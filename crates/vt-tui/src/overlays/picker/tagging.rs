@@ -22,7 +22,7 @@ impl App {
     /// Give an item in the explorer the tags typed after `T`: a sample or a kit's sound by its
     /// file, wherever it's listed, and a preset in its file. The status line says what it has now.
     pub(crate) fn tag_item(&mut self, item: usize, typed: Vec<String>) {
-        let Some(picker) = self.picker.as_ref() else {
+        let Some(picker) = self.overlays.picker.as_ref() else {
             return;
         };
         let chosen = picker.item(item);
@@ -42,6 +42,7 @@ impl App {
         self.services.status = match done {
             Ok(name) => {
                 let tags = self
+                    .overlays
                     .picker
                     .as_ref()
                     .map(|picker| picker.item(item).tags.clone())
@@ -101,7 +102,7 @@ impl App {
         path: &Path,
         typed: &[String],
     ) -> Result<String, String> {
-        let picker = self.picker.as_ref().ok_or_else(String::new)?;
+        let picker = self.overlays.picker.as_ref().ok_or_else(String::new)?;
         let fixed = picker
             .item(item)
             .tags
@@ -116,7 +117,7 @@ impl App {
         kind.set_tags(path, own)
             .map_err(|error| error.to_string())?;
         let (read, _) = explorer::item(path, Kind::Preset(kind), &self.explorer.tag_library);
-        if let Some(picker) = self.picker.as_mut() {
+        if let Some(picker) = self.overlays.picker.as_mut() {
             picker.set_tags(item, read.tags);
         }
         Ok(preset::preset_name(path))
@@ -126,7 +127,7 @@ impl App {
     /// its sound is heard.
     fn retag_file(&mut self, path: &Path) {
         let library = Arc::clone(&self.explorer.tag_library);
-        let Some(picker) = self.picker.as_ref() else {
+        let Some(picker) = self.overlays.picker.as_ref() else {
             return;
         };
         let changed: Vec<(usize, Vec<Tag>)> = picker
@@ -141,7 +142,7 @@ impl App {
                 (tags != picker.item(item).tags).then_some((item, tags))
             })
             .collect();
-        if let Some(picker) = self.picker.as_mut() {
+        if let Some(picker) = self.overlays.picker.as_mut() {
             picker.set_library(library);
             for (item, tags) in changed {
                 picker.set_tags(item, tags);

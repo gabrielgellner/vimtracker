@@ -410,7 +410,7 @@ impl App {
     /// the extension and any flags, and not one already in that folder.
     pub(crate) fn roll_name(&mut self) {
         let names = &mut self.names;
-        let rolled = rolled_line(&self.command_line, |folder| {
+        let rolled = rolled_line(&self.overlays.command_line, |folder| {
             let folder = if folder.is_empty() {
                 PathBuf::from(".")
             } else {
@@ -420,9 +420,9 @@ impl App {
             names.fresh(|name| taken.contains(name))
         });
         if let Some(line) = rolled {
-            self.command_line = line;
-            self.command_menu = None;
-            self.command_history.stop();
+            self.overlays.command_line = line;
+            self.overlays.command_menu = None;
+            self.overlays.command_history.stop();
         }
     }
 
@@ -443,8 +443,8 @@ impl App {
         let home = home_folder();
         let folder = place_name(folder, home.as_deref());
         let folder = folder.trim_end_matches('/');
-        self.command_line = format!("{} {folder}/{name}{}", naming.command, naming.after);
-        self.command_menu = None;
+        self.overlays.command_line = format!("{} {folder}/{name}{}", naming.command, naming.after);
+        self.overlays.command_menu = None;
         self.modes.mode = Mode::Command;
         self.services.status = "Type a name, or C-r for another, then Enter".to_owned();
     }
@@ -488,7 +488,7 @@ impl App {
     }
 
     fn show_loaded(&mut self, done: &[PathBuf]) {
-        let shown = self.picker.as_ref().and_then(|picker| {
+        let shown = self.overlays.picker.as_ref().and_then(|picker| {
             let item = picker.preview.as_ref()?.item;
             match &picker.item(item).preview {
                 Some(Preview::Sample(path)) => Some(path.clone()),
@@ -497,7 +497,7 @@ impl App {
         });
         if let Some(path) = shown
             && done.contains(&path)
-            && let Some(picker) = self.picker.as_mut()
+            && let Some(picker) = self.overlays.picker.as_mut()
         {
             picker.preview = None;
             self.refresh_preview();
@@ -509,7 +509,7 @@ impl App {
 
     /// The sample under the explorer's cursor, while it plays what it moves onto.
     fn file_to_play(&mut self) -> Option<PathBuf> {
-        let picker = self.picker.as_ref()?;
+        let picker = self.overlays.picker.as_ref()?;
         let tree = picker.tree()?;
         if !tree.purpose.auditions() {
             return None;
@@ -563,7 +563,7 @@ impl App {
 
     /// Show a sample that couldn't be read with a warning in the explorer.
     fn mark_unreadable(&mut self, path: &Path) {
-        if let Some(picker) = self.picker.as_mut() {
+        if let Some(picker) = self.overlays.picker.as_mut() {
             picker.mark_unreadable(path);
         }
     }
@@ -618,7 +618,7 @@ impl App {
         }
         roots.extend(self.places(Purpose::Sample));
         self.open_explorer(Purpose::Sample, roots, None);
-        if let Some(picker) = self.picker.take() {
+        if let Some(picker) = self.overlays.picker.take() {
             let picker = match in_kit {
                 Some(at) => picker.opened_on(Some(at)),
                 None if sample.is_some() => picker.following(sample.as_deref()),
@@ -635,7 +635,7 @@ impl App {
             meaning: String::new(),
         }];
         self.open_explorer(Purpose::Sample, roots, None);
-        if let Some(picker) = self.picker.take() {
+        if let Some(picker) = self.overlays.picker.take() {
             self.show_picker(picker.opening_roots());
         }
     }

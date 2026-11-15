@@ -92,6 +92,7 @@ fn k_lists_a_settings_choices_and_i_types_a_value() {
     let (mut app, _rt) = on_gen_page();
     keys(&mut app, "K");
     let names: Vec<String> = app
+        .overlays
         .picker
         .as_ref()
         .unwrap()
@@ -220,6 +221,7 @@ fn space_g_a_keeps_the_variation_heard_of_a_generator_that_varies() {
     assert!(text.contains("Random  Euclid  Once · Note 00–07"), "{text}");
     keys(&mut app, "K");
     let names: Vec<String> = app
+        .overlays
         .picker
         .as_ref()
         .unwrap()
@@ -297,7 +299,7 @@ fn enter_opens_the_shape_panel_on_it_in_the_phrase_view() {
     keys(&mut app, "<Enter>");
     assert_eq!(app.modes.view, View::Phrase);
     assert_eq!(app.modes.mode, Mode::Shape);
-    assert_eq!(app.shape.as_ref().unwrap().live, Some(0));
+    assert_eq!(app.overlays.shape.as_ref().unwrap().live, Some(0));
 }
 
 #[test]
@@ -307,6 +309,7 @@ fn empty_makes_another_column_live() {
     assert!(matches!(app.track_control(), Control::NewGenerator(0)));
     keys(&mut app, "K");
     let names: Vec<String> = app
+        .overlays
         .picker
         .as_ref()
         .unwrap()

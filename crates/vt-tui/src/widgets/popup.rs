@@ -195,7 +195,10 @@ mod tests {
 
     /// Where the picker's window is, by its title.
     fn picker_window(app: &mut App) -> Rect {
-        let title = format!(" {} ", app.picker.as_ref().expect("a picker").title);
+        let title = format!(
+            " {} ",
+            app.overlays.picker.as_ref().expect("a picker").title
+        );
         window(&screen(app, Instant::now()), &title)
     }
 
@@ -216,7 +219,12 @@ mod tests {
         app.key(Key::new(KeyCode::Tab), Instant::now());
         let title = format!(
             " {} ",
-            app.command_menu.as_ref().expect("a list").picker.title
+            app.overlays
+                .command_menu
+                .as_ref()
+                .expect("a list")
+                .picker
+                .title
         );
         assert_eq!(
             window(&screen(&mut app, Instant::now()), &title),
@@ -229,7 +237,7 @@ mod tests {
         let (mut app, _realtime) = app();
         press(&mut app, " ?");
         special(&mut app, KeyCode::Enter);
-        let title = format!(" {} ", app.guide.expect("a guide").title());
+        let title = format!(" {} ", app.overlays.guide.expect("a guide").title());
         assert_eq!(
             window(&screen(&mut app, Instant::now()), &title),
             Rect::new(31, 0, 100, 40)
@@ -256,7 +264,10 @@ mod tests {
     fn the_shape_panel_is_at_the_right_under_the_cpu_figure() {
         let (mut app, _realtime) = app();
         press(&mut app, "vjS");
-        let title = format!(" {} ", app.shape.as_ref().expect("the panel").verb());
+        let title = format!(
+            " {} ",
+            app.overlays.shape.as_ref().expect("the panel").verb()
+        );
         assert_eq!(
             window(&screen(&mut app, Instant::now()), &title),
             Rect::new(108, 2, 42, 11)
@@ -267,7 +278,7 @@ mod tests {
     fn the_mapping_view_is_in_the_middle_of_the_page() {
         let (mut app, _realtime) = app();
         press(&mut app, " 5}jM1gm");
-        assert!(app.mapping.is_some());
+        assert!(app.overlays.mapping.is_some());
         let shown = screen(&mut app, Instant::now());
         assert_eq!(window(&shown, " Macro 1"), Rect::new(34, 14, 82, 11));
     }

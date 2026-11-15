@@ -124,6 +124,7 @@ fn phrase_view_keys_move_through_the_chain_and_grr_lists_uses() {
     press(&mut app, "grr");
     assert_eq!(app.modes.mode, Mode::Picker);
     let uses: Vec<String> = app
+        .overlays
         .picker
         .as_ref()
         .unwrap()
@@ -173,7 +174,7 @@ fn k_chooses_a_chain_rows_phrase_and_large_steps_work_there() {
 
     press(&mut app, "K");
     assert_eq!(app.modes.mode, Mode::Picker);
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     let count = picker.shown().count();
     assert!(count >= 2);
     assert_eq!(picker.selected, start as usize);
@@ -288,7 +289,7 @@ fn bloom_alone_lists_the_paths_and_refuses_what_it_cant_grow() {
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     command(&mut app, "bloom");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     let items: Vec<String> = picker.shown().map(listed).collect();
     assert_eq!(items.len(), 5);
     assert_eq!(items[1], "trunk  The trunk before each branch: T 1 T 2 T 3");

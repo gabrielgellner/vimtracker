@@ -29,12 +29,8 @@ use crate::input::bindings::Table;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::typed::TypedValue;
-use crate::overlays::command::completion::CommandMenu;
-use crate::overlays::command::history::CommandHistory;
+use crate::overlays::Overlays;
 use crate::overlays::field_jump::FieldJump;
-use crate::overlays::guides::Guide;
-use crate::overlays::picker::Picker;
-use crate::overlays::shape::ShapePanel;
 use crate::pages::mixer::MixerPage;
 use crate::pages::phrase::PhraseView;
 use crate::pages::project::ProjectPage;
@@ -241,18 +237,15 @@ pub struct App {
     pub project_page: ProjectPage,
     /// Most recently used first, starting with the view on screen.
     pub recent_views: Vec<View>,
-    pub picker: Option<Picker>,
     /// The chain view: the column its cursor is on, and the row last copied.
     pub chain_view: ChainView,
+    /// What's drawn over the page: the picker, the `:` line, the help and the guides, the shape
+    /// panel and a macro's mapping view.
+    pub overlays: Overlays,
     /// The jump list, which `Ctrl-O`, `Ctrl-I` and `''` go through.
     pub jumps: Jumps,
     /// When the autosave was last due, and what it last wrote.
     pub autosave: Autosave,
-    pub command_line: String,
-    /// The list of matches above the command line, while there's more than one.
-    pub command_menu: Option<CommandMenu>,
-    /// The command lines run before, which `Up` and `Down` go through.
-    pub command_history: CommandHistory,
     /// Live recording, while it's armed.
     pub(crate) recording: Option<Recording>,
     /// The recorder: what `Space R` records, and the recording going on.
@@ -262,21 +255,9 @@ pub struct App {
     pub should_quit: bool,
     /// The keys that are down, and what they hold while they are.
     pub held: HeldKeys,
-    pub help_scroll: usize,
-    /// The open guide, how far it has scrolled, and how many of its rows fit.
-    pub guide: Option<Guide>,
-    pub guide_scroll: usize,
-    pub guide_page: usize,
-    pub guide_width: usize,
     pub(crate) table: Table,
     /// The grammar: keys typed so far, the operator and register, and the change `.` repeats.
     pub grammar: Grammar,
-    /// The open shape panel.
-    pub shape: Option<ShapePanel>,
-    /// The open mapping view of a macro.
-    pub mapping: Option<crate::overlays::mapping::MappingView>,
-    /// A selection to shape once the command for its empty FX column is chosen, and its field.
-    pub(crate) shape_command: Option<(Selection, Field)>,
     /// The file explorer: the kit in use, the files it reads and plays, its places and tags, and
     /// what a folder chosen in it goes on to.
     pub explorer: Explorer,
@@ -329,28 +310,17 @@ impl App {
             audio_page: AudioPage::default(),
             wheel: crate::input::wheel::Wheel::default(),
             recent_views: View::ALL.to_vec(),
-            picker: None,
             chain_view: ChainView::default(),
+            overlays: Overlays::default(),
             jumps: Jumps::default(),
             autosave: Autosave::default(),
-            command_line: String::new(),
-            command_menu: None,
-            command_history: CommandHistory::default(),
             recording: None,
             sampling: crate::services::sampling::Sampling::default(),
             readouts: Readouts::default(),
             should_quit: false,
             held: HeldKeys::default(),
-            help_scroll: 0,
-            guide: None,
-            guide_scroll: 0,
-            guide_page: 16,
-            guide_width: 76,
             table: Table::default(),
             grammar: Grammar::default(),
-            shape: None,
-            mapping: None,
-            shape_command: None,
             explorer: Explorer::new(rate),
             work_since: None,
             names,

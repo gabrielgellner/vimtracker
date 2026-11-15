@@ -49,7 +49,7 @@ fn m_and_a_digit_map_a_setting_to_a_macro_turned_to_where_it_is() {
     press(&mut app, "i40");
     press(&mut app, "M");
     assert_eq!(app.modes.mode, Mode::Picker);
-    assert_eq!(app.picker.as_ref().unwrap().items().len(), 8);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().items().len(), 8);
     press(&mut app, "5");
     assert_eq!(app.modes.mode, Mode::Normal);
     let track = &app.song().tracks[0];
@@ -104,7 +104,7 @@ fn m_on_a_mapped_setting_takes_it_off_its_macro_or_moves_it_to_another() {
     press(&mut app, "M2");
     press(&mut app, "M");
     assert_eq!(
-        app.picker.as_ref().unwrap().selected,
+        app.overlays.picker.as_ref().unwrap().selected,
         1,
         "opened on its macro"
     );
@@ -249,6 +249,7 @@ fn the_mapping_views_response_is_sent_once_and_again_only_when_it_bends() {
     press(&mut app, "gm");
     assert_eq!(sync(&mut app, &mut graphics), 1);
     let first = app
+        .overlays
         .mapping
         .as_ref()
         .and_then(|view| view.images.get(PanelKey::Mapping))
@@ -258,7 +259,8 @@ fn the_mapping_views_response_is_sent_once_and_again_only_when_it_bends() {
     press(&mut app, "=");
     assert_eq!(sync(&mut app, &mut graphics), 0);
     assert_eq!(
-        app.mapping
+        app.overlays
+            .mapping
             .as_ref()
             .and_then(|view| view.images.get(PanelKey::Mapping)),
         Some(first)
@@ -266,7 +268,8 @@ fn the_mapping_views_response_is_sent_once_and_again_only_when_it_bends() {
     press(&mut app, "ll+");
     assert_eq!(sync(&mut app, &mut graphics), 1);
     assert_ne!(
-        app.mapping
+        app.overlays
+            .mapping
             .as_ref()
             .and_then(|view| view.images.get(PanelKey::Mapping)),
         Some(first)
@@ -274,7 +277,8 @@ fn the_mapping_views_response_is_sent_once_and_again_only_when_it_bends() {
     special(&mut app, KeyCode::Esc);
     sync(&mut app, &mut graphics);
     assert_eq!(
-        app.mapping
+        app.overlays
+            .mapping
             .as_ref()
             .and_then(|view| view.images.get(PanelKey::Mapping)),
         None,
@@ -435,7 +439,7 @@ fn m_maps_a_generators_hits_and_turning_the_macro_writes_the_column_again() {
     );
     let backend = ratatui::backend::TestBackend::new(150, 40);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
-    let view = app.mapping.clone().unwrap();
+    let view = app.overlays.mapping.clone().unwrap();
     terminal
         .draw(|frame| vt_tui::overlays::mapping::draw::draw(frame, frame.area(), &app, &view))
         .unwrap();
@@ -555,7 +559,7 @@ fn gd_on_a_setting_a_macro_holds_goes_to_its_mapping_on_the_gen_page_and_c_o_com
         "on the macro, in the band"
     );
     assert_eq!(app.modes.mode, Mode::Mapping);
-    let view = app.mapping.as_ref().unwrap();
+    let view = app.overlays.mapping.as_ref().unwrap();
     assert_eq!((view.at, view.row), (0, 1), "on Cut's mapping");
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.modes.mode, Mode::Normal);
@@ -567,7 +571,7 @@ fn gd_on_a_setting_a_macro_holds_goes_to_its_mapping_on_the_gen_page_and_c_o_com
     assert_eq!(app.track_control(), Control::Macro(0));
     press(&mut app, "gd");
     assert_eq!(app.modes.mode, Mode::Mapping);
-    assert_eq!(app.mapping.as_ref().unwrap().at, 0);
+    assert_eq!(app.overlays.mapping.as_ref().unwrap().at, 0);
 }
 
 #[test]
@@ -629,7 +633,7 @@ fn gd_on_a_setting_two_macros_hold_lists_them_to_go_to() {
     );
     press(&mut app, "gd");
     assert_eq!(app.modes.mode, Mode::Picker);
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     let items: Vec<String> = picker.items().iter().map(listed).collect();
     assert_eq!(items.len(), 2, "{items:?}");
     assert!(items[0].starts_with("1 Cut"), "{items:?}");
@@ -638,5 +642,5 @@ fn gd_on_a_setting_two_macros_hold_lists_them_to_go_to() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.track_control(), Control::Macro(2));
     assert_eq!(app.modes.mode, Mode::Mapping);
-    assert_eq!(app.mapping.as_ref().unwrap().at, 2);
+    assert_eq!(app.overlays.mapping.as_ref().unwrap().at, 2);
 }

@@ -105,6 +105,7 @@ fn a_kit_adds_nothing_until_a_sound_is_chosen_for_a_track() {
     command(&mut app, "sample");
     assert_eq!(app.modes.mode, Mode::Picker);
     let labels: Vec<String> = app
+        .overlays
         .picker
         .as_ref()
         .unwrap()
@@ -219,7 +220,7 @@ fn kits_come_from_every_folder_in_the_settings_and_the_first_wins() {
         .collect();
     let named: Vec<String> = folders.iter().map(|f| f.display().to_string()).collect();
     assert_eq!(kit_roots, named);
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.current().unwrap().pick, Pick::Kit(first));
     assert_eq!(picker.marked(), picker.current_index());
 }

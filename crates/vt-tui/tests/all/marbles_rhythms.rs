@@ -53,7 +53,7 @@ fn complementary_across_two_tracks_gives_each_row_to_one_or_the_other() {
     keys(&mut app, "vGWS");
     down_to(&mut app, GenParam::Where);
     keys(&mut app, "K/compl<Enter>");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(
         panel.shape.place,
         Where::Complementary {

@@ -57,7 +57,7 @@ fn grids_across_a_kits_tracks_writes_one_beat_each_its_own_part() {
     ]);
     let depth = app.services.history.undo_depth();
     keys(&mut app, "vGWWSK/grids<Enter>");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.shape.kind, FillKind::Grids);
     assert_eq!(panel.shape.grids.part, None, "each track takes its own");
     use GenParam::*;
@@ -118,7 +118,7 @@ fn kept_live_each_track_has_a_generator_of_its_part_reopened_on_its_own() {
     }
     // `gl` on the snare: its part and its own density alone.
     keys(&mut app, "Wgl");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.live, Some(0));
     use GenParam::*;
     assert_eq!(
@@ -146,7 +146,7 @@ fn kept_live_each_track_has_a_generator_of_its_part_reopened_on_its_own() {
     assert_eq!(shape.grids.density[DrumPart::Snare.index()], 0);
     // Its part, chosen with `K`: the snare's track plays the hats' part now.
     keys(&mut app, "glj");
-    assert_eq!(app.shape.as_ref().unwrap().row, Part);
+    assert_eq!(app.overlays.shape.as_ref().unwrap().row, Part);
     keys(&mut app, "K/hh<Enter>");
     assert_eq!(rhythm(&app, 1), BEAT[2]);
 }
@@ -168,7 +168,7 @@ fn tracks_whose_sounds_say_nothing_take_the_parts_in_order() {
 fn a_live_grids_on_the_gen_page_is_named_by_its_part() {
     let (mut app, _rt) = app_with(&[("SD", Machine::Plaits(SynthVoice::Snare))]);
     keys(&mut app, "vGSK/grids<Enter>");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(
         panel.shape.grids.part,
         Some(DrumPart::Snare),

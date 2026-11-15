@@ -50,6 +50,7 @@ fn the_audio_page_chooses_a_buffer_a_rate_and_a_device() {
     press(&mut app, "K");
     assert_eq!(app.modes.mode, Mode::Picker);
     let labels: Vec<String> = app
+        .overlays
         .picker
         .as_ref()
         .unwrap()
@@ -59,7 +60,8 @@ fn the_audio_page_chooses_a_buffer_a_rate_and_a_device() {
         .collect();
     assert_eq!(labels[0], "64 frames, 1.3 ms", "{labels:?}");
     assert_eq!(
-        app.picker
+        app.overlays
+            .picker
             .as_ref()
             .unwrap()
             .current()

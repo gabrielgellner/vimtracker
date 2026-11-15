@@ -197,7 +197,7 @@ impl App {
 
     /// Show a picker, and its preview if it has one.
     pub(crate) fn show_picker(&mut self, picker: Picker) {
-        self.picker = Some(picker);
+        self.overlays.picker = Some(picker);
         self.modes.mode = Mode::Picker;
         self.refresh_preview();
     }
@@ -206,7 +206,7 @@ impl App {
     /// shown. A sample's is read in the background, and shows it's loading until it's in.
     pub(crate) fn refresh_preview(&mut self) {
         let rate = self.services.rate;
-        let Some(picker) = self.picker.as_mut() else {
+        let Some(picker) = self.overlays.picker.as_mut() else {
             return;
         };
         let wanted = picker
@@ -228,7 +228,7 @@ impl App {
             Preview::Kit(path) => Some(kit_preview(item, path, rate, &mut picker.waves)),
             _ => self.explorer_preview(item, &preview),
         };
-        if let Some(picker) = self.picker.as_mut() {
+        if let Some(picker) = self.overlays.picker.as_mut() {
             picker.preview = shown.map(|shown| {
                 let tags = picker.item(item).tags.clone();
                 Arc::new(Shown { tags, ..shown })
@@ -784,7 +784,7 @@ impl App {
     }
 
     pub(crate) fn picker_key(&mut self, key: Key) {
-        let Some(picker) = self.picker.as_mut() else {
+        let Some(picker) = self.overlays.picker.as_mut() else {
             self.modes.mode = Mode::Normal;
             return;
         };
@@ -792,7 +792,7 @@ impl App {
         if picker.title == crate::overlays::mapping::MACRO_PICKER
             && let KeyCode::Char(digit @ '1'..='8') = key.code
         {
-            self.picker = None;
+            self.overlays.picker = None;
             self.modes.mode = self.mode_after_picker();
             self.map_to_macro(usize::from(digit as u8 - b'1'));
             return;
@@ -803,9 +803,9 @@ impl App {
                 self.follow_file();
             }
             Outcome::Close => {
-                self.picker = None;
+                self.overlays.picker = None;
                 // A shape waiting for its command is given up.
-                self.shape_command = None;
+                self.overlays.shape_command = None;
                 self.modes.mode = self.mode_after_picker();
                 self.leave_explorer();
             }
@@ -815,7 +815,7 @@ impl App {
             }
             Outcome::Choose(pick) => {
                 let naming = self.explorer.naming.take();
-                self.picker = None;
+                self.overlays.picker = None;
                 self.modes.mode = self.mode_after_picker();
                 self.leave_explorer();
                 self.explorer.naming = naming;
@@ -854,8 +854,8 @@ impl App {
                 self.add_factory_patch(&name, over);
             }
             Pick::Prompt(text) => {
-                self.command_line = text;
-                self.command_menu = None;
+                self.overlays.command_line = text;
+                self.overlays.command_menu = None;
                 self.modes.mode = Mode::Command;
                 self.services.status =
                     "Type a name, with folders before it if you like, then Enter".to_owned();
@@ -963,8 +963,8 @@ impl App {
             Pick::GenCommand { field, command } => self.pick_gen_column(field, Some(command)),
             Pick::ShapeCommand(command) => self.pick_shape_command(command),
             Pick::Guide(guide) => {
-                self.guide = Some(guide);
-                self.guide_scroll = 0;
+                self.overlays.guide = Some(guide);
+                self.overlays.guide_scroll = 0;
                 self.modes.mode = Mode::Guide;
             }
             Pick::KitTracks(path) => {

@@ -971,5 +971,5 @@ fn the_kit_and_sample_lists_open_from_their_commands() {
     special(&mut app, KeyCode::Esc);
     command(&mut app, "kit");
     assert_eq!(app.modes.mode, Mode::Picker);
-    assert_eq!(app.picker.as_ref().unwrap().title, "Kits");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().title, "Kits");
 }

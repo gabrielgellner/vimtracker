@@ -36,7 +36,7 @@ pub(crate) fn draw_help(frame: &mut Frame, area: Rect, app: &App) {
     let lines: Vec<Line> = app
         .help_rows()
         .into_iter()
-        .skip(app.help_scroll)
+        .skip(app.overlays.help_scroll)
         .map(Line::raw)
         .collect();
     let border = popup::border()

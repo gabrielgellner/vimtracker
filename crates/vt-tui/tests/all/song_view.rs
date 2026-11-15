@@ -399,17 +399,18 @@ fn k_chooses_a_cells_chain_by_number_or_label() {
     assert_eq!(app.song().sections[2].chains[0], Some(1));
     command(&mut app, "label bass");
     press(&mut app, "kK");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.shown().count(), 3, "-- and both chains");
     press(&mut app, "bass");
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 1);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().shown().count(), 1);
     let depth = app.services.history.undo_depth();
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().sections[1].chains[0], Some(1));
     assert_eq!(app.services.history.undo_depth(), depth + 1);
     press(&mut app, "K");
     assert_eq!(
-        app.picker
+        app.overlays
+            .picker
             .as_ref()
             .unwrap()
             .current()
@@ -429,7 +430,7 @@ fn k_chooses_a_cells_chain_by_number_or_label() {
         "{}",
         app.services.status
     );
-    assert!(app.picker.is_none());
+    assert!(app.overlays.picker.is_none());
 }
 
 #[test]

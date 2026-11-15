@@ -198,11 +198,11 @@ impl App {
 
     /// What of its own state the pages show, as it is now.
     fn page_state(&self) -> PageState<'_> {
-        let covered = self.picker.is_some()
-            || self.guide.is_some()
-            || self.shape.is_some()
+        let covered = self.overlays.picker.is_some()
+            || self.overlays.guide.is_some()
+            || self.overlays.shape.is_some()
             || matches!(self.modes.mode, Mode::Help | Mode::Picker | Mode::Guide)
-            || (self.modes.mode == Mode::Command && self.command_menu.is_some());
+            || (self.modes.mode == Mode::Command && self.overlays.command_menu.is_some());
         // Only worked out while keys are typed, as the list of what follows them is.
         let continued = |_: &Instant| {
             !self.grammar.pending.is_empty()
@@ -218,7 +218,7 @@ impl App {
                 .grammar
                 .replacing_selection
                 .map(|(selection, _)| selection)
-                .or(self.shape.as_ref().map(|panel| panel.selection)),
+                .or(self.overlays.shape.as_ref().map(|panel| panel.selection)),
             recording: self.sampling_shown(),
             audio: &self.audio,
             wheel: self.wheel.setting,

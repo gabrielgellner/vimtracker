@@ -236,7 +236,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     }
     if let Some(path) = CommandHistory::default_path() {
         let (history, note) = CommandHistory::load(&path);
-        app.command_history = history;
+        app.overlays.command_history = history;
         if let Some(note) = note
             && status.is_empty()
         {
@@ -596,7 +596,9 @@ impl App {
             let wants = self.track_page.panels(&self.ctx());
             let ids = graphics.panels(&wants, rate, out)?;
             self.track_page.take_panels(ids, &wants, rate);
-            if let (Some(view), Some(track)) = (self.mapping.as_mut(), self.services.track_here()) {
+            if let (Some(view), Some(track)) =
+                (self.overlays.mapping.as_mut(), self.services.track_here())
+            {
                 view.images = graphics.panels(&view.panels(track), rate, out)?;
             }
         }
@@ -610,11 +612,12 @@ impl App {
             self.sample_page.images = PanelIds::default();
         }
         let shown = self
+            .overlays
             .picker
             .as_ref()
             .and_then(|picker| picker.preview.clone());
         let preview = graphics.preview(shown, out)?;
-        if let (Some(picker), Some((ids, wave))) = (self.picker.as_mut(), preview) {
+        if let (Some(picker), Some((ids, wave))) = (self.overlays.picker.as_mut(), preview) {
             picker.preview_images.clone_from(ids);
             picker.preview_wave = *wave;
         }
@@ -716,25 +719,25 @@ pub fn draw_screen(
     if app.modes.mode == Mode::Help {
         crate::overlays::help::draw_help(frame, body, app);
     }
-    app.guide_page = crate::overlays::guides::draw::page(body.height);
-    app.guide_width = crate::overlays::guides::draw::text_width(body.width);
-    if let Some(guide) = app.guide {
-        crate::overlays::guides::draw::draw(frame, body, guide, app.guide_scroll);
+    app.overlays.guide_page = crate::overlays::guides::draw::page(body.height);
+    app.overlays.guide_width = crate::overlays::guides::draw::text_width(body.width);
+    if let Some(guide) = app.overlays.guide {
+        crate::overlays::guides::draw::draw(frame, body, guide, app.overlays.guide_scroll);
     }
-    if let Some(panel) = &app.shape {
+    if let Some(panel) = &app.overlays.shape {
         crate::overlays::shape::draw::draw(frame, view, app, panel);
     }
-    if let Some(mapping) = &app.mapping {
+    if let Some(mapping) = &app.overlays.mapping {
         crate::overlays::mapping::draw::draw(frame, view, app, mapping);
     }
-    if let Some(picker) = &mut app.picker {
+    if let Some(picker) = &mut app.overlays.picker {
         crate::overlays::picker::draw::draw(frame, body, picker);
     }
-    if let Some(menu) = &mut app.command_menu
+    if let Some(menu) = &mut app.overlays.command_menu
         && app.modes.mode == Mode::Command
     {
         // Under the names it finishes, after the `:`.
-        let column = 1 + menu.column(&app.command_line);
+        let column = 1 + menu.column(&app.overlays.command_line);
         crate::overlays::picker::draw::draw_menu(frame, status, column, &mut menu.picker);
     }
 }

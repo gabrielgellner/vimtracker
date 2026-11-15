@@ -50,7 +50,16 @@ fn open_kit(app: &mut App) {
         "a kit opens, as a folder does"
     );
     press(app, "jl");
-    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "BD");
+    assert_eq!(
+        app.overlays
+            .picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .unwrap()
+            .label,
+        "BD"
+    );
 }
 
 /// The group the new tracks went in, by its number, and its name.
@@ -86,12 +95,12 @@ fn marked_sounds_load_as_new_tracks_after_the_last_in_a_folded_group_as_one_undo
     let (mut app, _realtime) = app();
     kit_in_folder(&mut app);
     open_kit(&mut app);
-    let hint = app.picker.as_ref().unwrap().shown_hint();
+    let hint = app.overlays.picker.as_ref().unwrap().shown_hint();
     assert_eq!(hint, Some("Space mark  a all  Enter load"));
 
     // x marks the kick and goes on to the snare, j passes it, Space marks the closed hat.
     press(&mut app, "xj ");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.marked_count(), 2);
     assert_eq!(picker.current().unwrap().label, "OH");
     let depth = app.services.history.undo_depth();
@@ -122,7 +131,7 @@ fn marked_sounds_load_as_new_tracks_after_the_last_in_a_folded_group_as_one_undo
     assert_eq!(app.services.status, "Kit 909: tracks 03-04 in G1, folded");
 
     // The beat is offered, and Esc leaves the tracks empty.
-    assert_eq!(app.picker.as_ref().unwrap().title, KIT_BEAT_PICKER);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().title, KIT_BEAT_PICKER);
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.modes.mode, Mode::Normal);
     assert!(!has_notes(&app, 2) && !has_notes(&app, 3));
@@ -201,7 +210,7 @@ fn moving_onto_a_kits_sound_plays_it_and_marking_plays_nothing_more() {
 
     // a marks them all, and takes the marks off, where the cursor is: nothing plays again.
     press(&mut app, "a");
-    assert_eq!(app.picker.as_ref().unwrap().marked_count(), 5);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().marked_count(), 5);
     assert_eq!(sounding(&mut realtime, &mut app), 0, "a plays nothing");
     press(&mut app, "a");
     assert_eq!(sounding(&mut realtime, &mut app), 0);
@@ -238,9 +247,9 @@ fn a_marks_them_all_and_the_beat_plays_on_the_kick_snare_and_first_hat() {
     command(&mut app, "kit");
     // a on the kit itself opens it and marks every sound; again takes the marks off.
     press(&mut app, "ja");
-    assert_eq!(app.picker.as_ref().unwrap().marked_count(), 5);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().marked_count(), 5);
     press(&mut app, "a");
-    assert_eq!(app.picker.as_ref().unwrap().marked_count(), 0);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().marked_count(), 0);
     press(&mut app, "a");
     let depth = app.services.history.undo_depth();
     special(&mut app, KeyCode::Enter);
@@ -266,7 +275,7 @@ fn a_marks_them_all_and_the_beat_plays_on_the_kick_snare_and_first_hat() {
     }
 
     // Enter takes the beat: the kick, the snare and the closed hat, each its own part.
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.title, KIT_BEAT_PICKER);
     assert_eq!(
         picker.current().unwrap().meaning,
@@ -304,7 +313,16 @@ fn enter_with_nothing_marked_loads_the_sound_under_the_cursor() {
     kit_in_folder(&mut app);
     open_kit(&mut app);
     press(&mut app, "jjjj");
-    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "PD");
+    assert_eq!(
+        app.overlays
+            .picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .unwrap()
+            .label,
+        "PD"
+    );
     special(&mut app, KeyCode::Enter);
     assert_eq!(names(&app), ["", "", "PD"]);
     assert_eq!(group_of(&app, 2), Some((1, "909".to_owned())));
@@ -315,7 +333,16 @@ fn enter_with_nothing_marked_loads_the_sound_under_the_cursor() {
     // Loading again goes after it, in the next group, and never over a track. The dialog opens
     // on the kit last loaded from, open.
     command(&mut app, "kit");
-    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "909");
+    assert_eq!(
+        app.overlays
+            .picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .unwrap()
+            .label,
+        "909"
+    );
     press(&mut app, "l");
     special(&mut app, KeyCode::Enter);
     assert_eq!(names(&app), ["", "", "PD", "BD"]);
@@ -342,24 +369,33 @@ fn marks_stay_in_one_kit_and_a_missing_sound_cant_be_marked() {
     );
     // Two of the 909's marked, then one of the 808's takes their place.
     press(&mut app, "jjl");
-    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "BD");
+    assert_eq!(
+        app.overlays
+            .picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .unwrap()
+            .label,
+        "BD"
+    );
     press(&mut app, "  ");
-    assert_eq!(app.picker.as_ref().unwrap().marked_count(), 2);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().marked_count(), 2);
     press(&mut app, "kkkkl");
     assert_eq!(explorer_rows(&app)[3..5], ["      BD", "      GH"]);
     press(&mut app, "x");
-    assert_eq!(app.picker.as_ref().unwrap().marked_count(), 1);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().marked_count(), 1);
     // The missing one isn't marked, by Space or by a.
     press(&mut app, "x");
-    assert_eq!(app.picker.as_ref().unwrap().marked_count(), 1);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().marked_count(), 1);
     press(&mut app, "ka");
     assert_eq!(
-        app.picker.as_ref().unwrap().marked_count(),
+        app.overlays.picker.as_ref().unwrap().marked_count(),
         0,
         "all there are marked already, so a takes them off"
     );
     press(&mut app, "a");
-    assert_eq!(app.picker.as_ref().unwrap().marked_count(), 1);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().marked_count(), 1);
     special(&mut app, KeyCode::Enter);
     assert_eq!(names(&app), ["", "", "BD"]);
     assert_eq!(group_of(&app, 2), Some((1, "808".to_owned())));

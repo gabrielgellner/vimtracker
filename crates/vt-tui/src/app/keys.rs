@@ -458,12 +458,12 @@ impl App {
 
     fn help_key(&mut self, key: Key) {
         match key.code {
-            KeyCode::Char('j') | KeyCode::Down => self.help_scroll += 1,
+            KeyCode::Char('j') | KeyCode::Down => self.overlays.help_scroll += 1,
             KeyCode::Char('k') | KeyCode::Up => {
-                self.help_scroll = self.help_scroll.saturating_sub(1);
+                self.overlays.help_scroll = self.overlays.help_scroll.saturating_sub(1);
             }
             _ => {
-                self.help_scroll = 0;
+                self.overlays.help_scroll = 0;
                 self.modes.mode = Mode::Normal;
             }
         }
@@ -479,33 +479,33 @@ impl App {
 
     /// Scroll an open guide, stopping when its last row reaches the bottom of the window.
     fn guide_key(&mut self, key: Key) {
-        let Some(guide) = self.guide else {
+        let Some(guide) = self.overlays.guide else {
             self.modes.mode = Mode::Normal;
             return;
         };
         let last = guide
-            .lines(self.guide_width)
+            .lines(self.overlays.guide_width)
             .len()
-            .saturating_sub(self.guide_page);
-        let half = (self.guide_page / 2).max(1);
-        self.guide_scroll = match key.code {
-            KeyCode::Char('d') if key.ctrl => self.guide_scroll + half,
-            KeyCode::Char('u') if key.ctrl => self.guide_scroll.saturating_sub(half),
-            KeyCode::Char('j') | KeyCode::Down => self.guide_scroll + 1,
-            KeyCode::Char('k') | KeyCode::Up => self.guide_scroll.saturating_sub(1),
+            .saturating_sub(self.overlays.guide_page);
+        let half = (self.overlays.guide_page / 2).max(1);
+        self.overlays.guide_scroll = match key.code {
+            KeyCode::Char('d') if key.ctrl => self.overlays.guide_scroll + half,
+            KeyCode::Char('u') if key.ctrl => self.overlays.guide_scroll.saturating_sub(half),
+            KeyCode::Char('j') | KeyCode::Down => self.overlays.guide_scroll + 1,
+            KeyCode::Char('k') | KeyCode::Up => self.overlays.guide_scroll.saturating_sub(1),
             KeyCode::Char('g') => 0,
             KeyCode::Char('G') => last,
             KeyCode::Char('?') => {
-                self.guide = None;
+                self.overlays.guide = None;
                 self.open_guide_picker();
                 return;
             }
             KeyCode::Char('q') | KeyCode::Esc => {
-                self.guide = None;
+                self.overlays.guide = None;
                 self.modes.mode = Mode::Normal;
                 return;
             }
-            _ => self.guide_scroll,
+            _ => self.overlays.guide_scroll,
         }
         .min(last);
     }
@@ -552,7 +552,7 @@ impl App {
             Cmd::Picker => self.open_view_picker(),
             Cmd::TrackPicker => self.open_track_picker(),
             Cmd::Help => {
-                self.help_scroll = 0;
+                self.overlays.help_scroll = 0;
                 self.modes.mode = Mode::Help;
             }
             Cmd::Guides => self.open_guide_picker(),
@@ -587,12 +587,12 @@ impl App {
                 self.modes.mode = Mode::Insert;
             }
             Cmd::EnterCommand => {
-                self.command_line.clear();
+                self.overlays.command_line.clear();
                 // From a selection on the sample page, the line starts with its range, as Vim's
                 // does from Visual, and the selection ends.
                 if self.modes.view == View::Sample && self.sample_page.anchor.is_some() {
                     self.sample_page.end_selection();
-                    self.command_line.push_str("'<,'>");
+                    self.overlays.command_line.push_str("'<,'>");
                 }
                 self.modes.mode = Mode::Command;
             }

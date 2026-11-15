@@ -48,7 +48,7 @@ fn across_three_tracks_each_plays_a_channel_and_the_third_both() {
     let (mut app, _rt) = app_with(&[Speed::Sixteenth; 3], 16);
     let depth = app.services.history.undo_depth();
     keys(&mut app, "vGWWSK/divisions<Enter>");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.shape.kind, FillKind::Divisions);
     assert_eq!(
         panel.shape.divisions.channel, None,
@@ -128,12 +128,12 @@ fn across_three_tracks_each_plays_a_channel_and_the_third_both() {
 fn a_track_at_1_32_reads_its_rows_as_32nds_with_the_triplets_on_the_odd_ones() {
     let (mut app, _rt) = app_with(&[Speed::ThirtySecond], 32);
     keys(&mut app, "vGSK/divisions<Enter>");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.shape.divisions.bar, Bar::FourFine);
     assert_eq!(panel.shape.divisions.channel, Some(Channel::A));
     // Only eighth triplets, every one.
     keys(&mut app, "jjjj");
-    assert_eq!(app.shape.as_ref().unwrap().row, GenParam::Quarters);
+    assert_eq!(app.overlays.shape.as_ref().unwrap().row, GenParam::Quarters);
     keys(&mut app, "i0<Enter>ji0<Enter>ji0<Enter>jji100<Enter>");
     assert_eq!(
         strikes(&app, 0),
@@ -159,10 +159,16 @@ fn a_track_at_1_32_reads_its_rows_as_32nds_with_the_triplets_on_the_odd_ones() {
 fn at_1_16_sixteenths_and_triplets_sharing_rows_are_pointed_out() {
     let (mut app, _rt) = app_with(&[Speed::Sixteenth], 16);
     keys(&mut app, "vGSK/divisions<Enter>");
-    assert_eq!(app.shape.as_ref().unwrap().shape.divisions.bar, Bar::Four);
+    assert_eq!(
+        app.overlays.shape.as_ref().unwrap().shape.divisions.bar,
+        Bar::Four
+    );
     // The sixteenths at 10% and the eighth triplets up.
     keys(&mut app, "jjjjjjjji50<Enter>");
-    assert_eq!(app.shape.as_ref().unwrap().row, GenParam::EighthTriplets);
+    assert_eq!(
+        app.overlays.shape.as_ref().unwrap().row,
+        GenParam::EighthTriplets
+    );
     let screen = drawn(&app);
     assert!(
         screen.contains("16ths and triplets need 32nds to fit"),
@@ -188,9 +194,9 @@ fn a_live_divisions_on_the_gen_page_shows_its_channel_bar_and_chances() {
     // As `A+B`, B's six take the page's last two columns.
     let (mut app, _rt) = app_with(&[Speed::Sixteenth], 16);
     keys(&mut app, "vGS");
-    assert_eq!(app.shape.as_ref().unwrap().row, GenParam::Fill);
+    assert_eq!(app.overlays.shape.as_ref().unwrap().row, GenParam::Fill);
     keys(&mut app, "K/divisions<Enter>jj");
-    assert_eq!(app.shape.as_ref().unwrap().row, GenParam::Channel);
+    assert_eq!(app.overlays.shape.as_ref().unwrap().row, GenParam::Channel);
     keys(&mut app, "K/A+B<Enter>L 8");
     let shape = app.song().tracks[0].phrases[&0].generators()[0].shape;
     assert_eq!(shape.divisions.channel, Some(Channel::Both));
