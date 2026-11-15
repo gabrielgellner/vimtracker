@@ -481,7 +481,7 @@ fn a_tick_on_the_tempo_moves_its_fine_part() {
     );
     let end = slow_ticks(&mut app, true, 3, Instant::now());
     assert_eq!(app.song().millibpm, 120_300, "a tenth of a BPM a slow tick");
-    assert!(!app.project_fine);
+    assert!(!app.project_page.fine);
     report_at(&mut app, MouseEventKind::ScrollUp, true, end);
     assert_eq!(app.song().millibpm, 130_300, "Shift is +, 10 BPM");
 }
