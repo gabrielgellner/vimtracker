@@ -4,6 +4,8 @@
 
 use std::path::{Path, PathBuf};
 
+use vt_model::ron_file;
+
 /// The history file's name, in the config folder.
 pub(crate) const HISTORY_FILE: &str = "history.ron";
 /// How many lines are kept, the oldest going first.
@@ -43,13 +45,14 @@ impl CommandHistory {
     /// The history kept at `path`, saved there again as lines are added. No file starts an empty
     /// one, and a file that won't read starts an empty one and says why.
     pub fn load(path: &Path) -> (Self, Option<String>) {
-        let (lines, note) = match std::fs::read_to_string(path) {
-            Ok(text) => match ron::from_str::<Vec<String>>(&text) {
-                Ok(lines) => (lines, None),
-                Err(error) => (Vec::new(), Some(format!("{}: {error}", path.display()))),
-            },
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (Vec::new(), None),
-            Err(error) => (Vec::new(), Some(format!("{}: {error}", path.display()))),
+        let (lines, note) = match ron_file::read::<Vec<String>>(path) {
+            Ok(lines) => (lines, None),
+            Err(ron_file::Error::Io { source, .. })
+                if source.kind() == std::io::ErrorKind::NotFound =>
+            {
+                (Vec::new(), None)
+            }
+            Err(error) => (Vec::new(), Some(error.to_string())),
         };
         let mut history = Self::new(lines);
         history.trim();
@@ -62,12 +65,7 @@ impl CommandHistory {
         let Some(path) = &self.path else {
             return Ok(());
         };
-        if let Some(folder) = path.parent() {
-            std::fs::create_dir_all(folder)?;
-        }
-        let text = ron::ser::to_string_pretty(&self.lines, ron::ser::PrettyConfig::default())
-            .map_err(std::io::Error::other)?;
-        std::fs::write(path, text)
+        Ok(ron_file::write(path, &self.lines)?)
     }
 
     /// The lines, oldest first.
@@ -201,6 +199,12 @@ mod tests {
         let (loaded, note) = CommandHistory::load(&path);
         assert_eq!(note, None);
         assert_eq!(loaded.lines(), ["set skip=4", "w"]);
+        // A write that can't finish, here with a folder in its temporary file's place, leaves
+        // the file before whole.
+        std::fs::create_dir(ron_file::temporary(&path)).unwrap();
+        assert!(history.add("bpm 120").is_err());
+        assert_eq!(CommandHistory::load(&path).0.lines(), ["set skip=4", "w"]);
+        std::fs::remove_dir(ron_file::temporary(&path)).unwrap();
         std::fs::write(&path, "not ron").unwrap();
         let (broken, note) = CommandHistory::load(&path);
         assert!(broken.lines().is_empty());

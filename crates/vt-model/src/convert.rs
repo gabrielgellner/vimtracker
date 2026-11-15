@@ -9,7 +9,6 @@
 //! what live generators keep under their rows, and a live Nudge generator's ends, list and step.
 //! A row under a `RATE` lock is converted at its track's own speed, not the lock's.
 
-use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -90,10 +89,7 @@ fn convert_file(
     if kept.exists() {
         return Err(ConvertError::Backup(kept.display().to_string()));
     }
-    fs::write(&kept, &text).map_err(|source| ron_file::Error::Io {
-        path: shown.clone(),
-        source,
-    })?;
+    ron_file::write_atomic(&kept, &text)?;
     if name == "song.ron" {
         save_song(folder, &song)?;
     } else {

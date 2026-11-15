@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use vt_model::preset::PresetKind;
+use vt_model::ron_file;
 
 use crate::overlays::picker::explorer::Purpose;
 
@@ -45,19 +46,14 @@ impl RecentPlaces {
     /// The places kept at `path`, saved there again as they change. No file starts with none,
     /// and a file that won't read starts with none and says why.
     pub fn load(path: &Path) -> (Self, Option<String>) {
-        let (lists, note) = match std::fs::read_to_string(path) {
-            Ok(text) => match ron::from_str::<Lists>(&text) {
-                Ok(lists) => (lists, None),
-                Err(error) => (
-                    Lists::default(),
-                    Some(format!("{}: {error}", path.display())),
-                ),
-            },
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (Lists::default(), None),
-            Err(error) => (
-                Lists::default(),
-                Some(format!("{}: {error}", path.display())),
-            ),
+        let (lists, note) = match ron_file::read::<Lists>(path) {
+            Ok(lists) => (lists, None),
+            Err(ron_file::Error::Io { source, .. })
+                if source.kind() == std::io::ErrorKind::NotFound =>
+            {
+                (Lists::default(), None)
+            }
+            Err(error) => (Lists::default(), Some(error.to_string())),
         };
         let places = Self {
             lists,
@@ -109,12 +105,7 @@ impl RecentPlaces {
         let Some(path) = &self.path else {
             return Ok(());
         };
-        if let Some(folder) = path.parent() {
-            std::fs::create_dir_all(folder)?;
-        }
-        let text = ron::ser::to_string_pretty(&self.lists, ron::ser::PrettyConfig::default())
-            .map_err(std::io::Error::other)?;
-        std::fs::write(path, text)
+        Ok(ron_file::write(path, &self.lists)?)
     }
 }
 
