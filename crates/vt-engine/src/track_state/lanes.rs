@@ -16,7 +16,8 @@ pub(crate) type Entry = (u32, usize);
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct LaneRun {
     /// The count of the track's steps it reads at next and the chain entry it's in, or none until
-    /// it's placed, after playing starts, a seek or a reset.
+    /// it's placed, after its chain starts again, as on play, a seek or a reset. A pause keeps it,
+    /// so playing on carries on.
     next: Option<(i64, Entry)>,
     /// Its row in the length it's heard at, from 0: the one it's on, or, with none of it `left`,
     /// the one it starts next, which goes round to the first if it's past the length heard then.
@@ -123,13 +124,11 @@ impl LaneRun {
     /// and how many steps of it are left, none if it starts there.
     fn ahead(self, count: i64, entry: Entry, offset: i64, heard: Heard) -> LaneAhead {
         let run = self.at(count, entry, offset, heard);
+        let round = run.left == 0 && run.row >= heard.length;
         LaneAhead {
-            row: match run.left {
-                0 if run.row >= heard.length => 0,
-                _ => run.row,
-            },
+            row: if round { 0 } else { run.row },
             left: run.left,
-            laps: run.laps,
+            laps: run.laps + i64::from(round),
         }
     }
 }

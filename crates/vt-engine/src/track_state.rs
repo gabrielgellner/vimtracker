@@ -693,7 +693,6 @@ impl TrackState {
         self.pending = [None; PENDING_PARTS];
         self.soonest = u64::MAX;
         self.tied = false;
-        self.unplace_lanes();
         for run in &mut self.slots {
             run.envelope = EnvelopeRun::Idle;
         }

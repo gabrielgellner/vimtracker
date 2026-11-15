@@ -278,6 +278,8 @@ hold:
   heard at the end of its title, `· here 6 rows, its own 4 rows`. It turns with the track page's
   keys, not the Gen page's reshaping ones. Making a column live put the cursor a device short of
   the new one since the macros' band came first; it now finds the device.
+- **A pause keeps a lane's place,** so playing on carries on from its row; a lane is placed
+  again whenever its track's chain starts again, which play, a seek and a reset all do.
 - **Drawing without playing** (`App::set_playhead`, the screenshots and tests) places each lane
   from the count at the track's settings, as the engine does from the top.
 - **An edit with a lane moved** keeps the stored row it was going to read, and its place in a row

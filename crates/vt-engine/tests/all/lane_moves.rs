@@ -169,6 +169,19 @@ fn plus_two_on_a_four_row_lane_plays_its_own_rows_again() {
 }
 
 #[test]
+fn a_pause_keeps_a_lanes_place() {
+    let original = song(vec![four(1)]);
+    let mut engine = engine(&original);
+    assert_eq!(sends(&mut engine, 38)[37], 0x20, "row 1 at count 37");
+    engine.swap(version(&moved(original, 0x81, 15)));
+    assert_eq!(sends(&mut engine, 1), [0x30]);
+    engine.pause_or_resume();
+    engine.pause_or_resume();
+    // On to row 3, where placing it again from the count would have row 39 % 5 = 4.
+    assert_eq!(sends(&mut engine, 2), [0x40, 0x10]);
+}
+
+#[test]
 fn the_playhead_is_on_the_row_being_copied() {
     let song = moved(song(vec![four(1)]), 0x82, 15);
     let mut engine = engine(&song);
