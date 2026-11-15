@@ -616,6 +616,8 @@ impl InsertState {
     }
 
     /// The slot as it is but for its long buffer, which it doesn't have, to try a frame on.
+    /// Each field is copied by hand rather than by `..self.clone()`, as cloning the slot would
+    /// copy its `Memory` too, allocating on the audio thread.
     fn without_memory(&self) -> Self {
         let Self {
             memory: _,
