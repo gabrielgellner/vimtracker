@@ -755,7 +755,7 @@ where they were written and are borrowed across folders; #260 may move shared sh
 **`App`** (`app.rs`) is the program's state and what each key does. It needs no terminal, so tests
 drive it directly. It holds the shared services, `App::services`, beside the pages (`track_page`,
 `mixer_page`, `project_page`, `audio_page`, `sample_page` and `song_view`), `App::modes`, the picker, the
-command line, help, the jump list and the keys' own state: 95 fields, and 48 files
+command line, help, the jump list and the keys' own state: 93 fields, and 48 files
 besides `app.rs` add an `impl App` block each, such as `track_page.rs`, `banking.rs`, `slicing.rs`,
 `shaping.rs`, `picking.rs`, `recording.rs` (live recording, `Space r`), `project_page.rs`,
 `audio_page.rs` and `sample_page.rs`.
