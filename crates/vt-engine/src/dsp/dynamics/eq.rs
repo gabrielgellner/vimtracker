@@ -11,6 +11,8 @@ use vt_model::settings::{band_db, band_q};
 use crate::dsp::blocks::flush::{flush, tiny_by_fields};
 use crate::dsp::blocks::sides::{SameBits, Sides, same_bits_by_fields};
 use crate::dsp::blocks::smoother::Smoothed;
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::{Mixing, Mono, SlotEffect};
 
 /// The shelves' width: a gentle slope with no bump.
 const SHELF_Q: f32 = std::f32::consts::FRAC_1_SQRT_2;
@@ -253,6 +255,35 @@ impl ThreeBands {
             }
             sample
         })
+    }
+}
+
+impl SlotEffect for ThreeBands {
+    type Settings = Settings;
+
+    /// Each band works each side alone, the same way, with nothing between them.
+    const MONO: Mono = Mono::OneSide;
+    const MIXING: Mixing = Mixing::AllWet;
+
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, _frames: u64) {
+        self.follow(settings);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// None: it's worked every frame, so the slot never waits on its tail.
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        0
     }
 }
 

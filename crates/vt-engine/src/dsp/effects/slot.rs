@@ -1,13 +1,13 @@
 //! A track's slot: what it keeps for whichever effect it holds, and what plays it. An effect with
 //! a long buffer keeps it in [`super::memory`]'s pool, and its DSP is in a file of its own; the
 //! small effects are kept in every slot, and so is what [`Distort`](super::distort) keeps.
+//!
+//! What the slot needs to know of each effect comes from its DSP's [`SlotEffect`] and from its
+//! description in the model, so an effect with a long buffer that the slot rings needs nothing
+//! here (decision 340).
 
 use vt_model::constants::{MAX_TRACKS, UNITY_LEVEL};
-use vt_model::insert::{
-    Beads, Chorus, Clouds, Comb, Compressor, CompressorType, Delay, Distort, DistortType, Echo,
-    Equaliser, Exciter, Flanger, FreqShift, Grains, Insert, Limiter, LowPassGate, Phaser, Pitch,
-    Plate, Resonator, Reverb, Rotary, Space, Spring, Stutter, Tape, Vowel, Warps,
-};
+use vt_model::insert::{Distort, DistortType, EffectKind, Insert, Param, Place, Shown, Warps};
 use vt_model::song::level_gain;
 
 use crate::dsp::blocks::sides::{SameBits, same_sides};
@@ -17,7 +17,7 @@ use crate::dsp::dynamics::eq::ThreeBands;
 use crate::dsp::dynamics::glue::PeakClip;
 use crate::dsp::effects::distort::Distortion;
 use crate::dsp::effects::exciter::Exciter as Excitement;
-use crate::dsp::effects::memory::{Memory, MemoryPool, SILENT, SongPlace};
+use crate::dsp::effects::memory::{BUFFERED_FACTS, Memory, MemoryPool, SILENT, SongPlace};
 use crate::dsp::effects::phaser::Phaser as AllPasses;
 use crate::dsp::filters::lpg::LowPassGate as Gate;
 use crate::dsp::filters::vowel::Formants;
@@ -29,10 +29,13 @@ pub const DEFAULT_NOTE: f32 = 60.0;
 /// enough that a step's lock of its bypass lands with the step.
 pub const BYPASS_FADE_MS: f32 = 5.0;
 
-/// What a slot effect with a long buffer does, besides how it's played: it's made on the edit
-/// thread, follows what's set, is emptied for the pool and says how long its tail lasts. A slot
-/// reaches it through [`Memory`]'s `match`es, which `memories!` writes, never through `dyn`
-/// (decision 340). Nothing here may allocate but `new`, which runs on the edit thread.
+/// What a slot effect does, besides how it's played: it's made on the edit thread, follows what's
+/// set, is emptied for the pool and says how long its tail lasts, what it does with a sound that's
+/// the same on both sides and how the slot blends it. One with a long buffer is reached through
+/// [`Memory`]'s `match`es, which `memories!` writes, never through `dyn` (decision 340). One small
+/// enough to keep in every slot, in `KEPT_IN_SLOT`, has a field of [`InsertState`]'s; the pool
+/// never holds it, so it has no tail the slot waits on. Nothing here may allocate but `new`, which
+/// runs on the edit thread.
 ///
 /// Each effect's own methods mostly have these names already, and an `impl` hands each call on to
 /// them: a method of the type's own is picked over the trait's, so `self.follow(settings)` inside
@@ -40,6 +43,12 @@ pub const BYPASS_FADE_MS: f32 = 5.0;
 pub trait SlotEffect: Sized {
     /// Its settings, as its `Insert` holds them.
     type Settings: Copy;
+
+    /// What it does with a sound that's the same on both sides (decision 147). `Mono::Stereo` is
+    /// always safe, and `tests/all/mono.rs` checks every other claim.
+    const MONO: Mono = Mono::Stereo;
+    /// How the slot blends what it gives with the sound going in, and turns it up or down.
+    const MIXING: Mixing = Mixing::Wet;
 
     /// Made on the edit thread, with its long buffers.
     fn new(rate: u32) -> Self;
@@ -70,6 +79,22 @@ pub trait SlotEffect: Sized {
 /// rung: the slot plays each itself, handing it the note, its glide or another track.
 pub trait Rung: SlotEffect {
     fn process(&mut self, input: [f32; 2]) -> [f32; 2];
+}
+
+/// Take what's set now, where the song is and this many frames in, and jump there if it's only
+/// just started, `fresh`, rather than gliding from where it was.
+#[inline]
+pub(crate) fn follow_fresh<E: SlotEffect>(
+    effect: &mut E,
+    settings: E::Settings,
+    song: SongPlace,
+    frames: u64,
+    fresh: bool,
+) {
+    effect.follow(settings, song, frames);
+    if fresh {
+        effect.settle();
+    }
 }
 
 /// Each track's sound after its slots and before its level and mute, from the latest frame, for a
@@ -117,6 +142,191 @@ pub enum Mono {
     /// It spreads the sides apart or mixes them, or hasn't been looked at for this: it works out
     /// both, and the slot looks at what comes out.
     Stereo,
+}
+
+/// How a slot blends what its effect gives with the sound going in, by the effect's `Mix`, and
+/// turns what comes out up or down by its `Gain`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mixing {
+    /// What it gives is all wet, blended with the sound by `Mix`, then turned by `Gain`. Written
+    /// so all wet and all dry are exact.
+    Wet,
+    /// What it makes is added to the sound, as an Aural Exciter's is, so `Mix` at `00` is the
+    /// sound alone and at `FF` the sound with all it makes.
+    Added,
+    /// It's blended with the sound by `Mix`, with nothing after: a compressor's makeup is its own,
+    /// on what it turned down, so compressing in parallel turns up only that.
+    Parallel,
+    /// What it gives is already its own blend of the sound and what it made, as Clouds' and
+    /// Beads' are, so the slot only turns it by `Gain`. Until its recording comes, the sound
+    /// passes.
+    Inside,
+    /// It's all wet, and what it leaves alone comes through as it is, as an EQ's does, so the slot
+    /// only turns it by `Gain`.
+    AllWet,
+}
+
+/// What a slot needs to know of an effect: from its DSP's [`SlotEffect`], and where its `Mix` and
+/// `Gain` are, from its description.
+#[derive(Debug, Clone, Copy)]
+pub struct Facts {
+    mono: Mono,
+    mixing: Mixing,
+    /// Where its `Mix` and its `Gain` are among the settings it keeps, found when `FACTS` is
+    /// made.
+    mix: Option<usize>,
+    gain: Option<usize>,
+}
+
+impl Facts {
+    /// What a DSP says of itself.
+    pub const fn of<E: SlotEffect>() -> Self {
+        Self {
+            mono: E::MONO,
+            mixing: E::MIXING,
+            mix: None,
+            gain: None,
+        }
+    }
+}
+
+/// An empty slot's: it passes the sound as it came, which is the same on both sides if it was.
+const EMPTY: Facts = Facts {
+    mono: Mono::Linked,
+    mixing: Mixing::Wet,
+    mix: None,
+    gain: None,
+};
+
+/// The effects kept in every slot rather than in the pool, each with its DSP, which has a field of
+/// [`InsertState`]'s. An effect with a long buffer is listed in `memories!` instead.
+const KEPT_IN_SLOT: [(EffectKind, Facts); 7] = [
+    (EffectKind::Distort, Facts::of::<Distortion>()),
+    (EffectKind::Eq, Facts::of::<ThreeBands>()),
+    (EffectKind::Compressor, Facts::of::<Dynamics>()),
+    (EffectKind::Phaser, Facts::of::<AllPasses>()),
+    (EffectKind::Lpg, Facts::of::<Gate>()),
+    (EffectKind::Vowel, Facts::of::<Formants>()),
+    (EffectKind::Exciter, Facts::of::<Excitement>()),
+];
+
+/// What every effect is to its slot, by [`EffectKind`]. Each has to be kept in the slot or in the
+/// pool, not both, and has to have the `Mix` and `Gain` its mixing takes, or it doesn't build.
+static FACTS: [Facts; EffectKind::COUNT] = {
+    let mut found = BUFFERED_FACTS;
+    let mut at = 0;
+    while at < KEPT_IN_SLOT.len() {
+        let (kind, facts) = KEPT_IN_SLOT[at];
+        assert!(
+            found[kind as usize].is_none(),
+            "an effect is kept in its slot and in the pool"
+        );
+        found[kind as usize] = Some(facts);
+        at += 1;
+    }
+    let mut facts = [EMPTY; EffectKind::COUNT];
+    let mut at = 0;
+    while at < EffectKind::COUNT {
+        let Some(mut these) = found[at] else {
+            panic!("an effect has no DSP");
+        };
+        let params = EffectKind::ALL[at].params();
+        these.mix = output(params, "mix");
+        these.gain = output(params, "gain");
+        let (mixes, turns) = match these.mixing {
+            Mixing::Wet | Mixing::Added => (true, true),
+            Mixing::Parallel => (true, false),
+            Mixing::Inside | Mixing::AllWet => (false, true),
+        };
+        assert!(
+            !mixes || these.mix.is_some(),
+            "an effect that mixes has no Mix"
+        );
+        assert!(
+            !turns || these.gain.is_some(),
+            "an effect that turns has no Gain"
+        );
+        facts[at] = these;
+        at += 1;
+    }
+    facts
+};
+
+/// The place among `params` of the one stored as `key` among what comes out, if there's one.
+const fn output(params: &[Param], key: &str) -> Option<usize> {
+    let mut at = 0;
+    while at < params.len() {
+        let param = &params[at];
+        if matches!(param.place, Place::Output) && same_bytes(param.key.as_bytes(), key.as_bytes())
+        {
+            return Some(at);
+        }
+        at += 1;
+    }
+    None
+}
+
+const fn same_bytes(one: &[u8], other: &[u8]) -> bool {
+    if one.len() != other.len() {
+        return false;
+    }
+    let mut at = 0;
+    while at < one.len() {
+        if one[at] != other[at] {
+            return false;
+        }
+        at += 1;
+    }
+    true
+}
+
+/// What the slot needs to know of the effect in it.
+#[inline]
+fn facts(insert: Insert) -> &'static Facts {
+    match insert.kind() {
+        Some(kind) => &FACTS[kind as usize],
+        None => &EMPTY,
+    }
+}
+
+/// What the slot eases and blends for an effect, as set: its amount, its mix and its gain.
+fn levels(insert: Insert) -> (u8, u8, u8) {
+    if insert.kind().is_none() {
+        return (0, 0, UNITY_LEVEL);
+    }
+    let facts = facts(insert);
+    let mix = || facts.mix.and_then(|at| insert.read(at)).unwrap_or(0xFF);
+    let gain = || {
+        facts
+            .gain
+            .and_then(|at| insert.read(at))
+            .unwrap_or(UNITY_LEVEL)
+    };
+    let (mix, gain) = match facts.mixing {
+        Mixing::Wet | Mixing::Added => (mix(), gain()),
+        Mixing::Parallel => (mix(), UNITY_LEVEL),
+        Mixing::Inside | Mixing::AllWet => (0xFF, gain()),
+    };
+    let amount = match insert {
+        // `Down` sweeps how long it holds as the shaping modes sweep how hard they drive.
+        Insert::Distort(Distort {
+            kind: DistortType::Down,
+            rate,
+            ..
+        }) => rate,
+        Insert::Distort(Distort { amount, .. }) => amount,
+        _ => 0,
+    };
+    (amount, mix, gain)
+}
+
+/// `wet` blended with `dry` by `mix`, then turned by `gain`, so all wet and all dry are exact.
+#[inline]
+fn mixed(wet: [f32; 2], dry: [f32; 2], mix: f32, gain: f32) -> [f32; 2] {
+    [
+        (wet[0] * mix + dry[0] * (1.0 - mix)) * gain,
+        (wet[1] * mix + dry[1] * (1.0 - mix)) * gain,
+    ]
 }
 
 /// What a track keeps for one of its slots. Nothing here allocates.
@@ -181,39 +391,17 @@ impl Default for InsertState {
     }
 }
 
-/// Whether it's the same effect, so it carries on rather than starting afresh.
+/// Whether it's the same effect, so it carries on rather than starting afresh. One that shows
+/// each type's own settings, as Distort and Comp do, is a different effect in each type.
 fn same_effect(before: Insert, after: Insert) -> bool {
-    match (before, after) {
-        (Insert::Distort(before), Insert::Distort(after)) => before.kind == after.kind,
-        (Insert::Compressor(before), Insert::Compressor(after)) => before.kind == after.kind,
-        (Insert::Empty, Insert::Empty)
-        | (Insert::Delay(_), Insert::Delay(_))
-        | (Insert::Reverb(_), Insert::Reverb(_))
-        | (Insert::Chorus(_), Insert::Chorus(_))
-        | (Insert::Eq(_), Insert::Eq(_))
-        | (Insert::Limit(_), Insert::Limit(_))
-        | (Insert::Phaser(_), Insert::Phaser(_))
-        | (Insert::Flanger(_), Insert::Flanger(_))
-        | (Insert::Tape(_), Insert::Tape(_))
-        | (Insert::Plate(_), Insert::Plate(_))
-        | (Insert::Pitch(_), Insert::Pitch(_))
-        | (Insert::Grains(_), Insert::Grains(_))
-        | (Insert::Warps(_), Insert::Warps(_))
-        | (Insert::Lpg(_), Insert::Lpg(_))
-        | (Insert::Reso(_), Insert::Reso(_))
-        | (Insert::Comb(_), Insert::Comb(_))
-        | (Insert::Vowel(_), Insert::Vowel(_))
-        | (Insert::FreqShift(_), Insert::FreqShift(_))
-        | (Insert::Spring(_), Insert::Spring(_))
-        | (Insert::Space(_), Insert::Space(_))
-        | (Insert::Rotary(_), Insert::Rotary(_))
-        | (Insert::Exciter(_), Insert::Exciter(_))
-        | (Insert::Stutter(_), Insert::Stutter(_))
-        | (Insert::Clouds(_), Insert::Clouds(_))
-        | (Insert::Beads(_), Insert::Beads(_))
-        | (Insert::Echo(_), Insert::Echo(_)) => true,
-        _ => false,
-    }
+    let kind = after.kind();
+    before.kind() == kind
+        && kind.is_none_or(|kind| match kind.spec().shown {
+            Shown::All => true,
+            Shown::ByType { type_at, .. } => {
+                before.read(usize::from(type_at)) == after.read(usize::from(type_at))
+            }
+        })
 }
 
 impl InsertState {
@@ -226,19 +414,11 @@ impl InsertState {
         {
             return;
         }
-        let frames_per_tick = song.frames_per_tick;
-        if !same_effect(self.insert, insert) {
+        let fresh = !same_effect(self.insert, insert);
+        if fresh {
             self.give_back(pool);
         }
-        let fresh = !same_effect(self.insert, insert);
-        self.set(insert);
-        // A phaser's sweep keeps time with the song, so it follows here, where the tempo is known.
-        if let Insert::Phaser(settings) = insert {
-            self.phaser.follow(settings, frames_per_tick);
-            if fresh {
-                self.phaser.settle();
-            }
-        }
+        self.take(insert, fresh, song, frames);
         let started = self.memory.is_none();
         if started {
             self.memory = pool.take(insert);
@@ -247,10 +427,7 @@ impl InsertState {
             }
         }
         if let Some(memory) = &mut self.memory {
-            memory.follow(insert, song, frames);
-            if started {
-                memory.settle();
-            }
+            memory.follow(insert, song, frames, started);
             // A knock rings the tank with nothing going in, and a stutter just triggered has a
             // piece to take, so neither may stay asleep.
             if memory.waking() {
@@ -304,59 +481,27 @@ impl InsertState {
         self.quiet = u32::MAX;
     }
 
-    /// Take what's now in the slot. A different effect starts afresh. What it keeps must be given
-    /// back first, as this drops it.
+    /// Take what's now in the slot, as `hold` does with the song standing still. A different
+    /// effect starts afresh. What it keeps must be given back first, as this drops it.
     pub fn set(&mut self, insert: Insert) {
-        let (amount, mix, gain) = match insert {
-            Insert::Empty => (0, 0, UNITY_LEVEL),
-            // `Down` sweeps how long it holds as the shaping modes sweep how hard they drive.
-            Insert::Distort(Distort {
-                kind: DistortType::Down,
-                rate,
-                mix,
-                gain,
-                ..
-            }) => (rate, mix, gain),
-            Insert::Distort(Distort {
-                amount, mix, gain, ..
-            }) => (amount, mix, gain),
-            Insert::Delay(Delay { mix, gain, .. })
-            | Insert::Reverb(Reverb { mix, gain, .. })
-            | Insert::Chorus(Chorus { mix, gain, .. })
-            | Insert::Limit(Limiter { mix, gain, .. })
-            | Insert::Phaser(Phaser { mix, gain, .. })
-            | Insert::Flanger(Flanger { mix, gain, .. })
-            | Insert::Tape(Tape { mix, gain, .. })
-            | Insert::Plate(Plate { mix, gain, .. })
-            | Insert::Spring(Spring { mix, gain, .. })
-            | Insert::Echo(Echo { mix, gain, .. })
-            | Insert::Stutter(Stutter { mix, gain, .. })
-            | Insert::Exciter(Exciter { mix, gain, .. })
-            | Insert::Rotary(Rotary { mix, gain, .. })
-            | Insert::Space(Space { mix, gain, .. })
-            | Insert::Pitch(Pitch { mix, gain, .. })
-            | Insert::Grains(Grains { mix, gain, .. })
-            | Insert::Warps(Warps { mix, gain, .. })
-            | Insert::Lpg(LowPassGate { mix, gain, .. })
-            | Insert::Reso(Resonator { mix, gain, .. })
-            | Insert::Comb(Comb { mix, gain, .. })
-            | Insert::Vowel(Vowel { mix, gain, .. })
-            | Insert::FreqShift(FreqShift { mix, gain, .. }) => (0, mix, gain),
-            // A compressor's makeup is its own, on what it turned down, with nothing after the mix.
-            Insert::Compressor(Compressor { mix, .. }) => (0, mix, UNITY_LEVEL),
-            // Clouds blends as the module does, inside it.
-            Insert::Clouds(Clouds { gain, .. }) | Insert::Beads(Beads { gain, .. }) => {
-                (0, 0xFF, gain)
-            }
-            // An EQ is all wet: what it leaves alone comes through as it is.
-            Insert::Eq(Equaliser { gain, .. }) => (0, 0xFF, gain),
-        };
+        self.take(
+            insert,
+            !same_effect(self.insert, insert),
+            SongPlace::STILL,
+            0,
+        );
+    }
+
+    /// Take what's now in the slot, where the song is and this many frames in, starting afresh if
+    /// `fresh`. Its long buffer follows in `hold`.
+    fn take(&mut self, insert: Insert, fresh: bool, song: SongPlace, frames: u64) {
+        let (amount, mix, gain) = levels(insert);
         let (amount, mix, gain) = (
             f32::from(amount) / 255.0,
             f32::from(mix) / 255.0,
             level_gain(f32::from(gain)),
         );
-        if !same_effect(self.insert, insert) {
+        if fresh {
             let (on, note, rng) = (self.on, self.note, self.rng);
             *self = Self::default();
             self.on = on;
@@ -365,47 +510,25 @@ impl InsertState {
             self.amount = Smoothed::at(amount);
             self.mix = Smoothed::at(mix);
             self.gain = Smoothed::at(gain);
-            if let Insert::Distort(settings) = insert {
-                self.distort = Distortion::starting(settings);
+        }
+        match insert {
+            Insert::Distort(settings) => {
+                follow_fresh(&mut self.distort, settings, song, frames, fresh);
             }
-        }
-        if let Insert::Distort(settings) = insert {
-            let fresh = !same_effect(self.insert, insert);
-            self.distort.follow(settings, fresh);
-        }
-        if let Insert::Eq(settings) = insert {
-            let fresh = !same_effect(self.insert, insert);
-            self.eq.follow(settings);
-            if fresh {
-                self.eq.settle();
+            Insert::Eq(settings) => follow_fresh(&mut self.eq, settings, song, frames, fresh),
+            Insert::Compressor(settings) => {
+                follow_fresh(&mut self.dynamics, settings, song, frames, fresh);
+                follow_fresh(&mut self.peak_clip, settings, song, frames, fresh);
             }
-        }
-        // Only Glue has its clip, which the other types keep while they're shown.
-        let clips = matches!(
-            insert,
-            Insert::Compressor(Compressor {
-                kind: CompressorType::Glue,
-                peak_clip: 1..,
-                ..
-            })
-        );
-        self.peak_clip.switch(clips);
-        if !same_effect(self.insert, insert) {
-            self.peak_clip.settle();
-        }
-        if let Insert::Vowel(settings) = insert {
-            let fresh = !same_effect(self.insert, insert);
-            self.vowel.follow(settings);
-            if fresh {
-                self.vowel.settle();
+            Insert::Phaser(settings) => {
+                follow_fresh(&mut self.phaser, settings, song, frames, fresh);
             }
-        }
-        if let Insert::Exciter(settings) = insert {
-            let fresh = !same_effect(self.insert, insert);
-            self.exciter.follow(settings);
-            if fresh {
-                self.exciter.settle();
+            Insert::Lpg(settings) => follow_fresh(&mut self.gate, settings, song, frames, fresh),
+            Insert::Vowel(settings) => follow_fresh(&mut self.vowel, settings, song, frames, fresh),
+            Insert::Exciter(settings) => {
+                follow_fresh(&mut self.exciter, settings, song, frames, fresh);
             }
+            _ => {}
         }
         self.insert = insert;
         self.amount.target = amount;
@@ -712,43 +835,10 @@ impl InsertState {
         Some((out, same || same_sides(out)))
     }
 
-    /// What its effect does with a sound that's the same on both sides (decision 147). Every
-    /// effect says, so a new one has to choose: `Mono::Stereo` is always safe, and
-    /// `tests/all/mono.rs` checks every other claim.
+    /// What its effect does with a sound that's the same on both sides (decision 147), as its
+    /// DSP's [`SlotEffect::MONO`] says. An empty slot is linked: it passes the sound as it came.
     pub fn mono(&self) -> Mono {
-        match self.insert {
-            // Each of its types works each side alone, the same way, with nothing between them.
-            Insert::Distort(_)
-            | Insert::Eq(_)
-            | Insert::Lpg(_)
-            | Insert::Vowel(_)
-            | Insert::Exciter(_) => Mono::OneSide,
-            // One detector for both sides, and one gain on each.
-            Insert::Empty | Insert::Compressor(_) => Mono::Linked,
-            // These spread the sides apart or mix them, or keep their sides in the effect pool's
-            // buffers, which haven't been looked at for this.
-            Insert::Delay(_)
-            | Insert::Reverb(_)
-            | Insert::Chorus(_)
-            | Insert::Limit(_)
-            | Insert::Phaser(_)
-            | Insert::Flanger(_)
-            | Insert::Tape(_)
-            | Insert::Plate(_)
-            | Insert::Pitch(_)
-            | Insert::Grains(_)
-            | Insert::Warps(_)
-            | Insert::Reso(_)
-            | Insert::Comb(_)
-            | Insert::FreqShift(_)
-            | Insert::Spring(_)
-            | Insert::Space(_)
-            | Insert::Rotary(_)
-            | Insert::Stutter(_)
-            | Insert::Clouds(_)
-            | Insert::Beads(_)
-            | Insert::Echo(_) => Mono::Stereo,
-        }
+        facts(self.insert).mono
     }
 
     /// One frame through the slot, faded toward what came in as it's bypassed.
@@ -808,23 +898,17 @@ impl InsertState {
         rate: u32,
         keys: &Keys,
     ) -> [f32; 2] {
-        let distort = match self.insert {
+        let (wet, dry) = match self.insert {
             Insert::Empty => return input,
             Insert::Compressor(settings) => {
                 // It hears its own input, or another track's as it was after its slots.
                 let key = settings
                     .source_track(keys.sounds)
                     .map_or(input, |track| keys.of(track));
-                // Its makeup is in what comes out wet, so compressing in parallel turns up only
-                // what it turned down.
                 let wet = self.dynamics.process(input, key, settings, smoothing, rate);
-                let mix = self.mix.next(smoothing);
                 // Glue's clip is the last thing it does, after its makeup and the mix.
-                let mixed = [
-                    wet[0] * mix + input[0] * (1.0 - mix),
-                    wet[1] * mix + input[1] * (1.0 - mix),
-                ];
-                return self.peak_clip.process(mixed, rate);
+                let out = self.output(wet, input, smoothing);
+                return self.peak_clip.process(out, rate);
             }
             Insert::Lpg(settings) => {
                 // It's opened by its own input, or another track's as it was after its slots.
@@ -834,127 +918,80 @@ impl InsertState {
                 let wet = self
                     .gate
                     .process(input, same, key, settings, smoothing, rate);
-                let mix = self.mix.next(smoothing);
-                let gain = self.gain.next(smoothing);
-                return [
-                    (wet[0] * mix + input[0] * (1.0 - mix)) * gain,
-                    (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
-                ];
+                (wet, input)
             }
+            // The dry sound comes out as late as the limited one, so blending them doesn't comb.
             Insert::Limit(_) => {
-                // The dry sound comes out as late as the limited one, so blending them doesn't comb.
                 let [wet, dry] = self.limit(input, smoothing, rate);
-                let mix = self.mix.next(smoothing);
-                let gain = self.gain.next(smoothing);
-                return [
-                    (wet[0] * mix + dry[0] * (1.0 - mix)) * gain,
-                    (wet[1] * mix + dry[1] * (1.0 - mix)) * gain,
-                ];
+                (wet, dry)
             }
-            Insert::Warps(settings) => {
-                let wet = self.warps(input, settings, smoothing, keys);
-                let mix = self.mix.next(smoothing);
-                let gain = self.gain.next(smoothing);
-                return [
-                    (wet[0] * mix + input[0] * (1.0 - mix)) * gain,
-                    (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
-                ];
-            }
+            Insert::Warps(settings) => (self.warps(input, settings, smoothing, keys), input),
             Insert::Reso(_) | Insert::Comb(_) | Insert::FreqShift(_) => {
-                let wet = self.resonate(input, smoothing, rate);
-                let mix = self.mix.next(smoothing);
-                let gain = self.gain.next(smoothing);
-                return [
-                    (wet[0] * mix + input[0] * (1.0 - mix)) * gain,
-                    (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
-                ];
+                (self.resonate(input, smoothing, rate), input)
             }
             Insert::Vowel(_) => {
                 let wet = self.vowel.process(input, same, self.note, smoothing, rate);
-                let mix = self.mix.next(smoothing);
-                let gain = self.gain.next(smoothing);
-                return [
-                    (wet[0] * mix + input[0] * (1.0 - mix)) * gain,
-                    (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
-                ];
+                (wet, input)
             }
-            // What it makes is added to the sound, as an Aural Exciter's is, so `Mix` at `00` is
-            // the sound alone and at `FF` the sound with all it makes.
-            Insert::Exciter(_) => {
-                let wet = self.exciter.process(input, same, smoothing, rate);
-                let mix = self.mix.next(smoothing);
-                let gain = self.gain.next(smoothing);
-                return [
-                    (input[0] + wet[0] * mix) * gain,
-                    (input[1] + wet[1] * mix) * gain,
-                ];
+            Insert::Exciter(_) => (self.exciter.process(input, same, smoothing, rate), input),
+            Insert::Phaser(_) => (self.phaser.process(input, smoothing, rate), input),
+            Insert::Eq(_) => (self.eq.process(input, same, smoothing, rate), input),
+            Insert::Distort(settings) => {
+                let amount = self.amount.next(smoothing);
+                let wet = self
+                    .distort
+                    .process(input, same, settings, amount, self.note, smoothing, rate);
+                (wet, input)
             }
-            Insert::Phaser(_) => {
-                let wet = self.phaser.process(input, smoothing, rate);
-                let mix = self.mix.next(smoothing);
-                let gain = self.gain.next(smoothing);
-                return [
-                    (wet[0] * mix + input[0] * (1.0 - mix)) * gain,
-                    (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
-                ];
-            }
-            Insert::Eq(_) => {
-                let gain = self.gain.next(smoothing);
-                return self
-                    .eq
-                    .process(input, same, smoothing, rate)
-                    .map(|sample| sample * gain);
-            }
-            // What comes out is already the module's blend of the sound and what it made, so the
-            // slot only turns it up or down. Until its recording comes, the sound passes.
-            Insert::Clouds(_) | Insert::Beads(_) => {
-                let gain = self.gain.next(smoothing);
-                let out = if self.memory.is_some() {
-                    self.ring(input, rate)
-                } else {
+            // Every other effect the slot rings. One that blends inside itself passes the sound
+            // until its recording comes.
+            insert => {
+                let waiting = self.memory.is_none() && facts(insert).mixing == Mixing::Inside;
+                let wet = if waiting {
                     input
+                } else {
+                    self.ring(input, rate)
                 };
-                return out.map(|sample| sample * gain);
+                (wet, input)
             }
-            Insert::Distort(settings) => Some(settings),
-            Insert::Delay(_)
-            | Insert::Reverb(_)
-            | Insert::Chorus(_)
-            | Insert::Flanger(_)
-            | Insert::Tape(_)
-            | Insert::Plate(_)
-            | Insert::Spring(_)
-            | Insert::Space(_)
-            | Insert::Pitch(_)
-            | Insert::Grains(_)
-            | Insert::Rotary(_)
-            | Insert::Stutter(_)
-            | Insert::Echo(_) => None,
         };
-        let amount = self.amount.next(smoothing);
-        let mix = self.mix.next(smoothing);
-        let gain = self.gain.next(smoothing);
-        let Some(settings) = distort else {
-            let wet = self.ring(input, rate);
-            return [
-                (wet[0] * mix + input[0] * (1.0 - mix)) * gain,
-                (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
-            ];
-        };
-        let wet = self
-            .distort
-            .process(input, same, settings, amount, self.note, smoothing, rate);
-        // Written so all wet and all dry are exact.
-        [
-            (wet[0] * mix + input[0] * (1.0 - mix)) * gain,
-            (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
-        ]
+        self.output(wet, dry, smoothing)
+    }
+
+    /// What comes out of the slot's effect: what it gave, `wet`, with the `dry` sound as its
+    /// effect's [`Mixing`] says, at the slot's mix and gain.
+    #[inline]
+    fn output(&mut self, wet: [f32; 2], dry: [f32; 2], smoothing: f32) -> [f32; 2] {
+        match facts(self.insert).mixing {
+            Mixing::Wet => {
+                let mix = self.mix.next(smoothing);
+                let gain = self.gain.next(smoothing);
+                mixed(wet, dry, mix, gain)
+            }
+            Mixing::Added => {
+                let mix = self.mix.next(smoothing);
+                let gain = self.gain.next(smoothing);
+                [
+                    (dry[0] + wet[0] * mix) * gain,
+                    (dry[1] + wet[1] * mix) * gain,
+                ]
+            }
+            Mixing::Parallel => {
+                let mix = self.mix.next(smoothing);
+                mixed(wet, dry, mix, 1.0)
+            }
+            Mixing::Inside | Mixing::AllWet => {
+                let gain = self.gain.next(smoothing);
+                wet.map(|sample| sample * gain)
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vt_model::insert::{Compressor, CompressorType, Delay, Equaliser};
 
     const RATE: u32 = 48_000;
     /// Settings take effect at once, as the smoother has nothing to do.
@@ -1172,6 +1209,127 @@ mod tests {
             })
         }));
         inserts
+    }
+
+    /// Every effect in each of its types and modes, with what the slot reads of it set apart from
+    /// its defaults.
+    fn every_type_of_every_effect() -> Vec<Insert> {
+        let mut inserts = Vec::new();
+        for insert in every_effect() {
+            let Some(kind) = insert.kind() else {
+                inserts.push(insert);
+                continue;
+            };
+            let mut set = insert;
+            for (at, param) in kind.params().iter().enumerate() {
+                if let "mix" | "gain" | "amount" | "rate" = param.key {
+                    set = set.write(at, (0x13 + 0x1D * at) as f32);
+                }
+            }
+            inserts.push(set);
+            for (at, param) in kind.params().iter().enumerate() {
+                if param.place == Place::Type {
+                    for value in 0..=param.kind.top() {
+                        inserts.push(set.write(at, f32::from(value)));
+                    }
+                }
+            }
+        }
+        inserts
+    }
+
+    /// The slot's facts as each effect's own arm said them before they came from its DSP and its
+    /// description: its amount, mix and gain, and what it does with a sound the same on both sides.
+    fn by_hand(insert: Insert) -> ((u8, u8, u8), Mono) {
+        use vt_model::insert::*;
+        let levels = match insert {
+            Insert::Empty => (0, 0, UNITY_LEVEL),
+            Insert::Distort(Distort {
+                kind: DistortType::Down,
+                rate,
+                mix,
+                gain,
+                ..
+            }) => (rate, mix, gain),
+            Insert::Distort(Distort {
+                amount, mix, gain, ..
+            }) => (amount, mix, gain),
+            Insert::Delay(Delay { mix, gain, .. })
+            | Insert::Reverb(Reverb { mix, gain, .. })
+            | Insert::Chorus(Chorus { mix, gain, .. })
+            | Insert::Limit(Limiter { mix, gain, .. })
+            | Insert::Phaser(Phaser { mix, gain, .. })
+            | Insert::Flanger(Flanger { mix, gain, .. })
+            | Insert::Tape(Tape { mix, gain, .. })
+            | Insert::Plate(Plate { mix, gain, .. })
+            | Insert::Spring(Spring { mix, gain, .. })
+            | Insert::Echo(Echo { mix, gain, .. })
+            | Insert::Stutter(Stutter { mix, gain, .. })
+            | Insert::Exciter(Exciter { mix, gain, .. })
+            | Insert::Rotary(Rotary { mix, gain, .. })
+            | Insert::Space(Space { mix, gain, .. })
+            | Insert::Pitch(Pitch { mix, gain, .. })
+            | Insert::Grains(Grains { mix, gain, .. })
+            | Insert::Warps(Warps { mix, gain, .. })
+            | Insert::Lpg(LowPassGate { mix, gain, .. })
+            | Insert::Reso(Resonator { mix, gain, .. })
+            | Insert::Comb(Comb { mix, gain, .. })
+            | Insert::Vowel(Vowel { mix, gain, .. })
+            | Insert::FreqShift(FreqShift { mix, gain, .. }) => (0, mix, gain),
+            Insert::Compressor(Compressor { mix, .. }) => (0, mix, UNITY_LEVEL),
+            Insert::Clouds(Clouds { gain, .. }) | Insert::Beads(Beads { gain, .. }) => {
+                (0, 0xFF, gain)
+            }
+            Insert::Eq(Equaliser { gain, .. }) => (0, 0xFF, gain),
+        };
+        let mono = match insert {
+            Insert::Distort(_)
+            | Insert::Eq(_)
+            | Insert::Lpg(_)
+            | Insert::Vowel(_)
+            | Insert::Exciter(_) => Mono::OneSide,
+            Insert::Empty | Insert::Compressor(_) => Mono::Linked,
+            _ => Mono::Stereo,
+        };
+        (levels, mono)
+    }
+
+    /// Whether it's the same effect, as it was said by hand.
+    fn same_by_hand(before: Insert, after: Insert) -> bool {
+        match (before, after) {
+            (Insert::Distort(before), Insert::Distort(after)) => before.kind == after.kind,
+            (Insert::Compressor(before), Insert::Compressor(after)) => before.kind == after.kind,
+            _ => before.kind() == after.kind(),
+        }
+    }
+
+    #[test]
+    fn what_the_slot_knows_of_each_effect_is_what_its_arms_said() {
+        let inserts = every_type_of_every_effect();
+        for &insert in &inserts {
+            let mut state = InsertState::default();
+            state.set(insert);
+            assert_eq!(
+                (levels(insert), state.mono()),
+                by_hand(insert),
+                "{insert:?}"
+            );
+            for &other in &inserts {
+                assert_eq!(
+                    same_effect(insert, other),
+                    same_by_hand(insert, other),
+                    "{insert:?} {other:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn each_effect_is_kept_in_its_slot_or_in_the_pool() {
+        for kind in EffectKind::ALL {
+            let kept = KEPT_IN_SLOT.iter().any(|(listed, _)| *listed == kind);
+            assert_ne!(kept, BUFFERED_FACTS[kind as usize].is_some(), "{kind:?}");
+        }
     }
 
     /// A slot holding `insert`, with a long buffer of its own if it takes one.

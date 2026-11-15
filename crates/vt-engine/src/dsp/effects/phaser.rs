@@ -19,6 +19,8 @@ use vt_model::lfo::SWEEP_TICKS;
 
 use crate::dsp::blocks::flush::{flush, tiny_by_fields};
 use crate::dsp::blocks::smoother::Smoothed;
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::SlotEffect;
 use crate::dsp::filters::filter::soft_clip;
 
 /// How many all-passes there are at most, and how many each choice of `Stages` adds.
@@ -223,6 +225,32 @@ impl Phaser {
             out[side] = state.process(sample, coefficients[side], feedback, taps);
         }
         out
+    }
+}
+
+impl SlotEffect for Phaser {
+    type Settings = Settings;
+
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    fn follow(&mut self, settings: Settings, song: SongPlace, _frames: u64) {
+        // Its sweep keeps time with the song.
+        self.follow(settings, song.frames_per_tick);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// None: it's worked every frame, so the slot never waits on its tail.
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        0
     }
 }
 

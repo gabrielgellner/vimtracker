@@ -46,7 +46,7 @@ use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::pitch_shifter::PitchShifter;
 use crate::dsp::effects::reverb::Reverb;
-use crate::dsp::effects::slot::{Rung, SlotEffect};
+use crate::dsp::effects::slot::{Mixing, Rung, SlotEffect};
 use crate::rng::Pcg32;
 use spectral::{Spectral, SpectralControl};
 
@@ -1563,6 +1563,8 @@ impl Clouds {
 
 impl SlotEffect for Clouds {
     type Settings = Settings;
+    /// It blends the sound and what it made itself, as the module does.
+    const MIXING: Mixing = Mixing::Inside;
 
     /// Clouds', which records the longest of the module's qualities.
     fn new(rate: u32) -> Self {
