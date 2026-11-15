@@ -25,11 +25,11 @@ use super::virtual_analog::{Moving, Settings};
 
 /// A resonant filter's sound, faked as Casio's CZ did: a sine at the cutoff, restarted each cycle
 /// of the note and windowed by a saw or a triangle, blended with a square made the same way.
-pub type DigitalFilter = Macro<DigitalFilterModel>;
+pub(crate) type DigitalFilter = Macro<DigitalFilterModel>;
 /// A sine bent by a second, which its own last output bends in turn.
-pub type FeedbackFm = Macro<FeedbackFmModel>;
+pub(crate) type FeedbackFm = Macro<FeedbackFmModel>;
 /// A sine bent by a second, whose speed its own output moves, for unstable, chaotic tones.
-pub type ChaoticFm = Macro<ChaoticFmModel>;
+pub(crate) type ChaoticFm = Macro<ChaoticFmModel>;
 
 /// Where each filter's sine restarts each cycle, and where its square's restarts each half, in
 /// turns: low-pass, peak, band-pass and high-pass.
@@ -37,7 +37,7 @@ const FILTER_RESETS: [f32; 4] = [0.0, 0.5, 0.25, 0.5];
 const SQUARE_RESETS: [f32; 2] = [0.25, 0.5];
 
 #[derive(Debug, Clone, Copy)]
-pub struct DigitalFilterModel {
+pub(crate) struct DigitalFilterModel {
     phase: f32,
     modulator: f32,
     square_modulator: f32,
@@ -150,7 +150,7 @@ fn ratio_semitones(ratio: f32) -> f32 {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct FeedbackFmModel {
+pub(crate) struct FeedbackFmModel {
     phase: f32,
     modulator: f32,
     previous: f32,
@@ -189,7 +189,7 @@ impl Model for FeedbackFmModel {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ChaoticFmModel {
+pub(crate) struct ChaoticFmModel {
     phase: f32,
     modulator: f32,
     amount: Option<f32>,

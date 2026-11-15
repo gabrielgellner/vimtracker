@@ -324,7 +324,7 @@ impl Loop {
 /// What a `Comb` slot keeps, from the effect pool, as its lines are a cycle of the lowest note
 /// long.
 #[derive(Debug, Clone)]
-pub struct Comb {
+pub(crate) struct Comb {
     lines: [Vec<f32>; 2],
     mask: usize,
     /// Where the newest frame is in the lines.
@@ -363,7 +363,7 @@ pub struct Comb {
 
 impl Comb {
     /// Lines long enough for a cycle of the lowest note, with the band's delay put back.
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         let size = mask_at(rate) + 1;
         Self {
             lines: [vec![0.0; size], vec![0.0; size]],
@@ -392,7 +392,7 @@ impl Comb {
     }
 
     /// Forget everything it was playing, for a fresh start.
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         for line in &mut self.lines {
             line.fill(0.0);
         }
@@ -404,12 +404,12 @@ impl Comb {
     }
 
     /// How many quiet frames in a row mean it's done.
-    pub fn quiet_frames(&self) -> u32 {
+    pub(crate) fn quiet_frames(&self) -> u32 {
         (QUIET_SECONDS * self.rate as f32) as u32
     }
 
     /// Take what's set now, jumping to it the first time.
-    pub fn follow(&mut self, settings: Settings) {
+    pub(crate) fn follow(&mut self, settings: Settings) {
         if self.settings == Some(settings) {
             return;
         }
@@ -428,7 +428,7 @@ impl Comb {
     }
 
     /// Jump to what's set and the next note, rather than gliding, as when it's been resting.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.fresh = true;
         self.left = 0;
     }
@@ -447,7 +447,7 @@ impl Comb {
     /// One frame of the slot's sound through the comb, tuned to `note` and its `Tune` above it,
     /// and the frame out, all wet and within full scale.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2], note: f32, smoothing: f32) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2], note: f32, smoothing: f32) -> [f32; 2] {
         if self.left == 0 {
             self.work_out(note, smoothing);
             self.left = BLOCK;

@@ -38,14 +38,14 @@ use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::dsp::filters::filter::soft_clip;
 
 /// The most of what comes out that goes back in, well short of all, so stacked shifts die away.
-pub const MOST_FEEDBACK: f32 = 0.85;
+pub(crate) const MOST_FEEDBACK: f32 = 0.85;
 /// How far what goes into the line can get before a soft clip holds it back, so only what's very
 /// loud is touched.
 const HEADROOM: f32 = 4.0;
 
 /// A pitch shifter's lines and grains.
 #[derive(Debug, Clone)]
-pub struct PitchShifter {
+pub(crate) struct PitchShifter {
     lines: [Vec<f32>; 2],
     mask: usize,
     write: usize,
@@ -68,7 +68,7 @@ pub struct PitchShifter {
 
 impl PitchShifter {
     /// Lines long enough for its longest window at this rate.
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         let frames_per_ms = rate as f32 / 1000.0;
         let longest = LONGEST_GRAIN_MS * frames_per_ms;
         let size = (longest.ceil() as usize + 4).next_power_of_two();
@@ -93,11 +93,11 @@ impl PitchShifter {
     }
 
     /// The longest anything stays in it, in frames.
-    pub fn frames(&self) -> usize {
+    pub(crate) fn frames(&self) -> usize {
         self.mask + 1
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         for line in &mut self.lines {
             line.fill(0.0);
         }
@@ -106,7 +106,7 @@ impl PitchShifter {
     }
 
     /// Take what's set now.
-    pub fn follow(&mut self, settings: Settings) {
+    pub(crate) fn follow(&mut self, settings: Settings) {
         self.semitones.target = shift_semitones(f32::from(settings.shift))
             + fine_cents(f32::from(settings.fine)) / 100.0;
         self.window.target = grain_ms(f32::from(settings.size)) * self.rate as f32 / 1000.0;
@@ -115,14 +115,14 @@ impl PitchShifter {
 
     /// Shift by so many semitones through a window of so many frames, with nothing fed back, as
     /// Clouds' looping delay has it after its delay. Both glide there as `Pitch` and `Size` do.
-    pub fn aim(&mut self, semitones: f32, window: f32) {
+    pub(crate) fn aim(&mut self, semitones: f32, window: f32) {
         self.semitones.target = semitones;
         self.window.target = window;
         self.feedback.target = 0.0;
     }
 
     /// Jump to what's set, as it's only just started.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.semitones.settle();
         self.window.settle();
         self.window_now = self.window.value;
@@ -151,7 +151,7 @@ impl PitchShifter {
 
     /// Feed one frame in and get the shifted sound out, all wet.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         let ratio = (self.semitones.next(self.smoothing) / 12.0).exp2();
         let wanted = self.window.next(self.smoothing);
         self.window_now += (wanted - self.window_now).clamp(-self.most_move, self.most_move);

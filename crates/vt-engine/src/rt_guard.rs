@@ -18,7 +18,7 @@ thread_local! {
     static VIOLATIONS: Cell<usize> = const { Cell::new(0) };
 }
 
-pub struct Guarded;
+pub(crate) struct Guarded;
 
 unsafe impl GlobalAlloc for Guarded {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
@@ -55,7 +55,7 @@ fn note() {
 }
 
 /// Run `f` with allocation forbidden on this thread, and say how many times it allocated anyway.
-pub fn forbidden<R>(f: impl FnOnce() -> R) -> (R, usize) {
+pub(crate) fn forbidden<R>(f: impl FnOnce() -> R) -> (R, usize) {
     let before = VIOLATIONS.with(Cell::get);
     ARMED.with(|armed| armed.set(true));
     let out = f();

@@ -5,9 +5,9 @@
 use std::f32::consts::TAU;
 use std::sync::Arc;
 
-use vt_engine::dsp::dynamics::compressor::{Compressor, curve_db};
-use vt_engine::dsp::effects::slot::{InsertState, Keys};
 use vt_engine::engine::Engine;
+use vt_engine::parts::{Compressor, InsertState, Keys};
+use vt_engine::pictures::curve_db;
 use vt_engine::published::Published;
 use vt_model::insert::{
     CONSOLE_AUTO_RELEASE, Compressor as Settings, CompressorType, GLUE_AUTO_RELEASE, Insert,

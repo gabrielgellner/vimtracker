@@ -140,7 +140,7 @@ impl Ramp {
 
 /// The rotary speaker's line and rotors.
 #[derive(Debug, Clone)]
-pub struct Rotary {
+pub(crate) struct Rotary {
     /// What goes to the horn, read back at each microphone's distance.
     line: Vec<f32>,
     mask: usize,
@@ -171,7 +171,7 @@ pub struct Rotary {
 
 impl Rotary {
     /// A line long enough for the horn's furthest delay at this rate.
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         let longest = DOPPLER_SECONDS * FURTHEST * rate as f32;
         let size = (longest.ceil() as usize + 4).next_power_of_two();
         let mut rotary = Self {
@@ -205,12 +205,12 @@ impl Rotary {
     }
 
     /// The longest anything stays in it, in frames.
-    pub fn frames(&self) -> usize {
+    pub(crate) fn frames(&self) -> usize {
         self.mask + 1
     }
 
     /// Forget what's in it, and start the rotors from the front.
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.line.fill(0.0);
         self.crossed = [0.0; 2];
         self.bassed = [0.0; 2];
@@ -220,7 +220,7 @@ impl Rotary {
     }
 
     /// Take what's set now. A new speed is eased to.
-    pub fn follow(&mut self, settings: Settings) {
+    pub(crate) fn follow(&mut self, settings: Settings) {
         let share = |value: u8| f32::from(value) / 255.0;
         self.fast = settings.fast == FAST_SPEED;
         self.inertia = share(settings.inertia);
@@ -231,7 +231,7 @@ impl Rotary {
     }
 
     /// Jump to what's set, the rotors at their speed, as it's only just started.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.doppler.settle();
         self.tremolo.settle();
         self.drive.settle();
@@ -301,13 +301,13 @@ impl Rotary {
 
     /// One frame in, for the pool's own use.
     #[inline]
-    pub fn process_alone(&mut self, input: [f32; 2]) -> [f32; 2] {
+    pub(crate) fn process_alone(&mut self, input: [f32; 2]) -> [f32; 2] {
         self.process(input, self.smoothing)
     }
 
     /// Feed one frame in and get the cabinet's sound out, all wet.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2], smoothing: f32) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2], smoothing: f32) -> [f32; 2] {
         self.doppler.next(smoothing);
         self.tremolo.next(smoothing);
         let drive = self.drive.next(smoothing);

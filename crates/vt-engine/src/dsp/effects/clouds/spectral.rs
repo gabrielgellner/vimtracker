@@ -89,7 +89,7 @@ pub(super) struct SpectralControl {
 
 impl SpectralControl {
     /// From the module's knobs, each 0 to 1, and its shift in semitones.
-    pub fn new(
+    pub(super) fn new(
         position: f32,
         size: f32,
         semitones: f32,
@@ -233,7 +233,7 @@ fn sample(rng: &mut Pcg32) -> u16 {
 
 impl Spectral {
     /// Frames of the module's length at this rate, and everything they need.
-    pub fn new(rate: u32) -> Self {
+    pub(super) fn new(rate: u32) -> Self {
         let frame = frame_for(f64::from(rate));
         let hop = frame / HOPS;
         let ring = frame + hop;
@@ -308,7 +308,7 @@ impl Spectral {
     }
 
     /// Start afresh with nothing in it, for one side or two and so many kept spectra.
-    pub fn reset(&mut self, sides: usize, textures: usize) {
+    pub(super) fn reset(&mut self, sides: usize, textures: usize) {
         self.used_sides = sides.clamp(1, 2);
         self.textures = textures.clamp(1, MOST_TEXTURES);
         for side in &mut self.sides {
@@ -326,20 +326,21 @@ impl Spectral {
     }
 
     /// How many frames late what comes out is, at the rate it runs at.
-    pub fn latency(&self) -> usize {
+    #[cfg(test)]
+    pub(super) fn latency(&self) -> usize {
         self.ring
     }
 
     /// The frame's samples and how many bins it uses, for the tests.
     #[cfg(test)]
-    pub fn sizes(&self) -> (usize, usize) {
+    pub(super) fn sizes(&self) -> (usize, usize) {
         (self.frame, self.bins)
     }
 
     /// Take a frame in and give the one a frame and a hop ago out; and every so often, a part of
     /// the last hop's frame's work.
     #[inline]
-    pub fn process(
+    pub(super) fn process(
         &mut self,
         input: [f32; 2],
         control: &SpectralControl,

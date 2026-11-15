@@ -47,7 +47,7 @@ fn soft_clip(x: f32) -> f32 {
 
 /// One voice. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct Kick {
+pub(crate) struct Kick {
     rate: f32,
     trigger: bool,
     pulse_remaining: i32,

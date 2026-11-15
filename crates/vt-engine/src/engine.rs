@@ -271,7 +271,7 @@ impl Engine {
     }
 
     /// The output sample rate.
-    pub fn rate(&self) -> u32 {
+    pub(crate) fn rate(&self) -> u32 {
         self.rate
     }
 

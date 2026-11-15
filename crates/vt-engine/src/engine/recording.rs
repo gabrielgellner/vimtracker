@@ -11,7 +11,7 @@ use super::{Engine, Transport, sample_of_tick};
 
 impl Engine {
     /// Listen to a source, so the margin before a recording's start is of it.
-    pub fn listen_to(&mut self, source: RecordSource) {
+    pub(crate) fn listen_to(&mut self, source: RecordSource) {
         self.recorder.listen_to(source);
     }
 
@@ -36,7 +36,7 @@ impl Engine {
     }
 
     /// Take a recording back, to be dropped.
-    pub fn cancel_recording(&mut self) {
+    pub(crate) fn cancel_recording(&mut self) {
         self.recorder.cancel();
     }
 

@@ -81,7 +81,7 @@ fn shaped(input: f32, shape: f32) -> f32 {
 
 /// One voice. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct Waveshaping {
+pub(crate) struct Waveshaping {
     phase: f32,
     next_sample: f32,
     high: bool,
@@ -113,7 +113,7 @@ impl SynthEngine for Waveshaping {
 }
 
 impl Waveshaping {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             phase: 0.5,
             next_sample: 0.0,

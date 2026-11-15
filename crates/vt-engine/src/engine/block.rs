@@ -17,13 +17,13 @@ use super::{Engine, RestingBuses, Transport};
 impl Engine {
     /// Fill interleaved stereo output. This doesn't allocate, lock or print.
     /// The master's levels since this was last asked.
-    pub fn take_reading(&mut self) -> Reading {
+    pub(crate) fn take_reading(&mut self) -> Reading {
         std::mem::take(&mut self.reading)
     }
 
     /// Each track's levels over the last so many frames. A silent track skips adding to its reading,
     /// so the frames are given here, and an average counts the silence.
-    pub fn take_track_readings(&mut self, frames: u32) -> [Reading; MAX_TRACKS] {
+    pub(crate) fn take_track_readings(&mut self, frames: u32) -> [Reading; MAX_TRACKS] {
         let mut readings = [Reading::default(); MAX_TRACKS];
         for (reading, track) in readings.iter_mut().zip(self.tracks.iter_mut()) {
             *reading = std::mem::take(&mut track.reading);

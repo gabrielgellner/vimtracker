@@ -44,7 +44,7 @@ const WOW_ROUNDING: f64 = 1.0 / 16.0;
 /// Where the wobble's triangle starts in its turn: at its middle, going down.
 const WOW_START: f64 = 0.25;
 /// The most repeats [`repeats`] gives, and how quiet one is when it stops, as a gain: -60 dB.
-pub const MOST_TAPS: usize = 16;
+pub(crate) const MOST_TAPS: usize = 16;
 const QUIETEST_TAP: f32 = 0.001;
 /// Where repeats are measured with no cuts, and the frequencies the cuts' best is looked for
 /// among: 64 a decade from 20 Hz to 20 kHz.
@@ -53,7 +53,7 @@ const SEARCH_STEPS: usize = 192;
 
 /// How many frames a slot's delay can hold: its longest time at the slowest tempo, and room to
 /// read around it.
-pub fn buffer_frames(rate: u32) -> usize {
+pub(crate) fn buffer_frames(rate: u32) -> usize {
     let longest = u64::from(DIVISION_TICKS[DIVISION_TICKS.len() - 1]);
     sample_of_tick(longest, rate, MIN_MILLIBPM) as usize + 8
 }
@@ -74,7 +74,7 @@ pub struct Tap {
 
 /// A delay's repeats at its settings and a tempo, for a drawing: the sound itself as it comes
 /// through, `dry`, a gain on both sides, and each repeat while it's louder than -60 dB, at most
-/// [`MOST_TAPS`], for a sound the same on both sides, measured at `hertz`, where the feedback's
+/// `MOST_TAPS`, for a sound the same on both sides, measured at `hertz`, where the feedback's
 /// cuts pass the most.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Repeats {
@@ -83,7 +83,7 @@ pub struct Repeats {
     pub taps: Vec<Tap>,
 }
 
-/// A delay's repeats, as [`Delay::process`] makes them for a quiet sound once its settings have
+/// A delay's repeats, as `Delay::process` makes them for a quiet sound once its settings have
 /// settled. The first comes out as it went in, and each after has been round the feedback once
 /// more, through the cuts and turned down by `Feedback`; `Drive`'s clip leaves a quiet sound as it
 /// is. With `Ping-pong` the sound goes in on the left and each repeat crosses to the other side,
@@ -154,7 +154,7 @@ pub fn repeats(settings: Settings, frames_per_tick: f64, rate: u32) -> Repeats {
 
 /// The delay line and what's in its feedback.
 #[derive(Debug, Clone)]
-pub struct Delay {
+pub(crate) struct Delay {
     buffer: Vec<[f32; 2]>,
     write: usize,
     /// Whether there's anything to clear.
@@ -193,7 +193,7 @@ pub struct Delay {
 impl Delay {
     /// Make a delay that can hold this many frames. Its memory is touched here, so the callback
     /// doesn't have to wait for it to be paged in.
-    pub fn new(frames: usize, rate: u32) -> Self {
+    pub(crate) fn new(frames: usize, rate: u32) -> Self {
         let mut buffer = vec![[0.0; 2]; frames.max(8)];
         buffer.fill([0.0; 2]);
         std::hint::black_box(&mut buffer);
@@ -229,7 +229,7 @@ impl Delay {
     }
 
     /// Forget what's in it.
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         if self.used {
             self.buffer.fill([0.0; 2]);
             self.used = false;
@@ -241,7 +241,7 @@ impl Delay {
     }
 
     /// Take the settings, at a tempo. The time eases to a new value.
-    pub fn follow(&mut self, settings: Settings, frames_per_tick: f64) {
+    pub(crate) fn follow(&mut self, settings: Settings, frames_per_tick: f64) {
         let ticks = DIVISION_TICKS[usize::from(settings.time).min(DIVISION_TICKS.len() - 1)];
         let longest = (self.buffer.len() - 1) as f64 - SHORTEST_FRAMES;
         self.target_frames = (f64::from(ticks) * frames_per_tick).clamp(SHORTEST_FRAMES, longest);
@@ -275,7 +275,7 @@ impl Delay {
     }
 
     /// Jump to the settings, for starting afresh.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.frames = self.target_frames;
         self.faded = 1.0;
         self.wow.settle();
@@ -285,13 +285,14 @@ impl Delay {
     }
 
     /// How long it is now, in frames.
-    pub fn frames(&self) -> f64 {
+    #[cfg(test)]
+    pub(crate) fn frames(&self) -> f64 {
         self.frames
     }
 
     /// The furthest back it reads now, in frames: past its time while a jump fades from a longer
     /// one, and by as far as `Wow` moves it.
-    pub fn reach(&self) -> f64 {
+    pub(crate) fn reach(&self) -> f64 {
         let outgoing = if self.faded < 1.0 { self.outgoing } else { 0.0 };
         self.frames.max(outgoing) + self.wow_frames * f64::from(self.wow.value)
     }
@@ -382,7 +383,7 @@ impl Delay {
 
     /// Feed one frame in and get what's wet out.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         let wow = self.wobble();
         let out = self.retimed(wow);
         let feedback = self.feedback.next(self.smoothing);

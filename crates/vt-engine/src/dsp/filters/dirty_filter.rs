@@ -41,7 +41,7 @@ use crate::dsp::blocks::flush::tiny_by_fields;
 const LEAST_RESONANCE: f32 = 0.1;
 const MOST_RESONANCE: f32 = 2.15;
 /// How much `Drive` adds to the loop's resonance, at full.
-pub const DRIVE_RESONANCE: f32 = 0.05;
+pub(crate) const DRIVE_RESONANCE: f32 = 0.05;
 /// How far the loop's input is turned up, to drive its saturation, and its output turned down.
 const SATURATION_BOOST: f32 = 1.4;
 /// What a quiet sound comes through at with no resonance, before this evens it out.
@@ -67,7 +67,7 @@ const RINGING_PULL: f32 = 0.4;
 /// What the filter runs with that depends only on its cutoff and resonance, worked out as often
 /// as the track's other filter coefficients are.
 #[derive(Debug, Clone, Copy)]
-pub struct Tuning {
+pub(crate) struct Tuning {
     /// The one-poles' coefficient, `g / (1 + g)`, and its `g`.
     coefficient: f32,
     analog: f32,
@@ -83,7 +83,7 @@ impl Tuning {
     /// From the one-poles' coefficient, for a cutoff at twice the rate, and `Res` from 0 to 1. The
     /// loop's resonance is on a square root, as Vital has it, and eased off a little at high
     /// cutoffs, where the loop would otherwise ring more.
-    pub fn new(coefficient: f32, resonance: f32) -> Self {
+    pub(crate) fn new(coefficient: f32, resonance: f32) -> Self {
         let eased = resonance.clamp(0.0, 1.0).sqrt() / (0.5 * coefficient + 0.97).max(1.0);
         let rest = 1.0 - coefficient;
         Self {
@@ -117,7 +117,7 @@ fn ringing_resonance(coefficient: f32) -> f32 {
 
 /// What the filter runs with for a sample.
 #[derive(Debug, Clone, Copy)]
-pub struct Settings {
+pub(crate) struct Settings {
     /// The coefficient of the one-poles before the loop, and of the loop's, which is raised once it
     /// rings by itself.
     coefficient: f32,
@@ -133,7 +133,7 @@ pub struct Settings {
 impl Settings {
     /// From the tuning, `Drive` from 0 to 1, and the gain it turns what comes straight in up by.
     #[inline]
-    pub fn new(tuning: &Tuning, drive: f32, gain: f32) -> Self {
+    pub(crate) fn new(tuning: &Tuning, drive: f32, gain: f32) -> Self {
         let resonance = tuning.resonance + drive * DRIVE_RESONANCE;
         let past = (resonance * tuning.over_ringing - 1.0).max(0.0);
         let raised = tuning.analog * (1.0 + tuning.pull * past);
@@ -153,7 +153,7 @@ impl Settings {
 
 /// A `Dirty` filter's state.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct DirtyFilter {
+pub(crate) struct DirtyFilter {
     /// The two-pole before the loop, then the two at its input.
     before: [OnePole; 2],
     entry: [OnePole; 2],
@@ -181,7 +181,7 @@ impl DirtyFilter {
     /// its weights. A quiet sound with no resonance or drive comes out at the level it went in
     /// through the low-pass, and the output stays within ±0.8 there.
     #[inline]
-    pub fn next(
+    pub(crate) fn next(
         &mut self,
         input: f32,
         settings: &Settings,
@@ -215,7 +215,12 @@ impl DirtyFilter {
 /// that hears its states a sample late:
 /// `A (z - a)^2 / ((z - a)^2 - 2 G B ((1 - 2G) z - (1 - 2G + 2G^2)))`, with `B` what comes round
 /// and `A` what comes straight in, both through the slope of the sum's `tanh`.
-pub fn response(settings: &Settings, before: &[f32; 3], entry: &[f32; 3], frequency: f32) -> f32 {
+pub(crate) fn response(
+    settings: &Settings,
+    before: &[f32; 3],
+    entry: &[f32; 3],
+    frequency: f32,
+) -> f32 {
     let turn = std::f32::consts::TAU * frequency.min(0.499);
     let z = Complex(turn.cos(), turn.sin());
     let one_pole = |g: f32| {
@@ -246,7 +251,7 @@ pub fn response(settings: &Settings, before: &[f32; 3], entry: &[f32; 3], freque
 
 /// How much louder its low-pass is in its bass than at its cutoff, with no drive, where a
 /// band-pass's peak is. Each of its four one-poles passes 0.71 at the cutoff.
-pub fn band_makeup(tuning: &Tuning) -> f32 {
+pub(crate) fn band_makeup(tuning: &Tuning) -> f32 {
     let settings = Settings::new(tuning, 0.0, 1.0);
     let at_cutoff = tuning.analog.atan() / std::f32::consts::PI;
     let through = [1.0, 0.0, 0.0];

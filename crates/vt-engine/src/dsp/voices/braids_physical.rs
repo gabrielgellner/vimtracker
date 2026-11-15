@@ -26,15 +26,15 @@ use super::braids_parts::{BRAIDS_BLOCK, INNER, Lcg, Macro, Model, Pitch, sine, w
 use super::virtual_analog::Settings;
 
 /// A bowed string: a bow's friction against a string between a bridge and a nut.
-pub type Bowed = Macro<BowedModel>;
+pub(crate) type Bowed = Macro<BowedModel>;
 /// A reed blown into a bore, as a clarinet's.
-pub type Blown = Macro<BlownModel>;
+pub(crate) type Blown = Macro<BlownModel>;
 /// A jet of air across a flute's bore.
-pub type Fluted = Macro<FlutedModel>;
+pub(crate) type Fluted = Macro<FlutedModel>;
 /// A bell of eleven partials, struck and dying away.
-pub type StruckBell = Macro<BellModel>;
+pub(crate) type StruckBell = Macro<BellModel>;
 /// A drum of six partials and filtered noise, struck and dying away.
-pub type StruckDrum = Macro<DrumModel>;
+pub(crate) type StruckDrum = Macro<DrumModel>;
 
 /// The delay of one cycle of the note, in frames at the rate it runs at, in 65 536ths: Braids'
 /// `ComputeDelay`, no shorter than its highest note's.
@@ -64,7 +64,7 @@ const BIQUAD_POLE_1: i32 = 6948;
 const BIQUAD_POLE_2: i32 = -2959;
 
 #[derive(Debug, Clone, Copy)]
-pub struct BowedModel {
+pub(crate) struct BowedModel {
     bridge: [i8; BRIDGE_LENGTH],
     neck: [i8; NECK_LENGTH],
     at: usize,
@@ -164,7 +164,7 @@ const REED_SLOPE: i32 = -1229;
 const REED_OFFSET: i32 = 22_938;
 
 #[derive(Debug, Clone, Copy)]
-pub struct BlownModel {
+pub(crate) struct BlownModel {
     bore: [i16; BORE_LENGTH],
     at: usize,
     low_pass: i32,
@@ -229,7 +229,7 @@ const FLUTE_BORE_LENGTH: usize = 4096;
 const DC_BLOCKING_POLE: i32 = 4055;
 
 #[derive(Debug, Clone, Copy)]
-pub struct FlutedModel {
+pub(crate) struct FlutedModel {
     jet: [i8; JET_LENGTH],
     bore: [i8; FLUTE_BORE_LENGTH],
     at: usize,
@@ -350,7 +350,7 @@ const BELL_SHORT: [u16; BELL_PARTIALS] = [
 ];
 
 #[derive(Debug, Clone, Copy)]
-pub struct BellModel {
+pub(crate) struct BellModel {
     phases: [f32; BELL_PARTIALS],
     levels: [f32; BELL_PARTIALS],
     previous: f32,
@@ -408,7 +408,7 @@ const DRUM_LONG: [u16; DRUM_PARTIALS] = [65533, 65531, 65531, 65531, 65531, 6551
 const DRUM_SHORT: [u16; DRUM_PARTIALS] = [65083, 64715, 64715, 64715, 64715, 62312];
 
 #[derive(Debug, Clone, Copy)]
-pub struct DrumModel {
+pub(crate) struct DrumModel {
     phases: [f32; DRUM_PARTIALS],
     levels: [f32; DRUM_PARTIALS],
     struck: bool,

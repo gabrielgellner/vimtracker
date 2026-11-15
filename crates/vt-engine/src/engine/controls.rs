@@ -25,7 +25,7 @@ impl Engine {
     }
 
     /// A track's faders as they're heard, for the mixer, the Output device and the Roto.
-    pub fn faders(&self, index: usize) -> Faders {
+    pub(crate) fn faders(&self, index: usize) -> Faders {
         self.tracks
             .get(index)
             .map(TrackState::faders)
@@ -34,14 +34,14 @@ impl Engine {
 
     /// A hand moved one of a track's faders that the steps drive: it's the hand's from now, until
     /// it's given back (decision 174).
-    pub fn take_over(&mut self, track: usize, fader: usize) {
+    pub(crate) fn take_over(&mut self, track: usize, fader: usize) {
         if let Some(state) = self.tracks.get_mut(track) {
             state.take_over(fader);
         }
     }
 
     /// Give a track's faders back to the steps, or every track's, as `Space e` and `Space E` do.
-    pub fn give_back(&mut self, track: Option<usize>) {
+    pub(crate) fn give_back(&mut self, track: Option<usize>) {
         match track {
             Some(track) => {
                 if let Some(state) = self.tracks.get_mut(track) {

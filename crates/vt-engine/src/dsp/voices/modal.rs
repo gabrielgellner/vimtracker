@@ -60,7 +60,7 @@ impl Mode {
 
 /// One voice. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct Modal {
+pub(crate) struct Modal {
     harmonics_lp: f32,
     excitation: Mode,
     amplitudes: [f32; MODES],
@@ -96,7 +96,7 @@ impl SynthEngine for Modal {
 }
 
 impl Modal {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         // Where it's struck, which sets how loud each mode is.
         let mut amplitudes = CosineOscillator::new(0.015);
         Self {

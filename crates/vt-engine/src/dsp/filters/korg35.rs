@@ -23,7 +23,7 @@ use crate::dsp::blocks::flush::tiny_by_fields;
 
 /// The feedback at full resonance. It self-oscillates from 2, and this goes as far past that as
 /// Vital's Sallen-Key filter does, so it sings by itself near the top of `Res`, as the ladder does.
-pub const MOST_FEEDBACK: f32 = 2.15;
+pub(crate) const MOST_FEEDBACK: f32 = 2.15;
 
 /// A one-pole in trapezoidal form, whose coefficient `G` is `g / (1 + g)`.
 #[derive(Debug, Clone, Copy, Default)]
@@ -50,7 +50,7 @@ impl OnePole {
 
 /// A Korg 35's state.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Korg35 {
+pub(crate) struct Korg35 {
     /// The one-pole on the input, then the loop's two.
     input: OnePole,
     forward: OnePole,
@@ -75,7 +75,7 @@ impl Korg35 {
     /// One sample of the low-pass, with the coefficient `G` of its one-poles and the feedback, from
     /// 0 to [`MOST_FEEDBACK`].
     #[inline]
-    pub fn low_pass(&mut self, input: f32, coefficient: f32, feedback: f32) -> f32 {
+    pub(crate) fn low_pass(&mut self, input: f32, coefficient: f32, feedback: f32) -> f32 {
         let (g, rest) = (coefficient, 1.0 - coefficient);
         let entered = self.input.low_pass(input, g);
         // The loop's high-pass gives `rest * (feedback * low-pass) - rest * its state`, and its
@@ -90,7 +90,7 @@ impl Korg35 {
 
     /// One sample of the high-pass, with the same coefficient and feedback.
     #[inline]
-    pub fn high_pass(&mut self, input: f32, coefficient: f32, feedback: f32) -> f32 {
+    pub(crate) fn high_pass(&mut self, input: f32, coefficient: f32, feedback: f32) -> f32 {
         let (g, rest) = (coefficient, 1.0 - coefficient);
         let entered = self.input.high_pass(input, g);
         // The loop's high-pass then low-pass give `g * rest * what's fed in`, plus what's known now.
@@ -107,7 +107,7 @@ impl Korg35 {
 /// `s (s + 1) / (s^2 + (2 - k) s + 1)` for the high-pass, which falls at 6 dB an octave under its
 /// peak. `along` is the frequency over the cutoff, both warped as the trapezoidal one-poles warp
 /// them.
-pub fn response(high_pass: bool, feedback: f32, along: f32) -> f32 {
+pub(crate) fn response(high_pass: bool, feedback: f32, along: f32) -> f32 {
     let squared = along * along;
     let real = 1.0 - squared;
     let imaginary = (2.0 - feedback) * along;

@@ -27,13 +27,13 @@ use crate::dsp::blocks::flush::tiny_by_fields;
 const LEAST_RESONANCE: f32 = 0.7;
 const MOST_RESONANCE: f32 = 17.0;
 /// The corner of the high-pass in the feedback loop, in Hz.
-pub const FEEDBACK_HIGH_PASS: f32 = 20.0;
+pub(crate) const FEEDBACK_HIGH_PASS: f32 = 20.0;
 /// Where it resonates, as a share of the cutoff it's given. Its four stages load each other, so
 /// their poles spread out: with no resonance, it starts to fall well under the cutoff, and the
 /// resonance peaks at about this share of it.
-pub const RESONANT_SHARE: f32 = 0.6;
+pub(crate) const RESONANT_SHARE: f32 = 0.6;
 /// How far under the cutoff the input's high-pass sits, as a ratio: Vital's lowest, `2^-9`.
-pub const HIGH_PASS_RATIO: f32 = 1.0 / 512.0;
+pub(crate) const HIGH_PASS_RATIO: f32 = 1.0 / 512.0;
 
 /// A one-pole low-pass in trapezoidal form, whose state can be saturated as it goes. Vital's
 /// `Dirty` filter is built from it too.
@@ -105,18 +105,18 @@ fn clip(value: f32) -> f32 {
 }
 
 /// The coefficient of the high-pass in the feedback loop, for a filter running at this rate, in Hz.
-pub fn feedback_coefficient(rate: f32) -> f32 {
+pub(crate) fn feedback_coefficient(rate: f32) -> f32 {
     feedback_coefficient_at(FEEDBACK_HIGH_PASS, rate)
 }
 
 /// The same with the high-pass's corner somewhere else, in Hz.
-pub fn feedback_coefficient_at(corner: f32, rate: f32) -> f32 {
+pub(crate) fn feedback_coefficient_at(corner: f32, rate: f32) -> f32 {
     coefficient(corner / rate)
 }
 
 /// A diode ladder's state.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct DiodeFilter {
+pub(crate) struct DiodeFilter {
     high_pass: [OnePole; 2],
     feedback_high_pass: OnePole,
     stages: [OnePole; 4],
@@ -134,7 +134,7 @@ impl DiodeFilter {
     /// high-pass sits as a share of the cutoff, [`HIGH_PASS_RATIO`] as Vital has it at its lowest.
     /// The output stays within ±1.
     #[inline]
-    pub fn next(
+    pub(crate) fn next(
         &mut self,
         input: f32,
         cutoff: f32,
@@ -225,7 +225,7 @@ impl Complex {
 /// the ones it runs with. Its saturations do nothing to a quiet signal, so it's the high-pass at its
 /// input, then four one-poles, each fed half of its neighbours, with the last fed back through the
 /// feedback's high-pass.
-pub fn response(
+pub(crate) fn response(
     cutoff: f32,
     resonance: f32,
     feedback_coefficient: f32,

@@ -431,7 +431,7 @@ impl Echo {
     }
 
     /// Forget what's on the tape and in the spring.
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         if self.used {
             self.tape.fill([0.0; 2]);
             self.pre.fill([0.0; 2]);
@@ -506,13 +506,14 @@ impl Echo {
     }
 
     /// How far behind the record head the first head is now, in frames.
-    pub fn frames(&self) -> f64 {
+    #[cfg(test)]
+    pub(crate) fn frames(&self) -> f64 {
         self.slow
     }
 
     /// How many quiet frames in a row mean nothing's left in it: the third head's delay and the
     /// most the wobble moves it, and the spring's ring.
-    pub fn quiet_frames(&self) -> u32 {
+    pub(crate) fn quiet_frames(&self) -> u32 {
         let rate = f64::from(self.rate);
         (self.slow.max(self.target) * 3.0 + (MOST_WOBBLE_SECONDS + REVERB_QUIET_SECONDS) * rate)
             as u32

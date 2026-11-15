@@ -23,7 +23,7 @@ const DECLICK: f64 = DECLICK_FRAMES as f64;
 /// What a track's settings make of a span as a note starts: how far into it the note starts and
 /// how much of it plays, as shares of the whole, and how it plays.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Cut {
+pub(crate) struct Cut {
     pub start: f64,
     pub length: f64,
     pub mode: PlayMode,
@@ -229,7 +229,7 @@ impl Tempo {
 
 /// Where a voice is in its sample, and how it reads on.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Reader {
+pub(crate) struct Reader {
     /// The span it was given, if it was given one, and the cut, to work out again as it changes.
     span: Option<Span>,
     cut: Cut,
@@ -254,7 +254,7 @@ impl Default for Reader {
 
 impl Reader {
     /// Start reading a span as a cut makes of it, or the whole sample as it is with none.
-    pub fn new(span: Option<Span>, cut: Cut) -> Self {
+    pub(crate) fn new(span: Option<Span>, cut: Cut) -> Self {
         let region = span.map_or(Region::WHOLE, |span| Region::new(span, cut));
         let mut reader = Self {
             span,
@@ -272,25 +272,25 @@ impl Reader {
     }
 
     /// The span it's reading.
-    pub fn span(&self) -> Option<Span> {
+    pub(crate) fn span(&self) -> Option<Span> {
         self.span
     }
 
     /// The frame of its sample it's at, for a playhead: counted from the first, whichever way it
     /// plays.
-    pub fn frame(&self) -> u64 {
+    pub(crate) fn frame(&self) -> u64 {
         self.region.frame(self.place).max(0.0) as u64
     }
 
     /// Whether it plays on past its slice's end, so the span it follows is the one that does.
-    pub fn thru(&self) -> bool {
+    pub(crate) fn thru(&self) -> bool {
         self.cut.mode == PlayMode::Thru
     }
 
     /// Carry on with a span that's changed, as moving a point does, from the same frame. A note
     /// past its new end fades out, one past its loop goes round with a crossfade, and a reversed
     /// one reads on from where it is, the other way.
-    pub fn respan(&mut self, span: Span) {
+    pub(crate) fn respan(&mut self, span: Span) {
         if self.span == Some(span) {
             return;
         }
@@ -320,7 +320,7 @@ impl Reader {
     }
 
     /// Whether it keeps to the song's tempo, so the engine tells it the tempo before each run.
-    pub fn keeps_time(&self) -> bool {
+    pub(crate) fn keeps_time(&self) -> bool {
         self.tempo.is_some()
     }
 
@@ -328,7 +328,7 @@ impl Reader {
     /// rate: it moves through its loop so its entry lasts as many steps as it says, or plays its
     /// own tempo at the song's. With `Beats`, `around` says where the clock's sound starts and
     /// where the next does, so this one ends.
-    pub fn keep_time(
+    pub(crate) fn keep_time(
         &mut self,
         step: f64,
         rate: u32,
@@ -404,7 +404,7 @@ impl Reader {
     /// The next frame, before it moves on, or none once it's past the sample. A loop's turn
     /// comes first, so the frame read is always in the loop.
     #[inline]
-    pub fn next(&mut self, data: Frames<'_>) -> Option<[f32; 2]> {
+    pub(crate) fn next(&mut self, data: Frames<'_>) -> Option<[f32; 2]> {
         let clock = self.tempo.and_then(|tempo| tempo.clock);
         if let Some(looping) = self.region.looping {
             match clock {
@@ -440,7 +440,7 @@ impl Reader {
     /// once it's past its end and faded out. Keeping to the tempo, it moves at the tempo's speed
     /// instead, or with `Beats`, its clock does, and its sound at the speed it's given.
     #[inline]
-    pub fn advance(&mut self, by: f64) -> bool {
+    pub(crate) fn advance(&mut self, by: f64) -> bool {
         let mut by = by;
         if let Some(tempo) = &mut self.tempo
             && let Some(rate) = tempo.rate

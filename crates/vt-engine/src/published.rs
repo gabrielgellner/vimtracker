@@ -5,8 +5,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use vt_model::constants::{NUDGE_TICKS, TICKS_PER_STEP};
 use vt_model::groove::GrooveId;
-pub use vt_model::playable::{LoopSpan, Playable, Span};
-use vt_model::playable::{normalize_peak, onset_analysis};
+pub use vt_model::playable::Span;
+use vt_model::playable::{Playable, normalize_peak, onset_analysis};
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
 use vt_model::shape::{FillKind, ShapeColumn};

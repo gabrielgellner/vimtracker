@@ -25,7 +25,7 @@ use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::dsp::filters::filter::soft_clip;
 
 /// The most feedback goes to either way, so the comb rings but never runs away.
-pub const MOST_FEEDBACK: f32 = 0.95;
+pub(crate) const MOST_FEEDBACK: f32 = 0.95;
 /// How far what goes into the line can get before a soft clip holds it back, so only what's very
 /// loud is touched.
 const HEADROOM: f32 = 4.0;
@@ -44,7 +44,7 @@ fn triangle(turns: f32) -> f32 {
 
 /// A flanger's delay lines and sweep.
 #[derive(Debug, Clone)]
-pub struct Flanger {
+pub(crate) struct Flanger {
     lines: [Vec<f32>; 2],
     mask: usize,
     write: usize,
@@ -68,7 +68,7 @@ pub struct Flanger {
 
 impl Flanger {
     /// Lines long enough for its longest sweep at this rate.
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         let frames_per_ms = rate as f32 / 1000.0;
         // At full depth it sweeps to twice the longest middle, less the shortest.
         let longest = (2.0 * LONGEST_FLANGE_MS - SHORTEST_FLANGE_MS) * frames_per_ms;
@@ -94,11 +94,11 @@ impl Flanger {
     }
 
     /// The longest anything stays in it, in frames.
-    pub fn frames(&self) -> usize {
+    pub(crate) fn frames(&self) -> usize {
         self.mask + 1
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         for line in &mut self.lines {
             line.fill(0.0);
         }
@@ -107,7 +107,7 @@ impl Flanger {
     }
 
     /// Take what's set now, at a tempo.
-    pub fn follow(&mut self, settings: Settings, frames_per_tick: f64) {
+    pub(crate) fn follow(&mut self, settings: Settings, frames_per_tick: f64) {
         let ticks = SWEEP_TICKS[usize::from(settings.rate).min(SWEEP_TICKS.len() - 1)];
         let frames = f64::from(ticks) * frames_per_tick;
         self.step = if frames >= 1.0 {
@@ -121,7 +121,7 @@ impl Flanger {
     }
 
     /// Jump to what's set, as it's only just started.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.depth.settle();
         self.delay.settle();
         self.feedback.settle();
@@ -148,7 +148,7 @@ impl Flanger {
 
     /// Feed one frame in and get the delayed sound out, all wet.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         let depth = self.depth.next(self.smoothing);
         let delay = self.delay.next(self.smoothing);
         let feedback = self.feedback.next(self.smoothing);

@@ -177,7 +177,7 @@ impl Curve {
 /// How far a steady sine is turned down once it's settled, in dB, for its level at its peak: the
 /// static curve, for drawing. Over a cycle, what the attack charges while the rectifier asks for
 /// more than the capacitor holds balances what the release lets go all the while.
-pub fn settled(level: f32, settings: Settings) -> f32 {
+pub(crate) fn settled(level: f32, settings: Settings) -> f32 {
     /// Points over a quarter of the wave, enough for the balance to come within a hundredth of a
     /// dB of a long sine's.
     const PHASES: usize = 32;
@@ -228,7 +228,7 @@ struct Times {
 
 /// The control voltage and its capacitors, and where its curve sits, gliding to where it's set.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Glue {
+pub(crate) struct Glue {
     /// How far it's turning down now, in dB: the timing capacitor's voltage.
     reduction: f32,
     /// Auto's big capacitor's voltage, in dB.
@@ -265,7 +265,7 @@ same_bits_by_fields!(PeakClip { on, target });
 
 impl Glue {
     /// How far it's turning down now, in dB, for a meter.
-    pub fn reduction(&self) -> f32 {
+    pub(crate) fn reduction(&self) -> f32 {
         self.reduction
     }
 
@@ -316,7 +316,7 @@ impl Glue {
     /// One frame turned down by what `key` asks for, all wet. `key` is the frame itself unless it
     /// hears another track.
     #[inline]
-    pub fn process(
+    pub(crate) fn process(
         &mut self,
         input: [f32; 2],
         key: [f32; 2],
@@ -362,7 +362,7 @@ impl Glue {
 /// change in how it bends there either, at twice the ceiling's height over the knee. Over that it's
 /// the ceiling. Glue's own puts out -1.08 dBFS for -1 dBFS in.
 #[inline]
-pub fn clipped(sample: f32) -> f32 {
+pub(crate) fn clipped(sample: f32) -> f32 {
     let size = sample.abs();
     if size <= CLIP_KNEE {
         return sample;
@@ -376,7 +376,7 @@ pub fn clipped(sample: f32) -> f32 {
 /// Glue's `Peak Clip`, after its output and its mix, switched in and out over a few ms. Switched
 /// out, it leaves what comes through bit for bit.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct PeakClip {
+pub(crate) struct PeakClip {
     /// How far it's switched in, from `0` to `1`, and where it's going.
     on: f32,
     target: f32,
@@ -384,18 +384,18 @@ pub struct PeakClip {
 
 impl PeakClip {
     /// Switch it in or out.
-    pub fn switch(&mut self, on: bool) {
+    pub(crate) fn switch(&mut self, on: bool) {
         self.target = if on { 1.0 } else { 0.0 };
     }
 
     /// Jump to where it's switched.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.on = self.target;
     }
 
     /// One frame through it.
     #[inline]
-    pub fn process(&mut self, frame: [f32; 2], rate: u32) -> [f32; 2] {
+    pub(crate) fn process(&mut self, frame: [f32; 2], rate: u32) -> [f32; 2] {
         if self.on == self.target {
             return if self.on == 0.0 {
                 frame

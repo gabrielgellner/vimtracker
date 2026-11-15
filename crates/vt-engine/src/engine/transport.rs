@@ -393,7 +393,7 @@ impl Engine {
 
     /// Go back to the first section's start without touching anything sounding, for a render. A
     /// step a groove's lead worked out early is worked out again from the top.
-    pub fn rewind(&mut self) {
+    pub(crate) fn rewind(&mut self) {
         if self.worked_out_early(true) {
             self.next_step -= 1;
             let from = self.next_step * TICKS_PER_STEP;

@@ -238,7 +238,7 @@ pub fn transfer(settings: Distort, input: f32) -> Option<f32> {
 /// What a slot keeps for a distortion beside its `Amount`, `Mix` and `Gain`, which the slot eases
 /// and blends as it does every effect's.
 #[derive(Debug, Clone, Copy)]
-pub struct Distortion {
+pub(crate) struct Distortion {
     /// Each side's oversampling for the shapes that need it, and what its shaping keeps, once for
     /// both while a sound is the same on both sides.
     oversampler: Sides<Shaper>,
@@ -280,7 +280,7 @@ impl SameBits for Distortion {
 
 impl Distortion {
     /// Take what's set: `Crush`'s bits, and a pedal's tone.
-    pub fn follow(&mut self, settings: Distort) {
+    pub(crate) fn follow(&mut self, settings: Distort) {
         self.bits.target = f32::from(settings.bits);
         if settings.kind.is_pedal() {
             self.pedal.follow(f32::from(settings.tone) / 255.0);
@@ -288,7 +288,7 @@ impl Distortion {
     }
 
     /// Jump to what's set, for playing from the start or a distortion just chosen.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.bits.settle();
         self.pedal.settle();
     }
@@ -297,7 +297,7 @@ impl Distortion {
     /// tracking `note` for `Down`. `same` says whether the frame's sides are the same, bit for bit.
     #[allow(clippy::too_many_arguments)]
     #[inline]
-    pub fn process(
+    pub(crate) fn process(
         &mut self,
         input: [f32; 2],
         same: bool,

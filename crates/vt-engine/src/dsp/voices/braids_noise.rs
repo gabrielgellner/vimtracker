@@ -27,13 +27,13 @@ use super::braids_parts::{
 use super::virtual_analog::Settings;
 
 /// Noise through two resonant peaks, one at the note and one up to five octaves either way.
-pub type TwinPeaks = Macro<TwinPeaksModel>;
+pub(crate) type TwinPeaks = Macro<TwinPeaksModel>;
 /// Noise held for each tick of a clock at the note, quantised, that loops after a while.
-pub type ClockedNoise = Macro<ClockedNoiseModel>;
+pub(crate) type ClockedNoise = Macro<ClockedNoiseModel>;
 /// A cloud of sine grains around the note.
-pub type GranularCloud = Macro<GranularCloudModel>;
+pub(crate) type GranularCloud = Macro<GranularCloudModel>;
 /// A carrier keyed through four symbols, as a modem sends data.
-pub type DigitalModulation = Macro<DigitalModulationModel>;
+pub(crate) type DigitalModulation = Macro<DigitalModulationModel>;
 
 /// What a frame holds to in 16 bits.
 #[inline]
@@ -151,7 +151,7 @@ impl Resonator {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct TwinPeaksModel {
+pub(crate) struct TwinPeaksModel {
     resonators: [Resonator; 2],
     noise: Lcg,
 }
@@ -198,7 +198,7 @@ impl Model for TwinPeaksModel {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ClockedNoiseModel {
+pub(crate) struct ClockedNoiseModel {
     phase: u32,
     cycle: u32,
     state: u32,
@@ -290,7 +290,7 @@ struct Grain {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct GranularCloudModel {
+pub(crate) struct GranularCloudModel {
     grains: [Grain; GRAINS],
     noise: Lcg,
 }
@@ -354,7 +354,7 @@ const CONSTELLATION_Q: [f32; 4] = [0.705, -0.705, -0.705, 0.705];
 const CONSTELLATION_I: [f32; 4] = [0.705, 0.705, -0.705, -0.705];
 
 #[derive(Debug, Clone, Copy)]
-pub struct DigitalModulationModel {
+pub(crate) struct DigitalModulationModel {
     phase: f32,
     symbol_phase: f32,
     count: u16,

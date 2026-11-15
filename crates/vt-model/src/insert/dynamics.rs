@@ -35,8 +35,6 @@ const COMPRESSOR_TYPE_NAMES: [&str; 3] = ["Clean", "Console", "Glue"];
 /// The console compressor's ratios, as its switch has them.
 pub const CONSOLE_RATIOS: [f32; 3] = [2.0, 4.0, 10.0];
 const CONSOLE_RATIO_NAMES: [&str; 3] = ["2:1", "4:1", "10:1"];
-/// The console compressor's attacks in ms, as its switch has them.
-pub const CONSOLE_ATTACKS_MS: [f32; 6] = [0.1, 0.3, 1.0, 3.0, 10.0, 30.0];
 const CONSOLE_ATTACK_NAMES: [&str; 6] = ["0.1 ms", "0.3 ms", "1 ms", "3 ms", "10 ms", "30 ms"];
 /// The console compressor's releases in ms, as its switch has them, before `Auto`.
 pub const CONSOLE_RELEASES_MS: [f32; 4] = [100.0, 300.0, 600.0, 1200.0];

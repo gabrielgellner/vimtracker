@@ -162,7 +162,7 @@ impl Wobble {
 
 /// A chorus's delay lines and wobbles.
 #[derive(Debug, Clone)]
-pub struct Chorus {
+pub(crate) struct Chorus {
     lines: [Vec<f32>; 2],
     mask: usize,
     write: usize,
@@ -191,7 +191,7 @@ pub struct Chorus {
 
 impl Chorus {
     /// Lines long enough for its longest read at this rate.
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         let longer = rate as f32 / TUNING_RATE;
         let size = ((LONGEST * longer).ceil() as usize + 2).next_power_of_two();
         Self {
@@ -217,11 +217,11 @@ impl Chorus {
     }
 
     /// The longest anything stays in it, in frames.
-    pub fn frames(&self) -> usize {
+    pub(crate) fn frames(&self) -> usize {
         self.mask + 1
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         for line in &mut self.lines {
             line.fill(0.0);
         }
@@ -233,14 +233,14 @@ impl Chorus {
     }
 
     /// Take what's set now. The speed is two octaves either way of Rings' or the Juno's at `80`.
-    pub fn follow(&mut self, settings: Settings) {
+    pub(crate) fn follow(&mut self, settings: Settings) {
         self.kind = settings.kind;
         self.speed.target = ((f32::from(settings.rate) - 128.0) / 64.0).exp2();
         self.depth.target = f32::from(settings.depth) / 255.0;
     }
 
     /// Jump to what's set, as it's only just started.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.speed.settle();
         self.depth.settle();
     }
@@ -277,7 +277,7 @@ impl Chorus {
 
     /// Feed one frame in and get the copies out, all wet.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         let speed = self.speed.next(self.smoothing);
         let depth = self.depth.next(self.smoothing);
         if self.kind.is_juno() {

@@ -35,7 +35,7 @@ pub(super) const DRIFT: usize = 3;
 
 /// The settings, each on `0..=1`.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Settings {
+pub(crate) struct Settings {
     /// Detunes the saw from the square, with the middle in tune.
     pub harmonics: f32,
     /// The square, from nothing to a narrow pulse, to a full square, to hard sync.
@@ -63,7 +63,7 @@ impl Default for Settings {
 impl Settings {
     /// A setting by its place among the voice's.
     #[inline]
-    pub fn at(&self, place: usize) -> f32 {
+    pub(crate) fn at(&self, place: usize) -> f32 {
         match place {
             0 => self.harmonics,
             1 => self.timbre,
@@ -74,7 +74,7 @@ impl Settings {
     }
 
     /// The settings in their places, as the track holds them.
-    pub fn from_places(places: [f32; MAX_MACHINE_SETTINGS]) -> Self {
+    pub(crate) fn from_places(places: [f32; MAX_MACHINE_SETTINGS]) -> Self {
         let [harmonics, timbre, morph, accent, further @ ..] = places;
         Self {
             harmonics,
@@ -405,7 +405,7 @@ impl VariableSaw {
 
 /// One voice of the model. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct VirtualAnalog {
+pub(crate) struct VirtualAnalog {
     square: SyncedSquare,
     saw: VariableSaw,
     drift: Drift,
@@ -453,7 +453,7 @@ impl SynthEngine for VirtualAnalog {
 }
 
 impl VirtualAnalog {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             square: SyncedSquare::new(),
             saw: VariableSaw::new(),

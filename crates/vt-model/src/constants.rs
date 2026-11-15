@@ -59,8 +59,6 @@ pub const MIN_MILLIBPM: u32 = 20_000;
 pub const MAX_MILLIBPM: u32 = 400_000;
 /// Undo versions kept.
 pub const HISTORY_LIMIT: usize = 1000;
-/// Sample rate for tests and `render`, in Hz.
-pub const DEFAULT_RENDER_RATE: u32 = 44_100;
 /// Song versions waiting for the callback.
 pub const PUBLISH_QUEUE: usize = 1;
 /// Long buffers on their way to or from the callback at once. More wait their turn.

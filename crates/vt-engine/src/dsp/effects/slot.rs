@@ -27,7 +27,7 @@ use crate::rng::Pcg32;
 pub const DEFAULT_NOTE: f32 = 60.0;
 /// How long switching a slot out or back in takes, in ms: long enough not to click, and short
 /// enough that a step's lock of its bypass lands with the step.
-pub const BYPASS_FADE_MS: f32 = 5.0;
+pub(crate) const BYPASS_FADE_MS: f32 = 5.0;
 
 /// What a slot effect does, besides how it's played: it's made on the edit thread, follows what's
 /// set, is emptied for the pool and says how long its tail lasts, what it does with a sound that's
@@ -40,7 +40,7 @@ pub const BYPASS_FADE_MS: f32 = 5.0;
 /// Each effect's own methods mostly have these names already, and an `impl` hands each call on to
 /// them: a method of the type's own is picked over the trait's, so `self.follow(settings)` inside
 /// one isn't a call back into it.
-pub trait SlotEffect: Sized {
+pub(crate) trait SlotEffect: Sized {
     /// Its settings, as its `Insert` holds them.
     type Settings: Copy;
 
@@ -77,7 +77,7 @@ pub trait SlotEffect: Sized {
 /// A slot effect the slot plays through its `ring`: a frame in, and what's wet out, with nothing
 /// more from the slot. The limiter, Warps, the resonator, the comb and the frequency shifter aren't
 /// rung: the slot plays each itself, handing it the note, its glide or another track.
-pub trait Rung: SlotEffect {
+pub(crate) trait Rung: SlotEffect {
     fn process(&mut self, input: [f32; 2]) -> [f32; 2];
 }
 
@@ -118,7 +118,7 @@ impl Default for Keys {
 
 impl Keys {
     /// A track's latest frame, or silence for one that isn't there.
-    pub fn of(&self, track: usize) -> [f32; 2] {
+    pub(crate) fn of(&self, track: usize) -> [f32; 2] {
         self.frames.get(track).copied().unwrap_or_default()
     }
 }
@@ -130,10 +130,9 @@ impl Keys {
 pub enum Mono {
     /// Each side goes through the same steps with its own state and nothing between them, so it
     /// works the left out alone and gives it to both, keeping the right's state to copy from the
-    /// left's the moment the sides differ ([`Sides`](crate::dsp::blocks::sides::Sides)). What
-    /// comes out is exactly what working out both gives. After the sides have differed, their
-    /// states can stay apart for a while, so it works out both until they're the same again, and
-    /// the slot looks at what comes out.
+    /// left's the moment the sides differ (`Sides`). What comes out is exactly what working out
+    /// both gives. After the sides have differed, their states can stay apart for a while, so it
+    /// works out both until they're the same again, and the slot looks at what comes out.
     OneSide,
     /// One state for both sides, such as a compressor's linked detector, and the same done to
     /// each: what comes out is the same on both sides, with nothing more to save, so the slot
@@ -147,7 +146,7 @@ pub enum Mono {
 /// How a slot blends what its effect gives with the sound going in, by the effect's `Mix`, and
 /// turns what comes out up or down by its `Gain`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Mixing {
+pub(crate) enum Mixing {
     /// What it gives is all wet, blended with the sound by `Mix`, then turned by `Gain`. Written
     /// so all wet and all dry are exact.
     Wet,
@@ -169,7 +168,7 @@ pub enum Mixing {
 /// What a slot needs to know of an effect: from its DSP's [`SlotEffect`], and where its `Mix` and
 /// `Gain` are, from its description.
 #[derive(Debug, Clone, Copy)]
-pub struct Facts {
+pub(crate) struct Facts {
     mono: Mono,
     mixing: Mixing,
     /// Where its `Mix` and its `Gain` are among the settings it keeps, found when `FACTS` is
@@ -180,7 +179,7 @@ pub struct Facts {
 
 impl Facts {
     /// What a DSP says of itself.
-    pub const fn of<E: SlotEffect>() -> Self {
+    pub(crate) const fn of<E: SlotEffect>() -> Self {
         Self {
             mono: E::MONO,
             mixing: E::MIXING,
@@ -407,7 +406,13 @@ fn same_effect(before: Insert, after: Insert) -> bool {
 impl InsertState {
     /// Take what's now in the slot, with what it keeps coming from and going back to the pool. If
     /// there's none free yet, it's silent and asks again next time.
-    pub fn hold(&mut self, insert: Insert, pool: &mut MemoryPool, song: SongPlace, frames: u64) {
+    pub(crate) fn hold(
+        &mut self,
+        insert: Insert,
+        pool: &mut MemoryPool,
+        song: SongPlace,
+        frames: u64,
+    ) {
         // An empty slot taking an empty slot again has nothing to set: an empty slot's own
         // settings are never heard, and an effect put in it starts afresh (#187).
         if matches!((self.insert, insert), (Insert::Empty, Insert::Empty)) && self.memory.is_none()
@@ -438,7 +443,7 @@ impl InsertState {
 
     /// Whether taking the same settings again would change nothing: it has what its effect keeps,
     /// if it keeps anything, and nothing in it is about to wake.
-    pub fn holding(&self) -> bool {
+    pub(crate) fn holding(&self) -> bool {
         match &self.memory {
             Some(memory) => !memory.waking(),
             None => !Memory::kept_by(self.insert),
@@ -447,7 +452,7 @@ impl InsertState {
 
     /// What taking its settings again would still change, while they stay the same: what goes by
     /// the frame.
-    pub fn keep_time(&mut self, frames: u64, song: SongPlace) {
+    pub(crate) fn keep_time(&mut self, frames: u64, song: SongPlace) {
         if let Some(memory) = &mut self.memory {
             memory.keep_time(frames, song);
         }
@@ -455,7 +460,7 @@ impl InsertState {
 
     /// A step has switched the slot's trigger on: a stutter in it starts again from what comes in
     /// next, even if it's on already. Nothing else has one.
-    pub fn strike(&mut self) {
+    pub(crate) fn strike(&mut self) {
         if let Some(memory) = &mut self.memory {
             memory.strike();
             if memory.waking() {
@@ -466,7 +471,7 @@ impl InsertState {
 
     /// Start drawing random numbers again from a generator of the track's, as playing from the top
     /// does, so what it plays repeats.
-    pub fn reseed(&mut self, rng: Pcg32) {
+    pub(crate) fn reseed(&mut self, rng: Pcg32) {
         self.rng = rng;
         if let Some(memory) = &mut self.memory {
             memory.seed(rng);
@@ -474,7 +479,7 @@ impl InsertState {
     }
 
     /// Give what it keeps back to the pool.
-    pub fn give_back(&mut self, pool: &mut MemoryPool) {
+    pub(crate) fn give_back(&mut self, pool: &mut MemoryPool) {
         if let Some(memory) = self.memory.take() {
             pool.put(memory);
         }
@@ -538,7 +543,7 @@ impl InsertState {
 
     /// How far a compressor or limiter in the slot is turning down now, in dB, for a meter. Any
     /// other effect, or a bypassed one, turns down nothing.
-    pub fn reduction(&self) -> f32 {
+    pub(crate) fn reduction(&self) -> f32 {
         if self.on.target == 0.0 {
             return 0.0;
         }
@@ -551,19 +556,19 @@ impl InsertState {
 
     /// How far a low-pass gate in the slot is open now, its level and cutoff from `0` to `1`, for
     /// the FX page's zoom to draw. Any other effect has none.
-    pub fn opening(&self) -> Option<(f32, f32)> {
+    pub(crate) fn opening(&self) -> Option<(f32, f32)> {
         matches!(self.insert, Insert::Lpg(_)).then(|| self.gate.opening())
     }
 
     /// The track's note as it's heard, with its `Pitch`, which a resonator, comb, vowel filter or
     /// oscillator in the slot follows.
-    pub fn note(&self) -> f32 {
+    pub(crate) fn note(&self) -> f32 {
         self.note
     }
 
     /// Whether it's got something left to play with nothing going in.
     #[inline]
-    pub fn ringing(&self, rate: u32) -> bool {
+    pub(crate) fn ringing(&self, rate: u32) -> bool {
         self.memory
             .as_ref()
             .is_some_and(|memory| self.quiet < memory.quiet_frames(rate))
@@ -579,7 +584,7 @@ impl InsertState {
     /// with the slot's bit for bit. One with a long buffer does no work only with nothing coming in
     /// and nothing ringing, and is otherwise never settled. A phaser's sweep, a vowel filter's
     /// block and `Down`'s hold go on by themselves, so they never settle either.
-    pub fn settled(
+    pub(crate) fn settled(
         &self,
         input: [f32; 2],
         same: bool,
@@ -670,7 +675,7 @@ impl InsertState {
 
     /// Keep up what skipping these frames of silence, once the slot has settled, would leave
     /// behind: how long Warps has been quiet.
-    pub fn rested(&mut self, frames: u32) {
+    pub(crate) fn rested(&mut self, frames: u32) {
         if let (Insert::Warps(_), Some(Memory::Warps(_))) = (self.insert, &self.memory) {
             self.quiet = self.quiet.saturating_add(frames);
         }
@@ -790,7 +795,7 @@ impl InsertState {
 
     /// Follow the track's note, for an oscillator, resonator, comb, vowel filter or frequency
     /// shifter of the slot's own.
-    pub fn follow_note(&mut self, note: f32) {
+    pub(crate) fn follow_note(&mut self, note: f32) {
         self.note = note;
     }
 
@@ -818,7 +823,7 @@ impl InsertState {
     }
 
     /// Whether the slot has no effect in it.
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         matches!(self.insert, Insert::Empty)
     }
 
@@ -827,7 +832,7 @@ impl InsertState {
     /// infinity heard as silence, and whether its sides are the same. It keeps nothing, so it's
     /// passed by without working through the rest (#187). None for any other slot.
     #[inline]
-    pub fn passed_through(&self, input: [f32; 2], same: bool) -> Option<([f32; 2], bool)> {
+    pub(crate) fn passed_through(&self, input: [f32; 2], same: bool) -> Option<([f32; 2], bool)> {
         if !self.is_empty() || self.on.value != self.on.target {
             return None;
         }
@@ -836,7 +841,7 @@ impl InsertState {
     }
 
     /// What its effect does with a sound that's the same on both sides (decision 147), as its
-    /// DSP's [`SlotEffect::MONO`] says. An empty slot is linked: it passes the sound as it came.
+    /// DSP's `SlotEffect::MONO` says. An empty slot is linked: it passes the sound as it came.
     pub fn mono(&self) -> Mono {
         facts(self.insert).mono
     }
