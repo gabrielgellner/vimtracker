@@ -568,6 +568,10 @@ impl Voice {
     /// Carry on with its entry's span changed, as moving a point or changing its gain or tune does,
     /// heard at once and without a click: it reads on from where it is, a new gain fades in, and a
     /// new tune moves its pitch.
+    #[allow(
+        clippy::float_cmp,
+        reason = "only a gain that moves at all rescales the target"
+    )]
     pub(crate) fn respan(&mut self, span: Span) {
         let Some(old) = self.reader.span() else {
             return;
@@ -613,6 +617,7 @@ impl Voice {
 
     /// The next stereo frame, with reads bounds-checked. A voice past its sample's end stops.
     #[inline]
+    #[allow(clippy::float_cmp, reason = "the glides land on their targets exactly")]
     pub(crate) fn next(&mut self, data: Option<Frames<'_>>) -> [f32; 2] {
         if self.stage == Stage::Idle {
             return [0.0, 0.0];

@@ -29,7 +29,7 @@ impl Services {
             .enumerate()
             .map(|(track, state)| {
                 let sound = match state.machine {
-                    _ if !state.is_sound() => state.kind.title().to_owned(),
+                    _ if !state.is_sound() => state.kind.title(),
                     Machine::Sampler => song
                         .bank
                         .get(state.sample())

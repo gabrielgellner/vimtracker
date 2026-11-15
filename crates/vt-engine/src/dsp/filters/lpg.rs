@@ -650,6 +650,7 @@ mod tests {
         let most = levels.iter().fold(0.0_f32, |most, level| most.max(*level));
         assert!(most > 0.9, "{most}");
         let opened = levels.iter().position(|level| *level > most * 0.9).unwrap();
+        #[allow(clippy::float_cmp, reason = "the peak is the loudest level itself")]
         let peaked = levels.iter().position(|level| *level == most).unwrap();
         let closed = peaked
             + levels[peaked..]

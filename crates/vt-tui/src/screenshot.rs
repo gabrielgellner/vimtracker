@@ -72,8 +72,8 @@ fn symbol_transform(left: f32, top: f32, cells: u16) -> String {
 fn colour(color: Color, default: Color) -> String {
     match color {
         Color::Rgb(r, g, b) => format!("#{r:02x}{g:02x}{b:02x}"),
-        Color::Reset => colour(default, theme::TEXT),
-        // The interface only uses exact colours, so these are only a fallback.
+        // The terminal's default, and the rest: the interface only uses exact colours, so those
+        // are only a fallback.
         _ => colour(default, theme::TEXT),
     }
 }

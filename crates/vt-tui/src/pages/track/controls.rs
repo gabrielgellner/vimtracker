@@ -131,6 +131,10 @@ pub(super) const fn base(control: TrackControl) -> Control {
 
 impl Control {
     /// The setting's name on screen.
+    #[allow(
+        clippy::match_same_arms,
+        reason = "a name for each control, in the page's order"
+    )]
     pub fn label(self) -> &'static str {
         match self {
             Self::Base(TrackControl::Cutoff) => "Cut",

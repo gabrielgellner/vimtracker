@@ -351,7 +351,7 @@ fn a_failed_condition_skips_the_rows_locks_and_events_but_not_its_lanes() {
     let chance = song(&[&["C-3 -- ---", "--- -- cha:00 vol:00"]]);
     assert!(level(&chance, 1) < 0.001);
     // A column with a lane of its own keeps its own loop.
-    let mut lane = locks.clone();
+    let mut lane = locks;
     let phrase = Arc::make_mut(lane.tracks[0].phrases.get_mut(&0).unwrap());
     phrase.set_lane(1, Some(Lane::new(0, 2)));
     assert!(

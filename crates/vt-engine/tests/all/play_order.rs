@@ -183,7 +183,7 @@ fn every_fixed_order_walks_its_round_again_and_again() {
         let round: Vec<Option<i32>> = Round::new(&rows, order, Deal::default())
             .map(|row| scale[row])
             .collect();
-        let twice = [round.clone(), round.clone()].concat();
+        let twice = [round.clone(), round].concat();
         assert_eq!(notes(&scale_song(order), twice.len()), twice, "{order}");
     }
 }
@@ -265,7 +265,7 @@ fn a_lane_keeps_its_own_forward_loop() {
     assert!(level(&rows_only, 0) > 0.1);
     assert!(level(&rows_only, 3) < 0.001);
     // With one, its column reads its steps forward, so the silent one is first.
-    let mut lane = rows_only.clone();
+    let mut lane = rows_only;
     let phrase = Arc::make_mut(lane.tracks[0].phrases.get_mut(&0).unwrap());
     phrase.set_lane(0, Some(Lane::new(0, 4)));
     assert!(level(&lane, 0) < 0.001);
@@ -325,7 +325,7 @@ fn a_shuffle_plays_every_row_once_a_pass_dealt_from_the_seed() {
     );
     assert_ne!(heard[0], named("C D E F G A B C4"));
     assert_eq!(passes(&shuffled, 3), heard, "a render repeats");
-    let mut other = shuffled.clone();
+    let mut other = shuffled;
     other.seed = 4;
     assert_ne!(passes(&other, 3), heard, "another seed deals another");
 }
@@ -373,7 +373,7 @@ fn brownian_walks_a_row_at_a_time_from_the_first_each_pass() {
         "dealt each pass"
     );
     assert_eq!(passes(&drunk, 6), heard, "a render repeats");
-    let mut other = drunk.clone();
+    let mut other = drunk;
     other.seed = 14;
     assert_ne!(passes(&other, 6), heard, "another seed walks another way");
 }
@@ -458,7 +458,7 @@ fn an_edit_that_leaves_the_order_alone_keeps_the_walk_where_it_is() {
     engine.play_from(0);
     let mut out = vec![0.0; (9 * STEP + 1) * 2];
     engine.process(&mut out);
-    let mut edited = song.clone();
+    let mut edited = song;
     let phrase = Arc::make_mut(edited.tracks[0].phrases.get_mut(&0).unwrap());
     phrase.step_mut(7).unwrap().velocity = Some(0x40);
     engine.swap(version(&edited, ramp_pool()));
@@ -542,7 +542,7 @@ fn songs_with_snakes_and_cartesian_render_the_same_twice_and_from_any_step() {
             "{order}"
         );
         // Playing from the third pass hears what playing up to it would.
-        let mut longer = song.clone();
+        let mut longer = song;
         longer.add_track();
         longer.tracks[1]
             .phrases
