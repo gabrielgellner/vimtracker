@@ -44,6 +44,8 @@ pub(crate) use pending::{
     Part, PendingStep, Retrigger, RowKey, Worked,
 };
 pub(crate) use shaping::{MasterRest, ShapedFrame};
+#[cfg(test)]
+pub(crate) use values::LOOKUPS;
 pub(crate) use values::base_of;
 
 use lanes::{LaneRun, lanes_at_rest};
