@@ -28,7 +28,7 @@ there are no samples to find.
 | `variations` | aicd's acid n-grams | `S`'s `Variation`: a Markov chain learned from the line itself |
 | `rene` | Make Noise's René | The rows as a grid: `:order cartesian` on chords, `:order snake` on a bass |
 | `bloom` | Qu-Bit's Bloom | `:bloom`: branches grown from a trunk, each a mutation of the one before, on a path |
-| `clock-multiplier` | 4ms' Shuffling Clock Multiplier | `Space o` rotating a group's speeds, and a live `CHA 00` column as `Skip` |
+| `clock-multiplier` | 4ms' Shuffling Clock Multiplier | `Space o` rotating a group's speeds, and a live `CHA 00` lane as `Skip` |
 | `cells` | dan derks' *less concepts* | `S`'s `Cells`: Wolfram's rules, a row a cell or a track a cell, a generation a pass |
 | `tonnetz` | Ornament & Crime's Harrington 1200 and Automatonnetz | `S`'s `Tonnetz`: chords by P, L and R, on the `Chord` voice and a voice a track |
 | `turing-machine`, again | Nonlinear Circuits' Sloth, Ornament & Crime's Low-rents | A `Lorenz` LFO on `Pitch in scale`: a tune that drifts and never goes round |
@@ -615,24 +615,28 @@ up to `y`.
 `RND 31`, so a fifth of the time they move a degree, and the rest wander more: `RND 62` and
 `RND A2` move up to two degrees, two times in five and two in three, `RND 83` up to three about
 half the time, and the last note, `RND F3`, always moves. The two `F-3`s have none. On the roots and the `G-3`, an `RND` beside a `LEN` varies the length instead:
-`LEN 60 RND A4` plays the note anywhere from `20` to `A0` long, two times in three. Track 2's hats
-have the other two of the module's chances: an `RND` beside a `VDLT 80` on the off-beats, so
-their velocity wanders up to `30` either way, and beside a `RET 02` before each beat, so they
-ratchet two times in five, with the ratchet's units anywhere from 1 to 3. Track 3 is a kick on
-every beat. [`song.ron`](songs/eloquencer/song.ron)
+`LEN 60 RND A4` plays the note anywhere from `20` to `A0` long, two times in three. Track 2's hats,
+on each off-beat and before each beat, have the other two of the module's chances, on a lane of
+3 rows across FX 1 and FX 2. One row is a `RET 02` with an `RND 61` beside it, so a hat it lands
+on ratchets two times in five, with the ratchet's units anywhere from 1 to 3. The other two are a
+`VDLT 80` with an `RND F3`, so a hat's velocity wanders up to `30` either way. Three against the
+hats' four, the ratchet row lands on a different hat each time, two or three a bar, and comes
+round with the bar only every three bars. The Eloquencer keeps its chances on its steps; a lane
+of them, going round against the line, is vimtracker's own. Track 3 is a kick on every beat.
+[`song.ron`](songs/eloquencer/song.ron)
 
 ```text
-Track 1                                Track 2
-00  D-3 64  RND 31  LEN 60  RND A4     00  --- --
-01  --- --                             01  --- --
+Track 1                                Track 2, FX 1 and 2 a lane of 3
+00  D-3 64  RND 31  LEN 60  RND A4     00  --- --  RET 02   RND 61
+01  --- --                             01  --- --  VDLT 80  RND F3
 02  A-3 50  RND 62                     02  C-4 50  VDLT 80  RND F3
-03  F-3 50                             03  C-4 40  RET 02   RND 61
-04  D-3 64  RND 31  LEN 60  RND A4     ... the same each beat
+03  F-3 50                             03  C-4 40
+04  D-3 64  RND 31  LEN 60  RND A4     ... the notes the same each beat
 05  C-4 50  RND A2
-06  --- --
-07  A-3 50  RND 62
-08  D-3 64  RND 31  LEN 60  RND A4
-09  --- --
+06  --- --                             The hats the RET row lands on:
+07  A-3 50  RND 62                     bar 1: 03 06 0F
+08  D-3 64  RND 31  LEN 60  RND A4     bar 2: 02 0B 0E
+09  --- --                             bar 3: 07 0A
 0A  E-3 50  RND 83
 0B  F-3 50
 0C  G-3 64  RND 62  LEN 40  RND A6
@@ -656,10 +660,12 @@ it would.
     `A4`. Beside the `LEN`, the status line says `67% of the times it plays, moves LEN up to 40
     either way`. The same on rows `04` and `08`, and `LEN 40 RND A6` on row `0C`.
 5.  Track 2: `W`, `K` `/hat` `Enter`, `:name HH`, and `C-4 50` on rows `02`, `06`, `0A` and
-    `0E`, each with `VDLT 80` (`K` `vdlt` `Enter` `80`), which leaves the velocity as written,
-    and `RND F3` beside it. On rows `03`, `07`, `0B` and `0F`, `C-4 40` with `RET 02` and
-    `RND 61`.
-6.  Track 3: a `Kick` on every beat.
+    `0E`, and `C-4 40` on rows `03`, `07`, `0B` and `0F`.
+6.  Its chances: on row `00`'s FX 1 `RET 02` (`K` `ret` `Enter` `02`) and on its FX 2
+    `RND 61`. On rows `01` and `02`, `VDLT 80` (`K` `vdlt` `Enter` `80`), which leaves the
+    velocity as written, and `RND F3` beside it. Back on row `00`, `:lane 3` on FX 1 and again
+    on FX 2: the title says `FX1:3 FX2:3`, and the two columns go round together, a row a step.
+7.  Track 3: a `Kick` on every beat.
 
 The finished song also makes the `VA` a pluck (`Mod 1`'s `Decay` `260 ms` and `Sustain` `45%`),
 sets its `Cut` `90`, sends it to the delay and the reverb, a shorter hat, and the levels.
@@ -671,6 +677,9 @@ sets its `Cut` `90`, sends it to the delay and the reverb, a shorter hat, and th
 *   `:seed 9`, and every `RND` rolls otherwise, as the module's random source would.
 *   `:set scale=off`: the same `RND`s move by semitones, and the line goes chromatic.
 *   An `ACU 01` on row `05`: the `C-4` climbs a degree each bar and wanders round where it's got.
+*   On track 2, `VDLT 80 RND F3` on rows `03` and `04` too, then `:len 5` on each of the hats'
+    lanes: the ratchet row comes round every five steps, on about one hat in five. Keep the two
+    lanes the same length, so an `RND` stays beside what it varies.
 *   When a bar goes somewhere you like, `Space g A` on track 1 writes its notes in, as they were
     heard, and takes their `RND`s out, so it stays. The `RND`s beside the `LEN`s stay, so the
     lengths keep varying.
@@ -688,11 +697,12 @@ plays rather than written again. In vimtracker that's the shape panel's `L`: the
 |---|---|---|
 | `HH` | Velocity | `Euclid` 5 hits over the 16 hats, at `7F`, as accents |
 | `BS` | Note | `Random` notes from `F-1` to `F-2` in F minor, on `Euclid` 9 of 16 |
-| `BS` | FX 1, a lane of 12 | A `Wave` of `Acid`'s `FREQ` from `30` to `A0`, once round the lane |
+| `BS` | FX 1, a lane of 12 at `/4` | A `Wave` of `Acid`'s `FREQ` from `30` to `A0`, once round the lane |
 
 The hats are typed quietly, at `34`, and the generator puts the accents on 5 of them. The bass is
-written by the panel on an empty Note column. Its filter wave runs on a lane of 12 steps, so it
-opens and closes against the 16-step line, landing somewhere new each bar.
+written by the panel on an empty Note column. Its filter wave runs on a lane of 12 rows at `/4`,
+each row lasting four steps, so the same 12 rows open and close the filter in one slow sweep
+over three bars, under a line that repeats every bar.
 [`song.ron`](songs/live-generators/song.ron)
 
 **Build it.**
@@ -706,9 +716,10 @@ opens and closes against the 16-step line, landing somewhere new each bar.
 5.  The bass, on track 3: `K` `acid` `Enter`, `:name BS`. On the Note column, `vG`, `S`:
     `Fill` `Random` (`K`), `From` `f1` and `To` `f2` (`i`, the note, `Enter`), `Where` `Euclid`
     with 9 hits, and `L`. `r` in the panel, before `L`, picks another line.
-6.  Its filter: `l` across to FX 1, `:lane 12`, `vG`, `S`, and from the commands `cutoff`
+6.  Its filter: `l` across to FX 1, `:lane 12/4`, `vG`, `S`, and from the commands `cutoff`
     `Enter`, which is `Acid`'s `FREQ`. `Fill` `Wave`, `From` `30`, `To` `A0`, `Rate` `x1` (`K`,
-    `x1`, `Enter`), and `L`. It fills the lane, and the title says `FX1:12  󰁨 Note,FX1`.
+    `x1`, `Enter`), and `L`. It fills the lane's 12 rows, and the title says
+    `FX1:12/4  󰁨 Note,FX1`.
 
 The finished song also sets the `Acid`'s `Resonance` `B0` and `Env mod` `70`, the hat's `Decay`
 `2C`, the delay and reverb sends, and the levels.
@@ -728,8 +739,13 @@ macros; add it with `:patch` to a track with notes to accent.
 
 *   `gl` on the hats' Velocity, then `Rotate`, a row at a time, while it plays.
 *   `gl` on the bass, `r` for a new line, `L` to keep it, as many times as you like.
-*   `gl` on FX 1, `Shape` `Saw` or `Smooth`, or `:lane 7` for a shorter drift: the wave fills the
-    new lane.
+*   `gl` on FX 1, `Shape` `Saw` or `Smooth`, or `:lane 7/4` on row `00` for a shorter sweep: the
+    wave fills the new lane.
+*   The sweep's speed is the lane's `Rate`, on the Gen page's `FX1 Lane` (`Space 8`): `÷2` takes
+    six bars, `×2` a bar and a half, and `×4` a row a step, 12 steps that drift against the bar.
+    `M` on it and `:macro Sweep` puts it on a knob. `Rate`, not `Length`, is the knob for a wave
+    lane: a lane heard longer plays its own rows again from the first, so `Length` `+4` plays the
+    whole wave and then its first four rows again, a jump back partway through the sweep.
 *   `Space g a` on any of them when you're done, to keep the values as plain ones.
 *   All three on track 3's bass at once: `Space 8`, the Gen page, where each live
     column of the phrase under the cursor is a device, `Random  Euclid · Note 00–0F` and
@@ -1453,13 +1469,18 @@ column of `CHA 00`, a chance that never comes up, on the rows a seeded `Chance` 
 
 **How the song does it.** Tracks 1 to 3, in group 1, are three clocks in A minor: a `Modal` bell at
 `1/16`, a plucked `VA` at `1/8` and a `VA` bass at `1/8T`, eight rows each. A kick keeps the beat,
-and a hat plays every sixteenth, its FX column a live `Chance` of `CHA 00` at `35%` that drops
-five of them, the same five every bar. The hat's first macro, `Skip`, holds that amount.
+and a hat plays every sixteenth. Its FX column is a lane of 7 rows, a live `Chance` of `CHA 00`
+at `35%` that drops two of them. Seven against the bar's sixteen, the skips go round the bar,
+four or five a bar, and come back to where they started only after seven bars, closer to the
+module's Skip patterns than a bar that drops the same steps every time. The hat's first macro,
+`Skip`, holds that amount.
 [`song.ron`](songs/clock-multiplier/song.ron)
 
 ```text
-    00  01  02  03  04  05  06  07  08  09  0A  0B  0C  0D  0E  0F
-HH  X   x   .   x   X   x   x   .   X   .   .   x   X   x   .   x       . is CHA 00
+       00  01  02  03  04  05  06  07  08  09  0A  0B  0C  0D  0E  0F
+Bar 1  X   .   x   x   .   x   x   x   .   x   x   .   X   x   x   .
+Bar 2  X   x   .   x   X   x   .   x   X   .   x   x   X   .   x   x       . is CHA 00
+Bar 3  .   x   x   x   .   x   x   .   X   x   x   .   X   x   .   x
 ```
 
 **Build it.**
@@ -1472,8 +1493,9 @@ HH  X   x   .   x   X   x   x   .   X   .   .   x   X   x   .   x       . is CHA
 4.  Track 3: a `VA`, `:name BS`, eight rows of bass on `A-1`, `E-1` and `G-1`, at `1/8T`.
 5.  `:group 1 1-3` puts the three in group 1.
 6.  A `Kick` on every beat, and on track 5 a `Hat` on every row. In the hat's phrase, `l` to its
-    first FX column, `vG` and `S`, and choose `CHA`. Set `From` and `To` to `00`, `Where` to
-    `Chance` and its `Amount` to `35%`, then `L`.
+    first FX column on row `00`, `:lane 7`, then `vG` and `S`, and choose `CHA`. Set `From` and
+    `To` to `00`, `Where` to `Chance` and its `Amount` to `35%`, then `L`. It fills the lane's
+    seven rows; `r` before `L` draws others, and two of seven is about right.
 7.  `Space 8` on the hat, `M` on the generator's `Amount`, and `:macro Skip` to name it.
 
 **Play it.**
@@ -1486,6 +1508,10 @@ HH  X   x   .   x   X   x   x   .   X   .   .   x   X   x   .   x       . is CHA
 *   Turn `Skip` up while it plays: the hat drops more steps, keeping the ones already gone, until at
     `100%` it's silent; down to `0%` it's a clock again. `r` on the Gen page draws other steps.
 *   `Where` on `Euclid` with `Hits` as the amount spreads the dropped steps evenly instead.
+*   The lane's `Rate`, on the Gen page's `FX1 Lane`, divides the skip pattern's clock: at `÷2`
+    each of its rows lasts two steps and acts on the first, so the skips fall only on every
+    other step and take fourteen steps to come round. `:lane 5` on row `00` makes a pattern
+    of five, a rotation every five steps.
 *   Give the group a groove of its own, `Swing 62` on each track's `Groove`, for the SCM's
     `Shuffle`.
 

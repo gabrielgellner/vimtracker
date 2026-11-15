@@ -730,7 +730,7 @@ fn metropolix() -> Song {
 
 /// Winter Modular's Eloquencer: a written line whose rows each have a chance of moving their note
 /// and of a longer or shorter gate, and hats with a chance of ratcheting and a velocity that
-/// wanders, all with `RND` (decision 323).
+/// wanders, all with `RND` (decision 323), the hats' on a lane of their own.
 fn eloquencer() -> Song {
     let mut song = song("eloquencer", 116, 2, ScaleKind::Minor, 3);
     song.seed = 0xE1;
@@ -765,20 +765,38 @@ fn eloquencer() -> Song {
     line.send_a = 0xA0;
     line.send_b = 0x90;
     pluck(&mut song, 0, 260, 45, 80);
-    // A hat on each off-beat whose velocity wanders, and one before each beat that ratchets now
-    // and then.
-    let wanders = "C-4 50 velocitydelta:80 rnd:F3 ---";
-    let ratchets = "C-4 40 ret:02 rnd:61 ---";
+    // A hat on each off-beat and one before each beat, and their chances on a lane of 3 on FX 1
+    // and 2, so they go round the hats: one row of three a chance of ratcheting, two a velocity
+    // that wanders.
+    let (off_beat, before) = ("C-4 50 --- --- ---", "C-4 40 --- --- ---");
     voice(
         &mut song,
         1,
         "HH",
         SynthVoice::Hat,
         &[
-            REST, REST, wanders, ratchets, REST, REST, wanders, ratchets, REST, REST, wanders,
-            ratchets, REST, REST, wanders, ratchets,
+            "--- -- ret:02 rnd:61 ---",
+            "--- -- velocitydelta:80 rnd:F3 ---",
+            "C-4 50 velocitydelta:80 rnd:F3 ---",
+            before,
+            REST,
+            REST,
+            off_beat,
+            before,
+            REST,
+            REST,
+            off_beat,
+            before,
+            REST,
+            REST,
+            off_beat,
+            before,
         ],
     );
+    let mut phrase = (*song.tracks[1].phrases[&0]).clone();
+    phrase.set_lane(0, Some(Lane::new(0, 3)));
+    phrase.set_lane(1, Some(Lane::new(0, 3)));
+    song.tracks[1].phrases.insert(0, Arc::new(phrase));
     set(&mut song, 1, "hat.decay", 0x30);
     song.tracks[1].level = 0xC8;
     four_on_the_floor(&mut song, 2);
@@ -832,14 +850,18 @@ fn live_generators() -> Song {
     line.seed = 3;
     let notes = empty_notes(&song);
     song = generate(song, 2, notes, 16, line);
-    // A wave on Acid's cutoff, on a lane of 12 steps that drifts against the line.
+    // A wave on Acid's cutoff, on a lane of 12 rows at `/4`, a row every four steps: one slow
+    // sweep over three bars.
     song = apply(
         song,
         &Action::SetLane {
             track: 2,
             phrase: 0,
             slot: 0,
-            lane: Some(Lane::new(0, 12)),
+            lane: Some(Lane {
+                division: 4,
+                ..Lane::new(0, 12)
+            }),
         },
     );
     let cutoff = FxCommand::Set(SettingId::from_key("acid.cutoff").unwrap());
@@ -1610,14 +1632,32 @@ fn clock_multiplier() -> Song {
     );
     set(&mut song, 4, "hat.decay", 0x28);
     song.tracks[4].level = 0xB0;
-    // The skip: `CHA 00`, never playing, on about a third of the hat's rows, the same each pass.
+    // The skip: `CHA 00`, never playing, on about a third of the rows of a lane of 7, so the
+    // skips go round the bar rather than repeat each bar.
+    song = apply(
+        song,
+        &Action::SetLane {
+            track: 4,
+            phrase: 0,
+            slot: 0,
+            lane: Some(Lane::new(0, 7)),
+        },
+    );
     let mut skip = shape(FillKind::Ramp, 0, 0, Where::Chance(35));
-    skip.seed = 0x5C;
-    let cha = ShapeColumn::Fx {
-        slot: 0,
-        command: FxCommand::Cha,
-    };
-    song = generate(song, 4, cha, 16, skip);
+    skip.seed = 0x2B;
+    song = apply(
+        song,
+        &Action::Generate {
+            track: 4,
+            phrase: 0,
+            column: ShapeColumn::Fx {
+                slot: 0,
+                command: FxCommand::Cha,
+            },
+            span: Span::Lane,
+            shape: skip,
+        },
+    );
     gen_knob(
         &mut song.tracks[4],
         0,
