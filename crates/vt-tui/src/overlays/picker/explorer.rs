@@ -7,6 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
+use vt_model::bank::PlayParams;
 use vt_model::kit::{KitEntry, load_kit};
 use vt_model::preset::{
     EffectPreset, PatchPreset, Preset, PresetError, PresetKind, SoundPreset, load, preset_name,
@@ -15,8 +16,7 @@ use vt_model::project::is_project;
 use vt_model::sample::is_sample_file;
 use vt_model::tag::{self, Source, Tag, TagLibrary};
 
-use crate::overlays::picker::picking::kit_item;
-use crate::overlays::picker::{Item, Pick, Preview};
+use crate::overlays::picker::{Item, KitChoice, Pick, Preview};
 
 /// What the explorer is choosing, which decides what it lists and what choosing does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -361,6 +361,32 @@ pub(crate) fn contents(
         (Some(kit), Some(place)) if kit.is_file() => sound_files(kit, place, library),
         _ => None,
     }
+}
+
+/// A row for a kit's sound: its label, and its name beside it, or its name alone if it has no
+/// label. Moving onto it plays it and shows its waveform, as a file's row does.
+pub(crate) fn kit_item(entry: &KitEntry) -> Item {
+    let (label, meaning) = if entry.label.is_empty() {
+        (entry.name.clone(), String::new())
+    } else {
+        (entry.label.clone(), entry.name.clone())
+    };
+    Item::new(
+        label,
+        Pick::KitSound(KitChoice {
+            path: entry.path.clone(),
+            label: entry.label.clone(),
+            name: entry.name.clone(),
+            play: PlayParams {
+                gain_db: entry.gain,
+                tune: entry.tune,
+                ..PlayParams::default()
+            },
+            choke: entry.choke,
+        }),
+    )
+    .meaning(meaning)
+    .preview(Preview::Sample(entry.path.clone()))
 }
 
 /// A kit's sounds, label first and named beside it, as the kit in use lists them. A sound with

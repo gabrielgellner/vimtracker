@@ -6,16 +6,57 @@ use std::sync::Arc;
 use vt_engine::engine::Transport;
 use vt_engine::link::Command;
 use vt_model::action::Action;
+use vt_model::bank::BankEntry;
 use vt_model::constants::FIXED_TRACKS;
 use vt_model::label::is_name;
-use vt_model::song::{Launch, TrackKind};
+use vt_model::song::{Launch, Machine, TrackKind};
 use vt_model::speed::Speed;
 
 use super::{App, TrackLive};
 use crate::overlays::command::parse::LineError;
+use crate::overlays::picker::{Item, Pick, Picker};
 use crate::services::Services;
+use crate::widgets::{group, role};
 
 impl Services {
+    /// The list of tracks, like Vim's buffers, with this one highlighted. It opens on its search,
+    /// as a track is found by name or number, as Vim's buffers are.
+    pub(crate) fn track_picker(&self) -> Picker {
+        let song = self.song();
+        let items = song
+            .tracks
+            .iter()
+            .enumerate()
+            .map(|(track, state)| {
+                let sound = match state.machine {
+                    _ if !state.is_sound() => state.kind.title().to_owned(),
+                    Machine::Sampler => song
+                        .bank
+                        .get(state.sample())
+                        .map_or_else(String::new, BankEntry::title),
+                    Machine::Plaits(voice) => voice.name().to_owned(),
+                };
+                let number = if state.is_sound() {
+                    format!("{:02}", track + 1)
+                } else {
+                    String::new()
+                };
+                // A group and the tracks in it are in its colour, and what each is for is the rule
+                // under it, as on the mixer.
+                let style = group::style(song, track).unwrap_or_default();
+                Item::new(
+                    format!("{number:<2}  {}", state.name).trim_end(),
+                    Pick::Track(track),
+                )
+                .meaning(sound)
+                .styled(style.patch(role::rule(song, track)))
+            })
+            .collect();
+        Picker::new("Tracks", items)
+            .opened_on(Some(self.cursor.track))
+            .searching("")
+    }
+
     /// Whether this track can be muted and soloed, saying so if not.
     pub(crate) fn can_silence(&mut self) -> bool {
         let master = self

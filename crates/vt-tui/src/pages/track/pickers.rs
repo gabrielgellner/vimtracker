@@ -165,7 +165,7 @@ impl App {
             Control::Tune | Control::Cents => self.open_tuning_picker(control),
             _ if control.setting_on(&page) == Some(SettingId::SLICE) => self.open_slice_picker(),
             // A track can follow the project's, which isn't one of the grooves.
-            Control::Groove => self.open_groove_picker(true),
+            Control::Groove => self.open_picker(self.services.groove_picker(true)),
             // A macro is the patch's knob, so its list is adding a patch and saving one.
             Control::Macro(_) => {
                 self.show_picker(Picker::new("Patches", with_patches(Vec::new())));

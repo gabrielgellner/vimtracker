@@ -576,7 +576,7 @@ impl App {
                 self.leave_selection(selection);
                 self.services.cursor.field = field;
                 self.overlays.shape_command = Some((selection, field));
-                let (_, items) = self.fx_command_items(track, Pick::ShapeCommand);
+                let (_, items) = self.services.fx_command_items(track, Pick::ShapeCommand);
                 self.show_picker(Picker::new("FX commands", items).searching(""));
                 self.services.status =
                     "Choose the command to write on the empty FX column".to_owned();

@@ -792,7 +792,7 @@ among it, as the tests drive the program through them (#733).
 drive it directly. It holds the shared services, `App::services`, beside the pages (`track_page`,
 `mixer_page`, `project_page`, `audio_page`, `sample_page`, `song_view`, `chain_view` and
 `phrase_view`), `App::modes`, the picker, the command line, help, the jump list and the keys' own
-state: 76 fields, and 47 files besides `app.rs` add an `impl App` block, such as
+state: 76 fields, and 48 files besides `app.rs` add an `impl App` block, such as
 `pages/track.rs`, `services/banking.rs`, `pages/sample/slicing.rs`, `overlays/shape.rs`,
 `overlays/picker/picking.rs`, `app/recording.rs` (live recording, `Space r`), `pages/project.rs`,
 `pages/audio.rs` and `pages/sample.rs`.
@@ -898,8 +898,9 @@ only name Normal's keys on those pages, for the binding table.
     line's running total, going back and forward with undo and redo; `SelectionPlace` is a
     selection to come back to after `r` (decision 148).
 *   **`overlays/picker.rs`:** one picker for every list, with categories as a tree one level deep, which is
-    also the file explorer. `picking.rs`, `explorer.rs` and `exploring.rs` open it and act on what it
-    chooses. The explorer's items carry tags, guessed by `vt-model`'s `tag.rs` and kept in its
+    also the file explorer. `picking.rs` shows it and acts on what it chooses, and `explorer.rs` and
+    `exploring.rs` open it as the explorer; every other list is built beside what it's for, such as
+    the phrase cell's in `pages/phrase/pickers.rs`. The explorer's items carry tags, guessed by `vt-model`'s `tag.rs` and kept in its
     `TagLibrary` or a preset's file; its search reads `#` words as tags (`picker/tree.rs`'s `Search`), and
     `tagging.rs` keeps what `T` gives (decision 315).
 *   **The command line** (`overlays/command.rs` and `overlays/command/`): `parse.rs` parses a `:`

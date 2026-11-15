@@ -1,205 +1,48 @@
-//! Opening the picker and acting on what it chooses.
+//! Showing the picker, its keys, and acting on what it chooses. The lists it opens on are built
+//! beside what they're for: the phrase cell's in `pages/phrase/pickers.rs`, the grooves and scales
+//! in `pages/project/pickers.rs`, the views in `app/keys.rs`, the tracks in `app/tracks.rs`, the
+//! guides in `overlays/guides.rs`, and the kits and the samples in the explorer's `exploring.rs`.
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use ratatui::crossterm::event::KeyCode;
 
-use vt_model::accumulator::{MOST_DEGREES, amount, amount_text, amount_value};
+use vt_model::accumulator::amount;
 use vt_model::action::{Action, FieldValue};
-use vt_model::bank::{BankEntry, PlayParams};
 use vt_model::condition::Condition;
-use vt_model::groove::GrooveId;
-use vt_model::kit::{KitEntry, load_kit};
 use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot};
-use vt_model::order::Order;
-use vt_model::sample::load_sample;
-use vt_model::scale::{Scale, ScaleKind};
+use vt_model::scale::Scale;
 use vt_model::selection::Field;
-use vt_model::settings::{SettingId, gate_percent};
-use vt_model::song::{FULL_GATE, Machine, Role};
+use vt_model::settings::SettingId;
+use vt_model::song::Role;
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark};
 
 use crate::app::{App, Entry};
-use crate::graphics;
-use crate::input::bindings::Cmd;
 use crate::input::keys::Key;
-use crate::input::mode::{Mode, View};
-use crate::overlays::command::parse::Line;
-use crate::overlays::guides::GUIDES;
-use crate::overlays::picker::draw::{PREVIEW_WAVE_HEIGHT, PREVIEW_WAVE_WIDTH};
+use crate::input::mode::Mode;
 use crate::overlays::picker::explorer::Purpose;
-use crate::overlays::picker::{
-    Item, KitChoice, Outcome, Pick, Picker, Preview, PreviewLine, Shown,
-};
+use crate::overlays::picker::exploring::kit_preview;
+use crate::overlays::picker::{KitChoice, Outcome, Pick, Picker, Preview, Shown};
 use crate::pages::chain::ChainView;
+use crate::pages::phrase::PhraseView;
 use crate::pages::song::COLUMNS_BEFORE_TRACKS;
 use crate::pages::track::tuning::set_tuning;
-use crate::pages::track::{Control, Page, set};
-use crate::services::Services;
+use crate::pages::track::{Control, set};
 use crate::services::banking::Seed;
-use crate::widgets::{group, role};
-
-/// The lengths `K` lists on a gate cell's length, as shares of its last pulse: from a click, through
-/// a 303's half, to all of it.
-const LENGTHS: [(u8, &str); 7] = [
-    (0x08, "a click, for ticks and plucks"),
-    (0x20, "very short, a stab"),
-    (0x40, "short, staccato"),
-    (0x80, "half, as a 303's gate closes"),
-    (0xC0, "long, with a gap before the next"),
-    (0xE6, "nearly legato, a breath before the next"),
-    (0xFF, "the whole pulse, held until something ends it"),
-];
-
-/// A row for a kit's sound: its label, and its name beside it, or its name alone if it has no
-/// label. Moving onto it plays it and shows its waveform, as a file's row does.
-pub(crate) fn kit_item(entry: &KitEntry) -> Item {
-    let (label, meaning) = if entry.label.is_empty() {
-        (entry.name.clone(), String::new())
-    } else {
-        (entry.label.clone(), entry.name.clone())
-    };
-    Item::new(
-        label,
-        Pick::KitSound(KitChoice {
-            path: entry.path.clone(),
-            label: entry.label.clone(),
-            name: entry.name.clone(),
-            play: PlayParams {
-                gain_db: entry.gain,
-                tune: entry.tune,
-                ..PlayParams::default()
-            },
-            choke: entry.choke,
-        }),
-    )
-    .meaning(meaning)
-    .preview(Preview::Sample(entry.path.clone()))
-}
-
-/// What a kit's preview shows: its name, how many sounds it has and where it came from, and each
-/// sound with its label, its name and its waveform. Waveforms already worked out are used again.
-fn kit_preview(
-    item: usize,
-    path: &Path,
-    rate: u32,
-    waves: &mut HashMap<PathBuf, Option<Vec<(usize, usize)>>>,
-) -> Shown {
-    let kit = match load_kit(path) {
-        Ok(kit) => kit,
-        Err(error) => {
-            let heading = path
-                .file_stem()
-                .map(|stem| stem.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            return Shown::new(item, heading, error.to_string());
-        }
-    };
-    let count = match kit.sounds.len() {
-        1 => "1 sound".to_owned(),
-        count => format!("{count} sounds"),
-    };
-    let note = if kit.source.is_empty() {
-        count
-    } else {
-        format!("{count} from {}", kit.source)
-    };
-    let lines = kit
-        .sounds
-        .iter()
-        .map(|sound| PreviewLine {
-            label: sound.label.clone(),
-            name: sound.name.clone(),
-            wave: waves
-                .entry(sound.path.clone())
-                .or_insert_with(|| {
-                    load_sample(&sound.path, rate).ok().map(|sample| {
-                        graphics::waveform_spans(
-                            &sample.frames,
-                            PREVIEW_WAVE_WIDTH,
-                            PREVIEW_WAVE_HEIGHT,
-                        )
-                    })
-                })
-                .clone(),
-        })
-        .collect();
-    Shown {
-        lines,
-        ..Shown::new(item, kit.name, note)
-    }
-}
 
 impl App {
-    /// A kit at a path, or by name in the first of the settings' kit folders that has it. A
-    /// name found nowhere is looked for in the first folder, so the error names it.
-    pub(crate) fn kit_path(&self, name: &Path) -> PathBuf {
-        if name.is_file() {
-            return name.to_path_buf();
-        }
-        let candidates: Vec<PathBuf> = self
-            .services
-            .settings
-            .kit_folders()
-            .iter()
-            .map(|folder| folder.join(name).with_extension("ron"))
-            .collect();
-        candidates
-            .iter()
-            .find(|candidate| candidate.is_file())
-            .or(candidates.first())
-            .cloned()
-            .unwrap_or_else(|| name.with_extension("ron"))
-    }
-
-    /// Open the view picker, with the view before this one highlighted so `Enter` flips back. The
-    /// track page is listed by the page it shows, where it's in the order, and then its other
-    /// pages after every view; each item has the key that shows it beside it, from the table.
-    pub(crate) fn open_view_picker(&mut self) {
-        self.modes.count = None;
-        let key = |cmd: Cmd| {
-            self.table
-                .rows()
-                .find(|binding| binding.mode == Mode::Normal && binding.cmd == cmd)
-                .map_or("", |binding| binding.keys)
-        };
-        let shown = self.track_page.page;
-        let page_item = |page: Page| {
-            Item::new(page.name().to_lowercase(), Pick::TrackPage(page))
-                .meaning(key(Cmd::ShowTrackPage(page)))
-        };
-        let mut items: Vec<Item> = self
-            .recent_views
-            .iter()
-            .map(|view| match view {
-                View::Track => page_item(shown),
-                // The project's sub-pages are `Space 9`, then `H` or `L`.
-                View::Project | View::Audio => {
-                    let side = if *view == View::Audio { "L" } else { "H" };
-                    Item::new(view.name(), Pick::View(*view))
-                        .meaning(format!("{}, {side}", key(Cmd::ShowProject)))
-                }
-                _ => Item::new(view.name(), Pick::View(*view)).meaning(key(Cmd::ShowView(*view))),
-            })
-            .collect();
-        items.extend(
-            Page::ALL
-                .into_iter()
-                .filter(|page| *page != shown)
-                .map(page_item),
-        );
-        let mut picker = Picker::new("Views", items).opened_on(Some(0));
-        picker.move_highlight(1);
-        self.show_picker(picker);
-    }
-
     /// Show a picker, and its preview if it has one.
     pub(crate) fn show_picker(&mut self, picker: Picker) {
         self.overlays.picker = Some(picker);
         self.modes.mode = Mode::Picker;
         self.refresh_preview();
+    }
+
+    /// Show a picker a key or a command line opened, which takes the count.
+    pub(crate) fn open_picker(&mut self, picker: Picker) {
+        self.modes.count = None;
+        self.show_picker(picker);
     }
 
     /// Load the preview of the item under the picker's cursor, if it has one and it isn't already
@@ -236,143 +79,6 @@ impl App {
         }
     }
 
-    /// Open the list of grooves for the project, or for the cursor's track, which can also
-    /// follow the project's, with the one playing highlighted.
-    pub(crate) fn open_groove_picker(&mut self, track: bool) {
-        self.modes.count = None;
-        let picker = self.services.groove_picker(track);
-        self.show_picker(picker);
-    }
-}
-
-impl Services {
-    /// The list of grooves for the project, or for the cursor's track, which can also follow the
-    /// project's, with the one playing highlighted.
-    pub(crate) fn groove_picker(&self, track: bool) -> Picker {
-        let song = self.song();
-        let own = song.tracks.get(self.cursor.track).and_then(|t| t.groove);
-        let mut items = Vec::new();
-        if track {
-            let follow = format!("Project's, {}", song.groove);
-            items.push(
-                Item::new(follow, Pick::Line(Line::TrackGroove(None)))
-                    .meaning("The groove the project plays with"),
-            );
-        }
-        for id in GrooveId::all() {
-            let line = if track {
-                Line::TrackGroove(Some(id))
-            } else {
-                Line::Groove(id)
-            };
-            items.push(Item::new(id.name(), Pick::Line(line)).meaning(id.meaning()));
-        }
-        let (title, at) = if track {
-            let at = own.map_or(0, |id| id.index() + 1);
-            ("This track's groove", at)
-        } else {
-            ("The project's groove", song.groove.index())
-        };
-        Picker::new(title, items).opened_on(Some(at))
-    }
-}
-
-impl App {
-    /// Open the list of orders the cursor's phrase's rows can play in, on the one they play in.
-    pub(crate) fn open_order_picker(&mut self) {
-        self.modes.count = None;
-        let Some(phrase) = self.services.phrase_here() else {
-            self.services.status = "This track has no phrase here".to_owned();
-            return;
-        };
-        // An order that takes numbers is listed with the phrase's own, if it plays in one.
-        let playing = phrase.order();
-        let orders = Order::ALL.map(|order| {
-            if order.takes_numbers() && order.is_like(playing) {
-                playing
-            } else {
-                order
-            }
-        });
-        let at = orders.iter().position(|order| *order == playing);
-        let items = orders
-            .map(|order| {
-                Item::new(order.to_string(), Pick::Line(Line::Order(Some(order))))
-                    .meaning(order.meaning())
-            })
-            .to_vec();
-        self.show_picker(Picker::new("This phrase's order", items).opened_on(at));
-    }
-
-    /// Play the cursor's phrase's rows in an order.
-    pub(crate) fn set_order(&mut self, order: Order) {
-        let Some(phrase) = self.services.phrase_id() else {
-            self.services.status = "This track has no phrase here".to_owned();
-            return;
-        };
-        let rows = self.services.phrase_here().map_or(0, |phrase| phrase.len());
-        self.services.apply(&Action::SetOrder {
-            track: self.services.cursor.track,
-            phrase,
-            order,
-        });
-        self.services.status = format!("This phrase plays {}: {}", order, order.describe(rows));
-    }
-
-    /// Open the list of scales, with this one highlighted.
-    pub(crate) fn open_scale_picker(&mut self) {
-        self.modes.count = None;
-        let items = ScaleKind::ALL
-            .map(|kind| Item::new(kind.name(), Pick::Scale(kind)))
-            .to_vec();
-        let at = ScaleKind::ALL
-            .iter()
-            .position(|kind| *kind == self.services.scale.kind);
-        self.show_picker(Picker::new("Scales", items).opened_on(at));
-    }
-
-    /// Open the list of tracks, like Vim's buffers, with this one highlighted.
-    pub(crate) fn open_track_picker(&mut self) {
-        self.modes.count = None;
-        let items = self
-            .song()
-            .tracks
-            .iter()
-            .enumerate()
-            .map(|(track, state)| {
-                let sound = match state.machine {
-                    _ if !state.is_sound() => state.kind.title().to_owned(),
-                    Machine::Sampler => self
-                        .song()
-                        .bank
-                        .get(state.sample())
-                        .map_or_else(String::new, BankEntry::title),
-                    Machine::Plaits(voice) => voice.name().to_owned(),
-                };
-                let number = if state.is_sound() {
-                    format!("{:02}", track + 1)
-                } else {
-                    String::new()
-                };
-                // A group and the tracks in it are in its colour, and what each is for is the rule
-                // under it, as on the mixer.
-                let style = group::style(self.song(), track).unwrap_or_default();
-                Item::new(
-                    format!("{number:<2}  {}", state.name).trim_end(),
-                    Pick::Track(track),
-                )
-                .meaning(sound)
-                .styled(style.patch(role::rule(self.song(), track)))
-            })
-            .collect();
-        // Found by name or number, as Vim's buffers are, so it opens on the search.
-        self.show_picker(
-            Picker::new("Tracks", items)
-                .opened_on(Some(self.services.cursor.track))
-                .searching(""),
-        );
-    }
-
     /// Go to a track chosen from the list, which `C-o` comes back from.
     fn go_to_track(&mut self, track: usize) {
         self.record_jump();
@@ -386,198 +92,11 @@ impl App {
         self.song_view.column = COLUMNS_BEFORE_TRACKS + track;
     }
 
-    /// Open the list of guides, in the order to learn them.
-    pub(crate) fn open_guide_picker(&mut self) {
-        let items = GUIDES
-            .iter()
-            .map(|guide| Item::new(guide.title(), Pick::Guide(*guide)))
-            .collect();
-        self.show_picker(Picker::new("Guides", items));
-    }
-
-    /// Choose a kit in the explorer, from the kit folders, with each kit's sounds beside the list.
-    /// `Enter` makes it the kit `:sample` lists first, and `L` puts its sounds on tracks.
-    pub(crate) fn open_kit_picker(&mut self) {
-        self.open_kit_explorer();
-    }
-
-    /// Make a kit's sounds the ones to choose from for a track. Nothing is loaded until one is.
-    pub(crate) fn use_kit(&mut self, path: &Path) {
-        match load_kit(path) {
-            Ok(kit) if kit.sounds.is_empty() => {
-                self.services.status = format!("{} has no sounds", path.display());
-            }
-            Ok(kit) => {
-                self.services.status = format!(
-                    "Kit {}: {} sounds. :sample chooses one for this track",
-                    kit.name,
-                    kit.sounds.len()
-                );
-                self.explorer.kit = kit.sounds;
-                self.explorer.kit_file = Some(path.to_path_buf());
-            }
-            Err(error) => self.services.status = error.to_string(),
-        }
-    }
-
-    /// Choose this field from a list, in the columns that are one.
-    pub(crate) fn open_field_picker(&mut self) {
-        match self.services.cursor.field {
-            // A condition's value is one of a list, so `K` on it lists them.
-            Field::FxValue(slot)
-                if self.services.current_slot(slot).and_then(|s| s.command)
-                    == Some(FxCommand::Cnd) =>
-            {
-                self.open_condition_picker(slot);
-            }
-            // So is an amount, as a signed byte is hard to type.
-            Field::FxValue(slot)
-                if self.services.current_slot(slot).and_then(|s| s.command)
-                    == Some(FxCommand::Acu) =>
-            {
-                self.open_amount_picker(slot);
-            }
-            // And a sample lock's is one of the bank's.
-            Field::FxValue(slot)
-                if self.services.current_slot(slot).and_then(|s| s.command)
-                    == Some(FxCommand::Set(SettingId::SAMPLE)) =>
-            {
-                self.open_sample_lock_picker(slot);
-            }
-            // And a slice lock's is one of the slices of the sample the step plays.
-            Field::FxValue(slot)
-                if self.services.current_slot(slot).and_then(|s| s.command)
-                    == Some(FxCommand::Set(SettingId::SLICE)) =>
-            {
-                self.open_slice_lock_picker(slot);
-            }
-            Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
-                self.open_fx_picker(slot, "");
-            }
-            Field::Gate => self.open_gate_picker(),
-            Field::GateLength => self.open_length_picker(),
-            Field::Note | Field::Velocity | Field::Nudge => {
-                self.services.status = "K chooses on the gate and FX columns".to_owned();
-            }
-        }
-    }
-
-    /// List the gate types, with what each does and the cell's current one highlighted.
-    fn open_gate_picker(&mut self) {
-        let current = self.services.current_gate().map(|gate| gate.kind);
-        let empty = Item::new("---", Pick::Gate(None)).meaning("Empty, one pulse of SGL");
-        let items = std::iter::once(empty)
-            .chain(GateKind::ALL.iter().map(|kind| {
-                Item::new(kind.name(), Pick::Gate(Some(*kind))).meaning(kind.meaning())
-            }))
-            .collect();
-        let position = GateKind::ALL
-            .iter()
-            .position(|kind| Some(*kind) == current)
-            .map_or(0, |position| position + 1);
-        self.show_picker(Picker::new("Gates", items).opened_on(Some(position)));
-    }
-
     /// Put a chosen gate type in the cell, keeping its pulses and length, or empty it.
     fn pick_gate(&mut self, kind: Option<GateKind>) {
         let current = self.services.current_gate().unwrap_or_default();
         let gate = kind.map(|kind| Gate { kind, ..current });
         self.set_field(FieldValue::Gate(gate));
-    }
-
-    /// List some useful lengths for the gate cell, from a click to all of the pulse, each with its
-    /// share of the last pulse and what it's for, with the cell's own marked, or the nearest shown.
-    fn open_length_picker(&mut self) {
-        let track = self
-            .song()
-            .tracks
-            .get(self.services.cursor.track)
-            .map_or(FULL_GATE, |track| track.gate_length());
-        let empty = Item::new("--", Pick::Length(None))
-            .meaning(format!("The track's Gate, now {}%", gate_percent(track)));
-        let items = std::iter::once(empty)
-            .chain(LENGTHS.iter().map(|(length, meaning)| {
-                Item::new(format!("{length:02X}"), Pick::Length(Some(*length)))
-                    .meaning(format!("{}%, {meaning}", gate_percent(*length)))
-            }))
-            .collect();
-        let current = self.services.current_gate().and_then(|gate| gate.length);
-        let exact = match current {
-            None => Some(0),
-            Some(current) => LENGTHS
-                .iter()
-                .position(|(length, _)| *length == current)
-                .map(|position| position + 1),
-        };
-        let nearest = current.and_then(|current| {
-            LENGTHS
-                .iter()
-                .enumerate()
-                .min_by_key(|(_, (length, _))| length.abs_diff(current))
-                .map(|(position, _)| position + 1)
-        });
-        let picker = Picker::new("Lengths", items);
-        self.show_picker(match exact {
-            Some(_) => picker.opened_on(exact),
-            None => picker.revealing(nearest),
-        });
-    }
-
-    /// List the FX commands this track has, in categories as `Dest` is: the filter, output, the
-    /// voice, each slot's effect, then the events. It opens on its search, so typing finds a label or
-    /// a name at once, and `Esc` goes to the list. A query starts it searching for that.
-    pub(crate) fn open_fx_picker(&mut self, slot: usize, query: &str) {
-        let current = self.services.current_slot(slot).and_then(|s| s.command);
-        let empty = Item::new(
-            "---",
-            Pick::FxCommand {
-                slot,
-                command: None,
-            },
-        )
-        .meaning("Empty");
-        let (commands, listed) =
-            self.fx_command_items(self.services.cursor.track, |command| Pick::FxCommand {
-                slot,
-                command: Some(command),
-            });
-        let items = std::iter::once(empty).chain(listed).collect();
-        let position = commands
-            .iter()
-            .position(|command| Some(*command) == current)
-            .map_or(0, |position| position + 1);
-        self.show_picker(
-            Picker::new("FX commands", items)
-                .opened_on(Some(position))
-                .searching(query),
-        );
-    }
-
-    /// The FX commands a track has, and an item for each choosing it as `pick` says, in categories
-    /// as `Dest` is: the filter, output, the voice, each slot's effect, then the events.
-    pub(crate) fn fx_command_items(
-        &self,
-        track: usize,
-        pick: impl Fn(FxCommand) -> Pick,
-    ) -> (Vec<FxCommand>, Vec<Item>) {
-        let track = self.song().tracks.get(track);
-        // Only what this track has, from its machine and its slots.
-        let commands: Vec<FxCommand> =
-            track.map_or_else(|| FxCommand::EVENTS.to_vec(), FxCommand::on_track);
-        let items = commands
-            .iter()
-            .map(|command| {
-                let (name, category) = match (command, track) {
-                    (FxCommand::Set(id), Some(track)) => (id.name_on(track), id.group_on(track)),
-                    (FxCommand::Set(id), None) => (command.meaning(), id.group()),
-                    _ => (command.meaning(), "Events".to_owned()),
-                };
-                Item::new(command.name(), pick(*command))
-                    .meaning(name)
-                    .category(category)
-            })
-            .collect();
-        (commands, items)
     }
 
     /// Put a chosen command in a slot. A slot with a value keeps it. An empty one waits for its value
@@ -595,14 +114,14 @@ impl App {
             .filter(|s| s.command.is_some())
             .is_some_and(|s| Condition::from_value(s.coarse()).is_some());
         if command == FxCommand::Cnd && !has_condition {
-            self.open_condition_picker(slot);
+            self.show_picker(PhraseView::condition_picker(&self.services, slot));
             return;
         }
         let has_amount = current
             .filter(|s| s.command.is_some())
             .is_some_and(|s| amount(s.coarse()).is_some_and(|amount| amount != 0));
         if command == FxCommand::Acu && !has_amount {
-            self.open_amount_picker(slot);
+            self.show_picker(PhraseView::amount_picker(&self.services, slot));
             return;
         }
         let has_value = current.is_some_and(|s| s.command.is_some());
@@ -633,73 +152,6 @@ impl App {
         self.modes.mode = Mode::Replace;
     }
 
-    /// List the conditions a `CND` can hold, in Elektron's order and by Elektron's names, in
-    /// groups, opening on the slot's own and on its search, as the FX commands' list does.
-    pub(crate) fn open_condition_picker(&mut self, slot: usize) {
-        let current = self
-            .services
-            .current_slot(slot)
-            .filter(|s| s.command == Some(FxCommand::Cnd))
-            .and_then(|s| Condition::from_value(s.coarse()));
-        let items = Condition::all()
-            .map(|condition| {
-                Item::new(
-                    condition.label(),
-                    Pick::Condition {
-                        slot,
-                        value: condition.value(),
-                    },
-                )
-                .meaning(format!(
-                    "{:02X}  {}",
-                    condition.value(),
-                    condition.meaning()
-                ))
-                .category(condition.group())
-            })
-            .collect();
-        let position = Condition::all().position(|condition| Some(condition) == current);
-        self.show_picker(
-            Picker::new("Conditions", items)
-                .opened_on(position)
-                .searching(""),
-        );
-    }
-
-    /// List how far an `ACU` can move its note each time, up and then down, in degrees or semitones
-    /// as the scale is on or off, opening on the slot's own, or on one up.
-    pub(crate) fn open_amount_picker(&mut self, slot: usize) {
-        let current = self
-            .services
-            .current_slot(slot)
-            .filter(|s| s.command == Some(FxCommand::Acu))
-            .and_then(|s| amount(s.coarse()))
-            .filter(|amount| *amount != 0)
-            .unwrap_or(1);
-        let most = MOST_DEGREES as i8;
-        let amounts: Vec<i8> = (1..=most).chain((1..=most).map(|down| -down)).collect();
-        let items = amounts
-            .iter()
-            .map(|&amount| {
-                let value = amount_value(amount);
-                Item::new(format!("{amount:+}"), Pick::Amount { slot, value })
-                    .meaning(format!(
-                        "{value:02X}  {}",
-                        capitalised(&amount_text(amount, self.services.scale.on))
-                    ))
-                    .category(if amount > 0 { "Up" } else { "Down" })
-            })
-            .collect();
-        let position = amounts.iter().position(|amount| *amount == current);
-        self.show_picker(
-            Picker::new("Accumulate", items)
-                .opened_on(position)
-                .searching(""),
-        );
-    }
-
-    /// Replace one of a track's mod slots with what was chosen. A new type keeps the slot's
-    /// destination, depth and switch, and finds its own settings as the slot last had them.
     /// Set one of a track's settings to one of its choices, as its view writes it.
     fn pick_param(&mut self, track: usize, control: Control, value: i32) {
         let song = Arc::clone(self.song());
@@ -712,6 +164,8 @@ impl App {
         }
     }
 
+    /// Replace one of a track's mod slots with what was chosen. A new type keeps the slot's
+    /// destination, depth and switch, and finds its own settings as the slot last had them.
     fn pick_mod(&mut self, track: usize, slot: usize, mut modulator: ModSlot) {
         let was = self
             .song()
@@ -768,19 +222,6 @@ impl App {
                 mark: Mark::default(),
             },
         ));
-    }
-
-    /// Choose this track's sample in the explorer, with the kit's sounds first.
-    pub(crate) fn open_default_sample_picker(&mut self) {
-        let kit_name = self
-            .explorer
-            .kit_file
-            .as_deref()
-            .and_then(Path::file_stem)
-            .map(|stem| format!("Kit {}", stem.to_string_lossy()))
-            .unwrap_or_else(|| "Kit".to_owned());
-        let kit = self.explorer.kit.iter().map(kit_item).collect();
-        self.open_sample_explorer(kit, kit_name);
     }
 
     pub(crate) fn picker_key(&mut self, key: Key) {
@@ -985,18 +426,4 @@ impl App {
             self.note_place(purpose, folder);
         }
     }
-
-    /// Record a view as most recently used.
-    pub(crate) fn note_view(&mut self, view: View) {
-        self.recent_views.retain(|other| *other != view);
-        self.recent_views.insert(0, view);
-    }
-}
-
-/// Text with its first letter a capital, as a list's meanings start.
-fn capitalised(text: &str) -> String {
-    let mut letters = text.chars();
-    letters.next().map_or_else(String::new, |first| {
-        first.to_uppercase().chain(letters).collect()
-    })
 }
