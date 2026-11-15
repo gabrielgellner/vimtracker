@@ -3684,3 +3684,73 @@ fn a_tracks_role_is_its_machines_until_its_told_and_k_lists_them() {
     press(&mut app, "u");
     assert_eq!(track(&app).role, Role::Auto);
 }
+
+#[test]
+fn a_count_steps_a_list_that_many_choices_round_or_to_its_end() {
+    use vt_model::speed::Speed;
+    use vt_tui::pages::track::Control;
+    let track = |app: &App| app.song().tracks[0].clone();
+    // The filter's types go round.
+    let (mut app, _realtime) = on_track_page();
+    press(&mut app, "k");
+    assert_eq!(app.track_control(), Control::FilterType);
+    assert_eq!(track(&app).filter, FilterType::ALL[0]);
+    press(&mut app, "3=");
+    assert_eq!(track(&app).filter, FilterType::ALL[3]);
+    press(&mut app, "5-");
+    assert_eq!(
+        track(&app).filter,
+        FilterType::ALL[8],
+        "round past the first"
+    );
+    press(&mut app, "=");
+    assert_eq!(track(&app).filter, FilterType::ALL[9], "the count was used");
+    press(&mut app, "2+");
+    assert_eq!(
+        track(&app).filter,
+        FilterType::ALL[1],
+        "a large step is one too"
+    );
+    // The speeds stop at their ends.
+    let (mut app, _realtime) = on_track_page();
+    press(&mut app, "2}ll");
+    assert_eq!(app.track_control(), Control::Speed);
+    let at = |app: &App| Speed::ALL.iter().position(|s| *s == track(app).speed);
+    let from = at(&app).unwrap();
+    press(&mut app, "3=");
+    assert_eq!(at(&app), Some(from + 3));
+    press(&mut app, "99=");
+    assert_eq!(track(&app).speed, Speed::Whole, "it stops at the last");
+    press(&mut app, "99_");
+    assert_eq!(at(&app), Some(0), "and at the first");
+    // So does the groove, from the project's.
+    let (mut app, _realtime) = on_track_page();
+    press(&mut app, "2}j$h");
+    assert_eq!(app.track_control(), Control::Groove);
+    let from = app.song().groove.index();
+    press(&mut app, "3=");
+    assert_eq!(track(&app).groove, GrooveId::from_index(from + 3));
+    press(&mut app, "2-");
+    assert_eq!(track(&app).groove, GrooveId::from_index(from + 1));
+    press(&mut app, "999=");
+    let last = GrooveId::all().count() - 1;
+    assert_eq!(track(&app).groove, GrooveId::from_index(last));
+}
+
+#[test]
+fn a_count_steps_the_effect_in_a_slot_that_many_effects() {
+    use vt_model::insert::Insert;
+    use vt_tui::pages::track::Control;
+    let (mut app, _realtime) = on_fx_page();
+    assert_eq!(app.track_control(), Control::Insert(0));
+    let at = |app: &App| {
+        let insert = app.song().tracks[0].inserts[0];
+        Insert::ALL
+            .iter()
+            .position(|each| each.name() == insert.name())
+            .unwrap()
+    };
+    let from = at(&app);
+    press(&mut app, "3=");
+    assert_eq!(at(&app), (from + 3) % Insert::ALL.len());
+}

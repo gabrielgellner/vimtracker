@@ -830,9 +830,9 @@ that list things that aren't choices of a value stay their own: grooves, samples
 patches, the macro picker.
 
 **As U8 built it** (`widgets/param/edit.rs`, `track_page/pickers.rs`). The view gained what the
-edits read: `pace` (`Even`, `Once` for the track's own lists and an effect's, which a count has
-never moved further, `Time`, `Hold` and `Bars`, whose steps are worked out again after each step
-of a count), `reads` and `why_not` for `typed`, `title` for `K`'s list, and `choices` as `Choice`s
+edits read: `pace` (`Even`, `Time`, `Hold` and `Bars`, whose steps are worked out again after each step
+of a count; a `Once` for the track's own lists and an effect's, which a count never moved
+further, went on 2026-11-15, when the user chose that a count moves a list that many choices), `reads` and `why_not` for `typed`, `title` for `K`'s list, and `choices` as `Choice`s
 with a meaning and a heading. `stepped_fine` gives the value as well as the fine byte, as a fine
 step carries. A machine's own lists still step as hex, `+` moving `10` and stopping at the last,
 as they did. `choice_picker(track, control, list)` replaces ten of the pickers; the machines'

@@ -187,14 +187,6 @@ impl ParamView {
         }
     }
 
-    /// One step whatever the count.
-    fn once(self) -> Self {
-        Self {
-            pace: Pace::Once,
-            ..self
-        }
-    }
-
     fn text(self, text: String) -> Self {
         Self { text, ..self }
     }
@@ -368,8 +360,7 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
                         usize::from(value),
                         usize::from(found.default),
                         found.wraps(),
-                    )
-                    .once();
+                    );
                 ParamView {
                     toggle: found.is_toggle(),
                     typing: if found.is_toggle() {
@@ -391,12 +382,11 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
             let effects = Insert::ALL.iter().map(|each| Choice::of(*each));
             ParamView {
                 engaged: insert != Insert::Empty,
-                ..of.listed(effects, at, empty.unwrap_or(0), true).once()
+                ..of.listed(effects, at, empty.unwrap_or(0), true)
             }
         }
-        Control::Machine => listed_of(of, track.machine, fresh.machine, true).once(),
+        Control::Machine => listed_of(of, track.machine, fresh.machine, true),
         Control::FilterType => listed_of(of, track.filter, fresh.filter, true)
-            .once()
             .titled("Filter type"),
         Control::FilterMode => {
             let modes = track.filter.modes();
@@ -404,7 +394,6 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
             let at = modes.iter().position(|mode| *mode == plays).unwrap_or(0);
             let list = of
                 .listed(modes.iter().map(|mode| Choice::of(*mode)), at, 0, true)
-                .once()
                 .titled("Filter mode");
             // The MS-20's have none, so it doesn't apply.
             let cell = match track.filter.has_modes() {
@@ -426,10 +415,10 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
             // `Auto` shows what it goes by, which the page dims as its default.
             ParamView {
                 cell: track.role().name().to_owned(),
-                ..of.listed(roles, at, place_of(Role::Auto), true).once()
+                ..of.listed(roles, at, place_of(Role::Auto), true)
             }
         }
-        Control::Speed => listed_of(of, track.speed, Speed::Sixteenth, false).once(),
+        Control::Speed => listed_of(of, track.speed, Speed::Sixteenth, false),
         Control::Groove => {
             let plays = track.groove.unwrap_or(song.groove);
             of.listed(
@@ -438,7 +427,6 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
                 song.groove.index(),
                 false,
             )
-            .once()
         }
         Control::Choke => of
             .whole(

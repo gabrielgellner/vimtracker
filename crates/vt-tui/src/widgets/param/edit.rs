@@ -5,7 +5,7 @@
 
 use vt_model::step::Note;
 
-use super::view::{Choice, Pace, ParamView, Reads, Steps};
+use super::view::{Choice, ParamView, Reads, Steps};
 
 /// How many small steps of a fine part a large one is.
 const FINE_JUMP: i64 = 0x10;
@@ -21,18 +21,14 @@ pub(crate) struct ChoiceList {
 }
 
 /// Where `=`, `-`, `+` and `_` take a value: its small or large step that way, `count` times,
-/// kept within its bounds, or round them where it wraps. A step that depends on where the value is
-/// is worked out again after each, by its pace; and a list that steps once whatever the count
-/// moves one choice.
+/// kept within its bounds, or round them where it wraps, so `3=` on a list moves three choices.
+/// A step that depends on where the value is is worked out again after each, by its pace.
 pub(crate) fn stepped(view: &ParamView, up: bool, large: bool, count: usize) -> i32 {
     let by = |nudge: Steps, jump: Steps| {
         let steps = if large { jump } else { nudge };
         i64::from(if up { steps.up } else { -steps.down })
     };
-    let count = match view.pace {
-        Pace::Once => 1,
-        _ => count.max(1),
-    };
+    let count = count.max(1);
     if view.pace.steps(view.value).is_none() {
         let moved = i64::from(view.value) + by(view.nudge, view.jump) * count as i64;
         return within(view, moved);
@@ -240,10 +236,22 @@ mod tests {
     }
 
     #[test]
-    fn a_list_of_the_tracks_own_steps_once_whatever_the_count() {
+    fn a_count_steps_a_list_that_many_choices_round_or_to_its_end() {
         let track = Track::default();
         let machine = shown(Control::Machine, &track);
-        assert_eq!(stepped(&machine, true, false, 3), machine.value + 1);
+        assert_eq!(stepped(&machine, true, false, 3), machine.value + 3);
+        let last = machine.bounds.1;
+        assert_eq!(
+            stepped(&machine, false, false, 2),
+            last + 1 + machine.value - 2,
+            "the machines go round"
+        );
+        let speed = shown(Control::Speed, &track);
+        assert_eq!(
+            stepped(&speed, true, true, 99),
+            speed.bounds.1,
+            "speeds stop"
+        );
         let pan = shown(Control::Base(vt_model::action::TrackControl::Pan), &track);
         assert_eq!(stepped(&pan, true, true, 3), pan.value + 0x30);
     }
