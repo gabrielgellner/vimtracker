@@ -1,10 +1,18 @@
 //! The model's behaviour tests, a module for each area, built as one binary so that they link once
 //! rather than once a file (#719). A new file of tests needs its `mod` line here.
 //!
-//! `tests/render.rs` stays a binary of its own: it installs a `#[global_allocator]` to count what a
-//! render allocates, and a binary has only one.
+//! The binary's allocator is the engine's `rt_guard`, so `render.rs` can count what a generator's
+//! render allocates. It counts only while a test arms it, so the rest run as they would without.
 
 use std::path::Path;
+
+// The model can't depend on the engine, so this builds the engine's file itself, which uses
+// nothing else of the engine's. Its own tests run here too, and show the guard is installed.
+#[path = "../../../vt-engine/src/rt_guard.rs"]
+mod rt_guard;
+
+#[global_allocator]
+static RT_GUARD: rt_guard::Guarded = rt_guard::Guarded;
 
 mod analysis;
 mod bloom;
@@ -20,13 +28,14 @@ mod marks;
 mod mod_fields;
 mod project;
 mod random_shapes;
+mod render;
 mod sample;
 mod seeding;
 mod slices;
 mod stable_names;
 
-/// Every file here has its `mod` line, as one without isn't built, and only `render.rs` sits
-/// beside this folder, where a file links a binary of its own.
+/// Every file here has its `mod` line, as one without isn't built, and none sits beside this
+/// folder, where it would link a binary of its own.
 #[test]
 fn every_file_of_tests_is_in_this_binary() {
     let tests = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
@@ -38,10 +47,9 @@ fn every_file_of_tests_is_in_this_binary() {
         );
     }
     let alone = rust_files(&tests);
-    assert_eq!(
-        alone,
-        ["render"],
-        "a file in tests/ links a binary of its own: move it into tests/all/"
+    assert!(
+        alone.is_empty(),
+        "{alone:?} in tests/ each link a binary of their own: move them into tests/all/"
     );
 }
 

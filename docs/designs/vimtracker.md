@@ -1350,7 +1350,7 @@ every pair of values still met, and all of them under `cargo test --release`.
 
 | Kind | Where | What it checks |
 |---|---|---|
-| Model | `crates/vt-model/tests/all/`, one binary, and unit tests in its modules; `tests/render.rs` a binary of its own for its allocator | Actions on songs, undo, saving and loading, kits, decoding the sample files in `tests/samples/`, slices and marks, analysis, seeds from WAV markers and `.ot` files |
+| Model | `crates/vt-model/tests/all/`, one binary with the engine's `rt_guard` as its allocator, and unit tests in its modules | Actions on songs, undo, saving and loading, kits, decoding the sample files in `tests/samples/`, slices and marks, analysis, seeds from WAV markers and `.ot` files |
 | Engine | `crates/vt-engine/tests/all/`, one binary with a module for each feature, such as `groove.rs`, `returns.rs` and `slices.rs`, and what they share in `support.rs` | What plays when, from songs built in code and played offline |
 | Golden renders | `crates/vt-engine/tests/golden/`, through `support::golden` | An FNV-1a hash of a render's exact samples. `VT_BLESS=1` updates one after a change to the sound on purpose, and `VT_DUMP` writes the samples, to compare two builds |
 | Tutorial songs | `crates/vt-engine/tests/all/tutorial_songs.rs`, which builds the songs in `docs/manual/src/tutorials/songs/` | That each song on disk is what its builder makes, so a format change can't leave them stale, and that each loads, plays and stays below full scale. `just tutorial-songs` writes them again |
@@ -2146,7 +2146,7 @@ Issues create the files they name. Files marked **copy** come from `gmuse`, are 
 *   `src/project.rs`: folder loading and saving, version check, sample copying and autosave.
 *   `src/sample.rs`: WAV, AIFF and FLAC decoding, stereo conversion and resampling.
 *   `src/samples.rs`: the session sample pool.
-*   `tests/all/*.rs`: behaviour tests, one binary; `tests/render.rs`, a binary of its own.
+*   `tests/all/*.rs`: behaviour tests, one binary, with the engine's `rt_guard` as its allocator.
 
 #### `crates/vt-engine` (Create)
 

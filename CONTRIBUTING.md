@@ -79,9 +79,10 @@ after a change to the engine.
 `tests/all/main.rs`, so they link once rather than once a file (#719). A new file of tests goes in
 `tests/all/`, with a `mod` line in its `main.rs`, as a file without one isn't built; a test there
 fails on a file missing its line, or left in `tests/`. Helpers that more than one file uses go in
-`tests/all/support.rs` for the engine and `tests/all/common/` for the interface. Only a file that
-needs a process of its own stays a binary in `tests/`, as `vt-model`'s `render.rs` does for its
-allocator. One file's tests run with `cargo test -p vt-engine --test all groove::` or
+`tests/all/support.rs` for the engine and `tests/all/common/` for the interface, and the DSP unit
+tests' signals in `vt-engine`'s `src/dsp/signals.rs`. `vt-model`'s binary has the engine's
+`rt_guard` as its allocator, built from the engine's file, so `render.rs` can count what a render
+allocates. One file's tests run with `cargo test -p vt-engine --test all groove::` or
 `cargo test -p vt-tui --test all grammar::`.
 
 A pull request that makes a choice the issue left open appends it to
