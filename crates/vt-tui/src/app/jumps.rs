@@ -24,6 +24,16 @@ pub(crate) struct Place {
     sample_pinned: Option<(usize, u8)>,
 }
 
+/// The jump list: the places jumped from, where `Ctrl-O` and `Ctrl-I` are in it, and where the
+/// latest jump left from.
+#[derive(Debug, Default)]
+pub struct Jumps {
+    pub(crate) places: Vec<Place>,
+    pub(crate) index: usize,
+    /// Where the latest jump left from, for `''` to go back to, as Vim's previous context mark.
+    pub(crate) jumped_from: Option<Place>,
+}
+
 impl App {
     fn here(&self) -> Place {
         Place {
@@ -40,13 +50,13 @@ impl App {
 
     /// Remember this place before a jump away from it.
     pub(crate) fn record_jump(&mut self) {
-        self.jumped_from = Some(self.here());
-        self.jumps.truncate(self.jump_index);
-        self.jumps.push(self.here());
-        if self.jumps.len() > JUMP_LIMIT {
-            self.jumps.remove(0);
+        self.jumps.jumped_from = Some(self.here());
+        self.jumps.places.truncate(self.jumps.index);
+        self.jumps.places.push(self.here());
+        if self.jumps.places.len() > JUMP_LIMIT {
+            self.jumps.places.remove(0);
         }
-        self.jump_index = self.jumps.len();
+        self.jumps.index = self.jumps.places.len();
     }
 
     fn restore(&mut self, place: Place) {
@@ -72,7 +82,7 @@ impl App {
     /// `''`: back to where the latest jump left from, as a jump itself, so a second `''` comes
     /// back again, as Vim's previous context mark does. Whether there was one.
     pub(crate) fn jump_to_previous_context(&mut self) -> bool {
-        let Some(place) = self.jumped_from else {
+        let Some(place) = self.jumps.jumped_from else {
             return false;
         };
         self.record_jump();
@@ -81,24 +91,24 @@ impl App {
     }
 
     pub(super) fn jump_back(&mut self) {
-        if self.jump_index == 0 {
+        if self.jumps.index == 0 {
             self.services.status = "Nothing to jump back to".to_owned();
             return;
         }
-        if self.jump_index == self.jumps.len() {
+        if self.jumps.index == self.jumps.places.len() {
             // Keep where we are, so `Tab` can come back.
-            self.jumps.push(self.here());
+            self.jumps.places.push(self.here());
         }
-        self.jump_index -= 1;
-        self.restore(self.jumps[self.jump_index]);
+        self.jumps.index -= 1;
+        self.restore(self.jumps.places[self.jumps.index]);
     }
 
     pub(super) fn jump_forward(&mut self) {
-        if self.jump_index + 1 >= self.jumps.len() {
+        if self.jumps.index + 1 >= self.jumps.places.len() {
             self.services.status = "Nothing to jump forward to".to_owned();
             return;
         }
-        self.jump_index += 1;
-        self.restore(self.jumps[self.jump_index]);
+        self.jumps.index += 1;
+        self.restore(self.jumps.places[self.jumps.index]);
     }
 }

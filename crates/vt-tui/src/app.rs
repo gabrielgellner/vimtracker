@@ -26,7 +26,7 @@ use vt_model::song::Song;
 use vt_model::step::{FxCommand, MAX_VELOCITY};
 
 use crate::app::grammar::{Adjustments, Change, SelectionPlace};
-use crate::app::jumps::Place;
+use crate::app::jumps::Jumps;
 use crate::app::recording::Recording;
 use crate::input::bindings::{Op, Table};
 use crate::input::keys::Key;
@@ -265,10 +265,8 @@ pub struct App {
     pub picker: Option<Picker>,
     /// The chain view: the column its cursor is on, and the row last copied.
     pub chain_view: ChainView,
-    pub(crate) jumps: Vec<Place>,
-    pub(crate) jump_index: usize,
-    /// Where the latest jump left from, for `''` to go back to, as Vim's previous context mark.
-    pub(crate) jumped_from: Option<Place>,
+    /// The jump list, which `Ctrl-O`, `Ctrl-I` and `''` go through.
+    pub jumps: Jumps,
     pub(crate) last_autosave: Option<Instant>,
     pub(crate) autosaved: Option<Arc<Song>>,
     /// The field a replace started on, since typing an FX command moves on to its value.
@@ -416,9 +414,7 @@ impl App {
             recent_views: View::ALL.to_vec(),
             picker: None,
             chain_view: ChainView::default(),
-            jumps: Vec::new(),
-            jump_index: 0,
-            jumped_from: None,
+            jumps: Jumps::default(),
             last_autosave: None,
             autosaved: None,
             replacing: None,
