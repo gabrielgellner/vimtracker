@@ -223,7 +223,7 @@ is a separate question:
   macro-held fader could read differently on the two pages. I didn't check whether a macro can
   hold a mixer row.
 - A macro-held setting with no bar (a choice, a Mod-page value, a title control) shows no sign that
-  a macro holds it.
+  a macro holds it. *Since added, at the user's word:* a faint dot after its value (decision 341).
 
 ---
 
@@ -624,7 +624,8 @@ state:
 
 The page itself is drawn from `Track::with_macros`, so `set` is already where the macro puts it.
 A macro-held cell with no bar keeps showing nothing extra, as today. Changing that would be a
-feature.
+feature. *Since added, at the user's word (decision 341):* such a cell has a faint `•` after its
+value, from the same `macro_range`.
 
 ### 3.3 Editing: `param::edit`, pure functions
 

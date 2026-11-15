@@ -3,8 +3,9 @@
 //! plan's §3.2, #739). The cell doesn't format the setting's value: the page passes the text in,
 //! so the widget reads nothing of the track or the program. What it does is lay the parts out the
 //! one way every page has them: a jump's labels and a taken-over mark on the name, what's typed in
-//! the value's place, the cursor's colour and the value's tone, a fine part set back, a word after
-//! the value in the bar's room, and a bar filled to what's heard with a mark where it's set.
+//! the value's place, the cursor's colour and the value's tone, a fine part set back, a macro's
+//! mark after a value with no bar, a word after the value in the bar's room, and a bar filled to
+//! what's heard with a mark where it's set.
 
 use std::borrow::Cow;
 
@@ -21,6 +22,9 @@ use crate::views::widgets::toggle;
 /// How wide a value's coarse digits are, before its fine ones, so what's typed in their place
 /// keeps the fine digits where they are.
 const COARSE_WIDTH: usize = 2;
+/// After a value a macro holds that has no bar to draw the macro's range on, after the dot Live
+/// puts on a control it automates: faint, as the range is behind a bar (decision 341).
+pub const MACRO_MARK: &str = "•";
 
 /// How a setting's value reads in its cell.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,7 +72,7 @@ pub struct ParamState {
     /// Filled to the fader with a mark at what's heard, rather than the other way (decision 174).
     pub fader: bool,
     /// The range a macro holding it can take it over, which its bar draws behind the fill. A cell
-    /// with no bar shows nothing for it yet.
+    /// with no bar has [`MACRO_MARK`] after its value instead.
     pub macro_range: Option<(u8, u8)>,
     /// How its value is coloured while the cursor isn't on it.
     pub tone: Tone,
@@ -112,10 +116,11 @@ pub struct ParamCell<'a> {
 impl ParamCell<'_> {
     /// Its name, value and bar, for a grid to place in cells of these widths.
     pub fn parts(&self, widths: CellWidths) -> CellParts {
+        let bar = self.bar(widths.bar_cells);
         CellParts {
             name: self.name(widths.name),
-            value: self.value(),
-            bar: self.bar(widths.bar_cells),
+            value: self.value_line(bar.is_some()),
+            bar,
         }
     }
 
@@ -132,8 +137,14 @@ impl ParamCell<'_> {
 
     /// Its value: what Insert has typed in its place, a toggle, or its text, in the cursor's colour
     /// under the cursor and in its tone otherwise, with a jump's label over its first letter; then
-    /// a fine part, set back, and a word after it where it has them.
+    /// a fine part, set back, the mark of a macro holding it if it has no bar to show the macro's
+    /// range on, and a word after it where it has them.
     pub fn value(&self) -> Line<'static> {
+        self.value_line(self.place.is_some())
+    }
+
+    /// [`ParamCell::value`], with a bar drawn beside it or not.
+    fn value_line(&self, barred: bool) -> Line<'static> {
         let look = &self.look;
         let (text, style) = match self.face {
             Face::Toggle { on } if look.typed.is_none() => (toggle::text(on), self.style(Some(on))),
@@ -147,6 +158,11 @@ impl ParamCell<'_> {
         if let Face::HexFine { fine } = self.face {
             let fine = setting::fine_text(look, || format!("{fine:02X}"));
             spans.push(Span::styled(fine, setting::fine_style(look)));
+        }
+        // A bar shows a macro's range behind its fill; a value with none has the macro's mark.
+        if !barred && self.state.macro_range.is_some() {
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(MACRO_MARK, theme::faint()));
         }
         if let Some((after, room)) = &self.state.after {
             let width: usize = spans.iter().map(Span::width).sum();
@@ -217,6 +233,57 @@ pub fn heard_byte(set: u8, live: Option<u8>, then: Option<u8>) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::input::mode::Mode;
+
+    /// A cell a macro holds over its whole range, with a bar or not.
+    fn held(place: Option<Place>) -> ParamCell<'static> {
+        ParamCell {
+            name: Cow::Borrowed("Cut"),
+            face: Face::Hex,
+            text: "40".to_owned(),
+            place,
+            state: ParamState {
+                macro_range: Some((0, 0xFF)),
+                ..ParamState::new(Tone::Plain)
+            },
+            look: CellLook {
+                focus: Focus::Off,
+                mode: Mode::Normal,
+                typed: None,
+                query: None,
+                name_labels: "",
+                value_label: None,
+            },
+        }
+    }
+
+    fn text(line: &Line) -> String {
+        line.spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect()
+    }
+
+    #[test]
+    fn a_macros_mark_goes_after_a_value_only_where_no_bar_shows_its_range() {
+        let place = Some(Place {
+            set: 0x40,
+            centred: false,
+        });
+        let barred = held(place).parts(CellWidths::FX);
+        assert!(barred.bar.is_some());
+        assert_eq!(text(&barred.value), "40", "the bar shows the range");
+        let compact = held(place).parts(CellWidths::COMPACT);
+        assert!(compact.bar.is_none());
+        assert_eq!(text(&compact.value), format!("40 {MACRO_MARK}"));
+        assert_eq!(compact.value.spans.last().unwrap().style, theme::faint());
+        assert_eq!(text(&held(None).value()), format!("40 {MACRO_MARK}"));
+        let free = ParamCell {
+            state: ParamState::new(Tone::Plain),
+            ..held(None)
+        };
+        assert_eq!(text(&free.value()), "40", "and only on one a macro holds");
+    }
 
     #[test]
     fn whats_heard_follows_the_setting_from_the_report() {

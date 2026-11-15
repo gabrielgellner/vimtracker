@@ -1969,8 +1969,10 @@ range and all. Each is one undo step.
 
 **A setting a macro holds** shows where the macro puts it, with the range the macro can take it
 over drawn faint behind its bar, `▕██▎░░░░  ▏`, and the status line says which macro and how far,
-as `Cut, 1.05 kHz: on macro 1 Bite, 170 Hz to 9.56 kHz`. Turning it is refused, as Live greys a
-mapped control out: turn its macro, or open its range with `gm`.
+as `Cut, 1.05 kHz: on macro 1 Bite, 170 Hz to 9.56 kHz`. One with no bar, such as a choice, a Mod
+page value or a device's title, has a faint dot after its value instead, `1/16 •`, after the dot
+Live puts on a control it automates. Turning it is refused, as Live greys a mapped control out: turn its macro, or open
+its range with `gm`.
 
 **The mapping view**, `gm`, lists each setting the macro holds with its `Min`, its `Max`, and
 the `Curve` and `S` of its response, with a drawing of the response of the one under the cursor

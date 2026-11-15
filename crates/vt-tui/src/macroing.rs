@@ -177,25 +177,39 @@ pub fn held_text(track: &Track, target: MacroTarget) -> Option<String> {
     ))
 }
 
+/// What a macro would hold of a control on a track: the registry's setting it is, or a live
+/// generator's setting by the generator's column.
+pub(crate) fn target_of(control: Control, track: &Track) -> Option<MacroTarget> {
+    Some(match control {
+        Control::Gen {
+            phrase,
+            generator,
+            param,
+        } => {
+            let found = track.phrases.get(&phrase)?.generators().get(generator)?;
+            MacroTarget::Gen {
+                column: GenColumn::of(found.column),
+                param,
+            }
+        }
+        control => MacroTarget::Setting(control.setting_for_macro(track)?),
+    })
+}
+
+/// The macros holding a control's setting on a track, with their mappings there: what the track
+/// page marks a setting by and `gd` goes to.
+pub(crate) fn holding(control: Control, track: &Track) -> impl Iterator<Item = (usize, &MacroMap)> {
+    target_of(control, track)
+        .into_iter()
+        .flat_map(move |target| track.macros_holding(target))
+}
+
 impl App {
     /// The setting under the cursor on the track page, if it's one a macro can hold: one of the
     /// registry's, or a live generator's on the Gen page, by its column.
     fn setting_here(&self) -> Option<MacroTarget> {
         let track = self.song().tracks.get(self.services.cursor.track)?;
-        let target = match self.track_control() {
-            Control::Gen {
-                phrase,
-                generator,
-                param,
-            } => {
-                let found = track.phrases.get(&phrase)?.generators().get(generator)?;
-                MacroTarget::Gen {
-                    column: GenColumn::of(found.column),
-                    param,
-                }
-            }
-            control => MacroTarget::Setting(control.setting_for_macro(track)?),
-        };
+        let target = target_of(self.track_control(), track)?;
         target.mappable().then_some(target)
     }
 
