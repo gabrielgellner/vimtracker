@@ -2,8 +2,8 @@
 # Sounds, samples and kits
 
 A track makes one sound at a time, from its machine: a sample, or a synth. Everything
-else about its sound is on the track page, `Space 5`: see **The track page, envelopes
-and LFOs**.
+else about its sound is on the track page, `Space 5`: see **The Sound page, output and
+groups**.
 
 ## The synths
 
@@ -987,8 +987,8 @@ with its gain and tune, as choosing it from `:sample` gives. The new tracks go i
 first group with no tracks, named after the kit by its first word, up to five
 characters, so `909 Core Kit` makes `909` and `Rytm Analog` makes `RYTM`. A first
 word that only says it's a kit, such as `Kit` in `Kit-808`, gives way to the kit's
-category, or `DRUMS`. The group is folded (see **Folding a group** in **The track
-page, envelopes and LFOs**), and `:group name` renames it. One `u` undoes the whole
+category, or `DRUMS`. The group is folded (see **Folding a group** in **The Sound
+page, output and groups**), and `:group name` renames it. One `u` undoes the whole
 load.
 If every group already has tracks, they go in none, and the status line says so.
 
@@ -1024,7 +1024,7 @@ Where kits, samples and presets are found is set for this machine in
 `kits` and `samples` are lists of folders, looked through in order, and a folder
 that isn't there is passed over. `:kit 909` opens the first `909.ron` found.
 `presets` is one folder, made the first time a preset is saved (see **Presets** in
-**The track page, envelopes and LFOs**). A file from before presets keeps the
+**The Gen page, macros, presets and patches**). A file from before presets keeps the
 default. Changes are read the next time the program starts.
 
 `:kit` opens the kit folders as a tree, with the first one open, and opens on
