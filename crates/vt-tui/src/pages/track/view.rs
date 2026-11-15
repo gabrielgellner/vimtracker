@@ -1138,13 +1138,14 @@ fn lane_shown(slot: usize, field: LaneField, moved: LaneMove) -> String {
                 std::cmp::Ordering::Equal => {
                     format!("{rate}: each row of a lane on {column} lasts its own steps")
                 }
-                std::cmp::Ordering::Greater => format!(
-                    "{rate}: each row of a lane on {column} lasts {} times its own steps",
-                    moved.rate - RATE_AS_WRITTEN + 1
-                ),
                 std::cmp::Ordering::Less => format!(
-                    "{rate}: each row of a lane on {column} lasts its own steps over {}, at least one",
+                    "{rate}: each row of a lane on {column} lasts {} times its own steps, slower",
                     RATE_AS_WRITTEN + 1 - moved.rate
+                ),
+                std::cmp::Ordering::Greater => format!(
+                    "{rate}: each row of a lane on {column} lasts its own steps over {}, faster, \
+                     but a row a step is as fast as a lane goes",
+                    moved.rate - RATE_AS_WRITTEN + 1
                 ),
             }
         }

@@ -109,7 +109,8 @@ fn length_and_rate_turn_reset_and_list_as_the_tracks_own() {
     keys(&mut app, "i-3<Enter>");
     assert_eq!(app.song().tracks[0].lanes[0].length, 0x7D, "typed in rows");
     keys(&mut app, "x");
-    // `Rate` is a list: `K` lists its 31 choices, opened on `×1`, and `+` goes to the end.
+    // `Rate` is a list: `K` lists its 31 choices, opened on `×1`, `=` goes faster, and `+` to
+    // the end, the fastest.
     keys(&mut app, "l");
     assert_eq!(app.track_control(), Control::Lane(0, LaneField::Rate));
     keys(&mut app, "K");
@@ -118,6 +119,23 @@ fn length_and_rate_turn_reset_and_list_as_the_tracks_own() {
     assert_eq!(picker.items().len(), LANE_RATES.len());
     assert_eq!(picker.current().unwrap().label, "×1");
     special(&mut app, KeyCode::Esc);
+    keys(&mut app, "=");
+    assert_eq!(app.song().tracks[0].lanes[0].rate, 16, "×2");
+    let line = status_line(&app);
+    assert!(
+        line.contains("×2: each row of a lane on FX1 lasts its own steps over 2, faster"),
+        "{line}"
+    );
+    assert!(
+        line.contains("a row a step is as fast as a lane goes"),
+        "{line}"
+    );
+    keys(&mut app, "--");
+    let line = status_line(&app);
+    assert!(
+        line.contains("÷2: each row of a lane on FX1 lasts 2 times its own steps, slower"),
+        "{line}"
+    );
     keys(&mut app, "+");
     assert_eq!(app.song().tracks[0].lanes[0].rate, 30, "×16");
 }
@@ -155,13 +173,13 @@ fn the_title_shows_what_a_lane_is_heard_as_and_its_own_and_the_playhead_the_row_
         (0..100).map(|x| buffer[(x, 0)].symbol()).collect()
     };
     assert!(title(&app).contains("FX1:4/2"), "{}", title(&app));
-    // Two more rows and twice the division: what's heard first, its own after.
+    // Two more rows at `÷2`, half as fast: what's heard first, its own after.
     let moved = vt_model::action::Action::SetLaneMove {
         track: 0,
         slot: 0,
         moved: vt_model::lane::LaneMove {
             length: 0x82,
-            rate: 16,
+            rate: 14,
         },
     };
     app.services.apply(&moved);
@@ -225,30 +243,37 @@ fn rows_past_a_shortened_lane_are_dim() {
 }
 
 #[test]
-fn the_kria_patchs_length_loop_turns_its_lane() {
+fn the_kria_patchs_loop_knobs_turn_its_lanes() {
     let (mut app, _realtime) = app_with(&[E; 16]);
     command(&mut app, "patch");
     press(&mut app, "/kria");
     special(&mut app, KeyCode::Enter);
-    let track = &app.song().tracks[0];
-    let at = track
-        .macros
-        .iter()
-        .position(|held| held.name.as_deref() == Some("Length loop"))
-        .unwrap();
-    let length = MacroTarget::Setting(SettingId::lane(0, 0).unwrap());
-    assert_eq!(track.macro_holding(length).map(|(on, _)| on), Some(at));
-    assert_eq!(track.phrases[&0].lane(0).map(|lane| lane.length), Some(4));
-    // At its bottom it's a lane of 1, at its top 16, and it starts at 4, as the patch was saved.
-    let heard = |app: &App, value: u16| {
-        let map = app.song().tracks[0].macros[at].maps[0];
-        let held = map.at(f32::from(value) / 256.0);
-        app.song().tracks[0].phrases[&0]
-            .lane(0)
-            .unwrap()
-            .heard_length(vt_model::lane::length_rows((held >> 8) as u8))
-    };
-    assert_eq!(heard(&app, 0), 1);
-    assert_eq!(heard(&app, 0xFF00), 16);
-    assert_eq!(heard(&app, app.song().tracks[0].macros[at].value), 4);
+    let knobs = [("Length loop", 4), ("Ratchet loop", 3), ("Chance loop", 7)];
+    for (slot, (name, rows)) in knobs.into_iter().enumerate() {
+        let track = &app.song().tracks[0];
+        let at = track
+            .macros
+            .iter()
+            .position(|held| held.name.as_deref() == Some(name))
+            .unwrap();
+        let length = MacroTarget::Setting(SettingId::lane(slot, 0).unwrap());
+        assert_eq!(track.macro_holding(length).map(|(on, _)| on), Some(at));
+        assert_eq!(
+            track.phrases[&0].lane(slot).map(|lane| lane.length),
+            Some(rows)
+        );
+        // At its bottom it's a lane of 1, at its top 16, and it starts where the patch was saved.
+        let heard = |app: &App, value: u16| {
+            let map = app.song().tracks[0].macros[at].maps[0];
+            let held = map.at(f32::from(value) / 256.0);
+            app.song().tracks[0].phrases[&0]
+                .lane(slot)
+                .unwrap()
+                .heard_length(vt_model::lane::length_rows((held >> 8) as u8))
+        };
+        assert_eq!(heard(&app, 0), 1, "{name}");
+        assert_eq!(heard(&app, 0xFF00), 16, "{name}");
+        let value = app.song().tracks[0].macros[at].value;
+        assert_eq!(heard(&app, value), rows, "{name}");
+    }
 }
