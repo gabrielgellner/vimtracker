@@ -370,7 +370,7 @@ impl App {
         self.services.folds.open_over(&song, track);
         self.folds_changed(was);
         self.services.go_to_track_at(track, self.modes.view);
-        self.song_column = COLUMNS_BEFORE_TRACKS + track;
+        self.song_view.column = COLUMNS_BEFORE_TRACKS + track;
     }
 
     /// Open the list of guides, in the order to learn them.

@@ -14,6 +14,7 @@ use crate::mixer_page::MixerPage;
 use crate::page::Page as _;
 use crate::project_page::ProjectPage;
 use crate::sample_page::{SampleKey, SamplePage};
+use crate::song_view::SongView;
 use crate::track_page::{Page, TrackPage};
 
 /// An operator key.
@@ -536,58 +537,6 @@ const CHAIN: &[(&str, Cmd, &str)] = &[
     ("g C", Cmd::CloneChain, "Copy this chain and its phrases"),
 ];
 
-const SONG: &[(&str, Cmd, &str)] = &[
-    ("j", Cmd::Move(Motion::Down), "Next section"),
-    ("k", Cmd::Move(Motion::Up), "Previous section"),
-    ("g g", Cmd::Move(Motion::First), "First section"),
-    ("G", Cmd::Move(Motion::Last), "Last section"),
-    ("h", Cmd::Move(Motion::Left), "Previous column"),
-    ("l", Cmd::Move(Motion::Right), "Next column"),
-    ("0", Cmd::Move(Motion::RowStart), "Length column"),
-    ("$", Cmd::Move(Motion::RowEnd), "Last track's column"),
-    ("=", Cmd::Increase, "Increase the value"),
-    ("-", Cmd::Decrease, "Decrease the value"),
-    ("+", Cmd::IncreaseLarge, "Increase the value, a large step"),
-    ("_", Cmd::DecreaseLarge, "Decrease the value, a large step"),
-    ("C-a", Cmd::Increase, "Increase the value"),
-    ("C-x", Cmd::Decrease, "Decrease the value"),
-    (
-        "x",
-        Cmd::ClearField,
-        "Follow the longest chain, new, or no chain",
-    ),
-    (
-        "K",
-        Cmd::PickValue,
-        "Switch new and reset, or choose this cell's chain",
-    ),
-    (
-        "g d",
-        Cmd::OpenItem,
-        "Open this chain's phrase, its rows, or add one",
-    ),
-    ("g C", Cmd::CloneChain, "Copy this chain and its phrases"),
-    ("a", Cmd::AddSection, "Add an empty section after this one"),
-    ("g c", Cmd::CloneSection, "Copy this section after itself"),
-    (
-        "Enter",
-        Cmd::Launch,
-        "Play this chain on its track next, or stop on --",
-    ),
-    (
-        "C",
-        Cmd::Capture,
-        "Add a section of what's playing, and stay on it",
-    ),
-    ("d d", Cmd::RemoveRow, "Remove this section"),
-    (";", Cmd::Audition, "Hear the start of this section"),
-    (
-        "V",
-        Cmd::VisualStep,
-        "Select sections, for :loop; V or Esc ends it",
-    ),
-];
-
 /// Keys to fold a group's tracks into it, after Vim's folds, in every view that shows tracks
 /// (decisions 128 and 305).
 const FOLDS: &[(&str, Cmd, &str)] = &[
@@ -734,7 +683,7 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Track, TrackPage::KEYS);
     add(Mode::Track, FOLDS);
     add(Mode::Track, EVERY_VIEW);
-    add(Mode::Song, SONG);
+    add(Mode::Song, SongView::KEYS);
     add(Mode::Song, FOLDS);
     add(Mode::Song, EVERY_VIEW);
     add(Mode::Mixer, MixerPage::KEYS);
