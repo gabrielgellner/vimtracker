@@ -7,7 +7,7 @@ use vt_model::insert::Insert;
 use vt_model::song::Song;
 
 use crate::dsp::effects::memory::{MemoryPool, SongPlace};
-use crate::dsp::effects::slot::{InsertState, Keys};
+use crate::dsp::effects::slot::{InsertState, SidechainFrames};
 
 /// How loud the sines are: quiet enough that every clip and limiter on the way leaves them alone,
 /// even on a peak 40 dB up.
@@ -39,7 +39,7 @@ pub(crate) fn measured_db(
     hertz: f32,
     settle: f32,
     rate: u32,
-    keys: &Keys,
+    sidechains: &SidechainFrames,
 ) -> f32 {
     let turn = f64::from(hertz) / f64::from(rate);
     let settle = (settle * rate as f32) as usize;
@@ -49,7 +49,7 @@ pub(crate) fn measured_db(
     for frame in 0..settle + frames {
         let phase = TAU * ((turn * frame as f64) % 1.0);
         let input = (phase.sin() * LEVEL) as f32;
-        let out = state.process([input; 2], 1.0, rate, keys);
+        let out = state.process([input; 2], 1.0, rate, sidechains);
         if frame >= settle {
             let middle = f64::from(out[0] + out[1]) * 0.5;
             real += middle * phase.cos();

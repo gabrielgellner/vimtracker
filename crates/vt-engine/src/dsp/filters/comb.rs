@@ -882,7 +882,7 @@ mod tests {
     fn its_curve_is_what_a_sweep_through_the_slot_measures() {
         use vt_model::insert::Insert;
 
-        use crate::dsp::effects::slot::Keys;
+        use crate::dsp::effects::slot::SidechainFrames;
         use crate::dsp::effects::sweep::{across, agrees, measured_db, slot};
         // Each long enough for its loop, ringing longest, to settle within 0.01 dB.
         let cases = [
@@ -927,7 +927,8 @@ mod tests {
             // Its first few harmonics, where its peaks are, or its notches as a flanger.
             let harmonics = (1..=6).map(|harmonic| hertz * harmonic as f32);
             for hertz in across(30).chain(harmonics) {
-                let measured = measured_db(&mut state, hertz, settle, RATE, &Keys::default());
+                let measured =
+                    measured_db(&mut state, hertz, settle, RATE, &SidechainFrames::default());
                 let curve = response(settings, note, RATE)(hertz);
                 assert!(
                     agrees(curve, measured),

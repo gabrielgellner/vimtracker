@@ -474,8 +474,8 @@ pub trait SlotEffect: Sized {
 }
 
 pub struct Now { pub song: SongPlace, pub frames: u64 }
-/// What `process` may read: the smoothing, the rate, the sidechains (`Keys`) and the note.
-pub struct Frame<'a> { pub smoothing: f32, pub rate: u32, pub keys: &'a Keys, pub note: f32 }
+/// What `process` may read: the smoothing, the rate, the sidechains (`SidechainFrames`) and the note.
+pub struct Frame<'a> { pub smoothing: f32, pub rate: u32, pub sidechains: &'a SidechainFrames, pub note: f32 }
 ```
 
 **One list makes the buffered effects' enum and all its forwarding:**

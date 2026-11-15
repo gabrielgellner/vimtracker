@@ -274,7 +274,7 @@ pub(crate) struct TrackState {
     /// Whether an LFO moves the filter, so it stays running at the top of its range.
     filter_moving: bool,
     /// Its sound after its slots in the latest frame, for a compressor on another track to hear.
-    pub key: [f32; 2],
+    pub sidechain: [f32; 2],
     /// How long each slot has taken, while `vimtracker bench --tracks` times the engine.
     pub slot_times: SlotTimes,
     /// Each macro's held value, from its turn, a step's lock or a glide, before modulation, on
@@ -420,7 +420,7 @@ impl TrackState {
             shared_at: 0,
             rest: None,
             filter_moving: false,
-            key: [0.0; 2],
+            sidechain: [0.0; 2],
             slot_times: SlotTimes::default(),
             macro_held: [0.0; MACROS],
             macro_heard: [None; MACROS],

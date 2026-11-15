@@ -586,7 +586,7 @@ mod tests {
     fn its_curve_is_what_a_sweep_through_the_slot_measures() {
         use vt_model::insert::Insert;
 
-        use crate::dsp::effects::slot::Keys;
+        use crate::dsp::effects::slot::SidechainFrames;
         use crate::dsp::effects::sweep::{across, agrees, measured_db, slot};
         let cases = [
             // Long enough for what rings longest, a third of a second at middle C, to settle within
@@ -633,7 +633,8 @@ mod tests {
             tuned(&mut modes, tuning, 0.0, 0.0, RATE);
             let peaks = modes.frequency[..6].iter().map(|f| f * RATE as f32);
             for hertz in across(30).chain(peaks) {
-                let measured = measured_db(&mut state, hertz, settle, RATE, &Keys::default());
+                let measured =
+                    measured_db(&mut state, hertz, settle, RATE, &SidechainFrames::default());
                 let curve = response(settings, note, RATE)(hertz);
                 assert!(
                     agrees(curve, measured),

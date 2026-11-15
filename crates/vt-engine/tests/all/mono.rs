@@ -3,7 +3,7 @@
 //! as working out both does, and the same on both sides, as a sound goes from the same on both to
 //! not and back. Every effect that claims either is checked, so a new one that opts in is too.
 
-use vt_engine::parts::{InsertState, Keys, Mono};
+use vt_engine::parts::{InsertState, Mono, SidechainFrames};
 use vt_model::insert::{
     Compressor, CompressorType, Distort, DistortType, Equaliser, Exciter, GateMode, Insert,
     LowPassGate, Vowel,
@@ -111,7 +111,7 @@ fn same(frame: [f32; 2]) -> bool {
 
 #[test]
 fn every_claim_comes_out_as_working_out_both_does() {
-    let keys = Keys::default();
+    let sidechains = SidechainFrames::default();
     let input = turns();
     let mut claims = 0;
     for insert in every_effect() {
@@ -122,8 +122,8 @@ fn every_claim_comes_out_as_working_out_both_does() {
         claims += 1;
         let mut both = slot(insert);
         for (at, &frame) in input.iter().enumerate() {
-            let (quick, kept) = shortcut.process_sides(frame, same(frame), 1.0, RATE, &keys);
-            let (full, _) = both.process_sides(frame, false, 1.0, RATE, &keys);
+            let (quick, kept) = shortcut.process_sides(frame, same(frame), 1.0, RATE, &sidechains);
+            let (full, _) = both.process_sides(frame, false, 1.0, RATE, &sidechains);
             assert_eq!(
                 quick.map(f32::to_bits),
                 full.map(f32::to_bits),

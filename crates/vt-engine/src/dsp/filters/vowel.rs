@@ -654,7 +654,7 @@ mod tests {
     fn its_curve_is_what_a_sweep_through_the_slot_measures() {
         use vt_model::insert::Insert;
 
-        use crate::dsp::effects::slot::Keys;
+        use crate::dsp::effects::slot::SidechainFrames;
         use crate::dsp::effects::sweep::{across, agrees, measured_db, slot};
         let cases = [
             (Settings::DEFAULT, 60.0),
@@ -681,7 +681,8 @@ mod tests {
             let peaks = formants(f32::from(settings.vowel), f32::from(settings.size))
                 .map(|formant| hertz_of(formant.note + shift));
             for hertz in across(36).chain(peaks) {
-                let measured = measured_db(&mut state, hertz, 0.3, RATE, &Keys::default());
+                let measured =
+                    measured_db(&mut state, hertz, 0.3, RATE, &SidechainFrames::default());
                 let curve = super::response(settings, note, RATE)(hertz);
                 assert!(
                     agrees(curve, measured),

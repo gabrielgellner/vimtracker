@@ -2,7 +2,7 @@ use vt_model::modulation::ModKind;
 use vt_model::song::{Machine, level_gain};
 use vt_model::step::Mark;
 
-use crate::dsp::effects::slot::Keys;
+use crate::dsp::effects::slot::SidechainFrames;
 
 use super::mods::in_scale;
 use super::shaping::{pan_gains, pan_position};
@@ -275,7 +275,7 @@ fn a_slot_in_scale_moves_the_note_to_the_scales_nearest() {
 fn a_broken_sample_from_a_voice_is_a_frame_of_silence_to_the_filter() {
     let rate = 48_000;
     let run = RunContext::new(rate);
-    let keys = Keys::default();
+    let sidechains = SidechainFrames::default();
     for filter in FilterType::ALL {
         for broken in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
             // Resonant and driven, with the utility filter cutting both ends, so every stage
@@ -297,8 +297,8 @@ fn a_broken_sample_from_a_voice_is_a_frame_of_silence_to_the_filter() {
                 } else {
                     ([sound; 2], [sound; 2])
                 };
-                let out = hit.shape(to_hit, run, &keys);
-                let heard = silent.shape(to_silent, run, &keys);
+                let out = hit.shape(to_hit, run, &sidechains);
+                let heard = silent.shape(to_silent, run, &sidechains);
                 // Within the same frame it's as if the voice had gone silent for one.
                 assert_eq!(out.dry, heard.dry, "{filter:?} {broken} at {frame}");
                 assert_eq!(out.send_a, heard.send_a);
@@ -316,7 +316,7 @@ fn a_broken_sample_from_a_voice_is_a_frame_of_silence_to_the_filter() {
 fn punch_is_heard_only_on_the_clean_filter_types() {
     let rate = 48_000;
     let run = RunContext::new(rate);
-    let keys = Keys::default();
+    let sidechains = SidechainFrames::default();
     let render = |filter, punch| {
         let track = Track {
             filter,
@@ -329,7 +329,7 @@ fn punch_is_heard_only_on_the_clean_filter_types() {
         (0..4_800)
             .map(|frame| {
                 let strike = if frame < 48 { 1.0 } else { 0.0 };
-                state.shape([strike; 2], run, &keys).dry[0]
+                state.shape([strike; 2], run, &sidechains).dry[0]
             })
             .collect::<Vec<f32>>()
     };
@@ -343,7 +343,7 @@ fn punch_is_heard_only_on_the_clean_filter_types() {
 fn safe_is_heard_only_on_the_types_that_ring_by_themselves() {
     let rate = 48_000;
     let run = RunContext::new(rate);
-    let keys = Keys::default();
+    let sidechains = SidechainFrames::default();
     let render = |filter, safe| {
         let track = Track {
             filter,
@@ -356,7 +356,7 @@ fn safe_is_heard_only_on_the_types_that_ring_by_themselves() {
         (0..4_800)
             .map(|frame| {
                 let strike = if frame < 48 { 1.0 } else { 0.0 };
-                state.shape([strike; 2], run, &keys).dry[0]
+                state.shape([strike; 2], run, &sidechains).dry[0]
             })
             .collect::<Vec<f32>>()
     };
