@@ -211,6 +211,7 @@ impl Engine {
         let seed = current.song.seed;
         let scale = current.song.scale;
         let memory = MemoryPool::for_song(&current.song, rate);
+        let gens = GenScratch::for_song(&current.song);
         let mut engine = Self {
             rate,
             current,
@@ -253,10 +254,9 @@ impl Engine {
             stopwatch: Stopwatch::default(),
             resting: true,
             rested: RestingBuses::default(),
-            gens: GenScratch::default(),
+            gens,
             recorder: Recorder::new(rate),
         };
-        engine.current.scratch.exchange(&mut engine.gens);
         engine.follow_levels();
         engine.reset_tracks();
         engine.find_listened();

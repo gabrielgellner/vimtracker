@@ -375,8 +375,9 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     frame's `Handle::pump` tries to send it. A newer version replaces the one waiting, which is
     freed there, so the last edit always reaches audio.
 4.  At the start of each block, the callback takes a version only if the return queue has room,
-    swaps it in with `Engine::swap`, and pushes the one it replaces back. It never drops one. The
-    edit thread empties the return queue each frame, and the versions are freed there.
+    swaps it in with `Engine::hand_over`, and pushes the one it replaces back. It never drops one.
+    Each goes over in a `Handover`, with the room its generators render into. The edit thread
+    empties the return queue each frame, and the versions are freed there.
 5.  **Long buffers**, for the effects with memory such as delays and reverbs, are made on the edit
     thread for what a version needs (`MemoryCount`) and sent ahead of it. Spare ones are asked back
     with `Command::ReleaseMemory`, and come back on a queue of their own to be freed.
@@ -610,10 +611,13 @@ steps are worked out so a groove or a nudge can play them early (`lead` and `gro
 flags that let the engine skip looking for nudges, `GRV`, `RATE` and other speeds in a song that has
 none.
 
-For live generators it carries the steps under each one, which a moving generator renders from,
-and a `GenScratch`, room made ahead for every track's runs and cells, which the engine takes as it
-swaps the version in and leaves in the old one going back, so it's dropped on the edit thread
-(decision 289). The engine reads every row through a `RowView`, the step as written with any moving
+For live generators it carries the steps under each one, which a moving generator renders from.
+Beside it, not in it, goes a `GenScratch`, room made ahead for every track's runs and cells:
+`Handle::publish` makes it for the version's song and sends the two together as a `Handover`, which
+`Engine::hand_over` takes whole, so the callback needs no lock for it, and the `Handover` going back
+carries the old version with the scratch the engine had, so it's dropped on the edit thread
+(decision 289, #843). `Engine::swap` makes the scratch itself, for callers off the audio thread,
+and `Engine::new` makes the first. The engine reads every row through a `RowView`, the step as written with any moving
 generator's cells laid over; at rest nothing renders, and the row is the step (decision 288).
 Each row a track plays while something reaches its generators is reported on `GEN_HEARD_QUEUE`, a
 `GenReport::Row` for each live generator on it with the cell it played, or none where it played

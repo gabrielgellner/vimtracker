@@ -8,12 +8,13 @@
 //! What it renders is kept beside the inputs it rendered from, so a row read with the same ones
 //! takes its cell from what's kept, and only a change renders the span again.
 //!
-//! Nothing here allocates on the audio thread: each version brings a `GenScratch` made ahead on
-//! the edit thread with room for every track's runs and cells, which the engine takes as it takes
-//! the version and gives back with it.
+//! Nothing here allocates or locks on the audio thread: each version comes to the engine with a
+//! `GenScratch` made ahead on the edit thread with room for every track's runs and cells, in a
+//! [`Handover`](crate::published::Handover), and the engine gives back the one it had with the
+//! version it had.
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::Arc;
 
 use vt_model::constants::{FX_SLOTS, MAX_PHRASE_STEPS};
 use vt_model::generator::{Span, lay_under};
@@ -305,8 +306,8 @@ struct Room {
 /// What the engine renders moving generators into, made ahead on the edit thread for a version's
 /// song: a run for each live generator of the phrase each track plays, and cells for each row of
 /// their spans, a whole phrase of them at most for each track (32 bytes a cell, so 128 KB for a
-/// phrase of the most rows). The engine takes it as it takes the version, and the queue that
-/// returns old versions gives it back to be dropped on the edit thread.
+/// phrase of the most rows). It goes to the engine with its version, and comes back with the old
+/// one on the queue that returns old versions, to be dropped on the edit thread.
 #[derive(Debug, Default)]
 pub(crate) struct GenScratch {
     rooms: Box<[Room]>,
@@ -645,27 +646,6 @@ fn tell(reports: &mut Vec<(usize, GenReport)>, track: usize, report: GenReport) 
     }
 }
 
-/// A version's scratch, taken once by the engine that plays it.
-#[derive(Debug, Default)]
-pub(crate) struct ScratchSlot(Mutex<GenScratch>);
-
-impl ScratchSlot {
-    pub(crate) fn new(scratch: GenScratch) -> Self {
-        let slot = Self(Mutex::new(scratch));
-        // Some platforms' locks make what they need on their first use, so it's used once here,
-        // on the edit thread, and the engine's use of it never allocates.
-        drop(slot.0.lock());
-        slot
-    }
-
-    /// Swap what's held for another, leaving that here: the engine takes a new version's this way,
-    /// and leaves the one it had in the old version going back.
-    pub(crate) fn exchange(&self, other: &mut GenScratch) {
-        let mut held = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-        std::mem::swap(&mut *held, other);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::time::{Duration, Instant};
@@ -681,7 +661,7 @@ mod tests {
 
     use super::*;
     use crate::engine::Engine;
-    use crate::published::Published;
+    use crate::published::{Handover, Published};
     use crate::rt_guard::forbidden;
 
     const RATE: u32 = 48_000;
@@ -767,11 +747,11 @@ mod tests {
         let mut violations = 0;
         let mut old = Vec::with_capacity(64);
         for round in 0..400 {
-            let next = (round % 8 == 0).then(|| version(&song(16 + round % 48)));
+            let next = (round % 8 == 0).then(|| Handover::new(version(&song(16 + round % 48))));
             let number = (round * 7 % 101) as i32;
             let ((), count) = forbidden(|| {
                 if let Some(next) = next {
-                    old.push(engine.swap(next));
+                    old.push(engine.hand_over(next));
                 }
                 engine.hold_generator(0, acid, GenParam::Density, Some(number));
                 engine.hold_generator(0, cut, GenParam::To, Some(number * 2));
@@ -786,6 +766,25 @@ mod tests {
             .map(|heard| heard.renders)
             .sum();
         assert!(renders > 0, "the generators rendered");
+    }
+
+    /// The scratch a version came with goes back with it as the next comes, to be dropped where
+    /// the next was made, and the engine renders into the next one's.
+    #[test]
+    fn a_versions_scratch_goes_back_with_it() {
+        let first = version(&song(64));
+        let made = GenScratch::for_song(&first.song).cells.len();
+        assert!(made > 0, "there's room for the generators");
+        let mut engine = Engine::new(RATE, Arc::clone(&first));
+        engine.play_from(0);
+        engine.process(&mut vec![0.0; BLOCK * 2]);
+        let next = Handover::new(version(&song(16)));
+        let room = next.scratch.cells.len();
+        let back = engine.hand_over(next);
+        assert!(Arc::ptr_eq(&back.version, &first));
+        assert_eq!(back.scratch.cells.len(), made);
+        let next = Handover::new(version(&song(32)));
+        assert_eq!(engine.hand_over(next).scratch.cells.len(), room);
     }
 
     /// The song with macro 1 holding the `Acid`'s density and the `Cut` ramp's end, an LFO on it,
@@ -835,10 +834,10 @@ mod tests {
         let mut old = Vec::with_capacity(64);
         for round in 0..400 {
             let turn = (round as u32 * 0x0700 % 0xFF00) as u16;
-            let next = (round % 16 == 0).then(|| version(&macro_song(32, turn)));
+            let next = (round % 16 == 0).then(|| Handover::new(version(&macro_song(32, turn))));
             let ((), count) = forbidden(|| {
                 if let Some(next) = next {
-                    old.push(engine.swap(next));
+                    old.push(engine.hand_over(next));
                 }
                 engine.process(&mut out);
                 engine.take_gen_reports(|_, report| {
@@ -876,10 +875,11 @@ mod tests {
         let (mut violations, mut reported) = (0, 0);
         let mut old = Vec::with_capacity(64);
         for round in 0..600 {
-            let next = (round % 100 == 50).then(|| version(&varying(16 + round % 3)));
+            let next =
+                (round % 100 == 50).then(|| Handover::new(version(&varying(16 + round % 3))));
             let ((), count) = forbidden(|| {
                 if let Some(next) = next {
-                    old.push(engine.swap(next));
+                    old.push(engine.hand_over(next));
                 }
                 engine.process(&mut out);
                 engine.take_gen_reports(|_, report| {

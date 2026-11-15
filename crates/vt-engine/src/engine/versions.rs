@@ -13,8 +13,7 @@ use vt_model::settings::{PlayMode, SettingId};
 use vt_model::song::{Song, Track};
 
 use crate::dsp::effects::memory::{Memory, MemoryCount};
-use crate::gens::GenScratch;
-use crate::published::{Bank, Published, Span};
+use crate::published::{Bank, Handover, Published, Span};
 use crate::track_state::base_of;
 use crate::voice::{NoteOn, Voice};
 
@@ -47,18 +46,25 @@ impl Engine {
         self.current.id
     }
 
-    /// Switch to a new version, returning the old one so it can be freed elsewhere.
+    /// Switch to a new version, as [`hand_over`](Self::hand_over) does, making the room for its
+    /// generators here, so not for the callback.
+    pub fn swap(&mut self, version: Arc<Published>) -> Arc<Published> {
+        self.hand_over(Handover::new(version)).version
+    }
+
+    /// Switch to a new version, returning the old one so it can be freed elsewhere. The new
+    /// version's scratch for generators is the engine's now, and the one it had goes back with the
+    /// old version, to be dropped on the edit thread.
     ///
     /// A track whose chain changed length stays on the row it was going to play next. An ID that
     /// no longer exists is silent, and a removed track's voices fade.
-    pub fn swap(&mut self, version: Arc<Published>) -> Arc<Published> {
+    pub fn hand_over(&mut self, handover: Handover) -> Handover {
+        let Handover {
+            version,
+            mut scratch,
+        } = handover;
         let old = std::mem::replace(&mut self.current, version);
-        // The new version's scratch for generators is the engine's now, and the one it had goes
-        // back with the old version, to be dropped on the edit thread.
-        let mut scratch = GenScratch::default();
-        self.current.scratch.exchange(&mut scratch);
         std::mem::swap(&mut self.gens, &mut scratch);
-        old.scratch.exchange(&mut scratch);
         // What any track plays with may have changed.
         for track in self.tracks.iter_mut() {
             track.wake();
@@ -92,7 +98,10 @@ impl Engine {
         if !Arc::ptr_eq(&old.bank, &self.current.bank) {
             self.follow_bank();
         }
-        old
+        Handover {
+            version: old,
+            scratch,
+        }
     }
 
     /// Have every note playing one of the bank's entries follow its changes, heard at once, as
