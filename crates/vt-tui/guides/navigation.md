@@ -105,6 +105,7 @@ rest closed. The title shows how many items match, out of how many there are.
 | `l` `Enter` | Open a category and go into it, or choose |
 | `h` | Close the category, from inside it or on it |
 | `/` | Search |
+| `?` | These keys, in `Space k`'s list, closing back to the list |
 | `Esc` | Close, or leave the search for the list |
 
 A long list scrolls before the cursor reaches its edge, keeping three rows beyond it in
@@ -239,5 +240,6 @@ the last 100, with one run again moved to the end.
 Press `Space` or another prefix and wait: a popup lists what can come next.
 `Space k` lists every key, and `Space ?` opens these guides, on the one for the page
 you're on: the mixer's is the Sound page's, and the phrase view's this one. In a guide,
-`?` goes back to the list, on the guide you were reading.
+`?` goes back to the list, on the guide you were reading. In a list, `?` opens `Space k`'s
+list at the list's own keys, and closing it goes back to the list as it was.
 <!-- ANCHOR_END: rest -->

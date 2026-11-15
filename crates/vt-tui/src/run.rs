@@ -720,11 +720,6 @@ pub fn draw_screen(
     }
     crate::screen::status::draw(frame, status, app);
     // An overlay may keep something of how it was drawn, so each is lent apart from the rest.
-    if app.modes.mode == Mode::Help {
-        let mut help = std::mem::take(&mut app.overlays.help);
-        help.draw(frame, body, &app.ctx());
-        app.overlays.help = help;
-    }
     // A guide keeps how many of its rows fit, which its keys go by, open or not.
     let mut guide = app.overlays.guide;
     guide.draw(frame, body, &app.ctx());
@@ -738,6 +733,12 @@ pub fn draw_screen(
     if let Some(mut picker) = app.overlays.picker.take() {
         picker.draw(frame, body, &app.ctx());
         app.overlays.picker = Some(picker);
+    }
+    // Over the picker, which `?` opens it from.
+    if app.modes.mode == Mode::Help {
+        let mut help = std::mem::take(&mut app.overlays.help);
+        help.draw(frame, body, &app.ctx());
+        app.overlays.help = help;
     }
     if app.modes.mode == Mode::Command {
         let mut command = std::mem::take(&mut app.overlays.command);
