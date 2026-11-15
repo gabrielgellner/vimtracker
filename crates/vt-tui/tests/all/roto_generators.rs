@@ -11,10 +11,10 @@ use vt_model::shape::{FillKind, GenParam, Role, Shape, ShapeColumn, Values, Wher
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
 use vt_roto::live::{Feel, KNOB_TOP};
+use vt_tui::pages::track::{Control, Page};
 use vt_tui::roto::devices::{control_at, knob, live_devices, placement, track_devices};
 use vt_tui::roto::edits::turned;
 use vt_tui::roto::layouts::{GENERATORS, WHERE_FIRST, WHERE_SECOND, app_only, layout_of, resolve};
-use vt_tui::track_page::{Control, Page};
 
 fn shape(kind: FillKind, place: Where) -> Shape {
     Shape {

@@ -12,7 +12,7 @@ use vt_model::song::{Launch, TrackKind};
 use vt_model::speed::Speed;
 
 use super::{App, TrackLive};
-use crate::input::command::LineError;
+use crate::overlays::command::parse::LineError;
 use crate::services::Services;
 
 impl Services {

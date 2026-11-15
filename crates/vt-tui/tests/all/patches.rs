@@ -14,8 +14,8 @@ use vt_model::shape::{GenParam, Where};
 use vt_model::song::{Phrase, Song};
 use vt_model::step::{Note, Step};
 use vt_tui::app::App;
-use vt_tui::config::Settings;
 use vt_tui::input::mode::Mode;
+use vt_tui::services::config::Settings;
 
 use crate::common::*;
 

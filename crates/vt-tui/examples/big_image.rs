@@ -29,7 +29,7 @@ use base64::engine::general_purpose::STANDARD;
 use flate2::write::ZlibEncoder;
 use flate2::{Compression, Crc};
 use ratatui::crossterm::terminal;
-use vt_tui::kitty::{Picture, id_color, placeholder_lines};
+use vt_tui::graphics::{Picture, id_color, placeholder_lines};
 
 /// The size of the sample page's waveform, in characters.
 const COLUMNS: usize = 160;

@@ -37,14 +37,14 @@ use vt_roto::sysex::{CONTROLS, MAX_STEPS};
 use ratatui::style::Color;
 
 use super::layouts::{self, Setting, Turn};
-use crate::shaping::{column_label, with_live};
-use crate::theme;
-use crate::track_page::tuning::{tuning, tuning_most};
-use crate::track_page::view::Reads;
-use crate::track_page::{
-    AccumulatorField, ArpField, Control, DeviceSpec, Page, ParamView, macros_device, view,
+use crate::overlays::shape::{column_label, with_live};
+use crate::pages::track::draw::toggle_on;
+use crate::pages::track::tuning::{tuning, tuning_most};
+use crate::pages::track::{
+    AccumulatorField, ArpField, Control, DeviceSpec, Page, macros_device, view,
 };
-use crate::views::track::toggle_on;
+use crate::widgets::param::view::{ParamView, Reads};
+use crate::widgets::theme;
 
 /// What a setting is for, which gives its knob's colour, the same wherever the setting is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -286,7 +286,7 @@ fn is_macros(spec: &DeviceSpec) -> bool {
 /// macro by its own, cut to the Roto's 12 characters.
 pub fn name(control: Control, track: &Track) -> Label {
     if let Control::Macro(at) = control {
-        let name: String = crate::macroing::macro_name(&track.macros[at], at)
+        let name: String = crate::overlays::mapping::macro_name(&track.macros[at], at)
             .chars()
             .take(vt_model::macros::MACRO_NAME_LENGTH)
             .collect();
@@ -771,7 +771,7 @@ fn enabled(control: Option<Control>, track: &Track) -> bool {
         Some(Control::Insert(slot)) => {
             track.inserts[slot] != Insert::Empty && !track.bypassed[slot]
         }
-        Some(control) => crate::track_page::modulator_bypassed(control, track) != Some(true),
+        Some(control) => crate::pages::track::modulator_bypassed(control, track) != Some(true),
         None => true,
     }
 }
@@ -972,7 +972,7 @@ pub fn device_switch(track: &Track, device: usize) -> Option<Control> {
     let (_, _, spec) = track_devices(track, None).into_iter().nth(device)?;
     match spec.title[0]? {
         control @ Control::Insert(_) => Some(control),
-        control => crate::track_page::modulator_bypassed(control, track).map(|_| control),
+        control => crate::pages::track::modulator_bypassed(control, track).map(|_| control),
     }
 }
 
@@ -989,7 +989,7 @@ pub fn live_tracks(song: &Song) -> Vec<LiveTrack> {
                 TrackKind::Sound if track.name.is_empty() => format!("Track {:02}", at + 1),
                 TrackKind::Sound => format!("{:02} {}", at + 1, track.name),
                 // A named group by its letters and name, as `G1 DRUMS`, in the Roto's twelve.
-                kind => crate::views::widgets::group::given_name(track)
+                kind => crate::widgets::group::given_name(track)
                     .map_or_else(|| kind.title(), |name| format!("{} {name}", kind.letter())),
             };
             let group = match track.kind {

@@ -6,17 +6,17 @@
 
 use vt_model::selection::{Motion, Target};
 
-use crate::audio_page::AudioPage;
-use crate::chain_view::ChainView;
 use crate::input::keys::{Key, parse, parse_sequence};
 use crate::input::mode::{Mode, View};
-use crate::mixer_page::MixerPage;
-use crate::page::Page as _;
-use crate::phrase_view::PhraseView;
-use crate::project_page::ProjectPage;
-use crate::sample_page::{SampleKey, SamplePage};
-use crate::song_view::SongView;
-use crate::track_page::{Page, TrackPage};
+use crate::pages::Page as _;
+use crate::pages::audio::AudioPage;
+use crate::pages::chain::ChainView;
+use crate::pages::mixer::MixerPage;
+use crate::pages::phrase::PhraseView;
+use crate::pages::project::ProjectPage;
+use crate::pages::sample::{SampleKey, SamplePage};
+use crate::pages::song::SongView;
+use crate::pages::track::{Page, TrackPage};
 
 /// An operator key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

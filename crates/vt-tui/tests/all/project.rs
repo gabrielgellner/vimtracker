@@ -405,7 +405,8 @@ fn e_with_no_folder_opens_a_project_from_beside_this_one_with_its_preview() {
     );
     assert_eq!(app.song().millibpm, 137_630);
     assert_eq!(
-        app.recent_places.of(vt_tui::explorer::Purpose::Project),
+        app.recent_places
+            .of(vt_tui::overlays::picker::explorer::Purpose::Project),
         std::slice::from_ref(&root)
     );
 
@@ -537,7 +538,7 @@ fn saving_a_new_project_chooses_a_folder_then_names_it_on_the_command_line() {
     let root = projects();
     let (mut app, _realtime) = app();
     app.recent_places
-        .add(vt_tui::explorer::Purpose::Save, &root)
+        .add(vt_tui::overlays::picker::explorer::Purpose::Save, &root)
         .unwrap();
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
@@ -554,7 +555,7 @@ fn saving_a_new_project_chooses_a_folder_then_names_it_on_the_command_line() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.mode, Mode::Command);
     let home = std::env::var_os("HOME").map(PathBuf::from).unwrap();
-    let shown = vt_tui::explorer::place_name(&root, Some(&home));
+    let shown = vt_tui::overlays::picker::explorer::place_name(&root, Some(&home));
     // The project's random name is filled in after the folder, so Enter saves it.
     let name = app.services.project_name();
     assert_eq!(app.command_line, format!("w {shown}/{name}"));
@@ -615,7 +616,7 @@ fn a_new_project_has_a_random_name_numbered_in_a_folder_that_has_it() {
     // A folder with the name already in it gets it numbered, as the project keeps its name.
     std::fs::create_dir_all(root.join(&name)).unwrap();
     app.recent_places
-        .add(vt_tui::explorer::Purpose::Save, &root)
+        .add(vt_tui::overlays::picker::explorer::Purpose::Save, &root)
         .unwrap();
     command(&mut app, "w");
     press(&mut app, "k");
@@ -705,7 +706,7 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
     press(&mut app, "k");
     special(&mut app, KeyCode::Enter);
     let home = std::env::var_os("HOME").map(PathBuf::from).unwrap();
-    let shown = vt_tui::explorer::place_name(&root.join("one"), Some(&home));
+    let shown = vt_tui::overlays::picker::explorer::place_name(&root.join("one"), Some(&home));
     assert_eq!(app.command_line, format!("render {shown}/one.wav --tail"));
     special(&mut app, KeyCode::Enter);
     assert!(
@@ -724,7 +725,7 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
     let (mut unsaved, _unsaved_realtime) = self::app();
     unsaved
         .recent_places
-        .add(vt_tui::explorer::Purpose::Render, &root)
+        .add(vt_tui::overlays::picker::explorer::Purpose::Render, &root)
         .unwrap();
     command(&mut unsaved, "render");
     special(&mut unsaved, KeyCode::Enter);
@@ -748,7 +749,7 @@ fn on_the_project_page() -> (App, Realtime) {
 
 #[test]
 fn the_project_page_sets_the_tempo_and_its_fine_part_as_bpm_does_with_undo() {
-    use vt_tui::project_page::ProjectControl;
+    use vt_tui::pages::project::ProjectControl;
     let (mut app, _realtime) = on_the_project_page();
     project_cursor_on(&mut app, ProjectControl::Bpm);
     tap(&mut app, "=");
@@ -803,7 +804,7 @@ fn the_project_page_sets_the_tempo_and_its_fine_part_as_bpm_does_with_undo() {
 #[test]
 fn the_project_page_edits_the_values_its_commands_set() {
     use vt_model::song::Launch;
-    use vt_tui::project_page::{PROJECT_ROWS, ProjectControl};
+    use vt_tui::pages::project::{PROJECT_ROWS, ProjectControl};
     let (mut app, _realtime) = on_the_project_page();
 
     project_cursor_on(&mut app, ProjectControl::Groove);
@@ -900,7 +901,7 @@ fn the_project_page_edits_the_values_its_commands_set() {
 #[test]
 fn the_project_page_sets_the_scale_its_root_and_auto_jump() {
     use vt_model::scale::ScaleKind;
-    use vt_tui::project_page::ProjectControl;
+    use vt_tui::pages::project::ProjectControl;
     let (mut app, _realtime) = on_the_project_page();
     project_cursor_on(&mut app, ProjectControl::Scale);
     assert!(!app.services.scale.on);
@@ -946,7 +947,7 @@ fn the_project_page_sets_the_scale_its_root_and_auto_jump() {
 
 #[test]
 fn the_project_page_names_the_project_and_the_window_title_says_it() {
-    use vt_tui::project_page::ProjectControl;
+    use vt_tui::pages::project::ProjectControl;
     let (mut app, _realtime) = on_the_project_page();
     let random = app.services.project_name();
     assert_eq!(app.song().name, random, "the song holds its name");
@@ -997,7 +998,7 @@ fn saving_a_project_somewhere_new_names_it_after_the_folder_and_keeps_the_name_a
         .apply(&vt_model::action::Action::SetSongName("verse".to_owned()));
     // Saving starts with its name.
     app.recent_places
-        .add(vt_tui::explorer::Purpose::Save, &root)
+        .add(vt_tui::overlays::picker::explorer::Purpose::Save, &root)
         .unwrap();
     command(&mut app, "w");
     tap(&mut app, "k");
@@ -1029,7 +1030,7 @@ fn saving_a_project_somewhere_new_names_it_after_the_folder_and_keeps_the_name_a
     copy.services
         .apply(&vt_model::action::Action::SetSongName("one".to_owned()));
     copy.recent_places
-        .add(vt_tui::explorer::Purpose::Save, &root)
+        .add(vt_tui::overlays::picker::explorer::Purpose::Save, &root)
         .unwrap();
     command(&mut copy, "w");
     tap(&mut copy, "k");
@@ -1057,7 +1058,7 @@ fn saving_a_project_somewhere_new_names_it_after_the_folder_and_keeps_the_name_a
 
 #[test]
 fn the_project_pages_actions_open_the_explorer_and_its_audio_row_the_audio_page() {
-    use vt_tui::project_page::ProjectControl;
+    use vt_tui::pages::project::ProjectControl;
     let (mut app, _realtime) = on_the_project_page();
     for (action, title) in [
         (ProjectControl::Save, "Save in"),
@@ -1109,7 +1110,7 @@ fn the_project_pages_actions_open_the_explorer_and_its_audio_row_the_audio_page(
 
 #[test]
 fn the_project_page_keeps_the_column_through_j_and_k() {
-    use vt_tui::project_page::ProjectControl;
+    use vt_tui::pages::project::ProjectControl;
     let (mut app, _realtime) = on_the_project_page();
     project_cursor_on(&mut app, ProjectControl::Root);
     tap(&mut app, "jj");
@@ -1158,7 +1159,7 @@ fn the_project_page_keeps_the_column_through_j_and_k() {
     assert_eq!(app.project_page.control(app.song()), ProjectControl::Bpm);
     assert!(app.project_page.fine);
     // The status line names the row.
-    assert_eq!(vt_tui::views::status::column_name(&app), "BPM");
+    assert_eq!(vt_tui::screen::status::column_name(&app), "BPM");
 }
 
 /// The project page as text, a line a row.
@@ -1209,7 +1210,7 @@ fn the_project_page_draws_the_projects_groove_as_ticks_by_its_pushes() {
 
 #[test]
 fn changing_a_groove_that_comes_with_it_makes_one_of_the_projects_own() {
-    use vt_tui::project_page::ProjectControl;
+    use vt_tui::pages::project::ProjectControl;
     let (mut app, _realtime) = on_the_project_page();
     command(&mut app, "swing 66");
     let custom = GrooveId::custom(0).unwrap();
@@ -1347,7 +1348,7 @@ fn a_read_only_project() -> (App, Realtime, PathBuf) {
 #[test]
 fn w_refuses_a_read_only_song_and_w_bang_writes_over_it_keeping_it_read_only() {
     use vt_model::project::load_song;
-    use vt_tui::project_page::ProjectControl;
+    use vt_tui::pages::project::ProjectControl;
     let (mut app, _rt, path) = a_read_only_project();
     let before = std::fs::read_to_string(path.join("song.ron")).unwrap();
     assert!(before.contains("read_only: true"), "{before}");
@@ -1547,7 +1548,7 @@ fn a_read_only_song_autosaves_and_restoring_never_writes_over_it() {
 
 #[test]
 fn the_project_page_shows_and_switches_read_only() {
-    use vt_tui::project_page::ProjectControl;
+    use vt_tui::pages::project::ProjectControl;
     let (mut app, _rt) = on_the_project_page();
     project_cursor_on(&mut app, ProjectControl::ReadOnly);
     let row = |app: &App| {

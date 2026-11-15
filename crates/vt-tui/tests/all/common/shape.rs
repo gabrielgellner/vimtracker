@@ -4,7 +4,7 @@
 use vt_model::shape::GenParam;
 use vt_model::step::Note;
 use vt_tui::app::App;
-use vt_tui::track_page::Control;
+use vt_tui::pages::track::Control;
 
 use super::keys;
 
@@ -14,7 +14,7 @@ pub fn shape_panel(app: &App, width: u16, height: u16) -> String {
     let backend = ratatui::backend::TestBackend::new(width, height);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::shape::draw(frame, frame.area(), app, &panel))
+        .draw(|frame| vt_tui::overlays::shape::draw::draw(frame, frame.area(), app, &panel))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..height)

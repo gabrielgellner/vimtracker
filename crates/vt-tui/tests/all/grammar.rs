@@ -3551,6 +3551,6 @@ fn a_live_column_is_drawn_in_the_shape_panels_colour_and_named_over_the_grid() {
     let at = (0..120)
         .find(|&x| buffer[(x, row)].symbol() == "C")
         .unwrap();
-    assert_eq!(buffer[(at + 4, row)].fg, vt_tui::theme::TEAL);
-    assert_ne!(buffer[(at, row)].fg, vt_tui::theme::TEAL);
+    assert_eq!(buffer[(at + 4, row)].fg, vt_tui::widgets::theme::TEAL);
+    assert_ne!(buffer[(at, row)].fg, vt_tui::widgets::theme::TEAL);
 }

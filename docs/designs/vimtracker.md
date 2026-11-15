@@ -272,7 +272,7 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 | `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, kits, presets, sample decoding and resampling, sample analysis, and reading WAV markers and `.ot` files | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `realfft`, `thiserror` and `xxhash-rust` |
 | `vt-engine` | `Published`, the queues to and from the callback (`link.rs`), transport and sequencing (`engine.rs` and `engine/`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues, `hound` to write WAVs, `wide` for `Supersaw`'s four lanes, `realfft` for `Clouds`' spectral mode and `thiserror` |
 | `vt-roto` | Melbourne Instruments' Roto-Control: its SysEx, CC and serial protocols, typed each way (`sysex.rs`, `cc.rs`, `serial.rs`), the handshake (`session.rs`), the link's thread with finding the ports and reconnecting (`link.rs`, `transport.rs`), devices in PLUGIN mode, live or stored, with their buttons' lights, the Roto's track list and what changed sent back (`live.rs`), MIX mode's banks, track focus, lights and meters (`mix.rs`), a device's pages of eight knobs and eight buttons as data (`layout.rs`), vimtracker's own stored setups, written only under its own hashes and only when they change (`store.rs`), a fake Roto in memory (`fake.rs`), and `roto-probe` | No other vimtracker crate: `midir` for MIDI, `serialport` (without `libudev`) for the serial port, `thiserror` and `xxhash-rust` |
-| `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, the mouse wheel as a knob (`wheel.rs`), the Roto's setting, every kind of device's layout on it (`roto/layouts.rs`), its devices as the Roto shows them, and its knobs' and buttons' moves as edits (`roto.rs`, `roto/devices.rs`, `roto/edits.rs`), the song as MIX mode's strips (`roto/mix.rs`), the faders as the steps automate them and a hand takes them over (`automating.rs`), and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
+| `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, the mouse wheel as a knob (`input/wheel.rs`), the Roto's setting, every kind of device's layout on it (`roto/layouts.rs`), its devices as the Roto shows them, and its knobs' and buttons' moves as edits (`roto.rs`, `roto/devices.rs`, `roto/edits.rs`), the song as MIX mode's strips (`roto/mix.rs`), the faders as the steps automate them and a hand takes them over (`services/automating.rs`), and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
 
 *   **One direction.** `vt-tui` uses `vt-engine`, which uses `vt-model`, and never the other way. The
     model doesn't know how it's played or shown, so its tests need neither, and the engine never
@@ -320,7 +320,7 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     eighth frame, about four times a second, until a key, the mouse or the window brings something,
     the song changes or it plays (`Redraws`, #547). Saving, `:render` and loading samples at a new
     rate happen here too.
-*   **The audio callback** is `cpal`'s output thread, in `audio.rs`. It calls `Realtime::process` in
+*   **The audio callback** is `cpal`'s output thread, in `services/audio.rs`. It calls `Realtime::process` in
     blocks of up to `MAX_BLOCK` frames, into scratch made when the stream starts, clamps the output
     at full level, and counts its load, late blocks and latency in `AudioStats`' atomics for the
     status line. Four times a second of audio, after its block, it times a small fixed kernel
@@ -330,7 +330,7 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     or the Mac is hot (`PowerState`, through `objc2-foundation`), never from the callback. A
     change on the audio page builds a new engine at the new rate and connects it afresh, keeping
     the song and its undo.
-*   **The input callback** is `cpal`'s input thread, also in `audio.rs`, only while the audio page's
+*   **The input callback** is `cpal`'s input thread, also in `services/audio.rs`, only while the audio page's
     `Input` row chooses one (`Off` to start with). It runs at the output's rate and pushes each
     frame, as interleaved stereo, into `INPUT_QUEUE`, which the output's callback reads a block at
     a time into the recorder, dropping the oldest past `INPUT_MOST_WAITING` so two drifting clocks
@@ -340,10 +340,10 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     program starts, while the song loads, at the user-interactive QoS that asks for a performance
     core, and keeps the fastest time it has ever seen in `full-speed.txt` in the cache folder, so
     a start in Low Power Mode or on a busy machine still has full speed to go by.
-*   **The analysis thread** (`analysing.rs`) works out each of the bank's files in turn, as it joins
+*   **The analysis thread** (`services/analysing.rs`) works out each of the bank's files in turn, as it joins
     the bank or a project opens: its peaks, its level and where its sound is, read from the cache
     folder by content hash if they're there.
-*   **The loader thread** (`loading.rs`) reads the file the explorer's cursor is on, only the newest
+*   **The loader thread** (`services/loading.rs`) reads the file the explorer's cursor is on, only the newest
     asked for, so its preview and the sound it plays don't hold up the screen.
 *   **The Roto's thread** (`vt-roto`'s `link.rs`, named `roto`) watches every second for the
     Roto-Control's MIDI ports, opens them, does the handshake and answers its pings, and turns what
@@ -563,11 +563,11 @@ Song                               song.ron, refused unless format_version is FO
 *   **Saving.** A project is a folder holding `song.ron`. Loading reads `format_version` first and
     refuses any other version, with no migration. What belongs to the machine rather than the song
     is in the config folder, `$XDG_CONFIG_HOME/vimtracker` or `~/.config/vimtracker`: where kits,
-    samples and presets are (`settings.ron`, `config.rs`), the audio choice (`audio.ron`), the command
+    samples and presets are (`settings.ron`, `services/config.rs`), the audio choice (`audio.ron`), the command
     history (`history.ron`), the explorer's last folders (`places.ron`) and the tags given to
     sample files by hand, by their content hash (`tags.ron`, `vt-model`'s `tag.rs`, decision 315).
     The cache folder, `$XDG_CACHE_HOME/vimtracker` or `~/Library/Caches/vimtracker` on macOS,
-    holds the sample analyses and `full-speed.txt`. Autosave (`autosave.rs`) writes `song.autosave.ron` beside
+    holds the sample analyses and `full-speed.txt`. Autosave (`services/autosave.rs`) writes `song.autosave.ron` beside
     `song.ron` every `AUTOSAVE_SECONDS`, and offers it back after a crash.
 *   **Presets.** `vt-model`'s `preset.rs` reads and writes a sound preset, a `Sound` (the machine
     to the slots' effects, and a sampler's bank entry by its full path) and a `Patch` (the mod
@@ -756,13 +756,42 @@ where they were written and are borrowed across folders; #260 may move shared sh
 
 ### Interface
 
+vt-tui's modules are in folders by what each is (#733):
+
+```text
+crates/vt-tui/src/
+  main.rs lib.rs run.rs     the subcommands; the terminal, the audio device and the main loop
+  app.rs  app/              App: key dispatch, the modes, held keys, the jump list (jumps.rs),
+                            the `:` runner (commands.rs), the grammar (grammar.rs), gd and cloning
+                            (tree.rs), Insert's accents and slides, and live recording
+  pages.rs  pages/          Page, Outcome, Ctx and CtxMut, and a folder for each page with its
+                            state, keys, edits and drawing (draw.rs): track/, mixer/, project/,
+                            audio/, sample/, song/, chain/ and phrase/
+  overlays.rs  overlays/    what's drawn over a page and takes its keys: picker/ with the explorer,
+                            command/ (the `:` line, its parser, completion and history), help.rs,
+                            guides/, shape/, mapping/ and field_jump.rs
+  services.rs  services/    what every page shares, and the helper threads: analysing, automating,
+                            autosave, banking, config, folding, heard, loading, meter, scope,
+                            sampling, and audio, the cpal device
+  screen.rs  screen/        what's always on screen: status.rs, system.rs and meter.rs
+  widgets.rs  widgets/      what pages are drawn from, param/ (ParamView, ParamCell and edit),
+                            theme.rs and glyphs.rs
+  graphics.rs  graphics/    kitty's graphics protocol: Graphics (sender.rs), the PNGs and curves
+  input.rs  input/          keys.rs, bindings.rs with bindings.tsv, mode.rs, typed.rs and wheel.rs
+  roto.rs  roto/            the Roto-Control
+  offline.rs  offline/      bench, probe (dsp_probe.rs), notes (track_notes.rs), kits
+                            import-ableton (ableton.rs) and probe-keys (probe.rs)
+  screenshot.rs  screenshot/  the manual's screenshots as SVGs
+```
+
 **`App`** (`app.rs`) is the program's state and what each key does. It needs no terminal, so tests
 drive it directly. It holds the shared services, `App::services`, beside the pages (`track_page`,
 `mixer_page`, `project_page`, `audio_page`, `sample_page`, `song_view`, `chain_view` and
 `phrase_view`), `App::modes`, the picker, the command line, help, the jump list and the keys' own
-state: 76 fields, and 45 files besides `app.rs` add an `impl App` block, such as
-`track_page.rs`, `banking.rs`, `slicing.rs`, `shaping.rs`, `picking.rs`, `recording.rs` (live
-recording, `Space r`), `project_page.rs`, `audio_page.rs` and `sample_page.rs`.
+state: 76 fields, and 47 files besides `app.rs` add an `impl App` block, such as
+`pages/track.rs`, `services/banking.rs`, `pages/sample/slicing.rs`, `overlays/shape.rs`,
+`overlays/picker/picking.rs`, `app/recording.rs` (live recording, `Space r`), `pages/project.rs`,
+`pages/audio.rs` and `pages/sample.rs`.
 
 **`Services`** (`services.rs`, #320) is what every page shares: the history, with
 `Services::apply` running an action on it and `Services::publish` sending the result, the
@@ -776,7 +805,7 @@ the live values, the faders, the live generators' rows as heard, and the meters 
 given the view), with `Services::move_track` and `go_to_track_at` moving it across tracks.
 **`Modes`** (`app.rs`) is what spans the pages as keys are
 typed: the view, the mode, what Insert has typed, a field jump under way and the count. A page
-reads and changes the program through two borrows, in `page.rs`: `CtxMut`, which a page's keys are
+reads and changes the program through two borrows, in `pages.rs`: `CtxMut`, which a page's keys are
 run with, is the services, lent mutably apart from the page, so a key can change the page and
 apply an action at once, and the modes to read; `Ctx`, which a page is drawn with, only reads: the
 services and the modes, and a `PageState` `App` fills as it lends it, the little of its own a page
@@ -785,7 +814,7 @@ holds, the recording and the audio's readouts (#784). What a page reads is worke
 services, given the view where it depends on it, as a live generator's sources do, so the scale,
 the octave and the rest of what entering notes reads are the services' too.
 
-**`Page`** (`page.rs`, #739) is a page as a component, which every page is: the track page, the
+**`Page`** (`pages.rs`, #739) is a page as a component, which every page is: the track page, the
 mixer, the project page's Song and Audio sub-pages, the sample page, the song view, the chain view
 and the phrase view. A `Page` has its rows of the binding table, `Page::KEYS`, kept beside it and
 assembled by `input/bindings.rs` under its mode; `Page::key`, which runs one of its keys with a
@@ -824,14 +853,15 @@ Normal, operator-pending, the two Visual modes, Insert, Replace, the command lin
 a jump, the keyboard playing, the picker, a guide or help. The chain, track, mixer and song modes
 only name Normal's keys on those pages, for the binding table.
 
-**Keys** (`input/`, and `grammar.rs` beside it):
+**Keys** (`input/`, with the grammar in `app/grammar.rs`, and the picker and the command line in
+`overlays/`):
 
 *   **`keys.rs`:** `Key`, made from crossterm's events, and `KEYBOARD_FLAGS`, the kitty keyboard
     protocol's flags, pushed from start to quitting, so every key comes with whether it's a press, a
     repeat or a release. `App::key_event` sends each to `App::key`, `App::key_repeated` or
     `App::key_released`. A press of the key that's already down counts as a repeat, as kitty on macOS
     sends some repeats as presses.
-*   **`wheel.rs`** (beside `input/`): the mouse wheel as a knob on the cursor's setting, while its
+*   **`wheel.rs`:** the mouse wheel as a knob on the cursor's setting, while its
     setting, `wheel.ron` in the config folder, is on; the main loop asks the terminal for mouse
     reports only then. `App::mouse_event` reads both axes as one knob, flipped to follow the
     fingers under macOS's natural scrolling (`wheel::natural_scrolling`, read at start) and by
@@ -851,24 +881,25 @@ only name Normal's keys on those pages, for the binding table.
     with `h` `j` `k` `l`: `bindings` gives every mode that binds `=` `-` `+` `_` their Cmd keys
     beside them, unless the mode binds one itself, and `adjusting_key` turns them into those keys
     for the shape panel, which reads its own (decision 148).
-*   **`grammar.rs`:** counts, registers, operators, Visual modes and `.`, on top of the table. A
+*   **`app/grammar.rs`:** counts, registers, operators, Visual modes and `.`, on top of the table. A
     command ends in an `Action` through `Services::apply`, or a `Command` to the engine. A selection
     stays through what moves or fills its values, and `Adjustments` counts those for the status
     line's running total, going back and forward with undo and redo; `SelectionPlace` is a
     selection to come back to after `r` (decision 148).
-*   **`picker.rs`:** one picker for every list, with categories as a tree one level deep, which is
+*   **`overlays/picker.rs`:** one picker for every list, with categories as a tree one level deep, which is
     also the file explorer. `picking.rs`, `explorer.rs` and `exploring.rs` open it and act on what it
     chooses. The explorer's items carry tags, guessed by `vt-model`'s `tag.rs` and kept in its
-    `TagLibrary` or a preset's file; its search reads `#` words as tags (`tree.rs`'s `Search`), and
+    `TagLibrary` or a preset's file; its search reads `#` words as tags (`picker/tree.rs`'s `Search`), and
     `tagging.rs` keeps what `T` gives (decision 315).
-*   **The command line:** `command.rs` parses a `:` line into a `Line`, `completion.rs` completes it
-    with `Tab` from the parser's own tables, and `command_history.rs` keeps the lines run, in
-    `history.ron`. `command_line.rs` has the line's keys.
+*   **The command line** (`overlays/command.rs` and `overlays/command/`): `parse.rs` parses a `:`
+    line into a `Line`, `completion.rs` completes it with `Tab` from the parser's own tables, and
+    `history.rs` keeps the lines run, in `history.ron`. `command.rs` has the line's keys.
 
-**Drawing** (`views/`). `run::draw_screen` lays out the page, the meter's column on the right with
-the scope at its top, and the status line, then draws the current page and whatever is open over
-it. Each page is a module with a `draw(frame, area, &App)`. `views/widgets/` holds what pages are
-built from, so a new page uses them rather than working out its layout again:
+**Drawing.** `run::draw_screen` lays out the page, the meter's column on the right with the scope
+at its top, and the status line (`screen/`), then draws the current page and whatever is open
+over it. Each page's drawing is the `draw` module in its folder, as each overlay's is in its
+own. `widgets/` holds what pages are built from, so a new page uses them rather than working out
+its layout again:
 
 *   `table`: `Columns`, a page's fixed column widths and the room between them, for ratatui
     `Table`s and for `Layout` cells that hold images.
@@ -918,7 +949,7 @@ grids, in the states the screenshots don't show, such as a fader taken over, a m
 slot a lock switches out (#739). A failing pin prints what was drawn, ready to paste in once it's
 checked by eye.
 
-**The track page** (`track_page.rs` and `track_page/`, decision 145) is the first page that's a
+**The track page** (`pages/track.rs` and `pages/track/`, decision 145) is the first page that's a
 component (#320). `App::track_page` is a `TrackPage`: the page showing (`Page`: Sound, Mod, FX or
 Gen), the cursor's row and field, the field `j` and `k` aim for, whether it's on a value's fine
 digits, and where it was left on each of the other pages, which `TrackPage::show` goes back to
@@ -932,15 +963,15 @@ cursor's track (`Services::track_here`) and read no `App`: `TrackPage::rows`, `p
 `devices` and `device_cursor` say where the cursor is and on what, and `TrackPage::key` runs the
 page's own keys, the moves, `{` and `}` and the pages either side, returning an `Outcome`: done,
 refused with a reason for the status line, or passed back. What else it reads of the program comes
-through a `Ctx` (`page.rs`), which borrows the shared services: the song and the cursor's place in
+through a `Ctx` (`pages.rs`), which borrows the shared services: the song and the cursor's place in
 it, the view and the modes that span pages (the mode, what Insert has typed, a field jump's labels),
 and what the engine last reported (the transport, the live values, where each track is and what it's
 launched onto, the faders, the live generators). `App::ctx` lends one. `TrackPage::key`, its
 `Page::key`, puts the cursor where it's seen and runs one of its own keys, given a `CtxMut`, and
-its `Page::draw` draws the page (`views/track.rs` and `views/track/`), giving back where its
+its `Page::draw` draws the page (`pages/track/draw.rs` and `pages/track/draw/`), giving back where its
 pictures with dots are. `run::draw_view` draws any view's page from an `App`, as the tests do.
-`App::run_track_pages` (`page.rs`) hands each key to `TrackPage::key`, the page and the services
-borrowed apart, and what it passes back to `App::run_across_pages` (`track_page.rs`), which runs
+`App::run_track_pages` (`pages.rs`) hands each key to `TrackPage::key`, the page and the services
+borrowed apart, and what it passes back to `App::run_across_pages` (`pages/track.rs`), which runs
 what spans the pages itself (`/`, `M`, `gm`, the Keys mode, the Gen page's keys, `K` and `i`), and
 hands the edits to `TrackPage::edit`, given the control under the cursor (`App::track_control`, the
 track page's or the mixer's) and the `Services`: `b`, `dd` and `p` are the page's own methods, in
@@ -955,7 +986,7 @@ entry, and `generators.rs`, which works through the live generators' sources and
     `fx.rs` the slots; `controls.rs` has `Control`, what each setting is called and holds on a
     track.
 *   **Each setting resolved once** (`view.rs`, the UI plan's U7, #739). `view(control, track,
-    song, scale)` gives a `ParamView`: its value within its bounds, its fine byte, its default,
+    song, scale)` gives a `ParamView` (`widgets/param/view.rs`): its value within its bounds, its fine byte, its default,
     its `nudge` and `jump` up and down from where it is (an envelope's time steps by 1 ms below
     10 ms and 5 ms from it, so `-` from 10 ms is 9 ms), whether it wraps, its bar, whether it's a
     switch, its choices and whether `K` numbers them, its cell's text, the status line's text
@@ -978,9 +1009,9 @@ entry, and `generators.rs`, which works through the live generators' sources and
     a sampler's sample, slice and tune, the groove a track follows, a gate back to the track's
     own, a filter's kept mode, a mod slot's type, rate and fade, a macro's patches and the Gen
     page's.
-*   **Macros on the page** (`macroing.rs`, decision 285). `M` maps the setting under the cursor,
+*   **Macros on the page** (`overlays/mapping.rs`, decision 285). `M` maps the setting under the cursor,
     `Control::setting_for_macro`, through a picker; `gm` opens `App::mapping`, a `MappingView` in
-    `Mode::Mapping`, drawn by `views/mapping.rs`. A setting a macro holds refuses a turn in
+    `Mode::Mapping`, drawn by `overlays/mapping/draw.rs`. A setting a macro holds refuses a turn in
     `run_across_pages` (`App::refuses_turn`), and the pages draw `Track::with_macros`, a copy with
     each mapped setting where its macro's turn puts it, never edited.
 *   **Racks** (`device.rs`). `Page::devices` asks each page's file for its `DeviceSpec`s: the FX
@@ -992,7 +1023,7 @@ entry, and `generators.rs`, which works through the live generators' sources and
     the app gives `TrackPage::phrase` as each key comes: first the track's macros as one band,
     `macros_device`, `Control::Macro` two rows of four (decision 285), then a device each for its live generators,
     their title and grid from `vt-model`'s `GenParam::title` and `GenParam::grid`, as
-    `Control::Gen`, then `Empty`. Each generator's preview is `kitty/generators.rs`'s
+    `Control::Gen`, then `Empty`. Each generator's preview is `graphics/generators.rs`'s
     `GenDrawing`, its column's values across its span from the phrase's steps, sent again only as
     they change, and the row playing is a dot placed on it as an LFO's is, in the same placements
     (decision 280). The Roto shows those of the phrase level with the cursor on its track after
@@ -1014,11 +1045,11 @@ entry, and `generators.rs`, which works through the live generators' sources and
     master's is its Output alone, the same grid with holes where it lacks a setting, the master's
     with the song's `Control::Limiter` in Send A's place (decision 155). Every page is a rack, so
     there are no row tables. What feeds a group or a return, its Tracks or its Sends in, is drawn
-    under the Output by `views/track/sound.rs` from the song each frame, and isn't a device, as
+    under the Output by `pages/track/draw/sound.rs` from the song each frame, and isn't a device, as
     the cursor doesn't stop in it.
-*   **Drawing** is in `views/track.rs`, with the Sound page's in `views/track/sound.rs` and the Mod
-    page's in `views/track/modulation.rs`: a device's frame and title (`widgets::device`), its grid
-    read through `TrackCells` (`views/track/cells.rs`), the one `CellSource` for every page's
+*   **Drawing** is in `pages/track/draw.rs`, with the Sound page's in `draw/sound.rs` and the Mod
+    page's in `draw/modulation.rs`: a device's frame and title (`widgets::device`), its grid
+    read through `TrackCells` (`draw/cells.rs`), the one `CellSource` for every page's
     settings and devices' titles, which turns each `Control` into a `widgets::param::ParamCell`
     from its `ParamView` and what only the page knows, the engine's report, the faders and the
     modes (`widgets::grid`: `CellWidths::FX`, `CellWidths::SOUND`, whose
@@ -1026,7 +1057,7 @@ entry, and `generators.rs`, which works through the live generators' sources and
     half-width devices), its panel (`widgets::panel`), and, for the Mod page's two columns,
     `widgets::device::rack_areas`.
 
-**The mixer** (`mixer_page.rs`, decision 25) is a component the same way (#320). `App::mixer_page`
+**The mixer** (`pages/mixer.rs`, decision 25) is a component the same way (#320). `App::mixer_page`
 is a `MixerPage`: the row its cursor is on, `MIXER`'s `Level` to start with, kept on a track that
 hasn't it and kept while other views show; the track it's on is the program's cursor, and nothing
 else is the mixer's own, as which strips show follows from the cursor and the folds each time it's
@@ -1035,26 +1066,26 @@ cursor's track, as `TrackPage`'s are. `MixerPage::key`, its `Page::key`, runs it
 `k`, `gg` and `G` down and up a strip, and `h`, `l`, `0` and `$` across the strips, moving the
 program's cursor through `Services::move_track` and `go_to_track_at`, which keep its place in the
 section, `0` and `$` to the strip `MixerPage::end_track` finds, returning an `Outcome`, given a
-`CtxMut`; `MixerPage::draw` draws it (`views/mixer.rs`) through a `Ctx`. `App::run_track_pages`
+`CtxMut`; `MixerPage::draw` draws it (`pages/mixer/draw.rs`) through a `Ctx`. `App::run_track_pages`
 hands each key to it, and a key it passes back to `TrackPage::key` and then `App::run_across_pages`,
 whose edits the mixer shares.
 
-Colours are in `theme.rs`, and the Nerd Font glyphs in `glyphs.rs`, each named with its codepoint.
-The guides (`guides.rs`) are the Markdown files in `crates/vt-tui/guides/`, built into the program
+Colours are in `widgets/theme.rs`, and the Nerd Font glyphs in `widgets/glyphs.rs`, each named with
+its codepoint. The guides (`overlays/guides.rs`) are the Markdown files in `crates/vt-tui/guides/`, built into the program
 with `include_str!` and opened with `Space ?`; the manual includes the same files, so the two can't
 differ.
 
-**The phrase view's timeline** (`timeline.rs`). The phrase view draws lines, not rows: a row of the
+**The phrase view's timeline** (`pages/phrase/timeline.rs`). The phrase view draws lines, not rows: a row of the
 loop takes a line for each of its pulses, a line being one step of the track's `Speed`, unless `z a`
 has collapsed it to a line a row (`PhraseView::rows_collapsed`). `timeline::lines` lays the rows
-out, each line with its row, its pulse and when it starts, and `views/phrase.rs` draws a row's own
+out, each line with its row, its pulse and when it starts, and `pages/phrase/draw.rs` draws a row's own
 line, its dim continuation lines and the lines past the phrase from that, the beat rules from each
 line's start, and the other tracks' columns from the ticks each line covers
 (`timeline::starting_in`). The cursor, counts, selections and `PhraseView::top` stay in rows, so only
 scrolling counts lines: the row-to-line helpers there are what `App::follow_cursor`, `H`, `M`, `L`,
 `Ctrl-d`, `Ctrl-u` and the view's furthest scroll go by.
 
-**Folding groups** (`folding.rs`). `Services::folds` says which groups are folded, `z a`, `zM` and `zR`
+**Folding groups** (`services/folding.rs`). `Services::folds` says which groups are folded, `z a`, `zM` and `zR`
 setting each, and a group none has set is folded while it's empty. `Folds::hides` is what the song
 view, the mixer and the phrase view's overview leave out: a folded group's tracks, and a folded
 group with none. Those views draw `Folds::shown` rather than every track, and the moves between
@@ -1073,9 +1104,9 @@ from code (decision 305).
 `fn draw(&self, frame, area, ctx: &Ctx)`. `App` holds the `Services` every page shares beside the
 pages, the current view, the modes and popups that span pages (the picker, the command line and
 help) and the jump list. What a page passes back, where it opens the picker, changes `Modes` or
-reaches across pages, stays `impl App`; moving the feature files onto the page or service they
-belong to, with the folders and `pub(crate)`, is U13 (#733), and what's passed back only to reach
-the picker, the views and `:` lines is the third architecture review's item 2 (#784).
+reaches across pages, stays `impl App`, in the folder of the page, overlay or service it belongs
+to (U13, #733); what's passed back only to reach the picker, the views and `:` lines is the third
+architecture review's item 2 (#784).
 `TrackPage` and `MixerPage` have their state, their own keys, their edits and their drawing: the
 edits are `TrackPage::edit`, the page's methods and functions over the `Services`, and the
 mixer's moves across tracks are its own keys. `App` dispatches to them in `App::run_track_pages`
@@ -1083,7 +1114,7 @@ and `App::run_across_pages`, and keeps the track page's lists that aren't a sett
 Insert's typing on it and the Gen page's keys, which open its picker, edit `Modes` and work through
 the shape panel. The track page says which pictures
 it wants as data and where its dots go, and `Graphics` reads no `App` (#728, below).
-`ProjectPage` (`project_page.rs`) and `AudioPage` (`audio_page.rs`), the project page's Song and
+`ProjectPage` (`pages/project.rs`) and `AudioPage` (`pages/audio.rs`), the project page's Song and
 Audio sub-pages, have their state, their moves and their drawing, through a `Ctx`, the Song
 sub-page's settings and the audio page's rows as `ParamCell`s: the Song sub-page's cursor and the
 groove it shows, and the audio page's row. `App::run_project_pages` hands them a key and then
@@ -1093,12 +1124,12 @@ the wheel and the Roto. The output as it plays, `App::audio`, stays `App`'s, as 
 status line and the recorder read it too.
 `SamplePage` is a component too: it keeps its own cursor, zoom, scroll, selection, settings focus
 and pictures' ids, runs its moves and its edits of the entry's points and settings
-(`placing.rs`, `sample_settings.rs`) through the `Services`, builds its settings' pickers, and is
+(`pages/sample/placing.rs` and `settings.rs`) through the `Services`, builds its settings' pickers, and is
 drawn through a `Ctx`. What it passes back is `App`'s, in `App::run_sample_passed`: what plays
 through the track, the pads, `'` and `m`'s letters and `]'` `['`'s jumps, and opening the picker.
 Whether an entry is still recording is `App`'s too, so `App::sample_shown` says so before the
 page's own `SamplePage::shown`.
-`SongView` (`song_view.rs`) has the column its cursor is on and the sections `V` selects, its
+`SongView` (`pages/song.rs`) has the column its cursor is on and the sections `V` selects, its
 moves along the columns, the value edits of the cell, `Enter`'s launch and `V`, and its drawing,
 through a `Ctx`. `App::run_song_view` hands it a key and then runs what it passes back, which stays
 `impl App`: a move to another section and the keys that end on one (`a`, `gc`, `dd`, `C`), as
@@ -1106,21 +1137,21 @@ going to a section moves the cursor every page shares and the phrase view's firs
 picker, Insert, `gC` and `;`. The sections `:loop` keeps playing are `Services::looping`, as
 `:loop` works from every view and the status line shows them.
 
-`ChainView` (`chain_view.rs`) has the column its cursor is on and the row `yy` and `dd` last
+`ChainView` (`pages/chain.rs`) has the column its cursor is on and the row `yy` and `dd` last
 copied, its moves between the columns, the edits of a row, `x`, `yy` and `p`, and its drawing,
-through a `Ctx`. `App::run_chain_view` hands it a key and then runs what it passes back, in
-`tree.rs`, which stays `impl App`: a move to another row, as it moves the cursor every page shares
+through a `Ctx`. `App::run_chain_view` hands it a key and then runs what it passes back, in an
+`impl App` beside it: a move to another row, as it moves the cursor every page shares
 and the phrase view's first row, `dd`, which keeps the cursor on a row, the phrase picker, Insert
 and `;`; what neither takes goes on to the tree, as before. The cursor's chain and its rows are
 `Services::chain_id` and `chain_entries`.
 
-`PhraseView` (`phrase_view.rs`) has where the view is scrolled to and how many lines fit, whether
+`PhraseView` (`pages/phrase.rs`) has where the view is scrolled to and how many lines fit, whether
 it's laid out in time and shows the row inspector, and the selection: where it started, how far
 it reaches across tracks, the columns it keeps and the one `gv` brings back. Its keys, through the
 `Services`, are the moves, the keys over the view (`H` `M` `L`, `C-d` `C-u`, `C-e` `C-y`),
 reaching another track from a selection, `zi` and `Space i`, and its binding rows sit beside it,
 the motions, targets and Visual's with its Normal ones. It's drawn through a `Ctx`
-(`views::phrase::draw`), a grid laid out once for the frame and drawn a line at a time. What
+(`pages::phrase::draw`), a grid laid out once for the frame and drawn a line at a time. What
 it passes back stays `impl App`: the grammar's operators, the motion after one, the Visual modes
 that change the mode, the edits, registers and `.`, Insert's typing, the tree's keys, the loop's,
 recording and the pickers, which read the selection from it. The cursor it moves is the program's,
@@ -1132,9 +1163,9 @@ in `Services`, which keeps it on what exists with `Services::clamp_cursor`.
 ### Graphics
 
 Pictures are drawn with the kitty graphics protocol, which kitty and Ghostty both have, and which the
-program asks the terminal for at start. `kitty/protocol.rs` has the placeholders and the commands,
-`kitty/encoding.rs` and `kitty/plot.rs` make the PNGs, `kitty/slots.rs` says what an FX slot's
-drawing shows, and `Graphics` (`kitty/graphics.rs`) sends them and keeps track of which images the
+program asks the terminal for at start. `graphics/protocol.rs` has the placeholders and the
+commands, `graphics/encoding.rs` and `graphics/plot.rs` make the PNGs, `graphics/slots.rs` says what
+an FX slot's drawing shows, and `Graphics` (`graphics/sender.rs`) sends them and keeps track of which images the
 terminal has. It's a service that reads no `App` (#728): a page lists the pictures it wants as
 `PanelWant`s, each its panel, shade, size and the `Shape` it's drawn from, which
 `TrackPage::panels` and `MappingView::panels` work out from their state and what they're given;
@@ -1159,8 +1190,8 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
     the screen is about to show, before ratatui draws, and only when what it shows has changed. A
     picture can have up to 15 colours that each mean something, and a big one is compressed inside
     its PNG.
-*   **One drawing path for curves, `kitty/plot.rs`.** The FX page's compressor and EQ curves, the
-    Sound page's filter curve and the Mod page's envelopes and LFO cycles are drawn by `kitty::plot` at the
+*   **One drawing path for curves, `graphics/plot.rs`.** The FX page's compressor and EQ curves, the
+    Sound page's filter curve and the Mod page's envelopes and LFO cycles are drawn by `graphics::plot` at the
     terminal's own pixels, the characters they cover times `Graphics::cell`, so nothing is
     stretched. Its `Plot` is an anti-aliased 2-pixel line, each pixel covered in eighths by its
     distance from the line, over faint dotted gridlines, as a PNG whose palette has an alpha for
@@ -1183,14 +1214,14 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
     marks are; moving it is placing it again, about 60 bytes. The track page's drawing gives back
     where each cycle is (`CyclesAt`), `TrackPage::dots` works out where each dot goes from it, and
     a dot is taken off under anything drawn over the page.
-*   **Panel images, `kitty/panels.rs`.** `PanelImages` holds the track page's panels' images by
+*   **Panel images, `graphics/panels.rs`.** `PanelImages` holds the track page's panels' images by
     `(PanelKey, Shade)`: the filter, a sampler's thumbnail, each mod slot, drawn by its type, and each FX slot, each in
     up to three shades, dim, focused and faint (a switched-out slot), with the shape it was drawn
     from. `Graphics::panels` sends one only when its shape is new, and one that changes again within
     a frame of a change waits a frame, so a curve following an LFO is sent at most 15 times a
     second, as the scope is. Moving the cursor or switching a slot out and back sends nothing once
     each shade has been sent.
-*   **A sampler's thumbnail, `sample_wave::Thumbnail`.** The Sound page's Machine device shows the
+*   **A sampler's thumbnail, `pages/sample/wave.rs`'s `Thumbnail`.** The Sound page's Machine device shows the
     slice its `Slice` is on, cut as the engine cuts a note: `Start` and `Length` are shares of the
     slice in play order. It's drawn by the sample page's own `Drawing`, at one pixel for each of
     the screen's, with the start's teal line, the end's red one, and the sound outside them dim.
@@ -1202,7 +1233,7 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
     it, about 60 bytes, and `a=d` takes it off. `Graphics::place` does this after ratatui draws, so
     they go where the page is now, and only for what moved. While anything is drawn over the page,
     they're taken off and drawn as characters instead, as they are in a render.
-*   **Switches, `kitty/switches.rs`.** Every on/off switch is a picture of a pill, three characters
+*   **Switches, `graphics/switches.rs`.** Every on/off switch is a picture of a pill, three characters
     by one at the terminal's pixels, its knob right and filled while on, left and hollow while off
     (decision 256). The views write the glyph and its spaces as ever; once ratatui has drawn a
     frame, `Graphics::find_switches` finds each in the buffer, by its glyph and two plain spaces on
@@ -1240,7 +1271,7 @@ These need no terminal and no sound device, so they run anywhere.
     add up to the whole; `--split` writes one for each sound track, those in groups too. Each is a
     render with that track or group soloed. `:render` does the same from the program, on the edit
     thread, for the song as it is.
-*   **`vimtracker bench <project>`** (`bench.rs`) plays a project through an `Engine` on this
+*   **`vimtracker bench <project>`** (`offline/bench.rs`) plays a project through an `Engine` on this
     thread, in blocks the size a device asks for, stopped and then playing, and prints the share of
     a core it takes and its worst block, as the status line's CPU figure measures it, with how much
     of the worst block its thread was on the CPU, so a block the system put aside reads as that, and
@@ -1255,7 +1286,7 @@ These need no terminal and no sound device, so they run anywhere.
     a `Stopwatch` (`vt-engine`'s `timing.rs`) reads the clock between parts, and each track's
     `SlotTimes` around its slots, both doing nothing until asked, and the clock's own cost is taken
     off.
-*   **`vimtracker probe <spec> <out.wav>`** (`dsp_probe.rs`) plays one voice or one effect through a
+*   **`vimtracker probe <spec> <out.wav>`** (`offline/dsp_probe.rs`) plays one voice or one effect through a
     track with no song, from a TOML spec, whose cases can each play notes of their own.
     `tools/compare/` renders the same spec through one or more reference plugins hosted by
     Spotify's pedalboard, or Ableton Live's own devices through a control surface script in Live
@@ -1266,7 +1297,7 @@ These need no terminal and no sound device, so they run anywhere.
     writes the track filter's response as the Sound page draws it. The Python side doesn't run in
     CI, while `crates/vt-tui/tests/all/probe.rs` checks that the specs in `tools/compare/specs/` parse
     and prepare on our side.
-*   **`vimtracker notes <project> <out.toml>`** (`track_notes.rs`) reads a project, never writing
+*   **`vimtracker notes <project> <out.toml>`** (`offline/track_notes.rs`) reads a project, never writing
     to it, and writes one sound track's notes once through its chain, the first in any section
     that gives it one, as a probe spec's notes, with the song's tempo and the track's machine
     settings. `--track` picks the track by its name and `--machine` by its machine. Rows are timed
@@ -1307,7 +1338,7 @@ every pair of values still met, and all of them under `cargo test --release`.
 | Real-time safety | The tests in `crates/vt-engine/src/link.rs`, `gens.rs`, `slowdown.rs` and `dsp/filters/filter.rs`, under `rt_guard` | That a block, a generator's render, the slowdown check and the track filter allocate and free nothing |
 | Interface | `crates/vt-tui/tests/all/`, one binary with a module for each part of the program, such as the keys (`keys.rs`), the track page's settings and keys (`track_page.rs`), its Sound page's rack (`sound_page.rs`), its Mod page's rack (`mod_page.rs`), its FX page (`fx_page.rs`), the sample page (`sample_page.rs`), live recording (`recording.rs`) and `grammar.rs`, with the helpers they share in `common/` | Keys pressed into an `App` connected to a real engine, whose `Realtime` the test runs. A held key can't be pressed from a test, so held keys go through `App::key_released` and `App::key_repeated`, mostly in `keys.rs` and `recording.rs` |
 | Roto-Control | `crates/vt-roto/tests/`: `handshake.rs`, `live.rs`, `protocol.rs` and `store.rs`, against the fake Roto, and unit tests in its modules | Every message of both protocols written and read back, the handshake and the link's thread, live devices, and vimtracker's own stored setups, with no hardware and no MIDI ports |
-| Graphics | Unit tests in `kitty/` and `views/` | The commands sent, and the PNGs, pinned by their size and CRC |
+| Graphics | Unit tests in `graphics/`, and beside the drawing of the pages, overlays and widgets | The commands sent, and the PNGs, pinned by their size and CRC |
 | Other paths | `crates/vt-tui/tests/all/probe.rs`, `notes.rs`, `analysis.rs` and `ableton.rs` | `probe`'s specs, `notes`' timing of a song's track, the analysis thread and its cache, and importing kits from Ableton |
 | Comparison harness | `tools/compare/tests/`, with `uv run python -m unittest discover tests` | The Live bridge, against stand-ins for Live's objects. Not in CI, as nothing in `tools/compare` is |
 | Screenshots | `just screenshots`, from `crates/vt-tui/examples/screenshots.rs`, into `docs/manual/src/images/` | Not a test: the SVGs are committed, so a change to what's drawn shows in the PR's diff |

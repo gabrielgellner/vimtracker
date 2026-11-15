@@ -415,7 +415,7 @@ fn reset_shows_on_the_status_line_and_undoes() {
         let backend = ratatui::backend::TestBackend::new(100, 2);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::status::draw(frame, frame.area(), app))
+            .draw(|frame| vt_tui::screen::status::draw(frame, frame.area(), app))
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         (0..100)
@@ -496,7 +496,7 @@ fn the_status_line_shows_the_grid_in_the_phrase_view() {
         let backend = ratatui::backend::TestBackend::new(100, 2);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::status::draw(frame, frame.area(), app))
+            .draw(|frame| vt_tui::screen::status::draw(frame, frame.area(), app))
             .unwrap();
         (0..100)
             .map(|x| terminal.backend().buffer()[(x, 0)].symbol().to_owned())

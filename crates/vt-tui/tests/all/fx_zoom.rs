@@ -7,11 +7,11 @@ use ratatui::crossterm::event::KeyCode;
 use vt_engine::track_state::LiveValues;
 use vt_tui::app::App;
 use vt_tui::input::mode::Mode;
-use vt_tui::track_page::Page;
+use vt_tui::pages::track::Page;
 
 use crate::common::*;
+use vt_tui::graphics::{PanelIds, PanelKey};
 use vt_tui::input::mode::View;
-use vt_tui::kitty::{PanelIds, PanelKey};
 
 /// The screen at the author's 163 by 42, with the keyboard's mode or not.
 fn zoomed_screen(app: &mut App, keys: bool) -> Vec<String> {
@@ -167,9 +167,13 @@ fn an_empty_slots_tile_in_the_strip_says_empty_dim() {
         .collect::<String>();
     let at = row.find("Empty").expect("an empty tile") as u16;
     let x = row[..at as usize].chars().count() as u16;
-    assert_eq!(buffer[(x, 2)].fg, vt_tui::theme::OVERLAY2, "{row}");
+    assert_eq!(buffer[(x, 2)].fg, vt_tui::widgets::theme::OVERLAY2, "{row}");
     let glue = row[..row.find("Glue").unwrap()].chars().count() as u16;
-    assert_ne!(buffer[(glue, 2)].fg, vt_tui::theme::OVERLAY2, "{row}");
+    assert_ne!(
+        buffer[(glue, 2)].fg,
+        vt_tui::widgets::theme::OVERLAY2,
+        "{row}"
+    );
 }
 
 #[test]
@@ -232,20 +236,21 @@ fn the_zoomed_meter_and_its_two_bars_show_how_far_it_turned_down() {
         terminal.backend().buffer().clone()
     };
     assert_eq!(buffer[(14, 9)].symbol(), "█");
-    assert_eq!(buffer[(14, 9)].fg, vt_tui::theme::OVERLAY0);
+    assert_eq!(buffer[(14, 9)].fg, vt_tui::widgets::theme::OVERLAY0);
 }
 
 #[test]
 fn zoomed_in_only_its_slot_is_drawn_bigger_and_a_shaping_distortion_has_its_curve() {
     use std::collections::HashMap;
-    let synced = |app: &mut App, graphics: &mut vt_tui::kitty::Graphics| -> HashMap<u32, Vec<u8>> {
-        let mut out = Vec::new();
-        app.send_pictures(graphics, &mut out).unwrap();
-        vt_tui::screenshot::sent_images(&out)
-    };
+    let synced =
+        |app: &mut App, graphics: &mut vt_tui::graphics::Graphics| -> HashMap<u32, Vec<u8>> {
+            let mut out = Vec::new();
+            app.send_pictures(graphics, &mut out).unwrap();
+            vt_tui::screenshot::sent_images(&out)
+        };
     let (mut app, _realtime) = on_fx_page();
     four_devices(&mut app);
-    let mut graphics = vt_tui::kitty::Graphics::new();
+    let mut graphics = vt_tui::graphics::Graphics::new();
     synced(&mut app, &mut graphics);
     assert!(app.track_page.images.get(PanelKey::Slot(0)).is_some());
     assert_eq!(app.track_page.images.get(PanelKey::Zoom), None);
@@ -293,11 +298,12 @@ fn zoomed_in_only_its_slot_is_drawn_bigger_and_a_shaping_distortion_has_its_curv
 #[test]
 fn the_filter_effects_have_their_curves_at_the_note_played_and_as_far_as_a_gate_is_open() {
     use std::collections::HashMap;
-    let synced = |app: &mut App, graphics: &mut vt_tui::kitty::Graphics| -> HashMap<u32, Vec<u8>> {
-        let mut out = Vec::new();
-        app.send_pictures(graphics, &mut out).unwrap();
-        vt_tui::screenshot::sent_images(&out)
-    };
+    let synced =
+        |app: &mut App, graphics: &mut vt_tui::graphics::Graphics| -> HashMap<u32, Vec<u8>> {
+            let mut out = Vec::new();
+            app.send_pictures(graphics, &mut out).unwrap();
+            vt_tui::screenshot::sent_images(&out)
+        };
     let (mut app, _realtime) = on_fx_page();
     for effect in ["LPG", "Reso", "Comb", "Vowel"] {
         press(&mut app, "K");
@@ -306,7 +312,7 @@ fn the_filter_effects_have_their_curves_at_the_note_played_and_as_far_as_a_gate_
         press(&mut app, "}");
     }
     press(&mut app, "gg");
-    let mut graphics = vt_tui::kitty::Graphics::new();
+    let mut graphics = vt_tui::graphics::Graphics::new();
     synced(&mut app, &mut graphics);
     press(&mut app, "zi");
     // Each is a frequency curve the device's width, as the EQ's is, sent once.
@@ -358,11 +364,12 @@ fn the_filter_effects_have_their_curves_at_the_note_played_and_as_far_as_a_gate_
 #[test]
 fn a_delay_has_its_repeats_and_each_reverb_its_tail_with_their_time_scales() {
     use std::collections::HashMap;
-    let synced = |app: &mut App, graphics: &mut vt_tui::kitty::Graphics| -> HashMap<u32, Vec<u8>> {
-        let mut out = Vec::new();
-        app.send_pictures(graphics, &mut out).unwrap();
-        vt_tui::screenshot::sent_images(&out)
-    };
+    let synced =
+        |app: &mut App, graphics: &mut vt_tui::graphics::Graphics| -> HashMap<u32, Vec<u8>> {
+            let mut out = Vec::new();
+            app.send_pictures(graphics, &mut out).unwrap();
+            vt_tui::screenshot::sent_images(&out)
+        };
     let (mut app, _realtime) = on_fx_page();
     for effect in ["Delay", "Reverb", "Plate", "Spring"] {
         press(&mut app, "K");
@@ -371,7 +378,7 @@ fn a_delay_has_its_repeats_and_each_reverb_its_tail_with_their_time_scales() {
         press(&mut app, "}");
     }
     press(&mut app, "gg");
-    let mut graphics = vt_tui::kitty::Graphics::new();
+    let mut graphics = vt_tui::graphics::Graphics::new();
     synced(&mut app, &mut graphics);
     press(&mut app, "zi");
     for (slot, said) in [
@@ -406,7 +413,7 @@ fn a_space_echo_has_its_repeats_drawn_as_a_delays_are() {
     press(&mut app, "K");
     press(&mut app, "Space Echo");
     special(&mut app, KeyCode::Enter);
-    let mut graphics = vt_tui::kitty::Graphics::new();
+    let mut graphics = vt_tui::graphics::Graphics::new();
     let mut out = Vec::new();
     app.send_pictures(&mut graphics, &mut out).unwrap();
     press(&mut app, "zi");

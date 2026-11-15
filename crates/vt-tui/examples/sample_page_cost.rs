@@ -37,10 +37,10 @@ use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
 use vt_model::song::{Machine, Song};
 use vt_tui::app::App;
+use vt_tui::graphics::{DEFAULT_CELL, Graphics};
 use vt_tui::input::keys::parse_sequence;
-use vt_tui::kitty::{DEFAULT_CELL, Graphics};
+use vt_tui::pages::sample::wave::Drawing;
 use vt_tui::run::draw_screen;
-use vt_tui::sample_wave::Drawing;
 
 /// The author's screen, in characters.
 const SCREEN: (u16, u16) = (163, 42);
@@ -296,7 +296,7 @@ fn main() -> io::Result<()> {
             first: page.first_frame(),
             zoom: page.zoom,
             columns: page.columns,
-            rows: usize::from(vt_tui::views::sample::WAVE_ROWS),
+            rows: usize::from(vt_tui::pages::sample::draw::WAVE_ROWS),
             cell,
             merged: false,
         }

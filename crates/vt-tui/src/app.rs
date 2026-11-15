@@ -5,15 +5,15 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::accent_slide::{HeldFlag, Moved, Written};
-use crate::audio::{AudioChoice, DeviceInfo, LoadReadout, SlowdownReadout};
-use crate::audio_page::AudioPage;
-use crate::chain_view::ChainView;
-use crate::exploring::Naming;
-use crate::glyphs;
-use crate::loading::Loader;
-use crate::places::RecentPlaces;
-use crate::views::picker::{PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH};
+use crate::app::accent_slide::{HeldFlag, Moved, Written};
+use crate::overlays::picker::draw::{PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH};
+use crate::overlays::picker::exploring::Naming;
+use crate::overlays::picker::places::RecentPlaces;
+use crate::pages::audio::AudioPage;
+use crate::pages::chain::ChainView;
+use crate::services::audio::{AudioChoice, DeviceInfo, LoadReadout, SlowdownReadout};
+use crate::services::loading::Loader;
+use crate::widgets::glyphs;
 use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::{PLAYHEADS, TrackPlace, Transport};
 use vt_engine::link::{Command, Handle, JamState};
@@ -25,32 +25,37 @@ use vt_model::selection::{Block, Field, Scope, StepRange};
 use vt_model::song::Song;
 use vt_model::step::{FxCommand, MAX_VELOCITY};
 
-use crate::grammar::{Adjustments, Change, SelectionPlace};
-use crate::guides::Guide;
+use crate::app::grammar::{Adjustments, Change, SelectionPlace};
+use crate::app::jumps::Place;
+use crate::app::recording::Recording;
 use crate::input::bindings::{Op, Table};
-use crate::input::command_history::CommandHistory;
-use crate::input::completion::CommandMenu;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
-use crate::input::picker::Picker;
 use crate::input::typed::TypedValue;
-use crate::jumping::FieldJump;
-use crate::mixer_page::MixerPage;
-use crate::phrase_view::PhraseView;
-use crate::project_page::ProjectPage;
-use crate::recording::Recording;
+use crate::overlays::command::completion::CommandMenu;
+use crate::overlays::command::history::CommandHistory;
+use crate::overlays::field_jump::FieldJump;
+use crate::overlays::guides::Guide;
+use crate::overlays::picker::Picker;
+use crate::overlays::shape::ShapePanel;
+use crate::pages::mixer::MixerPage;
+use crate::pages::phrase::PhraseView;
+use crate::pages::project::ProjectPage;
+use crate::pages::song::SongView;
+use crate::pages::track::TrackPage;
 use crate::services::Services;
-use crate::shaping::ShapePanel;
-use crate::song_view::SongView;
-use crate::track_page::TrackPage;
-use crate::tree::Place;
 
+pub mod accent_slide;
 mod commands;
 mod cursor;
 mod entry;
+pub mod grammar;
+mod jumps;
 mod keys;
 mod loops;
+pub mod recording;
 pub(crate) mod tracks;
+pub mod tree;
 
 /// A run of steps and columns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -239,7 +244,7 @@ pub struct App {
     /// The audio page: the row its cursor is on.
     pub audio_page: AudioPage,
     /// The mouse wheel as a knob on the cursor's setting, while its setting is on.
-    pub wheel: crate::wheel::Wheel,
+    pub wheel: crate::input::wheel::Wheel,
     /// The sample library the sample explorer lists, such as Ableton Live's, if this machine has
     /// one: found as the program starts, and none in tests.
     pub library: Option<PathBuf>,
@@ -252,7 +257,7 @@ pub struct App {
     /// The track page: which of its pages shows, where its cursor is, and the images it shows.
     pub track_page: TrackPage,
     /// The sample page: where it is, and the pictures of its waveform and its overview.
-    pub sample_page: crate::sample_page::SamplePage,
+    pub sample_page: crate::pages::sample::SamplePage,
     /// The project page's Song sub-page: where its cursor is, and the groove it draws.
     pub project_page: ProjectPage,
     /// Most recently used first, starting with the view on screen.
@@ -276,7 +281,7 @@ pub struct App {
     /// Live recording, while it's armed.
     pub(crate) recording: Option<Recording>,
     /// The recorder: what `Space R` records, and the recording going on.
-    pub sampling: crate::sampling::Sampling,
+    pub sampling: crate::services::sampling::Sampling,
     /// The id of the scope's image, and whether the last screen drawn had room for it.
     pub scope_image: Option<u32>,
     pub scope_shown: bool,
@@ -318,7 +323,7 @@ pub struct App {
     pub(crate) awaiting_register: bool,
     /// Whether `'` or `m` on the sample page waits for a letter: of the slice to go to, or to
     /// name the slice under the cursor with.
-    pub(crate) awaiting_mark: Option<crate::marking::MarkWait>,
+    pub(crate) awaiting_mark: Option<crate::pages::sample::marking::MarkWait>,
     pub(crate) registers: HashMap<char, Block>,
     /// What the changes kept on the selection have moved its values by, for the status line.
     pub(crate) adjustments: Adjustments,
@@ -327,7 +332,7 @@ pub struct App {
     /// The open shape panel.
     pub shape: Option<ShapePanel>,
     /// The open mapping view of a macro.
-    pub mapping: Option<crate::macroing::MappingView>,
+    pub mapping: Option<crate::overlays::mapping::MappingView>,
     /// A selection to shape once the command for its empty FX column is chosen, and its field.
     pub(crate) shape_command: Option<(Selection, Field)>,
     /// Changes each time random values are wanted anew.
@@ -403,13 +408,13 @@ impl App {
             song_view: SongView::default(),
             phrase_view: PhraseView::default(),
             track_page: TrackPage::default(),
-            sample_page: crate::sample_page::SamplePage::default(),
+            sample_page: crate::pages::sample::SamplePage::default(),
             project_page: ProjectPage::default(),
             audio: AudioState::default(),
             audio_request: None,
             library: None,
             audio_page: AudioPage::default(),
-            wheel: crate::wheel::Wheel::default(),
+            wheel: crate::input::wheel::Wheel::default(),
             recent_views: View::ALL.to_vec(),
             picker: None,
             chain_view: ChainView::default(),
@@ -423,7 +428,7 @@ impl App {
             command_menu: None,
             command_history: CommandHistory::default(),
             recording: None,
-            sampling: crate::sampling::Sampling::default(),
+            sampling: crate::services::sampling::Sampling::default(),
             scope_image: None,
             scope_shown: true,
             cpu: LoadReadout::default(),
@@ -492,7 +497,7 @@ impl App {
         self.services.rate = rate;
         self.loader = Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT));
         self.file_playing = None;
-        self.services.scope = crate::scope::Scope::new(rate);
+        self.services.scope = crate::services::scope::Scope::new(rate);
         self.services.transport = Transport::Stopped;
         self.services.playhead = 0;
         self.services.places = [TrackPlace::default(); MAX_TRACKS];
@@ -672,7 +677,7 @@ impl App {
             .filter(|report| report.watched == track)
             .map_or([0.0; 2], |report| report.live.after_trim);
         for (held, level) in self.track_page.after_trim.iter_mut().zip(trimmed) {
-            held.update(crate::meter::to_db(level), seconds);
+            held.update(crate::services::meter::to_db(level), seconds);
         }
         while let Some((track, pitch)) = self.services.handle.note_pitch() {
             let row = (track, pitch.row.phrase, pitch.row.row);

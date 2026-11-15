@@ -129,7 +129,7 @@ enum KitsCommand {
 fn main() -> std::process::ExitCode {
     let cli = Cli::parse();
     let result = match cli.command {
-        Some(Command::ProbeKeys) => vt_tui::probe::run().map_err(|e| e.to_string()),
+        Some(Command::ProbeKeys) => vt_tui::offline::probe::run().map_err(|e| e.to_string()),
         Some(Command::RotoProbe { clear_own: true }) => vt_tui::roto::clear_own_setups(
             &mut std::io::stdout().lock(),
             &mut std::io::stdin().lock(),
@@ -142,7 +142,7 @@ fn main() -> std::process::ExitCode {
         .map_err(|e| e.to_string()),
         Some(Command::Kits {
             command: KitsCommand::ImportAbleton { library, out },
-        }) => vt_tui::ableton::run(library, out).map_err(|e| e.to_string()),
+        }) => vt_tui::offline::ableton::run(library, out).map_err(|e| e.to_string()),
         Some(Command::Bench {
             project,
             rate,
@@ -152,17 +152,17 @@ fn main() -> std::process::ExitCode {
             paced,
             device,
             buffer,
-        }) => vt_tui::bench::run(&vt_tui::bench::BenchRequest {
+        }) => vt_tui::offline::bench::run(&vt_tui::offline::bench::BenchRequest {
             project,
             rate,
             block,
             seconds,
             pace: if device {
-                vt_tui::bench::Pace::Device
+                vt_tui::offline::bench::Pace::Device
             } else if paced {
-                vt_tui::bench::Pace::Paced
+                vt_tui::offline::bench::Pace::Paced
             } else {
-                vt_tui::bench::Pace::FlatOut
+                vt_tui::offline::bench::Pace::FlatOut
             },
             tracks,
             buffer,
@@ -194,7 +194,7 @@ fn main() -> std::process::ExitCode {
             case,
             write_input,
             response,
-        }) => vt_tui::dsp_probe::run(&vt_tui::dsp_probe::ProbeRequest {
+        }) => vt_tui::offline::dsp_probe::run(&vt_tui::offline::dsp_probe::ProbeRequest {
             spec,
             out,
             case,
@@ -207,10 +207,10 @@ fn main() -> std::process::ExitCode {
             out,
             track,
             machine,
-        }) => vt_tui::track_notes::run(&vt_tui::track_notes::NotesRequest {
+        }) => vt_tui::offline::track_notes::run(&vt_tui::offline::track_notes::NotesRequest {
             project,
             out,
-            choice: vt_tui::track_notes::Choice { track, machine },
+            choice: vt_tui::offline::track_notes::Choice { track, machine },
         })
         .map_err(|e| e.to_string()),
         Some(Command::ConvertNudges { project }) => vt_model::convert::convert_project(&project)

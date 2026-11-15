@@ -10,11 +10,11 @@ use vt_model::steps::STEPS;
 use vt_roto::layout::{Slot, row_ends_cleanly};
 use vt_roto::live::{Feel, MAX_PAGES};
 use vt_roto::sysex::CONTROLS;
+use vt_tui::pages::track::{Control, DeviceSpec, Page};
 use vt_tui::roto::devices::{
     FAMILY_COLOURS, Family, every_kind_of_device, knob, live_device, placement, stored_setups,
 };
 use vt_tui::roto::layouts::{ALL, DeviceLayout, Setting, app_only, key, layout_of, resolve};
-use vt_tui::track_page::{Control, DeviceSpec, Page};
 
 /// One of each kind of device, with its track, its song and its layout.
 fn kinds() -> Vec<(Song, usize, Page, usize)> {

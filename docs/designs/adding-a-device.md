@@ -67,8 +67,8 @@ is shaped this way is in [device-interface.md](device-interface.md); the
    (`Mix` and `Gain` are knobs 7 and 8), and its `BY_EFFECT` row, or one layout for each type of an
    effect whose settings change with its type. The compiler asks for the row.
    vt-tui's `tests/all/roto_layouts.rs` checks each setting is placed once.
-7. **Only if it draws**, in `vt-tui/src/`: its picture in `kitty/slots.rs`, its panes on the FX
-   page in `views/track.rs`, and the zoom's in `views/track/zoom.rs`. These matches have a
+7. **Only if it draws**, in `vt-tui/src/`: its picture in `graphics/slots.rs`, its panes on the FX
+   page in `pages/track/draw.rs`, and the zoom's in `pages/track/draw/zoom.rs`. These matches have a
    catch-all, so nothing asks.
 8. **The guide**: `vt-tui/guides/track-fx.md`, with its name and every setting's. `guides.rs`'s
    `every_effect_its_types_and_its_settings_are_in_the_fx_page_guide` fails until they're there.
@@ -91,7 +91,7 @@ slot. One new Roto pin. A golden render of its own. The release tests.
 4. **`vt-engine/src/voice.rs`**: one `synths!` line, `Voice(Engine)`, and its `use`. The compiler
    asks for it, as `Synth::new` matches every voice.
 5. **The Roto**: its layout and `BY_VOICE` row in `roto/layouts.rs`. The compiler asks for the row.
-6. **`glyphs::machine`** (`vt-tui/src/glyphs.rs`), only if it's a drum. The catch-all gives it the
+6. **`glyphs::machine`** (`vt-tui/src/widgets/glyphs.rs`), only if it's a drum. The catch-all gives it the
    synth's icon.
 7. **The guide**: `vt-tui/guides/sounds.md`, with its name and every setting's.
    `every_machine_and_its_settings_are_in_the_sounds_guide` fails until they're there.
@@ -119,7 +119,7 @@ it a golden render if it has a character to keep, as `supersaw.rs` and `four_op.
    engine can hold that setting.
 5. **The Roto**: its `gen/` layout and `BY_FILL` row in `roto/layouts.rs`. The compiler asks for the
    row. vt-tui's `tests/all/roto_generators.rs` checks each setting is on one knob.
-6. **Its hint** under the shape panel, in `vt-tui/src/views/shape.rs`. The catch-all gives it
+6. **Its hint** under the shape panel, in `vt-tui/src/overlays/shape/draw.rs`. The catch-all gives it
    `~ swap the ends`.
 7. **The guides**: `vt-tui/guides/editing.md`, the shape panel's fills, and `track-gen.md`, the Gen
    page.
@@ -140,7 +140,7 @@ every fill writes on every column in `renders.txt`: write its lines with
    goes in `MOD_OWN_FIELDS` and the registry's `settings/mods.rs`.
 3. **Its running**, in `vt-engine/src/track_state/mods.rs`. The compiler asks for its arms there.
 4. **The Roto**: its layout and `BY_MOD` row in `roto/layouts.rs`. The compiler asks for the row.
-5. **The Mod page**, in `vt-tui/src/track_page/`: its fields' arms in `view.rs`'s `mod_view`, its
+5. **The Mod page**, in `vt-tui/src/pages/track/`: its fields' arms in `view.rs`'s `mod_view`, its
    lists in `pickers.rs`, and its picture in `pictures.rs`'s `mod_panels`, whose match the compiler
    asks for (`continue` for none).
 6. **The guide**: `vt-tui/guides/track-mod.md`.

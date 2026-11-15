@@ -8,10 +8,10 @@ use vt_model::macros::MacroTarget;
 use vt_model::settings::SettingId;
 use vt_tui::app::App;
 use vt_tui::input::mode::{Mode, View};
-use vt_tui::track_page::Control;
+use vt_tui::pages::track::Control;
 
 use crate::common::*;
-use vt_tui::kitty::PanelKey;
+use vt_tui::graphics::PanelKey;
 
 /// On `Cut`, the Filter's first setting.
 fn on_cut() -> (App, vt_engine::link::Realtime) {
@@ -232,7 +232,7 @@ fn gm_bends_a_mappings_response_with_curve_and_s_as_the_shape_panel_does() {
 
 #[test]
 fn the_mapping_views_response_is_sent_once_and_again_only_when_it_bends() {
-    use vt_tui::kitty::Graphics;
+    use vt_tui::graphics::Graphics;
     let (mut app, _realtime) = on_cut();
     let mut graphics = Graphics::new();
     // The response is 13 by 5 characters; the Sound page's own pictures are other sizes.
@@ -306,7 +306,7 @@ fn the_page_shows_where_the_macro_puts_a_setting_and_its_range_on_its_bar() {
     let backend = ratatui::backend::TestBackend::new(163, 2);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::status::draw(frame, frame.area(), &app))
+        .draw(|frame| vt_tui::screen::status::draw(frame, frame.area(), &app))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let status: String = (0..163).map(|x| buffer[(x, 0)].symbol()).collect();
@@ -319,7 +319,7 @@ fn the_macros_band_turns_a_macro_and_colon_macro_names_it() {
     press(&mut app, "M1");
     // The Gen page, its first band the macros.
     press(&mut app, "LLL");
-    assert_eq!(app.track_page.page, vt_tui::track_page::Page::Gen);
+    assert_eq!(app.track_page.page, vt_tui::pages::track::Page::Gen);
     press(&mut app, "gg0");
     assert_eq!(app.track_control(), Control::Macro(0));
     press(&mut app, "iFF");
@@ -437,7 +437,7 @@ fn m_maps_a_generators_hits_and_turning_the_macro_writes_the_column_again() {
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     let view = app.mapping.clone().unwrap();
     terminal
-        .draw(|frame| vt_tui::views::mapping::draw(frame, frame.area(), &app, &view))
+        .draw(|frame| vt_tui::overlays::mapping::draw::draw(frame, frame.area(), &app, &view))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let text: String = (0..40)
@@ -541,7 +541,7 @@ fn jump_back(app: &mut App) {
 
 #[test]
 fn gd_on_a_setting_a_macro_holds_goes_to_its_mapping_on_the_gen_page_and_c_o_comes_back() {
-    use vt_tui::track_page::Page;
+    use vt_tui::pages::track::Page;
     let (mut app, _realtime) = on_cut();
     // Res on macro 1, then Cut, its second mapping.
     press(&mut app, "jM1kM1");
@@ -589,7 +589,7 @@ fn gd_on_a_generators_setting_goes_up_the_gen_page_to_its_macro_as_a_jump() {
 
 #[test]
 fn gd_on_a_setting_no_macro_holds_says_what_it_opens() {
-    use vt_tui::track_page::Page;
+    use vt_tui::pages::track::Page;
     let (mut app, _realtime) = on_cut();
     press(&mut app, "gd");
     assert_eq!(app.track_page.page, Page::Sound, "it stays");

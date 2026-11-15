@@ -11,9 +11,9 @@ use base64::engine::general_purpose::STANDARD;
 use ratatui::buffer::Buffer;
 use ratatui::style::{Color, Modifier};
 
-use crate::glyphs;
-use crate::kitty::{PLACEHOLDER, POSITIONS};
-use crate::theme;
+use crate::graphics::{PLACEHOLDER, POSITIONS};
+use crate::widgets::glyphs;
+use crate::widgets::theme;
 
 /// A cell's size in the picture, in pixels, and the size of its text.
 const CELL_WIDTH: f32 = 9.0;
@@ -453,7 +453,7 @@ mod tests {
     use ratatui::layout::Rect;
     use ratatui::style::Style;
 
-    use crate::kitty::{Image, id_color, placeholder_lines, transmit};
+    use crate::graphics::{Image, id_color, placeholder_lines, transmit};
 
     #[test]
     fn a_screen_becomes_an_svg_with_its_text_and_colours() {
@@ -483,7 +483,7 @@ mod tests {
         let plain = to_svg(&buffer, &HashMap::new());
         assert!(!plain.contains("<defs>"), "{plain}");
 
-        let play = crate::glyphs::PLAY;
+        let play = crate::widgets::glyphs::PLAY;
         buffer.set_string(4, 1, play.to_string(), Style::new().fg(theme::GREEN));
         buffer.set_string(6, 1, play.to_string(), Style::new().fg(theme::GREEN));
         let svg = to_svg(&buffer, &HashMap::new());
@@ -505,7 +505,7 @@ mod tests {
     #[test]
     fn a_toggle_is_drawn_across_its_two_cells_as_the_terminals_draw_it() {
         let mut buffer = Buffer::empty(Rect::new(0, 0, 10, 1));
-        let toggle = crate::views::widgets::toggle::span(true);
+        let toggle = crate::widgets::toggle::span(true);
         buffer.set_span(2, 0, &toggle, 2);
         // A switch with no plain space after it, as at a line's end, keeps to its cell.
         buffer.set_string(9, 0, glyphs::SWITCH_OFF.to_string(), Style::new());
@@ -531,7 +531,7 @@ mod tests {
     /// adding one.
     #[test]
     fn every_symbol_the_program_draws_has_a_path() {
-        let glyphs = include_str!("glyphs.rs");
+        let glyphs = include_str!("widgets/glyphs.rs");
         let mut rest = glyphs;
         while let Some(at) = rest.find("\\u{") {
             rest = &rest[at + 3..];
@@ -596,7 +596,7 @@ mod tests {
 
     #[test]
     fn an_image_the_program_places_is_put_in_where_it_was_last_placed() {
-        use crate::kitty::{Picture, Placement, place_at, store, unplace};
+        use crate::graphics::{Picture, Placement, place_at, store, unplace};
 
         let mut png = Picture::new(4, 6, vec![[255; 3]]);
         png.pixels.fill(1);

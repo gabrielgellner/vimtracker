@@ -24,7 +24,7 @@ use vt_tui::input::keys::parse_sequence;
 use vt_tui::input::mode::{Mode, View};
 
 use crate::common::*;
-use vt_tui::kitty::{PanelIds, PanelKey};
+use vt_tui::graphics::{PanelIds, PanelKey};
 
 /// Go to a track that's shown with `W` or `B`, as many times as there are shown tracks between,
 /// as they step over the folded ones.
@@ -39,7 +39,7 @@ fn to_track(app: &mut App, track: usize) {
 
 #[test]
 fn a_fixed_tracks_pages_only_show_what_it_has() {
-    use vt_tui::track_page::Control;
+    use vt_tui::pages::track::Control;
     let (mut app, _rt) = app();
     // Each fixed track's Output, with its settings where a sound track's are, and the keys that
     // reach each from the top: a return's, a group's and the master's.
@@ -63,12 +63,12 @@ fn a_fixed_tracks_pages_only_show_what_it_has() {
     let pages = [
         (
             return_a,
-            format!("{} Return A", vt_tui::glyphs::RETURN),
+            format!("{} Return A", vt_tui::widgets::glyphs::RETURN),
             vec![(Control::Trim, "gg0"), (Control::Level, "j"), (pan, "j")],
         ),
         (
             group,
-            format!("{} Group 1", vt_tui::glyphs::GROUP),
+            format!("{} Group 1", vt_tui::widgets::glyphs::GROUP),
             vec![
                 (Control::Trim, "gg0"),
                 (Control::Level, "j"),
@@ -79,7 +79,7 @@ fn a_fixed_tracks_pages_only_show_what_it_has() {
         ),
         (
             master,
-            format!("{} Master", vt_tui::glyphs::MASTER),
+            format!("{} Master", vt_tui::widgets::glyphs::MASTER),
             vec![
                 (Control::Trim, "gg0"),
                 (Control::Level, "j"),
@@ -192,7 +192,7 @@ fn typing_in_the_machine_list_finds_a_voice_under_any_kind() {
 
 #[test]
 fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app();
     press(&mut app, " 5");
     assert_eq!(column_name(&app), "Machine");
@@ -206,9 +206,9 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     // The sampler at the top, on its own, and every voice folded under its kind.
     let picker = app.picker.as_ref().unwrap();
     let top: Vec<_> = picker.shown().map(|item| item.pick.clone()).collect();
-    let sampler = vt_tui::input::picker::Pick::Param {
+    let sampler = vt_tui::overlays::picker::Pick::Param {
         track: 0,
-        control: vt_tui::track_page::Control::Machine,
+        control: vt_tui::pages::track::Control::Machine,
         value: 0,
     };
     assert_eq!(top, [sampler]);
@@ -280,7 +280,7 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
 
 #[test]
 fn each_voice_keeps_its_own_settings() {
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app();
     let names = |app: &App| -> Vec<String> {
         // The Machine device's first column, its rows apart by a blank line.
@@ -323,7 +323,7 @@ fn each_voice_keeps_its_own_settings() {
 
 #[test]
 fn six_op_patch_counts_patches_and_k_lists_them_by_name() {
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app();
     let patch = |app: &App| machine_value(app, 0);
     choose_machine(&mut app, "6-op");
@@ -364,7 +364,7 @@ fn six_op_patch_counts_patches_and_k_lists_them_by_name() {
 
 #[test]
 fn the_sound_page_sets_a_synths_accent() {
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app();
     let accent = |app: &App| machine_value(app, 3);
     choose_machine(&mut app, "Kick");
@@ -399,7 +399,7 @@ fn choosing_a_sample_goes_back_to_playing_samples() {
 
 #[test]
 fn bars_show_where_a_value_is() {
-    use vt_tui::views::widgets::bar::{centre_bar, level_bar};
+    use vt_tui::widgets::bar::{centre_bar, level_bar};
     assert_eq!(level_bar(0x00, 9), "         ");
     assert_eq!(level_bar(0x01, 9), "▏        ");
     assert_eq!(level_bar(0x40, 9), "██▎      ");
@@ -418,8 +418,8 @@ fn bars_show_where_a_value_is() {
 #[test]
 fn a_moving_bar_follows_what_plays_and_marks_what_is_set() {
     use ratatui::style::Style;
-    use vt_tui::theme;
-    use vt_tui::views::widgets::bar::ValueBar;
+    use vt_tui::widgets::bar::ValueBar;
+    use vt_tui::widgets::theme;
     let bar_spans =
         |set, live, centred| ValueBar::new(set, 9).playing(live).centred(centred).spans();
     let text = |spans: &[ratatui::text::Span]| {
@@ -478,8 +478,8 @@ fn a_moving_bar_follows_what_plays_and_marks_what_is_set() {
 /// does wherever the setting is, with no mark coming and going as a thin line at the edge (#421).
 #[test]
 fn a_bar_moving_about_its_setting_shows_no_mark() {
-    use vt_tui::theme;
-    use vt_tui::views::widgets::bar::{ValueBar, centre_bar, level_bar};
+    use vt_tui::widgets::bar::{ValueBar, centre_bar, level_bar};
+    use vt_tui::widgets::theme;
     for centred in [false, true] {
         for set in 0..=u8::MAX {
             for live in set.saturating_sub(3)..=set.saturating_add(3) {
@@ -513,7 +513,7 @@ fn a_bar_moving_about_its_setting_shows_no_mark() {
 
 #[test]
 fn a_bar_moves_at_the_same_pace_through_the_mark_as_either_side_of_it() {
-    use vt_tui::views::widgets::bar::{ValueBar, level_bar};
+    use vt_tui::widgets::bar::{ValueBar, level_bar};
     let text = |set, live| -> String {
         ValueBar::new(set, 9)
             .playing(live)
@@ -902,7 +902,7 @@ fn the_track_page_sets_the_filters_type_and_drive() {
 #[test]
 fn the_track_page_sets_the_filters_mode_for_its_type() {
     use vt_model::song::FilterMode;
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = on_track_page();
     let track = |app: &App| app.song().tracks[0].clone();
     // The mode is in the Filter's title, after its type.
@@ -1023,7 +1023,7 @@ fn the_track_page_sets_pitch_and_a_choke_group() {
 
 #[test]
 fn the_track_page_moves_every_notes_velocity_from_under_choke() {
-    use vt_tui::views::status::value_shown;
+    use vt_tui::screen::status::value_shown;
     let (mut app, _realtime) = on_track_page();
     let delta = |app: &App| app.song().tracks[0].velocity_delta;
     let line = from_name(&app, "Velocity");
@@ -1045,7 +1045,7 @@ fn the_track_page_moves_every_notes_velocity_from_under_choke() {
 fn the_track_page_quantises_the_nudges_from_under_velocity_and_leaves_them_written() {
     use vt_model::song::Phrase;
     use vt_model::step::Step;
-    use vt_tui::views::status::value_shown;
+    use vt_tui::screen::status::value_shown;
     let mut song = Song::new(1);
     let steps: Vec<Step> = ["C-3 40 -3", "C-3 40 +B", "C-3 40", "C-3 40 -B"]
         .iter()
@@ -1083,7 +1083,7 @@ fn the_track_page_quantises_the_nudges_from_under_velocity_and_leaves_them_writt
 
 #[test]
 fn the_track_page_sets_how_long_notes_last() {
-    use vt_tui::views::status::value_shown;
+    use vt_tui::screen::status::value_shown;
     let (mut app, _realtime) = on_track_page();
     let gate = |app: &App| app.song().tracks[0].gate_length;
     let line = |app: &App| from_name(app, "Gate");
@@ -1140,8 +1140,8 @@ fn the_track_page_sets_how_long_notes_last() {
 
 #[test]
 fn the_sample_row_lists_the_bank_steps_through_it_and_clears() {
-    use vt_tui::track_page::Control;
-    use vt_tui::views::status::value_shown;
+    use vt_tui::pages::track::Control;
+    use vt_tui::screen::status::value_shown;
     let (mut app, _realtime) = on_track_page();
     let track = |app: &App| app.song().tracks[0].clone();
     let kit = kit_file();
@@ -1331,7 +1331,7 @@ fn the_track_page_sets_envelopes() {
 
 #[test]
 fn the_track_page_draws_each_envelopes_shape() {
-    use vt_tui::kitty::{Graphics, id_color};
+    use vt_tui::graphics::{Graphics, id_color};
     let (mut app, _realtime) = on_track_page();
     let mut graphics = Graphics::new();
     // The page as the author's screen has room for it, beside the meter.
@@ -1542,7 +1542,7 @@ fn a_track_following_the_project_shows_its_groove_dimmed_and_x_returns_to_that()
     };
     // The cursor is elsewhere, so the colour is the setting's own.
     assert_eq!(app.song().tracks[0].groove, None);
-    let dim = vt_tui::theme::OVERLAY2;
+    let dim = vt_tui::widgets::theme::OVERLAY2;
     assert_eq!(groove_cell(&app), ("Swing 60".to_owned(), dim));
 
     // It's the track's own once set, and a nudge starts from what it was playing.
@@ -1621,7 +1621,7 @@ fn the_track_page_shows_its_settings_in_columns() {
     // An envelope's times down its left and its levels down its right.
     let (top, left) = device_at(&lines, "Mod 1");
     let row = |at: usize| from_column(&lines[top + at], left);
-    let on = vt_tui::glyphs::SWITCH_ON.to_string();
+    let on = vt_tui::widgets::glyphs::SWITCH_ON.to_string();
     assert!(row(2).starts_with("│  Attack    1 ms       Sustain   100%"));
     assert!(row(4).starts_with("│  Decay     0 ms       Depth     --"));
     assert!(row(6).starts_with(&format!("│  Release   50 ms      Reset     {on}")));
@@ -1696,7 +1696,7 @@ fn the_track_page_shows_its_settings_in_columns() {
 
 #[test]
 fn a_tracks_groove_on_the_page_is_chosen_from_a_list() {
-    use vt_tui::track_page::Control;
+    use vt_tui::pages::track::Control;
     let (mut app, _realtime) = on_track_page();
     let groove = |name: &str| GrooveId::named(name);
     press(&mut app, "2}j$h");
@@ -1719,7 +1719,7 @@ fn a_tracks_groove_on_the_page_is_chosen_from_a_list() {
 
 #[test]
 fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
-    use vt_tui::track_page::Page;
+    use vt_tui::pages::track::Page;
     let (mut app, _realtime) = on_track_page();
     assert_eq!(app.track_page.page, Page::Sound);
     press(&mut app, "H");
@@ -1763,7 +1763,7 @@ fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
 fn the_sample_setting_chooses_from_the_bank_and_x_clears_it() {
     let (mut app, _realtime) = on_track_page();
     press(&mut app, "ggl");
-    assert_eq!(app.track_control(), vt_tui::track_page::Control::Sample);
+    assert_eq!(app.track_control(), vt_tui::pages::track::Control::Sample);
     // With nothing in the bank, K opens the explorer to add a file.
     press(&mut app, "K");
     assert_ne!(app.modes.mode, Mode::Normal);
@@ -1845,7 +1845,7 @@ fn envelopes_drawn_as_images_leave_placeholders_with_their_positions() {
 
 #[test]
 fn a_changed_envelope_image_gets_a_new_id_and_moving_the_cursor_sends_nothing() {
-    use vt_tui::kitty::Graphics;
+    use vt_tui::graphics::Graphics;
     let (mut app, _realtime) = app();
     let mut graphics = Graphics::new();
     let sync = |app: &mut App, graphics: &mut Graphics| {
@@ -1913,8 +1913,8 @@ fn an_lfos_shape_is_a_word_in_its_grid_with_no_glyph_beside_it() {
 
 #[test]
 fn the_filter_curve_follows_its_settings_and_the_cursor() {
-    use vt_tui::kitty::Graphics;
-    use vt_tui::views::status::column_name;
+    use vt_tui::graphics::Graphics;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app();
     let mut graphics = Graphics::new();
     let sync = |app: &mut App, graphics: &mut Graphics| {
@@ -1956,7 +1956,7 @@ fn the_filter_curve_follows_its_settings_and_the_cursor() {
 #[test]
 fn the_filter_curve_moves_with_what_plays() {
     use vt_engine::track_state::LiveValues;
-    use vt_tui::kitty::Graphics;
+    use vt_tui::graphics::Graphics;
     let (mut app, _realtime) = app();
     let mut graphics = Graphics::new();
     let sync = |app: &mut App, graphics: &mut Graphics| {
@@ -2036,7 +2036,7 @@ fn jump_labels(app: &App) -> Vec<String> {
 
 #[test]
 fn a_jump_labels_matching_settings_nearest_first_and_lands_on_the_value() {
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app();
     press(&mut app, " 5/");
     assert_eq!(app.modes.mode, Mode::Jump);
@@ -2090,7 +2090,7 @@ fn a_jumps_label_is_never_the_next_letter_and_stays_as_you_type() {
 
 #[test]
 fn a_jump_finds_each_row_of_a_repeated_name_and_can_be_left() {
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app();
     // Every slot's.
     press(&mut app, " 5L/dep");
@@ -2123,14 +2123,14 @@ fn a_jump_finds_each_row_of_a_repeated_name_and_can_be_left() {
     assert_eq!(column_name(&app), "Depth");
     assert_eq!(
         app.track_control(),
-        vt_tui::track_page::Control::Mod(0, vt_model::modulation::ModField::Depth)
+        vt_tui::pages::track::Control::Mod(0, vt_model::modulation::ModField::Depth)
     );
 }
 
 #[test]
 fn ctrl_o_comes_back_from_a_jump_to_the_setting_it_left() {
-    use vt_tui::track_page::Page;
-    use vt_tui::views::status::column_name;
+    use vt_tui::pages::track::Page;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app();
     press(&mut app, " 5jj");
     let start = (app.track_page.row, app.track_page.field);
@@ -2172,12 +2172,12 @@ fn a_jumps_labels_cover_the_values_and_the_search_shows_below() {
     let y = (0..40)
         .find(|y| (3..6).map(|x| buffer[(x, *y)].symbol()).collect::<String>() == "Res")
         .unwrap();
-    assert_eq!(buffer[(13, y)].bg, vt_tui::theme::PEACH);
+    assert_eq!(buffer[(13, y)].bg, vt_tui::widgets::theme::PEACH);
 
     let backend = ratatui::backend::TestBackend::new(80, 2);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::status::draw(frame, frame.area(), &app))
+        .draw(|frame| vt_tui::screen::status::draw(frame, frame.area(), &app))
         .unwrap();
     let last: String = (0..4)
         .map(|x| terminal.backend().buffer()[(x, 1)].symbol().to_owned())
@@ -2188,7 +2188,7 @@ fn a_jumps_labels_cover_the_values_and_the_search_shows_below() {
 #[test]
 fn a_jumps_labels_also_follow_the_names_being_searched() {
     use vt_model::modulation::ModField;
-    use vt_tui::track_page::Control;
+    use vt_tui::pages::track::Control;
     let (mut app, _realtime) = app();
     press(&mut app, " 5/cu");
     let line = from_name;
@@ -2234,8 +2234,8 @@ fn a_jumps_labels_also_follow_the_names_being_searched() {
 
 #[test]
 fn a_jump_works_on_the_mixer_and_stays_on_the_cursors_track() {
-    use vt_tui::track_page::Control;
-    use vt_tui::views::status::column_name;
+    use vt_tui::pages::track::Control;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app();
     press(&mut app, " 4l");
     assert_eq!(app.modes.view, View::Mixer);
@@ -2261,10 +2261,10 @@ fn a_jump_works_on_the_mixer_and_stays_on_the_cursors_track() {
     let y = (0..24)
         .find(|y| line(*y).starts_with(&format!("S{solo}lo")))
         .unwrap();
-    assert_eq!(buffer[(1, y)].bg, vt_tui::theme::PEACH);
+    assert_eq!(buffer[(1, y)].bg, vt_tui::widgets::theme::PEACH);
     assert_eq!(buffer[(7, y)].symbol(), "-", "track 1");
     assert_eq!(buffer[(14, y)].symbol(), solo.to_string(), "track 2");
-    assert_eq!(buffer[(14, y)].bg, vt_tui::theme::PEACH);
+    assert_eq!(buffer[(14, y)].bg, vt_tui::widgets::theme::PEACH);
 
     press(&mut app, &solo.to_string());
     assert_eq!(app.modes.mode, Mode::Normal);
@@ -2289,7 +2289,7 @@ fn slash_only_jumps_on_the_parameter_pages() {
 #[test]
 fn the_sound_page_stops_on_a_values_fine_digits() {
     use vt_model::settings::SettingId;
-    use vt_tui::views::status::{column_name, value_shown};
+    use vt_tui::screen::status::{column_name, value_shown};
     let (mut app, _realtime) = on_track_page();
     assert_eq!(column_name(&app), "Cut");
     let cut = |app: &App| {
@@ -2334,7 +2334,7 @@ fn the_sound_page_stops_on_a_values_fine_digits() {
 
 #[test]
 fn semicolon_on_the_track_page_plays_the_sound_from_the_keyboard() {
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, mut realtime) = app();
     choose_machine(&mut app, "VA");
     let before = app.song().clone();
@@ -2358,7 +2358,10 @@ fn semicolon_on_the_track_page_plays_the_sound_from_the_keyboard() {
         .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), &app, View::Track))
         .unwrap();
     let corner = &terminal.backend().buffer()[(0, 0)];
-    assert_eq!((corner.symbol(), corner.fg), ("╭", vt_tui::theme::YELLOW));
+    assert_eq!(
+        (corner.symbol(), corner.fg),
+        ("╭", vt_tui::widgets::theme::YELLOW)
+    );
     press(&mut app, ";");
     assert_eq!(app.modes.mode, Mode::Normal);
     // Leaving the track page leaves the keyboard too.
@@ -2371,7 +2374,7 @@ fn semicolon_on_the_track_page_plays_the_sound_from_the_keyboard() {
 
 #[test]
 fn j_and_k_come_back_to_the_column_a_shorter_row_moved_them_from() {
-    use vt_tui::track_page::Control;
+    use vt_tui::pages::track::Control;
     let (mut app, _rt) = app();
     press(&mut app, " 5LL");
     press(&mut app, "K");
@@ -2438,8 +2441,8 @@ fn app_with_samples() -> (App, Realtime) {
 
 #[test]
 fn a_samplers_thumbnail_is_sent_once_and_again_only_for_a_change() {
-    use vt_tui::kitty::Graphics;
-    use vt_tui::views::status::column_name;
+    use vt_tui::graphics::Graphics;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app_with_samples();
     let mut graphics = Graphics::new();
     let sync = |app: &mut App, graphics: &mut Graphics| {
@@ -2497,7 +2500,7 @@ fn a_samplers_thumbnail_is_sent_once_and_again_only_for_a_change() {
 #[test]
 fn the_filter_curve_and_the_envelopes_are_smooth_at_their_sizes() {
     let (mut app, _realtime) = app();
-    let mut graphics = vt_tui::kitty::Graphics::new();
+    let mut graphics = vt_tui::graphics::Graphics::new();
     press(&mut app, " 5");
     let mut out = Vec::new();
     app.send_pictures(&mut graphics, &mut out).unwrap();
@@ -2529,8 +2532,8 @@ fn the_filter_curve_and_the_envelopes_are_smooth_at_their_sizes() {
 #[test]
 fn a_tracks_speed_on_the_page_is_chosen_from_a_list() {
     use vt_model::speed::Speed;
-    use vt_tui::track_page::Control;
-    use vt_tui::views::status::value_shown;
+    use vt_tui::pages::track::Control;
+    use vt_tui::screen::status::value_shown;
     let (mut app, _realtime) = on_track_page();
     let speed = |app: &App| app.song().tracks[0].speed;
     let line = |app: &App| from_name(app, "Speed");
@@ -2570,8 +2573,8 @@ fn a_tracks_speed_on_the_page_is_chosen_from_a_list() {
 
 #[test]
 fn a_tracks_reset_on_the_page_is_typed_in_steps_or_bars() {
-    use vt_tui::track_page::Control;
-    use vt_tui::views::status::value_shown;
+    use vt_tui::pages::track::Control;
+    use vt_tui::screen::status::value_shown;
     let (mut app, _realtime) = on_track_page();
     let reset = |app: &App| app.song().tracks[0].reset;
     let line = |app: &App| from_name(app, "Reset");
@@ -2639,7 +2642,7 @@ fn a_tracks_reset_on_the_page_is_typed_in_steps_or_bars() {
 #[test]
 fn the_mod_page_sets_the_accumulator_and_says_what_each_setting_does() {
     use vt_model::accumulator::{Accumulation, AtLimit, Moves, Reset};
-    use vt_tui::views::status::{column_name, value_shown};
+    use vt_tui::screen::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
     // Down the left column past the envelopes, onto its first row, as its title has nothing.
     press(&mut app, " 5L3}");
@@ -2765,8 +2768,8 @@ fn a_return_has_no_accumulator() {
 #[test]
 fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio};
-    use vt_tui::views::status::{column_name, value_shown};
-    use vt_tui::views::widgets::toggle;
+    use vt_tui::screen::status::{column_name, value_shown};
+    use vt_tui::widgets::toggle;
     let (mut app, _realtime) = app();
     // Across to the LFOs and down past them, onto its first row, as its title has nothing.
     press(&mut app, " 5L$l3}");
@@ -2916,9 +2919,9 @@ fn a_return_has_no_arpeggio() {
 #[test]
 fn two_state_settings_are_toggles_on_the_fx_and_mod_pages_and_nothing_moves() {
     use vt_model::insert::Insert;
-    use vt_tui::glyphs::{SWITCH_OFF, SWITCH_ON};
-    use vt_tui::theme;
-    use vt_tui::track_page::Control;
+    use vt_tui::pages::track::Control;
+    use vt_tui::widgets::glyphs::{SWITCH_OFF, SWITCH_ON};
+    use vt_tui::widgets::theme;
     let (mut app, _realtime) = on_fx_page();
     four_devices(&mut app);
     let text = fx_page_text(&app).join("\n");
@@ -3000,8 +3003,8 @@ fn two_state_settings_are_toggles_on_the_fx_and_mod_pages_and_nothing_moves() {
 #[test]
 fn the_track_page_sets_how_long_a_tie_glides() {
     use vt_model::settings::glide_value;
-    use vt_tui::track_page::Control;
-    use vt_tui::views::status::value_shown;
+    use vt_tui::pages::track::Control;
+    use vt_tui::screen::status::value_shown;
     let (mut app, _realtime) = on_track_page();
     let glide = |app: &App| app.song().tracks[0].glide;
     let line = |app: &App| from_name(app, "Glide");
@@ -3061,7 +3064,7 @@ fn the_track_page_sets_how_long_a_tie_glides() {
 #[test]
 fn the_sound_page_sets_a_samplers_start_length_and_play() {
     use vt_model::settings::PLAY_CHOICES;
-    use vt_tui::views::status::value_shown;
+    use vt_tui::screen::status::value_shown;
     let (mut app, _realtime) = on_track_page();
     let setting = |app: &App, id| app.song().tracks[0].setting(id);
     // In the Machine above, beside the slice.
@@ -3179,8 +3182,8 @@ fn a_groups_page_lists_its_tracks_with_their_mutes_and_solos() {
         tracks(&app),
         [
             "02".to_owned(),
-            glyph(vt_tui::glyphs::MUTE),
-            format!("04 {}", vt_tui::glyphs::SOLO)
+            glyph(vt_tui::widgets::glyphs::MUTE),
+            format!("04 {}", vt_tui::widgets::glyphs::SOLO)
         ]
     );
     app.services.levels[2].mute = false;
@@ -3290,7 +3293,7 @@ fn a_returns_sends_in_lists_what_sends_to_it_and_follows_the_song() {
 fn a_groups_icon_and_its_tracks_group_are_in_its_colour() {
     let (mut app, _realtime) = on_track_page();
     command(&mut app, "group 2");
-    let color = vt_tui::theme::group(2);
+    let color = vt_tui::widgets::theme::group(2);
     let cell_color = |app: &App, text: &str| {
         let backend = ratatui::backend::TestBackend::new(120, 24);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
@@ -3312,14 +3315,14 @@ fn a_groups_icon_and_its_tracks_group_are_in_its_colour() {
     assert_eq!(cell_color(&app, "G2"), color, "the track's Group");
     let at = app.song().fixed_track(TrackKind::Group(2)).unwrap();
     to_track(&mut app, at);
-    let icon = vt_tui::glyphs::GROUP.to_string();
+    let icon = vt_tui::widgets::glyphs::GROUP.to_string();
     assert_eq!(cell_color(&app, &icon), color, "the group's icon");
 }
 
 #[test]
 fn the_trim_sits_above_the_level_and_reads_in_db() {
-    use vt_tui::track_page::Control;
-    use vt_tui::views::status::value_shown;
+    use vt_tui::pages::track::Control;
+    use vt_tui::screen::status::value_shown;
     let (mut app, _realtime) = on_track_page();
     let trim = |app: &App| app.song().tracks[0].trim;
     // At the top of the Output, under the Filter.
@@ -3416,7 +3419,7 @@ fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
     use vt_model::insert::{INSERTS, Insert};
     use vt_model::modulation::ModField;
     use vt_model::step::FxCommand;
-    use vt_tui::track_page::Control;
+    use vt_tui::pages::track::Control;
     let (mut app, _realtime) = app();
     // A delay in the last slot.
     press(&mut app, " 5LL");
@@ -3486,7 +3489,7 @@ fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
 fn a_bar_swept_by_hand_follows_it_with_no_mark_flickering() {
     let (mut app, mut realtime) = app();
     press(&mut app, " 5}j");
-    assert_eq!(vt_tui::views::status::column_name(&app), "Cut");
+    assert_eq!(vt_tui::screen::status::column_name(&app), "Cut");
     let mut out = vec![0.0; 1600 * 2];
     realtime.process(&mut out);
     app.tick();
@@ -3501,7 +3504,7 @@ fn a_bar_swept_by_hand_follows_it_with_no_mark_flickering() {
         press(&mut app, "6-");
         app.tick();
         let cutoff = app.song().tracks[0].cutoff;
-        let plain = format!("▕{}▏", vt_tui::views::widgets::bar::level_bar(cutoff, 9));
+        let plain = format!("▕{}▏", vt_tui::widgets::bar::level_bar(cutoff, 9));
         assert_eq!(bar(&app), plain, "frame {frame}, Cut {cutoff:02X}");
         realtime.process(&mut out);
     }
@@ -3510,7 +3513,7 @@ fn a_bar_swept_by_hand_follows_it_with_no_mark_flickering() {
 #[test]
 fn each_page_keeps_its_own_cursor_and_starts_on_its_first_setting() {
     use vt_model::insert::Insert;
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app_with_distort();
     press(&mut app, " 5L$");
     assert_eq!(column_name(&app), "Dest");

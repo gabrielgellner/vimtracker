@@ -14,9 +14,9 @@ use vt_model::settings::SettingId;
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
 use vt_tui::app::App;
-use vt_tui::audio_page::AudioRow;
 use vt_tui::input::mode::{Mode, View};
-use vt_tui::wheel::{WheelSetting, feel, tick_size};
+use vt_tui::input::wheel::{WheelSetting, feel, tick_size};
+use vt_tui::pages::audio::AudioRow;
 
 use crate::common::*;
 
@@ -80,7 +80,9 @@ fn the_wheel_is_off_until_turned_on_on_the_audio_page_and_kept_for_the_machine()
     let (mut app, _realtime) = app_with(&[NOTE]);
     app.wheel.setting.on = false;
     let folder = folder();
-    let path = folder.join("vimtracker").join(vt_tui::wheel::SETTING_FILE);
+    let path = folder
+        .join("vimtracker")
+        .join(vt_tui::input::wheel::SETTING_FILE);
     app.wheel.setting_path = Some(path.clone());
     assert!(!app.wants_mouse(), "nothing is captured as it starts");
     scroll(&mut app, true, Instant::now());
@@ -190,7 +192,9 @@ fn the_value_follows_the_fingers_under_natural_scrolling_unless_reversed() {
     );
     // Reversed, on the audio page's row below the wheel's, and kept for the machine.
     let folder = folder();
-    let path = folder.join("vimtracker").join(vt_tui::wheel::SETTING_FILE);
+    let path = folder
+        .join("vimtracker")
+        .join(vt_tui::input::wheel::SETTING_FILE);
     app.wheel.setting_path = Some(path.clone());
     press(&mut app, " 9Ljjjjj");
     assert_eq!(app.audio_row_here(), AudioRow::WheelDirection);
@@ -462,7 +466,7 @@ fn a_tick_on_the_tempo_moves_its_fine_part() {
     press(&mut app, " 9ggjjj");
     assert_eq!(
         app.project_page.control(app.song()),
-        vt_tui::project_page::ProjectControl::Bpm
+        vt_tui::pages::project::ProjectControl::Bpm
     );
     let end = slow_ticks(&mut app, true, 3, Instant::now());
     assert_eq!(app.song().millibpm, 120_300, "a tenth of a BPM a slow tick");

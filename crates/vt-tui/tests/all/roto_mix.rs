@@ -17,12 +17,12 @@ use vt_roto::live::KNOB_TOP;
 use vt_roto::serial::Mode;
 use vt_roto::sysex::{AllTracks, FromRoto, KnobMode, SwitchMode, ToRoto};
 use vt_tui::app::App;
+use vt_tui::pages::track::Control;
 use vt_tui::roto::RotoMode;
 use vt_tui::roto::devices::knob;
 use vt_tui::roto::mix::{
     LEVEL_NOTCH, METER_RED_DB, METER_YELLOW_DB, level_at, level_position, meter_level,
 };
-use vt_tui::track_page::Control;
 
 use crate::common::{app_for, block, press, settle, tick_until, tick_until_app, values_shown};
 

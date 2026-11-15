@@ -12,7 +12,7 @@ use vt_model::song::{Phrase, Song};
 use vt_model::speed::Speed;
 use vt_model::step::Step;
 use vt_tui::app::App;
-use vt_tui::track_page::Page;
+use vt_tui::pages::track::Page;
 
 use crate::common::*;
 
@@ -39,7 +39,7 @@ fn drawn(app: &App) -> String {
     let backend = ratatui::backend::TestBackend::new(60, 18);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::shape::draw(frame, frame.area(), app, &panel))
+        .draw(|frame| vt_tui::overlays::shape::draw::draw(frame, frame.area(), app, &panel))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..18)

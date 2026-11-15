@@ -111,7 +111,10 @@ fn overview_start(headings: &str) -> usize {
 #[test]
 fn a_group_and_its_tracks_are_named_in_its_colour_where_tracks_are_listed() {
     let (mut app, _realtime) = grouped();
-    let (blue, peach) = (vt_tui::theme::group(1), vt_tui::theme::group(2));
+    let (blue, peach) = (
+        vt_tui::widgets::theme::group(1),
+        vt_tui::widgets::theme::group(2),
+    );
     // The song view's columns.
     press(&mut app, " 1");
     let song = drawn(&app, View::Song);
@@ -144,7 +147,7 @@ fn a_group_and_its_tracks_are_named_in_its_colour_where_tracks_are_listed() {
 
 #[test]
 fn z_a_folds_a_group_into_its_column_in_the_song_view_and_the_cursor_steps_over_it() {
-    use vt_tui::glyphs::{FOLDED, ICON_SPACE};
+    use vt_tui::widgets::glyphs::{FOLDED, ICON_SPACE};
     let (mut app, _realtime) = grouped();
     press(&mut app, " 1");
     let heading = |app: &App| song_text(app)[2].clone();
@@ -214,7 +217,7 @@ fn z_a_folds_a_group_into_its_column_in_the_song_view_and_the_cursor_steps_over_
 
 #[test]
 fn the_mixer_folds_a_groups_strips_into_it() {
-    use vt_tui::glyphs::{FOLDED, GROUP, ICON_SPACE};
+    use vt_tui::widgets::glyphs::{FOLDED, GROUP, ICON_SPACE};
     let (mut app, _realtime) = grouped();
     press(&mut app, " 4");
     let names = |app: &App| mixer_text_at(app, 160)[2].clone();
@@ -255,7 +258,7 @@ fn the_mixer_folds_a_groups_strips_into_it() {
 
 #[test]
 fn the_phrase_views_overview_shows_a_folded_group_as_a_column_of_its_own() {
-    use vt_tui::glyphs::{FOLDED, ICON_SPACE};
+    use vt_tui::widgets::glyphs::{FOLDED, ICON_SPACE};
     let (mut app, _realtime) = grouped();
     press(&mut app, " 4lza0");
     assert_eq!(app.services.cursor.track, 3);
@@ -517,7 +520,7 @@ fn name_on_a_groups_own_track_takes_five_characters_and_a_sound_track_two() {
 
 #[test]
 fn a_group_with_five_characters_shows_its_whole_name_in_every_view() {
-    use vt_tui::glyphs::{FOLDED, GROUP, ICON_SPACE};
+    use vt_tui::widgets::glyphs::{FOLDED, GROUP, ICON_SPACE};
     let (mut app, _realtime) = grouped();
     let g1 = app.song().fixed_track(TrackKind::Group(1)).unwrap();
     command(&mut app, "group name drums");

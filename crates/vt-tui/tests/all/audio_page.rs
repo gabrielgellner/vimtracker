@@ -19,8 +19,8 @@ use crate::common::*;
 
 #[test]
 fn the_audio_page_chooses_a_buffer_a_rate_and_a_device() {
-    use vt_tui::audio::AudioChoice;
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
+    use vt_tui::services::audio::AudioChoice;
     let (mut app, _realtime) = on_the_audio_page();
     assert_eq!(column_name(&app), "Device");
     // A smaller buffer, one step down from what's playing.
@@ -135,7 +135,7 @@ fn slowed_for_a_while(app: &mut App, thousandths: u64) {
 
 #[test]
 fn a_leaf_before_the_cpu_figure_shows_while_the_audio_thread_is_slowed() {
-    use vt_tui::glyphs::LEAF;
+    use vt_tui::widgets::glyphs::LEAF;
     let (mut app, _realtime) = app();
     let top = |app: &mut App| screen_rows(app)[0].clone();
     let plain = top(&mut app);
@@ -161,7 +161,7 @@ fn a_leaf_before_the_cpu_figure_shows_while_the_audio_thread_is_slowed() {
 
 #[test]
 fn the_audio_page_says_what_the_leaf_means_on_the_status_line() {
-    use vt_tui::glyphs::LEAF;
+    use vt_tui::widgets::glyphs::LEAF;
     let (mut app, _realtime) = on_the_audio_page();
     app.services.status.clear();
     let message = |app: &mut App| screen_rows(app)[41].trim_end().to_owned();
@@ -210,7 +210,7 @@ fn a_new_engine_keeps_the_song_its_undo_and_the_mutes() {
 
 #[test]
 fn dropouts_put_a_warning_at_the_right_of_the_status_line_only_once_there_are_any() {
-    use vt_tui::glyphs::{SPINNER, WARNING};
+    use vt_tui::widgets::glyphs::{SPINNER, WARNING};
     let (mut app, _rt) = app();
     let line = status_line(&app);
     assert!(!line.contains(WARNING));
@@ -227,7 +227,7 @@ fn dropouts_put_a_warning_at_the_right_of_the_status_line_only_once_there_are_an
 
 #[test]
 fn the_scope_sends_a_picture_only_when_it_changes_and_draws_above_the_meter() {
-    use vt_tui::kitty::Graphics;
+    use vt_tui::graphics::Graphics;
     let mut song = Song::new(2);
     song.tracks[0].machine = Machine::Plaits(SynthVoice::VirtualAnalog);
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
@@ -289,7 +289,10 @@ fn the_scope_sends_a_picture_only_when_it_changes_and_draws_above_the_meter() {
     let buffer = terminal.backend().buffer();
     let corner = &buffer[(108, 0)];
     assert_eq!(corner.symbol(), "\u{10EEEE}\u{305}\u{305}");
-    assert_eq!(corner.fg, vt_tui::kitty::id_color(app.scope_image.unwrap()));
+    assert_eq!(
+        corner.fg,
+        vt_tui::graphics::id_color(app.scope_image.unwrap())
+    );
     assert!(app.scope_shown);
 
     // On a screen too short for it, it isn't drawn, and nothing more is sent.

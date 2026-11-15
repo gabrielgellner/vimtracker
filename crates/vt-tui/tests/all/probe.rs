@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use vt_model::song::FilterType;
-use vt_tui::dsp_probe::{
+use vt_tui::offline::dsp_probe::{
     self, Input, Loaded, ProbeError, drawn_response, frames_in, parse, prepare, render,
 };
 

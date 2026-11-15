@@ -1,64 +1,27 @@
 //! The vimtracker terminal program.
+//!
+//! - [`app`]: `App`, the program's state, and what spans its pages: key dispatch, the modes, held
+//!   keys, the jump list and the `:` runner.
+//! - [`pages`]: each page as a component, with its keys, its edits and its drawing.
+//! - [`overlays`]: what's drawn over a page and takes its keys: the picker, the `:` line, the
+//!   guides and keys, the shape panel, a macro's mapping and `/`'s field jump.
+//! - [`services`]: what every page shares, from the song and its history to the helper threads.
+//! - [`screen`]: what's always on screen: the status line, the system readout and the main meter.
+//! - [`widgets`]: the pieces pages are drawn from, the colours and the glyphs.
+//! - [`graphics`]: pictures through kitty's graphics protocol.
+//! - [`input`]: keys, the binding table, the modes and views, typed values and the mouse wheel.
+//! - [`roto`]: the Roto-Control.
+//! - [`offline`]: the subcommands that run without a screen.
 
-pub mod ableton;
-pub mod accent_slide;
-pub mod analysing;
 pub mod app;
-pub mod audio;
-pub mod audio_page;
-pub mod auditioning;
-pub mod automating;
-pub mod autosave;
-pub mod banking;
-pub mod bench;
-pub mod chain_view;
-pub mod command_line;
-pub mod config;
-pub mod dsp_probe;
-pub mod explorer;
-pub mod exploring;
-pub mod folding;
-pub mod glyphs;
-pub mod grammar;
-pub mod guides;
-pub mod heard;
+pub mod graphics;
 pub mod input;
-pub mod jumping;
-pub mod kitty;
-pub mod loading;
-pub mod macroing;
-pub mod marking;
-pub mod meter;
-pub mod mixer_page;
-pub mod page;
-pub mod patching;
-pub mod phrase_view;
-pub mod picking;
-pub mod places;
-pub mod placing;
-pub mod points;
-pub mod presetting;
-pub mod probe;
-pub mod project_page;
-pub mod recording;
+pub mod offline;
+pub mod overlays;
+pub mod pages;
 pub mod roto;
 pub mod run;
-pub mod sample_page;
-pub mod sample_settings;
-pub mod sample_wave;
-pub mod sampling;
-pub mod scope;
+pub mod screen;
 pub mod screenshot;
 pub mod services;
-pub mod shaping;
-pub mod slicing;
-pub mod song_view;
-pub mod tagging;
-pub mod theme;
-pub mod timeline;
-pub mod track_notes;
-pub mod track_page;
-pub mod tree;
-pub mod views;
-pub mod waveform;
-pub mod wheel;
+pub mod widgets;

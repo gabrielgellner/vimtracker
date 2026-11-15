@@ -5,8 +5,8 @@ use std::time::Instant;
 use ratatui::crossterm::event::KeyCode;
 use vt_tui::input::keys::parse_sequence;
 use vt_tui::input::mode::{Mode, View};
-use vt_tui::input::picker::Pick;
-use vt_tui::track_page::Page;
+use vt_tui::overlays::picker::Pick;
+use vt_tui::pages::track::Page;
 
 use crate::common::*;
 
@@ -40,7 +40,7 @@ fn the_track_picker_goes_to_a_track_by_number_or_name_like_a_buffer() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.view, View::Song);
     assert_eq!(app.services.cursor.track, 1);
-    assert_eq!(vt_tui::views::status::column_name(&app), "Track 02 chain");
+    assert_eq!(vt_tui::screen::status::column_name(&app), "Track 02 chain");
 }
 
 #[test]

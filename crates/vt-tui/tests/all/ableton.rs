@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use vt_model::kit::load_kit;
-use vt_tui::ableton::{import, read_rack};
+use vt_tui::offline::ableton::{import, read_rack};
 
 fn folder() -> PathBuf {
     static NEXT: AtomicU32 = AtomicU32::new(0);

@@ -26,14 +26,14 @@ use vt_model::settings::SettingId;
 use vt_model::song::{Machine, Song};
 use vt_model::step::FxCommand;
 use vt_tui::app::App;
+use vt_tui::graphics::{Graphics, PanelIds};
 use vt_tui::input::keys::{Key, parse_sequence};
 use vt_tui::input::mode::{Mode, View};
-use vt_tui::kitty::{Graphics, PanelIds};
+use vt_tui::pages::sample::settings::SampleSetting;
+use vt_tui::pages::sample::wave::{END_COLOR, LOOP_COLOR, SLICE_COLOR, START_COLOR};
+use vt_tui::pages::track::Control;
 use vt_tui::run::draw_screen;
-use vt_tui::sample_settings::SampleSetting;
-use vt_tui::sample_wave::{END_COLOR, LOOP_COLOR, SLICE_COLOR, START_COLOR};
-use vt_tui::track_page::Control;
-use vt_tui::views::status::value_shown;
+use vt_tui::screen::status::value_shown;
 
 const RATE: u32 = 48_000;
 /// Two seconds.
@@ -896,7 +896,7 @@ fn the_page_on_the_authors_screen() {
     assert!(
         row(&terminal, 33).starts_with(" Start 0.021 s   End 1.875 s   Loop 1.000 s to 1.500 s")
     );
-    let off = vt_tui::glyphs::SWITCH_OFF;
+    let off = vt_tui::widgets::glyphs::SWITCH_OFF;
     assert!(
         row(&terminal, 33).contains(&format!("Snap {off}"))
             && row(&terminal, 33).contains("Sens 50%"),
@@ -927,7 +927,7 @@ fn a_smaller_window_shows_the_part_of_the_page_with_the_cursor() {
     assert_eq!(app.sample_page.columns, 161);
     let cursor_shown = |terminal: &Terminal<TestBackend>| {
         let buffer = terminal.backend().buffer();
-        (0..100).find(|x| buffer[(*x, 10)].bg == vt_tui::views::sample::cursor_column())
+        (0..100).find(|x| buffer[(*x, 10)].bg == vt_tui::pages::sample::draw::cursor_column())
     };
     assert_eq!(cursor_shown(&terminal), Some(2));
     // At the right of the view, the box has scrolled to keep the cursor in it.
@@ -1882,7 +1882,7 @@ fn as_its_column_a_playhead_is_its_columns_background() {
         entry: Some(1),
         frame: FIT * 10 + 5,
     });
-    let green = vt_tui::views::sample::playhead_column();
+    let green = vt_tui::pages::sample::draw::playhead_column();
     let green_columns = |terminal: &Terminal<TestBackend>| {
         let buffer = terminal.backend().buffer();
         (0..163)
@@ -2133,8 +2133,8 @@ fn g_s_g_e_g_l_and_g_upper_l_put_the_points_at_the_cursor_and_x_takes_them_back(
 
 #[test]
 fn snap_and_reverse_are_toggles_that_flip_with_their_settings() {
-    use vt_tui::glyphs::{SWITCH_OFF, SWITCH_ON};
-    use vt_tui::theme;
+    use vt_tui::widgets::glyphs::{SWITCH_OFF, SWITCH_ON};
+    use vt_tui::widgets::theme;
     let (mut app, _realtime) = on_page();
     let mut graphics = Graphics::new();
     // The glyph after a setting's name on a row of the settings, its colours, and where the next

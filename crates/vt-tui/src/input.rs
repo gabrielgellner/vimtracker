@@ -1,10 +1,7 @@
-//! Keys, modes and commands.
+//! Keys, the binding table, the modes and views, what's typed into a value, and the mouse wheel.
 
 pub mod bindings;
-pub mod command;
-pub mod command_history;
-pub mod completion;
 pub mod keys;
 pub mod mode;
-pub mod picker;
 pub mod typed;
+pub mod wheel;

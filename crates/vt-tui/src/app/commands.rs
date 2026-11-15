@@ -3,8 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::explorer::Purpose;
-use crate::folding::Folds;
+use crate::overlays::picker::explorer::Purpose;
+use crate::services::folding::Folds;
 use vt_engine::link::Command;
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, write_wav};
@@ -16,11 +16,11 @@ use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
 use vt_model::song::{Lane, Song};
 
-use crate::input::command::Line;
+use crate::overlays::command::parse::Line;
 
 use super::{App, Cursor, READ_ONLY, folder_name, name_song};
+use crate::pages::track::editing::{set_limiter, set_track_groove};
 use crate::services::live_from;
-use crate::track_page::editing::{set_limiter, set_track_groove};
 
 impl App {
     /// Run a command line.

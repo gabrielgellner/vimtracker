@@ -35,7 +35,7 @@ fn the_mixer_leaves_out_what_a_fixed_track_doesnt_have() {
 
 #[test]
 fn the_mixers_cursor_stays_on_rows_a_track_has_and_comes_back() {
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _rt) = app();
     // With the empty groups shown.
     press(&mut app, " 4zRjj");
@@ -105,7 +105,7 @@ fn mixer_line(app: &App, name: &str) -> String {
 
 #[test]
 fn the_mixer_edits_each_tracks_settings_as_the_track_page_does() {
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app();
     press(&mut app, " 4");
     assert_eq!(app.modes.view, View::Mixer);
@@ -171,7 +171,7 @@ fn the_mixers_mute_and_solo_reach_the_engine() {
     assert!(!app.services.levels[0].mute);
     press(&mut app, "j=");
     assert!(app.services.levels[0].solo);
-    assert!(mixer_line(&app, "Solo").contains(vt_tui::glyphs::SOLO));
+    assert!(mixer_line(&app, "Solo").contains(vt_tui::widgets::glyphs::SOLO));
     press(&mut app, "i");
     assert!(!app.services.levels[0].solo);
     assert_eq!(
@@ -218,7 +218,7 @@ fn mixer_color(app: &App, row: usize, text: &str) -> ratatui::style::Color {
 
 #[test]
 fn a_groups_strip_names_it_and_its_tracks_and_its_tracks_are_marked() {
-    use vt_tui::glyphs::{GROUP, ICON_SPACE};
+    use vt_tui::widgets::glyphs::{GROUP, ICON_SPACE};
     let (mut app, _realtime) = app();
     command(&mut app, "track add 4");
     command(&mut app, "group 1 1-3");
@@ -246,12 +246,12 @@ fn a_groups_strip_names_it_and_its_tracks_and_its_tracks_are_marked() {
         7 + 2
     );
     // A group and its tracks share its colour, and an empty group is faint, once it's shown.
-    let blue = vt_tui::theme::group(1);
+    let blue = vt_tui::widgets::theme::group(1);
     assert_eq!(mixer_color(&app, 2, &g1), blue);
     assert_eq!(mixer_color(&app, 3, "G1"), blue);
-    assert_eq!(mixer_color(&app, 3, "G2"), vt_tui::theme::group(2));
+    assert_eq!(mixer_color(&app, 3, "G2"), vt_tui::widgets::theme::group(2));
     press(&mut app, "zR");
-    assert_eq!(mixer_color(&app, 2, &g3), vt_tui::theme::OVERLAY0);
+    assert_eq!(mixer_color(&app, 2, &g3), vt_tui::widgets::theme::OVERLAY0);
     let names = &mixer_text_at(&app, 160)[2];
     assert_eq!(
         column(names, "\u{a0}A") - 1 - column(names, &format!("{GROUP}{ICON_SPACE}G4")),
@@ -262,8 +262,8 @@ fn a_groups_strip_names_it_and_its_tracks_and_its_tracks_are_marked() {
 #[test]
 fn the_mixer_names_its_parts_over_their_strips_with_the_cursors_brighter() {
     use ratatui::buffer::Buffer;
-    use vt_tui::glyphs::{GROUP, ICON_SPACE};
-    use vt_tui::theme::{OVERLAY2, SURFACE1, TEXT};
+    use vt_tui::widgets::glyphs::{GROUP, ICON_SPACE};
+    use vt_tui::widgets::theme::{OVERLAY2, SURFACE1, TEXT};
     let (mut app, _realtime) = app();
     command(&mut app, "track add 4");
     command(&mut app, "group 1 1-3");
@@ -332,7 +332,7 @@ fn the_mixer_names_its_parts_over_their_strips_with_the_cursors_brighter() {
 
 #[test]
 fn a_tracks_mute_and_solo_from_its_group_show_apart_from_its_own() {
-    use vt_tui::glyphs::{MUTE, SOLO};
+    use vt_tui::widgets::glyphs::{MUTE, SOLO};
     let (mut app, _realtime) = app();
     command(&mut app, "track add 2");
     command(&mut app, "group 1 1-2");
@@ -349,7 +349,10 @@ fn a_tracks_mute_and_solo_from_its_group_show_apart_from_its_own() {
         "01 to 04, and G1: {mutes}"
     );
     // The track's own in the active colour, its group's in the group's.
-    let (blue, green) = (vt_tui::theme::group(1), vt_tui::theme::GREEN);
+    let (blue, green) = (
+        vt_tui::widgets::theme::group(1),
+        vt_tui::widgets::theme::GREEN,
+    );
     assert_eq!(mixer_colors(&app, "Mute", MUTE), [blue, blue, green, green]);
     app.services.levels[group].mute = false;
     app.services.levels[group].solo = true;
@@ -376,7 +379,7 @@ fn mixer_colors(app: &App, name: &str, glyph: char) -> Vec<ratatui::style::Color
 
 #[test]
 fn the_mixers_meters_show_only_the_track_that_is_playing() {
-    use vt_tui::meter::FLOOR_DB;
+    use vt_tui::services::meter::FLOOR_DB;
     let (mut app, mut realtime) = app();
     with_a_sound(&mut app);
     press(&mut app, "ia");
@@ -440,7 +443,7 @@ fn the_mixer_draws_a_strip_per_track_with_a_meter_and_a_fader() {
 
 #[test]
 fn the_mixer_has_a_trim_above_each_fader_and_opens_on_the_fader() {
-    use vt_tui::views::status::{column_name, value_shown};
+    use vt_tui::screen::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
     press(&mut app, " 4");
     assert_eq!(column_name(&app), "Level");

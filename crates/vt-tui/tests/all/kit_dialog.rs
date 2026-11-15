@@ -9,11 +9,11 @@ use vt_model::constants::MAX_GROUPS;
 use vt_model::song::{Role, TrackKind};
 use vt_model::step::Note;
 use vt_tui::app::App;
-use vt_tui::banking::group_name;
-use vt_tui::config::Settings;
 use vt_tui::input::mode::Mode;
 use vt_tui::input::mode::View;
-use vt_tui::shaping::KIT_BEAT_PICKER;
+use vt_tui::overlays::shape::KIT_BEAT_PICKER;
+use vt_tui::services::banking::group_name;
+use vt_tui::services::config::Settings;
 
 use crate::common::*;
 
@@ -208,7 +208,10 @@ fn moving_onto_a_kits_sound_plays_it_and_marking_plays_nothing_more() {
     assert!(playing(&app).ends_with("drums/hat.wav"));
 
     // The hint shows its switch, and with the preview off the box is wide enough for it all.
-    let (on, off) = (vt_tui::glyphs::SWITCH_ON, vt_tui::glyphs::SWITCH_OFF);
+    let (on, off) = (
+        vt_tui::widgets::glyphs::SWITCH_ON,
+        vt_tui::widgets::glyphs::SWITCH_OFF,
+    );
     press(&mut app, "P");
     let text = picker_text(&app, 163, 42);
     assert!(

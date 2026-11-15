@@ -22,14 +22,14 @@ use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
 use vt_model::song::{Machine, Song, SynthVoice, TrackKind};
 use vt_tui::app::App;
-use vt_tui::audio::DeviceInfo;
-use vt_tui::explorer::Purpose;
+use vt_tui::graphics::{DEFAULT_CELL, Graphics};
 use vt_tui::input::keys::Key;
 use vt_tui::input::mode::Mode;
-use vt_tui::input::picker::{Picker, Root};
-use vt_tui::kitty::{DEFAULT_CELL, Graphics};
+use vt_tui::overlays::picker::explorer::Purpose;
+use vt_tui::overlays::picker::{Picker, Root};
 use vt_tui::run::draw_screen;
 use vt_tui::screenshot::{sent_images, sent_placements, to_svg_placed};
+use vt_tui::services::audio::DeviceInfo;
 
 const RATE: u32 = 48_000;
 /// Frames in one step at 120 BPM.

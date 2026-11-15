@@ -18,10 +18,10 @@ use vt_roto::serial::Mode;
 use vt_roto::sysex::{PluginKind, ToRoto};
 use vt_tui::app::App;
 use vt_tui::input::mode::View;
+use vt_tui::pages::track::{AccumulatorField, ArpField, Control, Page};
 use vt_tui::roto::devices::{Family, knob, live_devices, name, placement};
 use vt_tui::roto::edits::value_text;
 use vt_tui::roto::{Connection, RotoSetting};
-use vt_tui::track_page::{AccumulatorField, ArpField, Control, Page};
 
 /// A song with a sound track of every machine, each with a different effect in its slots and a
 /// different filter, and its groups, returns and master, so every kind of device is in it.
@@ -279,7 +279,7 @@ fn the_roto_is_off_until_turned_on_on_the_audio_page() {
     );
     press(&mut app, " 9LG");
     assert_eq!(app.modes.view, View::Audio);
-    assert_eq!(vt_tui::views::status::column_name(&app), "Roto");
+    assert_eq!(vt_tui::screen::status::column_name(&app), "Roto");
     press(&mut app, "=");
     assert!(app.services.roto.setting.on);
     assert!(

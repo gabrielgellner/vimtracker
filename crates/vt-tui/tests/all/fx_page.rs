@@ -11,7 +11,7 @@ use vt_tui::app::App;
 use vt_tui::input::mode::{Mode, View};
 
 use crate::common::*;
-use vt_tui::kitty::{PanelIds, PanelKey};
+use vt_tui::graphics::{PanelIds, PanelKey};
 
 /// The FX page's text for a slot: its device's lines, from its title on its frame's top to its
 /// frame's bottom.
@@ -26,7 +26,7 @@ fn fx_line(app: &App, slot: usize) -> String {
 
 #[test]
 fn l_reaches_the_fx_page_and_then_the_gen_page() {
-    use vt_tui::track_page::Page;
+    use vt_tui::pages::track::Page;
     let (mut app, _realtime) = on_fx_page();
     assert_eq!(app.track_page.page, Page::Fx);
     press(&mut app, "L");
@@ -51,7 +51,7 @@ fn l_reaches_the_fx_page_and_then_the_gen_page() {
 #[test]
 fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
     use vt_model::insert::Insert;
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = on_fx_page();
     let depth = app.services.history.undo_depth();
     assert_eq!(column_name(&app), "Effect");
@@ -143,7 +143,7 @@ fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
 #[test]
 fn emptying_a_slot_keeps_the_cursor_valid() {
     use vt_model::insert::Insert;
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "=j$");
     assert_eq!(column_name(&app), "Mix");
@@ -185,8 +185,8 @@ fn the_effect_list_chooses_one_and_keeps_settings_if_it_is_already_there() {
 
 #[test]
 fn a_jump_finds_a_slots_settings_only_where_they_exist() {
-    use vt_tui::track_page::Control;
-    use vt_tui::views::status::column_name;
+    use vt_tui::pages::track::Control;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "/amo");
     assert_eq!(
@@ -240,7 +240,7 @@ fn an_insert_set_on_the_page_is_heard() {
 #[test]
 fn the_cursors_device_has_a_brighter_frame_and_a_bypassed_one_goes_faint() {
     use ratatui::style::Modifier;
-    use vt_tui::theme;
+    use vt_tui::widgets::theme;
     let draw = |app: &App| {
         let backend = ratatui::backend::TestBackend::new(150, 40);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
@@ -289,7 +289,7 @@ fn the_cursors_device_has_a_brighter_frame_and_a_bypassed_one_goes_faint() {
 
 #[test]
 fn the_cursor_goes_through_each_slots_title_and_grid_over_its_holes() {
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = on_fx_page();
     // Glue, an EQ, an empty slot, and a Distort.
     press(&mut app, "K");
@@ -369,7 +369,7 @@ fn the_cursor_goes_through_each_slots_title_and_grid_over_its_holes() {
 
 #[test]
 fn braces_go_to_the_same_setting_in_the_next_slot() {
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "=}={"); // Slots 1 and 2 hold an effect.
     press(&mut app, "j");
@@ -407,7 +407,7 @@ fn braces_go_to_the_same_setting_in_the_next_slot() {
 
 #[test]
 fn a_jump_labels_a_slots_effect_once() {
-    use vt_tui::track_page::Control;
+    use vt_tui::pages::track::Control;
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "/effect");
     let jump = app.modes.field_jump.as_ref().unwrap();
@@ -427,7 +427,7 @@ fn a_jump_labels_a_slots_effect_once() {
 
 #[test]
 fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "=lK");
     press(&mut app, "crush");
@@ -644,7 +644,7 @@ fn b_bypasses_a_slot_and_brings_it_back_with_undo() {
 
 #[test]
 fn zero_and_dollar_go_to_the_ends_of_a_slots_row() {
-    use vt_tui::track_page::Control;
+    use vt_tui::pages::track::Control;
     let (mut app, _rt) = app();
     press(&mut app, " 5LL");
     press(&mut app, "K");
@@ -678,7 +678,7 @@ fn zero_and_dollar_go_to_the_ends_of_a_slots_row() {
 #[test]
 fn a_compressors_curve_is_sent_once_and_again_only_for_its_threshold_or_ratio() {
     use vt_model::insert::{Compressor, Insert};
-    use vt_tui::kitty::Graphics;
+    use vt_tui::graphics::Graphics;
     let (mut app, _realtime) = app();
     let mut graphics = Graphics::new();
     let sync = |app: &mut App, graphics: &mut Graphics| {
@@ -763,7 +763,7 @@ fn a_compressors_type_shows_its_own_settings_and_console_and_glue_pick_their_swi
         assert!(console.contains(shown), "{shown}: {console}");
     }
     // Auto is off, as a toggle.
-    let off = vt_tui::views::widgets::toggle::text(false);
+    let off = vt_tui::widgets::toggle::text(false);
     assert!(console.contains(&off), "{console}");
     assert!(!console.contains("Gain"), "{console}");
     assert_eq!(compressor(&app).console_release, CONSOLE_AUTO_RELEASE);
@@ -934,7 +934,7 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
     }
     // Half a cell filled from the top: the lower half drawn in the background's colour.
     assert_eq!(buffer[(140, comp + 6)].symbol(), "▄");
-    assert_eq!(buffer[(140, comp + 6)].fg, vt_tui::theme::BASE);
+    assert_eq!(buffer[(140, comp + 6)].fg, vt_tui::widgets::theme::BASE);
     // A limiter has its meter alone, with its scale, where the compressor's is: 3 dB is the top
     // three quarters of its top row, six eighths at half a dB each.
     let limit = row_of(&slot_title(2, Some(true), "Limit"));
@@ -954,10 +954,10 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
     assert_eq!(held[(140, limit + 2)].symbol(), "▂");
     assert_eq!(held[(140, limit + 3)].symbol(), " ");
     assert_eq!(held[(140, limit + 4)].symbol(), "▁");
-    assert_eq!(held[(141, limit + 4)].fg, vt_tui::theme::OVERLAY0);
+    assert_eq!(held[(141, limit + 4)].fg, vt_tui::widgets::theme::OVERLAY0);
     assert_eq!(held[(140, limit + 5)].symbol(), " ");
     // 9 dB is just past the top of the third row.
-    let mut lately = vt_tui::meter::Held::new(0.0);
+    let mut lately = vt_tui::services::meter::Held::new(0.0);
     lately.update(9.0, 0.0);
     app.track_page.slot_reduction[2] = lately;
     let held = draw(&app);
@@ -974,7 +974,7 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
 
 #[test]
 fn an_eqs_curve_follows_its_settings_and_the_cursor() {
-    use vt_tui::kitty::Graphics;
+    use vt_tui::graphics::Graphics;
     let (mut app, _realtime) = app();
     let mut graphics = Graphics::new();
     let sync = |app: &mut App, graphics: &mut Graphics| {
@@ -1025,7 +1025,7 @@ fn an_eqs_curve_follows_its_settings_and_the_cursor() {
     // In its box against the right of the slot's frame, two columns in, 33 by 5 inside, filling
     // the seven rows inside the frame.
     let corner = |row: usize, column: usize| {
-        let line: Vec<char> = vt_tui::kitty::placeholder_lines(33, 5)[row]
+        let line: Vec<char> = vt_tui::graphics::placeholder_lines(33, 5)[row]
             .chars()
             .collect();
         line[column * 3..column * 3 + 3].iter().collect::<String>()
@@ -1046,7 +1046,7 @@ fn line_color(png: &[u8]) -> Color {
 /// What one sync sends: the images, by id.
 fn synced(
     app: &mut App,
-    graphics: &mut vt_tui::kitty::Graphics,
+    graphics: &mut vt_tui::graphics::Graphics,
 ) -> std::collections::HashMap<u32, Vec<u8>> {
     let mut out = Vec::new();
     app.send_pictures(graphics, &mut out).unwrap();
@@ -1055,12 +1055,12 @@ fn synced(
 
 #[test]
 fn a_bypassed_slots_curve_is_faint_and_each_shade_is_sent_once() {
-    use vt_tui::theme;
+    use vt_tui::widgets::theme;
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "K");
     press(&mut app, "Comp");
     special(&mut app, KeyCode::Enter);
-    let mut graphics = vt_tui::kitty::Graphics::new();
+    let mut graphics = vt_tui::graphics::Graphics::new();
     let sent = synced(&mut app, &mut graphics);
     let focused = app.track_page.images.get(PanelKey::Slot(0)).unwrap();
     assert_eq!(line_color(&sent[&focused]), theme::active().fg.unwrap());
@@ -1103,7 +1103,7 @@ fn the_panels_are_drawn_at_the_screens_pixels_and_sent_again_after_a_clear() {
     press(&mut app, "}K");
     press(&mut app, "EQ3");
     special(&mut app, KeyCode::Enter);
-    let mut graphics = vt_tui::kitty::Graphics::new();
+    let mut graphics = vt_tui::graphics::Graphics::new();
     let sizes = |app: &App, sent: &std::collections::HashMap<u32, Vec<u8>>| {
         [0, 1]
             .map(|slot| png_size(&sent[&app.track_page.images.get(PanelKey::Slot(slot)).unwrap()]))
@@ -1157,7 +1157,7 @@ fn a_curve_under_an_lfo_is_sent_every_other_frame_and_costs_a_few_kilobytes() {
     press(&mut app, "}K");
     press(&mut app, "EQ3");
     special(&mut app, KeyCode::Enter);
-    let mut graphics = vt_tui::kitty::Graphics::new();
+    let mut graphics = vt_tui::graphics::Graphics::new();
     synced(&mut app, &mut graphics);
     let track = app.song().tracks[0].clone();
     // A second of frames, 30 of them, with the compressor's threshold and the EQ's low band
@@ -1200,7 +1200,7 @@ fn a_curve_under_an_lfo_is_sent_every_other_frame_and_costs_a_few_kilobytes() {
 #[test]
 fn four_devices_fit_beside_the_main_meter_and_inside_the_keys_box_at_163x42() {
     use vt_model::insert::{Compressor, CompressorType, Insert};
-    use vt_tui::track_page::Control;
+    use vt_tui::pages::track::Control;
     let (mut app, _realtime) = on_fx_page();
     four_devices(&mut app);
     let compressor = |app: &App| match app.song().tracks[0].inserts[0] {
@@ -1276,7 +1276,7 @@ fn four_devices_fit_beside_the_main_meter_and_inside_the_keys_box_at_163x42() {
     let glue = &screen[4];
     assert!(glue.contains("│  Threshold"), "{glue}");
     assert!(glue.contains("Mix       FF ▕█████████▏"), "{glue}");
-    let off = vt_tui::views::widgets::toggle::text(false);
+    let off = vt_tui::widgets::toggle::text(false);
     assert!(
         screen[6].contains(&format!("Peak Clip {off}")),
         "{}",
@@ -1331,7 +1331,9 @@ fn the_fx_page_fades_a_slot_a_lock_bypasses_while_the_song_plays() {
         (0..buffer.area.height).any(|y| {
             let row: Vec<&str> = (0..60).map(|x| buffer[(x, y)].symbol()).collect();
             let at = row.windows(5).position(|cells| cells.concat() == "Delay");
-            at.is_some_and(|x| buffer[(x as u16, y)].fg == vt_tui::theme::faint().fg.unwrap())
+            at.is_some_and(|x| {
+                buffer[(x as u16, y)].fg == vt_tui::widgets::theme::faint().fg.unwrap()
+            })
         })
     };
     let heard = |bypassed: bool| LiveValues {
@@ -1356,8 +1358,8 @@ fn the_fx_page_fades_a_slot_a_lock_bypasses_while_the_song_plays() {
 #[test]
 fn a_slots_toggle_follows_b_and_a_lock_while_the_song_plays() {
     use vt_engine::track_state::LiveValues;
-    use vt_tui::glyphs::{SWITCH_OFF, SWITCH_ON};
-    use vt_tui::theme;
+    use vt_tui::widgets::glyphs::{SWITCH_OFF, SWITCH_ON};
+    use vt_tui::widgets::theme;
     let (mut app, _realtime) = on_fx_page();
     // A Delay in the first slot, the second left empty, and the cursor off the slot's title.
     press(&mut app, "K");
@@ -1423,8 +1425,8 @@ fn the_track_pages_cursor_goes_through_a_rack_on_its_own() {
     use vt_model::selection::Motion;
     use vt_model::song::Track;
     use vt_tui::input::bindings::Cmd;
-    use vt_tui::page::Outcome;
-    use vt_tui::track_page::{Control, DeviceCursor, Page, TrackPage};
+    use vt_tui::pages::Outcome;
+    use vt_tui::pages::track::{Control, DeviceCursor, Page, TrackPage};
     let effect = |name| {
         *Insert::ALL
             .iter()
@@ -1490,7 +1492,7 @@ fn the_track_pages_cursor_goes_through_a_rack_on_its_own() {
 
 #[test]
 fn a_toggle_takes_three_cells_and_nothing_moves_when_one_flips() {
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = on_fx_page();
     // Glue, with its slot's switch in its title and Auto and Peak Clip in its grid, and the cursor
     // on Auto, its colours over all the toggle's cells.
@@ -1515,7 +1517,7 @@ fn a_toggle_takes_three_cells_and_nothing_moves_when_one_flips() {
 #[test]
 fn beads_shows_its_mode_and_quality_in_its_title_and_the_cursor_reaches_both() {
     use vt_model::insert::Insert;
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "K");
     press(&mut app, "Beads");
@@ -1543,7 +1545,7 @@ fn beads_shows_its_mode_and_quality_in_its_title_and_the_cursor_reaches_both() {
 #[test]
 fn a_space_echo_shows_its_mode_in_its_title_and_the_re_201s_controls_in_its_grid() {
     use vt_model::insert::Insert;
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "K");
     press(&mut app, "Space Echo");

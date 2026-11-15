@@ -15,13 +15,13 @@ use vt_model::step::Step;
 use vt_tui::app::App;
 use vt_tui::input::keys::Key;
 use vt_tui::input::mode::{Mode, View};
-use vt_tui::input::picker::Pick;
+use vt_tui::overlays::picker::Pick;
 
 use crate::common::*;
 
 #[test]
 fn a_step_locks_the_gate_by_its_label() {
-    use vt_tui::views::status::{column_name, value_shown};
+    use vt_tui::screen::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
     press(&mut app, "llllli");
     press(&mut app, "len");
@@ -90,22 +90,22 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
     assert!(
         row(2).contains(&format!(
             "CUT   4000 {} SNA   20   {} RES   1000 {}",
-            vt_tui::glyphs::LOCK,
-            vt_tui::glyphs::HOLD,
-            vt_tui::glyphs::GLIDE
+            vt_tui::widgets::glyphs::LOCK,
+            vt_tui::widgets::glyphs::HOLD,
+            vt_tui::widgets::glyphs::GLIDE
         )),
         "{}",
         row(2)
     );
     // The lock is dim, and a hold and a glide are in the value's fine colour.
     let at = |glyph: char| row(2).chars().position(|c| c == glyph).unwrap() as u16;
-    let fine = vt_tui::theme::fine(vt_tui::theme::MAUVE);
+    let fine = vt_tui::widgets::theme::fine(vt_tui::widgets::theme::MAUVE);
     assert_eq!(
-        buffer[(at(vt_tui::glyphs::LOCK), 2)].fg,
-        vt_tui::theme::OVERLAY2
+        buffer[(at(vt_tui::widgets::glyphs::LOCK), 2)].fg,
+        vt_tui::widgets::theme::OVERLAY2
     );
-    assert_eq!(buffer[(at(vt_tui::glyphs::HOLD), 2)].fg, fine);
-    assert_eq!(buffer[(at(vt_tui::glyphs::GLIDE), 2)].fg, fine);
+    assert_eq!(buffer[(at(vt_tui::widgets::glyphs::HOLD), 2)].fg, fine);
+    assert_eq!(buffer[(at(vt_tui::widgets::glyphs::GLIDE), 2)].fg, fine);
     assert!(
         row(3).contains("DEL   10     ···   ··     ···   ··"),
         "{}",
@@ -115,7 +115,7 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
 
 #[test]
 fn k_lists_commands_by_category_and_opens_searching() {
-    use vt_tui::input::picker::{Focus, Row};
+    use vt_tui::overlays::picker::{Focus, Row};
     let (mut app, _realtime) = app();
     press(&mut app, "lllllK");
     let picker = app.picker.as_ref().unwrap();
@@ -425,7 +425,7 @@ fn an_lfos_dest_list_only_reaches_the_lfos_after_it() {
 
 #[test]
 fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
-    use vt_tui::input::picker::{Focus, Row};
+    use vt_tui::overlays::picker::{Focus, Row};
     let (mut app, _realtime) = app();
     // Distort in slot 1, then Mod 4's Dest.
     press(&mut app, &format!(" 5LL=H{}$K", to_lfo(0)));
@@ -516,7 +516,7 @@ fn dests_window_draws_categories_as_dim_headings_with_counts() {
     let backend = ratatui::backend::TestBackend::new(100, 24);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), &mut picker))
+        .draw(|frame| vt_tui::overlays::picker::draw::draw(frame, frame.area(), &mut picker))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let text: String = (0..24)
@@ -540,7 +540,7 @@ fn dests_window_draws_categories_as_dim_headings_with_counts() {
         "in its category, with its meaning: {text}"
     );
     assert!(text.contains("▸ Output  "), "{text}");
-    let dim = vt_tui::theme::dim().fg;
+    let dim = vt_tui::widgets::theme::dim().fg;
     let heading = text
         .lines()
         .position(|line| line.contains("▸ Output"))
@@ -724,7 +724,7 @@ fn k_on_the_gate_column_chooses_a_gate_and_keeps_its_pulses() {
 
 #[test]
 fn an_lfos_depth_is_locked_by_its_label_and_reads_in_its_units() {
-    use vt_tui::views::status::{column_name, value_shown};
+    use vt_tui::screen::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
     press(&mut app, "llllli");
     press(&mut app, "dep4");
@@ -753,7 +753,7 @@ fn an_lfos_depth_is_locked_by_its_label_and_reads_in_its_units() {
 
 #[test]
 fn a_step_locks_the_speed_by_its_label() {
-    use vt_tui::views::status::{column_name, value_shown};
+    use vt_tui::screen::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
     press(&mut app, "llllli");
     press(&mut app, "rate");
@@ -841,7 +841,7 @@ fn k_on_a_gate_lists_gates_and_on_its_length_lists_lengths() {
 #[test]
 fn k_chooses_cnd_then_its_condition_from_a_list() {
     use vt_model::step::FxCommand;
-    use vt_tui::views::status::{column_name, value_shown};
+    use vt_tui::screen::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
     let slot = |app: &App| app.services.phrase_here().unwrap().steps()[0].fx[0];
     press(&mut app, "lllllK");
@@ -850,7 +850,7 @@ fn k_chooses_cnd_then_its_condition_from_a_list() {
     // Choosing `CND` lists the conditions, with Elektron's names.
     let picker = app.picker.as_ref().expect("the conditions are listed");
     assert_eq!(picker.title, "Conditions");
-    assert_eq!(picker.focus, vt_tui::input::picker::Focus::Search);
+    assert_eq!(picker.focus, vt_tui::overlays::picker::Focus::Search);
     press(&mut app, "1:4");
     assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "1:4");
     let depth = app.services.history.undo_depth();
@@ -918,11 +918,11 @@ fn space_l_turns_fill_on_and_held_it_goes_back() {
     let backend = ratatui::backend::TestBackend::new(120, 2);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::status::draw(frame, frame.area(), &app))
+        .draw(|frame| vt_tui::screen::status::draw(frame, frame.area(), &app))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let status: String = (0..120).map(|x| buffer[(x, 0)].symbol()).collect();
-    let fill = format!("{} FILL", vt_tui::glyphs::STOP);
+    let fill = format!("{} FILL", vt_tui::widgets::glyphs::STOP);
     assert!(status.contains(&fill), "{status}");
 
     press(&mut app, " ");
@@ -944,7 +944,7 @@ fn space_l_turns_fill_on_and_held_it_goes_back() {
 #[test]
 fn k_chooses_acu_then_its_amount_from_a_list() {
     use vt_model::step::FxCommand;
-    use vt_tui::views::status::{column_name, value_shown};
+    use vt_tui::screen::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
     let slot = |app: &App| app.services.phrase_here().unwrap().steps()[0].fx[0];
     press(&mut app, "lllllK");
@@ -1012,7 +1012,7 @@ fn k_chooses_acu_then_its_amount_from_a_list() {
 
 #[test]
 fn the_row_playing_shows_and_says_the_note_an_accumulator_moved_it_to() {
-    use vt_tui::views::status::value_shown;
+    use vt_tui::screen::status::value_shown;
     let rows = vec!["C-3 -- acu:02".parse().unwrap(), "D-3 --".parse().unwrap()];
     let (mut app, mut rt) = recording_app(rows);
     let row_text = |app: &App, row: u16| {
@@ -1043,7 +1043,7 @@ fn the_row_playing_shows_and_says_the_note_an_accumulator_moved_it_to() {
 #[test]
 fn k_chooses_arp_and_its_value_is_typed_as_two_digits() {
     use vt_model::step::FxCommand;
-    use vt_tui::views::status::{column_name, value_shown};
+    use vt_tui::screen::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
     let slot = |app: &App| app.services.phrase_here().unwrap().steps()[0].fx[0];
     press(&mut app, "lllllK");
@@ -1095,7 +1095,7 @@ fn k_chooses_arp_and_its_value_is_typed_as_two_digits() {
 #[test]
 fn k_chooses_rnd_and_the_status_line_says_what_it_varies() {
     use vt_model::step::FxCommand;
-    use vt_tui::views::status::value_shown;
+    use vt_tui::screen::status::value_shown;
     let (mut app, _realtime) = app();
     let slot = |app: &App, column: usize| app.services.phrase_here().unwrap().steps()[0].fx[column];
     // On FX 2, beside an empty FX 1, it varies the note.
@@ -1143,7 +1143,7 @@ fn k_chooses_rnd_and_the_status_line_says_what_it_varies() {
 #[test]
 fn order_plays_the_phrases_rows_in_an_order_from_a_word_or_a_list() {
     use vt_model::order::Order;
-    use vt_tui::input::command::Line;
+    use vt_tui::overlays::command::parse::Line;
     let (mut app, _realtime) = app();
     let order = |app: &App| app.services.phrase_here().unwrap().order();
     let heading = |app: &App| -> String {
@@ -1198,7 +1198,7 @@ fn order_plays_the_phrases_rows_in_an_order_from_a_word_or_a_list() {
 #[test]
 fn order_takes_a_snake_and_cartesian_numbers_and_the_title_shows_them() {
     use vt_model::order::{Cartesian, Order, Snake};
-    use vt_tui::input::command::Line;
+    use vt_tui::overlays::command::parse::Line;
     let (mut app, _realtime) = app();
     let order = |app: &App| app.services.phrase_here().unwrap().order();
     let heading = |app: &App| -> String {
@@ -1250,7 +1250,7 @@ fn order_takes_a_snake_and_cartesian_numbers_and_the_title_shows_them() {
 #[test]
 fn order_takes_a_jump_and_an_arps_numbers_and_the_metropolixs_other_orders() {
     use vt_model::order::{Arp, Order};
-    use vt_tui::input::command::Line;
+    use vt_tui::overlays::command::parse::Line;
     let (mut app, _realtime) = app();
     command(&mut app, "len 8");
     let order = |app: &App| app.services.phrase_here().unwrap().order();
@@ -1322,7 +1322,7 @@ fn playing_from_a_row_starts_at_its_step_with_the_walk_where_it_is_then() {
 #[test]
 fn k_lists_a_slots_bypass_with_its_effect_and_a_step_locks_it() {
     use vt_model::step::FxCommand;
-    use vt_tui::views::status::{column_name, value_shown};
+    use vt_tui::screen::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
     press(&mut app, " 5LLK");
     press(&mut app, "delay");
@@ -1367,7 +1367,7 @@ fn k_lists_a_slots_bypass_with_its_effect_and_a_step_locks_it() {
 
 #[test]
 fn a_step_locks_the_glide_by_its_label() {
-    use vt_tui::views::status::{column_name, value_shown};
+    use vt_tui::screen::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
     press(&mut app, "llllli");
     press(&mut app, "gld");

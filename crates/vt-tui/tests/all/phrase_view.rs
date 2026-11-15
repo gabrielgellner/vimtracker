@@ -27,12 +27,12 @@ fn a_selection_keeps_its_text_readable_and_shows_the_cursor() {
     let buffer = screen(&app);
     // Past the step number and playhead gutter, on the row the selection started from.
     let selected = &buffer[(10, 2)];
-    assert_eq!(selected.bg, vt_tui::theme::SURFACE1);
-    assert_eq!(selected.fg, vt_tui::theme::TEXT);
+    assert_eq!(selected.bg, vt_tui::widgets::theme::SURFACE1);
+    assert_eq!(selected.fg, vt_tui::widgets::theme::TEXT);
     assert_ne!(selected.symbol(), " ");
     let cursor = &buffer[(9, 3)];
-    assert_eq!(cursor.bg, vt_tui::theme::ROSEWATER);
-    assert_eq!(cursor.fg, vt_tui::theme::BASE);
+    assert_eq!(cursor.bg, vt_tui::widgets::theme::ROSEWATER);
+    assert_eq!(cursor.fg, vt_tui::widgets::theme::BASE);
 }
 
 #[test]
@@ -48,9 +48,17 @@ fn each_row_shows_how_far_it_is_from_the_cursor() {
     assert_eq!(row(6), " 1  06  ");
     // Decimal, to match the count typed, beside a step number in hex.
     assert_eq!(row(15), "10  0F  ");
-    assert_eq!(buffer[(1, 2)].fg, vt_tui::theme::OVERLAY0);
-    assert_eq!(buffer[(4, 2)].fg, vt_tui::theme::YELLOW, "the beat marker");
-    assert_eq!(buffer[(4, 3)].fg, vt_tui::theme::SUBTEXT1, "other steps");
+    assert_eq!(buffer[(1, 2)].fg, vt_tui::widgets::theme::OVERLAY0);
+    assert_eq!(
+        buffer[(4, 2)].fg,
+        vt_tui::widgets::theme::YELLOW,
+        "the beat marker"
+    );
+    assert_eq!(
+        buffer[(4, 3)].fg,
+        vt_tui::widgets::theme::SUBTEXT1,
+        "other steps"
+    );
 }
 
 #[test]
@@ -66,18 +74,18 @@ fn the_overview_shows_every_track_and_marks_the_one_being_edited() {
     );
     assert_eq!(
         buffer[(74, 1)].bg,
-        vt_tui::theme::GREEN,
+        vt_tui::widgets::theme::GREEN,
         "track 02 is marked"
     );
-    assert_ne!(buffer[(69, 1)].bg, vt_tui::theme::GREEN);
+    assert_ne!(buffer[(69, 1)].bg, vt_tui::widgets::theme::GREEN);
     let headings: String = (0..30).map(|x| buffer[(x, 1)].symbol()).collect();
     assert_eq!(headings.trim_end(), "        ╭Note ───────────── FX");
     assert_eq!(
         buffer[(28, 2)].bg,
-        vt_tui::theme::FX_BAND,
+        vt_tui::widgets::theme::FX_BAND,
         "the FX sit on a band"
     );
-    assert_ne!(buffer[(9, 2)].bg, vt_tui::theme::FX_BAND);
+    assert_ne!(buffer[(9, 2)].bg, vt_tui::widgets::theme::FX_BAND);
 }
 
 #[test]
@@ -91,21 +99,25 @@ fn other_tracks_light_the_step_they_are_playing() {
     // two rows below the title.
     let color = |app: &App, x: u16, row: u16| screen(app)[(x, row + 2)].fg;
     let (marker, note) = (68, 69);
-    let dimmed_green = vt_tui::theme::dimmed(vt_tui::theme::GREEN);
+    let dimmed_green = vt_tui::widgets::theme::dimmed(vt_tui::widgets::theme::GREEN);
     on_the_row_being_edited(&mut app);
     app.set_playhead(2);
     // Its rows are empty, so faint, as an empty cell on the grid is.
-    assert_eq!(color(&app, note, 2), vt_tui::theme::OVERLAY0, "stopped");
+    assert_eq!(
+        color(&app, note, 2),
+        vt_tui::widgets::theme::OVERLAY0,
+        "stopped"
+    );
     app.services.transport = Transport::Playing;
-    assert_eq!(color(&app, marker, 2), vt_tui::theme::GREEN);
+    assert_eq!(color(&app, marker, 2), vt_tui::widgets::theme::GREEN);
     assert_eq!(
         color(&app, note, 2),
         dimmed_green,
         "an empty row playing is lit, set back"
     );
-    assert_eq!(color(&app, note, 3), vt_tui::theme::OVERLAY0);
+    assert_eq!(color(&app, note, 3), vt_tui::widgets::theme::OVERLAY0);
     app.services.transport = Transport::Paused;
-    assert_eq!(color(&app, marker, 2), vt_tui::theme::GREEN);
+    assert_eq!(color(&app, marker, 2), vt_tui::widgets::theme::GREEN);
 }
 
 #[test]
@@ -117,27 +129,35 @@ fn insert_turns_the_cursor_and_the_grids_frame_green_without_moving_anything() {
 
     // The grid is framed as a device is, dim, with its parts named in the top edge.
     let normal = screen(&app);
-    assert_eq!(normal[(9, 2)].bg, vt_tui::theme::ROSEWATER);
+    assert_eq!(normal[(9, 2)].bg, vt_tui::widgets::theme::ROSEWATER);
     assert_eq!(normal[(8, 1)].symbol(), "╭");
     assert_eq!(normal[(8, 2)].symbol(), "│");
     assert_eq!(normal[(8, 18)].symbol(), "╰");
-    assert_eq!(normal[(8, 2)].fg, vt_tui::theme::SURFACE1);
-    assert_eq!(normal[(15, 1)].fg, vt_tui::theme::SURFACE1, "the edge");
+    assert_eq!(normal[(8, 2)].fg, vt_tui::widgets::theme::SURFACE1);
+    assert_eq!(
+        normal[(15, 1)].fg,
+        vt_tui::widgets::theme::SURFACE1,
+        "the edge"
+    );
     let headings: String = (8..67).map(|x| normal[(x, 1)].symbol()).collect();
     assert_eq!(
         headings,
         "╭Note ───────────── FX 1 ─────── FX 2 ─────── FX 3 ───────╮"
     );
-    assert_eq!(normal[(9, 1)].fg, vt_tui::theme::OVERLAY2, "a heading");
+    assert_eq!(
+        normal[(9, 1)].fg,
+        vt_tui::widgets::theme::OVERLAY2,
+        "a heading"
+    );
 
     press(&mut app, "i");
     let insert = screen(&app);
-    assert_eq!(insert[(9, 2)].bg, vt_tui::theme::GREEN);
-    assert_eq!(insert[(9, 2)].fg, vt_tui::theme::BASE);
+    assert_eq!(insert[(9, 2)].bg, vt_tui::widgets::theme::GREEN);
+    assert_eq!(insert[(9, 2)].fg, vt_tui::widgets::theme::BASE);
     assert_eq!(insert[(8, 1)].symbol(), "╭");
     assert_eq!(insert[(8, 2)].symbol(), "│");
     assert_eq!(insert[(8, 18)].symbol(), "╰");
-    assert_eq!(insert[(8, 2)].fg, vt_tui::theme::GREEN);
+    assert_eq!(insert[(8, 2)].fg, vt_tui::widgets::theme::GREEN);
     // Each heading is set into the top edge over its column, a space either side.
     let edge: String = (8..67).map(|x| insert[(x, 1)].symbol()).collect();
     assert_eq!(
@@ -153,8 +173,8 @@ fn insert_turns_the_cursor_and_the_grids_frame_green_without_moving_anything() {
 
     special(&mut app, KeyCode::Esc);
     let back = screen(&app);
-    assert_eq!(back[(8, 1)].fg, vt_tui::theme::SURFACE1);
-    assert_eq!(back[(9, 2)].bg, vt_tui::theme::ROSEWATER);
+    assert_eq!(back[(8, 1)].fg, vt_tui::widgets::theme::SURFACE1);
+    assert_eq!(back[(9, 2)].bg, vt_tui::widgets::theme::ROSEWATER);
 }
 
 #[test]
@@ -163,15 +183,15 @@ fn replace_shows_its_mode_and_a_red_cursor_with_the_frame_dim() {
     press(&mut app, "r");
     assert_eq!(app.modes.mode, Mode::Replace);
     let buffer = screen(&app);
-    assert_eq!(buffer[(9, 2)].bg, vt_tui::theme::RED);
+    assert_eq!(buffer[(9, 2)].bg, vt_tui::widgets::theme::RED);
     assert_eq!(
         buffer[(8, 2)].fg,
-        vt_tui::theme::SURFACE1,
+        vt_tui::widgets::theme::SURFACE1,
         "not lit, as in Insert"
     );
     press(&mut app, "a");
     assert_eq!(app.modes.mode, Mode::Normal);
-    assert_eq!(screen(&app)[(9, 2)].bg, vt_tui::theme::ROSEWATER);
+    assert_eq!(screen(&app)[(9, 2)].bg, vt_tui::widgets::theme::ROSEWATER);
 }
 
 #[test]
@@ -191,8 +211,8 @@ fn the_row_playing_lights_what_is_written_and_sets_back_what_is_empty() {
     on_the_row_being_edited(&mut app);
     app.services.transport = Transport::Playing;
     let (green, set_back) = (
-        vt_tui::theme::GREEN,
-        vt_tui::theme::dimmed(vt_tui::theme::GREEN),
+        vt_tui::widgets::theme::GREEN,
+        vt_tui::widgets::theme::dimmed(vt_tui::widgets::theme::GREEN),
     );
     // Row 00: its note and velocity lit, its empty gate and FX set back.
     app.set_playhead(0);
@@ -208,7 +228,7 @@ fn the_row_playing_lights_what_is_written_and_sets_back_what_is_empty() {
     for x in [9, 13, 20, 28] {
         assert_eq!(buffer[(x, 3)].fg, set_back, "cell {x}");
     }
-    assert_eq!(buffer[(20, 2)].fg, vt_tui::theme::OVERLAY0);
+    assert_eq!(buffer[(20, 2)].fg, vt_tui::widgets::theme::OVERLAY0);
 }
 
 #[test]
@@ -224,22 +244,30 @@ fn rows_count_from_the_loop_start_and_dim_outside_it() {
     assert_eq!(row_number_at(&buffer, 4), " 00");
     assert_eq!(row_number_at(&buffer, 7), " 03");
     assert_eq!(row_number_at(&buffer, 8), " 04");
-    assert_eq!(buffer[(5, 4)].fg, vt_tui::theme::YELLOW, "the loop start");
-    assert_eq!(buffer[(5, 5)].fg, vt_tui::theme::SUBTEXT1);
-    assert_eq!(buffer[(5, 2)].fg, vt_tui::theme::OVERLAY0, "not played");
+    assert_eq!(
+        buffer[(5, 4)].fg,
+        vt_tui::widgets::theme::YELLOW,
+        "the loop start"
+    );
+    assert_eq!(buffer[(5, 5)].fg, vt_tui::widgets::theme::SUBTEXT1);
+    assert_eq!(
+        buffer[(5, 2)].fg,
+        vt_tui::widgets::theme::OVERLAY0,
+        "not played"
+    );
     assert_eq!(
         buffer[(5, 8)].fg,
-        vt_tui::theme::OVERLAY2,
+        vt_tui::widgets::theme::OVERLAY2,
         "a beat, not played"
     );
     assert_eq!(
         buffer[(9, 8)].fg,
-        vt_tui::theme::OVERLAY0,
+        vt_tui::widgets::theme::OVERLAY0,
         "the step's text"
     );
     assert_eq!(
         buffer[(9, 6)].fg,
-        vt_tui::theme::OVERLAY0,
+        vt_tui::widgets::theme::OVERLAY0,
         "an empty cell is faint where it plays too"
     );
 }
@@ -297,11 +325,11 @@ fn the_overview_shows_empty_notes_faint_and_written_ones_dim() {
     let buffer = screen(&app);
     assert_eq!(
         beside(&buffer, 0, 0),
-        (" C-3".to_owned(), vt_tui::theme::OVERLAY2)
+        (" C-3".to_owned(), vt_tui::widgets::theme::OVERLAY2)
     );
     assert_eq!(
         beside(&buffer, 0, 1),
-        (" ---".to_owned(), vt_tui::theme::OVERLAY0)
+        (" ---".to_owned(), vt_tui::widgets::theme::OVERLAY0)
     );
 }
 
@@ -315,8 +343,8 @@ fn empty_cells_are_faint_dots_and_an_empty_slot_has_no_value() {
         row,
         "--- ··     ···· ·· ···   ··     ···   ··     ···   ··    "
     );
-    assert_eq!(buffer[(13, 3)].fg, vt_tui::theme::OVERLAY0);
-    assert_eq!(buffer[(34, 3)].fg, vt_tui::theme::OVERLAY0);
+    assert_eq!(buffer[(13, 3)].fg, vt_tui::widgets::theme::OVERLAY0);
+    assert_eq!(buffer[(34, 3)].fg, vt_tui::widgets::theme::OVERLAY0);
 }
 
 #[test]
@@ -329,7 +357,7 @@ fn the_phrase_title_is_in_groups_and_the_track_labels_head_their_columns() {
     // Each label over its column's note, past the marker's cell.
     let headings: String = lines[1].chars().skip(68).collect();
     assert!(headings.starts_with(" 01   02   03 "), "{headings}");
-    assert_eq!(buffer[(69, 1)].bg, vt_tui::theme::GREEN);
+    assert_eq!(buffer[(69, 1)].bg, vt_tui::widgets::theme::GREEN);
     // In Insert they sit beside the box's top edge, in the same columns.
     app.key(Key::char('i'), Instant::now());
     let insert = drawn_lines(&screen(&app))[1].clone();
@@ -339,7 +367,7 @@ fn the_phrase_title_is_in_groups_and_the_track_labels_head_their_columns() {
 
 #[test]
 fn a_shared_phrase_and_chain_are_linked_rather_than_starred() {
-    use vt_tui::glyphs::{ICON_SPACE, LINK};
+    use vt_tui::widgets::glyphs::{ICON_SPACE, LINK};
     let (mut app, _realtime) = app();
     // A second row of the chain plays phrase 00 again.
     press(&mut app, " 2yyp");
@@ -398,18 +426,18 @@ fn the_title_shows_the_chain_with_this_phrase_in_the_cursors_colour_cut_to_its_r
     );
     let at = title.find("Chain 00  ").unwrap();
     let first = (title[..at].chars().count() + "Chain 00  ".len()) as u16;
-    assert_eq!(buffer[(first, 0)].fg, vt_tui::theme::OVERLAY2);
+    assert_eq!(buffer[(first, 0)].fg, vt_tui::widgets::theme::OVERLAY2);
     assert_eq!(
         buffer[(first + 3, 0)].fg,
-        vt_tui::theme::ROSEWATER,
+        vt_tui::widgets::theme::ROSEWATER,
         "{title}"
     );
     // `]p` moves along it.
     press(&mut app, "]p");
     assert_eq!(app.services.cursor.slot, 2);
     let buffer = screen_wide(&app);
-    assert_eq!(buffer[(first + 3, 0)].fg, vt_tui::theme::OVERLAY2);
-    assert_eq!(buffer[(first + 6, 0)].fg, vt_tui::theme::ROSEWATER);
+    assert_eq!(buffer[(first + 3, 0)].fg, vt_tui::widgets::theme::OVERLAY2);
+    assert_eq!(buffer[(first + 6, 0)].fg, vt_tui::widgets::theme::ROSEWATER);
     // At the end, it's cut before the start instead, and the last phrase is still shown.
     for _ in 0..40 {
         press(&mut app, "]p");
@@ -491,7 +519,10 @@ fn screen_wide(app: &App) -> ratatui::buffer::Buffer {
 #[test]
 fn other_tracks_show_their_own_length_and_playhead() {
     let (mut app, _realtime) = tracks_of_different_lengths();
-    let (dim, green) = (vt_tui::theme::OVERLAY2, vt_tui::theme::GREEN);
+    let (dim, green) = (
+        vt_tui::widgets::theme::OVERLAY2,
+        vt_tui::widgets::theme::GREEN,
+    );
     let note = |text: &str, color| (text.to_owned(), color);
 
     // Stopped, nothing is marked. The 2-step track ends early, and the 8-step one has rows past
@@ -593,7 +624,7 @@ fn the_shape_panel_draws_its_settings_beside_the_grid() {
     let backend = ratatui::backend::TestBackend::new(80, 16);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::shape::draw(frame, frame.area(), &app, &panel))
+        .draw(|frame| vt_tui::overlays::shape::draw::draw(frame, frame.area(), &app, &panel))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let text: Vec<String> = (0..16)
@@ -629,7 +660,7 @@ fn a_list_fill_draws_its_values_in_place_of_the_ends() {
     let backend = ratatui::backend::TestBackend::new(80, 16);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::shape::draw(frame, frame.area(), &app, &panel))
+        .draw(|frame| vt_tui::overlays::shape::draw::draw(frame, frame.area(), &app, &panel))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let all: String = (0..16)
@@ -644,7 +675,7 @@ fn a_list_fill_draws_its_values_in_place_of_the_ends() {
 
 #[test]
 fn the_status_line_names_the_column() {
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app();
     assert_eq!(column_name(&app), "Note");
     press(&mut app, "l");
@@ -677,7 +708,7 @@ fn app_with_a_lock_for_another_voice() -> (App, Realtime) {
 
 #[test]
 fn the_status_line_names_the_setting_a_cell_locks() {
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app_with_a_lock_for_another_voice();
     press(&mut app, "lllll");
     assert_eq!(column_name(&app), "Filter: Cut");
@@ -693,7 +724,7 @@ fn the_status_line_names_the_setting_a_cell_locks() {
 
 #[test]
 fn the_status_line_shows_a_value_in_its_units() {
-    use vt_tui::views::status::value_shown;
+    use vt_tui::screen::status::value_shown;
     let (mut app, _realtime) = app_with_a_lock_for_another_voice();
     press(&mut app, "l");
     assert_eq!(value_shown(&app), None, "a velocity has no units");
@@ -729,7 +760,7 @@ fn the_status_line_shows_a_value_in_its_units() {
 #[test]
 fn each_kind_of_cell_has_its_own_colours() {
     use ratatui::style::Modifier;
-    use vt_tui::theme;
+    use vt_tui::widgets::theme;
     let (app, _realtime) = app_with_a_lock_for_another_voice();
     let buffer = screen(&app);
     let row: String = (0..80).map(|x| buffer[(x, 2)].symbol()).collect();
@@ -753,13 +784,13 @@ fn each_kind_of_cell_has_its_own_colours() {
     // A lock the track doesn't have is grey all over, brighter than an empty cell.
     assert_eq!(style_at("DCAY", 0).fg, theme::dim().fg);
     assert_eq!(style_at("DCAY  2000", 6).fg, theme::dim().fg);
-    assert_eq!(theme::dim().fg, Some(vt_tui::theme::OVERLAY2));
+    assert_eq!(theme::dim().fg, Some(vt_tui::widgets::theme::OVERLAY2));
 }
 
 #[test]
 fn a_gate_cell_shows_its_own_length_dim_and_the_tracks_as_faint_dots() {
-    use vt_tui::theme;
-    use vt_tui::views::status::{column_name, value_shown};
+    use vt_tui::screen::status::{column_name, value_shown};
+    use vt_tui::widgets::theme;
     let mut song = Song::new(1);
     let steps = [
         "C-3 40 SGL1 80 cut:40 --- ---",
@@ -808,8 +839,8 @@ fn a_gate_cell_shows_its_own_length_dim_and_the_tracks_as_faint_dots() {
 
 #[test]
 fn a_nudge_shows_dim_by_the_velocity_only_on_a_row_that_has_one() {
-    use vt_tui::theme;
-    use vt_tui::views::status::{column_name, value_shown};
+    use vt_tui::screen::status::{column_name, value_shown};
+    use vt_tui::widgets::theme;
     let mut song = Song::new(1);
     let steps: Vec<Step> = [
         "C-3 40 -3 SGL1 80 cut:40 --- ---",
@@ -883,7 +914,7 @@ fn a_nudge_shows_dim_by_the_velocity_only_on_a_row_that_has_one() {
 #[test]
 fn a_selection_lights_up_the_neighbour_columns_it_reaches() {
     let (mut app, _realtime) = tracks_of_different_lengths();
-    let selected = vt_tui::theme::selected().bg;
+    let selected = vt_tui::widgets::theme::selected().bg;
 
     press(&mut app, "lVW");
     assert!(app.modes.mode.is_visual());
@@ -918,8 +949,8 @@ fn a_rule_under_a_row_marks_where_the_next_beat_or_bar_begins() {
     command(&mut app, "len 20");
     app.phrase_view.top = 0;
     let buffer = screen(&app);
-    let beat = Some(vt_tui::theme::SURFACE1);
-    let bar = Some(vt_tui::theme::OVERLAY0);
+    let beat = Some(vt_tui::widgets::theme::SURFACE1);
+    let bar = Some(vt_tui::widgets::theme::OVERLAY0);
     assert_eq!(rule_under(&buffer, 2), None, "row 01 is a step");
     assert_eq!(rule_under(&buffer, 5), beat, "row 04 starts a beat");
     assert_eq!(rule_under(&buffer, 13), beat, "row 0C starts a beat");
@@ -932,7 +963,7 @@ fn a_rule_under_a_row_marks_where_the_next_beat_or_bar_begins() {
     // The rule runs under the whole row, its FX too.
     let fx = &buffer[(40, 17)];
     assert!(fx.modifier.contains(ratatui::style::Modifier::UNDERLINED));
-    assert_eq!(fx.underline_color, vt_tui::theme::OVERLAY0);
+    assert_eq!(fx.underline_color, vt_tui::widgets::theme::OVERLAY0);
 }
 
 #[test]
@@ -946,7 +977,7 @@ fn the_rules_follow_rows_that_last_several_pulses() {
     assert_eq!(rule_under(&buffer, 2), None, "row 01 starts at step 2");
     assert_eq!(
         rule_under(&buffer, 3),
-        Some(vt_tui::theme::SURFACE1),
+        Some(vt_tui::widgets::theme::SURFACE1),
         "row 02 starts at step 4"
     );
     assert_eq!(rule_under(&buffer, 4), None, "row 03 starts at step 5");
@@ -961,7 +992,7 @@ fn the_loops_last_row_is_followed_by_a_bar() {
     let buffer = screen(&app);
     // Rows -02 and -01 come before the loop, which plays rows 00 to 03 of those kept.
     assert_eq!(row_number_at(&buffer, 7), " 03");
-    let bar = Some(vt_tui::theme::OVERLAY0);
+    let bar = Some(vt_tui::widgets::theme::OVERLAY0);
     assert_eq!(
         rule_under(&buffer, 3),
         bar,
@@ -977,14 +1008,14 @@ fn the_loops_last_row_is_followed_by_a_bar() {
 
 #[test]
 fn a_tracks_heading_has_its_machine_and_mute_or_solo_glyphs() {
-    use vt_tui::glyphs::{DRUM, MUTE, SAMPLER, SOLO, SYNTH};
+    use vt_tui::widgets::glyphs::{DRUM, MUTE, SAMPLER, SOLO, SYNTH};
     let (mut app, _rt) = app();
     let heading = |app: &App, y: u16| -> String {
         let buffer = screen(app);
         (0..100).map(|x| buffer[(x, y)].symbol()).collect()
     };
     let machine = app.song().tracks[0].machine;
-    let glyph = vt_tui::glyphs::machine(machine);
+    let glyph = vt_tui::widgets::glyphs::machine(machine);
     assert!(heading(&app, 0).starts_with(&format!("{glyph} Track 01  Chain")));
     tap(&mut app, " m");
     assert!(heading(&app, 0).starts_with(&format!("{glyph} Track 01 {MUTE}  Chain")));
@@ -993,13 +1024,13 @@ fn a_tracks_heading_has_its_machine_and_mute_or_solo_glyphs() {
     tap(&mut app, " m");
     app.services.levels[0].solo = true;
     assert!(heading(&app, 0).contains(&format!("Track 01 {SOLO}  Chain")));
-    assert_eq!(vt_tui::glyphs::machine(Machine::Sampler), SAMPLER);
+    assert_eq!(vt_tui::widgets::glyphs::machine(Machine::Sampler), SAMPLER);
     assert_eq!(
-        vt_tui::glyphs::machine(Machine::Plaits(SynthVoice::Kick)),
+        vt_tui::widgets::glyphs::machine(Machine::Plaits(SynthVoice::Kick)),
         DRUM
     );
     assert_eq!(
-        vt_tui::glyphs::machine(Machine::Plaits(SynthVoice::Fm)),
+        vt_tui::widgets::glyphs::machine(Machine::Plaits(SynthVoice::Fm)),
         SYNTH
     );
 }
