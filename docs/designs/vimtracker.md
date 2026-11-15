@@ -778,8 +778,9 @@ apply an action at once, and the modes to read; `Ctx`, which a page is drawn wit
 reads through `App`, as drawing is given `&App` and some of what's drawn, such as a live
 generator's sources, is `App`'s to work out.
 
-**`Page`** (`page.rs`, #739) is a page as a component, which the track page, the mixer and the
-project page's Song and Audio sub-pages are so far: its rows of the binding table, `Page::KEYS`, kept beside it and assembled by
+**`Page`** (`page.rs`, #739) is a page as a component, which the track page, the mixer, the
+project page's Song and Audio sub-pages and the sample page are so far: its rows of the binding
+table, `Page::KEYS`, kept beside it and assembled by
 `input/bindings.rs` under its mode; `Page::key`, which runs one of its keys with a count through a
 `CtxMut` and says what it did as an `Outcome`, done, refused with why, or passed back; `Page::draw`,
 given a `Ctx`; and `Page::panels` and `Page::take_panels`, its pictures as data for `Graphics` and
@@ -944,6 +945,18 @@ the shape panel.
     track and the fixed tracks' Outputs, `modulation.rs` the Mod page's devices, and
     `fx.rs` the slots; `controls.rs` has `Control`, what each setting is called and holds on a
     track.
+*   **Each setting resolved once** (`view.rs`, the UI plan's U7, #739). `view(control, track,
+    song, scale)` gives a `ParamView`: its value within its bounds, its fine byte, its default,
+    its `nudge` and `jump` up and down from where it is (an envelope's time steps by 1 ms below
+    10 ms and 5 ms from it, so `-` from 10 ms is 9 ms), whether it wraps, its bar, whether it's a
+    switch, its choices and whether `K` numbers them, its cell's text, the status line's text
+    (`1.21 kHz`, or what it does, empty where the cell says it all), how `i` types it, its units
+    and whether it's engaged or dim. `set(control, at, track, song, value, fine)` is the action
+    that writes a value back. The cells and titles, the status line, the mixer, the zoom's tiles
+    and the Roto's value text read the view. It's vt-tui's, not the model's, as it's resolved from
+    `Control`, from a live generator, and by the scale lock the program keeps outside the song;
+    what it holds is description only, with nothing of the cursor, the modes or the report.
+    `Ctx::param_view` resolves one with the program's scale.
 *   **Macros on the page** (`macroing.rs`, decision 285). `M` maps the setting under the cursor,
     `Control::setting_for_macro`, through a picker; `gm` opens `App::mapping`, a `MappingView` in
     `Mode::Mapping`, drawn by `views/mapping.rs`. A setting a macro holds refuses a turn in
@@ -986,7 +999,8 @@ the shape panel.
     page's in `views/track/modulation.rs`: a device's frame and title (`widgets::device`), its grid
     read through `TrackCells` (`views/track/cells.rs`), the one `CellSource` for every page's
     settings and devices' titles, which turns each `Control` into a `widgets::param::ParamCell`
-    (`widgets::grid`: `CellWidths::FX`, `CellWidths::SOUND`, whose
+    from its `ParamView` and what only the page knows, the engine's report, the faders and the
+    modes (`widgets::grid`: `CellWidths::FX`, `CellWidths::SOUND`, whose
     value has room for its fine digits, and `CellWidths::COMPACT`, with no bar, for the Mod page's
     half-width devices), its panel (`widgets::panel`), and, for the Mod page's two columns,
     `widgets::device::rack_areas`.
@@ -1053,9 +1067,14 @@ groove it shows, and the audio page's row. `App::run_project_pages` hands them a
 runs what they pass back, their edits and `H` and `L`, which stay `impl App`, as the Song
 sub-page's run each row's `:` command and the audio page's change the output the main loop opens,
 the wheel and the Roto. The output as it plays, `App::audio`, stays `App`'s, as the main loop, the
-status line and the recorder read it too. `SamplePage` is half there too: it keeps its own cursor, zoom, scroll,
-selection and settings focus, while its keys are still `impl App` blocks, in `sample_page.rs`, and
-in `placing.rs` and `sample_settings.rs` for editing its points and settings.
+status line and the recorder read it too.
+`SamplePage` is a component too: it keeps its own cursor, zoom, scroll, selection, settings focus
+and pictures' ids, runs its moves and its edits of the entry's points and settings
+(`placing.rs`, `sample_settings.rs`) through the `Services`, builds its settings' pickers, and is
+drawn through a `Ctx`. What it passes back is `App`'s, in `App::run_sample_passed`: what plays
+through the track, the pads, `'` and `m`'s letters and `]'` `['`'s jumps, and opening the picker.
+Whether an entry is still recording is `App`'s too, so `App::sample_shown` says so before the
+page's own `SamplePage::shown`.
 
 **Decisions:** 49 to 53, 73 to 75, 100 to 104, 108, 122, 126, 128, 139, 140, 144, 145, 148, 149 and
 151 to 155, with #320 and #330.
@@ -1071,8 +1090,10 @@ terminal has. It's a service that reads no `App` (#728): a page lists the pictur
 `TrackPage::panels` and `MappingView::panels` work out from their state and what they're given;
 `Graphics::panels` sends whichever the terminal lacks and gives back their ids as `PanelIds`, which
 the page keeps for its drawing; and `Shape::png` draws any of them, one match over the shapes. The
-scope, the picker's preview and the sample page's waveforms are `Graphics` methods given what they
-draw, and what's placed directly comes as `Placements`. `App::send_pictures` and
+sample page's waveform and overview are `PanelWant`s too, from `SamplePage::panels`, which
+`Graphics::sample_panels` holds apart and sends again the moment what they show changes, never
+waiting as a picture that follows a modulated setting does. The scope and the picker's preview are
+`Graphics` methods given what they draw, and what's placed directly comes as `Placements`. `App::send_pictures` and
 `App::place_pictures`, in `run.rs`, hand each page its pictures each frame, and the screenshots make
 the same calls. Every command is sent with `q=2`, so the terminal's
 answers never arrive as keys. A picture reaches the screen in one of two ways.

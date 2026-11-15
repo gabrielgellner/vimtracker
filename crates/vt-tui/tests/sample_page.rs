@@ -27,7 +27,7 @@ use vt_model::step::FxCommand;
 use vt_tui::app::{App, Field};
 use vt_tui::input::keys::{Key, parse_sequence};
 use vt_tui::input::mode::{Mode, View};
-use vt_tui::kitty::Graphics;
+use vt_tui::kitty::{Graphics, PanelIds};
 use vt_tui::run::draw_screen;
 use vt_tui::sample_settings::SampleSetting;
 use vt_tui::sample_wave::{END_COLOR, LOOP_COLOR, SLICE_COLOR, START_COLOR};
@@ -524,7 +524,7 @@ fn the_ruler_numbers_each_slice_and_the_settings_row_counts_them() {
     assert_eq!(first, "  00", "{ruler}");
     // With no pictures, as in a render, the ruler draws the marks itself.
     let mut text = Terminal::new(TestBackend::new(163, 42)).unwrap();
-    app.sample_images = None;
+    app.sample_page.images = PanelIds::default();
     app.sample_page.cell_width = None;
     text.draw(|frame| draw_screen(frame, &mut app, None, Instant::now()))
         .unwrap();
@@ -1575,7 +1575,7 @@ fn the_ruler_puts_the_letters_after_their_slices_mark() {
     command(&mut app, "mark z 1");
     let column = |frame: u64| 1 + (frame / FIT) as usize;
     let mut text = Terminal::new(TestBackend::new(163, 42)).unwrap();
-    app.sample_images = None;
+    app.sample_page.images = PanelIds::default();
     app.sample_page.cell_width = None;
     text.draw(|frame| draw_screen(frame, &mut app, None, Instant::now()))
         .unwrap();

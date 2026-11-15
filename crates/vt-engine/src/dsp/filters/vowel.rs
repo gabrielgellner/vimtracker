@@ -33,7 +33,9 @@ use crate::dsp::blocks::flush::flush;
 use crate::dsp::blocks::response::{Gain, svf, warped};
 use crate::dsp::blocks::sides::Sides;
 use crate::dsp::blocks::smoother::Smoothed;
+use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::resonator::{Limiter, QUIET_GAIN, semitones};
+use crate::dsp::effects::slot::{Mono, SlotEffect};
 use crate::dsp::filters::filter::Svf;
 
 /// How many formants a voice has, and how many vowels and voices there are, as Plaits has them.
@@ -398,6 +400,34 @@ pub fn response(settings: Settings, note: f32, rate: u32) -> impl Fn(f32) -> f32
         wet.scale(f64::from(QUIET_GAIN) * mix)
             .plus(Gain::real(1.0 - mix))
             .db()
+    }
+}
+
+impl SlotEffect for Formants {
+    type Settings = Settings;
+
+    /// Each side goes through its own formants, the same way, with nothing between them.
+    const MONO: Mono = Mono::OneSide;
+
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, _frames: u64) {
+        self.follow(settings);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// None: it's worked every frame, so the slot never waits on its tail.
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        0
     }
 }
 

@@ -18,7 +18,7 @@ use vt_model::song::Track;
 
 use super::{
     MeterScale, REDUCTION_CAPTION, REDUCTION_METER_WIDTH, TrackCells, heard_bypassed,
-    reduction_cell, slot_frame, slot_grid, value,
+    reduction_cell, slot_frame, slot_grid,
 };
 use crate::kitty::PanelKey;
 use crate::page::Ctx;
@@ -218,7 +218,10 @@ fn draw_tile(
         let Some(label) = insert.params().get(param).and_then(|found| found.label) else {
             continue;
         };
-        let shown = value(*control, track, ctx.song());
+        let shown = ctx
+            .param_view(*control, track)
+            .map(|view| view.cell)
+            .unwrap_or_default();
         let gap = if spans.is_empty() {
             0
         } else {

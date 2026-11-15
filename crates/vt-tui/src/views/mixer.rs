@@ -25,7 +25,7 @@ use crate::mixer_page::{MIXER, MixerPage};
 use crate::page::Ctx;
 use crate::theme;
 use crate::track_page::Control;
-use crate::views::track::value;
+
 use crate::views::widgets::group::{self, Switched};
 use crate::views::widgets::meter::{EIGHTHS, level_cell};
 use crate::views::widgets::role;
@@ -390,7 +390,11 @@ pub(crate) fn draw_page(frame: &mut Frame, area: Rect, page: &MixerPage, ctx: &C
                 _ if waiting => glyphs::WAITING.to_string(),
                 (_, Some((Switched::Off, _))) => "-".to_owned(),
                 (_, Some((_, glyph))) => glyph.to_string(),
-                _ => setting::text(&look, || value(control, track, song)),
+                _ => setting::text(&look, || {
+                    ctx.param_view(control, track)
+                        .map(|view| view.cell)
+                        .unwrap_or_default()
+                }),
             };
             let style = match switched {
                 _ if selected => theme::cursor(ctx.mode()),

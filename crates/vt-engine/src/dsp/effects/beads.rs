@@ -50,7 +50,7 @@ use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::clouds::{mu_law_decode, mu_law_encode, soft_clip};
 use crate::dsp::effects::granular::{GrainPlayer, Launch};
 use crate::dsp::effects::memory::SongPlace;
-use crate::dsp::effects::slot::{Rung, SlotEffect};
+use crate::dsp::effects::slot::{Mixing, Rung, SlotEffect};
 use crate::dsp::effects::tape::Wobble;
 use crate::rng::Pcg32;
 
@@ -2058,6 +2058,8 @@ impl Rates {
 
 impl SlotEffect for Beads {
     type Settings = Settings;
+    /// It blends the sound and what it made itself, as the module does.
+    const MIXING: Mixing = Mixing::Inside;
 
     /// Beads', which records the longest of the module's qualities too.
     fn new(rate: u32) -> Self {

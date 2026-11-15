@@ -17,7 +17,9 @@ use crate::dsp::blocks::flush::{flush, tiny_by_fields};
 use crate::dsp::blocks::oversampler::Oversampler;
 use crate::dsp::blocks::sides::{SameBits, Sides};
 use crate::dsp::blocks::smoother::Smoothed;
+use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::pedal::Pedal;
+use crate::dsp::effects::slot::{Mono, SlotEffect};
 use crate::dsp::voices::drums::soft_clip;
 
 /// How much `Amount` turns up what's clipped or folded, at full, in dB.
@@ -277,26 +279,15 @@ impl SameBits for Distortion {
 }
 
 impl Distortion {
-    /// One starting afresh, with its bits where they're set rather than easing there.
-    pub fn starting(settings: Distort) -> Self {
-        Self {
-            bits: Smoothed::at(f32::from(settings.bits)),
-            ..Self::default()
-        }
-    }
-
-    /// Take what's set. A pedal that's only just started, `fresh`, jumps to its tone.
-    pub fn follow(&mut self, settings: Distort, fresh: bool) {
+    /// Take what's set: `Crush`'s bits, and a pedal's tone.
+    pub fn follow(&mut self, settings: Distort) {
         self.bits.target = f32::from(settings.bits);
         if settings.kind.is_pedal() {
             self.pedal.follow(f32::from(settings.tone) / 255.0);
-            if fresh {
-                self.pedal.settle();
-            }
         }
     }
 
-    /// Jump to what's set, for playing from the start.
+    /// Jump to what's set, for playing from the start or a distortion just chosen.
     pub fn settle(&mut self) {
         self.bits.settle();
         self.pedal.settle();
@@ -363,6 +354,34 @@ impl Distortion {
                 })
             }
         }
+    }
+}
+
+impl SlotEffect for Distortion {
+    type Settings = Distort;
+
+    /// Each of its types works each side alone, the same way, with nothing between them.
+    const MONO: Mono = Mono::OneSide;
+
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    fn follow(&mut self, settings: Distort, _song: SongPlace, _frames: u64) {
+        self.follow(settings);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// None: it's worked every frame, so the slot never waits on its tail.
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        0
     }
 }
 
