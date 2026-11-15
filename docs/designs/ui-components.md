@@ -1129,10 +1129,9 @@ The screenshot example (`examples/screenshots.rs:550-565`) makes the same three 
 ## 6. Testing
 
 **Today.**
-- 60 files in `tests/` drive keys into an `App` with a real engine. #719, in progress, makes them
-  one binary.
-- Screen readers live in `tests/common/mod.rs`: `screen` (:110), `track_page_text` (:253),
-  `fx_page_text` (:280), `track_page_buffer` (:374) and `screen_cells` (:450).
+- 60 files in `tests/all/`, one binary since #719, drive keys into an `App` with a real engine.
+- Screen readers live in `tests/all/common/mod.rs`: `screen` (:169), `track_page_text` (:306),
+  `fx_page_text` (:333), `track_page_buffer` (:427) and `screen_cells` (:503).
 - The SVG screenshots: `examples/screenshots.rs`, with `screenshots_are_the_same_on_every_run`
   (:872).
 - The PNGs are pinned by CRC (`kitty/tests.rs`).
@@ -1144,7 +1143,7 @@ The screenshot example (`examples/screenshots.rs:550-565`) makes the same three 
 |---|---|---|
 | Widget | render into a `Buffer`, read symbols and colours, as `bar.rs:186-196` does | a `HexFine` cell focused on its fine part; a toggle at its default; typing `4_`; a jump label over the value; a fader's inverted bar; a macro range; a faded grid keeping the cursor |
 | `param::edit` | pure functions, no `App` | `stepped(TIME, 95 ms, up, large)`; `typed(GROUP, "g3")`; a `List { wraps: false }` stops at the end; a phase wraps |
-| Page | `page.key(cmd, n, &mut services, &modes)`, with `Services` built for a test (a song, `connect(Engine::new(..))` as `tests/common/mod.rs:27` does) | the track page's moves, as `TrackPage::key` is already driven with a `Track` alone |
+| Page | `page.key(cmd, n, &mut services, &modes)`, with `Services` built for a test (a song, `connect(Engine::new(..))` as `app_for` in `tests/all/common/mod.rs:33` does) | the track page's moves, as `TrackPage::key` is already driven with a `Track` alone |
 | Pictures | `page.panels(&ctx)` gives `PanelWant`s, data with no terminal | the Mod page wants an LFO cycle in the focused shade for the cursor's slot |
 | App | as now: keys into `App`, the screen read back | unchanged |
 | Screenshots | as now; every PR states no diff | unchanged |
