@@ -40,7 +40,9 @@ use crate::dsp::filters::diode_filter::{
     DiodeFilter, HIGH_PASS_RATIO, RESONANT_SHARE, feedback_coefficient,
 };
 use crate::dsp::voices::SynthEngine;
+use vt_model::machine::SynthVoice;
 use vt_model::settings::slide_ms;
+use vt_model::settings::voice_place;
 use vt_model::settings::{
     ACID_HIGHEST_CUTOFF, ACID_LOWEST_CUTOFF, acid_cutoff_position, acid_decay_ms, acid_drive_db,
 };
@@ -172,16 +174,32 @@ const SWEEP_SOFTENING: f32 = 7.3;
 /// How many decibels double a level.
 const DECIBELS_PER_OCTAVE: f32 = 6.020_6;
 
-/// What's smoothed, by place among the voice's settings.
-const CUTOFF: usize = 0;
-const RESONANCE: usize = 1;
-const ENVELOPE_MOD: usize = 2;
-const DECAY: usize = 3;
-const ACCENT: usize = 4;
-const SLIDE: usize = 5;
-const DRIVE: usize = 6;
-const DRIFT: usize = 7;
+/// Where its wave is among the voice's settings, by the key it's stored under, and where the
+/// first of the settings that are smoothed is.
+const WAVE: usize = voice_place(SynthVoice::Acid, "wave");
+const FIRST_SMOOTHED: usize = voice_place(SynthVoice::Acid, "cutoff");
+/// What's smoothed, by place among the smoothed, each found by its key.
+const CUTOFF: usize = smoothed_place("cutoff");
+const RESONANCE: usize = smoothed_place("resonance");
+const ENVELOPE_MOD: usize = smoothed_place("envmod");
+const DECAY: usize = smoothed_place("decay");
+const ACCENT: usize = smoothed_place("accent");
+const SLIDE: usize = smoothed_place("slide");
+const DRIVE: usize = smoothed_place("drive");
+const DRIFT: usize = smoothed_place("drift");
 const SMOOTHED: usize = 8;
+
+/// The place of the setting stored as `key` among the smoothed, which are together among the
+/// voice's, or it doesn't build. There are as many keys as places, so the wave, a choice, can't be
+/// among them.
+const fn smoothed_place(key: &str) -> usize {
+    let place = voice_place(SynthVoice::Acid, key);
+    assert!(
+        FIRST_SMOOTHED <= place && place < FIRST_SMOOTHED + SMOOTHED,
+        "a smoothed setting is apart from the rest"
+    );
+    place - FIRST_SMOOTHED
+}
 /// How many frames go by between working out what follows from the settings, which are smoothed,
 /// so they move little in that time.
 const CONTROL_FRAMES: u32 = 16;
@@ -381,7 +399,7 @@ impl SynthEngine for Acid {
     #[inline]
     fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
         for (place, smoothed) in self.smoothed.iter_mut().enumerate() {
-            smoothed.target = settings.at(place + 1).clamp(0.0, 1.0);
+            smoothed.target = settings.at(FIRST_SMOOTHED + place).clamp(0.0, 1.0);
         }
         if self.fresh {
             self.smoothed.iter_mut().for_each(Smoothed::settle);
@@ -391,7 +409,7 @@ impl SynthEngine for Acid {
         for (value, smoothed) in values.iter_mut().zip(&mut self.smoothed) {
             *value = smoothed.next(self.smoothing);
         }
-        let square = (settings.at(0) * 255.0).round() >= 1.0;
+        let square = (settings.at(WAVE) * 255.0).round() >= 1.0;
         let resonance = values[RESONANCE];
         if self.countdown == 0 {
             let plain_decay = acid_decay_ms(values[DECAY] * 255.0);

@@ -18,31 +18,54 @@ use super::Settings;
 use super::virtual_analog::BLOCK;
 use crate::dsp::blocks::oversampler::Decimator;
 use crate::dsp::voices::SynthEngine;
-use vt_model::settings::{FOUR_OP_ALGORITHMS, FOUR_OP_EACH, FOUR_OP_SHARED};
+use vt_model::machine::SynthVoice;
+use vt_model::settings::{FOUR_OP_ALGORITHMS, FOUR_OP_EACH, voice_place};
 
 /// How many operators, one to a lane.
 const OPERATORS: usize = 4;
-/// The settings before the operators' own: the algorithm, feedback, ring modulation and beating.
-const ALGORITHM: usize = 0;
-const FEEDBACK: usize = 1;
-const RING: usize = 2;
-const BEAT: usize = 3;
-/// Each operator's, after those, in this order.
-const RATIO: usize = 0;
-const FINE: usize = 1;
-const LEVEL: usize = 2;
-const WAVE: usize = 3;
-const WARP: usize = 4;
-const AMOUNT: usize = 5;
-const ATTACK: usize = 6;
-const DECAY: usize = 7;
-const SUSTAIN: usize = 8;
-const RELEASE: usize = 9;
+/// Where the settings the operators share are among the voice's, by the keys they're stored
+/// under: the algorithm, feedback, ring modulation and beating.
+const ALGORITHM: usize = voice_place(SynthVoice::FourOp, "algorithm");
+const FEEDBACK: usize = voice_place(SynthVoice::FourOp, "feedback");
+const RING: usize = voice_place(SynthVoice::FourOp, "ring");
+const BEAT: usize = voice_place(SynthVoice::FourOp, "beat");
+/// Where the first operator's first setting is.
+const FIRST: usize = voice_place(SynthVoice::FourOp, "ratio1");
+
+/// Each operator's settings, by where the first operator's is among its own, from its key. The
+/// other three have to keep theirs in the same order, each operator's after the one before's, or
+/// it doesn't build.
+macro_rules! operator_places {
+    ($($name:ident = $key:literal),+ $(,)?) => {
+        $(const $name: usize = voice_place(SynthVoice::FourOp, concat!($key, "1")) - FIRST;)+
+        const _: () = {
+            $(
+                assert!($name < FOUR_OP_EACH);
+                assert!(voice_place(SynthVoice::FourOp, concat!($key, "2")) == place(1, $name));
+                assert!(voice_place(SynthVoice::FourOp, concat!($key, "3")) == place(2, $name));
+                assert!(voice_place(SynthVoice::FourOp, concat!($key, "4")) == place(3, $name));
+            )+
+        };
+    };
+}
+
+operator_places! {
+    RATIO = "ratio",
+    FINE = "fine",
+    LEVEL = "level",
+    WAVE = "wave",
+    WARP = "warp",
+    AMOUNT = "amount",
+    ATTACK = "attack",
+    DECAY = "decay",
+    SUSTAIN = "sustain",
+    RELEASE = "release",
+}
 
 /// Where an operator's setting is among the voice's.
 #[inline]
 const fn place(operator: usize, setting: usize) -> usize {
-    FOUR_OP_SHARED + operator * FOUR_OP_EACH + setting
+    FIRST + operator * FOUR_OP_EACH + setting
 }
 
 /// The ratios `Ratio` steps through, as the Digitone's do, as the model names them.

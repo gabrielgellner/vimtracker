@@ -22,10 +22,12 @@
 
 use super::Settings;
 use super::chord_bank::{ChordBank, VOICES};
-use super::virtual_analog::{BLOCK, DRIFT, Moving, SyncedSquare};
+use super::virtual_analog::{BLOCK, Moving, SyncedSquare};
 use crate::dsp::blocks::drift::{Drift, OSCILLATORS};
 use crate::dsp::blocks::plaits_parts::DcBlocker;
 use crate::dsp::voices::SynthEngine;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 const _: () = assert!(
     VOICES <= OSCILLATORS,
@@ -62,6 +64,12 @@ impl Default for Chiptune {
         Self::new()
     }
 }
+
+/// Where its settings are among the voice's, by the keys they're stored under.
+const CHORD: usize = voice_place(SynthVoice::Chiptune, "chord");
+const INVERSION: usize = voice_place(SynthVoice::Chiptune, "inversion");
+const SHAPE: usize = voice_place(SynthVoice::Chiptune, "shape");
+const DRIFT: usize = voice_place(SynthVoice::Chiptune, "drift");
 
 impl SynthEngine for Chiptune {
     const DRIFTS: bool = true;
@@ -114,7 +122,7 @@ impl Chiptune {
     }
 
     fn render(&mut self, f0: f32, settings: Settings) {
-        let shape = settings.morph.clamp(0.0, 1.0) * 0.995;
+        let shape = settings.at(SHAPE).clamp(0.0, 1.0) * 0.995;
         // The square runs at a ratio of the note and is reset by it: below the middle slower,
         // which narrows it to a thin pulse; at the middle a plain square; above, faster, for hard
         // sync.
@@ -124,8 +132,8 @@ impl Chiptune {
             1.0 + 16.0 * (shape - 0.5) * (shape - 0.5)
         };
         // Harmonics is a place in the list of chords.
-        self.chords.set_listed(settings.harmonics.clamp(0.0, 1.0));
-        let (ratios, mut amplitudes) = self.chords.inversion(settings.timbre);
+        self.chords.set_listed(settings.at(CHORD).clamp(0.0, 1.0));
+        let (ratios, mut amplitudes) = self.chords.inversion(settings.at(INVERSION));
         // Plaits turns every other voice upside down.
         for amplitude in amplitudes.iter_mut().skip(1).step_by(2) {
             *amplitude = -*amplitude;

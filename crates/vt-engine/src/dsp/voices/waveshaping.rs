@@ -24,6 +24,8 @@ use super::virtual_analog::{BLOCK, Moving, next_integrated_blep, this_integrated
 use super::waveshaping_tables::{FOLD, SHAPES};
 use crate::dsp::blocks::line::hermite_soras;
 use crate::dsp::voices::SynthEngine;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 const MAX_FREQUENCY: f32 = 0.25;
 const MIN_FREQUENCY: f32 = 0.000_001;
@@ -90,6 +92,11 @@ pub(crate) struct Waveshaping {
     output: [f32; BLOCK],
     at: usize,
 }
+
+/// Where its settings are among the voice's, by the keys they're stored under.
+const SHAPE: usize = voice_place(SynthVoice::Waveshaping, "shape");
+const FOLD_PLACE: usize = voice_place(SynthVoice::Waveshaping, "fold");
+const SLOPE: usize = voice_place(SynthVoice::Waveshaping, "slope");
 
 impl SynthEngine for Waveshaping {
     fn new(_rate: u32) -> Self {
@@ -174,12 +181,9 @@ impl Waveshaping {
     }
 
     fn render(&mut self, f0: f32, settings: Settings) {
-        let Settings {
-            harmonics,
-            timbre,
-            morph,
-            ..
-        } = settings;
+        let harmonics = settings.at(SHAPE);
+        let timbre = settings.at(FOLD_PLACE);
+        let morph = settings.at(SLOPE);
         self.render_slope(f0, morph * 0.45 + 0.5);
 
         let slope = 3.0 + (morph - 0.5).abs() * 5.0;

@@ -20,6 +20,8 @@
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use std::f32::consts::PI;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 use super::Settings;
 use super::virtual_analog::{BLOCK, Moving};
@@ -59,6 +61,12 @@ pub(crate) struct Kick {
     at: usize,
 }
 
+/// Where its settings are among the voice's, by the keys they're stored under.
+const PUNCH: usize = voice_place(SynthVoice::Kick, "punch");
+const TONE: usize = voice_place(SynthVoice::Kick, "tone");
+const DECAY: usize = voice_place(SynthVoice::Kick, "decay");
+const ACCENT: usize = voice_place(SynthVoice::Kick, "accent");
+
 impl SynthEngine for Kick {
     fn new(rate: u32) -> Self {
         Self {
@@ -97,13 +105,10 @@ impl SynthEngine for Kick {
 
 impl Kick {
     fn render(&mut self, f0: f32, settings: Settings) {
-        let Settings {
-            harmonics,
-            timbre: tone,
-            morph: decay,
-            accent,
-            ..
-        } = settings;
+        let harmonics = settings.at(PUNCH);
+        let tone = settings.at(TONE);
+        let decay = settings.at(DECAY);
+        let accent = settings.at(ACCENT);
         let attack_fm_amount = (harmonics * 4.0).min(1.0);
         let self_fm_amount = (harmonics * 4.0 - 1.0).clamp(0.0, 1.0);
         let drive = (harmonics * 2.0 - 1.0).max(0.0) * (1.0 - 16.0 * f0).max(0.0);

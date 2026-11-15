@@ -24,6 +24,8 @@
 use super::Settings;
 use crate::dsp::blocks::line::hermite_soras;
 use crate::dsp::voices::SynthEngine;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// How many frames are worked out at once, as in Plaits, whose smoothing is set per block.
 const BLOCK: usize = 24;
@@ -110,6 +112,11 @@ impl Default for Wavetable {
     }
 }
 
+/// Where its settings are among the voice's, by the keys they're stored under.
+const BANK: usize = voice_place(SynthVoice::Wavetable, "bank");
+const WAVE_PLACE: usize = voice_place(SynthVoice::Wavetable, "wave");
+const ROW: usize = voice_place(SynthVoice::Wavetable, "row");
+
 impl SynthEngine for Wavetable {
     fn new(_rate: u32) -> Self {
         Self::default()
@@ -148,9 +155,9 @@ impl Wavetable {
     /// Harm through the banks and back.
     fn targets(settings: Settings) -> [f32; 3] {
         [
-            settings.timbre.clamp(0.0, 1.0) * 6.9999,
-            settings.morph.clamp(0.0, 1.0) * 6.9999,
-            settings.harmonics.clamp(0.0, 1.0) * 6.9999,
+            settings.at(WAVE_PLACE).clamp(0.0, 1.0) * 6.9999,
+            settings.at(ROW).clamp(0.0, 1.0) * 6.9999,
+            settings.at(BANK).clamp(0.0, 1.0) * 6.9999,
         ]
     }
 

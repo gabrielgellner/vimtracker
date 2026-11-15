@@ -28,6 +28,8 @@ use super::wavetable::{PER_BANK, WAVE, stored};
 use crate::dsp::blocks::plaits_parts::{DcBlocker, interpolate};
 use crate::dsp::blocks::sine_table::SINE;
 use crate::dsp::voices::SynthEngine;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// The path is traced at twice the rate, and each pair of heights averaged, to tame aliasing.
 const OVERSAMPLING: usize = 2;
@@ -206,6 +208,11 @@ impl Default for WaveTerrain {
     }
 }
 
+/// Where its settings are among the voice's, by the keys they're stored under.
+const TERRAIN: usize = voice_place(SynthVoice::WaveTerrain, "terrain");
+const SIZE: usize = voice_place(SynthVoice::WaveTerrain, "size");
+const OFFSET: usize = voice_place(SynthVoice::WaveTerrain, "offset");
+
 impl SynthEngine for WaveTerrain {
     fn new(_rate: u32) -> Self {
         Self::default()
@@ -238,9 +245,9 @@ impl WaveTerrain {
     }
 
     fn render(&mut self, f0: f32, settings: Settings) {
-        let harmonics = settings.harmonics.clamp(0.0, 1.0);
-        let timbre = settings.timbre.clamp(0.0, 1.0);
-        let morph = settings.morph.clamp(0.0, 1.0);
+        let harmonics = settings.at(TERRAIN).clamp(0.0, 1.0);
+        let timbre = settings.at(SIZE).clamp(0.0, 1.0);
+        let morph = settings.at(OFFSET).clamp(0.0, 1.0);
         // The path grows with Timbre, but less so for high notes, whose wider paths would alias.
         let attenuation = (1.0 - 8.0 * f0).max(0.0);
         let radius = 0.1 + 0.9 * timbre * attenuation * (2.0 - attenuation);

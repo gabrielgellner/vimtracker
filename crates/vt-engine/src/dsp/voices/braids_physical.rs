@@ -24,6 +24,8 @@
 
 use super::Settings;
 use super::braids_parts::{BRAIDS_BLOCK, INNER, Lcg, Macro, Model, Pitch, sine, whole};
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// A bowed string: a bow's friction against a string between a bridge and a nut.
 pub(crate) type Bowed = Macro<BowedModel>;
@@ -90,9 +92,11 @@ impl Model for BowedModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
+        const PRESSURE: usize = voice_place(SynthVoice::Bowed, "pressure");
+        const POSITION: usize = voice_place(SynthVoice::Bowed, "position");
         // Harder bow pressure going up, and the bow nearer the middle of the string.
-        let pressure = 172 - (whole(settings.at(0)) >> 8);
-        let position = 6 + (whole(settings.at(1)) >> 9);
+        let pressure = 172 - (whole(settings.at(PRESSURE)) >> 8);
+        let position = 6 + (whole(settings.at(POSITION)) >> 9);
         // It runs at half the rate, less a frame each way for the filter's own delay.
         let mut delay = (cycle_delay(pitch) >> 1).saturating_sub(2 << 16);
         let mut bridge_delay = (delay >> 8) * position as u32;
@@ -191,14 +195,16 @@ impl Model for BlownModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
+        const BREATH: usize = voice_place(SynthVoice::Blown, "breath");
+        const TONE: usize = voice_place(SynthVoice::Blown, "tone");
         let mut delay = (cycle_delay(pitch) >> 1).saturating_sub(1 << 16);
         while delay > ((BORE_LENGTH as u32 - 1) << 16) {
             delay >>= 1;
         }
         let (bore_whole, bore_fraction) = ((delay >> 16) as usize, (delay & 0xFFFF) as i32);
         // Less noise in the breath going up.
-        let breath_noise = 28_000 - (whole(settings.at(0)) >> 1);
-        let tone = ((pitch.note * 128.0) as i32 - 8192 + (whole(settings.at(1)) >> 1)) >> 7;
+        let breath_noise = 28_000 - (whole(settings.at(BREATH)) >> 1);
+        let tone = ((pitch.note * 128.0) as i32 - 8192 + (whole(settings.at(TONE)) >> 1)) >> 7;
         let coefficient = i32::from(FLUTE_BODY_FILTER[tone.clamp(0, 127) as usize]);
         for out in out.iter_mut() {
             let mut breath = (i32::from(self.noise.sample()) * breath_noise) >> 15;
@@ -260,9 +266,11 @@ impl Model for FlutedModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
+        const JET: usize = voice_place(SynthVoice::Fluted, "jet");
+        const BREATH: usize = voice_place(SynthVoice::Fluted, "breath");
         let mut bore_delay = (cycle_delay(pitch) << 1).saturating_sub(2 << 16);
         // The jet's share of the length, from 48 to 79 256ths.
-        let mut jet_delay = (bore_delay >> 8) * (48 + (whole(settings.at(1)) >> 10)) as u32;
+        let mut jet_delay = (bore_delay >> 8) * (48 + (whole(settings.at(JET)) >> 10)) as u32;
         bore_delay -= jet_delay;
         while bore_delay > ((FLUTE_BORE_LENGTH as u32 - 1) << 16)
             || jet_delay > ((JET_LENGTH as u32 - 1) << 16)
@@ -274,7 +282,7 @@ impl Model for FlutedModel {
             ((bore_delay >> 16) as usize, (bore_delay & 0xFFFF) as i32);
         let (jet_whole, jet_fraction) = ((jet_delay >> 16) as usize, (jet_delay & 0xFFFF) as i32);
         // Less noise in the breath going up.
-        let intensity = 2100 - (whole(settings.at(0)) >> 4);
+        let intensity = 2100 - (whole(settings.at(BREATH)) >> 4);
         let note = (pitch.note as i32).clamp(0, 127) as usize;
         let coefficient = i32::from(FLUTE_BODY_FILTER[note]);
         for (index, out) in out.iter_mut().enumerate() {
@@ -369,7 +377,9 @@ impl Model for BellModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
-        let (length, detune) = (settings.at(0), settings.at(1));
+        const DECAY: usize = voice_place(SynthVoice::Bell, "decay");
+        const DETUNE: usize = voice_place(SynthVoice::Bell, "detune");
+        let (length, detune) = (settings.at(DECAY), settings.at(DETUNE));
         // Pairs of partials pulled apart, up to two semitones each way.
         let spread = (whole(detune) >> 7) as f32 / 128.0;
         let increments: [f32; BELL_PARTIALS] = std::array::from_fn(|at| {
@@ -437,7 +447,9 @@ impl Model for DrumModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
-        let (length, tone) = (settings.at(0), settings.at(1));
+        const DECAY: usize = voice_place(SynthVoice::Drum, "decay");
+        const TONE: usize = voice_place(SynthVoice::Drum, "tone");
+        let (length, tone) = (settings.at(DECAY), settings.at(TONE));
         // Struck, each partial rises to its level over the first block; then each block falls.
         let targets: [f32; DRUM_PARTIALS] = if self.struck {
             std::array::from_fn(|at| self.levels[at] * decay(length, DRUM_LONG[at], DRUM_SHORT[at]))
