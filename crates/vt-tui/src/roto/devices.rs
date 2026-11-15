@@ -16,23 +16,22 @@
 //! smoothly; an off/on setting is a switch; a centred value has a notch at its middle; and any
 //! other value turns smoothly.
 
-use vt_model::accumulator::{Adds, AtLimit, MOST_DEGREES, Moves, Reset};
+use vt_model::accumulator::{MOST_DEGREES, Reset};
 use vt_model::action::TrackControl;
-use vt_model::arpeggio::{ArpMode, ArpRate, MOST_OCTAVES};
+use vt_model::arpeggio::MOST_OCTAVES;
 use vt_model::constants::{
     BAR_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET, TICKS_PER_STEP,
 };
 use vt_model::envelope::{Hold, MAX_HOLD_MS};
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
-use vt_model::lfo::{Fade, Rate, Shape};
-use vt_model::listed::choices_of;
+use vt_model::lfo::{Fade, Rate};
+use vt_model::listed::{Listed, choices_of};
 use vt_model::modulation::{MAX_DEPTH, ModKind, Polarity};
 use vt_model::settings::{Kind, SettingId, Units};
 use vt_model::shape::GenParam;
 use vt_model::shape::params::Units as GenUnits;
-use vt_model::song::{FilterType, Machine, Role, Song, Track, TrackKind};
-use vt_model::speed::Speed;
+use vt_model::song::{FilterType, Machine, Song, Track, TrackKind};
 use vt_model::steps::{Loop, StepRate};
 use vt_roto::Label;
 use vt_roto::bytes::Rgb;
@@ -346,6 +345,12 @@ fn list(names: impl IntoIterator<Item = String>, at: usize) -> (Feel, u16) {
     }
 }
 
+/// A knob for one of a [`Listed`] type's values, on the one it has.
+fn listed<X: Listed>(current: X) -> (Feel, u16) {
+    let at = X::ALL.iter().position(|each| *each == current).unwrap_or(0);
+    list(choices_of::<X>().map(str::to_owned), at)
+}
+
 /// A knob for one of a list that changes with the track or the song, such as a destination: it
 /// turns smoothly, as its steps would move under it.
 fn changing(at: usize, count: usize) -> (Feel, u16) {
@@ -478,13 +483,7 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
             param,
         } => return gen_feel(song, track, phrase, generator, param),
         Control::NewGenerator(_) => return None,
-        Control::Machine => list(
-            Machine::ALL.iter().map(|machine| machine.name().to_owned()),
-            Machine::ALL
-                .iter()
-                .position(|machine| *machine == track.machine)
-                .unwrap_or(0),
-        ),
+        Control::Machine => listed(track.machine),
         Control::Sample => {
             let numbers: Vec<u8> = std::iter::once(0)
                 .chain(song.bank.iter().map(|(number, _)| number))
@@ -538,33 +537,16 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
             std::iter::once("Off".to_owned()).chain((1..=MAX_GROUPS).map(|g| format!("G{g}"))),
             usize::from(track.group.unwrap_or(0)),
         ),
-        Control::Role => list(
-            Role::ALL.iter().map(|role| role.name().to_owned()),
-            Role::ALL
-                .iter()
-                .position(|role| *role == track.role)
-                .unwrap_or(0),
-        ),
+        Control::Role => listed(track.role),
         Control::GateLength => value(
             u16::from(vt_model::settings::gate_percent(track.gate_length())) - 1,
             99,
             false,
         ),
-        Control::Speed => list(
-            Speed::ALL.iter().map(|speed| speed.name().to_owned()),
-            usize::from(track.speed.index()),
-        ),
+        Control::Speed => listed(track.speed),
         Control::Reset => value(track.reset.unwrap_or(0), MAX_TRACK_RESET, false),
         Control::Glide => value(u16::from(track.glide), 0xFF, false),
-        Control::FilterType => list(
-            FilterType::ALL
-                .iter()
-                .map(|filter| filter.name().to_owned()),
-            FilterType::ALL
-                .iter()
-                .position(|filter| *filter == track.filter)
-                .unwrap_or(0),
-        ),
+        Control::FilterType => listed(track.filter),
         Control::FilterMode => {
             let modes = track.filter.modes();
             if modes.is_empty() {
@@ -622,7 +604,7 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                         .map(|(name, _)| name.to_owned()),
                     place,
                 ),
-                ModField::Shape => list(choices_of::<Shape>().map(str::to_owned), place),
+                ModField::Shape => listed(modulator.lfo.shape),
                 // Smooth through every fade, out, none and in, its value shown as it turns.
                 ModField::Fade => list(Fade::ALL.iter().map(ToString::to_string), place),
                 ModField::Loop => list(Loop::ALL.iter().map(ToString::to_string), place),
@@ -654,27 +636,9 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
             match field {
                 AccumulatorField::Up => degrees(accumulation.up),
                 AccumulatorField::Down => degrees(accumulation.down),
-                AccumulatorField::Moves => list(
-                    Moves::ALL.iter().map(|moves| moves.name().to_owned()),
-                    Moves::ALL
-                        .iter()
-                        .position(|moves| *moves == accumulation.moves)
-                        .unwrap_or(0),
-                ),
-                AccumulatorField::AtLimit => list(
-                    AtLimit::ALL.iter().map(|at| at.name().to_owned()),
-                    AtLimit::ALL
-                        .iter()
-                        .position(|at| *at == accumulation.at_limit)
-                        .unwrap_or(0),
-                ),
-                AccumulatorField::Adds => list(
-                    Adds::ALL.iter().map(|adds| adds.name().to_owned()),
-                    Adds::ALL
-                        .iter()
-                        .position(|adds| *adds == accumulation.adds)
-                        .unwrap_or(0),
-                ),
+                AccumulatorField::Moves => listed(accumulation.moves),
+                AccumulatorField::AtLimit => listed(accumulation.at_limit),
+                AccumulatorField::Adds => listed(accumulation.adds),
                 AccumulatorField::Reset => {
                     let resets: Vec<Reset> = Reset::all().collect();
                     list(
@@ -690,20 +654,8 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
         Control::Arpeggio(field) => {
             let arpeggio = track.arpeggio;
             match field {
-                ArpField::Rate => list(
-                    ArpRate::ALL.iter().map(|rate| rate.name().to_owned()),
-                    ArpRate::ALL
-                        .iter()
-                        .position(|rate| *rate == arpeggio.rate)
-                        .unwrap_or(0),
-                ),
-                ArpField::Mode => list(
-                    ArpMode::ALL.iter().map(|mode| mode.name().to_owned()),
-                    ArpMode::ALL
-                        .iter()
-                        .position(|mode| *mode == arpeggio.mode)
-                        .unwrap_or(0),
-                ),
+                ArpField::Rate => listed(arpeggio.rate),
+                ArpField::Mode => listed(arpeggio.mode),
                 ArpField::Octaves => list(
                     (1..=MOST_OCTAVES).map(|octaves| octaves.to_string()),
                     usize::from(arpeggio.octaves.saturating_sub(1)),
