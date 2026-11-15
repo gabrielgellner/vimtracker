@@ -46,6 +46,7 @@ use vt_model::constants::TICKS_PER_STEP;
 use vt_model::insert::{Beads as Settings, BeadsMode, grain_length, shift_semitones};
 
 use crate::dsp::blocks::clip::soft_clip;
+use crate::dsp::blocks::line::{SharedLines, hermite};
 use crate::dsp::blocks::plaits_parts::Svf;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::clouds::{mu_law_decode, mu_law_encode};
@@ -1240,17 +1241,15 @@ impl Recording {
                 self.at(whole + 2),
             )
         };
-        let mut out = [0.0; 2];
-        for side in 0..2 {
-            let slope_in = (older[side] - newer[side]) * 0.5;
-            let slope_out = (oldest[side] - current[side]) * 0.5;
-            let difference = current[side] - older[side];
-            let bend = difference + slope_in;
-            let lift = bend + difference + slope_out;
-            out[side] =
-                ((lift * between - bend - lift) * between + slope_in) * between + current[side];
-        }
-        out
+        std::array::from_fn(|side| {
+            hermite(
+                newer[side],
+                current[side],
+                older[side],
+                oldest[side],
+                between,
+            )
+        })
     }
 }
 
@@ -1288,9 +1287,7 @@ impl Shifter {
 /// mix, run as the module runs it, at its quality's rate, so the dirtier ones ring longer.
 #[derive(Debug, Clone)]
 struct BeadsReverb {
-    buffer: Vec<f32>,
-    mask: usize,
-    write: usize,
+    shared: SharedLines,
     /// Each line's place and length, in frames.
     lines: [(usize, usize); 10],
     /// How many frames each of the module's samples is at the quality it's tuned for.
@@ -1317,9 +1314,7 @@ impl BeadsReverb {
             .sum::<usize>()
             .next_power_of_two();
         let mut reverb = Self {
-            buffer: vec![0.0; size],
-            mask: size - 1,
-            write: 0,
+            shared: SharedLines::new(size),
             lines: [(0, 1); 10],
             scale: 1.0,
             wobble: [1.0; 2],
@@ -1349,7 +1344,7 @@ impl BeadsReverb {
     }
 
     fn clear(&mut self) {
-        self.buffer.fill(0.0);
+        self.shared.clear();
         self.damped = [0.0; 2];
     }
 
@@ -1377,41 +1372,30 @@ impl BeadsReverb {
         self.wet.settle();
     }
 
-    #[inline]
-    fn read(&self, line: usize, offset: usize) -> f32 {
-        let (base, _) = self.lines[line];
-        self.buffer[(self.write + base + offset) & self.mask]
-    }
-
-    #[inline]
-    fn tail(&self, line: usize) -> f32 {
-        self.read(line, self.lines[line].1 - 1)
-    }
-
     /// What the module's 16-bit lines keep of a value: all of it, but clipped at full scale.
+    #[inline]
+    fn kept(value: f32) -> f32 {
+        value.clamp(-1.0, 32_767.0 / 32_768.0)
+    }
+
     #[inline]
     fn put(&mut self, line: usize, offset: usize, value: f32) {
         let (base, _) = self.lines[line];
-        self.buffer[(self.write + base + offset) & self.mask] =
-            value.clamp(-1.0, 32_767.0 / 32_768.0);
+        self.shared.write(base, offset, Self::kept(value));
     }
 
     #[inline]
     fn between(&self, line: usize, offset: f32) -> f32 {
-        let offset = offset.max(0.0);
-        let whole = offset as usize;
-        let fraction = offset - whole as f32;
-        let (a, b) = (self.read(line, whole), self.read(line, whole + 1));
-        a + (b - a) * fraction
+        let (base, _) = self.lines[line];
+        self.shared.between(base, offset.max(0.0))
     }
 
     /// A step through an allpass, by what it read from the end of its line.
     #[inline]
     fn allpass(&mut self, line: usize, input: f32, into: f32) -> f32 {
-        let read = self.tail(line);
-        let sum = input + read * into;
-        self.put(line, 0, sum);
-        sum * -into + read
+        let (base, length) = self.lines[line];
+        self.shared
+            .allpass_keeping(base, length, input, into, Self::kept)
     }
 
     #[inline]
@@ -1419,11 +1403,11 @@ impl BeadsReverb {
         let send = self.send.next(self.smoothing);
         let dry = self.dry.next(self.smoothing);
         let wet = self.wet.next(self.smoothing);
-        self.write = self.write.wrapping_sub(1) & self.mask;
+        self.shared.advance();
         for (phase, hertz) in self.wobble_phase.iter_mut().zip(REVERB_WOBBLE_HERTZ) {
             *phase = (*phase + hertz / f64::from(self.rate)).fract();
         }
-        if self.write & 31 == 0 {
+        if self.shared.turned() & 31 == 0 {
             self.wobble = self
                 .wobble_phase
                 .map(|phase| (phase * std::f64::consts::TAU).cos() as f32);

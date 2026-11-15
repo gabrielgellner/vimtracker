@@ -37,6 +37,7 @@ use std::f32::consts::TAU;
 
 use vt_model::insert::{Chorus as Settings, ChorusType};
 
+use crate::dsp::blocks::line::StereoLine;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::{Rung, SlotEffect};
@@ -163,9 +164,7 @@ impl Wobble {
 /// A chorus's delay lines and wobbles.
 #[derive(Debug, Clone)]
 pub(crate) struct Chorus {
-    lines: [Vec<f32>; 2],
-    mask: usize,
-    write: usize,
+    line: StereoLine,
     wobbles: [Wobble; 2],
     kind: ChorusType,
     /// How much faster than Rings the wobbles go.
@@ -195,9 +194,7 @@ impl Chorus {
         let longer = rate as f32 / TUNING_RATE;
         let size = ((LONGEST * longer).ceil() as usize + 2).next_power_of_two();
         Self {
-            lines: [vec![0.0; size], vec![0.0; size]],
-            mask: size - 1,
-            write: 0,
+            line: StereoLine::new(size),
             wobbles: [Wobble::START; 2],
             kind: ChorusType::Chorus,
             speed: Smoothed::at(1.0),
@@ -218,13 +215,11 @@ impl Chorus {
 
     /// The longest anything stays in it, in frames.
     pub(crate) fn frames(&self) -> usize {
-        self.mask + 1
+        self.line.frames()
     }
 
     pub(crate) fn clear(&mut self) {
-        for line in &mut self.lines {
-            line.fill(0.0);
-        }
+        self.line.clear();
         self.wobbles = [Wobble::START; 2];
         self.juno_phase = 0.0;
         self.juno_held = [0.0; 2];
@@ -251,9 +246,8 @@ impl Chorus {
         let frames = frames.max(1.0);
         let whole = frames as usize;
         let fraction = frames - whole as f32;
-        let line = &self.lines[side];
-        let newer = line[self.write.wrapping_sub(whole) & self.mask];
-        let older = line[self.write.wrapping_sub(whole + 1) & self.mask];
+        let newer = self.line.at(side, whole);
+        let older = self.line.at(side, whole + 1);
         newer + (older - newer) * fraction
     }
 
@@ -267,9 +261,8 @@ impl Chorus {
         let fraction = frames - whole as f32;
         // An all-pass's delay at low frequencies is `(1 - a) / (1 + a)` frames.
         let a = (1.0 - fraction) / (1.0 + fraction);
-        let line = &self.lines[side];
-        let newer = line[self.write.wrapping_sub(whole) & self.mask];
-        let older = line[self.write.wrapping_sub(whole + 1) & self.mask];
+        let newer = self.line.at(side, whole);
+        let older = self.line.at(side, whole + 1);
         let out = a * (newer - self.juno_held[side]) + older;
         self.juno_held[side] = out;
         out
@@ -296,10 +289,10 @@ impl Chorus {
         if self.juno_phase >= 1.0 {
             self.juno_phase -= 1.0;
         }
-        self.write = (self.write + 1) & self.mask;
+        self.line.advance();
         let mut out = [0.0; 2];
         for (side, sample) in input.into_iter().enumerate() {
-            self.lines[side][self.write] = sample;
+            self.line.write(side, sample);
             let wave = juno_wave(mode, self.juno_phase + side as f32 * JUNO_RIGHT_TURNS[mode]);
             let read =
                 self.read_through(side, juno_delay_ms(mode, depth, wave) * self.frames_per_ms);
@@ -323,12 +316,12 @@ impl Chorus {
         for (wobble, step) in self.wobbles.iter_mut().zip(speeds) {
             wobble.turn(step * speed);
         }
-        self.write = (self.write + 1) & self.mask;
+        self.line.advance();
         let longer = self.longer;
         match self.kind {
             ChorusType::Chorus => {
                 // Both sides go down one line, and two taps each wobble apart from the other.
-                self.lines[0][self.write] = (input[0] + input[1]) * 0.5;
+                self.line.write(0, (input[0] + input[1]) * 0.5);
                 let amount = depth * CHORUS_DEPTH;
                 // The right side's are a quarter of a turn on: the cosines.
                 let [first, second] = self.wobbles;
@@ -340,8 +333,8 @@ impl Chorus {
             }
             _ => {
                 // Each side has its own line, and three copies a third of a turn apart cross over.
-                self.lines[0][self.write] = input[0];
-                self.lines[1][self.write] = input[1];
+                self.line.write(0, input[0]);
+                self.line.write(1, input[1]);
                 let (slow, fast) = (
                     depth * ENSEMBLE_DEPTH,
                     depth * ENSEMBLE_DEPTH * ENSEMBLE_FAST,
@@ -576,8 +569,10 @@ mod tests {
         let hertz = 12_000.0;
         let (mut power, mut count) = (0.0_f32, 0);
         for frame in 0..RATE as usize / 10 {
-            chorus.write = (chorus.write + 1) & chorus.mask;
-            chorus.lines[0][chorus.write] = (frame as f32 / RATE as f32 * hertz * TAU).sin();
+            chorus.line.advance();
+            chorus
+                .line
+                .write(0, (frame as f32 / RATE as f32 * hertz * TAU).sin());
             let read = chorus.read_through(0, 40.5);
             if frame > RATE as usize / 20 {
                 power += read * read;

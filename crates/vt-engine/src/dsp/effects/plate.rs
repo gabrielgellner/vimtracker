@@ -33,6 +33,7 @@
 
 use vt_model::insert::{Plate as Settings, plate_size};
 
+use crate::dsp::blocks::line::SharedLines;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::{REVERB_QUIET_SECONDS, SongPlace};
 use crate::dsp::effects::slot::{Rung, SlotEffect};
@@ -164,50 +165,19 @@ struct Line {
     length: f32,
 }
 
-/// The buffer all the lines share, each with its own place, moving together.
-#[derive(Debug, Clone)]
-struct Lines {
-    buffer: Vec<f32>,
-    mask: usize,
-    write: usize,
-}
-
-impl Lines {
-    #[inline]
-    fn read(&self, line: Line, offset: usize) -> f32 {
-        self.buffer[(self.write + line.base + offset) & self.mask]
-    }
-
-    #[inline]
-    fn write(&mut self, line: Line, value: f32) {
-        let at = (self.write + line.base) & self.mask;
-        self.buffer[at] = value;
-    }
-
-    /// What went in this many frames ago, read between samples.
-    #[inline]
-    fn between(&self, line: Line, frames: f32) -> f32 {
-        let whole = frames as usize;
-        let fraction = frames - whole as f32;
-        let a = self.read(line, whole);
-        let b = self.read(line, whole + 1);
-        a + (b - a) * fraction
-    }
-
-    /// A step through an all-pass this many frames long.
-    #[inline]
-    fn allpass(&mut self, line: Line, frames: f32, input: f32, diffusion: f32) -> f32 {
-        let delayed = self.between(line, frames);
-        let sum = input - delayed * diffusion;
-        self.write(line, sum);
-        delayed + sum * diffusion
-    }
+/// A step through an all-pass this many frames long, read between samples, in the shared lines.
+#[inline]
+fn allpass(lines: &mut SharedLines, line: Line, frames: f32, input: f32, diffusion: f32) -> f32 {
+    let delayed = lines.between(line.base, frames);
+    let sum = input - delayed * diffusion;
+    lines.write(line.base, 0, sum);
+    delayed + sum * diffusion
 }
 
 /// The stereo plate.
 #[derive(Debug, Clone)]
 pub(crate) struct Plate {
-    lines: Lines,
+    lines: SharedLines,
     diffusers: [Line; 4],
     /// How long each input all-pass is at this rate, in frames.
     diffuser_frames: [f32; 4],
@@ -268,11 +238,7 @@ impl Plate {
         let pre_frames = (LONGEST_PRE * rate as f32) as usize + 2;
         let turning = std::f64::consts::TAU * WOBBLE_HZ / f64::from(rate);
         let mut plate = Self {
-            lines: Lines {
-                buffer: vec![0.0; size],
-                mask: size - 1,
-                write: 0,
-            },
+            lines: SharedLines::new(size),
             diffusers,
             diffuser_frames: DIFFUSER_LENGTHS.map(|length| (length * scale).round()),
             tank,
@@ -301,7 +267,7 @@ impl Plate {
 
     /// Forget what's in it.
     pub(crate) fn clear(&mut self) {
-        self.lines.buffer.fill(0.0);
+        self.lines.clear();
         self.pre.fill(0.0);
         self.band = 0.0;
         self.damped = [0.0; 2];
@@ -310,7 +276,7 @@ impl Plate {
     /// How many frames its buffer holds, for the tests.
     #[cfg(test)]
     fn frames(&self) -> usize {
-        self.lines.buffer.len()
+        self.lines.len()
     }
 
     /// Take the settings, and move the wobble to where it is this many frames in. It goes by the
@@ -392,7 +358,7 @@ impl Plate {
         );
 
         let lines = &mut self.lines;
-        lines.write = lines.write.wrapping_sub(1) & lines.mask;
+        lines.advance();
         let mut diffused = incoming;
         for ((line, frames), diffusion) in self
             .diffusers
@@ -400,7 +366,7 @@ impl Plate {
             .zip(self.diffuser_frames)
             .zip(DIFFUSIONS)
         {
-            diffused = lines.allpass(*line, frames, diffused, diffusion);
+            diffused = allpass(lines, *line, frames, diffused, diffusion);
         }
 
         // Each half takes what the other's last delay gives, so it all goes round.
@@ -408,19 +374,25 @@ impl Plate {
         let mut ends = [0.0; 2];
         for (half, end) in ends.iter_mut().enumerate() {
             let [_, _, _, other_end] = self.tank[1 - half];
-            *end = lines.between(other_end, other_end.length * stretch);
+            *end = lines.between(other_end.base, other_end.length * stretch);
         }
         for half in 0..2 {
             let [first, before, second, after] = self.tank[half];
             let mut sample = diffused + ends[1 - half] * decay;
             let wobbled = first.length * stretch + excursion * wobbles[half];
-            sample = lines.allpass(first, wobbled, sample, -DECAY_DIFFUSION);
-            lines.write(before, sample);
-            sample = lines.between(before, before.length * stretch);
+            sample = allpass(lines, first, wobbled, sample, -DECAY_DIFFUSION);
+            lines.write(before.base, 0, sample);
+            sample = lines.between(before.base, before.length * stretch);
             self.damped[half] += (sample - self.damped[half]) * damping;
             sample = self.damped[half] * decay;
-            sample = lines.allpass(second, second.length * stretch, sample, second_diffusion);
-            lines.write(after, sample);
+            sample = allpass(
+                lines,
+                second,
+                second.length * stretch,
+                sample,
+                second_diffusion,
+            );
+            lines.write(after.base, 0, sample);
         }
 
         let mut out = [0.0; 2];
@@ -428,7 +400,7 @@ impl Plate {
             *side = taps
                 .iter()
                 .map(|&(half, line, frames, sign)| {
-                    lines.between(self.tank[half][line], frames * stretch) * sign
+                    lines.between(self.tank[half][line].base, frames * stretch) * sign
                 })
                 .sum::<f32>()
                 * TAP_GAIN

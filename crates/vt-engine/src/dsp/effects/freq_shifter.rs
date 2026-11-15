@@ -31,6 +31,7 @@ use vt_model::insert::{
 };
 
 use crate::dsp::blocks::clip::within;
+use crate::dsp::blocks::line::StereoLine;
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::resonator::semitones;
@@ -141,9 +142,7 @@ fn limited(x: f32) -> f32 {
 /// A frequency shifter's lines, transforms and oscillators.
 #[derive(Debug, Clone)]
 pub(crate) struct FreqShifter {
-    lines: [Vec<f32>; 2],
-    mask: usize,
-    write: usize,
+    line: StereoLine,
     hilbert: [Hilbert; 2],
     /// Each side's oscillator, as a point going round the unit circle: its cosine and sine.
     turning: [[f32; 2]; 2],
@@ -173,9 +172,7 @@ impl FreqShifter {
         let longest = LONGEST_SHIFT_DELAY_MS / 1000.0 * rate as f32;
         let size = (longest.ceil() as usize + 2).next_power_of_two();
         let mut shifter = Self {
-            lines: [vec![0.0; size], vec![0.0; size]],
-            mask: size - 1,
-            write: 0,
+            line: StereoLine::new(size),
             hilbert: [Hilbert::new(rate); 2],
             turning: [[1.0, 0.0]; 2],
             step: [[1.0, 0.0]; 2],
@@ -199,13 +196,11 @@ impl FreqShifter {
 
     /// The longest anything stays in it, in frames.
     pub(crate) fn frames(&self) -> usize {
-        self.mask + 1
+        self.line.frames()
     }
 
     pub(crate) fn clear(&mut self) {
-        for line in &mut self.lines {
-            line.fill(0.0);
-        }
+        self.line.clear();
         for hilbert in &mut self.hilbert {
             hilbert.clear();
         }
@@ -222,7 +217,7 @@ impl FreqShifter {
         self.track.target = f32::from(settings.track) / 255.0;
         // A whole number of frames, so once it's still each read is exact.
         let frames = (shift_delay_ms(f32::from(settings.time)) / 1000.0 * self.rate as f32).round();
-        self.delay.target = frames.min((self.mask - 1) as f32);
+        self.delay.target = frames.min((self.line.mask() - 1) as f32);
         self.feedback.target = f32::from(settings.feedback) / 255.0 * MOST_FEEDBACK;
     }
 
@@ -241,9 +236,8 @@ impl FreqShifter {
     fn read(&self, side: usize, frames: f32) -> f32 {
         let whole = frames as usize;
         let between = frames - whole as f32;
-        let line = &self.lines[side];
-        let newer = line[self.write.wrapping_sub(whole) & self.mask];
-        let older = line[self.write.wrapping_sub(whole + 1) & self.mask];
+        let newer = self.line.at(side, whole);
+        let older = self.line.at(side, whole + 1);
         newer + (older - newer) * between
     }
 
@@ -283,10 +277,10 @@ impl FreqShifter {
             (shift + spread * 0.5) * followed,
             (shift - spread * 0.5) * followed,
         ];
-        self.write = (self.write + 1) & self.mask;
+        self.line.advance();
         let mut out = [0.0; 2];
         for side in 0..2 {
-            self.lines[side][self.write] = input[side] + self.fed_back[side];
+            self.line.write(side, input[side] + self.fed_back[side]);
             let read = within(self.read(side, delay), -HEADROOM, HEADROOM);
             let (real, imaginary) = self.hilbert[side].step(read);
             let [cos, sin] = self.turn(side, hertz[side]);
@@ -516,7 +510,7 @@ mod tests {
             ..Settings::DEFAULT
         });
         shifter.process([0.5; 2], 60.0, 1.0);
-        shifter.lines[0][shifter.write] = f32::NAN;
+        shifter.line.write(0, f32::NAN);
         let out: Vec<f32> = (0..RATE * 20)
             .flat_map(|_| shifter.process([0.0; 2], 60.0, 1.0))
             .collect();

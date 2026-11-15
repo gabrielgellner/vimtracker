@@ -14,6 +14,7 @@ use vt_model::lfo::DIVISION_TICKS;
 use vt_model::song::level_gain;
 
 use crate::dsp::blocks::clip::soft_clip;
+use crate::dsp::blocks::line::Tape;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::{Rung, SlotEffect};
@@ -25,7 +26,7 @@ const WET: f32 = 0.6;
 /// How long a change of time takes to go half way, in seconds.
 const GLIDE_HALF_LIFE: f64 = 0.05;
 /// The closest it reads to where it's writing, leaving room to read between samples.
-const SHORTEST_FRAMES: f64 = 4.0;
+const SHORTEST_FRAMES: f64 = Tape::SHORTEST_FRAMES;
 /// How far the soft clip's range is from what goes through it with no `Drive`, so only what's very
 /// loud is held back. It's what stops the highest `Feedback` growing without end.
 const CLEAN_HEADROOM: f32 = 4.0;
@@ -155,8 +156,7 @@ pub fn repeats(settings: Settings, frames_per_tick: f64, rate: u32) -> Repeats {
 /// The delay line and what's in its feedback.
 #[derive(Debug, Clone)]
 pub(crate) struct Delay {
-    buffer: Vec<[f32; 2]>,
-    write: usize,
+    buffer: Tape,
     /// Whether there's anything to clear.
     used: bool,
     /// How long it is now, and how long it's easing to, in frames.
@@ -194,13 +194,10 @@ impl Delay {
     /// Make a delay that can hold this many frames. Its memory is touched here, so the callback
     /// doesn't have to wait for it to be paged in.
     pub(crate) fn new(frames: usize, rate: u32) -> Self {
-        let mut buffer = vec![[0.0; 2]; frames.max(8)];
-        buffer.fill([0.0; 2]);
-        std::hint::black_box(&mut buffer);
+        let buffer = Tape::new(frames.max(8));
         let start = SHORTEST_FRAMES;
         Self {
             buffer,
-            write: 0,
             used: false,
             frames: start,
             target_frames: start,
@@ -231,7 +228,7 @@ impl Delay {
     /// Forget what's in it.
     pub(crate) fn clear(&mut self) {
         if self.used {
-            self.buffer.fill([0.0; 2]);
+            self.buffer.clear();
             self.used = false;
         }
         self.trim = [Trim::default(); 2];
@@ -297,43 +294,12 @@ impl Delay {
         self.frames.max(outgoing) + self.wow_frames * f64::from(self.wow.value)
     }
 
-    /// Where in the buffer is this many frames back, less than its length. Wrapping round by
-    /// taking the length away once is cheaper than `%`, and the buffer isn't a power of two
-    /// long, as that would nearly double the memory of the longest time and the clearing of it.
-    #[inline]
-    fn back(&self, frames: usize) -> usize {
-        let length = self.buffer.len();
-        let at = self.write + length - frames;
-        if at >= length { at - length } else { at }
-    }
-
-    /// What's in one side of the line this far back, reading between samples through four of
-    /// them, so a whole number of frames gives exactly what went in.
-    #[inline]
-    fn read_side(&self, side: usize, frames: f64) -> f32 {
-        let frames = frames.clamp(SHORTEST_FRAMES, (self.buffer.len() - 3) as f64);
-        let whole = frames as usize;
-        let between = (frames - whole as f64) as f32;
-        let at = |back: usize| self.buffer[self.back(back)][side];
-        let current = at(whole);
-        if between == 0.0 {
-            return current;
-        }
-        let (a, b, c, d) = (at(whole - 1), current, at(whole + 1), at(whole + 2));
-        let half = (c - a) * 0.5;
-        let w = b - c;
-        let v = half + w;
-        let slope = v + w + (d - b) * 0.5;
-        let bend = v + slope;
-        (((slope * between - bend) * between + half) * between) + b
-    }
-
     /// Both sides at a time, with `Wow` moving the left's read one way and the right's the other.
     #[inline]
     fn read(&self, frames: f64, wow: f64) -> [f32; 2] {
         [
-            self.read_side(0, frames + wow),
-            self.read_side(1, frames - wow),
+            self.buffer.read(0, frames + wow),
+            self.buffer.read(1, frames - wow),
         ]
     }
 
@@ -401,17 +367,12 @@ impl Delay {
             soft_clip(sample * push) / push * feedback
         };
         let (left, right) = (back(0, out[0], self), back(1, out[1], self));
-        self.buffer[self.write] = if self.ping_pong {
+        self.buffer.push(if self.ping_pong {
             // All of it goes in on one side, and each side feeds the other.
             [(input[0] + input[1]) * 0.5 + right, left]
         } else {
             [input[0] + left, input[1] + right]
-        };
-        self.write = if self.write + 1 == self.buffer.len() {
-            0
-        } else {
-            self.write + 1
-        };
+        });
         self.used = true;
         let middle = (out[0] + out[1]) * 0.5;
         let side = (out[0] - out[1]) * 0.5 * width;
@@ -702,8 +663,7 @@ mod tests {
             ..settings()
         });
         delay.process([0.5; 2]);
-        let last = (delay.write + delay.buffer.len() - 1) % delay.buffer.len();
-        delay.buffer[last] = [f32::NAN; 2];
+        *delay.buffer.back_mut(1) = [f32::NAN; 2];
         // Read once, it's held to the soft clip's end on the way round, so it repeats as a click.
         let out: Vec<f32> = (0..RATE * 4)
             .flat_map(|_| delay.process([0.0; 2]))

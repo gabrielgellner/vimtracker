@@ -39,6 +39,7 @@ use std::f32::consts::{FRAC_1_SQRT_2, PI, TAU};
 use vt_model::insert::{Comb as Settings, CombMode, from_middle, shift_semitones};
 
 use crate::dsp::blocks::clip::within;
+use crate::dsp::blocks::line::StereoLine;
 use crate::dsp::blocks::one_pole::{gain as one_pole_gain, low_pass};
 use crate::dsp::blocks::response::{Gain, one_pole, warped};
 use crate::dsp::blocks::smoother::Smoothed;
@@ -317,10 +318,7 @@ impl Loop {
 /// long.
 #[derive(Debug, Clone)]
 pub(crate) struct Comb {
-    lines: [Vec<f32>; 2],
-    mask: usize,
-    /// Where the newest frame is in the lines.
-    write: usize,
+    line: StereoLine,
     /// The band's low-pass and high-pass, on each side, and the two high-passes cleaning what
     /// goes into the line.
     low: [f32; 2],
@@ -358,9 +356,7 @@ impl Comb {
     pub(crate) fn new(rate: u32) -> Self {
         let size = mask_at(rate) + 1;
         Self {
-            lines: [vec![0.0; size], vec![0.0; size]],
-            mask: size - 1,
-            write: 0,
+            line: StereoLine::new(size),
             low: [0.0; 2],
             high: [0.0; 2],
             cleaned: [[0.0; 2]; 2],
@@ -385,9 +381,7 @@ impl Comb {
 
     /// Forget everything it was playing, for a fresh start.
     pub(crate) fn clear(&mut self) {
-        for line in &mut self.lines {
-            line.fill(0.0);
-        }
+        self.line.clear();
         self.low = [0.0; 2];
         self.high = [0.0; 2];
         self.cleaned = [[0.0; 2]; 2];
@@ -430,9 +424,9 @@ impl Comb {
     fn read(&self, side: usize, frames: f32) -> f32 {
         let whole = frames as usize;
         let [newer, current, older, oldest] = weights(frames - whole as f32);
-        let line = &self.lines[side];
-        // The frame `back` frames ago, a frame back being the newest in the line.
-        let at = |back: usize| line[(self.write + 1).wrapping_sub(back) & self.mask];
+        // The frame `back` frames ago, a frame back being the newest in the line, as it moves on
+        // before it reads.
+        let at = |back: usize| self.line.at(side, back);
         newer * at(whole - 1) + current * at(whole) + older * at(whole + 1) + oldest * at(whole + 2)
     }
 
@@ -446,7 +440,7 @@ impl Comb {
         }
         self.left -= 1;
         let now = self.now;
-        let write = (self.write + 1) & self.mask;
+        self.line.advance();
         let mut out = [0.0; 2];
         for (side, out) in out.iter_mut().enumerate() {
             let read = if now.polarity >= 1.0 {
@@ -465,13 +459,12 @@ impl Comb {
             let [first, second] = &mut self.cleaned[side];
             let cleaned = input[side] - low_pass(first, input[side], now.cleaning);
             let cleaned = cleaned - low_pass(second, cleaned, now.cleaning);
-            self.lines[side][write] = cleaned * now.input + fed;
+            self.line.write(side, cleaned * now.input + fed);
             // A comb is heard as what goes into its line, and a flanger as what comes out of it
             // with the sound, but the sound as it came in.
             let wet = fed + (band - fed) * now.flange;
             *out = (input[side] * now.dry + wet) * now.level;
         }
-        self.write = write;
         self.now = now.plus(self.step);
         self.limiter.process(out)
     }
@@ -502,7 +495,13 @@ impl Comb {
             .any(|(now, then)| (now - then).abs() >= 1e-4 || then.is_nan());
         if moved {
             self.worked_from = values;
-            self.target = worked_out(values, self.rate, self.mask, &self.target, &self.warped);
+            self.target = worked_out(
+                values,
+                self.rate,
+                self.line.mask(),
+                &self.target,
+                &self.warped,
+            );
             // A read that wasn't heard starts where it's now going.
             if previous.polarity >= 1.0 {
                 previous.falling = self.target.falling;
@@ -1238,8 +1237,8 @@ mod tests {
         for rate in [44_100, 48_000, 96_000, 192_000] {
             let comb = Comb::new(rate);
             let longest = rate as f32 / LOWEST_HZ * 1.25;
-            assert!(comb.lines[0].len() as f32 > longest + 4.0, "{rate}");
-            assert!(comb.lines[0].len() as f32 <= longest * 2.0 + 16.0, "{rate}");
+            assert!(comb.line.frames() as f32 > longest + 4.0, "{rate}");
+            assert!(comb.line.frames() as f32 <= longest * 2.0 + 16.0, "{rate}");
         }
     }
 }
