@@ -646,6 +646,7 @@ impl App {
     pub(crate) fn open_sample_lock_picker(&mut self, slot: usize) {
         self.modes.count = None;
         let current = self
+            .services
             .current_slot(slot)
             .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SAMPLE)))
             .map_or(0, |cell| cell.coarse());
@@ -657,6 +658,7 @@ impl App {
     /// Put a chosen bank entry in a slot as an `SMP`, keeping its mark.
     pub(crate) fn pick_sample_lock(&mut self, slot: usize, number: u8) {
         let mark = self
+            .services
             .current_slot(slot)
             .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SAMPLE)))
             .map_or(Mark::default(), |cell| cell.mark);

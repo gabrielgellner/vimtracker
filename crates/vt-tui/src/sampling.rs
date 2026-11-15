@@ -195,7 +195,7 @@ impl App {
     fn start_sampling(&mut self, from_page: bool) {
         let source = self.sampling.source;
         let quantise = self.sampling.quantise;
-        if self.read_only {
+        if self.services.read_only {
             self.services.status =
                 "This song is read-only, so nothing is recorded into its folder".to_owned();
             return;
@@ -490,17 +490,25 @@ impl App {
 
     /// Why the sample page can't show an entry that's still recording, if it is one.
     pub fn still_recording(&self, number: u8) -> Option<String> {
-        let live = self.sampling.live.as_ref()?;
-        if live.number != number {
-            return None;
-        }
-        Some(match self.sampling_shown() {
-            Some((_, Some(seconds))) => format!(
-                "Recording into {number:02X}: {seconds:.1} s so far. Space R stops it, and then it's shown"
-            ),
-            _ => format!("{number:02X} waits to record: Space R takes it back"),
-        })
+        still_recording(self.sampling_shown(), number)
     }
+}
+
+/// Why the sample page can't show an entry that's still recording, if it is one, from the
+/// recording as [`App::sampling_shown`] gives it, which a page is given in its [`Ctx`].
+///
+/// [`Ctx`]: crate::page::Ctx
+pub(crate) fn still_recording(recording: Option<(u8, Option<f64>)>, number: u8) -> Option<String> {
+    let (recorded, seconds) = recording?;
+    if recorded != number {
+        return None;
+    }
+    Some(match seconds {
+        Some(seconds) => format!(
+            "Recording into {number:02X}: {seconds:.1} s so far. Space R stops it, and then it's shown"
+        ),
+        None => format!("{number:02X} waits to record: Space R takes it back"),
+    })
 }
 
 /// Whether a song's entry at a number plays a path.

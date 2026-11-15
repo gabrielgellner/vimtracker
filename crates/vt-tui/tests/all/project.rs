@@ -54,7 +54,7 @@ fn the_window_title_names_the_project() {
     let (mut app, _rt) = app();
     assert_eq!(
         app.window_title(),
-        format!("vimtracker: {}", app.project_name()),
+        format!("vimtracker: {}", app.services.project_name()),
         "its random name before it's saved"
     );
     let path = folder();
@@ -556,7 +556,7 @@ fn saving_a_new_project_chooses_a_folder_then_names_it_on_the_command_line() {
     let home = std::env::var_os("HOME").map(PathBuf::from).unwrap();
     let shown = vt_tui::explorer::place_name(&root, Some(&home));
     // The project's random name is filled in after the folder, so Enter saves it.
-    let name = app.project_name();
+    let name = app.services.project_name();
     assert_eq!(app.command_line, format!("w {shown}/{name}"));
     assert!(
         app.services.status.contains("name"),
@@ -569,7 +569,7 @@ fn saving_a_new_project_chooses_a_folder_then_names_it_on_the_command_line() {
         Some(root.join(&name).as_path())
     );
     assert!(!app.services.dirty, "{}", app.services.status);
-    assert_eq!(app.project_name(), name, "the folder's name now");
+    assert_eq!(app.services.project_name(), name, "the folder's name now");
 
     // :new does the same, with a new name, which can be typed over.
     command(&mut app, "new");
@@ -604,10 +604,14 @@ fn random_name_like(name: &str) -> bool {
 fn a_new_project_has_a_random_name_numbered_in_a_folder_that_has_it() {
     let root = projects();
     let (mut app, _realtime) = app();
-    let name = app.project_name();
+    let name = app.services.project_name();
     assert!(random_name_like(&name), "{name}");
     let (other, _other_realtime) = self::app();
-    assert_ne!(other.project_name(), name, "each starts with its own");
+    assert_ne!(
+        other.services.project_name(),
+        name,
+        "each starts with its own"
+    );
     // A folder with the name already in it gets it numbered, as the project keeps its name.
     std::fs::create_dir_all(root.join(&name)).unwrap();
     app.recent_places
@@ -662,7 +666,7 @@ fn ctrl_r_rolls_a_new_name_on_a_name_line() {
     command(&mut app, "render --tail");
     special(&mut app, KeyCode::Enter);
     let line = app.command_line.clone();
-    let project = app.project_name();
+    let project = app.services.project_name();
     assert!(line.ends_with(&format!("/{project}.wav --tail")), "{line}");
     app.key(roll, Instant::now());
     assert!(
@@ -724,7 +728,7 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
         .unwrap();
     command(&mut unsaved, "render");
     special(&mut unsaved, KeyCode::Enter);
-    let name = unsaved.project_name();
+    let name = unsaved.services.project_name();
     assert!(
         unsaved.command_line.ends_with(&format!("/{name}.wav")),
         "{}",
@@ -899,52 +903,52 @@ fn the_project_page_sets_the_scale_its_root_and_auto_jump() {
     use vt_tui::project_page::ProjectControl;
     let (mut app, _realtime) = on_the_project_page();
     project_cursor_on(&mut app, ProjectControl::Scale);
-    assert!(!app.scale.on);
+    assert!(!app.services.scale.on);
     tap(&mut app, "=");
-    assert!(app.scale.on);
-    assert_eq!(app.scale.kind, ScaleKind::ALL[0]);
+    assert!(app.services.scale.on);
+    assert_eq!(app.services.scale.kind, ScaleKind::ALL[0]);
     tap(&mut app, "-");
-    assert!(!app.scale.on, "off is the first choice");
+    assert!(!app.services.scale.on, "off is the first choice");
     // i lists them, as K does.
     tap(&mut app, "i");
     assert_eq!(app.modes.mode, Mode::Picker);
     tap(&mut app, "/dorian");
     special(&mut app, KeyCode::Enter);
-    assert!(app.scale.on);
-    assert_eq!(app.scale.kind, ScaleKind::Dorian);
+    assert!(app.services.scale.on);
+    assert_eq!(app.services.scale.kind, ScaleKind::Dorian);
 
     // The root moves by a semitone, and keeps the scale as it is.
     tap(&mut app, "j");
     assert_eq!(app.project_control(), ProjectControl::Root);
     tap(&mut app, "=");
-    assert_eq!(app.scale.root, 1);
+    assert_eq!(app.services.scale.root, 1);
     tap(&mut app, "if#");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.scale.root, 6);
+    assert_eq!(app.services.scale.root, 6);
     tap(&mut app, "x");
-    assert_eq!(app.scale.root, 0);
+    assert_eq!(app.services.scale.root, 0);
     project_cursor_on(&mut app, ProjectControl::Scale);
     tap(&mut app, "x");
-    assert!(!app.scale.on);
+    assert!(!app.services.scale.on);
     project_cursor_on(&mut app, ProjectControl::Root);
     tap(&mut app, "=");
-    assert!(!app.scale.on, "the root alone doesn't turn it on");
-    assert_eq!(app.scale.root, 1);
+    assert!(!app.services.scale.on, "the root alone doesn't turn it on");
+    assert_eq!(app.services.scale.root, 1);
 
     project_cursor_on(&mut app, ProjectControl::AutoJump);
-    assert!(!app.auto_jump);
+    assert!(!app.services.auto_jump);
     tap(&mut app, "=");
-    assert!(app.auto_jump);
+    assert!(app.services.auto_jump);
     assert!(app.services.dirty, "it's kept with the song");
     tap(&mut app, "K");
-    assert!(!app.auto_jump);
+    assert!(!app.services.auto_jump);
 }
 
 #[test]
 fn the_project_page_names_the_project_and_the_window_title_says_it() {
     use vt_tui::project_page::ProjectControl;
     let (mut app, _realtime) = on_the_project_page();
-    let random = app.project_name();
+    let random = app.services.project_name();
     assert_eq!(app.song().name, random, "the song holds its name");
     assert_eq!(app.window_title(), format!("vimtracker: {random}"));
     assert_eq!(app.project_control(), ProjectControl::Name);
@@ -955,11 +959,15 @@ fn the_project_page_names_the_project_and_the_window_title_says_it() {
     app.key(parse_sequence("C-u").unwrap()[0], Instant::now());
     tap(&mut app, "Verse Ideas");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.project_name(), "Verse Ideas");
+    assert_eq!(app.services.project_name(), "Verse Ideas");
     assert_eq!(app.window_title(), "vimtracker: Verse Ideas");
     assert!(app.services.dirty);
     tap(&mut app, "u");
-    assert_eq!(app.project_name(), random, "renaming is an undo step");
+    assert_eq!(
+        app.services.project_name(),
+        random,
+        "renaming is an undo step"
+    );
     // C-r while typing rolls a new name.
     tap(&mut app, "i");
     app.key(parse_sequence("C-r").unwrap()[0], Instant::now());
@@ -967,13 +975,13 @@ fn the_project_page_names_the_project_and_the_window_title_says_it() {
     assert!(random_name_like(&rolled), "{rolled}");
     assert_ne!(rolled, random);
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.project_name(), rolled);
+    assert_eq!(app.services.project_name(), rolled);
     // A name that couldn't be a folder's is refused.
     tap(&mut app, "i");
     app.key(parse_sequence("C-u").unwrap()[0], Instant::now());
     tap(&mut app, "a/b");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.project_name(), rolled);
+    assert_eq!(app.services.project_name(), rolled);
     assert!(
         app.services.status.contains("no /"),
         "{}",
@@ -1011,7 +1019,7 @@ fn saving_a_project_somewhere_new_names_it_after_the_folder_and_keeps_the_name_a
     let (mut other, _other_realtime) = self::app();
     command(&mut other, &format!("e {}", root.join("verse").display()));
     assert_eq!(
-        other.project_name(),
+        other.services.project_name(),
         "chorus",
         "the name is kept in the song"
     );
@@ -1037,13 +1045,13 @@ fn saving_a_project_somewhere_new_names_it_after_the_folder_and_keeps_the_name_a
     }
     tap(&mut copy, "bridge");
     special(&mut copy, KeyCode::Enter);
-    assert_eq!(copy.project_name(), "bridge");
+    assert_eq!(copy.services.project_name(), "bridge");
     // An old song with no name takes its folder's.
     let mut nameless = Song::new(1);
     nameless.name.clear();
     vt_model::project::save_song(&root.join("old"), &nameless).unwrap();
     command(&mut copy, &format!("e {}", root.join("old").display()));
-    assert_eq!(copy.project_name(), "old");
+    assert_eq!(copy.services.project_name(), "old");
     std::fs::remove_dir_all(&root).unwrap();
 }
 
@@ -1074,7 +1082,7 @@ fn the_project_pages_actions_open_the_explorer_and_its_audio_row_the_audio_page(
     tap(&mut app, "K");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.mode, Mode::Command);
-    let name = app.project_name();
+    let name = app.services.project_name();
     assert!(
         app.command_line.starts_with("w ") && app.command_line.ends_with(&format!("/{name}")),
         "{}",
@@ -1313,7 +1321,7 @@ fn a_read_only_project() -> (App, Realtime, PathBuf) {
     vt_model::project::save_song(&path, &song).unwrap();
     let (mut app, realtime) = app();
     command(&mut app, &format!("e {}", path.display()));
-    assert!(app.read_only, "{}", app.services.status);
+    assert!(app.services.read_only, "{}", app.services.status);
     (app, realtime, path)
 }
 
@@ -1366,7 +1374,7 @@ fn w_refuses_a_read_only_song_and_w_bang_writes_over_it_keeping_it_read_only() {
     let saved = load_song(&path).unwrap();
     assert_eq!(saved.tracks[0].phrases[&0].steps()[0].note, Note::On(60));
     assert!(saved.read_only, ":w! keeps it parked");
-    assert!(app.read_only);
+    assert!(app.services.read_only);
     std::fs::remove_dir_all(&path).unwrap();
 }
 
@@ -1381,7 +1389,7 @@ fn w_to_a_new_folder_saves_a_copy_that_isnt_read_only_to_carry_on_in() {
     command(&mut app, &format!("w {}", copy.display()));
     assert!(!app.services.dirty, "{}", app.services.status);
     assert_eq!(app.services.folder.as_deref(), Some(copy.as_path()));
-    assert!(!app.read_only, "the copy is the user's own");
+    assert!(!app.services.read_only, "the copy is the user's own");
     assert!(!app.window_title().contains("[RO]"));
     assert!(!load_song(&copy).unwrap().read_only);
     assert!(
@@ -1423,7 +1431,7 @@ fn set_readonly_and_readwrite_switch_it_and_the_status_line_and_title_say_ro() {
         ("set ro", true),
     ] {
         command(&mut app, line);
-        assert_eq!(app.read_only, on, "{line}");
+        assert_eq!(app.services.read_only, on, "{line}");
         assert!(app.services.dirty, "{line} marks the song changed");
     }
     assert!(
@@ -1438,7 +1446,7 @@ fn set_readonly_and_readwrite_switch_it_and_the_status_line_and_title_say_ro() {
     );
     // It isn't an edit to undo.
     tap(&mut app, "u");
-    assert!(app.read_only);
+    assert!(app.services.read_only);
     command(&mut app, "w");
     assert!(app.services.dirty, "now it refuses");
     // Unsaved, :e, :new and :q offer a copy, as :w won't write over it.
@@ -1493,7 +1501,7 @@ fn a_read_only_song_autosaves_and_restoring_never_writes_over_it() {
     assert_eq!(other.modes.mode, Mode::Restore);
     press(&mut other, "y");
     assert!(other.services.dirty);
-    assert!(other.read_only);
+    assert!(other.services.read_only);
     assert!(
         other.services.status.contains("read-only"),
         "{}",
@@ -1531,23 +1539,23 @@ fn the_project_page_shows_and_switches_read_only() {
     };
     assert_eq!(row(&app).as_deref(), Some("Read-only off"));
     tap(&mut app, "=");
-    assert!(app.read_only);
+    assert!(app.services.read_only);
     assert!(app.services.dirty);
     assert_eq!(
         row(&app).as_deref(),
         Some("Read-only on  :w refuses, so Save as makes a copy to change")
     );
     tap(&mut app, "-");
-    assert!(!app.read_only);
+    assert!(!app.services.read_only);
     tap(&mut app, "K");
-    assert!(app.read_only, "K switches it");
+    assert!(app.services.read_only, "K switches it");
     tap(&mut app, "i");
-    assert!(!app.read_only, "and i, as it isn't typed");
+    assert!(!app.services.read_only, "and i, as it isn't typed");
     special(&mut app, KeyCode::Enter);
-    assert!(app.read_only, "and Enter");
+    assert!(app.services.read_only, "and Enter");
     tap(&mut app, "x");
     assert!(
-        !app.read_only,
+        !app.services.read_only,
         "x puts it back off, as a new project has it"
     );
 }

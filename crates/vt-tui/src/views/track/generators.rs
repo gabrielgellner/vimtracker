@@ -12,14 +12,13 @@ use vt_model::grid::GRID_COLUMNS;
 use vt_model::shape::ShapeColumn;
 use vt_model::song::Track;
 
-use crate::app::App;
 use crate::kitty::PanelKey;
 use crate::macroing::{holds, macro_name};
 use crate::page::Ctx;
+use crate::services::Services;
 use crate::shaping::LiveGen;
 use crate::theme;
 use crate::track_page::{Control, DeviceSpec, TrackPage};
-use crate::views::phrase::{lane_playheads, playhead_step};
 use crate::views::widgets::device::{DEVICE_HEIGHT, Device};
 use crate::views::widgets::grid::{CellWidths, ROW_STEP, SettingsGrid};
 use crate::views::widgets::image;
@@ -114,14 +113,14 @@ pub(super) fn playing_phrase(ctx: &Ctx) -> Option<u32> {
 
 /// The row of its span a live generator is playing, counted from its first, while the phrase
 /// it's on is the one under the cursor and is playing: on a lane, where the lane is reading.
-pub(crate) fn playing_row(app: &App, generator: &Generator) -> Option<usize> {
+pub(crate) fn playing_row(services: &Services, generator: &Generator) -> Option<usize> {
     let rows = generator.rows()?;
     let step = match (generator.span, generator.column) {
         (Spanned::Lane, ShapeColumn::Fx { slot, .. }) => {
-            let phrase = app.services.phrase_here()?;
-            lane_playheads(app, phrase)[slot]?
+            let phrase = services.phrase_here()?;
+            services.lane_playheads(phrase)[slot]?
         }
-        _ => playhead_step(app)?,
+        _ => services.playhead_step()?,
     };
     (rows.first..=rows.last)
         .contains(&step)

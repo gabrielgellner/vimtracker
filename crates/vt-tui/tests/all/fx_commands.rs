@@ -907,7 +907,7 @@ fn space_l_turns_fill_on_and_held_it_goes_back() {
     let (mut app, _realtime) = app();
     press(&mut app, " ");
     hold_for(&mut app, 'l', 100);
-    assert!(app.fill, "tapped, it stays on");
+    assert!(app.services.fill, "tapped, it stays on");
     assert_eq!(app.services.status, "Fill on");
     let backend = ratatui::backend::TestBackend::new(120, 2);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
@@ -921,17 +921,17 @@ fn space_l_turns_fill_on_and_held_it_goes_back() {
 
     press(&mut app, " ");
     hold_for(&mut app, 'l', 100);
-    assert!(!app.fill, "tapped again, it's off");
+    assert!(!app.services.fill, "tapped again, it's off");
 
     // Held, it's on until it's let go.
     press(&mut app, " ");
     let now = Instant::now();
     app.key(Key::char('l'), now);
-    assert!(app.fill);
+    assert!(app.services.fill);
     app.key_repeated(Key::char('l'), now + Duration::from_millis(300));
-    assert!(app.fill, "a repeat doesn't switch it back");
+    assert!(app.services.fill, "a repeat doesn't switch it back");
     app.key_released(Key::char('l'), now + Duration::from_millis(600));
-    assert!(!app.fill, "held, it goes back");
+    assert!(!app.services.fill, "held, it goes back");
     assert!(!app.services.dirty, "fill isn't part of the song");
 }
 

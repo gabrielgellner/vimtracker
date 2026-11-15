@@ -11,6 +11,7 @@ use vt_model::song::Track;
 use vt_model::step::Step;
 
 use crate::app::App;
+use crate::services::Services;
 
 /// Whether anything could move a live generator as it plays: a macro holding one of its column's
 /// settings the engine can hold, or `Vary`. Without, what was heard of it before an edit is
@@ -59,59 +60,6 @@ impl App {
         }
     }
 
-    /// A row of a live generator as it was last heard, if that wasn't what's written: the step
-    /// as heard, and on which pass.
-    pub(crate) fn heard_cell(
-        &self,
-        track: usize,
-        phrase: u32,
-        generator: usize,
-        row: usize,
-    ) -> Option<(Step, i64)> {
-        let heard = self
-            .services
-            .heard_rows
-            .get(&(track, phrase, generator, row))?;
-        let owner = self.song().tracks.get(track)?;
-        let held = owner.phrases.get(&phrase)?;
-        let live = held.generators().get(generator)?;
-        // Another generator may be in its place since.
-        if live.column != heard.column || !reachable(owner, live) {
-            return None;
-        }
-        let step = live.heard_row(held.steps(), row, heard.cell?)?;
-        (step != held.steps()[row]).then_some((step, heard.pass))
-    }
-
-    /// A row with each live generator on it laid as last heard, if any was heard otherwise than
-    /// written.
-    pub(crate) fn heard_step(&self, track: usize, phrase: u32, row: usize) -> Option<Step> {
-        let held = self.song().tracks.get(track)?.phrases.get(&phrase)?;
-        let mut step = held.steps().get(row)?.clone();
-        let mut moved = false;
-        for (index, generator) in held.generators().iter().enumerate() {
-            if self.heard_cell(track, phrase, index, row).is_some()
-                && let Some(cell) = self.services.heard_rows[&(track, phrase, index, row)].cell
-            {
-                generator.lay_heard(row, cell, &mut step);
-                moved = true;
-            }
-        }
-        moved.then_some(step)
-    }
-
-    /// Whether a live generator was heard otherwise than written on any of its rows, which the
-    /// phrase's title marks with `~`.
-    pub(crate) fn generator_moving(&self, track: usize, phrase: u32, generator: usize) -> bool {
-        self.services
-            .heard_rows
-            .keys()
-            .any(|&(on, at, index, row)| {
-                (on, at, index) == (track, phrase, generator)
-                    && self.heard_cell(track, phrase, generator, row).is_some()
-            })
-    }
-
     /// A live generator's rows as last heard, if any was heard otherwise than written.
     pub(crate) fn heard_rows_of(
         &self,
@@ -132,7 +80,7 @@ impl App {
             };
             heard += 1;
             pass = pass.max(report.pass);
-            if let Some((step, _)) = self.heard_cell(track, phrase, generator, row) {
+            if let Some((step, _)) = self.services.heard_cell(track, phrase, generator, row) {
                 rows.push((row, step));
             }
         }
@@ -197,5 +145,54 @@ impl App {
             heard.heard,
             heard.pass + 1
         );
+    }
+}
+
+impl Services {
+    /// A row of a live generator as it was last heard, if that wasn't what's written: the step
+    /// as heard, and on which pass.
+    pub(crate) fn heard_cell(
+        &self,
+        track: usize,
+        phrase: u32,
+        generator: usize,
+        row: usize,
+    ) -> Option<(Step, i64)> {
+        let heard = self.heard_rows.get(&(track, phrase, generator, row))?;
+        let owner = self.song().tracks.get(track)?;
+        let held = owner.phrases.get(&phrase)?;
+        let live = held.generators().get(generator)?;
+        // Another generator may be in its place since.
+        if live.column != heard.column || !reachable(owner, live) {
+            return None;
+        }
+        let step = live.heard_row(held.steps(), row, heard.cell?)?;
+        (step != held.steps()[row]).then_some((step, heard.pass))
+    }
+
+    /// A row with each live generator on it laid as last heard, if any was heard otherwise than
+    /// written.
+    pub(crate) fn heard_step(&self, track: usize, phrase: u32, row: usize) -> Option<Step> {
+        let held = self.song().tracks.get(track)?.phrases.get(&phrase)?;
+        let mut step = held.steps().get(row)?.clone();
+        let mut moved = false;
+        for (index, generator) in held.generators().iter().enumerate() {
+            if self.heard_cell(track, phrase, index, row).is_some()
+                && let Some(cell) = self.heard_rows[&(track, phrase, index, row)].cell
+            {
+                generator.lay_heard(row, cell, &mut step);
+                moved = true;
+            }
+        }
+        moved.then_some(step)
+    }
+
+    /// Whether a live generator was heard otherwise than written on any of its rows, which the
+    /// phrase's title marks with `~`.
+    pub(crate) fn generator_moving(&self, track: usize, phrase: u32, generator: usize) -> bool {
+        self.heard_rows.keys().any(|&(on, at, index, row)| {
+            (on, at, index) == (track, phrase, generator)
+                && self.heard_cell(track, phrase, generator, row).is_some()
+        })
     }
 }

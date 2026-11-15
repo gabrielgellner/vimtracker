@@ -234,57 +234,6 @@ fn selected_columns(step: &Step, scope: Scope, length: usize) -> (usize, usize) 
     (start.min(length), end.min(length))
 }
 
-/// Which step of this phrase the playhead is on, if it is on this phrase.
-pub(crate) fn playhead_step(app: &App) -> Option<usize> {
-    playhead_place(app).map(|(step, _)| step)
-}
-
-/// Which step of this phrase the playhead is on, and which of the step's pulses, if it is on this
-/// phrase.
-pub(crate) fn playhead_place(app: &App) -> Option<(usize, usize)> {
-    let owner = app.services.track_here()?;
-    let chain = (*app
-        .services
-        .section_here()?
-        .chains
-        .get(app.services.cursor.track)?)?;
-    let playhead = app
-        .services
-        .playing_place(app.services.cursor.track, chain)?;
-    let position = owner.chain_position(
-        chain,
-        playhead,
-        app.services.dealer(app.services.cursor.track),
-    )?;
-    let start = owner.phrases.get(&position.phrase)?.start();
-    (position.slot == app.services.cursor.slot && Some(position.phrase) == app.services.phrase_id())
-        .then_some((start + position.step, position.pulse))
-}
-
-/// The note the cursor's track's row playing was heard at, before its chain's transpose, where an
-/// accumulator or an `RND` moved it.
-pub(crate) fn heard_note(app: &App) -> Option<u8> {
-    app.services
-        .places
-        .get(app.services.cursor.track)?
-        .accumulated
-}
-
-/// Where each FX column with a lane of its own is reading, if this phrase is the one playing.
-pub(crate) fn lane_playheads(app: &App, phrase: &Phrase) -> [Option<usize>; FX_SLOTS] {
-    let mut playheads = [None; FX_SLOTS];
-    let Some(jam) = playhead_step(app).and(app.services.jam.get(app.services.cursor.track)) else {
-        return playheads;
-    };
-    let count = app.services.places[app.services.cursor.track].count - jam.started;
-    for (slot, playhead) in playheads.iter_mut().enumerate() {
-        *playhead = phrase
-            .lane(slot)
-            .map(|lane| lane.step_at(count + jam.lane_offsets[slot]));
-    }
-    playheads
-}
-
 /// The characters an FX slot takes in a step's text, with its mark.
 fn slot_columns(slot: usize) -> (usize, usize) {
     let (start, _) = field_range(Field::FxCommand(slot));
@@ -728,16 +677,6 @@ fn relative_number(index: usize, cursor: usize) -> String {
 fn row_number(row: isize) -> String {
     let sign = if row < 0 { '-' } else { ' ' };
     format!("{sign}{:02X}", row.unsigned_abs())
-}
-
-/// A track's name, or its number if it has none.
-pub(crate) fn track_name(app: &App, track: usize) -> String {
-    let name = app.song().tracks.get(track).map_or("", |t| t.name.as_str());
-    if name.is_empty() {
-        format!("{:02}", track + 1)
-    } else {
-        name.to_owned()
-    }
 }
 
 /// The glyph for a track that's muted or soloed, if it is, and its style: the active colour for

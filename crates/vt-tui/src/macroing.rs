@@ -226,7 +226,12 @@ impl App {
         else {
             return None;
         };
-        let live = self.live_generator(self.services.cursor.track, phrase, generator)?;
+        let live = self.services.live_generator(
+            self.services.cursor.track,
+            phrase,
+            generator,
+            self.modes.view,
+        )?;
         let context = live.context();
         let bounds = param.bounds(&context)?;
         let now = param.number(&live.generator.heard(), &context)?;

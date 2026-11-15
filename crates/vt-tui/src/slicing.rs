@@ -9,6 +9,7 @@ use vt_model::analysis::{Analysis, Pyramid};
 use vt_model::bank::{BankEntry, MAX_SLICES, SliceParams};
 use vt_model::constants::BAR_STEPS;
 use vt_model::onsets::{MIN_GAP_SECONDS, MIN_SILENCE_SECONDS, after_silence, quiet_level};
+use vt_model::samples::Rates;
 use vt_model::settings::SettingId;
 use vt_model::song::Machine;
 use vt_model::step::{FxCommand, FxSlot, Mark, Step};
@@ -19,6 +20,7 @@ use crate::input::command::{Address, SliceChange, SliceRange};
 use crate::input::mode::View;
 use crate::input::picker::{Item, Pick, Picker};
 use crate::sample_page::beat_frames;
+use crate::services::Services;
 use crate::views::sample::time;
 
 /// A time in microseconds as frames at a rate, to the nearest.
@@ -139,15 +141,6 @@ fn transient_starts(analysis: &Analysis, within: &std::ops::Range<u64>, sens: u8
 }
 
 impl App {
-    /// The bank entry the current track's sampler plays, before any step chooses another.
-    pub(crate) fn track_sample_number(&self) -> u8 {
-        self.song()
-            .tracks
-            .get(self.services.cursor.track)
-            .filter(|track| track.machine == Machine::Sampler)
-            .map_or(0, |track| track.sample())
-    }
-
     /// The slice a change to one slice is to: the one the sample page's cursor is in, while it
     /// shows this entry, or else the one the track's `Slice` is on.
     pub(crate) fn slice_here(&self, number: u8, entry: &BankEntry) -> usize {
@@ -167,7 +160,7 @@ impl App {
     /// what it is now. A range re-slices only the slices inside it, or changes those starting in
     /// it, and with none it's the whole sample, or the slice here for a slice's own setting.
     pub(crate) fn change_slices(&mut self, change: SliceChange, range: Option<SliceRange>) {
-        let number = self.track_sample_number();
+        let number = self.services.track_sample_number();
         let Some(entry) = self.song().bank.get(number).cloned() else {
             self.services.status = format!(
                 "Track {:02} plays no sample to slice: K on Sample chooses one",
@@ -175,7 +168,7 @@ impl App {
             );
             return;
         };
-        let Some((rate, length)) = self.file_of(&entry) else {
+        let Some((rate, length)) = self.services.file_of(&entry) else {
             self.services.status = "Its file isn't loaded, so its length isn't known".to_owned();
             return;
         };
@@ -327,7 +320,7 @@ impl App {
         rate: u32,
         length: u64,
     ) {
-        let number = self.track_sample_number();
+        let number = self.services.track_sample_number();
         let name = sample_text(self.song(), number);
         if entry.edit.points.slices.is_empty() {
             self.services.status = format!("{name} has no slices: :slice 16 cuts it into 16");
@@ -411,7 +404,9 @@ impl App {
     ) -> Vec<u64> {
         let quiet = quiet_level(analysis.peak);
         let gap = (MIN_SILENCE_SECONDS * f64::from(analysis.rate)).round() as u64;
-        let shown = self.shown_of(self.track_sample_number(), entry).ok();
+        let shown = self
+            .shown_of(self.services.track_sample_number(), entry)
+            .ok();
         let size = Pyramid::bucket_frames(0);
         after_silence(&analysis.pyramid, within.clone(), quiet, gap)
             .into_iter()
@@ -432,7 +427,7 @@ impl App {
             return vec![Item::new("00", pick(0)).meaning("No sample to slice")];
         };
         let points = &entry.edit.points;
-        let file = self.file_of(entry);
+        let file = self.services.file_of(entry);
         let length = file.map_or(u64::MAX, |(_, length)| length);
         // The letters line up in a column as wide as the most any slice has, if any has one.
         let letters = |at: usize| points.marks_of(at).into_iter().collect::<String>();
@@ -466,7 +461,7 @@ impl App {
     pub(crate) fn open_slice_picker(&mut self) {
         self.modes.count = None;
         let track = self.services.cursor.track;
-        let number = self.track_sample_number();
+        let number = self.services.track_sample_number();
         let current = self
             .song()
             .tracks
@@ -481,12 +476,136 @@ impl App {
         self.show_picker(Picker::new("Slice", items).opened_on(Some(at)));
     }
 
+    /// Choose the slice a step's `SLI` locks, from the slices of the sample the step plays: first
+    /// by each letter naming one, as `'a  03  0.214 s`, which keeps to its slice as slices before
+    /// it come and go, and then by number.
+    pub(crate) fn open_slice_lock_picker(&mut self, slot: usize) {
+        self.modes.count = None;
+        let current = self
+            .services
+            .current_slot(slot)
+            .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SLICE)));
+        let number = self.services.step_entry();
+        let mut items = self.mark_items(number, |letter| Pick::SliceMarkLock { slot, letter });
+        let named = items.len();
+        items.extend(self.slice_items(number, |number| Pick::SliceLock { slot, number }));
+        let at = match current.map(|cell| (cell.slice_mark(), cell.coarse())) {
+            Some((Some(letter), _)) => items[..named]
+                .iter()
+                .position(|item| item.pick == Pick::SliceMarkLock { slot, letter }),
+            Some((None, number)) => Some(named + usize::from(number).min(items.len() - named - 1)),
+            None => Some(named),
+        };
+        self.show_picker(Picker::new("Slice lock", items).opened_on(at));
+    }
+
+    /// Each letter naming a slice of an entry, in the order of their slices, as `'a  03  0.214 s`.
+    pub(crate) fn mark_items(&self, number: u8, pick: impl Fn(char) -> Pick) -> Vec<Item> {
+        let Some(entry) = self.song().bank.get(number) else {
+            return Vec::new();
+        };
+        let points = &entry.edit.points;
+        let file = self.services.file_of(entry);
+        let length = file.map_or(u64::MAX, |(_, length)| length);
+        points
+            .marks_in_order()
+            .into_iter()
+            .map(|(letter, at)| {
+                let frames = points.slice_frames(at, length);
+                let label = match file {
+                    Some((rate, _)) => format!("'{letter}  {at:02X}  {}", time(frames.start, rate)),
+                    None => format!("'{letter}  {at:02X}"),
+                };
+                Item::new(label, pick(letter)).meaning(format!("The slice named {letter}"))
+            })
+            .collect()
+    }
+
+    /// The mark an `SLI` in a slot has, if it has one, to keep as its value changes.
+    fn slice_lock_mark(&self, slot: usize) -> Mark {
+        self.services
+            .current_slot(slot)
+            .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SLICE)))
+            .map_or(Mark::default(), |cell| cell.mark)
+    }
+
+    /// Put a chosen slice in a slot as an `SLI`, keeping its mark.
+    pub(crate) fn pick_slice_lock(&mut self, slot: usize, number: u8) {
+        let mark = self.slice_lock_mark(slot);
+        self.services.cursor.field = Field::FxValue(slot);
+        self.set_field(FieldValue::Slot(
+            slot,
+            FxSlot {
+                command: Some(FxCommand::Set(SettingId::SLICE)),
+                value: u16::from(number) << 8,
+                mark,
+            },
+        ));
+    }
+
+    /// Put a slice chosen by a letter in a slot as an `SLI 'a`, keeping its mark.
+    pub(crate) fn pick_slice_mark_lock(&mut self, slot: usize, letter: char) {
+        let mark = self.slice_lock_mark(slot);
+        self.services.cursor.field = Field::FxValue(slot);
+        self.set_field(FieldValue::Slot(slot, FxSlot::slice_by_mark(letter, mark)));
+    }
+
+    /// `g d` on a step's `SLI` value: the sample page on the slice it locks, of the sample the step
+    /// plays, as a jump `C-o` comes back from. Whether the cursor was on one.
+    pub(crate) fn open_slice_of_step(&mut self) -> bool {
+        let Field::FxValue(slot) = self.services.cursor.field else {
+            return false;
+        };
+        let Some(cell) = self
+            .services
+            .current_slot(slot)
+            .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SLICE)))
+        else {
+            return false;
+        };
+        let number = self.services.step_entry();
+        let track = self.services.cursor.track;
+        self.jump_to_view(View::Sample);
+        self.sample_page.pinned =
+            (number != self.services.track_sample_number()).then_some((track, number));
+        let slice = self.services.slice_of_lock(cell).unwrap_or_else(|own| own);
+        match self.sample_page_here() {
+            Ok(shown) => {
+                let slice = usize::from(slice);
+                let points = &shown.entry.edit.points;
+                let frames = points.slice_frames(slice, shown.length());
+                self.sample_page.show_frame(frames.start, shown.length());
+                let count = points.slice_count();
+                self.services.status = if slice >= count {
+                    format!(
+                        "Slice {slice:02X} is past the last, {:02X}, so it plays that",
+                        count - 1
+                    )
+                } else {
+                    format!("{}: slice {slice:02X}", sample_text(self.song(), number))
+                };
+            }
+            Err(why) => self.services.status = why,
+        }
+        true
+    }
+}
+
+impl Services {
+    /// The bank entry the current track's sampler plays, before any step chooses another.
+    pub(crate) fn track_sample_number(&self) -> u8 {
+        self.song()
+            .tracks
+            .get(self.cursor.track)
+            .filter(|track| track.machine == Machine::Sampler)
+            .map_or(0, |track| track.sample())
+    }
+
     /// The bank entry the step under the cursor plays.
     fn step_entry(&self) -> u8 {
         let step = self
-            .services
             .phrase_here()
-            .and_then(|phrase| phrase.steps().get(self.services.cursor.step));
+            .and_then(|phrase| phrase.steps().get(self.cursor.step));
         entry_of_step(step, self.track_sample_number())
     }
 
@@ -558,78 +677,6 @@ impl App {
         }
     }
 
-    /// Choose the slice a step's `SLI` locks, from the slices of the sample the step plays: first
-    /// by each letter naming one, as `'a  03  0.214 s`, which keeps to its slice as slices before
-    /// it come and go, and then by number.
-    pub(crate) fn open_slice_lock_picker(&mut self, slot: usize) {
-        self.modes.count = None;
-        let current = self
-            .current_slot(slot)
-            .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SLICE)));
-        let number = self.step_entry();
-        let mut items = self.mark_items(number, |letter| Pick::SliceMarkLock { slot, letter });
-        let named = items.len();
-        items.extend(self.slice_items(number, |number| Pick::SliceLock { slot, number }));
-        let at = match current.map(|cell| (cell.slice_mark(), cell.coarse())) {
-            Some((Some(letter), _)) => items[..named]
-                .iter()
-                .position(|item| item.pick == Pick::SliceMarkLock { slot, letter }),
-            Some((None, number)) => Some(named + usize::from(number).min(items.len() - named - 1)),
-            None => Some(named),
-        };
-        self.show_picker(Picker::new("Slice lock", items).opened_on(at));
-    }
-
-    /// Each letter naming a slice of an entry, in the order of their slices, as `'a  03  0.214 s`.
-    pub(crate) fn mark_items(&self, number: u8, pick: impl Fn(char) -> Pick) -> Vec<Item> {
-        let Some(entry) = self.song().bank.get(number) else {
-            return Vec::new();
-        };
-        let points = &entry.edit.points;
-        let file = self.file_of(entry);
-        let length = file.map_or(u64::MAX, |(_, length)| length);
-        points
-            .marks_in_order()
-            .into_iter()
-            .map(|(letter, at)| {
-                let frames = points.slice_frames(at, length);
-                let label = match file {
-                    Some((rate, _)) => format!("'{letter}  {at:02X}  {}", time(frames.start, rate)),
-                    None => format!("'{letter}  {at:02X}"),
-                };
-                Item::new(label, pick(letter)).meaning(format!("The slice named {letter}"))
-            })
-            .collect()
-    }
-
-    /// The mark an `SLI` in a slot has, if it has one, to keep as its value changes.
-    fn slice_lock_mark(&self, slot: usize) -> Mark {
-        self.current_slot(slot)
-            .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SLICE)))
-            .map_or(Mark::default(), |cell| cell.mark)
-    }
-
-    /// Put a chosen slice in a slot as an `SLI`, keeping its mark.
-    pub(crate) fn pick_slice_lock(&mut self, slot: usize, number: u8) {
-        let mark = self.slice_lock_mark(slot);
-        self.services.cursor.field = Field::FxValue(slot);
-        self.set_field(FieldValue::Slot(
-            slot,
-            FxSlot {
-                command: Some(FxCommand::Set(SettingId::SLICE)),
-                value: u16::from(number) << 8,
-                mark,
-            },
-        ));
-    }
-
-    /// Put a slice chosen by a letter in a slot as an `SLI 'a`, keeping its mark.
-    pub(crate) fn pick_slice_mark_lock(&mut self, slot: usize, letter: char) {
-        let mark = self.slice_lock_mark(slot);
-        self.services.cursor.field = Field::FxValue(slot);
-        self.set_field(FieldValue::Slot(slot, FxSlot::slice_by_mark(letter, mark)));
-    }
-
     /// The slice an `SLI` plays of the sample the step under the cursor plays, by its number: the
     /// one its letter names, if it's by a letter. A letter naming none plays the track's own
     /// `Slice`, which comes back as an error with it.
@@ -640,7 +687,7 @@ impl App {
         let own = self
             .song()
             .tracks
-            .get(self.services.cursor.track)
+            .get(self.cursor.track)
             .map_or(0, |track| track.setting(SettingId::SLICE));
         self.song()
             .bank
@@ -650,41 +697,15 @@ impl App {
             .ok_or(own)
     }
 
-    /// `g d` on a step's `SLI` value: the sample page on the slice it locks, of the sample the step
-    /// plays, as a jump `C-o` comes back from. Whether the cursor was on one.
-    pub(crate) fn open_slice_of_step(&mut self) -> bool {
-        let Field::FxValue(slot) = self.services.cursor.field else {
-            return false;
-        };
-        let Some(cell) = self
-            .current_slot(slot)
-            .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SLICE)))
-        else {
-            return false;
-        };
-        let number = self.step_entry();
-        let track = self.services.cursor.track;
-        self.jump_to_view(View::Sample);
-        self.sample_page.pinned = (number != self.track_sample_number()).then_some((track, number));
-        let slice = self.slice_of_lock(cell).unwrap_or_else(|own| own);
-        match self.sample_page_here() {
-            Ok(shown) => {
-                let slice = usize::from(slice);
-                let points = &shown.entry.edit.points;
-                let frames = points.slice_frames(slice, shown.length());
-                self.sample_page.show_frame(frames.start, shown.length());
-                let count = points.slice_count();
-                self.services.status = if slice >= count {
-                    format!(
-                        "Slice {slice:02X} is past the last, {:02X}, so it plays that",
-                        count - 1
-                    )
-                } else {
-                    format!("{}: slice {slice:02X}", sample_text(self.song(), number))
-                };
-            }
-            Err(why) => self.services.status = why,
+    /// The rate an entry's file was recorded at, and its length in the file's frames, if it's
+    /// loaded.
+    pub(crate) fn file_of(&self, entry: &BankEntry) -> Option<(u32, u64)> {
+        let id = self.samples.id_of(&entry.source()?.path)?;
+        let loaded = self.samples.get(id)?.frames.len() as u64;
+        // One made at the program's rate, as a recording is, is at the program's rate.
+        match self.samples.rates(id) {
+            Rates::SAME => Some((self.rate, loaded)),
+            rates => Some((rates.file.max(1), rates.file_frame(loaded))),
         }
-        true
     }
 }

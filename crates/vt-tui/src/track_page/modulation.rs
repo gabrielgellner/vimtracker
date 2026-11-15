@@ -134,6 +134,7 @@ impl App {
         // The draws were worked out from the version the latest report is of, a frame or so
         // behind the song while it's being changed, and are kept only from a Steps slot there.
         let reported = self
+            .services
             .reported_track()
             .is_some_and(|track| track.mods[slot].kind == ModKind::Steps);
         let drawn = self
@@ -220,7 +221,7 @@ impl App {
                 .take(last + 1)
                 .skip(first)
                 .any(|(row, written)| {
-                    let heard = self.heard_step(track, phrase, row);
+                    let heard = self.services.heard_step(track, phrase, row);
                     !varying(heard.as_ref().unwrap_or(written)).is_empty()
                 });
         if moving.is_empty() && !owner.mods.iter().any(baked) && !any_varying {
@@ -239,7 +240,7 @@ impl App {
             .collect();
         // Each row as heard, with every moving generator on it laid over.
         let mut rows: std::collections::BTreeMap<usize, Step> = (0..steps.len())
-            .filter_map(|row| Some((row, self.heard_step(track, phrase, row)?)))
+            .filter_map(|row| Some((row, self.services.heard_step(track, phrase, row)?)))
             .collect();
         let mut moved = [false; MOD_SLOTS];
         let (mut heard, mut unheard, mut varied) = (0, 0, 0);

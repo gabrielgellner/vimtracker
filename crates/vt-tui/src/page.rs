@@ -7,8 +7,8 @@
 //!   and the [`Modes`] that span the pages, the view and the mode among them, to read.
 //! - **[`Ctx`]**, to be drawn: everything a page reads, the song, the cursor's place in it, the
 //!   view and the modes that span pages, which groups are folded, and what the engine last
-//!   reported, the tracks' meters among it. It only reads, and reads through `App`, as drawing is
-//!   given `&App` and some of what's drawn, a live generator's sources, is worked out by `App`.
+//!   reported, the tracks' meters among it. It only reads: the [`Services`] and the [`Modes`],
+//!   and the little of `App`'s own a page shows, a [`PageState`] `App` fills as it's drawn (#784).
 //!
 //! - **[`Page`]**, what a page is as a component: its keys in the binding table, how it runs one,
 //!   and its drawing and pictures. `App` holds one of each page and dispatches by `View` with a
@@ -36,7 +36,7 @@ use vt_model::selection::{Extent, Field};
 use vt_model::song::{ChainEntry, Phrase, Section, Song, Track};
 use vt_model::step::Step;
 
-use crate::app::{App, AudioState, Cursor, Entry, Modes, Selection, TrackLive};
+use crate::app::{App, AudioState, Cursor, Entry, Modes, Selection, TrackLive, which_key_due};
 use crate::folding::Folds;
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
@@ -45,10 +45,12 @@ use crate::kitty::{PanelIds, PanelWant};
 use crate::meter::Meter;
 use crate::phrase_view::PhraseView;
 use crate::roto::Roto;
-use crate::sample_page::{Shown, is_sample_motion};
+use crate::sample_page::{SamplePage, Shown, is_sample_motion};
+use crate::sampling::still_recording;
 use crate::services::Services;
 use crate::shaping::LiveGen;
 use crate::track_page::{Control, ParamView};
+use crate::views::help::POPUP_DELAY;
 use crate::views::widgets::setting::{CellLook, Focus};
 use crate::wheel::WheelSetting;
 
@@ -95,10 +97,35 @@ pub(crate) trait Page {
     fn take_panels(&mut self, _ids: PanelIds, _wants: &[PanelWant], _rate: u32) {}
 }
 
-/// What a page reads of the program, borrowed from it while the page is drawn.
+/// What a page reads of the program, borrowed from it while the page is drawn: the shared
+/// services, the modes that span the pages, and what of `App`'s own the pages show.
 #[derive(Clone, Copy)]
 pub struct Ctx<'a> {
-    app: &'a App,
+    services: &'a Services,
+    modes: &'a Modes,
+    page: PageState<'a>,
+}
+
+/// What of `App`'s own state a page shows, which isn't the services': what's drawn over the
+/// pages, the selection a replace or the shape panel holds, the recording, and the audio's
+/// readouts. `App` fills it each time a page is given a [`Ctx`].
+#[derive(Clone, Copy)]
+pub struct PageState<'a> {
+    /// Whether a picker, a guide, the shape panel, help or the command line's list is drawn over
+    /// the page.
+    covered: bool,
+    /// When the keys typed so far started, while more keys can follow them, for which-key's list
+    /// that opens over the page a moment after.
+    keys_since: Option<Instant>,
+    /// The selection a replace across it or the shape panel is filling.
+    held_selection: Option<Selection>,
+    /// The entry being recorded into, and its seconds so far once it has started.
+    recording: Option<(u8, Option<f64>)>,
+    /// The audio output as it plays, and what the audio page chooses from.
+    audio: &'a AudioState,
+    wheel: WheelSetting,
+    cpu_percent: u64,
+    slowed: bool,
 }
 
 /// What a page is given to run a key: the shared services, to read and change, and the modes that
@@ -111,7 +138,41 @@ pub struct CtxMut<'a> {
 impl App {
     /// What a page reads, to be drawn with.
     pub fn ctx(&self) -> Ctx<'_> {
-        Ctx { app: self }
+        Ctx {
+            services: &self.services,
+            modes: &self.modes,
+            page: self.page_state(),
+        }
+    }
+
+    /// What of its own state the pages show, as it is now.
+    fn page_state(&self) -> PageState<'_> {
+        let covered = self.picker.is_some()
+            || self.guide.is_some()
+            || self.shape.is_some()
+            || matches!(self.modes.mode, Mode::Help | Mode::Picker | Mode::Guide)
+            || (self.modes.mode == Mode::Command && self.command_menu.is_some());
+        // Only worked out while keys are typed, as the list of what follows them is.
+        let continued = |_: &Instant| {
+            !self.pending.is_empty()
+                && !self
+                    .table
+                    .continuations(self.key_scope(), &self.pending)
+                    .is_empty()
+        };
+        PageState {
+            covered,
+            keys_since: self.pending_since.filter(continued),
+            held_selection: self
+                .replacing_selection
+                .map(|(selection, _)| selection)
+                .or(self.shape.as_ref().map(|panel| panel.selection)),
+            recording: self.sampling_shown(),
+            audio: &self.audio,
+            wheel: self.wheel.setting,
+            cpu_percent: self.cpu.percent(),
+            slowed: self.slowdown.slowed(),
+        }
     }
 
     /// Run a command on the page on screen, the second place a key goes in [`App::run`]'s order:
@@ -316,67 +377,67 @@ impl CtxMut<'_> {
 impl<'a> Ctx<'a> {
     /// The current song.
     pub fn song(&self) -> &'a Arc<Song> {
-        self.app.song()
+        self.services.song()
     }
 
     /// Where the cursor is in the song: its section, track, chain slot, step and field.
     pub fn cursor(&self) -> Cursor {
-        self.app.services.cursor
+        self.services.cursor
     }
 
     /// The track under the cursor.
     pub fn track_here(&self) -> Option<&'a Track> {
-        self.app.services.track_here()
+        self.services.track_here()
     }
 
     /// A track's name, or its number if it has none.
     pub fn track_name(&self, track: usize) -> String {
-        crate::views::phrase::track_name(self.app, track)
+        self.services.track_name(track)
     }
 
     /// The chain on the cursor's track.
     pub fn chain_id(&self) -> Option<u32> {
-        self.app.services.chain_id()
+        self.services.chain_id()
     }
 
     /// The rows in the cursor's chain.
     pub fn chain_entries(&self) -> &'a [ChainEntry] {
-        self.app.services.chain_entries()
+        self.services.chain_entries()
     }
 
     /// How many sections play the cursor's chain.
     pub fn chain_uses(&self) -> usize {
-        self.app.chain_uses()
+        self.services.chain_uses()
     }
 
     /// Which sections and slots play a phrase of the cursor's track.
     pub fn phrase_uses(&self, phrase: u32) -> Vec<(usize, usize)> {
-        self.app.phrase_uses(phrase)
+        self.services.phrase_uses(phrase)
     }
 
     /// Which groups are folded, so their tracks are left out where tracks are drawn side by side.
     pub fn folds(&self) -> &'a Folds {
-        &self.app.services.folds
+        &self.services.folds
     }
 
     /// The view on screen.
     pub fn view(&self) -> View {
-        self.app.modes.view
+        self.modes.view
     }
 
     /// The mode the keys are in.
     pub fn mode(&self) -> Mode {
-        self.app.modes.mode
+        self.modes.mode
     }
 
     /// What's been typed in Insert and not yet written.
     pub fn entry(&self) -> &'a Entry {
-        &self.app.modes.entry
+        &self.modes.entry
     }
 
     /// The search for a setting under way, whose labels go over the settings it finds.
     pub fn field_jump(&self) -> Option<&'a FieldJump> {
-        self.app.modes.field_jump.as_ref()
+        self.modes.field_jump.as_ref()
     }
 
     /// How the modes show a setting's cell with the cursor on it this way: in the mode's colour,
@@ -408,74 +469,73 @@ impl<'a> Ctx<'a> {
     /// One of the track page's settings on a track of the song, as a widget draws it, with an
     /// accumulator's limits counted as the scale lock has them.
     pub fn param_view(&self, control: Control, track: &Track) -> Option<ParamView> {
-        crate::track_page::view(control, track, self.song(), self.app.scale.on)
+        crate::track_page::view(control, track, self.song(), self.services.scale.on)
     }
 
     /// Whether the song plays, as the engine last said.
     pub fn transport(&self) -> Transport {
-        self.app.services.transport
+        self.services.transport
     }
 
     /// The section the engine is on.
     pub fn playing_section(&self) -> usize {
-        self.app.services.playing_section
+        self.services.playing_section
     }
 
     /// The sections being kept playing, set with `:loop`.
     pub fn looping(&self) -> Option<SectionLoop> {
-        self.app.services.looping
+        self.services.looping
     }
 
     /// Whether the `:loop` is waiting for the launch grid's next line, as the engine last said.
     pub fn loop_waiting(&self) -> bool {
-        self.app.services.loop_waiting
+        self.services.loop_waiting
     }
 
     /// What the cursor's track is playing with right now, as the engine last said.
     pub fn live(&self) -> Option<LiveValues> {
-        self.app.services.live
+        self.services.live
     }
 
     /// The cursor's track as the latest report's live values were worked out from.
     pub fn reported_track(&self) -> Option<&'a Track> {
-        self.app.reported_track()
+        self.services.reported_track()
     }
 
     /// What each track is launched onto and cued to, as the engine last said.
     pub fn jam(&self) -> &'a [JamState] {
-        &self.app.services.jam
+        &self.services.jam
     }
 
     /// Each track's live mute and solo.
     pub fn levels(&self) -> &'a [TrackLive] {
-        &self.app.services.levels
+        &self.services.levels
     }
 
     /// How far a track is through this chain, if it's playing it, counting every time round it.
     pub fn playing_place(&self, track: usize, chain: u32) -> Option<usize> {
-        self.app.services.playing_place(track, chain)
+        self.services.playing_place(track, chain)
     }
 
     /// What a track's dealt orders are dealt from, as the engine deals them.
     pub fn dealer(&self, track: usize) -> Dealer {
-        self.app.services.dealer(track)
+        self.services.dealer(track)
     }
 
     /// A track's faders as they're heard.
     pub fn faders(&self, track: usize) -> Faders {
-        self.app.services.faders(track)
+        self.services.faders(track)
     }
 
     /// A track as the pages draw it: where its macros put what they hold, then its faders where
     /// the steps have them while they drive them.
     pub fn track_shown(&self, track: usize) -> Option<Cow<'a, Track>> {
-        self.app.services.track_shown(track)
+        self.services.track_shown(track)
     }
 
     /// A track's level, as its meter holds it.
     pub fn track_meter(&self, track: usize) -> Meter {
-        self.app
-            .services
+        self.services
             .track_meters
             .get(track)
             .copied()
@@ -484,12 +544,12 @@ impl<'a> Ctx<'a> {
 
     /// Whether a control on a track is a fader the steps drive now, so it shows their value.
     pub fn follows_steps(&self, track: usize, control: Control) -> bool {
-        self.app.services.follows_steps(track, control)
+        self.services.follows_steps(track, control)
     }
 
     /// Whether a control on a track is a fader a hand has taken over from the steps.
     pub fn taken_over(&self, track: usize, control: Control) -> bool {
-        self.app.services.taken_over(track, control)
+        self.services.taken_over(track, control)
     }
 
     /// A live generator of a track's phrase, by its place in the phrase's list, with what it
@@ -500,163 +560,166 @@ impl<'a> Ctx<'a> {
         phrase: u32,
         index: usize,
     ) -> Option<LiveGen> {
-        self.app.live_generator(track, phrase, index)
+        self.services
+            .live_generator(track, phrase, index, self.modes.view)
     }
 
     /// The row of its span a live generator is playing, counted from its first, while the phrase
     /// it's on is the one under the cursor and is playing.
     pub(crate) fn gen_playing_row(&self, generator: &Generator) -> Option<usize> {
-        crate::views::track::gen_playing_row(self.app, generator)
+        crate::views::track::gen_playing_row(self.services, generator)
     }
 
     /// The sample pool, with each file's analysis and frames, for a sampler's thumbnail.
     pub fn samples(&self) -> &'a SamplePool {
-        &self.app.services.samples
+        &self.services.samples
     }
 
     /// The program's sample rate, which the pictures of filters and tails are worked out at.
     pub fn rate(&self) -> u32 {
-        self.app.services.rate
+        self.services.rate
     }
 
     /// The project's name, which is the song's own.
     pub fn project_name(&self) -> String {
-        self.app.project_name()
+        self.services.project_name()
     }
 
     /// The folder the project is saved in, if it's been saved.
     pub fn folder(&self) -> Option<&'a Path> {
-        self.app.services.folder.as_deref()
+        self.services.folder.as_deref()
     }
 
     /// Whether the project has changed since it was last saved.
     pub fn dirty(&self) -> bool {
-        self.app.services.dirty
+        self.services.dirty
     }
 
     /// The section the cursor is in, or the last if it's past them.
     pub fn section_here(&self) -> Option<&'a Section> {
-        self.app.services.section_here()
+        self.services.section_here()
     }
 
     /// The scale notes are entered in.
     pub fn scale(&self) -> Scale {
-        self.app.scale
+        self.services.scale
     }
 
     /// Whether entering in Insert moves on by the grid.
     pub fn auto_jump(&self) -> bool {
-        self.app.auto_jump
+        self.services.auto_jump
     }
 
     /// Whether `:w` refuses to write over the project.
     pub fn read_only(&self) -> bool {
-        self.app.read_only
+        self.services.read_only
     }
 
     /// The audio output as it plays, and what the audio page chooses from.
     pub fn audio(&self) -> &'a AudioState {
-        &self.app.audio
+        self.page.audio
     }
 
     /// The Roto-Control: whether it's on, and the link to it.
     pub fn roto(&self) -> &'a Roto {
-        &self.app.services.roto
+        &self.services.roto
     }
 
     /// Whether the mouse wheel turns the cursor's setting, and which way.
     pub fn wheel(&self) -> WheelSetting {
-        self.app.wheel.setting
+        self.page.wheel
     }
 
     /// The CPU the audio takes, as the system line shows it, in percent.
     pub fn cpu_percent(&self) -> u64 {
-        self.app.cpu.percent()
+        self.page.cpu_percent
     }
 
     /// Whether power saving has slowed the CPU, so the figure is more than it would be.
     pub fn slowed(&self) -> bool {
-        self.app.slowdown.slowed()
+        self.page.slowed
     }
 
-    /// What the sample page shows for the cursor's track, or why it can't show it.
-    pub fn sample_shown(&self) -> Result<Shown, String> {
-        self.app.sample_shown()
+    /// What the sample page shows for the cursor's track, or why it can't show it: the entry the
+    /// page is on, which a jump may have chosen, unless it's still recording.
+    pub fn sample_shown(&self, page: &SamplePage) -> Result<Shown, String> {
+        let (number, entry) = page.entry_here(self.song(), self.cursor().track)?;
+        if let Some(why) = still_recording(self.page.recording, number) {
+            return Err(why);
+        }
+        Shown::of(self.samples(), number, entry)
     }
 
     /// Where each voice playing a sample through the cursor's track is in it, as the engine last
     /// said.
     pub fn playheads(&self) -> &'a [Option<Playhead>; PLAYHEADS] {
-        &self.app.services.playheads
+        &self.services.playheads
     }
 
     /// Whether something is drawn over the page, which a picture placed above the text would show
     /// through.
     pub fn overlaid(&self, now: Instant) -> bool {
-        crate::views::sample::overlaid(self.app, now)
+        self.page.covered || which_key_due(self.page.keys_since, now, POPUP_DELAY)
     }
 
     /// Which slice of its sample a track plays, as the Sound page's `Slice` says it after its
     /// number.
     pub fn slice_choice(&self, track: &Track) -> String {
-        self.app.slice_choice(track)
+        self.services.slice_choice(track)
     }
 
     /// The phrase under the cursor.
     pub fn phrase_id(&self) -> Option<u32> {
-        self.app.services.phrase_id()
+        self.services.phrase_id()
     }
 
     /// The contents of the phrase under the cursor.
     pub fn phrase_here(&self) -> Option<&'a Arc<Phrase>> {
-        self.app.services.phrase_here()
+        self.services.phrase_here()
     }
 
     /// Where the cursor's phrase's loop sits.
     pub fn extent(&self) -> Extent {
-        self.app.services.extent()
+        self.services.extent()
     }
 
     /// The cursor's position within the section, on the view on screen.
     pub fn section_step(&self) -> usize {
-        self.app.services.section_step(self.view())
+        self.services.section_step(self.view())
     }
 
     /// The step of its own that one track is at when another is at this one of its own.
     pub fn step_on(&self, track: usize, from: usize, step: usize) -> usize {
-        self.app.services.step_on(track, from, step)
+        self.services.step_on(track, from, step)
     }
 
     /// The selection a replace across it or the shape panel is filling, which shows while Visual
     /// has ended.
     pub fn held_selection(&self) -> Option<Selection> {
-        let app = self.app;
-        app.replacing_selection
-            .map(|(selection, _)| selection)
-            .or(app.shape.as_ref().map(|panel| panel.selection))
+        self.page.held_selection
     }
 
     /// Which step of the cursor's phrase the playhead is on, and which of the step's pulses, if
     /// it's on this phrase.
     pub fn playhead_place(&self) -> Option<(usize, usize)> {
-        crate::views::phrase::playhead_place(self.app)
+        self.services.playhead_place()
     }
 
     /// Where each FX column of the cursor's phrase with a lane of its own is reading, if it's the
     /// one playing.
     pub fn lane_playheads(&self, phrase: &Phrase) -> [Option<usize>; FX_SLOTS] {
-        crate::views::phrase::lane_playheads(self.app, phrase)
+        self.services.lane_playheads(phrase)
     }
 
     /// The note the cursor's track's row playing was heard at, where an accumulator or an `RND`
     /// moved it.
     pub fn heard_note(&self) -> Option<u8> {
-        crate::views::phrase::heard_note(self.app)
+        self.services.heard_note()
     }
 
     /// Whether the row the cursor's track is playing was skipped this time, by its `CHA` or `CND`.
     pub fn row_skipped(&self) -> bool {
-        let services = &self.app.services;
+        let services = self.services;
         services
             .places
             .get(services.cursor.track)
@@ -666,7 +729,7 @@ impl<'a> Ctx<'a> {
     /// A row with each live generator on it laid as last heard, if any was heard otherwise than
     /// written.
     pub fn heard_step(&self, track: usize, phrase: u32, row: usize) -> Option<Step> {
-        self.app.heard_step(track, phrase, row)
+        self.services.heard_step(track, phrase, row)
     }
 
     /// A row of a live generator as it was last heard, if that wasn't what's written: the step
@@ -678,22 +741,22 @@ impl<'a> Ctx<'a> {
         generator: usize,
         row: usize,
     ) -> Option<(Step, i64)> {
-        self.app.heard_cell(track, phrase, generator, row)
+        self.services.heard_cell(track, phrase, generator, row)
     }
 
     /// Whether a live generator was heard otherwise than written on any of its rows.
     pub fn generator_moving(&self, track: usize, phrase: u32, generator: usize) -> bool {
-        self.app.generator_moving(track, phrase, generator)
+        self.services.generator_moving(track, phrase, generator)
     }
 
     /// A field of the row under the cursor in its setting's units, where it has them, as the
     /// status line and the row inspector say it.
     pub fn phrase_value(&self, field: Field) -> Option<String> {
-        crate::views::status::phrase_value(self.app, field)
+        crate::views::status::phrase_value(self.services, field)
     }
 
     /// The furthest the cursor's track's nudges go at its speed.
     pub fn most_nudge_here(&self) -> i8 {
-        self.app.most_nudge_here()
+        self.services.most_nudge_here()
     }
 }

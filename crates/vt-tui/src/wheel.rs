@@ -500,6 +500,7 @@ impl App {
                     return None;
                 };
                 let sweeps = self
+                    .services
                     .current_slot(slot)
                     .and_then(|fx| fx.command)
                     .is_some_and(|command| command.has_fine());

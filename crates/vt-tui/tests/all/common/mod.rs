@@ -593,7 +593,7 @@ pub fn notes(app: &App) -> Vec<Note> {
 /// Turn auto-jump on with a grid of one row, so entries go down the rows one by one.
 pub fn entering_steps_down(app: &mut App) {
     command(app, "set skip=1");
-    app.auto_jump = true;
+    app.services.auto_jump = true;
 }
 
 /// Press a key now, and let it go after this many milliseconds.

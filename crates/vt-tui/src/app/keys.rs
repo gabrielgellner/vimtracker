@@ -292,11 +292,15 @@ impl App {
                 self.modes.mode = Mode::Normal;
                 self.services.status.clear();
             }
-            KeyCode::Char('<') if plain => self.octave = (self.octave - 1).max(LOWEST_OCTAVE),
-            KeyCode::Char('>') if plain => self.octave = (self.octave + 1).min(HIGHEST_OCTAVE),
+            KeyCode::Char('<') if plain => {
+                self.services.octave = (self.services.octave - 1).max(LOWEST_OCTAVE)
+            }
+            KeyCode::Char('>') if plain => {
+                self.services.octave = (self.services.octave + 1).min(HIGHEST_OCTAVE)
+            }
             KeyCode::Char(c) if plain && KEYS_NOTES.contains(c) => {
                 if let Some(note) = self.played_key(c) {
-                    self.hold_note(key, note, self.note_velocity);
+                    self.hold_note(key, note, self.services.note_velocity);
                 }
             }
             _ => {
@@ -312,11 +316,11 @@ impl App {
     /// The note a key plays in the current octave. With a scale, the home row goes up through it
     /// from the root, and the row above is silent, so every key is in key.
     pub(super) fn played_key(&self, c: char) -> Option<u8> {
-        if self.scale.on {
-            degree_key(c).map(|degree| self.scale.degree(degree, self.octave))
+        if self.services.scale.on {
+            degree_key(c).map(|degree| self.services.scale.degree(degree, self.services.octave))
         } else {
             note_key(c).map(|semitones| {
-                let midi = octave_start(self.octave) + i16::from(semitones);
+                let midi = octave_start(self.services.octave) + i16::from(semitones);
                 midi.clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8
             })
         }
@@ -612,7 +616,7 @@ impl App {
                 self.repeats_ignored = true;
             }
             Cmd::ToggleFill => {
-                let was = self.fill;
+                let was = self.services.fill;
                 self.set_fill(!was);
                 self.started = Some(Momentary::Fill { was });
             }

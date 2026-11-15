@@ -212,7 +212,10 @@ impl App {
             return;
         };
         let track = self.services.cursor.track;
-        let Some(live) = self.live_generator(track, phrase, generator) else {
+        let Some(live) = self
+            .services
+            .live_generator(track, phrase, generator, self.modes.view)
+        else {
             return;
         };
         let mut shape = live.generator.shape;
@@ -250,7 +253,12 @@ impl App {
         let Some((phrase, generator, _)) = self.gen_here() else {
             return;
         };
-        let Some(live) = self.live_generator(self.services.cursor.track, phrase, generator) else {
+        let Some(live) = self.services.live_generator(
+            self.services.cursor.track,
+            phrase,
+            generator,
+            self.modes.view,
+        ) else {
             return;
         };
         let starts = live.starts;
@@ -276,7 +284,12 @@ impl App {
         let Some((phrase, generator, param)) = self.gen_here() else {
             return;
         };
-        let Some(live) = self.live_generator(self.services.cursor.track, phrase, generator) else {
+        let Some(live) = self.services.live_generator(
+            self.services.cursor.track,
+            phrase,
+            generator,
+            self.modes.view,
+        ) else {
             return;
         };
         let context = live.context();
@@ -313,7 +326,10 @@ impl App {
     /// A choice from `K`'s list, for a generator.
     pub(crate) fn pick_gen_choice(&mut self, phrase: u32, generator: usize, choice: Choice) {
         let track = self.services.cursor.track;
-        let Some(live) = self.live_generator(track, phrase, generator) else {
+        let Some(live) = self
+            .services
+            .live_generator(track, phrase, generator, self.modes.view)
+        else {
             return;
         };
         let mut shape = live.generator.shape;
@@ -381,8 +397,12 @@ impl App {
             return;
         };
         let name = self.gen_name(phrase, generator);
-        if let Some(live) = self.live_generator(self.services.cursor.track, phrase, generator)
-            && live.generator.heard().varies()
+        if let Some(live) = self.services.live_generator(
+            self.services.cursor.track,
+            phrase,
+            generator,
+            self.modes.view,
+        ) && live.generator.heard().varies()
             && !live.generator.heard().evolves()
         {
             self.keep_variation(phrase, generator, &name);
@@ -401,7 +421,10 @@ impl App {
     /// so the pass heard plays first and its loops go on from there (decision 331).
     fn keep_variation(&mut self, phrase: u32, generator: usize, name: &str) {
         let track = self.services.cursor.track;
-        let Some(live) = self.live_generator(track, phrase, generator) else {
+        let Some(live) = self
+            .services
+            .live_generator(track, phrase, generator, self.modes.view)
+        else {
             return;
         };
         let heard = self
