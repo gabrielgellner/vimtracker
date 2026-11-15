@@ -30,13 +30,14 @@ pub struct Published {
     pub samples: Arc<SamplePool>,
     /// Each bank number's entry, `00` to `FF`: always 256 places.
     pub bank: Bank,
-    /// How far ahead of its place on the grid a step is worked out, in ticks, so a groove or a
-    /// nudge can play it early: as early as any groove the song can play lands a step, as shares
-    /// of the longest step any track can play, and further by the earliest nudge in the song,
-    /// which is the same time on every track. A live Nudge generator counts as early as its
-    /// track's range allows, as the engine can move it. With neither, it's 0, and steps are worked
-    /// out on the grid as they always were. Every track works its steps out this far ahead, so
-    /// they're all worked out in the order they fall.
+    /// How far ahead of its place on the grid a step is worked out, in ticks, to play it early.
+    ///
+    /// It's as early as any groove the song can play lands a step, as shares of the longest step
+    /// any track can play, and further by the earliest nudge in the song, which is the same time on
+    /// every track. A live Nudge generator counts as early as its track's range allows, as the
+    /// engine can move it. With neither, it's 0, and steps are worked out on the grid as they
+    /// always were. Every track works its steps out this far ahead, so they're all worked out in
+    /// the order they fall.
     pub lead: u64,
     /// How early any groove the song can play lands a step, in ticks of a sixteenth, which a step's
     /// push is kept within.
@@ -59,10 +60,12 @@ pub struct Published {
     pub(crate) unders: Unders,
 }
 
-/// A version on its way to the engine, with what its moving generators render into, made for its
-/// song on the edit thread; or the version the engine was playing on its way back, with what they
-/// rendered into then, both to be dropped on the edit thread. It moves through the queues whole, so
-/// the callback takes the scratch without a lock.
+/// A version on its way to the engine, or back from it to be dropped, with its generators' scratch.
+///
+/// Going, it's made for its song on the edit thread, with what its moving generators render into;
+/// coming back, it's the version the engine was playing, with what they rendered into then, both to
+/// be dropped on the edit thread. It moves through the queues whole, so the callback takes the
+/// scratch without a lock.
 #[derive(Debug)]
 pub struct Handover {
     pub version: Arc<Published>,

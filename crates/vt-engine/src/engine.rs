@@ -9,7 +9,6 @@ use vt_model::scale::Scale;
 use vt_model::song::{Song, trim_gain};
 use vt_model::speed::Speed;
 
-use crate::dsp::blocks::smoother::{coefficient, fast_coefficient};
 use crate::dsp::effects::memory::MemoryPool;
 use crate::dsp::effects::slot::Keys;
 use crate::gens::{GenHeard, GenReport, GenScratch};
@@ -18,7 +17,7 @@ use crate::preview::{Files, Previews};
 use crate::published::Published;
 use crate::recorder::Recorder;
 use crate::timing::Stopwatch;
-use crate::track_state::{LaneRead, MasterRest, SongTime, TrackState};
+use crate::track_state::{LaneRead, MasterRest, RunContext, SongTime, TrackState};
 
 mod block;
 mod controls;
@@ -175,8 +174,8 @@ pub struct Engine {
     /// Frames played in total, for events on a track's own schedule.
     clock: u64,
     millibpm: u32,
-    smoothing: f32,
-    fast_smoothing: f32,
+    /// The smoothers at the rate, for rendering.
+    run: RunContext,
     /// The long buffers no slot is using.
     memory: MemoryPool,
     /// Frames rendered in all, playing or not, for what moves on its own.
@@ -242,8 +241,7 @@ impl Engine {
             frames_since_origin: 0,
             clock: 0,
             millibpm,
-            smoothing: coefficient(rate),
-            fast_smoothing: fast_coefficient(rate),
+            run: RunContext::new(rate),
             memory,
             rendered: 0,
             reading: Reading::default(),
@@ -301,11 +299,13 @@ impl Engine {
         param: vt_model::shape::GenParam,
         number: Option<i32>,
     ) {
-        if let Some(state) = self.tracks.get_mut(track) {
-            state.gen_holds.hold(column, param, number);
-            if !state.gen_holds.any() {
-                self.gens.rest(track);
-            }
+        let Some(state) = self.tracks.get_mut(track) else {
+            debug_assert!(false, "no track {track} to hold a generator on");
+            return;
+        };
+        state.gen_holds.hold(column, param, number);
+        if !state.gen_holds.any() {
+            self.gens.rest(track);
         }
     }
 
@@ -359,6 +359,7 @@ impl Engine {
     /// Before a step has played, it's the next to.
     pub fn track_heard(&self, index: usize) -> TrackPlace {
         let Some(state) = self.tracks.get(index) else {
+            debug_assert!(false, "no track {index} to hear");
             return TrackPlace::default();
         };
         let ticks = self.speed_ticks(index);

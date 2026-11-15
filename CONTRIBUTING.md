@@ -102,7 +102,10 @@ tests' signals in `vt-engine`'s `src/dsp/signals.rs`. One file's tests run with
   It counts only while a test arms it.
 - **Goldens.** The engine's `tests/golden/*.hash` and the model's `tests/golden/*.txt` are
   written again with `VT_BLESS=1`, only after a change on purpose. The engine's
-  `tests/all/goldens.rs` fails while an effect or a voice has no golden.
+  `tests/all/goldens.rs` fails while an effect or a voice has no golden. Beside each hash is what
+  the render sounded like: its peak, RMS, DC, where it ends and how bright it is. A changed hash
+  fails with each of them before and after and whether it stayed in its band, as a small fix
+  keeps it; say in the commit why a sound that left one moved, and the bless's diff shows how.
 - **The Roto.** `vt-roto`'s tests are the four files in its `tests/`, against the fake Roto in
   memory. The fake is built only with the crate's `fake` feature, which its own tests and
   `vt-tui`'s turn on as a dev-dependency, so a release build leaves it out.
@@ -133,6 +136,19 @@ when a `pub` can't be reached from outside, and that keeps the dead-code lint wo
 A new effect, voice, generator or mod type has a checklist of its own,
 [docs/designs/adding-a-device.md](docs/designs/adding-a-device.md): every place it takes, what the
 compiler catches if one is missed, and which pinned names and goldens show the change.
+
+### Dependencies
+
+`Cargo.lock` is committed and keeps builds reproducible, and `just ci` passes `--locked`, so a
+manifest changed without its lock fails. `Cargo.toml` gives each dependency as a caret range,
+`ratatui = "0.30.2"`, so `cargo update` takes patch and minor releases without editing it. The
+exception is a crate whose arithmetic a golden render hears, pinned with `=` so an update can't
+move a hash unasked: `realfft`, for `Clouds`' spectral mode, and `wide`, for the Supersaw's and the
+4-op's lanes. Reading files, resampling them or drawing doesn't count, as the goldens build their
+sounds in memory, so `hound`, `symphonia` and `rubato` take ranges too. A new crate whose output a
+golden hears is pinned the same way, with a comment saying which goldens (decision 352). The lock
+also holds what those crates bring in, such as `rustfft` under `realfft`, which `cargo update`
+moves, so run the tests after one.
 
 ## The manual
 

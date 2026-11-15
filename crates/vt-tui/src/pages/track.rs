@@ -1,14 +1,16 @@
-//! The track page, `Space 5` to `Space 8`: a track's Sound, Mod, FX and Gen pages. `TrackPage` is
-//! the page as a component, which page shows, where its cursor is and the images it shows, with
-//! the moves that need only the cursor's track, its edits, [`TrackPage::edit`] and the Gen page's
-//! [`TrackPage::gen_edit`], given the [`Services`], and its drawing, in `draw`, given a [`Ctx`].
-//! Each page's settings are in a file of its own (`sound`, `modulation`, `fx`, `generators`), each
-//! gives its devices to `Page::devices` if it's a rack (`device`), and `editing`, `typing` and
-//! `tuning` change the setting under the cursor, as functions over the services that the mixer
-//! shares; `pictures` says which pictures the page wants the terminal to have and where their dots
-//! go, as data for `Graphics`; `pickers`, which open the program's picker, and the Gen page's
-//! `Enter`, which opens the program's shape panel, are still `App`'s. `TrackPage` is a
-//! [`crate::pages::Page`], with its rows of the binding table, `Page::KEYS`, here beside it.
+//! The track page, `Space 5` to `Space 8`: a track's Sound, Mod, FX and Gen pages.
+//!
+//! `TrackPage` is the page as a component, which page shows, where its cursor is and the images it
+//! shows, with the moves that need only the cursor's track, its edits, [`TrackPage::edit`] and the
+//! Gen page's [`TrackPage::gen_edit`], given the [`Services`], and its drawing, in `draw`, given a
+//! [`Ctx`]. Each page's settings are in a file of its own (`sound`, `modulation`, `fx`,
+//! `generators`), each gives its devices to `Page::devices` if it's a rack (`device`), and
+//! `editing`, `typing` and `tuning` change the setting under the cursor, as functions over the
+//! services that the mixer shares; `pictures` says which pictures the page wants the terminal to
+//! have and where their dots go, as data for `Graphics`; `pickers`, which open the program's
+//! picker, and the Gen page's `Enter`, which opens the program's shape panel, are still `App`'s.
+//! `TrackPage` is a [`crate::pages::Page`], with its rows of the binding table, `Page::KEYS`, here
+//! beside it.
 
 mod controls;
 mod device;
@@ -143,13 +145,15 @@ fn place_in(rows: &[Vec<Option<Control>>], rack: bool, row: usize, field: usize)
     (row, field)
 }
 
-/// The track page as a component: which of its pages shows, and where its cursor is, kept while
-/// other views are shown. Each page keeps its own place, which the cursor goes back to when that
-/// page shows again, and starts on its first setting. What's on a page depends on the cursor's track, so each move is given
-/// that track, or none, and the page holds no song of its own. It also keeps the ids of the
-/// terminal's images it shows and where it last drew those that carry a dot, the effect `dd`
-/// took, and the cursor's track's meters it shows, held as they fall. It's drawn with
-/// its `Page::draw`, given the rest of the program as a [`Ctx`].
+/// The track page as a component.
+///
+/// It holds which of its pages shows and where its cursor is, kept while other views are shown.
+/// Each page keeps its own place, which the cursor goes back to when that page shows again, and
+/// starts on its first setting. What's on a page depends on the cursor's track, so each move is
+/// given that track, or none, and the page holds no song of its own. It also keeps the ids of the
+/// terminal's images it shows and where it last drew those that carry a dot, the effect `dd` took,
+/// and the cursor's track's meters it shows, held as they fall. It's drawn with its `Page::draw`,
+/// given the rest of the program as a [`Ctx`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct TrackPage {
     /// The page showing: Sound, Mod or FX.

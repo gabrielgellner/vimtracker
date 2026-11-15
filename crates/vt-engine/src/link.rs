@@ -694,13 +694,11 @@ mod tests {
     const COMB: Insert = Insert::Comb(vt_model::insert::Comb::DEFAULT);
     /// A frequency shifter, which takes the lines of its loop from the pool.
     const SHIFT: Insert = Insert::FreqShift(vt_model::insert::FreqShift::DEFAULT);
-    /// A spring reverb, knocked, which takes its springs' lines from the pool.
     /// A rotary speaker, fast, which takes its horn's line from the pool.
     const ROTARY: Insert = Insert::Rotary(vt_model::insert::Rotary {
         fast: 1,
         ..vt_model::insert::Rotary::DEFAULT
     });
-    /// A spring reverb, knocked, which takes its springs' lines from the pool.
     /// A stutter, switched on so it's stuttering as it comes, which takes its pieces from the pool.
     const STUTTER: Insert = Insert::Stutter(vt_model::insert::Stutter {
         trig: 1,
@@ -1918,5 +1916,16 @@ mod tests {
         }
         assert_eq!(violations, 0);
         assert!(ended >= 8, "{ended} recordings ended");
+    }
+
+    /// A report is copied into its ring every block, so its size is watched (#836). It's about
+    /// 14 KB, nearly all of it the arrays of a place for every track there can be, `places` most
+    /// of all. Filling those took about 3 µs a block in a release build, a few percent of a light
+    /// song's block at 256 frames, so they're still sent every block; past this, it's time to send
+    /// them less often or only for the tracks in use.
+    #[test]
+    fn a_report_stays_under_sixteen_kilobytes() {
+        let size = size_of::<Telemetry>();
+        assert!(size <= 16 * 1024, "{size} bytes");
     }
 }
