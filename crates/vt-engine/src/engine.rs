@@ -301,11 +301,13 @@ impl Engine {
         param: vt_model::shape::GenParam,
         number: Option<i32>,
     ) {
-        if let Some(state) = self.tracks.get_mut(track) {
-            state.gen_holds.hold(column, param, number);
-            if !state.gen_holds.any() {
-                self.gens.rest(track);
-            }
+        let Some(state) = self.tracks.get_mut(track) else {
+            debug_assert!(false, "no track {track} to hold a generator on");
+            return;
+        };
+        state.gen_holds.hold(column, param, number);
+        if !state.gen_holds.any() {
+            self.gens.rest(track);
         }
     }
 
@@ -359,6 +361,7 @@ impl Engine {
     /// Before a step has played, it's the next to.
     pub fn track_heard(&self, index: usize) -> TrackPlace {
         let Some(state) = self.tracks.get(index) else {
+            debug_assert!(false, "no track {index} to hear");
             return TrackPlace::default();
         };
         let ticks = self.speed_ticks(index);
