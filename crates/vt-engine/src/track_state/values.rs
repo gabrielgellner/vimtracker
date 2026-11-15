@@ -3,7 +3,7 @@
 
 use vt_model::accumulator::Accumulation;
 use vt_model::arpeggio::Arpeggio;
-use vt_model::insert::{INSERTS, Setting};
+use vt_model::insert::INSERTS;
 use vt_model::macros::{MACROS, MacroTarget};
 use vt_model::settings::{
     FADER_COUNT, FADERS, MAX_MACHINE_SETTINGS, Owner, PLAYED_SETTINGS, SettingId,
@@ -251,7 +251,7 @@ impl TrackState {
             && effect
                 .params()
                 .get(at)
-                .is_some_and(|param| param.setting == Setting::Trig)
+                .is_some_and(|param| param.key == "trig")
         {
             self.struck[slot] = true;
         }

@@ -823,14 +823,11 @@ impl TrackState {
             let mut resolved = insert;
             self.slot_moving[slot] = false;
             let effect = insert.kind();
-            // A mode shows some of its effect's settings, so each is found by what it is.
-            for found in insert.params() {
-                let setting = found.setting;
+            // A mode shows some of its effect's settings, each with its place among those it keeps.
+            let shown = insert.params();
+            for (param, found) in shown.iter().enumerate() {
                 let Some((at, id)) = effect.and_then(|effect| {
-                    let at = effect
-                        .params()
-                        .iter()
-                        .position(|param| param.setting == setting)?;
+                    let at = shown.kept_at(param)?;
                     Some((at, SettingId::slot(slot, effect, at)?))
                 }) else {
                     continue;
@@ -838,7 +835,7 @@ impl TrackState {
                 let added = offsets[id.index()] * found.span();
                 self.slot_moving[slot] |= added != 0.0;
                 let value = self.slot_values[slot][at] + added;
-                resolved = resolved.write(setting, value);
+                resolved = resolved.write(at, value);
             }
             self.resolved[slot] = resolved;
             self.inserts[slot].hold(resolved, memory, now.place(stopped), now.rendered);

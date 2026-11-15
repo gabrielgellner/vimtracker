@@ -296,36 +296,16 @@ pub(super) fn render(
 mod tests {
     use super::*;
     use crate::scale::Scale;
-    use crate::shape::{
-        Acid, Bits, DEFAULT_RATE, FillKind, Follow, Pink, Shape, Values, Walk, Where, written,
-    };
+    use crate::shape::{FillKind, Shape, written};
 
     fn shape(grids: Grids, seed: u64) -> Shape {
         Shape {
             from: 36,
             to: 48,
-            curve: 0,
-            s: 0,
             kind: FillKind::Grids,
-            wave: crate::lfo::Shape::Sine,
-            rate: DEFAULT_RATE,
-            phase: 0,
-            run: 1,
-            values: Values::default(),
-            place: Where::AllRows,
             seed,
-            acid: Acid::default(),
-            follow: Follow::default(),
-            walk: Walk::default(),
-            pink: Pink::default(),
-            bits: Bits::default(),
             grids,
-            random: crate::shape::Random::default(),
-            vary: 0,
-            variation: crate::shape::Variation::default(),
-            divisions: crate::shape::Divisions::default(),
-            ring: crate::shape::Ring::default(),
-            tonnetz: crate::shape::Tonnetz::default(),
+            ..Shape::default()
         }
     }
 

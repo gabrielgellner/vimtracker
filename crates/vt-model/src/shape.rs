@@ -63,6 +63,7 @@ pub use walk::{Edge, MAX_DEPTH, MIN_DEPTH, Pink, Walk, default_step};
 pub use world::{MAX_PULSES, Role, World};
 
 use crate::constants::{MAX_PHRASE_STEPS, TICKS_PER_QUARTER};
+use crate::grid::GRID_ROWS;
 use crate::lfo::{Rate, Shape as Wave};
 use crate::scale::Scale;
 use crate::selection::StepRange;
@@ -278,104 +279,287 @@ impl FillKind {
         Self::RotateBits,
     ];
 
+    /// Its description, which the rest of these read.
+    #[inline]
+    pub const fn spec(self) -> &'static FillSpec {
+        &FILLS[self as usize]
+    }
+
     /// The name on screen.
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Ramp => "Ramp",
-            Self::Random => "Random",
-            Self::Walk => "Walk",
-            Self::Pink => "1/f",
-            Self::Wave => "Wave",
-            Self::Alternate => "Alternate",
-            Self::List => "List",
-            Self::Acid => "Acid",
-            Self::Grids => "Grids",
-            Self::Divisions => "Divisions",
-            Self::Ring => "Ring",
-            Self::Tonnetz => "Tonnetz",
-            Self::Follow => "Follow",
-            Self::Variation => "Variation",
-            Self::Scale => "Scale",
-            Self::Invert => "Invert",
-            Self::Shuffle => "Shuffle",
-            Self::Reverse => "Reverse",
-            Self::Snap => "Snap",
-            Self::Multiply => "Multiply",
-            Self::InvertBits => "Invert bits",
-            Self::MaskBits => "Mask bits",
-            Self::RotateBits => "Rotate bits",
-        }
+    pub const fn name(self) -> &'static str {
+        self.spec().name
     }
 
     /// What it does, for a list to choose from.
-    pub fn description(self) -> &'static str {
-        match self {
-            Self::Ramp => "From one value to the other",
-            Self::Random => "Anywhere between the two",
-            Self::Walk => "A small step at a time",
-            Self::Pink => "Pink, between random and a walk",
-            Self::Wave => "Swinging between the two",
-            Self::Alternate => "One value, then the other",
-            Self::List => "A few values in turn",
-            Self::Acid => "A 303 line, with accents and slides",
-            Self::Grids => "A drum part from Grids' map",
-            Self::Divisions => "A chance for each note division",
-            Self::Ring => "A noise ring's rhythm and pitch",
-            Self::Tonnetz => "Chords moving by P, L and R",
-            Self::Follow => "Another track's phrase, kept in step",
-            Self::Variation => "Something like the notes there",
-            Self::Scale => "The values there onto the two",
-            Self::Invert => "The values there, upside down",
-            Self::Shuffle => "The values there, in a new order",
-            Self::Reverse => "The values there, the other way",
-            Self::Snap => "The notes there into the scale",
-            Self::Multiply => "The rhythm there, times a number",
-            Self::InvertBits => "The values there, some bits flipped",
-            Self::MaskBits => "The values there, some bits kept",
-            Self::RotateBits => "The values there, their bits turned",
-        }
+    pub const fn description(self) -> &'static str {
+        self.spec().meaning
     }
 
     /// Whether it reworks the values already in the rows, rather than making new ones. A
     /// `Variation` learns from them.
-    pub fn reworks(self) -> bool {
-        matches!(
-            self,
-            Self::Variation
-                | Self::Scale
-                | Self::Invert
-                | Self::Shuffle
-                | Self::Reverse
-                | Self::Snap
-                | Self::Multiply
-                | Self::InvertBits
-                | Self::MaskBits
-                | Self::RotateBits
-        )
+    pub const fn reworks(self) -> bool {
+        self.spec().reworks
     }
 
     /// Whether it works on each value's bits.
-    pub fn on_bits(self) -> bool {
-        matches!(self, Self::InvertBits | Self::MaskBits | Self::RotateBits)
+    pub const fn on_bits(self) -> bool {
+        self.spec().on_bits
     }
 
     /// Whether it chooses its rows with a `Where`. A `Follow` writes every row from its source,
     /// `Multiply` reads and writes the rhythm itself, `Grids`, `Divisions` and `Ring` make one of
     /// their own, and a `Variation` learns one with the notes.
-    pub fn has_where(self) -> bool {
-        !matches!(
-            self,
-            Self::Follow
-                | Self::Multiply
-                | Self::Grids
-                | Self::Divisions
-                | Self::Ring
-                | Self::Variation
-        )
+    pub const fn has_where(self) -> bool {
+        self.spec().has_where
     }
 }
 
 crate::listed::listed!(FillKind);
+
+/// One fill, described once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FillSpec {
+    /// On screen and in lists.
+    pub name: &'static str,
+    /// What it does, for a list to choose from.
+    pub meaning: &'static str,
+    /// Whether it reworks the values already in the rows, rather than making new ones.
+    pub reworks: bool,
+    /// Whether it works on each value's bits.
+    pub on_bits: bool,
+    /// Whether it chooses its rows with a `Where`.
+    pub has_where: bool,
+    /// Its own settings' places on the Gen page, the first two columns, top to bottom, as they
+    /// are before what the shape has changes them ([`GenParam::grid`]).
+    pub grid: [[Option<GenParam>; GRID_ROWS]; 2],
+}
+
+/// Columns of the fills' own settings that several have.
+const NONE: [Option<GenParam>; GRID_ROWS] = [None; GRID_ROWS];
+const ENDS_RUN: [Option<GenParam>; GRID_ROWS] = [
+    Some(GenParam::From),
+    Some(GenParam::To),
+    Some(GenParam::Run),
+];
+
+/// Every fill's description, by [`FillKind`].
+pub const FILLS: [FillSpec; FillKind::ALL.len()] = {
+    use GenParam::*;
+    [
+        FillSpec {
+            name: "Ramp",
+            meaning: "From one value to the other",
+            reworks: false,
+            on_bits: false,
+            has_where: true,
+            grid: [ENDS_RUN, [Some(Curve), Some(S), None]],
+        },
+        FillSpec {
+            name: "Random",
+            meaning: "Anywhere between the two",
+            reworks: false,
+            on_bits: false,
+            has_where: true,
+            grid: [ENDS_RUN, [Some(Spread), Some(Bias), Some(Steps)]],
+        },
+        FillSpec {
+            name: "Walk",
+            meaning: "A small step at a time",
+            reworks: false,
+            on_bits: false,
+            has_where: true,
+            grid: [ENDS_RUN, [Some(Step), Some(Edge), None]],
+        },
+        FillSpec {
+            name: "1/f",
+            meaning: "Pink, between random and a walk",
+            reworks: false,
+            on_bits: false,
+            has_where: true,
+            grid: [ENDS_RUN, [Some(Depth), None, None]],
+        },
+        FillSpec {
+            name: "Wave",
+            meaning: "Swinging between the two",
+            reworks: false,
+            on_bits: false,
+            has_where: true,
+            grid: [
+                [Some(From), Some(To), Some(Wave)],
+                [Some(Rate), Some(Phase), Some(Run)],
+            ],
+        },
+        FillSpec {
+            name: "Alternate",
+            meaning: "One value, then the other",
+            reworks: false,
+            on_bits: false,
+            has_where: true,
+            grid: [ENDS_RUN, NONE],
+        },
+        FillSpec {
+            name: "List",
+            meaning: "A few values in turn",
+            reworks: false,
+            on_bits: false,
+            has_where: true,
+            grid: [[Some(Values), Some(Run), None], NONE],
+        },
+        FillSpec {
+            name: "Acid",
+            meaning: "A 303 line, with accents and slides",
+            reworks: false,
+            on_bits: false,
+            has_where: true,
+            grid: [
+                [Some(From), Some(To), Some(Notes)],
+                [Some(Octave), Some(Accent), Some(Slide)],
+            ],
+        },
+        // Every part's density, while the panel shapes several tracks, each taking its own.
+        FillSpec {
+            name: "Grids",
+            meaning: "A drum part from Grids' map",
+            reworks: false,
+            on_bits: false,
+            has_where: false,
+            grid: [
+                [Some(MapX), Some(MapY), Some(Chaos)],
+                [Some(KickDensity), Some(SnareDensity), Some(HatDensity)],
+            ],
+        },
+        // The track's own channel's chances, straight then triplets.
+        FillSpec {
+            name: "Divisions",
+            meaning: "A chance for each note division",
+            reworks: false,
+            on_bits: false,
+            has_where: false,
+            grid: [
+                [Some(Quarters), Some(Eighths), Some(Sixteenths)],
+                [
+                    Some(QuarterTriplets),
+                    Some(EighthTriplets),
+                    Some(SixteenthTriplets),
+                ],
+            ],
+        },
+        FillSpec {
+            name: "Ring",
+            meaning: "A noise ring's rhythm and pitch",
+            reworks: false,
+            on_bits: false,
+            has_where: false,
+            grid: [
+                [Some(From), Some(To), None],
+                [Some(Change), Some(Ones), Some(RingLength)],
+            ],
+        },
+        // Its list of moves, or a loop's length while it loops.
+        FillSpec {
+            name: "Tonnetz",
+            meaning: "Chords moving by P, L and R",
+            reworks: false,
+            on_bits: false,
+            has_where: true,
+            grid: [
+                [Some(From), Some(Triad), Some(Voice)],
+                [Some(Moves), Some(MoveList), Some(InScale)],
+            ],
+        },
+        FillSpec {
+            name: "Follow",
+            meaning: "Another track's phrase, kept in step",
+            reworks: false,
+            on_bits: false,
+            has_where: false,
+            grid: [
+                [Some(Transpose), Some(Invert), Some(Axis)],
+                [Some(Reverse), Some(Late), Some(CopyFx)],
+            ],
+        },
+        FillSpec {
+            name: "Variation",
+            meaning: "Something like the notes there",
+            reworks: true,
+            on_bits: false,
+            has_where: false,
+            grid: [[Some(Order), Some(Temperature), None], NONE],
+        },
+        FillSpec {
+            name: "Scale",
+            meaning: "The values there onto the two",
+            reworks: true,
+            on_bits: false,
+            has_where: true,
+            grid: [[Some(From), Some(To), Some(Curve)], [Some(S), None, None]],
+        },
+        FillSpec {
+            name: "Invert",
+            meaning: "The values there, upside down",
+            reworks: true,
+            on_bits: false,
+            has_where: true,
+            grid: [NONE, NONE],
+        },
+        FillSpec {
+            name: "Shuffle",
+            meaning: "The values there, in a new order",
+            reworks: true,
+            on_bits: false,
+            has_where: true,
+            grid: [NONE, NONE],
+        },
+        FillSpec {
+            name: "Reverse",
+            meaning: "The values there, the other way",
+            reworks: true,
+            on_bits: false,
+            has_where: true,
+            grid: [NONE, NONE],
+        },
+        FillSpec {
+            name: "Snap",
+            meaning: "The notes there into the scale",
+            reworks: true,
+            on_bits: false,
+            has_where: true,
+            grid: [NONE, NONE],
+        },
+        FillSpec {
+            name: "Multiply",
+            meaning: "The rhythm there, times a number",
+            reworks: true,
+            on_bits: false,
+            has_where: false,
+            grid: [[Some(Factor), Some(Masks), None], NONE],
+        },
+        FillSpec {
+            name: "Invert bits",
+            meaning: "The values there, some bits flipped",
+            reworks: true,
+            on_bits: true,
+            has_where: true,
+            grid: [[Some(Flip), None, None], NONE],
+        },
+        FillSpec {
+            name: "Mask bits",
+            meaning: "The values there, some bits kept",
+            reworks: true,
+            on_bits: true,
+            has_where: true,
+            grid: [[Some(Keep), None, None], NONE],
+        },
+        FillSpec {
+            name: "Rotate bits",
+            meaning: "The values there, their bits turned",
+            reworks: true,
+            on_bits: true,
+            has_where: true,
+            grid: [[Some(Turn), None, None], NONE],
+        },
+    ]
+};
 
 /// Which rows get a value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -962,25 +1146,25 @@ pub const VARIES: [u8; 5] = [0, 1, 2, 4, 8];
 /// Mixed into a pass's seed, so it isn't any track's (`track_seed`).
 const PASS_KEY: u64 = 0x7A55_0000;
 
-impl Shape {
-    /// A `Follow` of a phrase, with this seed and every other setting as the panel starts it, as
-    /// a Bloom branch is made (decision 307).
-    pub fn following(follow: Follow, seed: u64) -> Self {
+/// A ramp from `0` to `0` over every row, with seed `0` and every other setting as it starts: what
+/// a shape built of a few settings, as a test's is, takes the rest from.
+impl Default for Shape {
+    fn default() -> Self {
         Self {
             from: 0,
             to: 0,
             curve: 0,
             s: 0,
-            kind: FillKind::Follow,
+            kind: FillKind::Ramp,
             wave: Wave::Sine,
             rate: DEFAULT_RATE,
             phase: 0,
             run: 1,
             values: Values::default(),
             place: Where::AllRows,
-            seed,
+            seed: 0,
             acid: Acid::default(),
-            follow,
+            follow: Follow::default(),
             walk: Walk::default(),
             pink: Pink::default(),
             bits: Bits::default(),
@@ -991,6 +1175,19 @@ impl Shape {
             divisions: Divisions::default(),
             ring: Ring::default(),
             tonnetz: Tonnetz::default(),
+        }
+    }
+}
+
+impl Shape {
+    /// A `Follow` of a phrase, with this seed and every other setting as the panel starts it, as
+    /// a Bloom branch is made (decision 307).
+    pub fn following(follow: Follow, seed: u64) -> Self {
+        Self {
+            kind: FillKind::Follow,
+            seed,
+            follow,
+            ..Self::default()
         }
     }
 
@@ -1383,26 +1580,9 @@ mod tests {
             to,
             curve,
             s,
-            kind: FillKind::Ramp,
-            wave: Wave::Sine,
-            rate: DEFAULT_RATE,
-            phase: 0,
-            run: 1,
-            values: Values::default(),
             place: Where::Notes,
             seed: 1,
-            acid: Acid::default(),
-            follow: Follow::default(),
-            walk: Walk::default(),
-            pink: Pink::default(),
-            bits: Bits::default(),
-            grids: Grids::default(),
-            random: crate::shape::Random::default(),
-            vary: 0,
-            variation: crate::shape::Variation::default(),
-            divisions: Divisions::default(),
-            ring: Ring::default(),
-            tonnetz: Tonnetz::default(),
+            ..Shape::default()
         }
     }
 

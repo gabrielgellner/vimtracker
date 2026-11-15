@@ -7,7 +7,7 @@ use crate::constants::UNITY_LEVEL;
 
 use super::pitch::{MOST_SHIFT, PITCH_PARAMS};
 use super::{
-    AMOUNT_PARAM, GAIN_PARAM, Kind, MIX_PARAM, Param, Place, SOURCE_NAMES, Setting, Units,
+    AMOUNT_PARAM, Columns, GAIN_PARAM, Kind, MIX_PARAM, Param, Place, SOURCE_NAMES, Units,
     hex_param, source_track,
 };
 
@@ -17,51 +17,43 @@ pub(crate) const EQ_PARAMS: [Param; 8] = [
         "Low freq",
         "lowfreq",
         "LFRQ",
-        Setting::LowFrequency,
         Equaliser::DEFAULT.low_frequency,
     )
     .units(Units::Hertz),
-    hex_param("Low", "low", "LOW", Setting::Low, Equaliser::DEFAULT.low)
+    hex_param("Low", "low", "LOW", Equaliser::DEFAULT.low)
         .units(Units::Boost)
         .centred(),
     hex_param(
         "Mid freq",
         "midfreq",
         "MFRQ",
-        Setting::MidFrequency,
         Equaliser::DEFAULT.mid_frequency,
     )
     .units(Units::Hertz),
-    hex_param("Mid", "mid", "MID", Setting::Mid, Equaliser::DEFAULT.mid)
+    hex_param("Mid", "mid", "MID", Equaliser::DEFAULT.mid)
         .units(Units::Boost)
         .centred(),
     hex_param(
         "High freq",
         "highfreq",
         "HFRQ",
-        Setting::HighFrequency,
         Equaliser::DEFAULT.high_frequency,
     )
     .units(Units::Hertz),
-    hex_param(
-        "High",
-        "high",
-        "HIGH",
-        Setting::High,
-        Equaliser::DEFAULT.high,
-    )
-    .units(Units::Boost)
-    .centred(),
+    hex_param("High", "high", "HIGH", Equaliser::DEFAULT.high)
+        .units(Units::Boost)
+        .centred(),
     // After the bands, so the page shows each band's frequency over its boost.
-    hex_param(
-        "Mid Q",
-        "midq",
-        "MIDQ",
-        Setting::MidQ,
-        Equaliser::DEFAULT.mid_q,
-    )
-    .units(Units::Q),
+    hex_param("Mid Q", "midq", "MIDQ", Equaliser::DEFAULT.mid_q).units(Units::Q),
     GAIN_PARAM,
+];
+
+/// Where its settings sit on the FX page. Its bands are its columns, then what comes out.
+pub(super) const EQ_GRID: Columns = &[
+    &["lowfreq", "low"],
+    &["midfreq", "mid", "midq"],
+    &["highfreq", "high"],
+    &["gain"],
 ];
 
 /// An EQ's settings. Each band's boost or cut is centred on `80`, where it leaves the sound as it
@@ -101,14 +93,14 @@ impl Equaliser {
     };
 
     effect_settings! {
-        low_frequency => LowFrequency,
-        low => Low,
-        mid_frequency => MidFrequency,
-        mid => Mid,
-        mid_q => MidQ,
-        high_frequency => HighFrequency,
-        high => High,
-        gain => Gain,
+        low_frequency,
+        low,
+        mid_frequency,
+        mid,
+        high_frequency,
+        high,
+        mid_q,
+        gain,
     }
 }
 
@@ -140,7 +132,6 @@ pub(crate) const LPG_PARAMS: [Param; 8] = [
         key: "mode",
         // Choosing a mode chooses a sound, so steps don't lock it.
         label: None,
-        setting: Setting::GateMode,
         kind: Kind::Stepped {
             choices: &GATE_MODE_NAMES,
             wraps: true,
@@ -152,25 +143,12 @@ pub(crate) const LPG_PARAMS: [Param; 8] = [
         default: LowPassGate::DEFAULT.amount,
         ..AMOUNT_PARAM
     },
-    hex_param(
-        "Base",
-        "base",
-        "BASE",
-        Setting::Base,
-        LowPassGate::DEFAULT.base,
-    ),
-    hex_param(
-        "Res",
-        "res",
-        "RESO",
-        Setting::Resonance,
-        LowPassGate::DEFAULT.resonance,
-    ),
+    hex_param("Base", "base", "BASE", LowPassGate::DEFAULT.base),
+    hex_param("Res", "res", "RESO", LowPassGate::DEFAULT.resonance),
     hex_param(
         "Response",
         "response",
         "RESP",
-        Setting::Response,
         LowPassGate::DEFAULT.response,
     ),
     Param {
@@ -178,7 +156,6 @@ pub(crate) const LPG_PARAMS: [Param; 8] = [
         key: "source",
         // What it hears is part of how it's set up, so steps don't change it.
         label: None,
-        setting: Setting::Source,
         kind: Kind::Stepped {
             choices: &SOURCE_NAMES,
             wraps: false,
@@ -242,14 +219,14 @@ impl LowPassGate {
     }
 
     effect_settings! {
-        mode: GateMode => GateMode,
-        amount => Amount,
-        base => Base,
-        resonance => Resonance,
-        response => Response,
-        source => Source,
-        mix => Mix,
-        gain => Gain,
+        mode: GateMode,
+        amount,
+        base,
+        resonance,
+        response,
+        source,
+        mix,
+        gain,
     }
 }
 
@@ -263,41 +240,11 @@ pub(crate) const RESO_PARAMS: [Param; 8] = [
         default: Resonator::DEFAULT.tune,
         ..PITCH_PARAMS[0]
     },
-    hex_param(
-        "Material",
-        "material",
-        "MATL",
-        Setting::Material,
-        Resonator::DEFAULT.material,
-    ),
-    hex_param(
-        "Bright",
-        "bright",
-        "BRT",
-        Setting::Bright,
-        Resonator::DEFAULT.bright,
-    ),
-    hex_param(
-        "Decay",
-        "decay",
-        "DCAY",
-        Setting::Decay,
-        Resonator::DEFAULT.decay,
-    ),
-    hex_param(
-        "Position",
-        "position",
-        "POS",
-        Setting::Pickup,
-        Resonator::DEFAULT.position,
-    ),
-    hex_param(
-        "Width",
-        "width",
-        "WDTH",
-        Setting::Width,
-        Resonator::DEFAULT.width,
-    ),
+    hex_param("Material", "material", "MATL", Resonator::DEFAULT.material),
+    hex_param("Bright", "bright", "BRT", Resonator::DEFAULT.bright),
+    hex_param("Decay", "decay", "DCAY", Resonator::DEFAULT.decay),
+    hex_param("Position", "position", "POS", Resonator::DEFAULT.position),
+    hex_param("Width", "width", "WDTH", Resonator::DEFAULT.width),
     Param {
         default: 0xFF,
         ..MIX_PARAM
@@ -353,14 +300,14 @@ impl Resonator {
     };
 
     effect_settings! {
-        tune => Shift,
-        material => Material,
-        bright => Bright,
-        decay => Decay,
-        position => Pickup,
-        width => Width,
-        mix => Mix,
-        gain => Gain,
+        tune,
+        material,
+        bright,
+        decay,
+        position,
+        width,
+        mix,
+        gain,
     }
 }
 
@@ -389,7 +336,6 @@ pub(crate) const COMB_PARAMS: [Param; 7] = [
         key: "mode",
         // Choosing a mode chooses a sound, so steps don't lock it.
         label: None,
-        setting: Setting::CombMode,
         kind: Kind::Stepped {
             choices: &COMB_MODE_NAMES,
             wraps: true,
@@ -404,22 +350,9 @@ pub(crate) const COMB_PARAMS: [Param; 7] = [
         default: Comb::DEFAULT.tune,
         ..PITCH_PARAMS[0]
     },
-    hex_param(
-        "Feedback",
-        "feedback",
-        "FDBK",
-        Setting::FlangerFeedback,
-        Comb::DEFAULT.feedback,
-    )
-    .centred(),
-    hex_param("Tone", "tone", "TONE", Setting::Bright, Comb::DEFAULT.tone),
-    hex_param(
-        "Spread",
-        "spread",
-        "SPRD",
-        Setting::Spread,
-        Comb::DEFAULT.spread,
-    ),
+    hex_param("Feedback", "feedback", "FDBK", Comb::DEFAULT.feedback).centred(),
+    hex_param("Tone", "tone", "TONE", Comb::DEFAULT.tone),
+    hex_param("Spread", "spread", "SPRD", Comb::DEFAULT.spread),
     Param {
         default: 0xFF,
         ..MIX_PARAM
@@ -469,13 +402,13 @@ impl Comb {
     };
 
     effect_settings! {
-        mode: CombMode => CombMode,
-        tune => Shift,
-        feedback => FlangerFeedback,
-        tone => Bright,
-        spread => Spread,
-        mix => Mix,
-        gain => Gain,
+        mode: CombMode,
+        tune,
+        feedback,
+        tone,
+        spread,
+        mix,
+        gain,
     }
 }
 
@@ -501,35 +434,10 @@ pub fn vowel_blend(value: f32) -> (usize, usize, f32) {
 /// A vowel filter's, in the order the page shows them, as columns of two: which vowel and how big
 /// a voice, how sharp its formants are and how far they follow the note, then the mix and gain.
 pub(crate) const VOWEL_PARAMS: [Param; 6] = [
-    hex_param(
-        "Vowel",
-        "vowel",
-        "VOWL",
-        Setting::Vowel,
-        Vowel::DEFAULT.vowel,
-    )
-    .units(Units::Vowel),
-    hex_param(
-        "Size",
-        "size",
-        "SIZE",
-        Setting::VoiceSize,
-        Vowel::DEFAULT.size,
-    ),
-    hex_param(
-        "Res",
-        "res",
-        "RESO",
-        Setting::Resonance,
-        Vowel::DEFAULT.resonance,
-    ),
-    hex_param(
-        "Track",
-        "track",
-        "TRK",
-        Setting::KeyTrack,
-        Vowel::DEFAULT.track,
-    ),
+    hex_param("Vowel", "vowel", "VOWL", Vowel::DEFAULT.vowel).units(Units::Vowel),
+    hex_param("Size", "size", "SIZE", Vowel::DEFAULT.size),
+    hex_param("Res", "res", "RESO", Vowel::DEFAULT.resonance),
+    hex_param("Track", "track", "TRK", Vowel::DEFAULT.track),
     Param {
         default: 0xFF,
         ..MIX_PARAM
@@ -576,11 +484,11 @@ impl Vowel {
     };
 
     effect_settings! {
-        vowel => Vowel,
-        size => VoiceSize,
-        resonance => Resonance,
-        track => KeyTrack,
-        mix => Mix,
-        gain => Gain,
+        vowel,
+        size,
+        resonance,
+        track,
+        mix,
+        gain,
     }
 }
