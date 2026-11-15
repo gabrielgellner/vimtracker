@@ -1454,10 +1454,10 @@ fn the_track_pages_cursor_goes_through_a_rack_on_its_own() {
     assert_eq!(page.page, Page::Fx);
     assert_eq!(page.devices(track).len(), 4);
     assert_eq!(page.control(track), Control::Insert(0));
-    assert_eq!(
+    assert!(matches!(
         page.key_on(Cmd::Move(Motion::Down), 1, track),
         Outcome::Done
-    );
+    ));
     assert_eq!(page.device_cursor(track), at(0, 1, 0));
     // `}` keeps the row and column: an empty slot shows the cursor on its title, and the next
     // device has them again.
@@ -1473,7 +1473,10 @@ fn the_track_pages_cursor_goes_through_a_rack_on_its_own() {
     assert_eq!(page.device_cursor(track), at(0, 3, 1));
     // An edit isn't the page's own, and a return's Sound page is a rack of one, its Output, so
     // `}` has nowhere to go.
-    assert_eq!(page.key_on(Cmd::Increase, 1, track), Outcome::Passed);
+    assert!(matches!(
+        page.key_on(Cmd::Increase, 1, track),
+        Outcome::Passed
+    ));
     let fixed = Track {
         kind: vt_model::song::TrackKind::ReturnA,
         ..Track::default()
@@ -1483,10 +1486,10 @@ fn the_track_pages_cursor_goes_through_a_rack_on_its_own() {
     page.key_on(Cmd::PreviousPage, 1, fixed);
     assert_eq!(page.page, Page::Sound);
     assert_eq!(page.device_cursor(fixed), at(0, 1, 0));
-    assert_eq!(
+    assert!(matches!(
         page.key_on(Cmd::Move(Motion::NextBeat), 1, fixed),
         Outcome::Done
-    );
+    ));
     assert_eq!(page.device_cursor(fixed), at(0, 1, 0));
 }
 

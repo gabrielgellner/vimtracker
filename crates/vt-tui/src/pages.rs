@@ -50,8 +50,10 @@ use crate::graphics::{PanelIds, PanelWant};
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
 use crate::input::wheel::WheelSetting;
+use crate::overlays::command::parse::Line;
 use crate::overlays::field_jump::FieldJump;
 use crate::overlays::help::POPUP_DELAY;
+use crate::overlays::picker::Picker;
 use crate::overlays::shape::LiveGen;
 use crate::pages::phrase::PhraseView;
 use crate::pages::sample::{SamplePage, Shown, is_sample_motion};
@@ -65,8 +67,11 @@ use crate::services::sampling::still_recording;
 use crate::widgets::param::view::ParamView;
 use crate::widgets::setting::{CellLook, Focus};
 
-/// What a key did, as far as the page alone can tell.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// What a key did, as far as the page alone can tell, and what it asks for that only `App` can
+/// do: open the picker, show another view, or run a `:` line (#784). [`App::settled`] does what
+/// it asks once the page has given its borrows back, so a page needn't pass a key back to reach
+/// them.
+#[derive(Debug, Clone)]
 pub enum Outcome {
     /// The page did it.
     Done,
@@ -75,6 +80,14 @@ pub enum Outcome {
     /// It isn't one of the page's own keys: the next in the order [`App::run`] gives keys in gets
     /// it.
     Passed,
+    /// Done, and this picker opens over the page, with its preview.
+    Open(Box<Picker>),
+    /// Done, and this view shows, as [`App::show_view`] shows one.
+    Show(View),
+    /// Done, and this view shows as a jump, which `Ctrl-O` comes back from.
+    Jump(View),
+    /// Done, and this command line runs, as if it had been typed.
+    Run(Line),
 }
 
 /// One of the program's pages as a component: its own state, its keys, its drawing and its
@@ -323,23 +336,28 @@ impl App {
     }
 
     /// Settle what a page's key did: a key it did takes the count if `takes_count` says so, and
-    /// one it refused takes it and says why on the status line. Returns false for a key it passed
-    /// back, for the next in the order to have.
+    /// one it refused takes it and says why on the status line. Then what it asks for happens:
+    /// the picker opens, the view shows or the line runs. Returns false for a key it passed back,
+    /// for the next in the order to have.
     pub(crate) fn settled(&mut self, outcome: Outcome, takes_count: bool) -> bool {
         match outcome {
-            Outcome::Done => {
-                if takes_count {
-                    self.modes.count = None;
-                }
-                true
-            }
+            Outcome::Passed => return false,
             Outcome::Refused(why) => {
                 self.modes.count = None;
                 self.services.status = why.to_owned();
-                true
+                return true;
             }
-            Outcome::Passed => false,
+            _ if takes_count => self.modes.count = None,
+            _ => {}
         }
+        match outcome {
+            Outcome::Open(picker) => self.show_picker(*picker),
+            Outcome::Show(view) => self.show_view(view),
+            Outcome::Jump(view) => self.jump_to_view(view),
+            Outcome::Run(line) => self.line(line),
+            Outcome::Done | Outcome::Refused(_) | Outcome::Passed => {}
+        }
+        true
     }
 }
 

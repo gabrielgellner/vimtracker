@@ -823,7 +823,9 @@ mixer, the project page's Song and Audio sub-pages, the sample page, the song vi
 and the phrase view. A `Page` has its rows of the binding table, `Page::KEYS`, kept beside it and
 assembled by `input/bindings.rs` under its mode; `Page::key`, which runs one of its keys with a
 count through a `CtxMut` and says what it did as an `Outcome`, done, refused with why, or passed
-back; `Page::draw`, given a `Ctx`; and `Page::panels` and `Page::take_panels`, its pictures as data
+back, or done and asking for what only `App` can do, a picker opened (`Outcome::Open`), a view
+shown (`Show`, or `Jump` as a jump `Ctrl-O` comes back from) or a `:` line run (`Run`), which
+`App::settled` does once the page has given its borrows back (#784); `Page::draw`, given a `Ctx`; and `Page::panels` and `Page::take_panels`, its pictures as data
 for `Graphics` and the ids they're given. `App` holds one of each page and dispatches by `View` with
 a plain `match`, so there's no `dyn`. A key goes, in this order, to the first that takes it:
 
