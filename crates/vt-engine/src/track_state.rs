@@ -25,9 +25,9 @@ use vt_model::step::{FxSlot, Mark, slice_letter};
 use vt_model::steps::{MAX_STEP, STEPS, StepRate, Steps, StepsMode, smoothed};
 
 use crate::dsp::blocks::sides::same_sides;
-use crate::dsp::distort::{BYPASS_FADE_MS, InsertState};
 use crate::dsp::filter::{Channel, Coefficients, Ramp, Trim, safe_resonance};
 use crate::dsp::memory::{MemoryPool, SongPlace};
+use crate::dsp::slot::{BYPASS_FADE_MS, InsertState};
 use crate::dsp::smoother::Smoothed;
 use crate::dsp::virtual_analog::Settings;
 use crate::gens::GenHolds;
@@ -3287,31 +3287,9 @@ impl TrackState {
     }
 }
 
-/// Each track's sound after its slots and before its level and mute, from the latest frame, for a
-/// compressor that hears another track. A track renders in order, so one later than the listener
-/// is heard a frame late, which is far too little to hear.
-#[derive(Debug, Clone)]
-pub struct Keys {
-    pub frames: [[f32; 2]; MAX_TRACKS],
-    /// How many sound tracks there are, so the returns' places are known.
-    pub sounds: usize,
-}
-
-impl Default for Keys {
-    fn default() -> Self {
-        Self {
-            frames: [[0.0; 2]; MAX_TRACKS],
-            sounds: 0,
-        }
-    }
-}
-
-impl Keys {
-    /// A track's latest frame, or silence for one that isn't there.
-    pub fn of(&self, track: usize) -> [f32; 2] {
-        self.frames.get(track).copied().unwrap_or_default()
-    }
-}
+// What a compressor or Warps hears from other tracks lives beside the slot that hears it, and is
+// named here too, where the engine fills it.
+pub use crate::dsp::slot::Keys;
 
 /// What the master does every frame while it rests: what it takes in after its trim, what its
 /// slots give, and what it gives.

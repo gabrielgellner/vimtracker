@@ -885,8 +885,8 @@ mod tests {
     fn its_curve_is_what_a_sweep_through_the_slot_measures() {
         use vt_model::insert::Insert;
 
+        use crate::dsp::effects::slot::Keys;
         use crate::dsp::effects::sweep::{across, agrees, measured_db, slot};
-        use crate::track_state::Keys;
         // Each long enough for its loop, ringing longest, to settle within 0.01 dB.
         let cases = [
             (Settings::DEFAULT, 60.0, 3.0),
