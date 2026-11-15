@@ -105,7 +105,7 @@ rest closed. The title shows how many items match, out of how many there are.
 | `l` `Enter` | Open a category and go into it, or choose |
 | `h` | Close the category, from inside it or on it |
 | `/` | Search |
-| `?` | These keys, in `Space k`'s list. Any key but `j` and `k` comes back to the list |
+| `?` | These keys, in `Space k`'s list, closing back to the list |
 | `Esc` | Close, or leave the search for the list |
 
 A long list scrolls before the cursor reaches its edge, keeping three rows beyond it in
