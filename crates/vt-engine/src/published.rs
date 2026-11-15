@@ -14,7 +14,7 @@ use vt_model::song::{Song, Track};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, most_nudge};
 
-use crate::gens::{GenScratch, ScratchSlot, Unders};
+use crate::gens::{GenScratch, Unders};
 
 /// Each bank number's entry, `00` to `FF`, worked out on the edit thread so the callback only has
 /// to look it up, if it has one and its file loaded.
@@ -57,8 +57,24 @@ pub struct Published {
     pub has_steps: bool,
     /// The steps under each live generator, which the engine renders a moving one from.
     pub(crate) unders: Unders,
-    /// What the engine renders moving generators into, until it takes it.
-    pub(crate) scratch: ScratchSlot,
+}
+
+/// A version on its way to the engine, with what its moving generators render into, made for its
+/// song on the edit thread; or the version the engine was playing on its way back, with what they
+/// rendered into then, both to be dropped on the edit thread. It moves through the queues whole, so
+/// the callback takes the scratch without a lock.
+#[derive(Debug)]
+pub struct Handover {
+    pub version: Arc<Published>,
+    pub(crate) scratch: GenScratch,
+}
+
+impl Handover {
+    /// Make room for a version's generators, here rather than in the callback.
+    pub fn new(version: Arc<Published>) -> Self {
+        let scratch = GenScratch::for_song(&version.song);
+        Self { version, scratch }
+    }
 }
 
 impl Published {
@@ -97,7 +113,6 @@ impl Published {
                     .any(|track| track.speed != Speed::Sixteenth),
             has_steps: song.sections.iter().any(|s| song.section_length(s) > 0),
             unders: Unders::of(&song, last.map(|last| (&*last.song, &last.unders))),
-            scratch: ScratchSlot::new(GenScratch::for_song(&song)),
             song,
             samples,
         }
