@@ -30,7 +30,6 @@ use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::typed::TypedValue;
 use crate::overlays::Overlays;
-use crate::overlays::field_jump::FieldJump;
 use crate::pages::mixer::MixerPage;
 use crate::pages::phrase::PhraseView;
 use crate::pages::project::ProjectPage;
@@ -98,15 +97,13 @@ pub struct Entry {
 }
 
 /// What spans the pages as keys are typed: the view on screen, the mode the keys are in, what
-/// Insert has typed, a field jump under way and the count typed before a command. A page's keys
+/// Insert has typed and the count typed before a command. A page's keys
 /// read them.
 #[derive(Debug, Clone)]
 pub struct Modes {
     pub view: View,
     pub mode: Mode,
     pub entry: Entry,
-    /// The search for a setting under way.
-    pub field_jump: Option<FieldJump>,
     pub(crate) count: Option<usize>,
 }
 
@@ -116,7 +113,6 @@ impl Default for Modes {
             view: View::Phrase,
             mode: Mode::Normal,
             entry: Entry::default(),
-            field_jump: None,
             count: None,
         }
     }

@@ -190,14 +190,14 @@ fn a_jump_finds_a_slots_settings_only_where_they_exist() {
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "/amo");
     assert_eq!(
-        app.modes.field_jump.as_ref().unwrap().query,
+        app.overlays.field_jump.as_ref().unwrap().query,
         "",
         "nothing to find yet"
     );
     special(&mut app, KeyCode::Esc);
     press(&mut app, "=}=");
     press(&mut app, "/amo");
-    let jump = app.modes.field_jump.as_ref().unwrap();
+    let jump = app.overlays.field_jump.as_ref().unwrap();
     assert!(jump.label(Control::InsertParam(0, 1)).is_some());
     let second = jump.label(Control::InsertParam(1, 1)).unwrap();
     assert!(jump.label(Control::InsertParam(2, 1)).is_none());
@@ -410,7 +410,7 @@ fn a_jump_labels_a_slots_effect_once() {
     use vt_tui::controls::Control;
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "/effect");
-    let jump = app.modes.field_jump.as_ref().unwrap();
+    let jump = app.overlays.field_jump.as_ref().unwrap();
     let labels: Vec<char> = (0..3)
         .map(|slot| jump.label(Control::Insert(slot)).unwrap())
         .collect();
