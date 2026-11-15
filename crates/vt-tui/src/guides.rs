@@ -403,7 +403,7 @@ mod tests {
                 Some(at) => {
                     let param = effect.params()[at];
                     (0..param.choices().len())
-                        .map(|choice| effect.write(param.setting, choice as f32))
+                        .map(|choice| effect.with_value(at, choice as u8))
                         .collect()
                 }
                 None => vec![effect],

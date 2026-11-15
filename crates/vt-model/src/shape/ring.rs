@@ -247,10 +247,7 @@ pub(super) fn render(
 mod tests {
     use super::*;
     use crate::scale::{Scale, ScaleKind};
-    use crate::shape::{
-        Acid, Bits, DEFAULT_RATE, Divisions, FillKind, Follow, Grids, Pink, Shape, Values, Walk,
-        Where, written,
-    };
+    use crate::shape::{FillKind, Shape, written};
 
     const C_MINOR: Scale = Scale {
         on: true,
@@ -262,28 +259,10 @@ mod tests {
         Shape {
             from: 48,
             to: 72,
-            curve: 0,
-            s: 0,
             kind: FillKind::Ring,
-            wave: crate::lfo::Shape::Sine,
-            rate: DEFAULT_RATE,
-            phase: 0,
-            run: 1,
-            values: Values::default(),
-            place: Where::AllRows,
             seed,
-            acid: Acid::default(),
-            follow: Follow::default(),
-            walk: Walk::default(),
-            pink: Pink::default(),
-            bits: Bits::default(),
-            grids: Grids::default(),
-            random: crate::shape::Random::default(),
-            vary: 0,
-            variation: crate::shape::Variation::default(),
-            divisions: Divisions::default(),
             ring,
-            tonnetz: crate::shape::Tonnetz::default(),
+            ..Shape::default()
         }
     }
 
