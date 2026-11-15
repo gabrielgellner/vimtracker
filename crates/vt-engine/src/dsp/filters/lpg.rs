@@ -551,13 +551,13 @@ mod tests {
     fn its_curve_is_what_a_sweep_through_the_slot_measures() {
         use vt_model::insert::Insert;
 
-        use crate::dsp::effects::slot::Keys;
+        use crate::dsp::effects::slot::SidechainFrames;
         use crate::dsp::effects::sweep::{across, agrees, measured_db, slot};
         // It hears the second track: silent, or held at a steady level, so it rests or stays open
         // part of the way as the sines go through.
-        let mut keys = Keys {
+        let mut sidechains = SidechainFrames {
             sounds: 2,
-            ..Keys::default()
+            ..SidechainFrames::default()
         };
         let hearing = |mode: GateMode, base: u8, resonance: u8, mix: u8| Settings {
             mode,
@@ -575,10 +575,10 @@ mod tests {
             (hearing(GateMode::Vca, 0x40, 0x80, 0xFF), 0.01),
         ];
         for (settings, key) in cases {
-            keys.frames[1] = [key; 2];
+            sidechains.frames[1] = [key; 2];
             let mut state = slot(Insert::Lpg(settings), 60.0, RATE);
             for hertz in across(30) {
-                let measured = measured_db(&mut state, hertz, 1.0, RATE, &keys);
+                let measured = measured_db(&mut state, hertz, 1.0, RATE, &sidechains);
                 let opening = state.opening().unwrap();
                 if key == 0.0 {
                     let (level, cutoff) = resting(settings);

@@ -6,7 +6,7 @@ use std::f32::consts::TAU;
 use std::sync::Arc;
 
 use vt_engine::engine::Engine;
-use vt_engine::parts::{Compressor, InsertState, Keys};
+use vt_engine::parts::{Compressor, InsertState, SidechainFrames};
 use vt_engine::pictures::curve_db;
 use vt_engine::published::Published;
 use vt_model::insert::{
@@ -550,7 +550,7 @@ fn clipping_slot(peak_clip: u8, mix: u8, makeup: u8) -> InsertState {
 fn slot_through(state: &mut InsertState, signal: &[f32]) -> Vec<f32> {
     signal
         .iter()
-        .map(|&sample| state.process([sample; 2], 1.0, RATE, &Keys::default())[0])
+        .map(|&sample| state.process([sample; 2], 1.0, RATE, &SidechainFrames::default())[0])
         .collect()
 }
 
@@ -608,7 +608,7 @@ fn glues_peak_clip_follows_glues_curve() {
     let mut slot = clipping_slot(1, 0xFF, 0);
     for (going_in, theirs) in glue_compressor {
         for sign in [1.0, -1.0] {
-            let ours = slot.process([going_in * sign; 2], 1.0, RATE, &Keys::default());
+            let ours = slot.process([going_in * sign; 2], 1.0, RATE, &SidechainFrames::default());
             assert!(
                 (ours[0] - theirs * sign).abs() < 1e-6,
                 "{going_in}: {ours:?} {theirs}"

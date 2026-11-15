@@ -144,7 +144,7 @@ impl Engine {
             *rests = !fed[group] && self.tracks[index].group_rests(run);
             if *rests {
                 self.tracks[index].rest_bus();
-                self.keys.frames[index] = [0.0; 2];
+                self.sidechains.frames[index] = [0.0; 2];
             }
         }
         if !routes.is_empty() || !resting.groups.iter().all(|&rests| rests) {
@@ -155,12 +155,12 @@ impl Engine {
             *rests = !self.tracks[index].ringing(run.rate);
             if *rests {
                 self.tracks[index].rest_bus();
-                self.keys.frames[index] = [0.0; 2];
+                self.sidechains.frames[index] = [0.0; 2];
             }
         }
         // Every other track is silent now, so whatever a slot of the master hears is.
         if resting.returns.iter().all(|&rests| rests) {
-            resting.master = self.tracks[master].master_rests(run, &self.keys);
+            resting.master = self.tracks[master].master_rests(run, &self.sidechains);
         }
         resting
     }
@@ -175,7 +175,7 @@ impl Engine {
         let return_a = self.returns();
         let (return_b, master_track) = (return_a + 1, return_a + 2);
         let wet_only = self.return_soloed();
-        self.keys.sounds = groups;
+        self.sidechains.sounds = groups;
         // A note or a preview only starts between runs, and a skipped track doesn't change, so a
         // track that's silent at the start of this one stays silent through it and is only asked
         // once. The others are asked each frame, as one can fall silent part way.
@@ -206,7 +206,7 @@ impl Engine {
             }
             let previewing = self.previews.on_track(&previews, index);
             if !track.sounding() && !previewing && !track.ringing(self.rate) {
-                self.keys.frames[index] = [0.0; 2];
+                self.sidechains.frames[index] = [0.0; 2];
                 // Silent, a mute's fade has nothing to fade, so a note it plays later while a
                 // compressor hears it doesn't start with the end of one.
                 let track = &mut self.tracks[index];
@@ -264,7 +264,7 @@ impl Engine {
                 let track = &mut self.tracks[index];
                 let preview = self.previews.next(&previews, index, &samples, &self.files);
                 if !track.sounding() && preview.is_none() && !track.ringing(self.rate) {
-                    self.keys.frames[index] = [0.0; 2];
+                    self.sidechains.frames[index] = [0.0; 2];
                     self.stopwatch.lap(TimedPart::Voice(index));
                     continue;
                 }
@@ -278,9 +278,9 @@ impl Engine {
                         main[1] + tail[1] + preview[1],
                     ],
                     run,
-                    &self.keys,
+                    &self.sidechains,
                 );
-                self.keys.frames[index] = track.key;
+                self.sidechains.frames[index] = track.sidechain;
                 // Muted but heard by a compressor or Warps, it plays on, faded out of the mix and
                 // sends.
                 let heard = track.heard.next(run.smoothing);
@@ -310,7 +310,7 @@ impl Engine {
                 send_b[1] += shaped.send_b[1] * heard;
                 self.stopwatch.lap(TimedPart::Shaping(index));
             }
-            let keys = &mut self.keys;
+            let sidechains = &mut self.sidechains;
             for (group, bus) in buses.into_iter().enumerate() {
                 let index = groups + group;
                 // A group at rest gives exactly what it would working out its silence. The zeros
@@ -318,8 +318,8 @@ impl Engine {
                 let shaped = if resting.groups[group] {
                     ShapedFrame::SILENT
                 } else {
-                    let shaped = self.tracks[index].process_group(bus, run, keys);
-                    keys.frames[index] = self.tracks[index].key;
+                    let shaped = self.tracks[index].process_group(bus, run, sidechains);
+                    sidechains.frames[index] = self.tracks[index].sidechain;
                     shaped
                 };
                 if tap_track == Some(index) {
@@ -341,8 +341,8 @@ impl Engine {
                 .zip(from.iter_mut().zip(resting.returns))
             {
                 if !rests {
-                    *from = self.tracks[index].process_return(send, run, keys);
-                    keys.frames[index] = self.tracks[index].key;
+                    *from = self.tracks[index].process_return(send, run, sidechains);
+                    sidechains.frames[index] = self.tracks[index].sidechain;
                 }
                 if tap_track == Some(index) {
                     tapped = *from;
@@ -354,7 +354,7 @@ impl Engine {
                 mix[0] + from_a[0] + from_b[0],
                 mix[1] + from_a[1] + from_b[1],
             ];
-            let mastered = self.tracks[master_track].process_master(mixed, run, &self.keys);
+            let mastered = self.tracks[master_track].process_master(mixed, run, &self.sidechains);
             self.stopwatch.lap(TimedPart::Shaping(master_track));
             let out = master(mastered, limiter);
             self.tracks[master_track].reading.add(mastered, out);

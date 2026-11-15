@@ -824,12 +824,12 @@ mod tests {
 
     /// What a slot gives for `input`, then silence, until this many frames.
     fn through_slot(settings: Settings, input: &[f32], frames: usize) -> Vec<[f32; 2]> {
-        let keys = crate::dsp::effects::slot::Keys::default();
+        let sidechains = crate::dsp::effects::slot::SidechainFrames::default();
         let mut state = slot(settings);
         (0..frames)
             .map(|at| {
                 let sample = input.get(at).copied().unwrap_or(0.0);
-                state.process([sample; 2], 1.0, RATE, &keys)
+                state.process([sample; 2], 1.0, RATE, &sidechains)
             })
             .collect()
     }

@@ -232,6 +232,27 @@ structure updates it in the same PR, as well as appending its decision to
 there. The [Technical Plan](#technical-plan) after it is the plan as first written, kept for its
 reasoning. Where the two differ, this section is the one that matches the code.
 
+### Words in the code
+
+The engine's code has a few words of its own. Each means the same wherever it's used.
+
+| Word | Means |
+|---|---|
+| Version | One `Published`: the song as the callback plays it, with its compiled bank, sent whole by the edit thread and never changed after (`published.rs`). |
+| Slot, insert | A slot is one of a track's four places for an effect; an insert is the effect in it, as the song has it (`Insert`). `InsertState` is a slot as it plays (`dsp/effects/slot.rs`). An FX column's command is also called a slot (`FxSlot`), and a mod slot is one of a track's six modulators. |
+| Memory | What a slot's effect keeps, its DSP boxed with its state and any long buffer (`dsp/effects/memory.rs`). The callback holds a pool of them, so putting an effect in a slot never allocates. |
+| Hold, take, give back | A slot *holds* what the song has in it now, each time modulation is worked out; it *takes* its effect's settings, and *takes* a memory from the pool for a new effect, and *gives back* the old one's. |
+| Facts | What a slot needs to know of its effect: how it treats a mono sound and how it's mixed (`Facts`, beside `Mono` and `Mixing`). |
+| Rung | An effect the slot plays through its `ring`, a frame in and its wet frame out, with nothing more from the slot. The slot plays the rest itself, handing them the note, a glide or another track. |
+| Sidechain | A track's sound after its slots and before its level and mute, in the latest frame, which a compressor, a low-pass gate or Warps on another track hears. `SidechainFrames` holds every track's. |
+| Ringing, quiet, waking | A slot is *ringing* while its effect has something left to play with nothing going in. It counts *quiet* frames until it isn't, then does no work. An effect *waking*, as a spring just knocked or a stutter just triggered does, has to be worked out again although nothing comes in. |
+| Strike | A step switching a slot's trigger on, which starts a stutter again. |
+| Heard, feeds | A track's mute, faded: *heard* is how much of it the mix and the sends hear, and *feeds* how much its group does, which can be more, while a compressor hears the group. |
+| Rest, wake | A track's modulation *rests* while working it out again would change nothing, and is skipped; anything it reads changing *wakes* it. A bus *rests* while nothing comes in and nothing rings. |
+| Run | Frames with no event in them, rendered together (`Engine::render`), with one `RunContext`: the smoothers and the rate. |
+| Lane | An FX column playing on its own loop, read once each step (`LaneRead`). |
+| Part | What a nudge splits a step into: its lanes' values, which land on the groove, and its row's note, which lands where the nudge has it (`Part`). |
+
 ### Summary
 
 The program has one thread that owns and edits the song, and one audio callback that plays it. The

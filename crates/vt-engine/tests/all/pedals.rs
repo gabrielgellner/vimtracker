@@ -5,7 +5,7 @@
 
 use std::f32::consts::TAU;
 
-use vt_engine::parts::{InsertState, Keys};
+use vt_engine::parts::{InsertState, SidechainFrames};
 use vt_model::insert::{Distort, DistortType, Insert};
 
 use crate::support::{self, golden};
@@ -31,7 +31,9 @@ fn pedal(kind: DistortType, amount: u8, tone: u8, mix: u8) -> InsertState {
 fn play(state: &mut InsertState, input: &[f32]) -> Vec<f32> {
     input
         .iter()
-        .map(|&sample| state.process([sample; 2], NO_SMOOTHING, RATE, &Keys::default())[0])
+        .map(|&sample| {
+            state.process([sample; 2], NO_SMOOTHING, RATE, &SidechainFrames::default())[0]
+        })
         .collect()
 }
 
@@ -368,7 +370,7 @@ const OVERSAMPLED: [DistortType; 6] = [
 fn play_sides(state: &mut InsertState, input: &[[f32; 2]]) -> Vec<f32> {
     input
         .iter()
-        .flat_map(|&frame| state.process(frame, NO_SMOOTHING, RATE, &Keys::default()))
+        .flat_map(|&frame| state.process(frame, NO_SMOOTHING, RATE, &SidechainFrames::default()))
         .collect()
 }
 

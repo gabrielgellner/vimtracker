@@ -390,7 +390,7 @@ mod tests {
     use vt_model::insert::Insert;
 
     use super::*;
-    use crate::dsp::effects::slot::{InsertState, Keys};
+    use crate::dsp::effects::slot::{InsertState, SidechainFrames};
     use crate::dsp::signals::{peak, sines};
 
     const RATE: u32 = 48_000;
@@ -415,7 +415,9 @@ mod tests {
     fn played(kind: DistortType, amount: u8, mix: u8, level: f32) -> Vec<f32> {
         let mut state = state(kind, amount, mix);
         sines(RATE as usize / 10, 220.0, level, RATE)
-            .map(|sample| state.process([sample; 2], NO_SMOOTHING, RATE, &Keys::default())[0])
+            .map(|sample| {
+                state.process([sample; 2], NO_SMOOTHING, RATE, &SidechainFrames::default())[0]
+            })
             .collect()
     }
 
@@ -461,7 +463,12 @@ mod tests {
                     state.set(Insert::Distort(settings));
                     let mut out = 0.0;
                     for _ in 0..512 {
-                        out = state.process([level; 2], NO_SMOOTHING, RATE, &Keys::default())[0];
+                        out = state.process(
+                            [level; 2],
+                            NO_SMOOTHING,
+                            RATE,
+                            &SidechainFrames::default(),
+                        )[0];
                     }
                     let curve = transfer(settings, level).unwrap();
                     assert!(
@@ -582,10 +589,10 @@ mod tests {
         });
         state.set(settings);
         // From 12 bits, a frame on it's still fine; settled, its steps are a half.
-        let out = state.process([0.3; 2], 0.0001, RATE, &Keys::default())[0];
+        let out = state.process([0.3; 2], 0.0001, RATE, &SidechainFrames::default())[0];
         assert!((out - 0.3).abs() < 0.01, "{out}");
         state.settle();
-        let out = state.process([0.3; 2], 0.0001, RATE, &Keys::default())[0];
+        let out = state.process([0.3; 2], 0.0001, RATE, &SidechainFrames::default())[0];
         assert_eq!(out, 0.5);
         // Between whole bits, the steps are between theirs.
         assert!(crush_step(8.5) < crush_step(8.0) && crush_step(8.5) > crush_step(9.0));
@@ -603,7 +610,7 @@ mod tests {
                 ..Distort::default()
             }));
             sines(RATE as usize / 10, 220.0, 0.02, RATE)
-                .map(|x| state.process([x; 2], NO_SMOOTHING, RATE, &Keys::default())[0])
+                .map(|x| state.process([x; 2], NO_SMOOTHING, RATE, &SidechainFrames::default())[0])
                 .collect::<Vec<f32>>()
         };
         // Linear steps of an eighth gate a sound this quiet; mu-law's are fine enough near nothing.
@@ -632,7 +639,8 @@ mod tests {
             let frames = RATE as usize;
             let (mut real, mut imaginary) = (0.0_f64, 0.0_f64);
             for (frame, sample) in sines(frames, 440.0, 0.5, RATE).enumerate() {
-                let out = state.process([sample; 2], NO_SMOOTHING, RATE, &Keys::default())[0];
+                let out =
+                    state.process([sample; 2], NO_SMOOTHING, RATE, &SidechainFrames::default())[0];
                 let phase =
                     frame as f64 / f64::from(RATE) * f64::from(probe) * std::f64::consts::TAU;
                 real += f64::from(out) * phase.cos();
@@ -664,7 +672,7 @@ mod tests {
                 .map(|frame| {
                     let t = frame as f32 / rate as f32;
                     let sample = (t * 220.0 * std::f32::consts::TAU).sin();
-                    state.process([sample; 2], NO_SMOOTHING, rate, &Keys::default())[0]
+                    state.process([sample; 2], NO_SMOOTHING, rate, &SidechainFrames::default())[0]
                 })
                 .collect::<Vec<f32>>()
         };
@@ -709,7 +717,9 @@ mod tests {
                 ..Distort::DEFAULT
             }));
             sines(RATE as usize / 10, 220.0, 0.5, RATE)
-                .map(|sample| state.process([sample; 2], NO_SMOOTHING, RATE, &Keys::default())[0])
+                .map(|sample| {
+                    state.process([sample; 2], NO_SMOOTHING, RATE, &SidechainFrames::default())[0]
+                })
                 .collect::<Vec<f32>>()
         };
         let db = |a: f32, b: f32| 20.0 * (a / b).log10();
@@ -725,7 +735,7 @@ mod tests {
     #[test]
     fn a_changed_amount_moves_smoothly_and_keeps_its_state() {
         let mut state = state(DistortType::Soft, 0x00, 0xFF);
-        state.process([0.5; 2], NO_SMOOTHING, RATE, &Keys::default());
+        state.process([0.5; 2], NO_SMOOTHING, RATE, &SidechainFrames::default());
         let settings = |amount| {
             Insert::Distort(Distort {
                 kind: DistortType::Soft,
@@ -749,7 +759,8 @@ mod tests {
         let frames = RATE as usize;
         let (mut real, mut imaginary) = (0.0_f64, 0.0_f64);
         for (frame, sample) in sines(frames, hertz, 0.5, RATE).enumerate() {
-            let out = state.process([sample; 2], NO_SMOOTHING, RATE, &Keys::default())[0];
+            let out =
+                state.process([sample; 2], NO_SMOOTHING, RATE, &SidechainFrames::default())[0];
             if frame >= RATE as usize / 2 {
                 let phase = f64::from(frame as u32) / f64::from(RATE)
                     * f64::from(probe)
@@ -830,7 +841,9 @@ mod tests {
         for kind in [DistortType::Hard, DistortType::Fold, DistortType::Sine] {
             let mut state = state(kind, 0xFF, 0xFF);
             let out: Vec<f32> = (0..100)
-                .map(|_| state.process([0.5; 2], NO_SMOOTHING, RATE, &Keys::default())[0])
+                .map(|_| {
+                    state.process([0.5; 2], NO_SMOOTHING, RATE, &SidechainFrames::default())[0]
+                })
                 .collect();
             assert!(peak(&out) <= 1.2, "{kind:?}: {}", peak(&out));
         }

@@ -101,13 +101,13 @@ pub(crate) fn follow_fresh<E: SlotEffect>(
 /// compressor that hears another track. A track renders in order, so one later than the listener
 /// is heard a frame late, which is far too little to hear.
 #[derive(Debug, Clone)]
-pub struct Keys {
+pub struct SidechainFrames {
     pub frames: [[f32; 2]; MAX_TRACKS],
     /// How many sound tracks there are, so the returns' places are known.
     pub sounds: usize,
 }
 
-impl Default for Keys {
+impl Default for SidechainFrames {
     fn default() -> Self {
         Self {
             frames: [[0.0; 2]; MAX_TRACKS],
@@ -116,7 +116,7 @@ impl Default for Keys {
     }
 }
 
-impl Keys {
+impl SidechainFrames {
     /// A track's latest frame, or silence for one that isn't there. A setting's range keeps a
     /// key on a track, so one past them is a mistake the tests should hear of.
     pub(crate) fn of(&self, track: usize) -> [f32; 2] {
@@ -580,7 +580,8 @@ impl InsertState {
     /// would leave everything it keeps as it was, so that it would give the same for the same
     /// input every frame after. A mix bus whose slots all have settled like this with silence
     /// coming in can skip them until something comes in or changes (#558). What it hears from
-    /// another track has to stay as `keys` has it now. `smoothing` is what its settings move by.
+    /// another track has to stay as `sidechains` has it now. `smoothing` is what its settings move
+    /// by.
     ///
     /// A copy of the slot, without its long buffer, takes the frame, and what it keeps is compared
     /// with the slot's bit for bit. One with a long buffer does no work only with nothing coming in
@@ -592,7 +593,7 @@ impl InsertState {
         same: bool,
         smoothing: f32,
         rate: u32,
-        keys: &Keys,
+        sidechains: &SidechainFrames,
     ) -> Option<([f32; 2], bool)> {
         let moves_by_itself = matches!(
             self.insert,
@@ -613,7 +614,7 @@ impl InsertState {
             return Some(passed);
         }
         let mut tried = self.without_memory();
-        let out = tried.process_sides(input, same, smoothing, rate, keys);
+        let out = tried.process_sides(input, same, smoothing, rate, sidechains);
         tried.kept_as(self).then_some(out)
     }
 
@@ -734,11 +735,17 @@ impl InsertState {
     /// going while either the slot's own sound or the track it hears has something in it, then
     /// fades out over its tail, so its oscillator and vocoder never stop dead.
     #[inline]
-    fn warps(&mut self, input: [f32; 2], settings: Warps, smoothing: f32, keys: &Keys) -> [f32; 2] {
+    fn warps(
+        &mut self,
+        input: [f32; 2],
+        settings: Warps,
+        smoothing: f32,
+        sidechains: &SidechainFrames,
+    ) -> [f32; 2] {
         let heard = |frame: [f32; 2]| frame[0].abs() >= SILENT || frame[1].abs() >= SILENT;
         let modulator = settings
-            .source_track(keys.sounds)
-            .map(|track| keys.of(track));
+            .source_track(sidechains.sounds)
+            .map(|track| sidechains.of(track));
         let busy = heard(input) || modulator.is_some_and(heard);
         let Some(Memory::Warps(warps)) = &mut self.memory else {
             return [0.0; 2];
@@ -856,8 +863,14 @@ impl InsertState {
 
     /// One frame through the slot, faded toward what came in as it's bypassed.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2], smoothing: f32, rate: u32, keys: &Keys) -> [f32; 2] {
-        self.process_sides(input, same_sides(input), smoothing, rate, keys)
+    pub fn process(
+        &mut self,
+        input: [f32; 2],
+        smoothing: f32,
+        rate: u32,
+        sidechains: &SidechainFrames,
+    ) -> [f32; 2] {
+        self.process_sides(input, same_sides(input), smoothing, rate, sidechains)
             .0
     }
 
@@ -873,14 +886,14 @@ impl InsertState {
         same: bool,
         smoothing: f32,
         rate: u32,
-        keys: &Keys,
+        sidechains: &SidechainFrames,
     ) -> ([f32; 2], bool) {
         // A NaN or an infinity would stay in any filter or loop it reached, silencing the slot for
         // good whatever clips it on the way round, so it's heard as a frame of silence instead
         // (#461). Sides that were the same, bit for bit, still are.
         let input = input.map(|sample| if sample.is_finite() { sample } else { 0.0 });
         let kept = same && self.mono() == Mono::Linked;
-        let wet = self.effect(input, same, smoothing, rate, keys);
+        let wet = self.effect(input, same, smoothing, rate, sidechains);
         #[allow(
             clippy::float_cmp,
             reason = "the switch's ramp lands on its target exactly"
@@ -913,15 +926,15 @@ impl InsertState {
         same: bool,
         smoothing: f32,
         rate: u32,
-        keys: &Keys,
+        sidechains: &SidechainFrames,
     ) -> [f32; 2] {
         let (wet, dry) = match self.insert {
             Insert::Empty => return input,
             Insert::Compressor(settings) => {
                 // It hears its own input, or another track's as it was after its slots.
                 let key = settings
-                    .source_track(keys.sounds)
-                    .map_or(input, |track| keys.of(track));
+                    .source_track(sidechains.sounds)
+                    .map_or(input, |track| sidechains.of(track));
                 let wet = self.dynamics.process(input, key, settings, smoothing, rate);
                 // Glue's clip is the last thing it does, after its makeup and the mix.
                 let out = self.output(wet, input, smoothing);
@@ -930,8 +943,8 @@ impl InsertState {
             Insert::Lpg(settings) => {
                 // It's opened by its own input, or another track's as it was after its slots.
                 let key = settings
-                    .source_track(keys.sounds)
-                    .map_or(input, |track| keys.of(track));
+                    .source_track(sidechains.sounds)
+                    .map_or(input, |track| sidechains.of(track));
                 let wet = self
                     .gate
                     .process(input, same, key, settings, smoothing, rate);
@@ -942,7 +955,7 @@ impl InsertState {
                 let [wet, dry] = self.limit(input, smoothing, rate);
                 (wet, dry)
             }
-            Insert::Warps(settings) => (self.warps(input, settings, smoothing, keys), input),
+            Insert::Warps(settings) => (self.warps(input, settings, smoothing, sidechains), input),
             Insert::Reso(_) | Insert::Comb(_) | Insert::FreqShift(_) => {
                 (self.resonate(input, smoothing, rate), input)
             }
@@ -1017,7 +1030,7 @@ mod tests {
 
     #[test]
     fn an_empty_slot_passed_by_gives_what_working_it_through_does() {
-        let keys = Keys::default();
+        let sidechains = SidechainFrames::default();
         let frames = [
             [0.25, -0.5],
             [0.3, 0.3],
@@ -1032,11 +1045,11 @@ mod tests {
             for frame in frames {
                 for same in [false, true] {
                     let passed = state.passed_through(frame, same).unwrap();
-                    let worked = state.process_sides(frame, same, NO_SMOOTHING, RATE, &keys);
+                    let worked = state.process_sides(frame, same, NO_SMOOTHING, RATE, &sidechains);
                     assert_eq!(passed.0.map(f32::to_bits), worked.0.map(f32::to_bits));
                     assert_eq!(passed.1, worked.1);
                     assert_eq!(
-                        state.settled(frame, same, NO_SMOOTHING, RATE, &keys),
+                        state.settled(frame, same, NO_SMOOTHING, RATE, &sidechains),
                         Some(passed)
                     );
                 }
@@ -1059,7 +1072,7 @@ mod tests {
         let mut state = InsertState::default();
         for sample in sines(1000, 220.0, 0.5, RATE) {
             assert_eq!(
-                state.process([sample, -sample], 0.01, RATE, &Keys::default()),
+                state.process([sample, -sample], 0.01, RATE, &SidechainFrames::default()),
                 [sample, -sample]
             );
         }
@@ -1074,10 +1087,10 @@ mod tests {
         }));
         state.settle();
         let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
-        let mut last = state.process([0.5; 2], smoothing, RATE, &Keys::default())[0];
+        let mut last = state.process([0.5; 2], smoothing, RATE, &SidechainFrames::default())[0];
         state.bypass(true);
         for _ in 0..RATE / 10 {
-            let out = state.process([0.5; 2], smoothing, RATE, &Keys::default())[0];
+            let out = state.process([0.5; 2], smoothing, RATE, &SidechainFrames::default())[0];
             assert!((out - last).abs() < 0.03, "{last} to {out}");
             last = out;
         }
@@ -1173,7 +1186,7 @@ mod tests {
             }),
         ];
         let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
-        let keys = Keys::default();
+        let sidechains = SidechainFrames::default();
         for insert in looped.into_iter().chain(filtered) {
             let mut song = vt_model::song::Song::new(1);
             song.tracks[0].inserts[0] = insert;
@@ -1186,11 +1199,11 @@ mod tests {
             state.hold(insert, &mut pool, song, 0);
             state.settle();
             for sample in sines(RATE as usize / 4, 220.0, 0.5, RATE) {
-                state.process([sample, -sample * 0.5], smoothing, RATE, &keys);
+                state.process([sample, -sample * 0.5], smoothing, RATE, &sidechains);
             }
-            state.process([f32::NAN, f32::INFINITY], smoothing, RATE, &keys);
+            state.process([f32::NAN, f32::INFINITY], smoothing, RATE, &sidechains);
             let after: Vec<f32> = (0..RATE * 12)
-                .flat_map(|_| state.process([0.0; 2], smoothing, RATE, &keys))
+                .flat_map(|_| state.process([0.0; 2], smoothing, RATE, &sidechains))
                 .collect();
             assert!(after.iter().all(|s| s.is_finite()), "{insert:?}");
             let last = peak(&after[after.len() - RATE as usize / 5..]);
@@ -1338,17 +1351,17 @@ mod tests {
         // After a sound, it's asked every 16 frames of silence, and each frame until the next is
         // worked out as usual and has to be what it said, as a resting mix trusts it (#558).
         let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
-        let keys = Keys::default();
+        let sidechains = SidechainFrames::default();
         for insert in every_effect() {
             let mut state = holding(insert);
             for sample in sines(RATE as usize / 20, 220.0, 0.5, RATE) {
-                state.process_sides([sample, sample * 0.8], false, smoothing, RATE, &keys);
+                state.process_sides([sample, sample * 0.8], false, smoothing, RATE, &sidechains);
             }
             let mut settled = 0;
             for _ in 0..RATE as usize / 16 {
-                let said = state.settled([0.0; 2], true, smoothing, RATE, &keys);
+                let said = state.settled([0.0; 2], true, smoothing, RATE, &sidechains);
                 for _ in 0..16 {
-                    let out = state.process_sides([0.0; 2], true, smoothing, RATE, &keys);
+                    let out = state.process_sides([0.0; 2], true, smoothing, RATE, &sidechains);
                     if let Some((frame, same)) = said {
                         assert!(frame.same_bits(&out.0), "{insert:?}: {frame:?} {out:?}");
                         assert_eq!(same, out.1, "{insert:?}");
@@ -1377,18 +1390,18 @@ mod tests {
     #[allow(clippy::float_cmp, reason = "silence is exact zeros")]
     fn falls_silent(insert: Insert, seconds: usize, settles: bool) -> Option<f32> {
         let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
-        let keys = Keys::default();
+        let sidechains = SidechainFrames::default();
         let mut state = holding(insert);
         let mut noise = 1_u32;
         for sample in sines(RATE as usize / 5, 220.0, 0.9, RATE) {
             noise = noise.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
             let noise = (noise >> 9) as f32 / (1 << 23) as f32 - 0.5;
             let frame = [sample + noise, sample * 0.7 - noise];
-            state.process_sides(frame, false, smoothing, RATE, &keys);
+            state.process_sides(frame, false, smoothing, RATE, &sidechains);
         }
         let mut silent_since = None;
         for frame in 0..seconds * RATE as usize {
-            let (out, _) = state.process_sides([0.0; 2], true, smoothing, RATE, &keys);
+            let (out, _) = state.process_sides([0.0; 2], true, smoothing, RATE, &sidechains);
             if out != [0.0; 2] {
                 silent_since = None;
                 continue;
@@ -1396,7 +1409,7 @@ mod tests {
             let since = *silent_since.get_or_insert(frame);
             let settled = !settles
                 || state
-                    .settled([0.0; 2], true, smoothing, RATE, &keys)
+                    .settled([0.0; 2], true, smoothing, RATE, &sidechains)
                     .is_some();
             if frame - since >= RATE as usize && settled {
                 return Some(frame as f32 / RATE as f32);
@@ -1448,10 +1461,10 @@ mod tests {
     #[test]
     fn a_slot_has_settled_only_while_nothing_moves_it() {
         let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
-        let keys = Keys::default();
+        let sidechains = SidechainFrames::default();
         let silence = |state: &InsertState, input: [f32; 2]| {
             state
-                .settled(input, same_sides(input), smoothing, RATE, &keys)
+                .settled(input, same_sides(input), smoothing, RATE, &sidechains)
                 .is_some()
         };
         let mut eq = holding(Insert::Eq(Equaliser::DEFAULT));
@@ -1459,7 +1472,7 @@ mod tests {
             !silence(&eq, [0.0; 2]),
             "its first frame works out its bands"
         );
-        eq.process_sides([0.0; 2], true, smoothing, RATE, &keys);
+        eq.process_sides([0.0; 2], true, smoothing, RATE, &sidechains);
         assert!(silence(&eq, [0.0; 2]), "and then it has settled");
         assert!(!silence(&eq, [0.5; 2]), "a sound moves it");
         eq.set(Insert::Eq(Equaliser {

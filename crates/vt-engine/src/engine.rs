@@ -10,7 +10,7 @@ use vt_model::song::{Song, trim_gain};
 use vt_model::speed::Speed;
 
 use crate::dsp::effects::memory::MemoryPool;
-use crate::dsp::effects::slot::Keys;
+use crate::dsp::effects::slot::SidechainFrames;
 use crate::gens::{GenHeard, GenReport, GenScratch};
 use crate::mixer::Reading;
 use crate::preview::{Files, Previews};
@@ -147,7 +147,7 @@ pub struct Engine {
     files: Files,
     file_place: usize,
     /// Each track's sound after its slots, for compressors and Warps that hear another track.
-    keys: Keys,
+    sidechains: SidechainFrames,
     /// Which tracks a compressor or Warps somewhere hears, which keep playing while muted so it
     /// still does.
     listened: [bool; MAX_TRACKS],
@@ -227,7 +227,7 @@ impl Engine {
             auditioned: [false; MAX_TRACKS],
             files: [None, None],
             file_place: 0,
-            keys: Keys::default(),
+            sidechains: SidechainFrames::default(),
             listened: [false; MAX_TRACKS],
             transport: Transport::Stopped,
             section: 0,
