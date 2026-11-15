@@ -9,7 +9,6 @@ use vt_model::scale::Scale;
 use vt_model::song::{Song, trim_gain};
 use vt_model::speed::Speed;
 
-use crate::dsp::blocks::smoother::{coefficient, fast_coefficient};
 use crate::dsp::effects::memory::MemoryPool;
 use crate::dsp::effects::slot::Keys;
 use crate::gens::{GenHeard, GenReport, GenScratch};
@@ -18,7 +17,7 @@ use crate::preview::{Files, Previews};
 use crate::published::Published;
 use crate::recorder::Recorder;
 use crate::timing::Stopwatch;
-use crate::track_state::{LaneRead, MasterRest, SongTime, TrackState};
+use crate::track_state::{LaneRead, MasterRest, RunContext, SongTime, TrackState};
 
 mod block;
 mod controls;
@@ -175,8 +174,8 @@ pub struct Engine {
     /// Frames played in total, for events on a track's own schedule.
     clock: u64,
     millibpm: u32,
-    smoothing: f32,
-    fast_smoothing: f32,
+    /// The smoothers at the rate, for rendering.
+    run: RunContext,
     /// The long buffers no slot is using.
     memory: MemoryPool,
     /// Frames rendered in all, playing or not, for what moves on its own.
@@ -242,8 +241,7 @@ impl Engine {
             frames_since_origin: 0,
             clock: 0,
             millibpm,
-            smoothing: coefficient(rate),
-            fast_smoothing: fast_coefficient(rate),
+            run: RunContext::new(rate),
             memory,
             rendered: 0,
             reading: Reading::default(),
