@@ -103,13 +103,10 @@ impl WheelSetting {
             .unwrap_or_default()
     }
 
-    /// Keep it at `path` for next time.
+    /// Keep it at `path` for next time, on one line, whole or not at all.
     pub(crate) fn save_to(&self, path: &Path) -> std::io::Result<()> {
-        if let Some(folder) = path.parent() {
-            std::fs::create_dir_all(folder)?;
-        }
         let text = ron::to_string(self).map_err(std::io::Error::other)?;
-        std::fs::write(path, text)
+        Ok(vt_model::ron_file::write_atomic(path, text)?)
     }
 }
 

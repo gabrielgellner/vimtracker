@@ -130,7 +130,8 @@ pub fn create_project(folder: &Path, song: &Song) -> Result<(), ProjectError> {
 }
 
 /// Copy a sample into a project's `samples/` folder, returning its path relative to the
-/// project. A different file with the same name gets a new name.
+/// project. A different file with the same name gets a new name. The copy is written whole or not
+/// at all, so an import that's stopped never leaves half a sample under the name a song points at.
 pub fn import_sample(folder: &Path, source: &Path) -> Result<String, ProjectError> {
     let samples = folder.join(SAMPLES_DIR);
     fs::create_dir_all(&samples).map_err(io_at(&samples))?;
@@ -152,7 +153,7 @@ pub fn import_sample(folder: &Path, source: &Path) -> Result<String, ProjectErro
             Ok(existing) if existing == bytes => return Ok(format!("{SAMPLES_DIR}/{name}")),
             Ok(_) => continue,
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                fs::write(&target, &bytes).map_err(io_at(&target))?;
+                ron_file::write_atomic(&target, &bytes)?;
                 return Ok(format!("{SAMPLES_DIR}/{name}"));
             }
             Err(error) => return Err(io_at(&target)(error)),

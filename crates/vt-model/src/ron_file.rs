@@ -1,9 +1,10 @@
 //! RON files, read and written the one way: the song and its autosave, presets, kits and the tag
-//! library here, and vt-tui's recent places, command history and imported kits.
+//! library here, and vt-tui's recent places, command history, imported kits and settings.
 //!
 //! A file is written whole or not at all: to a temporary file beside it, which is then renamed
 //! over it ([`write_atomic`]), so a crash or a failed write leaves the file before intact. The
-//! analysis cache writes its binary files the same way. What won't read says which file it is.
+//! analysis cache writes its binary files the same way, and a project its imported samples. What
+//! won't read says which file it is.
 //!
 //! A format's number is read on its own first ([`probe`]), so a file of another format says so
 //! rather than failing on a field it doesn't know. What each format reads is its own: a song reads
@@ -14,6 +15,7 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use serde::Serialize;
 use serde::de::{self, DeserializeOwned, DeserializeSeed, IgnoredAny, MapAccess, Visitor};
@@ -135,7 +137,8 @@ pub fn temporary(path: &Path) -> PathBuf {
 }
 
 /// Write a file's bytes through a temporary file and a rename, making its folders, so a crash or
-/// a failed write leaves the file before intact. A failed one takes its temporary file away.
+/// a failed write leaves the file before intact. A failed one takes its temporary file away; one
+/// that's written takes away what crashed writes of the same file left ([`sweep`]).
 pub fn write_atomic(path: &Path, bytes: impl AsRef<[u8]>) -> Result<(), Error> {
     let folder = path.parent().unwrap_or(Path::new(""));
     fs::create_dir_all(folder).map_err(io_at(folder))?;
@@ -145,7 +148,52 @@ pub fn write_atomic(path: &Path, bytes: impl AsRef<[u8]>) -> Result<(), Error> {
         .and_then(|()| fs::rename(&temporary, path).map_err(io_at(path)))
         .inspect_err(|_| {
             let _ = fs::remove_file(&temporary);
-        })
+        })?;
+    sweep(path);
+    Ok(())
+}
+
+/// How long another process's temporary file goes unchanged before it's taken as left by a crash
+/// rather than still being written.
+const STALE: Duration = Duration::from_secs(60);
+
+/// Take away the temporary files other processes left beside `path`, of that file alone, which a
+/// crash between writing and renaming leaves. One written to in the last [`STALE`] is left, as
+/// another vimtracker may be saving the same file. What can't be taken away is left for next time.
+fn sweep(path: &Path) {
+    let Some(name) = path.file_name() else {
+        return;
+    };
+    let prefix = format!(".{}.", name.to_string_lossy());
+    let folder = match path.parent() {
+        Some(folder) if !folder.as_os_str().is_empty() => folder,
+        _ => Path::new("."),
+    };
+    let Ok(entries) = fs::read_dir(folder) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let file = entry.file_name();
+        let Some(pid) = file
+            .to_str()
+            .and_then(|file| file.strip_prefix(&prefix))
+            .and_then(|rest| rest.strip_suffix(".tmp"))
+        else {
+            continue;
+        };
+        let theirs = !pid.is_empty()
+            && pid.bytes().all(|byte| byte.is_ascii_digit())
+            && pid.parse() != Ok(std::process::id());
+        let stale = entry.metadata().is_ok_and(|metadata| {
+            metadata.is_file()
+                && metadata
+                    .modified()
+                    .is_ok_and(|modified| modified.elapsed().is_ok_and(|age| age >= STALE))
+        });
+        if theirs && stale {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
 }
 
 #[cfg(test)]
@@ -221,6 +269,35 @@ mod tests {
         write(&path, &thing(2)).unwrap();
         assert_eq!(read::<Thing>(&path).unwrap(), thing(2));
         assert!(!temporary(&path).exists());
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_write_takes_away_what_crashed_writes_of_that_file_left() {
+        let root = folder("sweep");
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("thing.ron");
+        // Half a file, last written `age` seconds ago.
+        let left = |name: &str, age: u64| {
+            let left = root.join(name);
+            fs::write(&left, "(name: \"ki").unwrap();
+            let then = std::time::SystemTime::now() - Duration::from_secs(age);
+            let file = fs::File::options().write(true).open(&left).unwrap();
+            file.set_modified(then).unwrap();
+            left
+        };
+        let crashed = left(".thing.ron.4000000001.tmp", 3600);
+        let saving = left(".thing.ron.4000000002.tmp", 0);
+        let another_file = left(".other.ron.4000000001.tmp", 3600);
+        let not_a_process = left(".thing.ron.x1.tmp", 3600);
+        let longer_name = left(".thing.ron.bak.1.tmp", 3600);
+        write(&path, &thing(1)).unwrap();
+        assert!(!crashed.exists(), "another process's old one is taken away");
+        assert!(saving.exists(), "one still being written is left");
+        assert!(another_file.exists(), "another file's is left");
+        assert!(not_a_process.exists(), "only a process's number");
+        assert!(longer_name.exists(), "only this file's");
+        assert_eq!(read::<Thing>(&path).unwrap(), thing(1));
         fs::remove_dir_all(&root).unwrap();
     }
 

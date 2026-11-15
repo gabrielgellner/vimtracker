@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{BufferSize, ErrorKind, SampleFormat, StreamConfig, SupportedBufferSize};
@@ -224,10 +224,7 @@ fn full_speed_here() -> Duration {
         Some(kept) if kept <= now => kept,
         _ => {
             // Nothing is lost if it can't be kept but the next start's comparison.
-            if let Some(folder) = path.parent() {
-                let _ = std::fs::create_dir_all(folder);
-            }
-            let _ = std::fs::write(&path, write_full_speed(now));
+            let _ = vt_model::ron_file::write_atomic(&path, write_full_speed(now));
             now
         }
     }
@@ -341,14 +338,16 @@ impl AudioChoice {
 
     /// Keep it for next time.
     pub fn save(&self) -> std::io::Result<()> {
-        let Some(path) = Self::path() else {
-            return Ok(());
-        };
-        if let Some(folder) = path.parent() {
-            std::fs::create_dir_all(folder)?;
+        match Self::path() {
+            Some(path) => self.save_to(&path),
+            None => Ok(()),
         }
+    }
+
+    /// Keep it at `path`, on one line, whole or not at all.
+    pub(crate) fn save_to(&self, path: &Path) -> std::io::Result<()> {
         let text = ron::to_string(self).map_err(std::io::Error::other)?;
-        std::fs::write(path, text)
+        Ok(vt_model::ron_file::write_atomic(path, text)?)
     }
 }
 
