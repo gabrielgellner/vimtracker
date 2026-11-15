@@ -16,7 +16,6 @@ static RT_GUARD: rt_guard::Guarded = rt_guard::Guarded;
 
 mod analysis;
 mod bloom;
-mod convert;
 mod follow;
 mod generators;
 mod history;
