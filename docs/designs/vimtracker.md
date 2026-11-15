@@ -385,8 +385,8 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 **How a version reaches the callback** (`link.rs`):
 
 1.  An `Action` goes through `vt_model::action::edit`, the only path that changes a song, which
-    returns a new `Arc<Song>`. Chains and phrases are each an `Arc`, so the new version shares
-    every one it didn't change. `History` keeps versions for undo, up to `HISTORY_LIMIT`, and
+    returns a new `Arc<Song>`. Tracks, and the chains and phrases in them, are each an `Arc`, so
+    the new version shares every one it didn't change (decision 356). `History` keeps versions for undo, up to `HISTORY_LIMIT`, and
     `Services::apply` commits the new one and calls `Services::publish`.
 2.  `Services::publish` builds a `Published` from the song, the sample pool and the last version,
     which compiles the bank ([What the engine sees](#what-the-engine-sees)), and gives it to
@@ -498,7 +498,12 @@ Song                               song.ron, refused unless format_version is FO
  '- view                           ViewState: the folded and opened groups, not undone
 ```
 
-*   **Tracks.** Up to `MAX_SOUND_TRACKS` (64) sound tracks, then the fixed tracks every song has:
+*   **Tracks.** `Song.tracks` is a `Tracks` (`song/tracks.rs`): a list of `Arc<Track>` that reads
+    as a `Vec<Track>`, copies a track only when something asks for it mutably, and tells whether
+    two versions hold the very same track with `same`. Asking for a `&mut Track` copies a shared
+    one whether or not it's then written to, so code goes through every track mutably only to
+    change every one.
+    Up to `MAX_SOUND_TRACKS` (64) sound tracks, then the fixed tracks every song has:
     `MAX_GROUPS` (4) groups, `G1` to `G4`, the returns `A` and `B`, which start with a delay and a
     reverb in their first slot, and the master `M`. Every kind has steps, inserts and a page, and
     only a sound track has a machine. A sound track's level scales what it sends, and `send_a` and
@@ -1435,7 +1440,7 @@ every pair of values still met, and all of them under `cargo test --release`.
 | Graphics | Unit tests in `graphics/`, and beside the drawing of the pages, overlays and widgets | The commands sent, and the PNGs, pinned by their size and CRC |
 | Other paths | `crates/vt-tui/tests/all/probe.rs`, `notes.rs`, `analysis.rs` and `ableton.rs` | `probe`'s specs, `notes`' timing of a song's track, the analysis thread and its cache, and importing kits from Ableton |
 | Comparison harness | `tools/compare/tests/`, with `uv run python -m unittest discover tests` | The Live bridge, against stand-ins for Live's objects. Not in CI, as nothing in `tools/compare` is |
-| Screenshots | `just screenshots`, from `crates/vt-tui/examples/screenshots.rs`, into `docs/manual/src/images/` | Not a test: the SVGs are committed, so a change to what's drawn shows in the PR's diff |
+| Screenshots | `just screenshots`, from `crates/vt-tui/examples/screenshots.rs`, into `docs/manual/src/images/` | The example's own tests: each shot comes out the same twice, and is the committed SVG byte for byte, so a change to what's drawn fails until the SVGs are made again, with `VT_BLESS=1` or `just screenshots`, and then shows in the PR's diff |
 
 `crates/vt-tui/examples/big_image.rs` and `sample_page_cost.rs` measure what sending pictures costs,
 in a real terminal. `just live` drives the release build in a kitty window of its own, to check a

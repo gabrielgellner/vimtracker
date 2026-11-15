@@ -112,11 +112,16 @@ pub fn render_stems(version: &Published, rate: u32, options: RenderOptions) -> V
             // that aren't muted themselves. The returns stay as they are, as what it sends goes
             // through them.
             let group = song.group_track_of(index);
-            for (other, track) in alone.tracks.iter_mut().enumerate() {
-                if other == index || Some(other) == group {
-                    track.mute = false;
+            // Only a track this changes is written to, as writing to one copies it.
+            for other in 0..alone.tracks.len() {
+                let track = &alone.tracks[other];
+                let mute = track.mute && other != index && Some(other) != group;
+                let solo = other == index;
+                if (mute, solo) != (track.mute, track.solo) {
+                    let track = &mut alone.tracks[other];
+                    track.mute = mute;
+                    track.solo = solo;
                 }
-                track.solo = other == index;
             }
             let alone = Published::new(Arc::new(alone), Arc::clone(&version.samples));
             Stem {

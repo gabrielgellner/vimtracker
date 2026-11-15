@@ -24,6 +24,8 @@ use super::virtual_analog::{BLOCK, Moving, next_blep, this_blep};
 use crate::dsp::blocks::plaits_parts::OnePole;
 use crate::dsp::blocks::sine_table::SINE;
 use crate::dsp::voices::SynthEngine;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// The highest frequency an oscillator runs at, as a fraction of the sample rate.
 const MAX_FREQUENCY: f32 = 0.25;
@@ -192,6 +194,11 @@ impl Default for Grain {
     }
 }
 
+/// Where its settings are among the voice's, by the keys they're stored under.
+const INTERVAL: usize = voice_place(SynthVoice::Formant, "interval");
+const FORMANT: usize = voice_place(SynthVoice::Formant, "formant");
+const WIDTH: usize = voice_place(SynthVoice::Formant, "width");
+
 impl SynthEngine for Grain {
     fn new(_rate: u32) -> Self {
         Self::default()
@@ -223,9 +230,9 @@ impl Grain {
     }
 
     fn render(&mut self, f0: f32, settings: Settings) {
-        let harmonics = settings.harmonics.clamp(0.0, 1.0);
-        let timbre = settings.timbre.clamp(0.0, 1.0);
-        let morph = settings.morph.clamp(0.0, 1.0);
+        let harmonics = settings.at(INTERVAL).clamp(0.0, 1.0);
+        let timbre = settings.at(FORMANT).clamp(0.0, 1.0);
+        let morph = settings.at(WIDTH).clamp(0.0, 1.0);
         let f1 = note_frequency(24.0 + 84.0 * timbre);
         let ratio = semitones(-24.0 + 48.0 * harmonics);
         // Below the middle of `Harm`, the bare window bleeds in alongside the formants.

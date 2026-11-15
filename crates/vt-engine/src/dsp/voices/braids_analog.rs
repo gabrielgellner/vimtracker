@@ -25,6 +25,8 @@ use super::braids_parts::{
     AnalogOscillator, INNER, Macro, Model, NO_SYNC, Pitch, Shape, VIOLENT_OVERDRIVE, mix, waveshape,
 };
 use super::virtual_analog::Moving;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// The CS-80-like saw: each cycle starts on a step, held for `Notch`, at a level `Depth` sets.
 pub(crate) type CSaw = Macro<CSawModel>;
@@ -51,7 +53,9 @@ impl Model for CSawModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
-        let (notch, depth) = (settings.at(0), settings.at(1));
+        const NOTCH: usize = voice_place(SynthVoice::CSaw, "notch");
+        const DEPTH: usize = voice_place(SynthVoice::CSaw, "depth");
+        let (notch, depth) = (settings.at(NOTCH), settings.at(DEPTH));
         self.oscillator.render(
             Shape::CSaw,
             pitch.increment(0.0),
@@ -86,7 +90,9 @@ impl Model for MorphModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
-        let (shape, fuzz) = (settings.at(0), settings.at(1));
+        const SHAPE: usize = voice_place(SynthVoice::Morph, "shape");
+        const FUZZ: usize = voice_place(SynthVoice::Morph, "fuzz");
+        let (shape, fuzz) = (settings.at(SHAPE), settings.at(FUZZ));
         let (first, width, second, balance) = if shape <= 1.0 / 3.0 {
             (Shape::Triangle, 0.0, Shape::Saw, shape * 3.0)
         } else if shape <= 2.0 / 3.0 {
@@ -136,7 +142,9 @@ impl Model for SawSquareModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
-        let (width, balance) = (settings.at(0), settings.at(1));
+        const WIDTH: usize = voice_place(SynthVoice::SawSquare, "width");
+        const MIX: usize = voice_place(SynthVoice::SawSquare, "mix");
+        let (width, balance) = (settings.at(WIDTH), settings.at(MIX));
         let increment = pitch.increment(0.0);
         let mut square = [0.0; INNER];
         let [saw, other] = &mut self.oscillators;
@@ -189,10 +197,13 @@ impl Model for SyncModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
-        let wave = (settings.at(0) * 255.0).round() as usize;
+        const WAVE: usize = voice_place(SynthVoice::HardSync, "wave");
+        const INTERVAL: usize = voice_place(SynthVoice::HardSync, "interval");
+        const MIX: usize = voice_place(SynthVoice::HardSync, "mix");
+        let wave = (settings.at(WAVE) * 255.0).round() as usize;
         let wave = wave.min(SYNC_WAVES.len() - 1);
         let (shape, gain) = (SYNC_WAVES[wave], SYNC_GAINS[wave] * 0.75);
-        let (interval, balance) = (settings.at(1), settings.at(2));
+        let (interval, balance) = (settings.at(INTERVAL), settings.at(MIX));
         let mut synced = [0.0; INNER];
         let mut sync = NO_SYNC;
         let [master, slave] = &mut self.oscillators;
@@ -278,9 +289,16 @@ impl Model for TripleModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
-        let wave = ((settings.at(0) * 255.0).round() as usize).min(TRIPLE_WAVES.len() - 1);
+        const WAVE: usize = voice_place(SynthVoice::Triple, "wave");
+        const SECOND: usize = voice_place(SynthVoice::Triple, "second");
+        const THIRD: usize = voice_place(SynthVoice::Triple, "third");
+        let wave = ((settings.at(WAVE) * 255.0).round() as usize).min(TRIPLE_WAVES.len() - 1);
         let (shape, gain) = TRIPLE_WAVES[wave];
-        let detunes = [0.0, interval(settings.at(1)), interval(settings.at(2))];
+        let detunes = [
+            0.0,
+            interval(settings.at(SECOND)),
+            interval(settings.at(THIRD)),
+        ];
         out.fill(0.0);
         let mut one = [0.0; INNER];
         for (oscillator, detune) in self.oscillators.iter_mut().zip(detunes) {

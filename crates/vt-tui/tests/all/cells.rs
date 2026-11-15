@@ -19,7 +19,7 @@ const E: &str = "--- -- --- --- ---";
 /// A song of `tracks` empty phrases of 16 rows.
 fn app_with(tracks: usize) -> (App, Realtime) {
     let mut song = Song::new(tracks);
-    for track in &mut song.tracks[..tracks] {
+    for track in song.tracks.iter_mut().take(tracks) {
         let steps: Vec<Step> = (0..16).map(|_| E.parse().unwrap()).collect();
         track.phrases.insert(0, Arc::new(Phrase::from_steps(steps)));
     }

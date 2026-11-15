@@ -24,6 +24,8 @@
 use super::Settings;
 use super::braids_parts::{INNER, Macro, Model, Pitch, sine};
 use super::virtual_analog::{next_blep, this_blep};
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// Two sines at fixed pitches, in a bell-shaped window that restarts each cycle of the note.
 pub(crate) type Vosim = Macro<VosimModel>;
@@ -81,10 +83,12 @@ impl Model for VosimModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
+        const FORMANT: usize = voice_place(SynthVoice::Vosim, "formant");
+        const SECOND: usize = voice_place(SynthVoice::Vosim, "second");
         let increment = pitch.increment(0.0);
         // Each formant's pitch is its own, whatever the note, from MIDI's lowest to its highest.
-        let formants =
-            [settings.at(0), settings.at(1)].map(|at| pitch.at(at * 128.0).increment(0.0));
+        let formants = [settings.at(FORMANT), settings.at(SECOND)]
+            .map(|at| pitch.at(at * 128.0).increment(0.0));
         for out in out.iter_mut() {
             self.phase += increment;
             let mut sample = 0.75;
@@ -184,7 +188,9 @@ impl Model for FofModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
-        let (vowel, voice) = (settings.at(0), settings.at(1));
+        const VOWEL: usize = voice_place(SynthVoice::Fof, "vowel");
+        const VOICE: usize = voice_place(SynthVoice::Fof, "voice");
+        let (vowel, voice) = (settings.at(VOWEL), settings.at(VOICE));
         // It runs at half the rate, so each filter is tuned an octave up for its frequency.
         let cutoffs: [f32; FORMANTS] = std::array::from_fn(|formant| {
             pitch.svf_cutoff(formant_pitch(voice, vowel, formant) + 12.0)

@@ -22,6 +22,8 @@ use super::Settings;
 use super::virtual_analog::BLOCK;
 use crate::dsp::blocks::drift::Drift;
 use crate::dsp::voices::SynthEngine;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// The most saws it stacks, and how many go in each four lanes.
 pub(crate) const MAX_SAWS: usize = 8;
@@ -42,16 +44,16 @@ const RAMP_FRAMES: f32 = 50.0;
 /// `Sub`, every other one a fifth up or an octave down (TetraOP's `kFifths` and `kSub`).
 const MODES: usize = 3;
 
-/// Where each setting is among its own.
-const MODE: usize = 0;
-const DETUNE: usize = 1;
-const WARP: usize = 2;
-const MIX: usize = 3;
-const VOICES: usize = 4;
-const SHAPE: usize = 5;
-const WIDTH: usize = 6;
-const PHASE: usize = 7;
-const DRIFT: usize = 8;
+/// Where its settings are among the voice's, by the keys they're stored under.
+const MODE: usize = voice_place(SynthVoice::Supersaw, "stack");
+const DETUNE: usize = voice_place(SynthVoice::Supersaw, "detune");
+const WARP: usize = voice_place(SynthVoice::Supersaw, "warp");
+const MIX: usize = voice_place(SynthVoice::Supersaw, "mix");
+const VOICES: usize = voice_place(SynthVoice::Supersaw, "saws");
+const SHAPE: usize = voice_place(SynthVoice::Supersaw, "shape");
+const WIDTH: usize = voice_place(SynthVoice::Supersaw, "width");
+const PHASE: usize = voice_place(SynthVoice::Supersaw, "phase");
+const DRIFT: usize = voice_place(SynthVoice::Supersaw, "drift");
 
 /// How the saws sit in the stack: how far each is detuned, in semitones, what its stack
 /// multiplies its pitch by, its gain, and where sst's pan law puts it, on `-1..1`.

@@ -1,7 +1,7 @@
 //! Each synth voice's settings, in the order it takes them, which its
 //! [`VoiceSpec`](crate::machine::VoiceSpec) in [`VOICES`](crate::machine::VOICES) names.
 
-use super::{Entry, Kind, Units, centred, level};
+use super::{Entry, Kind, Units, centred, level, same_key};
 use crate::machine::{DEFAULT_ACCENT, SynthVoice};
 use crate::patch_names::PATCH_NAMES;
 
@@ -526,6 +526,20 @@ pub(crate) const FOUR_OP: [Entry; MAX_MACHINE_SETTINGS] = {
 /// A voice's settings, in the order it takes them.
 pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
     voice.spec().params
+}
+
+/// The place of the setting stored as `key` among a voice's, which the engine's voices read their
+/// settings by. It's for their constants, so a key the voice doesn't have doesn't build.
+pub const fn voice_place(voice: SynthVoice, key: &str) -> usize {
+    let entries = voice_entries(voice);
+    let mut at = 0;
+    while at < entries.len() {
+        if same_key(entries[at].key, key) {
+            return at;
+        }
+        at += 1;
+    }
+    panic!("a voice has no setting of that key")
 }
 
 /// The name a voice's settings are stored under.
