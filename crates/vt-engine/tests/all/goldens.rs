@@ -15,7 +15,7 @@ use vt_model::samples::SamplePool;
 use vt_model::settings::{MAX_MACHINE_SETTINGS, SettingId, voice_key};
 use vt_model::song::{Machine, Phrase, Song, SynthVoice};
 
-use crate::support::golden;
+use crate::support::{Sound, golden};
 
 const RATE: u32 = 48_000;
 /// Every render's, so whatever draws random numbers draws the same ones.
@@ -363,5 +363,82 @@ fn every_effect_and_every_voice_has_a_golden() {
     assert!(
         voices.is_empty(),
         "no golden for {voices:?}: run with VT_BLESS=1"
+    );
+}
+
+/// A second of a sine at half scale on both sides, then a second of silence, as interleaved
+/// frames.
+fn half_sine(hertz: f32) -> Vec<f32> {
+    (0..RATE as usize * 2)
+        .flat_map(|frame| {
+            let t = frame as f32 / RATE as f32;
+            let s = if frame < RATE as usize {
+                (t * hertz * std::f32::consts::TAU).sin() * 0.5
+            } else {
+                0.0
+            };
+            [s, s]
+        })
+        .collect()
+}
+
+#[test]
+fn a_golden_keeps_its_peak_rms_dc_end_and_brightness() {
+    let sound = Sound::of(&half_sine(1000.0));
+    assert!((sound.peak - -6.02).abs() < 0.01, "{sound:?}");
+    // Half the time at a sine's RMS, 3 dB under its peak.
+    assert!((sound.rms - -12.04).abs() < 0.01, "{sound:?}");
+    assert!(sound.dc.abs() < 1e-6, "{sound:?}");
+    assert!((sound.ends - 50.0).abs() < 0.1, "{sound:?}");
+    assert!((sound.bright - 1000.0).abs() < 1.0, "{sound:?}");
+    let saved = Sound::parse(sound.to_string().lines()).unwrap();
+    assert!(saved.against(&sound).iter().all(|row| row.within));
+}
+
+#[test]
+fn a_small_change_stays_in_its_bands_and_a_broken_one_leaves_them() {
+    let was = Sound::of(&half_sine(1000.0));
+    let out = |changed: Vec<f32>| -> Vec<&'static str> {
+        was.against(&Sound::of(&changed))
+            .into_iter()
+            .filter(|row| !row.within)
+            .map(|row| row.name)
+            .collect()
+    };
+    // Each sample of the sine, with the frame it's in.
+    let change = |change: &dyn Fn(usize, f32) -> f32| -> Vec<f32> {
+        let sine = half_sine(1000.0);
+        sine.iter()
+            .enumerate()
+            .map(|(at, s)| change(at / 2, *s))
+            .collect()
+    };
+    let second = RATE as usize;
+    // Half a dB louder, a little offset, ringing on a little, or a little brighter.
+    assert!(out(change(&|_, s| s * 1.06)).is_empty());
+    assert!(out(change(&|at, s| if at < second { s + 0.002 } else { s })).is_empty());
+    assert!(
+        out(change(&|at, s| if at < second * 102 / 100 {
+            s + 1e-3
+        } else {
+            s
+        }))
+        .is_empty()
+    );
+    assert!(out(half_sine(1050.0)).is_empty());
+    // Half as loud, blown up, silent, offset, cut short, a third of an octave darker, or not a
+    // number.
+    assert_eq!(out(change(&|_, s| s * 0.5)), ["peak", "rms"]);
+    assert_eq!(out(change(&|_, s| s * 4.0)), ["peak", "rms"]);
+    assert_eq!(out(change(&|_, _| 0.0)), ["peak", "rms", "ends", "bright"]);
+    assert_eq!(out(change(&|_, s| s + 0.05)), ["dc", "ends"]);
+    assert_eq!(
+        out(change(&|at, s| if at < second * 8 / 10 { s } else { 0.0 })),
+        ["ends"]
+    );
+    assert_eq!(out(half_sine(800.0)), ["bright"]);
+    assert_eq!(
+        out(change(&|at, s| if at == 9 { f32::NAN } else { s })),
+        ["peak", "rms", "dc", "ends", "bright"]
     );
 }
