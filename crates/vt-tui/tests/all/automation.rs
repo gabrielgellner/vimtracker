@@ -11,6 +11,7 @@ use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 use vt_tui::app::App;
 use vt_tui::glyphs;
+use vt_tui::input::mode::View;
 use vt_tui::track_page::Control;
 
 use crate::common::*;
@@ -40,7 +41,7 @@ fn mixer_text(app: &App) -> Vec<String> {
     let backend = ratatui::backend::TestBackend::new(163, 30);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::mixer::draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Mixer))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..30)
@@ -155,7 +156,7 @@ fn the_output_device_shows_the_fader_where_the_steps_have_it() {
     let backend = ratatui::backend::TestBackend::new(163, 42);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), &app, View::Track))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let lines: Vec<String> = (0..42)

@@ -926,9 +926,9 @@ reason for the status line, or passed back. What else it reads of the program co
 and the modes that span pages (the mode, what Insert has typed, a field jump's labels), and what
 the engine last reported (the transport, the live values, where each track is and what it's
 launched onto, the faders, the live generators). `App::ctx` lends one. `TrackPage::run` puts the
-cursor where it's seen and runs one of its own keys, given a `CtxMut`, and `TrackPage::draw` draws
-the page (`views/track.rs` and `views/track/`), giving back where its pictures with dots are;
-`views::track::draw` draws the program's own from an `App`, as the tests do.
+cursor where it's seen and runs one of its own keys, given a `CtxMut`, and its `Page::draw` draws
+the page (`views/track.rs` and `views/track/`), giving back where its pictures with dots are.
+`run::draw_view` draws any view's page from an `App`, as the tests do.
 `App::run_track_page` hands each key to `TrackPage::run`, the page and the services borrowed apart,
 runs what spans the pages itself (`/`, `M`, `gm`, the Keys mode, the Gen page's keys, `K` and `i`),
 and hands the edits to `TrackPage::edit`, given the control under the cursor (`App::track_control`,
@@ -1108,7 +1108,7 @@ it reaches across tracks, the columns it keeps and the one `gv` brings back. Its
 `Services`, are the moves, the keys over the view (`H` `M` `L`, `C-d` `C-u`, `C-e` `C-y`),
 reaching another track from a selection, `zi` and `Space i`, and its binding rows sit beside it,
 the motions, targets and Visual's with its Normal ones. It's drawn through a `Ctx`
-(`views::phrase::draw_page`), a grid laid out once for the frame and drawn a line at a time. What
+(`views::phrase::draw`), a grid laid out once for the frame and drawn a line at a time. What
 it passes back stays `impl App`: the grammar's operators, the motion after one, the Visual modes
 that change the mode, the edits, registers and `.`, Insert's typing, the tree's keys, the loop's,
 recording and the pickers, which read the selection from it. The cursor it moves is the program's,

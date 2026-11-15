@@ -6,7 +6,6 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
-use crate::app::App;
 use crate::chain_view::{ChainColumn, ChainView};
 use crate::glyphs;
 use crate::input::mode::Mode;
@@ -14,13 +13,8 @@ use crate::page::Ctx;
 use crate::theme;
 use crate::views::widgets::{group, role};
 
-/// Draw the app's chain view.
-pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    draw_page(frame, area, &app.chain_view, &app.ctx());
-}
-
 /// Draw the view, as its `Page::draw`.
-pub(crate) fn draw_page(frame: &mut Frame, area: Rect, page: &ChainView, ctx: &Ctx) {
+pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &ChainView, ctx: &Ctx) {
     let Some(chain) = ctx.chain_id() else {
         frame.render_widget(Paragraph::new("This track has no chain."), area);
         return;

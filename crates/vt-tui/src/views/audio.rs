@@ -9,7 +9,6 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Row};
 
-use crate::app::App;
 use crate::audio_page::{AudioPage, AudioRow, buffer_ms};
 use crate::page::Ctx;
 use crate::theme;
@@ -108,13 +107,8 @@ fn switch_value(on: bool, switch: Line<'static>, says: String) -> Line<'static> 
     line
 }
 
-/// Draw the app's audio page.
-pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    draw_page(frame, area, &app.audio_page, &app.ctx());
-}
-
 /// Draw the audio page, as its `Page::draw`.
-pub(crate) fn draw_page(frame: &mut Frame, area: Rect, page: &AudioPage, ctx: &Ctx) {
+pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &AudioPage, ctx: &Ctx) {
     let mut rest = area;
     frame.render_widget(Paragraph::new(project::title(ctx)), take_top(&mut rest, 2));
     // A row's name and then its value, which has the rest of the room.

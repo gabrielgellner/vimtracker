@@ -298,7 +298,7 @@ impl Page for SongView {
 
     /// Draw the view.
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
-        crate::views::song::draw_page(frame, area, self, ctx);
+        crate::views::song::draw(frame, area, self, ctx);
     }
 }
 

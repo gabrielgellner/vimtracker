@@ -14,7 +14,6 @@ use vt_engine::engine::Transport;
 use vt_model::label::GROUP_NAME_CHARS;
 use vt_model::song::{SectionStart, Song};
 
-use crate::app::App;
 use crate::glyphs;
 use crate::input::mode::Mode;
 use crate::page::Ctx;
@@ -57,13 +56,8 @@ fn column_width(song: &Song, track: usize) -> usize {
     }
 }
 
-/// Draw the app's song view.
-pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    draw_page(frame, area, &app.song_view, &app.ctx());
-}
-
 /// Draw the view, as its `Page::draw`.
-pub(crate) fn draw_page(frame: &mut Frame, area: Rect, page: &SongView, ctx: &Ctx) {
+pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &SongView, ctx: &Ctx) {
     let bold = Style::new().add_modifier(Modifier::BOLD);
     let song = ctx.song();
     let before = NUMBER_WIDTH + LENGTH_WIDTH + REPEAT_WIDTH + START_WIDTH;

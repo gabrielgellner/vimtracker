@@ -199,10 +199,10 @@ fn an_empty_section_can_be_visited_from_every_view_and_filled() {
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
         .draw(|frame| {
-            vt_tui::views::chain::draw(frame, frame.area(), &app);
-            vt_tui::views::phrase::draw(frame, frame.area(), &app);
-            vt_tui::views::track::draw(frame, frame.area(), &app);
-            vt_tui::views::mixer::draw(frame, frame.area(), &app);
+            vt_tui::run::draw_view(frame, frame.area(), &app, View::Chain);
+            vt_tui::run::draw_view(frame, frame.area(), &app, View::Phrase);
+            vt_tui::run::draw_view(frame, frame.area(), &app, View::Track);
+            vt_tui::run::draw_view(frame, frame.area(), &app, View::Mixer);
         })
         .unwrap();
     press(&mut app, " 3ia");

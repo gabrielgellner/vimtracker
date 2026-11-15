@@ -1612,13 +1612,8 @@ fn marked_text(
     shown
 }
 
-/// Draw the view, as the program has it.
-pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    draw_page(frame, area, &app.phrase_view, &app.ctx());
-}
-
 /// Draw the view in an area, as it's laid out and scrolled.
-pub(crate) fn draw_page(frame: &mut Frame, area: Rect, view: &PhraseView, ctx: &Ctx) {
+pub(crate) fn draw(frame: &mut Frame, area: Rect, view: &PhraseView, ctx: &Ctx) {
     let Some(phrase) = ctx.phrase_here() else {
         frame.render_widget(Paragraph::new("This track has no phrase here."), area);
         return;

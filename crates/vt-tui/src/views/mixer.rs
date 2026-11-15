@@ -17,7 +17,6 @@ use vt_model::song::{Song, Track, level_gain};
 
 use vt_engine::engine::Transport;
 
-use crate::app::App;
 use crate::automating::fader_of;
 use crate::glyphs;
 use crate::meter::{height_of, to_db};
@@ -313,13 +312,8 @@ fn meter_row(
     cells.done()
 }
 
-/// Draw the view: the program's mixer, given the rest of the program.
-pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    draw_page(frame, area, &app.mixer_page, &app.ctx());
-}
-
 /// Draw the mixer, as its `Page::draw`.
-pub(crate) fn draw_page(frame: &mut Frame, area: Rect, page: &MixerPage, ctx: &Ctx) {
+pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &MixerPage, ctx: &Ctx) {
     let bold = Style::new().add_modifier(Modifier::BOLD);
     let song = ctx.song();
     // Room is kept for both gaps, whether or not they're in view.

@@ -208,7 +208,7 @@ fn mixer_color(app: &App, row: usize, text: &str) -> ratatui::style::Color {
     let backend = ratatui::backend::TestBackend::new(160, 16);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::mixer::draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Mixer))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let line: String = (0..160).map(|x| buffer[(x, row as u16)].symbol()).collect();
@@ -274,7 +274,7 @@ fn the_mixer_names_its_parts_over_their_strips_with_the_cursors_brighter() {
         let backend = ratatui::backend::TestBackend::new(163, 42);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::mixer::draw(frame, frame.area(), app))
+            .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Mixer))
             .unwrap();
         terminal.backend().buffer().clone()
     };
@@ -362,7 +362,7 @@ fn mixer_colors(app: &App, name: &str, glyph: char) -> Vec<ratatui::style::Color
     let backend = ratatui::backend::TestBackend::new(160, 16);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::mixer::draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Mixer))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let row = (0..16)

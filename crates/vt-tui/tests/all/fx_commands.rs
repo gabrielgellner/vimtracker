@@ -285,7 +285,7 @@ fn the_phrase_view_names_a_slots_setting_in_a_wide_column() {
     let backend = ratatui::backend::TestBackend::new(120, 12);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), &app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), &app, View::Phrase))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let text: String = (0..12)

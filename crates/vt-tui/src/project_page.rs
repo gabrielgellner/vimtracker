@@ -417,7 +417,7 @@ impl Page for ProjectPage {
 
     /// Draw the Song sub-page.
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
-        crate::views::project::draw_page(frame, area, self, ctx);
+        crate::views::project::draw(frame, area, self, ctx);
     }
 }
 

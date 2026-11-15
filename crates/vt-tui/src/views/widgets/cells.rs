@@ -24,6 +24,7 @@ use vt_model::song::{Machine, Phrase, Role, Song, SynthVoice, TrackKind};
 use vt_model::step::Step;
 
 use crate::app::App;
+use crate::input::mode::View;
 use crate::track_page::{Control, Page};
 use crate::views::widgets::pin::{app, app_with, assert_drawn, cut, press, special};
 
@@ -34,7 +35,7 @@ const RES: Control = Control::Base(TrackControl::Resonance);
 fn page(app: &App) -> Buffer {
     let mut terminal = Terminal::new(TestBackend::new(150, 40)).unwrap();
     terminal
-        .draw(|frame| crate::views::track::draw(frame, frame.area(), app))
+        .draw(|frame| crate::run::draw_view(frame, frame.area(), app, View::Track))
         .unwrap();
     terminal.backend().buffer().clone()
 }

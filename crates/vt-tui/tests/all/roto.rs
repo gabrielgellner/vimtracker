@@ -423,7 +423,7 @@ fn the_audio_page_says_whether_the_roto_is_on_and_connected() {
         let backend = ratatui::backend::TestBackend::new(100, 14);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::audio::draw(frame, frame.area(), app))
+            .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Audio))
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         (0..buffer.area.height)

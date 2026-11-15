@@ -122,7 +122,7 @@ impl Page for AudioPage {
 
     /// Draw the Audio sub-page.
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
-        crate::views::audio::draw_page(frame, area, self, ctx);
+        crate::views::audio::draw(frame, area, self, ctx);
     }
 }
 

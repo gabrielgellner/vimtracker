@@ -1158,7 +1158,7 @@ fn project_page_lines(app: &App) -> Vec<String> {
     let backend = ratatui::backend::TestBackend::new(120, 40);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::project::draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Project))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..40)

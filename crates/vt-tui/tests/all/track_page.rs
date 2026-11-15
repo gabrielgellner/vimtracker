@@ -126,7 +126,7 @@ fn track_text(app: &App) -> Vec<String> {
     let backend = ratatui::backend::TestBackend::new(width, height);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..height)
@@ -1340,7 +1340,7 @@ fn the_track_page_draws_each_envelopes_shape() {
         let backend = ratatui::backend::TestBackend::new(150, 40);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
             .unwrap();
         terminal.backend().buffer().clone()
     };
@@ -1524,7 +1524,7 @@ fn a_track_following_the_project_shows_its_groove_dimmed_and_x_returns_to_that()
         let backend = ratatui::backend::TestBackend::new(width, height);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         let name = |x: u16, y: u16| {
@@ -1807,7 +1807,7 @@ fn envelopes_drawn_as_images_leave_placeholders_with_their_positions() {
         let backend = ratatui::backend::TestBackend::new(150, 40);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
+            .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), &app, View::Track))
             .unwrap();
         terminal.backend().buffer().clone()
     };
@@ -2158,7 +2158,7 @@ fn a_jumps_labels_cover_the_values_and_the_search_shows_below() {
     let backend = ratatui::backend::TestBackend::new(150, 40);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), &app, View::Track))
         .unwrap();
     let label = &jump_labels(&app)[0][..1];
     let text = track_text(&app).join("\n");
@@ -2249,7 +2249,7 @@ fn a_jump_works_on_the_mixer_and_stays_on_the_cursors_track() {
     let backend = ratatui::backend::TestBackend::new(80, 24);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::mixer::draw(frame, frame.area(), &app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), &app, View::Mixer))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let line = |y: u16| {
@@ -2355,7 +2355,7 @@ fn semicolon_on_the_track_page_plays_the_sound_from_the_keyboard() {
     let backend = ratatui::backend::TestBackend::new(80, 16);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), &app, View::Track))
         .unwrap();
     let corner = &terminal.backend().buffer()[(0, 0)];
     assert_eq!((corner.symbol(), corner.fg), ("╭", vt_tui::theme::YELLOW));
@@ -3295,7 +3295,7 @@ fn a_groups_icon_and_its_tracks_group_are_in_its_colour() {
         let backend = ratatui::backend::TestBackend::new(120, 24);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         let lines: Vec<String> = (0..24)

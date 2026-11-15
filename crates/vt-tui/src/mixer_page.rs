@@ -172,6 +172,6 @@ impl Page for MixerPage {
 
     /// Draw the mixer.
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
-        crate::views::mixer::draw_page(frame, area, self, ctx);
+        crate::views::mixer::draw(frame, area, self, ctx);
     }
 }

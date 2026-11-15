@@ -31,7 +31,7 @@ fn page_text(app: &App) -> Vec<String> {
     let backend = ratatui::backend::TestBackend::new(width, height);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..height)

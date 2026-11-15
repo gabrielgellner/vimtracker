@@ -11,7 +11,6 @@ use vt_model::insert::Insert;
 use vt_model::modulation::ModField;
 use vt_model::song::{Song, Track, TrackKind};
 
-use crate::app::App;
 use crate::glyphs;
 use crate::input::mode::Mode;
 use crate::kitty::PanelKey;
@@ -380,11 +379,6 @@ fn slot_panel(page: &TrackPage, ctx: &Ctx, track: &Track, slot: usize) -> Graphi
     panel.beside(scale, REDUCTION_SCALE_WIDTH)
 }
 
-/// Draw the view: the program's track page, given the rest of the program.
-pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    app.track_page.draw(frame, area, &app.ctx());
-}
-
 /// Where the pictures that carry a dot are, as the track page drew them.
 #[derive(Debug, Clone, Default)]
 pub struct Drawn {
@@ -394,16 +388,9 @@ pub struct Drawn {
     pub previews: Vec<(usize, (u16, u16))>,
 }
 
-impl TrackPage {
-    /// Draw the page, giving back where the Mod page's LFO cycles and the Gen page's previews
-    /// are, for their dots.
-    pub fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) -> Drawn {
-        draw_page(frame, area, self, ctx)
-    }
-}
-
-/// Draw the page, as [`TrackPage::draw`].
-fn draw_page(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx) -> Drawn {
+/// Draw the page, as its `Page::draw`, giving back where the Mod page's LFO cycles and the Gen
+/// page's previews are, for their dots.
+pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx) -> Drawn {
     // While the keyboard plays the sound, the page sits in a box of that mode's colour.
     let area = if ctx.mode() == Mode::Keys {
         let block = widgets::window_border()

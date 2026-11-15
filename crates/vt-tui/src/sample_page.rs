@@ -1292,7 +1292,7 @@ impl Page for SamplePage {
     /// Draw the page, giving back where its waveform is on screen, if it's drawn, for the lines
     /// and marks the terminal places over it.
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) -> Option<WaveOnScreen> {
-        crate::views::sample::draw_page(frame, area, self, ctx)
+        crate::views::sample::draw(frame, area, self, ctx)
     }
 
     /// The waveform and the overview of the whole sample under it, as the view and the points

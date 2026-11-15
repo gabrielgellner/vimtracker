@@ -17,6 +17,7 @@ use vt_model::step::Step;
 use vt_tui::app::App;
 use vt_tui::input::keys::Key;
 use vt_tui::input::mode::Mode;
+use vt_tui::input::mode::View;
 
 use crate::common::{app_for, app_with, keys, steps};
 
@@ -2473,7 +2474,7 @@ fn a_follower_and_its_source_say_so_in_their_titles() {
         let backend = ratatui::backend::TestBackend::new(160, 8);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), app))
+            .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Phrase))
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         (0..160).map(|x| buffer[(x, 0)].symbol()).collect()
@@ -3539,7 +3540,7 @@ fn a_live_column_is_drawn_in_the_shape_panels_colour_and_named_over_the_grid() {
     let backend = ratatui::backend::TestBackend::new(120, 16);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), &app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), &app, View::Phrase))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let title: String = (0..120).map(|x| buffer[(x, 0)].symbol()).collect();
