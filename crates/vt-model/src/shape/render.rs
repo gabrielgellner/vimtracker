@@ -734,12 +734,12 @@ fn noted<F: FnMut(usize, &Shaped)>(
 /// The values on the rows chosen, for a column whose values run from 0 to `top`. A transform reads
 /// the values there through `read`, from the column's value with its fine part, and a random fill
 /// weighing its notes draws them by their `odds`.
-fn filled<F: FnMut(usize, &Shaped)>(
+fn filled<F: FnMut(usize, &Shaped), R: Fn(u16) -> f64>(
     rows: &Rows,
     range: StepRange,
     shape: &Shape,
     top: f64,
-    read: &dyn Fn(u16) -> f64,
+    read: &R,
     odds: Option<&Odds>,
     out: &mut Out<'_, F>,
 ) {
@@ -852,11 +852,11 @@ fn filled<F: FnMut(usize, &Shaped)>(
 /// row from the last back: a row is never before its place among them, so none is written over
 /// before it's moved. Until then a cell holds its value in an FX slot's, the one with room for a
 /// fine part.
-fn reworked<F: FnMut(usize, &Shaped)>(
+fn reworked<F: FnMut(usize, &Shaped), R: Fn(u16) -> f64>(
     rows: &Rows,
     shape: &Shape,
     top: f64,
-    read: &dyn Fn(u16) -> f64,
+    read: &R,
     out: &mut Out<'_, F>,
 ) {
     let mut present = Rows::new(rows.len);
