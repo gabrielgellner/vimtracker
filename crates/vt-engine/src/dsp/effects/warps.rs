@@ -41,6 +41,7 @@ use crate::dsp::blocks::clip::soft_clip;
 use crate::dsp::blocks::oversampler::PairOversampler;
 use crate::dsp::blocks::plaits_parts::{DcBlocker, Svf};
 use crate::dsp::blocks::smoother::Smoothed;
+use crate::dsp::blocks::xorshift::Xorshift;
 use crate::dsp::effects::distort::saturating_gains;
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::SlotEffect;
@@ -226,7 +227,7 @@ struct Oscillator {
     increment: f32,
     note: f32,
     noise: Svf,
-    seed: u32,
+    seed: Xorshift,
     /// Warps' one-poles taking the edge off the saw, at this rate, and the rate itself.
     saw_smoothing: f32,
     rate: u32,
@@ -254,7 +255,7 @@ impl Oscillator {
             increment: 0.0,
             note: f32::NAN,
             noise: Svf::default(),
-            seed: 0x2545_f491,
+            seed: Xorshift::new(0x2545_f491),
             saw_smoothing: at_rate(0.3, rate),
             rate,
         }
@@ -328,10 +329,7 @@ impl Oscillator {
             }
             _ => {
                 // A xorshift, so it's the same every time.
-                self.seed ^= self.seed << 13;
-                self.seed ^= self.seed >> 17;
-                self.seed ^= self.seed << 5;
-                let white = self.seed as f32 / u32::MAX as f32 * 2.0 - 1.0;
+                let white = self.seed.unit() * 2.0 - 1.0;
                 self.noise.low_pass(white)
             }
         }

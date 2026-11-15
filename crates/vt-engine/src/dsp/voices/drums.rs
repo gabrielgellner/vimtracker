@@ -30,12 +30,6 @@ fn semitones(interval: f32) -> f32 {
     2_f32.powf(interval / 12.0)
 }
 
-/// Noise on `0..1`.
-#[inline]
-fn noise(rng: &mut Pcg32) -> f32 {
-    rng.next_u32() as f32 / 4_294_967_296.0
-}
-
 const SNARE_MODES: usize = 5;
 const SNARE_RATIOS: [f32; SNARE_MODES] = [1.00, 2.00, 3.18, 4.16, 5.62];
 
@@ -168,7 +162,7 @@ impl Snare {
             }
             let shell = soft_clip(shell);
 
-            let hiss = (2.0 * noise(&mut self.rng) - 1.0).max(0.0);
+            let hiss = (2.0 * self.rng.unit() - 1.0).max(0.0);
             self.noise_envelope *= noise_decay;
             let hiss = hiss * self.noise_envelope * snappy * 2.0;
             let (_, hiss) = self.noise_filter.process(hiss);
@@ -272,7 +266,7 @@ impl Hat {
             self.noise_clock += noise_f;
             if self.noise_clock >= 1.0 {
                 self.noise_clock -= 1.0;
-                self.noise_sample = noise(&mut self.rng) - 0.5;
+                self.noise_sample = self.rng.unit() - 0.5;
             }
             let mixed = coloured + noisiness * (self.noise_sample - coloured);
 

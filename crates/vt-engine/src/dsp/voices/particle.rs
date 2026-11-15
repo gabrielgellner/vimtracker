@@ -20,7 +20,7 @@
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use super::virtual_analog::Settings;
-use crate::dsp::blocks::plaits_parts::{CosineOscillator, Limiter, Svf, random, tan_dirty};
+use crate::dsp::blocks::plaits_parts::{CosineOscillator, Limiter, Svf, tan_dirty};
 use crate::rng::Pcg32;
 use crate::voice::SynthEngine;
 
@@ -62,14 +62,14 @@ impl Particle {
         q: f32,
         out: &mut [f32; BLOCK],
     ) {
-        let mut u = if sync { density } else { random(rng) };
+        let mut u = if sync { density } else { rng.unit() };
         let mut can_randomize_frequency = true;
         for out in out.iter_mut() {
             let mut s = 0.0;
             if u <= density {
                 s = u * gain;
                 if can_randomize_frequency {
-                    let v = 2.0 * random(rng) - 1.0;
+                    let v = 2.0 * rng.unit() - 1.0;
                     let f = (semitones(spread * v) * frequency).min(0.25);
                     self.pre_gain = 0.5 / (q * f * density.sqrt()).sqrt();
                     self.filter.set_g_q(tan_dirty(f), q);
@@ -78,7 +78,7 @@ impl Particle {
                 }
             }
             *out += self.filter.band_pass(self.pre_gain * s);
-            u = random(rng);
+            u = rng.unit();
         }
     }
 }

@@ -13,3 +13,4 @@ pub(crate) mod response;
 pub(crate) mod sides;
 pub(super) mod sine_table;
 pub(crate) mod smoother;
+pub(crate) mod xorshift;

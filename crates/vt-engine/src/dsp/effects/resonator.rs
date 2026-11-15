@@ -504,7 +504,7 @@ mod tests {
         (0..frames)
             .map(|frame| {
                 let since = (frame % (rate as usize / 4)) as f32 / rate as f32;
-                let noise = rng.next_u32() as f32 / 2_147_483_648.0 - 1.0;
+                let noise = rng.bipolar();
                 noise * level * (-since / 0.02).exp()
             })
             .collect()
@@ -822,7 +822,7 @@ mod tests {
             });
             let note = 36.0 + (frame / 192 % 3) as f32 * 5.0;
             // A quiet hiss, so what moves is the resonator and not the sound.
-            let noise = (rng.next_u32() as f32 / 2_147_483_648.0 - 1.0) * 0.02;
+            let noise = rng.bipolar() * 0.02;
             let out = resonator.process([noise; 2], note, smoothing);
             if frame > RATE as usize / 2 {
                 for side in 0..2 {
