@@ -1917,4 +1917,15 @@ mod tests {
         assert_eq!(violations, 0);
         assert!(ended >= 8, "{ended} recordings ended");
     }
+
+    /// A report is copied into its ring every block, so its size is watched (#836). It's about
+    /// 14 KB, nearly all of it the arrays of a place for every track there can be, `places` most
+    /// of all. Filling those took about 3 µs a block in a release build, a few percent of a light
+    /// song's block at 256 frames, so they're still sent every block; past this, it's time to send
+    /// them less often or only for the tracks in use.
+    #[test]
+    fn a_report_stays_under_sixteen_kilobytes() {
+        let size = size_of::<Telemetry>();
+        assert!(size <= 16 * 1024, "{size} bytes");
+    }
 }
