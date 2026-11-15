@@ -4,7 +4,8 @@
 //!
 //! It's laid out for the author's screen, kitty full screen on a MacBook, 163 characters by 42. A
 //! wider window gives the waveform its width, and a smaller one shows part of the page, following
-//! the cursor across, rather than squeezing it.
+//! the cursor across, rather than squeezing it. It's drawn from the page's own state and what it
+//! reads of the program through a [`Ctx`].
 
 use std::time::Instant;
 
@@ -18,6 +19,7 @@ use ratatui::widgets::{Paragraph, Widget};
 use crate::app::App;
 use crate::input::mode::{Mode, View};
 use crate::kitty;
+use crate::page::Ctx;
 use crate::placing::{Edge, Point};
 use crate::sample_page::{SamplePage, Shown};
 use crate::sample_settings::SampleSetting;
@@ -26,7 +28,8 @@ use crate::sample_wave::{
 };
 use crate::theme;
 use crate::views::help::POPUP_DELAY;
-use crate::views::widgets::toggle;
+use crate::views::widgets::param::{Face, ParamCell, ParamState, Tone};
+use crate::views::widgets::setting::{CellLook, Focus};
 
 /// The waveform's rows: 14 for each channel of a stereo sample, left above right, or 28 for a
 /// mono one.
@@ -161,18 +164,18 @@ pub fn marks(shown: &Shown) -> Vec<Mark> {
 /// Whether the terminal places the ruler's marks at their lines' pixels, rather than the ruler
 /// drawing each as `▾` over its column: when the pictures are drawn and nothing is drawn over the
 /// page, which a placed image would show through.
-pub fn marks_placed(app: &App, now: Instant) -> bool {
-    app.modes.view == View::Sample
-        && app.sample_images.is_some()
-        && app.sample_page.cell_width.is_some()
-        && !overlaid(app, now)
+pub fn marks_placed(page: &SamplePage, ctx: &Ctx, now: Instant) -> bool {
+    ctx.view() == View::Sample
+        && page.wave_images().is_some()
+        && page.cell_width.is_some()
+        && !ctx.overlaid(now)
 }
 
 /// Whether the terminal places the cursor and the playheads as thin lines at their frames' pixels,
 /// rather than the page drawing their columns' backgrounds: when the marks are placed and the
 /// cursor is a line, as `zc` has it, so the playheads follow the cursor's style.
-pub fn lines_placed(app: &App, now: Instant) -> bool {
-    marks_placed(app, now) && app.sample_page.cursor_line
+pub fn lines_placed(page: &SamplePage, ctx: &Ctx, now: Instant) -> bool {
+    marks_placed(page, ctx, now) && page.cursor_line
 }
 
 /// The page's size in this much room: at least the author's screen's.
@@ -247,16 +250,21 @@ fn tick_step(seconds_a_column: f64) -> (f64, usize) {
     (step, 0)
 }
 
-pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
+/// Draw the sample page, as its `Page::draw`, once it's laid out for the room and settled on what
+/// it shows, giving back where its waveform is on screen, if it's drawn.
+pub(crate) fn draw_page(
+    frame: &mut Frame,
+    area: Rect,
+    state: &SamplePage,
+    ctx: &Ctx,
+) -> Option<WaveOnScreen> {
     let (width, height) = page_size(area);
-    app.sample_page.columns = wave_columns(width);
-    app.sample_page.on_screen = None;
-    let shown = app.sample_page_here();
+    let shown = ctx.sample_shown();
     let page = Rect::new(0, 0, width, height);
     let mut buffer = Buffer::empty(page);
     buffer.set_style(page, theme::screen());
     match &shown {
-        Ok(shown) => draw_page(&mut buffer, page, app, shown),
+        Ok(shown) => draw_whole(&mut buffer, page, state, ctx, shown),
         Err(why) => {
             let lines = vec![
                 Line::styled("Sample", Style::new().add_modifier(Modifier::BOLD)),
@@ -267,8 +275,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
         }
     }
     // A window smaller than the page shows the part with the cursor's column in it.
-    let cursor_column = app
-        .sample_page
+    let cursor_column = state
         .cursor_on_screen()
         .map_or(0, |column| i32::from(MARGIN) + column as i32);
     let scroll_x = if width > area.width {
@@ -285,29 +292,24 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &mut App) {
             }
         }
     }
-    if shown.is_ok() {
-        let left = i32::from(area.x) + i32::from(MARGIN) - scroll_x;
-        let columns = app.sample_page.columns as i32;
-        let start = left.max(i32::from(area.x));
-        let end = (left + columns).min(i32::from(area.right()));
-        let rows = area.height.saturating_sub(WAVE_TOP).min(WAVE_ROWS);
-        app.sample_page.on_screen = (rows > 0 && start < end).then_some(WaveOnScreen {
-            left,
-            top: area.y + WAVE_TOP,
-            columns: start..end,
-            rows,
-            marks: shown.as_ref().map(marks).unwrap_or_default(),
-            playheads: shown
-                .as_ref()
-                .map(|shown| app.sample_playheads(shown))
-                .unwrap_or_default(),
-        });
-    }
+    let shown = shown.ok()?;
+    let left = i32::from(area.x) + i32::from(MARGIN) - scroll_x;
+    let columns = state.columns as i32;
+    let start = left.max(i32::from(area.x));
+    let end = (left + columns).min(i32::from(area.right()));
+    let rows = area.height.saturating_sub(WAVE_TOP).min(WAVE_ROWS);
+    (rows > 0 && start < end).then(|| WaveOnScreen {
+        left,
+        top: area.y + WAVE_TOP,
+        columns: start..end,
+        rows,
+        marks: marks(&shown),
+        playheads: state.playheads(&shown, ctx.playheads()),
+    })
 }
 
 /// The whole page, into a buffer of its size.
-fn draw_page(buffer: &mut Buffer, page: Rect, app: &App, shown: &Shown) {
-    let state = &app.sample_page;
+fn draw_whole(buffer: &mut Buffer, page: Rect, state: &SamplePage, ctx: &Ctx, shown: &Shown) {
     let rate = shown.rate();
     let bold = Style::new().add_modifier(Modifier::BOLD);
     let channels = match shown.analysis.channels() {
@@ -337,10 +339,10 @@ fn draw_page(buffer: &mut Buffer, page: Rect, app: &App, shown: &Shown) {
     ]);
     let row = |y: u16| Rect::new(MARGIN, y, page.width - MARGIN, 1);
     header.render(row(0), buffer);
-    ruler(app, shown).render(row(WAVE_TOP - 1), buffer);
+    ruler(state, ctx, shown).render(row(WAVE_TOP - 1), buffer);
 
     let columns = state.columns as u16;
-    if let Some((wave, overview)) = app.sample_images {
+    if let Some((wave, overview)) = state.wave_images() {
         let style = Style::new().fg(kitty::id_color(wave));
         let cursor = state.cursor_on_screen().filter(|_| !state.cursor_line);
         // The selection, as the selection's grey behind the columns it covers.
@@ -355,10 +357,11 @@ fn draw_page(buffer: &mut Buffer, page: Rect, app: &App, shown: &Shown) {
             })
             .unwrap_or_default();
         // The playheads as their columns, where the terminal isn't placing them as lines.
-        let playheads: Vec<usize> = if lines_placed(app, Instant::now()) {
+        let playheads: Vec<usize> = if lines_placed(state, ctx, Instant::now()) {
             Vec::new()
         } else {
-            app.sample_playheads(shown)
+            state
+                .playheads(shown, ctx.playheads())
                 .into_iter()
                 .filter_map(|frame| state.on_screen_column(frame))
                 .collect()
@@ -376,7 +379,7 @@ fn draw_page(buffer: &mut Buffer, page: Rect, app: &App, shown: &Shown) {
                 buffer[(MARGIN + *column as u16, y)].set_bg(playhead_column());
             }
             if let Some(column) = cursor {
-                let color = if state.setting.is_some() && app.modes.mode != Mode::Keys {
+                let color = if state.setting.is_some() && ctx.mode() != Mode::Keys {
                     theme::dimmed(cursor_column())
                 } else {
                     cursor_column()
@@ -397,7 +400,7 @@ fn draw_page(buffer: &mut Buffer, page: Rect, app: &App, shown: &Shown) {
     }
     settings(state, shown).render(row(WAVE_TOP + WAVE_ROWS + 2), buffer);
     slice_settings(state, shown).render(row(WAVE_TOP + WAVE_ROWS + 3), buffer);
-    cursor_line(app, shown).render(row(WAVE_TOP + WAVE_ROWS + 4), buffer);
+    cursor_line(state, shown).render(row(WAVE_TOP + WAVE_ROWS + 4), buffer);
 }
 
 /// The background of the cursor's column, when it's shown that way: the cursor's own colour,
@@ -418,10 +421,9 @@ pub fn playhead_column() -> Color {
 /// where there's room after that, faint. With the pictures drawn, the terminal places each mark
 /// at its line's pixels, so the ruler leaves the columns the mark covers for it, and draws it as
 /// `▾` itself only while something is drawn over the page.
-fn ruler(app: &App, shown: &Shown) -> Line<'static> {
-    let state = &app.sample_page;
+fn ruler(state: &SamplePage, ctx: &Ctx, shown: &Shown) -> Line<'static> {
     let columns = state.columns;
-    let placed = marks_placed(app, Instant::now());
+    let placed = marks_placed(state, ctx, Instant::now());
     let mut cells: Vec<(char, Style)> = vec![(' ', Style::new()); columns];
     let mut taken = vec![false; columns];
     let on_screen = |frame: u64| {
@@ -531,25 +533,36 @@ fn ruler(app: &App, shown: &Shown) -> Line<'static> {
     )
 }
 
-/// A setting's value on the rows: in the cursor's colours while the focus is on it, the text's
-/// if it's the slice's own, and dimmer if it's the entry's, which the slice plays as. `Snap` and
-/// `Reverse`, which are off or on, are a toggle, in its own colour where it's the slice's own.
-fn setting_span(state: &SamplePage, shown: &Shown, setting: SampleSetting) -> Span<'static> {
+/// A setting's value on the rows, as a setting's cell draws it: in the cursor's colours while the
+/// focus is on it, the text's if it's the slice's own, and dimmer if it's the entry's, which the
+/// slice plays as. `Snap` and `Reverse`, which are off or on, are a toggle, in its own colour
+/// where it's the slice's own. Its name is the row's, in the text's colour rather than a cell's
+/// dim, so only the value is the cell's.
+fn setting_value(state: &SamplePage, shown: &Shown, setting: SampleSetting) -> Line<'static> {
     let (value, own) = shown.setting_value(setting, state.cursor);
-    let toggle =
-        matches!(setting, SampleSetting::Snap | SampleSetting::Reverse).then_some(value != 0);
-    let text = match toggle {
-        Some(on) => toggle::text(on),
-        None => setting.text(value, shown.rate()),
+    let face = match setting {
+        SampleSetting::Snap | SampleSetting::Reverse => Face::Toggle { on: value != 0 },
+        _ => Face::Word,
     };
-    let style = if state.setting == Some(setting) {
-        theme::cursor(Mode::Normal)
-    } else if !own {
-        theme::dim()
-    } else {
-        toggle.map_or_else(Style::new, toggle::style)
+    let tone = if own { Tone::Plain } else { Tone::Default };
+    let cell = ParamCell {
+        name: setting.name().into(),
+        face,
+        text: setting.text(value, shown.rate()),
+        place: None,
+        state: ParamState::new(tone),
+        // The cursor's colours are Normal's whatever the mode, as the pads leave the focus where
+        // it was, and nothing is typed or jumped to here.
+        look: CellLook {
+            focus: Focus::at(state.setting == Some(setting), false),
+            mode: Mode::Normal,
+            typed: None,
+            query: None,
+            name_labels: "",
+            value_label: None,
+        },
     };
-    Span::styled(text, style)
+    cell.value()
 }
 
 /// The entry's points, each named in its colour, so the row is the waveform's key too, whether
@@ -599,13 +612,13 @@ fn settings(state: &SamplePage, shown: &Shown) -> Line<'static> {
     }
     spans.push(Span::raw("   "));
     spans.push(Span::raw("Snap "));
-    spans.push(setting_span(state, shown, SampleSetting::Snap));
+    spans.extend(setting_value(state, shown, SampleSetting::Snap));
     spans.push(Span::raw("   Sens "));
-    spans.push(setting_span(state, shown, SampleSetting::Sens));
+    spans.extend(setting_value(state, shown, SampleSetting::Sens));
     spans.push(Span::raw("   Steps "));
-    spans.push(setting_span(state, shown, SampleSetting::Steps));
+    spans.extend(setting_value(state, shown, SampleSetting::Steps));
     spans.push(Span::raw("   Warp "));
-    spans.push(setting_span(state, shown, SampleSetting::Warp));
+    spans.extend(setting_value(state, shown, SampleSetting::Warp));
     Line::from(spans)
 }
 
@@ -641,15 +654,14 @@ fn slice_settings(state: &SamplePage, shown: &Shown) -> Line<'static> {
             continue;
         }
         spans.push(Span::raw(format!("   {} ", setting.name())));
-        spans.push(setting_span(state, shown, setting));
+        spans.extend(setting_value(state, shown, setting));
     }
     Line::from(spans)
 }
 
 /// Where the cursor is: its time, its frame and its slice, the point under it, which the nudges
 /// and `x` act on, and the selection while there's one.
-fn cursor_line(app: &App, shown: &Shown) -> Line<'static> {
-    let state = &app.sample_page;
+fn cursor_line(state: &SamplePage, shown: &Shown) -> Line<'static> {
     let rate = shown.rate();
     let (slice, _) = shown.slice_at(state.cursor);
     let style = if state.cursor_line {
@@ -666,7 +678,7 @@ fn cursor_line(app: &App, shown: &Shown) -> Line<'static> {
         )),
         Span::styled(format!("slice {slice:02X}"), Style::new().fg(SLICE_COLOR)),
     ];
-    if let Some(point) = app.point_here(shown) {
+    if let Some(point) = state.point_here(shown) {
         let (name, color) = match point {
             Point::Slice(number) => (format!("slice {number:02X}'s start"), SLICE_COLOR),
             Point::Edge(Edge::Start) => ("the start".to_owned(), START_COLOR),

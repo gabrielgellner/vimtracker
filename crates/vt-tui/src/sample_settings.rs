@@ -4,7 +4,9 @@
 //! there `h` and `l` go along them, `=` `-` and `+` `_` change it by a small or a large step, `K`
 //! lists its values, `x` puts it back, and `Esc` goes back to the waveform. `j` and `k` still go
 //! by slice, so a setting can be set slice after slice. `>` and `<` move the slice's gain and `~`
-//! reverses it from the waveform too. Each change is one undo step on the bank entry.
+//! reverses it from the waveform too. Each change is one undo step on the bank entry, which the
+//! page makes through the [`Services`] it's given; the pickers it builds are opened by the
+//! program.
 
 use vt_model::action::Action;
 use vt_model::bank::{BankEntry, Hints, MOST_PAN, MOST_STEPS, Warp};
@@ -12,10 +14,10 @@ use vt_model::constants::BAR_STEPS;
 use vt_model::kit::MAX_TUNE;
 use vt_model::onsets::MOST_SENS;
 
-use crate::app::App;
 use crate::input::command::MOST_SAMPLE_DB;
 use crate::input::picker::{Item, Pick, Picker};
-use crate::sample_page::{Shown, beat_frames};
+use crate::sample_page::{SamplePage, Shown, beat_frames};
+use crate::services::Services;
 use crate::slicing::pan_text;
 use crate::views::sample::time;
 use crate::views::status::format_bpm;
@@ -317,15 +319,21 @@ impl Shown {
     }
 }
 
-impl App {
+impl SamplePage {
     /// Put a setting's value in, for the slice under the cursor, as one undo step, and say what it
     /// is now.
-    fn put_setting(&mut self, shown: &Shown, setting: SampleSetting, value: Option<i32>) {
-        let cursor = self.sample_page.cursor;
+    pub(crate) fn put_setting(
+        &self,
+        shown: &Shown,
+        setting: SampleSetting,
+        value: Option<i32>,
+        services: &mut Services,
+    ) {
+        let cursor = self.cursor;
         let entry = shown.with_setting(setting, cursor, value);
         if entry == shown.entry {
             let inherits = value.is_none() && shown.settings_slice(cursor).is_some();
-            self.services.status = if inherits && !setting.is_entrys() {
+            services.status = if inherits && !setting.is_entrys() {
                 format!("{} already plays as the sample's", setting.name())
             } else {
                 format!("{} is already that", setting.name())
@@ -333,11 +341,11 @@ impl App {
             return;
         }
         let number = shown.number;
-        self.services.apply(&Action::SetBankEntry {
+        services.apply(&Action::SetBankEntry {
             number,
             entry: Some(entry),
         });
-        let Ok(now) = self.sample_shown() else {
+        let Ok(now) = self.shown(services) else {
             return;
         };
         let (value, own) = now.setting_value(setting, cursor);
@@ -361,7 +369,7 @@ impl App {
                 format!(", finding {count} {sounds}")
             }
             SampleSetting::Steps if value > 0 => {
-                let millibpm = self.song().millibpm;
+                let millibpm = services.song().millibpm;
                 let speed = now.tempo_speed(value as u32, millibpm);
                 format!(
                     ", playing at {} on Play's Tempo at {} BPM",
@@ -371,25 +379,25 @@ impl App {
             }
             _ => String::new(),
         };
-        self.services.status = format!("{whose}{name} {text}{inherited}{found}: u to undo");
+        services.status = format!("{whose}{name} {text}{inherited}{found}: u to undo");
     }
 
     /// `=` `-` `+` `_` on the settings rows, `>` `<` for the gain: a setting up or down a small or
     /// a large step, `times` over, from what it plays as.
     pub(crate) fn change_setting(
-        &mut self,
+        &self,
         shown: &Shown,
         setting: SampleSetting,
         up: bool,
         large: bool,
         times: u64,
+        services: &mut Services,
     ) {
         if !setting.exists_on(shown) {
-            self.services.status =
-                format!("{} is a slice's: slice the sample first", setting.name());
+            services.status = format!("{} is a slice's: slice the sample first", setting.name());
             return;
         }
-        let (value, _) = shown.setting_value(setting, self.sample_page.cursor);
+        let (value, _) = shown.setting_value(setting, self.cursor);
         let (small, big) = setting.steps(shown.rate());
         let step = if large { big } else { small };
         let by = i64::from(step) * times.min(1000) as i64;
@@ -400,25 +408,31 @@ impl App {
             i64::from(value) - by
         };
         let to = to.clamp(i64::from(low), i64::from(high)) as i32;
-        self.put_setting(shown, setting, Some(to));
+        self.put_setting(shown, setting, Some(to), services);
     }
 
     /// `x` on the settings rows: a slice's setting back to the entry's, or the entry's to its
     /// default.
-    pub(crate) fn reset_setting(&mut self, shown: &Shown, setting: SampleSetting) {
-        self.put_setting(shown, setting, None);
+    pub(crate) fn reset_setting(
+        &self,
+        shown: &Shown,
+        setting: SampleSetting,
+        services: &mut Services,
+    ) {
+        self.put_setting(shown, setting, None, services);
     }
 
     /// `~`: the slice under the cursor, or the entry with no slices, played the other way.
-    pub(crate) fn reverse_here(&mut self, shown: &Shown) {
-        let (value, _) = shown.setting_value(SampleSetting::Reverse, self.sample_page.cursor);
-        self.put_setting(shown, SampleSetting::Reverse, Some(1 - value.clamp(0, 1)));
+    pub(crate) fn reverse_here(&self, shown: &Shown, services: &mut Services) {
+        let (value, _) = shown.setting_value(SampleSetting::Reverse, self.cursor);
+        let reversed = Some(1 - value.clamp(0, 1));
+        self.put_setting(shown, SampleSetting::Reverse, reversed, services);
     }
 
     /// `K` on the waveform: the settings, each with its value, to choose one to change on the
-    /// rows.
-    pub(crate) fn open_settings_picker(&mut self, shown: &Shown) {
-        let cursor = self.sample_page.cursor;
+    /// rows, as a picker for the program to open.
+    pub(crate) fn settings_picker(&self, shown: &Shown) -> Picker {
+        let cursor = self.cursor;
         let items = shown
             .settings()
             .into_iter()
@@ -437,15 +451,21 @@ impl App {
             })
             .collect();
         let at = self
-            .sample_page
             .setting
             .and_then(|setting| shown.settings().iter().position(|has| *has == setting));
-        self.show_picker(Picker::new("Sample settings", items).opened_on(at.or(Some(0))));
+        Picker::new("Sample settings", items).opened_on(at.or(Some(0)))
     }
 
-    /// `K` on the settings rows: the setting's values, and the sample's own first for a slice's.
-    pub(crate) fn open_setting_values_picker(&mut self, shown: &Shown, setting: SampleSetting) {
-        let cursor = self.sample_page.cursor;
+    /// `K` on the settings rows: the setting's values, and the sample's own first for a slice's,
+    /// as a picker for the program to open. Each length says how fast it plays at a tempo, in
+    /// thousandths of a beat a minute.
+    pub(crate) fn values_picker(
+        &self,
+        shown: &Shown,
+        setting: SampleSetting,
+        millibpm: u32,
+    ) -> Picker {
+        let cursor = self.cursor;
         let rate = shown.rate();
         let (current, own) = shown.setting_value(setting, cursor);
         let slice = shown
@@ -471,7 +491,6 @@ impl App {
         }
         let first = items.len();
         let choices = setting.choices(rate);
-        let millibpm = self.song().millibpm;
         items.extend(choices.iter().map(|value| {
             // Each length says how fast it would play at the song's tempo, so the one nearest its
             // own speed can be seen.
@@ -499,32 +518,23 @@ impl App {
         } else {
             Some(0)
         };
-        self.show_picker(Picker::new("Sample setting", items).opened_on(at));
-    }
-
-    /// A setting chosen from `K` on the waveform: the focus goes to it on the rows.
-    /// The status line says `SETTINGS` while it's there, and how to change it under that.
-    pub(crate) fn pick_sample_setting(&mut self, setting: SampleSetting) {
-        self.sample_page.setting = Some(setting);
-        self.services.status.clear();
-    }
-
-    /// A value chosen from `K` on the rows.
-    pub(crate) fn pick_sample_value(&mut self, setting: SampleSetting, value: Option<i32>) {
-        if let Ok(shown) = self.sample_page_here() {
-            self.put_setting(&shown, setting, value);
-        }
+        Picker::new("Sample setting", items).opened_on(at)
     }
 
     /// `h` and `l` on the rows: the setting before or after, stopping at either end.
-    pub(crate) fn move_setting(&mut self, shown: &Shown, later: bool, times: usize) {
+    pub(crate) fn move_setting(
+        &mut self,
+        shown: &Shown,
+        later: bool,
+        times: usize,
+        services: &mut Services,
+    ) {
         let settings = shown.settings();
         let Some(here) = self
-            .sample_page
             .setting
             .and_then(|setting| settings.iter().position(|has| *has == setting))
         else {
-            self.sample_page.setting = settings.first().copied();
+            self.setting = settings.first().copied();
             return;
         };
         let to = if later {
@@ -535,11 +545,11 @@ impl App {
         // At either end it says so, so `h` and `l` there don't seem to do nothing.
         if to == here {
             let end = if later { "last" } else { "first" };
-            self.services.status = format!(
+            services.status = format!(
                 "{} is the {end} setting. Esc goes back to the waveform, where h and l move",
                 settings[here].name()
             );
         }
-        self.sample_page.setting = Some(settings[to]);
+        self.setting = Some(settings[to]);
     }
 }
