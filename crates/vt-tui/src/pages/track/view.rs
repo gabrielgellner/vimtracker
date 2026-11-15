@@ -15,17 +15,15 @@ use std::borrow::Cow;
 use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Reset};
 use vt_model::action::{Action, TrackControl};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES, octaves_text, retrig_meaning};
-use vt_model::constants::{BAR_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::{Hold, MAX_HOLD_MS, MAX_RATCHET};
+use vt_model::constants::{BAR_STEPS, MAX_GROUPS, MAX_TRACK_RESET};
 use vt_model::generator::Generator;
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lane::{LANE_RATES, LaneMove, RATE_AS_WRITTEN, length_rows};
-use vt_model::lfo::Shape;
 use vt_model::listed::Listed;
 use vt_model::modulation::{
-    MOD_SLOTS, ModField, ModKind, ModSlot, Polarity, default_mod, depth_text, note_shape_slot,
+    MOD_SLOTS, ModField, ModKind, ModUnits, default_mod, depth_text, note_shape_slot,
 };
 use vt_model::settings::{
     Kind, LONGEST_GLIDE_MS, SettingId, Units, gate_percent, gate_value, glide_ms, rows_text,
@@ -34,7 +32,6 @@ use vt_model::shape::params::{Typing, Units as GenUnits};
 use vt_model::shape::{Context, GenParam, Where};
 use vt_model::song::{FilterType, Machine, Role, Song, SynthVoice, Track, reset_name, trim_text};
 use vt_model::speed::Speed;
-use vt_model::steps::{Loop, MAX_MUTATE, STEPS, StepsMode};
 use vt_model::tracking::Source;
 
 use crate::overlays::mapping::macro_name;
@@ -631,376 +628,202 @@ fn untuned(song: &Song, track: &Track, control: Control) -> bool {
         && tuning(song, track).is_none_or(|tuning| tuning.at_rest(control))
 }
 
-/// One of a mod slot's settings, under its type.
+/// One of a mod slot's settings, under its type, as its [`ModUnits`] read and step, with the
+/// page's own: each slot's titles, where it goes, and the note-shaping slot's `--`.
 fn mod_view(of: ParamView, track: &Track, slot: usize, field: ModField) -> ParamView {
     let modulator = &track.mods[slot];
-    let (adsr, ahd, drum, lpg, lfo) = (
-        &modulator.adsr,
-        &modulator.ahd,
-        &modulator.drum,
-        &modulator.lpg,
-        &modulator.lfo,
-    );
-    let steps = &modulator.steps;
-    let ahd_kind = modulator.kind == ModKind::Ahd;
-    let lpg_kind = modulator.kind == ModKind::Lpg;
-    let ms = |value: u16| format!("{value} ms");
-    // The slot as it starts under its type, with Track's map of the source it follows.
-    let mut fresh = ModSlot {
-        kind: modulator.kind,
-        ..default_mod(slot)
-    };
-    if matches!(field, ModField::Low | ModField::High) {
-        fresh.track.source = modulator.track.source;
-    }
-    let value = modulator.field(field);
+    let (low, high) = modulator.bounds(field).unwrap_or((0, 0));
+    let choices = modulator.choices(field).into_iter();
     let of = ParamView {
-        value: value.unwrap_or(0),
-        bounds: modulator.bounds(field).unwrap_or((0, 0)),
-        default: fresh.field(field).unwrap_or(0),
+        value: modulator.field(field).unwrap_or(0),
+        bounds: (low, high),
+        default: modulator.default_field(slot, field).unwrap_or(0),
         nudge: Steps::even(1),
         jump: Steps::even(HEX_JUMP),
+        choices: choices
+            .map(|(name, meaning)| Choice::named(name).meaning(meaning))
+            .collect(),
+        cell: modulator.text(field).unwrap_or_else(|| "--".to_owned()),
         typing: Typing::Whole { signed: false },
         ..of
     };
-    let list = |of: ParamView| ParamView {
-        jump: Steps::even(HEX_JUMP),
-        wraps: true,
-        typing: Typing::Listed,
-        ..of
-    };
+    let name = field.name();
     // A signed amount in hex, as a depth is.
-    let signed = |of: ParamView, why: &'static str| {
+    let signed = |of: ParamView, what: &str| {
+        let (low, high) = (depth_text(low as i16), depth_text(high as i16));
         ParamView {
             typing: Typing::Whole { signed: true },
             ..of
         }
-        .reads(Reads::HexWithin { signed: true }, why)
+        .reads(
+            Reads::HexWithin { signed: true },
+            format!("{what} is hex from {low} to {high}"),
+        )
     };
-    let times = format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}");
-    // An envelope's times step finer while they're short.
-    let time = |of: ParamView| of.paced(Pace::Time).reads(NUMBER, times.clone());
-    let shape_slot = note_shape_slot(&track.mods) == Some(slot);
-    match field {
-        ModField::Type => ParamView {
-            nudge: Steps::NONE,
-            jump: Steps::NONE,
-            choices: ModKind::ALL.iter().map(|kind| Choice::of(*kind)).collect(),
-            cell: modulator.kind.name().to_owned(),
+    let view = match field.units() {
+        ModUnits::Listed | ModUnits::Switch => ParamView {
+            wraps: true,
             typing: Typing::Listed,
             ..of
         },
-        // An envelope's curve, how notes start an LFO or Steps, or what Track follows.
-        ModField::Mode => list(ParamView {
-            choices: modulator
-                .kind
-                .modes()
-                .into_iter()
-                .map(|(name, meaning)| Choice::named(name).meaning(meaning))
-                .collect(),
-            cell: modulator.mode_name().unwrap_or("--").to_owned(),
-            title: match modulator.kind {
-                ModKind::Lfo | ModKind::Steps => MODE_TITLES[slot],
-                ModKind::Track => SOURCE_TITLES[slot],
-                _ => CURVE_TITLES[slot],
-            },
-            ..of
-        }),
-        // The note-shaping slot's level is the note's, one way only.
-        ModField::Polarity => list(ParamView {
-            choices: Polarity::ALL.iter().map(|each| Choice::of(*each)).collect(),
-            cell: match shape_slot {
-                true => "--".to_owned(),
-                false => modulator.polarity().name().to_owned(),
-            },
-            title: POLARITY_TITLES[slot],
-            ..of
-        }),
-        ModField::Destination => {
-            // `Pitch` comes twice, as it is and moving the note along the song's scale.
-            let places = destinations(track, slot);
-            let here = (modulator.destination, modulator.goes_in_scale());
-            let at = places.iter().position(|place| *place == here).unwrap_or(0);
-            let choices = places.iter().map(|place| match place {
-                (_, true) => Choice {
-                    group: Cow::Owned(SettingId::PITCH.group()),
-                    ..Choice::named(IN_SCALE_PITCH).meaning("Moves the note along the song's scale")
-                },
-                (Some(destination), false) => Choice {
-                    group: Cow::Owned(destination.group()),
-                    ..Choice::named(destination.name_on(track)).meaning(destination.meaning())
-                },
-                (None, false) => Choice::named("---").meaning("Off"),
-            });
-            let default = places
-                .iter()
-                .position(|(destination, _)| *destination == default_mod(slot).destination)
-                .unwrap_or(0);
-            ParamView {
-                cell: match modulator.destination {
-                    _ if modulator.goes_in_scale() => IN_SCALE_PITCH.to_owned(),
-                    Some(destination) => destination.name_on(track),
-                    None => "---".to_owned(),
-                },
-                ..of.listed(choices, at, default, true)
-                    .titled(DESTINATION_TITLES[slot])
-            }
-        }
-        // The slot that shapes each note does so with its level, rather than moving a value.
-        ModField::Depth => signed(
-            ParamView {
-                cell: match shape_slot {
-                    true => "--".to_owned(),
-                    false => depth_text(modulator.depth),
-                },
-                ..of
-            },
-            "Depth is hex from -FF to +FF",
+        // An envelope's times step finer while they're short.
+        ModUnits::Time => of.paced(Pace::Time).reads(
+            NUMBER,
+            format!("Times are milliseconds from {low} to {high}"),
         ),
-        ModField::Attack if ahd_kind => time(ParamView {
-            cell: ms(ahd.attack_ms),
+        // `Note` is below no time, so `-` from 0 ms holds for the note.
+        ModUnits::Hold => of.paced(Pace::Hold).reads(
+            Reads::Hold,
+            format!("{name} is milliseconds from 0 to {high}, or note"),
+        ),
+        ModUnits::Percent => ParamView {
+            jump: Steps::even(PERCENT_JUMP),
             ..of
-        }),
-        ModField::Attack if lpg_kind => time(ParamView {
-            cell: ms(lpg.attack_ms),
-            ..of
-        }),
-        ModField::Decay if lpg_kind => time(ParamView {
-            cell: ms(lpg.decay_ms),
-            ..of
-        }),
-        ModField::Colour => ParamView {
-            cell: format!("{:02X}", lpg.colour),
+        }
+        .reads(PERCENT, format!("{name} is a percent from {low} to {high}")),
+        ModUnits::Count { what, from_one } => {
+            let first = i32::from(from_one);
+            ParamView {
+                jump: Steps::even(1),
+                ..of
+            }
+            .reads(
+                Reads::Number {
+                    before: None,
+                    after: "",
+                    off: false,
+                    from_one,
+                },
+                format!("{name} is {what}, from {} to {}", low + first, high + first),
+            )
+        }
+        ModUnits::Hex => ParamView {
             typing: Typing::Hex,
             ..of
         }
         .reads(
             Reads::HexWithin { signed: false },
-            "Colour is hex from 00 to FF",
+            format!("{name} is hex from {low:02X} to {high:02X}"),
         ),
-        ModField::Attack => time(ParamView {
-            cell: ms(adsr.attack_ms),
-            ..of
-        }),
-        ModField::Decay if ahd_kind => time(ParamView {
-            cell: ms(ahd.decay_ms),
-            ..of
-        }),
-        ModField::Decay if modulator.kind == ModKind::Drum => time(ParamView {
-            cell: ms(drum.decay_ms),
-            ..of
-        }),
-        ModField::Peak => time(ParamView {
-            cell: ms(drum.peak_ms),
-            ..of
-        }),
-        ModField::Body => ParamView {
-            cell: format!("{}%", drum.body),
-            jump: Steps::even(PERCENT_JUMP),
-            ..of
-        }
-        .reads(PERCENT, "Body is a percent from 0 to 100"),
-        ModField::Ratchet => ParamView {
-            cell: drum.ratchet.to_string(),
-            jump: Steps::even(1),
-            ..of
-        }
-        .reads(
-            NUMBER,
-            format!("Ratchet is how many strikes, from 1 to {MAX_RATCHET}"),
-        ),
-        ModField::Decay => time(ParamView {
-            cell: ms(adsr.decay_ms),
-            ..of
-        }),
-        // `Note` is below no time, so `-` from 0 ms holds for the note.
-        ModField::Hold => ParamView {
-            cell: match ahd.hold {
-                Hold::Note => "Note".to_owned(),
-                Hold::Ms(hold) => ms(hold),
-            },
-            ..of
-        }
-        .paced(Pace::Hold)
-        .reads(
-            Reads::Hold,
-            format!("Hold is milliseconds from 0 to {MAX_HOLD_MS}, or note"),
-        ),
-        ModField::Sustain => ParamView {
-            cell: format!("{}%", adsr.sustain),
-            jump: Steps::even(PERCENT_JUMP),
-            ..of
-        }
-        .reads(PERCENT, "Sustain is a percent from 0 to 100"),
-        ModField::Release => time(ParamView {
-            cell: ms(adsr.release_ms),
-            ..of
-        }),
-        ModField::Reset => list(ParamView {
-            cell: on_off(match modulator.kind {
-                ModKind::Ahd => ahd.reset,
-                ModKind::Lpg => lpg.reset,
-                _ => adsr.reset,
-            }),
-            typing: Typing::Toggled,
-            ..of
-        }),
-        // The attractors say what they are, and Rössler's name is found without its umlaut.
-        ModField::Shape => list(ParamView {
-            choices: Shape::ALL
-                .iter()
-                .map(|shape| match shape {
-                    Shape::Lorenz => {
-                        Choice::of(*shape).meaning("chaos round two wings, never quite repeating")
-                    }
-                    Shape::Rossler => Choice::of(*shape).meaning("Rossler's chaos round one loop"),
-                    _ => Choice::of(*shape),
-                })
-                .collect(),
-            cell: lfo.shape.name().to_owned(),
-            title: "LFO shape",
-            ..of
-        }),
-        // A rate steps through its own kinds, a division or hertz. One a note, Steps have no
-        // rate.
-        ModField::Rate => ParamView {
-            nudge: Steps::NONE,
-            jump: Steps::NONE,
-            cell: match (modulator.kind, steps.mode) {
-                (ModKind::Steps, StepsMode::Note) => "--".to_owned(),
-                (ModKind::Steps, _) => steps.rate.to_string(),
-                _ => lfo.rate.to_string(),
-            },
-            typing: Typing::Rate,
-            ..of
-        },
-        ModField::Length => ParamView {
-            cell: steps.length.to_string(),
-            jump: Steps::even(1),
-            ..of
-        }
-        .reads(
-            NUMBER,
-            format!("Length is how many steps, from 1 to {STEPS}"),
-        ),
-        // Typed from 1, as the page shows it.
-        ModField::Start => ParamView {
-            cell: (steps.start + 1).to_string(),
-            jump: Steps::even(1),
-            ..of
-        }
-        .reads(
-            Reads::Number {
-                before: None,
-                after: "",
-                off: false,
-                from_one: true,
-            },
-            format!("Start is a step, from 1 to {STEPS}"),
-        ),
-        ModField::Loop => list(ParamView {
-            choices: Loop::ALL
-                .iter()
-                .map(|each| Choice::named(each.to_string()).meaning(each.meaning()))
-                .collect(),
-            cell: steps.looping.to_string(),
-            title: "Steps loop",
-            ..of
-        }),
-        ModField::Mutate => ParamView {
-            cell: format!("{}%", steps.mutate),
-            jump: Steps::even(PERCENT_JUMP),
-            ..of
-        }
-        .reads(
-            PERCENT,
-            format!("Mutate is a percent from 0 to {MAX_MUTATE}"),
-        ),
-        ModField::Smooth => signed(
+        ModUnits::Signed => signed(of, name),
+        ModUnits::Step => signed(
             ParamView {
-                cell: depth_text(steps.smooth),
-                ..of
-            },
-            "Smooth is hex from -FF to +FF",
-        ),
-        // A large step is an octave, as a step's value on `Pitch` is semitones.
-        ModField::Step(at) => signed(
-            ParamView {
-                cell: depth_text(steps.values[usize::from(at)]),
                 jump: Steps::even(OCTAVE),
                 ..of
             },
-            "A step is hex from -FF to +FF",
+            "A step",
         ),
-        // An attractor's is the axis heard, named where it's one alone, and its large step goes
-        // from one axis to the next.
-        ModField::Phase => {
-            let attractor = lfo.shape.is_attractor();
-            let cell = match lfo.phase {
-                0 if attractor => "x".to_owned(),
-                120 if attractor => "y".to_owned(),
-                240 if attractor => "z".to_owned(),
-                phase => format!("{phase}°"),
-            };
-            ParamView {
-                nudge: Steps::even(PHASE_NUDGE),
-                jump: Steps::even(if attractor { AXIS_JUMP } else { PHASE_JUMP }),
-                wraps: true,
-                cell,
-                ..of
-            }
-            .reads(NUMBER, "Phase is degrees from 0 to 359")
+        // An attractor's large step goes from one axis to the next.
+        ModUnits::Degrees => ParamView {
+            nudge: Steps::even(PHASE_NUDGE),
+            jump: Steps::even(match modulator.lfo.shape.is_attractor() {
+                true => AXIS_JUMP,
+                false => PHASE_JUMP,
+            }),
+            wraps: true,
+            ..of
         }
-        ModField::Deform => signed(
-            ParamView {
-                cell: depth_text(lfo.deform),
-                ..of
-            },
-            "Deform is hex from -FF to +FF",
-        ),
-        // A fade steps through its own kinds.
-        ModField::Fade => ParamView {
+        .reads(NUMBER, format!("{name} is degrees from {low} to {high}")),
+        // These step through their own kinds.
+        ModUnits::Rate => ParamView {
             nudge: Steps::NONE,
             jump: Steps::NONE,
-            cell: lfo.fade.to_string(),
+            typing: Typing::Rate,
+            ..of
+        },
+        ModUnits::Fade => ParamView {
+            nudge: Steps::NONE,
+            jump: Steps::NONE,
             ..of
         },
         // A large step on a map of notes is an octave.
-        ModField::Low | ModField::High => {
-            let tracking = &modulator.track;
-            let bounds = tracking.bounds();
-            let end = if field == ModField::Low {
-                bounds.low
-            } else {
-                bounds.high
-            };
-            let source = tracking.source;
-            let notes = source == Source::Note;
-            let what = Control::Mod(slot, field).label();
-            let (lowest, highest) = source.span();
-            let (lowest, highest) = (source.text(lowest), source.text(highest));
-            let (reads, why) = match notes {
-                true => (
+        ModUnits::Mapped => {
+            let source = modulator.track.source;
+            let (lowest, highest) = (source.text(low as u8), source.text(high as u8));
+            match source == Source::Note {
+                true => ParamView {
+                    jump: Steps::even(OCTAVE),
+                    typing: Typing::Named { list: false },
+                    ..of
+                }
+                .reads(
                     Reads::Note,
-                    format!("{what} is a note from {lowest} to {highest}"),
+                    format!("{name} is a note from {lowest} to {highest}"),
                 ),
-                false => (
+                false => ParamView {
+                    typing: Typing::Hex,
+                    ..of
+                }
+                .reads(
                     Reads::HexWithin { signed: false },
-                    format!("{what} is hex from {lowest} to {highest}"),
+                    format!("{name} is hex from {lowest} to {highest}"),
                 ),
-            };
-            ParamView {
-                jump: Steps::even(if notes { OCTAVE } else { HEX_JUMP }),
-                cell: tracking.source.text(end),
-                typing: if notes {
-                    Typing::Named { list: false }
-                } else {
-                    Typing::Hex
-                },
-                ..of
             }
-            .reads(reads, why)
         }
+    };
+    // The slot that shapes each note does so with its level, one way only, rather than moving
+    // a value.
+    let view = match field {
+        ModField::Polarity | ModField::Depth if note_shape_slot(&track.mods) == Some(slot) => {
+            ParamView {
+                cell: "--".to_owned(),
+                ..view
+            }
+        }
+        _ => view,
+    };
+    match field {
+        // Only `K` picks a type, as a type changes what the device is.
+        ModField::Type => ParamView {
+            nudge: Steps::NONE,
+            jump: Steps::NONE,
+            wraps: false,
+            ..view
+        },
+        // An envelope's curve, how notes start an LFO or Steps, or what Track follows.
+        ModField::Mode => view.titled(match modulator.kind {
+            ModKind::Lfo | ModKind::Steps => MODE_TITLES[slot],
+            ModKind::Track => SOURCE_TITLES[slot],
+            _ => CURVE_TITLES[slot],
+        }),
+        ModField::Polarity => view.titled(POLARITY_TITLES[slot]),
+        ModField::Shape => view.titled("LFO shape"),
+        ModField::Loop => view.titled("Steps loop"),
+        ModField::Destination => destination_view(view, track, slot),
+        _ => view,
+    }
+}
+
+/// Where a mod slot goes, by its place in [`destinations`].
+fn destination_view(of: ParamView, track: &Track, slot: usize) -> ParamView {
+    let modulator = &track.mods[slot];
+    // `Pitch` comes twice, as it is and moving the note along the song's scale.
+    let places = destinations(track, slot);
+    let here = (modulator.destination, modulator.goes_in_scale());
+    let at = places.iter().position(|place| *place == here).unwrap_or(0);
+    let choices = places.iter().map(|place| match place {
+        (_, true) => Choice {
+            group: Cow::Owned(SettingId::PITCH.group()),
+            ..Choice::named(IN_SCALE_PITCH).meaning("Moves the note along the song's scale")
+        },
+        (Some(destination), false) => Choice {
+            group: Cow::Owned(destination.group()),
+            ..Choice::named(destination.name_on(track)).meaning(destination.meaning())
+        },
+        (None, false) => Choice::named("---").meaning("Off"),
+    });
+    let default = places
+        .iter()
+        .position(|(destination, _)| *destination == default_mod(slot).destination)
+        .unwrap_or(0);
+    ParamView {
+        cell: match modulator.destination {
+            _ if modulator.goes_in_scale() => IN_SCALE_PITCH.to_owned(),
+            Some(destination) => destination.name_on(track),
+            None => "---".to_owned(),
+        },
+        ..of.listed(choices, at, default, true)
+            .titled(DESTINATION_TITLES[slot])
     }
 }
 
@@ -1522,6 +1345,8 @@ mod tests {
     use std::sync::Arc;
 
     use vt_model::action::edit;
+    use vt_model::envelope::Hold;
+    use vt_model::lfo::Shape;
     use vt_model::song::TrackKind;
 
     use super::*;
