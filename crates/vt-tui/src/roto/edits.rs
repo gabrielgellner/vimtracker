@@ -27,10 +27,10 @@ use vt_model::speed::Speed;
 use vt_model::steps::StepRate;
 use vt_roto::live::{share_of, step_at};
 
-use crate::shaping::with_live;
+use crate::shaping::{live_shown, with_live};
 use crate::track_page::tuning::{tuning, tuning_most};
-use crate::track_page::{AccumulatorField, ArpField, Control, ModField};
-use crate::views::track::{toggle_on, value};
+use crate::track_page::{AccumulatorField, ArpField, Control, ModField, view};
+use crate::views::track::toggle_on;
 
 use super::devices::{hold_steps, knob, rate_position, time_steps};
 
@@ -499,8 +499,19 @@ pub fn value_text(control: Control, track: &Track, song: &Song) -> String {
     if control == Control::Trim {
         return trim_text(track.trim);
     }
-    match control.value_on(track) {
-        Some((id, set)) if id.exists_on(track) => id.entry().kind.shown(set),
-        _ => value(control, track, song),
+    match (control, control.value_on(track)) {
+        (_, Some((id, set))) if id.exists_on(track) => id.entry().kind.shown(set),
+        // As it's set, rather than as a macro holding it puts it.
+        (
+            Control::Gen {
+                phrase,
+                generator,
+                param,
+            },
+            _,
+        ) => live_shown(song, track, phrase, generator, param),
+        _ => view(control, track, song, false)
+            .map(|view| view.cell)
+            .unwrap_or_default(),
     }
 }
