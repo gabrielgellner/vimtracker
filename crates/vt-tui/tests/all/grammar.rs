@@ -502,6 +502,57 @@ fn viewport_keys_move_within_the_screen() {
 }
 
 #[test]
+fn the_viewport_keys_take_a_count_and_never_carry_it_on() {
+    let start = notes("C-3", 64);
+    let (mut app, _rt) = app_with(&refs(&start));
+    app.follow_cursor(20);
+    keys(&mut app, "5^e");
+    assert_eq!(app.phrase_view.top, 5, "a count scrolls that many rows");
+    assert_eq!(app.services.cursor.step, 5, "the cursor kept on screen");
+    keys(&mut app, "2^y");
+    assert_eq!(app.phrase_view.top, 3);
+    keys(&mut app, "j");
+    assert_eq!(
+        app.services.cursor.step, 6,
+        "the count wasn't carried on to j"
+    );
+    keys(&mut app, "5H");
+    assert_eq!(app.services.cursor.step, 7, "the 5th row from the top");
+    keys(&mut app, "3L");
+    assert_eq!(app.services.cursor.step, 20, "the 3rd row from the bottom");
+    keys(&mut app, "99H");
+    assert_eq!(app.services.cursor.step, 22, "no further than the bottom");
+    keys(&mut app, "99L");
+    assert_eq!(app.services.cursor.step, 3, "no further than the top");
+    keys(&mut app, "4Mj");
+    assert_eq!(
+        app.services.cursor.step, 14,
+        "M has no count, and drops it rather than giving it to j"
+    );
+}
+
+#[test]
+fn a_count_sets_how_far_half_a_page_goes_from_then_on() {
+    let start = notes("C-3", 64);
+    let (mut app, _rt) = app_with(&refs(&start));
+    app.follow_cursor(20);
+    keys(&mut app, "4^d");
+    assert_eq!(app.services.cursor.step, 4);
+    keys(&mut app, "^d");
+    assert_eq!(
+        app.services.cursor.step, 8,
+        "as Vim's scroll option, it's kept"
+    );
+    keys(&mut app, "^u");
+    assert_eq!(app.services.cursor.step, 4);
+    keys(&mut app, "j");
+    assert_eq!(
+        app.services.cursor.step, 5,
+        "and the count isn't carried on"
+    );
+}
+
+#[test]
 fn value_entry_commits_two_digits_and_stays() {
     check(&[E, E], "li7f", &["--- 7F --- --- ---", E]);
     let (mut app, _rt) = app_with(&[E, E]);
@@ -2713,6 +2764,22 @@ fn a_selection_reaches_other_tracks_and_clears_them_as_one_undo() {
     assert_eq!(app.services.cursor.track, 0, "it lands on the first track");
     keys(&mut app, "u");
     assert_eq!(track_steps(&app, 1), [N, N, N]);
+}
+
+#[test]
+fn a_count_reaches_that_many_tracks_and_is_used_up() {
+    let (mut app, _rt) = tracks_with(&[&[N, N, N], &[N, N, N], &[N, N, N]]);
+    keys(&mut app, "V2Wjd");
+    assert_eq!(track_steps(&app, 0), [GONE, GONE, N]);
+    assert_eq!(track_steps(&app, 1), [GONE, GONE, N]);
+    assert_eq!(
+        track_steps(&app, 2),
+        [GONE, GONE, N],
+        "2W reached two tracks, and j went one row"
+    );
+    let (mut app, _rt) = tracks_with(&[&[N], &[N], &[N]]);
+    keys(&mut app, "WWV2Bd");
+    assert_eq!(track_steps(&app, 0), [GONE], "2B reached back two tracks");
 }
 
 #[test]
