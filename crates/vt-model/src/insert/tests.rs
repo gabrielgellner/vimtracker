@@ -1,5 +1,6 @@
 use super::*;
 use crate::grid::GRID_COLUMNS;
+use crate::lfo::{DIVISION_NAMES, SWEEP_NAMES};
 
 #[test]
 fn every_effect_starts_at_its_declared_defaults_and_fits() {
@@ -37,21 +38,34 @@ fn each_effect_kind_is_its_insert_and_its_row() {
     }
 }
 
-/// What a setting's kind says is its top is what a step can give it.
+/// What a setting's kind says is its top is what a step can give it, and every setting an effect
+/// keeps, shown in its mode or not, reads and writes.
 #[test]
 fn each_setting_tops_out_where_a_step_can_set_it() {
     for kind in EffectKind::ALL {
+        let effect = Insert::ALL[kind as usize + 1];
         for param in kind.params() {
+            let name = format!("{} {}", kind.name(), param.key);
             let top = param.kind.top();
-            assert_eq!(
-                top,
-                param.setting.highest(),
-                "{} {}",
-                kind.name(),
-                param.key
-            );
+            let past = effect.write(param.setting, 1000.0);
+            assert_eq!(past.read(param.setting), Some(top), "{name}");
+            let below = effect.write(param.setting, -5.0);
+            assert_eq!(below.read(param.setting), Some(0), "{name}");
         }
     }
+}
+
+/// Full modulation moves a list through all of it, and a value by `FF` hex steps, as a depth is in
+/// steps of what it moves. Gain's top is the level scale's, `F8`, but a depth still moves it by
+/// steps, as it does the faders, rather than by a share of its range.
+#[test]
+fn full_modulation_moves_a_list_through_it_and_a_value_by_ff() {
+    let delay = |key: &str| *DELAY_PARAMS.iter().find(|param| param.key == key).unwrap();
+    assert_eq!(delay("time").span(), (DIVISION_NAMES.len() - 1) as f32);
+    assert_eq!(delay("pingpong").span(), 1.0);
+    assert_eq!(delay("feedback").span(), 255.0);
+    assert_eq!(delay("gain").kind.top(), MAX_LEVEL);
+    assert_eq!(delay("gain").span(), 255.0);
 }
 
 /// Every effect in each of its types and modes, as it starts.
@@ -379,8 +393,8 @@ fn a_compressors_makeup_runs_from_unity_to_its_most_in_db() {
             .copied()
             .unwrap();
         assert_eq!((makeup.key, makeup.label), ("makeup", Some("MKUP")));
-        assert_eq!(Setting::Makeup.highest(), 0xFF);
-        assert_eq!(Setting::Makeup.span(), 255.0);
+        assert_eq!(makeup.kind.top(), 0xFF);
+        assert_eq!(makeup.span(), 255.0);
     }
     let turned_up = compressor(CompressorType::Console).write(Setting::Makeup, 255.0);
     assert_eq!(turned_up.read(Setting::Makeup), Some(0xFF));
@@ -403,7 +417,7 @@ fn a_delays_time_is_a_note_division_and_stops_at_the_ends() {
 fn every_setting_of_every_effect_reads_as_it_writes() {
     for effect in Insert::ALL {
         for (at, param) in effect.params().iter().enumerate() {
-            let highest = param.setting.highest();
+            let highest = param.kind.top();
             let written = effect.write(param.setting, f32::from(highest));
             assert_eq!(written.read(param.setting), Some(highest), "{}", param.name);
             // A type or mode shows its own settings, so the others are another list.
@@ -787,7 +801,10 @@ fn a_source_names_the_returns_by_their_old_numbers_and_the_groups_after() {
     assert_eq!(heard(67), Some(8));
     assert_eq!(SOURCE_NAMES[66 + MAX_GROUPS], format!("G{MAX_GROUPS}"));
     assert_eq!(heard(66 + MAX_GROUPS as u8), Some(7 + MAX_GROUPS));
-    assert_eq!(Setting::Source.highest(), 66 + MAX_GROUPS as u8);
+    let source = COMPRESSOR_PARAMS
+        .iter()
+        .find(|param| param.setting == Setting::Source);
+    assert_eq!(source.unwrap().kind.top(), 66 + MAX_GROUPS as u8);
 }
 
 #[test]
