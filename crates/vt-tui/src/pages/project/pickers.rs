@@ -47,7 +47,7 @@ impl Services {
             .to_vec();
         let at = ScaleKind::ALL
             .iter()
-            .position(|kind| *kind == self.scale.kind);
+            .position(|kind| *kind == self.live.scale.kind);
         Picker::new("Scales", items).opened_on(at)
     }
 }

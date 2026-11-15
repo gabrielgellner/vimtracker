@@ -201,7 +201,7 @@ impl App {
     /// Hear the note on a row outside the loop. Other tracks have nothing to play with it, since
     /// only the loop has a place in the section.
     pub(super) fn audition_outside_loop(&mut self) {
-        if self.services.transport == Transport::Playing {
+        if self.services.reported.transport == Transport::Playing {
             self.services.status = "Audition works while stopped or paused".to_owned();
             return;
         }

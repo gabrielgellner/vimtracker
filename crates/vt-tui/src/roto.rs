@@ -732,8 +732,12 @@ impl RotoDriver<'_> {
     /// Each track's faders where the steps have them, for those they drive: what the Roto's knobs
     /// show that the song doesn't.
     fn faders_shown(&self) -> Vec<[Option<u16>; FADER_COUNT]> {
-        let tracks = self.song().tracks.len().min(self.services.faders.len());
-        self.services.faders[..tracks]
+        let tracks = self
+            .song()
+            .tracks
+            .len()
+            .min(self.services.reported.faders.len());
+        self.services.reported.faders[..tracks]
             .iter()
             .map(|faders| {
                 std::array::from_fn(|fader| faders.follows_steps(fader).then_some(faders.at[fader]))
@@ -1131,7 +1135,11 @@ impl RotoDriver<'_> {
     fn mix_message(&mut self, message: &FromRoto) {
         let place = mix::place_of(self.song(), self.services.roto.track);
         self.services.roto.mix.select(place);
-        let lists = mix::strips(self.song(), &self.services.levels, &self.services.faders);
+        let lists = mix::strips(
+            self.song(),
+            &self.services.live.levels,
+            &self.services.reported.faders,
+        );
         let (refresh, chosen) = self
             .services
             .roto
@@ -1145,7 +1153,7 @@ impl RotoDriver<'_> {
             self.services.roto.track = track;
         }
         self.services.roto.sent_song = Some(Arc::clone(self.song()));
-        self.services.roto.sent_levels = self.services.levels.clone();
+        self.services.roto.sent_levels = self.services.live.levels.clone();
     }
 
     /// Sends MIX mode what changed since it was last sent the song and the mutes and solos: the
@@ -1158,13 +1166,17 @@ impl RotoDriver<'_> {
             .sent_song
             .as_ref()
             .is_some_and(|sent| Arc::ptr_eq(sent, self.song()))
-            && self.services.roto.sent_levels == self.services.levels;
+            && self.services.roto.sent_levels == self.services.live.levels;
         if same && !let_go && !turned.iter().any(|moved| *moved) {
             return;
         }
         let place = mix::place_of(self.song(), self.services.roto.track);
         self.services.roto.mix.select(place);
-        let lists = mix::strips(self.song(), &self.services.levels, &self.services.faders);
+        let lists = mix::strips(
+            self.song(),
+            &self.services.live.levels,
+            &self.services.reported.faders,
+        );
         let refresh = self.services.roto.mix.refresh(
             lists,
             mix::send_names(),
@@ -1182,7 +1194,7 @@ impl RotoDriver<'_> {
             }
         }
         self.services.roto.sent_song = Some(Arc::clone(self.song()));
-        self.services.roto.sent_levels = self.services.levels.clone();
+        self.services.roto.sent_levels = self.services.live.levels.clone();
     }
 
     /// A button pressed in MIX mode: its track muted or unmuted, or soloed or not, as the keys
@@ -1262,7 +1274,7 @@ impl RotoDriver<'_> {
     /// The transport's state for its buttons' lights.
     fn transport_status(&self) -> TransportStatus {
         TransportStatus {
-            playing: self.services.transport == Transport::Playing,
+            playing: self.services.reported.transport == Transport::Playing,
             recording: self.recording,
             ..TransportStatus::default()
         }
@@ -1422,10 +1434,10 @@ impl App {
     /// recording as the keys do. The others have nothing yet.
     fn roto_transport(&mut self, button: u8) {
         match button {
-            PLAY_BUTTON if self.services.transport != Transport::Playing => {
+            PLAY_BUTTON if self.services.reported.transport != Transport::Playing => {
                 self.services.handle.send(Command::PauseOrResume);
             }
-            STOP_BUTTON if self.services.transport == Transport::Playing => {
+            STOP_BUTTON if self.services.reported.transport == Transport::Playing => {
                 self.services.handle.send(Command::PauseOrResume);
             }
             STOP_BUTTON => {

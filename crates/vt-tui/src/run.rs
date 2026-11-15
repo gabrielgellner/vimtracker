@@ -444,8 +444,8 @@ fn main_loop(
             app.readouts.slowdown.power = audio::PowerState::now();
         }
         app.autosave_if_due(Instant::now());
-        woken |=
-            app.services.transport == Transport::Playing || !Arc::ptr_eq(app.song(), &shown_song);
+        woken |= app.services.reported.transport == Transport::Playing
+            || !Arc::ptr_eq(app.song(), &shown_song);
         if redraws.due(woken) {
             // The sample page's waveform is drawn at one pixel for each of the screen's.
             if let Ok(size) = terminal::window_size() {

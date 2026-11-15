@@ -203,7 +203,7 @@ impl SamplePage {
     fn tapped_frame(&self, shown: &Shown, services: &Services) -> Option<u64> {
         let (_, rates) = shown.frames.as_ref()?;
         let heard = self.heard == Some((shown.number, shown.analysis.hash));
-        let heads: Vec<_> = services.playheads.iter().flatten().collect();
+        let heads: Vec<_> = services.reported.playheads.iter().flatten().collect();
         let own = heads.iter().find(|head| head.entry.is_none() && heard);
         let note = heads.iter().find(|head| head.entry == Some(shown.number));
         own.or(note).map(|head| rates.file_frame(head.frame))

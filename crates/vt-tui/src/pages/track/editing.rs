@@ -94,6 +94,7 @@ pub(super) fn adjust_control(
         Control::Gen { .. } | Control::NewGenerator(_) => {}
         Control::Mute | Control::Solo => {
             let live = services
+                .live
                 .levels
                 .get(services.cursor.track)
                 .copied()
@@ -247,6 +248,7 @@ pub(super) fn reset_control(services: &mut Services, control: Control) {
         Control::Gen { .. } | Control::NewGenerator(_) => {}
         Control::Mute | Control::Solo => {
             let live = services
+                .live
                 .levels
                 .get(services.cursor.track)
                 .copied()

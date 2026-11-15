@@ -191,7 +191,7 @@ fn the_view_scrolls_by_the_lines_rows_take() {
 fn the_playheads_follow_the_timeline() {
     let (mut app, _realtime) = timeline_song(&UNEVEN, 16, vt_model::speed::Speed::Sixteenth);
     on_the_row_being_edited(&mut app);
-    app.services.transport = Transport::Playing;
+    app.services.reported.transport = Transport::Playing;
     // Step 5 is row 02's third pulse, on line 5, and the drums' row 05.
     app.set_playhead(5);
     let buffer = screen(&app);

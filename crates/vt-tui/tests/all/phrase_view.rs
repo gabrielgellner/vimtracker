@@ -108,7 +108,7 @@ fn other_tracks_light_the_step_they_are_playing() {
         vt_tui::widgets::theme::OVERLAY0,
         "stopped"
     );
-    app.services.transport = Transport::Playing;
+    app.services.reported.transport = Transport::Playing;
     assert_eq!(color(&app, marker, 2), vt_tui::widgets::theme::GREEN);
     assert_eq!(
         color(&app, note, 2),
@@ -116,7 +116,7 @@ fn other_tracks_light_the_step_they_are_playing() {
         "an empty row playing is lit, set back"
     );
     assert_eq!(color(&app, note, 3), vt_tui::widgets::theme::OVERLAY0);
-    app.services.transport = Transport::Paused;
+    app.services.reported.transport = Transport::Paused;
     assert_eq!(color(&app, marker, 2), vt_tui::widgets::theme::GREEN);
 }
 
@@ -209,7 +209,7 @@ fn the_row_playing_lights_what_is_written_and_sets_back_what_is_empty() {
     let (handle, _realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
     on_the_row_being_edited(&mut app);
-    app.services.transport = Transport::Playing;
+    app.services.reported.transport = Transport::Playing;
     let (green, set_back) = (
         vt_tui::widgets::theme::GREEN,
         vt_tui::widgets::theme::dimmed(vt_tui::widgets::theme::GREEN),
@@ -299,7 +299,7 @@ fn the_playhead_marks_where_the_loop_is_playing() {
     command(&mut app, "len 4");
     press(&mut app, "2]L");
     on_the_row_being_edited(&mut app);
-    app.services.transport = Transport::Playing;
+    app.services.reported.transport = Transport::Playing;
     app.set_playhead(1);
     app.phrase_view.top = 0;
     let buffer = screen(&app);
@@ -535,7 +535,7 @@ fn other_tracks_show_their_own_length_and_playhead() {
 
     on_the_row_being_edited(&mut app);
     // Each track marks where it is in its own loop.
-    app.services.transport = Transport::Playing;
+    app.services.reported.transport = Transport::Playing;
     app.set_playhead(5);
     let buffer = screen(&app);
     assert_eq!(beside(&buffer, 0, 1), note(">C#3", green));
@@ -543,7 +543,7 @@ fn other_tracks_show_their_own_length_and_playhead() {
     assert_eq!(beside(&buffer, 1, 5), note(">F-3", green));
     assert_eq!(beside(&buffer, 1, 1), note(" C#3", dim));
 
-    app.services.transport = Transport::Paused;
+    app.services.reported.transport = Transport::Paused;
     assert_eq!(beside(&screen(&app), 1, 5), note(">F-3", green));
 }
 
@@ -584,7 +584,7 @@ fn a_column_shows_the_phrase_its_chain_is_on() {
     app.services.cursor.step = 0;
 
     on_the_row_being_edited(&mut app);
-    app.services.transport = Transport::Playing;
+    app.services.reported.transport = Transport::Playing;
     app.set_playhead(2);
     assert_eq!(beside(&screen(&app), 0, 0).0, ">E-3");
 }
@@ -1022,7 +1022,7 @@ fn a_tracks_heading_has_its_machine_and_mute_or_solo_glyphs() {
     // Over its column in the overview too, in place of the number's last cell.
     assert!(heading(&app, 1).contains(&format!(" 01{MUTE}")));
     tap(&mut app, " m");
-    app.services.levels[0].solo = true;
+    app.services.live.levels[0].solo = true;
     assert!(heading(&app, 0).contains(&format!("Track 01 {SOLO}  Chain")));
     assert_eq!(vt_tui::widgets::glyphs::machine(Machine::Sampler), SAMPLER);
     assert_eq!(
@@ -1046,7 +1046,7 @@ fn a_track_at_an_eighth_has_its_own_playhead() {
     let (handle, _realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
     on_the_row_being_edited(&mut app);
-    app.services.transport = Transport::Playing;
+    app.services.reported.transport = Transport::Playing;
     app.set_playhead(6);
     assert_eq!(app.chain_playhead(0, 0), Some(6));
     assert_eq!(app.chain_playhead(1, 0), Some(3));

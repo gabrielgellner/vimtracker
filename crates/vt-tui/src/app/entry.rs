@@ -135,14 +135,14 @@ impl App {
     pub(super) fn toggle_scale(&mut self) {
         self.modes.count = None;
         self.services.set_scale(Scale {
-            on: !self.services.scale.on,
-            ..self.services.scale
+            on: !self.services.live.scale.on,
+            ..self.services.live.scale
         });
     }
 
     /// Move this phrase's notes to the nearest in the scale.
     pub(super) fn fit_to_scale(&mut self) {
-        if !self.services.scale.on {
+        if !self.services.live.scale.on {
             self.services.status = "The scale is off".to_owned();
             return;
         }
@@ -150,7 +150,7 @@ impl App {
             self.services.apply(&Action::FitToScale {
                 track: self.services.cursor.track,
                 phrase,
-                scale: self.services.scale,
+                scale: self.services.live.scale,
             });
         }
     }
@@ -191,16 +191,18 @@ impl App {
                 self.clear_note();
             }
             KeyCode::Char('z') => {
-                self.services.octave = (self.services.octave - 1).max(LOWEST_OCTAVE)
+                self.services.live.octave = (self.services.live.octave - 1).max(LOWEST_OCTAVE)
             }
             KeyCode::Char('x') => {
-                self.services.octave = (self.services.octave + 1).min(HIGHEST_OCTAVE)
+                self.services.live.octave = (self.services.live.octave + 1).min(HIGHEST_OCTAVE)
             }
             KeyCode::Char('c') => {
-                self.services.note_velocity = next_note_velocity(self.services.note_velocity, false)
+                self.services.live.note_velocity =
+                    next_note_velocity(self.services.live.note_velocity, false)
             }
             KeyCode::Char('v') => {
-                self.services.note_velocity = next_note_velocity(self.services.note_velocity, true)
+                self.services.live.note_velocity =
+                    next_note_velocity(self.services.live.note_velocity, true)
             }
             // A note, and an OFF, is written once however long its key is held.
             KeyCode::Char('1') => {
@@ -217,7 +219,7 @@ impl App {
                     && self.modes.mode == Mode::Insert
                 {
                     self.record_note(key, midi);
-                    let velocity = self.flagged_velocity(self.services.note_velocity);
+                    let velocity = self.flagged_velocity(self.services.live.note_velocity);
                     self.hold_note(key, midi, velocity);
                 } else if let Some(midi) = played {
                     let on_step =
@@ -226,7 +228,9 @@ impl App {
                         });
                     let velocity = on_step
                         .as_ref()
-                        .map_or(self.services.note_velocity, |step| self.played_with(step));
+                        .map_or(self.services.live.note_velocity, |step| {
+                            self.played_with(step)
+                        });
                     let velocity = self.flagged_velocity(velocity);
                     let (track, step) = (self.services.cursor.track, self.services.cursor.step);
                     let phrase = self.write_played_note(midi);
@@ -291,9 +295,9 @@ impl App {
     /// The velocity a played note takes. Replacing keeps what the step has.
     fn played_with(&self, step: &Step) -> u8 {
         if self.modes.mode == Mode::Replace {
-            step.velocity.unwrap_or(self.services.note_velocity)
+            step.velocity.unwrap_or(self.services.live.note_velocity)
         } else {
-            self.services.note_velocity
+            self.services.live.note_velocity
         }
     }
 
@@ -674,7 +678,7 @@ impl App {
             self.finish_replace();
             return;
         }
-        if self.services.auto_jump {
+        if self.services.live.auto_jump {
             self.services.move_step(self.song().skip as isize);
         }
     }
@@ -682,7 +686,7 @@ impl App {
     /// Before `Backspace` clears: with auto-jump, back one grid cell to the last entry, and
     /// without, it clears where it is.
     fn back_for_clearing(&mut self) {
-        if self.services.auto_jump {
+        if self.services.live.auto_jump {
             self.services.move_step(-(self.song().skip as isize));
         }
     }
@@ -704,7 +708,7 @@ impl App {
 impl Services {
     /// Set the scale, which isn't an edit to undo, and say what it now does.
     pub(crate) fn set_scale(&mut self, scale: Scale) {
-        self.scale = scale;
+        self.live.scale = scale;
         self.handle.send(Command::SetScale { scale });
         self.dirty = true;
         self.status = if scale.on {
@@ -717,9 +721,9 @@ impl Services {
     /// `;` in Insert: whether entering moves on by the grid. Like the scale, it isn't an edit to
     /// undo.
     pub(crate) fn toggle_auto_jump(&mut self) {
-        self.auto_jump = !self.auto_jump;
+        self.live.auto_jump = !self.live.auto_jump;
         self.dirty = true;
-        self.status = if self.auto_jump {
+        self.status = if self.live.auto_jump {
             "Auto-jump on: each entry moves on by the grid".to_owned()
         } else {
             "Auto-jump off: entering stays put".to_owned()
