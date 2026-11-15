@@ -8,6 +8,7 @@ use vt_model::arpeggio::{ArpMode, Cycle};
 use vt_model::condition::{Condition, Situation};
 use vt_model::constants::{FX_SLOTS, NUDGE_TICKS, TICKS_PER_STEP};
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
+use vt_model::phrase::Phrase;
 use vt_model::settings::SettingId;
 use vt_model::shape::RowView;
 use vt_model::song::{ChainPosition, Song, Track};
@@ -22,6 +23,7 @@ use crate::track_state::{
     Accumulating, Arpeggiating, Decided, DelayedNote, Epoch, LaneRead, Part, PendingStep,
     Retrigger, RowKey, Worked,
 };
+use crate::voice::NoteOn;
 
 /// Where each FX column's lane reads at a step, for those with one.
 pub(super) type LaneReads = [Option<LaneRead>; FX_SLOTS];
@@ -292,7 +294,6 @@ impl Engine {
     /// Start or stop a track's note for a step, and run its FX left to right: all of it, or the
     /// part a nudge has it land apart, its lanes' values or its row's note part.
     pub(super) fn fire_track(&mut self, index: usize, pending: PendingStep) {
-        let running = pending.running;
         let row = pending.part.plays_row();
         if row {
             self.tracks[index].retrigger = None;
@@ -316,7 +317,7 @@ impl Engine {
         let Some(written) = owner.step_at(position) else {
             return;
         };
-        let phrase = owner.phrases.get(&position.phrase);
+        let phrase = owner.phrases.get(&position.phrase).map(Arc::as_ref);
         let count = pending.count;
         let read = Read {
             chain,
@@ -334,94 +335,15 @@ impl Engine {
         // A row's later pulses repeat its note only on a `Multi`, and run only the note's own timing.
         let first = position.pulse == 0;
         let gate = step.gate_kind();
-        let row_fx = |slot: &FxSlot| {
-            first
-                || gate == GateKind::Multi
-                    && matches!(
-                        slot.command,
-                        Some(
-                            FxCommand::Del
-                                | FxCommand::Kil
-                                | FxCommand::Off
-                                | FxCommand::Ret
-                                | FxCommand::Acu
-                                | FxCommand::Arp
-                                | FxCommand::Rnd
-                        )
-                    )
-        };
-        // Each FX column reads its own lane's step if it has one, and the note's row if not. What
-        // each reads is kept whether it runs on this pulse or not, for an `RND` to see what's to
-        // its left. A lane's row lasting several steps runs its FX on its first, as a row's own
-        // run on its first pulse, so a `RET` or a `CHA` acts once; a lock or a hold of it is put
-        // again on the rest, so it holds through the row though a note there ends the last's.
-        let mut lane_steps = [None; FX_SLOTS];
-        let mut fx = [FxSlot::default(); FX_SLOTS];
-        let mut read_fx = [FxSlot::default(); FX_SLOTS];
-        for (number, slot) in fx.iter_mut().enumerate() {
-            let found = match phrase.zip(pending.lanes[number]) {
-                Some((phrase, lane)) => {
-                    lane_steps[number] = Some(lane.row);
-                    let played = match lane.first {
-                        true => Played::Lane(number),
-                        false => Played::Ahead,
-                    };
-                    let found = phrase.steps().get(lane.row).and_then(|step| {
-                        self.view_row(index, read, lane.row, step, played)
-                            .fx(number)
-                            .copied()
-                    });
-                    read_fx[number] = found.unwrap_or_default();
-                    found.filter(|slot| lane.first || holds_through(slot))
-                }
-                None => {
-                    read_fx[number] = step.fx(number).copied().unwrap_or_default();
-                    step.fx(number).copied().filter(|slot| row_fx(slot))
-                }
-            };
-            *slot = found.unwrap_or_default();
-        }
-        let mut delay_units = None;
-        let mut kill_units = None;
-        let mut off_units = None;
-        let mut retrigger = None;
-        let mut accumulates: Option<i8> = None;
-        let mut arpeggiates = None;
-        // `CHA` and `CND` go first, as whether the note plays decides whether locks end. A row's
-        // own are decided once, on its first pulse, by the step's first part to land. Every `CHA`
-        // is rolled whatever the conditions say, so its rolls are the same with or without them.
+        let mut fx = self.read_row_fx(index, phrase, read, &step);
+        // `CHA` and `CND` go first, as whether the note plays decides whether locks end.
         let decided = match pending.plays {
             Some(decided) => decided,
-            None => {
-                let mut decided = if first {
-                    Decided::PLAYS
-                } else {
-                    self.tracks[index].row
-                };
-                let mut chance = None;
-                for slot in fx.iter().filter(|s| s.command == Some(FxCommand::Cha)) {
-                    let rolled = self.tracks[index].rng.chance(slot.coarse());
-                    decided.note &= rolled;
-                    chance = Some(chance.unwrap_or(true) && rolled);
-                }
-                if !self.conditions_hold(index, &fx, &pending, position, chance) {
-                    decided = Decided {
-                        note: false,
-                        fx: false,
-                    };
-                }
-                if first {
-                    self.tracks[index].row = decided;
-                }
-                if pending.part != Part::Whole {
-                    self.tracks[index].decide(pending.step, decided);
-                }
-                decided
-            }
+            None => self.decide_row(index, &fx.fx, &pending, position),
         };
         let plays = decided.note;
         let variation = if row && decided.fx {
-            self.vary(index, &mut fx, &read_fx, &lane_steps, count)
+            self.vary(index, &mut fx.fx, &fx.read, &fx.lane_steps, count)
         } else {
             NoteVariation::default()
         };
@@ -436,6 +358,7 @@ impl Engine {
         // A lane's values stay where the groove lands the step. What times the note goes with it,
         // wherever it's written. A failed `CND` skips the row's own FX, as Elektron's skips a
         // trig's locks, while a lane keeps to its own loop.
+        let lane_steps = fx.lane_steps;
         let runs = |number: usize, slot: &FxSlot| match slot.command {
             Some(
                 FxCommand::Del
@@ -451,42 +374,18 @@ impl Engine {
             _ if lane_steps[number].is_some() => pending.part.runs_lanes(),
             _ => row && decided.fx,
         };
-        for (number, slot) in fx.iter().enumerate() {
-            let Some(command) = slot.command.filter(|_| runs(number, slot)) else {
+        for (number, slot) in fx.fx.into_iter().enumerate() {
+            let Some(command) = slot.command.filter(|_| runs(number, &slot)) else {
                 continue;
             };
             match command {
-                FxCommand::Del => delay_units = Some(slot.coarse()),
-                FxCommand::Kil => kill_units = Some(slot.coarse()),
-                FxCommand::Off => off_units = Some(slot.coarse()),
-                FxCommand::Ret => retrigger = Some(slot.coarse()),
+                FxCommand::Del | FxCommand::Kil | FxCommand::Off | FxCommand::Ret => {
+                    fx.time(command, slot.coarse());
+                }
+                FxCommand::Acu | FxCommand::Arp => fx.pitch(command, slot.coarse()),
+                // Decided before any of them run.
                 FxCommand::Cha | FxCommand::Cnd | FxCommand::Rnd => {}
-                // Two on a row add up, as far as an `ACU` goes at once. A value past that is left
-                // out, as if it wasn't there.
-                FxCommand::Acu => {
-                    if let Some(amount) = amount(slot.coarse()) {
-                        let most = MOST_DEGREES as i8;
-                        let sum = accumulates.unwrap_or(0).saturating_add(amount);
-                        accumulates = Some(sum.clamp(-most, most));
-                    }
-                }
-                // The last column's wins, as they run left to right.
-                FxCommand::Arp => arpeggiates = Some(slot.coarse()),
-                FxCommand::Set(id) if slot.mark == Mark::Glide => {
-                    let value = command;
-                    // A lane's rows last its division heard.
-                    let rows = pending.lanes[number].map_or(1, |lane| lane.heard.division);
-                    let to = phrase.and_then(|phrase| {
-                        match lane_steps[number] {
-                            Some(at) => phrase.next_in_lane(number, at, value),
-                            None => phrase.glide_to(position.visit, position.deal, number, value),
-                        }
-                        .map(|(steps, to)| (to, (steps * rows) as f64 * pending.ticks as f64))
-                    });
-                    let now = self.song_time();
-                    self.tracks[index].start_glide(id, slot.value, to, now);
-                }
-                FxCommand::Set(id) => self.tracks[index].set_value(id, slot.value, slot.mark),
+                FxCommand::Set(_) => self.lock(index, number, slot, phrase, read, pending.ticks),
             }
         }
         // A `MAC` lock on the row reaches what its macro holds of the generators on the row itself,
@@ -505,14 +404,16 @@ impl Engine {
             }
             return;
         }
-        let tie = tying && plays && delay_units.is_none() && matches!(event, Note::On(_));
-        if plays && delay_units.is_none() && matches!(event, Note::On(_)) && !tie {
+        let tie = tying && plays && fx.delay.is_none() && matches!(event, Note::On(_));
+        if plays && fx.delay.is_none() && matches!(event, Note::On(_)) && !tie {
             self.start_modulation(index);
         }
         if !self.tracks[index].sounding() {
             self.tracks[index].settle();
         }
-        let start_frames = delay_units.map_or(0, |units| self.groove_units(units, pending.ticks));
+        let start_frames = fx
+            .delay
+            .map_or(0, |units| self.groove_units(units, pending.ticks));
         let start_at = self.clock + start_frames;
         if first {
             self.tracks[index].tied =
@@ -540,43 +441,19 @@ impl Engine {
             Note::Off => {}
             Note::On(_) if !plays => {}
             Note::On(midi) => {
-                let heard = self.accumulate(index, epoch, key, midi, accumulates.filter(|_| adds));
-                // The row's `RND`s move the note from where the accumulators have it, so they
-                // don't add to the walk.
-                let moved = moved_note(heard, variation.by, self.scale);
-                self.tracks[index].accumulated = (moved != midi).then_some(moved);
-                if accumulation.adds == Adds::Retrig {
-                    accumulating = accumulates.map(|amount| Accumulating {
-                        row: key,
-                        amount,
-                        written: midi,
-                        varied: variation.by,
-                        transpose: position.transpose,
-                        epoch,
-                    });
-                }
-                // What the row's own `RND`s moved it by, in semitones, as it's heard.
-                let own = moved_note(heard, variation.own, self.scale);
-                let varied = (i16::from(own) - i16::from(heard)) as i8;
-                let heard = moved;
-                let note = (i16::from(heard) + i16::from(position.transpose))
-                    .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE))
-                    as u8;
-                let played = (heard, position.transpose);
-                let arp = self.arpeggiate(index, &pending, arpeggiates, played, tie, start_at);
-                self.tracks[index].arp = arp;
-                let note = arp.map_or(note, |arp| arp.cycle.note(arp.place));
-                // `VDLT` moves the note's own, after the FX have run so a lock on this step
-                // counts, and the groove's velocity for the step scales that.
-                let own = self.tracks[index].velocity(step.velocity.unwrap_or(MAX_VELOCITY));
-                let own = u32::from(own);
-                let percent = u32::from(pending.groove.velocity(running));
-                let velocity = if percent == u32::from(FULL_VELOCITY) {
-                    own
-                } else {
-                    (own * percent + 50) / 100
+                let start = NoteStart {
+                    key,
+                    epoch,
+                    transpose: position.transpose,
+                    adds,
+                    retriggers: accumulation.adds == Adds::Retrig,
+                    tie,
+                    at: start_at,
                 };
-                let velocity = velocity.min(u32::from(MAX_VELOCITY)) as u8;
+                let (note, varied, moves) =
+                    self.row_pitch(index, midi, &fx, variation, &pending, start);
+                accumulating = moves;
+                let velocity = self.row_velocity(index, step.velocity, &pending);
                 let on = self.note_on(index, note, velocity, self.note_shape(index));
                 // A row's note on a track with a slot on `Pitch`, or with an `RND` of its own on
                 // its note, has what the slots and the `RND`s move it by reported, from the
@@ -596,28 +473,7 @@ impl Engine {
                     });
                     self.tracks[index].pitch_varied = varied;
                 }
-                match on {
-                    // A `Hold` before it ties into this note, with no new attack.
-                    Some(on) if tie => self.tracks[index].tie(on),
-                    Some(on) if start_frames > 0 => {
-                        self.tracks[index].last_note = Some(on);
-                        self.tracks[index].wake();
-                        self.tracks[index].delayed = Some(DelayedNote {
-                            at: start_at,
-                            note: on,
-                        });
-                    }
-                    Some(on) if self.plays(index) => {
-                        self.tracks[index].start(on, self.rate);
-                        self.choke(index);
-                    }
-                    Some(on) => {
-                        self.tracks[index].last_note = Some(on);
-                        self.tracks[index].wake();
-                        self.tracks[index].cut_to_tail();
-                    }
-                    None => self.tracks[index].cut_to_tail(),
-                }
+                self.start_row_note(index, on, tie, start_at, start_frames > 0);
             }
         }
         // A note's gate closes its length of the way through its last pulse: a `Single`'s is its
@@ -634,21 +490,256 @@ impl Engine {
                 .gate_frames(index, pulses, step.length(), &pending)
                 .map(|frames| start_at + frames);
         }
-        if let Some(units) = kill_units {
-            self.tracks[index].kill_at = Some(start_at + self.groove_units(units, pending.ticks));
+        self.time_note(index, &fx, start_at, pending.ticks, accumulating);
+    }
+
+    /// The note a row starts, from the note as written: moved on by the track's accumulators, its
+    /// own `ACU` with them if it adds now, then by its `RND`s, with its chain's transpose, or an
+    /// arpeggio's note from there. With it, what the row's own `RND`s moved it by, in semitones,
+    /// as it's heard, and what a `RET` moves it by on each hit, as the track says.
+    fn row_pitch(
+        &mut self,
+        index: usize,
+        midi: u8,
+        fx: &RowFx,
+        variation: NoteVariation,
+        pending: &PendingStep,
+        start: NoteStart,
+    ) -> (u8, i8, Option<Accumulating>) {
+        let NoteStart {
+            key,
+            epoch,
+            transpose,
+            ..
+        } = start;
+        let accumulates = fx.accumulates;
+        let heard = self.accumulate(index, epoch, key, midi, accumulates.filter(|_| start.adds));
+        // The row's `RND`s move the note from where the accumulators have it, so they don't add to
+        // the walk.
+        let moved = moved_note(heard, variation.by, self.scale);
+        self.tracks[index].accumulated = (moved != midi).then_some(moved);
+        let accumulating = accumulates
+            .filter(|_| start.retriggers)
+            .map(|amount| Accumulating {
+                row: key,
+                amount,
+                written: midi,
+                varied: variation.by,
+                transpose,
+                epoch,
+            });
+        let own = moved_note(heard, variation.own, self.scale);
+        let varied = (i16::from(own) - i16::from(heard)) as i8;
+        let heard = moved;
+        let note = (i16::from(heard) + i16::from(transpose))
+            .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8;
+        let played = (heard, transpose);
+        let arp = self.arpeggiate(index, pending, fx.arpeggiates, played, start.tie, start.at);
+        self.tracks[index].arp = arp;
+        let note = arp.map_or(note, |arp| arp.cycle.note(arp.place));
+        (note, varied, accumulating)
+    }
+
+    /// A row's note's velocity: its own, as `VDLT` moves it after the FX have run so a lock on
+    /// this step counts, scaled by the groove's velocity for the step.
+    fn row_velocity(&self, index: usize, written: Option<u8>, pending: &PendingStep) -> u8 {
+        let own = self.tracks[index].velocity(written.unwrap_or(MAX_VELOCITY));
+        let own = u32::from(own);
+        let percent = u32::from(pending.groove.velocity(pending.running));
+        let velocity = if percent == u32::from(FULL_VELOCITY) {
+            own
+        } else {
+            (own * percent + 50) / 100
+        };
+        velocity.min(u32::from(MAX_VELOCITY)) as u8
+    }
+
+    /// Start a row's note: tied into the one before, held until its `DEL` has gone by, `delayed`,
+    /// started now, or left to its tail while the track isn't heard.
+    fn start_row_note(
+        &mut self,
+        index: usize,
+        on: Option<NoteOn>,
+        tie: bool,
+        start_at: u64,
+        delayed: bool,
+    ) {
+        match on {
+            // A `Hold` before it ties into this note, with no new attack.
+            Some(on) if tie => self.tracks[index].tie(on),
+            Some(on) if delayed => {
+                self.tracks[index].last_note = Some(on);
+                self.tracks[index].wake();
+                self.tracks[index].delayed = Some(DelayedNote {
+                    at: start_at,
+                    note: on,
+                });
+            }
+            Some(on) if self.plays(index) => {
+                self.tracks[index].start(on, self.rate);
+                self.choke(index);
+            }
+            Some(on) => {
+                self.tracks[index].last_note = Some(on);
+                self.tracks[index].wake();
+                self.tracks[index].cut_to_tail();
+            }
+            None => self.tracks[index].cut_to_tail(),
         }
-        if let Some(units) = off_units {
-            self.tracks[index].off_at = Some(start_at + self.groove_units(units, pending.ticks));
+    }
+
+    /// Read a row's FX columns at a pulse. Each reads its own lane's step if it has one, and the
+    /// note's row, `step`, if not. What each reads is kept whether it runs on this pulse or not,
+    /// for an `RND` to see what's to its left. A lane's row lasting several steps runs its FX on
+    /// its first, as a row's own run on its first pulse, so a `RET` or a `CHA` acts once; a lock or
+    /// a hold of it is put again on the rest, so it holds through the row though a note there ends
+    /// the last's. A row's later pulses run only the note's own timing, and only on a `Multi`.
+    fn read_row_fx(
+        &mut self,
+        index: usize,
+        phrase: Option<&Phrase>,
+        read: Read,
+        step: &RowView,
+    ) -> RowFx {
+        let first = read.position.pulse == 0;
+        let gate = step.gate_kind();
+        let row_fx = |slot: &FxSlot| {
+            first
+                || gate == GateKind::Multi
+                    && matches!(
+                        slot.command,
+                        Some(
+                            FxCommand::Del
+                                | FxCommand::Kil
+                                | FxCommand::Off
+                                | FxCommand::Ret
+                                | FxCommand::Acu
+                                | FxCommand::Arp
+                                | FxCommand::Rnd
+                        )
+                    )
+        };
+        let mut fx = RowFx::default();
+        for number in 0..FX_SLOTS {
+            let found = match phrase.zip(read.lanes[number]) {
+                Some((phrase, lane)) => {
+                    fx.lane_steps[number] = Some(lane.row);
+                    let played = match lane.first {
+                        true => Played::Lane(number),
+                        false => Played::Ahead,
+                    };
+                    let found = phrase.steps().get(lane.row).and_then(|step| {
+                        self.view_row(index, read, lane.row, step, played)
+                            .fx(number)
+                            .copied()
+                    });
+                    fx.read[number] = found.unwrap_or_default();
+                    found.filter(|slot| lane.first || holds_through(slot))
+                }
+                None => {
+                    fx.read[number] = step.fx(number).copied().unwrap_or_default();
+                    step.fx(number).copied().filter(|slot| row_fx(slot))
+                }
+            };
+            fx.fx[number] = found.unwrap_or_default();
         }
-        if let Some(value) = retrigger {
+        fx
+    }
+
+    /// Decide a row's `CHA`s and `CND`s. A row's own are decided once, on its first pulse, by the
+    /// step's first part to land, and later pulses keep what that decided. Every `CHA` is rolled
+    /// whatever the conditions say, so its rolls are the same with or without them.
+    fn decide_row(
+        &mut self,
+        index: usize,
+        fx: &[FxSlot; FX_SLOTS],
+        pending: &PendingStep,
+        position: ChainPosition,
+    ) -> Decided {
+        let first = position.pulse == 0;
+        let mut decided = if first {
+            Decided::PLAYS
+        } else {
+            self.tracks[index].row
+        };
+        let mut chance = None;
+        for slot in fx.iter().filter(|s| s.command == Some(FxCommand::Cha)) {
+            let rolled = self.tracks[index].rng.chance(slot.coarse());
+            decided.note &= rolled;
+            chance = Some(chance.unwrap_or(true) && rolled);
+        }
+        if !self.conditions_hold(index, fx, pending, position, chance) {
+            decided = Decided {
+                note: false,
+                fx: false,
+            };
+        }
+        if first {
+            self.tracks[index].row = decided;
+        }
+        if pending.part != Part::Whole {
+            self.tracks[index].decide(pending.step, decided);
+        }
+        decided
+    }
+
+    /// Put a column's lock, or start its glide to the next value of the same setting in the
+    /// column, the row's or its lane's, which a lane's rows reach at its division heard.
+    fn lock(
+        &mut self,
+        index: usize,
+        number: usize,
+        slot: FxSlot,
+        phrase: Option<&Phrase>,
+        read: Read,
+        ticks: u64,
+    ) {
+        let Some(command @ FxCommand::Set(id)) = slot.command else {
+            return;
+        };
+        if slot.mark != Mark::Glide {
+            self.tracks[index].set_value(id, slot.value, slot.mark);
+            return;
+        }
+        let lane = read.lanes[number];
+        let rows = lane.map_or(1, |lane| lane.heard.division);
+        let position = read.position;
+        let to = phrase.and_then(|phrase| {
+            match lane {
+                Some(lane) => phrase.next_in_lane(number, lane.row, command),
+                None => phrase.glide_to(position.visit, position.deal, number, command),
+            }
+            .map(|(steps, to)| (to, (steps * rows) as f64 * ticks as f64))
+        });
+        let now = self.song_time();
+        self.tracks[index].start_glide(id, slot.value, to, now);
+    }
+
+    /// Time a row's note as its `KIL`, `OFF` and `RET` say, from where it starts, `start_at`. A
+    /// `RET` with no units doesn't retrigger.
+    fn time_note(
+        &mut self,
+        index: usize,
+        fx: &RowFx,
+        start_at: u64,
+        ticks: u64,
+        accumulates: Option<Accumulating>,
+    ) {
+        if let Some(units) = fx.kill {
+            self.tracks[index].kill_at = Some(start_at + self.groove_units(units, ticks));
+        }
+        if let Some(units) = fx.off {
+            self.tracks[index].off_at = Some(start_at + self.groove_units(units, ticks));
+        }
+        if let Some(value) = fx.retrigger {
             let units = value & 0x0F;
             if units > 0 {
-                let interval = self.groove_units(units, pending.ticks).max(1);
+                let interval = self.groove_units(units, ticks).max(1);
                 self.tracks[index].retrigger = Some(Retrigger {
                     next_at: start_at + interval,
                     interval,
                     factor: retrigger_factor(value >> 4),
-                    accumulates: accumulating,
+                    accumulates,
                 });
             }
         }
@@ -855,6 +946,70 @@ impl Engine {
         };
         phrase_pass(owner, chain, pending.count, position)
     }
+}
+
+/// A row's FX columns at a pulse, as `fire_track` reads them, and what its timing and pitch
+/// commands leave for its note as they run left to right.
+#[derive(Debug, Clone, Copy, Default)]
+struct RowFx {
+    /// What each column runs on this pulse.
+    fx: [FxSlot; FX_SLOTS],
+    /// What each column reads, whether it runs on this pulse or not.
+    read: [FxSlot; FX_SLOTS],
+    /// The row each column's lane reads, for those with one.
+    lane_steps: [Option<usize>; FX_SLOTS],
+    /// The units of a `DEL`, a `KIL` and an `OFF`, and a `RET`'s value.
+    delay: Option<u8>,
+    kill: Option<u8>,
+    off: Option<u8>,
+    retrigger: Option<u8>,
+    /// What the row's `ACU`s add up to, and its `ARP`'s value.
+    accumulates: Option<i8>,
+    arpeggiates: Option<u8>,
+}
+
+impl RowFx {
+    /// Take a `DEL`, `KIL`, `OFF` or `RET` that runs, the last column's winning.
+    fn time(&mut self, command: FxCommand, value: u8) {
+        match command {
+            FxCommand::Del => self.delay = Some(value),
+            FxCommand::Kil => self.kill = Some(value),
+            FxCommand::Off => self.off = Some(value),
+            FxCommand::Ret => self.retrigger = Some(value),
+            _ => {}
+        }
+    }
+
+    /// Take an `ACU` or `ARP` that runs. Two `ACU`s on a row add up, as far as one goes at once,
+    /// and a value past that is left out, as if it wasn't there. The last column's `ARP` wins, as
+    /// they run left to right.
+    fn pitch(&mut self, command: FxCommand, value: u8) {
+        match command {
+            FxCommand::Acu => {
+                if let Some(amount) = amount(value) {
+                    let most = MOST_DEGREES as i8;
+                    let sum = self.accumulates.unwrap_or(0).saturating_add(amount);
+                    self.accumulates = Some(sum.clamp(-most, most));
+                }
+            }
+            FxCommand::Arp => self.arpeggiates = Some(value),
+            _ => {}
+        }
+    }
+}
+
+/// Where a row's note starts, for its pitch: its row, the epoch its accumulators count in and its
+/// chain's transpose, whether its `ACU` adds now and on each hit of a `RET`, whether it ties into
+/// the note before, and when it starts.
+#[derive(Debug, Clone, Copy)]
+struct NoteStart {
+    key: RowKey,
+    epoch: Epoch,
+    transpose: i8,
+    adds: bool,
+    retriggers: bool,
+    tie: bool,
+    at: u64,
 }
 
 /// What a row's `RND`s do to its note, in scale degrees with the scale on and semitones with it
