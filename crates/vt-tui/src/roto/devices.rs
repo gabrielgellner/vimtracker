@@ -16,23 +16,17 @@
 //! smoothly; an off/on setting is a switch; a centred value has a notch at its middle; and any
 //! other value turns smoothly.
 
-use vt_model::accumulator::{MOST_DEGREES, Reset};
 use vt_model::action::TrackControl;
-use vt_model::arpeggio::MOST_OCTAVES;
-use vt_model::constants::{
-    BAR_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET, TICKS_PER_STEP,
-};
+use vt_model::constants::{BAR_STEPS, MAX_ENVELOPE_MS, TICKS_PER_STEP};
 use vt_model::envelope::{Hold, MAX_HOLD_MS};
 use vt_model::insert::Insert;
-use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{Fade, Rate};
-use vt_model::listed::{Listed, choices_of};
-use vt_model::modulation::{MAX_DEPTH, ModKind, Polarity};
+use vt_model::modulation::{ModKind, Polarity};
 use vt_model::settings::{Kind, SettingId, Units};
 use vt_model::shape::GenParam;
 use vt_model::shape::params::Units as GenUnits;
 use vt_model::song::{FilterType, Machine, Song, Track, TrackKind};
-use vt_model::steps::{Loop, StepRate};
+use vt_model::steps::StepRate;
 use vt_roto::Label;
 use vt_roto::bytes::Rgb;
 use vt_roto::colour;
@@ -46,8 +40,9 @@ use super::layouts::{self, Setting, Turn};
 use crate::shaping::{column_label, with_live};
 use crate::theme;
 use crate::track_page::tuning::{tuning, tuning_most};
+use crate::track_page::view::Reads;
 use crate::track_page::{
-    AccumulatorField, ArpField, Control, DeviceSpec, ModField, Page, macros_device,
+    AccumulatorField, ArpField, Control, DeviceSpec, ModField, Page, ParamView, macros_device, view,
 };
 use crate::views::track::toggle_on;
 
@@ -212,34 +207,6 @@ fn registry_setting(control: Control, track: &Track) -> Option<SettingId> {
     }
 }
 
-/// A generator's setting as a knob: a list or a switch stepped through its choices, named as the
-/// page names them, and a number smooth from its lowest to its highest, a bend or an interval
-/// with a notch at its middle. A `List`'s values have none.
-fn gen_feel(
-    song: &Song,
-    track: &Track,
-    phrase: u32,
-    index: usize,
-    param: GenParam,
-) -> Option<(Feel, u16)> {
-    with_live(song, track, phrase, index, |generator, context| {
-        let shape = &generator.shape;
-        let (low, high) = param.bounds(context)?;
-        let number = param.number(shape, context)?;
-        if param.units() == GenUnits::Named {
-            let names = (low..=high).map(|at| {
-                let mut named = *shape;
-                param.set_number(&mut named, context, at);
-                param.shown(&named, context)
-            });
-            return Some(list(names, (number - low) as usize));
-        }
-        let centred = matches!(param.units(), GenUnits::Bend | GenUnits::Interval);
-        Some(value((number - low) as u16, (high - low) as u16, centred))
-    })
-    .flatten()
-}
-
 /// A generator's setting's family: its chances, bends and phase are how it moves, as a
 /// modulator's are; its ends, steps, rows and counts are pitches and times; and its lists and
 /// switches are choices.
@@ -345,12 +312,6 @@ fn list(names: impl IntoIterator<Item = String>, at: usize) -> (Feel, u16) {
     }
 }
 
-/// A knob for one of a [`Listed`] type's values, on the one it has.
-fn listed<X: Listed>(current: X) -> (Feel, u16) {
-    let at = X::ALL.iter().position(|each| *each == current).unwrap_or(0);
-    list(choices_of::<X>().map(str::to_owned), at)
-}
-
 /// A knob for one of a list that changes with the track or the song, such as a destination: it
 /// turns smoothly, as its steps would move under it.
 fn changing(at: usize, count: usize) -> (Feel, u16) {
@@ -358,7 +319,7 @@ fn changing(at: usize, count: usize) -> (Feel, u16) {
 }
 
 /// A knob for a value from 0 to a top, centred or not.
-fn value(value: u16, top: u16, centred: bool) -> (Feel, u16) {
+fn value(value: u32, top: u32, centred: bool) -> (Feel, u16) {
     let feel = if centred {
         Feel::CentreNotch
     } else {
@@ -367,18 +328,114 @@ fn value(value: u16, top: u16, centred: bool) -> (Feel, u16) {
     (feel, position_at(f64::from(value) / f64::from(top.max(1))))
 }
 
-/// A knob for a setting in the registry, with its coarse value and fine part together.
-fn registry(id: SettingId, coarse: u8, fine: u8) -> (Feel, u16) {
-    match id.entry().kind {
-        Kind::Continuous { top, middle, .. } => {
-            let whole = u16::from(coarse.min(top)) << 8 | u16::from(fine);
-            value(whole, u16::from(top) << 8, middle)
-        }
-        Kind::Stepped { choices, .. } => list(
-            choices.iter().map(|choice| (*choice).to_owned()),
-            usize::from(coarse),
-        ),
+/// A setting's view as its knob goes through it: a setting of the registry's as far as its top,
+/// which on the level scale is short of where the keys stop, with its notch where the registry
+/// has its middle; and a generator's setting as it's set, rather than as a macro holding it puts
+/// it, and nothing while it has no number.
+pub(crate) fn knob_view(control: Control, track: &Track, song: &Song) -> Option<ParamView> {
+    let shown = view(control, track, song, false)?;
+    if let Control::Gen {
+        phrase,
+        generator,
+        param,
+    } = control
+    {
+        let set = with_live(song, track, phrase, generator, |found, context| {
+            param.bounds(context)?;
+            param.number(&found.shape, context)
+        })??;
+        return Some(ParamView {
+            value: set,
+            ..shown
+        });
     }
+    let kind = registry_setting(control, track).map(|id| id.entry().kind);
+    Some(match kind {
+        Some(Kind::Continuous { top, middle, .. }) if shown.choices.is_empty() => ParamView {
+            bounds: (0, i32::from(top)),
+            centred: middle,
+            ..shown
+        },
+        _ => shown,
+    })
+}
+
+/// The names of the places a knob clicks through for a setting, from its lowest, or none for a
+/// value it turns through smoothly: a generator's named values as the page names them, a list's
+/// choices, a count's or a place's numbers as they're typed, a fade's kinds, and the registry's
+/// choices for one of its settings that steps.
+pub(crate) fn places(
+    control: Control,
+    track: &Track,
+    song: &Song,
+    shown: &ParamView,
+) -> Option<Vec<String>> {
+    match control {
+        Control::Gen {
+            phrase,
+            generator,
+            param,
+        } => {
+            if param.units() != GenUnits::Named {
+                return None;
+            }
+            with_live(song, track, phrase, generator, |found, context| {
+                let (low, high) = param.bounds(context)?;
+                let names = (low..=high).map(|at| {
+                    let mut named = found.shape;
+                    param.set_number(&mut named, context, at);
+                    param.shown(&named, context)
+                });
+                Some(names.collect())
+            })?
+        }
+        _ if !shown.choices.is_empty() => Some(
+            shown
+                .choices
+                .iter()
+                .map(|choice| choice.name.clone().into_owned())
+                .collect(),
+        ),
+        Control::Choke
+        | Control::Group
+        | Control::Mod(_, ModField::Length | ModField::Start | ModField::Ratchet)
+        | Control::Accumulator(AccumulatorField::Up | AccumulatorField::Down)
+        | Control::Arpeggio(ArpField::Octaves) => Some(numbered(shown)),
+        Control::Mod(_, ModField::Fade) => {
+            Some(Fade::ALL.iter().map(ToString::to_string).collect())
+        }
+        _ => match registry_setting(control, track)?.entry().kind {
+            Kind::Stepped { choices, .. } => {
+                Some(choices.iter().map(|choice| (*choice).to_owned()).collect())
+            }
+            Kind::Continuous { .. } => None,
+        },
+    }
+}
+
+/// A count's or a place's values by name, as they're typed: `Off` for none where it has it, a
+/// group with its `G`, and a step counted from 1.
+fn numbered(shown: &ParamView) -> Vec<String> {
+    let Reads::Number {
+        before,
+        off,
+        from_one,
+        ..
+    } = shown.reads
+    else {
+        return Vec::new();
+    };
+    let (low, high) = shown.bounds;
+    (low..=high)
+        .map(|at| {
+            let number = at + i32::from(from_one);
+            match before {
+                _ if off && at == low => "Off".to_owned(),
+                Some(letter) => format!("{letter}{number}"),
+                None => number.to_string(),
+            }
+        })
+        .collect()
 }
 
 /// Where an envelope's time is among the steps `=` takes: 1 ms to 10 ms, 5 ms to 100 ms, then
@@ -441,16 +498,6 @@ pub(crate) fn rate_position(rate: Rate) -> u16 {
     position_at((cycles_a_bar.log2() - SLOWEST) / (FASTEST - SLOWEST))
 }
 
-/// A depth either side of none, as a mod slot's.
-fn depth(depth: i16) -> (Feel, u16) {
-    let top = MAX_DEPTH;
-    value(
-        (depth.clamp(-top, top) + top) as u16,
-        (2 * top) as u16,
-        true,
-    )
-}
-
 /// Whether a mod slot's two-way choice is on, as its button shows it: any slot's polarity is `Bi`
 /// (the button under its `Depth`).
 fn mod_switch_on(control: Control, track: &Track) -> Option<bool> {
@@ -462,7 +509,8 @@ fn mod_switch_on(control: Control, track: &Track) -> Option<bool> {
 
 /// A knob's feel and where it's set, for a control on this track, or nothing if the track
 /// hasn't the setting, as a fixed track hasn't `Pitch`, or it has nothing to choose, as a filter
-/// type without modes has for `Mode`.
+/// type without modes has for `Mode`. It's read from the setting's view, as the knob's turn is
+/// ([`super::edits::turned`]), but for what the view doesn't say.
 fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
     if !control.exists_on(track) {
         return None;
@@ -470,20 +518,11 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
     if let Some(on) = toggle_on(control, track, song).or_else(|| mod_switch_on(control, track)) {
         return Some((Feel::Switch, if on { position_of(1, 2) } else { 0 }));
     }
-    let names = |items: &[&str]| {
-        items
-            .iter()
-            .map(|name| (*name).to_owned())
-            .collect::<Vec<_>>()
-    };
-    let found = match control {
-        Control::Gen {
-            phrase,
-            generator,
-            param,
-        } => return gen_feel(song, track, phrase, generator, param),
-        Control::NewGenerator(_) => return None,
-        Control::Machine => listed(track.machine),
+    match control {
+        // What a slot is, the app's alone.
+        Control::NewGenerator(_) | Control::Mod(_, ModField::Type) => return None,
+        Control::FilterMode if track.filter.modes().is_empty() => return None,
+        // The song's samples, rather than every number.
         Control::Sample => {
             let numbers: Vec<u8> = std::iter::once(0)
                 .chain(song.bank.iter().map(|(number, _)| number))
@@ -492,77 +531,22 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                 .iter()
                 .position(|number| *number == track.sample())
                 .unwrap_or(0);
-            changing(at, numbers.len())
-        }
-        Control::Setting(_) => {
-            let id = control.setting_on(track)?;
-            registry(id, track.setting(id), track.fine(id))
-        }
-        Control::Macro(at) => {
-            let [coarse, fine] = track.macros[at].value.to_be_bytes();
-            registry(SettingId::macro_at(at)?, coarse, fine)
+            return Some(changing(at, numbers.len()));
         }
         // The sample's own, either side of none with a notch there, and nothing with no sample.
         Control::Tune | Control::Cents => {
             let set = tuning(song, track)?.value(control);
             let most = i16::from(tuning_most(control));
-            value((i16::from(set) + most) as u16, (2 * most) as u16, true)
-        }
-        Control::Base(which) => {
-            let coarse = track.control(which);
-            match which.setting() {
-                Some(id) => registry(id, coarse, track.fine(id)),
-                None => value(u16::from(coarse), 0xFF, false),
-            }
-        }
-        Control::Level => registry(SettingId::LEVEL, track.level, 0),
-        // `80` is 0 dB, so the notch is where it neither cuts nor boosts.
-        Control::Trim => value(u16::from(track.trim), 0xFF, true),
-        Control::Groove => {
-            let grooves: Vec<_> = vt_model::groove::GrooveId::all().collect();
-            let playing = track.groove.unwrap_or(song.groove);
-            list(
-                grooves.iter().map(|groove| groove.name().to_owned()),
-                grooves
-                    .iter()
-                    .position(|groove| *groove == playing)
-                    .unwrap_or(0),
-            )
-        }
-        Control::Choke => list(
-            std::iter::once("Off".to_owned()).chain((1..=CHOKE_GROUPS).map(|g| g.to_string())),
-            usize::from(track.choke.unwrap_or(0)),
-        ),
-        Control::Group => list(
-            std::iter::once("Off".to_owned()).chain((1..=MAX_GROUPS).map(|g| format!("G{g}"))),
-            usize::from(track.group.unwrap_or(0)),
-        ),
-        Control::Role => listed(track.role),
-        Control::GateLength => value(
-            u16::from(vt_model::settings::gate_percent(track.gate_length())) - 1,
-            99,
-            false,
-        ),
-        Control::Speed => listed(track.speed),
-        Control::Reset => value(track.reset.unwrap_or(0), MAX_TRACK_RESET, false),
-        Control::Glide => value(u16::from(track.glide), 0xFF, false),
-        Control::FilterType => listed(track.filter),
-        Control::FilterMode => {
-            let modes = track.filter.modes();
-            if modes.is_empty() {
-                return None;
-            }
-            let playing = track.filter.plays(track.filter_mode);
-            list(
-                modes.iter().map(|mode| mode.name().to_owned()),
-                modes.iter().position(|mode| *mode == playing).unwrap_or(0),
-            )
+            return Some(value(
+                (i16::from(set) + most) as u32,
+                (2 * most) as u32,
+                true,
+            ));
         }
         Control::Mod(slot, field) => {
             let modulator = &track.mods[slot];
             match field {
-                // What a slot is, the app's alone.
-                ModField::Type | ModField::Polarity | ModField::Reset => return None,
+                // `Pitch` once, rather than twice as `K` lists it.
                 ModField::Destination => {
                     let choices = SettingId::for_mod(track, slot);
                     let at = modulator
@@ -587,104 +571,28 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                 ModField::Rate => return Some((Feel::Smooth, rate_position(modulator.lfo.rate))),
                 // Smooth, its value shown as it turns, with `Note` at the bottom.
                 ModField::Hold => return Some((Feel::Smooth, hold_position(modulator.ahd.hold))),
+                // By the steps `=` takes.
+                ModField::Attack | ModField::Decay | ModField::Release | ModField::Peak => {
+                    let at = modulator.field(field)?;
+                    return Some((Feel::Smooth, time_position(at as u16)));
+                }
+                // A setting its type hasn't.
+                _ if modulator.bounds(field).is_none() => return None,
                 _ => {}
             }
-            let at = modulator.field(field)?;
-            let (lowest, highest) = modulator.bounds(field)?;
-            let place = (at.clamp(lowest, highest) - lowest) as usize;
-            let top = (highest - lowest) as u16;
-            match field {
-                // An envelope's curve, how notes start an LFO or Steps, and what Track follows are
-                // musical lists, which leave the layout as it is.
-                ModField::Mode => list(
-                    modulator
-                        .kind
-                        .modes()
-                        .into_iter()
-                        .map(|(name, _)| name.to_owned()),
-                    place,
-                ),
-                ModField::Shape => listed(modulator.lfo.shape),
-                // Smooth through every fade, out, none and in, its value shown as it turns.
-                ModField::Fade => list(Fade::ALL.iter().map(ToString::to_string), place),
-                ModField::Loop => list(Loop::ALL.iter().map(ToString::to_string), place),
-                // Counts and places, numbered from 1.
-                ModField::Length | ModField::Start | ModField::Ratchet => list(
-                    (1..=usize::from(top) + 1).map(|count| count.to_string()),
-                    place,
-                ),
-                ModField::Attack | ModField::Decay | ModField::Release | ModField::Peak => {
-                    (Feel::Smooth, time_position(at as u16))
-                }
-                // Each either way of none, with the depth's centre notch.
-                ModField::Depth | ModField::Deform | ModField::Smooth | ModField::Step(_) => {
-                    depth(at as i16)
-                }
-                // Smooth from its lowest to its highest: a level, a percentage, degrees, or Track's
-                // map across its source's values, its note or hex shown as it turns.
-                _ => value(place as u16, top, false),
-            }
         }
-        Control::Accumulator(field) => {
-            let accumulation = track.accumulation;
-            let degrees = |at: u8| {
-                list(
-                    (1..=MOST_DEGREES).map(|degrees| degrees.to_string()),
-                    usize::from(at.saturating_sub(1)),
-                )
-            };
-            match field {
-                AccumulatorField::Up => degrees(accumulation.up),
-                AccumulatorField::Down => degrees(accumulation.down),
-                AccumulatorField::Moves => listed(accumulation.moves),
-                AccumulatorField::AtLimit => listed(accumulation.at_limit),
-                AccumulatorField::Adds => listed(accumulation.adds),
-                AccumulatorField::Reset => {
-                    let resets: Vec<Reset> = Reset::all().collect();
-                    list(
-                        resets.iter().map(|reset| reset.name()),
-                        resets
-                            .iter()
-                            .position(|reset| *reset == accumulation.reset)
-                            .unwrap_or(0),
-                    )
-                }
-            }
-        }
-        Control::Arpeggio(field) => {
-            let arpeggio = track.arpeggio;
-            match field {
-                ArpField::Rate => listed(arpeggio.rate),
-                ArpField::Mode => listed(arpeggio.mode),
-                ArpField::Octaves => list(
-                    (1..=MOST_OCTAVES).map(|octaves| octaves.to_string()),
-                    usize::from(arpeggio.octaves.saturating_sub(1)),
-                ),
-                ArpField::Retrig => return None,
-            }
-        }
-        Control::Insert(slot) => list(
-            Insert::ALL.iter().map(|insert| insert.name().to_owned()),
-            Insert::ALL
-                .iter()
-                .position(|insert| insert.name() == track.inserts[slot].name())
-                .unwrap_or(0),
-        ),
-        Control::InsertParam(slot, param) => {
-            let insert = track.inserts[slot];
-            let found = insert.params().get(param)?;
-            let set = insert.value(param);
-            if found.choices().is_empty() {
-                let (id, _) = control.value_on(track)?;
-                registry(id, set, 0)
-            } else {
-                list(names(found.choices()), usize::from(set))
-            }
-        }
-        // The mixer's, which no device has, and the off/on settings, which are switches.
-        Control::Mute | Control::Solo | Control::Limiter | Control::Safe => return None,
-    };
-    Some(found)
+        _ => {}
+    }
+    let shown = knob_view(control, track, song)?;
+    let (low, high) = shown.bounds;
+    let at = (shown.value.clamp(low, high) - low) as u32;
+    if let Some(names) = places(control, track, song, &shown) {
+        return Some(list(names, at as usize));
+    }
+    // A signed amount, as a depth is, has its notch at none; a fine part goes after its value.
+    let centred = shown.centred || matches!(shown.reads, Reads::HexWithin { signed: true });
+    let fine = u32::from(shown.fine.unwrap_or(0));
+    Some(value(at << 8 | fine, ((high - low) as u32) << 8, centred))
 }
 
 /// One knob, for a control on this track, as its kind has it, or nothing for a hole.
