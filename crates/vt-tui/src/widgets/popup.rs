@@ -220,7 +220,8 @@ mod tests {
         let title = format!(
             " {} ",
             app.overlays
-                .command_menu
+                .command
+                .menu
                 .as_ref()
                 .expect("a list")
                 .picker

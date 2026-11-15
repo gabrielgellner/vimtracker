@@ -211,7 +211,7 @@ impl App {
             || self.overlays.guide.open.is_some()
             || self.overlays.shape.is_some()
             || matches!(self.modes.mode, Mode::Help | Mode::Picker | Mode::Guide)
-            || (self.modes.mode == Mode::Command && self.overlays.command_menu.is_some());
+            || (self.modes.mode == Mode::Command && self.overlays.command.menu.is_some());
         // Only worked out while keys are typed, as the list of what follows them is.
         let continued = |_: &Instant| {
             !self.grammar.pending.is_empty()
@@ -397,6 +397,7 @@ impl App {
                     self.overlays.guide.open = None;
                     self.modes.mode = Mode::Normal;
                 }
+                Mode::Command => self.modes.mode = Mode::Normal,
                 _ => {
                     self.overlays.picker = None;
                     // A shape waiting for its command is given up.

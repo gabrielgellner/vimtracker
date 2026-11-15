@@ -531,9 +531,9 @@ fn new_bang_starts_a_project_and_discards_unsaved_changes() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.mode, Mode::Command);
     assert!(
-        app.overlays.command_line.starts_with("new! "),
+        app.overlays.command.line.starts_with("new! "),
         "{}",
-        app.overlays.command_line
+        app.overlays.command.line
     );
     special(&mut app, KeyCode::Esc);
 
@@ -573,7 +573,7 @@ fn saving_a_new_project_chooses_a_folder_then_names_it_on_the_command_line() {
     let shown = vt_tui::overlays::picker::explorer::place_name(&root, Some(&home));
     // The project's random name is filled in after the folder, so Enter saves it.
     let name = app.services.project_name();
-    assert_eq!(app.overlays.command_line, format!("w {shown}/{name}"));
+    assert_eq!(app.overlays.command.line, format!("w {shown}/{name}"));
     assert!(
         app.services.status.contains("name"),
         "{}",
@@ -591,7 +591,7 @@ fn saving_a_new_project_chooses_a_folder_then_names_it_on_the_command_line() {
     command(&mut app, "new");
     assert_eq!(app.overlays.picker.as_ref().unwrap().title, "Save in");
     special(&mut app, KeyCode::Enter);
-    let line = app.overlays.command_line.clone();
+    let line = app.overlays.command.line.clone();
     assert!(line.starts_with(&format!("new {shown}/")), "{line}");
     assert!(!line.ends_with(&format!("/{name}")), "{line} is a new name");
     for _ in line.rsplit('/').next().unwrap().chars() {
@@ -639,7 +639,8 @@ fn a_new_project_has_a_random_name_numbered_in_a_folder_that_has_it() {
     special(&mut app, KeyCode::Enter);
     let given = app
         .overlays
-        .command_line
+        .command
+        .line
         .rsplit('/')
         .next()
         .unwrap()
@@ -656,7 +657,8 @@ fn a_new_project_has_a_random_name_numbered_in_a_folder_that_has_it() {
     special(&mut app, KeyCode::Enter);
     let fresh = app
         .overlays
-        .command_line
+        .command
+        .line
         .rsplit('/')
         .next()
         .unwrap()
@@ -675,12 +677,12 @@ fn ctrl_r_rolls_a_new_name_on_a_name_line() {
     press(&mut app, ":");
     press(&mut app, &typed);
     app.key(roll, Instant::now());
-    let first = app.overlays.command_line.clone();
+    let first = app.overlays.command.line.clone();
     let folder = format!("w {}/", root.display());
     assert!(first.starts_with(&folder), "{first}");
     assert!(random_name_like(&first[folder.len()..]), "{first}");
     app.key(roll, Instant::now());
-    assert_ne!(app.overlays.command_line, first, "each press rolls again");
+    assert_ne!(app.overlays.command.line, first, "each press rolls again");
     assert_eq!(app.modes.mode, Mode::Command);
     special(&mut app, KeyCode::Enter);
     let saved = app.services.folder.clone().unwrap();
@@ -694,18 +696,19 @@ fn ctrl_r_rolls_a_new_name_on_a_name_line() {
     // A render's extension and flags stay.
     command(&mut app, "render --tail");
     special(&mut app, KeyCode::Enter);
-    let line = app.overlays.command_line.clone();
+    let line = app.overlays.command.line.clone();
     let project = app.services.project_name();
     assert!(line.ends_with(&format!("/{project}.wav --tail")), "{line}");
     app.key(roll, Instant::now());
     assert!(
-        app.overlays.command_line.ends_with(".wav --tail"),
+        app.overlays.command.line.ends_with(".wav --tail"),
         "{}",
-        app.overlays.command_line
+        app.overlays.command.line
     );
     assert!(
         !app.overlays
-            .command_line
+            .command
+            .line
             .contains(&format!("/{project}.wav"))
     );
 
@@ -713,7 +716,7 @@ fn ctrl_r_rolls_a_new_name_on_a_name_line() {
     special(&mut app, KeyCode::Esc);
     press(&mut app, ":bpm 12");
     app.key(roll, Instant::now());
-    assert_eq!(app.overlays.command_line, "bpm 12");
+    assert_eq!(app.overlays.command.line, "bpm 12");
     std::fs::remove_dir_all(&root).unwrap();
 }
 
@@ -740,7 +743,7 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
     let home = std::env::var_os("HOME").map(PathBuf::from).unwrap();
     let shown = vt_tui::overlays::picker::explorer::place_name(&root.join("one"), Some(&home));
     assert_eq!(
-        app.overlays.command_line,
+        app.overlays.command.line,
         format!("render {shown}/one.wav --tail")
     );
     special(&mut app, KeyCode::Enter);
@@ -754,7 +757,7 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
     press(&mut app, "k");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
-        app.overlays.command_line,
+        app.overlays.command.line,
         format!("render {shown}/one-2.wav")
     );
     special(&mut app, KeyCode::Esc);
@@ -772,10 +775,11 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
     assert!(
         unsaved
             .overlays
-            .command_line
+            .command
+            .line
             .ends_with(&format!("/{name}.wav")),
         "{}",
-        unsaved.overlays.command_line
+        unsaved.overlays.command.line
     );
     std::fs::remove_dir_all(&root).unwrap();
 }
@@ -1050,9 +1054,9 @@ fn saving_a_project_somewhere_new_names_it_after_the_folder_and_keeps_the_name_a
     tap(&mut app, "k");
     special(&mut app, KeyCode::Enter);
     assert!(
-        app.overlays.command_line.ends_with("/verse"),
+        app.overlays.command.line.ends_with("/verse"),
         "{}",
-        app.overlays.command_line
+        app.overlays.command.line
     );
     special(&mut app, KeyCode::Enter);
     assert_eq!(
@@ -1087,9 +1091,9 @@ fn saving_a_project_somewhere_new_names_it_after_the_folder_and_keeps_the_name_a
     tap(&mut copy, "k");
     special(&mut copy, KeyCode::Enter);
     assert!(
-        copy.overlays.command_line.ends_with("/one-2"),
+        copy.overlays.command.line.ends_with("/one-2"),
         "{}",
-        copy.overlays.command_line
+        copy.overlays.command.line
     );
     // A name typed in its place names the project after it.
     for _ in 0.."one-2".len() {
@@ -1140,10 +1144,10 @@ fn the_project_pages_actions_open_the_explorer_and_its_audio_row_the_audio_page(
     assert_eq!(app.modes.mode, Mode::Command);
     let name = app.services.project_name();
     assert!(
-        app.overlays.command_line.starts_with("w ")
-            && app.overlays.command_line.ends_with(&format!("/{name}")),
+        app.overlays.command.line.starts_with("w ")
+            && app.overlays.command.line.ends_with(&format!("/{name}")),
         "{}",
-        app.overlays.command_line
+        app.overlays.command.line
     );
     special(&mut app, KeyCode::Esc);
     // With changes, open and new refuse, as :e and :new do.

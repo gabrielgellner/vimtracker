@@ -299,7 +299,7 @@ fn a_range_limits_re_slicing_to_the_slices_inside_it() {
     keys(&mut app, "G v 4 k");
     let selected = app.sample_page.selection().unwrap();
     keys(&mut app, ":");
-    assert_eq!(app.overlays.command_line, "'<,'>");
+    assert_eq!(app.overlays.command.line, "'<,'>");
     assert_eq!(app.sample_page.anchor, None);
     for c in "slice clear".chars() {
         app.key(Key::new(KeyCode::Char(c)), Instant::now());

@@ -237,7 +237,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     }
     if let Some(path) = CommandHistory::default_path() {
         let (history, note) = CommandHistory::load(&path);
-        app.overlays.command_history = history;
+        app.overlays.command.history = history;
         if let Some(note) = note
             && status.is_empty()
         {
@@ -740,12 +740,10 @@ pub fn draw_screen(
         help.draw(frame, body, &app.ctx());
         app.overlays.help = help;
     }
-    if let Some(menu) = &mut app.overlays.command_menu
-        && app.modes.mode == Mode::Command
-    {
-        // Under the names it finishes, after the `:`.
-        let column = 1 + menu.column(&app.overlays.command_line);
-        crate::overlays::picker::draw::draw_menu(frame, status, column, &mut menu.picker);
+    if app.modes.mode == Mode::Command {
+        let mut command = std::mem::take(&mut app.overlays.command);
+        command.draw(frame, status, &app.ctx());
+        app.overlays.command = command;
     }
     // Over everything, as what follows a key can be asked for in an overlay too.
     crate::overlays::help::draw_popup(frame, body, app, now);

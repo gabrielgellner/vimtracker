@@ -459,27 +459,7 @@ impl App {
             }
             // Saving keeps the project's name, numbered if the folder has it, as a copy is.
             _ if naming.command == "w" => numbered(&self.services.project_name(), is_taken),
-            _ => self.names.fresh(is_taken),
-        }
-    }
-
-    /// `C-r` on a name line: put a new random name in place of the one there, keeping the folder,
-    /// the extension and any flags, and not one already in that folder.
-    pub(crate) fn roll_name(&mut self) {
-        let names = &mut self.names;
-        let rolled = rolled_line(&self.overlays.command_line, |folder| {
-            let folder = if folder.is_empty() {
-                PathBuf::from(".")
-            } else {
-                crate::services::config::expand_home(folder)
-            };
-            let taken = taken_in(&folder);
-            names.fresh(|name| taken.contains(name))
-        });
-        if let Some(line) = rolled {
-            self.overlays.command_line = line;
-            self.overlays.command_menu = None;
-            self.overlays.command_history.stop();
+            _ => self.services.names.fresh(is_taken),
         }
     }
 
@@ -519,8 +499,8 @@ impl App {
         let home = home_folder();
         let folder = place_name(folder, home.as_deref());
         let folder = folder.trim_end_matches('/');
-        self.overlays.command_line = format!("{} {folder}/{name}{}", naming.command, naming.after);
-        self.overlays.command_menu = None;
+        self.overlays.command.line = format!("{} {folder}/{name}{}", naming.command, naming.after);
+        self.overlays.command.menu = None;
         self.modes.mode = Mode::Command;
         self.services.status = "Type a name, or C-r for another, then Enter".to_owned();
     }
