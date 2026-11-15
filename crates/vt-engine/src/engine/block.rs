@@ -9,7 +9,7 @@ use crate::mixer::{Reading, master};
 use crate::published::Bank;
 use crate::recorder::RecordSource;
 use crate::timing::{Part as TimedPart, PartTimes, SlotTimes};
-use crate::track_state::ShapedFrame;
+use crate::track_state::{RunContext, ShapedFrame};
 use crate::voice::Voice;
 
 use super::{Engine, RestingBuses, Transport};
@@ -127,13 +127,7 @@ impl Engine {
     /// an audition plays a track, and an edit, a lock or the transport changes what a bus is set
     /// to, so each run asks again. Done once, a resting group or return hears its silence, which
     /// is all that changes about it while it rests.
-    fn resting_buses(
-        &mut self,
-        routes: &[Option<usize>],
-        smoothing: f32,
-        fast: f32,
-        rate: u32,
-    ) -> RestingBuses {
+    fn resting_buses(&mut self, routes: &[Option<usize>], run: RunContext) -> RestingBuses {
         let mut resting = RestingBuses::default();
         if !self.resting {
             return resting;
@@ -147,7 +141,7 @@ impl Engine {
         }
         for (group, rests) in resting.groups.iter_mut().enumerate() {
             let index = groups + group;
-            *rests = !fed[group] && self.tracks[index].group_rests(smoothing, fast, rate);
+            *rests = !fed[group] && self.tracks[index].group_rests(run);
             if *rests {
                 self.tracks[index].rest_bus();
                 self.keys.frames[index] = [0.0; 2];
@@ -158,7 +152,7 @@ impl Engine {
         }
         for (place, rests) in resting.returns.iter_mut().enumerate() {
             let index = return_a + place;
-            *rests = !self.tracks[index].ringing(rate);
+            *rests = !self.tracks[index].ringing(run.rate);
             if *rests {
                 self.tracks[index].rest_bus();
                 self.keys.frames[index] = [0.0; 2];
@@ -166,7 +160,7 @@ impl Engine {
         }
         // Every other track is silent now, so whatever a slot of the master hears is.
         if resting.returns.iter().all(|&rests| rests) {
-            resting.master = self.tracks[master].master_rests(smoothing, fast, rate, &self.keys);
+            resting.master = self.tracks[master].master_rests(run, &self.keys);
         }
         resting
     }
@@ -224,8 +218,8 @@ impl Engine {
                 count += 1;
             }
         }
-        let (smoothing, fast, rate) = (self.smoothing, self.fast_smoothing, self.rate);
-        let resting = self.resting_buses(&routes[..count], smoothing, fast, rate);
+        let run = self.run;
+        let resting = self.resting_buses(&routes[..count], run);
         self.rested = resting;
         let tap = self.recorder.source();
         let tap_track = match tap {
@@ -283,16 +277,14 @@ impl Engine {
                         main[0] + tail[0] + preview[0],
                         main[1] + tail[1] + preview[1],
                     ],
-                    self.smoothing,
-                    self.fast_smoothing,
-                    self.rate,
+                    run,
                     &self.keys,
                 );
                 self.keys.frames[index] = track.key;
                 // Muted but heard by a compressor or Warps, it plays on, faded out of the mix and
                 // sends.
-                let heard = track.heard.next(self.smoothing);
-                let feeds = track.feeds.next(self.smoothing);
+                let heard = track.heard.next(run.smoothing);
+                let feeds = track.feeds.next(run.smoothing);
                 let dry = shaped.dry.map(|sample| sample * heard);
                 track.reading.add(dry, dry);
                 if tap_track == Some(index) {
@@ -326,7 +318,7 @@ impl Engine {
                 let shaped = if resting.groups[group] {
                     ShapedFrame::SILENT
                 } else {
-                    let shaped = self.tracks[index].process_group(bus, smoothing, fast, rate, keys);
+                    let shaped = self.tracks[index].process_group(bus, run, keys);
                     keys.frames[index] = self.tracks[index].key;
                     shaped
                 };
@@ -349,7 +341,7 @@ impl Engine {
                 .zip(from.iter_mut().zip(resting.returns))
             {
                 if !rests {
-                    *from = self.tracks[index].process_return(send, smoothing, fast, rate, keys);
+                    *from = self.tracks[index].process_return(send, run, keys);
                     keys.frames[index] = self.tracks[index].key;
                 }
                 if tap_track == Some(index) {
@@ -362,8 +354,7 @@ impl Engine {
                 mix[0] + from_a[0] + from_b[0],
                 mix[1] + from_a[1] + from_b[1],
             ];
-            let mastered =
-                self.tracks[master_track].process_master(mixed, smoothing, fast, rate, &self.keys);
+            let mastered = self.tracks[master_track].process_master(mixed, run, &self.keys);
             self.stopwatch.lap(TimedPart::Shaping(master_track));
             let out = master(mastered, limiter);
             self.tracks[master_track].reading.add(mastered, out);
