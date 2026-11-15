@@ -34,6 +34,8 @@ pub mod devices;
 pub mod edits;
 pub mod layouts;
 pub mod mix;
+#[cfg(test)]
+mod parity;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
