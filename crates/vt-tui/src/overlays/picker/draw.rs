@@ -577,8 +577,9 @@ mod tests {
         terminal
             .draw(|frame| super::draw(frame, frame.area(), &mut picker))
             .unwrap();
+        let mut pending = Vec::new();
         for c in "13j".chars() {
-            picker.key(Key::char(c));
+            crate::overlays::picker::tests::key_in(&mut picker, &mut pending, Key::char(c));
         }
         terminal
             .draw(|frame| super::draw(frame, frame.area(), &mut picker))

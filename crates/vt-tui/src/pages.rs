@@ -57,8 +57,8 @@ use crate::input::wheel::WheelSetting;
 use crate::overlays::command::parse::Line;
 use crate::overlays::field_jump::FieldJump;
 use crate::overlays::help::POPUP_DELAY;
-use crate::overlays::picker::Picker;
 use crate::overlays::picker::exploring::Naming;
+use crate::overlays::picker::{Pick, Picker};
 use crate::pages::sample::{SamplePage, Shown, is_sample_motion};
 use crate::roto::Roto;
 use crate::services::Services;
@@ -69,8 +69,8 @@ use crate::services::meter::Meter;
 use crate::services::sampling::still_recording;
 use crate::widgets::setting::{CellLook, Focus};
 
-/// What a key did, as far as the page alone can tell, and what it asks for that only `App` can
-/// do: open the picker, show another view or run a `:` line, and start Insert or another mode,
+/// What a key did, as far as the page or the overlay it went to alone can tell, and what it asks
+/// for that only `App` can do: open the picker, show another view or run a `:` line, and start Insert or another mode,
 /// open the explorer to name a file, hold what lasts while the key is down, or start the phrase
 /// view afresh. [`App::settled`] does what it asks once the page has given its borrows back, so a
 /// page needn't pass a key back to reach them.
@@ -106,6 +106,13 @@ pub enum Outcome {
     /// such as going to another section or chain row: a jump back, or going to another track,
     /// leaves the phrase view's top where it was.
     Moved,
+    /// Done, and what's open over the page closes, with nothing chosen.
+    Close,
+    /// Done, and the picker closes with this chosen, which `App` then does.
+    Choose(Pick),
+    /// Done, and an item in the explorer is given these tags, as typed after `T`. The explorer
+    /// stays open.
+    Tag { item: usize, tags: Vec<String> },
 }
 
 /// One of the program's pages as a component: its own state, its keys, its drawing and its
@@ -347,9 +354,10 @@ impl App {
         self.settled(outcome, true)
     }
 
-    /// Settle what a page's key did: a key it did takes the count if `takes_count` says so, and
-    /// one it refused takes it and says why on the status line. Then what it asks for happens:
-    /// the picker opens, the view shows or the line runs. Returns false for a key it passed back,
+    /// Settle what a page's key did, or an overlay's: a key it did takes the count if
+    /// `takes_count` says so, and one it refused takes it and says why on the status line. Then
+    /// what it asks for happens: the picker opens or closes, with what was chosen in it done, the
+    /// view shows or the line runs. Returns false for a key it passed back,
     /// for the next in the order to have.
     pub(crate) fn settled(&mut self, outcome: Outcome, takes_count: bool) -> bool {
         match outcome {
@@ -377,6 +385,25 @@ impl App {
             }
             Outcome::Hold(started) => self.held.started = Some(started),
             Outcome::Moved => self.phrase_view.top = self.services.cursor.step,
+            Outcome::Close => {
+                self.overlays.picker = None;
+                // A shape waiting for its command is given up.
+                self.overlays.shape_command = None;
+                self.modes.mode = self.mode_after_picker();
+                self.leave_explorer();
+            }
+            Outcome::Choose(pick) => {
+                let naming = self.explorer.naming.take();
+                self.overlays.picker = None;
+                self.modes.mode = self.mode_after_picker();
+                self.leave_explorer();
+                self.explorer.naming = naming;
+                self.choose(pick);
+            }
+            Outcome::Tag { item, tags } => {
+                self.tag_item(item, tags);
+                self.refresh_preview();
+            }
             Outcome::Done | Outcome::Refused(_) | Outcome::Passed => {}
         }
         true

@@ -31,6 +31,7 @@ use crate::graphics::{self, Graphics, PanelIds, Placements, SampleLines};
 use crate::input::keys::{KEYBOARD_FLAGS, Key};
 use crate::input::mode::{Mode, View};
 use crate::input::wheel;
+use crate::overlays::Overlay as _;
 use crate::overlays::command::history::CommandHistory;
 use crate::overlays::picker::places::RecentPlaces;
 use crate::pages::Page;
@@ -715,7 +716,6 @@ pub fn draw_screen(
         crate::screen::meter::draw(frame, meter, &app.services.meter, app.song().limiter);
     }
     crate::screen::status::draw(frame, status, app);
-    crate::overlays::help::draw_popup(frame, body, app, now);
     if app.modes.mode == Mode::Help {
         crate::overlays::help::draw_help(frame, body, app);
     }
@@ -730,8 +730,10 @@ pub fn draw_screen(
     if let Some(mapping) = &app.overlays.mapping {
         crate::overlays::mapping::draw::draw(frame, view, app, mapping);
     }
-    if let Some(picker) = &mut app.overlays.picker {
-        crate::overlays::picker::draw::draw(frame, body, picker);
+    // The picker keeps how far it has scrolled as it's drawn, so it's lent apart from the rest.
+    if let Some(mut picker) = app.overlays.picker.take() {
+        picker.draw(frame, body, &app.ctx());
+        app.overlays.picker = Some(picker);
     }
     if let Some(menu) = &mut app.overlays.command_menu
         && app.modes.mode == Mode::Command
@@ -740,6 +742,8 @@ pub fn draw_screen(
         let column = 1 + menu.column(&app.overlays.command_line);
         crate::overlays::picker::draw::draw_menu(frame, status, column, &mut menu.picker);
     }
+    // Over everything, as what follows a key can be asked for in an overlay too.
+    crate::overlays::help::draw_popup(frame, body, app, now);
 }
 
 /// What a view's drawing notes for after the frame, for [`draw_screen`] to keep.

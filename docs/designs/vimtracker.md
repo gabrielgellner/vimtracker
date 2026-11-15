@@ -904,7 +904,21 @@ held while it's down (`Hold`), or the phrase view started afresh after a move on
 (`Moved`), which `App::settled` does once the page has given its borrows back (#784);
 `Page::draw`, given a `Ctx`; and `Page::panels` and `Page::take_panels`, its pictures as data
 for `Graphics` and the ids they're given. `App` holds one of each page and dispatches by `View`
-with a plain `match`, so there's no `dyn`. A key goes, in this order, to the first that takes it:
+with a plain `match`, so there's no `dyn`.
+
+**`Overlay`** (`overlays.rs`, #872) is the same seam for what's drawn over a page: `Overlay::KEYS`,
+its rows of the binding table under `Overlay::MODE`, so which-key and `Space k` list them;
+`Overlay::key`, given a `CtxMut`, which answers with the pages' `Outcome`, closing with nothing
+chosen (`Close`), with a choice for `App` to do (`Choose`), or tagging an item (`Tag`) among
+what it can ask for; and `Overlay::draw`. Where it differs from a page is what overlays are:
+each has a line that's typed into, so `Overlay::text` takes a key as text, every key while
+`Overlay::takes_text` and otherwise one the table doesn't bind or that `key` passed back, as
+the explorer's `H` is passed back on a plain list and starts a search; and there's no count,
+as an overlay that counts keeps its own digits. `overlays::press` gives an overlay a key that
+way, with the keys of a sequence typed so far in `Grammar::pending`, as Normal's are. The
+picker is the first behind it; the others still read their keys in `App`'s methods.
+
+A key goes, in this order, to the first that takes it:
 
 1.  the overlay for the `Mode`: the picker, the shape panel, the mapping view, the command line,
     Insert, a jump, a guide or help (`App::handle_key`);
@@ -957,7 +971,8 @@ only name Normal's keys on those pages, for the binding table.
     into one undo step (`History::squash_to`, as the Roto's touch to let-go), and in a selection
     `Adjustments::join_from` keeps its running total in step (decisions 162 and 163).
 *   **`bindings.rs`:** the binding table, one list of mode, key sequence, `Cmd` and description,
-    assembled from its own rows and each component page's `Page::KEYS`, and pinned row by row in
+    assembled from its own rows, each component page's `Page::KEYS` and each overlay's
+    `Overlay::KEYS`, and pinned row by row in
     `bindings.tsv` by a test (`VT_PIN_BINDINGS=1` pins it again after a change on purpose). The
     which-key popup and `Space k` are generated from it. `CMD_ADJUSTS` is the one rule for Cmd
     with `h` `j` `k` `l`: `bindings` gives every mode that binds `=` `-` `+` `_` their Cmd keys
