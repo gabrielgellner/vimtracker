@@ -1,6 +1,6 @@
 //! The Roto's SysEx commands, version 1.6 of Melbourne Instruments' API, as typed messages each
 //! way: [`ToRoto`] for what the program sends and [`FromRoto`] for what the Roto does. Both can be
-//! written and read, so the fake Roto in [`crate::fake`] speaks the same code.
+//! written and read, so the fake Roto in `crate::fake` speaks the same code.
 //!
 //! Every message is `F0 00 22 03 02 <group> <command> <data> F7`. Where the PDF and the vendor's
 //! scripts disagree, the scripts win, as they run against the real firmware:

@@ -2653,6 +2653,7 @@ dependencies = [
  "midir",
  "serialport",
  "thiserror 2.0.21",
+ "vt-roto",
  "xxhash-rust",
 ]
 

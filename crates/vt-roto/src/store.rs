@@ -20,7 +20,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use xxhash_rust::xxh3::xxh3_64;
 
 use crate::bytes::{Label, ParamHash, PluginHash};
-use crate::fake::{FakePorts, FakeRoto};
 use crate::live::{Feel, KNOB_TOP, LiveControl, LiveDevice};
 use crate::serial::{
     Code, KnobHaptic, MAX_PLUGIN_SETUPS, MAX_STORED_STEPS, PluginKnobConfig, PluginSwitchConfig,
@@ -50,19 +49,6 @@ impl Serial for SerialLink {
         } else {
             self.change(request)
         }
-    }
-}
-
-impl Serial for FakeRoto {
-    fn exchange(&mut self, request: &Request) -> Result<Result<Reply, Code>, LinkError> {
-        let reply = self.serial_in(&request.encode());
-        Ok(request.decode_reply(&reply)?)
-    }
-}
-
-impl Serial for FakePorts {
-    fn exchange(&mut self, request: &Request) -> Result<Result<Reply, Code>, LinkError> {
-        self.with(|roto| roto.exchange(request))
     }
 }
 
