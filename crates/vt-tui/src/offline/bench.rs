@@ -18,13 +18,12 @@ use vt_engine::published::{Handover, Published};
 use vt_engine::slowdown::Look;
 
 use vt_engine::timing::{PartTimes, clock_cost};
-use vt_model::constants::FRAME_MS;
 use vt_model::insert::INSERTS;
 use vt_model::project;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Machine, Song};
 
-use crate::run::{RunError, analyse_now};
+use crate::run::{FRAME_MS, RunError, analyse_now};
 use crate::services::audio::{
     AudioChoice, CallbackTime, Output, PowerState, measure_full_speed, thread_cpu_time,
 };

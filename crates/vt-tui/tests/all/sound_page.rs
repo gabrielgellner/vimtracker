@@ -493,10 +493,11 @@ fn the_output_meter_reads_the_cursors_track_after_its_trim_as_it_plays() {
 /// what it measures with `--nocapture`, for decision 153.
 #[test]
 fn the_filter_curve_under_an_lfo_on_cut_is_sent_at_most_every_other_frame() {
-    use vt_model::constants::{FRAME_MS, TICKS_PER_QUARTER};
+    use vt_model::constants::TICKS_PER_QUARTER;
     use vt_model::lfo::{Lfo, Rate, Shape};
     use vt_model::modulation::ModSlot;
     use vt_tui::graphics::Graphics;
+    use vt_tui::run::FRAME_MS;
     let mut song = Song::new(2);
     song.tracks[0].machine = Machine::Plaits(SynthVoice::Acid);
     song.tracks[0].cutoff = 0x80;

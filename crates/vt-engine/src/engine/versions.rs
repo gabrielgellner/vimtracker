@@ -206,7 +206,9 @@ impl Engine {
     /// Keep each playing track on the row it was going to play next, as its chain's length changes:
     /// the same slot of its chain and row of that phrase's loop, or its chain's first row if those
     /// have gone. Only `started` moves, and a track whose chain didn't change is left alone, so its
-    /// count since its chain started carries on.
+    /// count since its chain started carries on. A track the version shares with the last, which
+    /// is every track an edit didn't touch, is passed over by its pointer, as finding its row
+    /// again finds it where it is.
     fn keep_places(&mut self, old: &Song) {
         if self.transport == Transport::Stopped {
             return;
@@ -219,6 +221,10 @@ impl Engine {
                 _ if index < was => index,
                 _ => continue,
             };
+            // The very track it was has the chains and phrases it had, so it's where it was.
+            if self.current.song.tracks.same(index, &old.tracks, then) {
+                continue;
+            }
             let old_chain = match self.tracks[index].launched {
                 Some(launched) => launched,
                 None => old
@@ -324,19 +330,32 @@ impl Engine {
     }
 
     /// Hear a change to a track's page straight away. A held value a step has set since stays
-    /// until something changes it, so this only acts on what actually changed.
+    /// until something changes it, so this only acts on what actually changed. It's compared with
+    /// the version the engine was playing, which may not be the one before this on the edit
+    /// thread, as a version still waiting is replaced by the next.
     fn follow_base(&mut self, old: &Published) {
         let fresh = Track::default();
         let (now, was) = (self.sounds(), old.song.sound_tracks());
+        let song = &self.current.song;
         let tracks = self.tracks.iter_mut().enumerate();
-        for ((index, state), track) in tracks.zip(&self.current.song.tracks) {
+        for ((index, state), track) in tracks.zip(&song.tracks) {
             // A fixed track is compared with what it was, wherever that was.
             let then = if index >= now {
                 index - now + was
             } else {
                 index
             };
-            let before = if index >= now || index < was {
+            let was_there = index >= now || index < was;
+            // The very track it was has nothing moved, and its macros hold what they held, so
+            // it's compared by its pointer alone. Its macros still put what they hold where they
+            // have it, as they do for every version, over a value a step has set since.
+            if was_there && song.tracks.same(index, &old.song.tracks, then) {
+                if track.macros.iter().any(|held| !held.maps.is_empty()) {
+                    state.put_macros_again(track);
+                }
+                continue;
+            }
+            let before = if was_there {
                 old.song.tracks.get(then).unwrap_or(&fresh)
             } else {
                 &fresh
@@ -413,8 +432,12 @@ fn follow_note(note: &mut NoteOn, bank: &Bank) {
 
 #[cfg(test)]
 mod tests {
+    use vt_model::order::Order;
     use vt_model::samples::SamplePool;
     use vt_model::settings::SettingId;
+    use vt_model::song::{Chain, ChainEntry, Lane, Phrase};
+    use vt_model::speed::Speed;
+    use vt_model::step::Gate;
 
     use super::*;
     use crate::track_state::LOOKUPS;
@@ -441,5 +464,69 @@ mod tests {
         let own = (0..).map_while(SettingId::track).count();
         assert_eq!(lookups(&mut engine, &song), 2 * own);
         assert_eq!(engine.live(3).cutoff, 0x40, "and hears it");
+    }
+
+    /// A song whose first track plays a chain of two phrases in an order, with rows of two pulses
+    /// and of none and a lane on its first FX column, at a speed of its own.
+    fn walking(order: Order) -> Song {
+        let mut song = Song::new(3);
+        song.millibpm = 300_000;
+        song.seed = 7;
+        let track = &mut song.tracks[0];
+        track.speed = Speed::SixteenthTriplet;
+        for (id, length) in [(0, 7), (1, 5)] {
+            let mut phrase = Phrase::new(length);
+            phrase.set_order(order);
+            for row in 0..length {
+                let step = phrase.step_mut(row).unwrap();
+                *step = "C-3 --".parse().unwrap();
+                step.gate = Some(Gate {
+                    pulses: [1, 2, 0][row % 3],
+                    ..Gate::default()
+                });
+            }
+            phrase.set_lane(0, Some(Lane::new(0, 3)));
+            track.phrases.insert(id, Arc::new(phrase));
+        }
+        let entry = |phrase| ChainEntry {
+            phrase,
+            transpose: 0,
+        };
+        let entries = vec![entry(0), entry(1), entry(0)];
+        let label = String::new();
+        track.chains.insert(0, Arc::new(Chain { entries, label }));
+        song
+    }
+
+    #[test]
+    fn a_track_an_edit_didnt_touch_keeps_its_place_in_every_order() {
+        for order in Order::ALL {
+            let song = walking(order);
+            let first = Published::new(Arc::new(song), Arc::new(SamplePool::default()));
+            let mut engine = Engine::new(48_000, Arc::new(first));
+            engine.play_from(0);
+            let mut last = Arc::clone(engine.current());
+            for block in 0..400 {
+                engine.process(&mut [0.0; 512]);
+                let place = |engine: &Engine| {
+                    let state = &engine.tracks[0];
+                    (state.started, state.lane_offsets, state.clock.count)
+                };
+                let before = place(&engine);
+                // Another track's cutoff turns, as a knob held does, a version a block.
+                let mut next = Song::clone(&last.song);
+                next.tracks[1].cutoff = block as u8;
+                assert!(next.tracks.same(0, &last.song.tracks, 0));
+                let next = Arc::new(Published::after(
+                    Arc::new(next),
+                    Arc::clone(&last.samples),
+                    Some(&last),
+                ));
+                engine.swap(Arc::clone(&next));
+                last = next;
+                assert_eq!(place(&engine), before, "{order:?}, block {block}");
+            }
+            assert!(engine.tracks[0].clock.count > 60, "{order:?} played on");
+        }
     }
 }

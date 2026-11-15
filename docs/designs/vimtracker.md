@@ -291,7 +291,7 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 | Crate | Owns | May depend on |
 |---|---|---|
 | `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, every RON file read and written one way, each write atomic (`ron_file.rs`), kits, presets, sample decoding and resampling, sample analysis, and reading WAV markers and `.ot` files | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `realfft`, `thiserror` and `xxhash-rust` |
-| `vt-engine` | `Published`, the queues to and from the callback (`link.rs`), transport and sequencing (`engine.rs` and `engine/`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), which is the crate's own, with what others draw of it in `pictures.rs` and the parts the tests play on their own in `parts.rs`, the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues, `hound` to write WAVs, `wide` for `Supersaw`'s four lanes, `realfft` for `Clouds`' spectral mode and `thiserror` |
+| `vt-engine` | `Published`, the queues to and from the callback (`link.rs`) and their lengths (`queues.rs`), transport and sequencing (`engine.rs` and `engine/`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), which is the crate's own, with what others draw of it in `pictures.rs` and the parts the tests play on their own in `parts.rs`, the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues, `hound` to write WAVs, `wide` for `Supersaw`'s four lanes, `realfft` for `Clouds`' spectral mode and `thiserror` |
 | `vt-roto` | Melbourne Instruments' Roto-Control: its SysEx, CC and serial protocols, typed each way (`sysex.rs`, `cc.rs`, `serial.rs`), the handshake (`session.rs`), the link's thread with finding the ports and reconnecting (`link.rs`, `transport.rs`), devices in PLUGIN mode, live or stored, with their buttons' lights, the Roto's track list and what changed sent back (`live.rs`), MIX mode's banks, track focus, lights and meters (`mix.rs`), a device's pages of eight knobs and eight buttons as data (`layout.rs`), vimtracker's own stored setups, written only under its own hashes and only when they change (`store.rs`), a fake Roto in memory (`fake.rs`, built only with the `fake` feature, which its own tests and vt-tui's turn on as a dev-dependency, so a release build leaves it out), and `roto-probe` | No other vimtracker crate: `midir` for MIDI, `serialport` (without `libudev`) for the serial port, `thiserror` and `xxhash-rust` |
 | `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, the mouse wheel as a knob (`input/wheel.rs`), the Roto's setting, every kind of device's layout on it (`roto/layouts.rs`), its devices as the Roto shows them, and its knobs' and buttons' moves as edits (`roto.rs`, `roto/devices.rs`, `roto/edits.rs`), the song as MIX mode's strips (`roto/mix.rs`), the faders as the steps automate them and a hand takes them over (`services/automating.rs`), and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
 
@@ -401,10 +401,13 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     empties the return queue each frame, and the versions are freed there. A track's page is heard
     at once: `hand_over` looks up only the settings `Track::settings_moved_from` names, those of
     what differs between the track's two versions and those either keeps a value or a fine part of
-    that the other doesn't, so a track the edit didn't touch costs comparisons and no look-ups
-    (#842). It's worked out in the callback rather than with the version, as the version a
-    callback swaps from isn't always the one the next was built after: a waiting one can be
-    replaced.
+    that the other doesn't (#842). A track the edit didn't touch is the very `Arc<Track>` the
+    callback's version has, so `follow_base` and `keep_places` pass over it by
+    `Tracks::same`, one pointer compared, and only its macros, if it has any mapped, put what
+    they hold again (#871). It's worked out in the callback rather than with the version, as the
+    version a callback swaps from isn't always the one the next was built after: a waiting one
+    can be replaced. The callback drops no track either: its tracks are its version's, which
+    goes back whole.
 5.  **Long buffers**, for the effects with memory such as delays and reverbs, are made on the edit
     thread for what a version needs (`MemoryCount`) and sent ahead of it. Spare ones are asked back
     with `Command::ReleaseMemory`, and come back on a queue of their own to be freed.
@@ -778,13 +781,15 @@ module per file, each keeping its port's licence notice:
 |---|---|---|
 | `voices/` | What makes a track's sound from its notes, and the parts only voices use | `acid`, `additive`, `braids_analog`, `braids_digital`, `braids_filter_fm`, `braids_noise`, `braids_physical`, `braids_parts` (how Braids' models run at twice the rate, its analog oscillator and waveshapers), `braids_vocal`, `braids_waves`, `chiptune`, `chord`, `chord_bank`, `drums`, `fm`, `four_op` (four operators in `wide`'s `f32x4` lanes, an operator a lane), `grain`, `kick`, `modal`, `noise`, `particle`, `phase_distortion`, `six_op`, `speech`, `string_model`, `supersaw` (its saws four at a time in `wide`'s `f32x4` lanes), `swarm`, `variable_shape`, `virtual_analog`, `virtual_analog_vcf`, `wave_terrain`, `waveshaping`, `waveshaping_tables`, `wavetable`, and `tables/` with Plaits' waves, DX7 patches and words and Braids' waves |
 | `filters/` | The track's filter and the character filters it switches between, and the slot effects that are filters | `filter`, `diode_filter`, `dirty_filter`, `korg35`, `obx` (the OB-X's two-pole filter, after OB-Xf's), `comb`, `lpg`, `vowel` |
-| `effects/` | The other slot effects, and what plays a slot | `beads` (Mutable Instruments' Beads, whose grains are `granular`'s and whose wow and flutter are `tape`'s), `chorus`, `clouds` (Mutable Instruments' Clouds, whose reverb and pitch shifter are `reverb`'s and `pitch_shifter`'s, with its phase vocoder in `clouds/spectral`, on `realfft`), `delay`, `distort` (also `Distortion`, what a slot keeps for it), `echo` (the Space Echo, a Roland RE-201's tape loop, whose reverb is `spring`'s), `exciter`, `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take, by `EffectKind`, and `memories!`, the one list of the effects that take one, which writes `Memory` and every `match` that hands a call on to them), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `rotary`, `slot` (`InsertState`, which plays whichever effect a slot has, `Keys`, what it hears from other tracks, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `space`, `spring`, `stutter`, `sweep` (sines swept through a slot, for the tests that hold its curve to what's heard), `tail` (how a reverb's tail dies away, for its drawing), `tape`, `warps`, and `tables/` with Warps' fold |
+| `effects/` | The other slot effects, and what plays a slot | `beads` (Mutable Instruments' Beads, whose grains are `granular`'s and whose wow and flutter are `tape`'s), `chorus`, `clouds` (Mutable Instruments' Clouds, whose reverb and pitch shifter are `reverb`'s and `pitch_shifter`'s, with its phase vocoder in `clouds/spectral`, on `realfft`), `delay`, `distort` (also `Distortion`, what a slot keeps for it), `echo` (the Space Echo, a Roland RE-201's tape loop, whose reverb is `spring`'s), `exciter`, `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take, by `EffectKind`, and `memories!`, the one list of the effects that take one, which writes `Memory` and every `match` that hands a call on to them), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `rotary`, `slot` (`InsertState`, which plays whichever effect a slot has, `kept!`, the one list of the effects small enough to keep in every slot, which writes `Kept`, `Keys`, what it hears from other tracks, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `space`, `spring`, `stutter`, `sweep` (sines swept through a slot, for the tests that hold its curve to what's heard), `tail` (how a reverb's tail dies away, for its drawing), `tape`, `warps`, and `tables/` with Warps' fold |
 | `dynamics/` | The mixing tools | `compressor` (the `Comp` slot, an enum of its types, the `Auto` and `Makeup` they share, and `Clean`), `console` (its `Console` type, fitted to Bus FORCE), `glue` (its `Glue` type, fitted to Live's Glue Compressor, and the `Peak Clip` the slot runs after its mix), `limiter`, `eq` |
 | `blocks/` | Small parts the others share, which use nothing else in `dsp` | `clip` (a clamp that's safe in a feedback loop, #461, and stmlib's soft clip and soft limit built on it), `coefficient` (a one-pole's coefficient from a time constant or a corner, `of_time`, `kept_over` and `of_corner`), `line` (delay lines: `Lines` and `StereoLine`, a power of two long; `Tape`, Delay's and Echo's frame line; `SharedLines`, Clouds' many short lines in one buffer; and the two forms of the Hermite read, `hermite` and `hermite_soras`), `one_pole` (the trapezoidal one-pole's `gain` and `low_pass`), `xorshift` (the xorshift32 the tape, Grains and Warps keep, as `Pcg32` would change what they play), `drift` (what makes each note of an analog voice a little different, decisions 190 and 191), `flush` (a filter's state let go once it's far below anything heard, #260), `oversampler` (also its `Decimator`, for a sound made at twice the rate), `response` (what a filter does to a steady sine, from its coefficients, for the FX page's curves, decision 333), `sides` (a state for each side, worked out once for both while a sound is the same on both, as every `OneSide` effect keeps its own), `smoother`, `sine_table`, `plaits_parts` |
 
 A new voice, filter, effect or dynamics tool goes in its folder. A slot effect with a long buffer
 implements `SlotEffect` (and `Rung`, if the slot plays it through `ring`) and takes one line of
-`memories!`; the slot reaches it by `match`, never `dyn` (decision 340). A voice implements
+`memories!`; the slot reaches it by `match`, never `dyn` (decision 340). One small enough for
+every slot takes one line of `kept!` in `slot.rs` instead, which writes `Kept`, the one of them a
+slot holds inline, and an arm of `InsertState::effect`. A voice implements
 `SynthEngine` (`dsp/voices.rs`) and takes one line of `synths!`. [Adding a device](adding-a-device.md) has the rest
 of each family's checklist. A part that two folders
 would share, such as the antiderivative antialiasing, 4x oversampling and state variable filter of
@@ -2047,13 +2052,18 @@ These applied to every issue of M1 to M3, as first written. Some rows have been 
 | `FX_SLOTS` | 3 | FX slots per step |
 | `DEFAULT_MILLIBPM` | 120000 | New project tempo, in thousandths of a BPM |
 | `HISTORY_LIMIT` | 1000 | Undo versions kept |
+
+**The queues' lengths** are the engine's own, in `vt-engine/src/queues.rs`, as it makes each of them in `link::connect`; `link` gives out `INPUT_QUEUE`, the one the program makes itself. Changing these needs a document update too.
+
+| Constant | Value | Meaning |
+|---|---|---|
 | `PUBLISH_QUEUE` | 1 | Song versions waiting for the callback |
 | `RETURN_QUEUE` | 16 | Versions waiting to be freed |
 | `COMMAND_QUEUE` | 64 | Transport, preview and mute messages |
 | `TELEMETRY_QUEUE` | 64 | Playhead and load messages; newest dropped when full |
 | `NOTE_PITCH_QUEUE` | 256 | What the mod slots moved each note's pitch by; newest dropped when full |
 
-**Tuning values** can change by ear with no document update: `SMOOTHING_MS` (10), `DECLICK_FRAMES` (64), `PREVIEW_MS` (250), `FRAME_MS` (33), and `AUTOSAVE_SECONDS` (60).
+**Tuning values** can change by ear with no document update: in `vt-model`'s `constants.rs`, `SMOOTHING_MS` (10), `DECLICK_FRAMES` (64) and `PREVIEW_MS` (250); and the program's own, in `vt-tui`, `FRAME_MS` (33) in `run.rs` and `AUTOSAVE_SECONDS` (60) in `services/autosave.rs`.
 
 **Step text format.** Fields are separated by one space, and an FX slot is a command and value with no space. A hold or glide adds one letter, as in `CUT40h`.
 
