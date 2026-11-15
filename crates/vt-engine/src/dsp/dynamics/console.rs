@@ -29,6 +29,7 @@ use vt_model::insert::{
     CONSOLE_AUTO_RELEASE, CONSOLE_RATIOS, CONSOLE_RELEASES_MS, Compressor as Settings, threshold_db,
 };
 
+use crate::dsp::blocks::coefficient::{kept_over, of_time};
 use crate::dsp::blocks::sides::same_bits_by_fields;
 use crate::dsp::blocks::smoother::Smoothed;
 
@@ -51,11 +52,6 @@ const HOLD_MS: f32 = 10.0;
 const AUTO_DISCHARGE: f32 = 750e3 * 0.47e-6;
 const AUTO_INTO_SLOW: f32 = 91e3 * 0.47e-6;
 const AUTO_SLOW_FILLS: f32 = 91e3 * 6.8e-6;
-
-/// How much of the last value a one-pole keeps each frame, for a time constant in seconds.
-fn keeps(seconds: f32, rate: u32) -> f32 {
-    (-1.0 / (seconds * rate as f32).max(1.0)).exp()
-}
 
 /// The control voltage the rectifier asks for, in dB, for how far what it hears is over the
 /// threshold: none below it, then bending over the knee into `slope` times what's over.
@@ -176,18 +172,18 @@ impl Console {
         }
         let attack = ATTACK_MS[usize::from(settings.console_attack).min(ATTACK_MS.len() - 1)];
         let release = (settings.console_release < CONSOLE_AUTO_RELEASE).then(|| {
-            keeps(
+            kept_over(
                 CONSOLE_RELEASES_MS[usize::from(settings.console_release)] / 1000.0,
                 rate,
             )
         });
         let times = Times {
-            attack: keeps(attack / 1000.0, rate),
+            attack: kept_over(attack / 1000.0, rate),
             release,
-            hold: keeps(HOLD_MS / 1000.0, rate),
-            discharge: 1.0 - keeps(AUTO_DISCHARGE, rate),
-            into_slow: 1.0 - keeps(AUTO_INTO_SLOW, rate),
-            slow_fills: 1.0 - keeps(AUTO_SLOW_FILLS, rate),
+            hold: kept_over(HOLD_MS / 1000.0, rate),
+            discharge: of_time(AUTO_DISCHARGE, rate),
+            into_slow: of_time(AUTO_INTO_SLOW, rate),
+            slow_fills: of_time(AUTO_SLOW_FILLS, rate),
         };
         self.times = Some((settings, times));
         times

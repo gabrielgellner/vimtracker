@@ -50,6 +50,7 @@ use vt_model::insert::{
     Compressor as Settings, CompressorType, GLUE_AUTO_RELEASE, GLUE_RATIOS, range_db, threshold_db,
 };
 
+use crate::dsp::blocks::coefficient::of_time;
 use crate::dsp::blocks::sides::same_bits_by_fields;
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::effects::memory::SongPlace;
@@ -92,11 +93,6 @@ const CLIP_CEILING: f32 = 0.944_060_9;
 /// How long switching `Peak Clip` in or out takes, in ms, as long as switching a slot out does, so
 /// it doesn't click on a loud sound.
 const CLIP_SWITCH_MS: f32 = 5.0;
-
-/// How much of the way a one-pole goes each frame, for a time constant in seconds.
-fn takes(seconds: f32, rate: u32) -> f32 {
-    1.0 - (-1.0 / (seconds * rate as f32).max(1.0)).exp()
-}
 
 /// The most the rectifier asks for, in dB, at a value of `Range`.
 fn ceiling(value: u8) -> f32 {
@@ -297,17 +293,17 @@ impl Glue {
         }
         let attack = ATTACK_MS[usize::from(settings.glue_attack).min(ATTACK_MS.len() - 1)];
         let release = (settings.glue_release < GLUE_AUTO_RELEASE).then(|| {
-            takes(
+            of_time(
                 RELEASE_MS[usize::from(settings.glue_release)] / 1000.0,
                 rate,
             )
         });
         let times = Times {
-            attack: takes(attack / 1000.0, rate),
+            attack: of_time(attack / 1000.0, rate),
             release,
-            discharge: takes(AUTO_DISCHARGE, rate),
-            into_slow: takes(AUTO_INTO_SLOW, rate),
-            slow_fills: takes(AUTO_SLOW_FILLS, rate),
+            discharge: of_time(AUTO_DISCHARGE, rate),
+            into_slow: of_time(AUTO_INTO_SLOW, rate),
+            slow_fills: of_time(AUTO_SLOW_FILLS, rate),
         };
         self.times = Some((settings, times));
         times

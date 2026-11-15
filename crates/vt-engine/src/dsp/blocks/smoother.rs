@@ -2,18 +2,17 @@
 
 use vt_model::constants::{FAST_SMOOTHING_MS, SMOOTHING_MS};
 
+use super::coefficient::of_time;
 use super::sides::same_bits_by_fields;
 
 /// How much of the remaining distance to cover each frame.
 pub(crate) fn coefficient(rate: u32) -> f32 {
-    let frames = SMOOTHING_MS as f32 / 1000.0 * rate as f32;
-    1.0 - (-1.0 / frames.max(1.0)).exp()
+    of_time(SMOOTHING_MS as f32 / 1000.0, rate)
 }
 
 /// The same for fast changes, like an envelope's snap: just enough to stop a jump clicking.
 pub(crate) fn fast_coefficient(rate: u32) -> f32 {
-    let frames = FAST_SMOOTHING_MS as f32 / 1000.0 * rate as f32;
-    1.0 - (-1.0 / frames.max(1.0)).exp()
+    of_time(FAST_SMOOTHING_MS as f32 / 1000.0, rate)
 }
 
 /// A value moving toward its target.
