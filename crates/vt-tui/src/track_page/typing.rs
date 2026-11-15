@@ -62,7 +62,7 @@ impl App {
 
 /// Write what was typed into one of the track's settings, as its view reads it, saying on the
 /// status line why where it doesn't.
-pub(super) fn commit_control(services: &mut Services, control: Control, text: &str) {
+fn commit_control(services: &mut Services, control: Control, text: &str) {
     let track = services.page_track();
     match control {
         // A generator's are typed into its shape, by `App::commit_typed`.

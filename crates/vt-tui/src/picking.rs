@@ -807,7 +807,7 @@ impl App {
     }
 
     /// Do what a picker's choice says.
-    pub(crate) fn choose(&mut self, pick: Pick) {
+    fn choose(&mut self, pick: Pick) {
         match pick {
             Pick::View(view) => self.jump_to_view(view),
             Pick::TrackPage(page) => self.show_track_page(page),
@@ -902,28 +902,11 @@ impl App {
             Pick::Length(length) => self.set_length(length),
             Pick::Condition { slot, value } => self.pick_condition(slot, value),
             Pick::Amount { slot, value } => self.pick_amount(slot, value),
-            Pick::Accumulation {
-                track,
-                accumulation,
-            } => {
-                self.services.apply(&Action::SetAccumulation {
-                    track,
-                    accumulation,
-                });
-            }
-            Pick::Arpeggio { track, arpeggio } => {
-                self.services
-                    .apply(&Action::SetArpeggio { track, arpeggio });
-            }
             Pick::Mod {
                 track,
                 slot,
                 modulator,
             } => self.pick_mod(track, slot, modulator),
-            Pick::Machine { track, machine } => {
-                self.services
-                    .apply(&Action::SetTrackMachine { track, machine });
-            }
             Pick::Setting {
                 track,
                 setting,
@@ -935,19 +918,6 @@ impl App {
                     value,
                 });
             }
-            Pick::FilterType { track, filter } => {
-                self.services
-                    .apply(&Action::SetFilterType { track, filter });
-            }
-            Pick::FilterMode { track, mode } => {
-                self.services.apply(&Action::SetFilterMode { track, mode });
-            }
-            Pick::Role { track, role } => {
-                self.services.apply(&Action::SetTrackRole { track, role });
-            }
-            Pick::Speed { track, speed } => {
-                self.services.apply(&Action::SetTrackSpeed { track, speed });
-            }
             Pick::Param {
                 track,
                 control,
@@ -955,15 +925,6 @@ impl App {
             } => self.pick_param(track, control, value),
             Pick::RowPhrase(phrase) => self.pick_row_phrase(phrase),
             Pick::SectionChain(chain) => self.pick_section_chain(chain),
-            Pick::Insert {
-                track,
-                slot,
-                insert,
-            } => self.services.apply(&Action::SetInsert {
-                track,
-                slot,
-                insert,
-            }),
             Pick::Line(line) => self.line(line),
             Pick::ScaleTo(scale) => self.set_scale(scale),
             Pick::ShowGroove(groove) => self.project_page.groove_shown = Some(groove),
