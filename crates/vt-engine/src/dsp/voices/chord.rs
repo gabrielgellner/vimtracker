@@ -273,7 +273,7 @@ impl WaveVoice {
 
 /// One voice of the model. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct Chord {
+pub(crate) struct Chord {
     chords: ChordBank,
     organ: [StringSynth; VOICES],
     waves: [WaveVoice; VOICES],
@@ -309,7 +309,7 @@ impl SynthEngine for Chord {
 }
 
 impl Chord {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             chords: ChordBank::new(),
             organ: [StringSynth::new(); VOICES],

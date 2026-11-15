@@ -2,7 +2,7 @@
 //! `resources/lookup_tables.py`, under the licence in `waveshaping.rs`.
 
 /// The waveshapers, in the order `Shape` moves through them, each on `-32767..=32767`.
-pub const SHAPES: [[i16; 257]; 5] = [
+pub(super) const SHAPES: [[i16; 257]; 5] = [
     // inverse tan
     [
         -32767, -26872, -24921, -23661, -22748, -22047, -21486, -21026, -20640, -20310, -20025,
@@ -127,7 +127,7 @@ pub const SHAPES: [[i16; 257]; 5] = [
 
 /// The wavefolder.
 #[allow(clippy::excessive_precision)]
-pub const FOLD: [f32; 516] = [
+pub(super) const FOLD: [f32; 516] = [
     -0.998055, -0.997065, -0.996065, -0.995053, -0.994030, -0.992996, -0.991950, -0.990893,
     -0.989825, -0.988747, -0.987658, -0.986559, -0.985451, -0.984334, -0.983209, -0.982076,
     -0.980936, -0.979791, -0.978640, -0.977486, -0.976329, -0.975169, -0.974008, -0.972848,

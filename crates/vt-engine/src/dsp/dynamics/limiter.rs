@@ -17,7 +17,7 @@ use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::SlotEffect;
 
 /// How far ahead it looks, in ms. Everything through it comes out this late.
-pub const LOOK_AHEAD_MS: f32 = 2.0;
+pub(crate) const LOOK_AHEAD_MS: f32 = 2.0;
 
 /// A gain from dB.
 fn gain_of(db: f32) -> f32 {
@@ -26,7 +26,7 @@ fn gain_of(db: f32) -> f32 {
 
 /// A limiter's lines and the gain it's worked out.
 #[derive(Debug, Clone)]
-pub struct Limiter {
+pub(crate) struct Limiter {
     /// The sound, driven and over the ceiling as it was going in, waiting to come out: it's limited
     /// to no more than 1, and the ceiling brought back as it comes out.
     lines: [Vec<f32>; 2],
@@ -61,7 +61,7 @@ pub struct Limiter {
 
 impl Limiter {
     /// Lines long enough to look ahead at this rate.
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         let ahead = ((LOOK_AHEAD_MS / 1000.0 * rate as f32).round() as usize).max(1);
         // The window takes in the frame coming out and every frame behind it in the line.
         let window = ahead + 1;
@@ -92,23 +92,24 @@ impl Limiter {
     }
 
     /// How long anything stays in it, in frames, which is more than it looks ahead.
-    pub fn frames(&self) -> usize {
+    pub(crate) fn frames(&self) -> usize {
         self.mask + 1
     }
 
     /// How late it puts the sound, in frames.
-    pub fn latency(&self) -> usize {
+    #[cfg(test)]
+    pub(crate) fn latency(&self) -> usize {
         self.ahead
     }
 
     /// How far it's turning down now, in dB, for a meter: what it's taking off peaks over the
     /// ceiling, not the ceiling itself.
-    pub fn reduction(&self) -> f32 {
+    pub(crate) fn reduction(&self) -> f32 {
         -20.0 * self.turned.log10()
     }
 
     /// Forget what's in it, for a fresh start.
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         for line in self.lines.iter_mut().chain(&mut self.dry) {
             line.fill(0.0);
         }
@@ -116,7 +117,7 @@ impl Limiter {
     }
 
     /// Let go entirely, as it would have after a long silence.
-    pub fn rest(&mut self) {
+    pub(crate) fn rest(&mut self) {
         self.held_count = 0;
         self.released = 1.0;
         self.turned = 1.0;
@@ -125,7 +126,7 @@ impl Limiter {
     }
 
     /// Take what's set now.
-    pub fn follow(&mut self, settings: Settings) {
+    pub(crate) fn follow(&mut self, settings: Settings) {
         self.drive.target = gain_of(input_db(f32::from(settings.input)));
         self.ceiling.target = gain_of(ceiling_db(f32::from(settings.ceiling)));
         let frames = limit_release_ms(f32::from(settings.release)) / 1000.0 * self.rate as f32;
@@ -133,7 +134,7 @@ impl Limiter {
     }
 
     /// Jump to what's set, as it's only just started.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.drive.settle();
         self.ceiling.settle();
     }
@@ -178,7 +179,7 @@ impl Limiter {
     /// One frame in, and out of the far end of the line: the limited frame, all wet, and the dry
     /// one, each as late as the other.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2], smoothing: f32) -> [[f32; 2]; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2], smoothing: f32) -> [[f32; 2]; 2] {
         let drive = self.drive.next(smoothing);
         let ceiling = self.ceiling.next(smoothing);
         let scale = drive / ceiling;

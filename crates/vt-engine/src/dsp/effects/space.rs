@@ -189,7 +189,7 @@ fn mixed(outs: [f32; 4]) -> [f32; 4] {
 
 /// The stereo space.
 #[derive(Debug, Clone)]
-pub struct Space {
+pub(crate) struct Space {
     /// Every line of both sides, each in a place of its own.
     buffer: Vec<f32>,
     /// Where each line is written on this frame of the tank. It goes down by one each.
@@ -224,7 +224,7 @@ pub struct Space {
 
 impl Space {
     /// Make one for a sample rate, with lines long enough for the biggest.
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         let scale = rate as f32 / TUNING_RATE;
         let every = every(scale);
         let mut base = 0;
@@ -278,7 +278,7 @@ impl Space {
     }
 
     /// Forget what's in it, and start its random speeds again.
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.buffer.fill(0.0);
         self.vibrato.fill(0.0);
         for side in &mut self.sides {
@@ -306,7 +306,7 @@ impl Space {
     }
 
     /// Take the settings.
-    pub fn follow(&mut self, settings: Settings) {
+    pub(crate) fn follow(&mut self, settings: Settings) {
         let share = |value: u8| f32::from(value) / 255.0;
         self.decay.target = share(settings.decay);
         self.size.target = share(settings.size);
@@ -315,7 +315,7 @@ impl Space {
     }
 
     /// Jump to the settings, for starting afresh.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.decay.settle();
         self.size.settle();
         self.damp.settle();
@@ -371,7 +371,7 @@ impl Space {
 
     /// Feed one frame in and get the wet signal out.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         self.decay.next(self.smoothing);
         self.size.next(self.smoothing);
         self.damp.next(self.smoothing);

@@ -48,7 +48,7 @@ impl ValueLayers {
 /// Where a setting starts on this track, before any step sets it, with a coarse byte and a fine
 /// one. A voice keeps its own, an effect's setting is what's in its slot, or its default while
 /// another effect is there, and a mod slot's depth and phase are what its page has.
-pub fn base_of(id: SettingId, track: &Track) -> u16 {
+pub(crate) fn base_of(id: SettingId, track: &Track) -> u16 {
     track.value_of(id)
 }
 
@@ -78,7 +78,7 @@ impl TrackState {
     /// Have each macro put the settings it holds where it has them, now, with what modulation
     /// last added to it, as a new version's maps may differ or the settings have just been set
     /// from the song's.
-    pub fn put_macros_again(&mut self, track: &Track) {
+    pub(crate) fn put_macros_again(&mut self, track: &Track) {
         self.wake();
         self.macro_heard = [None; MACROS];
         // A generator's setting no macro holds now goes back to its shape.
@@ -92,7 +92,7 @@ impl TrackState {
     /// Put each macro that has moved since the block began where it has its settings now, as a
     /// row's `MAC` lock has just moved it, so the row is heard with it rather than from the next
     /// block. Whether that moved a generator's setting, so the row is to be read again.
-    pub fn put_macros_now(&mut self, track: &Track) -> bool {
+    pub(crate) fn put_macros_now(&mut self, track: &Track) -> bool {
         let before = self.gen_holds.changes();
         let moves = std::array::from_fn(|at| {
             SettingId::macro_at(at).map_or(0.0, |id| self.offsets[id.index()])
@@ -133,7 +133,7 @@ impl TrackState {
 
     /// The accumulator's settings as they're heard, its `Up` and `Down` as macros and modulation
     /// have them.
-    pub fn heard_accumulation(&self, track: &Track) -> Accumulation {
+    pub(crate) fn heard_accumulation(&self, track: &Track) -> Accumulation {
         let mut heard = track.accumulation;
         for at in 0..ACCUMULATION_SETTINGS {
             if let Some(value) = self.played(at, track.accumulation.own_value(at)) {
@@ -145,7 +145,7 @@ impl TrackState {
 
     /// The arpeggio's settings as they're heard, its `Rate` and `Octaves` as macros and
     /// modulation have them.
-    pub fn heard_arpeggio(&self, track: &Track) -> Arpeggio {
+    pub(crate) fn heard_arpeggio(&self, track: &Track) -> Arpeggio {
         let mut heard = track.arpeggio;
         for at in 0..PLAYED_SETTINGS - ACCUMULATION_SETTINGS {
             let place = ACCUMULATION_SETTINGS + at;
@@ -199,7 +199,7 @@ impl TrackState {
     }
 
     /// What a synth on this track plays with: the held values and what modulation adds.
-    pub fn synth_settings(&self) -> Settings {
+    pub(crate) fn synth_settings(&self) -> Settings {
         let at = |setting: usize| {
             let offset = self.voice_settings[setting].map_or(0.0, |index| self.offsets[index]);
             (self.synth[setting] + offset).clamp(0.0, 1.0)
@@ -224,7 +224,7 @@ impl TrackState {
 
     /// Run a lock or hold value from a step. Anything else on that value gives way to it. A fader
     /// a hand has taken over keeps it underneath, unheard, for when it's given back.
-    pub fn set_value(&mut self, id: SettingId, value: u16, mark: Mark) {
+    pub(crate) fn set_value(&mut self, id: SettingId, value: u16, mark: Mark) {
         self.wake();
         if let Some(fader) = id.fader() {
             let run = &mut self.faders[fader];
@@ -267,7 +267,7 @@ impl TrackState {
 
     /// A hand moved a fader the steps drive: from now its track page's value is heard, and the
     /// steps' values for it are kept underneath, unheard, until it's given back.
-    pub fn take_over(&mut self, fader: usize) {
+    pub(crate) fn take_over(&mut self, fader: usize) {
         self.wake();
         let Some(run) = self.faders.get_mut(fader) else {
             return;
@@ -279,7 +279,7 @@ impl TrackState {
 
     /// Give a fader back to the steps, as Live's Re-Enable Automation does: it's heard where they
     /// have it now, a lock's or a hold's value or, at the next update, a glide's place.
-    pub fn give_back(&mut self, fader: usize) {
+    pub(crate) fn give_back(&mut self, fader: usize) {
         self.wake();
         let Some(run) = self.faders.get_mut(fader) else {
             return;
@@ -299,7 +299,7 @@ impl TrackState {
     }
 
     /// Give every fader back to the steps.
-    pub fn give_back_all(&mut self) {
+    pub(crate) fn give_back_all(&mut self) {
         for fader in 0..FADER_COUNT {
             self.give_back(fader);
         }
@@ -307,7 +307,7 @@ impl TrackState {
 
     /// Run a glide value from a step, toward the next value of its parameter if there is one.
     /// `to` is that value, with how many ticks away it is.
-    pub fn start_glide(
+    pub(crate) fn start_glide(
         &mut self,
         id: SettingId,
         value: u16,
@@ -330,7 +330,7 @@ impl TrackState {
     }
 
     /// A note has started, so the locks it would have outlived are over. Glides carry on.
-    pub fn end_locks(&mut self) {
+    pub(crate) fn end_locks(&mut self) {
         for id in SettingId::all() {
             let layers = &mut self.values[id.index()];
             if layers.lock.take().is_some() && layers.glide.is_none() {
@@ -343,7 +343,7 @@ impl TrackState {
     /// The track page changed a value. A lock or glide on top stays until it ends, and a hold
     /// gives way to it. On a fader a hand has taken over it's heard at once, whatever the steps do,
     /// which keep their hold for when it's given back.
-    pub fn set_base(&mut self, id: SettingId, value: u16) {
+    pub(crate) fn set_base(&mut self, id: SettingId, value: u16) {
         self.wake();
         if let Some(fader) = id.fader() {
             let run = &mut self.faders[fader];

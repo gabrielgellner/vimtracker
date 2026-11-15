@@ -250,7 +250,13 @@ const SAFE_OBX: [f32; SAFE_POINTS] = [
 /// only as far as the type's loudest peak that still dies away, after Cytomic The Drop's `SAFE`,
 /// which keeps its knob under where it self-oscillates. The clean types never ring by themselves,
 /// so they hear it as it is, as does any type at 0.
-pub fn safe_resonance(kind: FilterType, resonance: f32, cutoff: f32, drive: f32, safe: f32) -> f32 {
+pub(crate) fn safe_resonance(
+    kind: FilterType,
+    resonance: f32,
+    cutoff: f32,
+    drive: f32,
+    safe: f32,
+) -> f32 {
     let at = |table: &[f32; SAFE_POINTS]| {
         let along = cutoff.clamp(0.0, 1.0) * (SAFE_POINTS - 1) as f32;
         let index = (along as usize).min(SAFE_POINTS - 2);
@@ -323,7 +329,7 @@ pub(crate) fn soft_clip(x: f32) -> f32 {
 
 /// Filter coefficients. Cutoff is `0..=1`, exponential from 20 Hz to 20 kHz.
 #[derive(Debug, Clone, Copy)]
-pub struct Coefficients {
+pub(crate) struct Coefficients {
     g: f32,
     /// The band-pass's damping, `1 / Q`, and `a1`, `1 / (1 + g (g + k))`, which the utility
     /// filters share at Res 0.
@@ -371,13 +377,13 @@ pub struct Coefficients {
 
 impl Coefficients {
     /// Work out coefficients, for each type's first mode.
-    pub fn new(cutoff: f32, resonance: f32, rate: u32) -> Self {
+    pub(crate) fn new(cutoff: f32, resonance: f32, rate: u32) -> Self {
         Self::with_mode(cutoff, resonance, FilterMode::default(), rate)
     }
 
     /// Work out coefficients for a mode. A mode a family doesn't have leaves that family in its
     /// first, so this is the same for any type that plays it.
-    pub fn with_mode(cutoff: f32, resonance: f32, mode: FilterMode, rate: u32) -> Self {
+    pub(crate) fn with_mode(cutoff: f32, resonance: f32, mode: FilterMode, rate: u32) -> Self {
         let frequency = 20.0 * 1000_f32.powf(cutoff);
         let nyquist_safe = frequency.min(rate as f32 * 0.45);
         let g = (std::f32::consts::PI * nyquist_safe / rate as f32).tan();
@@ -429,7 +435,7 @@ impl Coefficients {
     /// The same with `Punch`, from 0 to 1, for the clean types; the others don't hear it. Its
     /// cutoff is worked out each sample from what the low-pass is doing, so there's nothing for
     /// the curve to show: at rest it's the filter without it.
-    pub fn punched(mut self, punch: f32, rate: u32) -> Self {
+    pub(crate) fn punched(mut self, punch: f32, rate: u32) -> Self {
         self.punch_g = std::f32::consts::PI * punch * punch * PUNCH_HERTZ / rate as f32;
         self.double_punch_g = self.punch_g * 0.5;
         self.punch_k = (punch / PUNCH_DAMPING_FROM).min(1.0) * PUNCH_DAMPING;
@@ -503,7 +509,7 @@ impl Coefficients {
 /// either side of its pitch 16 dB louder than with coefficients worked out every frame (#463).
 /// After Surge's `FilterCoefficientMaker`, which ramps every coefficient across its block.
 #[derive(Debug, Clone, Copy)]
-pub struct Ramp {
+pub(crate) struct Ramp {
     now: Coefficients,
     step: Coefficients,
     /// Frames left before it reaches the target, after which it holds.
@@ -512,7 +518,7 @@ pub struct Ramp {
 
 impl Ramp {
     /// Start at a set, holding it.
-    pub fn at(c: Coefficients) -> Self {
+    pub(crate) fn at(c: Coefficients) -> Self {
         Self {
             now: c,
             step: c,
@@ -522,7 +528,7 @@ impl Ramp {
 
     /// Head for a new set, reaching it in `frames` frames. Its mix is taken at once, as each
     /// channel moves to it at its own pace.
-    pub fn toward(&mut self, target: &Coefficients, frames: u32) {
+    pub(crate) fn toward(&mut self, target: &Coefficients, frames: u32) {
         let over = 1.0 / frames.max(1) as f32;
         self.step = *target;
         self.step
@@ -534,13 +540,13 @@ impl Ramp {
 
     /// The set to filter this frame with.
     #[inline]
-    pub fn now(&self) -> &Coefficients {
+    pub(crate) fn now(&self) -> &Coefficients {
         &self.now
     }
 
     /// A frame's step on toward the target.
     #[inline]
-    pub fn advance(&mut self) {
+    pub(crate) fn advance(&mut self) {
         if self.left > 0 {
             self.left -= 1;
             self.now.each(&self.step, |value, step| *value += step);
@@ -552,7 +558,7 @@ impl Ramp {
 /// How a filter's outputs are mixed for its mode. Every family's weights are kept, as a track's
 /// filter starts afresh when its type changes, and only its own are read.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub struct Mix {
+pub(crate) struct Mix {
     /// The ladder's: what goes into its first stage, then each stage.
     ladder: [f32; 5],
     /// `Dirty`'s two-poles', before its loop and where it goes in.
@@ -689,7 +695,7 @@ impl Mix {
 
 /// A state-variable filter's state.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Svf {
+pub(crate) struct Svf {
     ic1: f32,
     ic2: f32,
 }
@@ -763,7 +769,7 @@ impl Svf {
 /// Huovilainen's model, with Zavalishin's trapezoidal integrators and Mystran's per-stage
 /// linearisation of `tanh`, after VCV Fundamental's VCF.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Ladder {
+pub(crate) struct Ladder {
     state: [f32; 4],
     last: [f32; 4],
     last_input: f32,
@@ -833,7 +839,7 @@ impl Ladder {
 
 /// One channel of a track's filter.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Channel {
+pub(crate) struct Channel {
     svf: Svf,
     /// The second clean filter, for 24 dB. It always runs on the clean types, so a change to 24 dB
     /// finds it settled.
@@ -853,7 +859,13 @@ pub struct Channel {
 impl Channel {
     /// Filter one sample. `drive` runs from 0, which takes the clean path, to 1.
     #[inline]
-    pub fn process(&mut self, input: f32, kind: FilterType, drive: f32, c: &Coefficients) -> f32 {
+    pub(crate) fn process(
+        &mut self,
+        input: f32,
+        kind: FilterType,
+        drive: f32,
+        c: &Coefficients,
+    ) -> f32 {
         if input == 0.0 {
             self.let_go(kind);
         }
@@ -882,7 +894,7 @@ impl Channel {
     }
 
     /// Start on the coefficients' mix next time, rather than moving to it, for a new sound.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.mixing = false;
     }
 
@@ -988,7 +1000,7 @@ impl Channel {
 ///
 /// `Drive` only changes the level and the saturation of the others, but it adds resonance to
 /// `Dirty`, which changes its shape, so that's drawn. Its level isn't, as for the others.
-pub fn response_db(
+pub(crate) fn response_db(
     kind: FilterType,
     mode: FilterMode,
     cutoff: f32,
@@ -1105,7 +1117,7 @@ pub fn track_response_db(track: &Track, rate: u32, hertz: f32) -> f32 {
 /// One channel of a track's utility filter: a high-pass and a low-pass, flat and without resonance,
 /// for thinning out a sound after its main filter.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Trim {
+pub(crate) struct Trim {
     high_pass: Svf,
     low_pass: Svf,
 }
@@ -1113,7 +1125,7 @@ pub struct Trim {
 impl Trim {
     /// Pass through the high-pass.
     #[inline]
-    pub fn low_cut(&mut self, input: f32, c: &Coefficients) -> f32 {
+    pub(crate) fn low_cut(&mut self, input: f32, c: &Coefficients) -> f32 {
         // With nothing coming in, it lets go of what's left once it's tiny, as the filter does.
         if input == 0.0 {
             flush(&mut self.high_pass);
@@ -1124,7 +1136,7 @@ impl Trim {
 
     /// Pass through the low-pass.
     #[inline]
-    pub fn high_cut(&mut self, input: f32, c: &Coefficients) -> f32 {
+    pub(crate) fn high_cut(&mut self, input: f32, c: &Coefficients) -> f32 {
         if input == 0.0 {
             flush(&mut self.low_pass);
         }
@@ -1133,7 +1145,7 @@ impl Trim {
 
     /// Get ready to start cutting highs at this input, so its output doesn't start from silence.
     #[inline]
-    pub fn prime_high_cut(&mut self, input: f32) {
+    pub(crate) fn prime_high_cut(&mut self, input: f32) {
         self.low_pass = Svf {
             ic1: 0.0,
             ic2: input,
@@ -1142,14 +1154,14 @@ impl Trim {
 
     /// Forget the low cut, which then starts with nothing to take away.
     #[inline]
-    pub fn clear_low_cut(&mut self) {
+    pub(crate) fn clear_low_cut(&mut self) {
         self.high_pass = Svf::default();
     }
 
     /// How much the low cut and the high cut pass a frequency once settled, as gains, with these
     /// coefficients at a rate, for a drawing of what they do: the state-variable filter's
     /// high-pass and low-pass at its damping, through the bilinear transform as it runs.
-    pub fn gains(c: &Coefficients, rate: u32, hertz: f32) -> (f32, f32) {
+    pub(crate) fn gains(c: &Coefficients, rate: u32, hertz: f32) -> (f32, f32) {
         let rate = rate as f32;
         let w = (std::f32::consts::PI * hertz.min(rate * 0.499) / rate).tan() / c.g;
         let (w2, k2) = (w * w, c.k * c.k);

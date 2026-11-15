@@ -17,7 +17,7 @@ pub(crate) fn sine_pm(phase: u32, pm: f32) -> f32 {
 }
 
 #[allow(clippy::excessive_precision, clippy::approx_constant)]
-pub const SINE: [f32; 641] = [
+pub(crate) const SINE: [f32; 641] = [
     0.000000000e+00,
     1.227153829e-02,
     2.454122852e-02,

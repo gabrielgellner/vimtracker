@@ -177,7 +177,7 @@ impl Grainlet {
 
 /// One voice of the model. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct Grain {
+pub(crate) struct Grain {
     grainlets: [Grainlet; 2],
     dc_blocker: OnePole,
     output: [f32; BLOCK],
@@ -211,7 +211,7 @@ impl SynthEngine for Grain {
 }
 
 impl Grain {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             grainlets: [Grainlet::new(); 2],
             dc_blocker: OnePole::default(),

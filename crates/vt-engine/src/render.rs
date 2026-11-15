@@ -84,7 +84,7 @@ pub struct Stem {
 /// The tracks a stem render makes a stem of, in order: each sound track that would be heard, or,
 /// unless asked for each track, each group with a track that would be heard in place of its
 /// tracks.
-pub fn stem_tracks(song: &Song, each_track: bool) -> Vec<usize> {
+pub(crate) fn stem_tracks(song: &Song, each_track: bool) -> Vec<usize> {
     let sounds = song.sound_tracks();
     let mut tracks: Vec<usize> = (0..sounds)
         .filter(|track| song.heard(*track))

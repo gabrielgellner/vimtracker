@@ -44,7 +44,7 @@ fn sine(phase: f32) -> f32 {
 
 /// One voice. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct PhaseDistortion {
+pub(crate) struct PhaseDistortion {
     shaper: VariableShape,
     output: [f32; BLOCK],
     at: usize,
@@ -75,7 +75,7 @@ impl SynthEngine for PhaseDistortion {
 }
 
 impl PhaseDistortion {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             shaper: VariableShape::new(),
             output: [0.0; BLOCK],

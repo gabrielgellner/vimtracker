@@ -14,7 +14,7 @@ use super::TrackState;
 
 /// A note waiting for its delayed start.
 #[derive(Debug, Clone, Copy)]
-pub struct DelayedNote {
+pub(crate) struct DelayedNote {
     pub at: u64,
     pub note: NoteOn,
 }
@@ -22,7 +22,7 @@ pub struct DelayedNote {
 /// Which of a step's parts lands. A nudge moves the row's note part off the grid, while the FX
 /// columns with lanes of their own stay on it, so the two land apart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Part {
+pub(crate) enum Part {
     /// All of it at once, as every step lands without a nudge.
     Whole,
     /// The lanes' values, where the groove lands the step.
@@ -34,12 +34,12 @@ pub enum Part {
 
 impl Part {
     /// Whether it plays the row's note part.
-    pub fn plays_row(self) -> bool {
+    pub(crate) fn plays_row(self) -> bool {
         self != Self::Lanes
     }
 
     /// Whether it runs the lanes' values.
-    pub fn runs_lanes(self) -> bool {
+    pub(crate) fn runs_lanes(self) -> bool {
         self != Self::Row
     }
 }
@@ -49,7 +49,7 @@ impl Part {
 /// slow track's early groove works every track's steps out further ahead, so a fast track can
 /// have several steps worked out before the one heard has landed: at most 28 of a 32nd's steps
 /// against a whole note's earliest groove and nudge, 3190 ticks, each with two parts.
-pub const PENDING_PARTS: usize = 64;
+pub(crate) const PENDING_PARTS: usize = 64;
 
 /// How many of the steps a track has worked out it keeps, to find the one heard while it works
 /// some out ahead: as many as a 32nd's steps worked out ahead of a whole note's earliest groove
@@ -59,7 +59,7 @@ pub(super) const WORKED_KEPT: usize = 32;
 /// Where a track's own steps fall on the grid. Each track counts its own steps, so one at an
 /// eighth counts its eighths, and its groove swings them.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Clock {
+pub(crate) struct Clock {
     /// Where its next step falls on the grid, in ticks on the engine's count of steps.
     pub beat: u64,
     /// The running count at that step: the track's own steps since the song's start or the last
@@ -73,27 +73,27 @@ pub struct Clock {
 
 impl Clock {
     /// Have the next step fall here, and count the steps from here.
-    pub fn line_up(&mut self, at: u64) {
+    pub(crate) fn line_up(&mut self, at: u64) {
         self.beat = at;
         self.anchor = at as i64;
     }
 
     /// Where the step after the next falls if the next is this many ticks long: the next of its
     /// speed's steps from the anchor, so a step that doesn't start on one is cut short.
-    pub fn after(&self, ticks: u64) -> u64 {
+    pub(crate) fn after(&self, ticks: u64) -> u64 {
         let ticks = ticks.max(1) as i64;
         let from = self.beat as i64 - self.anchor;
         (self.anchor + (from.div_euclid(ticks) + 1) * ticks) as u64
     }
 
     /// Move on to the step after the next, which is this many ticks long.
-    pub fn advance(&mut self, ticks: u64) {
+    pub(crate) fn advance(&mut self, ticks: u64) {
         self.beat = self.after(ticks);
         self.count += 1;
     }
 
     /// Count on, as if it had played steps this many ticks long, to the first at or after a place.
-    pub fn skip_to(&mut self, at: u64, ticks: u64) {
+    pub(crate) fn skip_to(&mut self, at: u64, ticks: u64) {
         if at <= self.beat {
             return;
         }
@@ -104,7 +104,7 @@ impl Clock {
 
     /// Move it along the grid, as working out a place to play from does once it's known where it
     /// starts.
-    pub fn shift(&mut self, by: i64) {
+    pub(crate) fn shift(&mut self, by: i64) {
         self.beat = (self.beat as i64 + by).max(0) as u64;
         self.anchor += by;
     }
@@ -114,7 +114,7 @@ impl Clock {
 /// count, how long it lasts and the speed it plays at, which a step cut short by a change of speed
 /// doesn't last the whole of.
 #[derive(Debug, Clone, Copy)]
-pub struct Worked {
+pub(crate) struct Worked {
     pub grid: u64,
     pub count: i64,
     pub ticks: u64,
@@ -124,7 +124,7 @@ pub struct Worked {
 /// A step, or one part of it, worked out but not yet played, as its groove or nudge lands it later
 /// than now.
 #[derive(Debug, Clone, Copy)]
-pub struct PendingStep {
+pub(crate) struct PendingStep {
     /// When it lands, on the track's clock.
     pub at: u64,
     /// Its place in the track's running count, which its groove counts.
@@ -155,7 +155,7 @@ pub struct PendingStep {
 
 /// What a row's chance and conditions decided, once, on its first pulse.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Decided {
+pub(crate) struct Decided {
     /// Whether its note plays, past its `CHA` and `CND`.
     pub note: bool,
     /// Whether its own FX run, past its `CND`. A failed `CHA` skips only the note.
@@ -164,7 +164,7 @@ pub struct Decided {
 
 impl Decided {
     /// A row with nothing against it.
-    pub const PLAYS: Self = Self {
+    pub(crate) const PLAYS: Self = Self {
         note: true,
         fx: true,
     };
@@ -172,7 +172,7 @@ impl Decided {
 
 /// Retriggering the current note.
 #[derive(Debug, Clone, Copy)]
-pub struct Retrigger {
+pub(crate) struct Retrigger {
     pub next_at: u64,
     pub interval: u64,
     /// Multiplies the level on each retrigger.
@@ -183,7 +183,7 @@ pub struct Retrigger {
 
 /// A note's arpeggio, going round its notes at its rate for as long as the note lasts.
 #[derive(Debug, Clone, Copy)]
-pub struct Arpeggiating {
+pub(crate) struct Arpeggiating {
     pub cycle: Cycle,
     /// Its `ARP`'s value, which a `HLD` carries into the note it ties into, unless that row has
     /// one of its own.
@@ -206,7 +206,7 @@ pub struct Arpeggiating {
 
 /// A row whose accumulator moves its note on each time its retrigger hits.
 #[derive(Debug, Clone, Copy)]
-pub struct Accumulating {
+pub(crate) struct Accumulating {
     pub row: RowKey,
     pub amount: i8,
     /// The note as written, which it's moved from.
@@ -220,7 +220,7 @@ pub struct Accumulating {
 
 /// The most rows on a track that keep an accumulator of their own at once. Past it, a row with an
 /// `ACU` plays its note as written, though in Track mode it still moves with the track.
-pub const ACCUMULATED_ROWS: usize = 64;
+pub(crate) const ACCUMULATED_ROWS: usize = 64;
 
 /// A row of a phrase, which an accumulator belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -243,7 +243,7 @@ pub struct NotePitch {
 
 /// Which start of a track's chain, and which group of loops round it, a track's accumulators are
 /// counting in. They start again from the notes as written once it moves on.
-pub type Epoch = (u64, i64);
+pub(crate) type Epoch = (u64, i64);
 
 /// One row's accumulator, and whether its row has played since they started again, as its first
 /// play is as written.
@@ -257,7 +257,7 @@ struct RowWalk {
 /// A track's accumulators: one for each row with an `ACU`, and the track's own for Track mode, in a
 /// fixed table so the callback never allocates.
 #[derive(Debug, Clone, Copy)]
-pub struct Accumulators {
+pub(crate) struct Accumulators {
     rows: [Option<RowWalk>; ACCUMULATED_ROWS],
     track: Walk,
     epoch: Epoch,
@@ -275,13 +275,13 @@ impl Default for Accumulators {
 
 impl Accumulators {
     /// Go back to the notes as written.
-    pub fn forget(&mut self) {
+    pub(crate) fn forget(&mut self) {
         self.rows = [None; ACCUMULATED_ROWS];
         self.track = Walk::default();
     }
 
     /// Count in this epoch, starting again if it's a new one.
-    pub fn enter(&mut self, epoch: Epoch) {
+    pub(crate) fn enter(&mut self, epoch: Epoch) {
         if epoch != self.epoch {
             self.forget();
             self.epoch = epoch;
@@ -290,7 +290,7 @@ impl Accumulators {
 
     /// Add a row's amount as it plays, to its own accumulator or the track's, a `Random` one
     /// rolling on `rng`. Its first play since they started again is as written, and adds nothing.
-    pub fn add(&mut self, key: RowKey, amount: i8, settings: Accumulation, rng: &mut Pcg32) {
+    pub(crate) fn add(&mut self, key: RowKey, amount: i8, settings: Accumulation, rng: &mut Pcg32) {
         let found = self
             .rows
             .iter()
@@ -316,7 +316,7 @@ impl Accumulators {
     }
 
     /// How far a row's note is moved: by its own accumulator, or the track's in Track mode.
-    pub fn offset(&self, key: RowKey, moves: Moves) -> i16 {
+    pub(crate) fn offset(&self, key: RowKey, moves: Moves) -> i16 {
         match moves {
             Moves::Track => self.track.offset,
             Moves::Row => self
@@ -331,7 +331,7 @@ impl Accumulators {
 
 impl TrackState {
     /// How far either way a groove's humanise moves a step, at random, in ticks.
-    pub fn humanise(&mut self, ticks: u8) -> i64 {
+    pub(crate) fn humanise(&mut self, ticks: u8) -> i64 {
         if ticks == 0 {
             return 0;
         }
@@ -341,7 +341,7 @@ impl TrackState {
 
     /// Take the part that lands first, if it lands by this time. Parts that land together play in
     /// the order their steps were worked out, a step's first part before its other.
-    pub fn take_due(&mut self, by: u64) -> Option<PendingStep> {
+    pub(crate) fn take_due(&mut self, by: u64) -> Option<PendingStep> {
         if self.soonest > by {
             return None;
         }
@@ -358,7 +358,7 @@ impl TrackState {
     }
 
     /// When the soonest part waiting lands, or `u64::MAX` with none.
-    pub fn soonest(&self) -> u64 {
+    pub(crate) fn soonest(&self) -> u64 {
         self.soonest
     }
 
@@ -374,7 +374,7 @@ impl TrackState {
 
     /// Wait for a part to land. With no room, which only a big change of tempo could bring
     /// about, the earliest waiting is given back to be played now.
-    pub fn wait_for(&mut self, part: PendingStep) -> Option<PendingStep> {
+    pub(crate) fn wait_for(&mut self, part: PendingStep) -> Option<PendingStep> {
         let full = self.pending.iter().all(Option::is_some);
         let earliest = if full { self.take_due(u64::MAX) } else { None };
         if let Some(free) = self.pending.iter_mut().find(|part| part.is_none()) {
@@ -385,13 +385,13 @@ impl TrackState {
     }
 
     /// Keep a step it has worked out, for where it's heard.
-    pub fn note_worked(&mut self, worked: Worked) {
+    pub(crate) fn note_worked(&mut self, worked: Worked) {
         self.worked[self.worked_next] = Some(worked);
         self.worked_next = (self.worked_next + 1) % WORKED_KEPT;
     }
 
     /// The latest step it has worked out that falls by this tick on the grid, the one heard.
-    pub fn heard_at(&self, tick: f64) -> Option<Worked> {
+    pub(crate) fn heard_at(&self, tick: f64) -> Option<Worked> {
         self.worked
             .iter()
             .flatten()
@@ -402,7 +402,7 @@ impl TrackState {
 
     /// Forget the steps it has worked out from this tick on the grid, as they'll be worked out
     /// again, or all of them, when playing starts somewhere else.
-    pub fn forget_worked(&mut self, from: u64) {
+    pub(crate) fn forget_worked(&mut self, from: u64) {
         for worked in &mut self.worked {
             if worked.is_some_and(|worked| worked.grid >= from) {
                 *worked = None;
@@ -412,7 +412,7 @@ impl TrackState {
 
     /// The latest any waiting part that plays a row's note lands, as the next row's can't land
     /// before it.
-    pub fn last_row_at(&self) -> Option<u64> {
+    pub(crate) fn last_row_at(&self) -> Option<u64> {
         self.pending
             .iter()
             .flatten()
@@ -422,7 +422,7 @@ impl TrackState {
     }
 
     /// Tell a step's other part, still waiting, what its row's chance and conditions decided.
-    pub fn decide(&mut self, step: u64, plays: Decided) {
+    pub(crate) fn decide(&mut self, step: u64, plays: Decided) {
         for part in self.pending.iter_mut().flatten() {
             if part.step == step {
                 part.plays = Some(plays);
@@ -432,7 +432,7 @@ impl TrackState {
 
     /// Forget whatever is waiting of the steps from this tick on the grid, as they're to be worked
     /// out again.
-    pub fn forget_steps(&mut self, from: u64) {
+    pub(crate) fn forget_steps(&mut self, from: u64) {
         for part in &mut self.pending {
             if part.is_some_and(|part| part.step >= from) {
                 *part = None;

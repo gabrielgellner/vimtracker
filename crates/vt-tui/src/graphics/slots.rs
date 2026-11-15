@@ -2,11 +2,10 @@
 //! compressor's or an EQ's curve, a distortion's transfer curve, a filter effect's response, a
 //! delay's repeats or a reverb's tail, with the caption a zoomed one has under its box.
 
-use vt_engine::dsp::effects::distort::transfer;
-use vt_engine::dsp::effects::slot::DEFAULT_NOTE;
-use vt_engine::dsp::effects::tail::Tail;
-use vt_engine::dsp::effects::{delay, echo, plate, resonator, reverb, space, spring};
-use vt_engine::dsp::filters::{comb, lpg, vowel};
+use vt_engine::pictures::{
+    DEFAULT_NOTE, Tail, comb, delay, echo, lpg, plate, resonator, reverb, space, spring, transfer,
+    vowel,
+};
 use vt_engine::track_state::LiveValues;
 use vt_model::insert::{
     Comb, Compressor, Delay, Distort, Echo, Equaliser, GateMode, Insert, LowPassGate, MAX_PARAMS,

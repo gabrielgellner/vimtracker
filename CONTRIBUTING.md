@@ -94,9 +94,9 @@ pull request.
 vt-tui's modules are in folders by what each is, as the Architecture's
 [Interface](docs/designs/vimtracker.md#interface) maps them: a page's keys, edits and drawing in
 its folder under `pages/`, what's drawn over a page in `overlays/`, what pages share in
-`services/`. Make new code `pub(crate)` unless a test, an example or `main.rs` uses it; the
-`unreachable_pub` lint says when a `pub` can't be reached from outside, and that keeps the
-dead-code lint working.
+`services/`. In vt-tui and vt-engine, make new code `pub(crate)` unless another crate, a test, an
+example or `main.rs` uses it; the `unreachable_pub` lint says when a `pub` can't be reached from
+outside, and that keeps the dead-code lint working.
 
 A new effect, voice, generator or mod type has a checklist of its own,
 [docs/designs/adding-a-device.md](docs/designs/adding-a-device.md): every place it takes, what the

@@ -267,8 +267,8 @@ fn demos_for_the_ear() {
     // Played on the effect itself, half wet as the slot is, so its settings can move every 512
     // frames as TAPE-201's are moved between its buffers.
     let played = |settings: &dyn Fn(usize) -> Echo, frames: usize| -> Vec<f32> {
-        let mut echo = vt_engine::dsp::effects::echo::Echo::new(RATE);
-        echo.seed(vt_engine::rng::Pcg32::new(1, 0));
+        let mut echo = vt_engine::parts::Echo::new(RATE);
+        echo.seed(vt_engine::parts::Pcg32::new(1, 0));
         echo.follow(settings(0), 25.0);
         echo.settle();
         let mut out = Vec::with_capacity(frames * 2);

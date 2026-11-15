@@ -100,7 +100,7 @@ impl SameBits for Side {
 
 /// The stereo exciter, all wet: what it makes, to be added to the sound.
 #[derive(Debug, Clone)]
-pub struct Exciter {
+pub(crate) struct Exciter {
     sides: Sides<Side>,
     drive: Smoothed,
     tone: Smoothed,
@@ -152,7 +152,7 @@ impl Default for Exciter {
 
 impl Exciter {
     /// Take the settings.
-    pub fn follow(&mut self, settings: Settings) {
+    pub(crate) fn follow(&mut self, settings: Settings) {
         let share = |value: u8| f32::from(value) / 255.0;
         let tone = share(settings.tone);
         // Surge's: Chowdhury's curve on the knob, and less of it as `Tone` lets more through.
@@ -171,7 +171,7 @@ impl Exciter {
     }
 
     /// Jump to the settings, for starting afresh.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.drive.settle();
         self.tone.settle();
     }
@@ -179,7 +179,13 @@ impl Exciter {
     /// One frame in, and what it makes of it out, to be added to the sound. `same` says the frame's
     /// sides are the same, bit for bit (decision 147).
     #[inline]
-    pub fn process(&mut self, input: [f32; 2], same: bool, smoothing: f32, rate: u32) -> [f32; 2] {
+    pub(crate) fn process(
+        &mut self,
+        input: [f32; 2],
+        same: bool,
+        smoothing: f32,
+        rate: u32,
+    ) -> [f32; 2] {
         let drive = self.drive.next(smoothing);
         let tone = self.tone.next(smoothing);
         if rate != self.rate {

@@ -21,7 +21,7 @@ impl Pcg32 {
     }
 
     /// The next value.
-    pub fn next_u32(&mut self) -> u32 {
+    pub(crate) fn next_u32(&mut self) -> u32 {
         let old = self.state;
         self.state = old
             .wrapping_mul(6_364_136_299_858_216_321)
@@ -31,7 +31,7 @@ impl Pcg32 {
     }
 
     /// Whether a chance of `value` out of 255 comes up. `00` never does and `FF` always does.
-    pub fn chance(&mut self, value: u8) -> bool {
+    pub(crate) fn chance(&mut self, value: u8) -> bool {
         (self.next_u32() % 255) < u32::from(value)
     }
 }

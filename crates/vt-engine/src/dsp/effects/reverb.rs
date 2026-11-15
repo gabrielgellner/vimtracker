@@ -152,7 +152,7 @@ impl Lines {
 
 /// The stereo reverb.
 #[derive(Debug, Clone)]
-pub struct Reverb {
+pub(crate) struct Reverb {
     lines: Lines,
     diffusers: [Line; 4],
     /// Each side's loop: two allpasses and a delay.
@@ -183,7 +183,7 @@ pub struct Reverb {
 
 impl Reverb {
     /// Make a reverb for a sample rate.
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         let scale = rate as f32 / TUNING_RATE;
         let mut base = 0;
         let lines = LENGTHS.map(|length| {
@@ -232,7 +232,7 @@ impl Reverb {
     }
 
     /// Forget what's in it.
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.lines.buffer.fill(0.0);
         self.pre.fill(0.0);
         self.damped = [0.0; 2];
@@ -242,7 +242,7 @@ impl Reverb {
     /// Take the settings, and move the wobbles to where they are this many frames in. They go by
     /// the frame rather than by what the reverb has done, so one that's slept is where it would
     /// have been.
-    pub fn follow(&mut self, settings: Settings, frames: u64) {
+    pub(crate) fn follow(&mut self, settings: Settings, frames: u64) {
         self.keep_time(frames);
         self.pre_frames.target = f32::from(settings.pre) / 255.0 * LONGEST_PRE * self.rate as f32;
         self.decay.target = f32::from(settings.decay) / 255.0 * MOST_DECAY;
@@ -267,14 +267,14 @@ impl Reverb {
     }
 
     /// Move the wobbles to where they are this many frames in.
-    pub fn keep_time(&mut self, frames: u64) {
+    pub(crate) fn keep_time(&mut self, frames: u64) {
         let seconds = frames as f64 / f64::from(self.rate);
         self.wobble =
             WOBBLE_HERTZ.map(|hertz| (std::f64::consts::TAU * hertz * seconds).cos() as f32);
     }
 
     /// Jump to the settings, for starting afresh.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.pre_frames.settle();
         self.decay.settle();
         self.damping.settle();
@@ -307,7 +307,7 @@ impl Reverb {
 
     /// Feed one frame in and get the wet signal out.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         let incoming = self.before_lines(input);
         self.tank(incoming)
     }
@@ -316,7 +316,13 @@ impl Reverb {
     /// keeps, its damping as a one-pole's coefficient at 32 kHz, its allpasses' diffusion and how
     /// much of what goes in reaches the lines. The decay and damping glide there as `Decay` and
     /// `Damp` do.
-    pub fn tune(&mut self, decay: f32, damping_at_tuning_rate: f32, diffusion: f32, gain: f32) {
+    pub(crate) fn tune(
+        &mut self,
+        decay: f32,
+        damping_at_tuning_rate: f32,
+        diffusion: f32,
+        gain: f32,
+    ) {
         self.decay.target = decay;
         self.damping.target = 1.0 - (1.0 - damping_at_tuning_rate).powf(self.rate_ratio);
         self.diffusion = diffusion;
@@ -326,7 +332,7 @@ impl Reverb {
     /// Feed one frame into the tank alone, with no cuts or pre-delay, as Clouds' reverb has none,
     /// and get the wet signal out.
     #[inline]
-    pub fn process_tank(&mut self, input: [f32; 2]) -> [f32; 2] {
+    pub(crate) fn process_tank(&mut self, input: [f32; 2]) -> [f32; 2] {
         self.tank(input[0] + input[1])
     }
 

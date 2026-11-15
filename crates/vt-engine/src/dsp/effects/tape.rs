@@ -466,7 +466,7 @@ impl Wobble {
 
 /// A tape's state and line.
 #[derive(Debug, Clone)]
-pub struct Tape {
+pub(crate) struct Tape {
     sides: [Side; 2],
     lines: [Vec<f32>; 2],
     mask: usize,
@@ -489,7 +489,7 @@ pub struct Tape {
 
 impl Tape {
     /// A line long enough for the most wow and flutter at this rate.
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         let scale = rate as f32 / AIRWINDOWS_RATE;
         let longest = 1.0 + (MOST_WOW_FRAMES + MOST_FLUTTER_FRAMES) * rate as f32 / BEADS_RATE;
         let size = (longest.ceil() as usize + 4).next_power_of_two();
@@ -525,17 +525,17 @@ impl Tape {
     }
 
     /// The longest anything stays in its line, in frames.
-    pub fn frames(&self) -> usize {
+    pub(crate) fn frames(&self) -> usize {
         self.mask + 1
     }
 
     /// How many quiet frames in a row mean nothing's left in it: its line, and a tenth of a second
     /// for the heads' bump to ring down.
-    pub fn quiet_frames(&self) -> u32 {
+    pub(crate) fn quiet_frames(&self) -> u32 {
         (self.frames() + self.rate as usize / 10) as u32
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         for line in &mut self.lines {
             line.fill(0.0);
         }
@@ -545,7 +545,7 @@ impl Tape {
     }
 
     /// Take what's set now.
-    pub fn follow(&mut self, settings: Settings) {
+    pub(crate) fn follow(&mut self, settings: Settings) {
         self.drive.target = 10_f32.powf(tape_drive_db(f32::from(settings.drive)) / 20.0);
         self.tilt.target = 0.5 + 0.5 * from_middle(f32::from(settings.tone));
         let bias = from_middle(f32::from(settings.bias));
@@ -563,7 +563,7 @@ impl Tape {
     }
 
     /// Jump to what's set, as it's only just started.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.drive.settle();
         self.tilt.settle();
         self.bias.settle();
@@ -630,7 +630,7 @@ impl Tape {
 
     /// One frame through the tape, all wet.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         let drive = self.drive.next(self.smoothing);
         let wow = self.wow.next(self.smoothing);
         let flutter = self.flutter.next(self.smoothing);

@@ -65,7 +65,7 @@ impl Default for PartTimes {
 
 /// The engine's clock for its parts. It reads nothing while off.
 #[derive(Debug, Default)]
-pub struct Stopwatch {
+pub(crate) struct Stopwatch {
     running: Option<Box<Running>>,
 }
 
@@ -77,7 +77,7 @@ struct Running {
 
 impl Stopwatch {
     /// Start timing from nothing. This allocates, so it's done before audio starts.
-    pub fn start(&mut self) {
+    pub(crate) fn start(&mut self) {
         self.running = Some(Box::new(Running {
             last: Instant::now(),
             times: PartTimes::default(),
@@ -85,13 +85,13 @@ impl Stopwatch {
     }
 
     /// The times so far, if it's running.
-    pub fn times(&self) -> Option<&PartTimes> {
+    pub(crate) fn times(&self) -> Option<&PartTimes> {
         self.running.as_ref().map(|running| &running.times)
     }
 
     /// Start the next lap from now, giving the time since the last to nothing.
     #[inline]
-    pub fn restart_lap(&mut self) {
+    pub(crate) fn restart_lap(&mut self) {
         if let Some(running) = &mut self.running {
             running.last = Instant::now();
         }
@@ -99,7 +99,7 @@ impl Stopwatch {
 
     /// Give the time since the last lap to a part.
     #[inline]
-    pub fn lap(&mut self, part: Part) {
+    pub(crate) fn lap(&mut self, part: Part) {
         let Some(running) = &mut self.running else {
             return;
         };
@@ -119,7 +119,7 @@ impl Stopwatch {
     }
 
     /// Add a slot's time, which a track times on its own as it runs its slots.
-    pub fn add_slots(&mut self, track: usize, slots: &mut SlotTimes) {
+    pub(crate) fn add_slots(&mut self, track: usize, slots: &mut SlotTimes) {
         if let Some(running) = &mut self.running {
             for slot in 0..INSERTS {
                 running.times.slots[track][slot] += std::mem::take(&mut slots.times[slot]);
@@ -131,7 +131,7 @@ impl Stopwatch {
 
 /// A track's own count of the time each of its slots takes, kept while the engine's stopwatch runs.
 #[derive(Debug, Clone, Default)]
-pub struct SlotTimes {
+pub(crate) struct SlotTimes {
     on: bool,
     times: [Duration; INSERTS],
     laps: [u64; INSERTS],
@@ -139,7 +139,7 @@ pub struct SlotTimes {
 
 impl SlotTimes {
     /// Timing from nothing.
-    pub fn running() -> Self {
+    pub(crate) fn running() -> Self {
         Self {
             on: true,
             ..Self::default()
@@ -148,7 +148,7 @@ impl SlotTimes {
 
     /// Run a slot, timing it if timing is on and the slot has an effect in it.
     #[inline]
-    pub fn time<T>(&mut self, slot: usize, effect: bool, run: impl FnOnce() -> T) -> T {
+    pub(crate) fn time<T>(&mut self, slot: usize, effect: bool, run: impl FnOnce() -> T) -> T {
         if !self.on || !effect {
             return run();
         }

@@ -45,7 +45,7 @@ fn smoother(moving: bool, smoothing: f32, fast: f32) -> f32 {
 /// What the master does every frame while it rests: what it takes in after its trim, what its
 /// slots give, and what it gives.
 #[derive(Debug, Clone, Copy)]
-pub struct MasterRest {
+pub(crate) struct MasterRest {
     trimmed: [f32; 2],
     key: [f32; 2],
     pub out: [f32; 2],
@@ -53,7 +53,7 @@ pub struct MasterRest {
 
 /// One track's frame, and what it sends to the returns.
 #[derive(Debug, Clone, Copy)]
-pub struct ShapedFrame {
+pub(crate) struct ShapedFrame {
     pub dry: [f32; 2],
     pub send_a: [f32; 2],
     pub send_b: [f32; 2],
@@ -61,7 +61,7 @@ pub struct ShapedFrame {
 
 impl ShapedFrame {
     /// Nothing, as a group with nothing coming in gives.
-    pub const SILENT: Self = Self {
+    pub(crate) const SILENT: Self = Self {
         dry: [0.0; 2],
         send_a: [0.0; 2],
         send_b: [0.0; 2],
@@ -147,7 +147,7 @@ impl TrackState {
 
     /// Trim, filter, level and pan one frame of voice output, and work out what it sends.
     #[inline]
-    pub fn shape(
+    pub(crate) fn shape(
         &mut self,
         input: [f32; 2],
         smoothing: f32,
@@ -304,7 +304,7 @@ impl TrackState {
     /// whether it's heard, faded so muting doesn't click. With nothing going in and nothing left in
     /// its slots, it does no work.
     #[inline]
-    pub fn process_return(
+    pub(crate) fn process_return(
         &mut self,
         input: [f32; 2],
         smoothing: f32,
@@ -337,7 +337,7 @@ impl TrackState {
     /// What a group adds to the mix for the sum of its tracks, as a return does, and what it sends
     /// to the returns from there, after its level and pan.
     #[inline]
-    pub fn process_group(
+    pub(crate) fn process_group(
         &mut self,
         input: [f32; 2],
         smoothing: f32,
@@ -360,7 +360,7 @@ impl TrackState {
     /// Whether a group with nothing coming in would give silence and change nothing, frame after
     /// frame, so it can be skipped until something comes in (#558): its slots aren't ringing, so it
     /// does no work, and what it sends isn't moving.
-    pub fn group_rests(&self, smoothing: f32, fast: f32, rate: u32) -> bool {
+    pub(crate) fn group_rests(&self, smoothing: f32, fast: f32, rate: u32) -> bool {
         let keeping_up = |target| self.smoother_for(target, smoothing, fast);
         !self.ringing(rate)
             && self.send_a_gain.still(keeping_up(SettingId::SEND_A))
@@ -369,7 +369,7 @@ impl TrackState {
 
     /// What a group or return with nothing coming in and nothing ringing does for a run of frames,
     /// done once: it lets its mute's fade go and gives nothing to a compressor that hears it.
-    pub fn rest_bus(&mut self) {
+    pub(crate) fn rest_bus(&mut self) {
         self.key = [0.0, 0.0];
         self.heard.settle();
     }
@@ -379,7 +379,7 @@ impl TrackState {
     /// settled (`InsertState::settled`) on what the one before gives, hearing only what other
     /// tracks give now. It's usually silence, but a filter can be left holding a value too small
     /// to hear for good, and then that's what it gives.
-    pub fn master_rests(
+    pub(crate) fn master_rests(
         &self,
         smoothing: f32,
         fast: f32,
@@ -409,7 +409,7 @@ impl TrackState {
     }
 
     /// What the master, once it rests, does for a run of `frames`, done once.
-    pub fn rest_master(&mut self, rest: &MasterRest, frames: u32) {
+    pub(crate) fn rest_master(&mut self, rest: &MasterRest, frames: u32) {
         self.take_in_after_trim(rest.trimmed);
         self.key = rest.key;
         for insert in &mut self.inserts {
@@ -419,7 +419,7 @@ impl TrackState {
 
     /// The master's slots and level, for the whole mix.
     #[inline]
-    pub fn process_master(
+    pub(crate) fn process_master(
         &mut self,
         input: [f32; 2],
         smoothing: f32,

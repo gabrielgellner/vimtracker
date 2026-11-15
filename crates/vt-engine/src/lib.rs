@@ -1,20 +1,27 @@
 //! Sequencer and audio engine for vimtracker.
+//!
+//! The sound itself, in `dsp`, is the crate's own. What others draw of it is in [`pictures`], and
+//! the parts the tests play on their own are in [`parts`].
 
-pub mod dsp;
+#![warn(unreachable_pub)]
+
+pub(crate) mod dsp;
 pub mod engine;
 pub mod gens;
 pub mod link;
 pub mod mixer;
+pub mod parts;
+pub mod pictures;
 mod preview;
 pub mod published;
-pub mod reader;
+pub(crate) mod reader;
 pub mod recorder;
 pub mod render;
-pub mod rng;
+pub(crate) mod rng;
 pub mod slowdown;
 pub mod timing;
 pub mod track_state;
-pub mod voice;
+pub(crate) mod voice;
 
 #[cfg(test)]
 mod rt_guard;

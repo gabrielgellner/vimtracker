@@ -9,10 +9,8 @@
 
 use std::cmp::Ordering;
 
-use vt_engine::dsp::dynamics::compressor::curve_db;
-use vt_engine::dsp::dynamics::eq::response_db as eq_response_db;
-use vt_engine::dsp::effects::distort::transfer;
-use vt_engine::dsp::filters::filter::track_response_db;
+use vt_engine::pictures::eq::response_db as eq_response_db;
+use vt_engine::pictures::{curve_db, track_response_db, transfer};
 use vt_model::attractor::{Attractor, System, view};
 use vt_model::envelope::Envelope;
 use vt_model::insert::{Compressor, Distort, Equaliser, threshold_db};
@@ -1063,7 +1061,7 @@ mod tests {
 
     #[test]
     fn a_combs_peaks_narrower_than_a_pixel_are_drawn_to_their_tops() {
-        use vt_engine::dsp::filters::comb;
+        use vt_engine::pictures::comb;
         use vt_model::insert::Comb;
         // Ringing for seconds at middle C, its peaks are a few cents wide, and a pixel of 2100 is
         // nearly six.

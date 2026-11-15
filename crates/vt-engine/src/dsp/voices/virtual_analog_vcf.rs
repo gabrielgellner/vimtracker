@@ -42,7 +42,7 @@ fn semitones(interval: f32) -> f32 {
 
 /// One voice. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct VirtualAnalogVcf {
+pub(crate) struct VirtualAnalogVcf {
     oscillator: VariableShape,
     sub_oscillator: VariableShape,
     /// Two filters, the second making it four-pole when it's mixed in.
@@ -103,7 +103,7 @@ impl SynthEngine for VirtualAnalogVcf {
 }
 
 impl VirtualAnalogVcf {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             oscillator: VariableShape::new(),
             sub_oscillator: VariableShape::new(),

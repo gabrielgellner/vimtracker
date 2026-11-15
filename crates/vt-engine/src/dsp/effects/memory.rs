@@ -34,7 +34,7 @@ use crate::rng::Pcg32;
 /// Where the song is, for the effects that keep time with it: its tick, whether it's playing,
 /// and how many frames a tick takes.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SongPlace {
+pub(crate) struct SongPlace {
     pub tick: f64,
     pub playing: bool,
     pub frames_per_tick: f64,
@@ -42,7 +42,7 @@ pub struct SongPlace {
 
 impl SongPlace {
     /// A song that isn't playing, for an effect that's only just started.
-    pub const STILL: Self = Self {
+    pub(crate) const STILL: Self = Self {
         tick: 0.0,
         playing: false,
         frames_per_tick: 1.0,
@@ -54,7 +54,7 @@ impl SongPlace {
 /// on its way.
 pub(crate) const REVERB_QUIET_SECONDS: f32 = 1.0;
 /// How quiet an effect has to be to be done, about -100 dB.
-pub const SILENT: f32 = 0.00001;
+pub(crate) const SILENT: f32 = 0.00001;
 
 /// Makes [`Memory`], what one slot's effect keeps, from one list of the effects that keep a long
 /// buffer, with everything that hands a call on to one of them by `match` (decision 340). Each
@@ -71,13 +71,13 @@ macro_rules! memories {
     (@made [$($kind:ident($dsp:ty),)+] [$($rung:ident),+] [$($own:ident),+]) => {
         /// What one slot's effect keeps.
         #[derive(Debug, Clone)]
-        pub enum Memory {
+        pub(crate) enum Memory {
             $($kind(Box<$dsp>),)+
         }
 
         /// Whether each effect keeps a long buffer, which it takes from the pool, by
         /// [`EffectKind`].
-        pub const BUFFERED: [bool; EffectKind::COUNT] = {
+        pub(crate) const BUFFERED: [bool; EffectKind::COUNT] = {
             let mut buffered = [false; EffectKind::COUNT];
             $(buffered[EffectKind::$kind as usize] = true;)+
             buffered
@@ -85,7 +85,7 @@ macro_rules! memories {
 
         /// What each effect that keeps a long buffer says of itself to its slot, by
         /// [`EffectKind`], and nothing for the rest.
-        pub const BUFFERED_FACTS: [Option<Facts>; EffectKind::COUNT] = {
+        pub(crate) const BUFFERED_FACTS: [Option<Facts>; EffectKind::COUNT] = {
             let mut facts = [None; EffectKind::COUNT];
             $(facts[EffectKind::$kind as usize] = Some(Facts::of::<$dsp>());)+
             facts
@@ -93,7 +93,7 @@ macro_rules! memories {
 
         impl Memory {
             /// What an effect keeps, made on the edit thread, if it keeps a long buffer.
-            pub fn new(kind: EffectKind, rate: u32) -> Option<Self> {
+            pub(crate) fn new(kind: EffectKind, rate: u32) -> Option<Self> {
                 Some(match kind {
                     $(EffectKind::$kind => Self::$kind(Box::new(<$dsp as SlotEffect>::new(rate))),)+
                     _ => return None,
@@ -101,7 +101,7 @@ macro_rules! memories {
             }
 
             /// Which effect's it is.
-            pub fn kind(&self) -> EffectKind {
+            pub(crate) fn kind(&self) -> EffectKind {
                 match self {
                     $(Self::$kind(_) => EffectKind::$kind,)+
                 }
@@ -109,7 +109,7 @@ macro_rules! memories {
 
             /// Feed one frame in and get what's wet out.
             #[inline]
-            pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+            pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
                 match self {
                     $(Self::$rung(dsp) => Rung::process(&mut **dsp, input),)+
                     // The slot plays these itself, so they never come here. Were one to, it's
@@ -122,7 +122,7 @@ macro_rules! memories {
             }
 
             /// How many quiet frames in a row mean nothing's left in it.
-            pub fn quiet_frames(&self, rate: u32) -> u32 {
+            pub(crate) fn quiet_frames(&self, rate: u32) -> u32 {
                 match self {
                     $(Self::$kind(dsp) => SlotEffect::quiet_frames(&**dsp, rate),)+
                 }
@@ -131,7 +131,7 @@ macro_rules! memories {
             /// Take what's set now, where the song is and at its tempo, and jump there if it's only
             /// just started, `fresh`.
             #[inline]
-            pub fn follow(&mut self, insert: Insert, song: SongPlace, frames: u64, fresh: bool) {
+            pub(crate) fn follow(&mut self, insert: Insert, song: SongPlace, frames: u64, fresh: bool) {
                 match (self, insert) {
                     $((Self::$kind(dsp), Insert::$kind(settings)) => {
                         follow_fresh(&mut **dsp, settings, song, frames, fresh);
@@ -143,7 +143,7 @@ macro_rules! memories {
             /// Move what goes by the frame rather than by what it's done to where it is this many
             /// frames in, as taking its settings does: a reverb's and a plate's wobbles, Clouds'
             /// and Beads' reverbs', and the song's steps Beads follows.
-            pub fn keep_time(&mut self, frames: u64, song: SongPlace) {
+            pub(crate) fn keep_time(&mut self, frames: u64, song: SongPlace) {
                 match self {
                     $(Self::$kind(dsp) => SlotEffect::keep_time(&mut **dsp, frames, song),)+
                 }
@@ -151,7 +151,7 @@ macro_rules! memories {
 
             /// Give what draws random numbers its own generator, from the track's: Clouds' and
             /// Beads' grains, and the Space Echo's wobble.
-            pub fn seed(&mut self, rng: Pcg32) {
+            pub(crate) fn seed(&mut self, rng: Pcg32) {
                 match self {
                     $(Self::$kind(dsp) => SlotEffect::seed(&mut **dsp, rng),)+
                 }
@@ -160,7 +160,7 @@ macro_rules! memories {
             /// Whether it's about to play something of its own with nothing going in, as a spring
             /// that's just been knocked does, or a stutter that's just been triggered, so it has to
             /// be woken.
-            pub fn waking(&self) -> bool {
+            pub(crate) fn waking(&self) -> bool {
                 match self {
                     $(Self::$kind(dsp) => SlotEffect::waking(&**dsp),)+
                 }
@@ -168,7 +168,7 @@ macro_rules! memories {
 
             /// A step has switched its trigger on, so a stutter starts again, whether or not it
             /// was on.
-            pub fn strike(&mut self) {
+            pub(crate) fn strike(&mut self) {
                 match self {
                     $(Self::$kind(dsp) => SlotEffect::strike(&mut **dsp),)+
                 }
@@ -193,7 +193,7 @@ memories! {
 
 impl Memory {
     /// Whether an effect keeps a long buffer, which it takes from the pool.
-    pub fn kept_by(insert: Insert) -> bool {
+    pub(crate) fn kept_by(insert: Insert) -> bool {
         insert.kind().is_some_and(|kind| BUFFERED[kind as usize])
     }
 }
@@ -234,7 +234,7 @@ impl IndexMut<EffectKind> for MemoryCount {
 /// What the callback holds that no slot is using, by [`EffectKind`]. Nothing here allocates or
 /// frees.
 #[derive(Debug)]
-pub struct MemoryPool {
+pub(crate) struct MemoryPool {
     free: [Vec<Memory>; EffectKind::COUNT],
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
@@ -245,7 +245,7 @@ const POOL_CAPACITY: usize = MAX_TRACKS * INSERTS * 2;
 
 impl MemoryPool {
     /// A pool with what a song needs, for before audio starts.
-    pub fn for_song(song: &Song, rate: u32) -> Self {
+    pub(crate) fn for_song(song: &Song, rate: u32) -> Self {
         let mut pool = Self {
             // What keeps no long buffer never has one to hold, so it takes no room.
             free: std::array::from_fn(|at| {
@@ -269,7 +269,7 @@ impl MemoryPool {
     }
 
     /// Keep what's no longer in use.
-    pub fn put(&mut self, memory: Memory) {
+    pub(crate) fn put(&mut self, memory: Memory) {
         let held = &mut self.free[memory.kind() as usize];
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
@@ -281,21 +281,21 @@ impl MemoryPool {
     }
 
     /// Take what an effect needs, empty, if it needs something and there's one free.
-    pub fn take(&mut self, insert: Insert) -> Option<Memory> {
+    pub(crate) fn take(&mut self, insert: Insert) -> Option<Memory> {
         let mut memory = self.free[insert.kind()? as usize].pop()?;
         memory.clear();
         Some(memory)
     }
 
     /// Note that the edit thread wants this many back.
-    pub fn owe(&mut self, count: MemoryCount) {
+    pub(crate) fn owe(&mut self, count: MemoryCount) {
         for (owed, more) in self.owed.0.iter_mut().zip(count.0) {
             *owed += more;
         }
     }
 
     /// The next to send back to be freed, if any is owed and free, the first effect's first.
-    pub fn next_owed(&mut self) -> Option<Memory> {
+    pub(crate) fn next_owed(&mut self) -> Option<Memory> {
         for kind in EffectKind::ALL {
             if self.owed[kind] > 0
                 && let Some(memory) = self.free[kind as usize].pop()
@@ -308,7 +308,8 @@ impl MemoryPool {
     }
 
     /// How many are free.
-    pub fn spare(&self) -> usize {
+    #[cfg(test)]
+    pub(crate) fn spare(&self) -> usize {
         self.free.iter().map(Vec::len).sum()
     }
 }

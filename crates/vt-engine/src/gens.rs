@@ -8,7 +8,7 @@
 //! What it renders is kept beside the inputs it rendered from, so a row read with the same ones
 //! takes its cell from what's kept, and only a change renders the span again.
 //!
-//! Nothing here allocates on the audio thread: each version brings a [`GenScratch`] made ahead on
+//! Nothing here allocates on the audio thread: each version brings a `GenScratch` made ahead on
 //! the edit thread with room for every track's runs and cells, which the engine takes as it takes
 //! the version and gives back with it.
 
@@ -54,7 +54,7 @@ fn place_of(column: GenColumn) -> usize {
 /// ([`GenHolds::hold`]) wins over one a macro puts there, which the macros set each block as they
 /// set the registry's settings (decision 300).
 #[derive(Debug, Clone)]
-pub struct GenHolds {
+pub(crate) struct GenHolds {
     held: [[Option<i32>; PARAMS]; COLUMNS],
     /// Where the track's macros put them, from each one's turn, a step's `MAC` lock or glide, and
     /// what modulation adds.
@@ -79,7 +79,7 @@ impl Default for GenHolds {
 impl GenHolds {
     /// Hold a column's setting at a number, or give it back to the shape with none. A list
     /// setting is left to the shape.
-    pub fn hold(&mut self, column: ShapeColumn, param: GenParam, number: Option<i32>) {
+    pub(crate) fn hold(&mut self, column: ShapeColumn, param: GenParam, number: Option<i32>) {
         if let Some(at) = param_place(param) {
             self.held[column_place(column)][at] = number;
             self.count();
@@ -87,7 +87,7 @@ impl GenHolds {
     }
 
     /// Hold a column's setting where a macro puts it, the column as a mapping names it.
-    pub fn hold_by_macro(&mut self, column: GenColumn, param: GenParam, number: i32) {
+    pub(crate) fn hold_by_macro(&mut self, column: GenColumn, param: GenParam, number: i32) {
         if let Some(at) = param_place(param) {
             let held = &mut self.by_macros[place_of(column)][at];
             if *held != Some(number) {
@@ -99,7 +99,7 @@ impl GenHolds {
     }
 
     /// Let go of every setting the macros hold, as they're about to be put again.
-    pub fn forget_macros(&mut self) {
+    pub(crate) fn forget_macros(&mut self) {
         self.by_macros = [[None; PARAMS]; COLUMNS];
         self.count();
     }
@@ -114,12 +114,12 @@ impl GenHolds {
     }
 
     /// Whether any setting is held.
-    pub fn any(&self) -> bool {
+    pub(crate) fn any(&self) -> bool {
         self.any
     }
 
     /// How many times a macro has moved a setting, counting round.
-    pub fn changes(&self) -> u32 {
+    pub(crate) fn changes(&self) -> u32 {
         self.changes
     }
 
@@ -308,7 +308,7 @@ struct Room {
 /// phrase of the most rows). The engine takes it as it takes the version, and the queue that
 /// returns old versions gives it back to be dropped on the edit thread.
 #[derive(Debug, Default)]
-pub struct GenScratch {
+pub(crate) struct GenScratch {
     rooms: Box<[Room]>,
     runs: Box<[Option<GenRun>]>,
     cells: Box<[GenCell]>,

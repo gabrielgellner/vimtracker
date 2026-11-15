@@ -8,8 +8,8 @@
 //! - [`dynamics`] are the mixing tools: compressor, limiter and EQ.
 //! - [`blocks`] are the small parts the others share, which use nothing else here.
 
-pub mod blocks;
-pub mod dynamics;
-pub mod effects;
-pub mod filters;
-pub mod voices;
+pub(crate) mod blocks;
+pub(crate) mod dynamics;
+pub(crate) mod effects;
+pub(crate) mod filters;
+pub(crate) mod voices;

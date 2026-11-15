@@ -60,7 +60,7 @@ pub(super) fn ratio(harmonics: f32) -> f32 {
 
 /// One voice. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct Fm {
+pub(crate) struct Fm {
     rate: f32,
     carrier_phase: u32,
     modulator_phase: u32,

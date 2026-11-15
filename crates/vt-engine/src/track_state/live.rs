@@ -189,7 +189,7 @@ impl TrackState {
     /// Its faders as they're heard: where each is, and what's heard with `VOL` and modulation on
     /// top, which is shown against the fader's `Level`, as they both set how loud it is. The first
     /// envelope on `Vol` shapes notes, and isn't a movement of the level.
-    pub fn faders(&self) -> Faders {
+    pub(crate) fn faders(&self) -> Faders {
         let offset = |destination: SettingId| self.offsets[destination.index()];
         let on_level = |held: f32, destination| {
             (held + offset(destination) * 255.0)
@@ -216,7 +216,7 @@ impl TrackState {
 
     /// What this track is playing with right now, its faders as [`TrackState::faders`] hears
     /// them.
-    pub fn live(&self) -> LiveValues {
+    pub(crate) fn live(&self) -> LiveValues {
         let offset = |destination: SettingId| self.offsets[destination.index()];
         let moved = |held: f32, destination| {
             ((held + offset(destination)).clamp(0.0, 1.0) * 255.0).round() as u8

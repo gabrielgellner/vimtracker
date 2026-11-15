@@ -736,8 +736,15 @@ implements `SlotEffect` (and `Rung`, if the slot plays it through `ring`) and ta
 of each family's checklist. A part that two folders
 would share, such as the antiderivative antialiasing, 4x oversampling and state variable filter of
 #260, goes in `blocks/`. A binary table sits in a `tables/` beside the modules that read it, so
-their `include_bytes!` paths stay short. The rest of the engine and `vt-tui` name each module by its
-folder, as `dsp::filters::filter` and `dsp::dynamics::compressor`.
+their `include_bytes!` paths stay short. The rest of the engine names each module by its folder, as
+`dsp::filters::filter` and `dsp::dynamics::compressor`.
+
+`dsp` is `pub(crate)`, as are `voice`, `reader` and `rng` (#809). What `vt-tui` draws of the sound,
+its curves, responses, transfers, repeats and tails, it reads through `pictures`, which re-exports
+each from the module that plays it, a module per effect where names repeat, as `pictures::lpg`.
+The parts the tests play on their own, a slot, the compressor and the Space Echo, are re-exported
+in `parts`. `vt-engine`'s `lib.rs` warns on `unreachable_pub`, as `vt-tui`'s does, so the dead-code
+lint sees inside `dsp`.
 
 Where the unclear ones went: `comb`, `lpg` and `vowel` are slot effects, but filters by what they do,
 as Vital files its comb and formant filters. `resonator` is the `Reso` slot effect's code; the `Modal`
@@ -1941,7 +1948,6 @@ These applied to every issue of M1 to M3, as first written. Some rows have been 
 | `FX_SLOTS` | 3 | FX slots per step |
 | `DEFAULT_MILLIBPM` | 120000 | New project tempo, in thousandths of a BPM |
 | `HISTORY_LIMIT` | 1000 | Undo versions kept |
-| `DEFAULT_RENDER_RATE` | 44100 | Hz, for tests; `vimtracker render` defaults to 48000 |
 | `PUBLISH_QUEUE` | 1 | Song versions waiting for the callback |
 | `RETURN_QUEUE` | 16 | Versions waiting to be freed |
 | `COMMAND_QUEUE` | 64 | Transport, preview and mute messages |

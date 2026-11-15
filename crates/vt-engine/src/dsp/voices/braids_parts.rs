@@ -82,7 +82,7 @@ pub(super) const NO_SYNC: Restarts = [None; INNER];
 
 /// A note as Braids takes it, in semitones as MIDI numbers them, at the rate a model runs at.
 #[derive(Debug, Clone, Copy)]
-pub struct Pitch {
+pub(crate) struct Pitch {
     pub(super) note: f32,
     /// Twice the program's rate, in Hz.
     rate: f32,
@@ -148,7 +148,7 @@ pub(super) fn mix(a: f32, b: f32, balance: f32) -> f32 {
 }
 
 /// One of Braids' models, rendering at twice the rate.
-pub trait Model: Copy {
+pub(crate) trait Model: Copy {
     /// How loud it comes out against the other machines.
     const LEVEL: f32;
     /// Whether it draws noise, which [`Model::seed`] chooses.
@@ -163,7 +163,7 @@ pub trait Model: Copy {
 /// A voice playing one of Braids' models, at twice the rate and brought back down. It's plain
 /// data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct Macro<M> {
+pub(crate) struct Macro<M> {
     model: M,
     /// Twice the program's rate, in Hz.
     rate: f32,

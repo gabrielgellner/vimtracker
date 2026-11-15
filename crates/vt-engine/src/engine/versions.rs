@@ -22,27 +22,28 @@ use super::{Engine, Transport};
 
 impl Engine {
     /// Keep a long buffer the edit thread has sent, for a version it's about to send.
-    pub fn receive_memory(&mut self, memory: Memory) {
+    pub(crate) fn receive_memory(&mut self, memory: Memory) {
         self.memory.put(memory);
     }
 
     /// The edit thread wants this many back, as they're more than its versions need.
-    pub fn release_memory(&mut self, count: MemoryCount) {
+    pub(crate) fn release_memory(&mut self, count: MemoryCount) {
         self.memory.owe(count);
     }
 
     /// The next long buffer to send back to be freed.
-    pub fn next_freed_memory(&mut self) -> Option<Memory> {
+    pub(crate) fn next_freed_memory(&mut self) -> Option<Memory> {
         self.memory.next_owed()
     }
 
     /// How many long buffers are held that no slot is using.
-    pub fn spare_memory(&self) -> usize {
+    #[cfg(test)]
+    pub(crate) fn spare_memory(&self) -> usize {
         self.memory.spare()
     }
 
     /// The id of the version playing, [`Published::id`].
-    pub fn version(&self) -> u64 {
+    pub(crate) fn version(&self) -> u64 {
         self.current.id
     }
 

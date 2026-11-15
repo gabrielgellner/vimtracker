@@ -94,7 +94,7 @@ impl ClockedNoise {
 
 /// One voice. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct Noise {
+pub(crate) struct Noise {
     rng: Pcg32,
     clocked: ClockedNoise,
     filter: Svf,
@@ -139,7 +139,7 @@ impl SynthEngine for Noise {
 }
 
 impl Noise {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             rng: Pcg32::new(0, 0),
             clocked: ClockedNoise::new(),

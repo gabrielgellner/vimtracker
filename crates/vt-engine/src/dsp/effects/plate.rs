@@ -206,7 +206,7 @@ impl Lines {
 
 /// The stereo plate.
 #[derive(Debug, Clone)]
-pub struct Plate {
+pub(crate) struct Plate {
     lines: Lines,
     diffusers: [Line; 4],
     /// How long each input all-pass is at this rate, in frames.
@@ -240,7 +240,7 @@ pub struct Plate {
 
 impl Plate {
     /// Make a plate for a sample rate, with lines long enough for the biggest.
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         let scale = rate as f32 / TUNING_RATE;
         let mut base = 0;
         let mut place = |longest: f32| {
@@ -300,7 +300,7 @@ impl Plate {
     }
 
     /// Forget what's in it.
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.lines.buffer.fill(0.0);
         self.pre.fill(0.0);
         self.band = 0.0;
@@ -316,7 +316,7 @@ impl Plate {
     /// Take the settings, and move the wobble to where it is this many frames in. It goes by the
     /// frame rather than by what the plate has done, so one that's slept is where it would have
     /// been.
-    pub fn follow(&mut self, settings: Settings, frames: u64) {
+    pub(crate) fn follow(&mut self, settings: Settings, frames: u64) {
         self.keep_time(frames);
         self.pre_frames.target = f32::from(settings.pre) / 255.0 * LONGEST_PRE * self.rate as f32;
         self.decay.target = f32::from(settings.decay) / 255.0 * MOST_DECAY;
@@ -332,14 +332,14 @@ impl Plate {
     }
 
     /// Move the wobble to where it is this many frames in.
-    pub fn keep_time(&mut self, frames: u64) {
+    pub(crate) fn keep_time(&mut self, frames: u64) {
         let turns = frames as f64 / f64::from(self.rate) * WOBBLE_HZ;
         let angle = std::f64::consts::TAU * (turns - turns.floor());
         self.wobble = (angle.cos() as f32, angle.sin() as f32);
     }
 
     /// Jump to the settings, for starting afresh.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.pre_frames.settle();
         self.pre_now = self.pre_frames.value;
         self.decay.settle();
@@ -375,7 +375,7 @@ impl Plate {
 
     /// Feed one frame in and get the wet signal out.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         let incoming = self.before_lines(input);
         let decay = self.decay.next(self.smoothing);
         let damping = self.damping.next(self.smoothing);

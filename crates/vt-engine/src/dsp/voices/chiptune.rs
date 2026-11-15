@@ -42,7 +42,7 @@ const DC_POLE: f32 = 1.0 - 20.0 / 48_000.0;
 
 /// One voice of the model. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct Chiptune {
+pub(crate) struct Chiptune {
     chords: ChordBank,
     /// Plaits' super square is the virtual analog voice's synced square at an even width.
     squares: [SyncedSquare; VOICES],
@@ -99,7 +99,7 @@ impl SynthEngine for Chiptune {
 }
 
 impl Chiptune {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             chords: ChordBank::new(),
             squares: [SyncedSquare::new(); VOICES],

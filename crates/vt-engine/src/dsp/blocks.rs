@@ -4,9 +4,9 @@
 pub(crate) mod clip;
 pub(crate) mod drift;
 pub(crate) mod flush;
-pub mod oversampler;
+pub(crate) mod oversampler;
 pub(super) mod plaits_parts;
 pub(crate) mod response;
 pub(crate) mod sides;
 pub(super) mod sine_table;
-pub mod smoother;
+pub(crate) mod smoother;

@@ -434,7 +434,7 @@ pub fn tail(settings: Settings, rate: u32) -> Option<Tail> {
 
 /// The stereo spring reverb.
 #[derive(Debug, Clone)]
-pub struct Spring {
+pub(crate) struct Spring {
     allpasses: Allpasses,
     /// Each side's loop, and the line its reflections are read from.
     loops: Lines,
@@ -478,7 +478,7 @@ pub struct Spring {
 
 impl Spring {
     /// Make a spring for a sample rate, with lines long enough for the biggest.
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         let frames = |seconds: f32| seconds * rate as f32;
         let scale = rate as f32 / TUNING_RATE;
         let longest_loop =
@@ -522,7 +522,7 @@ impl Spring {
     }
 
     /// Forget what's in it, and start its random numbers again.
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.allpasses.clear();
         self.loops.buffer.fill(0.0);
         self.reflections.buffer.fill(0.0);
@@ -549,7 +549,7 @@ impl Spring {
     }
 
     /// Take the settings.
-    pub fn follow(&mut self, settings: Settings) {
+    pub(crate) fn follow(&mut self, settings: Settings) {
         let share = |value: u8| f32::from(value) / 255.0;
         self.decay.target = share(settings.decay);
         self.size.target = share(settings.size);
@@ -561,7 +561,7 @@ impl Spring {
     }
 
     /// Jump to the settings, for starting afresh.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.decay.settle();
         self.size.settle();
         self.size_now = self.size.value;
@@ -573,7 +573,7 @@ impl Spring {
     }
 
     /// Whether it's about to be knocked, so it has something to play with nothing going in.
-    pub fn knocking(&self) -> bool {
+    pub(crate) fn knocking(&self) -> bool {
         self.knocked && self.knock == Knock::Ready
     }
 
@@ -657,7 +657,7 @@ impl Spring {
 
     /// Feed one frame in and get the wet signal out.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         let wanted = self.size.next(self.smoothing);
         let most = SIZE_PER_SECOND / self.rate as f32;
         self.size_now += (wanted - self.size_now).clamp(-most, most);

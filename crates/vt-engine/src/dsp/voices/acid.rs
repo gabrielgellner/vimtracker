@@ -224,7 +224,7 @@ fn blep(phase: f32, increment: f32) -> f32 {
 
 /// One voice. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct Acid {
+pub(crate) struct Acid {
     rate: f32,
     phase: f32,
     /// The frequency it plays now, as a fraction of the rate, which a slide moves toward the note.
@@ -534,7 +534,7 @@ impl Acid {
     /// Glide to the next note with the gate held, so neither envelope starts again. The note
     /// slid to brings its own accent, which sets the filter envelope's decay from here. It takes
     /// as long as its `Slide` says, or a time it's given, from the track's `Glide`.
-    pub fn slide(&mut self, accent: bool, ms: Option<f32>) {
+    pub(crate) fn slide(&mut self, accent: bool, ms: Option<f32>) {
         self.accented = accent;
         self.sliding = true;
         self.slide_ms = ms;
@@ -552,17 +552,20 @@ impl Acid {
     }
 
     /// The cutoff it played the latest frame at, in Hz.
-    pub fn cutoff(&self) -> f32 {
+    #[cfg(test)]
+    pub(crate) fn cutoff(&self) -> f32 {
         self.cutoff
     }
 
     /// The frequency it played the latest frame at, as a fraction of the rate.
-    pub fn heard(&self) -> f32 {
+    #[cfg(test)]
+    pub(crate) fn heard(&self) -> f32 {
         self.heard
     }
 
     /// The filter envelope's level.
-    pub fn envelope(&self) -> f32 {
+    #[cfg(test)]
+    pub(crate) fn envelope(&self) -> f32 {
         self.envelope
     }
 }
