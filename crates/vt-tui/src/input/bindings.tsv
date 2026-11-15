@@ -936,3 +936,8 @@ Command	C-n	InCommand(NextMatch)	In the list of matches: the next
 Command	C-p	InCommand(PreviousMatch)	In the list of matches: the one before
 Command	Backspace	InCommand(Erase)	Erase a character, or close once the line is empty
 Command	C-r	InCommand(RollName)	On a name line: another random name
+Jump	Tab	InJump(Play)	Play, or pause in place
+Jump	S-Tab	InJump(PlayFromStart)	Play from the start
+Jump	Enter	InJump(Land)	Land on the nearest match
+Jump	Backspace	InJump(Erase)	Erase a letter, or close once the search is empty
+Jump	Esc	InJump(Close)	Close

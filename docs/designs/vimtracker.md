@@ -932,8 +932,12 @@ answers `Run` with the line typed, `Close` on `Esc` or a line that doesn't parse
 `Enter(Normal)` on `Backspace` in an empty line; `App::command_line_key` lends it the folder of
 the presets `:preset` lists here, which only the track page knows, and once it's left by `Esc`
 or run, ends the song view's selection and says if the history couldn't be kept. The random
-names it rolls with `C-r` are `Services::names`. The others still read their keys in `App`'s
-methods.
+names it rolls with `C-r` are `Services::names`. `/`'s field jump (`FieldJump`, in
+`Overlays::field_jump`, which pages read through `Ctx::field_jump` for its labels) is given the
+page's settings and the cursor's place among them before each key, answers `Land` with the
+setting's row and field for `App` to move the cursor to, and `Do` with `Tab`'s and
+`Shift-Tab`'s commands, which play as they do in Normal. The others still read their keys in
+`App`'s methods.
 
 A key goes, in this order, to the first that takes it:
 

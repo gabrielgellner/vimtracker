@@ -11,6 +11,7 @@ use crate::input::keys::{Key, parse, parse_sequence};
 use crate::input::mode::{Mode, View};
 use crate::overlays::Overlay as _;
 use crate::overlays::command::{CommandKey, CommandLine};
+use crate::overlays::field_jump::{FieldJump, JumpKey};
 use crate::overlays::guides::{GuideKey, GuideView};
 use crate::overlays::help::{Help, HelpKey};
 use crate::overlays::picker::{Picker, PickerKey};
@@ -207,6 +208,8 @@ pub enum Cmd {
     InGuide(GuideKey),
     /// A key of the `:` line.
     InCommand(CommandKey),
+    /// A key of `/`'s field jump.
+    InJump(JumpKey),
 }
 
 /// One row of the table.
@@ -435,6 +438,7 @@ pub fn bindings() -> Vec<Binding> {
     add(Help::MODE, Help::KEYS);
     add(GuideView::MODE, GuideView::KEYS);
     add(CommandLine::MODE, CommandLine::KEYS);
+    add(FieldJump::MODE, FieldJump::KEYS);
     with_cmd_adjusts(rows)
 }
 
