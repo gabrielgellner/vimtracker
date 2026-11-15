@@ -827,8 +827,8 @@ assembled by `input/bindings.rs` under its mode; `Page::key`, which runs one of 
 count through a `CtxMut` and says what it did as an `Outcome`, done, refused with why, or passed
 back, or done and asking for what only `App` can do, a picker opened (`Outcome::Open`), a view
 shown (`Show`, or `Jump` as a jump `Ctrl-O` comes back from), a `:` line run (`Run`), Insert
-started with what's typed already (`Insert`), what the key started held while it's down (`Hold`),
-or the phrase view started afresh after a move onto another phrase (`Moved`), which
+started with what's typed already (`Insert`), another mode of the page's, such as the sample
+page's pads (`Enter`), what the key started held while it's down (`Hold`), or the phrase view started afresh after a move onto another phrase (`Moved`), which
 `App::settled` does once the page has given its borrows back (#784); `Page::draw`, given a `Ctx`;
 and `Page::panels` and `Page::take_panels`, its pictures as data for `Graphics` and the ids
 they're given. `App` holds one of each page and dispatches by `View` with a plain `match`, so
@@ -840,8 +840,8 @@ there's no `dyn`. A key goes, in this order, to the first that takes it:
 3.  what the page passed back, which is `App`'s: for the track page and the mixer,
     `App::run_across_pages`, the commands across pages (`i`'s mode, `/`, `M`, `gm`, the Keys mode,
     the Gen page's keys and the pickers) and then the track page's edits, which the mixer shares;
-    for the others, each page's own, `App::run_project_page`, `run_audio_page`,
-    and `run_sample_passed`, while the song view's, the chain view's and the phrase view's go on;
+    for the project page's two sub-pages, `App::run_project_page` and `run_audio_page`, while the
+    other pages' go on;
 4.  the tree of chains and phrases (`App::run_tree`);
 5.  the grammar's operators, the motion after one, and the Visual modes (`App::run_grammar`);
 6.  the global `match` in `App::run`.
@@ -1136,9 +1136,11 @@ status line and the recorder read it too.
 `SamplePage` is a component too: it keeps its own cursor, zoom, scroll, selection, settings focus
 and pictures' ids, runs its moves and its edits of the entry's points and settings
 (`pages/sample/placing.rs` and `settings.rs`) through the `Services`, builds its settings' pickers, and is
-drawn through a `Ctx`. What it passes back is `App`'s, in `App::run_sample_passed`: what plays
-through the track, the pads, `'` and `m`'s letters and `]'` `['`'s jumps, and opening the picker.
-Whether an entry is still recording is `App`'s too, so `App::sample_shown` says so before the
+drawn through a `Ctx`. It plays what's under the cursor through the track
+(`pages/sample/auditioning.rs`), and what only `App` can do it asks for in its `Outcome` (#784):
+the settings' pickers, the pads' keys mode (`Enter(Mode::Keys)`), whose keys are `App`'s, and
+what plays, held while the key is down. `'` and `m`'s letters and `]'` `['`'s jumps it passes
+back, to `App::run`'s own match, as they wait for a letter and go on the jump list. Whether an entry is still recording is `App`'s too, so `App::sample_shown` says so before the
 page's own `SamplePage::shown`.
 `SongView` (`pages/song.rs`) has the column its cursor is on and the sections `V` selects, all of
 its keys and Insert's typing on it, and its drawing, through a `Ctx`: the moves along the columns

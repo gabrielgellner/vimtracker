@@ -70,9 +70,9 @@ use crate::widgets::param::view::ParamView;
 use crate::widgets::setting::{CellLook, Focus};
 
 /// What a key did, as far as the page alone can tell, and what it asks for that only `App` can
-/// do: open the picker, show another view or run a `:` line, and start Insert, hold what lasts
-/// while the key is down, or start the phrase view afresh (#784). [`App::settled`] does what it asks once
-/// the page has given its borrows back, so a page needn't pass a key back to reach them.
+/// do: open the picker, show another view or run a `:` line, and start Insert or another mode,
+/// hold what lasts while the key is down, or start the phrase view afresh (#784). [`App::settled`] does what it asks once the page has given its borrows back, so
+/// a page needn't pass a key back to reach them.
 #[derive(Debug, Clone)]
 pub enum Outcome {
     /// The page did it.
@@ -92,6 +92,8 @@ pub enum Outcome {
     Run(Line),
     /// Done, and Insert starts, with this typed already.
     Insert(Entry),
+    /// Done, and the keys go into this mode of the page's, such as the sample page's pads.
+    Enter(Mode),
     /// Done, and what it started lasts while the key is down, to be ended or undone when it's
     /// let go.
     Hold(Momentary),
@@ -283,28 +285,27 @@ impl App {
             }
     }
 
-    /// Run a command on the sample page: the page's own key, and then what it passes back, which
-    /// is `App`'s, as it plays, starts the pads, waits for a mark's letter or opens the picker. A
-    /// key that moves over the sample says why there's none to show, as there's nothing it can
-    /// do, while any other goes on to mean what it does on every page. The count is taken by
-    /// what takes it, and left for what passes it on.
+    /// Run a command on the sample page: the page's own key, and what it asks for, once the page
+    /// is up to date with what it shows. A key that moves over the sample says why there's none
+    /// to show, as there's nothing it can do, while any other goes on to mean what it does on
+    /// every page. The count is taken by what takes it, and left for what passes it on.
     fn run_sample_page(&mut self, cmd: Cmd) -> bool {
-        let shown = match self.sample_page_here() {
-            Ok(shown) => shown,
+        match self.sample_page_here() {
+            Ok(_) => {}
             Err(why) if is_sample_motion(cmd) => {
                 self.services.status = why;
                 self.modes.count = None;
                 return true;
             }
             Err(_) => return false,
-        };
+        }
         let times = self.modes.count.unwrap_or(1).max(1);
         let mut ctx = CtxMut {
             services: &mut self.services,
             modes: &self.modes,
         };
         let outcome = self.sample_page.key(cmd, times, &mut ctx);
-        self.settled(outcome, true) || self.run_sample_passed(cmd, &shown)
+        self.settled(outcome, true)
     }
 
     /// Run a command in the song view: the view's own key, and what it asks for. What it passes
@@ -319,9 +320,8 @@ impl App {
         self.settled(outcome, true)
     }
 
-    /// Run a command in the chain view: the view's own key, and then what it passes back, a move
-    /// to another row, `dd`, the phrase picker, Insert and `;`, which are `App`'s. What neither
-    /// takes goes on to the tree. The count stays for what takes it.
+    /// Run a command in the chain view: the view's own key, and what it asks for. What it passes
+    /// back goes on to the tree, with the count for what takes it.
     fn run_chain_view(&mut self, cmd: Cmd) -> bool {
         let times = self.modes.count.unwrap_or(1).max(1);
         let mut ctx = CtxMut {
@@ -370,6 +370,7 @@ impl App {
                 self.modes.entry = entry;
                 self.modes.mode = Mode::Insert;
             }
+            Outcome::Enter(mode) => self.modes.mode = mode,
             Outcome::Hold(started) => self.started = Some(started),
             Outcome::Moved => self.phrase_view.top = self.services.cursor.step,
             Outcome::Done | Outcome::Refused(_) | Outcome::Passed => {}
