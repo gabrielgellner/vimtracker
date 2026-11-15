@@ -21,10 +21,10 @@ use vt_model::song::{Song, Track, trim_text};
 use vt_model::steps::StepRate;
 use vt_roto::live::{share_of, step_at};
 
-use crate::overlays::shape::live_shown;
 use crate::pages::track::draw::toggle_on;
 use crate::pages::track::tuning::{tuning, tuning_most};
 use crate::pages::track::{Control, set, view};
+use crate::services::generators::live_shown;
 use crate::widgets::param::edit;
 use crate::widgets::param::view::ParamView;
 

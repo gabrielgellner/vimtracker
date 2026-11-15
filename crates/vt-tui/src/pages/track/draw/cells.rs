@@ -17,12 +17,12 @@ use vt_model::shape::Context;
 use vt_model::song::Track;
 
 use crate::overlays::mapping::holding;
-use crate::overlays::shape::LiveGen;
 use crate::pages::Ctx;
 use crate::pages::track::tuning::{TuneOf, Tuning, tuning};
 use crate::pages::track::view::share;
 use crate::pages::track::{Control, DeviceSpec, TrackPage};
 use crate::services::automating::fader_of;
+use crate::services::generators::LiveGen;
 use crate::widgets::grid::{CellParts, CellSource, CellWidths};
 use crate::widgets::group;
 use crate::widgets::param::view::ParamView;

@@ -14,10 +14,10 @@ use vt_model::song::Track;
 
 use crate::graphics::PanelKey;
 use crate::overlays::mapping::{holds, macro_name};
-use crate::overlays::shape::LiveGen;
 use crate::pages::Ctx;
 use crate::pages::track::{Control, DeviceSpec, TrackPage};
 use crate::services::Services;
+use crate::services::generators::LiveGen;
 use crate::widgets::device::{DEVICE_HEIGHT, Device};
 use crate::widgets::grid::{CellWidths, ROW_STEP, SettingsGrid};
 use crate::widgets::image;
@@ -86,7 +86,7 @@ fn acts_on(live: &LiveGen) -> String {
     let generator = &live.generator;
     let column = match generator.column {
         ShapeColumn::Fx { slot, command } => format!("FX{} {}", slot + 1, command.name()),
-        _ => crate::overlays::shape::generator_label(generator),
+        _ => crate::services::generators::generator_label(generator),
     };
     match (generator.span, generator.rows()) {
         (Spanned::Lane, Some(rows)) => {
