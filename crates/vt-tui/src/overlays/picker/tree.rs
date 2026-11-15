@@ -10,7 +10,8 @@ use vt_model::tag::{self, Tag, TagLibrary};
 
 use crate::overlays::picker::explorer::{self, Icon, Purpose};
 
-use super::{Item, KitChoice, Outcome, Pick, Picker, Row};
+use super::{Item, KitChoice, Pick, Picker, Row};
+use crate::pages::Outcome;
 
 /// The most a search by tag reads below the open folders, so one over the home folder stops.
 pub(crate) const MOST_READ: usize = 20_000;
@@ -676,7 +677,7 @@ impl Picker {
                 let line = std::mem::take(&mut self.tag_line);
                 self.focus = super::Focus::List;
                 let Some(item) = self.taggable() else {
-                    return Outcome::Stay;
+                    return Outcome::Done;
                 };
                 let mut tags: Vec<String> = Vec::new();
                 for name in line.split_whitespace().filter_map(tag::tag_name) {
@@ -714,7 +715,7 @@ impl Picker {
             KeyCode::Char(c) if !key.ctrl => self.tag_line.push(c),
             _ => {}
         }
-        Outcome::Stay
+        Outcome::Done
     }
 
     /// Use these tags given by hand for what's read from now on.
@@ -855,10 +856,10 @@ impl Picker {
     /// own, such as a kit's sound with variants, which `l` opens.
     pub(super) fn enter_tree(&mut self, wider: bool, confirm: bool) -> Outcome {
         let Some(at) = self.current_index() else {
-            return Outcome::Stay;
+            return Outcome::Done;
         };
         let Some(tree) = self.tree.as_ref() else {
-            return Outcome::Stay;
+            return Outcome::Done;
         };
         let node = &tree.nodes[at];
         let chooses = !matches!(self.items[at].pick, Pick::Folder(_));
@@ -903,7 +904,7 @@ impl Picker {
                 self.selected = row + 1;
             }
         }
-        Outcome::Stay
+        Outcome::Done
     }
 
     /// `h` in the explorer: close the folder the cursor is on, or the one it's in, going up to it.
