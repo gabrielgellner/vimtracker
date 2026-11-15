@@ -475,7 +475,7 @@ mod tests {
         let mut b = [0.0_f32; 3];
         (0..frames)
             .map(|_| {
-                let white = rng.next_u32() as f32 / 2_147_483_648.0 - 1.0;
+                let white = rng.bipolar();
                 b[0] = 0.99765 * b[0] + white * 0.099_046;
                 b[1] = 0.963 * b[1] + white * 0.296_516_4;
                 b[2] = 0.57 * b[2] + white * 1.052_691_3;
@@ -490,7 +490,7 @@ mod tests {
         (0..frames)
             .map(|frame| {
                 let since = (frame % (rate as usize / 4)) as f32 / rate as f32;
-                let noise = rng.next_u32() as f32 / 2_147_483_648.0 - 1.0;
+                let noise = rng.bipolar();
                 noise * level * (-since / 0.02).exp()
             })
             .collect()

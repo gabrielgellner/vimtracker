@@ -361,16 +361,10 @@ impl Walk {
         if self.phase >= 1.0 {
             self.phase -= 1.0;
             self.from = self.to;
-            self.to = 2.0 * uniform(rng) - 1.0;
+            self.to = 2.0 * rng.unit() - 1.0;
         }
         self.from + (self.to - self.from) * smooth_step(self.phase)
     }
-}
-
-/// A number from 0 to 1.
-#[inline]
-fn uniform(rng: &mut Pcg32) -> f32 {
-    rng.next_u32() as f32 / 4_294_967_296.0
 }
 
 /// A converter from one rate to another `up` over `down` times it, which puts zeros between what
@@ -970,7 +964,7 @@ impl Seed {
         self.phase -= 1.0;
         let late = self.phase / step;
         if random {
-            self.ratio = -1.0 / log_one_minus(0.1 + 0.9 * uniform(rng));
+            self.ratio = -1.0 / log_one_minus(0.1 + 0.9 * rng.unit());
         }
         Some(Fire {
             late,
@@ -1005,7 +999,7 @@ impl Seed {
             self.reset_after = self.default_reset.max(4 * self.since);
             let threshold = self.audio_rate_interval + if self.audio_rate { 8 } else { 0 };
             self.audio_rate = self.since < threshold && chance >= 1.0;
-            self.accept = uniform(rng) < chance && self.count.is_multiple_of(division);
+            self.accept = rng.unit() < chance && self.count.is_multiple_of(division);
             if self.accept {
                 let frequency = 1.0 / self.since.max(1) as f32;
                 self.target = if chance >= 1.0 {
@@ -1806,7 +1800,7 @@ impl Beads {
         if random <= 0.0 {
             return value;
         }
-        (value + (uniform(&mut self.rng) - value) * random).clamp(0.0, 1.0)
+        (value + (self.rng.unit() - value) * random).clamp(0.0, 1.0)
     }
 
     /// Start a grain, as Beads' granular player does.
@@ -1825,7 +1819,7 @@ impl Beads {
         let amplitude = 1.0 / (playing as f32).sqrt();
         let spread = (3.0 * random + 1.0 - fire.regularity).min(1.0);
         let spread = 0.5 * playing as f32 * spread;
-        let (u, v) = (uniform(&mut self.rng), uniform(&mut self.rng));
+        let (u, v) = (self.rng.unit(), self.rng.unit());
         let pan = 0.5 + (u - 0.5) * (spread * v).min(1.0);
         let safety = f64::from(HEAD_SAFETY * self.scale);
         let reach = self.recording.duration() - 2.0 * safety;

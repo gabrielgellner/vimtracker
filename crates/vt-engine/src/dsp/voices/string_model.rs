@@ -25,7 +25,7 @@
 
 use super::virtual_analog::Settings;
 use crate::dsp::blocks::plaits_parts::{
-    DcBlocker, DelayLine, Limiter, SVF_SHIFT, Svf, interpolate, random, tan_dirty,
+    DcBlocker, DelayLine, Limiter, SVF_SHIFT, Svf, interpolate, tan_dirty,
 };
 use crate::rng::Pcg32;
 use crate::voice::SynthEngine;
@@ -134,7 +134,7 @@ impl StringModel {
         let noisy = self.remaining_noise.min(BLOCK);
         self.remaining_noise -= noisy;
         for sample in &mut excitation[..noisy] {
-            *sample = 2.0 * random(&mut self.rng) - 1.0;
+            *sample = 2.0 * self.rng.unit() - 1.0;
         }
         for sample in &mut excitation {
             *sample = self.excitation.low_pass(*sample);
@@ -219,7 +219,7 @@ impl StringModel {
                 let mut delay = self.delay;
                 let mut s;
                 if dispersion {
-                    let noise = random(&mut self.rng) - 0.5;
+                    let noise = self.rng.unit() - 0.5;
                     self.dispersion_noise += noise_filter * (noise - self.dispersion_noise);
                     delay *= 1.0 + self.dispersion_noise * noise_amount;
                     let ap_delay = delay * stretch_point;

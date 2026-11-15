@@ -20,7 +20,7 @@
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use super::virtual_analog::{BLOCK, Moving, Settings, next_blep, this_blep};
-use crate::dsp::blocks::plaits_parts::{Limiter, interpolate, random};
+use crate::dsp::blocks::plaits_parts::{Limiter, interpolate};
 use crate::dsp::blocks::sine_table::SINE;
 use crate::rng::Pcg32;
 use crate::voice::SynthEngine;
@@ -95,12 +95,12 @@ impl GrainEnvelope {
         }
         if randomize {
             self.from += self.interval;
-            self.interval = random(rng) - self.from;
+            self.interval = rng.unit() - self.from;
             // A random length for the next grain.
             if burst_mode {
-                self.fm *= 0.8 + 0.2 * random(rng);
+                self.fm *= 0.8 + 0.2 * rng.unit();
             } else {
-                self.fm = 0.5 + 1.5 * random(rng);
+                self.fm = 0.5 + 1.5 * rng.unit();
             }
         }
     }

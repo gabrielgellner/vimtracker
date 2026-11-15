@@ -80,28 +80,22 @@ impl Drift {
     /// where it is.
     pub(crate) fn roll(&mut self) {
         for oscillator in 0..OSCILLATORS {
-            self.tune[oscillator] = self.bipolar();
+            self.tune[oscillator] = self.rng.bipolar();
         }
-        self.cutoff = self.bipolar();
-        self.level = self.bipolar();
-        self.time = self.bipolar();
-    }
-
-    /// Noise on `-1..1`.
-    #[inline]
-    fn bipolar(&mut self) -> f32 {
-        self.rng.next_u32() as f32 / 2_147_483_648.0 - 1.0
+        self.cutoff = self.rng.bipolar();
+        self.level = self.rng.bipolar();
+        self.time = self.rng.bipolar();
     }
 
     /// A start phase, on `0..1`.
     pub(crate) fn phase(&mut self) -> f32 {
-        self.rng.next_u32() as f32 / 4_294_967_296.0
+        self.rng.unit()
     }
 
     /// The tuning offset of one more oscillator, on `-1..1`, for a voice with more than
     /// [`OSCILLATORS`]: `Supersaw` rolls one for each saw of its stack after the note's own.
     pub(crate) fn tuning(&mut self) -> f32 {
-        self.bipolar()
+        self.rng.bipolar()
     }
 
     /// How far an oscillator with its own `tuning` is off, in semitones, at `Drift` `amount`: its
@@ -114,7 +108,7 @@ impl Drift {
     /// Move the wander on, once a block.
     #[inline]
     pub(crate) fn step(&mut self) {
-        let white = self.bipolar();
+        let white = self.rng.bipolar();
         self.wander += (white - self.wander) * WANDER_COEFFICIENT;
     }
 
@@ -147,7 +141,7 @@ impl Drift {
     /// The next sample of the noise floor, to add to what goes into a filter.
     #[inline]
     pub(crate) fn noise(&mut self) -> f32 {
-        NOISE_FLOOR * self.bipolar()
+        NOISE_FLOOR * self.rng.bipolar()
     }
 }
 

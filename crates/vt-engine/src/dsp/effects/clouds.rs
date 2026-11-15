@@ -1023,12 +1023,6 @@ impl Clouds {
         self.delay = self.control.position * longest;
     }
 
-    /// A number from 0 to 1, from its own generator.
-    #[inline]
-    fn uniform(&mut self) -> f32 {
-        self.rng.next_u32() as f32 / 4_294_967_296.0
-    }
-
     /// The block's settings, as the module works them out from its knobs.
     fn work_out_control(&mut self) {
         let mut control = Control {
@@ -1135,7 +1129,7 @@ impl Clouds {
         let size = self.recording.size as f32;
         let mut grain_size = (1024.0 * (control.size * 4.0).exp2()).floor() * self.scale;
         let ratio = (control.semitones / 12.0).exp2();
-        let pan = 0.5 + control.spread * (self.uniform() - 0.5);
+        let pan = 0.5 + control.spread * (self.rng.unit() - 0.5);
         let gains = if self.recording.sides == 1 {
             [(pan * FRAC_PI_2).sin(), (pan * FRAC_PI_2).cos()]
         } else if pan < 0.5 {
@@ -1194,7 +1188,7 @@ impl Clouds {
             .filter(|grain| !grain.active)
             .count();
         self.since_grain += 1.0;
-        let by_chance = !control.regular && self.uniform() < chance && wanted > self.playing;
+        let by_chance = !control.regular && self.rng.unit() < chance && wanted > self.playing;
         let in_time = self.since_grain >= space;
         if idle > 0 && (by_chance || in_time) {
             let index = (0..self.most_grains)

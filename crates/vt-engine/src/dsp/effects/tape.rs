@@ -44,6 +44,7 @@ use vt_model::insert::{Tape as Settings, from_middle, tape_drive_db};
 
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::blocks::xorshift::Xorshift;
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::{Rung, SlotEffect};
 
@@ -397,7 +398,7 @@ pub(super) struct Wobble {
     drift: f32,
     /// How far round the drift goes each frame, now.
     drift_step: f32,
-    random: u32,
+    random: Xorshift,
     /// How far back the line is read, how far that moves each frame, and how many frames until
     /// the next is worked out. Without one, the next is jumped to.
     delay: Option<f32>,
@@ -412,20 +413,11 @@ impl Wobble {
             flutter: 0.0,
             drift: 0.0,
             drift_step: FIRST_DRIFT_HZ / rate as f32,
-            random: 0x9E37_79B9,
+            random: Xorshift::new(0x9E37_79B9),
             delay: None,
             slope: 0.0,
             countdown: 0,
         }
-    }
-
-    /// A number from 0 to 1 that's hard to guess, the same each time it starts.
-    #[inline]
-    fn random(&mut self) -> f32 {
-        self.random ^= self.random << 13;
-        self.random ^= self.random >> 17;
-        self.random ^= self.random << 5;
-        self.random as f32 / u32::MAX as f32
     }
 
     /// Where a sine from 0 to 1 is, after going a share of a turn.
@@ -446,7 +438,7 @@ impl Wobble {
             let before = self.drift;
             let drift = Self::turned(&mut self.drift, self.drift_step * frames);
             if before < 0.25 && self.drift >= 0.25 {
-                let hertz = SLOWEST_DRIFT_HZ + self.random() * DRIFT_SPREAD_HZ;
+                let hertz = SLOWEST_DRIFT_HZ + self.random.unit() * DRIFT_SPREAD_HZ;
                 self.drift_step = hertz / rate as f32;
             }
             let speed = 0.5 + 1.5 * drift * drift;

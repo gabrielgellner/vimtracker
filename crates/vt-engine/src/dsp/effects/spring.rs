@@ -577,18 +577,13 @@ impl Spring {
         self.knocked && self.knock == Knock::Ready
     }
 
-    /// A random number from 0 to 1.
-    fn random(&mut self) -> f32 {
-        (f64::from(self.rng.next_u32()) / 4_294_967_296.0) as f32
-    }
-
     /// Work out what's slow to, from the settings as they are now, as Surge's `setParams` does
     /// once a block.
     fn update(&mut self) {
         let rate = self.rate as f32;
         let size = self.size_now;
         if self.knocked && self.knock == Knock::Ready {
-            let amount = self.random();
+            let amount = self.rng.unit();
             let seconds = (KNOCK_SECONDS.0 + (KNOCK_SECONDS.1 - KNOCK_SECONDS.0) * amount)
                 * (1.0 + 0.5 * size);
             let length = ((rate * seconds) as u32).max(1);
@@ -600,7 +595,7 @@ impl Spring {
         let t60 = t60(self.decay.value, size);
         // The wander glides to a new place each block, as Surge's linear smoother does.
         let frames = loop_frames(size, self.rate);
-        let target = self.random() * frames * MOST_CHAOS;
+        let target = self.rng.unit() * frames * MOST_CHAOS;
         let glide = (CHAOS_GLIDE_SECONDS * rate) as u32;
         self.wander_step = (target - self.wander) / glide as f32;
         self.wander_left = glide;
