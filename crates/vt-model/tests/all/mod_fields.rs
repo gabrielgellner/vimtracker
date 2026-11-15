@@ -1,18 +1,14 @@
-//! A mod slot's settings read and set by what they are, and the track's own controls, checked
-//! against how the track page and the Roto chose each one's field before they moved into the
-//! model (#726). Each `today_` function is that code as it was, so the pages can switch over to
-//! [`ModSlot::field`], [`ModSpec`] and [`Track::control`] without changing what they do.
+//! A mod slot's settings read and set by what they are, wherever its type keeps them, each type's
+//! spec, and the track's own controls (#726). The track page and the Roto read these rather than
+//! choosing the struct field themselves.
 
 use vt_model::action::TrackControl;
-use vt_model::constants::{MAX_ENVELOPE_MS, MAX_LEVEL};
-use vt_model::envelope::{
-    Adsr, Ahd, Curve, Drum, Hold, Lpg, MAX_HOLD_MS, MAX_RATCHET, time_at, time_value,
-};
-use vt_model::grid::Grid;
-use vt_model::lfo::{Fade, Lfo, LfoMode, MAX_DEFORM, Rate, Shape};
+use vt_model::constants::MAX_LEVEL;
+use vt_model::envelope::{Adsr, Ahd, Curve, Drum, Hold, Lpg, time_at, time_value};
+use vt_model::lfo::{Fade, Lfo, LfoMode, Rate, Shape};
 use vt_model::modulation::{
-    MAX_DEPTH, MOD_LOCKED_FIELDS, MOD_OWN_FIELDS, MOD_SPECS, ModField, ModKind, ModSlot, Polarity,
-    depth_of, depth_value,
+    MOD_LOCKED_FIELDS, MOD_OWN_FIELDS, MOD_SPECS, ModField, ModKind, ModSlot, Polarity, depth_of,
+    depth_value,
 };
 use vt_model::settings::{MOD_OWN_SETTINGS, SettingId};
 use vt_model::song::Track;
@@ -121,147 +117,6 @@ fn distinct(kind: ModKind) -> ModSlot {
     }
 }
 
-/// Where a value is in a list.
-fn place<T: PartialEq>(items: &[T], value: T) -> i32 {
-    items.iter().position(|item| *item == value).unwrap() as i32
-}
-
-/// `ModField::on`, as the track page had it.
-fn today_on(field: ModField, kind: ModKind) -> bool {
-    match field {
-        ModField::Type | ModField::Destination | ModField::Depth => true,
-        ModField::Polarity => kind != ModKind::Steps,
-        ModField::Mode => kind != ModKind::Lpg,
-        ModField::Decay => matches!(
-            kind,
-            ModKind::Adsr | ModKind::Ahd | ModKind::Drum | ModKind::Lpg
-        ),
-        ModField::Attack | ModField::Reset => {
-            matches!(kind, ModKind::Adsr | ModKind::Ahd | ModKind::Lpg)
-        }
-        ModField::Peak | ModField::Body | ModField::Ratchet => kind == ModKind::Drum,
-        ModField::Colour => kind == ModKind::Lpg,
-        ModField::Sustain | ModField::Release => kind == ModKind::Adsr,
-        ModField::Hold => kind == ModKind::Ahd,
-        ModField::Shape | ModField::Phase | ModField::Deform | ModField::Fade => {
-            kind == ModKind::Lfo
-        }
-        ModField::Rate => matches!(kind, ModKind::Lfo | ModKind::Steps),
-        ModField::Length
-        | ModField::Start
-        | ModField::Loop
-        | ModField::Mutate
-        | ModField::Smooth
-        | ModField::Step(_) => kind == ModKind::Steps,
-        ModField::Low | ModField::High => kind == ModKind::Track,
-    }
-}
-
-/// The field the track page's `adjust_mod` and `mod_at_default` and the Roto's knobs read for a
-/// setting under a type, in [`ModSlot::field`]'s units.
-fn today_value(slot: &ModSlot, field: ModField) -> Option<i32> {
-    let kind = slot.kind;
-    let (adsr, ahd, drum, lpg, lfo, steps) = (
-        &slot.adsr,
-        &slot.ahd,
-        &slot.drum,
-        &slot.lpg,
-        &slot.lfo,
-        &slot.steps,
-    );
-    let ahd_kind = kind == ModKind::Ahd;
-    let lpg_kind = kind == ModKind::Lpg;
-    let drum_kind = kind == ModKind::Drum;
-    Some(match field {
-        ModField::Type => place(&ModKind::ALL, kind),
-        ModField::Mode => match kind {
-            ModKind::Adsr => place(&Curve::ALL, adsr.curve),
-            ModKind::Ahd => place(&Curve::ALL, ahd.curve),
-            ModKind::Drum => place(&Curve::ALL, drum.curve),
-            ModKind::Lfo => place(&LfoMode::ALL, lfo.mode),
-            ModKind::Steps => place(&StepsMode::ALL, steps.mode),
-            ModKind::Track => place(&Source::ALL, slot.track.source),
-            ModKind::Lpg => return None,
-        },
-        ModField::Polarity => i32::from(slot.polarity().index()),
-        ModField::Depth => i32::from(slot.depth),
-        ModField::Attack if ahd_kind => i32::from(ahd.attack_ms),
-        ModField::Attack if lpg_kind => i32::from(lpg.attack_ms),
-        ModField::Attack => i32::from(adsr.attack_ms),
-        ModField::Decay if ahd_kind => i32::from(ahd.decay_ms),
-        ModField::Decay if drum_kind => i32::from(drum.decay_ms),
-        ModField::Decay if lpg_kind => i32::from(lpg.decay_ms),
-        ModField::Decay => i32::from(adsr.decay_ms),
-        ModField::Reset if ahd_kind => i32::from(ahd.reset),
-        ModField::Reset if lpg_kind => i32::from(lpg.reset),
-        ModField::Reset => i32::from(adsr.reset),
-        ModField::Colour => i32::from(lpg.colour),
-        ModField::Peak => i32::from(drum.peak_ms),
-        ModField::Body => i32::from(drum.body),
-        ModField::Ratchet => i32::from(drum.ratchet),
-        ModField::Hold => match ahd.hold {
-            Hold::Note => -1,
-            Hold::Ms(ms) => i32::from(ms),
-        },
-        ModField::Release => i32::from(adsr.release_ms),
-        ModField::Sustain => i32::from(adsr.sustain),
-        ModField::Shape => place(&Shape::ALL, lfo.shape),
-        ModField::Phase => i32::from(lfo.phase),
-        ModField::Deform => i32::from(lfo.deform),
-        ModField::Fade => place(&Fade::ALL, lfo.fade),
-        ModField::Length => i32::from(steps.length),
-        ModField::Start => i32::from(steps.start),
-        ModField::Loop => place(&Loop::ALL, steps.looping),
-        ModField::Mutate => i32::from(steps.mutate),
-        ModField::Smooth => i32::from(steps.smooth),
-        ModField::Step(at) => i32::from(*steps.values.get(usize::from(at))?),
-        ModField::Low => i32::from(slot.track.bounds().low),
-        ModField::High => i32::from(slot.track.bounds().high),
-        ModField::Rate | ModField::Destination => return None,
-    })
-}
-
-/// The ends the track page's `adjust_mod` stopped each setting at.
-fn today_bounds(slot: &ModSlot, field: ModField) -> Option<(i32, i32)> {
-    let list = |count: usize| (0, count as i32 - 1);
-    Some(match field {
-        ModField::Type => list(ModKind::ALL.len()),
-        ModField::Mode => list(match slot.kind {
-            ModKind::Lfo => LfoMode::ALL.len(),
-            ModKind::Steps => StepsMode::ALL.len(),
-            ModKind::Track => Source::ALL.len(),
-            ModKind::Lpg => return None,
-            _ => Curve::ALL.len(),
-        }),
-        ModField::Polarity | ModField::Reset => (0, 1),
-        ModField::Depth => (-i32::from(MAX_DEPTH), i32::from(MAX_DEPTH)),
-        ModField::Attack | ModField::Decay | ModField::Release | ModField::Peak => {
-            (0, i32::from(MAX_ENVELOPE_MS))
-        }
-        ModField::Hold => (-1, i32::from(MAX_HOLD_MS)),
-        ModField::Sustain | ModField::Body => (0, 100),
-        ModField::Ratchet => (1, i32::from(MAX_RATCHET)),
-        ModField::Colour => (0, 0xFF),
-        ModField::Shape => list(Shape::ALL.len()),
-        ModField::Phase => (0, 359),
-        ModField::Deform => (-i32::from(MAX_DEFORM), i32::from(MAX_DEFORM)),
-        ModField::Fade => list(Fade::ALL.len()),
-        ModField::Length => (1, STEPS as i32),
-        ModField::Start => list(STEPS),
-        ModField::Loop => list(Loop::ALL.len()),
-        ModField::Mutate => (0, i32::from(MAX_MUTATE)),
-        ModField::Smooth => (-i32::from(MAX_STEP), i32::from(MAX_STEP)),
-        ModField::Step(at) if usize::from(at) < STEPS => {
-            (-i32::from(MAX_STEP), i32::from(MAX_STEP))
-        }
-        ModField::Low | ModField::High => {
-            let (lowest, highest) = slot.track.source.span();
-            (i32::from(lowest), i32::from(highest))
-        }
-        ModField::Rate | ModField::Destination | ModField::Step(_) => return None,
-    })
-}
-
 #[test]
 fn each_types_spec_says_what_its_matches_said() {
     for (at, kind) in ModKind::ALL.into_iter().enumerate() {
@@ -309,159 +164,200 @@ fn each_types_spec_says_what_its_matches_said() {
 }
 
 #[test]
-fn a_type_has_the_fields_the_track_page_gave_it() {
-    for kind in ModKind::ALL {
-        for field in FIELDS {
-            assert_eq!(field.on(kind), today_on(field, kind), "{kind:?} {field:?}");
-        }
-    }
-}
-
-/// A grid's columns, top to bottom.
-type Columns = [[Option<usize>; 3]];
-
-#[test]
-fn each_types_title_settings_and_grid_are_the_mod_pages() {
+fn each_types_title_is_in_order_and_its_grid_places_each_setting() {
     use ModField::*;
-    let today: [(&[ModField], &Columns); 7] = [
-        (
-            &[Attack, Decay, Release, Sustain, Depth, Reset],
-            &[[Some(0), Some(1), Some(2)], [Some(3), Some(4), Some(5)]],
-        ),
-        (
-            &[Attack, Hold, Decay, Depth, Reset],
-            &[[Some(0), Some(1), Some(2)], [Some(3), Some(4), None]],
-        ),
-        (
-            &[Peak, Body, Decay, Depth, Ratchet],
-            &[[Some(0), Some(1), Some(2)], [Some(3), Some(4), None]],
-        ),
-        (
-            &[Attack, Decay, Colour, Depth, Reset],
-            &[[Some(0), Some(1), Some(2)], [Some(3), Some(4), None]],
-        ),
-        (
-            &[Shape, Rate, Depth, Phase, Fade, Deform],
-            &[[Some(0), Some(1), Some(2)], [Some(3), Some(4), Some(5)]],
-        ),
-        (
-            &[Rate, Length, Depth, Start, Mutate, Smooth, Step(0)],
-            &[
-                [Some(0), Some(1), Some(2)],
-                [Some(3), Some(4), Some(5)],
-                [Some(6), Some(6), Some(6)],
-            ],
-        ),
-        (
-            &[Low, High, Depth],
-            &[[Some(0), Some(1), Some(2)], [None, None, None]],
-        ),
-    ];
-    for (kind, (fields, columns)) in ModKind::ALL.into_iter().zip(today) {
+    for kind in ModKind::ALL {
         let spec = kind.spec();
-        assert_eq!(spec.fields, fields, "{kind:?}");
-        assert_eq!(spec.grid, Grid::from_columns(columns), "{kind:?}");
         let title: Vec<ModField> = [Type, Mode, Loop, Polarity, Destination]
             .into_iter()
-            .filter(|field| today_on(*field, kind))
+            .filter(|field| spec.title.contains(field))
             .collect();
         assert_eq!(spec.title, title, "{kind:?}");
+        assert_eq!(spec.title.first(), Some(&Type), "{kind:?}");
+        assert_eq!(spec.title.last(), Some(&Destination), "{kind:?}");
+        assert!(spec.fields.contains(&Depth), "{kind:?}");
+        let mut placed: Vec<usize> = spec.grid.settings().collect();
+        // Steps' values are on every row, so `l` from any of its grid goes in.
+        placed.sort_unstable();
+        placed.dedup();
+        assert_eq!(
+            placed,
+            (0..spec.fields.len()).collect::<Vec<_>>(),
+            "{kind:?}"
+        );
     }
 }
 
+/// Where a value is in a list.
+fn place<T: PartialEq>(items: &[T], value: T) -> i32 {
+    items.iter().position(|item| *item == value).unwrap() as i32
+}
+
+/// How a setting that more than one type has is kept by each of them: read, then set from a value
+/// in [`ModSlot::field`]'s units.
+type Kept = (
+    ModKind,
+    ModField,
+    fn(&ModSlot) -> i32,
+    fn(&mut ModSlot, i32),
+);
+
+const KEPT: [Kept; 18] = [
+    (
+        ModKind::Adsr,
+        ModField::Attack,
+        |slot| i32::from(slot.adsr.attack_ms),
+        |slot, at| slot.adsr.attack_ms = at as u16,
+    ),
+    (
+        ModKind::Ahd,
+        ModField::Attack,
+        |slot| i32::from(slot.ahd.attack_ms),
+        |slot, at| slot.ahd.attack_ms = at as u16,
+    ),
+    (
+        ModKind::Lpg,
+        ModField::Attack,
+        |slot| i32::from(slot.lpg.attack_ms),
+        |slot, at| slot.lpg.attack_ms = at as u16,
+    ),
+    (
+        ModKind::Adsr,
+        ModField::Decay,
+        |slot| i32::from(slot.adsr.decay_ms),
+        |slot, at| slot.adsr.decay_ms = at as u16,
+    ),
+    (
+        ModKind::Ahd,
+        ModField::Decay,
+        |slot| i32::from(slot.ahd.decay_ms),
+        |slot, at| slot.ahd.decay_ms = at as u16,
+    ),
+    (
+        ModKind::Drum,
+        ModField::Decay,
+        |slot| i32::from(slot.drum.decay_ms),
+        |slot, at| slot.drum.decay_ms = at as u16,
+    ),
+    (
+        ModKind::Lpg,
+        ModField::Decay,
+        |slot| i32::from(slot.lpg.decay_ms),
+        |slot, at| slot.lpg.decay_ms = at as u16,
+    ),
+    (
+        ModKind::Adsr,
+        ModField::Reset,
+        |slot| i32::from(slot.adsr.reset),
+        |slot, at| slot.adsr.reset = at != 0,
+    ),
+    (
+        ModKind::Ahd,
+        ModField::Reset,
+        |slot| i32::from(slot.ahd.reset),
+        |slot, at| slot.ahd.reset = at != 0,
+    ),
+    (
+        ModKind::Lpg,
+        ModField::Reset,
+        |slot| i32::from(slot.lpg.reset),
+        |slot, at| slot.lpg.reset = at != 0,
+    ),
+    (
+        ModKind::Adsr,
+        ModField::Mode,
+        |slot| place(&Curve::ALL, slot.adsr.curve),
+        |slot, at| slot.adsr.curve = Curve::ALL[at as usize],
+    ),
+    (
+        ModKind::Ahd,
+        ModField::Mode,
+        |slot| place(&Curve::ALL, slot.ahd.curve),
+        |slot, at| slot.ahd.curve = Curve::ALL[at as usize],
+    ),
+    (
+        ModKind::Drum,
+        ModField::Mode,
+        |slot| place(&Curve::ALL, slot.drum.curve),
+        |slot, at| slot.drum.curve = Curve::ALL[at as usize],
+    ),
+    (
+        ModKind::Lfo,
+        ModField::Mode,
+        |slot| place(&LfoMode::ALL, slot.lfo.mode),
+        |slot, at| slot.lfo.mode = LfoMode::ALL[at as usize],
+    ),
+    (
+        ModKind::Steps,
+        ModField::Mode,
+        |slot| place(&StepsMode::ALL, slot.steps.mode),
+        |slot, at| slot.steps.mode = StepsMode::ALL[at as usize],
+    ),
+    (
+        ModKind::Track,
+        ModField::Mode,
+        |slot| place(&Source::ALL, slot.track.source),
+        |slot, at| slot.track.source = Source::ALL[at as usize],
+    ),
+    // Its map is the source's it follows, a note's in `distinct`.
+    (
+        ModKind::Track,
+        ModField::Low,
+        |slot| i32::from(slot.track.note.low),
+        |slot, at| slot.track.note.low = at as u8,
+    ),
+    (
+        ModKind::Track,
+        ModField::High,
+        |slot| i32::from(slot.track.note.high),
+        |slot, at| slot.track.note.high = at as u8,
+    ),
+];
+
 #[test]
-fn a_field_reads_the_struct_field_its_type_keeps_it_in() {
-    for kind in ModKind::ALL {
+fn a_setting_two_types_have_is_read_and_set_where_each_keeps_it() {
+    for (kind, field, read, keep) in KEPT {
         let slot = distinct(kind);
-        for field in FIELDS {
-            let wanted = if today_on(field, kind) {
-                today_value(&slot, field)
-            } else {
-                None
-            };
-            assert_eq!(slot.field(field), wanted, "{kind:?} {field:?}");
-            let bounds = if wanted.is_some() {
-                today_bounds(&slot, field)
-            } else {
-                None
-            };
-            assert_eq!(slot.bounds(field), bounds, "{kind:?} {field:?}");
+        assert_eq!(slot.field(field), Some(read(&slot)), "{kind:?} {field:?}");
+        let (lowest, highest) = slot.bounds(field).unwrap();
+        for to in [lowest, highest] {
+            let (mut set, mut kept) = (slot, slot);
+            set.set_field(field, to);
+            keep(&mut kept, to);
+            assert_eq!(set, kept, "{kind:?} {field:?} {to}");
         }
     }
 }
 
-/// The field the track page's `adjust_mod` and the Roto's knobs set for a setting under a type,
-/// from a value within its bounds in [`ModSlot::field`]'s units.
-fn today_set(slot: &mut ModSlot, field: ModField, value: i32) {
-    let kind = slot.kind;
-    let ahd_kind = kind == ModKind::Ahd;
-    let lpg_kind = kind == ModKind::Lpg;
-    let drum_kind = kind == ModKind::Drum;
-    let (ms, byte, signed, at) = (value as u16, value as u8, value as i16, value as usize);
-    match field {
-        ModField::Type => slot.kind = ModKind::ALL[at],
-        ModField::Mode => match kind {
-            ModKind::Adsr => slot.adsr.curve = Curve::ALL[at],
-            ModKind::Ahd => slot.ahd.curve = Curve::ALL[at],
-            ModKind::Drum => slot.drum.curve = Curve::ALL[at],
-            ModKind::Lfo => slot.lfo.mode = LfoMode::ALL[at],
-            ModKind::Steps => slot.steps.mode = StepsMode::ALL[at],
-            ModKind::Track => slot.track.source = Source::ALL[at],
-            ModKind::Lpg => {}
-        },
-        ModField::Polarity => slot.polarity = Some(Polarity::ALL[at]),
-        ModField::Depth => slot.depth = signed,
-        ModField::Attack if ahd_kind => slot.ahd.attack_ms = ms,
-        ModField::Attack if lpg_kind => slot.lpg.attack_ms = ms,
-        ModField::Attack => slot.adsr.attack_ms = ms,
-        ModField::Decay if ahd_kind => slot.ahd.decay_ms = ms,
-        ModField::Decay if drum_kind => slot.drum.decay_ms = ms,
-        ModField::Decay if lpg_kind => slot.lpg.decay_ms = ms,
-        ModField::Decay => slot.adsr.decay_ms = ms,
-        ModField::Reset if ahd_kind => slot.ahd.reset = value != 0,
-        ModField::Reset if lpg_kind => slot.lpg.reset = value != 0,
-        ModField::Reset => slot.adsr.reset = value != 0,
-        ModField::Colour => slot.lpg.colour = byte,
-        ModField::Peak => slot.drum.peak_ms = ms,
-        ModField::Body => slot.drum.body = byte,
-        ModField::Ratchet => slot.drum.ratchet = byte,
-        ModField::Hold if value < 0 => slot.ahd.hold = Hold::Note,
-        ModField::Hold => slot.ahd.hold = Hold::Ms(ms),
-        ModField::Release => slot.adsr.release_ms = ms,
-        ModField::Sustain => slot.adsr.sustain = byte,
-        ModField::Shape => slot.lfo.shape = Shape::ALL[at],
-        ModField::Phase => slot.lfo.phase = ms,
-        ModField::Deform => slot.lfo.deform = signed,
-        ModField::Fade => slot.lfo.fade = Fade::ALL[at],
-        ModField::Length => slot.steps.length = byte,
-        ModField::Start => slot.steps.start = byte,
-        ModField::Loop => slot.steps.looping = Loop::ALL[at],
-        ModField::Mutate => slot.steps.mutate = byte,
-        ModField::Smooth => slot.steps.smooth = signed,
-        ModField::Step(step) => slot.steps.values[usize::from(step)] = signed,
-        ModField::Low => slot.track.bounds_mut().low = byte,
-        ModField::High => slot.track.bounds_mut().high = byte,
-        ModField::Rate | ModField::Destination => {}
-    }
-}
-
 #[test]
-fn setting_a_field_sets_the_struct_field_its_type_keeps_it_in_and_nothing_else() {
+fn a_slot_has_only_its_types_settings_and_setting_one_moves_only_it() {
     for kind in ModKind::ALL {
         let slot = distinct(kind);
         for field in FIELDS {
             let Some((lowest, highest)) = slot.bounds(field) else {
+                assert_eq!(slot.field(field), None, "{kind:?} {field:?}");
                 let mut set = slot;
                 set.set_field(field, 1);
                 assert_eq!(set, slot, "{kind:?} {field:?} is left alone");
                 continue;
             };
+            assert!(field.on(kind), "{kind:?} {field:?}");
             for value in [lowest, highest, (lowest + highest) / 2] {
-                let (mut set, mut today) = (slot, slot);
+                let mut set = slot;
                 set.set_field(field, value);
-                today_set(&mut today, field, value);
-                assert_eq!(set, today, "{kind:?} {field:?} {value}");
                 assert_eq!(set.field(field), Some(value), "{kind:?} {field:?} {value}");
+                // A type is what the rest mean, and Track's source is which map its ends are.
+                let follows = |other: ModField| {
+                    field == ModField::Type
+                        || (kind == ModKind::Track
+                            && field == ModField::Mode
+                            && matches!(other, ModField::Low | ModField::High))
+                };
+                for other in FIELDS.into_iter().filter(|other| *other != field) {
+                    if !follows(other) {
+                        assert_eq!(set.field(other), slot.field(other), "{kind:?} {field:?}");
+                    }
+                }
             }
             // Past either end, it stops there, and a phase goes round.
             let mut set = slot;
@@ -481,6 +377,25 @@ fn setting_a_field_sets_the_struct_field_its_type_keeps_it_in_and_nothing_else()
             assert_eq!(set.field(field), Some(past), "{kind:?} {field:?}");
         }
     }
+}
+
+#[test]
+fn a_types_modes_are_its_lists_in_the_order_its_mode_counts_them() {
+    for kind in ModKind::ALL {
+        let slot = distinct(kind);
+        let modes = kind.modes();
+        assert_eq!(modes.is_empty(), !kind.has_mode(), "{kind:?}");
+        if let Some((lowest, highest)) = slot.bounds(ModField::Mode) {
+            assert_eq!((lowest, highest), (0, modes.len() as i32 - 1), "{kind:?}");
+        }
+    }
+    let names =
+        |kind: ModKind| -> Vec<&str> { kind.modes().into_iter().map(|(name, _)| name).collect() };
+    assert_eq!(names(ModKind::Ahd), Curve::ALL.map(Curve::name));
+    assert_eq!(names(ModKind::Lfo), LfoMode::ALL.map(LfoMode::name));
+    assert_eq!(names(ModKind::Steps), StepsMode::ALL.map(StepsMode::name));
+    assert_eq!(names(ModKind::Track), Source::ALL.map(Source::name));
+    assert_eq!(ModKind::Track.modes()[0].1, Source::ALL[0].meaning());
 }
 
 #[test]
@@ -508,22 +423,7 @@ fn the_registrys_own_settings_and_locked_ones_are_in_the_fields_order() {
         assert_eq!(field.setting(4), Some(id));
     }
     assert_eq!(SettingId::modulator(0, MOD_LOCKED_FIELDS.len()), None);
-    // The places the track page's `own_place` gave them.
-    let own_place = [
-        (ModField::Attack, 0),
-        (ModField::Decay, 1),
-        (ModField::Sustain, 2),
-        (ModField::Release, 3),
-        (ModField::Body, 4),
-        (ModField::Colour, 5),
-        (ModField::Length, 6),
-        (ModField::Mutate, 7),
-        (ModField::Smooth, 8),
-        (ModField::Rate, 9),
-    ];
-    for (field, at) in own_place {
-        assert_eq!(field.own(), Some(at), "{field:?}");
-    }
+    // An AHD's hold isn't on the `00` to `FF` scale, as `Note` is below no time.
     assert_eq!(ModField::Hold.own(), None);
     assert_eq!(ModField::Hold.setting(0), None);
 }
@@ -649,24 +549,6 @@ fn own_values_read_and_set_exactly_as_before() {
     }
 }
 
-/// The track page's and the Roto's match from a control to its field, as they were.
-fn today_control(track: &Track, control: TrackControl) -> u8 {
-    match control {
-        TrackControl::Cutoff => track.cutoff,
-        TrackControl::Resonance => track.resonance,
-        TrackControl::Pan => track.pan,
-        TrackControl::SendA => track.send_a,
-        TrackControl::SendB => track.send_b,
-        TrackControl::Drive => track.drive,
-        TrackControl::Punch => track.punch,
-        TrackControl::LowCut => track.low_cut,
-        TrackControl::HighCut => track.high_cut,
-        TrackControl::Pitch => track.pitch,
-        TrackControl::VelocityDelta => track.velocity_delta,
-        TrackControl::Quantise => track.quantise,
-    }
-}
-
 #[test]
 fn a_tracks_controls_read_and_set_their_own_fields() {
     let mut track = Track::default();
@@ -675,8 +557,10 @@ fn a_tracks_controls_read_and_set_their_own_fields() {
     }
     for (at, control) in TrackControl::ALL.into_iter().enumerate() {
         assert_eq!(track.control(control), 0x10 + at as u8, "{control:?}");
-        assert_eq!(track.control(control), today_control(&track, control));
     }
+    assert_eq!(track.cutoff, track.control(TrackControl::Cutoff));
+    assert_eq!(track.send_b, track.control(TrackControl::SendB));
+    assert_eq!(track.quantise, track.control(TrackControl::Quantise));
     for control in TrackControl::ALL {
         let mut set = track.clone();
         set.set_control(control, 0xFF);
@@ -684,7 +568,7 @@ fn a_tracks_controls_read_and_set_their_own_fields() {
             TrackControl::SendA | TrackControl::SendB => MAX_LEVEL,
             _ => 0xFF,
         };
-        assert_eq!(today_control(&set, control), top, "{control:?}");
+        assert_eq!(set.control(control), top, "{control:?}");
         for other in TrackControl::ALL {
             if other != control {
                 assert_eq!(set.control(other), track.control(other), "{control:?}");
