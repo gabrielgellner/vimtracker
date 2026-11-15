@@ -135,7 +135,7 @@ rows `00` and `08` (`'` after the note, in Insert), slides from `07` into `08` (
 some delay, a shorter hat (`Decay` `30`), and the tracks' `Level`s.
 
 **Give it knobs.** A macro is one knob that turns any of the track's settings, each between a
-`Min` and a `Max` of its own (see **Macros** in **The Gen page, macros, presets and patches**). Three make the slot a panel,
+`Min` and a `Max` of its own (see **Macros** in **The Gen page, macros and presets**). Three make the slot a panel,
 all on track 1's Mod page, `Space 6`:
 
 1.  `/mutate` `Enter` puts the cursor on `Mod 4`'s `Mutate`. `M` lists the track's eight
@@ -190,7 +190,7 @@ it has a `Rate` to map, for a register that steps in time rather than with the n
     one it was moved to the last time it was heard, and the slot is switched out, knobs and all.
 
 **Save it as a patch.** The Steps slot and the three macros that turn it are a Turing Machine you
-can put on any track, keeping that track's sound (see **Patches** in **The Gen page, macros, presets and patches**).
+can put on any track, keeping that track's sound (see **Patches** in **The Gen page, macros and presets**).
 
 1.  On track 1, `:patch save Turing Machine`. A patch is the track's macros that hold something
     and what they move, so this one is `Mod 4` and the three macros, `1 slot, 3 macros` as the

@@ -1,5 +1,5 @@
 <!-- ANCHOR: before-gen -->
-# The Gen page, macros, presets and patches
+# The Gen page, macros and presets
 
 The fourth page, after FX, shows the live columns of the phrase under the cursor,
 the one `gl` reopens, as devices you turn as you would a filter. Its title names
