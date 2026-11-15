@@ -525,6 +525,7 @@ impl GenEdit<'_> {
         };
         let heard = self
             .services
+            .reported
             .heard_passes
             .get(&(track, phrase, generator))
             .filter(|heard| heard.column == live.generator.column)

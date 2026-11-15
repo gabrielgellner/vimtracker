@@ -139,7 +139,7 @@ fn the_guides_moves_do_what_they_say() {
     assert_eq!(written, [0, 4, 8, 12]);
 
     press(&mut app, "i;");
-    assert!(!app.services.auto_jump);
+    assert!(!app.services.live.auto_jump);
     special(&mut app, KeyCode::Esc);
     press(&mut app, "gg");
     let before = app.services.cursor.step;

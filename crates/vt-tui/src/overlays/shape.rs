@@ -365,8 +365,8 @@ impl App {
             // An empty Note column takes notes of its own, at the velocity notes are typed with.
             Field::Note => (
                 ShapeColumn::Note {
-                    scale: self.services.scale,
-                    writes: (!notes).then_some(self.services.note_velocity),
+                    scale: self.services.live.scale,
+                    writes: (!notes).then_some(self.services.live.note_velocity),
                 },
                 !notes,
             ),
@@ -503,8 +503,8 @@ impl App {
     pub(crate) fn write_kit_beat(&mut self, tracks: &[usize]) {
         let song = Arc::clone(self.song());
         let column = ShapeColumn::Note {
-            scale: self.services.scale,
-            writes: Some(self.services.note_velocity),
+            scale: self.services.live.scale,
+            writes: Some(self.services.live.note_velocity),
         };
         let ends = self.services.generated_ends(column);
         self.services.shape_seed = self.services.shape_seed.wrapping_add(1);
@@ -791,8 +791,8 @@ impl App {
                 // Notes go through the scale as it is now.
                 let column = match column {
                     ShapeColumn::Note { .. } => ShapeColumn::Note {
-                        scale: self.services.scale,
-                        writes: generate.then_some(self.services.note_velocity),
+                        scale: self.services.live.scale,
+                        writes: generate.then_some(self.services.live.note_velocity),
                     },
                     column => column,
                 };

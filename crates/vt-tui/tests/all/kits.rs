@@ -334,7 +334,7 @@ fn a_kit_fills_tracks_from_the_first_as_one_undo_step() {
     assert!(sample_of(&app, 1).unwrap().ends_with("kick.wav"));
     assert_eq!(app.services.status, "Kit 909: 3 tracks");
     assert_eq!(app.song().sound_tracks(), 3, "it added the track it needed");
-    assert_eq!(app.services.levels.len(), 3 + FIXED_TRACKS);
+    assert_eq!(app.services.live.levels.len(), 3 + FIXED_TRACKS);
     assert!(
         app.services
             .samples

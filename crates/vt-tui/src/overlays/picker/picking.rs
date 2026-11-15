@@ -392,7 +392,7 @@ impl App {
             Pick::Scale(kind) => self.services.set_scale(Scale {
                 on: true,
                 kind,
-                ..self.services.scale
+                ..self.services.live.scale
             }),
             Pick::ShapeChoice(choice) => self.pick_shape_choice(choice),
             Pick::GenChoice {

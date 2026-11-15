@@ -946,45 +946,48 @@ fn the_project_page_sets_the_scale_its_root_and_auto_jump() {
     use vt_tui::pages::project::ProjectControl;
     let (mut app, _realtime) = on_the_project_page();
     project_cursor_on(&mut app, ProjectControl::Scale);
-    assert!(!app.services.scale.on);
+    assert!(!app.services.live.scale.on);
     tap(&mut app, "=");
-    assert!(app.services.scale.on);
-    assert_eq!(app.services.scale.kind, ScaleKind::ALL[0]);
+    assert!(app.services.live.scale.on);
+    assert_eq!(app.services.live.scale.kind, ScaleKind::ALL[0]);
     tap(&mut app, "-");
-    assert!(!app.services.scale.on, "off is the first choice");
+    assert!(!app.services.live.scale.on, "off is the first choice");
     // i lists them, as K does.
     tap(&mut app, "i");
     assert_eq!(app.modes.mode, Mode::Picker);
     tap(&mut app, "/dorian");
     special(&mut app, KeyCode::Enter);
-    assert!(app.services.scale.on);
-    assert_eq!(app.services.scale.kind, ScaleKind::Dorian);
+    assert!(app.services.live.scale.on);
+    assert_eq!(app.services.live.scale.kind, ScaleKind::Dorian);
 
     // The root moves by a semitone, and keeps the scale as it is.
     tap(&mut app, "j");
     assert_eq!(app.project_page.control(app.song()), ProjectControl::Root);
     tap(&mut app, "=");
-    assert_eq!(app.services.scale.root, 1);
+    assert_eq!(app.services.live.scale.root, 1);
     tap(&mut app, "if#");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.services.scale.root, 6);
+    assert_eq!(app.services.live.scale.root, 6);
     tap(&mut app, "x");
-    assert_eq!(app.services.scale.root, 0);
+    assert_eq!(app.services.live.scale.root, 0);
     project_cursor_on(&mut app, ProjectControl::Scale);
     tap(&mut app, "x");
-    assert!(!app.services.scale.on);
+    assert!(!app.services.live.scale.on);
     project_cursor_on(&mut app, ProjectControl::Root);
     tap(&mut app, "=");
-    assert!(!app.services.scale.on, "the root alone doesn't turn it on");
-    assert_eq!(app.services.scale.root, 1);
+    assert!(
+        !app.services.live.scale.on,
+        "the root alone doesn't turn it on"
+    );
+    assert_eq!(app.services.live.scale.root, 1);
 
     project_cursor_on(&mut app, ProjectControl::AutoJump);
-    assert!(!app.services.auto_jump);
+    assert!(!app.services.live.auto_jump);
     tap(&mut app, "=");
-    assert!(app.services.auto_jump);
+    assert!(app.services.live.auto_jump);
     assert!(app.services.dirty, "it's kept with the song");
     tap(&mut app, "K");
-    assert!(!app.services.auto_jump);
+    assert!(!app.services.live.auto_jump);
 }
 
 #[test]
@@ -1394,7 +1397,7 @@ fn a_read_only_project() -> (App, Realtime, PathBuf) {
     vt_model::project::save_song(&path, &song).unwrap();
     let (mut app, realtime) = app();
     command(&mut app, &format!("e {}", path.display()));
-    assert!(app.services.read_only, "{}", app.services.status);
+    assert!(app.services.live.read_only, "{}", app.services.status);
     (app, realtime, path)
 }
 
@@ -1447,7 +1450,7 @@ fn w_refuses_a_read_only_song_and_w_bang_writes_over_it_keeping_it_read_only() {
     let saved = load_song(&path).unwrap();
     assert_eq!(saved.tracks[0].phrases[&0].steps()[0].note, Note::On(60));
     assert!(saved.read_only, ":w! keeps it parked");
-    assert!(app.services.read_only);
+    assert!(app.services.live.read_only);
     std::fs::remove_dir_all(&path).unwrap();
 }
 
@@ -1462,7 +1465,7 @@ fn w_to_a_new_folder_saves_a_copy_that_isnt_read_only_to_carry_on_in() {
     command(&mut app, &format!("w {}", copy.display()));
     assert!(!app.services.dirty, "{}", app.services.status);
     assert_eq!(app.services.folder.as_deref(), Some(copy.as_path()));
-    assert!(!app.services.read_only, "the copy is the user's own");
+    assert!(!app.services.live.read_only, "the copy is the user's own");
     assert!(!app.window_title().contains("[RO]"));
     assert!(!load_song(&copy).unwrap().read_only);
     assert!(
@@ -1504,7 +1507,7 @@ fn set_readonly_and_readwrite_switch_it_and_the_status_line_and_title_say_ro() {
         ("set ro", true),
     ] {
         command(&mut app, line);
-        assert_eq!(app.services.read_only, on, "{line}");
+        assert_eq!(app.services.live.read_only, on, "{line}");
         assert!(app.services.dirty, "{line} marks the song changed");
     }
     assert!(
@@ -1519,7 +1522,7 @@ fn set_readonly_and_readwrite_switch_it_and_the_status_line_and_title_say_ro() {
     );
     // It isn't an edit to undo.
     tap(&mut app, "u");
-    assert!(app.services.read_only);
+    assert!(app.services.live.read_only);
     command(&mut app, "w");
     assert!(app.services.dirty, "now it refuses");
     // Unsaved, :e, :new and :q offer a copy, as :w won't write over it.
@@ -1574,7 +1577,7 @@ fn a_read_only_song_autosaves_and_restoring_never_writes_over_it() {
     assert_eq!(other.modes.mode, Mode::Restore);
     press(&mut other, "y");
     assert!(other.services.dirty);
-    assert!(other.services.read_only);
+    assert!(other.services.live.read_only);
     assert!(
         other.services.status.contains("read-only"),
         "{}",
@@ -1612,23 +1615,23 @@ fn the_project_page_shows_and_switches_read_only() {
     };
     assert_eq!(row(&app).as_deref(), Some("Read-only off"));
     tap(&mut app, "=");
-    assert!(app.services.read_only);
+    assert!(app.services.live.read_only);
     assert!(app.services.dirty);
     assert_eq!(
         row(&app).as_deref(),
         Some("Read-only on  :w refuses, so Save as makes a copy to change")
     );
     tap(&mut app, "-");
-    assert!(!app.services.read_only);
+    assert!(!app.services.live.read_only);
     tap(&mut app, "K");
-    assert!(app.services.read_only, "K switches it");
+    assert!(app.services.live.read_only, "K switches it");
     tap(&mut app, "i");
-    assert!(!app.services.read_only, "and i, as it isn't typed");
+    assert!(!app.services.live.read_only, "and i, as it isn't typed");
     special(&mut app, KeyCode::Enter);
-    assert!(app.services.read_only, "and Enter");
+    assert!(app.services.live.read_only, "and Enter");
     tap(&mut app, "x");
     assert!(
-        !app.services.read_only,
+        !app.services.live.read_only,
         "x puts it back off, as a new project has it"
     );
 }

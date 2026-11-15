@@ -222,15 +222,18 @@ fn playable(
 /// Why a track plays what it's given in silence, if it does: it's muted, or another track is
 /// soloed, as the engine has it.
 fn why_silent(services: &Services, track: usize) -> Option<String> {
-    let sounds = services.song().sound_tracks().min(services.levels.len());
-    let live = services.levels.get(track)?;
+    let sounds = services
+        .song()
+        .sound_tracks()
+        .min(services.live.levels.len());
+    let live = services.live.levels.get(track)?;
     if live.mute {
         return Some(format!(
             "Track {:02} is muted, so it plays silently. Space m unmutes it",
             track + 1
         ));
     }
-    let soloed = services.levels[..sounds]
+    let soloed = services.live.levels[..sounds]
         .iter()
         .position(|other| other.solo);
     match soloed {
@@ -291,6 +294,7 @@ impl App {
     /// track's own notes of it, any of its notes on the preview voices, and what the page itself
     /// played.
     pub fn sample_playheads(&self, shown: &Shown) -> Vec<u64> {
-        self.sample_page.playheads(shown, &self.services.playheads)
+        self.sample_page
+            .playheads(shown, &self.services.reported.playheads)
     }
 }

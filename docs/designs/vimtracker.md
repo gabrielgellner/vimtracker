@@ -628,10 +628,10 @@ generator's cells laid over; at rest nothing renders, and the row is the step (d
 Each row a track plays while something reaches its generators is reported on `GEN_HEARD_QUEUE`, a
 `GenReport::Row` for each live generator on it with the cell it played, or none where it played
 what's written, and a phrase played with nothing reaching them, once, as `GenReport::Rest`; the app
-keeps the latest for each row (`Services::heard_rows`), for the playhead's row, the overview, the
+keeps the latest for each row (`Reported::heard_rows`), for the playhead's row, the overview, the
 title's `~`, the status line and `Space g a` and `Space g A` (decision 300). A generator that varies
 is also reported as each pass of it is first heard, with the seeds it played, as
-`GenReport::Pass`, and the app keeps the latest for each generator (`Services::heard_passes`) for
+`GenReport::Pass`, and the app keeps the latest for each generator (`Reported::heard_passes`) for
 `Space g a` to keep (decision 293).
 
 A `Playable` is one bank entry ready to play: its `SampleId` and frames, a `Span` for each slice in
@@ -850,10 +850,12 @@ besides `app.rs` add an `impl App` block, such as
 program's cursor and the folds, the project's folder and whether it's changed, the status line,
 the sample pool and its `Analyst`, this
 machine's `Settings`, the Roto, which `RotoDriver` (`roto.rs`) answers from the services alone,
-lent the view and whether recording is armed, and the engine's `Handle` with everything it last
-reported (the transport and playheads, where each track is and what it's launched onto, the live
-mutes and solos, the live values, the faders, the live generators' rows as heard, and the meters
-and the scope).
+lent the view and whether recording is armed, and the engine's `Handle`, with the meters and the
+scope. Two groups of it are kept apart by what they are (#834): `Reported` mirrors the engine's
+last report (the transport and playheads, where each track is and what it's launched onto, the
+loop and realigns waiting, the live values, the faders and the live generators' rows as heard),
+and `Live` holds the controls outside undo (the live mutes and solos, the scale, Insert's jump,
+read-only, fill, the octave and the note velocity).
 `App::song` reads the song through it, and the cursor's place in the song is its reads too
 (`Services::track_here`, `phrase_id`, `phrase_here`, `section_here`, `extent` and `section_step`,
 given the view), with `Services::move_track` and `go_to_track_at` moving it across tracks.
