@@ -754,11 +754,11 @@ where they were written and are borrowed across folders; #260 may move shared sh
 
 **`App`** (`app.rs`) is the program's state and what each key does. It needs no terminal, so tests
 drive it directly. It holds the shared services, `App::services`, beside the pages (`track_page`,
-`mixer_page`, `project_page`, `audio_page`, `sample_page` and `phrase_view`), `App::modes`, the
-picker, the command line, help, the jump list and the keys' own state: 85 fields, and 45 files
-besides `app.rs` add an `impl App` block each, such as `track_page.rs`, `banking.rs`, `slicing.rs`,
-`shaping.rs`, `picking.rs`, `recording.rs` (live recording, `Space r`), `project_page.rs`,
-`audio_page.rs` and `sample_page.rs`.
+`mixer_page`, `project_page`, `audio_page`, `sample_page`, `song_view` and `phrase_view`),
+`App::modes`, the picker, the command line, help, the jump list and the keys' own state: 83
+fields, and 45 files besides `app.rs` add an `impl App` block each, such as `track_page.rs`,
+`banking.rs`, `slicing.rs`, `shaping.rs`, `picking.rs`, `recording.rs` (live recording, `Space r`),
+`project_page.rs`, `audio_page.rs` and `sample_page.rs`.
 
 **`Services`** (`services.rs`, #320) is what every page shares: the history, with
 `Services::apply` running an action on it and `Services::publish` sending the result, the
@@ -779,8 +779,8 @@ reads through `App`, as drawing is given `&App` and some of what's drawn, such a
 generator's sources, is `App`'s to work out.
 
 **`Page`** (`page.rs`, #739) is a page as a component, which the track page, the mixer, the
-project page's Song and Audio sub-pages, the sample page and the phrase view are so far: its rows
-of the binding table, `Page::KEYS`, kept beside it and assembled by
+project page's Song and Audio sub-pages, the sample page, the song view and the phrase view are
+so far: its rows of the binding table, `Page::KEYS`, kept beside it and assembled by
 `input/bindings.rs` under its mode; `Page::key`, which runs one of its keys with a count through a
 `CtxMut` and says what it did as an `Outcome`, done, refused with why, or passed back; `Page::draw`,
 given a `Ctx`; and `Page::panels` and `Page::take_panels`, its pictures as data for `Graphics` and
@@ -1075,6 +1075,13 @@ drawn through a `Ctx`. What it passes back is `App`'s, in `App::run_sample_passe
 through the track, the pads, `'` and `m`'s letters and `]'` `['`'s jumps, and opening the picker.
 Whether an entry is still recording is `App`'s too, so `App::sample_shown` says so before the
 page's own `SamplePage::shown`.
+`SongView` (`song_view.rs`) has the column its cursor is on and the sections `V` selects, its
+moves along the columns, the value edits of the cell, `Enter`'s launch and `V`, and its drawing,
+through a `Ctx`. `App::run_song_view` hands it a key and then runs what it passes back, which stays
+`impl App`: a move to another section and the keys that end on one (`a`, `gc`, `dd`, `C`), as
+going to a section moves the cursor every page shares and the phrase view's first row, the chain
+picker, Insert, `gC` and `;`. The sections `:loop` keeps playing are `Services::looping`, as
+`:loop` works from every view and the status line shows them.
 `PhraseView` (`phrase_view.rs`) has where the view is scrolled to and how many lines fit, whether
 it's laid out in time and shows the row inspector, and the selection: where it started, how far
 it reaches across tracks, the columns it keeps and the one `gv` brings back. Its keys, through the

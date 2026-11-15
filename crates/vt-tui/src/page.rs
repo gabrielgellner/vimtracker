@@ -24,7 +24,7 @@ use std::time::Instant;
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use vt_engine::engine::{PLAYHEADS, Playhead, Transport};
+use vt_engine::engine::{PLAYHEADS, Playhead, SectionLoop, Transport};
 use vt_engine::link::JamState;
 use vt_engine::track_state::{Faders, LiveValues};
 use vt_model::constants::FX_SLOTS;
@@ -66,7 +66,9 @@ pub enum Outcome {
 
 /// One of the program's pages as a component: its own state, its keys, its drawing and its
 /// pictures. The track page, the mixer, the project page's two sub-pages, the sample page and the
-/// phrase view are so far (#739); the other pages' keys and drawing are still `App`'s.
+/// pictures. The track page, the mixer, the project page's two sub-pages, the sample page, the
+/// song view and the phrase view are so far (#739); the other pages' keys and drawing are still
+/// `App`'s.
 pub(crate) trait Page {
     /// Its rows of the binding table, as `(keys, Cmd, description)`, in the order which-key and
     /// `Space k` list them. The table is still assembled in one place, `input::bindings`, under
@@ -123,7 +125,7 @@ impl App {
             View::Chain => self.run_chain(cmd),
             View::Audio | View::Project => self.run_project_pages(cmd),
             View::Sample => self.run_sample_page(cmd),
-            View::Song => self.run_song(cmd),
+            View::Song => self.run_song_view(cmd),
             View::Phrase => self.run_phrase_view(cmd),
         }
     }
@@ -224,6 +226,29 @@ impl App {
                 true
             }
             Outcome::Passed => self.run_sample_passed(cmd, &shown),
+        }
+    }
+
+    /// Run a command in the song view: the view's own key, and then what it passes back, a move
+    /// to another section and what ends on one, a picker, Insert, `gC` and `;`, which are `App`'s.
+    /// The count stays for what takes it.
+    fn run_song_view(&mut self, cmd: Cmd) -> bool {
+        let times = self.modes.count.unwrap_or(1).max(1);
+        let mut ctx = CtxMut {
+            services: &mut self.services,
+            modes: &self.modes,
+        };
+        match self.song_view.key(cmd, times, &mut ctx) {
+            Outcome::Done => {
+                self.modes.count = None;
+                true
+            }
+            Outcome::Refused(why) => {
+                self.modes.count = None;
+                self.services.status = why.to_owned();
+                true
+            }
+            Outcome::Passed => self.run_song_passed(cmd),
         }
     }
 
@@ -342,6 +367,21 @@ impl<'a> Ctx<'a> {
     /// Whether the song plays, as the engine last said.
     pub fn transport(&self) -> Transport {
         self.app.services.transport
+    }
+
+    /// The section the engine is on.
+    pub fn playing_section(&self) -> usize {
+        self.app.services.playing_section
+    }
+
+    /// The sections being kept playing, set with `:loop`.
+    pub fn looping(&self) -> Option<SectionLoop> {
+        self.app.services.looping
+    }
+
+    /// Whether the `:loop` is waiting for the launch grid's next line, as the engine last said.
+    pub fn loop_waiting(&self) -> bool {
+        self.app.services.loop_waiting
     }
 
     /// What the cursor's track is playing with right now, as the engine last said.
