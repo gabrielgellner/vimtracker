@@ -189,9 +189,12 @@ impl App {
             under: Some(under),
             sources,
             default_source,
+            kept: false,
         });
         self.modes.mode = Mode::Shape;
-        self.preview_shape();
+        if let Some(panel) = &self.overlays.shape {
+            panel.preview(&mut self.services);
+        }
     }
 
     /// Apply the live generator under the cursor, leaving its values as plain ones: as last heard
