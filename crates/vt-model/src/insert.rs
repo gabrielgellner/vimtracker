@@ -4,8 +4,53 @@ use serde::{Deserialize, Serialize};
 
 use crate::constants::{MAX_GROUPS, MAX_LEVEL, MAX_SOUND_TRACKS, UNITY_LEVEL};
 use crate::grid::{GRID_ROWS, Grid};
-use crate::lfo::{DIVISION_NAMES, SWEEP_NAMES};
 use crate::settings::{Entry, Kind, Units};
+
+/// An effect's `read` and `written`, from one list of its fields and the setting each is, so a
+/// field is named once here rather than twice. It goes in the effect's `impl`. Each entry is one of:
+/// - `field => Setting`, a `u8` read and written as it is;
+/// - `field: Choices => Setting`, a type or mode, read as its place in `Choices::ALL`;
+/// - `field => Setting via (place, kept)`, kept on a scale of its own: `place` turns what's kept
+///   into what a step gives, and `kept` turns that back. Distort's `bits` is the one.
+///
+/// A setting the effect doesn't have reads as `0` and writes as nothing. [`Insert::write`] only
+/// writes one it has, within its range.
+macro_rules! effect_settings {
+    (
+        $($field:ident $(: $choices:ident)? => $setting:ident $(via ($place:path, $kept:path))?),+
+        $(,)?
+    ) => {
+        /// A setting's value, on the scale a step gives. One it doesn't have reads as nothing.
+        pub(super) fn read(self, setting: $crate::insert::Setting) -> u8 {
+            match setting {
+                $($crate::insert::Setting::$setting => {
+                    effect_settings!(@read self.$field $(, $choices)? $(, via $place)?)
+                })+
+                _ => 0,
+            }
+        }
+
+        /// The same with a setting changed, on the scale `read` gives.
+        pub(super) fn written(self, setting: $crate::insert::Setting, value: u8) -> Self {
+            let mut settings = self;
+            match setting {
+                $($crate::insert::Setting::$setting => {
+                    settings.$field = effect_settings!(@write value $(, $choices)? $(, via $kept)?);
+                })+
+                _ => {}
+            }
+            settings
+        }
+    };
+    (@read $stored:expr) => { $stored };
+    (@read $stored:expr, via $place:path) => { $place($stored) };
+    (@read $stored:expr, $choices:ident) => { $stored as u8 };
+    (@write $value:expr) => { $value };
+    (@write $value:expr, via $kept:path) => { $kept($value) };
+    (@write $value:expr, $choices:ident) => {
+        $choices::ALL[usize::from($value).min($choices::ALL.len() - 1)]
+    };
+}
 
 mod colour;
 mod dynamics;
@@ -250,85 +295,6 @@ pub enum Setting {
     Damp,
 }
 
-impl Setting {
-    /// The highest value a step can give it.
-    pub const fn highest(self) -> u8 {
-        match self {
-            Self::Type => DistortType::ALL.len() as u8 - 1,
-            Self::ChorusType => ChorusType::ALL.len() as u8 - 1,
-            Self::Source => SOURCE_NAMES.len() as u8 - 1,
-            Self::AutoGain | Self::PeakClip => 1,
-            Self::CompressorType => CompressorType::ALL.len() as u8 - 1,
-            Self::ConsoleRatio => CONSOLE_RATIOS.len() as u8 - 1,
-            Self::ConsoleAttack => CONSOLE_ATTACKS_MS.len() as u8 - 1,
-            Self::ConsoleRelease => CONSOLE_AUTO_RELEASE,
-            Self::GlueRatio => GLUE_RATIOS.len() as u8 - 1,
-            Self::GlueAttack => GLUE_ATTACK_NAMES.len() as u8 - 1,
-            Self::GlueRelease => GLUE_AUTO_RELEASE,
-            Self::Bits => MOST_BITS - LEAST_BITS,
-            Self::MuLaw | Self::FollowNote => 1,
-            Self::Gain => MAX_LEVEL,
-            Self::Time => DIVISION_NAMES.len() as u8 - 1,
-            Self::SweepRate => SWEEP_NAMES.len() as u8 - 1,
-            Self::Stages => STAGE_NAMES.len() as u8 - 1,
-            Self::PingPong | Self::Freeze | Self::Knock | Self::Fast | Self::Trig | Self::Clock => {
-                1
-            }
-            Self::RepeatLength => REPEAT_LENGTH_NAMES.len() as u8 - 1,
-            Self::Repeats => REPEAT_NAMES.len() as u8 - 1,
-            Self::Retime => RETIMES.len() as u8 - 1,
-            Self::Shift => SHIFT_NAMES.len() as u8 - 1,
-            Self::Wave => WAVE_NAMES.len() as u8 - 1,
-            Self::GateMode => GateMode::ALL.len() as u8 - 1,
-            Self::CombMode => CombMode::ALL.len() as u8 - 1,
-            Self::CloudsMode => CloudsMode::ALL.len() as u8 - 1,
-            Self::Quality => QUALITY_NAMES.len() as u8 - 1,
-            Self::BeadsMode => BeadsMode::ALL.len() as u8 - 1,
-            Self::EchoMode => ECHO_MODE_NAMES.len() as u8 - 1,
-            Self::EchoSync => ECHO_SYNC_NAMES.len() as u8 - 1,
-            _ => 0xFF,
-        }
-    }
-
-    /// What full modulation moves it by, in its own units.
-    pub const fn span(self) -> f32 {
-        match self {
-            Self::Type => (DistortType::ALL.len() - 1) as f32,
-            Self::ChorusType => (ChorusType::ALL.len() - 1) as f32,
-            Self::Source => (SOURCE_NAMES.len() - 1) as f32,
-            Self::AutoGain | Self::PeakClip => 1.0,
-            Self::CompressorType => (CompressorType::ALL.len() - 1) as f32,
-            Self::ConsoleRatio => (CONSOLE_RATIOS.len() - 1) as f32,
-            Self::ConsoleAttack => (CONSOLE_ATTACKS_MS.len() - 1) as f32,
-            Self::ConsoleRelease => CONSOLE_AUTO_RELEASE as f32,
-            Self::GlueRatio => (GLUE_RATIOS.len() - 1) as f32,
-            Self::GlueAttack => (GLUE_ATTACK_NAMES.len() - 1) as f32,
-            Self::GlueRelease => GLUE_AUTO_RELEASE as f32,
-            Self::Bits => (MOST_BITS - LEAST_BITS) as f32,
-            Self::MuLaw | Self::FollowNote => 1.0,
-            Self::Time => (DIVISION_NAMES.len() - 1) as f32,
-            Self::SweepRate => (SWEEP_NAMES.len() - 1) as f32,
-            Self::Stages => (STAGE_NAMES.len() - 1) as f32,
-            Self::PingPong | Self::Freeze | Self::Knock | Self::Fast | Self::Trig | Self::Clock => {
-                1.0
-            }
-            Self::RepeatLength => (REPEAT_LENGTH_NAMES.len() - 1) as f32,
-            Self::Repeats => (REPEAT_NAMES.len() - 1) as f32,
-            Self::Retime => (RETIMES.len() - 1) as f32,
-            Self::Shift => (SHIFT_NAMES.len() - 1) as f32,
-            Self::Wave => (WAVE_NAMES.len() - 1) as f32,
-            Self::GateMode => (GateMode::ALL.len() - 1) as f32,
-            Self::CombMode => (CombMode::ALL.len() - 1) as f32,
-            Self::CloudsMode => (CloudsMode::ALL.len() - 1) as f32,
-            Self::Quality => (QUALITY_NAMES.len() - 1) as f32,
-            Self::BeadsMode => (BeadsMode::ALL.len() - 1) as f32,
-            Self::EchoMode => (ECHO_MODE_NAMES.len() - 1) as f32,
-            Self::EchoSync => (ECHO_SYNC_NAMES.len() - 1) as f32,
-            _ => 255.0,
-        }
-    }
-}
-
 /// One setting an effect declares. The pages, stepping, `x`, `K`, typing and the status line read
 /// these, so a new effect needs no new page code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -385,6 +351,16 @@ impl Param {
     /// Whether it's off or on and nothing else, which the pages show as a toggle.
     pub fn is_toggle(&self) -> bool {
         self.choices() == OFF_ON
+    }
+
+    /// What full modulation moves it by, on the scale a step gives: the whole of a list, and `FF`
+    /// for a value, as a depth is in hex steps of what it moves. `Gain` too, though it stops at
+    /// the level scale's top, as the faders do.
+    pub fn span(&self) -> f32 {
+        match self.kind {
+            Kind::Stepped { .. } => f32::from(self.kind.top()),
+            Kind::Continuous { .. } => 255.0,
+        }
     }
 
     /// It as an entry in the table of every setting.
@@ -622,14 +598,17 @@ impl Insert {
             .map_or(self, |found| self.write(found.setting, f32::from(value)))
     }
 
+    /// The setting its effect keeps, in any of its types and modes, if it has it.
+    fn kept(self, setting: Setting) -> Option<&'static Param> {
+        let kind = self.kind()?;
+        kind.params().iter().find(|found| found.setting == setting)
+    }
+
     /// A setting as a step gives it: a place for `Type` and `Bits`. Nothing if there's no effect
     /// here that has it. A distortion keeps every mode's, and a compressor every type's, so one not
     /// shown now still reads.
     pub fn read(self, setting: Setting) -> Option<u8> {
-        let kind = self.kind()?;
-        if !kind.params().iter().any(|found| found.setting == setting) {
-            return None;
-        }
+        self.kept(setting)?;
         Some(match self {
             Self::Empty => return None,
             Self::Distort(distort) => distort.read(setting),
@@ -663,10 +642,14 @@ impl Insert {
     }
 
     /// The same with a setting moved, on the scale `read` gives, landing on a whole value within its
-    /// range. It's how a stepped setting ends up stepping, whatever moved it.
+    /// range. It's how a stepped setting ends up stepping, whatever moved it. One there's no effect
+    /// here to have stays as it was.
     #[must_use]
     pub fn write(self, setting: Setting, value: f32) -> Self {
-        let whole = value.round().clamp(0.0, f32::from(setting.highest())) as u8;
+        let Some(param) = self.kept(setting) else {
+            return self;
+        };
+        let whole = value.round().clamp(0.0, f32::from(param.kind.top())) as u8;
         match self {
             Self::Empty => self,
             Self::Distort(distort) => Self::Distort(distort.written(setting, whole)),

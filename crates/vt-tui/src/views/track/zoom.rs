@@ -17,7 +17,7 @@ use vt_model::insert::Insert;
 use vt_model::song::Track;
 
 use super::{
-    EMPTY_SLOT, MeterScale, REDUCTION_CAPTION, REDUCTION_METER_WIDTH, heard_bypassed,
+    MeterScale, REDUCTION_CAPTION, REDUCTION_METER_WIDTH, TrackCells, heard_bypassed,
     reduction_cell, slot_frame, slot_grid, value,
 };
 use crate::kitty::PanelKey;
@@ -29,7 +29,6 @@ use crate::views::widgets::grid::{CellWidths, GRID_HEIGHT, faded};
 use crate::views::widgets::image;
 use crate::views::widgets::meter::{amount_across, hanging_cell, hanging_eighths};
 use crate::views::widgets::panel::GraphicPanel;
-use crate::views::widgets::setting;
 use crate::views::widgets::table::take_top;
 
 /// How tall the zoomed slot's graphics are inside their boxes, in rows: the meter's 24 dB at 1.5
@@ -81,7 +80,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx, t
     strip(
         frame,
         take_top(&mut rest, TILE_HEIGHT),
-        (ctx, track),
+        (page, ctx, track),
         &devices,
         zoomed,
     );
@@ -126,7 +125,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx, t
 fn strip(
     frame: &mut Frame,
     area: Rect,
-    (ctx, track): (&Ctx, &Track),
+    (page, ctx, track): (&TrackPage, &Ctx, &Track),
     devices: &[DeviceSpec],
     zoomed: usize,
 ) {
@@ -135,7 +134,7 @@ fn strip(
     for (at, device) in devices.iter().enumerate() {
         let x = area.x + at as u16 * (width + TILE_GAP);
         let tile = Rect::new(x, area.y, width, area.height);
-        draw_tile(frame, tile, (ctx, track), device, at == zoomed);
+        draw_tile(frame, tile, (page, ctx, track), device, at == zoomed);
     }
 }
 
@@ -146,7 +145,7 @@ fn strip(
 fn draw_tile(
     frame: &mut Frame,
     area: Rect,
-    (ctx, track): (&Ctx, &Track),
+    (page, ctx, track): (&TrackPage, &Ctx, &Track),
     device: &DeviceSpec,
     zoomed: bool,
 ) {
@@ -160,17 +159,12 @@ fn draw_tile(
         true => faded(line, theme::faint()),
         false => line,
     };
+    let cells = TrackCells::new(page, ctx, track);
     let controls = device
         .title
         .iter()
         .flatten()
-        .map(|control| {
-            let text = match empty {
-                true => EMPTY_SLOT.to_owned(),
-                false => value(*control, track, ctx.song()),
-            };
-            fade(Line::styled(text, setting::resting(empty)))
-        })
+        .map(|control| fade(Line::raw(cells.title_text(*control))))
         .collect();
     let tile = Device::new(device.identity.clone());
     let tile = match empty {

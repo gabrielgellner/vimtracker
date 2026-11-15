@@ -112,33 +112,13 @@ impl Pitch {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::Shift => self.shift,
-            Setting::Fine => self.fine,
-            Setting::Grain => self.size,
-            Setting::Feedback => self.feedback,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut pitch = self;
-        match setting {
-            Setting::Shift => pitch.shift = value,
-            Setting::Fine => pitch.fine = value,
-            Setting::Grain => pitch.size = value,
-            Setting::Feedback => pitch.feedback = value,
-            Setting::Mix => pitch.mix = value,
-            Setting::Gain => pitch.gain = value,
-            _ => {}
-        }
-        pitch
+    effect_settings! {
+        shift => Shift,
+        fine => Fine,
+        size => Grain,
+        feedback => Feedback,
+        mix => Mix,
+        gain => Gain,
     }
 }
 
@@ -312,41 +292,17 @@ impl Grains {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::Position => self.time,
-            Setting::Length => self.size,
-            Setting::Shift => self.pitch,
-            Setting::Shape => self.shape,
-            Setting::Density => self.density,
-            Setting::Spread => self.spread,
-            Setting::Freeze => self.freeze,
-            Setting::Random => self.random,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut grains = self;
-        match setting {
-            Setting::Position => grains.time = value,
-            Setting::Length => grains.size = value,
-            Setting::Shift => grains.pitch = value,
-            Setting::Shape => grains.shape = value,
-            Setting::Density => grains.density = value,
-            Setting::Spread => grains.spread = value,
-            Setting::Freeze => grains.freeze = value,
-            Setting::Random => grains.random = value,
-            Setting::Mix => grains.mix = value,
-            Setting::Gain => grains.gain = value,
-            _ => {}
-        }
-        grains
+    effect_settings! {
+        time => Position,
+        size => Length,
+        pitch => Shift,
+        shape => Shape,
+        density => Density,
+        spread => Spread,
+        freeze => Freeze,
+        random => Random,
+        mix => Mix,
+        gain => Gain,
     }
 }
 
@@ -548,47 +504,20 @@ impl Clouds {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::CloudsMode => self.mode as u8,
-            Setting::CloudsPosition => self.position,
-            Setting::CloudsSize => self.size,
-            Setting::Shift => self.pitch,
-            Setting::CloudsDensity => self.density,
-            Setting::Texture => self.texture,
-            Setting::Mix => self.blend,
-            Setting::Spread => self.spread,
-            Setting::Feedback => self.feedback,
-            Setting::ReverbAmount => self.reverb,
-            Setting::Freeze => self.freeze,
-            Setting::Quality => self.quality,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut clouds = self;
-        match setting {
-            Setting::CloudsMode => clouds.mode = CloudsMode::ALL[usize::from(value)],
-            Setting::CloudsPosition => clouds.position = value,
-            Setting::CloudsSize => clouds.size = value,
-            Setting::Shift => clouds.pitch = value,
-            Setting::CloudsDensity => clouds.density = value,
-            Setting::Texture => clouds.texture = value,
-            Setting::Mix => clouds.blend = value,
-            Setting::Spread => clouds.spread = value,
-            Setting::Feedback => clouds.feedback = value,
-            Setting::ReverbAmount => clouds.reverb = value,
-            Setting::Freeze => clouds.freeze = value,
-            Setting::Quality => clouds.quality = value,
-            Setting::Gain => clouds.gain = value,
-            _ => {}
-        }
-        clouds
+    effect_settings! {
+        mode: CloudsMode => CloudsMode,
+        position => CloudsPosition,
+        size => CloudsSize,
+        pitch => Shift,
+        density => CloudsDensity,
+        texture => Texture,
+        blend => Mix,
+        spread => Spread,
+        feedback => Feedback,
+        reverb => ReverbAmount,
+        freeze => Freeze,
+        quality => Quality,
+        gain => Gain,
     }
 }
 
@@ -802,49 +731,21 @@ impl Beads {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::BeadsMode => self.mode as u8,
-            Setting::BeadsTime => self.time,
-            Setting::Length => self.size,
-            Setting::Shape => self.shape,
-            Setting::Shift => self.pitch,
-            Setting::BeadsDensity => self.density,
-            Setting::Clock => self.clock,
-            Setting::Random => self.random,
-            Setting::Freeze => self.freeze,
-            Setting::Feedback => self.feedback,
-            Setting::Mix => self.blend,
-            Setting::ReverbAmount => self.reverb,
-            Setting::Quality => self.quality,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut beads = self;
-        match setting {
-            Setting::BeadsMode => beads.mode = BeadsMode::ALL[usize::from(value)],
-            Setting::BeadsTime => beads.time = value,
-            Setting::Length => beads.size = value,
-            Setting::Shape => beads.shape = value,
-            Setting::Shift => beads.pitch = value,
-            Setting::BeadsDensity => beads.density = value,
-            Setting::Clock => beads.clock = value,
-            Setting::Random => beads.random = value,
-            Setting::Freeze => beads.freeze = value,
-            Setting::Feedback => beads.feedback = value,
-            Setting::Mix => beads.blend = value,
-            Setting::ReverbAmount => beads.reverb = value,
-            Setting::Quality => beads.quality = value,
-            Setting::Gain => beads.gain = value,
-            _ => {}
-        }
-        beads
+    effect_settings! {
+        mode: BeadsMode => BeadsMode,
+        time => BeadsTime,
+        size => Length,
+        shape => Shape,
+        pitch => Shift,
+        density => BeadsDensity,
+        clock => Clock,
+        random => Random,
+        freeze => Freeze,
+        feedback => Feedback,
+        blend => Mix,
+        reverb => ReverbAmount,
+        quality => Quality,
+        gain => Gain,
     }
 }
 
@@ -964,34 +865,13 @@ impl FreqShift {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::ShiftHertz => self.shift,
-            Setting::ShiftSpread => self.spread,
-            Setting::KeyTrack => self.track,
-            Setting::LoopTime => self.time,
-            Setting::Feedback => self.feedback,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut shifter = self;
-        match setting {
-            Setting::ShiftHertz => shifter.shift = value,
-            Setting::ShiftSpread => shifter.spread = value,
-            Setting::KeyTrack => shifter.track = value,
-            Setting::LoopTime => shifter.time = value,
-            Setting::Feedback => shifter.feedback = value,
-            Setting::Mix => shifter.mix = value,
-            Setting::Gain => shifter.gain = value,
-            _ => {}
-        }
-        shifter
+    effect_settings! {
+        shift => ShiftHertz,
+        spread => ShiftSpread,
+        track => KeyTrack,
+        time => LoopTime,
+        feedback => Feedback,
+        mix => Mix,
+        gain => Gain,
     }
 }
