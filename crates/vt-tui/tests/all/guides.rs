@@ -25,6 +25,53 @@ fn space_question_opens_guides_and_space_k_lists_keys() {
     assert_eq!(app.modes.mode, Mode::Help);
 }
 
+/// The guide under the list's cursor as `Space ?` opens it, from where the keys before it went.
+fn guide_opened_from(keys: &str) -> String {
+    let (mut app, _realtime) = app();
+    press(&mut app, keys);
+    press(&mut app, " ?");
+    assert_eq!(app.modes.mode, Mode::Picker, "from {keys:?}");
+    let picker = app.overlays.picker.as_ref().unwrap();
+    picker.current().unwrap().label.clone()
+}
+
+#[test]
+fn space_question_opens_on_the_guide_for_the_page_showing() {
+    assert_eq!(guide_opened_from(""), "Navigation");
+    assert_eq!(guide_opened_from(" 2"), "Phrases and chains");
+    assert_eq!(guide_opened_from(" 1"), "Phrases and chains");
+    assert_eq!(
+        guide_opened_from(" 4"),
+        "The Sound page, output and groups",
+        "the mixer is in the Sound page's guide"
+    );
+    assert_eq!(guide_opened_from(" 5"), "The Sound page, output and groups");
+    assert_eq!(guide_opened_from(" 6"), "The Mod page, envelopes and LFOs");
+    assert_eq!(guide_opened_from(" 7"), "The FX page and its effects");
+    assert!(guide_opened_from(" 8").starts_with("The Gen page"));
+    assert_eq!(guide_opened_from(" 9"), "Saving and rendering");
+    assert_eq!(
+        guide_opened_from(" 9L"),
+        "The meter",
+        "the audio page is in its guide"
+    );
+    assert_eq!(guide_opened_from(" 0"), "The sample editor");
+}
+
+#[test]
+fn question_in_a_guide_goes_back_to_the_list_on_that_guide() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " ?gg");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(
+        app.overlays.guide.map(|g| g.title()),
+        Some("Your first loop")
+    );
+    press(&mut app, "?");
+    let picker = app.overlays.picker.as_ref().unwrap();
+    assert_eq!(picker.current().unwrap().label, "Your first loop");
+}
+
 #[test]
 fn a_guide_stops_scrolling_at_its_end() {
     let (mut app, _realtime) = app();

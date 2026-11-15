@@ -28,6 +28,13 @@ A number before a motion repeats it, as in Vim.
 | `4j` | Down 4 steps |
 | `2}` | Down 2 beats |
 | `8G` | To the 8th step of the loop, counting in decimal |
+| `5C-e` `5C-y` | Scroll the view 5 rows, rather than 3 |
+| `5H` `3L` | To the 5th row on screen, or the 3rd from the bottom |
+| `8C-d` `8C-u` | Down or up 8 rows, and 8 from then on, as in Vim |
+| `2W` `2B` | In a selection, reach 2 tracks on or back |
+
+A key with no use for a count, such as `M`, drops it, so it never goes on to the
+key after.
 
 Step numbers on screen are hex, so step `10` on screen is the 17th step.
 
@@ -230,5 +237,7 @@ the last 100, with one run again moved to the end.
 ## When you forget
 
 Press `Space` or another prefix and wait: a popup lists what can come next.
-`Space k` lists every key, and `Space ?` opens these guides.
+`Space k` lists every key, and `Space ?` opens these guides, on the one for the page
+you're on: the mixer's is the Sound page's, and the phrase view's this one. In a guide,
+`?` goes back to the list, on the guide you were reading.
 <!-- ANCHOR_END: rest -->

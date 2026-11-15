@@ -57,7 +57,6 @@ use crate::overlays::field_jump::FieldJump;
 use crate::overlays::help::POPUP_DELAY;
 use crate::overlays::picker::Picker;
 use crate::overlays::picker::exploring::Naming;
-use crate::pages::phrase::PhraseView;
 use crate::pages::sample::{SamplePage, Shown, is_sample_motion};
 use crate::pages::track::Control;
 use crate::roto::Roto;
@@ -336,8 +335,8 @@ impl App {
 
     /// Run a command in the phrase view: the view's own key, a move or one over the view, or
     /// pass it back for what's `App`'s, the tree's keys, the grammar's operators, edits and Visual
-    /// modes, Insert, the loop's keys, recording and the pickers. A move takes the count, and a
-    /// key it passes back leaves it for what takes it.
+    /// modes, Insert, the loop's keys, recording and the pickers. A key it does takes the count,
+    /// and one it passes back leaves it for what takes it.
     fn run_phrase_view(&mut self, cmd: Cmd) -> bool {
         let times = self.modes.count.unwrap_or(1).max(1);
         let mut ctx = CtxMut {
@@ -345,7 +344,7 @@ impl App {
             modes: &self.modes,
         };
         let outcome = self.phrase_view.key(cmd, times, &mut ctx);
-        self.settled(outcome, PhraseView::takes_count(cmd))
+        self.settled(outcome, true)
     }
 
     /// Settle what a page's key did: a key it did takes the count if `takes_count` says so, and
