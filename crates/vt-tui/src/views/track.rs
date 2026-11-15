@@ -33,8 +33,6 @@ use cells::TrackCells;
 mod cells;
 mod generators;
 mod modulation;
-#[cfg(test)]
-mod parity;
 mod sound;
 mod zoom;
 
