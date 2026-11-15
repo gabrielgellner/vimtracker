@@ -511,7 +511,7 @@ impl App {
                     _ => None,
                 }
             }
-            (Mode::Project, _) if self.project_control() == ProjectControl::Bpm => {
+            (Mode::Project, _) if self.project_page.control(self.song()) == ProjectControl::Bpm => {
                 let most = (BPM_NUDGE / FINE_NUDGE) as u64;
                 if self.project_page.fine {
                     step(Finer::Already, 1, most)

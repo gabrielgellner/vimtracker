@@ -71,7 +71,7 @@ pub fn column_name(app: &App) -> String {
             Some(setting) => format!("Sample: {}", setting.name()),
             None => "Sample".to_owned(),
         },
-        View::Project => app.project_control().label().to_owned(),
+        View::Project => app.project_page.control(app.song()).label().to_owned(),
         View::Phrase => match app.services.cursor.field {
             Field::Note => "Note".to_owned(),
             Field::Velocity => "Velocity".to_owned(),

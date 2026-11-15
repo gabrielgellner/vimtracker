@@ -297,7 +297,7 @@ impl App {
         self.phrase_view.anchor_track = place.anchor_track;
         self.phrase_view.scope = place.scope;
         self.adjustments = place.adjustments;
-        self.clamp_cursor();
+        self.services.clamp_cursor(self.modes.view);
     }
 
     /// Back to the selection a replace across it started from, as `Esc` cancelled it.
@@ -1167,7 +1167,8 @@ impl App {
                         self.services.apply(&Action::Batch(actions));
                     }
                     if *advance && !Arc::ptr_eq(&before, self.song()) {
-                        self.move_step(length.min(isize::MAX as usize) as isize);
+                        self.services
+                            .move_step(length.min(isize::MAX as usize) as isize);
                     }
                 }
             }
@@ -1281,7 +1282,7 @@ impl App {
         self.services
             .go_to_track_at(selection.tracks.first, self.modes.view);
         self.phrase_view.scope = None;
-        self.clamp_cursor();
+        self.services.clamp_cursor(self.modes.view);
     }
 
     fn reselect(&mut self) {
@@ -1301,6 +1302,6 @@ impl App {
         } else {
             Mode::VisualField
         };
-        self.clamp_cursor();
+        self.services.clamp_cursor(self.modes.view);
     }
 }

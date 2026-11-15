@@ -756,7 +756,7 @@ fn the_project_page_sets_the_tempo_and_its_fine_part_as_bpm_does_with_undo() {
     // l goes onto the fine part, which moves by hundredths and carries into the whole.
     tap(&mut app, "l");
     assert!(app.project_page.fine);
-    assert_eq!(app.project_control(), ProjectControl::Bpm);
+    assert_eq!(app.project_page.control(app.song()), ProjectControl::Bpm);
     tap(&mut app, "-");
     assert_eq!(app.song().millibpm, 120_990);
     tap(&mut app, "x");
@@ -915,7 +915,7 @@ fn the_project_page_sets_the_scale_its_root_and_auto_jump() {
 
     // The root moves by a semitone, and keeps the scale as it is.
     tap(&mut app, "j");
-    assert_eq!(app.project_control(), ProjectControl::Root);
+    assert_eq!(app.project_page.control(app.song()), ProjectControl::Root);
     tap(&mut app, "=");
     assert_eq!(app.scale.root, 1);
     tap(&mut app, "if#");
@@ -947,7 +947,7 @@ fn the_project_page_names_the_project_and_the_window_title_says_it() {
     let random = app.project_name();
     assert_eq!(app.song().name, random, "the song holds its name");
     assert_eq!(app.window_title(), format!("vimtracker: {random}"));
-    assert_eq!(app.project_control(), ProjectControl::Name);
+    assert_eq!(app.project_page.control(app.song()), ProjectControl::Name);
     // i starts with the name as it is.
     tap(&mut app, "i");
     assert_eq!(app.modes.mode, Mode::Insert);
@@ -1105,36 +1105,49 @@ fn the_project_page_keeps_the_column_through_j_and_k() {
     let (mut app, _realtime) = on_the_project_page();
     project_cursor_on(&mut app, ProjectControl::Root);
     tap(&mut app, "jj");
-    assert_eq!(app.project_control(), ProjectControl::AutoJump);
-    tap(&mut app, "j");
-    assert_eq!(app.project_control(), ProjectControl::Seed, "a row of one");
-    tap(&mut app, "j");
-    assert_eq!(app.project_control(), ProjectControl::GrooveShown);
+    assert_eq!(
+        app.project_page.control(app.song()),
+        ProjectControl::AutoJump
+    );
     tap(&mut app, "j");
     assert_eq!(
-        app.project_control(),
+        app.project_page.control(app.song()),
+        ProjectControl::Seed,
+        "a row of one"
+    );
+    tap(&mut app, "j");
+    assert_eq!(
+        app.project_page.control(app.song()),
+        ProjectControl::GrooveShown
+    );
+    tap(&mut app, "j");
+    assert_eq!(
+        app.project_page.control(app.song()),
         ProjectControl::Humanise,
         "back in the right column"
     );
     tap(&mut app, "kkk");
-    assert_eq!(app.project_control(), ProjectControl::AutoJump);
+    assert_eq!(
+        app.project_page.control(app.song()),
+        ProjectControl::AutoJump
+    );
     // A count goes further, and gg and G go to the ends, keeping it too.
     tap(&mut app, "2k");
-    assert_eq!(app.project_control(), ProjectControl::Root);
+    assert_eq!(app.project_page.control(app.song()), ProjectControl::Root);
     tap(&mut app, "G");
-    assert_eq!(app.project_control(), ProjectControl::New);
+    assert_eq!(app.project_page.control(app.song()), ProjectControl::New);
     tap(&mut app, "g");
     tap(&mut app, "g");
-    assert_eq!(app.project_control(), ProjectControl::Name);
+    assert_eq!(app.project_page.control(app.song()), ProjectControl::Name);
     project_cursor_on(&mut app, ProjectControl::Scale);
     tap(&mut app, "0");
-    assert_eq!(app.project_control(), ProjectControl::Bpm);
+    assert_eq!(app.project_page.control(app.song()), ProjectControl::Bpm);
     assert!(!app.project_page.fine);
     tap(&mut app, "$");
-    assert_eq!(app.project_control(), ProjectControl::Scale);
+    assert_eq!(app.project_page.control(app.song()), ProjectControl::Scale);
     // h from the right column lands on the tempo's fine part, as the track page's does.
     tap(&mut app, "h");
-    assert_eq!(app.project_control(), ProjectControl::Bpm);
+    assert_eq!(app.project_page.control(app.song()), ProjectControl::Bpm);
     assert!(app.project_page.fine);
     // The status line names the row.
     assert_eq!(vt_tui::views::status::column_name(&app), "BPM");
@@ -1211,7 +1224,10 @@ fn changing_a_groove_that_comes_with_it_makes_one_of_the_projects_own() {
     assert!(app.song().grooves.is_empty());
     // Its own changes in place.
     command(&mut app, "groove custom-1");
-    assert_eq!(app.project_control(), ProjectControl::Push(1));
+    assert_eq!(
+        app.project_page.control(app.song()),
+        ProjectControl::Push(1)
+    );
     tap(&mut app, "i-12");
     special(&mut app, KeyCode::Enter);
     let own = |app: &App| app.song().groove(custom);
@@ -1259,10 +1275,13 @@ fn changing_a_groove_that_comes_with_it_makes_one_of_the_projects_own() {
     assert_eq!(app.modes.mode, Mode::Picker);
     tap(&mut app, "/pull");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.shown_groove().0, GrooveId::named("Pull").unwrap());
+    assert_eq!(
+        app.project_page.shown_groove(app.song()).0,
+        GrooveId::named("Pull").unwrap()
+    );
     assert_eq!(app.song().groove, custom, "only what's drawn changes");
     tap(&mut app, "x");
-    assert_eq!(app.shown_groove().0, custom);
+    assert_eq!(app.project_page.shown_groove(app.song()).0, custom);
 }
 
 #[test]

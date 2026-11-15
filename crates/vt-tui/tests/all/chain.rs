@@ -17,7 +17,7 @@ fn cuj_5_reuse_and_vary_a_phrase() {
     press(&mut app, " 2");
     assert_eq!(app.modes.view, View::Chain);
     press(&mut app, "yyp");
-    assert_eq!(app.chain_entries().len(), 2);
+    assert_eq!(app.services.chain_entries().len(), 2);
     assert_eq!(app.services.cursor.slot, 1);
     press(&mut app, "gd");
     assert_eq!(app.modes.view, View::Phrase);
@@ -39,7 +39,7 @@ fn cuj_5_reuse_and_vary_a_phrase() {
         app.song().tracks[0].phrases[&1].steps()[0].note,
         Note::On(60)
     );
-    assert_eq!(app.chain_entries()[0].phrase, 0);
+    assert_eq!(app.services.chain_entries()[0].phrase, 0);
     // Ctrl-O returns to where the jump started, and Ctrl-I goes forward again.
     let back = parse_sequence("C-o").unwrap()[0];
     app.key(back, Instant::now());
@@ -49,7 +49,7 @@ fn cuj_5_reuse_and_vary_a_phrase() {
     assert_eq!(app.modes.view, View::Phrase);
     // Undo removes the clone's use again.
     press(&mut app, "uu");
-    assert_eq!(app.chain_entries()[1].phrase, 0);
+    assert_eq!(app.services.chain_entries()[1].phrase, 0);
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn gd_on_the_empty_row_adds_the_lowest_unused_phrase() {
     press(&mut app, "gd");
     assert_eq!(app.modes.view, View::Phrase);
     assert_eq!(app.services.phrase_id(), Some(1));
-    assert_eq!(app.chain_entries().len(), 2);
+    assert_eq!(app.services.chain_entries().len(), 2);
     // Leaving the chain view never leaves the cursor on the empty row.
     press(&mut app, " 2G 3");
     assert_eq!(app.services.cursor.slot, 1);
@@ -82,30 +82,30 @@ fn the_chain_view_edits_rows_and_keeps_one() {
     // Typing a phrase on the empty row adds it, and a new ID is created.
     press(&mut app, "ji1f");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.chain_entries()[1].phrase, 0x1F);
+    assert_eq!(app.services.chain_entries()[1].phrase, 0x1F);
     assert!(app.song().tracks[0].phrases.contains_key(&0x1F));
     // Transpose by keys and by typing, and out of range is refused.
     press(&mut app, "l5=");
-    assert_eq!(app.chain_entries()[1].transpose, 5);
+    assert_eq!(app.services.chain_entries()[1].transpose, 5);
     press(&mut app, "i-12");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.chain_entries()[1].transpose, -12);
+    assert_eq!(app.services.chain_entries()[1].transpose, -12);
     press(&mut app, "i60");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.chain_entries()[1].transpose, -12);
+    assert_eq!(app.services.chain_entries()[1].transpose, -12);
     assert!(
         app.services.status.contains("48"),
         "{}",
         app.services.status
     );
     press(&mut app, "99-");
-    assert_eq!(app.chain_entries()[1].transpose, -48);
+    assert_eq!(app.services.chain_entries()[1].transpose, -48);
     // Removing the row copies it, so it can be pasted back.
     press(&mut app, "dd");
-    assert_eq!(app.chain_entries().len(), 1);
+    assert_eq!(app.services.chain_entries().len(), 1);
     assert_eq!(app.services.cursor.slot, 1);
     press(&mut app, "kp");
-    assert_eq!(app.chain_entries()[1].phrase, 0x1F);
+    assert_eq!(app.services.chain_entries()[1].phrase, 0x1F);
 }
 
 #[test]
@@ -150,7 +150,7 @@ fn a_shared_chain_warns_on_clone_and_gc_big_separates_it() {
     );
     press(&mut app, "gC");
     assert_eq!(app.chain_uses(), 1);
-    assert_ne!(app.chain_id(), Some(0));
+    assert_ne!(app.services.chain_id(), Some(0));
 }
 
 #[test]
@@ -167,8 +167,8 @@ fn undo_keeps_the_cursor_on_a_row_that_exists() {
 fn k_chooses_a_chain_rows_phrase_and_large_steps_work_there() {
     let (mut app, _realtime) = app();
     press(&mut app, " 2Ggd 2Ggd 2ggjdddd 2gg");
-    assert_eq!(app.chain_entries().len(), 1);
-    let row = |app: &App, slot: usize| app.chain_entries()[slot];
+    assert_eq!(app.services.chain_entries().len(), 1);
+    let row = |app: &App, slot: usize| app.services.chain_entries()[slot];
     let start = row(&app, 0).phrase;
 
     press(&mut app, "K");
@@ -185,7 +185,7 @@ fn k_chooses_a_chain_rows_phrase_and_large_steps_work_there() {
     press(&mut app, "jK");
     press(&mut app, "01");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.chain_entries().len(), 2);
+    assert_eq!(app.services.chain_entries().len(), 2);
     assert_eq!(row(&app, 1).phrase, 1);
 
     // Transpose isn't a list, and moves by octaves.
@@ -223,9 +223,9 @@ fn x_in_a_chain_only_resets_transpose() {
         "{}",
         app.services.status
     );
-    assert_eq!(app.chain_entries().len(), 1);
+    assert_eq!(app.services.chain_entries().len(), 1);
     press(&mut app, "l+x");
-    assert_eq!(app.chain_entries()[0].transpose, 0);
+    assert_eq!(app.services.chain_entries()[0].transpose, 0);
 }
 
 /// `:bloom` grows branches from the phrase here, each following the one before it, and writes
@@ -240,6 +240,7 @@ fn bloom_grows_branches_from_this_phrase_and_writes_their_path_into_the_chain() 
     let depth = app.services.history.undo_depth();
     command(&mut app, "bloom 3 1 trunk");
     let phrases: Vec<(u32, i8)> = app
+        .services
         .chain_entries()
         .iter()
         .map(|entry| (entry.phrase, entry.transpose))
@@ -267,11 +268,11 @@ fn bloom_grows_branches_from_this_phrase_and_writes_their_path_into_the_chain() 
         "one undo step"
     );
     press(&mut app, "u");
-    assert_eq!(app.chain_entries().len(), 1);
+    assert_eq!(app.services.chain_entries().len(), 1);
     assert_eq!(app.song().tracks[0].phrases.len(), 1);
     // The trunk's notes reach every branch, in one edit.
     command(&mut app, "bloom 2");
-    assert_eq!(app.chain_entries().len(), 3);
+    assert_eq!(app.services.chain_entries().len(), 3);
     press(&mut app, "ggig");
     special(&mut app, KeyCode::Esc);
     let track = &app.song().tracks[0];
@@ -292,7 +293,11 @@ fn bloom_alone_lists_the_paths_and_refuses_what_it_cant_grow() {
     assert_eq!(items.len(), 5);
     assert_eq!(items[1], "trunk  The trunk before each branch: T 1 T 2 T 3");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.chain_entries().len(), 4, "three branches, forward");
+    assert_eq!(
+        app.services.chain_entries().len(),
+        4,
+        "three branches, forward"
+    );
     command(&mut app, "bloom 8");
     assert!(
         app.services.status.contains(":bloom takes"),
@@ -305,5 +310,5 @@ fn bloom_alone_lists_the_paths_and_refuses_what_it_cant_grow() {
         "{}",
         app.services.status
     );
-    assert_eq!(app.chain_entries().len(), 4);
+    assert_eq!(app.services.chain_entries().len(), 4);
 }

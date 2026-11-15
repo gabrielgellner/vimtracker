@@ -244,7 +244,7 @@ impl App {
             self.cancel_entry();
             self.modes.mode = Mode::Insert;
         }
-        self.move_step(by);
+        self.services.move_step(by);
     }
 
     /// Write a played note with its velocity, and an accent or slide whose key is down, as one
@@ -694,7 +694,7 @@ impl App {
             return;
         }
         if self.auto_jump {
-            self.move_step(self.song().skip as isize);
+            self.services.move_step(self.song().skip as isize);
         }
     }
 
@@ -702,7 +702,7 @@ impl App {
     /// without, it clears where it is.
     fn back_for_clearing(&mut self) {
         if self.auto_jump {
-            self.move_step(-(self.song().skip as isize));
+            self.services.move_step(-(self.song().skip as isize));
         }
     }
 

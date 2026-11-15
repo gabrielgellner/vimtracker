@@ -357,7 +357,7 @@ impl App {
         }
         self.modes.view = view;
         self.note_view(view);
-        self.clamp_cursor();
+        self.services.clamp_cursor(self.modes.view);
         if view != View::Phrase {
             self.stop_recording();
         }

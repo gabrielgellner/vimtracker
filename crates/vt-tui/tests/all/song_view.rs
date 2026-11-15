@@ -173,14 +173,14 @@ fn each_track_numbers_its_own_chains_and_phrases() {
         "not the first track's phrase 00"
     );
     press(&mut app, " 2gc");
-    assert_eq!(app.chain_entries()[0].phrase, 1);
+    assert_eq!(app.services.chain_entries()[0].phrase, 1);
     assert_eq!(
         app.song().tracks[0].phrases.len(),
         1,
         "the first track has none new"
     );
     command(&mut app, "chain FF");
-    assert_eq!(app.chain_id(), Some(0xFF));
+    assert_eq!(app.services.chain_id(), Some(0xFF));
     assert!(!app.song().tracks[0].chains.contains_key(&0xFF));
     press(&mut app, " 1lll");
     assert!(
@@ -225,8 +225,8 @@ fn gd_in_the_song_view_opens_a_new_chains_phrase_as_one_undo() {
     press(&mut app, "gd");
     assert_eq!(app.modes.view, View::Phrase);
     assert_eq!(app.services.cursor.track, 1);
-    assert!(app.chain_id().is_some());
-    assert_eq!(app.chain_entries().len(), 1);
+    assert!(app.services.chain_id().is_some());
+    assert_eq!(app.services.chain_entries().len(), 1);
     assert_eq!(app.services.history.undo_depth(), depth + 1);
 }
 
@@ -236,7 +236,7 @@ fn gd_in_the_song_view_goes_by_how_many_phrases_a_chain_has() {
     press(&mut app, " 1lllgd");
     assert_eq!(app.modes.view, View::Phrase, "one phrase");
     press(&mut app, " 2jgd");
-    assert_eq!(app.chain_entries().len(), 2);
+    assert_eq!(app.services.chain_entries().len(), 2);
     press(&mut app, " 1gd");
     assert_eq!(app.modes.view, View::Chain, "several");
     app.key(parse_sequence("C-o").unwrap()[0], Instant::now());

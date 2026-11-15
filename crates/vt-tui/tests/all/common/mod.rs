@@ -771,7 +771,7 @@ pub fn project_cursor_on(app: &mut App, control: vt_tui::project_page::ProjectCo
     if field > 0 && app.project_page.fine {
         tap(app, "l");
     }
-    assert_eq!(app.project_control(), control);
+    assert_eq!(app.project_page.control(app.song()), control);
 }
 
 /// The ids of the track page's images of the Mod page's slots, by slot, none as 0, as a Steps

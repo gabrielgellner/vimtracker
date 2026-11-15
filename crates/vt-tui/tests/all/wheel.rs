@@ -461,7 +461,7 @@ fn a_tick_on_the_tempo_moves_its_fine_part() {
     let (mut app, _realtime) = app_with(&[NOTE]);
     press(&mut app, " 9ggjjj");
     assert_eq!(
-        app.project_control(),
+        app.project_page.control(app.song()),
         vt_tui::project_page::ProjectControl::Bpm
     );
     let end = slow_ticks(&mut app, true, 3, Instant::now());
