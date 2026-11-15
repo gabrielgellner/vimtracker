@@ -276,9 +276,10 @@ impl<'a> Ctx<'a> {
         self.app.services.faders(track)
     }
 
-    /// A track as it's heard, its faders where the steps have them while they drive them.
-    pub fn track_as_heard(&self, track: usize) -> Option<Cow<'a, Track>> {
-        self.app.services.track_as_heard(track)
+    /// A track as the pages draw it: where its macros put what they hold, then its faders where
+    /// the steps have them while they drive them.
+    pub fn track_shown(&self, track: usize) -> Option<Cow<'a, Track>> {
+        self.app.services.track_shown(track)
     }
 
     /// A track's level, as its meter holds it.
