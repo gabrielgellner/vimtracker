@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::app::accent_slide::{HeldFlag, Moved, Written};
 use crate::overlays::picker::draw::{PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH};
 use crate::overlays::picker::exploring::Naming;
 use crate::overlays::picker::places::RecentPlaces;
@@ -15,7 +14,6 @@ use crate::screen::Readouts;
 use crate::services::audio::{AudioChoice, DeviceInfo};
 use crate::services::loading::Loader;
 use crate::widgets::glyphs;
-use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::{PLAYHEADS, TrackPlace, Transport};
 use vt_engine::link::{Command, Handle, JamState};
 use vt_model::constants::{DEFAULT_NOTE_VELOCITY, MAX_TRACKS, TICKS_PER_STEP};
@@ -28,6 +26,7 @@ use vt_model::step::{FxCommand, MAX_VELOCITY};
 
 use crate::app::grammar::{Adjustments, Change, SelectionPlace};
 use crate::app::jumps::Jumps;
+use crate::app::keys::HeldKeys;
 use crate::app::recording::Recording;
 use crate::input::bindings::{Op, Table};
 use crate::input::keys::Key;
@@ -189,22 +188,6 @@ pub enum Momentary {
     },
 }
 
-/// A key holding a note, on the keyboard or in Insert, and the note it started.
-#[derive(Debug, Clone, Copy)]
-struct HeldNote {
-    key: KeyCode,
-    track: usize,
-    note: u8,
-}
-
-/// A momentary change, the key it's held by, and when that key went down.
-#[derive(Debug, Clone, Copy)]
-struct Held {
-    key: KeyCode,
-    since: Instant,
-    what: Momentary,
-}
-
 /// The audio output as it plays, and what the audio page offers.
 #[derive(Debug, Clone, Default)]
 pub struct AudioState {
@@ -285,24 +268,8 @@ pub struct App {
     /// The CPU and slowdown figures, and the scope's image.
     pub readouts: Readouts,
     pub should_quit: bool,
-    /// The key last pressed, as it is on the keyboard, until it's let go.
-    key_down: Option<KeyCode>,
-    /// Whether the key that's down ignores its repeats, as a transport key and a held note do.
-    pub(crate) repeats_ignored: bool,
-    /// The keys holding notes, on the keyboard or in Insert, in the order they went down, so
-    /// they play a chord.
-    held_notes: Vec<HeldNote>,
-    /// The keys holding an accent, slide or octave in Insert, for the notes played while they're
-    /// down.
-    pub(crate) held_flags: Vec<HeldFlag>,
-    /// Where the last note played in Insert went, for an accent, slide or octave tapped after it.
-    pub(crate) last_written: Option<Written>,
-    /// The note a tapped octave key last moved, so the same key tapped again puts it back.
-    pub(crate) octave_moved: Option<Moved>,
-    /// What the key that's down started that lasts while it's held.
-    momentary: Option<Held>,
-    /// What the press being handled started, for [`App::press`] to tie to its key.
-    pub(crate) started: Option<Momentary>,
+    /// The keys that are down, and what they hold while they are.
+    pub held: HeldKeys,
     pub help_scroll: usize,
     /// The open guide, how far it has scrolled, and how many of its rows fit.
     pub guide: Option<Guide>,
@@ -421,14 +388,7 @@ impl App {
             sampling: crate::services::sampling::Sampling::default(),
             readouts: Readouts::default(),
             should_quit: false,
-            key_down: None,
-            repeats_ignored: false,
-            held_notes: Vec::new(),
-            held_flags: Vec::new(),
-            last_written: None,
-            octave_moved: None,
-            momentary: None,
-            started: None,
+            held: HeldKeys::default(),
             help_scroll: 0,
             guide: None,
             guide_scroll: 0,
@@ -530,7 +490,7 @@ impl App {
         }
         // While a mute or solo key is down it may yet be a hold, which goes back when it's let go,
         // so what's saved is how it was. A tap marks the song changed again when it's let go.
-        if let Some(held) = self.momentary {
+        if let Some(held) = self.held.momentary {
             match held.what {
                 Momentary::Mute { track, was } => {
                     if let Some(track) = song.tracks.get_mut(track) {

@@ -91,7 +91,8 @@ impl App {
 
     /// Whether this key is holding a flag, so its repeats, and kitty's presses of it, do nothing.
     pub(crate) fn holds_flag(&self, key: Key) -> bool {
-        self.held_flags
+        self.held
+            .flags
             .iter()
             .any(|held| held.key == key.physical())
     }
@@ -99,24 +100,25 @@ impl App {
     /// A flag's key went down. What it does waits for what comes next: a note played while it's
     /// down is written with it, and with none, letting go switches it on the row just written.
     pub(crate) fn hold_flag(&mut self, key: Key, flag: Flag) {
-        self.held_flags.push(HeldFlag {
+        self.held.flags.push(HeldFlag {
             key: key.physical(),
             flag,
             used: false,
         });
-        self.repeats_ignored = true;
+        self.held.repeats_ignored = true;
     }
 
     /// A key let go. If it held a flag and no note was played meanwhile, it was a tap.
     pub(crate) fn let_go_of_flag(&mut self, key: Key) {
         let Some(at) = self
-            .held_flags
+            .held
+            .flags
             .iter()
             .position(|held| held.key == key.physical())
         else {
             return;
         };
-        let held = self.held_flags.remove(at);
+        let held = self.held.flags.remove(at);
         let writing = self.modes.mode == Mode::Insert
             && self.modes.view == View::Phrase
             && self.services.cursor.field == Field::Note;
@@ -136,12 +138,12 @@ impl App {
 
     /// Let go of every flag, as leaving Insert or losing focus does, doing nothing.
     pub(crate) fn drop_flags(&mut self) {
-        self.held_flags.clear();
+        self.held.flags.clear();
     }
 
     /// Whether this flag's key is down.
     fn flag_held(&self, flag: Flag) -> bool {
-        self.held_flags.iter().any(|held| held.flag == flag)
+        self.held.flags.iter().any(|held| held.flag == flag)
     }
 
     /// The velocity a note played now takes: the accent's while its key is down.
@@ -172,10 +174,10 @@ impl App {
     /// A note was played with these flags' keys down, so each counts as held rather than tapped,
     /// and the status line says what the note got.
     pub(crate) fn use_flags(&mut self) {
-        if self.held_flags.is_empty() {
+        if self.held.flags.is_empty() {
             return;
         }
-        for held in &mut self.held_flags {
+        for held in &mut self.held.flags {
             held.used = true;
         }
         let flags = match (self.flag_held(Flag::Accent), self.flag_held(Flag::Slide)) {
@@ -203,7 +205,7 @@ impl App {
     /// The row a tapped flag goes on: the one the last note went on, if the cursor is still where
     /// that left it, and otherwise the cursor's.
     fn flag_target(&self) -> Option<(usize, u32, usize)> {
-        match self.last_written {
+        match self.held.last_written {
             Some(written) if written.cursor == self.services.cursor => {
                 Some((written.track, written.phrase, written.step))
             }
@@ -274,6 +276,7 @@ impl App {
     /// last, when it goes back to where it was played.
     fn toggle_octave(&mut self, by: i8, row: (usize, u32, usize), step: Step, note: u8) {
         let octaves = self
+            .held
             .octave_moved
             .filter(|moved| moved.row == row && moved.note == note)
             .map_or(0, |moved| moved.octaves);
@@ -293,7 +296,7 @@ impl App {
                 ..step
             },
         });
-        self.octave_moved = Some(Moved {
+        self.held.octave_moved = Some(Moved {
             row,
             octaves: to,
             note: moved,

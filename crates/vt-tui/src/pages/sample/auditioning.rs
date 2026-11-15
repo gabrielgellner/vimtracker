@@ -273,7 +273,7 @@ impl App {
                     .sample_page
                     .play_pad(&shown, number, &mut self.services)
                 {
-                    self.started = Some(started);
+                    self.held.started = Some(started);
                 }
             }
             _ => {

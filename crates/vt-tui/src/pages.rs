@@ -375,7 +375,7 @@ impl App {
             Outcome::Explore(naming) => {
                 self.open_naming_explorer(naming.purpose, naming.command, naming.after);
             }
-            Outcome::Hold(started) => self.started = Some(started),
+            Outcome::Hold(started) => self.held.started = Some(started),
             Outcome::Moved => self.phrase_view.top = self.services.cursor.step,
             Outcome::Done | Outcome::Refused(_) | Outcome::Passed => {}
         }

@@ -14,7 +14,48 @@ use crate::input::mode::{Mode, View};
 use crate::pages::sample::SampleKey;
 use crate::pages::sample::marking::MarkWait;
 
-use super::{App, Entry, HOLD_TIME, Held, HeldNote, KEYS_NOTES, Momentary, which_key_due};
+use super::accent_slide::{HeldFlag, Moved, Written};
+use super::{App, Entry, HOLD_TIME, KEYS_NOTES, Momentary, which_key_due};
+
+/// The keys that are down, and what they hold while they are: notes, Insert's accent, slide and
+/// octave keys, and a momentary change.
+#[derive(Debug, Default)]
+pub struct HeldKeys {
+    /// The key last pressed, as it is on the keyboard, until it's let go.
+    pub(super) key_down: Option<KeyCode>,
+    /// Whether the key that's down ignores its repeats, as a transport key and a held note do.
+    pub(crate) repeats_ignored: bool,
+    /// The keys holding notes, on the keyboard or in Insert, in the order they went down, so
+    /// they play a chord.
+    pub(super) notes: Vec<HeldNote>,
+    /// The keys holding an accent, slide or octave in Insert, for the notes played while they're
+    /// down.
+    pub(crate) flags: Vec<HeldFlag>,
+    /// Where the last note played in Insert went, for an accent, slide or octave tapped after it.
+    pub(crate) last_written: Option<Written>,
+    /// The note a tapped octave key last moved, so the same key tapped again puts it back.
+    pub(crate) octave_moved: Option<Moved>,
+    /// What the key that's down started that lasts while it's held.
+    pub(super) momentary: Option<Held>,
+    /// What the press being handled started, for [`App::press`] to tie to its key.
+    pub(crate) started: Option<Momentary>,
+}
+
+/// A key holding a note, on the keyboard or in Insert, and the note it started.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct HeldNote {
+    key: KeyCode,
+    track: usize,
+    note: u8,
+}
+
+/// A momentary change, the key it's held by, and when that key went down.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Held {
+    key: KeyCode,
+    since: Instant,
+    pub(super) what: Momentary,
+}
 
 impl App {
     /// A key from the terminal, which the kitty keyboard protocol says is a press, a repeat or a
@@ -54,12 +95,15 @@ impl App {
         // A real second press comes after a release, so a press of the key that's down is the
         // terminal repeating it. kitty on macOS has been seen sending a held `a`'s repeats as
         // presses. A key holding a note is down too, even after another key has gone down.
-        if self.key_down == Some(key.physical()) || self.holds_note(key) || self.holds_flag(key) {
+        if self.held.key_down == Some(key.physical())
+            || self.holds_note(key)
+            || self.holds_flag(key)
+        {
             self.key_repeated(key, now);
             return;
         }
-        self.key_down = Some(key.physical());
-        self.repeats_ignored = false;
+        self.held.key_down = Some(key.physical());
+        self.held.repeats_ignored = false;
         self.press(key, now);
     }
 
@@ -68,7 +112,7 @@ impl App {
     pub fn key_repeated(&mut self, key: Key, now: Instant) {
         self.services.now = now;
         self.end_wheel_gesture();
-        if (self.repeats_ignored && self.key_down == Some(key.physical()))
+        if (self.held.repeats_ignored && self.held.key_down == Some(key.physical()))
             || self.holds_note(key)
             || self.holds_flag(key)
         {
@@ -83,20 +127,22 @@ impl App {
     /// that lasts while it's held.
     pub fn key_released(&mut self, key: Key, now: Instant) {
         self.services.now = now;
-        if self.key_down == Some(key.physical()) {
-            self.key_down = None;
-            self.repeats_ignored = false;
+        if self.held.key_down == Some(key.physical()) {
+            self.held.key_down = None;
+            self.held.repeats_ignored = false;
         }
         if let Some(at) = self
-            .held_notes
+            .held
+            .notes
             .iter()
             .position(|held| held.key == key.physical())
         {
-            let held = self.held_notes.remove(at);
+            let held = self.held.notes.remove(at);
             self.let_go_of(held);
         }
         self.let_go_of_flag(key);
         if self
+            .held
             .momentary
             .is_some_and(|held| held.key == key.physical())
         {
@@ -109,7 +155,7 @@ impl App {
     /// a tap, and stays as it is: a mute or solo stays switched, and an audition plays out. Held
     /// longer, a mute or solo goes back to how it was, and an audition stops.
     fn end_momentary(&mut self, now: Instant) {
-        let Some(held) = self.momentary.take() else {
+        let Some(held) = self.held.momentary.take() else {
             return;
         };
         let long = now.saturating_duration_since(held.since) >= HOLD_TIME;
@@ -163,7 +209,8 @@ impl App {
 
     /// Whether this key is holding a note.
     fn holds_note(&self, key: Key) -> bool {
-        self.held_notes
+        self.held
+            .notes
             .iter()
             .any(|held| held.key == key.physical())
     }
@@ -173,7 +220,8 @@ impl App {
     fn let_go_of(&mut self, held: HeldNote) {
         self.end_take(held.key);
         let shared = self
-            .held_notes
+            .held
+            .notes
             .iter()
             .any(|other| other.track == held.track && other.note == held.note);
         if !shared {
@@ -186,7 +234,7 @@ impl App {
 
     /// End every held note.
     fn let_go_of_held_notes(&mut self) {
-        for held in std::mem::take(&mut self.held_notes) {
+        for held in std::mem::take(&mut self.held.notes) {
             self.let_go_of(held);
         }
     }
@@ -196,8 +244,8 @@ impl App {
     /// and the next press of it is a press.
     pub fn focus_lost(&mut self, now: Instant) {
         self.services.now = now;
-        self.key_down = None;
-        self.repeats_ignored = false;
+        self.held.key_down = None;
+        self.held.repeats_ignored = false;
         self.let_go_of_held_notes();
         self.drop_flags();
         self.end_momentary(now);
@@ -208,12 +256,12 @@ impl App {
     /// sounds its own note, so several play a chord.
     pub(super) fn hold_note(&mut self, key: Key, note: u8, velocity: u8) {
         let track = self.services.cursor.track;
-        self.held_notes.push(HeldNote {
+        self.held.notes.push(HeldNote {
             key: key.physical(),
             track,
             note,
         });
-        self.repeats_ignored = true;
+        self.held.repeats_ignored = true;
         self.services.handle.send(Command::HoldPreview {
             track,
             note,
@@ -224,7 +272,7 @@ impl App {
     /// Act on a press, or a repeat that acts as one.
     pub(crate) fn press(&mut self, key: Key, now: Instant) {
         let was = self.modes.mode;
-        self.started = None;
+        self.held.started = None;
         // The Gen page shows the phrase under the cursor, wherever a key or the time between
         // keys has moved it.
         self.track_page.phrase = self.services.phrase_id();
@@ -233,21 +281,21 @@ impl App {
         self.track_page.phrase = self.services.phrase_id();
         // Something that lasts while its key is down is tied to that key, and doesn't repeat.
         // One already held ends as if let go now, as only one is kept.
-        if let Some(what) = self.started.take() {
+        if let Some(what) = self.held.started.take() {
             self.end_momentary(now);
-            self.momentary = Some(Held {
+            self.held.momentary = Some(Held {
                 key: key.physical(),
                 since: now,
                 what,
             });
-            self.repeats_ignored = true;
+            self.held.repeats_ignored = true;
         }
         // Leaving the keyboard, or Insert, lets go of what it's holding.
         if matches!(was, Mode::Keys | Mode::Insert) && self.modes.mode != was {
             self.let_go_of_held_notes();
             self.drop_flags();
-            self.last_written = None;
-            self.octave_moved = None;
+            self.held.last_written = None;
+            self.held.octave_moved = None;
         }
         self.settle_sample_page();
     }
@@ -423,7 +471,7 @@ impl App {
     /// held.
     pub(crate) fn audition(&mut self, section_step: usize) {
         if let Some(started) = self.services.audition(section_step) {
-            self.started = Some(started);
+            self.held.started = Some(started);
         }
     }
 
@@ -532,8 +580,8 @@ impl App {
             Cmd::Substitute => self.substitute(),
             Cmd::EnterInsert => {
                 self.modes.entry = Entry::default();
-                self.last_written = None;
-                self.octave_moved = None;
+                self.held.last_written = None;
+                self.held.octave_moved = None;
                 self.modes.mode = Mode::Insert;
             }
             Cmd::EnterCommand => {
@@ -555,11 +603,11 @@ impl App {
                     step,
                     track,
                 });
-                self.repeats_ignored = true;
+                self.held.repeats_ignored = true;
             }
             Cmd::PlayFromStart => {
                 self.services.handle.send(Command::PlayFrom { step: 0 });
-                self.repeats_ignored = true;
+                self.held.repeats_ignored = true;
             }
             Cmd::Audition => {
                 if self.services.extent().plays(self.services.cursor.step) {
@@ -571,7 +619,7 @@ impl App {
             }
             Cmd::PauseOrResume => {
                 self.services.handle.send(Command::PauseOrResume);
-                self.repeats_ignored = true;
+                self.held.repeats_ignored = true;
             }
             Cmd::Quit => self.quit(false),
             Cmd::ToggleScale => self.toggle_scale(),
@@ -588,7 +636,7 @@ impl App {
                 if let Some(was) = self.services.levels.get(track).map(|live| live.mute) {
                     self.services.toggle_mute();
                     if self.services.levels[track].mute != was {
-                        self.started = Some(Momentary::Mute { track, was });
+                        self.held.started = Some(Momentary::Mute { track, was });
                     }
                 }
             }
@@ -597,43 +645,43 @@ impl App {
                 if let Some(was) = self.services.levels.get(track).map(|live| live.solo) {
                     self.services.toggle_solo();
                     if self.services.levels[track].solo != was {
-                        self.started = Some(Momentary::Solo { track, was });
+                        self.held.started = Some(Momentary::Solo { track, was });
                     }
                 }
             }
             Cmd::MuteOnGrid => {
                 self.switch_on_grid(false);
-                self.repeats_ignored = true;
+                self.held.repeats_ignored = true;
             }
             Cmd::SoloOnGrid => {
                 self.switch_on_grid(true);
-                self.repeats_ignored = true;
+                self.held.repeats_ignored = true;
             }
             Cmd::ToggleFill => {
                 let was = self.services.fill;
                 self.set_fill(!was);
-                self.started = Some(Momentary::Fill { was });
+                self.held.started = Some(Momentary::Fill { was });
             }
             Cmd::Realign => {
                 self.realign();
-                self.repeats_ignored = true;
+                self.held.repeats_ignored = true;
             }
             Cmd::RealignTrack => {
                 self.realign_track();
-                self.repeats_ignored = true;
+                self.held.repeats_ignored = true;
             }
             Cmd::RotateSpeeds(every) => {
                 self.rotate_speeds(every);
-                self.repeats_ignored = true;
+                self.held.repeats_ignored = true;
             }
             Cmd::GiveBack => self.give_back_faders(false),
             Cmd::GiveBackAll => self.give_back_faders(true),
             Cmd::ClearMutes => {
                 // A held mute or solo stays cleared when it's let go.
-                if self.momentary.is_some_and(|held| {
+                if self.held.momentary.is_some_and(|held| {
                     matches!(held.what, Momentary::Mute { .. } | Momentary::Solo { .. })
                 }) {
-                    self.momentary = None;
+                    self.held.momentary = None;
                 }
                 self.clear_live();
             }
