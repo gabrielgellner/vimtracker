@@ -1,8 +1,8 @@
 # Adding a device: an effect, a voice, a generator or a mod type
 
-A checklist for each family, written against the code as it is (#784, #809). It lists every place a new
-one takes, what the compiler says if you miss one, and which tests show the change. Why the code
-is shaped this way is in [device-interface.md](device-interface.md); the
+A checklist for each family, written against the code as it is (#784, #809, #833). It lists
+every place a new one takes, what the compiler says if you miss one, and which tests show the
+change. Why the code is shaped this way is in [device-interface.md](device-interface.md); the
 [Architecture](vimtracker.md#architecture) section describes it as built. Paths are under
 `crates/`.
 
@@ -150,18 +150,24 @@ every fill writes on every column in `renders.txt`: write its lines with
 2. **`vt-model/src/modulation/fields.rs`**: its `MOD_SPECS` row (name, meaning, whether it's an
    envelope, its mode's label, polarity, title, fields and grid), any `ModField` it has that no
    other type has, and its arms in `bounds`, `field` and `set_field`. The compiler asks for the row
-   and the `Mode` arms; the other fields have a catch-all. A setting macros and modulation move
-   goes in `MOD_OWN_FIELDS` and the registry's `settings/mods.rs`.
+   and the `Mode` arms (`modes` too); the other fields have a catch-all. A new `ModField` also
+   takes its arms in `name` and `units`, which the compiler asks for, and in `choices` if it's a
+   list. A setting macros and modulation move goes in `MOD_OWN_FIELDS` and the registry's
+   `settings/mods.rs`.
 3. **Its running**, in `vt-engine/src/track_state/mods.rs`. The compiler asks for its arms there.
 4. **The Roto**: its layout and `BY_MOD` row in `roto/layouts.rs`. The compiler asks for the row.
-5. **The Mod page**, in `vt-tui/src/pages/track/`: its fields' arms in `view.rs`'s `mod_view`, its
-   lists in `pickers.rs`, and its picture in `pictures.rs`'s `mod_panels`, whose match the compiler
-   asks for (`continue` for none).
+5. **The Mod page**, in `vt-tui/src/pages/track/`: its picture in `pictures.rs`'s `mod_panels`,
+   whose match the compiler asks for (`continue` for none). Its cells, `K` lists, steps and typing
+   come from step 2 (#833): `view.rs`'s `mod_view` builds each setting by its `ModField::units`,
+   so it changes only for units no setting has yet, whose arm the compiler asks for, or for a mode
+   whose list is titled other than a curve. `pickers.rs` changes only for a setting picked from a
+   list of its own, as `Type`, `Rate` and `Fade` are.
 6. **The guide**: `vt-tui/guides/track-mod.md`.
 
 **Pins:** `mods.txt` gains a line, and `settings.txt` too if it adds to `MOD_OWN_FIELDS`.
 vt-model's `tests/all/mod_fields.rs` lists each type's name, meaning and mode label, so it gains
-the new type's. One new Roto pin. vt-tui's `tests/all/mod_page.rs` checks each setting is on the
+the new type's, and checks each setting it has shows as text and each list has a choice for
+each value. One new Roto pin. vt-tui's `tests/all/mod_page.rs` checks each setting is on the
 page once and the keys reach it.
 
 ## Then
