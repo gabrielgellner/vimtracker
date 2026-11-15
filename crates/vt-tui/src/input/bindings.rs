@@ -14,6 +14,7 @@ use crate::overlays::command::{CommandKey, CommandLine};
 use crate::overlays::field_jump::{FieldJump, JumpKey};
 use crate::overlays::guides::{GuideKey, GuideView};
 use crate::overlays::help::{Help, HelpKey};
+use crate::overlays::mapping::{MappingKey, MappingView};
 use crate::overlays::picker::{Picker, PickerKey};
 use crate::pages::Page as _;
 use crate::pages::audio::AudioPage;
@@ -210,6 +211,8 @@ pub enum Cmd {
     InCommand(CommandKey),
     /// A key of `/`'s field jump.
     InJump(JumpKey),
+    /// A key of a macro's mapping view.
+    InMapping(MappingKey),
 }
 
 /// One row of the table.
@@ -439,6 +442,7 @@ pub fn bindings() -> Vec<Binding> {
     add(GuideView::MODE, GuideView::KEYS);
     add(CommandLine::MODE, CommandLine::KEYS);
     add(FieldJump::MODE, FieldJump::KEYS);
+    add(MappingView::MODE, MappingView::KEYS);
     with_cmd_adjusts(rows)
 }
 

@@ -441,7 +441,7 @@ fn m_maps_a_generators_hits_and_turning_the_macro_writes_the_column_again() {
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     let view = app.overlays.mapping.clone().unwrap();
     terminal
-        .draw(|frame| vt_tui::overlays::mapping::draw::draw(frame, frame.area(), &app, &view))
+        .draw(|frame| vt_tui::overlays::mapping::draw::draw(frame, frame.area(), &app.ctx(), &view))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let text: String = (0..40)
@@ -643,4 +643,18 @@ fn gd_on_a_setting_two_macros_hold_lists_them_to_go_to() {
     assert_eq!(app.track_control(), Control::Macro(2));
     assert_eq!(app.modes.mode, Mode::Mapping);
     assert_eq!(app.overlays.mapping.as_ref().unwrap().at, 2);
+}
+
+#[test]
+fn the_keys_of_the_mapping_view_are_in_the_binding_table() {
+    let (app, _realtime) = app();
+    let help = app.help_rows();
+    let at = help.iter().position(|line| line == "Mapping").unwrap();
+    let rows: Vec<&String> = help[at + 1..]
+        .iter()
+        .take_while(|line| !line.is_empty())
+        .collect();
+    for row in ["Swap the range's ends", "take the setting off the macro", "D-l"] {
+        assert!(rows.iter().any(|line| line.contains(row)), "{row}");
+    }
 }

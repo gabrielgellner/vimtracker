@@ -939,8 +939,11 @@ names it rolls with `C-r` are `Services::names`. `/`'s field jump (`FieldJump`, 
 `Overlays::field_jump`, which pages read through `Ctx::field_jump` for its labels) is given the
 page's settings and the cursor's place among them before each key, answers `Land` with the
 setting's row and field for `App` to move the cursor to, and `Do` with `Tab`'s and
-`Shift-Tab`'s commands, which play as they do in Normal. The others still read their keys in
-`App`'s methods.
+`Shift-Tab`'s commands, which play as they do in Normal. A macro's mapping view
+(`MappingView`) changes the macro's mappings through the services itself, answers `Do(Undo)`
+for `u`, after which `App::mapping_key` keeps it on a mapping or closes it, and `Close` when
+`dd` leaves the macro holding nothing; opening it, and `M`, `gd` and `:macro`, are the track
+page's still. The others still read their keys in `App`'s methods.
 
 A key goes, in this order, to the first that takes it:
 

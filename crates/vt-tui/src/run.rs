@@ -732,8 +732,9 @@ pub fn draw_screen(
     if let Some(panel) = &app.overlays.shape {
         crate::overlays::shape::draw::draw(frame, view, app, panel);
     }
-    if let Some(mapping) = &app.overlays.mapping {
-        crate::overlays::mapping::draw::draw(frame, view, app, mapping);
+    if let Some(mut mapping) = app.overlays.mapping.take() {
+        mapping.draw(frame, view, &app.ctx());
+        app.overlays.mapping = Some(mapping);
     }
     if let Some(mut picker) = app.overlays.picker.take() {
         picker.draw(frame, body, &app.ctx());
