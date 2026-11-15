@@ -310,10 +310,10 @@ impl Page for SongView {
             START_COLUMN => "Start".to_owned(),
             column => {
                 let index = column - COLUMNS_BEFORE_TRACKS;
-                let name = match ctx.song().tracks.get(index) {
-                    Some(track) if !track.is_sound() => track.kind.title().to_owned(),
-                    _ => format!("Track {:02}", index + 1),
-                };
+                let name = ctx.song().tracks.get(index).map_or_else(
+                    || format!("Track {:02}", index + 1),
+                    |track| track.title(index),
+                );
                 let label = self.label(ctx);
                 if label.is_empty() {
                     format!("{name} chain")

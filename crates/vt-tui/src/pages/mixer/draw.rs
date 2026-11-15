@@ -359,7 +359,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &MixerPage, ctx: &Ctx) {
         strips.fill_shown(&mut cells, |index, track| {
             // A setting a macro holds shows where the macro puts it, and a fader the steps drive
             // where they have it.
-            let muted = group::muted(ctx, index);
+            let muted = group::muted(ctx.song(), ctx.levels(), index);
             let automated = ctx.follows_steps(index, control);
             let taken = ctx.taken_over(index, control);
             let here = index == ctx.cursor().track;
@@ -369,7 +369,9 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &MixerPage, ctx: &Ctx) {
             // in its group's colour for its group's.
             let switched = match control {
                 Control::Mute => Some((muted, glyphs::MUTE)),
-                Control::Solo => Some((group::soloed(ctx, index), glyphs::SOLO)),
+                Control::Solo => {
+                    Some((group::soloed(ctx.song(), ctx.levels(), index), glyphs::SOLO))
+                }
                 _ => None,
             };
             // One waiting for the launch grid is the glyph for waiting until it switches.

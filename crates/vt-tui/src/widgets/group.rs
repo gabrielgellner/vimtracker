@@ -5,7 +5,7 @@ use ratatui::style::Style;
 use ratatui::text::Span;
 use vt_model::song::{Song, Track, TrackKind};
 
-use crate::pages::Ctx;
+use crate::app::TrackLive;
 use crate::widgets::theme;
 
 /// The number of the group a track is, or plays through.
@@ -99,28 +99,27 @@ impl Switched {
 }
 
 /// Whether a track's own switch is on, or its group's, as each was last set live.
-fn switched(ctx: &Ctx, track: usize, on: impl Fn(usize) -> bool) -> Switched {
+fn switched(song: &Song, track: usize, on: impl Fn(usize) -> bool) -> Switched {
     if on(track) {
         return Switched::Own;
     }
-    let song = ctx.song();
     match (song.group_track_of(track), number(song, track)) {
         (Some(group), Some(number)) if on(group) => Switched::Group(number),
         _ => Switched::Off,
     }
 }
 
-/// Whether a track is muted, by itself or by its group.
-pub fn muted(ctx: &Ctx, track: usize) -> Switched {
-    switched(ctx, track, |index| {
-        ctx.levels().get(index).is_some_and(|live| live.mute)
+/// Whether a track is muted, by itself or by its group, from the live mutes and solos.
+pub fn muted(song: &Song, levels: &[TrackLive], track: usize) -> Switched {
+    switched(song, track, |index| {
+        levels.get(index).is_some_and(|live| live.mute)
     })
 }
 
-/// Whether a track is soloed, by itself or by its group.
-pub fn soloed(ctx: &Ctx, track: usize) -> Switched {
-    switched(ctx, track, |index| {
-        ctx.levels().get(index).is_some_and(|live| live.solo)
+/// Whether a track is soloed, by itself or by its group, from the live mutes and solos.
+pub fn soloed(song: &Song, levels: &[TrackLive], track: usize) -> Switched {
+    switched(song, track, |index| {
+        levels.get(index).is_some_and(|live| live.solo)
     })
 }
 
