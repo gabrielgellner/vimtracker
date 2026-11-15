@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use vt_engine::engine::{PLAYHEADS, Playhead, TrackPlace, Transport};
+use vt_engine::engine::{PLAYHEADS, Playhead, SectionLoop, TrackPlace, Transport};
 use vt_engine::gens::{GenPass, GenRow};
 use vt_engine::link::{Handle, JamState};
 use vt_engine::published::Published;
@@ -82,6 +82,8 @@ pub struct Services {
     pub(crate) report_at: Instant,
     /// The section the engine is on.
     pub playing_section: usize,
+    /// The sections being kept playing, set with `:loop`, and by the song view's `Enter` and `C`.
+    pub looping: Option<SectionLoop>,
     /// Whether the `:loop` is waiting for the launch grid's next line, as the engine last said.
     pub loop_waiting: bool,
     /// Whether a realign is waiting for the launch grid, as the engine last said.
@@ -165,6 +167,7 @@ impl Services {
             places: [TrackPlace::default(); MAX_TRACKS],
             report_at: Instant::now(),
             playing_section: 0,
+            looping: None,
             loop_waiting: false,
             realigning: false,
             realigning_tracks: [false; MAX_TRACKS],

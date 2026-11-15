@@ -353,7 +353,7 @@ impl App {
         self.audio.refresh |= view == View::Audio && self.modes.view != View::Audio;
         // Sections selected in the song view are left there.
         if view != View::Song {
-            self.section_anchor = None;
+            self.song_view.anchor = None;
         }
         self.modes.view = view;
         self.note_view(view);

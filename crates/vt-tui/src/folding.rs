@@ -225,7 +225,7 @@ impl App {
     /// track the others are on.
     fn folding_track(&self) -> Option<usize> {
         match self.modes.view {
-            View::Song => self.song_column.checked_sub(COLUMNS_BEFORE_TRACKS),
+            View::Song => self.song_view.column.checked_sub(COLUMNS_BEFORE_TRACKS),
             View::Mixer | View::Phrase | View::Chain | View::Track => {
                 Some(self.services.cursor.track)
             }
@@ -316,7 +316,7 @@ impl App {
             .step_to_group(self.song(), from, by * times, order)
         {
             Some(group) if self.modes.view == View::Song => {
-                self.song_column = COLUMNS_BEFORE_TRACKS + group;
+                self.song_view.column = COLUMNS_BEFORE_TRACKS + group;
             }
             Some(group) => self.services.go_to_track_at(group, self.modes.view),
             None if by > 0 => self.services.status = "No group after this track".to_owned(),
@@ -333,7 +333,7 @@ impl App {
         };
         let to = self.services.folds.stand_in(self.song(), track);
         match self.modes.view {
-            View::Song => self.song_column = COLUMNS_BEFORE_TRACKS + to,
+            View::Song => self.song_view.column = COLUMNS_BEFORE_TRACKS + to,
             _ if to != track => self.services.go_to_track_at(to, self.modes.view),
             _ => {}
         }

@@ -698,7 +698,7 @@ pub fn draw_screen(
             let _ = app.sample_page_here();
             app.sample_page.on_screen = app.sample_page.draw(frame, view, &app.ctx());
         }
-        View::Song => views::song::draw(frame, view, app),
+        View::Song => app.song_view.draw(frame, view, &app.ctx()),
     }
     // Inside the box the track page has while the keyboard plays it.
     let free = if app.modes.mode == Mode::Keys && app.modes.view == View::Track {

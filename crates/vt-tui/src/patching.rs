@@ -12,8 +12,8 @@ use vt_model::constants::FX_SLOTS;
 use vt_model::generator::Span;
 use vt_model::macros::GenColumn;
 use vt_model::preset::{
-    FACTORY, FACTORY_PATCHES, Patch, PatchGen, PatchPreset, Placement, Preset, PresetError,
-    PresetKind, Short, factory_patch, is_preset_name, load, preset_name, preset_path, save,
+    FACTORY, FACTORY_PATCHES, Patch, PatchGen, PatchPreset, Placement, Preset, PresetKind, Short,
+    factory_patch, load, preset_name,
 };
 use vt_model::selection::Field;
 use vt_model::shape::ShapeColumn;
@@ -21,10 +21,10 @@ use vt_model::song::Lane;
 use vt_model::step::FxCommand;
 
 use crate::app::App;
-use crate::config::home_folder;
-use crate::explorer::{Icon, Purpose, place_name, preset_tags};
+use crate::explorer::{Icon, Purpose, preset_tags};
 use crate::input::command::PatchLine;
 use crate::input::picker::{Item, Pick, Root};
+use crate::presetting::{kind_place, named_file};
 
 /// What's said where a patch is wanted on a track that doesn't play sounds.
 const NOT_SOUND: &str = "Only a track that plays sounds takes a patch";
@@ -115,15 +115,7 @@ impl App {
     /// The cursor's track, if it plays sounds, saying so if it doesn't.
     fn patch_track(&mut self) -> Option<usize> {
         let track = self.services.cursor.track;
-        let sound = self
-            .song()
-            .tracks
-            .get(track)
-            .is_some_and(vt_model::song::Track::is_sound);
-        if !sound {
-            self.services.status = NOT_SOUND.to_owned();
-        }
-        sound.then_some(track)
+        self.plays_sounds(track, NOT_SOUND).then_some(track)
     }
 
     /// List the patches in the presets folder, once there is one, and the shipped ones under
@@ -147,71 +139,44 @@ impl App {
         let Some(track) = self.patch_track() else {
             return;
         };
-        let Some(folder) = self.presets_folder() else {
-            return;
-        };
-        let path = match preset_path(&folder, PresetKind::Patch, name) {
-            Ok(path) => path,
-            Err(error) => {
-                self.services.status = error.to_string();
-                return;
-            }
-        };
-        let phrase = self.services.phrase_here().map(|phrase| &**phrase);
-        let Some(preset) = PatchPreset::of(&self.song().tracks[track], phrase) else {
-            self.services.status = format!(
-                "No macro of track {:02} holds anything, so there's no patch to save: M on a setting maps one",
-                track + 1
-            );
-            return;
-        };
-        match save(&path, &preset, force) {
-            Ok(()) => {
-                if let Some(saved_in) = path.parent() {
-                    self.note_place(Purpose::Preset(PresetKind::Patch), saved_in);
-                }
-                let home = home_folder();
-                self.services.status = format!(
-                    "Saved track {:02}'s patch as {name}, {}, in {}",
+        self.save_named(
+            name,
+            force,
+            |app| {
+                let phrase = app.services.phrase_here().map(|phrase| &**phrase);
+                PatchPreset::of(&app.song().tracks[track], phrase).ok_or_else(|| {
+                    format!(
+                        "No macro of track {:02} holds anything, so there's no patch to save: M on a setting maps one",
+                        track + 1
+                    )
+                })
+            },
+            |preset| {
+                format!(
+                    "track {:02}'s patch as {name}, {}",
                     track + 1,
-                    preset.summary(),
-                    place_name(&folder.join(PresetKind::Patch.folder()), home.as_deref())
-                );
-            }
-            Err(PresetError::Taken(_)) => {
-                self.services.status = format!(
-                    "There's a patch called {name} already: :patch! save {name} writes over it"
-                );
-            }
-            Err(error) => self.services.status = error.to_string(),
-        }
+                    preset.summary()
+                )
+            },
+        );
     }
 
     /// `:patch load name`: the patch of that name in the presets folder, or else the shipped one,
     /// added to the cursor's track.
     fn add_patch_named(&mut self, name: &str, over: bool) {
-        if !is_preset_name(name) {
-            self.services.status = PresetError::Name.to_string();
-            return;
-        }
         let folder = self.services.settings.preset_folder();
-        let path = folder
-            .as_deref()
-            .and_then(|folder| preset_path(folder, PresetKind::Patch, name).ok())
-            .filter(|path| path.is_file());
-        if let Some(path) = path {
-            self.add_patch(&path, over);
-        } else if factory_patch(name).is_some() {
-            self.add_factory_patch(name, over);
-        } else {
-            let home = home_folder();
-            let place = folder.map_or_else(String::new, |folder| {
-                let patches = folder.join(PresetKind::Patch.folder());
-                format!(" in {}", place_name(&patches, home.as_deref()))
-            });
-            self.services.status = format!(
-                "There's no patch called {name}{place}, nor one that comes with vimtracker"
-            );
+        match named_file(folder.as_deref(), PresetKind::Patch, name) {
+            Ok(Some(path)) => self.add_patch(&path, over),
+            Ok(None) if factory_patch(name).is_some() => self.add_factory_patch(name, over),
+            Ok(None) => {
+                let place = folder.map_or_else(String::new, |folder| {
+                    format!(" in {}", kind_place(&folder, PresetKind::Patch))
+                });
+                self.services.status = format!(
+                    "There's no patch called {name}{place}, nor one that comes with vimtracker"
+                );
+            }
+            Err(error) => self.services.status = error.to_string(),
         }
     }
 

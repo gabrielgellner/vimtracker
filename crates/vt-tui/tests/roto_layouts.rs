@@ -152,7 +152,7 @@ fn rows(layout: &DeviceLayout) -> Vec<(&'static str, &[Slot<Setting>; CONTROLS])
 
 #[test]
 fn no_layout_has_a_gap_it_does_not_mean() {
-    for layout in ALL {
+    for layout in ALL.iter() {
         for page in layout.layout.pages {
             assert!(!page.name.is_empty(), "{}'s pages are named", layout.kind);
             assert!(
@@ -192,7 +192,7 @@ fn no_layout_has_a_gap_it_does_not_mean() {
 
 #[test]
 fn no_page_has_more_than_eight_knobs_and_eight_buttons() {
-    for layout in ALL {
+    for layout in ALL.iter() {
         for page in layout.layout.pages {
             assert_eq!(page.knobs.len(), CONTROLS);
             assert_eq!(page.buttons.len(), CONTROLS);
@@ -341,7 +341,7 @@ fn no_layout_chooses_a_machine_an_effect_or_its_type_as_the_app_builds_and_the_r
 
 #[test]
 fn a_device_keeps_to_one_page_with_its_buttons_on_the_first_unless_it_has_a_reason() {
-    for layout in ALL {
+    for layout in ALL.iter() {
         let pages = layout.layout.pages;
         let Some(first) = pages.first() else {
             continue;
@@ -541,7 +541,7 @@ fn the_guides_legend_is_the_colour_table() {
 
 #[test]
 fn every_button_is_under_a_knob_so_the_roto_draws_its_label() {
-    for layout in ALL {
+    for layout in ALL.iter() {
         for page in layout.layout.pages {
             for (at, button) in page.buttons.iter().enumerate() {
                 if let Some(setting) = button.setting() {

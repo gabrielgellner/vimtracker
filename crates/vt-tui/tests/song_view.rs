@@ -485,7 +485,7 @@ fn loop_and_transport_keys_reach_the_section_being_edited() {
     press(&mut app, " 1a");
     block(&mut realtime, &mut app);
     command(&mut app, "loop");
-    assert_eq!(app.looping, Some(SectionLoop::one(1)));
+    assert_eq!(app.services.looping, Some(SectionLoop::one(1)));
     assert!(
         app.services.status.contains("section 02"),
         "{}",
@@ -499,9 +499,9 @@ fn loop_and_transport_keys_reach_the_section_being_edited() {
     press(&mut app, " 1k");
     assert!(song_text(&app)[4].contains(">02"), "{:?}", song_text(&app));
     command(&mut app, "loop");
-    assert_eq!(app.looping, Some(SectionLoop::one(0)));
+    assert_eq!(app.services.looping, Some(SectionLoop::one(0)));
     command(&mut app, "loop");
-    assert_eq!(app.looping, None);
+    assert_eq!(app.services.looping, None);
 }
 
 #[test]
@@ -519,9 +519,9 @@ fn capital_v_over_sections_then_loop_loops_them_from_the_next_launch_line() {
     );
     press(&mut app, "j");
     command(&mut app, "loop");
-    assert_eq!(app.looping, Some(SectionLoop::new(1, 2)));
+    assert_eq!(app.services.looping, Some(SectionLoop::new(1, 2)));
     assert_eq!(app.services.status, "Looping sections 02-03");
-    assert_eq!(app.section_anchor, None, "the command ends the selection");
+    assert_eq!(app.song_view.anchor, None, "the command ends the selection");
     assert!(status_line(&app).contains("Sec 3/3 loop 2-3"));
     block(&mut rt, &mut app);
     assert_eq!(rt.engine().looping(), Some(SectionLoop::new(1, 2)));
@@ -558,7 +558,7 @@ fn capital_v_over_sections_then_loop_loops_them_from_the_next_launch_line() {
 
     // `:loop` alone on one of them goes back to the song.
     command(&mut app, "loop");
-    assert_eq!(app.looping, None);
+    assert_eq!(app.services.looping, None);
     assert_eq!(app.services.status, "Playing the song");
     block(&mut rt, &mut app);
     assert_eq!(rt.engine().looping(), None);
@@ -568,16 +568,19 @@ fn capital_v_over_sections_then_loop_loops_them_from_the_next_launch_line() {
 fn esc_or_v_again_ends_a_selection_of_sections_and_so_does_leaving_the_view() {
     let (mut app, _rt) = app();
     press(&mut app, " 1aV");
-    assert!(app.section_anchor.is_some());
+    assert!(app.song_view.anchor.is_some());
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.section_anchor, None);
+    assert_eq!(app.song_view.anchor, None);
     press(&mut app, "VV");
-    assert_eq!(app.section_anchor, None);
+    assert_eq!(app.song_view.anchor, None);
     press(&mut app, "V 3");
-    assert_eq!(app.section_anchor, None);
+    assert_eq!(app.song_view.anchor, None);
     press(&mut app, " 1V:");
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.section_anchor, None, "a command line left ends it too");
+    assert_eq!(
+        app.song_view.anchor, None,
+        "a command line left ends it too"
+    );
 }
 
 #[test]
@@ -624,7 +627,11 @@ fn enter_cues_this_chain_on_one_track_and_holds_the_section() {
     assert_eq!(app.services.playing_section, 0);
     press(&mut app, "0lll");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.looping, Some(SectionLoop::one(0)), "the jam stays here");
+    assert_eq!(
+        app.services.looping,
+        Some(SectionLoop::one(0)),
+        "the jam stays here"
+    );
     play_on(&mut app, &mut realtime, 1);
     assert_eq!(app.services.jam[0].cued, Some(Some(1)));
     assert!(
@@ -696,7 +703,7 @@ fn c_captures_what_each_track_is_playing_as_one_undo() {
         "the row it came from"
     );
     assert_eq!(app.services.cursor.section, 1);
-    assert_eq!(app.looping, Some(SectionLoop::one(1)));
+    assert_eq!(app.services.looping, Some(SectionLoop::one(1)));
     play_on(&mut app, &mut realtime, 1);
     assert_eq!(
         app.services.playing_section, 1,
