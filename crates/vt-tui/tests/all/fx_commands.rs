@@ -118,7 +118,7 @@ fn k_lists_commands_by_category_and_opens_searching() {
     use vt_tui::overlays::picker::{Focus, Row};
     let (mut app, _realtime) = app();
     press(&mut app, "lllllK");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.focus, Focus::Search);
     assert!(picker.query.is_empty());
     let names: Vec<&str> = picker
@@ -134,7 +134,7 @@ fn k_lists_commands_by_category_and_opens_searching() {
     assert_eq!(picker.current().unwrap().label, "---", "on the empty slot");
     // Typing searches long names as well as labels.
     press(&mut app, "send b");
-    let current = app.picker.as_ref().unwrap().current().unwrap();
+    let current = app.overlays.picker.as_ref().unwrap().current().unwrap();
     assert_eq!(
         (current.label.as_str(), current.meaning.as_str()),
         ("SNB", "Send B")
@@ -149,6 +149,7 @@ fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
     let list = |app: &mut App| {
         press(app, "K/");
         let labels: Vec<String> = app
+            .overlays
             .picker
             .as_ref()
             .unwrap()
@@ -218,6 +219,7 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
     // The list has what's on the track, by label and then by group and name.
     press(&mut app, "lllllK");
     let labels: Vec<String> = app
+        .overlays
         .picker
         .as_ref()
         .unwrap()
@@ -264,7 +266,7 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
         "{}",
         app.services.status
     );
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.query, "amnt");
     assert_eq!(
         picker.current().map(listed).as_deref(),
@@ -307,6 +309,7 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
     let labels = |app: &mut App, keys: &str| {
         press(app, keys);
         let found: Vec<String> = app
+            .overlays
             .picker
             .as_ref()
             .unwrap()
@@ -367,6 +370,7 @@ fn an_lfos_dest_list_only_reaches_the_lfos_after_it() {
     let labels = |app: &mut App, keys: &str| {
         press(app, keys);
         let found: Vec<String> = app
+            .overlays
             .picker
             .as_ref()
             .unwrap()
@@ -430,14 +434,15 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
     // Distort in slot 1, then Mod 4's Dest.
     press(&mut app, &format!(" 5LL=H{}$K", to_lfo(0)));
     let current = |app: &App| {
-        app.picker
+        app.overlays
+            .picker
             .as_ref()
             .unwrap()
             .current()
             .map(|item| item.label.clone())
             .unwrap_or_default()
     };
-    let picker = |app: &App| app.picker.as_ref().unwrap().clone();
+    let picker = |app: &App| app.overlays.picker.as_ref().unwrap().clone();
     assert_eq!(picker(&app).focus, Focus::List);
     assert_eq!(current(&app), "---", "on what's chosen: nothing");
     assert!(
@@ -512,7 +517,7 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
 fn dests_window_draws_categories_as_dim_headings_with_counts() {
     let (mut app, _realtime) = app();
     press(&mut app, &format!(" 5L{}$Kjl", to_lfo(0)));
-    let mut picker = app.picker.clone().unwrap();
+    let mut picker = app.overlays.picker.clone().unwrap();
     let backend = ratatui::backend::TestBackend::new(100, 24);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
@@ -555,7 +560,7 @@ fn a_plain_list_opens_on_the_list_and_typing_searches() {
     // `K` then typing on Machine, and `/` goes to the search.
     let (mut app, _realtime) = app();
     press(&mut app, " 5Kpl");
-    assert_eq!(app.picker.as_ref().unwrap().query, "pl");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().query, "pl");
     special(&mut app, KeyCode::Esc);
     special(&mut app, KeyCode::Esc);
     assert_eq!(
@@ -564,7 +569,7 @@ fn a_plain_list_opens_on_the_list_and_typing_searches() {
         "Esc clears the search, then closes"
     );
     press(&mut app, "K/j");
-    assert_eq!(app.picker.as_ref().unwrap().query, "j");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().query, "j");
 }
 
 fn lane_of(app: &App, slot: usize) -> Option<vt_model::song::Lane> {
@@ -775,9 +780,9 @@ fn k_on_a_gate_lists_gates_and_on_its_length_lists_lengths() {
     // On the gate, the gate types.
     press(&mut app, "lllK");
     assert_eq!(app.services.cursor.field, vt_model::selection::Field::Gate);
-    assert_eq!(app.picker.as_ref().unwrap().title, "Gates");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().title, "Gates");
     special(&mut app, KeyCode::Esc);
-    assert!(app.picker.is_none());
+    assert!(app.overlays.picker.is_none());
 
     // On its length, some lengths, with the track's first and marked on an empty cell.
     press(&mut app, "lK");
@@ -785,7 +790,11 @@ fn k_on_a_gate_lists_gates_and_on_its_length_lists_lengths() {
         app.services.cursor.field,
         vt_model::selection::Field::GateLength
     );
-    let picker = app.picker.as_ref().expect("the lengths are listed");
+    let picker = app
+        .overlays
+        .picker
+        .as_ref()
+        .expect("the lengths are listed");
     assert_eq!(picker.title, "Lengths");
     let labels: Vec<&str> = picker
         .items()
@@ -801,7 +810,7 @@ fn k_on_a_gate_lists_gates_and_on_its_length_lists_lengths() {
     assert_eq!(picker.current().unwrap().label, "--");
     // `Esc` leaves it as it was.
     special(&mut app, KeyCode::Esc);
-    assert!(app.picker.is_none());
+    assert!(app.overlays.picker.is_none());
     assert_eq!(gate(&app), None);
 
     // Choosing one sets it, in one change, on one pulse of `SGL` for an empty cell.
@@ -819,9 +828,18 @@ fn k_on_a_gate_lists_gates_and_on_its_length_lists_lengths() {
     press(&mut app, "hKHLD");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "==lK");
-    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "80");
+    assert_eq!(
+        app.overlays
+            .picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .unwrap()
+            .label,
+        "80"
+    );
     press(&mut app, "C0");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.shown().next().unwrap().label, "C0");
     assert!(picker.shown().count() < picker.items().len());
     special(&mut app, KeyCode::Enter);
@@ -848,11 +866,24 @@ fn k_chooses_cnd_then_its_condition_from_a_list() {
     press(&mut app, "CND");
     special(&mut app, KeyCode::Enter);
     // Choosing `CND` lists the conditions, with Elektron's names.
-    let picker = app.picker.as_ref().expect("the conditions are listed");
+    let picker = app
+        .overlays
+        .picker
+        .as_ref()
+        .expect("the conditions are listed");
     assert_eq!(picker.title, "Conditions");
     assert_eq!(picker.focus, vt_tui::overlays::picker::Focus::Search);
     press(&mut app, "1:4");
-    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "1:4");
+    assert_eq!(
+        app.overlays
+            .picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .unwrap()
+            .label,
+        "1:4"
+    );
     let depth = app.services.history.undo_depth();
     special(&mut app, KeyCode::Enter);
     assert_eq!(slot(&app).command, Some(FxCommand::Cnd));
@@ -866,7 +897,7 @@ fn k_chooses_cnd_then_its_condition_from_a_list() {
 
     // `K` on its value lists them again, on its own.
     press(&mut app, "K");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.title, "Conditions");
     assert_eq!(picker.current().unwrap().label, "1:4");
     special(&mut app, KeyCode::Esc);
@@ -898,7 +929,16 @@ fn k_chooses_cnd_then_its_condition_from_a_list() {
 
     // A build is in the list too, and `+` moves its pass by four.
     press(&mut app, "K>5");
-    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, ">5");
+    assert_eq!(
+        app.overlays
+            .picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .unwrap()
+            .label,
+        ">5"
+    );
     special(&mut app, KeyCode::Enter);
     assert_eq!(slot(&app).coarse(), 0x95);
     assert_eq!(value_shown(&app).as_deref(), Some(">5, from pass 5 on"));
@@ -951,7 +991,11 @@ fn k_chooses_acu_then_its_amount_from_a_list() {
     press(&mut app, "ACU");
     special(&mut app, KeyCode::Enter);
     // Choosing `ACU` lists how far it can move the note, up and then down.
-    let picker = app.picker.as_ref().expect("the amounts are listed");
+    let picker = app
+        .overlays
+        .picker
+        .as_ref()
+        .expect("the amounts are listed");
     assert_eq!(picker.title, "Accumulate");
     assert_eq!(picker.current().unwrap().label, "+1", "it opens on one up");
     assert_eq!(
@@ -960,7 +1004,16 @@ fn k_chooses_acu_then_its_amount_from_a_list() {
         "the scale is off"
     );
     press(&mut app, "-2");
-    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "-2");
+    assert_eq!(
+        app.overlays
+            .picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .unwrap()
+            .label,
+        "-2"
+    );
     let depth = app.services.history.undo_depth();
     special(&mut app, KeyCode::Enter);
     assert_eq!(slot(&app).command, Some(FxCommand::Acu));
@@ -977,7 +1030,16 @@ fn k_chooses_acu_then_its_amount_from_a_list() {
 
     // `K` on its value lists them again, on its own.
     press(&mut app, "K");
-    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "-2");
+    assert_eq!(
+        app.overlays
+            .picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .unwrap()
+            .label,
+        "-2"
+    );
     special(&mut app, KeyCode::Esc);
     special(&mut app, KeyCode::Esc);
 
@@ -1048,7 +1110,11 @@ fn k_chooses_arp_and_its_value_is_typed_as_two_digits() {
     let slot = |app: &App| app.services.phrase_here().unwrap().steps()[0].fx[0];
     press(&mut app, "lllllK");
     press(&mut app, "ARP");
-    let picker = app.picker.as_ref().expect("the commands are listed");
+    let picker = app
+        .overlays
+        .picker
+        .as_ref()
+        .expect("the commands are listed");
     assert_eq!(
         listed(picker.current().unwrap()),
         "ARP  Arpeggio: the note, x up and y up"
@@ -1101,7 +1167,11 @@ fn k_chooses_rnd_and_the_status_line_says_what_it_varies() {
     // On FX 2, beside an empty FX 1, it varies the note.
     press(&mut app, "llllllllK");
     press(&mut app, "RND");
-    let picker = app.picker.as_ref().expect("the commands are listed");
+    let picker = app
+        .overlays
+        .picker
+        .as_ref()
+        .expect("the commands are listed");
     assert_eq!(
         listed(picker.current().unwrap()),
         "RND  Chance x of F to vary the note or lock left, by y"
@@ -1175,7 +1245,7 @@ fn order_plays_the_phrases_rows_in_an_order_from_a_word_or_a_list() {
     );
     // With nothing after it, a list opens on the order it plays in.
     command(&mut app, "order");
-    let picker = app.picker.as_ref().expect("the list is open");
+    let picker = app.overlays.picker.as_ref().expect("the list is open");
     assert_eq!(
         picker.current().map(|item| item.pick.clone()),
         Some(Pick::Line(Line::Order(Some(Order::UpDown))))
@@ -1239,7 +1309,7 @@ fn order_takes_a_snake_and_cartesian_numbers_and_the_title_shows_them() {
     );
     // The list shows the phrase's own Cartesian numbers, and opens on them.
     command(&mut app, "order");
-    let picker = app.picker.as_ref().expect("the list is open");
+    let picker = app.overlays.picker.as_ref().expect("the list is open");
     assert_eq!(
         picker.current().map(|item| item.pick.clone()),
         Some(Pick::Line(Line::Order(Some(cartesian))))
@@ -1288,7 +1358,7 @@ fn order_takes_a_jump_and_an_arps_numbers_and_the_metropolixs_other_orders() {
     );
     // The list shows the phrase's own arp, and opens on it.
     command(&mut app, "order");
-    let picker = app.picker.as_ref().expect("the list is open");
+    let picker = app.overlays.picker.as_ref().expect("the list is open");
     assert_eq!(
         picker.current().map(|item| item.pick.clone()),
         Some(Pick::Line(Line::Order(Some(arp))))
@@ -1332,7 +1402,11 @@ fn k_lists_a_slots_bypass_with_its_effect_and_a_step_locks_it() {
     let slot = |app: &App| app.services.phrase_here().unwrap().steps()[0].fx[0];
     press(&mut app, "lllllK");
     press(&mut app, "1byp");
-    let picker = app.picker.as_ref().expect("the commands are listed");
+    let picker = app
+        .overlays
+        .picker
+        .as_ref()
+        .expect("the commands are listed");
     let item = picker.current().unwrap();
     assert_eq!(listed(item), "1BYP  1 Bypass");
     assert_eq!(item.category, "FX 1 Delay", "with the slot's effect");

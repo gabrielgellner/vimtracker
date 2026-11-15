@@ -620,7 +620,7 @@ fn rows_past_a_short_phrase_keep_the_box_and_have_nothing_above_the_loop() {
 fn the_shape_panel_draws_its_settings_beside_the_grid() {
     let (mut app, _realtime) = tracks_of_different_lengths();
     press(&mut app, "lvGS");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     let backend = ratatui::backend::TestBackend::new(80, 16);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
@@ -656,7 +656,7 @@ fn a_list_fill_draws_its_values_in_place_of_the_ends() {
     special(&mut app, KeyCode::Enter);
     press(&mut app, "ji704055");
     special(&mut app, KeyCode::Enter);
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     let backend = ratatui::backend::TestBackend::new(80, 16);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal

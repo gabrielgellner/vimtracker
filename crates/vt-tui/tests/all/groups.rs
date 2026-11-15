@@ -139,7 +139,7 @@ fn a_group_and_its_tracks_are_named_in_its_colour_where_tracks_are_listed() {
     assert!(page[0].contains("Track 01 G1 "), "{}", page[0]);
     // The track picker.
     press(&mut app, " fb");
-    let items = app.picker.as_ref().unwrap().items();
+    let items = app.overlays.picker.as_ref().unwrap().items();
     assert_eq!(items[1].style.fg, Some(blue));
     assert_eq!(items[3].style.fg, None);
     assert_eq!(items[4].style.fg, Some(peach));
@@ -568,7 +568,7 @@ fn a_group_with_five_characters_shows_its_whole_name_in_every_view() {
     assert_eq!(roto[g1].name.as_str(), "G1 DRUMS");
     assert_eq!(roto[g1 + 1].name.as_str(), "Group 2", "an unnamed group");
     press(&mut app, " fb");
-    let items = app.picker.as_ref().unwrap().items();
+    let items = app.overlays.picker.as_ref().unwrap().items();
     assert!(
         items.iter().any(|item| item.label.ends_with("DRUMS")),
         "{:?}",

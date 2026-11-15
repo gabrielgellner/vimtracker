@@ -296,7 +296,7 @@ fn a_step_locks_a_sample_from_the_bank() {
 
     // K on its value lists the bank again, on the one it locks.
     press(&mut app, "K");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.current().unwrap().label, "02  kick");
     press(&mut app, "k");
     special(&mut app, KeyCode::Enter);

@@ -39,7 +39,7 @@ fn drum_library(app: &mut App) -> PathBuf {
 
 /// The names of the files the search kept, in order.
 fn found(app: &App) -> Vec<String> {
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     picker
         .rows()
         .iter()
@@ -56,7 +56,7 @@ fn found(app: &App) -> Vec<String> {
 fn drawn(app: &App) -> String {
     let backend = ratatui::backend::TestBackend::new(163, 42);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
-    let mut picker = app.picker.clone().unwrap();
+    let mut picker = app.overlays.picker.clone().unwrap();
     terminal
         .draw(|frame| vt_tui::overlays::picker::draw::draw(frame, frame.area(), &mut picker))
         .unwrap();
@@ -94,7 +94,7 @@ fn a_search_by_tag_finds_every_kick_below_the_open_folders() {
 
     press(&mut app, "#kick");
     assert_eq!(found(&app), ["kick loop.wav", "BD01.wav", "thump.wav"]);
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.tag_found(), Some(3));
     assert_eq!(
         picker.current().unwrap().label,
@@ -118,13 +118,13 @@ fn a_search_by_tag_finds_every_kick_below_the_open_folders() {
     // `#` alone lists everything below, with each tag in use and how many have it.
     special(&mut app, KeyCode::Esc);
     assert_eq!(
-        app.picker.as_ref().unwrap().tag_row(),
+        app.overlays.picker.as_ref().unwrap().tag_row(),
         None,
         "only while the search is typed"
     );
     press(&mut app, "#");
     assert_eq!(found(&app).len(), 5);
-    let row = app.picker.as_ref().unwrap().tag_row().unwrap();
+    let row = app.overlays.picker.as_ref().unwrap().tag_row().unwrap();
     assert_eq!(
         row,
         [
@@ -137,7 +137,7 @@ fn a_search_by_tag_finds_every_kick_below_the_open_folders() {
     // `Tab` finishes the tag being typed as the row's first.
     press(&mut app, "sn");
     special(&mut app, KeyCode::Tab);
-    assert_eq!(app.picker.as_ref().unwrap().query, "#snare ");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().query, "#snare ");
     assert_eq!(found(&app), ["snare 808.wav"]);
     std::fs::remove_dir_all(&library).unwrap();
 }
@@ -150,7 +150,7 @@ fn t_gives_a_sample_tags_by_its_content_and_takes_a_wrong_guess_off() {
     command(&mut app, "sample");
     press(&mut app, "#kick thu");
     special(&mut app, KeyCode::Esc);
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.current().unwrap().label, "thump.wav");
     assert_eq!(
         picker.current().unwrap().tags,
@@ -169,7 +169,10 @@ fn t_gives_a_sample_tags_by_its_content_and_takes_a_wrong_guess_off() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.services.status, "thump.wav: #kick #one-shot #punchy");
     let thump = library.join("drums/kicks/thump.wav");
-    assert_eq!(app.tag_library.of_file(&thump).unwrap().tags, ["punchy"]);
+    assert_eq!(
+        app.explorer.tag_library.of_file(&thump).unwrap().tags,
+        ["punchy"]
+    );
     let text = drawn(&app);
     assert!(
         text.lines()
@@ -184,10 +187,10 @@ fn t_gives_a_sample_tags_by_its_content_and_takes_a_wrong_guess_off() {
     }
     press(&mut app, "pun");
     special(&mut app, KeyCode::Tab);
-    assert_eq!(app.picker.as_ref().unwrap().tag_line, "punchy ");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().tag_line, "punchy ");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.services.status, "thump.wav: #punchy");
-    let kept = app.tag_library.of_file(&thump).unwrap();
+    let kept = app.explorer.tag_library.of_file(&thump).unwrap();
     assert_eq!(kept.not, ["kick", "one-shot"]);
     press(&mut app, "#kick");
     assert_eq!(found(&app), ["kick loop.wav", "BD01.wav"]);
@@ -201,7 +204,14 @@ fn t_gives_a_sample_tags_by_its_content_and_takes_a_wrong_guess_off() {
     press(&mut app, "x");
     special(&mut app, KeyCode::Esc);
     assert_eq!(
-        app.picker.as_ref().unwrap().current().unwrap().tags.len(),
+        app.overlays
+            .picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .unwrap()
+            .tags
+            .len(),
         1
     );
     assert_eq!(
@@ -239,7 +249,7 @@ fn how_a_sample_ends_says_one_shot_or_loop_once_its_read() {
     sounding(&library.join("b drone.wav"), 2.0, 0.0);
     command(&mut app, &format!("sample {}", library.display()));
     app.finish_loading();
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.current().unwrap().label, "a hit.wav");
     assert_eq!(
         picker.current().unwrap().tags,
@@ -251,7 +261,7 @@ fn how_a_sample_ends_says_one_shot_or_loop_once_its_read() {
     assert!(text.contains("│ #one-shot"), "in the preview: {text}");
     press(&mut app, "j");
     app.finish_loading();
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     let drone = picker.current_index().unwrap();
     assert_eq!(picker.item(drone).tags, [Tag::new("loop", Source::Guessed)]);
     assert_eq!(picker.icon(drone), Some(Icon::Loop), "drawn as a loop");
@@ -288,13 +298,13 @@ fn a_presets_tags_are_kept_in_its_file_and_patch_lists_the_patches() {
     };
     command(&mut app, "preset save Plain");
     command(&mut app, "preset");
-    assert_eq!(app.picker.as_ref().unwrap().title, "Sound presets");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().title, "Sound presets");
     press(&mut app, "#sampler");
     assert_eq!(found(&app), ["Plain"], "its machine's tag");
     special(&mut app, KeyCode::Esc);
     press(&mut app, "T");
     assert_eq!(
-        app.picker.as_ref().unwrap().tag_line,
+        app.overlays.picker.as_ref().unwrap().tag_line,
         "",
         "what it always is isn't for changing"
     );
@@ -314,7 +324,7 @@ fn a_presets_tags_are_kept_in_its_file_and_patch_lists_the_patches() {
     )
     .unwrap();
     command(&mut app, "patch");
-    assert_eq!(app.picker.as_ref().unwrap().title, "Patches");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().title, "Patches");
     // The shipped patches are listed after the folder's, with their own tags (decision 318).
     press(&mut app, "#patch");
     let all = found(&app);

@@ -30,10 +30,10 @@ impl App {
         match key.code {
             KeyCode::Esc => {
                 self.cancel_entry();
-                if let Some(field) = self.replacing.take() {
+                if let Some(field) = self.grammar.replacing.take() {
                     self.services.cursor.field = field;
                 }
-                if let Some((selection, _)) = self.replacing_selection.take() {
+                if let Some((selection, _)) = self.grammar.replacing_selection.take() {
                     self.services.cursor.step = selection.range.first;
                     self.cancel_selection_replace();
                 }
@@ -203,7 +203,7 @@ impl App {
             }
             // A note, and an OFF, is written once however long its key is held.
             KeyCode::Char('1') => {
-                self.repeats_ignored = true;
+                self.held.repeats_ignored = true;
                 self.write_note(Note::Off);
                 self.advance();
             }
@@ -231,8 +231,8 @@ impl App {
                     let phrase = self.write_played_note(midi);
                     self.hold_note(key, midi, velocity);
                     self.advance();
-                    self.octave_moved = None;
-                    self.last_written = phrase.map(|phrase| Written {
+                    self.held.octave_moved = None;
+                    self.held.last_written = phrase.map(|phrase| Written {
                         track,
                         phrase,
                         step,

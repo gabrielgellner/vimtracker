@@ -541,7 +541,7 @@ pub fn from_column(line: &str, column: usize) -> String {
 /// a folder at the top by why it's there.
 pub fn explorer_rows(app: &App) -> Vec<String> {
     use vt_tui::overlays::picker::Row;
-    let picker = app.picker.as_ref().expect("the explorer is open");
+    let picker = app.overlays.picker.as_ref().expect("the explorer is open");
     picker
         .rows()
         .iter()
@@ -568,7 +568,7 @@ pub fn explorer_rows(app: &App) -> Vec<String> {
 
 /// The folders at the top of the explorer: each one's name and why it's there.
 pub fn explorer_roots(app: &App) -> Vec<(String, String)> {
-    let picker = app.picker.as_ref().expect("the explorer is open");
+    let picker = app.overlays.picker.as_ref().expect("the explorer is open");
     picker
         .items()
         .iter()
@@ -730,7 +730,7 @@ pub fn screen_rows(app: &mut App) -> Vec<String> {
 pub fn picker_text(app: &App, width: u16, height: u16) -> String {
     let backend = ratatui::backend::TestBackend::new(width, height);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
-    let mut picker = app.picker.clone().unwrap();
+    let mut picker = app.overlays.picker.clone().unwrap();
     terminal
         .draw(|frame| vt_tui::overlays::picker::draw::draw(frame, frame.area(), &mut picker))
         .unwrap();

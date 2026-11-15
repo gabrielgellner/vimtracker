@@ -18,14 +18,14 @@ fn the_track_picker_goes_to_a_track_by_number_or_name_like_a_buffer() {
     command(&mut app, "name BD");
     press(&mut app, "W");
     press(&mut app, " fb");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(
         picker.current().map(|item| item.pick.clone()),
         Some(Pick::Track(2))
     );
     assert_eq!(picker.shown().count(), app.song().tracks.len());
     press(&mut app, "bd");
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 1);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().shown().count(), 1);
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.services.cursor.track, 1);
     assert_eq!(app.modes.view, View::Phrase);
@@ -59,7 +59,7 @@ fn the_view_picker_flips_back_and_escape_changes_nothing() {
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.modes.mode, Mode::Normal);
     assert_eq!(app.modes.view, View::Track);
-    assert!(app.picker.is_none());
+    assert!(app.overlays.picker.is_none());
     // The list starts on the view before this one.
     press(&mut app, " ff");
     special(&mut app, KeyCode::Enter);
@@ -80,14 +80,14 @@ fn the_view_picker_searches_and_moves_with_ctrl_keys() {
     special(&mut app, KeyCode::Backspace);
     special(&mut app, KeyCode::Backspace);
     assert_eq!(
-        app.picker.as_ref().unwrap().shown().count(),
+        app.overlays.picker.as_ref().unwrap().shown().count(),
         11,
         "every view, with each of the track page's pages"
     );
     app.key(parse_sequence("C-p").unwrap()[0], Instant::now());
-    assert_eq!(app.picker.as_ref().unwrap().selected, 0);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().selected, 0);
     app.key(parse_sequence("C-n").unwrap()[0], Instant::now());
-    assert_eq!(app.picker.as_ref().unwrap().selected, 1);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().selected, 1);
     special(&mut app, KeyCode::Esc);
 }
 
@@ -98,6 +98,7 @@ fn the_track_picker_names_a_synths_voice_and_can_find_it() {
     let voice = app.song().tracks[0].machine.name();
     press(&mut app, " fb");
     let labels: Vec<String> = app
+        .overlays
         .picker
         .as_ref()
         .unwrap()
@@ -110,7 +111,8 @@ fn the_track_picker_names_a_synths_voice_and_can_find_it() {
 
     press(&mut app, &voice.to_lowercase());
     assert_eq!(
-        app.picker
+        app.overlays
+            .picker
             .as_ref()
             .unwrap()
             .current()
@@ -125,6 +127,7 @@ fn the_view_picker_lists_each_view_with_the_key_that_shows_it() {
     press(&mut app, " 6");
     press(&mut app, "  ");
     let listed: Vec<String> = app
+        .overlays
         .picker
         .as_ref()
         .unwrap()

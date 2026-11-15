@@ -430,7 +430,7 @@ impl App {
         adds.push(Action::LoadKit(sounds));
         self.services.apply(&Action::Batch(adds));
         self.fit_levels();
-        self.kit_file = Some(path.to_path_buf());
+        self.explorer.kit_file = Some(path.to_path_buf());
         self.services.status = format!("Kit {}: {count} tracks", kit.name);
         self.finish_kit(seeds, &[]);
         if !replaced.is_empty() {
@@ -542,7 +542,7 @@ impl App {
         if let Some(number) = group {
             self.fold_group(number, true);
         }
-        self.kit_file = Some(path.to_path_buf());
+        self.explorer.kit_file = Some(path.to_path_buf());
         let tracks = match count {
             1 => format!("track {:02}", first + 1),
             _ => format!("tracks {:02}-{:02}", first + 1, first + count),

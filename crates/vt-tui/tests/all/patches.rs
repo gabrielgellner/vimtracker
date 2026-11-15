@@ -185,7 +185,7 @@ fn the_browser_and_k_add_a_patch() {
     app.services.cursor.track = 2;
     press(&mut app, " 6");
     press(&mut app, "K");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     let labels: Vec<String> = picker.items().iter().map(listed).collect();
     assert!(
         labels
@@ -196,7 +196,7 @@ fn the_browser_and_k_add_a_patch() {
     press(&mut app, "/add a p");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.mode, Mode::Picker, "{}", app.services.status);
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.title, "Patches");
     let rows = explorer_rows(&app);
     assert_eq!(
@@ -218,13 +218,13 @@ fn the_browser_and_k_add_a_patch() {
     press(&mut app, "/save as a p");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.mode, Mode::Command);
-    assert_eq!(app.command_line, "patch save ");
+    assert_eq!(app.overlays.command_line, "patch save ");
 
     // And on a macro, the patch's knob, on the Gen page.
     special(&mut app, KeyCode::Esc);
     press(&mut app, " 8gg0");
     press(&mut app, "K");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.title, "Patches");
     let labels: Vec<String> = picker.items().iter().map(listed).collect();
     assert_eq!(labels.len(), 2, "{labels:?}");
@@ -547,7 +547,7 @@ fn the_browser_adds_a_shipped_patch_and_kria_brings_its_lane() {
     let (mut app, _realtime, _presets) = app_on(fresh_track());
     command(&mut app, "patch");
     press(&mut app, "/kria");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(
         picker.current().unwrap().meaning,
         "FX1 generator, 2 slots, 2 macros"
@@ -587,8 +587,8 @@ fn the_browser_adds_a_shipped_patch_and_kria_brings_its_lane() {
 fn the_shipped_patches_are_found_by_their_tags_and_cant_be_tagged() {
     let (mut app, _realtime, _presets) = app_on(fresh_track());
     command(&mut app, "patch");
-    let hint = |app: &App| app.picker.as_ref().unwrap().shown_hint();
-    let factory = app.picker.as_ref().unwrap().current().unwrap();
+    let hint = |app: &App| app.overlays.picker.as_ref().unwrap().shown_hint();
+    let factory = app.overlays.picker.as_ref().unwrap().current().unwrap();
     assert_eq!(factory.label, "Factory");
     assert_eq!(hint(&app), Some("Enter add"), "T can't tag their group");
     press(&mut app, "/#rhythm");
@@ -611,6 +611,7 @@ fn the_shipped_patches_are_found_by_their_tags_and_cant_be_tagged() {
     assert_eq!(rows.len(), 12, "all eleven: {rows:?}");
     special(&mut app, KeyCode::Esc);
     let tags: Vec<String> = app
+        .overlays
         .picker
         .as_ref()
         .unwrap()
@@ -624,7 +625,7 @@ fn the_shipped_patches_are_found_by_their_tags_and_cant_be_tagged() {
     press(&mut app, "T");
     assert_eq!(app.modes.mode, Mode::Picker);
     assert!(
-        app.picker.as_ref().unwrap().taggable().is_none(),
+        app.overlays.picker.as_ref().unwrap().taggable().is_none(),
         "a shipped patch is read-only"
     );
     // So its hint doesn't offer `T` either.
@@ -637,7 +638,7 @@ fn a_patch_of_the_users_own_offers_t_to_tag_it() {
     command(&mut app, "patch save Mine");
     command(&mut app, "patch");
     press(&mut app, "/mine");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.current().unwrap().label, "Mine");
     assert_eq!(picker.shown_hint(), Some("Enter add  T tag"));
 }

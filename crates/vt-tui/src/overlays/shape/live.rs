@@ -172,7 +172,7 @@ impl App {
             }
             _ => (Vec::new(), None),
         };
-        self.shape = Some(ShapePanel {
+        self.overlays.shape = Some(ShapePanel {
             selection: Selection {
                 range,
                 scope: Scope::column(self.services.cursor.field.group()),

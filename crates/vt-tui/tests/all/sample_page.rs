@@ -843,7 +843,7 @@ fn the_line_is_taken_away_while_something_is_drawn_over_the_page() {
     draw(&mut app, &mut graphics, 163, 42);
     draw(&mut app, &mut graphics, 163, 42);
     keys(&mut app, "Space Space");
-    assert!(app.picker.is_some());
+    assert!(app.overlays.picker.is_some());
     let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
     assert!(sent.contains("a=d,d=i"), "{sent:?}");
     app.key(Key::new(KeyCode::Esc), Instant::now());
@@ -1031,6 +1031,7 @@ fn k_on_sli_lists_the_slices_with_their_starts_and_puts_the_one_chosen() {
     step_with(&mut app, 0, "C-3 -- --- sampler.slice:01 ---");
     keys(&mut app, "K");
     let labels: Vec<String> = app
+        .overlays
         .picker
         .as_ref()
         .expect("the slices are listed")
@@ -1319,7 +1320,7 @@ fn the_marks_are_taken_off_while_something_is_drawn_over_the_page() {
     marks.take(&sent);
     let placed = marks.placed.clone();
     keys(&mut app, "Space Space");
-    assert!(app.picker.is_some());
+    assert!(app.overlays.picker.is_some());
     let (_, sent) = draw_in(&mut app, &mut graphics, 163, 42, (15, 39));
     marks.take(&sent);
     assert!(marks.placed.is_empty(), "{sent:?}");
@@ -1446,6 +1447,7 @@ fn mark_names_a_slice_and_quote_goes_to_it_as_a_jump() {
     keys(&mut app, "Space 3");
     command(&mut app, "marks");
     let labels: Vec<String> = app
+        .overlays
         .picker
         .as_ref()
         .expect("the marks are listed")
@@ -1508,6 +1510,7 @@ fn k_on_sli_locks_by_a_letter_which_the_grid_shows_and_follows_its_slice() {
     step_with(&mut app, 0, "C-3 -- --- sampler.slice:01 ---");
     keys(&mut app, "K");
     let labels: Vec<String> = app
+        .overlays
         .picker
         .as_ref()
         .expect("the slices are listed")

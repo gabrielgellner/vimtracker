@@ -27,7 +27,7 @@ fn rhythm(app: &App) -> String {
 
 /// The panel as drawn, a line a row.
 fn drawn(app: &App) -> String {
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     let backend = ratatui::backend::TestBackend::new(52, 14);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
@@ -55,7 +55,7 @@ fn multiply_turns_four_on_the_floor_by_its_factor() {
     let (mut app, _rt) = app_with(&four_on_the_floor());
     let depth = app.services.history.undo_depth();
     keys(&mut app, "vGSKmultiply<Enter>");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.shape.kind, FillKind::Multiply);
     assert_eq!(
         panel.rows(),
@@ -80,7 +80,7 @@ fn multiply_turns_four_on_the_floor_by_its_factor() {
         "times 4 is two rows later"
     );
     keys(&mut app, "+");
-    assert_eq!(app.shape.as_ref().unwrap().shape.bits.factor, 8);
+    assert_eq!(app.overlays.shape.as_ref().unwrap().shape.bits.factor, 8);
     keys(&mut app, "i17<Enter>");
     assert_eq!(app.services.status, "Factor runs from 1 to 16");
     keys(&mut app, "i5<Enter>");
@@ -88,10 +88,10 @@ fn multiply_turns_four_on_the_floor_by_its_factor() {
     keys(&mut app, "i1<Enter>");
     assert_eq!(rhythm(&app), "x...x...x...x...", "1 leaves it as it is");
     keys(&mut app, "x");
-    assert_eq!(app.shape.as_ref().unwrap().shape.bits.factor, 3);
+    assert_eq!(app.overlays.shape.as_ref().unwrap().shape.bits.factor, 3);
     // Masks keep rows 1, 2 and 13 to 16 before 3 multiplies.
     keys(&mut app, "j=");
-    assert!(app.shape.as_ref().unwrap().shape.bits.masks);
+    assert!(app.overlays.shape.as_ref().unwrap().shape.bits.masks);
     assert_eq!(rhythm(&app), "xx..........xx..");
     keys(&mut app, "<Enter>");
     assert_eq!(app.services.history.undo_depth(), depth + 1);
@@ -102,11 +102,11 @@ fn multiply_turns_four_on_the_floor_by_its_factor() {
 fn multiply_is_only_offered_on_a_rhythm() {
     let (mut app, _rt) = app_with(&four_on_the_floor());
     keys(&mut app, "lvGS");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert!(!panel.context().fills().contains(&FillKind::Multiply));
     let (mut app, _rt) = app_with(&[E; 16]);
     keys(&mut app, "vGS");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.verb(), "Generate");
     assert!(!panel.context().fills().contains(&FillKind::Multiply));
 }
@@ -130,7 +130,7 @@ fn the_bit_transforms_flip_keep_and_turn_a_columns_bits() {
     ]);
     let depth = app.services.history.undo_depth();
     keys(&mut app, "lvjjSKflipped<Enter>");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.shape.kind, FillKind::InvertBits);
     assert_eq!(
         panel.rows(),
@@ -151,10 +151,16 @@ fn the_bit_transforms_flip_keep_and_turn_a_columns_bits() {
     assert_eq!(velocities(&app), ["3A", "0F", "4E"]);
     // `Mask bits` keeps some, and `Rotate bits` turns them.
     keys(&mut app, "k=");
-    assert_eq!(app.shape.as_ref().unwrap().shape.kind, FillKind::MaskBits);
+    assert_eq!(
+        app.overlays.shape.as_ref().unwrap().shape.kind,
+        FillKind::MaskBits
+    );
     assert_eq!(velocities(&app), ["30", "00", "40"]);
     keys(&mut app, "=");
-    assert_eq!(app.shape.as_ref().unwrap().shape.kind, FillKind::RotateBits);
+    assert_eq!(
+        app.overlays.shape.as_ref().unwrap().shape.kind,
+        FillKind::RotateBits
+    );
     assert_eq!(velocities(&app), ["6A", "00", "03"]);
     keys(&mut app, "j=");
     assert!(drawn(&app).contains("Turn    2 bits"));

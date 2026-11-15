@@ -675,9 +675,9 @@ fn explore(app: &mut App, purpose: Purpose, folder: &Path, meaning: &str, home: 
         Purpose::Preset(_) => "Enter load  T tag",
         _ => "Enter choose  T tag",
     };
-    app.picker = Some(
+    app.overlays.picker = Some(
         Picker::explorer(purpose, roots, Some(home.to_path_buf()))
-            .with_tags(Arc::clone(&app.tag_library))
+            .with_tags(Arc::clone(&app.explorer.tag_library))
             .opening_first()
             .hinted(hint),
     );
@@ -717,7 +717,7 @@ fn take_explorer(folder: &Path) -> std::io::Result<PathBuf> {
     let picker = Picker::explorer(Purpose::Sample, roots, Some(home.clone()))
         .following(Some(&samples.join("kick.wav")))
         .hinted("Enter choose");
-    app.picker = Some(picker);
+    app.overlays.picker = Some(picker);
     app.modes.mode = Mode::Picker;
     // Open the loops and the kit, and come back down to the kick, which is the track's.
     press(&mut app, "kkkljjjljjj", start);

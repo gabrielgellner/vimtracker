@@ -6,21 +6,29 @@ use std::time::{Duration, Instant};
 use ratatui::crossterm::event::KeyCode;
 use vt_model::constants::AUTOSAVE_SECONDS;
 use vt_model::project;
+use vt_model::song::Song;
 
 use crate::app::App;
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
+
+/// When the autosave was last due, and the song it last wrote.
+#[derive(Debug, Default)]
+pub struct Autosave {
+    pub(crate) last: Option<Instant>,
+    pub(crate) saved: Option<Arc<Song>>,
+}
 
 impl App {
     /// Write the autosave file if it's due and something changed since the last one. A project
     /// whose folder doesn't exist yet has nowhere to write until the first `:w`.
     pub fn autosave_if_due(&mut self, now: Instant) {
         let every = Duration::from_secs(AUTOSAVE_SECONDS);
-        let started = *self.last_autosave.get_or_insert(now);
+        let started = *self.autosave.last.get_or_insert(now);
         if now.saturating_duration_since(started) < every {
             return;
         }
-        self.last_autosave = Some(now);
+        self.autosave.last = Some(now);
         let Some(folder) = self
             .services
             .folder
@@ -33,18 +41,18 @@ impl App {
             return;
         }
         let song = self.song_to_save();
-        if self.autosaved.as_ref() == Some(&song) {
+        if self.autosave.saved.as_ref() == Some(&song) {
             return;
         }
         match project::write_autosave(&folder, &song) {
-            Ok(()) => self.autosaved = Some(song),
+            Ok(()) => self.autosave.saved = Some(song),
             Err(error) => self.services.status = format!("Autosave failed: {error}"),
         }
     }
 
     /// Remove the autosave file, once the work in it is saved or was thrown away on purpose.
     pub(crate) fn forget_autosave(&mut self) {
-        self.autosaved = None;
+        self.autosave.saved = None;
         if let Some(folder) = &self.services.folder {
             project::remove_autosave(folder);
         }
@@ -88,7 +96,7 @@ impl App {
             Ok(song) => {
                 self.replace_song(song, Some(folder));
                 self.services.dirty = true;
-                self.autosaved = Some(Arc::clone(self.song()));
+                self.autosave.saved = Some(Arc::clone(self.song()));
                 // Restoring only puts the work back unsaved, so a read-only song's file is left as
                 // it is until it's written over on purpose (decision 313).
                 if self.services.status.is_empty() {

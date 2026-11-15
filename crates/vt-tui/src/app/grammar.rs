@@ -1,5 +1,6 @@
 //! Counts, registers, operators, Visual modes and repeat, on top of the binding table.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -18,10 +19,36 @@ use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::overlays::shape::ShapePanel;
 use crate::pages::phrase::PhraseView;
+use crate::pages::sample::marking::MarkWait;
 use crate::services::Services;
 
 /// The register that holds the last copy. A cut doesn't touch it.
 const YANK_REGISTER: char = '0';
+
+/// The grammar's state: the keys typed so far, the operator, count and register waiting for what
+/// follows, the registers, a replace under way, and the change `.` repeats.
+#[derive(Debug, Default)]
+pub struct Grammar {
+    pub(crate) pending: Vec<Key>,
+    pub(crate) pending_since: Option<Instant>,
+    pub(crate) operator: Option<Op>,
+    pub(crate) operator_count: Option<usize>,
+    pub(crate) register: Option<char>,
+    pub(crate) awaiting_register: bool,
+    /// Whether `'` or `m` on the sample page waits for a letter: of the slice to go to, or to
+    /// name the slice under the cursor with.
+    pub(crate) awaiting_mark: Option<MarkWait>,
+    pub(crate) registers: HashMap<char, Block>,
+    /// What the changes kept on the selection have moved its values by, for the status line.
+    pub(crate) adjustments: Adjustments,
+    /// The selection a replace across it comes back to, once its value is in or it's cancelled.
+    pub(crate) replace_returns_to: Option<SelectionPlace>,
+    /// The field a replace started on, since typing an FX command moves on to its value.
+    pub(crate) replacing: Option<Field>,
+    /// The selection a replace will fill, and the undo depth from before it started.
+    pub(crate) replacing_selection: Option<(Selection, usize)>,
+    pub(crate) last_change: Option<Change>,
+}
 
 /// What `.` repeats.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -244,7 +271,7 @@ impl App {
         self.modes
             .mode
             .is_visual()
-            .then(|| self.adjustments.total())
+            .then(|| self.grammar.adjustments.total())
             .flatten()
     }
 
@@ -252,13 +279,13 @@ impl App {
     /// changes add up to.
     fn adjusted(&mut self, before: &Arc<Song>, adjustment: Adjustment) {
         if !Arc::ptr_eq(before, self.song()) {
-            self.adjustments.record(adjustment);
+            self.grammar.adjustments.record(adjustment);
         }
         self.show_adjusted();
     }
 
     fn show_adjusted(&mut self) {
-        if let Some(total) = self.adjustments.total() {
+        if let Some(total) = self.grammar.adjustments.total() {
             self.services.status = total;
         }
     }
@@ -273,9 +300,9 @@ impl App {
     /// forward with the change.
     pub(crate) fn undid_while_selecting(&mut self, undo: bool) {
         if undo {
-            self.adjustments.undo();
+            self.grammar.adjustments.undo();
         } else {
-            self.adjustments.redo();
+            self.grammar.adjustments.redo();
         }
         self.show_adjusted();
     }
@@ -287,7 +314,7 @@ impl App {
             anchor: self.phrase_view.anchor,
             anchor_track: self.phrase_view.anchor_track,
             scope: self.phrase_view.scope,
-            adjustments: self.adjustments.clone(),
+            adjustments: self.grammar.adjustments.clone(),
         }
     }
 
@@ -297,13 +324,13 @@ impl App {
         self.phrase_view.anchor = place.anchor;
         self.phrase_view.anchor_track = place.anchor_track;
         self.phrase_view.scope = place.scope;
-        self.adjustments = place.adjustments;
+        self.grammar.adjustments = place.adjustments;
         self.services.clamp_cursor(self.modes.view);
     }
 
     /// Back to the selection a replace across it started from, as `Esc` cancelled it.
     pub(crate) fn cancel_selection_replace(&mut self) {
-        if let Some(place) = self.replace_returns_to.take() {
+        if let Some(place) = self.grammar.replace_returns_to.take() {
             self.return_to(place);
         }
     }
@@ -323,7 +350,7 @@ impl App {
                 {
                     self.services.status.clear();
                 }
-                self.adjustments = Adjustments::default();
+                self.grammar.adjustments = Adjustments::default();
             }
             if self.modes.mode.is_visual() || self.modes.mode == Mode::OperatorPending {
                 self.modes.mode = Mode::Normal;
@@ -340,28 +367,28 @@ impl App {
             }
             return;
         }
-        if let Some(wait) = self.awaiting_mark.take() {
+        if let Some(wait) = self.grammar.awaiting_mark.take() {
             self.mark_key(wait, key);
             return;
         }
-        if self.awaiting_register {
-            self.awaiting_register = false;
+        if self.grammar.awaiting_register {
+            self.grammar.awaiting_register = false;
             if let KeyCode::Char(c) = key.code
                 && (c.is_ascii_lowercase() || c == YANK_REGISTER)
             {
-                self.register = Some(c);
+                self.grammar.register = Some(c);
             } else {
                 self.services.status = "Registers are a to z, and 0 for the last copy".to_owned();
             }
             return;
         }
-        if self.pending.is_empty()
+        if self.grammar.pending.is_empty()
             && let KeyCode::Char(c) = key.code
             && !key.ctrl
             && !key.alt
         {
             if c == '"' {
-                self.awaiting_register = true;
+                self.grammar.awaiting_register = true;
                 return;
             }
             if let Some(digit) = c.to_digit(10)
@@ -372,14 +399,14 @@ impl App {
                 return;
             }
         }
-        if self.pending.is_empty() {
-            self.pending_since = Some(now);
+        if self.grammar.pending.is_empty() {
+            self.grammar.pending_since = Some(now);
         }
-        self.pending.push(key);
-        match self.table.resolve(self.key_scope(), &self.pending) {
+        self.grammar.pending.push(key);
+        match self.table.resolve(self.key_scope(), &self.grammar.pending) {
             Resolved::Prefix => {}
             Resolved::Unbound => {
-                let keys: Vec<String> = self.pending.iter().map(Key::to_string).collect();
+                let keys: Vec<String> = self.grammar.pending.iter().map(Key::to_string).collect();
                 self.services.status = format!("{} isn't bound here", keys.join(" "));
                 self.reset_pending();
                 if self.modes.mode == Mode::OperatorPending {
@@ -387,8 +414,8 @@ impl App {
                 }
             }
             Resolved::Command(cmd) => {
-                self.pending.clear();
-                self.pending_since = None;
+                self.grammar.pending.clear();
+                self.grammar.pending_since = None;
                 self.services.status.clear();
                 self.run(cmd);
             }
@@ -396,13 +423,13 @@ impl App {
     }
 
     pub(crate) fn reset_pending(&mut self) {
-        self.pending.clear();
-        self.pending_since = None;
+        self.grammar.pending.clear();
+        self.grammar.pending_since = None;
         self.modes.count = None;
-        self.operator = None;
-        self.register = None;
-        self.awaiting_register = false;
-        self.awaiting_mark = None;
+        self.grammar.operator = None;
+        self.grammar.register = None;
+        self.grammar.awaiting_register = false;
+        self.grammar.awaiting_mark = None;
     }
 
     /// Run a resolved command that belongs to the grammar. Returns false if it isn't one.
@@ -417,19 +444,19 @@ impl App {
             Cmd::On(target) => self.target(target),
             Cmd::ClearField => {
                 self.do_change(&Change::ClearField);
-                self.last_change = Some(Change::ClearField);
+                self.grammar.last_change = Some(Change::ClearField);
                 self.modes.count = None;
             }
             Cmd::CycleMark => self.cycle_mark_key(),
             Cmd::Paste | Cmd::PasteAfter | Cmd::PasteMerge => {
                 let change = Change::Paste {
-                    register: self.register,
+                    register: self.grammar.register,
                     times: self.take_count().unwrap_or(1).max(1),
                     merge: cmd == Cmd::PasteMerge,
                     advance: cmd == Cmd::PasteAfter,
                 };
                 self.do_change(&change);
-                self.last_change = Some(change);
+                self.grammar.last_change = Some(change);
                 self.reset_pending();
             }
             Cmd::Increase => self.increment(1, Shift::Increment),
@@ -449,7 +476,7 @@ impl App {
 
     fn take_count(&mut self) -> Option<usize> {
         let count = self.modes.count.take();
-        match (self.operator_count.take(), count) {
+        match (self.grammar.operator_count.take(), count) {
             (Some(a), Some(b)) => Some(a.saturating_mul(b)),
             (a, b) => a.or(b),
         }
@@ -471,7 +498,7 @@ impl App {
             self.modes.count = None;
             let before = Arc::clone(self.song());
             self.apply_operator(op, selection.range, selection.scope, selection.tracks);
-            self.last_change = Some(Change::Operator {
+            self.grammar.last_change = Some(Change::Operator {
                 op,
                 cover: Cover::Sized {
                     steps: selection.range.len(),
@@ -491,8 +518,8 @@ impl App {
             }
             return;
         }
-        self.operator = Some(op);
-        self.operator_count = self.modes.count.take();
+        self.grammar.operator = Some(op);
+        self.grammar.operator_count = self.modes.count.take();
         self.modes.mode = Mode::OperatorPending;
     }
 
@@ -568,17 +595,17 @@ impl App {
     }
 
     fn finish_operator(&mut self, cover: Cover) {
-        let Some(op) = self.operator.take() else {
+        let Some(op) = self.grammar.operator.take() else {
             return;
         };
         self.modes.mode = Mode::Normal;
         self.modes.count = None;
-        self.operator_count = None;
+        self.grammar.operator_count = None;
         let (range, scope) = self.resolve_cover(cover);
         self.apply_operator(op, range, scope, self.span_of(cover));
-        self.register = None;
+        self.grammar.register = None;
         if op != Op::Copy {
-            self.last_change = Some(Change::Operator { op, cover });
+            self.grammar.last_change = Some(Change::Operator { op, cover });
         }
     }
 
@@ -657,7 +684,7 @@ impl App {
                 });
             }
         }
-        self.register = None;
+        self.grammar.register = None;
     }
 
     /// Fill the unnamed register, and a named one if chosen. Only a copy reaches register `0`, so
@@ -678,13 +705,13 @@ impl App {
             steps,
             other_tracks: copied,
         };
-        if let Some(name) = self.register.filter(|name| *name != YANK_REGISTER) {
-            self.registers.insert(name, block.clone());
+        if let Some(name) = self.grammar.register.filter(|name| *name != YANK_REGISTER) {
+            self.grammar.registers.insert(name, block.clone());
         }
         if copying {
-            self.registers.insert(YANK_REGISTER, block.clone());
+            self.grammar.registers.insert(YANK_REGISTER, block.clone());
         }
-        self.registers.insert('"', block);
+        self.grammar.registers.insert('"', block);
     }
 
     fn cycle_mark_key(&mut self) {
@@ -692,7 +719,7 @@ impl App {
         if self.modes.mode.is_visual() {
             let selection = self.current_selection();
             self.cycle_mark(selection.range, selection.scope, selection.tracks);
-            self.last_change = Some(Change::CycleMark {
+            self.grammar.last_change = Some(Change::CycleMark {
                 cover: Cover::Sized {
                     steps: selection.range.len(),
                     scope: selection.scope,
@@ -706,7 +733,7 @@ impl App {
             cover: Cover::Cursor,
         };
         self.do_change(&change);
-        self.last_change = Some(change);
+        self.grammar.last_change = Some(change);
     }
 
     /// Move every value covered to the mark after the first one's, so a mix ends up the same.
@@ -752,7 +779,7 @@ impl App {
             let selection = self.current_selection();
             let before = Arc::clone(self.song());
             self.apply_increment(by, selection.range, selection.scope, selection.tracks, kind);
-            self.last_change = Some(Change::Increment {
+            self.grammar.last_change = Some(Change::Increment {
                 by,
                 cover: Cover::Sized {
                     steps: selection.range.len(),
@@ -771,7 +798,7 @@ impl App {
             kind,
         };
         self.do_change(&change);
-        self.last_change = Some(change);
+        self.grammar.last_change = Some(change);
     }
 
     /// Wait for what replaces the field under the cursor, as Vim's `r` does: no move, and back
@@ -803,7 +830,7 @@ impl App {
             return;
         }
         self.modes.entry = Entry::default();
-        self.replacing = Some(self.services.cursor.field);
+        self.grammar.replacing = Some(self.services.cursor.field);
         self.modes.mode = Mode::Replace;
     }
 
@@ -843,12 +870,12 @@ impl App {
         // Once the value is in, or `Esc` cancels it, the selection comes back, for another.
         let place = self.selection_place();
         self.leave_visual(selection);
-        self.replace_returns_to = Some(place);
+        self.grammar.replace_returns_to = Some(place);
         self.services.cursor.step = first;
         self.services.cursor.field = field;
         self.modes.entry = Entry::default();
-        self.replacing = Some(field);
-        self.replacing_selection = Some((selection, self.services.history.undo_depth()));
+        self.grammar.replacing = Some(field);
+        self.grammar.replacing_selection = Some((selection, self.services.history.undo_depth()));
         self.modes.mode = Mode::Replace;
     }
 
@@ -879,7 +906,7 @@ impl App {
     /// Back to where the replace started, and remember it for `.`.
     pub(crate) fn finish_replace(&mut self) {
         self.modes.mode = Mode::Normal;
-        let Some(field) = self.replacing.take() else {
+        let Some(field) = self.grammar.replacing.take() else {
             return;
         };
         self.services.cursor.field = field;
@@ -892,17 +919,17 @@ impl App {
             return;
         };
         let mut steps = 1;
-        if let Some((selection, depth)) = self.replacing_selection.take() {
+        if let Some((selection, depth)) = self.grammar.replacing_selection.take() {
             self.fill(selection.range, selection.tracks, field, &value);
             self.services.history.squash_to(depth);
             self.services.cursor.step = selection.range.first;
             steps = selection.range.len();
-            if let Some(place) = self.replace_returns_to.take() {
+            if let Some(place) = self.grammar.replace_returns_to.take() {
                 self.return_to(place);
-                self.adjustments.record(Adjustment::Filled);
+                self.grammar.adjustments.record(Adjustment::Filled);
             }
         }
-        self.last_change = Some(Change::Replace {
+        self.grammar.last_change = Some(Change::Replace {
             field,
             value: Box::new(value),
             steps,
@@ -1106,7 +1133,7 @@ impl App {
                 advance,
             } => {
                 let name = register.unwrap_or('"');
-                let Some(block) = self.registers.get(&name).cloned() else {
+                let Some(block) = self.grammar.registers.get(&name).cloned() else {
                     self.services.status = format!("Nothing in register {name}");
                     return;
                 };
@@ -1166,7 +1193,7 @@ impl App {
 
     /// `.`: repeat the last change, on the selection in Visual modes.
     fn repeat(&mut self) {
-        let Some(change) = self.last_change.clone() else {
+        let Some(change) = self.grammar.last_change.clone() else {
             self.services.status = "Nothing to repeat".to_owned();
             return;
         };
@@ -1235,7 +1262,7 @@ impl App {
         self.phrase_view.anchor = Some((self.services.cursor.step, scope));
         self.phrase_view.anchor_track = Some(self.services.cursor.track);
         self.phrase_view.scope = None;
-        self.adjustments = Adjustments::default();
+        self.grammar.adjustments = Adjustments::default();
         self.modes.mode = mode;
         self.modes.count = None;
     }
@@ -1253,7 +1280,7 @@ impl App {
 
     /// Remember a kept shape for `.`.
     pub(crate) fn remember_shape(&mut self, panel: &ShapePanel) {
-        self.last_change = Some(Change::Shape {
+        self.grammar.last_change = Some(Change::Shape {
             column: panel.column,
             shape: Box::new(panel.shape),
             steps: panel.selection.range.len(),
@@ -1263,7 +1290,7 @@ impl App {
 
     fn leave_visual(&mut self, selection: Selection) {
         self.phrase_view.last_selection = Some(selection);
-        self.adjustments = Adjustments::default();
+        self.grammar.adjustments = Adjustments::default();
         self.services.cursor.step = selection.range.first;
         self.modes.mode = Mode::Normal;
         self.phrase_view.anchor = None;
@@ -1282,7 +1309,7 @@ impl App {
         self.phrase_view.anchor = Some((selection.range.first, selection.scope));
         self.phrase_view.anchor_track = Some(selection.tracks.last);
         self.phrase_view.scope = Some(selection.scope);
-        self.adjustments = Adjustments::default();
+        self.grammar.adjustments = Adjustments::default();
         self.services
             .go_to_track_at(selection.tracks.first, self.modes.view);
         self.services.cursor.step = selection.range.last;

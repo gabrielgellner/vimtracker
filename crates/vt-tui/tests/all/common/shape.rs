@@ -10,7 +10,7 @@ use super::keys;
 
 /// The open shape panel drawn this wide and high, a line a row.
 pub fn shape_panel(app: &App, width: u16, height: u16) -> String {
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     let backend = ratatui::backend::TestBackend::new(width, height);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
@@ -41,7 +41,7 @@ pub fn rhythm(app: &App, track: usize) -> String {
 /// Down the open panel to a setting.
 pub fn down_to(app: &mut App, row: GenParam) {
     for _ in 0..GenParam::ALL.len() {
-        if app.shape.as_ref().unwrap().row == row {
+        if app.overlays.shape.as_ref().unwrap().row == row {
             return;
         }
         keys(app, "j");

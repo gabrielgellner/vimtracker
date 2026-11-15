@@ -772,12 +772,12 @@ fn a_compressors_type_shows_its_own_settings_and_console_and_glue_pick_their_swi
     // the type is the attack, and the ratio under the threshold.
     press(&mut app, "jhj");
     press(&mut app, "K");
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 3);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().shown().count(), 3);
     press(&mut app, "10:1");
     special(&mut app, KeyCode::Enter);
     assert_eq!(compressor(&app).console_ratio, 2);
     press(&mut app, "lK");
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 5);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().shown().count(), 5);
     press(&mut app, "0.3 s");
     special(&mut app, KeyCode::Enter);
     assert_eq!(compressor(&app).console_release, 1);
@@ -812,12 +812,12 @@ fn a_compressors_type_shows_its_own_settings_and_console_and_glue_pick_their_swi
     }
     // Its attack has seven places, from 0.01 ms, and its release seven, Auto last.
     press(&mut app, "jK");
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 7);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().shown().count(), 7);
     press(&mut app, "0.01 ms");
     special(&mut app, KeyCode::Enter);
     assert_eq!(compressor(&app).glue_attack, 0);
     press(&mut app, "jK");
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 7);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().shown().count(), 7);
     press(&mut app, "Auto");
     special(&mut app, KeyCode::Enter);
     assert_eq!(compressor(&app).glue_release, 6);
@@ -1304,7 +1304,7 @@ fn four_devices_fit_beside_the_main_meter_and_inside_the_keys_box_at_163x42() {
     press(&mut app, "ggj$j");
     assert_eq!(app.track_control(), Control::InsertParam(0, 10));
     press(&mut app, "K");
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 2);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().shown().count(), 2);
     press(&mut app, "On");
     special(&mut app, KeyCode::Enter);
     assert_eq!(compressor(&app).peak_clip, 1);

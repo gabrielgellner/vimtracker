@@ -230,7 +230,10 @@ fn an_effect_saved_from_one_slot_loads_into_another() {
     press(&mut app, "}}");
     command(&mut app, "preset");
     assert_eq!(app.modes.mode, Mode::Picker);
-    assert_eq!(app.picker.as_ref().unwrap().title, "Effect presets");
+    assert_eq!(
+        app.overlays.picker.as_ref().unwrap().title,
+        "Effect presets"
+    );
     let rows = explorer_rows(&app);
     assert!(rows.iter().any(|row| row.contains("Dub Delay")), "{rows:?}");
     let depth = app.services.history.undo_depth();
@@ -278,7 +281,7 @@ fn k_on_the_machine_lists_the_presets_and_the_browser_loads_one() {
     app.services.cursor.track = 1;
     press(&mut app, " 5gg");
     press(&mut app, "K");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.title, "Machine");
     let labels: Vec<String> = picker.items().iter().map(listed).collect();
     assert!(
@@ -291,7 +294,7 @@ fn k_on_the_machine_lists_the_presets_and_the_browser_loads_one() {
     press(&mut app, "/load");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.mode, Mode::Picker, "{}", app.services.status);
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.title, "Sound presets");
     let rows = explorer_rows(&app);
     assert_eq!(
@@ -313,7 +316,7 @@ fn k_on_the_machine_lists_the_presets_and_the_browser_loads_one() {
     press(&mut app, "/save");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.mode, Mode::Command);
-    assert_eq!(app.command_line, "preset save ");
+    assert_eq!(app.overlays.command_line, "preset save ");
 }
 
 #[test]

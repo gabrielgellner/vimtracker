@@ -59,7 +59,7 @@ fn the_panel_writes_a_rings_rhythm_and_pitch_and_keeps_it_live() {
     let (mut app, _rt) = app_with(16);
     let depth = app.services.history.undo_depth();
     keys(&mut app, "vGSK/ring<Enter>");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.shape.kind, FillKind::Ring);
     {
         use GenParam::*;

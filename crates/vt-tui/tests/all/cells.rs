@@ -35,11 +35,11 @@ fn drawn(app: &App) -> String {
 /// one cell.
 fn cells_from_one(app: &mut App, select: &str, rule: u8) {
     keys(app, &format!("{select}S"));
-    while app.shape.as_ref().unwrap().row != GenParam::Where {
+    while app.overlays.shape.as_ref().unwrap().row != GenParam::Where {
         keys(app, "j");
     }
     keys(app, "K/cells<Enter>j");
-    assert_eq!(app.shape.as_ref().unwrap().row, GenParam::Rule);
+    assert_eq!(app.overlays.shape.as_ref().unwrap().row, GenParam::Rule);
     keys(app, &format!("i{rule}<Enter>jK/one<Enter>"));
 }
 
@@ -47,7 +47,7 @@ fn cells_from_one(app: &mut App, select: &str, rule: u8) {
 fn on_one_column_each_row_is_a_cell() {
     let (mut app, _rt) = app_with(1);
     cells_from_one(&mut app, "vG", 90);
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     let Where::Cells(cells) = panel.shape.place else {
         panic!("{:?}", panel.shape.place);
     };
@@ -137,7 +137,7 @@ fn across_tracks_each_is_a_cell_of_one_automaton() {
     // Reopened on one, it has its rule and no start, as theirs is worked out for all five.
     keys(&mut app, "gg");
     keys(&mut app, "gl");
-    let panel = app.shape.clone().expect("gl opens the panel");
+    let panel = app.overlays.shape.clone().expect("gl opens the panel");
     assert!(panel.rows().contains(&GenParam::Rule));
     assert!(!panel.rows().contains(&GenParam::CellStart));
 }

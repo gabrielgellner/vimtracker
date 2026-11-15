@@ -109,7 +109,7 @@ fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
     };
     command(&mut app, "kit");
     assert_eq!(app.modes.mode, Mode::Picker);
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.title, "Kits");
     assert!(picker.hint.unwrap().contains("L on tracks"));
     assert_eq!(
@@ -118,7 +118,7 @@ fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
     );
     // The kit under the cursor is shown beside the list, each sound with its waveform.
     press(&mut app, "jj");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     let shown = picker.preview.as_deref().unwrap();
     assert_eq!(shown.heading, "909");
     assert_eq!(shown.note, "3 sounds");
@@ -128,7 +128,7 @@ fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
 
     // Into the folders, and the preview follows.
     press(&mut app, "kkll");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.current().unwrap().label, "808 Core Kit");
     let shown = picker.preview.as_deref().unwrap();
     assert_eq!(shown.heading, "808 Core Kit");
@@ -139,7 +139,7 @@ fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
     let depth = app.services.history.undo_depth();
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.mode, Mode::Normal);
-    assert_eq!(app.kit.len(), 2);
+    assert_eq!(app.explorer.kit.len(), 2);
     assert_eq!(app.services.history.undo_depth(), depth);
     assert!(
         app.services
@@ -149,7 +149,8 @@ fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
         app.services.status
     );
     assert_eq!(
-        app.recent_places
+        app.explorer
+            .recent_places
             .of(vt_tui::overlays::picker::explorer::Purpose::Kit),
         [root.join("Ableton/Drum Machines")],
         "its folder is a recent place"
@@ -158,7 +159,7 @@ fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
     // It opens on the kit in use, with its folder at the top as a recent place, and L puts its
     // sounds on tracks, as one undo step.
     command(&mut app, "kit");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(
         picker.current().unwrap().label,
         "808 Core Kit",
@@ -191,7 +192,7 @@ fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
     let mut sent = Vec::new();
     let mut graphics = vt_tui::graphics::Graphics::new();
     app.send_pictures(&mut graphics, &mut sent).unwrap();
-    let mut picker = app.picker.clone().unwrap();
+    let mut picker = app.overlays.picker.clone().unwrap();
     assert_eq!(picker.preview_images.len(), 3);
     assert!(picker.preview_images.iter().all(Option::is_some));
     let backend = ratatui::backend::TestBackend::new(120, 24);
@@ -249,7 +250,7 @@ fn sample_explores_the_sample_folders_and_opens_on_the_tracks_own() {
     special(&mut app, KeyCode::Enter);
     assert!(sample_of(&app, 0).unwrap().ends_with("kicks/short.wav"));
     command(&mut app, "sample");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(
         picker.current().unwrap().label,
         "short.wav",
@@ -349,7 +350,13 @@ fn the_sample_explorer_opens_a_kit_like_a_folder_and_plays_and_chooses_its_sound
     // Down to a kit, by its name, and into it.
     press(&mut app, "ll");
     assert_eq!(
-        app.picker.as_ref().unwrap().current().unwrap().label,
+        app.overlays
+            .picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .unwrap()
+            .label,
         "808 Core Kit"
     );
     press(&mut app, "l");
@@ -357,26 +364,43 @@ fn the_sample_explorer_opens_a_kit_like_a_folder_and_plays_and_chooses_its_sound
         explorer_rows(&app)[3..6],
         ["      v 808 Core Kit", "          BD", "          SD"]
     );
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     let bd = picker.current().unwrap();
     assert_eq!((bd.label.as_str(), bd.meaning.as_str()), ("BD", "Kick 808"));
 
     // It plays as the cursor moves onto it, with its waveform beside the list.
     app.finish_loading();
     assert!(
-        app.file_playing
+        app.explorer
+            .file_playing
             .as_ref()
             .is_some_and(|path| path.ends_with("drums/kick.wav")),
         "{:?}",
-        app.file_playing
+        app.explorer.file_playing
     );
-    let shown = app.picker.as_ref().unwrap().preview.clone().unwrap();
+    let shown = app
+        .overlays
+        .picker
+        .as_ref()
+        .unwrap()
+        .preview
+        .clone()
+        .unwrap();
     assert_eq!(shown.heading, "kick.wav");
     assert!(shown.wave.is_some());
 
     // Hidden files shown keep the kit open and the cursor on its sound.
     press(&mut app, "jH");
-    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "SD");
+    assert_eq!(
+        app.overlays
+            .picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .unwrap()
+            .label,
+        "SD"
+    );
     press(&mut app, "H");
 
     // Choosing it is choosing from the kit in use: its label names the track.
@@ -415,7 +439,7 @@ fn a_kit_sound_opens_to_its_variants_and_layers_and_a_missing_one_says_so() {
     );
     // l opens it: its own file, then its variants, then its layers from the softest.
     press(&mut app, "l");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     let files: Vec<String> = picker
         .rows()
         .iter()
@@ -449,7 +473,16 @@ fn a_kit_sound_opens_to_its_variants_and_layers_and_a_missing_one_says_so() {
     // Enter on the sound itself chooses its own file, where l opens it.
     command(&mut app, "sample");
     press(&mut app, "jjl");
-    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "BD");
+    assert_eq!(
+        app.overlays
+            .picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .unwrap()
+            .label,
+        "BD"
+    );
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.mode, Mode::Normal);
     assert!(sample_of(&app, 0).unwrap().ends_with("drums/kick.wav"));
@@ -458,9 +491,25 @@ fn a_kit_sound_opens_to_its_variants_and_layers_and_a_missing_one_says_so() {
     // A sound whose file has gone is listed, and says why as a missing file does.
     command(&mut app, "sample");
     press(&mut app, "jjlj");
-    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "GH");
+    assert_eq!(
+        app.overlays
+            .picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .unwrap()
+            .label,
+        "GH"
+    );
     app.finish_loading();
-    let shown = app.picker.as_ref().unwrap().preview.clone().unwrap();
+    let shown = app
+        .overlays
+        .picker
+        .as_ref()
+        .unwrap()
+        .preview
+        .clone()
+        .unwrap();
     assert_eq!(shown.heading, "gone.wav");
     assert!(shown.note.contains("gone.wav"), "{}", shown.note);
     special(&mut app, KeyCode::Enter);
@@ -475,7 +524,7 @@ fn a_kit_sound_opens_to_its_variants_and_layers_and_a_missing_one_says_so() {
 /// The icon of the first row shown with this name.
 fn icon_of(app: &App, label: &str) -> vt_tui::overlays::picker::explorer::Icon {
     use vt_tui::overlays::picker::Row;
-    let picker = app.picker.as_ref().expect("the explorer is open");
+    let picker = app.overlays.picker.as_ref().expect("the explorer is open");
     picker
         .rows()
         .iter()
@@ -490,7 +539,7 @@ fn icon_of(app: &App, label: &str) -> vt_tui::overlays::picker::explorer::Icon {
 fn glyph_colour(app: &App, glyph: char) -> Option<Color> {
     let backend = ratatui::backend::TestBackend::new(163, 42);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
-    let mut picker = app.picker.clone().unwrap();
+    let mut picker = app.overlays.picker.clone().unwrap();
     terminal
         .draw(|frame| vt_tui::overlays::picker::draw::draw(frame, frame.area(), &mut picker))
         .unwrap();
@@ -587,7 +636,13 @@ fn the_explorer_shows_what_each_row_is_with_an_icon() {
     // A file that won't read is warned of once the explorer has tried it.
     press(&mut app, "kk");
     assert_eq!(
-        app.picker.as_ref().unwrap().current().unwrap().label,
+        app.overlays
+            .picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .unwrap()
+            .label,
         "broken.wav"
     );
     app.finish_loading();
@@ -618,7 +673,7 @@ fn the_sample_explorer_lists_the_kits_and_the_library_and_no_other_ron_files() {
         samples: Vec::new(),
         presets: String::new(),
     };
-    app.library = Some(library.clone());
+    app.explorer.library = Some(library.clone());
     command(&mut app, "sample");
     let meanings: Vec<String> = explorer_roots(&app)
         .into_iter()
@@ -667,16 +722,23 @@ fn a_samples_preview_is_read_in_the_background_with_its_waveform_length_and_rate
     let library = sample_library(&mut app);
     command(&mut app, "sample");
     press(&mut app, "l");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.current().unwrap().label, "break.wav");
     let shown = picker.preview.as_deref().unwrap();
     assert_eq!(shown.heading, "break.wav");
-    if app.loader.is_waiting() {
+    if app.explorer.loader.is_waiting() {
         assert_eq!(shown.note, "Loading", "a placeholder until it's read");
         assert_eq!(shown.wave, None);
     }
     app.finish_loading();
-    let shown = app.picker.as_ref().unwrap().preview.clone().unwrap();
+    let shown = app
+        .overlays
+        .picker
+        .as_ref()
+        .unwrap()
+        .preview
+        .clone()
+        .unwrap();
     assert_eq!(shown.note, "2.50 s  44.1 kHz  stereo");
     assert!(shown.wave.is_some());
 
@@ -686,7 +748,7 @@ fn a_samples_preview_is_read_in_the_background_with_its_waveform_length_and_rate
     app.send_pictures(&mut graphics, &mut sent).unwrap();
     let sent = String::from_utf8_lossy(&sent);
     assert_eq!(sent.matches("c=28,r=4").count(), 1, "28 by 4");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert!(picker.preview_wave.is_some());
     let text = picker_text(&app, 120, 26);
     assert!(text.contains("│ 2.50 s  44.1 kHz  stereo"), "{text}");
@@ -699,7 +761,8 @@ fn a_samples_preview_is_read_in_the_background_with_its_waveform_length_and_rate
     // Moving away and back finds it kept, with nothing to wait for.
     press(&mut app, "jk");
     assert_eq!(
-        app.picker
+        app.overlays
+            .picker
             .as_ref()
             .unwrap()
             .preview
@@ -710,11 +773,11 @@ fn a_samples_preview_is_read_in_the_background_with_its_waveform_length_and_rate
     );
     // P hides the preview, and shows it again.
     press(&mut app, "P");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert!(!picker.has_previews());
     assert!(picker.preview.is_none());
     press(&mut app, "P");
-    assert!(app.picker.as_ref().unwrap().preview.is_some());
+    assert!(app.overlays.picker.as_ref().unwrap().preview.is_some());
     std::fs::remove_dir_all(&library).unwrap();
 }
 
@@ -745,7 +808,7 @@ fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
     let switch_colour = |app: &App, glyph: char, after: &str| {
         let backend = ratatui::backend::TestBackend::new(163, 42);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
-        let mut picker = app.picker.clone().unwrap();
+        let mut picker = app.overlays.picker.clone().unwrap();
         terminal
             .draw(|frame| vt_tui::overlays::picker::draw::draw(frame, frame.area(), &mut picker))
             .unwrap();
@@ -833,10 +896,13 @@ fn moving_onto_a_sample_plays_it_on_the_track_until_the_cursor_moves_off() {
         out[out.len() - 2].abs()
     };
     command(&mut app, "sample");
-    assert_eq!(app.file_wanted, None, "a folder plays nothing");
+    assert_eq!(app.explorer.file_wanted, None, "a folder plays nothing");
     press(&mut app, "l");
     app.finish_loading();
-    assert_eq!(app.file_playing, Some(library.join("loops/break.wav")));
+    assert_eq!(
+        app.explorer.file_playing,
+        Some(library.join("loops/break.wav"))
+    );
     assert!(heard(&mut realtime, &mut app) > 0.01, "it plays");
     assert_eq!(realtime.engine().previews_sounding(), 1);
     assert!(sample_of(&app, 0).is_none(), "and isn't put on the track");
@@ -844,25 +910,31 @@ fn moving_onto_a_sample_plays_it_on_the_track_until_the_cursor_moves_off() {
     // The next one takes over.
     press(&mut app, "j");
     app.finish_loading();
-    assert_eq!(app.file_playing, Some(library.join("loops/fill.wav")));
+    assert_eq!(
+        app.explorer.file_playing,
+        Some(library.join("loops/fill.wav"))
+    );
     heard(&mut realtime, &mut app);
 
     // A turns it off, and stops what's playing.
     press(&mut app, "A");
-    assert_eq!(app.file_playing, None);
+    assert_eq!(app.explorer.file_playing, None);
     for _ in 0..8 {
         heard(&mut realtime, &mut app);
     }
     assert_eq!(realtime.engine().previews_sounding(), 0, "stopped");
     press(&mut app, "k");
-    assert_eq!(app.file_wanted, None, "nothing plays while it's off");
+    assert_eq!(
+        app.explorer.file_wanted, None,
+        "nothing plays while it's off"
+    );
     press(&mut app, "A");
     app.finish_loading();
-    assert!(app.file_playing.is_some(), "A turns it on again");
+    assert!(app.explorer.file_playing.is_some(), "A turns it on again");
 
     // Leaving the explorer stops it.
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.file_playing, None);
+    assert_eq!(app.explorer.file_playing, None);
     for _ in 0..8 {
         heard(&mut realtime, &mut app);
     }
@@ -873,7 +945,15 @@ fn moving_onto_a_sample_plays_it_on_the_track_until_the_cursor_moves_off() {
     special(&mut app, KeyCode::Esc);
     command(&mut app, "sample");
     press(&mut app, "l");
-    assert!(!app.picker.as_ref().unwrap().tree().unwrap().audition);
-    assert_eq!(app.file_wanted, None);
+    assert!(
+        !app.overlays
+            .picker
+            .as_ref()
+            .unwrap()
+            .tree()
+            .unwrap()
+            .audition
+    );
+    assert_eq!(app.explorer.file_wanted, None);
     std::fs::remove_dir_all(&library).unwrap();
 }
