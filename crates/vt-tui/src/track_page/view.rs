@@ -483,12 +483,11 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
         fine: control.fine_on(track).map(|id| track.fine(id)),
         units: view
             .units
-            .or_else(|| registry(control, track).map(|(id, _)| units(id))),
+            .or_else(|| registry(control, track).and_then(|(id, _)| units(id))),
         engaged: view.engaged && !at_default(control, track) && !untuned(song, track, control),
         ..view
     };
-    // A switch that's off or on, whatever it's built from, and the registry's settings in their
-    // units.
+    // A switch that's off or on, whatever it's built from.
     let view = match toggle_on(control, track, song) {
         Some(on) => ParamView {
             toggle: true,
@@ -497,6 +496,7 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
         },
         None => view,
     };
+    // The registry's settings say their values in their units.
     Some(match (view.text.is_empty(), registry(control, track)) {
         (true, Some((id, value))) => view.text(id.entry().kind.shown(value)),
         _ => view,
@@ -511,11 +511,11 @@ fn registry(control: Control, track: &Track) -> Option<(SettingId, u16)> {
         .filter(|(id, _)| id.exists_on(track))
 }
 
-/// A registry setting's units, if it reads in any.
-fn units(id: SettingId) -> Units {
+/// A registry setting's units, if it reads in any rather than by a list's names.
+fn units(id: SettingId) -> Option<Units> {
     match id.entry().kind {
-        Kind::Continuous { units, .. } => units,
-        Kind::Stepped { .. } => Units::Percent,
+        Kind::Continuous { units, .. } => Some(units),
+        Kind::Stepped { .. } => None,
     }
 }
 

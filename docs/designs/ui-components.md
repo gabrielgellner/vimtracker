@@ -558,6 +558,19 @@ The value scale is `ParamView`'s `value: i32` within `bounds`, plus `fine: Optio
 0..255 position is worked out from those once, in the widget. The live report's `u8`s
 (`LiveValues`) feed `heard` on that same scale.
 
+**As U7 built it** (`track_page/view.rs`). The four gaps are closed as `cell: String` beside
+`text`, `nudge` and `jump` as `Steps { up, down }`, `numbered: bool`, and `set(control, at,
+track, song, value, fine) -> Option<Action>`. Three things differ from the sketch:
+- `label` is the cell's name (`Cow<'static, str>`, as a macro's is the name it was given), not
+  the registry's lockable label.
+- The bar's place is `bar: Option<u8>`, resolved in `view`, because the level-scale settings'
+  bounds stop at their top while their bars run to `FF`, and a list of a machine's has bounds
+  but no bar.
+- `view` takes the scale lock as a fourth argument, which an accumulator's limits are counted
+  in, so it lives in vt-tui; `Ctx::param_view` passes the program's.
+
+A macro's cell shows where it's heard, from the report, so that one text stays the page's.
+
 ### 3.2 `ParamCell`: one widget, five faces
 
 A cell is a name, a value and a bar, as `SettingsGrid::render` lays them out (`grid.rs:119-163`).
