@@ -13,6 +13,7 @@ use vt_model::song::{Machine, Song, SynthVoice};
 use vt_model::step::Note;
 use vt_tui::app::App;
 use vt_tui::input::mode::Mode;
+use vt_tui::input::mode::View;
 
 use crate::common::*;
 
@@ -78,7 +79,7 @@ fn the_audio_page_shows_what_plays_and_when_it_stops() {
         let backend = ratatui::backend::TestBackend::new(90, 12);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::audio::draw(frame, frame.area(), app))
+            .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Audio))
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         (0..12)

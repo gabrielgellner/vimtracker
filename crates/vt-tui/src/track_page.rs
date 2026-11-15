@@ -23,7 +23,7 @@ pub(crate) mod tuning;
 mod typing;
 pub(crate) mod view;
 
-pub use controls::{AccumulatorField, ArpField, Control, ModField};
+pub use controls::{AccumulatorField, ArpField, Control};
 pub use device::{
     DEVICE_COLUMNS, DEVICE_ROWS, DeviceCursor, DeviceSpec, DeviceWidth, RackPlace, rack_places,
 };
@@ -37,6 +37,7 @@ use std::sync::Arc;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use vt_model::insert::INSERTS;
+use vt_model::modulation::ModField;
 use vt_model::selection::Motion;
 use vt_model::song::Track;
 use vt_model::steps::STEPS;
@@ -146,7 +147,7 @@ fn place_in(rows: &[Vec<Option<Control>>], rack: bool, row: usize, field: usize)
 /// that track, or none, and the page holds no song of its own. It also keeps the ids of the
 /// terminal's images it shows and where it last drew those that carry a dot, the effect `dd`
 /// took, and the cursor's track's meters it shows, held as they fall. It's drawn with
-/// [`TrackPage::draw`], given the rest of the program as a [`Ctx`].
+/// its `Page::draw`, given the rest of the program as a [`Ctx`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct TrackPage {
     /// The page showing: Sound, Mod or FX.
@@ -700,11 +701,8 @@ impl crate::page::Page for TrackPage {
         self.key_on(cmd, count, track)
     }
 
-    /// Draw the page, giving back where the Mod page's LFO cycles and the Gen page's previews
-    /// are, for their dots. The drawing is `views::track`'s, the inherent `TrackPage::draw` this
-    /// names, as an inherent function comes before a trait's.
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) -> Drawn {
-        TrackPage::draw(self, frame, area, ctx)
+        crate::views::track::draw(frame, area, self, ctx)
     }
 
     fn panels(&self, ctx: &Ctx) -> Vec<PanelWant> {

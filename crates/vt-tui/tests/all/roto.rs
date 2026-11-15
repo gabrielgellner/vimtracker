@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use crate::common::{app, press, settle, tick_until, tick_until_app, values_shown};
 use vt_model::action::TrackControl;
 use vt_model::insert::Insert;
+use vt_model::modulation::ModField;
 use vt_model::settings::SettingId;
 use vt_model::song::{FilterType, Machine, Song, Track};
 use vt_roto::cc::ControlEvent;
@@ -20,7 +21,7 @@ use vt_tui::input::mode::View;
 use vt_tui::roto::devices::{Family, knob, live_devices, name, placement};
 use vt_tui::roto::edits::value_text;
 use vt_tui::roto::{Connection, RotoSetting};
-use vt_tui::track_page::{AccumulatorField, ArpField, Control, ModField, Page};
+use vt_tui::track_page::{AccumulatorField, ArpField, Control, Page};
 
 /// A song with a sound track of every machine, each with a different effect in its slots and a
 /// different filter, and its groups, returns and master, so every kind of device is in it.
@@ -422,7 +423,7 @@ fn the_audio_page_says_whether_the_roto_is_on_and_connected() {
         let backend = ratatui::backend::TestBackend::new(100, 14);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::audio::draw(frame, frame.area(), app))
+            .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Audio))
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         (0..buffer.area.height)

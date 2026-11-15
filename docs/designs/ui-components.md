@@ -46,10 +46,13 @@ Where it differs from the plan:
   services, the modes and a `PageState`, in #787.
 - The Roto's knob feel kept a match on each `Control` until #784's item 3 read it from the view,
   in #788.
+- Each view kept a `draw` taking `&App` for the tests, and the sample page settled on what it
+  shows while it was drawn, until #784's item 4 gave the tests `run::draw_view` and settled the
+  page after keys and each frame's work.
 - Pages still pass keys back to `App` only to reach the picker, the views and `:` lines (#784's
   item 2).
 
-What's left: U13, the module layout (#733), and #784's other items: 2, 4 and 9 to 13.
+What's left: U13, the module layout (#733), and #784's other items: 2 and 9 to 13.
 
 ---
 

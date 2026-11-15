@@ -28,7 +28,7 @@ use crate::input::bindings::Resolved;
 use crate::input::keys::{Key, parse};
 use crate::input::mode::{Mode, View};
 use crate::project_page::{BPM_NUDGE, FINE_NUDGE, ProjectControl};
-pub use crate::roto::GESTURE_PAUSE;
+use crate::roto::GESTURE_PAUSE;
 
 /// The setting's file, in the config folder beside `audio.ron`.
 pub const SETTING_FILE: &str = "wheel.ron";
@@ -512,7 +512,7 @@ impl App {
                     _ => None,
                 }
             }
-            (Mode::Project, _) if self.project_control() == ProjectControl::Bpm => {
+            (Mode::Project, _) if self.project_page.control(self.song()) == ProjectControl::Bpm => {
                 let most = (BPM_NUDGE / FINE_NUDGE) as u64;
                 if self.project_page.fine {
                     step(Finer::Already, 1, most)

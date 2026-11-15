@@ -3,7 +3,7 @@
 use ratatui::crossterm::event::KeyCode;
 
 use vt_model::lfo::{Fade, Lfo, Rate};
-use vt_model::modulation::{ModKind, ModSlot};
+use vt_model::modulation::{ModField, ModKind, ModSlot};
 use vt_model::shape::params::Typing;
 use vt_model::steps::{StepRate, Steps};
 
@@ -13,9 +13,9 @@ use crate::input::typed::{HEX, Rule, Typed};
 use crate::services::Services;
 use crate::views::widgets::param::edit;
 
+use super::Control;
 use super::editing::{set_fine_here, set_mod, view_on, write};
 use super::tuning::type_tuning;
-use super::{Control, ModField};
 
 /// The longest a generator's value can be typed: a list of eight notes and the spaces between.
 const GEN_TEXT: usize = 40;

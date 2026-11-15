@@ -239,7 +239,7 @@ fn tick_step(seconds_a_column: f64) -> (f64, usize) {
 
 /// Draw the sample page, as its `Page::draw`, once it's laid out for the room and settled on what
 /// it shows, giving back where its waveform is on screen, if it's drawn.
-pub(crate) fn draw_page(
+pub(crate) fn draw(
     frame: &mut Frame,
     area: Rect,
     state: &SamplePage,

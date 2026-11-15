@@ -18,7 +18,7 @@ use vt_model::insert::EffectKind;
 use vt_model::sample::SampleData;
 use vt_model::scale::Scale;
 
-use crate::dsp::memory::{Memory, MemoryCount};
+use crate::dsp::effects::memory::{Memory, MemoryCount};
 use crate::engine::{Engine, PLAYHEADS, Playhead, SectionLoop, TrackPlace, Transport};
 use crate::gens::GenReport;
 use crate::mixer::Reading;
@@ -671,7 +671,7 @@ mod tests {
     use vt_model::step::{Note, Step};
 
     use super::*;
-    use crate::dsp::memory::BUFFERED;
+    use crate::dsp::effects::memory::BUFFERED;
     use crate::recorder::RecordQuantise;
     use crate::rt_guard::forbidden;
 

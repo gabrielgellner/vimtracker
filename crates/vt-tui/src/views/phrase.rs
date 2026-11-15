@@ -10,13 +10,13 @@ use ratatui::widgets::Paragraph;
 use vt_model::constants::{BAR_STEPS, BEAT_STEPS, FX_SLOTS, TICKS_PER_STEP};
 use vt_model::generator::Span as GenSpan;
 use vt_model::label::GROUP_NAME_CHARS;
-use vt_model::selection::{Extent, Scope, StepRange};
+use vt_model::selection::{Extent, Field, Scope, StepRange};
 use vt_model::shape::{ShapeColumn, Source};
 use vt_model::song::{Phrase, Song, Track};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, GateKind, Mark, Note, Step, nudge_text};
 
-use crate::app::{App, Field, Selection, TrackSpan};
+use crate::app::{Selection, TrackSpan};
 use crate::folding::Order;
 use crate::glyphs;
 use crate::input::mode::Mode;
@@ -1551,13 +1551,8 @@ fn marked_text(
     shown
 }
 
-/// Draw the view, as the program has it.
-pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    draw_page(frame, area, &app.phrase_view, &app.ctx());
-}
-
 /// Draw the view in an area, as it's laid out and scrolled.
-pub(crate) fn draw_page(frame: &mut Frame, area: Rect, view: &PhraseView, ctx: &Ctx) {
+pub(crate) fn draw(frame: &mut Frame, area: Rect, view: &PhraseView, ctx: &Ctx) {
     let Some(phrase) = ctx.phrase_here() else {
         frame.render_widget(Paragraph::new("This track has no phrase here."), area);
         return;

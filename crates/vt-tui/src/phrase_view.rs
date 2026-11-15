@@ -582,6 +582,6 @@ impl Page for PhraseView {
 
     /// Draw the view.
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
-        crate::views::phrase::draw_page(frame, area, self, ctx);
+        crate::views::phrase::draw(frame, area, self, ctx);
     }
 }

@@ -45,7 +45,7 @@ impl App {
                 by,
             });
             self.keep_row(before);
-            self.clamp_cursor();
+            self.services.clamp_cursor(self.modes.view);
         }
     }
 
@@ -185,6 +185,7 @@ impl App {
         };
         let velocity = step.velocity.unwrap_or(MAX_VELOCITY);
         let transpose = self
+            .services
             .chain_entries()
             .get(self.services.cursor.slot)
             .map_or(0, |entry| entry.transpose);

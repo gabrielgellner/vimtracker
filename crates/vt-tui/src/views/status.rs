@@ -12,12 +12,13 @@ use vt_model::condition::Condition;
 use vt_model::constants::TICKS_PER_STEP;
 use vt_model::lfo::{Rate, note_rates};
 use vt_model::macros::{GenColumn, MacroTarget};
+use vt_model::selection::Field;
 use vt_model::settings::SettingId;
 use vt_model::song::Track;
 use vt_model::step::{FxCommand, Note};
 use vt_model::variation::{self, Varies};
 
-use crate::app::{App, Field};
+use crate::app::App;
 use crate::banking::sample_shown;
 use crate::chain_view::ChainColumn;
 use crate::glyphs;
@@ -74,7 +75,7 @@ pub fn column_name(app: &App) -> String {
             Some(setting) => format!("Sample: {}", setting.name()),
             None => "Sample".to_owned(),
         },
-        View::Project => app.project_control().label().to_owned(),
+        View::Project => app.project_page.control(app.song()).label().to_owned(),
         View::Phrase => match app.services.cursor.field {
             Field::Note => "Note".to_owned(),
             Field::Velocity => "Velocity".to_owned(),

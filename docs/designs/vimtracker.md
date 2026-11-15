@@ -284,8 +284,8 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     button's press back into the `Action` a key would give ([`roto-control.md`](roto-control.md)).
 *   **What the interface borrows from the engine.** Besides `Published` and the queues, `vt-tui`
     calls the engine's DSP to draw what a sound does: the track filter's response, a compressor's
-    static curve and an EQ's response come from `dsp::filter`, `dsp::compressor` and `dsp::eq`, so a
-    drawing is the sound's own maths. `dsp.rs` re-exports those at their old paths.
+    static curve and an EQ's response come from `dsp::filters::filter`, `dsp::dynamics::compressor`
+    and `dsp::dynamics::eq`, so a drawing is the sound's own maths.
 *   **A new setting needs no new interface.** Every setting a step can lock or a modulator can move
     is registered once, in `vt-model`'s `settings.rs`, with the key songs store it by, a name, a
     label for the grid, a kind and a default. The track page, `K`, the grid and the engine all read
@@ -736,9 +736,8 @@ implements `SlotEffect` (and `Rung`, if the slot plays it through `ring`) and ta
 of each family's checklist. A part that two folders
 would share, such as the antiderivative antialiasing, 4x oversampling and state variable filter of
 #260, goes in `blocks/`. A binary table sits in a `tables/` beside the modules that read it, so
-their `include_bytes!` paths stay short. `dsp.rs` re-exports the modules used outside `dsp` at their
-old paths, such as `dsp::filter` and `dsp::compressor`, so the rest of the engine and `vt-tui` name
-them as before.
+their `include_bytes!` paths stay short. The rest of the engine and `vt-tui` name each module by its
+folder, as `dsp::filters::filter` and `dsp::dynamics::compressor`.
 
 Where the unclear ones went: `comb`, `lpg` and `vowel` are slot effects, but filters by what they do,
 as Vital files its comb and formant filters. `resonator` is the `Reso` slot effect's code; the `Modal`
@@ -938,8 +937,8 @@ it, the view and the modes that span pages (the mode, what Insert has typed, a f
 and what the engine last reported (the transport, the live values, where each track is and what it's
 launched onto, the faders, the live generators). `App::ctx` lends one. `TrackPage::key`, its
 `Page::key`, puts the cursor where it's seen and runs one of its own keys, given a `CtxMut`, and
-`TrackPage::draw` draws the page (`views/track.rs` and `views/track/`), giving back where its
-pictures with dots are; `views::track::draw` draws the program's own from an `App`, as the tests do.
+its `Page::draw` draws the page (`views/track.rs` and `views/track/`), giving back where its
+pictures with dots are. `run::draw_view` draws any view's page from an `App`, as the tests do.
 `App::run_track_pages` (`page.rs`) hands each key to `TrackPage::key`, the page and the services
 borrowed apart, and what it passes back to `App::run_across_pages` (`track_page.rs`), which runs
 what spans the pages itself (`/`, `M`, `gm`, the Keys mode, the Gen page's keys, `K` and `i`), and
@@ -1121,7 +1120,7 @@ it reaches across tracks, the columns it keeps and the one `gv` brings back. Its
 `Services`, are the moves, the keys over the view (`H` `M` `L`, `C-d` `C-u`, `C-e` `C-y`),
 reaching another track from a selection, `zi` and `Space i`, and its binding rows sit beside it,
 the motions, targets and Visual's with its Normal ones. It's drawn through a `Ctx`
-(`views::phrase::draw_page`), a grid laid out once for the frame and drawn a line at a time. What
+(`views::phrase::draw`), a grid laid out once for the frame and drawn a line at a time. What
 it passes back stays `impl App`: the grammar's operators, the motion after one, the Visual modes
 that change the mode, the edits, registers and `.`, Insert's typing, the tree's keys, the loop's,
 recording and the pickers, which read the selection from it. The cursor it moves is the program's,

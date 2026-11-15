@@ -298,7 +298,7 @@ impl Page for SongView {
 
     /// Draw the view.
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
-        crate::views::song::draw_page(frame, area, self, ctx);
+        crate::views::song::draw(frame, area, self, ctx);
     }
 }
 
@@ -530,10 +530,10 @@ impl App {
         }
         self.services.cursor.track = track;
         self.services.cursor.slot = 0;
-        if self.chain_entries().len() > 1 {
+        if self.services.chain_entries().len() > 1 {
             self.modes.view = View::Chain;
             self.note_view(View::Chain);
-        } else if let Some(chain) = self.chain_id() {
+        } else if let Some(chain) = self.services.chain_id() {
             self.enter_row(chain, 0);
         }
     }

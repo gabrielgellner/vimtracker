@@ -10,11 +10,12 @@ use vt_model::bank::{BankEntry, MAX_SLICES, SliceParams};
 use vt_model::constants::BAR_STEPS;
 use vt_model::onsets::{MIN_GAP_SECONDS, MIN_SILENCE_SECONDS, after_silence, quiet_level};
 use vt_model::samples::Rates;
+use vt_model::selection::Field;
 use vt_model::settings::SettingId;
 use vt_model::song::Machine;
 use vt_model::step::{FxCommand, FxSlot, Mark, Step};
 
-use crate::app::{App, Field};
+use crate::app::App;
 use crate::banking::sample_text;
 use crate::input::command::{Address, SliceChange, SliceRange};
 use crate::input::mode::View;

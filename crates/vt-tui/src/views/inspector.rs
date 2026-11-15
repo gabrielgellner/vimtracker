@@ -7,9 +7,9 @@ use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
+use vt_model::selection::Field;
 use vt_model::step::{FxCommand, FxSlot, GateKind, Mark, Note, Step, nudge_text};
 
-use crate::app::Field;
 use crate::page::Ctx;
 use crate::theme;
 use crate::views::widgets::{self, bar::ValueBar, popup};

@@ -8,6 +8,7 @@ use vt_model::step::Note;
 use vt_tui::app::App;
 use vt_tui::input::keys::Key;
 use vt_tui::input::mode::Mode;
+use vt_tui::input::mode::View;
 
 use crate::common::*;
 
@@ -199,7 +200,7 @@ fn the_screen_shows_the_scale_and_notes_outside_it() {
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
             .draw(|frame| {
-                vt_tui::views::phrase::draw(frame, frame.area(), app);
+                vt_tui::run::draw_view(frame, frame.area(), app, View::Phrase);
             })
             .unwrap();
         terminal.backend().buffer().clone()

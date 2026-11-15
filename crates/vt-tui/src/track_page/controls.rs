@@ -4,7 +4,7 @@
 use vt_model::action::TrackControl;
 use vt_model::lfo::phase_value;
 use vt_model::macros::MACROS;
-pub use vt_model::modulation::ModField;
+use vt_model::modulation::ModField;
 use vt_model::modulation::depth_value;
 use vt_model::settings::SettingId;
 use vt_model::shape::GenParam;

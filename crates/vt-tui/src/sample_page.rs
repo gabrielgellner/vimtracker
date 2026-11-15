@@ -137,6 +137,9 @@ pub struct SamplePage {
     pub column: u64,
     /// How many columns the waveform has, as the page was last drawn.
     pub columns: usize,
+    /// How many frames long what the page last settled on is, so it settles again when it's laid
+    /// out for other room, or none while it shows nothing.
+    settled: Option<u64>,
     /// Whether the cursor is a thin line at its frame rather than its column's background.
     pub cursor_line: bool,
     /// Where the waveform was last drawn on screen, if it was.
@@ -189,6 +192,7 @@ impl Default for SamplePage {
             zoom: 1,
             column: 0,
             columns: DEFAULT_COLUMNS,
+            settled: None,
             cursor_line: true,
             on_screen: None,
             cell_width: None,
@@ -650,12 +654,20 @@ impl SamplePage {
             self.start_on(shown);
         }
         self.settle(shown.length());
+        self.settled = Some(shown.length());
     }
 
     /// Lay the page out for this much room, so the waveform has as many columns as it's drawn
-    /// with.
+    /// with, and what it shows settles inside them.
     pub fn lay_out(&mut self, area: Rect) {
-        self.columns = wave_columns(page_size(area).0);
+        let columns = wave_columns(page_size(area).0);
+        if columns == self.columns {
+            return;
+        }
+        self.columns = columns;
+        if let Some(length) = self.settled {
+            self.settle(length);
+        }
     }
 
     /// The ids of the waveform's picture and the overview's, while the terminal has both.
@@ -1292,7 +1304,7 @@ impl Page for SamplePage {
     /// Draw the page, giving back where its waveform is on screen, if it's drawn, for the lines
     /// and marks the terminal places over it.
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) -> Option<WaveOnScreen> {
-        crate::views::sample::draw_page(frame, area, self, ctx)
+        crate::views::sample::draw(frame, area, self, ctx)
     }
 
     /// The waveform and the overview of the whole sample under it, as the view and the points
@@ -1400,9 +1412,21 @@ impl App {
     /// Bring the page up to date with the sample the cursor's track plays, starting afresh if
     /// it's another, and say what it shows.
     pub fn sample_page_here(&mut self) -> Result<Shown, String> {
-        let shown = self.sample_shown()?;
-        self.sample_page.settle_on(&shown);
-        Ok(shown)
+        let shown = self.sample_shown();
+        match &shown {
+            Ok(shown) => self.sample_page.settle_on(shown),
+            Err(_) => self.sample_page.settled = None,
+        }
+        shown
+    }
+
+    /// Bring the sample page up to date with what it shows, while it's the view, after a key or
+    /// a frame's work may have changed that: another track, another sample or a recording that
+    /// has ended. So drawing it and sending its pictures change nothing.
+    pub(crate) fn settle_sample_page(&mut self) {
+        if self.modes.view == View::Sample {
+            let _ = self.sample_page_here();
+        }
     }
 
     /// Run a key the sample page passed back, on what it shows: `;` and `Space c`, which play

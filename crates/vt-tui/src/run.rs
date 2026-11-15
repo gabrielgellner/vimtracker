@@ -12,7 +12,7 @@ use ratatui::crossterm::event::{
 };
 use ratatui::crossterm::terminal::SetTitle;
 use ratatui::crossterm::{execute, terminal};
-use ratatui::layout::{Constraint, Layout, Margin};
+use ratatui::layout::{Constraint, Layout, Margin, Rect};
 use ratatui::widgets::Block;
 use thiserror::Error;
 use vt_engine::engine::{Engine, Transport};
@@ -37,6 +37,7 @@ use crate::page::Page;
 use crate::places::RecentPlaces;
 use crate::theme;
 use crate::views;
+use crate::views::sample::WaveOnScreen;
 use crate::wheel;
 
 /// Why the program stopped with an error.
@@ -601,7 +602,6 @@ impl App {
         if self.modes.view == View::Sample {
             // So `h` and `l` move the cursor's line by a pixel of these.
             self.sample_page.cell_width = Some(graphics.cell().0);
-            let _ = self.sample_page_here();
             let wants = self.sample_page.panels(&self.ctx());
             let ids = graphics.sample_panels(&wants, rate, out)?;
             self.sample_page.take_panels(ids, &wants, rate);
@@ -681,24 +681,17 @@ pub fn draw_screen(
     // place.
     app.track_page.lfo_cycles_at = Default::default();
     app.track_page.gen_panels_at = Vec::new();
-    match app.modes.view {
-        View::Chain => app.chain_view.draw(frame, view, &app.ctx()),
-        View::Phrase => app.phrase_view.draw(frame, view, &app.ctx()),
-        View::Track => {
-            let drawn = app.track_page.draw(frame, view, &app.ctx());
+    // Laid out for the room first, so what it shows settles in the columns it's drawn with.
+    if app.modes.view == View::Sample {
+        app.sample_page.lay_out(view);
+    }
+    match draw_view_noting(frame, view, app, app.modes.view) {
+        PageNotes::Nothing => {}
+        PageNotes::Track(drawn) => {
             app.track_page.lfo_cycles_at = drawn.cycles;
             app.track_page.gen_panels_at = drawn.previews;
         }
-        View::Mixer => app.mixer_page.draw(frame, view, &app.ctx()),
-        View::Audio => app.audio_page.draw(frame, view, &app.ctx()),
-        View::Project => app.project_page.draw(frame, view, &app.ctx()),
-        View::Sample => {
-            // Laid out for the room first, so it settles on the columns it's drawn with.
-            app.sample_page.lay_out(view);
-            let _ = app.sample_page_here();
-            app.sample_page.on_screen = app.sample_page.draw(frame, view, &app.ctx());
-        }
-        View::Song => app.song_view.draw(frame, view, &app.ctx()),
+        PageNotes::Sample(on_screen) => app.sample_page.on_screen = on_screen,
     }
     // Inside the box the track page has while the keyboard plays it.
     let free = if app.modes.mode == Mode::Keys && app.modes.view == View::Track {
@@ -742,6 +735,37 @@ pub fn draw_screen(
         let column = 1 + menu.column(&app.command_line);
         views::picker::draw_menu(frame, status, column, &mut menu.picker);
     }
+}
+
+/// What a view's drawing notes for after the frame, for [`draw_screen`] to keep.
+enum PageNotes {
+    Nothing,
+    /// Where the track page drew the pictures that carry a dot.
+    Track(views::track::Drawn),
+    /// Where the sample page's waveform is on screen, if it's drawn.
+    Sample(Option<WaveOnScreen>),
+}
+
+/// Draw a view's page in an area as the screen draws it, without the meter, the status line or
+/// anything drawn over it, as the tests draw one page.
+pub fn draw_view(frame: &mut ratatui::Frame, area: Rect, app: &App, view: View) {
+    draw_view_noting(frame, area, app, view);
+}
+
+/// Draw a view's page, giving back what its drawing notes for after the frame.
+fn draw_view_noting(frame: &mut ratatui::Frame, area: Rect, app: &App, view: View) -> PageNotes {
+    let ctx = app.ctx();
+    match view {
+        View::Chain => app.chain_view.draw(frame, area, &ctx),
+        View::Phrase => app.phrase_view.draw(frame, area, &ctx),
+        View::Track => return PageNotes::Track(app.track_page.draw(frame, area, &ctx)),
+        View::Mixer => app.mixer_page.draw(frame, area, &ctx),
+        View::Audio => app.audio_page.draw(frame, area, &ctx),
+        View::Project => app.project_page.draw(frame, area, &ctx),
+        View::Sample => return PageNotes::Sample(app.sample_page.draw(frame, area, &ctx)),
+        View::Song => app.song_view.draw(frame, area, &ctx),
+    }
+    PageNotes::Nothing
 }
 
 #[cfg(test)]

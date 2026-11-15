@@ -67,9 +67,8 @@ pub enum Outcome {
 }
 
 /// One of the program's pages as a component: its own state, its keys, its drawing and its
-/// pictures. The track page, the mixer, the project page's two sub-pages, the sample page, the
-/// song view, the chain view and the phrase view are so far (#739); the other pages' keys and
-/// drawing are still `App`'s.
+/// pictures. Every page is one: the song view, the chain view, the phrase view, the track page,
+/// the mixer, the project page's two sub-pages and the sample page (#739).
 pub(crate) trait Page {
     /// Its rows of the binding table, as `(keys, Cmd, description)`, in the order which-key and
     /// `Space k` list them. The table is still assembled in one place, `input::bindings`, under

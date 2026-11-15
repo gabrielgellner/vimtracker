@@ -16,6 +16,7 @@ use vt_model::step::{Note, Step};
 use vt_tui::app::App;
 use vt_tui::input::keys::Key;
 use vt_tui::input::mode::Mode;
+use vt_tui::input::mode::View;
 
 use crate::common::*;
 
@@ -342,7 +343,7 @@ fn a_shared_phrase_and_chain_are_linked_rather_than_starred() {
     let (mut app, _realtime) = app();
     // A second row of the chain plays phrase 00 again.
     press(&mut app, " 2yyp");
-    let chain = drawn_lines(&drawn(&app, vt_tui::views::chain::draw));
+    let chain = drawn_lines(&drawn(&app, View::Chain));
     assert!(
         chain[2].contains(&format!("00{LINK}{ICON_SPACE}")),
         "{}",
@@ -482,7 +483,7 @@ fn screen_wide(app: &App) -> ratatui::buffer::Buffer {
     let backend = ratatui::backend::TestBackend::new(148, 24);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Phrase))
         .unwrap();
     terminal.backend().buffer().clone()
 }
@@ -844,7 +845,7 @@ fn a_nudge_shows_dim_by_the_velocity_only_on_a_row_that_has_one() {
 
     // It's a stop of its own, after the velocity.
     press(&mut app, "ll");
-    assert_eq!(app.services.cursor.field, vt_tui::app::Field::Nudge);
+    assert_eq!(app.services.cursor.field, vt_model::selection::Field::Nudge);
     assert_eq!(column_name(&app), "Nudge");
     assert_eq!(
         value_shown(&app).as_deref(),

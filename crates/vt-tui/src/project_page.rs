@@ -417,21 +417,11 @@ impl Page for ProjectPage {
 
     /// Draw the Song sub-page.
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
-        crate::views::project::draw_page(frame, area, self, ctx);
+        crate::views::project::draw(frame, area, self, ctx);
     }
 }
 
 impl App {
-    /// What the cursor is on.
-    pub fn project_control(&self) -> ProjectControl {
-        self.project_page.control(self.song())
-    }
-
-    /// The groove the page draws, and its pushes.
-    pub fn shown_groove(&self) -> (GrooveId, Groove) {
-        self.project_page.shown_groove(self.song())
-    }
-
     /// `Space 9`: the project page, on whichever of its sub-pages showed last, as a jump.
     pub(crate) fn show_project(&mut self) {
         let last = self
@@ -490,7 +480,7 @@ impl App {
         let song = Arc::clone(self.song());
         let sign = if up { 1 } else { -1 };
         let count = count.min(0x1000) as i64;
-        match self.project_control() {
+        match self.project_page.control(self.song()) {
             ProjectControl::Bpm => {
                 let size = match (self.project_page.fine, large) {
                     (true, false) => FINE_NUDGE,
@@ -516,7 +506,7 @@ impl App {
                 }
             }
             ProjectControl::GrooveShown => {
-                let (id, _) = self.shown_groove();
+                let (id, _) = self.project_page.shown_groove(self.song());
                 let last = GrooveId::all().count() - 1;
                 let to = if up {
                     (id.index() + 1).min(last)
@@ -529,7 +519,7 @@ impl App {
             | ProjectControl::Humanise
             | ProjectControl::Push(_)
             | ProjectControl::Velocity(_)) => {
-                let (_, groove) = self.shown_groove();
+                let (_, groove) = self.project_page.shown_groove(self.song());
                 let by = |small: i64, jump: i64| sign * if large { jump } else { small } * count;
                 let shaped = match control {
                     ProjectControl::GrooveSteps => {
@@ -668,7 +658,7 @@ impl App {
     /// nothing changes and no undo step is left.
     fn reset_project_control(&mut self) {
         let song = Arc::clone(self.song());
-        match self.project_control() {
+        match self.project_page.control(self.song()) {
             ProjectControl::Bpm if self.project_page.fine => {
                 let whole = song.millibpm / 1000 * 1000;
                 if whole != song.millibpm {
@@ -683,7 +673,7 @@ impl App {
             }
             ProjectControl::GrooveShown => self.project_page.groove_shown = None,
             control if control.shapes_groove() => {
-                let (_, groove) = self.shown_groove();
+                let (_, groove) = self.project_page.shown_groove(self.song());
                 let shaped = match control {
                     ProjectControl::GrooveSteps => groove.with_steps(MAX_GROOVE_STEPS),
                     ProjectControl::Humanise => groove.with_humanise(0),
@@ -735,7 +725,7 @@ impl App {
     /// `K` and `Enter`: list the choices, switch something on or off, open the audio page, or run
     /// an action.
     fn choose_project_control(&mut self) {
-        let control = self.project_control();
+        let control = self.project_page.control(self.song());
         let items: Vec<Item>;
         let (title, current) = match control {
             ProjectControl::Launch => {
@@ -785,7 +775,7 @@ impl App {
             }
             ProjectControl::Groove => return self.open_groove_picker(false),
             ProjectControl::GrooveShown => {
-                let shown = self.shown_groove().0;
+                let shown = self.project_page.shown_groove(self.song()).0;
                 items = GrooveId::all()
                     .map(|id| Item::new(id.name(), Pick::ShowGroove(id)).meaning(id.meaning()))
                     .collect();
@@ -845,7 +835,7 @@ impl App {
     /// `i`: type a value, or for what's chosen, switched or run, the same as `K`. A name starts as
     /// it is, to change, and anything else starts empty.
     fn type_project_control(&mut self) {
-        let control = self.project_control();
+        let control = self.project_page.control(self.song());
         let typed = matches!(
             control,
             ProjectControl::Name
@@ -878,7 +868,7 @@ impl App {
     /// A key while typing on the project page: `Enter` sets what's typed, `Esc` leaves it, and on
     /// the name `C-r` rolls a new one and `C-u` clears it.
     pub(crate) fn insert_project_page(&mut self, key: Key) {
-        let control = self.project_control();
+        let control = self.project_page.control(self.song());
         match key.code {
             KeyCode::Esc => {
                 self.modes.entry = Entry::default();
@@ -964,7 +954,7 @@ impl App {
     /// Set a number typed into the groove drawn: its steps, its humanise in ticks, a push in
     /// ticks either way, or a velocity in percent.
     fn commit_groove(&mut self, control: ProjectControl, text: &str) {
-        let (_, groove) = self.shown_groove();
+        let (_, groove) = self.project_page.shown_groove(self.song());
         let number: Option<i64> = text
             .trim_start_matches('+')
             .trim_end_matches('%')
@@ -1013,7 +1003,7 @@ impl App {
     /// page then shows, and the project plays it if it played the one it came from, all as one
     /// undo step.
     fn shape_groove(&mut self, control: ProjectControl, shaped: Groove) {
-        let (id, groove) = self.shown_groove();
+        let (id, groove) = self.project_page.shown_groove(self.song());
         if control == ProjectControl::Push(0) {
             self.services.status =
                 "The first step stays on the grid: the others are pushed from it".to_owned();

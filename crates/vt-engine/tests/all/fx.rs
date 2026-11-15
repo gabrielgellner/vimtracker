@@ -1061,7 +1061,7 @@ fn reduction_playing_and_after(insert: Insert, slot: usize) -> ([f32; INSERTS], 
 
 #[test]
 fn a_compressor_reports_how_far_its_turning_down() {
-    use vt_engine::dsp::compressor::curve_db;
+    use vt_engine::dsp::dynamics::compressor::curve_db;
     use vt_model::insert::Compressor;
     let settings = Compressor {
         threshold: 0x80,

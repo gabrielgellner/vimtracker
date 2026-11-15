@@ -13,9 +13,9 @@ use vt_model::settings::{MOD_OWN_SETTINGS, SettingId};
 use vt_model::song::Track;
 use vt_model::steps::{MAX_STEP, STEPS, StepRate, Steps, StepsMode, smoothed};
 
-use crate::dsp::filter::Channel;
-use crate::dsp::memory::{MemoryPool, SongPlace};
-use crate::dsp::slot::{BYPASS_FADE_MS, InsertState};
+use crate::dsp::effects::memory::{MemoryPool, SongPlace};
+use crate::dsp::effects::slot::{BYPASS_FADE_MS, InsertState};
+use crate::dsp::filters::filter::Channel;
 use crate::rng::Pcg32;
 
 use super::TrackState;

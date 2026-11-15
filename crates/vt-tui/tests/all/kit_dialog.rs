@@ -12,6 +12,7 @@ use vt_tui::app::App;
 use vt_tui::banking::group_name;
 use vt_tui::config::Settings;
 use vt_tui::input::mode::Mode;
+use vt_tui::input::mode::View;
 use vt_tui::shaping::KIT_BEAT_PICKER;
 
 use crate::common::*;
@@ -457,11 +458,11 @@ fn a_group_named_after_its_kit_fits_its_column_folded_or_open() {
             .join("\n")
     };
     // Whole, with the fold mark beside it, in the song view's group column and on the mixer.
-    let song = text(&drawn(&app, vt_tui::views::song::draw));
+    let song = text(&drawn(&app, View::Song));
     assert!(song.contains("909\u{f084c}\u{a0}  A"), "{song}");
-    let mixer = text(&drawn(&app, vt_tui::views::mixer::draw));
+    let mixer = text(&drawn(&app, View::Mixer));
     assert!(mixer.contains("909\u{f084c}"), "{mixer}");
     app.fold_group(1, false);
-    let song = text(&drawn(&app, vt_tui::views::song::draw));
+    let song = text(&drawn(&app, View::Song));
     assert!(song.contains("BD  909    A"), "{song}");
 }

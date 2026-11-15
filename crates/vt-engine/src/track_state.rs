@@ -12,10 +12,10 @@ use vt_model::settings::{
 use vt_model::song::{DEFAULT_ACCENT, FilterType, SynthVoice, Track};
 use vt_model::step::slice_letter;
 
-use crate::dsp::filter::{Channel, Coefficients, Ramp, Trim};
-use crate::dsp::memory::MemoryPool;
-use crate::dsp::slot::InsertState;
-use crate::dsp::smoother::Smoothed;
+use crate::dsp::blocks::smoother::Smoothed;
+use crate::dsp::effects::memory::MemoryPool;
+use crate::dsp::effects::slot::InsertState;
+use crate::dsp::filters::filter::{Channel, Coefficients, Ramp, Trim};
 use crate::gens::GenHolds;
 use crate::mixer::Reading;
 use crate::rng::Pcg32;
@@ -275,10 +275,6 @@ pub struct TrackState {
     own_held: [[f32; MOD_OWN_SETTINGS]; MOD_SLOTS],
     played_held: [f32; PLAYED_SETTINGS],
 }
-
-// What a compressor or Warps hears from other tracks lives beside the slot that hears it, and is
-// named here too, where the engine fills it.
-pub use crate::dsp::slot::Keys;
 
 impl TrackState {
     /// A silent track with default held values.

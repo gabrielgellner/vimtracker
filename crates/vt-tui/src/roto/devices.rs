@@ -21,7 +21,7 @@ use vt_model::constants::{BAR_STEPS, MAX_ENVELOPE_MS, TICKS_PER_STEP};
 use vt_model::envelope::{Hold, MAX_HOLD_MS};
 use vt_model::insert::Insert;
 use vt_model::lfo::{Fade, Rate};
-use vt_model::modulation::{ModKind, Polarity};
+use vt_model::modulation::{ModField, ModKind, Polarity};
 use vt_model::settings::{Kind, SettingId, Units};
 use vt_model::shape::GenParam;
 use vt_model::shape::params::Units as GenUnits;
@@ -42,7 +42,7 @@ use crate::theme;
 use crate::track_page::tuning::{tuning, tuning_most};
 use crate::track_page::view::Reads;
 use crate::track_page::{
-    AccumulatorField, ArpField, Control, DeviceSpec, ModField, Page, ParamView, macros_device, view,
+    AccumulatorField, ArpField, Control, DeviceSpec, Page, ParamView, macros_device, view,
 };
 use crate::views::track::toggle_on;
 

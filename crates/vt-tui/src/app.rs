@@ -21,8 +21,7 @@ use vt_model::constants::{DEFAULT_NOTE_VELOCITY, MAX_TRACKS, TICKS_PER_STEP};
 use vt_model::kit::KitEntry;
 use vt_model::names::Names;
 use vt_model::samples::SamplePool;
-pub use vt_model::selection::Field;
-use vt_model::selection::{Block, Scope, StepRange};
+use vt_model::selection::{Block, Field, Scope, StepRange};
 use vt_model::song::Song;
 use vt_model::step::{FxCommand, MAX_VELOCITY};
 
@@ -701,6 +700,7 @@ impl App {
         self.follow_sampling();
         let working = self.loader.is_waiting() || self.services.analyst.is_waiting();
         self.work_since = working.then(|| self.work_since.unwrap_or(now));
+        self.settle_sample_page();
     }
 
     /// The work going on in the background, by name, and the spinner's turn for it. Only work

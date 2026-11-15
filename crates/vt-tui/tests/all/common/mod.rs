@@ -170,7 +170,7 @@ pub fn screen(app: &App) -> ratatui::buffer::Buffer {
     let backend = ratatui::backend::TestBackend::new(100, 24);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Phrase))
         .unwrap();
     terminal.backend().buffer().clone()
 }
@@ -277,7 +277,7 @@ pub fn device_title(app: &App, identity: &str) -> String {
     let backend = ratatui::backend::TestBackend::new(width, height);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let start = format!("╭─ {identity} ");
@@ -307,7 +307,7 @@ pub fn track_page_text(app: &App) -> Vec<String> {
     let backend = ratatui::backend::TestBackend::new(80, 16);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..16)
@@ -334,7 +334,7 @@ pub fn fx_page_text(app: &App) -> Vec<String> {
     let backend = ratatui::backend::TestBackend::new(150, 40);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..40)
@@ -428,7 +428,7 @@ pub fn track_page_buffer(app: &App) -> ratatui::buffer::Buffer {
     let backend = ratatui::backend::TestBackend::new(150, 40);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
         .unwrap();
     terminal.backend().buffer().clone()
 }
@@ -486,14 +486,11 @@ pub fn glyph_at(buffer: &ratatui::buffer::Buffer, at: (u16, u16)) -> (char, Colo
 }
 
 /// A view drawn 160 columns wide and 24 high.
-pub fn drawn(
-    app: &App,
-    draw: fn(&mut ratatui::Frame, ratatui::layout::Rect, &App),
-) -> ratatui::buffer::Buffer {
+pub fn drawn(app: &App, view: View) -> ratatui::buffer::Buffer {
     let backend = ratatui::backend::TestBackend::new(160, 24);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, view))
         .unwrap();
     terminal.backend().buffer().clone()
 }
@@ -635,7 +632,7 @@ pub fn mixer_text_at(app: &App, width: u16) -> Vec<String> {
     let backend = ratatui::backend::TestBackend::new(width, 17);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::mixer::draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Mixer))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..17)
@@ -651,7 +648,7 @@ pub fn song_text(app: &App) -> Vec<String> {
     let backend = ratatui::backend::TestBackend::new(80, 12);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::song::draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Song))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..12)
@@ -771,7 +768,7 @@ pub fn project_cursor_on(app: &mut App, control: vt_tui::project_page::ProjectCo
     if field > 0 && app.project_page.fine {
         tap(app, "l");
     }
-    assert_eq!(app.project_control(), control);
+    assert_eq!(app.project_page.control(app.song()), control);
 }
 
 /// The ids of the track page's images of the Mod page's slots, by slot, none as 0, as a Steps

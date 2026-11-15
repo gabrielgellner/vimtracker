@@ -11,7 +11,6 @@ use ratatui::widgets::{Paragraph, Row};
 
 use vt_model::groove::{FULL_VELOCITY, MAX_PUSH};
 
-use crate::app::App;
 use crate::config::home_folder;
 use crate::explorer::place_name;
 use crate::input::mode::View;
@@ -300,13 +299,8 @@ pub fn title(ctx: &Ctx) -> Line<'static> {
     Line::from(title)
 }
 
-/// Draw the Song sub-page of the app's project page.
-pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    draw_page(frame, area, &app.project_page, &app.ctx());
-}
-
 /// Draw the Song sub-page, as its `Page::draw`.
-pub(crate) fn draw_page(frame: &mut Frame, area: Rect, page: &ProjectPage, ctx: &Ctx) {
+pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &ProjectPage, ctx: &Ctx) {
     let mut rest = area;
     frame.render_widget(Paragraph::new(title(ctx)), take_top(&mut rest, 2));
     let columns = columns();

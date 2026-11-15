@@ -12,7 +12,7 @@ impl App {
         self.services.dirty = true;
         self.fit_levels();
         self.services.cursor.track = self.services.cursor.track.min(self.song().tracks.len() - 1);
-        self.clamp_cursor();
+        self.services.clamp_cursor(self.modes.view);
         self.services.publish();
     }
 
@@ -21,14 +21,5 @@ impl App {
             .phrase_here()
             .and_then(|p| p.steps().get(self.services.cursor.step))
             .map_or(0, |step| step.fx.len())
-    }
-
-    pub(crate) fn move_step(&mut self, by: isize) {
-        self.services.move_step(by);
-    }
-
-    /// Keep the cursor on something that exists. Only the chain view has a row past the end.
-    pub(crate) fn clamp_cursor(&mut self) {
-        self.services.clamp_cursor(self.modes.view);
     }
 }

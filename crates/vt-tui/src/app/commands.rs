@@ -87,7 +87,7 @@ impl App {
                 } else if self.services.cursor.track >= now {
                     self.services.cursor.track = now - 1;
                     self.services.cursor.slot = 0;
-                    self.clamp_cursor();
+                    self.services.clamp_cursor(self.modes.view);
                 }
             }
             Line::Chain(chain) => self.set_track_chain(chain),
@@ -218,7 +218,7 @@ impl App {
                         phrase,
                         length,
                     });
-                    self.clamp_cursor();
+                    self.services.clamp_cursor(self.modes.view);
                 }
             }
         }
@@ -413,7 +413,7 @@ impl App {
             self.services.cursor.track = 0;
             self.services.cursor.slot = 0;
         }
-        self.clamp_cursor();
+        self.services.clamp_cursor(self.modes.view);
         if let Some(first) = notes.first() {
             self.services.status = first.clone();
         }

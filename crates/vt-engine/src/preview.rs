@@ -11,7 +11,7 @@ use vt_model::sample::SampleData;
 use vt_model::samples::{Frames, SampleId, SamplePool};
 use vt_model::song::SynthVoice;
 
-use crate::dsp::virtual_analog::Settings;
+use crate::dsp::voices::virtual_analog::Settings;
 use crate::voice::{NoteOn, Voice};
 
 /// The ids a one-off file plays under, which no sample in the pool has. There are two places, so a

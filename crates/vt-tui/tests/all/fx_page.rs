@@ -245,7 +245,7 @@ fn the_cursors_device_has_a_brighter_frame_and_a_bypassed_one_goes_faint() {
         let backend = ratatui::backend::TestBackend::new(150, 40);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
             .unwrap();
         terminal.backend().buffer().clone()
     };
@@ -724,7 +724,7 @@ fn a_compressors_type_shows_its_own_settings_and_console_and_glue_pick_their_swi
         let backend = ratatui::backend::TestBackend::new(163, 24);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         (0..24)
@@ -865,7 +865,7 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
         let backend = ratatui::backend::TestBackend::new(150, 40);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
             .unwrap();
         terminal.backend().buffer().clone()
     };
@@ -1010,7 +1010,7 @@ fn an_eqs_curve_follows_its_settings_and_the_cursor() {
         let backend = ratatui::backend::TestBackend::new(150, 24);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
+            .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), &app, View::Track))
             .unwrap();
         terminal.backend().buffer().clone()
     };
@@ -1325,7 +1325,7 @@ fn the_fx_page_fades_a_slot_a_lock_bypasses_while_the_song_plays() {
         let backend = ratatui::backend::TestBackend::new(80, 24);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         (0..buffer.area.height).any(|y| {

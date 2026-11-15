@@ -5,7 +5,7 @@
 use std::f32::consts::TAU;
 use std::sync::Arc;
 
-use vt_engine::dsp::compressor::{Compressor, curve_db};
+use vt_engine::dsp::dynamics::compressor::{Compressor, curve_db};
 use vt_engine::dsp::effects::slot::{InsertState, Keys};
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;

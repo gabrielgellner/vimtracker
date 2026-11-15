@@ -194,6 +194,6 @@ impl Page for ChainView {
 
     /// Draw the view.
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
-        crate::views::chain::draw_page(frame, area, self, ctx);
+        crate::views::chain::draw(frame, area, self, ctx);
     }
 }

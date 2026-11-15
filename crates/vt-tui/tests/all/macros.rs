@@ -31,7 +31,7 @@ fn page_text(app: &App) -> Vec<String> {
     let backend = ratatui::backend::TestBackend::new(width, height);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..height)
@@ -506,7 +506,7 @@ fn the_roto_shows_the_macros_first_each_knob_named_by_its_macro_and_turns_them()
 
 #[test]
 fn m_on_an_lfos_rate_maps_it_and_its_ends_read_as_rates() {
-    use vt_tui::track_page::ModField;
+    use vt_model::modulation::ModField;
     let (mut app, _realtime) = app();
     press(&mut app, " 5L");
     press(&mut app, &format!("{}jj", to_lfo(0)));

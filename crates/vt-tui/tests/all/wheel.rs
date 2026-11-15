@@ -9,10 +9,11 @@ use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use vt_engine::link::Realtime;
+use vt_model::selection::Field;
 use vt_model::settings::SettingId;
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
-use vt_tui::app::{App, Field};
+use vt_tui::app::App;
 use vt_tui::audio_page::AudioRow;
 use vt_tui::input::mode::{Mode, View};
 use vt_tui::wheel::{WheelSetting, feel, tick_size};
@@ -460,7 +461,7 @@ fn a_tick_on_the_tempo_moves_its_fine_part() {
     let (mut app, _realtime) = app_with(&[NOTE]);
     press(&mut app, " 9ggjjj");
     assert_eq!(
-        app.project_control(),
+        app.project_page.control(app.song()),
         vt_tui::project_page::ProjectControl::Bpm
     );
     let end = slow_ticks(&mut app, true, 3, Instant::now());

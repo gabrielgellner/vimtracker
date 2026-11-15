@@ -9,6 +9,7 @@ use vt_engine::link::Realtime;
 use vt_model::song::TrackKind;
 use vt_tui::app::App;
 use vt_tui::input::keys::Key;
+use vt_tui::input::mode::View;
 
 use crate::common::*;
 
@@ -113,14 +114,14 @@ fn a_group_and_its_tracks_are_named_in_its_colour_where_tracks_are_listed() {
     let (blue, peach) = (vt_tui::theme::group(1), vt_tui::theme::group(2));
     // The song view's columns.
     press(&mut app, " 1");
-    let song = drawn(&app, vt_tui::views::song::draw);
+    let song = drawn(&app, View::Song);
     assert_eq!(color_from(&song, 2, 0, "02"), blue);
     assert_eq!(color_from(&song, 2, 0, "05"), peach);
     assert_eq!(color_from(&song, 2, 0, "G1"), blue);
     assert_ne!(color_from(&song, 2, 0, "04"), blue);
     // The phrase view's overview, beside the grid.
     press(&mut app, " 3");
-    let phrase = drawn(&app, vt_tui::views::phrase::draw);
+    let phrase = drawn(&app, View::Phrase);
     let title = drawn_lines(&phrase)[0].clone();
     let headings = drawn_lines(&phrase)[1].clone();
     let from = overview_start(&headings);
@@ -129,9 +130,9 @@ fn a_group_and_its_tracks_are_named_in_its_colour_where_tracks_are_listed() {
     assert_ne!(color_from(&phrase, 1, from, "04"), blue);
     // The titles of a track in a group carry its mark.
     assert!(title.contains("Track 01 G1 "), "{title}");
-    let chain = drawn_lines(&drawn(&app, vt_tui::views::chain::draw));
+    let chain = drawn_lines(&drawn(&app, View::Chain));
     assert!(chain[0].contains("Track 01 G1  Chain 00"), "{}", chain[0]);
-    let page = drawn_lines(&drawn(&app, vt_tui::views::track::draw));
+    let page = drawn_lines(&drawn(&app, View::Track));
     assert!(page[0].contains("Track 01 G1 "), "{}", page[0]);
     // The track picker.
     press(&mut app, " fb");
@@ -259,7 +260,7 @@ fn the_phrase_views_overview_shows_a_folded_group_as_a_column_of_its_own() {
     press(&mut app, " 4lza0");
     assert_eq!(app.services.cursor.track, 3);
     press(&mut app, " 3");
-    let headings = drawn_lines(&drawn(&app, vt_tui::views::phrase::draw))[1].clone();
+    let headings = drawn_lines(&drawn(&app, View::Phrase))[1].clone();
     let overview: String = headings.chars().skip(overview_start(&headings)).collect();
     assert!(
         overview.contains(&format!(" G1{FOLDED}{ICON_SPACE}    04 ")),
@@ -521,7 +522,7 @@ fn a_group_with_five_characters_shows_its_whole_name_in_every_view() {
     let g1 = app.song().fixed_track(TrackKind::Group(1)).unwrap();
     command(&mut app, "group name drums");
     let mixer = |app: &App| mixer_text_at(app, 160)[2].clone();
-    let song = |app: &App| drawn_lines(&drawn(app, vt_tui::views::song::draw))[2].clone();
+    let song = |app: &App| drawn_lines(&drawn(app, View::Song))[2].clone();
 
     // Open, the song view's column holds it with a gap, and the mixer's strip leaves out the
     // group's icon to fit it.
@@ -549,7 +550,7 @@ fn a_group_with_five_characters_shows_its_whole_name_in_every_view() {
     // The phrase view's overview gives the folded group a column wide enough.
     app.services.cursor.track = 3;
     press(&mut app, " 3");
-    let headings = drawn_lines(&drawn(&app, vt_tui::views::phrase::draw))[1].clone();
+    let headings = drawn_lines(&drawn(&app, View::Phrase))[1].clone();
     let overview: String = headings.chars().skip(overview_start(&headings)).collect();
     assert!(
         overview.contains(&format!(" DRUMS{FOLDED}{ICON_SPACE} 04 ")),
@@ -558,7 +559,7 @@ fn a_group_with_five_characters_shows_its_whole_name_in_every_view() {
 
     // The track page's title, the track picker and the Roto's track list.
     app.services.cursor.track = g1;
-    let page = drawn_lines(&drawn(&app, vt_tui::views::track::draw))[0].clone();
+    let page = drawn_lines(&drawn(&app, View::Track))[0].clone();
     assert!(page.contains("Group 1 DRUMS"), "{page}");
     let roto = vt_tui::roto::devices::live_tracks(app.song());
     assert_eq!(roto[g1].name.as_str(), "G1 DRUMS");

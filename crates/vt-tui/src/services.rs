@@ -20,11 +20,11 @@ use vt_model::history::History;
 use vt_model::order::Dealer;
 use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
-use vt_model::selection::Extent;
+use vt_model::selection::{Extent, Field};
 use vt_model::song::{ChainEntry, Phrase, Section, Song, Track};
 
 use crate::analysing::Analyst;
-use crate::app::{Cursor, Field, TrackLive};
+use crate::app::{Cursor, TrackLive};
 use crate::config::Settings;
 use crate::folding::{Folds, Order};
 use crate::input::mode::View;

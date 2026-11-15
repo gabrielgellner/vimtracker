@@ -18,12 +18,14 @@ use vt_engine::link::Realtime;
 use vt_engine::track_state::LiveValues;
 use vt_model::action::TrackControl;
 use vt_model::macros::{MacroMap, MacroTarget};
+use vt_model::modulation::ModField;
 use vt_model::settings::SettingId;
 use vt_model::song::{Machine, Phrase, Role, Song, SynthVoice, TrackKind};
 use vt_model::step::Step;
 
 use crate::app::App;
-use crate::track_page::{Control, ModField, Page};
+use crate::input::mode::View;
+use crate::track_page::{Control, Page};
 use crate::views::widgets::pin::{app, app_with, assert_drawn, cut, press, special};
 
 const CUT: Control = Control::Base(TrackControl::Cutoff);
@@ -33,7 +35,7 @@ const RES: Control = Control::Base(TrackControl::Resonance);
 fn page(app: &App) -> Buffer {
     let mut terminal = Terminal::new(TestBackend::new(150, 40)).unwrap();
     terminal
-        .draw(|frame| crate::views::track::draw(frame, frame.area(), app))
+        .draw(|frame| crate::run::draw_view(frame, frame.area(), app, View::Track))
         .unwrap();
     terminal.backend().buffer().clone()
 }

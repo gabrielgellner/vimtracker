@@ -9,7 +9,7 @@ use vt_engine::link::Realtime;
 use vt_engine::track_state::{LfoNow, LiveValues};
 use vt_model::action::Action;
 use vt_model::lfo::{Fade, Lfo, LfoMode, Rate, Shape, wave};
-use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot, Polarity};
+use vt_model::modulation::{MOD_SLOTS, ModField, ModKind, ModSlot, Polarity};
 use vt_model::selection::Motion;
 use vt_model::settings::SettingId;
 use vt_model::song::{Track, TrackKind};
@@ -19,14 +19,13 @@ use vt_tui::input::bindings::Cmd;
 use vt_tui::input::mode::Mode;
 use vt_tui::kitty::{DEFAULT_CELL, Graphics, dot_pixels};
 use vt_tui::screenshot::sent_placements;
-use vt_tui::track_page::{
-    AccumulatorField, ArpField, Control, DeviceCursor, ModField, Page, TrackPage,
-};
+use vt_tui::track_page::{AccumulatorField, ArpField, Control, DeviceCursor, Page, TrackPage};
 
 /// How many LFOs a new track's slots have, its last three.
 const LFOS: usize = 3;
 
 use crate::common::*;
+use vt_tui::input::mode::View;
 use vt_tui::kitty::{PanelIds, PanelKey};
 
 /// Every setting a new track's mod slots have under their types, the three ADSRs' and the three
@@ -572,7 +571,7 @@ fn the_mod_page_goes_by_whole_bands_where_fewer_fit() {
         let backend = ratatui::backend::TestBackend::new(width, height);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+            .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         (0..height)
@@ -1832,7 +1831,7 @@ fn mod_page_text(app: &App) -> Vec<String> {
     let backend = ratatui::backend::TestBackend::new(width, height);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..height)
@@ -1987,7 +1986,7 @@ fn the_step_playing_is_lit_in_the_playheads_colour() {
     let backend = ratatui::backend::TestBackend::new(163, 40);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), &app, View::Track))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let lines = mod_page_text(&app);

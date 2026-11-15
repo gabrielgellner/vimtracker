@@ -285,7 +285,7 @@ fn the_phrase_view_names_a_slots_setting_in_a_wide_column() {
     let backend = ratatui::backend::TestBackend::new(120, 12);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), &app))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), &app, View::Phrase))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let text: String = (0..12)
@@ -576,7 +576,10 @@ fn lane_makes_an_fx_column_a_lane_and_the_loop_keys_then_set_it() {
     use vt_model::song::Lane;
     let (mut app, _realtime) = app();
     press(&mut app, "llllljj");
-    assert_eq!(app.services.cursor.field, vt_tui::app::Field::FxCommand(0));
+    assert_eq!(
+        app.services.cursor.field,
+        vt_model::selection::Field::FxCommand(0)
+    );
     command(&mut app, "lane 3");
     assert_eq!(
         lane_of(&app, 0),
@@ -771,14 +774,17 @@ fn k_on_a_gate_lists_gates_and_on_its_length_lists_lengths() {
     let gate = |app: &App| app.services.phrase_here().unwrap().steps()[0].gate;
     // On the gate, the gate types.
     press(&mut app, "lllK");
-    assert_eq!(app.services.cursor.field, vt_tui::app::Field::Gate);
+    assert_eq!(app.services.cursor.field, vt_model::selection::Field::Gate);
     assert_eq!(app.picker.as_ref().unwrap().title, "Gates");
     special(&mut app, KeyCode::Esc);
     assert!(app.picker.is_none());
 
     // On its length, some lengths, with the track's first and marked on an empty cell.
     press(&mut app, "lK");
-    assert_eq!(app.services.cursor.field, vt_tui::app::Field::GateLength);
+    assert_eq!(
+        app.services.cursor.field,
+        vt_model::selection::Field::GateLength
+    );
     let picker = app.picker.as_ref().expect("the lengths are listed");
     assert_eq!(picker.title, "Lengths");
     let labels: Vec<&str> = picker
@@ -1122,12 +1128,12 @@ fn k_chooses_rnd_and_the_status_line_says_what_it_varies() {
         Some("100% of the times it plays, moves the note up to 6 scale degrees either way")
     );
     // Beside a lock, it varies the lock.
-    app.services.cursor.field = vt_tui::app::Field::FxCommand(0);
+    app.services.cursor.field = vt_model::selection::Field::FxCommand(0);
     press(&mut app, "K");
     press(&mut app, "CUT");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "40");
-    app.services.cursor.field = vt_tui::app::Field::FxValue(1);
+    app.services.cursor.field = vt_model::selection::Field::FxValue(1);
     assert_eq!(
         value_shown(&app).as_deref(),
         Some("100% of the times it plays, moves CUT up to 60 either way")

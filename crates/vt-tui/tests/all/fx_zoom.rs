@@ -10,6 +10,7 @@ use vt_tui::input::mode::Mode;
 use vt_tui::track_page::Page;
 
 use crate::common::*;
+use vt_tui::input::mode::View;
 use vt_tui::kitty::{PanelIds, PanelKey};
 
 /// The screen at the author's 163 by 42, with the keyboard's mode or not.
@@ -226,7 +227,7 @@ fn the_zoomed_meter_and_its_two_bars_show_how_far_it_turned_down() {
         let backend = ratatui::backend::TestBackend::new(150, 40);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
+            .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), &app, View::Track))
             .unwrap();
         terminal.backend().buffer().clone()
     };

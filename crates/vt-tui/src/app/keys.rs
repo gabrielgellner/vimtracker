@@ -101,6 +101,7 @@ impl App {
         {
             self.end_momentary(now);
         }
+        self.settle_sample_page();
     }
 
     /// End what a key started that lasts while it's held. Down for less than [`HOLD_TIME`], it was
@@ -199,6 +200,7 @@ impl App {
         self.let_go_of_held_notes();
         self.drop_flags();
         self.end_momentary(now);
+        self.settle_sample_page();
     }
 
     /// Sound a note for as long as this key is down, ignoring the key's repeats. Each key held
@@ -246,6 +248,7 @@ impl App {
             self.last_written = None;
             self.octave_moved = None;
         }
+        self.settle_sample_page();
     }
 
     fn handle_key(&mut self, key: Key, now: Instant) {
@@ -361,7 +364,7 @@ impl App {
         }
         self.modes.view = view;
         self.note_view(view);
-        self.clamp_cursor();
+        self.services.clamp_cursor(self.modes.view);
         if view != View::Phrase {
             self.stop_recording();
         }
