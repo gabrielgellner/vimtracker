@@ -82,7 +82,7 @@ impl App {
         if matches!(self.modes.mode, Mode::Shape | Mode::Mapping) {
             return adjusting_key(key).is_some();
         }
-        let mut keys = self.pending.clone();
+        let mut keys = self.grammar.pending.clone();
         keys.push(key);
         self.table.resolve(self.key_scope(), &keys) != Resolved::Unbound
     }
@@ -338,9 +338,9 @@ impl App {
             self.sample_keys_key(key, now);
             return;
         }
-        let plain = self.pending.is_empty() && !key.ctrl && !key.alt;
+        let plain = self.grammar.pending.is_empty() && !key.ctrl && !key.alt;
         match key.code {
-            KeyCode::Esc | KeyCode::Char(';') if self.pending.is_empty() => {
+            KeyCode::Esc | KeyCode::Char(';') if self.grammar.pending.is_empty() => {
                 self.modes.mode = Mode::Normal;
                 self.services.status.clear();
             }
@@ -380,10 +380,12 @@ impl App {
 
     /// What the popup should list, once the delay has passed.
     pub fn popup_rows(&self, now: Instant, delay: Duration) -> Vec<(String, &'static str)> {
-        if self.pending.is_empty() || !which_key_due(self.pending_since, now, delay) {
+        if self.grammar.pending.is_empty() || !which_key_due(self.grammar.pending_since, now, delay)
+        {
             return Vec::new();
         }
-        self.table.continuations(self.key_scope(), &self.pending)
+        self.table
+            .continuations(self.key_scope(), &self.grammar.pending)
     }
 
     /// Which rows of the binding table apply now. Normal mode's keys depend on the view.
@@ -560,7 +562,7 @@ impl App {
             // motion, and `]'` and `['` are jumps, the jump list's.
             Cmd::Sample(key @ (SampleKey::Mark | SampleKey::NameSlice)) => {
                 self.modes.count = None;
-                self.awaiting_mark = Some(match key {
+                self.grammar.awaiting_mark = Some(match key {
                     SampleKey::Mark => MarkWait::Jump,
                     _ => MarkWait::Name,
                 });

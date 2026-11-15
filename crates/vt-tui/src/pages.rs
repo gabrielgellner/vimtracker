@@ -205,16 +205,17 @@ impl App {
             || (self.modes.mode == Mode::Command && self.command_menu.is_some());
         // Only worked out while keys are typed, as the list of what follows them is.
         let continued = |_: &Instant| {
-            !self.pending.is_empty()
+            !self.grammar.pending.is_empty()
                 && !self
                     .table
-                    .continuations(self.key_scope(), &self.pending)
+                    .continuations(self.key_scope(), &self.grammar.pending)
                     .is_empty()
         };
         PageState {
             covered,
-            keys_since: self.pending_since.filter(continued),
+            keys_since: self.grammar.pending_since.filter(continued),
             held_selection: self
+                .grammar
                 .replacing_selection
                 .map(|(selection, _)| selection)
                 .or(self.shape.as_ref().map(|panel| panel.selection)),

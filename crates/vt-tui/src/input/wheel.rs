@@ -323,7 +323,10 @@ impl App {
         if !self.wheel_adjusts(key) {
             return;
         }
-        let (depth, adjusted) = (self.services.history.undo_depth(), self.adjustments.steps());
+        let (depth, adjusted) = (
+            self.services.history.undo_depth(),
+            self.grammar.adjustments.steps(),
+        );
         let gesture = self
             .wheel
             .gesture
@@ -374,7 +377,7 @@ impl App {
             return;
         }
         // The wheel isn't a key, so `.` still repeats the last key's change.
-        let last_change = self.last_change.clone();
+        let last_change = self.grammar.last_change.clone();
         if let Some(finer) = finer {
             self.step_onto_fine(finer, true);
         }
@@ -384,7 +387,7 @@ impl App {
         if let Some(finer) = finer {
             self.step_onto_fine(finer, false);
         }
-        self.last_change = last_change;
+        self.grammar.last_change = last_change;
     }
 
     /// Ends the wheel's gesture, if one is going, making what it owes and its ticks one undo
@@ -398,7 +401,7 @@ impl App {
             self.services.history.squash_to(gesture.depth);
         }
         if self.modes.mode.is_visual() {
-            self.adjustments.join_from(gesture.adjusted);
+            self.grammar.adjustments.join_from(gesture.adjusted);
         }
     }
 
@@ -460,7 +463,7 @@ impl App {
     /// Whether this key adjusts something here, so a tick may press it: with no keys typed before
     /// it, in a mode that binds it, or in the shape panel, which reads `=` and its kin itself.
     fn wheel_adjusts(&self, key: Key) -> bool {
-        if !self.pending.is_empty() {
+        if !self.grammar.pending.is_empty() {
             return false;
         }
         match self.modes.mode {

@@ -30,10 +30,10 @@ impl App {
         match key.code {
             KeyCode::Esc => {
                 self.cancel_entry();
-                if let Some(field) = self.replacing.take() {
+                if let Some(field) = self.grammar.replacing.take() {
                     self.services.cursor.field = field;
                 }
-                if let Some((selection, _)) = self.replacing_selection.take() {
+                if let Some((selection, _)) = self.grammar.replacing_selection.take() {
                     self.services.cursor.step = selection.range.first;
                     self.cancel_selection_replace();
                 }

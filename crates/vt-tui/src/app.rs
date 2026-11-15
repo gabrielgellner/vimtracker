@@ -1,6 +1,5 @@
 //! Application state, and what each key does. It runs without a terminal, so tests can drive it.
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -20,15 +19,15 @@ use vt_model::constants::{DEFAULT_NOTE_VELOCITY, MAX_TRACKS, TICKS_PER_STEP};
 use vt_model::kit::KitEntry;
 use vt_model::names::Names;
 use vt_model::samples::SamplePool;
-use vt_model::selection::{Block, Field, Scope, StepRange};
+use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::song::Song;
 use vt_model::step::{FxCommand, MAX_VELOCITY};
 
-use crate::app::grammar::{Adjustments, Change, SelectionPlace};
+use crate::app::grammar::Grammar;
 use crate::app::jumps::Jumps;
 use crate::app::keys::HeldKeys;
 use crate::app::recording::Recording;
-use crate::input::bindings::{Op, Table};
+use crate::input::bindings::Table;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::typed::TypedValue;
@@ -254,8 +253,6 @@ pub struct App {
     pub jumps: Jumps,
     /// When the autosave was last due, and what it last wrote.
     pub autosave: Autosave,
-    /// The field a replace started on, since typing an FX command moves on to its value.
-    pub(crate) replacing: Option<Field>,
     pub command_line: String,
     /// The list of matches above the command line, while there's more than one.
     pub command_menu: Option<CommandMenu>,
@@ -277,20 +274,8 @@ pub struct App {
     pub guide_page: usize,
     pub guide_width: usize,
     pub(crate) table: Table,
-    pub(crate) pending: Vec<Key>,
-    pub(crate) pending_since: Option<Instant>,
-    pub(crate) operator: Option<Op>,
-    pub(crate) operator_count: Option<usize>,
-    pub(crate) register: Option<char>,
-    pub(crate) awaiting_register: bool,
-    /// Whether `'` or `m` on the sample page waits for a letter: of the slice to go to, or to
-    /// name the slice under the cursor with.
-    pub(crate) awaiting_mark: Option<crate::pages::sample::marking::MarkWait>,
-    pub(crate) registers: HashMap<char, Block>,
-    /// What the changes kept on the selection have moved its values by, for the status line.
-    pub(crate) adjustments: Adjustments,
-    /// The selection a replace across it comes back to, once its value is in or it's cancelled.
-    pub(crate) replace_returns_to: Option<SelectionPlace>,
+    /// The grammar: keys typed so far, the operator and register, and the change `.` repeats.
+    pub grammar: Grammar,
     /// The open shape panel.
     pub shape: Option<ShapePanel>,
     /// The open mapping view of a macro.
@@ -328,9 +313,6 @@ pub struct App {
     pub(crate) patch_over: bool,
     /// Makes the random names that name lines start with and `C-r` rolls, seeded from the clock.
     pub(crate) names: Names,
-    /// The selection a replace will fill, and the undo depth from before it started.
-    pub(crate) replacing_selection: Option<(Selection, usize)>,
-    pub(crate) last_change: Option<Change>,
 }
 
 /// The keys that play while the track page's keyboard is on, from C to F. The rest stay the
@@ -380,7 +362,6 @@ impl App {
             chain_view: ChainView::default(),
             jumps: Jumps::default(),
             autosave: Autosave::default(),
-            replacing: None,
             command_line: String::new(),
             command_menu: None,
             command_history: CommandHistory::default(),
@@ -395,16 +376,7 @@ impl App {
             guide_page: 16,
             guide_width: 76,
             table: Table::default(),
-            pending: Vec::new(),
-            pending_since: None,
-            operator: None,
-            operator_count: None,
-            register: None,
-            awaiting_register: false,
-            awaiting_mark: None,
-            registers: HashMap::new(),
-            adjustments: Adjustments::default(),
-            replace_returns_to: None,
+            grammar: Grammar::default(),
             shape: None,
             mapping: None,
             shape_command: None,
@@ -422,8 +394,6 @@ impl App {
             opening_discards: false,
             patch_over: false,
             names,
-            replacing_selection: None,
-            last_change: None,
         };
         app.services.live_song = Some(Arc::clone(app.song()));
         app.send_live();
@@ -543,7 +513,7 @@ impl App {
 
     /// The keys typed so far in a sequence.
     pub fn pending(&self) -> &[Key] {
-        &self.pending
+        &self.grammar.pending
     }
 
     /// Put the cursor on the first step that plays, at the top of the screen.

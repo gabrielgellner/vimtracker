@@ -629,7 +629,7 @@ impl App {
             command: Some(command),
             ..Entry::default()
         };
-        self.replacing = Some(Field::FxValue(slot));
+        self.grammar.replacing = Some(Field::FxValue(slot));
         self.modes.mode = Mode::Replace;
     }
 
