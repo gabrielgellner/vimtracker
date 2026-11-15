@@ -8,10 +8,11 @@
 //!
 //! `SamplePage` is the page as a component (#320): its cursor, zoom, view, selection and the
 //! settings' focus, the pictures it shows, its moves and its edits of the entry, through the
-//! [`Services`]' actions, and its drawing, in `draw`, given a [`Ctx`]. What plays, the
-//! pads, the marks' letters and jumps and the picker are still `App`'s, which the page passes its
-//! keys back to. It's a [`Page`], with its rows of the binding table, [`Page::KEYS`], here beside
-//! it.
+//! [`Services`]' actions, what it plays, in `auditioning`, and its drawing, in `draw`, given a
+//! [`Ctx`]. What only `App` can do its keys ask for in their [`Outcome`]: the picker, the pads'
+//! keys mode, and what plays held while the key is down (#784). The marks' letters and jumps are
+//! `App`'s, as they wait for a letter and go on the jump list, so the page passes them back. It's a
+//! [`Page`], with its rows of the binding table, [`Page::KEYS`], here beside it.
 //!
 //! Everything here is in frames at the file's own rate, as an entry's points are, so the cursor
 //! stays on the same sound whatever rate the program plays at.
@@ -46,7 +47,6 @@ use crate::graphics::{PanelIds, PanelKey, PanelWant, Shape};
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
 use crate::pages::sample::draw::{WAVE_ROWS, WaveOnScreen, page_size, wave_columns};
-use crate::pages::sample::marking::MarkWait;
 use crate::pages::sample::placing::{Edge, Nudge};
 use crate::pages::sample::settings::SampleSetting;
 use crate::pages::sample::wave::{Wave, drawn_points};
@@ -1289,13 +1289,41 @@ impl Page for SamplePage {
     type Drawn = Option<WaveOnScreen>;
 
     /// Run a key as the program gives it to the page, on the sample the cursor's track plays: one
-    /// of the page's own keys, [`SamplePage::key_on`], or passed back.
+    /// of the page's own keys, [`SamplePage::key_on`], what plays, the pads, or `K`'s picker, or
+    /// passed back, for the marks and what means the same on every page.
     fn key(&mut self, cmd: Cmd, times: usize, ctx: &mut CtxMut) -> Outcome {
         let Ok(shown) = self.shown(ctx.services) else {
             return Outcome::Passed;
         };
         let count = ctx.modes.count;
-        self.key_on(cmd, times as u64, count, &shown, ctx.services)
+        let services = &mut *ctx.services;
+        let started = match self.key_on(cmd, times as u64, count, &shown, services) {
+            Outcome::Passed => match cmd {
+                Cmd::PickValue => {
+                    let picker = match self.setting {
+                        Some(setting) => {
+                            self.values_picker(&shown, setting, services.song().millibpm)
+                        }
+                        None => self.settings_picker(&shown),
+                    };
+                    return Outcome::Open(Box::new(picker));
+                }
+                Cmd::Audition => match self.selection() {
+                    Some(selected) => self.audition_frames(&shown, selected, services),
+                    None => self.audition_slice(&shown, services),
+                },
+                Cmd::PlayFromCursor => self.audition_from_cursor(&shown, services),
+                // The keys mode, where two rows of keys play the slices. The status line says
+                // `PADS` while it's on, and what the keys play under it.
+                Cmd::EnterInsert => {
+                    services.status.clear();
+                    return Outcome::Enter(Mode::Keys);
+                }
+                _ => return Outcome::Passed,
+            },
+            outcome => return outcome,
+        };
+        started.map_or(Outcome::Done, Outcome::Hold)
     }
 
     /// Draw the page, giving back where its waveform is on screen, if it's drawn, for the lines
@@ -1428,50 +1456,6 @@ impl App {
         if self.modes.view == View::Sample {
             let _ = self.sample_page_here();
         }
-    }
-
-    /// Run a key the sample page passed back, on what it shows: `;` and `Space c`, which play
-    /// through the cursor's track, `i`, the pads, `'` and `m`, which wait for a letter, `]'` and
-    /// `['`, which are jumps, and `K`, the picker of the settings or of a setting's values.
-    /// Returns false if it means what it does on every page.
-    pub(crate) fn run_sample_passed(&mut self, cmd: Cmd, shown: &Shown) -> bool {
-        let count = self.modes.count.take();
-        let times = count.unwrap_or(1).max(1);
-        match cmd {
-            Cmd::PickValue => {
-                let picker = match self.sample_page.setting {
-                    Some(setting) => {
-                        let millibpm = self.song().millibpm;
-                        self.sample_page.values_picker(shown, setting, millibpm)
-                    }
-                    None => self.sample_page.settings_picker(shown),
-                };
-                self.show_picker(picker);
-            }
-            Cmd::Sample(SampleKey::Mark) => self.awaiting_mark = Some(MarkWait::Jump),
-            Cmd::Sample(SampleKey::NameSlice) => self.awaiting_mark = Some(MarkWait::Name),
-            Cmd::Sample(key @ (SampleKey::NextMark | SampleKey::PreviousMark)) => {
-                self.jump_to_next_mark(key == SampleKey::NextMark, times);
-            }
-            Cmd::Audition => match self.sample_page.selection() {
-                Some(selected) => self.audition_frames(shown, selected),
-                None => self.audition_slice(shown),
-            },
-            Cmd::PlayFromCursor => self.audition_from_cursor(shown),
-            Cmd::EnterInsert => self.start_pads(),
-            _ => {
-                self.modes.count = count;
-                return false;
-            }
-        }
-        true
-    }
-
-    /// A setting chosen from `K` on the waveform: the focus goes to it on the rows.
-    /// The status line says `SETTINGS` while it's there, and how to change it under that.
-    pub(crate) fn pick_sample_setting(&mut self, setting: SampleSetting) {
-        self.sample_page.setting = Some(setting);
-        self.services.status.clear();
     }
 
     /// A value chosen from `K` on the rows.

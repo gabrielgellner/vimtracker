@@ -456,6 +456,13 @@ impl SamplePage {
         Picker::new("Sample settings", items).opened_on(at.or(Some(0)))
     }
 
+    /// A setting chosen from `K` on the waveform: the focus goes to it on the rows.
+    /// The status line says `SETTINGS` while it's there, and how to change it under that.
+    pub(crate) fn pick_setting(&mut self, setting: SampleSetting, services: &mut Services) {
+        self.setting = Some(setting);
+        services.status.clear();
+    }
+
     /// `K` on the settings rows: the setting's values, and the sample's own first for a slice's,
     /// as a picker for the program to open. Each length says how fast it plays at a tempo, in
     /// thousandths of a beat a minute.

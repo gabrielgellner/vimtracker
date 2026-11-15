@@ -11,6 +11,8 @@ use vt_model::step::{HIGHEST_OCTAVE, LOWEST_OCTAVE, MAX_NOTE, MIN_NOTE, octave_s
 use crate::input::bindings::{Binding, Cmd, Resolved, adjusting_key, degree_key, note_key};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
+use crate::pages::sample::SampleKey;
+use crate::pages::sample::marking::MarkWait;
 
 use super::{App, Entry, HOLD_TIME, Held, HeldNote, KEYS_NOTES, Momentary, which_key_due};
 
@@ -506,6 +508,19 @@ impl App {
             Cmd::Guides => self.open_guide_picker(),
             Cmd::PickValue => self.open_field_picker(),
             Cmd::Shape => self.open_shape(),
+            // The sample page's marks: `'` and `m` wait for a letter, as an operator waits for a
+            // motion, and `]'` and `['` are jumps, the jump list's.
+            Cmd::Sample(key @ (SampleKey::Mark | SampleKey::NameSlice)) => {
+                self.modes.count = None;
+                self.awaiting_mark = Some(match key {
+                    SampleKey::Mark => MarkWait::Jump,
+                    _ => MarkWait::Name,
+                });
+            }
+            Cmd::Sample(key @ (SampleKey::NextMark | SampleKey::PreviousMark)) => {
+                let times = self.modes.count.take().unwrap_or(1).max(1);
+                self.jump_to_next_mark(key == SampleKey::NextMark, times);
+            }
             Cmd::ReopenGenerator => self.reopen_generator(),
             Cmd::ApplyGenerator => self.apply_generator_here(),
             Cmd::BakeMods => self.bake_pitch_mods(),

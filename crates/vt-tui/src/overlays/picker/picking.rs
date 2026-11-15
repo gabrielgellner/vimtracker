@@ -898,7 +898,9 @@ impl App {
             Pick::SliceLock { slot, number } => self.pick_slice_lock(slot, number),
             Pick::SliceMarkLock { slot, letter } => self.pick_slice_mark_lock(slot, letter),
             Pick::Mark(letter) => self.jump_to_mark(letter),
-            Pick::SampleSetting(setting) => self.pick_sample_setting(setting),
+            Pick::SampleSetting(setting) => {
+                self.sample_page.pick_setting(setting, &mut self.services);
+            }
             Pick::SampleValue { setting, value } => self.pick_sample_value(setting, value),
             Pick::Tuning { control, value } => set_tuning(&mut self.services, control, value),
             Pick::Track(track) => self.go_to_track(track),
