@@ -259,10 +259,10 @@ fn the_sound_rack_moves_on_its_own_without_an_app() {
     // Kick has no type, so its title has only the machine.
     assert_eq!(devices[0].title, [Some(Control::Machine), None, None, None]);
     assert_eq!(page.device_cursor(track), at(0, 0, 0));
-    assert_eq!(
+    assert!(matches!(
         page.key_on(Cmd::Move(Motion::Right), 1, track),
         Outcome::Done
-    );
+    ));
     assert_eq!(page.device_cursor(track), at(0, 0, 0), "nothing beside it");
     page.key_on(Cmd::Move(Motion::Down), 1, track);
     page.key_on(Cmd::Move(Motion::RowEnd), 1, track);

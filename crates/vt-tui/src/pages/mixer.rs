@@ -155,7 +155,7 @@ impl Page for MixerPage {
     /// page's, or what it means across pages.
     fn key(&mut self, cmd: Cmd, times: usize, ctx: &mut CtxMut) -> Outcome {
         let outcome = self.key_on(cmd, times, ctx.track_here());
-        if outcome != Outcome::Passed {
+        if !matches!(outcome, Outcome::Passed) {
             return outcome;
         }
         let view = ctx.modes.view;
