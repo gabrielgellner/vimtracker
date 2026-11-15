@@ -29,8 +29,8 @@ A number before a motion repeats it, as in Vim.
 | `2}` | Down 2 beats |
 | `8G` | To the 8th step of the loop, counting in decimal |
 | `5C-e` `5C-y` | Scroll the view 5 rows, rather than 3 |
-| `5H` `3L` | To the 5th row from the top, or the 3rd from the bottom, of the screen |
-| `8C-d` `8C-u` | Down or up 8 rows, and 8 from then on, as Vim's `scroll` option |
+| `5H` `3L` | To the 5th row on screen, or the 3rd from the bottom |
+| `8C-d` `8C-u` | Down or up 8 rows, and 8 from then on, as in Vim |
 | `2W` `2B` | In a selection, reach 2 tracks on or back |
 
 A key with no use for a count, such as `M`, drops it, so it never goes on to the
