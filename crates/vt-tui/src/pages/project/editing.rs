@@ -203,15 +203,19 @@ impl ProjectPage {
                 return Outcome::Run(Line::Seed(seed));
             }
             ProjectControl::Scale => {
-                let scale = next_in(&scales(services.scale), scale_here(services.scale), up);
+                let scale = next_in(
+                    &scales(services.live.scale),
+                    scale_here(services.live.scale),
+                    up,
+                );
                 services.set_scale(scale);
             }
             ProjectControl::Root => {
                 let roots: Vec<u8> = (0..ROOTS.len() as u8).collect();
-                let root = next_in(&roots, services.scale.root, up);
+                let root = next_in(&roots, services.live.scale.root, up);
                 services.set_scale(Scale {
                     root,
-                    ..services.scale
+                    ..services.live.scale
                 });
             }
             ProjectControl::Grid => {
@@ -226,12 +230,12 @@ impl ProjectPage {
                 }
             }
             ProjectControl::AutoJump => {
-                if services.auto_jump != up {
+                if services.live.auto_jump != up {
                     services.toggle_auto_jump();
                 }
             }
             ProjectControl::ReadOnly => {
-                if services.read_only != up {
+                if services.live.read_only != up {
                     return Outcome::Run(Line::ReadOnly(up));
                 }
             }
@@ -297,28 +301,28 @@ impl ProjectPage {
                 Some(Line::Reset(None))
             }
             ProjectControl::Seed if song.seed != 0 => Some(Line::Seed(0)),
-            ProjectControl::Scale if services.scale.on => {
+            ProjectControl::Scale if services.live.scale.on => {
                 services.set_scale(Scale {
                     on: false,
-                    ..services.scale
+                    ..services.live.scale
                 });
                 None
             }
-            ProjectControl::Root if services.scale.root != 0 => {
+            ProjectControl::Root if services.live.scale.root != 0 => {
                 services.set_scale(Scale {
                     root: 0,
-                    ..services.scale
+                    ..services.live.scale
                 });
                 None
             }
             ProjectControl::Grid if song.skip != BEAT_STEPS as u32 => {
                 Some(Line::SetSkip(BEAT_STEPS as u32))
             }
-            ProjectControl::AutoJump if services.auto_jump => {
+            ProjectControl::AutoJump if services.live.auto_jump => {
                 services.toggle_auto_jump();
                 None
             }
-            ProjectControl::ReadOnly if services.read_only => Some(Line::ReadOnly(false)),
+            ProjectControl::ReadOnly if services.live.read_only => Some(Line::ReadOnly(false)),
             ProjectControl::Name => {
                 services.status =
                     "i renames the project, and C-r there rolls a new name".to_owned();
@@ -349,8 +353,8 @@ impl ProjectPage {
                 ("Launch. i types a number of steps", at)
             }
             ProjectControl::Scale => {
-                let choices = scales(services.scale);
-                let here = scale_here(services.scale);
+                let choices = scales(services.live.scale);
+                let here = scale_here(services.live.scale);
                 items = choices
                     .iter()
                     .map(|scale| {
@@ -365,12 +369,12 @@ impl ProjectPage {
                     .map(|root| {
                         let scale = Scale {
                             root,
-                            ..services.scale
+                            ..services.live.scale
                         };
                         Item::new(scale.root_name(), Pick::ScaleTo(scale))
                     })
                     .collect();
-                ("Root", Some(usize::from(services.scale.root)))
+                ("Root", Some(usize::from(services.live.scale.root)))
             }
             ProjectControl::Grid => {
                 let skip = song.skip;
@@ -395,7 +399,9 @@ impl ProjectPage {
                 services.toggle_auto_jump();
                 return Outcome::Done;
             }
-            ProjectControl::ReadOnly => return Outcome::Run(Line::ReadOnly(!services.read_only)),
+            ProjectControl::ReadOnly => {
+                return Outcome::Run(Line::ReadOnly(!services.live.read_only));
+            }
             ProjectControl::Audio => return Outcome::Jump(View::Audio),
             ProjectControl::Save => {
                 return Outcome::Run(Line::Write {
@@ -564,7 +570,7 @@ impl ProjectPage {
             ProjectControl::Root => match parse_root(text) {
                 Some(root) => services.set_scale(Scale {
                     root,
-                    ..services.scale
+                    ..services.live.scale
                 }),
                 None => services.status = "A root is a note, such as d or f#".to_owned(),
             },

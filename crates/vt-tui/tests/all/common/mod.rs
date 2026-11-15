@@ -590,7 +590,7 @@ pub fn notes(app: &App) -> Vec<Note> {
 /// Turn auto-jump on with a grid of one row, so entries go down the rows one by one.
 pub fn entering_steps_down(app: &mut App) {
     command(app, "set skip=1");
-    app.services.auto_jump = true;
+    app.services.live.auto_jump = true;
 }
 
 /// Press a key now, and let it go after this many milliseconds.
@@ -660,7 +660,7 @@ pub fn song_text(app: &App) -> Vec<String> {
 /// Have each track report the chain of the row being edited, for setting a playhead by hand.
 pub fn on_the_row_being_edited(app: &mut App) {
     let chains = app.services.section_here().unwrap().chains.clone();
-    for (jam, chain) in app.services.jam.iter_mut().zip(chains) {
+    for (jam, chain) in app.services.reported.jam.iter_mut().zip(chains) {
         jam.chain = chain;
     }
 }

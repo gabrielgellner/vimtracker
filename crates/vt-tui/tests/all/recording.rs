@@ -49,7 +49,7 @@ fn space_r_arms_recording_only_while_playing_and_stopping_or_leaving_disarms() {
     app.key(tab, time_at(at));
     app.key_released(tab, time_at(at));
     play_to(&mut app, &mut rt, &mut at, 1.0);
-    assert_eq!(app.services.transport, Transport::Paused);
+    assert_eq!(app.services.reported.transport, Transport::Paused);
     assert!(!app.recording());
 
     // So does leaving the phrase view.
@@ -74,7 +74,7 @@ fn a_recorded_note_goes_on_the_row_its_own_track_is_playing_as_long_as_its_held(
     app.key(a, time_at(at));
     let rows = rows_of(&app, 1);
     assert_eq!(rows[1].note, Note::On(60), "{rows:?}");
-    assert_eq!(rows[1].velocity, Some(app.services.note_velocity));
+    assert_eq!(rows[1].velocity, Some(app.services.live.note_velocity));
     assert_eq!(rows[1].nudge, 6);
     assert_eq!(app.services.cursor.step, 0, "the cursor stays");
     // Until it's let go, it holds on the row's pulse until something ends it.
@@ -206,7 +206,7 @@ fn recording_overwrites_only_the_note_velocity_and_gate_and_a_pass_is_one_undo()
     let written = rows_of(&app, 1);
     assert_eq!(written[0], rows[0], "a row not played into stays");
     assert_eq!(written[1].note, Note::On(60));
-    assert_eq!(written[1].velocity, Some(app.services.note_velocity));
+    assert_eq!(written[1].velocity, Some(app.services.live.note_velocity));
     assert_eq!(
         written[1].gate_kind(),
         vt_model::step::GateKind::Single,

@@ -506,7 +506,7 @@ fn the_fx_pages_bars_follow_what_plays() {
         macros: Default::default(),
     };
     live.inserts[0][..4].copy_from_slice(&[0, 0xFF, 0xFF, 0xE0]);
-    app.services.live = Some(live);
+    app.services.reported.live = Some(live);
     let line = fx_line(&app, 0);
     // The number stays what's set, and the fill goes where it's playing, with a mark on the setting.
     assert!(line.contains("Amount    40 ▕██│██████▏"), "{line}");
@@ -608,7 +608,7 @@ fn the_sound_follows_the_new_order() {
     press(&mut app, " 3k;");
     let _ = loudest(&mut realtime, 4000);
     app.tick();
-    let live: LiveValues = app.services.live.unwrap();
+    let live: LiveValues = app.services.reported.live.unwrap();
     assert_eq!(live.inserts[1][1], 0x40, "the second slot has it");
     assert_eq!(live.inserts[0][..4], [0; 4], "the first doesn't");
 }
@@ -879,7 +879,7 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
     special(&mut app, KeyCode::Enter);
     app.track_page.images = PanelIds::from_iter([(PanelKey::Slot(0), 0x01_02_03)]);
     // 18 dB is nine tenths of the meter's 20: all of its top four rows and half of the last.
-    app.services.live = Some(LiveValues {
+    app.services.reported.live = Some(LiveValues {
         reduction: [18.0, 0.0, 3.0, 0.0],
         ..LiveValues::default()
     });
@@ -1181,7 +1181,7 @@ fn a_curve_under_an_lfo_is_sent_every_other_frame_and_costs_a_few_kilobytes() {
         let mut inserts = [[0; MAX_PARAMS]; vt_model::insert::INSERTS];
         inserts[0] = moved(0, "Threshold", 4 * frame + 1);
         inserts[1] = moved(1, "Low", 2 * frame + 1);
-        app.services.live = Some(LiveValues {
+        app.services.reported.live = Some(LiveValues {
             inserts,
             ..LiveValues::default()
         });
@@ -1341,14 +1341,14 @@ fn the_fx_page_fades_a_slot_a_lock_bypasses_while_the_song_plays() {
         ..LiveValues::default()
     };
     assert!(!faint(&app));
-    app.services.transport = Transport::Playing;
-    app.services.live = Some(heard(true));
+    app.services.reported.transport = Transport::Playing;
+    app.services.reported.live = Some(heard(true));
     assert!(faint(&app), "a lock switches it out as it plays");
-    app.services.live = Some(heard(false));
+    app.services.reported.live = Some(heard(false));
     assert!(!faint(&app));
     // Stopped, it shows the slot's own, whatever was last heard.
-    app.services.transport = Transport::Stopped;
-    app.services.live = Some(heard(true));
+    app.services.reported.transport = Transport::Stopped;
+    app.services.reported.live = Some(heard(true));
     assert!(!faint(&app));
     press(&mut app, "kkb");
     press(&mut app, "jj");
@@ -1405,15 +1405,15 @@ fn a_slots_toggle_follows_b_and_a_lock_while_the_song_plays() {
         bypassed: [bypassed, false, false, false],
         ..LiveValues::default()
     };
-    app.services.transport = Transport::Playing;
-    app.services.live = Some(heard(true));
+    app.services.reported.transport = Transport::Playing;
+    app.services.reported.live = Some(heard(true));
     assert_eq!(switch(&app), off, "a lock bypasses it");
-    app.services.live = Some(heard(false));
+    app.services.reported.live = Some(heard(false));
     assert_eq!(switch(&app), on);
     press(&mut app, "b");
     assert_eq!(switch(&app), on, "a lock brings it in under b's bypass");
     // Stopped, it's the slot's own, whatever was last heard.
-    app.services.transport = Transport::Stopped;
+    app.services.reported.transport = Transport::Stopped;
     assert_eq!(switch(&app), off);
 }
 

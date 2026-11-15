@@ -195,7 +195,7 @@ impl App {
     fn start_sampling(&mut self, from_page: bool) {
         let source = self.sampling.source;
         let quantise = self.sampling.quantise;
-        if self.services.read_only {
+        if self.services.live.read_only {
             self.services.status =
                 "This song is read-only, so nothing is recorded into its folder".to_owned();
             return;
@@ -270,7 +270,7 @@ impl App {
                 "Audio has stopped, so nothing records. Space 9 L chooses a device".to_owned();
             return;
         }
-        let waits = match (quantise, self.services.transport) {
+        let waits = match (quantise, self.services.reported.transport) {
             (RecordQuantise::Now, _) => "now",
             (_, vt_engine::engine::Transport::Playing) => on(quantise),
             _ => "as the song starts",
@@ -305,7 +305,7 @@ impl App {
         self.services
             .handle
             .send(Command::StopRecording { quantise, latency });
-        let playing = self.services.transport == vt_engine::engine::Transport::Playing;
+        let playing = self.services.reported.transport == vt_engine::engine::Transport::Playing;
         let when = if playing { on(quantise) } else { "now" };
         self.services.status = format!("Stopping {number:02X} {when}");
     }

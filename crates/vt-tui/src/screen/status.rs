@@ -86,7 +86,7 @@ pub fn value_shown(app: &App) -> Option<String> {
         return None;
     }
     let control = app.track_control();
-    let view = |track: &Track| view(control, track, app.song(), app.services.scale.on);
+    let view = |track: &Track| view(control, track, app.song(), app.services.live.scale.on);
     // A fader the steps drive reads where they have it, and says so, as one a hand has taken over
     // from them does (decision 174).
     let heard = app.services.track_as_heard(app.services.cursor.track)?;
@@ -182,7 +182,11 @@ pub(crate) fn phrase_value(services: &Services, field: Field) -> Option<String> 
                 return Some(condition_shown(cell.coarse()));
             }
             if cell.command == Some(FxCommand::Arp) {
-                return Some(arp_shown(cell.coarse(), track.arpeggio, services.scale.on));
+                return Some(arp_shown(
+                    cell.coarse(),
+                    track.arpeggio,
+                    services.live.scale.on,
+                ));
             }
             // What an `RND` varies is what's to its left.
             if cell.command == Some(FxCommand::Rnd) {
@@ -192,14 +196,14 @@ pub(crate) fn phrase_value(services: &Services, field: Field) -> Option<String> 
                 return Some(variation::text(
                     cell.coarse(),
                     Varies::of(left),
-                    services.scale.on,
+                    services.live.scale.on,
                 ));
             }
             if cell.command == Some(FxCommand::Acu) {
                 return Some(amount_shown(
                     cell.coarse(),
                     track.accumulation,
-                    services.scale.on,
+                    services.live.scale.on,
                 ));
             }
             if cell.command == Some(FxCommand::Set(SettingId::SAMPLE)) && track.is_sound() {
@@ -294,13 +298,13 @@ pub(crate) fn grid_name(skip: u32) -> String {
 /// while it's on, and a realign, a cued launch, a mute or solo armed for the grid and a loop are
 /// named, with the glyph for waiting, until the launch grid comes round.
 pub(crate) fn transport_spans(app: &App) -> Vec<Span<'static>> {
-    let (glyph, style) = match app.services.transport {
+    let (glyph, style) = match app.services.reported.transport {
         Transport::Playing => (glyphs::PLAY, theme::active()),
         Transport::Paused => (glyphs::PAUSE, theme::dim()),
         Transport::Stopped => (glyphs::STOP, theme::dim()),
     };
     let mut spans = vec![Span::raw(" "), Span::styled(glyph.to_string(), style)];
-    if app.services.transport == Transport::Playing && app.recording() {
+    if app.services.reported.transport == Transport::Playing && app.recording() {
         spans.push(Span::raw(" "));
         spans.push(Span::styled(
             glyphs::RECORD.to_string(),
@@ -324,19 +328,25 @@ pub(crate) fn transport_spans(app: &App) -> Vec<Span<'static>> {
         }
         None => {}
     }
-    if app.services.fill {
+    if app.services.live.fill {
         spans.push(Span::raw(" FILL"));
     }
-    let realigning = app.services.realigning || app.services.realigning_tracks.contains(&true);
-    let cued = app.services.jam.iter().any(|jam| jam.cued.is_some());
-    let muting = app.services.jam.iter().any(|jam| jam.mute_waiting);
-    let soloing = app.services.jam.iter().any(|jam| jam.solo_waiting);
+    let realigning =
+        app.services.reported.realigning || app.services.reported.realigning_tracks.contains(&true);
+    let cued = app
+        .services
+        .reported
+        .jam
+        .iter()
+        .any(|jam| jam.cued.is_some());
+    let muting = app.services.reported.jam.iter().any(|jam| jam.mute_waiting);
+    let soloing = app.services.reported.jam.iter().any(|jam| jam.solo_waiting);
     for (waiting, name) in [
         (realigning, "REALIGN"),
         (cued, "LAUNCH"),
         (muting, "MUTE"),
         (soloing, "SOLO"),
-        (app.services.loop_waiting, "LOOP"),
+        (app.services.reported.loop_waiting, "LOOP"),
     ] {
         if waiting {
             spans.push(Span::raw(" "));
@@ -411,7 +421,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     };
     let dirty = if app.services.dirty { " *" } else { "" };
     // After the changes' mark, as Vim's status line puts `[RO]` after `[+]`.
-    let read_only = if app.services.read_only { " [RO]" } else { "" };
+    let read_only = if app.services.live.read_only {
+        " [RO]"
+    } else {
+        ""
+    };
     let typed = if app.modes.entry.text.is_empty() {
         String::new()
     } else {
@@ -440,7 +454,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .map_or_else(String::new, |steps| format!("Reset {steps}  "));
     let sections = app.song().sections.len();
     let section = if sections > 1 {
-        let looping = match app.services.looping {
+        let looping = match app.services.reported.looping {
             Some(sections) if sections.first != sections.last => {
                 format!(" loop {}-{}", sections.first + 1, sections.last + 1)
             }
@@ -457,16 +471,20 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let reset = format!("{section}{reset}");
     // The grid only means something where notes are entered.
     let grid = if app.modes.view == View::Phrase {
-        let jump = if app.services.auto_jump { " Jump" } else { "" };
+        let jump = if app.services.live.auto_jump {
+            " Jump"
+        } else {
+            ""
+        };
         format!("  Grid {}{jump}", grid_name(app.song().skip))
     } else {
         String::new()
     };
-    let scale = if app.modes.view == View::Phrase && app.services.scale.on {
+    let scale = if app.modes.view == View::Phrase && app.services.live.scale.on {
         format!(
             "  Scale {} {}",
-            app.services.scale.root_name(),
-            app.services.scale.kind.short_name()
+            app.services.live.scale.root_name(),
+            app.services.live.scale.kind.short_name()
         )
     } else {
         String::new()
@@ -500,8 +518,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     status.push(Span::raw(format!(
         "  {} BPM  Groove {groove}  {reset}Oct {} Vel {:02X}{grid}{scale}  TVol {level:02X}{dirty}{read_only}{pending}{typed}",
         format_bpm(app.song().millibpm),
-        app.services.octave,
-        app.services.note_velocity,
+        app.services.live.octave,
+        app.services.live.note_velocity,
     )));
     let message = if app.modes.mode == Mode::Command {
         format!(":{}", app.overlays.command_line)

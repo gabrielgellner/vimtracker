@@ -17,7 +17,7 @@ fn with_a_scale_the_degrees_go_up_from_the_root_and_on_along_the_row_above() {
     let (mut app, _realtime) = app();
     command(&mut app, "set root=d");
     command(&mut app, "set scale=dorian");
-    assert!(app.services.scale.on, "setting one turns it on");
+    assert!(app.services.live.scale.on, "setting one turns it on");
     entering_steps_down(&mut app);
     tap(&mut app, "iasdfghjqwertyu");
     assert_eq!(
@@ -77,23 +77,23 @@ fn option_s_turns_the_scale_off_and_on_and_remembers_it() {
     command(&mut app, "set scale=dorian");
     press(&mut app, "i");
     alt(&mut app, "M-s");
-    assert!(!app.services.scale.on);
+    assert!(!app.services.live.scale.on);
     assert_eq!(app.modes.mode, Mode::Insert, "in Insert, it stays");
     press(&mut app, "s");
     assert_eq!(written_notes(&app), [Note::On(62)], "the piano again");
     app.key_released(Key::char('s'), Instant::now());
     alt(&mut app, "M-s");
-    assert_eq!(app.services.scale.root_name(), "D");
-    assert_eq!(app.services.scale.kind.name(), "Dorian");
+    assert_eq!(app.services.live.scale.root_name(), "D");
+    assert_eq!(app.services.live.scale.kind.name(), "Dorian");
     press(&mut app, "s");
     assert_eq!(written_notes(&app)[1], Note::On(64));
     special(&mut app, KeyCode::Esc);
     alt(&mut app, "M-s");
-    assert!(!app.services.scale.on);
+    assert!(!app.services.live.scale.on);
     command(&mut app, "set scale=on");
-    assert!(app.services.scale.on);
+    assert!(app.services.live.scale.on);
     command(&mut app, "set scale=off");
-    assert!(!app.services.scale.on);
+    assert!(!app.services.live.scale.on);
 }
 
 #[test]
@@ -107,15 +107,15 @@ fn the_scale_is_not_undone_but_is_saved() {
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     press(&mut app, "u");
-    assert!(app.services.scale.on, "undoing a note leaves it");
-    assert_eq!(app.services.scale.root_name(), "D");
+    assert!(app.services.live.scale.on, "undoing a note leaves it");
+    assert_eq!(app.services.live.scale.root_name(), "D");
 
     let path = folder();
     command(&mut app, &format!("w {}", path.display()));
     let (mut other, _realtime) = self::app();
     command(&mut other, &format!("e {}", path.display()));
     assert_eq!(
-        other.services.scale, app.services.scale,
+        other.services.live.scale, app.services.live.scale,
         "{}",
         other.services.status
     );
@@ -189,8 +189,8 @@ fn the_scale_list_sets_the_kind_and_turns_it_on() {
     assert_eq!(app.modes.mode, Mode::Picker);
     press(&mut app, "dorian");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.services.scale.kind.name(), "Dorian");
-    assert!(app.services.scale.on);
+    assert_eq!(app.services.live.scale.kind.name(), "Dorian");
+    assert!(app.services.live.scale.on);
 }
 
 #[test]
