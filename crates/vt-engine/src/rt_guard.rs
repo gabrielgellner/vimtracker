@@ -5,6 +5,9 @@
 //!
 //! It counts rather than panics, because panicking inside a global allocator is its own hazard:
 //! the unwinder allocates.
+//!
+//! vt-model's tests build this file too, by its path, as their allocator: the model can't depend
+//! on the engine. So it uses nothing but `std`.
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;

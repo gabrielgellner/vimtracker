@@ -798,6 +798,7 @@ impl Rung for Granular {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::signals::sine;
     use std::f32::consts::TAU;
     use vt_model::insert::MOST_SHIFT;
 
@@ -808,10 +809,6 @@ mod tests {
         granular.follow(settings);
         granular.settle();
         granular
-    }
-
-    fn sine(frame: usize, hertz: f32, rate: u32) -> f32 {
-        (frame as f32 / rate as f32 * hertz * TAU).sin() * 0.5
     }
 
     /// How many grains started over a stretch.
@@ -857,7 +854,7 @@ mod tests {
         let mut granular = granular(Settings::DEFAULT, RATE);
         let mut energy = 0.0;
         for frame in 0..RATE as usize * 2 {
-            let out = granular.process([sine(frame, 330.0, RATE); 2]);
+            let out = granular.process([sine(frame, 330.0, 0.5, RATE); 2]);
             if frame > RATE as usize {
                 energy += out[0] * out[0] + out[1] * out[1];
             }
@@ -872,7 +869,7 @@ mod tests {
         });
         // Once the grains playing are done, nothing more comes out.
         let out: Vec<[f32; 2]> = (0..RATE as usize * 2)
-            .map(|frame| quiet.process([sine(frame, 330.0, RATE); 2]))
+            .map(|frame| quiet.process([sine(frame, 330.0, 0.5, RATE); 2]))
             .collect();
         assert!(out[RATE as usize..].iter().flatten().all(|s| *s == 0.0));
     }
@@ -904,7 +901,7 @@ mod tests {
     fn through(settings: Settings, hertz: f32) -> Vec<f32> {
         let mut granular = granular(settings, RATE);
         (0..RATE as usize * 3)
-            .map(|frame| granular.process([sine(frame, hertz, RATE); 2])[0])
+            .map(|frame| granular.process([sine(frame, hertz, 0.5, RATE); 2])[0])
             .skip(RATE as usize * 2)
             .collect()
     }
@@ -932,7 +929,7 @@ mod tests {
     fn frozen_it_keeps_playing_a_tone_after_it_stops() {
         let mut granular = granular(Settings::DEFAULT, RATE);
         for frame in 0..RATE as usize * 2 {
-            granular.process([sine(frame, 330.0, RATE); 2]);
+            granular.process([sine(frame, 330.0, 0.5, RATE); 2]);
         }
         let mut frozen = granular.clone();
         frozen.follow(Settings {
@@ -974,7 +971,7 @@ mod tests {
                 };
                 granular.follow(now);
             }
-            let out = granular.process([sine(frame, 220.0, RATE); 2]);
+            let out = granular.process([sine(frame, 220.0, 0.5, RATE); 2]);
             if late {
                 most = most.max((out[0] - last[0]).abs().max((out[1] - last[1]).abs()));
             }
@@ -1163,7 +1160,7 @@ mod tests {
         );
         let mut loudest = 0.0_f32;
         for frame in 0..RATE as usize * 6 {
-            let out = granular.process([sine(frame, 110.0, RATE) * 2.0; 2]);
+            let out = granular.process([sine(frame, 110.0, 0.5, RATE) * 2.0; 2]);
             if frame > RATE as usize {
                 loudest = loudest.max(out[0].abs()).max(out[1].abs());
             }
@@ -1186,7 +1183,7 @@ mod tests {
     fn clearing_forgets_what_is_in_it() {
         let mut granular = granular(Settings::DEFAULT, RATE);
         for frame in 0..RATE as usize {
-            granular.process([sine(frame, 440.0, RATE); 2]);
+            granular.process([sine(frame, 440.0, 0.5, RATE); 2]);
         }
         granular.clear();
         for _ in 0..RATE {

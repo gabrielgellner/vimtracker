@@ -14,7 +14,7 @@ use vt_model::settings::SettingId;
 use vt_model::song::{Machine, Song, SynthVoice, level_gain};
 
 use crate::support::steady::flat;
-use crate::support::{pool, song};
+use crate::support::{self, pool, song};
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
@@ -785,8 +785,8 @@ fn modulating_a_slot_is_heard_and_renders_the_same_each_time() {
             ModSlot::lfo(Some(AMOUNT_TARGET), Lfo::default()).with_depth(depth);
         render_frames(version(moved, flat()), RATE, STEP * 8)
     };
-    assert_eq!(render(0x80), render(0x80));
-    assert_ne!(render(0x80), render(0));
+    let moved = support::repeats("moved", || render(0x80));
+    assert_ne!(moved, render(0));
 }
 
 /// How far a track's level swings in decibels over the last of a render.
@@ -926,11 +926,10 @@ fn an_envelope_moves_an_lfos_depth() {
 
 #[test]
 fn an_lfo_moving_another_renders_the_same_each_time() {
-    let render = || {
+    support::repeats("an LFO on an LFO", || {
         let moved = lfo_on_lfo(SettingId::modulator(4, 0).unwrap(), 0x20, 0);
         render_frames(version(moved, flat()), RATE, STEP * 8)
-    };
-    assert_eq!(render(), render());
+    });
 }
 
 /// LFO 1 swinging the cutoff by a square a quarter long, with no depth of its own.

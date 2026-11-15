@@ -7,6 +7,7 @@ use vt_model::modulation::{ModSlot, default_mod};
 use vt_model::settings::{SHORTEST_GATE, SettingId};
 use vt_model::song::{ACID_GATE, Lane, Machine, Song, SynthVoice};
 
+use crate::support;
 use crate::support::level::{render, song};
 
 const RATE: u32 = 48_000;
@@ -189,9 +190,7 @@ fn acid(rows: &[&str]) -> Song {
 
 /// The loudest the left channel is over a stretch.
 fn peak(out: &[f32], from: usize, to: usize) -> f32 {
-    out[from..to]
-        .iter()
-        .fold(0.0, |peak, sample| sample.abs().max(peak))
+    support::peak(&out[from..to])
 }
 
 #[test]

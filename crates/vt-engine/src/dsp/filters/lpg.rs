@@ -528,6 +528,7 @@ mod tests {
     use vt_model::constants::UNITY_LEVEL;
 
     use super::*;
+    use crate::dsp::signals::sine;
 
     const RATE: u32 = 48_000;
 
@@ -538,14 +539,10 @@ mod tests {
         }
     }
 
-    fn sine(hertz: f32, frame: usize, rate: u32) -> f32 {
-        (frame as f32 / rate as f32 * hertz * std::f32::consts::TAU).sin()
-    }
-
     /// A band-limited sawtooth: its first twenty harmonics.
     fn saw(hertz: f32, frame: usize, rate: u32) -> f32 {
         (1..=20)
-            .map(|harmonic| sine(hertz * harmonic as f32, frame, rate) / harmonic as f32)
+            .map(|harmonic| sine(frame, hertz * harmonic as f32, 1.0, rate) / harmonic as f32)
             .sum::<f32>()
             * 0.5
     }
@@ -636,7 +633,7 @@ mod tests {
         (0..frames)
             .map(|frame| {
                 let sample = if frame < held {
-                    sine(220.0, frame, rate) * 0.8
+                    sine(frame, 220.0, 1.0, rate) * 0.8
                 } else {
                     0.0
                 };
@@ -671,7 +668,7 @@ mod tests {
         let mut cutoffs = Vec::new();
         for frame in 0..RATE as usize {
             let sample = if frame < held {
-                sine(220.0, frame, RATE) * 0.8
+                sine(frame, 220.0, 1.0, RATE) * 0.8
             } else {
                 0.0
             };
@@ -772,7 +769,7 @@ mod tests {
         for mode in [GateMode::Gate, GateMode::Vca] {
             let mut gate = LowPassGate::default();
             for frame in 0..RATE as usize / 2 {
-                let sample = sine(220.0, frame, RATE) * 0.8;
+                let sample = sine(frame, 220.0, 1.0, RATE) * 0.8;
                 let out = gate.process([sample; 2], true, [0.0; 2], settings(mode), 1.0, RATE);
                 assert_eq!(out, [0.0; 2], "{mode:?} {frame}");
             }
@@ -780,7 +777,7 @@ mod tests {
         // As a filter it lets the sound through, closed down to where it rests.
         let mut gate = LowPassGate::default();
         for frame in 0..RATE as usize / 2 {
-            let sample = sine(220.0, frame, RATE) * 0.8;
+            let sample = sine(frame, 220.0, 1.0, RATE) * 0.8;
             gate.process(
                 [sample; 2],
                 true,
@@ -811,7 +808,7 @@ mod tests {
                     ..Settings::DEFAULT
                 };
                 // A steady low tone, so what moves is the gate and not the sound.
-                let sample = sine(55.0, frame, RATE) * 0.5;
+                let sample = sine(frame, 55.0, 1.0, RATE) * 0.5;
                 let out = gate.process([sample; 2], true, [sample; 2], jumpy, smoothing, RATE)[0];
                 if frame > RATE as usize / 2 {
                     assert!(
@@ -827,7 +824,7 @@ mod tests {
         let mut last = 0.0;
         for frame in 0..RATE as usize * 2 {
             let mode = GateMode::ALL[frame / 4800 % 3];
-            let sample = sine(55.0, frame, RATE) * 0.5;
+            let sample = sine(frame, 55.0, 1.0, RATE) * 0.5;
             let out = gate.process(
                 [sample; 2],
                 true,
@@ -871,7 +868,7 @@ mod tests {
                     for frame in 0..rate as usize / 2 {
                         // Loud noise-like bursts and a full-scale square.
                         let sample = if frame % 9000 < 4000 {
-                            if sine(97.0, frame, rate) > 0.0 {
+                            if sine(frame, 97.0, 1.0, rate) > 0.0 {
                                 1.0
                             } else {
                                 -1.0

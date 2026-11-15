@@ -684,6 +684,7 @@ impl Rung for Tape {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::signals::sine;
 
     const RATE: u32 = 48_000;
 
@@ -702,10 +703,6 @@ mod tests {
         ..Settings::DEFAULT
     };
 
-    fn sine(frame: usize, hertz: f32, level: f32) -> f32 {
-        (frame as f32 / RATE as f32 * hertz * TAU).sin() * level
-    }
-
     /// How loud a sine at a frequency comes out, as a share of how loud it went in, measured by
     /// correlating with it over the last half of a quarter second. The tape is two frames late.
     fn harmonic(out: &[f32], hertz: f32) -> f32 {
@@ -721,7 +718,7 @@ mod tests {
 
     fn through(tape: &mut Tape, hertz: f32, level: f32, frames: usize) -> Vec<f32> {
         (0..frames)
-            .map(|frame| tape.process([sine(frame, hertz, level); 2])[0])
+            .map(|frame| tape.process([sine(frame, hertz, level, RATE); 2])[0])
             .collect()
     }
 
@@ -736,7 +733,9 @@ mod tests {
             let off = out[RATE as usize / 8..]
                 .iter()
                 .enumerate()
-                .map(|(at, sample)| (sample - sine(at + RATE as usize / 8 - 2, hertz, 0.05)).abs())
+                .map(|(at, sample)| {
+                    (sample - sine(at + RATE as usize / 8 - 2, hertz, 0.05, RATE)).abs()
+                })
                 .fold(0.0_f32, f32::max);
             assert!(off < 0.05 * 0.1, "{hertz} Hz: {off}");
         }
@@ -881,7 +880,7 @@ mod tests {
     #[test]
     fn moving_any_setting_glides_without_a_step() {
         let mut tape = tape(Settings::DEFAULT);
-        let tone = |frame: usize| sine(frame, 100.0, 0.5);
+        let tone = |frame: usize| sine(frame, 100.0, 0.5, RATE);
         let mut last = [0.0; 2];
         for frame in 0..RATE as usize / 10 {
             last = tape.process([tone(frame); 2]);

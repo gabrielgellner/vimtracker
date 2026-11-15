@@ -415,6 +415,7 @@ impl Model for DigitalModulationModel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::signals::{differs, rms};
     use crate::dsp::voices::virtual_analog::VirtualAnalog;
     use crate::voice::SynthEngine;
 
@@ -432,15 +433,6 @@ mod tests {
         (0..frames)
             .map(|_| voice.next(hertz / RATE as f32, settings(values)))
             .collect()
-    }
-
-    fn rms(samples: &[f32]) -> f32 {
-        (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt()
-    }
-
-    fn differs(a: &[f32], b: &[f32]) -> f32 {
-        let total: f32 = a.iter().zip(b).map(|(a, b)| (a - b).powi(2)).sum();
-        (total / a.len() as f32).sqrt()
     }
 
     fn each(mut check: impl FnMut(&str, &dyn Fn(f32, [f32; 2], usize) -> Vec<f32>)) {

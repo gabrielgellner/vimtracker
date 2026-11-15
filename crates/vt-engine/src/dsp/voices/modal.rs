@@ -154,6 +154,7 @@ impl Modal {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::signals::peak;
 
     const RATE: f32 = 48_000.0;
 
@@ -171,10 +172,6 @@ mod tests {
             morph: 0.5,
             ..Settings::default()
         }
-    }
-
-    fn peak(samples: &[f32]) -> f32 {
-        samples.iter().fold(0.0_f32, |peak, s| peak.max(s.abs()))
     }
 
     #[test]

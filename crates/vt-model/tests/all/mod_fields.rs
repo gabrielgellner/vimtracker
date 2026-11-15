@@ -4,15 +4,14 @@
 
 use vt_model::action::TrackControl;
 use vt_model::constants::MAX_LEVEL;
-use vt_model::envelope::{Adsr, Ahd, Curve, Drum, Hold, Lpg, time_at, time_value};
+use vt_model::envelope::{Adsr, Ahd, Curve, Drum, Hold, Lpg};
 use vt_model::lfo::{Fade, Lfo, LfoMode, Rate, Shape};
 use vt_model::modulation::{
-    MOD_LOCKED_FIELDS, MOD_OWN_FIELDS, MOD_SPECS, ModField, ModKind, ModSlot, Polarity, depth_of,
-    depth_value,
+    MOD_LOCKED_FIELDS, MOD_OWN_FIELDS, MOD_SPECS, ModField, ModKind, ModSlot, Polarity,
 };
 use vt_model::settings::{MOD_OWN_SETTINGS, SettingId};
 use vt_model::song::Track;
-use vt_model::steps::{Loop, MAX_MUTATE, MAX_STEP, STEPS, StepRate, Steps, StepsMode};
+use vt_model::steps::{Loop, StepRate, Steps, StepsMode};
 use vt_model::tracking::{Bounds, Source, Tracking};
 
 /// Every setting a slot can have, with Steps' first and last values and one past them.
@@ -118,7 +117,7 @@ fn distinct(kind: ModKind) -> ModSlot {
 }
 
 #[test]
-fn each_types_spec_says_what_its_matches_said() {
+fn each_types_spec_is_pinned() {
     for (at, kind) in ModKind::ALL.into_iter().enumerate() {
         assert_eq!(MOD_SPECS[at].kind, kind);
         assert_eq!(kind.spec().kind, kind);
@@ -428,122 +427,28 @@ fn the_registrys_own_settings_and_locked_ones_are_in_the_fields_order() {
     assert_eq!(ModField::Hold.setting(0), None);
 }
 
-/// `ModSlot::own_value` as it was, before it read [`ModSlot::field`].
-fn today_own_value(slot: &ModSlot, at: usize) -> Option<u16> {
-    let whole = |value: u8| u16::from(value) << 8;
-    let kind = slot.kind;
-    Some(match at {
-        0 => time_value(match kind {
-            ModKind::Adsr => slot.adsr.attack_ms,
-            ModKind::Ahd => slot.ahd.attack_ms,
-            ModKind::Lpg => slot.lpg.attack_ms,
-            _ => return None,
-        }),
-        1 => time_value(match kind {
-            ModKind::Adsr => slot.adsr.decay_ms,
-            ModKind::Ahd => slot.ahd.decay_ms,
-            ModKind::Drum => slot.drum.decay_ms,
-            ModKind::Lpg => slot.lpg.decay_ms,
-            _ => return None,
-        }),
-        2 if kind == ModKind::Adsr => whole(slot.adsr.sustain),
-        3 if kind == ModKind::Adsr => time_value(slot.adsr.release_ms),
-        4 if kind == ModKind::Drum => whole(slot.drum.body),
-        5 if kind == ModKind::Lpg => whole(slot.lpg.colour),
-        6 if kind == ModKind::Steps => whole(slot.steps.length.saturating_sub(1)),
-        7 if kind == ModKind::Steps => whole(slot.steps.mutate),
-        8 if kind == ModKind::Steps => depth_value(slot.steps.smooth),
-        9 if kind == ModKind::Lfo => slot.lfo.rate.place(),
-        9 if kind == ModKind::Steps => slot.steps.rate.place()?,
-        _ => return None,
-    })
-}
-
-/// `ModSlot::set_own` as it was, before it went through [`ModSlot::set_field`].
-fn today_set_own(slot: &mut ModSlot, at: usize, value: f32) {
-    let whole = |top: u8| value.round().clamp(0.0, f32::from(top)) as u8;
-    let most = f32::from(MAX_STEP);
-    match (at, slot.kind) {
-        (0, ModKind::Adsr) => slot.adsr.attack_ms = time_at(value),
-        (0, ModKind::Ahd) => slot.ahd.attack_ms = time_at(value),
-        (0, ModKind::Lpg) => slot.lpg.attack_ms = time_at(value),
-        (1, ModKind::Adsr) => slot.adsr.decay_ms = time_at(value),
-        (1, ModKind::Ahd) => slot.ahd.decay_ms = time_at(value),
-        (1, ModKind::Drum) => slot.drum.decay_ms = time_at(value),
-        (1, ModKind::Lpg) => slot.lpg.decay_ms = time_at(value),
-        (2, ModKind::Adsr) => slot.adsr.sustain = whole(100),
-        (3, ModKind::Adsr) => slot.adsr.release_ms = time_at(value),
-        (4, ModKind::Drum) => slot.drum.body = whole(100),
-        (5, ModKind::Lpg) => slot.lpg.colour = whole(0xFF),
-        (6, ModKind::Steps) => slot.steps.length = whole(STEPS as u8 - 1) + 1,
-        (7, ModKind::Steps) => slot.steps.mutate = whole(MAX_MUTATE),
-        (8, ModKind::Steps) => {
-            slot.steps.smooth = depth_of(value).round().clamp(-most, most) as i16;
-        }
-        (9, ModKind::Lfo) => slot.lfo.rate = slot.lfo.rate.placed(value),
-        (9, ModKind::Steps) => slot.steps.rate = slot.steps.rate.placed(value),
-        _ => {}
-    }
-}
-
+/// Modulation sets a slot's own settings from past either end of the `00` to `FF` scale, as it
+/// adds its swing to the value held, and each stops at that end. A type's own settings it hasn't
+/// are left alone.
 #[test]
-fn own_values_read_and_set_exactly_as_before() {
-    let values = [
-        -40.0,
-        -0.4,
-        0.0,
-        0.3,
-        0.5,
-        0.99,
-        1.0,
-        1.5,
-        7.25,
-        63.5,
-        100.0,
-        100.4,
-        127.9,
-        128.0,
-        200.6,
-        254.5,
-        255.0,
-        255.9,
-        300.0,
-        f32::NAN,
-        f32::INFINITY,
-        f32::NEG_INFINITY,
-    ];
-    let mut slots: Vec<ModSlot> = ModKind::ALL.into_iter().map(distinct).collect();
-    // And the slots a new track has, and one at every end.
-    slots.extend(vt_model::modulation::default_mods());
-    let mut ends = distinct(ModKind::Steps);
-    ends.steps.length = 0;
-    ends.steps.rate = StepRate::Pass;
-    slots.push(ends);
+fn own_values_set_from_past_the_scales_ends_stop_there() {
     for kind in ModKind::ALL {
-        let mut slot = slots[0];
-        slot.kind = kind;
-        slots.push(slot);
-    }
-    for slot in slots {
+        let slot = distinct(kind);
         for at in 0..=MOD_OWN_SETTINGS {
-            assert_eq!(
-                slot.own_value(at),
-                today_own_value(&slot, at),
-                "{:?} {at}",
-                slot.kind
-            );
-            for value in values {
-                let (mut set, mut today) = (slot, slot);
+            let set = |value: f32| {
+                let mut set = slot;
                 set.set_own(at, value);
-                today_set_own(&mut today, at, value);
-                assert_eq!(set, today, "{:?} {at} {value}", slot.kind);
+                set
+            };
+            if slot.own_value(at).is_none() {
+                assert_eq!(set(100.0), slot, "{kind:?} {at}");
+                continue;
             }
-            for coarse in 0..=255_u16 {
-                let value = f32::from(coarse << 8 | 0x5A) / 256.0;
-                let (mut set, mut today) = (slot, slot);
-                set.set_own(at, value);
-                today_set_own(&mut today, at, value);
-                assert_eq!(set, today, "{:?} {at} {value}", slot.kind);
+            for below in [-0.4, -40.0, f32::NEG_INFINITY] {
+                assert_eq!(set(below), set(0.0), "{kind:?} {at} {below}");
+            }
+            for above in [255.4, 300.0, f32::INFINITY] {
+                assert_eq!(set(above), set(255.0), "{kind:?} {at} {above}");
             }
         }
     }

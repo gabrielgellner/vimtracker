@@ -11,6 +11,7 @@ use vt_model::accumulator::{Accumulation, Adds, AtLimit, Moves, Reset};
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::song::{Chain, ChainEntry, Phrase, Song};
 
+use crate::support;
 use crate::support::ramp::{RAMP_FRAMES, render, version};
 
 const RATE: u32 = 48_000;
@@ -474,8 +475,10 @@ fn renders_with_accumulators_repeat() {
                     ..Accumulation::default()
                 };
                 let song = song(&rows, accumulation);
-                let render = || render_frames(version(&song), RATE, 24 * STEP);
-                assert_eq!(render(), render(), "{moves:?} {at_limit:?} {adds:?}");
+                // Three times round: the `1:3` comes round, and each `ACU` adds twice.
+                support::repeats(&format!("{moves:?} {at_limit:?} {adds:?}"), || {
+                    render_frames(version(&song), RATE, 12 * STEP)
+                });
             }
         }
     }

@@ -1,6 +1,8 @@
-//! What the tests share: golden renders, and the samples, songs and renders that more than one
-//! file builds the same way. A file's own variants stay in the file.
+//! What the tests share: golden renders, a sound's peak and RMS, a render that repeats, and the
+//! samples, songs and renders that more than one file builds the same way. A file's own variants
+//! stay in the file. The DSP unit tests' signals are in `src/dsp/signals.rs`.
 
+use std::borrow::Borrow;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -48,6 +50,37 @@ pub fn golden(name: &str, samples: &[f32]) {
         found,
         "{name} changed: run with VT_BLESS=1 if that was intended"
     );
+}
+
+/// The loudest a sound gets, either side of zero.
+pub fn peak(samples: impl IntoIterator<Item = impl Borrow<f32>>) -> f32 {
+    samples
+        .into_iter()
+        .fold(0.0, |most: f32, s| most.max(s.borrow().abs()))
+}
+
+/// The root of the mean of the squares: how loud a sound is on average.
+pub fn rms(samples: impl IntoIterator<Item = impl Borrow<f32>>) -> f32 {
+    let (sum, count) = samples.into_iter().fold((0.0, 0), |(sum, count), s| {
+        let s = *s.borrow();
+        (sum + s * s, count + 1)
+    });
+    (sum / count as f32).sqrt()
+}
+
+/// Render twice and check the two are the same, sample for sample, so what's random follows the
+/// song's seed and nothing carries over from one render to the next. Gives the render back.
+pub fn repeats(what: &str, render: impl Fn() -> Vec<f32>) -> Vec<f32> {
+    let (first, second) = (render(), render());
+    if first != second {
+        let at = first.iter().zip(&second).position(|(a, b)| a != b);
+        panic!(
+            "{what}: the second render differs, at sample {at:?}, {} samples against {}",
+            first.len(),
+            second.len()
+        );
+    }
+    first
 }
 
 /// A pool of one sample, `s`, of these frames.
