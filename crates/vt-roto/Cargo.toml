@@ -11,3 +11,11 @@ thiserror.workspace = true
 xxhash-rust.workspace = true
 midir.workspace = true
 serialport.workspace = true
+
+[features]
+# The Roto in memory (`fake`), for tests here and in vt-tui. Release builds leave it out.
+fake = []
+
+# The crate's own tests use the fake, so they turn it on through the crate itself.
+[dev-dependencies]
+vt-roto = { path = ".", features = ["fake"] }

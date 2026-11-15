@@ -5,6 +5,7 @@ pub(crate) mod clip;
 pub(crate) mod drift;
 pub(crate) mod flush;
 pub(crate) mod line;
+pub(crate) mod one_pole;
 pub(crate) mod oversampler;
 pub(super) mod plaits_parts;
 pub(crate) mod response;

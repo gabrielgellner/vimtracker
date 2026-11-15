@@ -59,8 +59,10 @@ impl History {
         Some(&self.current)
     }
 
-    /// Take back the last version as if it was never made, leaving nothing to redo, as for an edit
-    /// that turns out not to have been meant.
+    /// Take back the last version as if it was never made, as for an edit that turns out not to
+    /// have been meant: the one before becomes current and the one taken back is dropped, not kept
+    /// to redo. What was already there to redo stays, so call it straight after the commit it
+    /// takes back, when there's nothing to redo.
     pub fn take_back(&mut self) -> Option<&Arc<Song>> {
         self.current = self.past.pop()?;
         Some(&self.current)

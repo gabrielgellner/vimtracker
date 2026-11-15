@@ -26,6 +26,7 @@ use vt_model::song::level_gain;
 
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::line::Tape;
+use crate::dsp::blocks::one_pole::{gain as one_pole_gain, low_pass};
 use crate::dsp::blocks::response::{Gain, one_pole, svf, warped};
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::delay::{MOST_TAPS, Repeats, Tap};
@@ -182,8 +183,7 @@ impl Svf {
 
 /// A trapezoidal one-pole's `g / (1 + g)`.
 fn one_pole_step(hertz: f32, rate: u32) -> f32 {
-    let g = (std::f32::consts::PI * (hertz / rate as f32).min(0.49)).tan();
-    g / (1.0 + g)
+    one_pole_gain((std::f32::consts::PI * (hertz / rate as f32).min(0.49)).tan())
 }
 
 /// A one-pole low-pass's state.
@@ -195,10 +195,7 @@ struct OnePole {
 impl OnePole {
     #[inline]
     fn process(&mut self, x: f32, step: f32) -> f32 {
-        let v = (x - self.s) * step;
-        let low = v + self.s;
-        self.s = low + v;
-        low
+        low_pass(&mut self.s, x, step)
     }
 }
 

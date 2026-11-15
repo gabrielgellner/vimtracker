@@ -19,7 +19,7 @@
 //! *   [`store`]: vimtracker's own setups stored on the Roto, for devices with buttons, written
 //!     only under its own hashes and only when they change.
 //! *   [`transport`]: the ports, through `midir` and `serialport`.
-//! *   [`fake`]: a Roto in memory that speaks both protocols, for tests.
+//! *   `fake`: a Roto in memory that speaks both protocols, for tests, behind the `fake` feature.
 //! *   [`probe`]: `vimtracker roto-probe`.
 //!
 //! The command tables, the CC numbers, the colour schemes and the handshake's order are adapted
@@ -29,6 +29,7 @@
 pub mod bytes;
 pub mod cc;
 pub mod colour;
+#[cfg(feature = "fake")]
 pub mod fake;
 pub mod layout;
 pub mod link;

@@ -13,12 +13,12 @@ use vt_model::insert::Delay as Settings;
 use vt_model::lfo::DIVISION_TICKS;
 use vt_model::song::level_gain;
 
+use crate::dsp::blocks::clip::soft_clip;
 use crate::dsp::blocks::line::Tape;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::dsp::filters::filter::{Coefficients, Trim};
-use crate::dsp::voices::drums::soft_clip;
 use crate::engine::sample_of_tick;
 
 /// How much of what's in the line comes out. Tuned by ear with the send levels.

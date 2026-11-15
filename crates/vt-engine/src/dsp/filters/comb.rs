@@ -40,6 +40,7 @@ use vt_model::insert::{Comb as Settings, CombMode, from_middle, shift_semitones}
 
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::line::StereoLine;
+use crate::dsp::blocks::one_pole::{gain as one_pole_gain, low_pass};
 use crate::dsp::blocks::response::{Gain, one_pole, warped};
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::effects::memory::SongPlace;
@@ -168,15 +169,6 @@ fn geometric(x: f32, power: f32, count: f32) -> f32 {
 fn soft_clip_cubic(x: f32) -> f32 {
     let x = within(x, -1.5, 1.5);
     x - 4.0 / 27.0 * x * x * x
-}
-
-/// A trapezoidal one-pole low-pass, with its gain `g / (1 + g)`.
-#[inline]
-fn low_pass(state: &mut f32, input: f32, gain: f32) -> f32 {
-    let step = (input - *state) * gain;
-    let out = step + *state;
-    *state = out + step;
-    out
 }
 
 /// How much the band in the loop passes at `tan(pi f)`, from the trapezoidal one-poles' `g`s.
@@ -661,13 +653,13 @@ fn worked_out(
         rising,
         falling,
         polarity,
-        low: low / (1.0 + low),
-        high: high / (1.0 + high),
+        low: one_pole_gain(low),
+        high: one_pole_gain(high),
         boost,
         feedback: amount,
         input: comb_input + (FLANGE_SCALE - comb_input) * flange,
         dry: comb_input + (FLANGE_SCALE * flange_direct - comb_input) * flange,
-        cleaning: cleaning / (1.0 + cleaning),
+        cleaning: one_pole_gain(cleaning),
         flange,
         level: LEVEL / power.sqrt(),
     }

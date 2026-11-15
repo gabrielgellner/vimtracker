@@ -10,7 +10,8 @@
 
 use crate::sysex::{Daw, FirmwareVersion, FromRoto, ToRoto};
 
-/// The API version this was written against.
+/// The API version this was written against. Nothing checks the Roto's against it, but it's kept
+/// as the record of which version of the vendor's document the tables follow.
 pub const API_MAJOR: u8 = 1;
 pub const API_MINOR: u8 = 6;
 

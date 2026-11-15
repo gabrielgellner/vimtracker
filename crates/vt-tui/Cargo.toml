@@ -45,3 +45,7 @@ rtrb.workspace = true
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2.workspace = true
 objc2-foundation.workspace = true
+
+# The Roto in memory, for the tests that drive the program's Roto with no hardware.
+[dev-dependencies]
+vt-roto = { workspace = true, features = ["fake"] }

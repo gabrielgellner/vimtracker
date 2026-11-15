@@ -45,10 +45,11 @@ use std::f32::consts::TAU;
 use vt_model::constants::TICKS_PER_STEP;
 use vt_model::insert::{Beads as Settings, BeadsMode, grain_length, shift_semitones};
 
+use crate::dsp::blocks::clip::soft_clip;
 use crate::dsp::blocks::line::{SharedLines, hermite};
 use crate::dsp::blocks::plaits_parts::Svf;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
-use crate::dsp::effects::clouds::{mu_law_decode, mu_law_encode, soft_clip};
+use crate::dsp::effects::clouds::{mu_law_decode, mu_law_encode};
 use crate::dsp::effects::granular::{GrainPlayer, Launch};
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::{Mixing, Rung, SlotEffect};

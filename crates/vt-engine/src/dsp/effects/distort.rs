@@ -12,6 +12,7 @@
 
 use vt_model::insert::{Distort, DistortType};
 
+use crate::dsp::blocks::clip::soft_clip;
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::flush::{flush, tiny_by_fields};
 use crate::dsp::blocks::oversampler::Oversampler;
@@ -20,7 +21,6 @@ use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::pedal::Pedal;
 use crate::dsp::effects::slot::{Mono, SlotEffect};
-use crate::dsp::voices::drums::soft_clip;
 
 /// How much `Amount` turns up what's clipped or folded, at full, in dB.
 const MOST_DRIVE_DB: f32 = 30.0;

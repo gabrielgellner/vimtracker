@@ -25,8 +25,10 @@ use std::f32::consts::PI;
 
 use crate::rng::Pcg32;
 
+use super::clip::soft_limit;
 use super::flush::Tiny;
 use super::line::hermite_soras;
+use super::one_pole;
 use super::sides::SameBits;
 
 /// Noise on `0..1`.
@@ -190,15 +192,12 @@ pub(in crate::dsp) struct OnePole {
 
 impl OnePole {
     pub(in crate::dsp) fn set_dirty(&mut self, f: f32) {
-        let g = tan_dirty(f);
-        self.gain = g / (1.0 + g);
+        self.gain = one_pole::gain(tan_dirty(f));
     }
 
     #[inline]
     pub(in crate::dsp) fn high_pass(&mut self, input: f32) -> f32 {
-        let low = (input - self.state) * self.gain + self.state;
-        self.state = (input - self.state) * self.gain + low;
-        input - low
+        input - one_pole::low_pass(&mut self.state, input, self.gain)
     }
 }
 
@@ -228,12 +227,6 @@ impl Limiter {
         // Plaits clips what's left as it turns it into 16-bit samples.
         soft_limit(s * gain * 0.8).clamp(-1.0, 1.0)
     }
-}
-
-/// stmlib's `SoftLimit`: a gentle curve near unity for quiet signals, reaching 1 at 3.
-#[inline]
-pub(in crate::dsp) fn soft_limit(x: f32) -> f32 {
-    x * (27.0 + x * x) / (27.0 + 9.0 * x * x)
 }
 
 /// Picks one of a number of steps from a value on `0..=1`, leaving a step only once the value is

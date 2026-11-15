@@ -45,7 +45,8 @@ pub const MIDI_SETUPS: u8 = 64;
 /// How many knobs, and as many switches, a PLUGIN setup has: eight pages of eight.
 pub const PLUGIN_CONTROLS: u8 = 64;
 
-/// How many knobs, and as many switches, a MIDI setup has: four pages of eight.
+/// How many knobs, and as many switches, a MIDI setup has: four pages of eight. vimtracker writes
+/// no MIDI setups, so nothing uses it; it's kept beside [`PLUGIN_CONTROLS`] as the protocol has it.
 pub const MIDI_CONTROLS: u8 = 32;
 
 /// How many step names a reply carries, used or not, and the most a stored control has.

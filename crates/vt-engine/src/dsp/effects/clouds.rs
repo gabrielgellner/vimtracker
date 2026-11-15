@@ -41,8 +41,9 @@ use std::f32::consts::{FRAC_1_SQRT_2, FRAC_PI_2, PI, SQRT_2};
 
 use vt_model::insert::{Clouds as Settings, CloudsMode, shift_semitones};
 
+use crate::dsp::blocks::clip::{soft_clip, soft_limit};
 use crate::dsp::blocks::line::hermite_soras;
-use crate::dsp::blocks::plaits_parts::{Svf, soft_limit};
+use crate::dsp::blocks::plaits_parts::Svf;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::pitch_shifter::PitchShifter;
@@ -140,18 +141,6 @@ const RESAMPLING: [f32; 45] = [
 /// How many points the grains' smooth window and the blend's crossfades are read between.
 const WINDOW_POINTS: usize = 4096;
 const CROSSFADE_POINTS: usize = 16;
-
-/// stmlib's `SoftClip`: `soft_limit` up to 3, and 1 past it.
-#[inline]
-pub(super) fn soft_clip(x: f32) -> f32 {
-    if x < -3.0 {
-        -1.0
-    } else if x > 3.0 {
-        1.0
-    } else {
-        soft_limit(x)
-    }
-}
 
 /// A sample's 8-bit mu-law code, as the module writes one.
 pub(super) fn mu_law_encode(pcm: i16) -> u8 {
