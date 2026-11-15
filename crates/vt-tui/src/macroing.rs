@@ -1,7 +1,8 @@
 //! Macros on the track page (decision 285, `docs/designs/generators-page.md` §4.3): `M` puts the
 //! setting under the cursor on one of the track's eight macros, or moves it, or takes it off; `gm`
-//! opens a macro's mapping, each setting it holds with its range; `:macro` names one; and a
-//! setting a macro holds refuses a turn of its own, as Live greys a mapped control out.
+//! opens a macro's mapping, each setting it holds with its range; `gd` goes from a setting to the
+//! macro holding it (decision 341); `:macro` names one; and a setting a macro holds refuses a turn
+//! of its own, as Live greys a mapped control out.
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::Action;
@@ -15,16 +16,18 @@ use vt_model::song::Track;
 use crate::app::App;
 use crate::input::bindings::Cmd;
 use crate::input::keys::Key;
-use crate::input::mode::Mode;
+use crate::input::mode::{Mode, View};
 use crate::input::picker::{Item, Pick, Picker};
 use crate::input::typed::{Typed, TypedValue};
 use crate::kitty::plot::{MappingDrawing, Shade};
 use crate::kitty::{PanelIds, PanelKey, PanelWant, Shape};
-use crate::track_page::Control;
+use crate::track_page::{Control, Page};
 use crate::views::mapping::{RESPONSE_HEIGHT, RESPONSE_WIDTH};
 
 /// The macro picker's title, which `M` opens and a digit chooses in at once.
 pub const MACRO_PICKER: &str = "Map to a macro";
+/// The list `gd` opens on a setting more than one macro holds, to go to one.
+pub const HOLDING_PICKER: &str = "Go to a macro";
 
 /// How far a large step moves an end of a range, in coarse steps.
 const RANGE_JUMP: i32 = 0x10;
@@ -386,7 +389,12 @@ impl App {
                 }
             },
         };
-        if track.macros[at].maps.is_empty() {
+        self.open_mapping_on(at, row);
+    }
+
+    /// Open a macro's mapping view on one of its rows, or say it holds nothing.
+    fn open_mapping_on(&mut self, at: usize, row: usize) {
+        if self.services.page_track().macros[at].maps.is_empty() {
             self.services.status =
                 format!("Macro {} holds nothing yet: M on a setting maps it", at + 1);
             return;
@@ -398,6 +406,70 @@ impl App {
         });
         self.modes.mode = Mode::Mapping;
         self.say_mapping();
+    }
+
+    /// `gd` on the track page: on a macro, its mapping view; on a setting a macro holds, that
+    /// macro in the Gen page's band with its mapping view open on the setting's row, as a jump
+    /// `C-o` comes back from; and on one more than one macro holds, a list of them to go to.
+    /// Whether the cursor was on a macro or a setting one holds.
+    pub(crate) fn open_macro_here(&mut self) -> bool {
+        let control = self.track_control();
+        if let Control::Macro(at) = control {
+            self.open_mapping_on(at, 0);
+            return true;
+        }
+        let track = self.services.page_track();
+        let held: Vec<(usize, MacroMap)> = holding(control, &track)
+            .map(|(at, map)| (at, *map))
+            .collect();
+        match held.as_slice() {
+            [] => false,
+            [(at, _)] => {
+                self.go_to_macro(*at);
+                true
+            }
+            _ => {
+                let items = held
+                    .iter()
+                    .map(|(at, map)| {
+                        let label = format!("{} {}", at + 1, macro_name(&track.macros[*at], *at));
+                        let range = format!(
+                            "{} to {}",
+                            end_shown(&track, map.target, map.min),
+                            end_shown(&track, map.target, map.max)
+                        );
+                        Item::new(label, Pick::MacroHolding(*at)).meaning(range)
+                    })
+                    .collect();
+                self.show_picker(Picker::new(HOLDING_PICKER, items));
+                true
+            }
+        }
+    }
+
+    /// Go to a macro in the Gen page's band, as a jump, and open its mapping view on the row of
+    /// the setting the cursor was on.
+    pub(crate) fn go_to_macro(&mut self, at: usize) {
+        let track = self.services.page_track();
+        let row = self
+            .setting_here()
+            .and_then(|target| track.macros[at].map_of(target))
+            .unwrap_or(0);
+        self.record_jump();
+        self.track_page.show(Page::Gen);
+        self.track_page.phrase = self.services.phrase_id();
+        let rows = self.track_page.rows(Some(&track));
+        let place = rows.iter().enumerate().find_map(|(row, places)| {
+            let field = places
+                .iter()
+                .position(|place| *place == Some(Control::Macro(at)))?;
+            Some((row, field))
+        });
+        if let Some((row, field)) = place {
+            self.move_control(row, field);
+        }
+        self.show_view(View::Track);
+        self.open_mapping_on(at, row);
     }
 
     /// The mapping under the mapping view's cursor, with its place, if the view is open on one.

@@ -533,3 +533,111 @@ fn m_on_an_lfos_rate_maps_it_and_its_ends_read_as_rates() {
         app.services.status
     );
 }
+
+/// `C-o`, back from a jump.
+fn jump_back(app: &mut App) {
+    let back = vt_tui::input::keys::parse_sequence("C-o").unwrap()[0];
+    app.key(back, std::time::Instant::now());
+}
+
+#[test]
+fn gd_on_a_setting_a_macro_holds_goes_to_its_mapping_on_the_gen_page_and_c_o_comes_back() {
+    use vt_tui::track_page::Page;
+    let (mut app, _realtime) = on_cut();
+    // Res on macro 1, then Cut, its second mapping.
+    press(&mut app, "jM1kM1");
+    let cut_here = app.track_control();
+    press(&mut app, "gd");
+    assert_eq!(app.modes.view, View::Track);
+    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(
+        app.track_control(),
+        Control::Macro(0),
+        "on the macro, in the band"
+    );
+    assert_eq!(app.modes.mode, Mode::Mapping);
+    let view = app.mapping.as_ref().unwrap();
+    assert_eq!((view.at, view.row), (0, 1), "on Cut's mapping");
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.modes.mode, Mode::Normal);
+    jump_back(&mut app);
+    assert_eq!(app.track_page.page, Page::Sound);
+    assert_eq!(app.track_control(), cut_here, "back on Cut");
+    // On a macro, gd opens its mapping view, as gm does.
+    press(&mut app, " 8gg0");
+    assert_eq!(app.track_control(), Control::Macro(0));
+    press(&mut app, "gd");
+    assert_eq!(app.modes.mode, Mode::Mapping);
+    assert_eq!(app.mapping.as_ref().unwrap().at, 0);
+}
+
+#[test]
+fn gd_on_a_generators_setting_goes_up_the_gen_page_to_its_macro_as_a_jump() {
+    let (mut app, _realtime) = on_hits();
+    press(&mut app, "M2");
+    let hits = app.track_control();
+    press(&mut app, "gd");
+    assert_eq!(app.track_control(), Control::Macro(1));
+    assert_eq!(app.modes.mode, Mode::Mapping);
+    special(&mut app, KeyCode::Esc);
+    jump_back(&mut app);
+    assert_eq!(
+        app.track_control(),
+        hits,
+        "a jump on the same page comes back too"
+    );
+}
+
+#[test]
+fn gd_on_a_setting_no_macro_holds_says_what_it_opens() {
+    use vt_tui::track_page::Page;
+    let (mut app, _realtime) = on_cut();
+    press(&mut app, "gd");
+    assert_eq!(app.track_page.page, Page::Sound, "it stays");
+    assert_eq!(app.modes.mode, Mode::Normal);
+    assert!(
+        app.services
+            .status
+            .contains("a macro from a setting it holds"),
+        "{}",
+        app.services.status
+    );
+}
+
+#[test]
+fn gd_on_a_setting_two_macros_hold_lists_them_to_go_to() {
+    use std::sync::Arc;
+    use vt_model::macros::MacroMap;
+    // `M` keeps a setting on one macro, so a song that has two hold it is made by hand.
+    let mut song = vt_model::song::Song::new(2);
+    song.tracks[0].macros[0].maps.push(MacroMap::whole(cut()));
+    song.tracks[0].macros[2].maps.push(MacroMap {
+        max: 0x8000,
+        ..MacroMap::whole(cut())
+    });
+    let samples = Arc::new(vt_model::samples::SamplePool::default());
+    let version = Arc::new(vt_engine::published::Published::new(
+        Arc::new(song.clone()),
+        Arc::clone(&samples),
+    ));
+    let (handle, _realtime) =
+        vt_engine::link::connect(vt_engine::engine::Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    press(&mut app, " 5}j");
+    assert_eq!(
+        app.track_control(),
+        Control::Base(vt_model::action::TrackControl::Cutoff)
+    );
+    press(&mut app, "gd");
+    assert_eq!(app.modes.mode, Mode::Picker);
+    let picker = app.picker.as_ref().unwrap();
+    let items: Vec<String> = picker.items().iter().map(listed).collect();
+    assert_eq!(items.len(), 2, "{items:?}");
+    assert!(items[0].starts_with("1 Cut"), "{items:?}");
+    assert!(items[1].starts_with("3 Cut"), "{items:?}");
+    special(&mut app, KeyCode::Down);
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.track_control(), Control::Macro(2));
+    assert_eq!(app.modes.mode, Mode::Mapping);
+    assert_eq!(app.mapping.as_ref().unwrap().at, 2);
+}
