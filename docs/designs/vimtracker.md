@@ -376,7 +376,13 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     freed there, so the last edit always reaches audio.
 4.  At the start of each block, the callback takes a version only if the return queue has room,
     swaps it in with `Engine::swap`, and pushes the one it replaces back. It never drops one. The
-    edit thread empties the return queue each frame, and the versions are freed there.
+    edit thread empties the return queue each frame, and the versions are freed there. A track's
+    page is heard at once: `swap` looks up only the settings `Track::settings_moved_from` names,
+    those of what differs between the track's two versions and those either keeps a value or a
+    fine part of that the other doesn't, so a track the edit didn't touch costs comparisons and no
+    look-ups (#842). It's worked out in the callback rather than with the version, as the version a
+    callback swaps from isn't always the one the next was built after: a waiting one can be
+    replaced.
 5.  **Long buffers**, for the effects with memory such as delays and reverbs, are made on the edit
     thread for what a version needs (`MemoryCount`) and sent ahead of it. Spare ones are asked back
     with `Command::ReleaseMemory`, and come back on a queue of their own to be freed.
@@ -1332,7 +1338,8 @@ These need no terminal and no sound device, so they run anywhere.
     thread, in blocks the size a device asks for, stopped and then playing, and prints the share of
     a core it takes and its worst block, as the status line's CPU figure measures it, with how much
     of the worst block its thread was on the CPU, so a block the system put aside reads as that, and
-    how long starting to play took. `--paced` plays each block when its time comes rather than flat
+    how long starting to play took, and how long taking an edit's version took while playing,
+    on average and at worst, each one turning the first track's `Cut`. `--paced` plays each block when its time comes rather than flat
     out. `--device` plays through the output device's own callback (`Output::start_measured`), at
     its rate and buffer, sending it only silence, and splits each callback's time into the
     engine's (`Realtime::engine_time`), the queues' and the report's, and the rest, and says how

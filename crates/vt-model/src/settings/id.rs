@@ -455,6 +455,53 @@ impl SettingId {
     }
 }
 
+/// How many words a [`SettingSet`] takes, a bit for each setting.
+const SET_WORDS: usize = SettingId::COUNT.div_ceil(64);
+
+/// Some settings, a bit for each, which needs no room beyond its own, so the audio thread can make
+/// and read one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SettingSet([u64; SET_WORDS]);
+
+impl Default for SettingSet {
+    fn default() -> Self {
+        Self([0; SET_WORDS])
+    }
+}
+
+impl SettingSet {
+    pub fn insert(&mut self, id: SettingId) {
+        self.0[id.index() / 64] |= 1 << (id.index() % 64);
+    }
+
+    pub fn contains(&self, id: SettingId) -> bool {
+        self.0[id.index() / 64] & 1 << (id.index() % 64) != 0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.iter().all(|word| *word == 0)
+    }
+
+    /// Put in each of some settings.
+    pub fn extend(&mut self, ids: impl IntoIterator<Item = SettingId>) {
+        for id in ids {
+            self.insert(id);
+        }
+    }
+
+    /// Each setting in it, in the table's order.
+    pub fn iter(&self) -> impl Iterator<Item = SettingId> + '_ {
+        self.0.iter().enumerate().flat_map(|(at, word)| {
+            let mut bits = *word;
+            std::iter::from_fn(move || {
+                let bit = bits.trailing_zeros() as usize;
+                bits &= bits.checked_sub(1)?;
+                Some(SettingId((at * 64 + bit) as u16))
+            })
+        })
+    }
+}
+
 /// Songs store a setting by its key, which never changes.
 impl serde::Serialize for SettingId {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {

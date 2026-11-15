@@ -49,7 +49,15 @@ impl ValueLayers {
 /// one. A voice keeps its own, an effect's setting is what's in its slot, or its default while
 /// another effect is there, and a mod slot's depth and phase are what its page has.
 pub(crate) fn base_of(id: SettingId, track: &Track) -> u16 {
+    #[cfg(test)]
+    LOOKUPS.with(|count| count.set(count.get() + 1));
     track.value_of(id)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// How many settings [`base_of`] has looked up on this thread, for a test to count.
+    pub(crate) static LOOKUPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// How many of the played settings are the accumulator's, before the arpeggio's.

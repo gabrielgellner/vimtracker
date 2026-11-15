@@ -5,14 +5,17 @@
 //! min and at `FF` at its max.
 
 use std::borrow::Cow;
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::constants::UNITY_LEVEL;
+use crate::constants::{FX_SLOTS, UNITY_LEVEL};
 use crate::generator::Generator;
+use crate::insert::INSERTS;
 use crate::lfo::phase_value;
-use crate::modulation::{ModKind, Polarity, depth_of, depth_value};
-use crate::settings::{Kind, Owner, SettingId};
+use crate::modulation::{MOD_SLOTS, ModKind, Polarity, depth_of, depth_value};
+use crate::settings::{Kind, Owner, SettingId, SettingSet};
 use crate::shape::{GenParam, MAX_BEND, Shape, ShapeColumn, curved};
 use crate::song::{FilterMode, Track};
 use crate::speed::Speed;
@@ -427,26 +430,7 @@ impl Track {
             (Owner::Accumulation, at) => return self.accumulation.own_value(at),
             (Owner::Arpeggio, at) => return self.arpeggio.own_value(at),
             (Owner::Lane(slot), at) => self.lanes[slot].value(at),
-            (Owner::Track, _) => match id {
-                SettingId::VOL => UNITY_LEVEL,
-                SettingId::LEVEL => self.level,
-                SettingId::PAN => self.pan,
-                SettingId::CUT => self.cutoff,
-                SettingId::RES => self.resonance,
-                SettingId::SEND_A => self.send_a,
-                SettingId::SEND_B => self.send_b,
-                SettingId::PITCH => self.pitch,
-                SettingId::VELOCITY_DELTA => self.velocity_delta,
-                SettingId::QUANTISE => self.quantise,
-                SettingId::FILTER_MODE => self.filter_mode.index(),
-                SettingId::GATE_LENGTH => self.gate_length(),
-                SettingId::GROOVE => self
-                    .groove
-                    .map_or(0, |groove| (groove.index() + 1).min(0xFF) as u8),
-                SettingId::SPEED => self.speed.index(),
-                SettingId::GLIDE => self.glide,
-                _ => id.entry().default,
-            },
+            (Owner::Track, _) => self.own_value(id),
             (Owner::Bypass(slot), _) => u8::from(self.bypassed[slot]),
             (Owner::Voice(_) | Owner::Sampler, _) => self.setting(id),
             (Owner::Slot { slot, effect }, at) => {
@@ -461,6 +445,82 @@ impl Track {
             }
         };
         u16::from(whole) << 8 | u16::from(self.fine(id))
+    }
+
+    /// One of the track's own settings' coarse byte, from the field that holds it.
+    fn own_value(&self, id: SettingId) -> u8 {
+        match id {
+            SettingId::VOL => UNITY_LEVEL,
+            SettingId::LEVEL => self.level,
+            SettingId::PAN => self.pan,
+            SettingId::CUT => self.cutoff,
+            SettingId::RES => self.resonance,
+            SettingId::SEND_A => self.send_a,
+            SettingId::SEND_B => self.send_b,
+            SettingId::PITCH => self.pitch,
+            SettingId::VELOCITY_DELTA => self.velocity_delta,
+            SettingId::QUANTISE => self.quantise,
+            SettingId::FILTER_MODE => self.filter_mode.index(),
+            SettingId::GATE_LENGTH => self.gate_length(),
+            SettingId::GROOVE => self
+                .groove
+                .map_or(0, |groove| (groove.index() + 1).min(0xFF) as u8),
+            SettingId::SPEED => self.speed.index(),
+            SettingId::GLIDE => self.glide,
+            _ => id.entry().default,
+        }
+    }
+
+    /// The settings whose [`value_of`](Self::value_of) may differ from what it is on `before`:
+    /// each one of what differs between them, a mod slot, an effect or the track's own fields, and
+    /// each one either keeps a value or a fine part of that the other doesn't. What's the same
+    /// costs comparisons and no look-ups, so a track an edit didn't touch names none, and the
+    /// engine, which follows each new version's on the audio thread, needn't go through all of
+    /// the settings for it (#842).
+    pub fn settings_moved_from(&self, before: &Track) -> SettingSet {
+        let mut moved = SettingSet::default();
+        differing_keys(&self.settings, &before.settings, &mut moved);
+        differing_keys(&self.fine, &before.fine, &mut moved);
+        let own = || (0..).map_while(SettingId::track);
+        if own().any(|id| self.own_value(id) != before.own_value(id)) {
+            moved.extend(own());
+        }
+        for slot in 0..MOD_SLOTS {
+            if self.mods[slot] != before.mods[slot] {
+                moved.extend((0..).map_while(|at| SettingId::modulator(slot, at)));
+                moved.extend((0..).map_while(|at| SettingId::mod_own(slot, at)));
+            }
+        }
+        for (at, (now, was)) in self.macros.iter().zip(&before.macros).enumerate() {
+            if now.value != was.value {
+                moved.extend(SettingId::macro_at(at));
+            }
+        }
+        if self.accumulation != before.accumulation {
+            moved.extend((0..).map_while(SettingId::accumulation));
+        }
+        if self.arpeggio != before.arpeggio {
+            moved.extend((0..).map_while(SettingId::arpeggio));
+        }
+        for slot in 0..FX_SLOTS {
+            if self.lanes[slot] != before.lanes[slot] {
+                moved.extend((0..).map_while(|at| SettingId::lane(slot, at)));
+            }
+        }
+        for slot in 0..INSERTS {
+            if self.bypassed[slot] != before.bypassed[slot] {
+                moved.extend(SettingId::bypass(slot));
+            }
+            // Another effect's settings in the slot are at their defaults on both.
+            let (now, was) = (self.inserts[slot], before.inserts[slot]);
+            if now != was {
+                for effect in [now.kind(), was.kind()].into_iter().flatten() {
+                    let ids = (0..).map_while(|at| SettingId::slot(slot, effect, at));
+                    moved.extend(ids);
+                }
+            }
+        }
+        moved
     }
 
     /// Put a setting at a value, with a coarse byte and a fine one, wherever its owner keeps it,
@@ -544,9 +604,122 @@ impl Track {
     }
 }
 
+/// Put in each key one map has a value for that the other hasn't, or has another value for,
+/// going through both in order.
+fn differing_keys(
+    one: &BTreeMap<SettingId, u8>,
+    other: &BTreeMap<SettingId, u8>,
+    into: &mut SettingSet,
+) {
+    let (mut one, mut other) = (one.iter().peekable(), other.iter().peekable());
+    loop {
+        let order = match (one.peek(), other.peek()) {
+            (None, None) => return,
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            (Some((a, _)), Some((b, _))) => a.cmp(b),
+        };
+        let (a, b) = match order {
+            Ordering::Less => (one.next(), None),
+            Ordering::Greater => (None, other.next()),
+            Ordering::Equal => (one.next(), other.next()),
+        };
+        if let Some((id, _)) = a.or(b)
+            && a.map(|(_, value)| value) != b.map(|(_, value)| value)
+        {
+            into.insert(*id);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::insert::Insert;
+    use crate::machine::{Machine, SynthVoice};
+
+    /// Each setting whose value differs between two tracks, going through every one.
+    fn every_moved(now: &Track, was: &Track) -> Vec<SettingId> {
+        SettingId::all()
+            .filter(|id| now.value_of(*id) != was.value_of(*id))
+            .collect()
+    }
+
+    /// A track with something of everything set.
+    fn busy() -> Track {
+        let mut track = Track {
+            machine: Machine::Plaits(SynthVoice::FourOp),
+            cutoff: 0x60,
+            ..Track::default()
+        };
+        track.inserts[0] = Insert::RETURN_DELAY;
+        track.inserts[2] = Insert::RETURN_REVERB;
+        track.mods[1].depth = 20;
+        track.macros[3].value = 0x4000;
+        track.bypassed[2] = true;
+        for at in 0..3 {
+            let id = SettingId::voice(SynthVoice::FourOp, at).unwrap();
+            track.set_setting(id, 0x30 + at as u8);
+        }
+        track.set_fine(SettingId::CUT, 0x80);
+        track
+    }
+
+    #[test]
+    fn a_track_as_it_was_names_no_settings() {
+        let track = busy();
+        assert!(track.settings_moved_from(&track.clone()).is_empty());
+        let fresh = Track::default();
+        assert!(fresh.settings_moved_from(&Track::default()).is_empty());
+    }
+
+    #[test]
+    fn a_turn_of_the_cutoff_names_only_the_tracks_own() {
+        let was = busy();
+        let mut now = was.clone();
+        now.cutoff += 1;
+        let moved = now.settings_moved_from(&was);
+        assert!(moved.contains(SettingId::CUT));
+        assert!(moved.iter().all(|id| id.owner().0 == Owner::Track));
+    }
+
+    #[test]
+    fn every_setting_that_moves_is_named() {
+        let busy = busy();
+        // Each setting turned on its own, wherever its owner keeps it.
+        let mut pairs: Vec<(Track, Track)> = SettingId::all()
+            .map(|id| {
+                let mut now = busy.clone();
+                now.set_value_of(id, busy.value_of(id) ^ 0x1180);
+                (now, busy.clone())
+            })
+            .collect();
+        // Or only its fine part.
+        pairs.extend(SettingId::all().map(|id| {
+            let mut now = busy.clone();
+            now.set_fine(id, 0x40);
+            (now, busy.clone())
+        }));
+        // And what changes many at once: another machine, effect or mod slot, or a track as new.
+        let mut other_machine = busy.clone();
+        other_machine.machine = Machine::Plaits(SynthVoice::Chord);
+        let mut other_effect = busy.clone();
+        other_effect.inserts[0] = Insert::RETURN_REVERB;
+        other_effect.inserts[2] = Insert::Empty;
+        let mut other_mod = busy.clone();
+        other_mod.mods[4].depth = -40;
+        other_mod.mods[4].lfo.phase = 90;
+        for now in [other_machine, other_effect, other_mod, Track::default()] {
+            pairs.push((now.clone(), busy.clone()));
+            pairs.push((busy.clone(), now));
+        }
+        for (now, was) in &pairs {
+            let moved = now.settings_moved_from(was);
+            for id in every_moved(now, was) {
+                assert!(moved.contains(id), "{} moved and isn't named", id.key());
+            }
+        }
+    }
 
     #[test]
     fn only_a_generators_list_settings_are_reached_by_hand_alone() {
