@@ -50,6 +50,11 @@ toml = { version = "=1.2.1", default-features = false, features = ["std", "parse
 # times as long unoptimised (#663). Debug assertions and overflow checks stay on, as the rest of
 # the dev profile has them. Not 1: the golden hashes hold unoptimised, at 2 and in release
 # builds, but 1 rounds a reverb's maths differently.
+#
+# The opt-level reaches the packages' integration tests too, as Cargo sets it for a whole package.
+# Moving them into a package of their own at 0 was measured and left (#719): an edit to a test
+# rebuilds in about a second at 2 with incremental builds, but the engine's `#[inline]` DSP built
+# into a test at 0 made a full run take about 15% more CPU.
 [profile.dev.package.vt-engine]
 opt-level = 2
 
