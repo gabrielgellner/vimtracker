@@ -370,6 +370,8 @@ pub enum PickerKey {
     Tags,
     Search,
     Close,
+    /// `?`: `Space k`'s list of keys, at the picker's.
+    Help,
 }
 
 /// What the preview shows for the item under the cursor, once it's been loaded.
@@ -934,6 +936,11 @@ impl Picker {
             // A count is let go first, as in Vim.
             PickerKey::Close if !digits.is_empty() => {}
             PickerKey::Close => return Outcome::Close,
+            // The list is left as it is, its count too, for when the keys close.
+            PickerKey::Help => {
+                self.count = digits;
+                return Outcome::Keys(Mode::Picker);
+            }
         }
         Outcome::Done
     }
@@ -1101,6 +1108,7 @@ impl Overlay for Picker {
             Cmd::InPicker(PickerKey::MarkAll),
             "In a kit: mark every sound, or none",
         ),
+        ("?", Cmd::InPicker(PickerKey::Help), "These keys"),
     ];
 
     fn key(&mut self, cmd: Cmd, _ctx: &mut CtxMut) -> Outcome {
