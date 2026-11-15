@@ -12,6 +12,7 @@ use vt_model::project::{
     ProjectError, create_project, find_sources, import_sample, load_samples, load_song, save_as,
     save_song,
 };
+use vt_model::ron_file;
 use vt_model::sample::{SampleError, load_sample};
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
@@ -415,6 +416,36 @@ fn imports_keep_same_files_and_rename_different_ones() {
         import_sample(&project, &other).unwrap(),
         "samples/kick-2.wav"
     );
+}
+
+#[test]
+fn an_import_that_cannot_finish_leaves_no_sample_to_point_at() {
+    let source = folder().join("snare.wav");
+    wav(&source, 1, 16, 48_000, 10);
+    let project = folder();
+    let target = project.join("samples/snare.wav");
+    // A copy stopped partway, here by a folder in its temporary file's place.
+    let temporary = ron_file::temporary(&target);
+    fs::create_dir_all(&temporary).unwrap();
+    assert!(import_sample(&project, &source).is_err());
+    assert!(!target.exists(), "no half sample under its name");
+    fs::remove_dir(&temporary).unwrap();
+    // Half a copy left by another process that crashed is neither the sample nor kept.
+    let crashed = project.join("samples/.snare.wav.4000000001.tmp");
+    fs::write(&crashed, b"RIFF").unwrap();
+    let an_hour_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    fs::File::options()
+        .write(true)
+        .open(&crashed)
+        .unwrap()
+        .set_modified(an_hour_ago)
+        .unwrap();
+    assert_eq!(
+        import_sample(&project, &source).unwrap(),
+        "samples/snare.wav"
+    );
+    assert_eq!(fs::read(&target).unwrap(), fs::read(&source).unwrap());
+    assert!(!crashed.exists());
 }
 
 #[test]

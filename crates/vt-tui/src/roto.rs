@@ -87,13 +87,10 @@ pub(crate) fn load_versions(path: &Path) -> Versions {
         .unwrap_or_default()
 }
 
-/// Keeps the versions of vimtracker's setups at `path`.
+/// Keeps the versions of vimtracker's setups at `path`, on one line, whole or not at all.
 pub(crate) fn save_versions(versions: &Versions, path: &Path) -> std::io::Result<()> {
-    if let Some(folder) = path.parent() {
-        std::fs::create_dir_all(folder)?;
-    }
     let text = ron::to_string(versions).map_err(std::io::Error::other)?;
-    std::fs::write(path, text)
+    Ok(vt_model::ron_file::write_atomic(path, text)?)
 }
 
 /// Whether vimtracker drives the Roto, remembered for this machine rather than the song.
@@ -119,13 +116,10 @@ impl RotoSetting {
             .unwrap_or_default()
     }
 
-    /// Keep it at `path` for next time.
+    /// Keep it at `path` for next time, on one line, whole or not at all.
     pub(crate) fn save_to(&self, path: &Path) -> std::io::Result<()> {
-        if let Some(folder) = path.parent() {
-            std::fs::create_dir_all(folder)?;
-        }
         let text = ron::to_string(self).map_err(std::io::Error::other)?;
-        std::fs::write(path, text)
+        Ok(vt_model::ron_file::write_atomic(path, text)?)
     }
 }
 
@@ -1455,6 +1449,18 @@ mod tests {
         assert_eq!(RotoSetting::load_from(&path), RotoSetting { on: false });
         RotoSetting { on: true }.save_to(&path).unwrap();
         assert_eq!(RotoSetting::load_from(&path), RotoSetting { on: true });
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "(on:true)",
+            "on one line"
+        );
+        // A write that can't finish, here with a folder in its temporary file's place, leaves
+        // the setting before.
+        let temporary = vt_model::ron_file::temporary(&path);
+        std::fs::create_dir(&temporary).unwrap();
+        assert!(RotoSetting { on: false }.save_to(&path).is_err());
+        assert_eq!(RotoSetting::load_from(&path), RotoSetting { on: true });
+        std::fs::remove_dir(&temporary).unwrap();
         RotoSetting { on: false }.save_to(&path).unwrap();
         assert_eq!(RotoSetting::load_from(&path), RotoSetting { on: false });
         std::fs::write(&path, "(on: maybe)").unwrap();
