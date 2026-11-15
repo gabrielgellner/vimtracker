@@ -1,4 +1,5 @@
-//! Moving through tracks, chains and phrases: the chain view's keys, `gd`, cloning and the jump list.
+//! Moving through tracks, chains and phrases: what the chain view passes back, `gd`, cloning and the
+//! jump list.
 
 use std::sync::Arc;
 
@@ -10,6 +11,7 @@ use vt_model::selection::Motion;
 use vt_model::song::{ChainEntry, lowest_unused};
 
 use crate::app::{App, Cursor, Entry};
+use crate::chain_view::ChainColumn;
 use crate::input::bindings::Cmd;
 use crate::input::command::Line;
 use crate::input::mode::{Mode, View};
@@ -18,13 +20,6 @@ use crate::track_page::{Control, Page};
 
 /// How many places the jump list remembers.
 const JUMP_LIMIT: usize = 100;
-
-/// A column of the chain view.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChainColumn {
-    Phrase,
-    Transpose,
-}
 
 /// Somewhere `Ctrl-O` can go back to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,19 +40,12 @@ pub struct Place {
 impl App {
     /// The chain on the cursor's track.
     pub fn chain_id(&self) -> Option<u32> {
-        let section = self.services.section_here()?;
-        section
-            .chains
-            .get(self.services.cursor.track)
-            .copied()
-            .flatten()
+        self.services.chain_id()
     }
 
     /// The rows in the cursor's chain.
     pub fn chain_entries(&self) -> &[ChainEntry] {
-        self.chain_id()
-            .and_then(|id| self.services.track_here()?.chains.get(&id))
-            .map_or(&[], |chain| chain.entries.as_slice())
+        self.services.chain_entries()
     }
 
     fn here(&self) -> Place {
@@ -436,77 +424,9 @@ impl App {
         true
     }
 
-    /// Change a row. A large step is an octave of transpose, or `10` in hex of phrase numbers.
-    fn adjust_row(&mut self, by: i32, large: bool) {
-        let (Some(chain), Some(entry)) = (
-            self.chain_id(),
-            self.chain_entries().get(self.services.cursor.slot).copied(),
-        ) else {
-            return;
-        };
-        let entry = match self.chain_column {
-            ChainColumn::Transpose => ChainEntry {
-                transpose: (i32::from(entry.transpose) + if large { by * 12 } else { by })
-                    .clamp(i32::from(MIN_TRANSPOSE), i32::from(MAX_TRANSPOSE))
-                    as i8,
-                ..entry
-            },
-            ChainColumn::Phrase => {
-                let Some(phrases) = self.services.track_here().map(|track| &track.phrases) else {
-                    return;
-                };
-                let distance = if large { by.unsigned_abs() * 0x10 } else { 1 };
-                let next = if by > 0 {
-                    phrases
-                        .range(entry.phrase.saturating_add(distance)..)
-                        .next()
-                } else {
-                    phrases
-                        .range(..=entry.phrase.saturating_sub(distance))
-                        .next_back()
-                        .filter(|(phrase, _)| **phrase != entry.phrase)
-                };
-                let Some((&phrase, _)) = next else {
-                    return;
-                };
-                ChainEntry { phrase, ..entry }
-            }
-        };
-        self.services.apply(&Action::SetChainEntry {
-            track: self.services.cursor.track,
-            chain,
-            slot: self.services.cursor.slot,
-            entry,
-        });
-    }
-
-    /// Put this row's transpose back to 0. A row always plays a phrase, so `dd` is for removing it.
-    fn reset_row(&mut self) {
-        if self.chain_column != ChainColumn::Transpose {
-            self.services.status =
-                "x resets Transpose. A row needs a phrase, so dd removes it".to_owned();
-            return;
-        }
-        if let (Some(chain), Some(entry)) = (
-            self.chain_id(),
-            self.chain_entries().get(self.services.cursor.slot).copied(),
-        ) && entry.transpose != 0
-        {
-            self.services.apply(&Action::SetChainEntry {
-                track: self.services.cursor.track,
-                chain,
-                slot: self.services.cursor.slot,
-                entry: ChainEntry {
-                    transpose: 0,
-                    ..entry
-                },
-            });
-        }
-    }
-
     /// List the phrases to choose from for this row, with the one it plays highlighted.
     fn open_phrase_picker(&mut self) {
-        if self.chain_column != ChainColumn::Phrase {
+        if self.chain_view.column != ChainColumn::Phrase {
             self.services.status = "K chooses a phrase on the Phrase column".to_owned();
             return;
         }
@@ -568,8 +488,10 @@ impl App {
         self.services.apply(&action);
     }
 
-    /// Run a command in the chain view. Returns false if it means the same as anywhere.
-    pub(crate) fn run_chain(&mut self, cmd: Cmd) -> bool {
+    /// Run a command the chain view passed back: a move to another row, `dd`, which keeps the
+    /// cursor on a row, the phrase picker, Insert or `;`. Returns false if it means the same as
+    /// anywhere, or is the tree's.
+    pub(crate) fn run_chain_passed(&mut self, cmd: Cmd) -> bool {
         let count = self.modes.count.take();
         let times = count.unwrap_or(1).max(1);
         let rows = self.chain_entries().len();
@@ -588,22 +510,13 @@ impl App {
                 self.audition(section_step);
             }
             Cmd::Audition => {}
-            Cmd::Move(Motion::Left | Motion::RowStart) => self.chain_column = ChainColumn::Phrase,
-            Cmd::Move(Motion::Right | Motion::RowEnd) => {
-                self.chain_column = ChainColumn::Transpose;
-            }
-            Cmd::Increase => self.adjust_row(times as i32, false),
-            Cmd::Decrease => self.adjust_row(-(times as i32), false),
-            Cmd::IncreaseLarge => self.adjust_row(times as i32, true),
-            Cmd::DecreaseLarge => self.adjust_row(-(times as i32), true),
-            Cmd::ClearField => self.reset_row(),
             Cmd::PickValue => self.open_phrase_picker(),
             Cmd::RemoveRow => {
                 if let (Some(chain), Some(entry)) = (
                     chain,
                     self.chain_entries().get(self.services.cursor.slot).copied(),
                 ) {
-                    self.yanked_row = Some(entry);
+                    self.chain_view.yanked = Some(entry);
                     self.services.apply(&Action::RemoveChainEntry {
                         track: self.services.cursor.track,
                         chain,
@@ -612,27 +525,9 @@ impl App {
                     self.clamp_cursor();
                 }
             }
-            Cmd::CopyRow => {
-                if let Some(entry) = self.chain_entries().get(self.services.cursor.slot).copied() {
-                    self.yanked_row = Some(entry);
-                    self.services.status = format!("Copied phrase {:02X}", entry.phrase);
-                }
-            }
-            Cmd::Paste => match (chain, self.yanked_row) {
-                (Some(chain), Some(entry)) => {
-                    let at = (self.services.cursor.slot + 1).min(rows);
-                    self.services.apply(&Action::InsertChainEntry {
-                        track: self.services.cursor.track,
-                        chain,
-                        at,
-                        entry,
-                    });
-                    self.services.cursor.slot = at;
-                }
-                _ => self.services.status = "No chain row copied yet".to_owned(),
-            },
             Cmd::EnterInsert => {
-                if self.chain_column == ChainColumn::Transpose && self.services.cursor.slot >= rows
+                if self.chain_view.column == ChainColumn::Transpose
+                    && self.services.cursor.slot >= rows
                 {
                     self.services.status = "Add a phrase to this row first".to_owned();
                 } else {
@@ -650,7 +545,7 @@ impl App {
 
     /// Type a phrase ID in hex, or a transpose in semitones, then `Enter`.
     pub(crate) fn insert_chain_row(&mut self, key: KeyCode) {
-        let phrase = self.chain_column == ChainColumn::Phrase;
+        let phrase = self.chain_view.column == ChainColumn::Phrase;
         match key {
             KeyCode::Esc => {
                 self.modes.entry = Entry::default();
@@ -685,7 +580,7 @@ impl App {
         };
         let slot = self.services.cursor.slot;
         let existing = self.chain_entries().get(slot).copied();
-        let action = match self.chain_column {
+        let action = match self.chain_view.column {
             ChainColumn::Phrase => {
                 let Ok(phrase) = u32::from_str_radix(&text, 16) else {
                     return;

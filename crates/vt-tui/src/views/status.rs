@@ -19,6 +19,7 @@ use vt_model::variation::{self, Varies};
 
 use crate::app::{App, Field};
 use crate::banking::sample_shown;
+use crate::chain_view::ChainColumn;
 use crate::glyphs;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
@@ -27,7 +28,6 @@ use crate::shaping::with_live;
 use crate::song_view::{COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, START_COLUMN};
 use crate::theme;
 use crate::track_page::{Control, view};
-use crate::tree::ChainColumn;
 use crate::views::phrase::{generator_cell_text, heard_note, playhead_step};
 
 /// Show a tempo without trailing zeros.
@@ -84,7 +84,7 @@ pub fn column_name(app: &App) -> String {
                 fx_name(app, slot)
             }
         },
-        View::Chain => match app.chain_column {
+        View::Chain => match app.chain_view.column {
             ChainColumn::Phrase => "Phrase".to_owned(),
             ChainColumn::Transpose => "Transpose".to_owned(),
         },
