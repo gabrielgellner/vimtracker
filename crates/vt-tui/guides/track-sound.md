@@ -37,6 +37,13 @@ each machine.
 | `b` | Switch an FX slot or a mod slot out, or back in |
 | `;` | `a` `w` `s` `e` `d` `f` play C to F, `<` `>` the octave, until `;` |
 
+A count before `=` `-` `+` `_` goes that many steps. On a value each is its step, so `10=`
+moves a hex value `0A`. On one of the track's lists, Machine, the filter's Type and Mode, Role,
+Speed, Groove, a slot's effect or one of an effect's lists, each step is the next choice, so
+`3=` moves three choices, and `+` and `_` move one as `=` and `-` do. Machine, Type, Mode, Role
+and a slot's effect go round past either end; Speed and Groove stop there. A machine's own lists,
+such as the 6-op's patches, step as hex values do: `=` one choice and `+` sixteen.
+
 A note holds for as long as its key is down, and several keys down play a
 chord, up to eight notes; a ninth takes over the oldest. Letting go of one key
 ends only its note. `Acid` plays one note at a time, as a 303 does: a key

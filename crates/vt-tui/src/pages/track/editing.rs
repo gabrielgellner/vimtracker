@@ -115,13 +115,14 @@ pub(super) fn adjust_control(
             services.status = no_modes(track.filter);
         }
         Control::Groove => {
-            // One at a time, from what it plays, as a large step would skip through the list.
+            // One at a time from what it plays, as a large step would skip through the list, and
+            // as many as the count, stopping at either end.
             let from = track.groove.unwrap_or(services.song().groove).index();
             let last = GrooveId::all().count() - 1;
             let to = if up {
-                (from + 1).min(last)
+                from.saturating_add(count).min(last)
             } else {
-                from.saturating_sub(1)
+                from.saturating_sub(count)
             };
             if track.groove.is_none() || to != from {
                 set_track_groove(services, GrooveId::from_index(to));

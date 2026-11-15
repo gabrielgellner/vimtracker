@@ -1044,8 +1044,8 @@ entry, and `generators.rs`, which works through the live generators' sources and
     `Ctx::param_view` resolves one with the program's scale.
 *   **Each setting edited one way** (`widgets/param/edit.rs`, the UI plan's U8, #739). Pure
     functions over the `ParamView` say where a key takes a value: `stepped` for `=` `-` `+` `_`
-    and a count, by the view's `pace` where a step depends on the value or a list steps once
-    whatever the count; `stepped_fine` on the fine digits; `typed` for `i`'s text, by the view's
+    and a count, by the view's `pace` where a step depends on the value, so a count moves a list
+    that many choices; `stepped_fine` on the fine digits; `typed` for `i`'s text, by the view's
     `reads` and its `why_not`; `reset` for `x`; and `choices` for `K`'s list, which
     `pickers::choice_picker` opens, each item a `Pick::Param` that `set` writes. A Roto knob's
     turn (`roto/edits.rs`) finds its value in the same view, `edit::shared` and `edit::at_place`,

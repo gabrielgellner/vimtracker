@@ -38,8 +38,6 @@ pub enum Pace {
     /// Each the same, wherever it gets to: three steps go three times as far.
     #[default]
     Even,
-    /// One step whatever the count, as the track's own lists and an effect's go.
-    Once,
     /// An envelope's time, whose steps grow as it gets longer.
     Time,
     /// An AHD's hold, which steps as a time and has `Note` below 0 ms.
@@ -63,7 +61,7 @@ impl Pace {
             (nudge, jump)
         };
         Some(match self {
-            Self::Even | Self::Once => return None,
+            Self::Even => return None,
             Self::Time => time(value),
             // Up from `Note` is 0 ms, down from no time is `Note`, and a time steps down no
             // further than 0 ms.
