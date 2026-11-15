@@ -415,10 +415,10 @@ impl App {
         self.say_mapping();
     }
 
-    /// `gd` on the track page: on a macro, its mapping view; on a setting a macro holds, that
-    /// macro in the Gen page's band with its mapping view open on the setting's row, as a jump
-    /// `C-o` comes back from; and on one more than one macro holds, a list of them to go to.
-    /// Whether the cursor was on a macro or a setting one holds.
+    /// `gd` on the track page or the mixer: on a macro, its mapping view; on a setting or a
+    /// fader a macro holds, that macro in the Gen page's band with its mapping view open on the
+    /// setting's row, as a jump `C-o` comes back from; and on one more than one macro holds, a
+    /// list of them to go to. Whether the cursor was on a macro or a setting one holds.
     pub(crate) fn open_macro_here(&mut self) -> bool {
         let control = self.track_control();
         if let Control::Macro(at) = control {
@@ -455,7 +455,7 @@ impl App {
     }
 
     /// Go to a macro in the Gen page's band, as a jump, and open its mapping view on the row of
-    /// the setting the cursor was on.
+    /// the setting the cursor was on, on the track page or the mixer.
     pub(crate) fn go_to_macro(&mut self, at: usize) {
         let track = self.services.page_track();
         let row = self

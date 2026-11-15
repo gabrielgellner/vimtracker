@@ -460,7 +460,9 @@ tracks, `0` and `$` to the first or last, `j` and `k` up and down the strip, and
 `G` to its top or bottom. Values edit as they do on the track page, with `=` `-` `+` `_`,
 `C-a` `C-x`, or Cmd with `l` `h` `k` `j`, and `x` puts one back to its default. On mute
 and solo, `=` switches on, `-` switches off, and `K` or `i` changes it. `/` jumps to a setting by its name, as
-it does on the track page, staying on the cursor's track.
+it does on the track page, staying on the cursor's track. `gd` on a fader a macro holds goes
+to that macro on the Gen page, and `C-o` comes back; with more than one holding it, a list
+of them to choose from.
 
 While a step's `LEV`, `PAN`, `SNA` or `SNB` drives a fader, the strip shows the
 step's value in the playing colour, and the fader beside the meters moves with it.
