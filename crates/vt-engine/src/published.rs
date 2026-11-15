@@ -365,12 +365,11 @@ mod tests {
             let alone = Published::new(Arc::clone(&next), Arc::clone(&pool));
             assert_eq!(worked_out(&after), worked_out(&alone), "{action:?}");
             // A track the edit shared keeps what was read from its rows, and no other does.
-            for index in 0..next.tracks.len() {
+            assert_eq!(after.rows.len(), next.tracks.len());
+            for (index, rows) in after.rows.iter().enumerate() {
                 let shared = next.tracks.same(index, &song.tracks, index);
-                let kept = last
-                    .rows
-                    .get(index)
-                    .is_some_and(|was| Arc::ptr_eq(was, &after.rows[index]));
+                let was = last.rows.get(index);
+                let kept = was.is_some_and(|was| Arc::ptr_eq(was, rows));
                 assert_eq!(kept, shared, "track {index} after {action:?}");
             }
             seen.push((
