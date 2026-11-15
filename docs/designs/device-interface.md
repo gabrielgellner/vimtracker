@@ -6,6 +6,41 @@ row, const term, struct field or forwarding function that a new device needs onl
 registered, apart from its own DSP or algorithm. Every Rust block below is a sketch and has not
 been compiled.
 
+**As built** (2026-11-15). The plan in §6 is built. The study below is kept as it was written, so
+its "today" and its counts are `main` before the plan; the design's
+[Architecture](vimtracker.md#architecture) describes the code as it is, and
+[adding-a-device.md](adding-a-device.md) replaces §6.3 with each family's checklist as built.
+
+| Step | Built in |
+|---|---|
+| P0a, the model's pins | #741 |
+| P0b, the Roto's pins | #778 |
+| E1 `EffectSpec` | #752 |
+| E2 `effect_settings!` | #757 |
+| E3 `Setting` retired | #765 |
+| E4 the slot, `SlotEffect` and `memories!` | #760, #762 |
+| E5 the slot's facts from the trait | #771 |
+| V1 `VoiceSpec` | #758 |
+| V2 `SynthEngine` and `synths!` | #763 |
+| G1 steps from bounds, `grid` a `Grid` | #744, with #746 |
+| G2 `GenParamSpec` and `FillSpec` | #766 |
+| M1 `ModField` and `ModSpec` in the model | #745 |
+| S1 `Listed` | #750 |
+| M2 the track page from the descriptions | #761 |
+| E6, V3, G3, the Roto's lookups by kind | #778 |
+| S2, as the UI plan's U7 and U8 | #772, #782 |
+| §0's macro for the effect list, `effects!` | #786 |
+
+Where it differs from the plan:
+- §0's one list for the effects came after the rest, as `effects!` in #786 (the third architecture
+  review's item 6, #784), with the test literals of `Shape` ending in `..Shape::default()`, as G2
+  meant.
+- S2's "the Roto's `feel`, `pick` and `key` read it": the knob's position still has a match on each
+  `Control` (#784's item 3).
+- The Gen page keeps keys of its own, and `GenParam::step` its own steps (#784's item 11).
+
+What's left: those two items, and the UI plan's U13 (#733).
+
 ## 0. The answer in brief
 
 **Recommendation.**
