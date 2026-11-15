@@ -95,7 +95,12 @@ impl App {
             if !key.ctrl {
                 match self.modes.view {
                     View::Chain => self.insert_chain_row(key.code),
-                    View::Song => self.insert_song(key.code),
+                    View::Song => {
+                        let entry = &mut self.modes.entry;
+                        if !self.song_view.insert(key.code, entry, &mut self.services) {
+                            self.modes.mode = Mode::Normal;
+                        }
+                    }
                     _ => self.insert_track_page(key.code),
                 }
             }

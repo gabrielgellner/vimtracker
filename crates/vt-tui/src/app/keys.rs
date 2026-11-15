@@ -428,16 +428,6 @@ impl App {
         }
     }
 
-    /// Hear a row of a section, for as long as the key is down if it's held.
-    pub(crate) fn audition_section(&mut self, section: usize, section_step: usize) {
-        self.services.handle.send(Command::Audition {
-            section,
-            section_step,
-            track: None,
-        });
-        self.started = Some(Momentary::Audition);
-    }
-
     /// Hear the row the cursor's track is on at a step of its own, with the row each other track
     /// plays then, for as long as the key is down if it's held.
     pub(crate) fn audition_track(&mut self, section: usize, step: usize) {

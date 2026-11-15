@@ -160,7 +160,7 @@ const READ_ONLY: &str = "This song is read-only: :w path saves a copy, :w! write
 
 /// What a key started that lasts while it's down, and is undone or ended when it's let go.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Momentary {
+pub enum Momentary {
     /// A track's mute or solo was switched from this.
     Mute {
         track: usize,
@@ -602,9 +602,8 @@ impl App {
 
     /// Put the cursor on the first step that plays, at the top of the screen.
     pub(crate) fn go_to_loop_start(&mut self) {
-        let start = self.services.extent().start;
-        self.services.cursor.step = start;
-        self.phrase_view.top = start;
+        self.services.go_to_loop_start();
+        self.phrase_view.top = self.services.cursor.step;
     }
 
     /// Do the work due each frame: send waiting versions and read the callback's report.

@@ -931,7 +931,7 @@ impl App {
                 value,
             } => self.pick_param(track, control, value),
             Pick::RowPhrase(phrase) => self.pick_row_phrase(phrase),
-            Pick::SectionChain(chain) => self.pick_section_chain(chain),
+            Pick::SectionChain(chain) => self.song_view.pick_chain(chain, &mut self.services),
             Pick::Line(line) => self.line(line),
             Pick::ScaleTo(scale) => self.set_scale(scale),
             Pick::ShowGroove(groove) => self.project_page.groove_shown = Some(groove),

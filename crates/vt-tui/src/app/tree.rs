@@ -202,22 +202,6 @@ impl App {
         self.show_picker(Picker::new("Grow three branches, played", items));
     }
 
-    /// `gC`: copy this track's chain and all its phrases, and point this track at the copy.
-    pub(crate) fn clone_chain(&mut self) {
-        let Some(old) = self.services.chain_id() else {
-            self.services.status = "This track has no chain".to_owned();
-            return;
-        };
-        self.services.apply(&Action::CloneChain {
-            section: self.services.cursor.section,
-            track: self.services.cursor.track,
-        });
-        if let Some(new) = self.services.chain_id() {
-            self.services.status =
-                format!("Copied chain {old:02X} and its phrases to chain {new:02X}");
-        }
-    }
-
     /// `grr`: list where the phrase at the cursor plays.
     fn list_uses(&mut self) {
         let Some(phrase) = self.services.phrase_id() else {
@@ -270,7 +254,7 @@ impl App {
             Cmd::JumpForward => self.jump_forward(),
             Cmd::ListUses => self.list_uses(),
             Cmd::ClonePhrase => self.clone_phrase(),
-            Cmd::CloneChain => self.clone_chain(),
+            Cmd::CloneChain => self.services.clone_chain(),
             Cmd::NextSlot => self.move_slot((self.services.cursor.slot + 1).min(last)),
             Cmd::PreviousSlot => self.move_slot(self.services.cursor.slot.saturating_sub(1)),
             Cmd::LastSlot => self.move_slot(last),
@@ -295,6 +279,21 @@ impl App {
 }
 
 impl Services {
+    /// `gC`: copy this track's chain and all its phrases, and point this track at the copy.
+    pub(crate) fn clone_chain(&mut self) {
+        let Some(old) = self.chain_id() else {
+            self.status = "This track has no chain".to_owned();
+            return;
+        };
+        self.apply(&Action::CloneChain {
+            section: self.cursor.section,
+            track: self.cursor.track,
+        });
+        if let Some(new) = self.chain_id() {
+            self.status = format!("Copied chain {old:02X} and its phrases to chain {new:02X}");
+        }
+    }
+
     /// Which sections and slots play a phrase of the cursor's track.
     pub fn phrase_uses(&self, phrase: u32) -> Vec<(usize, usize)> {
         let Some(track) = self.track_here() else {

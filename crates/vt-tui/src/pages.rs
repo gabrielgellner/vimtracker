@@ -45,7 +45,9 @@ use vt_model::selection::{Extent, Field};
 use vt_model::song::{ChainEntry, Phrase, Section, Song, Track};
 use vt_model::step::{FxSlot, Gate, Step};
 
-use crate::app::{App, AudioState, Cursor, Entry, Modes, Selection, TrackLive, which_key_due};
+use crate::app::{
+    App, AudioState, Cursor, Entry, Modes, Momentary, Selection, TrackLive, which_key_due,
+};
 use crate::graphics::{PanelIds, PanelWant};
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
@@ -68,9 +70,9 @@ use crate::widgets::param::view::ParamView;
 use crate::widgets::setting::{CellLook, Focus};
 
 /// What a key did, as far as the page alone can tell, and what it asks for that only `App` can
-/// do: open the picker, show another view, or run a `:` line (#784). [`App::settled`] does what
-/// it asks once the page has given its borrows back, so a page needn't pass a key back to reach
-/// them.
+/// do: open the picker, show another view or run a `:` line, and start Insert, hold what lasts
+/// while the key is down, or start the phrase view afresh (#784). [`App::settled`] does what it asks once
+/// the page has given its borrows back, so a page needn't pass a key back to reach them.
 #[derive(Debug, Clone)]
 pub enum Outcome {
     /// The page did it.
@@ -88,6 +90,16 @@ pub enum Outcome {
     Jump(View),
     /// Done, and this command line runs, as if it had been typed.
     Run(Line),
+    /// Done, and Insert starts, with this typed already.
+    Insert(Entry),
+    /// Done, and what it started lasts while the key is down, to be ended or undone when it's
+    /// let go.
+    Hold(Momentary),
+    /// Done, and the cursor moved onto another phrase, so the phrase view starts it afresh, with
+    /// the cursor's step at its top. Only a move that means to start a phrase over asks for it,
+    /// such as going to another section or chain row: a jump back, or going to another track,
+    /// leaves the phrase view's top where it was.
+    Moved,
 }
 
 /// One of the program's pages as a component: its own state, its keys, its drawing and its
@@ -295,9 +307,8 @@ impl App {
         self.settled(outcome, true) || self.run_sample_passed(cmd, &shown)
     }
 
-    /// Run a command in the song view: the view's own key, and then what it passes back, a move
-    /// to another section and what ends on one, a picker, Insert, `gC` and `;`, which are `App`'s.
-    /// The count stays for what takes it.
+    /// Run a command in the song view: the view's own key, and what it asks for. What it passes
+    /// back, the tree's `gd` and what means the same anywhere, leaves the count for what takes it.
     fn run_song_view(&mut self, cmd: Cmd) -> bool {
         let times = self.modes.count.unwrap_or(1).max(1);
         let mut ctx = CtxMut {
@@ -305,7 +316,7 @@ impl App {
             modes: &self.modes,
         };
         let outcome = self.song_view.key(cmd, times, &mut ctx);
-        self.settled(outcome, true) || self.run_song_passed(cmd)
+        self.settled(outcome, true)
     }
 
     /// Run a command in the chain view: the view's own key, and then what it passes back, a move
@@ -355,6 +366,12 @@ impl App {
             Outcome::Show(view) => self.show_view(view),
             Outcome::Jump(view) => self.jump_to_view(view),
             Outcome::Run(line) => self.line(line),
+            Outcome::Insert(entry) => {
+                self.modes.entry = entry;
+                self.modes.mode = Mode::Insert;
+            }
+            Outcome::Hold(started) => self.started = Some(started),
+            Outcome::Moved => self.phrase_view.top = self.services.cursor.step,
             Outcome::Done | Outcome::Refused(_) | Outcome::Passed => {}
         }
         true
