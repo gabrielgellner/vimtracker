@@ -94,7 +94,12 @@ impl App {
         if self.modes.view != View::Phrase {
             if !key.ctrl {
                 match self.modes.view {
-                    View::Chain => self.insert_chain_row(key.code),
+                    View::Chain => {
+                        let entry = &mut self.modes.entry;
+                        if !self.chain_view.insert(key.code, entry, &mut self.services) {
+                            self.modes.mode = Mode::Normal;
+                        }
+                    }
                     View::Song => {
                         let entry = &mut self.modes.entry;
                         if !self.song_view.insert(key.code, entry, &mut self.services) {

@@ -33,6 +33,7 @@ use crate::overlays::picker::explorer::Purpose;
 use crate::overlays::picker::{
     Item, KitChoice, Outcome, Pick, Picker, Preview, PreviewLine, Shown,
 };
+use crate::pages::chain::ChainView;
 use crate::pages::song::COLUMNS_BEFORE_TRACKS;
 use crate::pages::track::tuning::set_tuning;
 use crate::pages::track::{Control, Page, set};
@@ -930,7 +931,7 @@ impl App {
                 control,
                 value,
             } => self.pick_param(track, control, value),
-            Pick::RowPhrase(phrase) => self.pick_row_phrase(phrase),
+            Pick::RowPhrase(phrase) => ChainView::pick_phrase(phrase, &mut self.services),
             Pick::SectionChain(chain) => self.song_view.pick_chain(chain, &mut self.services),
             Pick::Line(line) => self.line(line),
             Pick::ScaleTo(scale) => self.set_scale(scale),

@@ -4,7 +4,6 @@
 use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::{KeyCode, KeyEventKind};
-use vt_engine::engine::Transport;
 use vt_engine::link::Command;
 use vt_model::constants::MAX_PHRASE_STEPS;
 use vt_model::step::{HIGHEST_OCTAVE, LOWEST_OCTAVE, MAX_NOTE, MIN_NOTE, octave_start};
@@ -421,22 +420,9 @@ impl App {
     /// Hear a row, unless playback is using the tracks, for as long as the key is down if it's
     /// held.
     pub(crate) fn audition(&mut self, section_step: usize) {
-        if self.services.transport == Transport::Playing {
-            self.services.status = "Audition works while stopped or paused".to_owned();
-        } else {
-            self.audition_track(self.services.cursor.section, section_step);
+        if let Some(started) = self.services.audition(section_step) {
+            self.started = Some(started);
         }
-    }
-
-    /// Hear the row the cursor's track is on at a step of its own, with the row each other track
-    /// plays then, for as long as the key is down if it's held.
-    pub(crate) fn audition_track(&mut self, section: usize, step: usize) {
-        self.services.handle.send(Command::Audition {
-            section,
-            section_step: step,
-            track: Some(self.services.cursor.track),
-        });
-        self.started = Some(Momentary::Audition);
     }
 
     /// Scroll an open guide, stopping when its last row reaches the bottom of the window.
