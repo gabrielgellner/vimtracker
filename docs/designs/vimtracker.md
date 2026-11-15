@@ -791,8 +791,10 @@ among it, as the tests drive the program through them (#733).
 **`App`** (`app.rs`) is the program's state and what each key does. It needs no terminal, so tests
 drive it directly. It holds the shared services, `App::services`, beside the pages (`track_page`,
 `mixer_page`, `project_page`, `audio_page`, `sample_page`, `song_view`, `chain_view` and
-`phrase_view`), `App::modes`, the picker, the command line, help, the jump list and the keys' own
-state: 76 fields, and 48 files besides `app.rs` add an `impl App` block, such as
+`phrase_view`), `App::modes`, and seven groups of its own (#804): `overlays` (the picker, the
+command line, help, the guides, the shape panel and the mapping view), `grammar`, `held` (held
+keys and notes), `explorer`, `jumps`, `readouts` and `autosave`. That's 27 fields, and 48 files
+besides `app.rs` add an `impl App` block, such as
 `pages/track.rs`, `services/banking.rs`, `pages/sample/slicing.rs`, `overlays/shape.rs`,
 `overlays/picker/picking.rs`, `app/recording.rs` (live recording, `Space r`), `pages/project.rs`,
 `pages/audio.rs` and `pages/sample.rs`.
