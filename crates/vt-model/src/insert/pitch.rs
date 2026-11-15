@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::constants::UNITY_LEVEL;
 
 use super::{
-    GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Param, Place, Setting, Units, WET_MIX_PARAM, from_middle,
+    Columns, GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Param, Place, Units, WET_MIX_PARAM, from_middle,
     hex_param,
 };
 
@@ -51,7 +51,6 @@ pub(crate) const PITCH_PARAMS: [Param; 6] = [
         name: "Pitch",
         key: "pitch",
         label: Some("PTCH"),
-        setting: Setting::Shift,
         kind: Kind::Stepped {
             choices: &SHIFT_NAMES,
             wraps: false,
@@ -59,17 +58,11 @@ pub(crate) const PITCH_PARAMS: [Param; 6] = [
         default: Pitch::DEFAULT.shift,
         place: Place::Own,
     },
-    hex_param("Fine", "fine", "FINE", Setting::Fine, Pitch::DEFAULT.fine)
+    hex_param("Fine", "fine", "FINE", Pitch::DEFAULT.fine)
         .units(Units::Cents)
         .centred(),
-    hex_param("Size", "size", "SIZE", Setting::Grain, Pitch::DEFAULT.size).units(Units::Grain),
-    hex_param(
-        "Feedback",
-        "feedback",
-        "FDBK",
-        Setting::Feedback,
-        Pitch::DEFAULT.feedback,
-    ),
+    hex_param("Size", "size", "SIZE", Pitch::DEFAULT.size).units(Units::Grain),
+    hex_param("Feedback", "feedback", "FDBK", Pitch::DEFAULT.feedback),
     Param {
         default: 0xFF,
         ..MIX_PARAM
@@ -113,12 +106,12 @@ impl Pitch {
     };
 
     effect_settings! {
-        shift => Shift,
-        fine => Fine,
-        size => Grain,
-        feedback => Feedback,
-        mix => Mix,
-        gain => Gain,
+        shift,
+        fine,
+        size,
+        feedback,
+        mix,
+        gain,
     }
 }
 
@@ -126,42 +119,14 @@ impl Pitch {
 /// how often and how wide, freezing and straying, then pitch and envelope, whose short names fit
 /// the narrow fourth column.
 pub(crate) const GRAINS_PARAMS: [Param; 10] = [
-    hex_param(
-        "Time",
-        "time",
-        "TIME",
-        Setting::Position,
-        Grains::DEFAULT.time,
-    )
-    .units(Units::GrainTime),
-    hex_param(
-        "Size",
-        "size",
-        "SIZE",
-        Setting::Length,
-        Grains::DEFAULT.size,
-    )
-    .units(Units::GrainLength),
-    hex_param(
-        "Density",
-        "density",
-        "DENS",
-        Setting::Density,
-        Grains::DEFAULT.density,
-    )
-    .units(Units::Density),
-    hex_param(
-        "Spread",
-        "spread",
-        "SPRD",
-        Setting::Spread,
-        Grains::DEFAULT.spread,
-    ),
+    hex_param("Time", "time", "TIME", Grains::DEFAULT.time).units(Units::GrainTime),
+    hex_param("Size", "size", "SIZE", Grains::DEFAULT.size).units(Units::GrainLength),
+    hex_param("Density", "density", "DENS", Grains::DEFAULT.density).units(Units::Density),
+    hex_param("Spread", "spread", "SPRD", Grains::DEFAULT.spread),
     Param {
         name: "Freeze",
         key: "freeze",
         label: Some("FRZ"),
-        setting: Setting::Freeze,
         kind: Kind::Stepped {
             choices: &OFF_ON,
             wraps: true,
@@ -169,24 +134,12 @@ pub(crate) const GRAINS_PARAMS: [Param; 10] = [
         default: Grains::DEFAULT.freeze,
         place: Place::Own,
     },
-    hex_param(
-        "Random",
-        "random",
-        "RAND",
-        Setting::Random,
-        Grains::DEFAULT.random,
-    ),
+    hex_param("Random", "random", "RAND", Grains::DEFAULT.random),
     Param {
         default: Grains::DEFAULT.pitch,
         ..PITCH_PARAMS[0]
     },
-    hex_param(
-        "Shape",
-        "shape",
-        "SHAP",
-        Setting::Shape,
-        Grains::DEFAULT.shape,
-    ),
+    hex_param("Shape", "shape", "SHAP", Grains::DEFAULT.shape),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -293,16 +246,16 @@ impl Grains {
     };
 
     effect_settings! {
-        time => Position,
-        size => Length,
-        pitch => Shift,
-        shape => Shape,
-        density => Density,
-        spread => Spread,
-        freeze => Freeze,
-        random => Random,
-        mix => Mix,
-        gain => Gain,
+        time,
+        size,
+        density,
+        spread,
+        freeze,
+        random,
+        pitch,
+        shape,
+        mix,
+        gain,
     }
 }
 
@@ -343,7 +296,6 @@ pub(crate) const CLOUDS_PARAMS: [Param; 13] = [
         key: "mode",
         // Choosing a mode chooses a sound, so steps don't lock it.
         label: None,
-        setting: Setting::CloudsMode,
         kind: Kind::Stepped {
             choices: &CLOUDS_MODE_NAMES,
             wraps: true,
@@ -351,38 +303,14 @@ pub(crate) const CLOUDS_PARAMS: [Param; 13] = [
         default: 0,
         place: Place::Type,
     },
-    hex_param(
-        "Position",
-        "position",
-        "POS",
-        Setting::CloudsPosition,
-        Clouds::DEFAULT.position,
-    ),
-    hex_param(
-        "Size",
-        "size",
-        "SIZE",
-        Setting::CloudsSize,
-        Clouds::DEFAULT.size,
-    ),
+    hex_param("Position", "position", "POS", Clouds::DEFAULT.position),
+    hex_param("Size", "size", "SIZE", Clouds::DEFAULT.size),
     Param {
         default: Clouds::DEFAULT.pitch,
         ..PITCH_PARAMS[0]
     },
-    hex_param(
-        "Density",
-        "density",
-        "DENS",
-        Setting::CloudsDensity,
-        Clouds::DEFAULT.density,
-    ),
-    hex_param(
-        "Texture",
-        "texture",
-        "TEXT",
-        Setting::Texture,
-        Clouds::DEFAULT.texture,
-    ),
+    hex_param("Density", "density", "DENS", Clouds::DEFAULT.density),
+    hex_param("Texture", "texture", "TEXT", Clouds::DEFAULT.texture),
     Param {
         name: "Blend",
         key: "blend",
@@ -390,32 +318,13 @@ pub(crate) const CLOUDS_PARAMS: [Param; 13] = [
         default: Clouds::DEFAULT.blend,
         ..MIX_PARAM
     },
-    hex_param(
-        "Spread",
-        "spread",
-        "SPRD",
-        Setting::Spread,
-        Clouds::DEFAULT.spread,
-    ),
-    hex_param(
-        "Feedback",
-        "feedback",
-        "FDBK",
-        Setting::Feedback,
-        Clouds::DEFAULT.feedback,
-    ),
-    hex_param(
-        "Reverb",
-        "reverb",
-        "VERB",
-        Setting::ReverbAmount,
-        Clouds::DEFAULT.reverb,
-    ),
+    hex_param("Spread", "spread", "SPRD", Clouds::DEFAULT.spread),
+    hex_param("Feedback", "feedback", "FDBK", Clouds::DEFAULT.feedback),
+    hex_param("Reverb", "reverb", "VERB", Clouds::DEFAULT.reverb),
     Param {
         name: "Freeze",
         key: "freeze",
         label: Some("FRZ"),
-        setting: Setting::Freeze,
         kind: Kind::Stepped {
             choices: &OFF_ON,
             wraps: true,
@@ -428,7 +337,6 @@ pub(crate) const CLOUDS_PARAMS: [Param; 13] = [
         key: "quality",
         // A new quality starts a new recording, so steps don't lock it.
         label: None,
-        setting: Setting::Quality,
         kind: Kind::Stepped {
             choices: &QUALITY_NAMES,
             wraps: true,
@@ -437,6 +345,15 @@ pub(crate) const CLOUDS_PARAMS: [Param; 13] = [
         place: Place::Own,
     },
     GAIN_PARAM,
+];
+
+/// Where its settings sit on the FX page. The module's big knobs, then its small ones with its freeze button, then what its
+/// `Blend` knob also does, then its quality over what comes out.
+pub(super) const CLOUDS_GRID: Columns = &[
+    &["position", "size", "pitch"],
+    &["density", "texture", "freeze"],
+    &["spread", "feedback", "reverb"],
+    &["quality", "blend", "gain"],
 ];
 
 /// Clouds' settings: Mutable Instruments' texture synthesizer as the module plays, with its modes,
@@ -505,19 +422,19 @@ impl Clouds {
     };
 
     effect_settings! {
-        mode: CloudsMode => CloudsMode,
-        position => CloudsPosition,
-        size => CloudsSize,
-        pitch => Shift,
-        density => CloudsDensity,
-        texture => Texture,
-        blend => Mix,
-        spread => Spread,
-        feedback => Feedback,
-        reverb => ReverbAmount,
-        freeze => Freeze,
-        quality => Quality,
-        gain => Gain,
+        mode: CloudsMode,
+        position,
+        size,
+        pitch,
+        density,
+        texture,
+        blend,
+        spread,
+        feedback,
+        reverb,
+        freeze,
+        quality,
+        gain,
     }
 }
 
@@ -561,7 +478,6 @@ pub(crate) const BEADS_PARAMS: [Param; 14] = [
         key: "mode",
         // Choosing a mode chooses a sound, so steps don't lock it.
         label: None,
-        setting: Setting::BeadsMode,
         kind: Kind::Stepped {
             choices: &BEADS_MODE_NAMES,
             wraps: true,
@@ -569,38 +485,18 @@ pub(crate) const BEADS_PARAMS: [Param; 14] = [
         default: 0,
         place: Place::Type,
     },
-    hex_param(
-        "Time",
-        "time",
-        "TIME",
-        Setting::BeadsTime,
-        Beads::DEFAULT.time,
-    ),
-    hex_param("Size", "size", "SIZE", Setting::Length, Beads::DEFAULT.size)
-        .units(Units::GrainLength),
-    hex_param(
-        "Shape",
-        "shape",
-        "SHAP",
-        Setting::Shape,
-        Beads::DEFAULT.shape,
-    ),
+    hex_param("Time", "time", "TIME", Beads::DEFAULT.time),
+    hex_param("Size", "size", "SIZE", Beads::DEFAULT.size).units(Units::GrainLength),
+    hex_param("Shape", "shape", "SHAP", Beads::DEFAULT.shape),
     Param {
         default: Beads::DEFAULT.pitch,
         ..PITCH_PARAMS[0]
     },
-    hex_param(
-        "Density",
-        "density",
-        "DENS",
-        Setting::BeadsDensity,
-        Beads::DEFAULT.density,
-    ),
+    hex_param("Density", "density", "DENS", Beads::DEFAULT.density),
     Param {
         name: "Clock",
         key: "clock",
         label: Some("CLK"),
-        setting: Setting::Clock,
         kind: Kind::Stepped {
             choices: &CLOCK_NAMES,
             wraps: true,
@@ -608,18 +504,11 @@ pub(crate) const BEADS_PARAMS: [Param; 14] = [
         default: Beads::DEFAULT.clock,
         place: Place::Own,
     },
-    hex_param(
-        "Random",
-        "random",
-        "RAND",
-        Setting::Random,
-        Beads::DEFAULT.random,
-    ),
+    hex_param("Random", "random", "RAND", Beads::DEFAULT.random),
     Param {
         name: "Freeze",
         key: "freeze",
         label: Some("FRZ"),
-        setting: Setting::Freeze,
         kind: Kind::Stepped {
             choices: &OFF_ON,
             wraps: true,
@@ -627,13 +516,7 @@ pub(crate) const BEADS_PARAMS: [Param; 14] = [
         default: Beads::DEFAULT.freeze,
         place: Place::Own,
     },
-    hex_param(
-        "Feedback",
-        "feedback",
-        "FDBK",
-        Setting::Feedback,
-        Beads::DEFAULT.feedback,
-    ),
+    hex_param("Feedback", "feedback", "FDBK", Beads::DEFAULT.feedback),
     Param {
         name: "Blend",
         key: "blend",
@@ -641,19 +524,12 @@ pub(crate) const BEADS_PARAMS: [Param; 14] = [
         default: Beads::DEFAULT.blend,
         ..MIX_PARAM
     },
-    hex_param(
-        "Reverb",
-        "reverb",
-        "VERB",
-        Setting::ReverbAmount,
-        Beads::DEFAULT.reverb,
-    ),
+    hex_param("Reverb", "reverb", "VERB", Beads::DEFAULT.reverb),
     Param {
         name: "Quality",
         key: "quality",
         // A new quality starts a new recording, so steps don't lock it.
         label: None,
-        setting: Setting::Quality,
         kind: Kind::Stepped {
             choices: &BEADS_QUALITY_NAMES,
             wraps: true,
@@ -662,6 +538,16 @@ pub(crate) const BEADS_PARAMS: [Param; 14] = [
         place: Place::Title,
     },
     GAIN_PARAM,
+];
+
+/// Where its settings sit on the FX page. The module's big knobs; its pitch, its attenuverters' randomness and its freeze
+/// button; its density, the clock it follows and its feedback; then its reverb over what comes
+/// out. Its mode and quality are in the title.
+pub(super) const BEADS_GRID: Columns = &[
+    &["time", "size", "shape"],
+    &["pitch", "random", "freeze"],
+    &["density", "clock", "feedback"],
+    &["reverb", "blend", "gain"],
 ];
 
 /// Beads' settings: Mutable Instruments' granular texture synthesizer as the module plays, with its
@@ -732,20 +618,20 @@ impl Beads {
     };
 
     effect_settings! {
-        mode: BeadsMode => BeadsMode,
-        time => BeadsTime,
-        size => Length,
-        shape => Shape,
-        pitch => Shift,
-        density => BeadsDensity,
-        clock => Clock,
-        random => Random,
-        freeze => Freeze,
-        feedback => Feedback,
-        blend => Mix,
-        reverb => ReverbAmount,
-        quality => Quality,
-        gain => Gain,
+        mode: BeadsMode,
+        time,
+        size,
+        shape,
+        pitch,
+        density,
+        clock,
+        random,
+        freeze,
+        feedback,
+        blend,
+        reverb,
+        quality,
+        gain,
     }
 }
 
@@ -778,45 +664,13 @@ pub fn shift_delay_ms(value: f32) -> f32 {
 /// sides are apart and how far it follows the note; then the loop's delay and feedback; then the
 /// mix and gain.
 pub(crate) const FREQ_SHIFT_PARAMS: [Param; 7] = [
-    hex_param(
-        "Shift",
-        "shift",
-        "SHFT",
-        Setting::ShiftHertz,
-        FreqShift::DEFAULT.shift,
-    )
-    .units(Units::ShiftHertz)
-    .centred(),
-    hex_param(
-        "Spread",
-        "spread",
-        "SPRD",
-        Setting::ShiftSpread,
-        FreqShift::DEFAULT.spread,
-    )
-    .units(Units::SpreadHertz),
-    hex_param(
-        "Track",
-        "track",
-        "TRK",
-        Setting::KeyTrack,
-        FreqShift::DEFAULT.track,
-    ),
-    hex_param(
-        "Time",
-        "time",
-        "TIME",
-        Setting::LoopTime,
-        FreqShift::DEFAULT.time,
-    )
-    .units(Units::LoopTime),
-    hex_param(
-        "Feedback",
-        "feedback",
-        "FDBK",
-        Setting::Feedback,
-        FreqShift::DEFAULT.feedback,
-    ),
+    hex_param("Shift", "shift", "SHFT", FreqShift::DEFAULT.shift)
+        .units(Units::ShiftHertz)
+        .centred(),
+    hex_param("Spread", "spread", "SPRD", FreqShift::DEFAULT.spread).units(Units::SpreadHertz),
+    hex_param("Track", "track", "TRK", FreqShift::DEFAULT.track),
+    hex_param("Time", "time", "TIME", FreqShift::DEFAULT.time).units(Units::LoopTime),
+    hex_param("Feedback", "feedback", "FDBK", FreqShift::DEFAULT.feedback),
     Param {
         default: 0xFF,
         ..MIX_PARAM
@@ -866,12 +720,12 @@ impl FreqShift {
     };
 
     effect_settings! {
-        shift => ShiftHertz,
-        spread => ShiftSpread,
-        track => KeyTrack,
-        time => LoopTime,
-        feedback => Feedback,
-        mix => Mix,
-        gain => Gain,
+        shift,
+        spread,
+        track,
+        time,
+        feedback,
+        mix,
+        gain,
     }
 }

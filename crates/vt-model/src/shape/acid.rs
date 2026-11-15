@@ -465,9 +465,9 @@ pub(super) fn render<F: FnMut(usize, &Shaped)>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lfo::Shape as Wave;
+
     use crate::scale::{Scale, ScaleKind};
-    use crate::shape::{Bits, DEFAULT_RATE, FillKind, Pink, Values, Walk, Where};
+    use crate::shape::{FillKind, Where};
 
     const C_MINOR: Scale = Scale {
         on: true,
@@ -491,28 +491,10 @@ mod tests {
         Shape {
             from: 36,
             to: 48,
-            curve: 0,
-            s: 0,
             kind: FillKind::Acid,
-            wave: Wave::Sine,
-            rate: DEFAULT_RATE,
-            phase: 0,
-            run: 1,
-            values: Values::default(),
-            place: Where::AllRows,
             seed,
             acid,
-            follow: crate::shape::Follow::default(),
-            walk: Walk::default(),
-            pink: Pink::default(),
-            bits: Bits::default(),
-            grids: crate::shape::Grids::default(),
-            random: crate::shape::Random::default(),
-            vary: 0,
-            variation: crate::shape::Variation::default(),
-            divisions: crate::shape::Divisions::default(),
-            ring: crate::shape::Ring::default(),
-            tonnetz: crate::shape::Tonnetz::default(),
+            ..Shape::default()
         }
     }
 

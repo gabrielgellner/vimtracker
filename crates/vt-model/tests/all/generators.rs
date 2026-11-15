@@ -5,13 +5,10 @@ use std::sync::Arc;
 
 use vt_model::action::{Action, FieldValue, edit};
 use vt_model::generator::{Span, applied};
-use vt_model::lfo::Shape as Wave;
 use vt_model::project::{load_song, save_song};
 use vt_model::scale::Scale;
 use vt_model::selection::StepRange;
-use vt_model::shape::{
-    Acid, Bits, DEFAULT_RATE, Edge, FillKind, Follow, Pink, Shape, ShapeColumn, Values, Walk, Where,
-};
+use vt_model::shape::{Acid, Bits, Edge, FillKind, Pink, Shape, ShapeColumn, Values, Walk, Where};
 use vt_model::song::{Lane, Phrase, Song};
 use vt_model::step::{FxCommand, Note, Step};
 
@@ -64,28 +61,9 @@ fn ramp(from: u8, to: u8, place: Where) -> Shape {
     Shape {
         from,
         to,
-        curve: 0,
-        s: 0,
-        kind: FillKind::Ramp,
-        wave: Wave::Sine,
-        rate: DEFAULT_RATE,
-        phase: 0,
-        run: 1,
-        values: Values::default(),
         place,
         seed: 7,
-        acid: Acid::default(),
-        follow: Follow::default(),
-        walk: Walk::default(),
-        pink: Pink::default(),
-        bits: Bits::default(),
-        grids: vt_model::shape::Grids::default(),
-        random: vt_model::shape::Random::default(),
-        vary: 0,
-        variation: vt_model::shape::Variation::default(),
-        divisions: vt_model::shape::Divisions::default(),
-        ring: vt_model::shape::Ring::default(),
-        tonnetz: vt_model::shape::Tonnetz::default(),
+        ..Shape::default()
     }
 }
 
