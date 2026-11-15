@@ -48,12 +48,12 @@ impl ModKind {
     ];
 
     /// Its description, which the rest of these read.
-    pub fn spec(self) -> &'static ModSpec {
+    pub const fn spec(self) -> &'static ModSpec {
         &MOD_SPECS[self as usize]
     }
 
     /// The name in the slot's title.
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         self.spec().name
     }
 

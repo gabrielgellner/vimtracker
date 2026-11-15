@@ -36,8 +36,11 @@
 //! an override where a slot needs one, such as a pitch an effect chooses from a list, which is
 //! still a pitch's colour.
 
+use std::sync::LazyLock;
+
 use vt_model::action::TrackControl;
-use vt_model::insert::{CompressorType, DistortType, Insert};
+use vt_model::generator::Generator;
+use vt_model::insert::{CompressorType, DistortType, EffectKind, Insert};
 use vt_model::song::{Machine, SynthVoice, Track, TrackKind};
 use vt_roto::layout::{Layout, Page, Slot};
 use vt_roto::sysex::CONTROLS;
@@ -45,7 +48,7 @@ use vt_roto::sysex::CONTROLS;
 use super::devices::Family;
 use vt_model::modulation::ModKind;
 use vt_model::settings::{FOUR_OP_EACH, FOUR_OP_SHARED};
-use vt_model::shape::{FillKind, GenParam};
+use vt_model::shape::{FillKind, GenParam, Where};
 use vt_model::steps::STEPS;
 
 use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, ModField};
@@ -182,7 +185,7 @@ const SAMPLER: DeviceLayout = live(
 const VA: DeviceLayout = live(
     "machine/va",
     &[knobs(
-        "VA",
+        SynthVoice::VirtualAnalog.name(),
         [
             s("detune"),
             s("square"),
@@ -198,7 +201,7 @@ const VA: DeviceLayout = live(
 const VA_VCF: DeviceLayout = live(
     "machine/va-vcf",
     &[knobs(
-        "VA VCF",
+        SynthVoice::VirtualAnalogVcf.name(),
         [
             s("frequency"),
             s("resonance"),
@@ -217,7 +220,7 @@ const ACID: DeviceLayout = live(
     "machine/acid",
     &[
         knobs(
-            "Acid",
+            SynthVoice::Acid.name(),
             [
                 s("cutoff"),
                 s("resonance"),
@@ -238,7 +241,7 @@ const SUPERSAW: DeviceLayout = live(
     "machine/supersaw",
     &[
         knobs(
-            "Supersaw",
+            SynthVoice::Supersaw.name(),
             [
                 s("detune"),
                 s("mix"),
@@ -256,49 +259,49 @@ const SUPERSAW: DeviceLayout = live(
 const FM: DeviceLayout = live(
     "machine/fm",
     &[knobs(
-        "FM",
+        SynthVoice::Fm.name(),
         [s("ratio"), s("index"), s("feedback"), __, __, __, __, __],
     )],
 );
 const PD: DeviceLayout = live(
     "machine/pd",
     &[knobs(
-        "PD",
+        SynthVoice::PhaseDistortion.name(),
         [s("ratio"), s("amount"), s("skew"), __, __, __, __, __],
     )],
 );
 const FOLD: DeviceLayout = live(
     "machine/fold",
     &[knobs(
-        "Fold",
+        SynthVoice::Waveshaping.name(),
         [s("shape"), s("fold"), s("slope"), __, __, __, __, __],
     )],
 );
 const FORMANT: DeviceLayout = live(
     "machine/formant",
     &[knobs(
-        "Formant",
+        SynthVoice::Formant.name(),
         [s("formant"), s("width"), s("interval"), __, __, __, __, __],
     )],
 );
 const ADDITIVE: DeviceLayout = live(
     "machine/additive",
     &[knobs(
-        "Additive",
+        SynthVoice::Additive.name(),
         [s("bumps"), s("peak"), s("shape"), __, __, __, __, __],
     )],
 );
 const WAVES: DeviceLayout = live(
     "machine/waves",
     &[knobs(
-        "Waves",
+        SynthVoice::Wavetable.name(),
         [s("bank"), s("row"), s("wave"), __, __, __, __, __],
     )],
 );
 const TERRAIN: DeviceLayout = live(
     "machine/terrain",
     &[knobs(
-        "Terrain",
+        SynthVoice::WaveTerrain.name(),
         [s("terrain"), s("size"), s("offset"), __, __, __, __, __],
     )],
 );
@@ -306,7 +309,7 @@ const TERRAIN: DeviceLayout = live(
 const FOUR_OP: DeviceLayout = live(
     "machine/4op",
     &[knobs(
-        "4-op",
+        SynthVoice::FourOp.name(),
         [
             s("algorithm"),
             s("feedback"),
@@ -366,7 +369,7 @@ const FOUR_OP_OPERATORS: [DeviceLayout; 4] = [
 const SIX_OP: DeviceLayout = live(
     "machine/6-op",
     &[knobs(
-        "6-op",
+        SynthVoice::SixOp.name(),
         [
             s("bright"),
             s("time"),
@@ -382,14 +385,14 @@ const SIX_OP: DeviceLayout = live(
 const CHORD: DeviceLayout = live(
     "machine/chord",
     &[knobs(
-        "Chord",
+        SynthVoice::Chord.name(),
         [s("inversion"), s("wave"), s("chord"), __, __, __, __, __],
     )],
 );
 const CHIP: DeviceLayout = live(
     "machine/chip",
     &[knobs(
-        "Chip",
+        SynthVoice::Chiptune.name(),
         [
             s("inversion"),
             s("shape"),
@@ -405,7 +408,7 @@ const CHIP: DeviceLayout = live(
 const SWARM: DeviceLayout = live(
     "machine/swarm",
     &[knobs(
-        "Swarm",
+        SynthVoice::Swarm.name(),
         [s("spread"), s("density"), s("overlap"), __, __, __, __, __],
     )],
 );
@@ -413,7 +416,7 @@ const SWARM: DeviceLayout = live(
 const STRING: DeviceLayout = live(
     "machine/string",
     &[knobs(
-        "String",
+        SynthVoice::String.name(),
         [
             s("material"),
             s("bright"),
@@ -429,7 +432,7 @@ const STRING: DeviceLayout = live(
 const MODAL: DeviceLayout = live(
     "machine/modal",
     &[knobs(
-        "Modal",
+        SynthVoice::Modal.name(),
         [
             s("material"),
             s("bright"),
@@ -445,14 +448,14 @@ const MODAL: DeviceLayout = live(
 const DUST: DeviceLayout = live(
     "machine/dust",
     &[knobs(
-        "Dust",
+        SynthVoice::Dust.name(),
         [s("density"), s("spread"), s("filter"), __, __, __, __, __],
     )],
 );
 const NOISE: DeviceLayout = live(
     "machine/noise",
     &[knobs(
-        "Noise",
+        SynthVoice::Noise.name(),
         [s("type"), s("clock"), s("ring"), __, __, __, __, __],
     )],
 );
@@ -460,7 +463,7 @@ const NOISE: DeviceLayout = live(
 const KICK: DeviceLayout = live(
     "machine/kick",
     &[knobs(
-        "Kick",
+        SynthVoice::Kick.name(),
         [
             s("tone"),
             s("decay"),
@@ -476,7 +479,7 @@ const KICK: DeviceLayout = live(
 const SNARE: DeviceLayout = live(
     "machine/snare",
     &[knobs(
-        "Snare",
+        SynthVoice::Snare.name(),
         [
             s("tone"),
             s("snappy"),
@@ -492,7 +495,7 @@ const SNARE: DeviceLayout = live(
 const HAT: DeviceLayout = live(
     "machine/hat",
     &[knobs(
-        "Hat",
+        SynthVoice::Hat.name(),
         [
             s("tone"),
             s("decay"),
@@ -508,168 +511,168 @@ const HAT: DeviceLayout = live(
 const CSAW: DeviceLayout = live(
     "machine/csaw",
     &[knobs(
-        "CSaw",
+        SynthVoice::CSaw.name(),
         [s("notch"), s("depth"), __, __, __, __, __, __],
     )],
 );
 const MORPH: DeviceLayout = live(
     "machine/morph",
     &[knobs(
-        "Morph",
+        SynthVoice::Morph.name(),
         [s("shape"), s("fuzz"), __, __, __, __, __, __],
     )],
 );
 const SAW_SQUARE: DeviceLayout = live(
     "machine/sawsquare",
     &[knobs(
-        "Saw Sq",
+        SynthVoice::SawSquare.name(),
         [s("width"), s("mix"), __, __, __, __, __, __],
     )],
 );
 const SYNC: DeviceLayout = live(
     "machine/sync",
     &[knobs(
-        "Sync",
+        SynthVoice::HardSync.name(),
         [s("interval"), s("mix"), s("wave"), __, __, __, __, __],
     )],
 );
 const TRIPLE: DeviceLayout = live(
     "machine/triple",
     &[knobs(
-        "Triple",
+        SynthVoice::Triple.name(),
         [s("second"), s("third"), s("wave"), __, __, __, __, __],
     )],
 );
 const RING: DeviceLayout = live(
     "machine/ring",
     &[knobs(
-        "Ring",
+        SynthVoice::Ring.name(),
         [s("first"), s("second"), __, __, __, __, __, __],
     )],
 );
 const SAW_COMB: DeviceLayout = live(
     "machine/sawcomb",
     &[knobs(
-        "Saw Comb",
+        SynthVoice::SawComb.name(),
         [s("tune"), s("feedback"), __, __, __, __, __, __],
     )],
 );
 const Z_FILTER: DeviceLayout = live(
     "machine/zfilter",
     &[knobs(
-        "Z Filter",
+        SynthVoice::ZFilter.name(),
         [s("cutoff"), s("shape"), s("type"), __, __, __, __, __],
     )],
 );
 const FB_FM: DeviceLayout = live(
     "machine/fbfm",
     &[knobs(
-        "FB FM",
+        SynthVoice::FeedbackFm.name(),
         [s("amount"), s("ratio"), __, __, __, __, __, __],
     )],
 );
 const CHAOS_FM: DeviceLayout = live(
     "machine/chaosfm",
     &[knobs(
-        "Chaos FM",
+        SynthVoice::ChaoticFm.name(),
         [s("amount"), s("ratio"), __, __, __, __, __, __],
     )],
 );
 const VOSIM: DeviceLayout = live(
     "machine/vosim",
     &[knobs(
-        "VOSIM",
+        SynthVoice::Vosim.name(),
         [s("formant"), s("second"), __, __, __, __, __, __],
     )],
 );
 const FOF: DeviceLayout = live(
     "machine/fof",
     &[knobs(
-        "FOF",
+        SynthVoice::Fof.name(),
         [s("vowel"), s("voice"), __, __, __, __, __, __],
     )],
 );
 const BOWED: DeviceLayout = live(
     "machine/bowed",
     &[knobs(
-        "Bowed",
+        SynthVoice::Bowed.name(),
         [s("pressure"), s("position"), __, __, __, __, __, __],
     )],
 );
 const BLOWN: DeviceLayout = live(
     "machine/blown",
     &[knobs(
-        "Blown",
+        SynthVoice::Blown.name(),
         [s("breath"), s("tone"), __, __, __, __, __, __],
     )],
 );
 const FLUTED: DeviceLayout = live(
     "machine/fluted",
     &[knobs(
-        "Fluted",
+        SynthVoice::Fluted.name(),
         [s("breath"), s("jet"), __, __, __, __, __, __],
     )],
 );
 const STRUCK_BELL: DeviceLayout = live(
     "machine/bell",
     &[knobs(
-        "Bell",
+        SynthVoice::Bell.name(),
         [s("decay"), s("detune"), __, __, __, __, __, __],
     )],
 );
 const STRUCK_DRUM: DeviceLayout = live(
     "machine/drum",
     &[knobs(
-        "Drum",
+        SynthVoice::Drum.name(),
         [s("decay"), s("tone"), __, __, __, __, __, __],
     )],
 );
 const WAVE_MAP: DeviceLayout = live(
     "machine/wavemap",
     &[knobs(
-        "Wave Map",
+        SynthVoice::WaveMap.name(),
         [s("across"), s("down"), __, __, __, __, __, __],
     )],
 );
 const WAVE_LINE: DeviceLayout = live(
     "machine/waveline",
     &[knobs(
-        "Wave Line",
+        SynthVoice::WaveLine.name(),
         [s("scan"), s("steps"), __, __, __, __, __, __],
     )],
 );
 const PARAPHONIC: DeviceLayout = live(
     "machine/paraphonic",
     &[knobs(
-        "Paraphonic",
+        SynthVoice::Paraphonic.name(),
         [s("wave"), s("chord"), __, __, __, __, __, __],
     )],
 );
 const TWIN_PEAKS: DeviceLayout = live(
     "machine/twinpeaks",
     &[knobs(
-        "Twin Peaks",
+        SynthVoice::TwinPeaks.name(),
         [s("sharpness"), s("spacing"), __, __, __, __, __, __],
     )],
 );
 const CLOCKED: DeviceLayout = live(
     "machine/clocked",
     &[knobs(
-        "Clocked",
+        SynthVoice::Clocked.name(),
         [s("loop"), s("steps"), __, __, __, __, __, __],
     )],
 );
 const GRAIN_CLOUD: DeviceLayout = live(
     "machine/graincloud",
     &[knobs(
-        "Grain Cloud",
+        SynthVoice::GrainCloud.name(),
         [s("length"), s("spread"), __, __, __, __, __, __],
     )],
 );
 const MODEM: DeviceLayout = live(
     "machine/modem",
     &[knobs(
-        "Modem",
+        SynthVoice::Modem.name(),
         [s("baud"), s("data"), __, __, __, __, __, __],
     )],
 );
@@ -677,7 +680,7 @@ const MODEM: DeviceLayout = live(
 const SPEECH: DeviceLayout = live(
     "machine/speech",
     &[knobs(
-        "Speech",
+        SynthVoice::Speech.name(),
         [
             s("model"),
             s("species"),
@@ -693,7 +696,7 @@ const SPEECH: DeviceLayout = live(
 const TOY: DeviceLayout = live(
     "machine/toy",
     &[knobs(
-        "Toy",
+        SynthVoice::Toy.name(),
         [s("clock"), s("bend"), __, __, __, __, __, __],
     )],
 );
@@ -807,7 +810,7 @@ const ADSR: DeviceLayout = stored(
     "adsr",
     &[
         page(
-            "ADSR",
+            ModKind::Adsr.name(),
             [
                 s("attack"),
                 s("decay"),
@@ -830,7 +833,7 @@ const AHD: DeviceLayout = stored(
     "ahd",
     &[
         page(
-            "AHD",
+            ModKind::Ahd.name(),
             [
                 s("attack"),
                 s("hold"),
@@ -855,7 +858,7 @@ const DRUM: DeviceLayout = stored(
     "drum",
     &[
         page(
-            "Drum",
+            ModKind::Drum.name(),
             [
                 s("peak"),
                 s("body"),
@@ -879,7 +882,7 @@ const LPG_ENVELOPE: DeviceLayout = stored(
     "lpg",
     &[
         page(
-            "LPG",
+            ModKind::Lpg.name(),
             [
                 s("attack"),
                 s("decay"),
@@ -904,7 +907,7 @@ const LFO: DeviceLayout = stored(
     "lfo",
     &[
         page(
-            "LFO",
+            ModKind::Lfo.name(),
             [
                 s("rate"),
                 s("shape"),
@@ -930,7 +933,7 @@ const STEPS_LAYOUT: DeviceLayout = live(
     "steps",
     &[
         knobs(
-            "Steps",
+            ModKind::Steps.name(),
             [
                 s("rate"),
                 s("length"),
@@ -980,7 +983,7 @@ const TRACK: DeviceLayout = stored(
     "track",
     &[
         page(
-            "Track",
+            ModKind::Track.name(),
             [s("low"), s("high"), s("depth"), s("mode"), __, __, __, __],
             [GAP, GAP, s("polarity"), __, __, __, __, __],
         ),
@@ -1046,7 +1049,7 @@ const EMPTY: DeviceLayout = live("fx/empty", &[]);
 const SHAPING: DeviceLayout = live(
     "fx/distort",
     &[knobs(
-        "Distort",
+        EffectKind::Distort.name(),
         [s("amount"), GAP, GAP, GAP, GAP, GAP, s("mix"), s("gain")],
     )],
 );
@@ -1054,7 +1057,7 @@ const SHAPING: DeviceLayout = live(
 const CRUSH: DeviceLayout = stored(
     "fx/distort-crush",
     &[page(
-        "Crush",
+        DistortType::Crush.name(),
         [s("bits"), GAP, GAP, GAP, GAP, GAP, s("mix"), s("gain")],
         button(0, "mulaw"),
     )],
@@ -1063,7 +1066,7 @@ const CRUSH: DeviceLayout = stored(
 const DOWN: DeviceLayout = stored(
     "fx/distort-down",
     &[page(
-        "Down",
+        DistortType::Down.name(),
         [s("rate"), GAP, GAP, GAP, GAP, GAP, s("mix"), s("gain")],
         button(0, "track"),
     )],
@@ -1091,7 +1094,7 @@ const DELAY: DeviceLayout = stored(
     "fx/delay",
     &[
         page(
-            "Delay",
+            EffectKind::Delay.name(),
             [
                 s("time"),
                 s("feedback"),
@@ -1110,7 +1113,7 @@ const DELAY: DeviceLayout = stored(
 const REVERB: DeviceLayout = live(
     "fx/reverb",
     &[knobs(
-        "Reverb",
+        EffectKind::Reverb.name(),
         [
             s("decay"),
             s("pre"),
@@ -1126,7 +1129,7 @@ const REVERB: DeviceLayout = live(
 const CHORUS: DeviceLayout = live(
     "fx/chorus",
     &[knobs(
-        "Chorus",
+        EffectKind::Chorus.name(),
         [
             s("rate"),
             s("depth"),
@@ -1144,7 +1147,7 @@ const CHORUS: DeviceLayout = live(
 const EQ: DeviceLayout = live(
     "fx/eq3",
     &[knobs(
-        "EQ3",
+        EffectKind::Eq.name(),
         [
             s("low"),
             s("mid"),
@@ -1163,7 +1166,7 @@ const EQ: DeviceLayout = live(
 const CLEAN: DeviceLayout = stored(
     "fx/comp-clean",
     &[page(
-        "Comp",
+        EffectKind::Compressor.name(),
         [
             s("threshold"),
             s("ratio"),
@@ -1216,7 +1219,7 @@ const GLUE: DeviceLayout = stored(
 const LIMIT: DeviceLayout = live(
     "fx/limit",
     &[knobs(
-        "Limit",
+        EffectKind::Limit.name(),
         [
             s("input"),
             s("ceiling"),
@@ -1232,7 +1235,7 @@ const LIMIT: DeviceLayout = live(
 const PHASER: DeviceLayout = live(
     "fx/phaser",
     &[knobs(
-        "Phaser",
+        EffectKind::Phaser.name(),
         [
             s("rate"),
             s("depth"),
@@ -1248,7 +1251,7 @@ const PHASER: DeviceLayout = live(
 const FLANGER: DeviceLayout = live(
     "fx/flanger",
     &[knobs(
-        "Flanger",
+        EffectKind::Flanger.name(),
         [
             s("rate"),
             s("depth"),
@@ -1265,7 +1268,7 @@ const FLANGER: DeviceLayout = live(
 const TAPE: DeviceLayout = live(
     "fx/tape",
     &[knobs(
-        "Tape",
+        EffectKind::Tape.name(),
         [
             s("drive"),
             s("bias"),
@@ -1281,7 +1284,7 @@ const TAPE: DeviceLayout = live(
 const PLATE: DeviceLayout = live(
     "fx/plate",
     &[knobs(
-        "Plate",
+        EffectKind::Plate.name(),
         [
             s("decay"),
             s("size"),
@@ -1297,7 +1300,7 @@ const PLATE: DeviceLayout = live(
 const PITCH: DeviceLayout = live(
     "fx/pitch",
     &[knobs(
-        "Pitch",
+        EffectKind::Pitch.name(),
         [
             tinted("pitch", Family::Time),
             s("fine"),
@@ -1316,7 +1319,7 @@ const GRAINS: DeviceLayout = stored(
     "fx/grains",
     &[
         page(
-            "Grains",
+            EffectKind::Grains.name(),
             [
                 s("time"),
                 s("size"),
@@ -1339,7 +1342,7 @@ const CLOUDS: DeviceLayout = stored(
     "fx/clouds",
     &[
         page(
-            "Clouds",
+            EffectKind::Clouds.name(),
             [
                 s("position"),
                 s("size"),
@@ -1365,7 +1368,7 @@ const BEADS: DeviceLayout = stored(
     "fx/beads",
     &[
         page(
-            "Beads",
+            EffectKind::Beads.name(),
             [
                 s("time"),
                 s("size"),
@@ -1400,7 +1403,7 @@ const ECHO: DeviceLayout = live(
     "fx/echo",
     &[
         knobs(
-            "Space Echo",
+            EffectKind::Echo.name(),
             [
                 s("rate"),
                 s("intensity"),
@@ -1430,7 +1433,7 @@ const ECHO: DeviceLayout = live(
 const WARPS: DeviceLayout = live(
     "fx/warps",
     &[knobs(
-        "Warps",
+        EffectKind::Warps.name(),
         [
             s("algo"),
             s("timbre"),
@@ -1446,7 +1449,7 @@ const WARPS: DeviceLayout = live(
 const LPG: DeviceLayout = live(
     "fx/lpg",
     &[knobs(
-        "LPG",
+        EffectKind::Lpg.name(),
         [
             s("amount"),
             s("response"),
@@ -1462,7 +1465,7 @@ const LPG: DeviceLayout = live(
 const RESO: DeviceLayout = live(
     "fx/reso",
     &[knobs(
-        "Reso",
+        EffectKind::Reso.name(),
         [
             tinted("tune", Family::Time),
             s("decay"),
@@ -1478,7 +1481,7 @@ const RESO: DeviceLayout = live(
 const COMB: DeviceLayout = live(
     "fx/comb",
     &[knobs(
-        "Comb",
+        EffectKind::Comb.name(),
         [
             tinted("tune", Family::Time),
             s("feedback"),
@@ -1494,7 +1497,7 @@ const COMB: DeviceLayout = live(
 const VOWEL: DeviceLayout = live(
     "fx/vowel",
     &[knobs(
-        "Vowel",
+        EffectKind::Vowel.name(),
         [
             s("vowel"),
             s("res"),
@@ -1512,7 +1515,7 @@ const VOWEL: DeviceLayout = live(
 const FREQ_SHIFT: DeviceLayout = live(
     "fx/freqshift",
     &[knobs(
-        "Freq Shift",
+        EffectKind::FreqShift.name(),
         [
             s("shift"),
             s("spread"),
@@ -1530,7 +1533,7 @@ const FREQ_SHIFT: DeviceLayout = live(
 const SPRING: DeviceLayout = stored(
     "fx/spring",
     &[page(
-        "Spring",
+        EffectKind::Spring.name(),
         [
             s("decay"),
             s("size"),
@@ -1549,7 +1552,7 @@ const SPRING: DeviceLayout = stored(
 const STUTTER: DeviceLayout = stored(
     "fx/stutter",
     &[page(
-        "Stutter",
+        EffectKind::Stutter.name(),
         [
             s("length"),
             s("repeats"),
@@ -1567,7 +1570,7 @@ const STUTTER: DeviceLayout = stored(
 const EXCITER: DeviceLayout = live(
     "fx/exciter",
     &[knobs(
-        "Exciter",
+        EffectKind::Exciter.name(),
         [
             s("drive"),
             s("tone"),
@@ -1585,7 +1588,7 @@ const EXCITER: DeviceLayout = live(
 const ROTARY: DeviceLayout = stored(
     "fx/rotary",
     &[page(
-        "Rotary",
+        EffectKind::Rotary.name(),
         [
             s("inertia"),
             s("doppler"),
@@ -1603,7 +1606,7 @@ const ROTARY: DeviceLayout = stored(
 const SPACE: DeviceLayout = live(
     "fx/space",
     &[knobs(
-        "Space",
+        EffectKind::Space.name(),
         [
             s("decay"),
             s("size"),
@@ -1637,7 +1640,7 @@ pub const PART_DENSITY: &str = "partdensity";
 const GEN_RAMP: DeviceLayout = live(
     "gen/ramp",
     &[knobs(
-        "Ramp",
+        FillKind::Ramp.name(),
         [
             s("from"),
             s("to"),
@@ -1656,7 +1659,7 @@ const GEN_RANDOM: DeviceLayout = live(
     "gen/random",
     &[
         knobs(
-            "Random",
+            FillKind::Random.name(),
             [
                 s("from"),
                 s("to"),
@@ -1676,7 +1679,7 @@ const GEN_WAVE: DeviceLayout = live(
     "gen/wave",
     &[
         knobs(
-            "Wave",
+            FillKind::Wave.name(),
             [
                 s("from"),
                 s("to"),
@@ -1694,7 +1697,7 @@ const GEN_WAVE: DeviceLayout = live(
 const GEN_ALTERNATE: DeviceLayout = live(
     "gen/alternate",
     &[knobs(
-        "Alternate",
+        FillKind::Alternate.name(),
         [
             s("from"),
             s("to"),
@@ -1711,7 +1714,7 @@ const GEN_ALTERNATE: DeviceLayout = live(
 const GEN_LIST: DeviceLayout = live(
     "gen/list",
     &[knobs(
-        "List",
+        FillKind::List.name(),
         [
             s("run"),
             GAP,
@@ -1731,7 +1734,7 @@ const GEN_ACID: DeviceLayout = live(
     "gen/acid",
     &[
         knobs(
-            "Acid",
+            FillKind::Acid.name(),
             [
                 s("notes"),
                 s("octave"),
@@ -1783,7 +1786,7 @@ const GEN_FOLLOW: DeviceLayout = live(
     "gen/follow",
     &[
         knobs(
-            "Follow",
+            FillKind::Follow.name(),
             [
                 s("transpose"),
                 s("invert"),
@@ -1813,7 +1816,7 @@ const GEN_FOLLOW: DeviceLayout = live(
 const GEN_SCALE: DeviceLayout = live(
     "gen/scale",
     &[knobs(
-        "Scale",
+        FillKind::Scale.name(),
         [
             s("from"),
             s("to"),
@@ -1829,7 +1832,7 @@ const GEN_SCALE: DeviceLayout = live(
 const GEN_WALK: DeviceLayout = live(
     "gen/walk",
     &[knobs(
-        "Walk",
+        FillKind::Walk.name(),
         [
             s("from"),
             s("to"),
@@ -1845,7 +1848,7 @@ const GEN_WALK: DeviceLayout = live(
 const GEN_PINK: DeviceLayout = live(
     "gen/pink",
     &[knobs(
-        "1/f",
+        FillKind::Pink.name(),
         [
             s("from"),
             s("to"),
@@ -1862,7 +1865,7 @@ const GEN_PINK: DeviceLayout = live(
 const GEN_MULTIPLY: DeviceLayout = live(
     "gen/multiply",
     &[knobs(
-        "Multiply",
+        FillKind::Multiply.name(),
         [s("factor"), s("masks"), __, __, __, __, __, __],
     )],
 );
@@ -1871,7 +1874,7 @@ const GEN_MULTIPLY: DeviceLayout = live(
 const GEN_GRIDS: DeviceLayout = live(
     "gen/grids",
     &[knobs(
-        "Grids",
+        FillKind::Grids.name(),
         [
             s("x"),
             s("y"),
@@ -1891,7 +1894,7 @@ const GEN_DIVISIONS: DeviceLayout = live(
     "gen/divisions",
     &[
         knobs(
-            "Divisions",
+            FillKind::Divisions.name(),
             [
                 s("d4"),
                 s("d8"),
@@ -1924,7 +1927,7 @@ const GEN_DIVISIONS: DeviceLayout = live(
 const GEN_RING: DeviceLayout = live(
     "gen/ring",
     &[knobs(
-        "Ring",
+        FillKind::Ring.name(),
         [
             s("from"),
             s("to"),
@@ -1944,7 +1947,7 @@ const GEN_TONNETZ: DeviceLayout = live(
     "gen/tonnetz",
     &[
         knobs(
-            "Tonnetz",
+            FillKind::Tonnetz.name(),
             [
                 s("from"),
                 s("triad"),
@@ -1964,7 +1967,7 @@ const GEN_TONNETZ: DeviceLayout = live(
 const GEN_VARIATION: DeviceLayout = live(
     "gen/variation",
     &[knobs(
-        "Variation",
+        FillKind::Variation.name(),
         [
             s("order"),
             s("temperature"),
@@ -2013,262 +2016,236 @@ const GEN_REWORK: DeviceLayout = live(
     )],
 );
 
-/// Every live generator's layout, a fill each, apart from [`ALL`], as a generator is a phrase's
-/// rather than a kind of device a track always has.
-pub const GENERATORS: [&DeviceLayout; 19] = [
-    &GEN_RAMP,
-    &GEN_RANDOM,
-    &GEN_WAVE,
-    &GEN_ALTERNATE,
-    &GEN_LIST,
-    &GEN_ACID,
-    &GEN_ACID_LOOPS,
-    &GEN_FOLLOW,
-    &GEN_SCALE,
-    &GEN_WALK,
-    &GEN_PINK,
-    &GEN_MULTIPLY,
-    &GEN_GRIDS,
-    &GEN_DIVISIONS,
-    &GEN_RING,
-    &GEN_TONNETZ,
-    &GEN_VARIATION,
-    &GEN_BITS,
-    &GEN_REWORK,
-];
-
-/// A live generator's layout, by its fill.
-pub fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
-    match kind {
-        FillKind::Ramp => &GEN_RAMP,
-        FillKind::Random => &GEN_RANDOM,
-        FillKind::Wave => &GEN_WAVE,
-        FillKind::Alternate => &GEN_ALTERNATE,
-        FillKind::List => &GEN_LIST,
-        FillKind::Acid => &GEN_ACID,
-        FillKind::Follow => &GEN_FOLLOW,
-        FillKind::Scale => &GEN_SCALE,
-        FillKind::Walk => &GEN_WALK,
-        FillKind::Pink => &GEN_PINK,
-        FillKind::Multiply => &GEN_MULTIPLY,
-        FillKind::Grids => &GEN_GRIDS,
-        FillKind::Divisions => &GEN_DIVISIONS,
-        FillKind::Ring => &GEN_RING,
-        FillKind::Tonnetz => &GEN_TONNETZ,
-        FillKind::Variation => &GEN_VARIATION,
-        FillKind::InvertBits | FillKind::MaskBits | FillKind::RotateBits => &GEN_BITS,
-        FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => &GEN_REWORK,
+/// A table by kind, from each kind's place and what it holds there, every place given once,
+/// which the compiler checks.
+const fn by_kind<T: Copy, const N: usize>(entries: [(usize, T); N]) -> [T; N] {
+    let mut table = [entries[0].1; N];
+    let mut given = [false; N];
+    let mut at = 0;
+    while at < N {
+        let (place, value) = entries[at];
+        assert!(!given[place], "a kind is given twice");
+        given[place] = true;
+        table[place] = value;
+        at += 1;
     }
+    table
 }
 
-/// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 103] = [
-    &SAMPLER,
-    &VA,
-    &VA_VCF,
-    &ACID,
-    &SUPERSAW,
-    &FM,
-    &PD,
-    &FOLD,
-    &FORMANT,
-    &ADDITIVE,
-    &WAVES,
-    &TERRAIN,
-    &SIX_OP,
-    &FOUR_OP,
-    &FOUR_OP_OPERATORS[0],
-    &FOUR_OP_OPERATORS[1],
-    &FOUR_OP_OPERATORS[2],
-    &FOUR_OP_OPERATORS[3],
-    &CHORD,
-    &CHIP,
-    &SWARM,
-    &STRING,
-    &MODAL,
-    &DUST,
-    &NOISE,
-    &KICK,
-    &SNARE,
-    &HAT,
-    &CSAW,
-    &MORPH,
-    &SAW_SQUARE,
-    &SYNC,
-    &TRIPLE,
-    &RING,
-    &SAW_COMB,
-    &TOY,
-    &Z_FILTER,
-    &FB_FM,
-    &CHAOS_FM,
-    &VOSIM,
-    &FOF,
-    &BOWED,
-    &BLOWN,
-    &FLUTED,
-    &STRUCK_BELL,
-    &STRUCK_DRUM,
-    &WAVE_MAP,
-    &WAVE_LINE,
-    &PARAPHONIC,
-    &TWIN_PEAKS,
-    &CLOCKED,
-    &GRAIN_CLOUD,
-    &MODEM,
-    &SPEECH,
+/// Each fill's live layout, by [`FillKind`]: the bit fills share one, as do the fills that rework
+/// what's there.
+const BY_FILL: [&DeviceLayout; FillKind::ALL.len()] = by_kind([
+    (FillKind::Ramp as usize, &GEN_RAMP),
+    (FillKind::Random as usize, &GEN_RANDOM),
+    (FillKind::Walk as usize, &GEN_WALK),
+    (FillKind::Pink as usize, &GEN_PINK),
+    (FillKind::Wave as usize, &GEN_WAVE),
+    (FillKind::Alternate as usize, &GEN_ALTERNATE),
+    (FillKind::List as usize, &GEN_LIST),
+    (FillKind::Acid as usize, &GEN_ACID),
+    (FillKind::Grids as usize, &GEN_GRIDS),
+    (FillKind::Divisions as usize, &GEN_DIVISIONS),
+    (FillKind::Ring as usize, &GEN_RING),
+    (FillKind::Tonnetz as usize, &GEN_TONNETZ),
+    (FillKind::Follow as usize, &GEN_FOLLOW),
+    (FillKind::Variation as usize, &GEN_VARIATION),
+    (FillKind::Scale as usize, &GEN_SCALE),
+    (FillKind::Invert as usize, &GEN_REWORK),
+    (FillKind::Shuffle as usize, &GEN_REWORK),
+    (FillKind::Reverse as usize, &GEN_REWORK),
+    (FillKind::Snap as usize, &GEN_REWORK),
+    (FillKind::Multiply as usize, &GEN_MULTIPLY),
+    (FillKind::InvertBits as usize, &GEN_BITS),
+    (FillKind::MaskBits as usize, &GEN_BITS),
+    (FillKind::RotateBits as usize, &GEN_BITS),
+]);
+
+/// Each voice's layout, by [`SynthVoice`].
+const BY_VOICE: [&DeviceLayout; SynthVoice::ALL.len()] = by_kind([
+    (SynthVoice::VirtualAnalog as usize, &VA),
+    (SynthVoice::VirtualAnalogVcf as usize, &VA_VCF),
+    (SynthVoice::Acid as usize, &ACID),
+    (SynthVoice::Supersaw as usize, &SUPERSAW),
+    (SynthVoice::Fm as usize, &FM),
+    (SynthVoice::PhaseDistortion as usize, &PD),
+    (SynthVoice::Waveshaping as usize, &FOLD),
+    (SynthVoice::Formant as usize, &FORMANT),
+    (SynthVoice::Additive as usize, &ADDITIVE),
+    (SynthVoice::Wavetable as usize, &WAVES),
+    (SynthVoice::WaveTerrain as usize, &TERRAIN),
+    (SynthVoice::SixOp as usize, &SIX_OP),
+    (SynthVoice::FourOp as usize, &FOUR_OP),
+    (SynthVoice::Chord as usize, &CHORD),
+    (SynthVoice::Chiptune as usize, &CHIP),
+    (SynthVoice::Swarm as usize, &SWARM),
+    (SynthVoice::String as usize, &STRING),
+    (SynthVoice::Modal as usize, &MODAL),
+    (SynthVoice::Dust as usize, &DUST),
+    (SynthVoice::Noise as usize, &NOISE),
+    (SynthVoice::Kick as usize, &KICK),
+    (SynthVoice::Snare as usize, &SNARE),
+    (SynthVoice::Hat as usize, &HAT),
+    (SynthVoice::Speech as usize, &SPEECH),
+    (SynthVoice::CSaw as usize, &CSAW),
+    (SynthVoice::Morph as usize, &MORPH),
+    (SynthVoice::SawSquare as usize, &SAW_SQUARE),
+    (SynthVoice::HardSync as usize, &SYNC),
+    (SynthVoice::Triple as usize, &TRIPLE),
+    (SynthVoice::Ring as usize, &RING),
+    (SynthVoice::SawComb as usize, &SAW_COMB),
+    (SynthVoice::Toy as usize, &TOY),
+    (SynthVoice::ZFilter as usize, &Z_FILTER),
+    (SynthVoice::FeedbackFm as usize, &FB_FM),
+    (SynthVoice::ChaoticFm as usize, &CHAOS_FM),
+    (SynthVoice::Vosim as usize, &VOSIM),
+    (SynthVoice::Fof as usize, &FOF),
+    (SynthVoice::Bowed as usize, &BOWED),
+    (SynthVoice::Blown as usize, &BLOWN),
+    (SynthVoice::Fluted as usize, &FLUTED),
+    (SynthVoice::Bell as usize, &STRUCK_BELL),
+    (SynthVoice::Drum as usize, &STRUCK_DRUM),
+    (SynthVoice::WaveMap as usize, &WAVE_MAP),
+    (SynthVoice::WaveLine as usize, &WAVE_LINE),
+    (SynthVoice::Paraphonic as usize, &PARAPHONIC),
+    (SynthVoice::TwinPeaks as usize, &TWIN_PEAKS),
+    (SynthVoice::Clocked as usize, &CLOCKED),
+    (SynthVoice::GrainCloud as usize, &GRAIN_CLOUD),
+    (SynthVoice::Modem as usize, &MODEM),
+]);
+
+/// Distort's layouts, by its type: those that shape the wave share one, as do the pedals.
+const BY_DISTORT_TYPE: [&DeviceLayout; DistortType::ALL.len()] = by_kind([
+    (DistortType::Soft as usize, &SHAPING),
+    (DistortType::Hard as usize, &SHAPING),
+    (DistortType::Fold as usize, &SHAPING),
+    (DistortType::Sine as usize, &SHAPING),
+    (DistortType::Crush as usize, &CRUSH),
+    (DistortType::Down as usize, &DOWN),
+    (DistortType::Overdrive as usize, &PEDAL),
+    (DistortType::Distortion as usize, &PEDAL),
+]);
+
+/// Comp's layouts, by its type.
+const BY_COMPRESSOR_TYPE: [&DeviceLayout; CompressorType::ALL.len()] = by_kind([
+    (CompressorType::Clean as usize, &CLEAN),
+    (CompressorType::Console as usize, &CONSOLE),
+    (CompressorType::Glue as usize, &GLUE),
+]);
+
+/// Each effect's layouts, by [`EffectKind`], one for each value of its type where its settings
+/// change with it: Distort's by [`DistortType`], Comp's by [`CompressorType`].
+const BY_EFFECT: [&[&DeviceLayout]; EffectKind::COUNT] = by_kind([
+    (EffectKind::Distort as usize, &BY_DISTORT_TYPE),
+    (EffectKind::Delay as usize, &[&DELAY]),
+    (EffectKind::Reverb as usize, &[&REVERB]),
+    (EffectKind::Chorus as usize, &[&CHORUS]),
+    (EffectKind::Eq as usize, &[&EQ]),
+    (EffectKind::Compressor as usize, &BY_COMPRESSOR_TYPE),
+    (EffectKind::Limit as usize, &[&LIMIT]),
+    (EffectKind::Phaser as usize, &[&PHASER]),
+    (EffectKind::Flanger as usize, &[&FLANGER]),
+    (EffectKind::Tape as usize, &[&TAPE]),
+    (EffectKind::Plate as usize, &[&PLATE]),
+    (EffectKind::Pitch as usize, &[&PITCH]),
+    (EffectKind::Grains as usize, &[&GRAINS]),
+    (EffectKind::Warps as usize, &[&WARPS]),
+    (EffectKind::Lpg as usize, &[&LPG]),
+    (EffectKind::Reso as usize, &[&RESO]),
+    (EffectKind::Comb as usize, &[&COMB]),
+    (EffectKind::Vowel as usize, &[&VOWEL]),
+    (EffectKind::FreqShift as usize, &[&FREQ_SHIFT]),
+    (EffectKind::Spring as usize, &[&SPRING]),
+    (EffectKind::Space as usize, &[&SPACE]),
+    (EffectKind::Rotary as usize, &[&ROTARY]),
+    (EffectKind::Exciter as usize, &[&EXCITER]),
+    (EffectKind::Stutter as usize, &[&STUTTER]),
+    (EffectKind::Clouds as usize, &[&CLOUDS]),
+    (EffectKind::Beads as usize, &[&BEADS]),
+    (EffectKind::Echo as usize, &[&ECHO]),
+]);
+
+/// Each mod slot's layout, by its type's [`ModKind`].
+const BY_MOD: [&DeviceLayout; ModKind::ALL.len()] = by_kind([
+    (ModKind::Adsr as usize, &ADSR),
+    (ModKind::Ahd as usize, &AHD),
+    (ModKind::Drum as usize, &DRUM),
+    (ModKind::Lpg as usize, &LPG_ENVELOPE),
+    (ModKind::Lfo as usize, &LFO),
+    (ModKind::Steps as usize, &STEPS_LAYOUT),
+    (ModKind::Track as usize, &TRACK),
+]);
+
+/// The layouts of the devices every track has of its own, apart from its machine's.
+const TRACKS_OWN: [&DeviceLayout; 9] = [
     &FILTER,
     &OUTPUT,
     &GROUP_OUTPUT,
     &RETURN_OUTPUT,
     &MASTER_OUTPUT,
     &PLAY,
-    &ADSR,
-    &AHD,
-    &DRUM,
-    &LPG_ENVELOPE,
-    &LFO,
-    &STEPS_LAYOUT,
-    &TRACK,
     &ACCUMULATOR,
     &ARPEGGIO,
     &MACROS,
-    &EMPTY,
-    &SHAPING,
-    &CRUSH,
-    &DOWN,
-    &PEDAL,
-    &DELAY,
-    &REVERB,
-    &CHORUS,
-    &EQ,
-    &CLEAN,
-    &CONSOLE,
-    &GLUE,
-    &LIMIT,
-    &PHASER,
-    &FLANGER,
-    &TAPE,
-    &PLATE,
-    &PITCH,
-    &GRAINS,
-    &WARPS,
-    &LPG,
-    &RESO,
-    &COMB,
-    &VOWEL,
-    &FREQ_SHIFT,
-    &SPRING,
-    &SPACE,
-    &ROTARY,
-    &EXCITER,
-    &STUTTER,
-    &CLOUDS,
-    &BEADS,
-    &ECHO,
 ];
+
+/// These layouts, each once, in their order, as a table by kind can hold one several times.
+fn each_once(
+    layouts: impl IntoIterator<Item = &'static DeviceLayout>,
+) -> Vec<&'static DeviceLayout> {
+    let mut found: Vec<&'static DeviceLayout> = Vec::new();
+    for layout in layouts {
+        if !found.contains(&layout) {
+            found.push(layout);
+        }
+    }
+    found
+}
+
+/// Every live generator's layout, a fill's each, and `Acid`'s loops', apart from [`ALL`], as a
+/// generator is a phrase's rather than a kind of device a track always has.
+pub static GENERATORS: LazyLock<Vec<&'static DeviceLayout>> =
+    LazyLock::new(|| each_once(BY_FILL.into_iter().chain([&GEN_ACID_LOOPS])));
+
+/// A live generator's layout, by its fill.
+pub fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
+    BY_FILL[kind as usize]
+}
+
+/// Every kind of device's layout, for the tests and the stored setups: the machines', the track's
+/// own, the mod slots' and the effects'.
+pub static ALL: LazyLock<Vec<&'static DeviceLayout>> = LazyLock::new(|| {
+    let operators: &'static [DeviceLayout] = &FOUR_OP_OPERATORS;
+    let effects = BY_EFFECT.into_iter().flatten().copied();
+    each_once(
+        [&SAMPLER]
+            .into_iter()
+            .chain(BY_VOICE)
+            .chain(operators)
+            .chain(TRACKS_OWN)
+            .chain(BY_MOD)
+            .chain([&EMPTY])
+            .chain(effects),
+    )
+});
 
 /// A machine's layout.
 pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
     match machine {
         Machine::Sampler => &SAMPLER,
-        Machine::Plaits(voice) => match voice {
-            SynthVoice::VirtualAnalog => &VA,
-            SynthVoice::VirtualAnalogVcf => &VA_VCF,
-            SynthVoice::Acid => &ACID,
-            SynthVoice::Supersaw => &SUPERSAW,
-            SynthVoice::Fm => &FM,
-            SynthVoice::PhaseDistortion => &PD,
-            SynthVoice::Waveshaping => &FOLD,
-            SynthVoice::Formant => &FORMANT,
-            SynthVoice::Additive => &ADDITIVE,
-            SynthVoice::Wavetable => &WAVES,
-            SynthVoice::WaveTerrain => &TERRAIN,
-            SynthVoice::SixOp => &SIX_OP,
-            SynthVoice::FourOp => &FOUR_OP,
-            SynthVoice::Chord => &CHORD,
-            SynthVoice::Chiptune => &CHIP,
-            SynthVoice::Swarm => &SWARM,
-            SynthVoice::String => &STRING,
-            SynthVoice::Modal => &MODAL,
-            SynthVoice::Dust => &DUST,
-            SynthVoice::Noise => &NOISE,
-            SynthVoice::Kick => &KICK,
-            SynthVoice::Snare => &SNARE,
-            SynthVoice::Hat => &HAT,
-            SynthVoice::CSaw => &CSAW,
-            SynthVoice::Morph => &MORPH,
-            SynthVoice::SawSquare => &SAW_SQUARE,
-            SynthVoice::HardSync => &SYNC,
-            SynthVoice::Triple => &TRIPLE,
-            SynthVoice::Ring => &RING,
-            SynthVoice::SawComb => &SAW_COMB,
-            SynthVoice::Toy => &TOY,
-            SynthVoice::ZFilter => &Z_FILTER,
-            SynthVoice::FeedbackFm => &FB_FM,
-            SynthVoice::ChaoticFm => &CHAOS_FM,
-            SynthVoice::Vosim => &VOSIM,
-            SynthVoice::Fof => &FOF,
-            SynthVoice::Bowed => &BOWED,
-            SynthVoice::Blown => &BLOWN,
-            SynthVoice::Fluted => &FLUTED,
-            SynthVoice::Bell => &STRUCK_BELL,
-            SynthVoice::Drum => &STRUCK_DRUM,
-            SynthVoice::WaveMap => &WAVE_MAP,
-            SynthVoice::WaveLine => &WAVE_LINE,
-            SynthVoice::Paraphonic => &PARAPHONIC,
-            SynthVoice::TwinPeaks => &TWIN_PEAKS,
-            SynthVoice::Clocked => &CLOCKED,
-            SynthVoice::GrainCloud => &GRAIN_CLOUD,
-            SynthVoice::Modem => &MODEM,
-            SynthVoice::Speech => &SPEECH,
-        },
+        Machine::Plaits(voice) => BY_VOICE[voice as usize],
     }
 }
 
 /// An effect's layout, in the type or mode it's in, as its settings change with it.
 pub fn effect_layout(insert: Insert) -> &'static DeviceLayout {
-    match insert {
-        Insert::Empty => &EMPTY,
-        Insert::Distort(distort) => match distort.kind {
-            DistortType::Crush => &CRUSH,
-            DistortType::Down => &DOWN,
-            DistortType::Overdrive | DistortType::Distortion => &PEDAL,
-            DistortType::Soft | DistortType::Hard | DistortType::Fold | DistortType::Sine => {
-                &SHAPING
-            }
-        },
-        Insert::Delay(_) => &DELAY,
-        Insert::Reverb(_) => &REVERB,
-        Insert::Chorus(_) => &CHORUS,
-        Insert::Eq(_) => &EQ,
-        Insert::Compressor(compressor) => match compressor.kind {
-            CompressorType::Clean => &CLEAN,
-            CompressorType::Console => &CONSOLE,
-            CompressorType::Glue => &GLUE,
-        },
-        Insert::Limit(_) => &LIMIT,
-        Insert::Phaser(_) => &PHASER,
-        Insert::Flanger(_) => &FLANGER,
-        Insert::Tape(_) => &TAPE,
-        Insert::Plate(_) => &PLATE,
-        Insert::Pitch(_) => &PITCH,
-        Insert::Grains(_) => &GRAINS,
-        Insert::Warps(_) => &WARPS,
-        Insert::Lpg(_) => &LPG,
-        Insert::Reso(_) => &RESO,
-        Insert::Comb(_) => &COMB,
-        Insert::Vowel(_) => &VOWEL,
-        Insert::FreqShift(_) => &FREQ_SHIFT,
-        Insert::Spring(_) => &SPRING,
-        Insert::Stutter(_) => &STUTTER,
-        Insert::Clouds(_) => &CLOUDS,
-        Insert::Beads(_) => &BEADS,
-        Insert::Echo(_) => &ECHO,
-        Insert::Rotary(_) => &ROTARY,
-        Insert::Exciter(_) => &EXCITER,
-        Insert::Space(_) => &SPACE,
-    }
+    let Some(kind) = insert.kind() else {
+        return &EMPTY;
+    };
+    let by_type = BY_EFFECT[kind as usize];
+    let at = insert
+        .type_param()
+        .map_or(0, |param| usize::from(insert.value(param)));
+    by_type[at.min(by_type.len() - 1)]
 }
 
 /// A device's layout, by what it holds: its machine, its effect, or which of the track's own
@@ -2284,28 +2261,14 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
         Some(Control::Insert(slot)) => effect_layout(track.inserts[slot]),
         Some(Control::FilterType) => &FILTER,
         Some(Control::Base(TrackControl::Pitch)) => &PLAY,
-        Some(Control::Mod(slot, _)) => match track.mods[slot].kind {
-            ModKind::Adsr => &ADSR,
-            ModKind::Ahd => &AHD,
-            ModKind::Drum => &DRUM,
-            ModKind::Lpg => &LPG_ENVELOPE,
-            ModKind::Lfo => &LFO,
-            ModKind::Steps => &STEPS_LAYOUT,
-            ModKind::Track => &TRACK,
-        },
+        Some(Control::Mod(slot, _)) => BY_MOD[track.mods[slot].kind as usize],
         Some(Control::Accumulator(_)) => &ACCUMULATOR,
         Some(Control::Arpeggio(_)) => &ARPEGGIO,
         Some(Control::Macro(_)) => &MACROS,
         // An `Acid`'s loops, on a device of their own.
         Some(Control::Gen { param, .. }) if param.is_loop() => &GEN_ACID_LOOPS,
-        Some(Control::Gen {
-            phrase, generator, ..
-        }) => generator_layout(
-            track
-                .phrases
-                .get(&phrase)
-                .and_then(|found| found.generators().get(generator))
-                .map_or(FillKind::Ramp, |found| found.shape.kind),
+        Some(control @ Control::Gen { .. }) => generator_layout(
+            generator_of(control, track).map_or(FillKind::Ramp, |found| found.shape.kind),
         ),
         _ => match track.kind {
             TrackKind::Sound => &OUTPUT,
@@ -2316,31 +2279,24 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
     }
 }
 
+/// The generator a generator's setting is of.
+fn generator_of(control: Control, track: &Track) -> Option<&Generator> {
+    let Control::Gen {
+        phrase, generator, ..
+    } = control
+    else {
+        return None;
+    };
+    track.phrases.get(&phrase)?.generators().get(generator)
+}
+
 /// Whether a control is the app's alone, never on the Roto: what a device is, its machine, its
 /// effect, the effect's type or mode, or a mod slot's type, as each swaps the device's whole
-/// layout.
+/// layout, and a generator's settings that are what it is or are typed.
 pub fn app_only(control: Control, track: &Track) -> bool {
     match control {
         Control::Machine | Control::Insert(_) | Control::Mod(_, ModField::Type) => true,
-        // A generator's fill and rows, what a `Follow` follows, which part a `Grids` plays, which
-        // channel a `Divisions` plays, which side of `Complementary`'s coin a track is and which
-        // named rhythm and part it plays are what it is, as is the voice of a `Tonnetz`' chords it
-        // plays, and a `List`'s values, a `Random`'s weights and a `Tonnetz`' moves are typed.
-        Control::Gen { param, .. } => matches!(
-            param,
-            GenParam::Fill
-                | GenParam::Where
-                | GenParam::Source
-                | GenParam::Values
-                | GenParam::Part
-                | GenParam::Channel
-                | GenParam::Side
-                | GenParam::Rhythm
-                | GenParam::Role
-                | GenParam::Weights
-                | GenParam::Voice
-                | GenParam::MoveList
-        ),
+        Control::Gen { param, .. } => param.spec().app_only,
         Control::InsertParam(slot, param) => track.inserts[slot].type_param() == Some(param),
         _ => false,
     }
@@ -2358,29 +2314,25 @@ pub fn resolve(setting: &Setting, spec: &DeviceSpec, track: &Track) -> Option<Co
             _ => None,
         });
     }
-    // A generator's `Where`'s settings, whichever it has.
-    let wanted: &[GenParam] = match setting.key {
-        WHERE_FIRST => &[
-            GenParam::Hits,
-            GenParam::Every,
-            GenParam::Chance,
-            GenParam::Clusters,
-            GenParam::Markov,
-            GenParam::States,
-            GenParam::Share,
-            GenParam::Child,
-            GenParam::Rule,
-        ],
-        WHERE_SECOND => &[GenParam::Rotate, GenParam::CellStart],
-        PART_DENSITY => &[
-            GenParam::KickDensity,
-            GenParam::SnareDensity,
-            GenParam::HatDensity,
-        ],
-        _ => return controls().find(|control| key(*control, track) == setting.key),
+    // A generator's `Where`'s first or second setting the Roto turns, whichever it has, and the
+    // density of the part a `Grids` plays.
+    let shape = || {
+        let first = controls().find(|control| matches!(control, Control::Gen { .. }))?;
+        generator_of(first, track).map(|found| found.shape)
     };
-    controls()
-        .find(|control| matches!(control, Control::Gen { param, .. } if wanted.contains(param)))
+    let on_roto = |place: Where| {
+        GenParam::of_where(place)
+            .into_iter()
+            .flatten()
+            .filter(|param| !param.spec().app_only)
+    };
+    let wanted = match setting.key {
+        WHERE_FIRST => on_roto(shape()?.place).next(),
+        WHERE_SECOND => on_roto(shape()?.place).nth(1),
+        PART_DENSITY => shape()?.grids.part.map(GenParam::density_of),
+        _ => return controls().find(|control| key(*control, track) == setting.key),
+    }?;
+    controls().find(|control| matches!(control, Control::Gen { param, .. } if *param == wanted))
 }
 
 /// The macros' keys, by their place, as the registry has them.

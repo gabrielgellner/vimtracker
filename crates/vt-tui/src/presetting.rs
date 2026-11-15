@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 
 use vt_model::action::Action;
 use vt_model::preset::{
-    EffectPreset, PresetError, PresetKind, SoundPreset, load, preset_name, preset_path, save,
+    EffectPreset, Preset, PresetError, PresetKind, SoundPreset, is_preset_name, load, preset_name,
+    preset_path, save,
 };
 
 use crate::app::App;
@@ -51,6 +52,36 @@ const NOT_SOUND: &str =
 const NO_FOLDER: &str =
     "There's no presets folder: set presets in settings.ron, in the config folder";
 
+/// What a preset of this kind is called in a sentence, as `sound preset` or `patch`, and the
+/// command that saves one.
+fn called(kind: PresetKind) -> (String, &'static str) {
+    match kind {
+        PresetKind::Patch => ("patch".to_owned(), ":patch"),
+        kind => (format!("{} preset", kind.noun()), ":preset"),
+    }
+}
+
+/// Where a kind's presets are kept in the presets folder, as the status line names it.
+pub(crate) fn kind_place(folder: &Path, kind: PresetKind) -> String {
+    let home = home_folder();
+    place_name(&folder.join(kind.folder()), home.as_deref())
+}
+
+/// The file of the preset of this kind and name in the presets folder, if there's a folder and
+/// the preset is in it, or why the name can't be one.
+pub(crate) fn named_file(
+    folder: Option<&Path>,
+    kind: PresetKind,
+    name: &str,
+) -> Result<Option<PathBuf>, PresetError> {
+    if !is_preset_name(name) {
+        return Err(PresetError::Name);
+    }
+    Ok(folder
+        .and_then(|folder| preset_path(folder, kind, name).ok())
+        .filter(|path| path.is_file()))
+}
+
 impl App {
     /// What `:preset` acts on here: on the FX page with the cursor on a slot, its effect, and
     /// anywhere else the cursor's track's sound.
@@ -71,20 +102,25 @@ impl App {
         Some(self.services.settings.preset_folder()?.join(kind.folder()))
     }
 
-    /// Whether the cursor's track plays sounds, saying why not if it doesn't, for a sound preset.
-    fn takes_sound(&mut self, target: Target) -> bool {
-        let Target::Sound(track) = target else {
-            return true;
-        };
+    /// Whether this track plays sounds, saying `not_sound` if it doesn't.
+    pub(crate) fn plays_sounds(&mut self, track: usize, not_sound: &str) -> bool {
         let sound = self
             .song()
             .tracks
             .get(track)
             .is_some_and(vt_model::song::Track::is_sound);
         if !sound {
-            self.services.status = NOT_SOUND.to_owned();
+            not_sound.clone_into(&mut self.services.status);
         }
         sound
+    }
+
+    /// Whether the cursor's track plays sounds, saying why not if it doesn't, for a sound preset.
+    fn takes_sound(&mut self, target: Target) -> bool {
+        match target {
+            Target::Sound(track) => self.plays_sounds(track, NOT_SOUND),
+            Target::Effect { .. } => true,
+        }
     }
 
     /// The presets folder, or none, saying so.
@@ -139,47 +175,72 @@ impl App {
         if !self.takes_sound(target) {
             return;
         }
+        let saved = format!("{} as {name}", target.said());
+        match target {
+            Target::Sound(track) => self.save_named(
+                name,
+                force,
+                |app| {
+                    let sample = app.preset_sample(track);
+                    Ok(SoundPreset::of(&app.song().tracks[track], sample))
+                },
+                |_| saved,
+            ),
+            Target::Effect { track, slot } => self.save_named(
+                name,
+                force,
+                |app| {
+                    EffectPreset::of(&app.song().tracks[track], slot).ok_or_else(|| {
+                        format!("FX {} is empty, so there's nothing to save", slot + 1)
+                    })
+                },
+                |_| saved,
+            ),
+        }
+    }
+
+    /// Save a preset of this name in its kind's folder, which is made if it isn't there: what
+    /// `make` makes, or else why there's nothing to save. A name that's taken is refused unless
+    /// forced. `saved` says what's saved as what, for the status line.
+    pub(crate) fn save_named<P: Preset>(
+        &mut self,
+        name: &str,
+        force: bool,
+        make: impl FnOnce(&Self) -> Result<P, String>,
+        saved: impl FnOnce(&P) -> String,
+    ) {
         let Some(folder) = self.presets_folder() else {
             return;
         };
-        let path = match preset_path(&folder, target.kind(), name) {
+        let path = match preset_path(&folder, P::KIND, name) {
             Ok(path) => path,
             Err(error) => {
                 self.services.status = error.to_string();
                 return;
             }
         };
-        let written = match target {
-            Target::Sound(track) => {
-                let sample = self.preset_sample(track);
-                let preset = SoundPreset::of(&self.song().tracks[track], sample);
-                save(&path, &preset, force)
-            }
-            Target::Effect { track, slot } => {
-                let Some(preset) = EffectPreset::of(&self.song().tracks[track], slot) else {
-                    self.services.status =
-                        format!("FX {} is empty, so there's nothing to save", slot + 1);
-                    return;
-                };
-                save(&path, &preset, force)
+        let preset = match make(self) {
+            Ok(preset) => preset,
+            Err(why) => {
+                self.services.status = why;
+                return;
             }
         };
-        match written {
+        match save(&path, &preset, force) {
             Ok(()) => {
                 if let Some(saved_in) = path.parent() {
-                    self.note_place(Purpose::Preset(target.kind()), saved_in);
+                    self.note_place(Purpose::Preset(P::KIND), saved_in);
                 }
-                let home = home_folder();
                 self.services.status = format!(
-                    "Saved {} as {name}, in {}",
-                    target.said(),
-                    place_name(&folder.join(target.kind().folder()), home.as_deref())
+                    "Saved {}, in {}",
+                    saved(&preset),
+                    kind_place(&folder, P::KIND)
                 );
             }
             Err(PresetError::Taken(_)) => {
+                let (called, command) = called(P::KIND);
                 self.services.status = format!(
-                    "There's a {} preset called {name} already: :preset! save {name} writes over it",
-                    target.kind().noun()
+                    "There's a {called} called {name} already: {command}! save {name} writes over it"
                 );
             }
             Err(error) => self.services.status = error.to_string(),
@@ -202,27 +263,21 @@ impl App {
 
     /// `:preset load name`: the preset of that name for what's under the cursor.
     fn load_preset_named(&mut self, name: &str) {
-        let target = self.preset_target();
+        let kind = self.preset_target().kind();
         let Some(folder) = self.presets_folder() else {
             return;
         };
-        let path = match preset_path(&folder, target.kind(), name) {
-            Ok(path) => path,
-            Err(error) => {
-                self.services.status = error.to_string();
-                return;
+        match named_file(Some(&folder), kind, name) {
+            Ok(Some(path)) => self.load_preset(kind, &path),
+            Ok(None) => {
+                self.services.status = format!(
+                    "There's no {} preset called {name} in {}",
+                    kind.noun(),
+                    kind_place(&folder, kind)
+                );
             }
-        };
-        if !path.is_file() {
-            let home = home_folder();
-            self.services.status = format!(
-                "There's no {} preset called {name} in {}",
-                target.kind().noun(),
-                place_name(&folder.join(target.kind().folder()), home.as_deref())
-            );
-            return;
+            Err(error) => self.services.status = error.to_string(),
         }
-        self.load_preset(target.kind(), &path);
     }
 
     /// Load a preset on what's under the cursor, as one undo step: a sound on its track, keeping

@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use vt_model::kit::{KitEntry, load_kit};
 use vt_model::preset::{
-    EffectPreset, PatchPreset, Preset, PresetKind, SoundPreset, load, preset_name,
+    EffectPreset, PatchPreset, Preset, PresetError, PresetKind, SoundPreset, load, preset_name,
 };
 use vt_model::project::is_project;
 use vt_model::sample::is_sample_file;
@@ -143,38 +143,33 @@ pub enum Icon {
 /// a warning, and why beside it.
 fn preset_listing(path: &Path, kind: PresetKind) -> (Icon, String, Vec<Tag>) {
     let read = match kind {
-        PresetKind::Sound => load::<SoundPreset>(path).map(|preset| {
-            let icon = Icon::Sound(preset.sound.machine);
-            (icon, preset.summary(), preset.fixed_tags(), preset.tags)
-        }),
-        PresetKind::Effect => load::<EffectPreset>(path).map(|preset| {
-            (
-                Icon::Effect,
-                preset.summary(),
-                preset.fixed_tags(),
-                preset.tags,
-            )
-        }),
-        PresetKind::Patch => load::<PatchPreset>(path).map(|preset| {
-            (
-                Icon::Patch,
-                preset.summary(),
-                preset.fixed_tags(),
-                preset.tags,
-            )
-        }),
+        PresetKind::Sound => {
+            listed::<SoundPreset>(path, |preset| Icon::Sound(preset.sound.machine))
+        }
+        PresetKind::Effect => listed::<EffectPreset>(path, |_| Icon::Effect),
+        PresetKind::Patch => listed::<PatchPreset>(path, |_| Icon::Patch),
     };
     match read {
-        Ok((icon, meaning, fixed, own)) => (icon, meaning, preset_tags(fixed, own)),
+        Ok(listing) => listing,
         Err(error) => {
             let why = match error {
-                vt_model::preset::PresetError::Parse { detail, .. }
-                | vt_model::preset::PresetError::Holds { detail, .. } => detail,
+                PresetError::Parse { detail, .. } | PresetError::Holds { detail, .. } => detail,
                 error => error.to_string(),
             };
             (Icon::Missing, why, Vec::new())
         }
     }
+}
+
+/// How a preset of one type is listed, if it reads: its icon, from `icon`, what it is and its
+/// tags.
+fn listed<P: Preset>(
+    path: &Path,
+    icon: impl FnOnce(&P) -> Icon,
+) -> Result<(Icon, String, Vec<Tag>), PresetError> {
+    let mut preset: P = load(path)?;
+    let tags = preset_tags(preset.fixed_tags(), std::mem::take(preset.tags()));
+    Ok((icon(&preset), preset.summary(), tags))
 }
 
 /// A preset's tags: those it always has, then its own that aren't among them.

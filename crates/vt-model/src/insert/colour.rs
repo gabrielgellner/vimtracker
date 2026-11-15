@@ -47,7 +47,7 @@ impl DistortType {
     }
 
     /// The name on screen.
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         DISTORT_TYPE_NAMES[self as usize]
     }
 }
