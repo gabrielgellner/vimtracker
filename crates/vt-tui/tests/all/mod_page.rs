@@ -1232,7 +1232,8 @@ fn an_lfos_cycle_is_sent_again_only_for_its_wave_phase_deform_or_depths_sign() {
 /// what it measures with `--nocapture`.
 #[test]
 fn three_lfos_dots_move_by_placing_alone_at_about_60_bytes_each() {
-    use vt_model::constants::{FRAME_MS, TICKS_PER_QUARTER};
+    use vt_model::constants::TICKS_PER_QUARTER;
+    use vt_tui::run::FRAME_MS;
     let quarter = TICKS_PER_QUARTER as u32;
     let lfo = |destination, shape, ticks| {
         let mut slot = lfo_on(destination, shape, 0, 0x40);

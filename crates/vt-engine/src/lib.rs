@@ -14,6 +14,7 @@ pub mod parts;
 pub mod pictures;
 mod preview;
 pub mod published;
+mod queues;
 pub(crate) mod reader;
 pub mod recorder;
 pub mod render;
