@@ -43,8 +43,10 @@ use vt_model::insert::{Clouds as Settings, CloudsMode, shift_semitones};
 
 use crate::dsp::blocks::plaits_parts::{Svf, soft_limit};
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::pitch_shifter::PitchShifter;
 use crate::dsp::effects::reverb::Reverb;
+use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::rng::Pcg32;
 use spectral::{Spectral, SpectralControl};
 
@@ -1556,6 +1558,46 @@ impl Clouds {
             let mixed = input[side] * fade_out + out[side] * POST_GAIN * fade_in;
             soft_clip(mixed) * SQRT_2
         })
+    }
+}
+
+impl SlotEffect for Clouds {
+    type Settings = Settings;
+
+    /// Clouds', which records the longest of the module's qualities.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, frames: u64) {
+        self.follow(settings, frames);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        self.quiet_frames()
+    }
+
+    fn keep_time(&mut self, frames: u64, _song: SongPlace) {
+        self.keep_time(frames);
+    }
+
+    fn seed(&mut self, rng: Pcg32) {
+        self.seed(rng);
+    }
+}
+
+impl Rung for Clouds {
+    #[inline]
+    fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.process(input)
     }
 }
 

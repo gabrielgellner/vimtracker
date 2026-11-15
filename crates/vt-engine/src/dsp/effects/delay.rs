@@ -14,6 +14,8 @@ use vt_model::lfo::DIVISION_TICKS;
 use vt_model::song::level_gain;
 
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::dsp::filters::filter::{Coefficients, Trim};
 use crate::dsp::voices::drums::soft_clip;
 use crate::engine::sample_of_tick;
@@ -416,9 +418,43 @@ impl Delay {
     }
 }
 
+impl SlotEffect for Delay {
+    type Settings = Settings;
+
+    /// A delay's, which can hold its longest time at the slowest tempo, and read around it.
+    fn new(rate: u32) -> Self {
+        Self::new(buffer_frames(rate), rate)
+    }
+
+    fn follow(&mut self, settings: Settings, song: SongPlace, _frames: u64) {
+        self.follow(settings, song.frames_per_tick);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        self.reach() as u32
+    }
+}
+
+impl Rung for Delay {
+    #[inline]
+    fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.process(input)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vt_model::insert::EffectKind;
+
     use crate::dsp::effects::memory::Memory;
 
     const RATE: u32 = 48_000;
@@ -807,9 +843,9 @@ mod tests {
     }
 
     /// A slot holding a delay at 120 BPM, settled, as the engine has one.
-    fn slot(settings: Settings) -> crate::dsp::effects::distort::InsertState {
-        use crate::dsp::effects::distort::InsertState;
+    fn slot(settings: Settings) -> crate::dsp::effects::slot::InsertState {
         use crate::dsp::effects::memory::{MemoryPool, SongPlace};
+        use crate::dsp::effects::slot::InsertState;
         use vt_model::insert::Insert;
         let insert = Insert::Delay(settings);
         let mut song = vt_model::song::Song::new(1);
@@ -827,7 +863,7 @@ mod tests {
 
     /// What a slot gives for `input`, then silence, until this many frames.
     fn through_slot(settings: Settings, input: &[f32], frames: usize) -> Vec<[f32; 2]> {
-        let keys = crate::track_state::Keys::default();
+        let keys = crate::dsp::effects::slot::Keys::default();
         let mut state = slot(settings);
         (0..frames)
             .map(|at| {
@@ -840,7 +876,7 @@ mod tests {
     #[test]
     fn the_tempo_gives_the_engines_frames_a_tick() {
         assert_eq!(frames_per_tick(120_000, RATE), FRAMES_PER_TICK);
-        let Memory::Delay(delay) = Memory::delay(RATE) else {
+        let Some(Memory::Delay(delay)) = Memory::new(EffectKind::Delay, RATE) else {
             panic!("a delay's memory")
         };
         assert_eq!(delay.buffer.len(), buffer_frames(RATE));

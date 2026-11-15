@@ -2,15 +2,17 @@
 //! thread makes them and sends them ahead of the version that needs them. The callback keeps them
 //! in a pool, and slots take what they need from it, so an effect costs nothing until it's used.
 
+use std::ops::{Index, IndexMut};
+
 use vt_model::constants::MAX_TRACKS;
-use vt_model::insert::{INSERTS, Insert};
+use vt_model::insert::{EffectKind, INSERTS, Insert};
 use vt_model::song::Song;
 
 use crate::dsp::dynamics::limiter::Limiter;
 use crate::dsp::effects::beads::Beads;
 use crate::dsp::effects::chorus::Chorus;
 use crate::dsp::effects::clouds::Clouds;
-use crate::dsp::effects::delay::{self, Delay};
+use crate::dsp::effects::delay::Delay;
 use crate::dsp::effects::echo::Echo;
 use crate::dsp::effects::flanger::Flanger;
 use crate::dsp::effects::freq_shifter::FreqShifter;
@@ -20,12 +22,14 @@ use crate::dsp::effects::plate::Plate;
 use crate::dsp::effects::resonator::Resonator;
 use crate::dsp::effects::reverb::Reverb;
 use crate::dsp::effects::rotary::Rotary;
+use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::dsp::effects::space::Space;
 use crate::dsp::effects::spring::Spring;
 use crate::dsp::effects::stutter::Stutter;
 use crate::dsp::effects::tape::Tape;
 use crate::dsp::effects::warps::Warps;
 use crate::dsp::filters::comb::Comb;
+use crate::rng::Pcg32;
 
 /// Where the song is, for the effects that keep time with it: its tick, whether it's playing,
 /// and how many frames a tick takes.
@@ -45,421 +49,191 @@ impl SongPlace {
     };
 }
 
-/// How long a reverb or plate has to stay below `SILENT` to be done, in seconds. It's longer than the way
-/// round its loops and its longest pre-delay, so nothing louder is still on its way.
-const REVERB_QUIET_SECONDS: f32 = 1.0;
+/// How long a reverb, plate, spring or space has to stay below `SILENT` to be done, in seconds.
+/// It's longer than the way round its loops and its longest pre-delay, so nothing louder is still
+/// on its way.
+pub(crate) const REVERB_QUIET_SECONDS: f32 = 1.0;
 /// How quiet an effect has to be to be done, about -100 dB.
 pub const SILENT: f32 = 0.00001;
 
-/// What one slot's effect keeps.
-#[derive(Debug, Clone)]
-pub enum Memory {
-    Delay(Box<Delay>),
-    Reverb(Box<Reverb>),
-    Chorus(Box<Chorus>),
-    Limit(Box<Limiter>),
-    Flanger(Box<Flanger>),
-    Tape(Box<Tape>),
-    Plate(Box<Plate>),
-    Pitch(Box<PitchShifter>),
-    Grains(Box<Granular>),
-    Warps(Box<Warps>),
-    Reso(Box<Resonator>),
-    Comb(Box<Comb>),
-    FreqShift(Box<FreqShifter>),
-    Spring(Box<Spring>),
-    Space(Box<Space>),
-    Rotary(Box<Rotary>),
-    Stutter(Box<Stutter>),
-    Clouds(Box<Clouds>),
-    Beads(Box<Beads>),
-    Echo(Box<Echo>),
+/// Makes [`Memory`], what one slot's effect keeps, from one list of the effects that keep a long
+/// buffer, with everything that hands a call on to one of them by `match` (decision 340). Each
+/// entry is the effect's name, which its [`EffectKind`], its `Insert` and its `Memory` share, and
+/// its DSP, which implements [`SlotEffect`]. The slot plays the first list's through its `ring`
+/// ([`Rung`]), and the second's itself, with its note, its glide or another track.
+macro_rules! memories {
+    (
+        rung: $($rung:ident($rung_dsp:ty)),+ $(,)?;
+        played_by_slot: $($own:ident($own_dsp:ty)),+ $(,)?;
+    ) => {
+        memories!(@made [$($rung($rung_dsp),)+ $($own($own_dsp),)+] [$($rung),+] [$($own),+]);
+    };
+    (@made [$($kind:ident($dsp:ty),)+] [$($rung:ident),+] [$($own:ident),+]) => {
+        /// What one slot's effect keeps.
+        #[derive(Debug, Clone)]
+        pub enum Memory {
+            $($kind(Box<$dsp>),)+
+        }
+
+        /// Whether each effect keeps a long buffer, which it takes from the pool, by
+        /// [`EffectKind`].
+        pub const BUFFERED: [bool; EffectKind::COUNT] = {
+            let mut buffered = [false; EffectKind::COUNT];
+            $(buffered[EffectKind::$kind as usize] = true;)+
+            buffered
+        };
+
+        impl Memory {
+            /// What an effect keeps, made on the edit thread, if it keeps a long buffer.
+            pub fn new(kind: EffectKind, rate: u32) -> Option<Self> {
+                Some(match kind {
+                    $(EffectKind::$kind => Self::$kind(Box::new(<$dsp as SlotEffect>::new(rate))),)+
+                    _ => return None,
+                })
+            }
+
+            /// Which effect's it is.
+            pub fn kind(&self) -> EffectKind {
+                match self {
+                    $(Self::$kind(_) => EffectKind::$kind,)+
+                }
+            }
+
+            /// Feed one frame in and get what's wet out.
+            #[inline]
+            pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+                match self {
+                    $(Self::$rung(dsp) => Rung::process(&mut **dsp, input),)+
+                    // The slot plays these itself, so they never come here. Were one to, it's
+                    // heard as silence rather than stopping the callback.
+                    $(Self::$own(_))|+ => {
+                        debug_assert!(false, "{:?} is played by its slot", self.kind());
+                        [0.0; 2]
+                    }
+                }
+            }
+
+            /// How many quiet frames in a row mean nothing's left in it.
+            pub fn quiet_frames(&self, rate: u32) -> u32 {
+                match self {
+                    $(Self::$kind(dsp) => SlotEffect::quiet_frames(&**dsp, rate),)+
+                }
+            }
+
+            /// Take what's set now, where the song is and at its tempo.
+            #[inline]
+            pub fn follow(&mut self, insert: Insert, song: SongPlace, frames: u64) {
+                match (self, insert) {
+                    $((Self::$kind(dsp), Insert::$kind(settings)) => {
+                        SlotEffect::follow(&mut **dsp, settings, song, frames);
+                    })+
+                    _ => {}
+                }
+            }
+
+            /// Move what goes by the frame rather than by what it's done to where it is this many
+            /// frames in, as taking its settings does: a reverb's and a plate's wobbles, Clouds'
+            /// and Beads' reverbs', and the song's steps Beads follows.
+            pub fn keep_time(&mut self, frames: u64, song: SongPlace) {
+                match self {
+                    $(Self::$kind(dsp) => SlotEffect::keep_time(&mut **dsp, frames, song),)+
+                }
+            }
+
+            /// Give what draws random numbers its own generator, from the track's: Clouds' and
+            /// Beads' grains, and the Space Echo's wobble.
+            pub fn seed(&mut self, rng: Pcg32) {
+                match self {
+                    $(Self::$kind(dsp) => SlotEffect::seed(&mut **dsp, rng),)+
+                }
+            }
+
+            /// Whether it's about to play something of its own with nothing going in, as a spring
+            /// that's just been knocked does, or a stutter that's just been triggered, so it has to
+            /// be woken.
+            pub fn waking(&self) -> bool {
+                match self {
+                    $(Self::$kind(dsp) => SlotEffect::waking(&**dsp),)+
+                }
+            }
+
+            /// A step has switched its trigger on, so a stutter starts again, whether or not it
+            /// was on.
+            pub fn strike(&mut self) {
+                match self {
+                    $(Self::$kind(dsp) => SlotEffect::strike(&mut **dsp),)+
+                }
+            }
+
+            /// Jump to what's set, as it's only just started.
+            pub fn settle(&mut self) {
+                match self {
+                    $(Self::$kind(dsp) => SlotEffect::settle(&mut **dsp),)+
+                }
+            }
+
+            fn clear(&mut self) {
+                match self {
+                    $(Self::$kind(dsp) => SlotEffect::clear(&mut **dsp),)+
+                }
+            }
+        }
+    };
+}
+
+memories! {
+    rung: Delay(Delay), Reverb(Reverb), Chorus(Chorus), Flanger(Flanger), Tape(Tape),
+        Plate(Plate), Pitch(PitchShifter), Grains(Granular), Spring(Spring), Space(Space),
+        Rotary(Rotary), Stutter(Stutter), Clouds(Clouds), Beads(Beads), Echo(Echo);
+    played_by_slot: Limit(Limiter), Warps(Warps), Reso(Resonator), Comb(Comb),
+        FreqShift(FreqShifter);
 }
 
 impl Memory {
-    /// A delay's, which can hold its longest time at the slowest tempo, and read around it.
-    pub fn delay(rate: u32) -> Self {
-        Self::Delay(Box::new(Delay::new(delay::buffer_frames(rate), rate)))
-    }
-
-    /// A reverb's.
-    pub fn reverb(rate: u32) -> Self {
-        Self::Reverb(Box::new(Reverb::new(rate)))
-    }
-
-    /// A chorus's.
-    pub fn chorus(rate: u32) -> Self {
-        Self::Chorus(Box::new(Chorus::new(rate)))
-    }
-
-    /// A limiter's, which looks as far ahead at any rate.
-    pub fn limit(rate: u32) -> Self {
-        Self::Limit(Box::new(Limiter::new(rate)))
-    }
-
-    /// A flanger's.
-    pub fn flanger(rate: u32) -> Self {
-        Self::Flanger(Box::new(Flanger::new(rate)))
-    }
-
-    /// A tape's, with a line for its wow and flutter.
-    pub fn tape(rate: u32) -> Self {
-        Self::Tape(Box::new(Tape::new(rate)))
-    }
-
-    /// A plate's, long enough for the biggest.
-    pub fn plate(rate: u32) -> Self {
-        Self::Plate(Box::new(Plate::new(rate)))
-    }
-
-    /// A pitch shifter's, long enough for its longest window.
-    pub fn pitch(rate: u32) -> Self {
-        Self::Pitch(Box::new(PitchShifter::new(rate)))
-    }
-
-    /// A granular effect's, which records Beads' four seconds.
-    pub fn grains(rate: u32) -> Self {
-        Self::Grains(Box::new(Granular::new(rate)))
-    }
-
-    /// Warps', for its vocoder's filter bank.
-    pub fn warps(rate: u32) -> Self {
-        Self::Warps(Box::new(Warps::new(rate)))
-    }
-
-    /// A resonator's, for its modes and their gains.
-    pub fn reso(rate: u32) -> Self {
-        Self::Reso(Box::new(Resonator::new(rate)))
-    }
-
-    /// A comb's, for its lines.
-    pub fn comb(rate: u32) -> Self {
-        Self::Comb(Box::new(Comb::new(rate)))
-    }
-
-    /// A frequency shifter's, with lines for its longest delay.
-    pub fn freq_shift(rate: u32) -> Self {
-        Self::FreqShift(Box::new(FreqShifter::new(rate)))
-    }
-
-    /// A spring reverb's, long enough for the biggest.
-    pub fn spring(rate: u32) -> Self {
-        Self::Spring(Box::new(Spring::new(rate)))
-    }
-
-    /// A stutter's, which holds a beat at the slowest tempo.
-    pub fn stutter(rate: u32) -> Self {
-        Self::Stutter(Box::new(Stutter::new(rate)))
-    }
-
-    /// A rotary speaker's, with a line for the horn's furthest delay.
-    pub fn rotary(rate: u32) -> Self {
-        Self::Rotary(Box::new(Rotary::new(rate)))
-    }
-
-    /// A space's, long enough for the biggest tank.
-    pub fn space(rate: u32) -> Self {
-        Self::Space(Box::new(Space::new(rate)))
-    }
-
-    /// Clouds', which records the longest of the module's qualities.
-    pub fn clouds(rate: u32) -> Self {
-        Self::Clouds(Box::new(Clouds::new(rate)))
-    }
-
-    /// Beads', which records the longest of the module's qualities too.
-    pub fn beads(rate: u32) -> Self {
-        Self::Beads(Box::new(Beads::new(rate)))
-    }
-
-    /// A Space Echo's, whose tape holds its slowest speed, and its spring.
-    pub fn echo(rate: u32) -> Self {
-        Self::Echo(Box::new(Echo::new(rate)))
-    }
-
-    /// Feed one frame in and get what's wet out.
-    #[inline]
-    pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
-        match self {
-            Self::Delay(delay) => delay.process(input),
-            Self::Reverb(reverb) => reverb.process(input),
-            Self::Chorus(chorus) => chorus.process(input),
-            Self::Limit(limiter) => limiter.process_alone(input),
-            Self::Flanger(flanger) => flanger.process(input),
-            Self::Tape(tape) => tape.process(input),
-            Self::Plate(plate) => plate.process(input),
-            Self::Pitch(shifter) => shifter.process(input),
-            Self::Grains(granular) => granular.process(input),
-            Self::Warps(warps) => warps.process_alone(input),
-            Self::Reso(resonator) => resonator.process_alone(input),
-            Self::Comb(comb) => comb.process_alone(input),
-            Self::FreqShift(shifter) => shifter.process_alone(input),
-            Self::Spring(spring) => spring.process(input),
-            Self::Stutter(stutter) => stutter.process(input),
-            Self::Rotary(rotary) => rotary.process_alone(input),
-            Self::Space(space) => space.process(input),
-            Self::Clouds(clouds) => clouds.process(input),
-            Self::Beads(beads) => beads.process(input),
-            Self::Echo(echo) => echo.process(input),
-        }
-    }
-
-    /// How many quiet frames in a row mean nothing's left in it.
-    pub fn quiet_frames(&self, rate: u32) -> u32 {
-        match self {
-            Self::Delay(delay) => delay.reach() as u32,
-            Self::Reverb(_) | Self::Plate(_) | Self::Spring(_) | Self::Space(_) => {
-                (REVERB_QUIET_SECONDS * rate as f32) as u32
-            }
-            Self::Chorus(chorus) => chorus.frames() as u32,
-            Self::Limit(limiter) => limiter.frames() as u32,
-            Self::Flanger(flanger) => flanger.frames() as u32,
-            Self::Tape(tape) => tape.quiet_frames(),
-            Self::Pitch(shifter) => shifter.frames() as u32,
-            Self::Grains(granular) => granular.quiet_frames(),
-            Self::Warps(warps) => warps.quiet_frames(),
-            Self::Reso(resonator) => resonator.quiet_frames(),
-            Self::Comb(comb) => comb.quiet_frames(),
-            Self::FreqShift(shifter) => shifter.frames() as u32,
-            Self::Stutter(stutter) => stutter.quiet_frames(),
-            Self::Rotary(rotary) => rotary.frames() as u32,
-            Self::Clouds(clouds) => clouds.quiet_frames(),
-            Self::Beads(beads) => beads.quiet_frames(),
-            Self::Echo(echo) => echo.quiet_frames(),
-        }
-    }
-
-    /// Take what's set now, where the song is and at its tempo.
-    #[inline]
-    pub fn follow(&mut self, insert: Insert, song: SongPlace, frames: u64) {
-        let frames_per_tick = song.frames_per_tick;
-        match (self, insert) {
-            (Self::Delay(delay), Insert::Delay(settings)) => {
-                delay.follow(settings, frames_per_tick);
-            }
-            (Self::Reverb(reverb), Insert::Reverb(settings)) => reverb.follow(settings, frames),
-            (Self::Chorus(chorus), Insert::Chorus(settings)) => chorus.follow(settings),
-            (Self::Limit(limiter), Insert::Limit(settings)) => limiter.follow(settings),
-            (Self::Flanger(flanger), Insert::Flanger(settings)) => {
-                flanger.follow(settings, frames_per_tick);
-            }
-            (Self::Tape(tape), Insert::Tape(settings)) => tape.follow(settings),
-            (Self::Plate(plate), Insert::Plate(settings)) => plate.follow(settings, frames),
-            (Self::Pitch(shifter), Insert::Pitch(settings)) => shifter.follow(settings),
-            (Self::Grains(granular), Insert::Grains(settings)) => granular.follow(settings),
-            (Self::Warps(warps), Insert::Warps(settings)) => warps.follow(settings),
-            (Self::Reso(resonator), Insert::Reso(settings)) => resonator.follow(settings),
-            (Self::Comb(comb), Insert::Comb(settings)) => comb.follow(settings),
-            (Self::FreqShift(shifter), Insert::FreqShift(settings)) => shifter.follow(settings),
-            (Self::Spring(spring), Insert::Spring(settings)) => spring.follow(settings),
-            (Self::Stutter(stutter), Insert::Stutter(settings)) => {
-                stutter.follow(settings, frames_per_tick);
-            }
-            (Self::Rotary(rotary), Insert::Rotary(settings)) => rotary.follow(settings),
-            (Self::Space(space), Insert::Space(settings)) => space.follow(settings),
-            (Self::Clouds(clouds), Insert::Clouds(settings)) => clouds.follow(settings, frames),
-            (Self::Beads(beads), Insert::Beads(settings)) => beads.follow(settings, song, frames),
-            (Self::Echo(echo), Insert::Echo(settings)) => echo.follow(settings, frames_per_tick),
-            _ => {}
-        }
-    }
-
-    /// Move what goes by the frame rather than by what it's done to where it is this many frames
-    /// in, as taking its settings does: a reverb's and a plate's wobbles, Clouds' and Beads'
-    /// reverbs', and the song's steps Beads follows.
-    pub fn keep_time(&mut self, frames: u64, song: SongPlace) {
-        match self {
-            Self::Reverb(reverb) => reverb.keep_time(frames),
-            Self::Plate(plate) => plate.keep_time(frames),
-            Self::Clouds(clouds) => clouds.keep_time(frames),
-            Self::Beads(beads) => beads.keep_time(frames, song),
-            _ => {}
-        }
-    }
-
-    /// Give what draws random numbers its own generator, from the track's: Clouds' and Beads'
-    /// grains, and the Space Echo's wobble.
-    pub fn seed(&mut self, rng: crate::rng::Pcg32) {
-        match self {
-            Self::Clouds(clouds) => clouds.seed(rng),
-            Self::Beads(beads) => beads.seed(rng),
-            Self::Echo(echo) => echo.seed(rng),
-            _ => {}
-        }
-    }
-
     /// Whether an effect keeps a long buffer, which it takes from the pool.
     pub fn kept_by(insert: Insert) -> bool {
-        !matches!(
-            insert,
-            Insert::Empty
-                | Insert::Distort(_)
-                | Insert::Exciter(_)
-                | Insert::Eq(_)
-                | Insert::Compressor(_)
-                | Insert::Lpg(_)
-                | Insert::Phaser(_)
-                | Insert::Vowel(_)
-        )
-    }
-
-    /// Whether it's about to play something of its own with nothing going in, as a spring that's
-    /// just been knocked does, or a stutter that's just been triggered, so it has to be woken.
-    pub fn waking(&self) -> bool {
-        match self {
-            Self::Spring(spring) => spring.knocking(),
-            Self::Stutter(stutter) => stutter.waking(),
-            _ => false,
-        }
-    }
-
-    /// A step has switched its trigger on, so a stutter starts again, whether or not it was on.
-    pub fn strike(&mut self) {
-        if let Self::Stutter(stutter) = self {
-            stutter.strike();
-        }
-    }
-
-    /// Jump to what's set, as it's only just started.
-    pub fn settle(&mut self) {
-        match self {
-            Self::Delay(delay) => delay.settle(),
-            Self::Reverb(reverb) => reverb.settle(),
-            Self::Chorus(chorus) => chorus.settle(),
-            Self::Limit(limiter) => limiter.settle(),
-            Self::Flanger(flanger) => flanger.settle(),
-            Self::Tape(tape) => tape.settle(),
-            Self::Plate(plate) => plate.settle(),
-            Self::Pitch(shifter) => shifter.settle(),
-            Self::Grains(granular) => granular.settle(),
-            Self::Warps(warps) => warps.settle(),
-            Self::Reso(resonator) => resonator.settle(),
-            Self::Comb(comb) => comb.settle(),
-            Self::FreqShift(shifter) => shifter.settle(),
-            Self::Spring(spring) => spring.settle(),
-            Self::Stutter(_) => {}
-            Self::Rotary(rotary) => rotary.settle(),
-            Self::Space(space) => space.settle(),
-            Self::Clouds(clouds) => clouds.settle(),
-            Self::Beads(beads) => beads.settle(),
-            Self::Echo(echo) => echo.settle(),
-        }
-    }
-
-    fn clear(&mut self) {
-        match self {
-            Self::Delay(delay) => delay.clear(),
-            Self::Reverb(reverb) => reverb.clear(),
-            Self::Chorus(chorus) => chorus.clear(),
-            Self::Limit(limiter) => limiter.clear(),
-            Self::Flanger(flanger) => flanger.clear(),
-            Self::Tape(tape) => tape.clear(),
-            Self::Plate(plate) => plate.clear(),
-            Self::Pitch(shifter) => shifter.clear(),
-            Self::Grains(granular) => granular.clear(),
-            Self::Warps(warps) => warps.clear(),
-            Self::Reso(resonator) => resonator.clear(),
-            Self::Comb(comb) => comb.clear(),
-            Self::FreqShift(shifter) => shifter.clear(),
-            Self::Spring(spring) => spring.clear(),
-            Self::Stutter(stutter) => stutter.clear(),
-            Self::Rotary(rotary) => rotary.clear(),
-            Self::Space(space) => space.clear(),
-            Self::Clouds(clouds) => clouds.clear(),
-            Self::Beads(beads) => beads.clear(),
-            Self::Echo(echo) => echo.clear(),
-        }
+        insert.kind().is_some_and(|kind| BUFFERED[kind as usize])
     }
 }
 
-/// How many of each a song needs.
+/// How many of each a song needs, by [`EffectKind`]: none of what keeps no long buffer.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct MemoryCount {
-    pub delay: u16,
-    pub reverb: u16,
-    pub chorus: u16,
-    pub limit: u16,
-    pub flanger: u16,
-    pub tape: u16,
-    pub plate: u16,
-    pub pitch: u16,
-    pub grains: u16,
-    pub warps: u16,
-    pub reso: u16,
-    pub comb: u16,
-    pub freq_shift: u16,
-    pub spring: u16,
-    pub space: u16,
-    pub rotary: u16,
-    pub stutter: u16,
-    pub clouds: u16,
-    pub beads: u16,
-    pub echo: u16,
-}
+pub struct MemoryCount(pub [u16; EffectKind::COUNT]);
 
 impl MemoryCount {
     /// What a song's slots need.
     pub fn of(song: &Song) -> Self {
         let mut count = Self::default();
         for insert in song.tracks.iter().flat_map(|track| track.inserts) {
-            match insert {
-                Insert::Delay(_) => count.delay += 1,
-                Insert::Reverb(_) => count.reverb += 1,
-                Insert::Chorus(_) => count.chorus += 1,
-                Insert::Limit(_) => count.limit += 1,
-                Insert::Flanger(_) => count.flanger += 1,
-                Insert::Tape(_) => count.tape += 1,
-                Insert::Plate(_) => count.plate += 1,
-                Insert::Pitch(_) => count.pitch += 1,
-                Insert::Grains(_) => count.grains += 1,
-                Insert::Warps(_) => count.warps += 1,
-                Insert::Reso(_) => count.reso += 1,
-                Insert::Comb(_) => count.comb += 1,
-                Insert::FreqShift(_) => count.freq_shift += 1,
-                Insert::Spring(_) => count.spring += 1,
-                Insert::Stutter(_) => count.stutter += 1,
-                Insert::Rotary(_) => count.rotary += 1,
-                Insert::Space(_) => count.space += 1,
-                Insert::Clouds(_) => count.clouds += 1,
-                Insert::Beads(_) => count.beads += 1,
-                Insert::Echo(_) => count.echo += 1,
-                Insert::Empty
-                | Insert::Distort(_)
-                | Insert::Exciter(_)
-                | Insert::Eq(_)
-                | Insert::Compressor(_)
-                | Insert::Lpg(_)
-                | Insert::Phaser(_)
-                | Insert::Vowel(_) => {}
+            if Memory::kept_by(insert)
+                && let Some(kind) = insert.kind()
+            {
+                count[kind] += 1;
             }
         }
         count
     }
 }
 
-/// What the callback holds that no slot is using. Nothing here allocates or frees.
+impl Index<EffectKind> for MemoryCount {
+    type Output = u16;
+
+    fn index(&self, kind: EffectKind) -> &u16 {
+        &self.0[kind as usize]
+    }
+}
+
+impl IndexMut<EffectKind> for MemoryCount {
+    fn index_mut(&mut self, kind: EffectKind) -> &mut u16 {
+        &mut self.0[kind as usize]
+    }
+}
+
+/// What the callback holds that no slot is using, by [`EffectKind`]. Nothing here allocates or
+/// frees.
 #[derive(Debug)]
 pub struct MemoryPool {
-    delays: Vec<Memory>,
-    reverbs: Vec<Memory>,
-    choruses: Vec<Memory>,
-    limiters: Vec<Memory>,
-    flangers: Vec<Memory>,
-    tapes: Vec<Memory>,
-    plates: Vec<Memory>,
-    pitches: Vec<Memory>,
-    grains: Vec<Memory>,
-    warps: Vec<Memory>,
-    reso: Vec<Memory>,
-    comb: Vec<Memory>,
-    freq_shift: Vec<Memory>,
-    springs: Vec<Memory>,
-    stutters: Vec<Memory>,
-    rotaries: Vec<Memory>,
-    spaces: Vec<Memory>,
-    clouds: Vec<Memory>,
-    beads: Vec<Memory>,
-    echoes: Vec<Memory>,
+    free: [Vec<Memory>; EffectKind::COUNT],
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
 }
@@ -471,116 +245,30 @@ impl MemoryPool {
     /// A pool with what a song needs, for before audio starts.
     pub fn for_song(song: &Song, rate: u32) -> Self {
         let mut pool = Self {
-            delays: Vec::with_capacity(POOL_CAPACITY),
-            reverbs: Vec::with_capacity(POOL_CAPACITY),
-            choruses: Vec::with_capacity(POOL_CAPACITY),
-            limiters: Vec::with_capacity(POOL_CAPACITY),
-            flangers: Vec::with_capacity(POOL_CAPACITY),
-            tapes: Vec::with_capacity(POOL_CAPACITY),
-            plates: Vec::with_capacity(POOL_CAPACITY),
-            pitches: Vec::with_capacity(POOL_CAPACITY),
-            grains: Vec::with_capacity(POOL_CAPACITY),
-            warps: Vec::with_capacity(POOL_CAPACITY),
-            reso: Vec::with_capacity(POOL_CAPACITY),
-            comb: Vec::with_capacity(POOL_CAPACITY),
-            freq_shift: Vec::with_capacity(POOL_CAPACITY),
-            springs: Vec::with_capacity(POOL_CAPACITY),
-            stutters: Vec::with_capacity(POOL_CAPACITY),
-            rotaries: Vec::with_capacity(POOL_CAPACITY),
-            spaces: Vec::with_capacity(POOL_CAPACITY),
-            clouds: Vec::with_capacity(POOL_CAPACITY),
-            beads: Vec::with_capacity(POOL_CAPACITY),
-            echoes: Vec::with_capacity(POOL_CAPACITY),
+            // What keeps no long buffer never has one to hold, so it takes no room.
+            free: std::array::from_fn(|at| {
+                if BUFFERED[at] {
+                    Vec::with_capacity(POOL_CAPACITY)
+                } else {
+                    Vec::new()
+                }
+            }),
             owed: MemoryCount::default(),
         };
         let needed = MemoryCount::of(song);
-        for _ in 0..needed.delay {
-            pool.put(Memory::delay(rate));
-        }
-        for _ in 0..needed.reverb {
-            pool.put(Memory::reverb(rate));
-        }
-        for _ in 0..needed.chorus {
-            pool.put(Memory::chorus(rate));
-        }
-        for _ in 0..needed.limit {
-            pool.put(Memory::limit(rate));
-        }
-        for _ in 0..needed.flanger {
-            pool.put(Memory::flanger(rate));
-        }
-        for _ in 0..needed.tape {
-            pool.put(Memory::tape(rate));
-        }
-        for _ in 0..needed.plate {
-            pool.put(Memory::plate(rate));
-        }
-        for _ in 0..needed.pitch {
-            pool.put(Memory::pitch(rate));
-        }
-        for _ in 0..needed.grains {
-            pool.put(Memory::grains(rate));
-        }
-        for _ in 0..needed.warps {
-            pool.put(Memory::warps(rate));
-        }
-        for _ in 0..needed.reso {
-            pool.put(Memory::reso(rate));
-        }
-        for _ in 0..needed.comb {
-            pool.put(Memory::comb(rate));
-        }
-        for _ in 0..needed.freq_shift {
-            pool.put(Memory::freq_shift(rate));
-        }
-        for _ in 0..needed.spring {
-            pool.put(Memory::spring(rate));
-        }
-        for _ in 0..needed.stutter {
-            pool.put(Memory::stutter(rate));
-        }
-        for _ in 0..needed.rotary {
-            pool.put(Memory::rotary(rate));
-        }
-        for _ in 0..needed.space {
-            pool.put(Memory::space(rate));
-        }
-        for _ in 0..needed.clouds {
-            pool.put(Memory::clouds(rate));
-        }
-        for _ in 0..needed.beads {
-            pool.put(Memory::beads(rate));
-        }
-        for _ in 0..needed.echo {
-            pool.put(Memory::echo(rate));
+        for kind in EffectKind::ALL {
+            for _ in 0..needed[kind] {
+                if let Some(memory) = Memory::new(kind, rate) {
+                    pool.put(memory);
+                }
+            }
         }
         pool
     }
 
     /// Keep what's no longer in use.
     pub fn put(&mut self, memory: Memory) {
-        let held = match memory {
-            Memory::Delay(_) => &mut self.delays,
-            Memory::Reverb(_) => &mut self.reverbs,
-            Memory::Chorus(_) => &mut self.choruses,
-            Memory::Limit(_) => &mut self.limiters,
-            Memory::Flanger(_) => &mut self.flangers,
-            Memory::Tape(_) => &mut self.tapes,
-            Memory::Plate(_) => &mut self.plates,
-            Memory::Pitch(_) => &mut self.pitches,
-            Memory::Grains(_) => &mut self.grains,
-            Memory::Warps(_) => &mut self.warps,
-            Memory::Reso(_) => &mut self.reso,
-            Memory::Comb(_) => &mut self.comb,
-            Memory::FreqShift(_) => &mut self.freq_shift,
-            Memory::Spring(_) => &mut self.springs,
-            Memory::Stutter(_) => &mut self.stutters,
-            Memory::Rotary(_) => &mut self.rotaries,
-            Memory::Space(_) => &mut self.spaces,
-            Memory::Clouds(_) => &mut self.clouds,
-            Memory::Beads(_) => &mut self.beads,
-            Memory::Echo(_) => &mut self.echoes,
-        };
+        let held = &mut self.free[memory.kind() as usize];
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
         if held.len() < held.capacity() {
@@ -592,214 +280,34 @@ impl MemoryPool {
 
     /// Take what an effect needs, empty, if it needs something and there's one free.
     pub fn take(&mut self, insert: Insert) -> Option<Memory> {
-        let held = match insert {
-            Insert::Delay(_) => &mut self.delays,
-            Insert::Reverb(_) => &mut self.reverbs,
-            Insert::Chorus(_) => &mut self.choruses,
-            Insert::Limit(_) => &mut self.limiters,
-            Insert::Flanger(_) => &mut self.flangers,
-            Insert::Tape(_) => &mut self.tapes,
-            Insert::Plate(_) => &mut self.plates,
-            Insert::Pitch(_) => &mut self.pitches,
-            Insert::Grains(_) => &mut self.grains,
-            Insert::Warps(_) => &mut self.warps,
-            Insert::Reso(_) => &mut self.reso,
-            Insert::Comb(_) => &mut self.comb,
-            Insert::FreqShift(_) => &mut self.freq_shift,
-            Insert::Spring(_) => &mut self.springs,
-            Insert::Stutter(_) => &mut self.stutters,
-            Insert::Rotary(_) => &mut self.rotaries,
-            Insert::Space(_) => &mut self.spaces,
-            Insert::Clouds(_) => &mut self.clouds,
-            Insert::Beads(_) => &mut self.beads,
-            Insert::Echo(_) => &mut self.echoes,
-            Insert::Empty
-            | Insert::Distort(_)
-            | Insert::Exciter(_)
-            | Insert::Eq(_)
-            | Insert::Compressor(_)
-            | Insert::Lpg(_)
-            | Insert::Phaser(_)
-            | Insert::Vowel(_) => {
-                return None;
-            }
-        };
-        let mut memory = held.pop()?;
+        let mut memory = self.free[insert.kind()? as usize].pop()?;
         memory.clear();
         Some(memory)
     }
 
     /// Note that the edit thread wants this many back.
     pub fn owe(&mut self, count: MemoryCount) {
-        self.owed.delay += count.delay;
-        self.owed.reverb += count.reverb;
-        self.owed.chorus += count.chorus;
-        self.owed.limit += count.limit;
-        self.owed.flanger += count.flanger;
-        self.owed.tape += count.tape;
-        self.owed.plate += count.plate;
-        self.owed.pitch += count.pitch;
-        self.owed.grains += count.grains;
-        self.owed.warps += count.warps;
-        self.owed.reso += count.reso;
-        self.owed.comb += count.comb;
-        self.owed.freq_shift += count.freq_shift;
-        self.owed.spring += count.spring;
-        self.owed.stutter += count.stutter;
-        self.owed.rotary += count.rotary;
-        self.owed.space += count.space;
-        self.owed.clouds += count.clouds;
-        self.owed.beads += count.beads;
-        self.owed.echo += count.echo;
+        for (owed, more) in self.owed.0.iter_mut().zip(count.0) {
+            *owed += more;
+        }
     }
 
-    /// The next to send back to be freed, if any is owed and free.
+    /// The next to send back to be freed, if any is owed and free, the first effect's first.
     pub fn next_owed(&mut self) -> Option<Memory> {
-        if self.owed.delay > 0
-            && let Some(memory) = self.delays.pop()
-        {
-            self.owed.delay -= 1;
-            return Some(memory);
-        }
-        if self.owed.reverb > 0
-            && let Some(memory) = self.reverbs.pop()
-        {
-            self.owed.reverb -= 1;
-            return Some(memory);
-        }
-        if self.owed.chorus > 0
-            && let Some(memory) = self.choruses.pop()
-        {
-            self.owed.chorus -= 1;
-            return Some(memory);
-        }
-        if self.owed.limit > 0
-            && let Some(memory) = self.limiters.pop()
-        {
-            self.owed.limit -= 1;
-            return Some(memory);
-        }
-        if self.owed.flanger > 0
-            && let Some(memory) = self.flangers.pop()
-        {
-            self.owed.flanger -= 1;
-            return Some(memory);
-        }
-        if self.owed.tape > 0
-            && let Some(memory) = self.tapes.pop()
-        {
-            self.owed.tape -= 1;
-            return Some(memory);
-        }
-        if self.owed.plate > 0
-            && let Some(memory) = self.plates.pop()
-        {
-            self.owed.plate -= 1;
-            return Some(memory);
-        }
-        if self.owed.pitch > 0
-            && let Some(memory) = self.pitches.pop()
-        {
-            self.owed.pitch -= 1;
-            return Some(memory);
-        }
-        if self.owed.grains > 0
-            && let Some(memory) = self.grains.pop()
-        {
-            self.owed.grains -= 1;
-            return Some(memory);
-        }
-        if self.owed.warps > 0
-            && let Some(memory) = self.warps.pop()
-        {
-            self.owed.warps -= 1;
-            return Some(memory);
-        }
-        if self.owed.reso > 0
-            && let Some(memory) = self.reso.pop()
-        {
-            self.owed.reso -= 1;
-            return Some(memory);
-        }
-        if self.owed.comb > 0
-            && let Some(memory) = self.comb.pop()
-        {
-            self.owed.comb -= 1;
-            return Some(memory);
-        }
-        if self.owed.freq_shift > 0
-            && let Some(memory) = self.freq_shift.pop()
-        {
-            self.owed.freq_shift -= 1;
-            return Some(memory);
-        }
-        if self.owed.spring > 0
-            && let Some(memory) = self.springs.pop()
-        {
-            self.owed.spring -= 1;
-            return Some(memory);
-        }
-        if self.owed.stutter > 0
-            && let Some(memory) = self.stutters.pop()
-        {
-            self.owed.stutter -= 1;
-            return Some(memory);
-        }
-        if self.owed.rotary > 0
-            && let Some(memory) = self.rotaries.pop()
-        {
-            self.owed.rotary -= 1;
-            return Some(memory);
-        }
-        if self.owed.space > 0
-            && let Some(memory) = self.spaces.pop()
-        {
-            self.owed.space -= 1;
-            return Some(memory);
-        }
-        if self.owed.clouds > 0
-            && let Some(memory) = self.clouds.pop()
-        {
-            self.owed.clouds -= 1;
-            return Some(memory);
-        }
-        if self.owed.beads > 0
-            && let Some(memory) = self.beads.pop()
-        {
-            self.owed.beads -= 1;
-            return Some(memory);
-        }
-        if self.owed.echo > 0
-            && let Some(memory) = self.echoes.pop()
-        {
-            self.owed.echo -= 1;
-            return Some(memory);
+        for kind in EffectKind::ALL {
+            if self.owed[kind] > 0
+                && let Some(memory) = self.free[kind as usize].pop()
+            {
+                self.owed[kind] -= 1;
+                return Some(memory);
+            }
         }
         None
     }
 
     /// How many are free.
     pub fn spare(&self) -> usize {
-        self.delays.len()
-            + self.reverbs.len()
-            + self.choruses.len()
-            + self.limiters.len()
-            + self.flangers.len()
-            + self.tapes.len()
-            + self.plates.len()
-            + self.pitches.len()
-            + self.grains.len()
-            + self.warps.len()
-            + self.reso.len()
-            + self.comb.len()
-            + self.freq_shift.len()
-            + self.springs.len()
-            + self.stutters.len()
-            + self.rotaries.len()
-            + self.spaces.len()
-            + self.clouds.len()
-            + self.beads.len()
-            + self.echoes.len()
+        self.free.iter().map(Vec::len).sum()
     }
 }
 
@@ -817,7 +325,7 @@ mod tests {
         for rate in [44_100, 48_000, 96_000] {
             // A whole bar, at 20 BPM.
             let frames = sample_of_tick(3840, rate, MIN_MILLIBPM) as usize;
-            let mut memory = Memory::delay(rate);
+            let mut memory = Memory::new(EffectKind::Delay, rate).unwrap();
             let settings = DelaySettings {
                 time: 17,
                 ..DelaySettings::DEFAULT
@@ -852,13 +360,20 @@ mod tests {
     fn what_is_owed_goes_back_only_once_it_is_free() {
         let mut pool = MemoryPool::for_song(&Song::new(1), 48_000);
         let held = pool.take(DELAY).unwrap();
-        pool.owe(MemoryCount {
-            delay: 1,
-            ..MemoryCount::default()
-        });
+        let mut owed = MemoryCount::default();
+        owed[EffectKind::Delay] = 1;
+        pool.owe(owed);
         assert!(pool.next_owed().is_none(), "a slot still has it");
         pool.put(held);
         assert!(pool.next_owed().is_some());
         assert!(pool.next_owed().is_none());
+    }
+
+    #[test]
+    fn what_keeps_a_buffer_is_made_of_its_own_kind_and_nothing_else_is() {
+        for kind in EffectKind::ALL {
+            let made = Memory::new(kind, 48_000).map(|memory| memory.kind());
+            assert_eq!(made, BUFFERED[kind as usize].then_some(kind), "{kind:?}");
+        }
     }
 }

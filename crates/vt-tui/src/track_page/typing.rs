@@ -6,7 +6,7 @@ use vt_model::accumulator::{Accumulation, MOST_DEGREES};
 use vt_model::action::Action;
 use vt_model::arpeggio::{Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::{Adsr, Ahd, Drum, Hold, Lpg, MAX_HOLD_MS, MAX_RATCHET};
+use vt_model::envelope::{MAX_HOLD_MS, MAX_RATCHET};
 use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{Fade, Lfo, Rate};
 use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot};
@@ -208,175 +208,108 @@ fn commit_control(services: &mut Services, control: Control, text: &str) {
 /// note's name or hex as its source has them. The rest are lists, chosen with `K`.
 fn type_mod(services: &mut Services, slot: usize, field: ModField, text: &str) {
     let current = services.page_track().mods[slot];
-    let (adsr, ahd, drum, lpg, lfo) = (
-        current.adsr,
-        current.ahd,
-        current.drum,
-        current.lpg,
-        current.lfo,
-    );
-    let ms = text.parse::<u16>().ok().filter(|ms| *ms <= MAX_ENVELOPE_MS);
-    let with_adsr = |adsr: Adsr| ModSlot { adsr, ..current };
-    let with_ahd = |ahd: Ahd| ModSlot { ahd, ..current };
-    let with_drum = |drum: Drum| ModSlot { drum, ..current };
-    let with_lpg = |lpg: Lpg| ModSlot { lpg, ..current };
-    let lpg_kind = current.kind == ModKind::Lpg;
-    let with_lfo = |lfo: Lfo| ModSlot { lfo, ..current };
-    let steps = current.steps;
-    let with_steps = |steps: Steps| ModSlot { steps, ..current };
-    let ahd_kind = current.kind == ModKind::Ahd;
+    // A rate and a fade are read as they're written, as they aren't one number.
+    let written = match field {
+        ModField::Rate if current.kind == ModKind::Steps => Some(
+            text.parse::<StepRate>()
+                .map(|rate| {
+                    let steps = Steps {
+                        rate,
+                        ..current.steps
+                    };
+                    ModSlot { steps, ..current }
+                })
+                .map_err(|error| error.to_string()),
+        ),
+        ModField::Rate => Some(
+            text.parse::<Rate>()
+                .map(|rate| {
+                    let lfo = Lfo {
+                        rate,
+                        ..current.lfo
+                    };
+                    ModSlot { lfo, ..current }
+                })
+                .map_err(|error| error.to_string()),
+        ),
+        ModField::Fade => Some(
+            text.parse::<Fade>()
+                .map(|fade| {
+                    let lfo = Lfo {
+                        fade,
+                        ..current.lfo
+                    };
+                    ModSlot { lfo, ..current }
+                })
+                .map_err(|error| error.to_string()),
+        ),
+        _ => None,
+    };
+    if let Some(written) = written {
+        match written {
+            Ok(modulator) => set_mod(services, slot, modulator),
+            Err(why) => services.status = why,
+        }
+        return;
+    }
+    // The rest are numbers, read as the slot keeps them.
+    let percent = |text: &str| text.trim_end_matches('%').parse::<u8>().ok().map(i32::from);
+    let count = |text: &str| text.trim().parse::<u8>().ok().map(i32::from);
+    let signed = |text: &str| parse_depth(text).map(i32::from);
     let times = format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}");
-    let (changed, why) = match field {
-        ModField::Depth => (
-            parse_depth(text).map(|depth| ModSlot { depth, ..current }),
-            "Depth is hex from -FF to +FF".to_owned(),
-        ),
-        ModField::Attack if lpg_kind => (
-            ms.map(|attack_ms| with_lpg(Lpg { attack_ms, ..lpg })),
-            times,
-        ),
-        ModField::Decay if lpg_kind => {
-            (ms.map(|decay_ms| with_lpg(Lpg { decay_ms, ..lpg })), times)
+    let (value, why) = match field {
+        ModField::Depth => (signed(text), "Depth is hex from -FF to +FF".to_owned()),
+        ModField::Attack | ModField::Decay | ModField::Release | ModField::Peak => {
+            (text.parse::<u16>().ok().map(i32::from), times)
         }
         ModField::Colour => (
-            u8::from_str_radix(text.trim(), 16)
-                .ok()
-                .map(|colour| with_lpg(Lpg { colour, ..lpg })),
+            u8::from_str_radix(text.trim(), 16).ok().map(i32::from),
             "Colour is hex from 00 to FF".to_owned(),
         ),
-        ModField::Attack if ahd_kind => (
-            ms.map(|attack_ms| with_ahd(Ahd { attack_ms, ..ahd })),
-            times,
-        ),
-        ModField::Attack => (
-            ms.map(|attack_ms| with_adsr(Adsr { attack_ms, ..adsr })),
-            times,
-        ),
-        ModField::Decay if ahd_kind => {
-            (ms.map(|decay_ms| with_ahd(Ahd { decay_ms, ..ahd })), times)
-        }
-        ModField::Decay if current.kind == ModKind::Drum => (
-            ms.map(|decay_ms| with_drum(Drum { decay_ms, ..drum })),
-            times,
-        ),
-        ModField::Peak => (ms.map(|peak_ms| with_drum(Drum { peak_ms, ..drum })), times),
-        ModField::Body => (
-            text.trim_end_matches('%')
-                .parse::<u8>()
-                .ok()
-                .filter(|body| *body <= 100)
-                .map(|body| with_drum(Drum { body, ..drum })),
-            "Body is a percent from 0 to 100".to_owned(),
+        ModField::Body => (percent(text), "Body is a percent from 0 to 100".to_owned()),
+        ModField::Sustain => (
+            percent(text),
+            "Sustain is a percent from 0 to 100".to_owned(),
         ),
         ModField::Ratchet => (
-            text.trim()
-                .parse::<u8>()
-                .ok()
-                .filter(|ratchet| (1..=MAX_RATCHET).contains(ratchet))
-                .map(|ratchet| with_drum(Drum { ratchet, ..drum })),
+            count(text),
             format!("Ratchet is how many strikes, from 1 to {MAX_RATCHET}"),
         ),
-        ModField::Decay => (
-            ms.map(|decay_ms| with_adsr(Adsr { decay_ms, ..adsr })),
-            times,
-        ),
+        // `Note` is below no time.
         ModField::Hold => {
             let hold = if text.trim().eq_ignore_ascii_case("note") {
-                Some(Hold::Note)
+                Some(-1)
             } else {
-                let ms = text
-                    .trim()
-                    .trim_end_matches("ms")
-                    .trim()
-                    .parse::<u16>()
-                    .ok();
-                ms.filter(|ms| *ms <= MAX_HOLD_MS).map(Hold::Ms)
+                let ms = text.trim().trim_end_matches("ms").trim();
+                ms.parse::<u16>().ok().map(i32::from)
             };
             (
-                hold.map(|hold| with_ahd(Ahd { hold, ..ahd })),
+                hold,
                 format!("Hold is milliseconds from 0 to {MAX_HOLD_MS}, or note"),
             )
         }
-        ModField::Release => (
-            ms.map(|release_ms| with_adsr(Adsr { release_ms, ..adsr })),
-            format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}"),
-        ),
-        ModField::Sustain => (
-            text.trim_end_matches('%')
-                .parse::<u8>()
-                .ok()
-                .filter(|sustain| *sustain <= 100)
-                .map(|sustain| with_adsr(Adsr { sustain, ..adsr })),
-            "Sustain is a percent from 0 to 100".to_owned(),
-        ),
-        ModField::Rate if current.kind == ModKind::Steps => match text.parse::<StepRate>() {
-            Ok(rate) => (Some(with_steps(Steps { rate, ..steps })), String::new()),
-            Err(error) => (None, error.to_string()),
-        },
-        ModField::Rate => match text.parse::<Rate>() {
-            Ok(rate) => (Some(with_lfo(Lfo { rate, ..lfo })), String::new()),
-            Err(error) => (None, error.to_string()),
-        },
         ModField::Length => (
-            text.trim()
-                .parse::<u8>()
-                .ok()
-                .filter(|length| (1..=STEPS as u8).contains(length))
-                .map(|length| with_steps(Steps { length, ..steps })),
+            count(text),
             format!("Length is how many steps, from 1 to {STEPS}"),
         ),
+        // Typed from 1, as the page shows it.
         ModField::Start => (
-            text.trim()
-                .parse::<u8>()
-                .ok()
-                .filter(|start| (1..=STEPS as u8).contains(start))
-                .map(|start| {
-                    with_steps(Steps {
-                        start: start - 1,
-                        ..steps
-                    })
-                }),
+            count(text).map(|start| start - 1),
             format!("Start is a step, from 1 to {STEPS}"),
         ),
         ModField::Mutate => (
-            text.trim()
-                .trim_end_matches('%')
-                .parse::<u8>()
-                .ok()
-                .filter(|mutate| *mutate <= MAX_MUTATE)
-                .map(|mutate| with_steps(Steps { mutate, ..steps })),
+            percent(text.trim()),
             format!("Mutate is a percent from 0 to {MAX_MUTATE}"),
         ),
-        ModField::Smooth => (
-            parse_depth(text).map(|smooth| with_steps(Steps { smooth, ..steps })),
-            "Smooth is hex from -FF to +FF".to_owned(),
-        ),
-        ModField::Step(at) => (
-            parse_depth(text).map(|value| {
-                let mut values = steps.values;
-                values[usize::from(at)] = value;
-                with_steps(Steps { values, ..steps })
-            }),
-            "A step is hex from -FF to +FF".to_owned(),
-        ),
+        ModField::Smooth => (signed(text), "Smooth is hex from -FF to +FF".to_owned()),
+        ModField::Step(_) => (signed(text), "A step is hex from -FF to +FF".to_owned()),
         ModField::Phase => (
-            text.parse::<u16>()
-                .ok()
-                .filter(|phase| *phase < 360)
-                .map(|phase| with_lfo(Lfo { phase, ..lfo })),
+            text.parse::<u16>().ok().map(i32::from),
             "Phase is degrees from 0 to 359".to_owned(),
         ),
-        ModField::Deform => (
-            parse_depth(text).map(|deform| with_lfo(Lfo { deform, ..lfo })),
-            "Deform is hex from -FF to +FF".to_owned(),
-        ),
-        ModField::Fade => match text.parse::<Fade>() {
-            Ok(fade) => (Some(with_lfo(Lfo { fade, ..lfo })), String::new()),
-            Err(error) => (None, error.to_string()),
-        },
+        ModField::Deform => (signed(text), "Deform is hex from -FF to +FF".to_owned()),
         ModField::Low | ModField::High => {
             let source = current.track.source;
-            let (lowest, highest) = source.span();
             let value = match source {
                 Source::Note => text
                     .trim()
@@ -388,25 +321,14 @@ fn type_mod(services: &mut Services, slot: usize, field: ModField, text: &str) {
                     }),
                 Source::Velocity | Source::Random => u8::from_str_radix(text.trim(), 16).ok(),
             };
-            let changed = value
-                .filter(|value| (lowest..=highest).contains(value))
-                .map(|value| {
-                    let mut track = current.track;
-                    let bounds = track.bounds_mut();
-                    if field == ModField::Low {
-                        bounds.low = value;
-                    } else {
-                        bounds.high = value;
-                    }
-                    ModSlot { track, ..current }
-                });
             let what = Control::Mod(slot, field).label();
+            let (lowest, highest) = source.span();
             let (lowest, highest) = (source.text(lowest), source.text(highest));
             let why = match source {
                 Source::Note => format!("{what} is a note from {lowest} to {highest}"),
                 _ => format!("{what} is hex from {lowest} to {highest}"),
             };
-            (changed, why)
+            (value.map(i32::from), why)
         }
         ModField::Type
         | ModField::Mode
@@ -414,10 +336,21 @@ fn type_mod(services: &mut Services, slot: usize, field: ModField, text: &str) {
         | ModField::Destination
         | ModField::Reset
         | ModField::Loop
-        | ModField::Shape => return,
+        | ModField::Shape
+        | ModField::Rate
+        | ModField::Fade => return,
     };
-    match changed {
-        Some(modulator) => set_mod(services, slot, modulator),
+    let within = |value: &i32| {
+        current
+            .bounds(field)
+            .is_some_and(|(lowest, highest)| (lowest..=highest).contains(value))
+    };
+    match value.filter(within) {
+        Some(value) => {
+            let mut modulator = current;
+            modulator.set_field(field, value);
+            set_mod(services, slot, modulator);
+        }
         None => services.status = why,
     }
 }
