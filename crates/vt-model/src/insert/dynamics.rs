@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use crate::constants::UNITY_LEVEL;
 
 use super::{
-    GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Param, Place, SOURCE_NAMES, Setting, Units, hex_param,
-    source_track,
+    GAIN_PARAM, Kind, MIX_PARAM, Mode, OFF_ON, Param, Place, SOURCE_NAMES, Shown, Units, hex_param,
+    place_of, places_of, source_track,
 };
 
 /// A compressor's character, each modelled on its own reference and tuned against it (#338).
@@ -95,7 +95,6 @@ const COMPRESSOR_TYPE_PARAM: Param = Param {
     key: "type",
     // Choosing a type chooses a sound, so steps don't lock it.
     label: None,
-    setting: Setting::CompressorType,
     kind: Kind::Stepped {
         choices: &COMPRESSOR_TYPE_NAMES,
         wraps: true,
@@ -108,7 +107,6 @@ const SOURCE_PARAM: Param = Param {
     key: "source",
     // What it hears is part of how it's set up, so steps don't change it.
     label: None,
-    setting: Setting::Source,
     kind: Kind::Stepped {
         choices: &SOURCE_NAMES,
         wraps: false,
@@ -120,39 +118,19 @@ const THRESHOLD_PARAM: Param = hex_param(
     "Threshold",
     "threshold",
     "THRS",
-    Setting::Threshold,
     Compressor::DEFAULT.threshold,
 )
 .units(Units::Threshold);
-const RATIO_PARAM: Param = hex_param(
-    "Ratio",
-    "ratio",
-    "RTIO",
-    Setting::Ratio,
-    Compressor::DEFAULT.ratio,
-)
-.units(Units::Ratio);
-const ATTACK_PARAM: Param = hex_param(
-    "Attack",
-    "attack",
-    "ATK",
-    Setting::Attack,
-    Compressor::DEFAULT.attack,
-)
-.units(Units::Attack);
-const RELEASE_PARAM: Param = hex_param(
-    "Release",
-    "release",
-    "REL",
-    Setting::Release,
-    Compressor::DEFAULT.release,
-)
-.units(Units::Release);
+const RATIO_PARAM: Param =
+    hex_param("Ratio", "ratio", "RTIO", Compressor::DEFAULT.ratio).units(Units::Ratio);
+const ATTACK_PARAM: Param =
+    hex_param("Attack", "attack", "ATK", Compressor::DEFAULT.attack).units(Units::Attack);
+const RELEASE_PARAM: Param =
+    hex_param("Release", "release", "REL", Compressor::DEFAULT.release).units(Units::Release);
 const AUTO_GAIN_PARAM: Param = Param {
     name: "Auto",
     key: "auto",
     label: Some("AUTO"),
-    setting: Setting::AutoGain,
     kind: Kind::Stepped {
         choices: &OFF_ON,
         wraps: true,
@@ -162,21 +140,14 @@ const AUTO_GAIN_PARAM: Param = Param {
 };
 /// Every type's makeup, from 0 dB at `00` to [`MOST_MAKEUP_DB`] at `FF`, on top of what `Auto`
 /// gives back.
-const MAKEUP_PARAM: Param = hex_param(
-    "Makeup",
-    "makeup",
-    "MKUP",
-    Setting::Makeup,
-    Compressor::DEFAULT.makeup,
-)
-.units(Units::Makeup);
+const MAKEUP_PARAM: Param =
+    hex_param("Makeup", "makeup", "MKUP", Compressor::DEFAULT.makeup).units(Units::Makeup);
 /// The bus type's switches, shown by the same names as the clean type's knobs. Their labels are
 /// their own, as a slot's labels name one setting each.
 const CONSOLE_RATIO_PARAM: Param = Param {
     name: "Ratio",
     key: "consoleratio",
     label: Some("CRTO"),
-    setting: Setting::ConsoleRatio,
     kind: Kind::Stepped {
         choices: &CONSOLE_RATIO_NAMES,
         wraps: false,
@@ -188,7 +159,6 @@ const CONSOLE_ATTACK_PARAM: Param = Param {
     name: "Attack",
     key: "consoleattack",
     label: Some("CATK"),
-    setting: Setting::ConsoleAttack,
     kind: Kind::Stepped {
         choices: &CONSOLE_ATTACK_NAMES,
         wraps: false,
@@ -200,7 +170,6 @@ const CONSOLE_RELEASE_PARAM: Param = Param {
     name: "Release",
     key: "consolerelease",
     label: Some("CREL"),
-    setting: Setting::ConsoleRelease,
     kind: Kind::Stepped {
         choices: &CONSOLE_RELEASE_NAMES,
         wraps: false,
@@ -213,7 +182,6 @@ const GLUE_RATIO_PARAM: Param = Param {
     name: "Ratio",
     key: "glueratio",
     label: Some("GRTO"),
-    setting: Setting::GlueRatio,
     kind: Kind::Stepped {
         choices: &GLUE_RATIO_NAMES,
         wraps: false,
@@ -225,7 +193,6 @@ const GLUE_ATTACK_PARAM: Param = Param {
     name: "Attack",
     key: "glueattack",
     label: Some("GATK"),
-    setting: Setting::GlueAttack,
     kind: Kind::Stepped {
         choices: &GLUE_ATTACK_NAMES,
         wraps: false,
@@ -237,7 +204,6 @@ const GLUE_RELEASE_PARAM: Param = Param {
     name: "Release",
     key: "gluerelease",
     label: Some("GREL"),
-    setting: Setting::GlueRelease,
     kind: Kind::Stepped {
         choices: &GLUE_RELEASE_NAMES,
         wraps: false,
@@ -246,21 +212,14 @@ const GLUE_RELEASE_PARAM: Param = Param {
     place: Place::Own,
 };
 /// Glue's `Range`, the most it turns down, from none at `00` to [`MOST_RANGE_DB`] at `FF`.
-const RANGE_PARAM: Param = hex_param(
-    "Range",
-    "range",
-    "RNGE",
-    Setting::Range,
-    Compressor::DEFAULT.range,
-)
-.units(Units::Range);
+const RANGE_PARAM: Param =
+    hex_param("Range", "range", "RNGE", Compressor::DEFAULT.range).units(Units::Range);
 /// Glue's soft clip at the very end, after its makeup and its mix, as Live's `Peak Clip In` is:
 /// off, as Live loads it, or on.
 const PEAK_CLIP_PARAM: Param = Param {
     name: "Peak Clip",
     key: "peakclip",
     label: Some("PCLP"),
-    setting: Setting::PeakClip,
     kind: Kind::Stepped {
         choices: &OFF_ON,
         wraps: true,
@@ -294,47 +253,86 @@ pub(crate) const COMPRESSOR_PARAMS: [Param; 17] = [
     MAKEUP_PARAM,
     PEAK_CLIP_PARAM,
 ];
-/// `Clean`'s, in the order the page shows them: the type over what it hears, then the threshold
-/// over the ratio, the attack over the release, and Auto over the mix, with the makeup last.
-pub(super) const CLEAN_PARAMS: [Param; 9] = [
-    COMPRESSOR_TYPE_PARAM,
-    SOURCE_PARAM,
-    THRESHOLD_PARAM,
-    RATIO_PARAM,
-    ATTACK_PARAM,
-    RELEASE_PARAM,
-    AUTO_GAIN_PARAM,
-    COMPRESSOR_MIX_PARAM,
-    MAKEUP_PARAM,
-];
+/// `Clean`'s, in the order the page lists them: the type over what it hears, then the threshold
+/// over the ratio, the attack over the release, and Auto over the mix, with the makeup last. On
+/// the page its detector, its times and what comes out each have a column.
+const CLEAN: Mode = Mode {
+    shown: &places_of(
+        &COMPRESSOR_PARAMS,
+        [
+            "type",
+            "source",
+            "threshold",
+            "ratio",
+            "attack",
+            "release",
+            "auto",
+            "mix",
+            "makeup",
+        ],
+    ),
+    grid: Some(&[
+        &["threshold", "ratio"],
+        &["attack", "release", "source"],
+        &["makeup", "auto"],
+        &["mix"],
+    ]),
+};
 /// `Console`'s: its switches in place of the clean type's knobs, and the rest as `Clean` has them.
-pub(super) const CONSOLE_PARAMS: [Param; 9] = [
-    COMPRESSOR_TYPE_PARAM,
-    SOURCE_PARAM,
-    THRESHOLD_PARAM,
-    CONSOLE_RATIO_PARAM,
-    CONSOLE_ATTACK_PARAM,
-    CONSOLE_RELEASE_PARAM,
-    AUTO_GAIN_PARAM,
-    COMPRESSOR_MIX_PARAM,
-    MAKEUP_PARAM,
-];
+const CONSOLE: Mode = Mode {
+    shown: &places_of(
+        &COMPRESSOR_PARAMS,
+        [
+            "type",
+            "source",
+            "threshold",
+            "consoleratio",
+            "consoleattack",
+            "consolerelease",
+            "auto",
+            "mix",
+            "makeup",
+        ],
+    ),
+    grid: Some(&[
+        &["threshold", "consoleratio"],
+        &["consoleattack", "consolerelease", "source"],
+        &["makeup", "auto"],
+        &["mix"],
+    ]),
+};
 /// `Glue`'s: its switches as `Console` has its own, and its `Range` over the makeup, so the rest
 /// keep the places they have in the other types, then its `Peak Clip` in a column of its own, last
 /// as it's last in what Glue does.
-pub(super) const GLUE_PARAMS: [Param; 11] = [
-    COMPRESSOR_TYPE_PARAM,
-    SOURCE_PARAM,
-    THRESHOLD_PARAM,
-    GLUE_RATIO_PARAM,
-    GLUE_ATTACK_PARAM,
-    GLUE_RELEASE_PARAM,
-    AUTO_GAIN_PARAM,
-    COMPRESSOR_MIX_PARAM,
-    RANGE_PARAM,
-    MAKEUP_PARAM,
-    PEAK_CLIP_PARAM,
-];
+const GLUE: Mode = Mode {
+    shown: &places_of(
+        &COMPRESSOR_PARAMS,
+        [
+            "type",
+            "source",
+            "threshold",
+            "glueratio",
+            "glueattack",
+            "gluerelease",
+            "auto",
+            "mix",
+            "range",
+            "makeup",
+            "peakclip",
+        ],
+    ),
+    grid: Some(&[
+        &["threshold", "glueratio", "range"],
+        &["glueattack", "gluerelease", "source"],
+        &["makeup", "auto"],
+        &["mix", "peakclip"],
+    ]),
+};
+/// Each type's, in the order of [`CompressorType::ALL`].
+pub(super) const COMPRESSOR_SHOWN: Shown = Shown::ByType {
+    type_at: place_of(&COMPRESSOR_PARAMS, "type"),
+    modes: &[CLEAN, CONSOLE, GLUE],
+};
 
 /// The most a compressor's `Makeup` turns up what it's turned down, in dB, as a limiter's `Input`
 /// turns up what goes in.
@@ -419,23 +417,23 @@ impl Compressor {
     }
 
     effect_settings! {
-        kind: CompressorType => CompressorType,
-        threshold => Threshold,
-        ratio => Ratio,
-        attack => Attack,
-        release => Release,
-        console_ratio => ConsoleRatio,
-        console_attack => ConsoleAttack,
-        console_release => ConsoleRelease,
-        glue_ratio => GlueRatio,
-        glue_attack => GlueAttack,
-        glue_release => GlueRelease,
-        range => Range,
-        peak_clip => PeakClip,
-        source => Source,
-        auto => AutoGain,
-        mix => Mix,
-        makeup => Makeup,
+        kind: CompressorType,
+        source,
+        threshold,
+        ratio,
+        attack,
+        release,
+        console_ratio,
+        console_attack,
+        console_release,
+        glue_ratio,
+        glue_attack,
+        glue_release,
+        range,
+        auto,
+        mix,
+        makeup,
+        peak_clip,
     }
 }
 
@@ -462,30 +460,9 @@ pub fn limit_release_ms(value: f32) -> f32 {
 
 /// A limiter's, in the order the page shows them.
 pub(crate) const LIMIT_PARAMS: [Param; 5] = [
-    hex_param(
-        "Input",
-        "input",
-        "INPT",
-        Setting::Input,
-        Limiter::DEFAULT.input,
-    )
-    .units(Units::Input),
-    hex_param(
-        "Ceiling",
-        "ceiling",
-        "CEIL",
-        Setting::Ceiling,
-        Limiter::DEFAULT.ceiling,
-    )
-    .units(Units::Ceiling),
-    hex_param(
-        "Release",
-        "release",
-        "REL",
-        Setting::LimitRelease,
-        Limiter::DEFAULT.release,
-    )
-    .units(Units::LimitRelease),
+    hex_param("Input", "input", "INPT", Limiter::DEFAULT.input).units(Units::Input),
+    hex_param("Ceiling", "ceiling", "CEIL", Limiter::DEFAULT.ceiling).units(Units::Ceiling),
+    hex_param("Release", "release", "REL", Limiter::DEFAULT.release).units(Units::LimitRelease),
     Param {
         default: 0xFF,
         ..MIX_PARAM
@@ -527,10 +504,10 @@ impl Limiter {
     };
 
     effect_settings! {
-        input => Input,
-        ceiling => Ceiling,
-        release => LimitRelease,
-        mix => Mix,
-        gain => Gain,
+        input,
+        ceiling,
+        release,
+        mix,
+        gain,
     }
 }

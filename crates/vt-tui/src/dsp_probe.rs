@@ -619,9 +619,8 @@ fn check_settings(
 fn set_on(track: &mut Track, id: SettingId, value: u8) {
     match id.owner() {
         (Owner::Voice(_) | Owner::Sampler, _) => track.set_setting(id, value),
-        (Owner::Slot { slot, effect }, at) => {
-            track.inserts[slot] =
-                track.inserts[slot].write(effect.params()[at].setting, value.into());
+        (Owner::Slot { slot, .. }, at) => {
+            track.inserts[slot] = track.inserts[slot].write(at, value.into());
         }
         (Owner::Bypass(slot), _) => track.bypassed[slot] = value != 0,
         (Owner::Track, _) => match id {

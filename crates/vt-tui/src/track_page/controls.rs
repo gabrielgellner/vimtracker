@@ -283,12 +283,7 @@ impl Control {
             Self::Macro(at) => Some((SettingId::macro_at(at)?, track.macros[at].value)),
             Self::InsertParam(slot, param) => {
                 let insert = track.inserts[slot];
-                let setting = insert.params().get(param)?.setting;
-                let effect = insert.kind()?;
-                let at = effect
-                    .params()
-                    .iter()
-                    .position(|found| found.setting == setting)?;
+                let (effect, at) = (insert.kind()?, insert.kept_at(param)?);
                 base(SettingId::slot(slot, effect, at)?, insert.value(param))
             }
             _ => None,

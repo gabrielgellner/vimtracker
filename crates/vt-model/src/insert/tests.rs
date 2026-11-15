@@ -2,6 +2,25 @@ use super::*;
 use crate::grid::GRID_COLUMNS;
 use crate::lfo::{DIVISION_NAMES, SWEEP_NAMES};
 
+impl Insert {
+    /// The setting stored as `key`, as `read` gives it, if its effect keeps it.
+    fn read_key(self, key: &str) -> Option<u8> {
+        self.read(self.kept_key(key)?)
+    }
+
+    /// The same with the setting stored as `key` moved, as `write` moves it.
+    fn write_key(self, key: &str, value: f32) -> Self {
+        self.kept_key(key).map_or(self, |at| self.write(at, value))
+    }
+
+    fn kept_key(self, key: &str) -> Option<usize> {
+        self.kind()?
+            .params()
+            .iter()
+            .position(|param| param.key == key)
+    }
+}
+
 #[test]
 fn every_effect_starts_at_its_declared_defaults_and_fits() {
     for effect in Insert::ALL {
@@ -38,19 +57,67 @@ fn each_effect_kind_is_its_insert_and_its_row() {
     }
 }
 
+/// An effect's fields are listed in the order its settings are kept, so each of those it keeps, in
+/// any mode, reads as its own default as the effect starts, and moves its own field alone.
+#[test]
+fn each_kept_setting_reads_and_writes_its_own_field() {
+    for kind in EffectKind::ALL {
+        let effect = Insert::ALL[kind as usize + 1];
+        let params = kind.params();
+        for (at, param) in params.iter().enumerate() {
+            let name = format!("{} {}", kind.name(), param.key);
+            assert_eq!(effect.read(at), Some(param.default), "{name}");
+            let moved = if param.default == 0 { 1 } else { 0 };
+            let written = effect.write(at, f32::from(moved));
+            assert_eq!(written.read(at), Some(moved), "{name}");
+            for other in (0..params.len()).filter(|other| *other != at) {
+                assert_eq!(written.read(other), effect.read(other), "{name}");
+            }
+        }
+        assert_eq!(effect.read(params.len()), None);
+        assert_eq!(effect.write(params.len(), 1.0), effect);
+    }
+}
+
+/// A mode for each type, and every key a grid places is one its effect keeps.
+#[test]
+fn each_effects_modes_and_grids_are_its_own() {
+    for kind in EffectKind::ALL {
+        let spec = kind.spec();
+        let mut grids: Vec<Columns> = spec.grid.into_iter().collect();
+        if let Shown::ByType { type_at, modes } = spec.shown {
+            let type_param = spec.params[usize::from(type_at)];
+            assert_eq!(type_param.place, Place::Type, "{}", kind.name());
+            assert_eq!(modes.len(), type_param.choices().len(), "{}", kind.name());
+            assert!(spec.grid.is_none(), "{}", kind.name());
+            for mode in modes {
+                assert_eq!(mode.shown.first(), Some(&type_at), "{}", kind.name());
+                grids.extend(mode.grid);
+            }
+        }
+        for key in grids.iter().flat_map(|grid| grid.iter().copied().flatten()) {
+            assert!(
+                spec.params.iter().any(|param| param.key == *key),
+                "{} {key}",
+                kind.name()
+            );
+        }
+    }
+}
+
 /// What a setting's kind says is its top is what a step can give it, and every setting an effect
 /// keeps, shown in its mode or not, reads and writes.
 #[test]
 fn each_setting_tops_out_where_a_step_can_set_it() {
     for kind in EffectKind::ALL {
         let effect = Insert::ALL[kind as usize + 1];
-        for param in kind.params() {
+        for (at, param) in kind.params().iter().enumerate() {
             let name = format!("{} {}", kind.name(), param.key);
             let top = param.kind.top();
-            let past = effect.write(param.setting, 1000.0);
-            assert_eq!(past.read(param.setting), Some(top), "{name}");
-            let below = effect.write(param.setting, -5.0);
-            assert_eq!(below.read(param.setting), Some(0), "{name}");
+            let past = effect.write(at, 1000.0);
+            assert_eq!(past.read(at), Some(top), "{name}");
+            let below = effect.write(at, -5.0);
+            assert_eq!(below.read(at), Some(0), "{name}");
         }
     }
 }
@@ -141,7 +208,7 @@ fn every_effects_grid_places_each_of_its_settings_once_with_what_comes_out_last(
         assert!(
             (0..GRID_ROWS)
                 .filter_map(|row| grid.at(row, last))
-                .any(|at| matches!(params[at].setting, Setting::Mix | Setting::Gain)),
+                .any(|at| params[at].place == Place::Output),
             "{effect:?}: {grid:?}"
         );
         // A name has its column's ten characters and a space, and a choice the value's and
@@ -344,29 +411,27 @@ fn a_compressors_type_and_switches_save_and_load_and_an_old_one_loads_clean() {
 
 #[test]
 fn changing_a_compressors_type_and_back_finds_each_types_settings() {
-    let clean = compressor(CompressorType::Clean).write(Setting::Ratio, f32::from(0x30_u8));
-    let bus = clean
-        .write(Setting::CompressorType, 1.0)
-        .write(Setting::ConsoleRatio, 9.0);
+    let clean = compressor(CompressorType::Clean).write_key("ratio", f32::from(0x30_u8));
+    let bus = clean.write_key("type", 1.0).write_key("consoleratio", 9.0);
     assert_eq!(
-        bus.read(Setting::ConsoleRatio),
+        bus.read_key("consoleratio"),
         Some(2),
         "a switch stops at its last"
     );
     assert_eq!(
-        bus.read(Setting::Ratio),
+        bus.read_key("ratio"),
         Some(0x30),
         "kept while it's not shown"
     );
-    let back = bus.write(Setting::CompressorType, 0.0);
-    assert_eq!(back.read(Setting::Ratio), Some(0x30));
-    assert_eq!(back.read(Setting::ConsoleRatio), Some(2));
+    let back = bus.write_key("type", 0.0);
+    assert_eq!(back.read_key("ratio"), Some(0x30));
+    assert_eq!(back.read_key("consoleratio"), Some(2));
 }
 
 #[test]
 fn every_effect_ends_with_a_gain_and_a_compressor_with_its_makeup() {
     for effect in Insert::ALL.into_iter().filter(|e| *e != Insert::Empty) {
-        let last = effect.params().last().unwrap();
+        let last = effect.params().iter().next_back().unwrap();
         let expected = match effect {
             Insert::Compressor(_) => ("Makeup", 0),
             _ => ("Gain", UNITY_LEVEL),
@@ -389,15 +454,15 @@ fn a_compressors_makeup_runs_from_unity_to_its_most_in_db() {
         let makeup = compressor(kind)
             .params()
             .iter()
-            .find(|param| param.setting == Setting::Makeup)
+            .find(|param| param.key == "makeup")
             .copied()
             .unwrap();
         assert_eq!((makeup.key, makeup.label), ("makeup", Some("MKUP")));
         assert_eq!(makeup.kind.top(), 0xFF);
         assert_eq!(makeup.span(), 255.0);
     }
-    let turned_up = compressor(CompressorType::Console).write(Setting::Makeup, 255.0);
-    assert_eq!(turned_up.read(Setting::Makeup), Some(0xFF));
+    let turned_up = compressor(CompressorType::Console).write_key("makeup", 255.0);
+    assert_eq!(turned_up.read_key("makeup"), Some(0xFF));
 }
 
 #[test]
@@ -407,10 +472,7 @@ fn a_delays_time_is_a_note_division_and_stops_at_the_ends() {
     assert_eq!(time.choices()[usize::from(delay.value(0))], "1/8d");
     assert_eq!(*time.choices().last().unwrap(), "1 bar");
     assert!(!time.wraps());
-    assert_eq!(
-        delay.write(Setting::Time, 300.0).read(Setting::Time),
-        Some(17)
-    );
+    assert_eq!(delay.write_key("time", 300.0).read_key("time"), Some(17));
 }
 
 #[test]
@@ -418,8 +480,9 @@ fn every_setting_of_every_effect_reads_as_it_writes() {
     for effect in Insert::ALL {
         for (at, param) in effect.params().iter().enumerate() {
             let highest = param.kind.top();
-            let written = effect.write(param.setting, f32::from(highest));
-            assert_eq!(written.read(param.setting), Some(highest), "{}", param.name);
+            let kept = effect.kept_at(at).unwrap();
+            let written = effect.write(kept, f32::from(highest));
+            assert_eq!(written.read(kept), Some(highest), "{}", param.name);
             // A type or mode shows its own settings, so the others are another list.
             if written.params() != effect.params() {
                 continue;
@@ -461,11 +524,9 @@ fn a_reverbs_settings_change_alone_and_read_back() {
     );
     let mixed = effect.with_value(5, 0x12);
     assert_eq!((mixed.value(5), mixed.value(6)), (0x12, UNITY_LEVEL));
-    assert_eq!(
-        effect.write(Setting::Mix, 300.0).read(Setting::Mix),
-        Some(0xFF)
-    );
-    assert_eq!(effect.read(Setting::Amount), None);
+    assert_eq!(effect.write_key("mix", 300.0).read_key("mix"), Some(0xFF));
+    assert_eq!(effect.read_key("amount"), None);
+    assert_eq!(effect.read(REVERB_PARAMS.len()), None);
     assert_eq!(effect.stepped(true).stepped(false), effect);
 }
 
@@ -511,9 +572,9 @@ fn distort(kind: DistortType) -> Insert {
 #[test]
 fn no_two_settings_of_an_effect_share_a_name() {
     let modes = DistortType::ALL.map(|kind| distort(kind).params());
-    for params in modes.into_iter().chain([&DISTORT_PARAMS[..]]) {
+    for params in modes.into_iter().chain([Params::all(&DISTORT_PARAMS)]) {
         for (at, param) in params.iter().enumerate() {
-            for other in &params[at + 1..] {
+            for other in params.iter().skip(at + 1) {
                 assert_ne!(param.name, other.name);
             }
         }
@@ -523,28 +584,16 @@ fn no_two_settings_of_an_effect_share_a_name() {
 #[test]
 fn writing_lands_on_whole_values_inside_the_range() {
     let effect = distort(DistortType::Crush);
+    assert_eq!(effect.write_key("bits", 6.4).read_key("bits"), Some(6));
+    assert_eq!(effect.write_key("bits", 6.6).read_key("bits"), Some(7));
+    assert_eq!(effect.write_key("bits", -3.0).read_key("bits"), Some(0));
     assert_eq!(
-        effect.write(Setting::Bits, 6.4).read(Setting::Bits),
-        Some(6)
-    );
-    assert_eq!(
-        effect.write(Setting::Bits, 6.6).read(Setting::Bits),
-        Some(7)
-    );
-    assert_eq!(
-        effect.write(Setting::Bits, -3.0).read(Setting::Bits),
-        Some(0)
-    );
-    assert_eq!(
-        effect.write(Setting::Bits, 99.0).read(Setting::Bits),
+        effect.write_key("bits", 99.0).read_key("bits"),
         Some(MOST_BITS - LEAST_BITS)
     );
+    assert_eq!(effect.write_key("type", 2.2).read_key("type"), Some(2));
     assert_eq!(
-        effect.write(Setting::Type, 2.2).read(Setting::Type),
-        Some(2)
-    );
-    assert_eq!(
-        effect.write(Setting::Gain, 300.0).read(Setting::Gain),
+        effect.write_key("gain", 300.0).read_key("gain"),
         Some(MAX_LEVEL)
     );
 }
@@ -588,10 +637,10 @@ fn each_mode_has_its_own_setting_beside_mix_and_gain() {
 #[test]
 fn changing_mode_keeps_each_modes_own_setting() {
     let crushed = distort(DistortType::Crush).with_value(1, 3);
-    let soft = crushed.write(Setting::Type, 0.0).with_value(1, 0xF0);
-    let back = soft.write(Setting::Type, DistortType::Crush as u8 as f32);
+    let soft = crushed.write_key("type", 0.0).with_value(1, 0xF0);
+    let back = soft.write_key("type", DistortType::Crush as u8 as f32);
     assert_eq!(back.value(1), 3, "Bits as it was");
-    assert_eq!(back.read(Setting::Amount), Some(0xF0));
+    assert_eq!(back.read_key("amount"), Some(0xF0));
 }
 
 #[test]
@@ -610,17 +659,12 @@ fn a_phaser_and_a_flanger_sweep_in_note_lengths() {
     assert_eq!(rate(flanger), "1 bar");
     assert_eq!(*SWEEP_NAMES.last().unwrap(), "16 bars");
     assert_eq!(
-        phaser
-            .write(Setting::SweepRate, 300.0)
-            .read(Setting::SweepRate),
+        phaser.write_key("rate", 300.0).read_key("rate"),
         Some(SWEEP_NAMES.len() as u8 - 1)
     );
     let stages = phaser.params()[4];
     assert_eq!(stages.choices()[usize::from(phaser.value(4))], "8");
-    assert_eq!(
-        phaser.write(Setting::Stages, 9.0).read(Setting::Stages),
-        Some(2)
-    );
+    assert_eq!(phaser.write_key("stages", 9.0).read_key("stages"), Some(2));
 }
 
 #[test]
@@ -630,10 +674,11 @@ fn a_flangers_settings_read_in_real_units() {
     assert_eq!(flanger_feedback(128.0), 0.0);
     assert_eq!(flanger_feedback(0.0), -1.0);
     assert_eq!(flanger_feedback(255.0), 1.0);
-    // It reads nothing for a setting it hasn't got, as a delay's feedback.
+    // It reads nothing for a setting it hasn't got, as a delay's ping-pong.
     let flanger = Insert::Flanger(Flanger::DEFAULT);
-    assert_eq!(flanger.read(Setting::Feedback), None);
-    assert_eq!(flanger.read(Setting::FlangerFeedback), Some(0xC0));
+    assert_eq!(flanger.read_key("pingpong"), None);
+    assert_eq!(flanger.read(FLANGER_PARAMS.len()), None);
+    assert_eq!(flanger.read_key("feedback"), Some(0xC0));
 }
 
 #[test]
@@ -642,10 +687,10 @@ fn a_tapes_drive_reads_in_db_around_the_middle() {
     assert_eq!(tape_drive_db(0.0), -MOST_TAPE_DRIVE_DB);
     assert_eq!(tape_drive_db(255.0), MOST_TAPE_DRIVE_DB);
     let tape = Insert::Tape(Tape::DEFAULT);
-    // It reads nothing for a setting it hasn't got, as a delay's drive.
-    assert_eq!(tape.read(Setting::Drive), None);
-    assert_eq!(tape.read(Setting::TapeDrive), Some(0x80));
-    assert_eq!(tape.read(Setting::Mix), Some(0xFF));
+    // It reads nothing for a setting it hasn't got, as a delay's feedback.
+    assert_eq!(tape.read_key("feedback"), None);
+    assert_eq!(tape.read_key("drive"), Some(0x80));
+    assert_eq!(tape.read_key("mix"), Some(0xFF));
 }
 
 #[test]
@@ -664,8 +709,8 @@ fn a_plates_settings_share_the_reverbs_names_and_read_back() {
         assert!(reverb_labels.contains(&label.unwrap().label), "{shared}");
     }
     let bigger = plate.with_value(4, 0xFF);
-    assert_eq!(bigger.read(Setting::Size), Some(0xFF));
-    assert_eq!(bigger.read(Setting::LowCut), None);
+    assert_eq!(bigger.read_key("size"), Some(0xFF));
+    assert_eq!(bigger.read_key("lowcut"), None);
     let text = ron::to_string(&bigger).unwrap();
     assert_eq!(ron::from_str::<Insert>(&text).unwrap(), bigger);
     assert_eq!(plate_size(0.0), 0.5);
@@ -678,14 +723,14 @@ fn a_pitch_shifters_settings_read_back_and_save() {
     let pitch = Insert::Pitch(Pitch::DEFAULT);
     let names: Vec<&str> = pitch.params().iter().map(|param| param.name).collect();
     assert_eq!(names, ["Pitch", "Fine", "Size", "Feedback", "Mix", "Gain"]);
-    assert_eq!(pitch.read(Setting::Shift), Some(MOST_SHIFT));
+    assert_eq!(pitch.read_key("pitch"), Some(MOST_SHIFT));
     assert_eq!(PITCH_PARAMS[0].choices()[usize::from(MOST_SHIFT)], "+0 st");
     let up = pitch.with_value(0, 36);
-    assert_eq!(up.read(Setting::Shift), Some(36));
+    assert_eq!(up.read_key("pitch"), Some(36));
     assert_eq!(shift_semitones(36.0), 12.0);
     // It stops at two octaves.
-    assert_eq!(pitch.with_value(0, 0xFF).read(Setting::Shift), Some(48));
-    assert_eq!(pitch.read(Setting::Decay), None);
+    assert_eq!(pitch.with_value(0, 0xFF).read_key("pitch"), Some(48));
+    assert_eq!(pitch.read_key("decay"), None);
     let text = ron::to_string(&up).unwrap();
     assert_eq!(ron::from_str::<Insert>(&text).unwrap(), up);
     assert_eq!(fine_cents(0.0), -50.0);
@@ -709,14 +754,14 @@ fn a_granular_effects_settings_read_back_and_save() {
             "Gain"
         ]
     );
-    assert_eq!(grains.read(Setting::Shift), Some(MOST_SHIFT));
-    assert_eq!(grains.read(Setting::Freeze), Some(0));
+    assert_eq!(grains.read_key("pitch"), Some(MOST_SHIFT));
+    assert_eq!(grains.read_key("freeze"), Some(0));
     let frozen = grains.with_value(4, 1);
-    assert_eq!(frozen.read(Setting::Freeze), Some(1));
+    assert_eq!(frozen.read_key("freeze"), Some(1));
     // It's a switch.
-    assert_eq!(grains.with_value(4, 0xFF).read(Setting::Freeze), Some(1));
-    assert_eq!(grains.with_value(6, 0xFF).read(Setting::Shift), Some(48));
-    assert_eq!(grains.read(Setting::Decay), None);
+    assert_eq!(grains.with_value(4, 0xFF).read_key("freeze"), Some(1));
+    assert_eq!(grains.with_value(6, 0xFF).read_key("pitch"), Some(48));
+    assert_eq!(grains.read_key("decay"), None);
     let text = ron::to_string(&frozen).unwrap();
     assert_eq!(ron::from_str::<Insert>(&text).unwrap(), frozen);
     assert_eq!(grain_time_seconds(0.0), 0.0);
@@ -760,7 +805,7 @@ fn warps_settings_read_back_and_save_and_its_algo_reads_as_warps_knob() {
         WARPS_PARAMS[5].choices()[usize::from(warps.value(5))],
         "Sine"
     );
-    assert_eq!(warps.with_value(5, 0xFF).read(Setting::Wave), Some(4));
+    assert_eq!(warps.with_value(5, 0xFF).read_key("shape"), Some(4));
     let fed = warps.with_value(2, 2);
     assert_eq!(
         match fed {
@@ -770,7 +815,7 @@ fn warps_settings_read_back_and_save_and_its_algo_reads_as_warps_knob() {
         Some(1)
     );
     assert_eq!(Warps::DEFAULT.source_track(8), None);
-    assert_eq!(warps.read(Setting::Shape), None);
+    assert_eq!(warps.read_key("decay"), None);
     let text = ron::to_string(&fed).unwrap();
     assert_eq!(ron::from_str::<Insert>(&text).unwrap(), fed);
     // Each cross-modulation is an eighth further, on a value of its own, then the modulator,
@@ -801,9 +846,7 @@ fn a_source_names_the_returns_by_their_old_numbers_and_the_groups_after() {
     assert_eq!(heard(67), Some(8));
     assert_eq!(SOURCE_NAMES[66 + MAX_GROUPS], format!("G{MAX_GROUPS}"));
     assert_eq!(heard(66 + MAX_GROUPS as u8), Some(7 + MAX_GROUPS));
-    let source = COMPRESSOR_PARAMS
-        .iter()
-        .find(|param| param.setting == Setting::Source);
+    let source = COMPRESSOR_PARAMS.iter().find(|param| param.key == "source");
     assert_eq!(source.unwrap().kind.top(), 66 + MAX_GROUPS as u8);
 }
 
@@ -820,7 +863,7 @@ fn a_low_pass_gates_settings_read_back_and_save() {
     assert_eq!(LPG_PARAMS[0].choices(), ["Gate", "Filter", "VCA"]);
     assert_eq!(LPG_PARAMS[0].label, None, "a mode isn't locked from a step");
     // It goes round the modes, stopping at the last when written.
-    assert_eq!(gate.with_value(0, 0xFF).read(Setting::GateMode), Some(2));
+    assert_eq!(gate.with_value(0, 0xFF).read_key("mode"), Some(2));
     let filter = gate.with_value(0, 1);
     assert!(matches!(
         filter,
@@ -838,8 +881,8 @@ fn a_low_pass_gates_settings_read_back_and_save() {
         Some(1)
     );
     assert_eq!(LowPassGate::DEFAULT.source_track(8), None);
-    assert_eq!(gate.read(Setting::Resonance), Some(0));
-    assert_eq!(gate.read(Setting::Decay), None);
+    assert_eq!(gate.read_key("res"), Some(0));
+    assert_eq!(gate.read_key("decay"), None);
     let text = ron::to_string(&keyed).unwrap();
     assert_eq!(ron::from_str::<Insert>(&text).unwrap(), keyed);
 }
