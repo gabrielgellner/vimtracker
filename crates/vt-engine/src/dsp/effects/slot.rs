@@ -130,10 +130,9 @@ impl Keys {
 pub enum Mono {
     /// Each side goes through the same steps with its own state and nothing between them, so it
     /// works the left out alone and gives it to both, keeping the right's state to copy from the
-    /// left's the moment the sides differ (`Sides`). What
-    /// comes out is exactly what working out both gives. After the sides have differed, their
-    /// states can stay apart for a while, so it works out both until they're the same again, and
-    /// the slot looks at what comes out.
+    /// left's the moment the sides differ (`Sides`). What comes out is exactly what working out
+    /// both gives. After the sides have differed, their states can stay apart for a while, so it
+    /// works out both until they're the same again, and the slot looks at what comes out.
     OneSide,
     /// One state for both sides, such as a compressor's linked detector, and the same done to
     /// each: what comes out is the same on both sides, with nothing more to save, so the slot
