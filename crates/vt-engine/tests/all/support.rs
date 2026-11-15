@@ -50,6 +50,21 @@ pub fn golden(name: &str, samples: &[f32]) {
     );
 }
 
+/// Render twice and check the two are the same, sample for sample, so what's random follows the
+/// song's seed and nothing carries over from one render to the next. Gives the render back.
+pub fn repeats(what: &str, render: impl Fn() -> Vec<f32>) -> Vec<f32> {
+    let (first, second) = (render(), render());
+    if first != second {
+        let at = first.iter().zip(&second).position(|(a, b)| a != b);
+        panic!(
+            "{what}: the second render differs, at sample {at:?}, {} samples against {}",
+            first.len(),
+            second.len()
+        );
+    }
+    first
+}
+
 /// A pool of one sample, `s`, of these frames.
 pub fn pool(frames: Vec<[f32; 2]>) -> Arc<SamplePool> {
     let mut pool = SamplePool::default();

@@ -10,6 +10,8 @@ use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Chain, ChainEntry, Launch, Phrase, Repeat, Section, SectionStart, Song};
 
+use crate::support;
+
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
 const STEP: usize = 6000;
@@ -383,8 +385,9 @@ fn a_render_covers_the_whole_song_once() {
 #[test]
 fn songs_with_sections_render_the_same_each_time() {
     let whole = song(&[&[A, "--- -- cha:80 --- ---"], &[B, C]]);
-    let render = || render_loop(version(whole.clone()), RATE, RenderOptions::default());
-    assert_eq!(render(), render());
+    support::repeats("sections", || {
+        render_loop(version(whole.clone()), RATE, RenderOptions::default())
+    });
 }
 
 /// Play from the top, launching partway through, and give the level in each step.

@@ -13,6 +13,8 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::song::{Machine, Phrase, Song, SynthVoice};
 use vt_model::speed::Speed;
 
+use crate::support;
+
 const RATE: u32 = 48_000;
 /// Frames per step at 120 BPM.
 const STEP: usize = 6000;
@@ -515,8 +517,10 @@ fn renders_with_arpeggios_repeat() {
                 ..Arpeggio::default()
             };
             let song = song(&rows, arpeggio);
-            let render = || render_frames(version(&song), RATE, 16 * STEP);
-            assert_eq!(render(), render(), "{mode:?} {retrig}");
+            // Twice round, so the second time the `ACU` has added.
+            support::repeats(&format!("{mode:?} {retrig}"), || {
+                render_frames(version(&song), RATE, 8 * STEP)
+            });
         }
     }
 }

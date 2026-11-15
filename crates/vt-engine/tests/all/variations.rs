@@ -13,6 +13,7 @@ use vt_model::arpeggio::{ArpRate, Arpeggio};
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::song::{Phrase, Song};
 
+use crate::support;
 use crate::support::ramp::{RAMP_FRAMES, render, version};
 
 const RATE: u32 = 48_000;
@@ -250,7 +251,8 @@ fn renders_with_variations_repeat() {
     ];
     for scale_on in [false, true] {
         let song = song(&rows, scale_on);
-        let render = || render_frames(version(&song), RATE, 24 * STEP);
-        assert_eq!(render(), render(), "scale on: {scale_on}");
+        support::repeats(&format!("scale on: {scale_on}"), || {
+            render_frames(version(&song), RATE, 24 * STEP)
+        });
     }
 }
