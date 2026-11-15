@@ -7,40 +7,44 @@ use thiserror::Error;
 
 use crate::accumulator::{Accumulation, MOST_DEGREES, MOST_LOOPS};
 use crate::arpeggio::{Arpeggio, MOST_OCTAVES};
-use crate::bank::{BankEntry, Points};
-use crate::bloom::{Bloom, LAST_PHRASE, MAX_BRANCHES};
+use crate::bank::BankEntry;
+use crate::bloom::{Bloom, MAX_BRANCHES};
 use crate::constants::{
-    DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_LEVEL, MAX_MILLIBPM,
-    MAX_PROJECT_NAME_CHARS, MAX_SOUND_TRACKS, MAX_TRACK_RESET, MAX_TRANSPOSE, MIN_MILLIBPM,
-    MIN_TRANSPOSE,
+    MAX_ENVELOPE_MS, MAX_GROUPS, MAX_PROJECT_NAME_CHARS, MAX_SOUND_TRACKS, MAX_TRACK_RESET,
+    MAX_TRANSPOSE, MIN_TRANSPOSE,
 };
-use crate::generator::{Generator, Span};
+use crate::generator::Span;
 use crate::groove::{CUSTOM_GROOVES, Groove, GrooveId};
 use crate::insert::Insert;
 use crate::kit::CHOKE_GROUPS;
-use crate::label::{GROUP_NAME_CHARS, is_group_name};
-use crate::macros::{MACRO_NAME_LENGTH, MACROS, MacroMap, MacroTarget, valid_name};
+use crate::label::GROUP_NAME_CHARS;
+use crate::macros::{MACRO_NAME_LENGTH, MACROS, MacroMap, MacroTarget};
 use crate::modulation::ModSlot;
-use crate::names::is_project_name;
 use crate::order::Order;
 use crate::preset::{Patch, Placement, SoundPreset};
 use crate::scale::Scale;
-use crate::selection::{
-    Block, Scope, Shift, StepRange, clear_step, mark_step, merge_step, paste_step, shift_step,
-};
-use crate::settings::{Owner, SettingId};
-use crate::shape::{Shape, ShapeColumn, Source, written_from};
+use crate::selection::{Block, Scope, Shift, StepRange};
+use crate::settings::SettingId;
+use crate::shape::{Shape, ShapeColumn, Source};
 use crate::song::{
-    Chain, ChainEntry, FilterMode, FilterType, Lane, Launch, Machine, Phrase, Repeat, Role,
-    Section, SectionStart, Song, Track, lowest_unused,
+    ChainEntry, FilterMode, FilterType, Lane, Launch, Machine, Phrase, Repeat, Role, Section,
+    SectionStart, Song, Track,
 };
 use crate::speed::Speed;
-use crate::step::{FxCommand, FxSlot, Gate, Mark, Note, Step};
+use crate::step::{FxSlot, Gate, Mark, Note, Step};
 
+mod bank;
+mod chains;
 mod generators;
+mod phrases;
+mod sections;
+mod song_wide;
+mod sound;
+mod steps;
+mod tracks;
 
+use generators::follow_generators;
 pub use generators::hold_generators;
-use generators::{follow_generators, followed, followed_live};
 
 /// A new value for one field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -606,46 +610,6 @@ impl TrackControl {
     }
 }
 
-/// Cut a bank entry into slices starting where `starts` says from its points, moving its marks
-/// and the steps' `SLI` locks with their sound, as one change.
-fn reslice(
-    song: &mut Song,
-    number: u8,
-    starts: impl FnOnce(&Points) -> Result<Vec<u64>, EditError>,
-) -> Result<(), EditError> {
-    let mut entry = song
-        .bank
-        .get(number)
-        .cloned()
-        .ok_or(EditError::NoSample(number))?;
-    let starts = starts(&entry.edit.points)?;
-    let renumbered = entry.edit.points.reslice(&starts);
-    song.bank.set(number, Some(entry));
-    if let Some(renumbered) = renumbered {
-        song.renumber_slices(number, &renumbered);
-    }
-    Ok(())
-}
-
-/// An FX slot with its value within what its command takes, and a fine part only on what has
-/// one, or on an `SLI` locking a slice by its letter.
-fn snapped(slot: FxSlot) -> FxSlot {
-    if let Some(letter) = slot.slice_mark() {
-        return FxSlot::slice_by_mark(letter, slot.mark).with_valid_mark();
-    }
-    let highest = slot.command.map_or(0xFF00, FxCommand::highest_value);
-    let value = if slot.command.is_some_and(FxCommand::has_fine) {
-        slot.value
-    } else {
-        slot.value & 0xFF00
-    };
-    FxSlot {
-        value: value.min(highest),
-        ..slot
-    }
-    .with_valid_mark()
-}
-
 fn section_mut(song: &mut Song, section: usize) -> Result<&mut Section, EditError> {
     song.sections
         .get_mut(section)
@@ -750,6 +714,7 @@ pub enum EditError {
 }
 
 /// Apply an action, returning a new song that shares everything unchanged with the old one.
+/// Each family of actions is applied in a module of its own.
 pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
     if let Action::Batch(actions) = action {
         let mut current = Arc::clone(song);
@@ -761,931 +726,92 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
     let mut next = Song::clone(song);
     match action {
         Action::Batch(_) => {}
-        Action::SetNote {
-            track,
-            phrase,
-            step,
-            note,
-        } => {
-            step_mut(&mut next, *track, *phrase, *step)?.note = *note;
-        }
-        Action::SetStep {
-            track,
-            phrase,
-            step,
-            value,
-        } => {
-            *step_mut(&mut next, *track, *phrase, *step)? = value.clone();
-        }
-        Action::SetField {
-            track,
-            phrase,
-            step,
-            value,
-        } => {
-            let most = most_nudge(&next, *track)?;
-            let target = step_mut(&mut next, *track, *phrase, *step)?;
-            match value {
-                FieldValue::Velocity(velocity) => target.velocity = *velocity,
-                FieldValue::Nudge(nudge) => target.nudge = (*nudge).clamp(-most, most),
-                FieldValue::Gate(gate) => target.gate = *gate,
-                FieldValue::Slot(slot, fx) => {
-                    *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? = snapped(*fx);
-                }
-            }
-        }
-        Action::Shape {
-            track,
-            phrase,
-            range,
-            column,
-            shape,
-        } => {
-            let found = track_mut(&mut next, *track)?
-                .phrases
-                .get(phrase)
-                .cloned()
-                .ok_or(EditError::NoPhrase(*phrase))?;
-            // Once, as plain notes, a phrase may copy its own loop.
-            let source = followed(&next, shape)?;
-            let source = source.as_ref().map(|source| source.loop_steps());
-            for (row, step) in written_from(found.steps(), *range, *column, shape, source) {
-                *step_mut(&mut next, *track, *phrase, row)? = step;
-            }
-        }
-        Action::Generate {
-            track,
-            phrase,
-            column,
-            span,
-            shape,
-        } => {
-            let source = followed_live(&next, shape, *track, *phrase)?;
-            let source = source.as_ref().map(|source| source.loop_steps());
-            let generator = Generator::new(*column, *span, *shape);
-            if !phrase_mut(&mut next, *track, *phrase)?.add_generator(generator, source) {
-                return Err(EditError::NoLane);
-            }
-        }
-        Action::Reshape {
-            track,
-            phrase,
-            generator,
-            shape,
-        } => {
-            let source = followed_live(&next, shape, *track, *phrase)?;
-            let source = source.as_ref().map(|source| source.loop_steps());
-            if !phrase_mut(&mut next, *track, *phrase)?
-                .reshape_generator(*generator, *shape, source)
-            {
-                return Err(EditError::NoGenerator {
-                    phrase: *phrase,
-                    generator: *generator,
-                });
-            }
-        }
-        Action::ApplyGenerator {
-            track,
-            phrase,
-            generator,
-        } => {
-            phrase_mut(&mut next, *track, *phrase)?
-                .apply_generator(*generator)
-                .ok_or(EditError::NoGenerator {
-                    phrase: *phrase,
-                    generator: *generator,
-                })?;
-        }
-        Action::RemoveGenerator {
-            track,
-            phrase,
-            generator,
-        } => {
-            phrase_mut(&mut next, *track, *phrase)?
-                .remove_generator(*generator)
-                .ok_or(EditError::NoGenerator {
-                    phrase: *phrase,
-                    generator: *generator,
-                })?;
-        }
-        Action::Fill {
-            track,
-            phrase,
-            range,
-            fill,
-        } => {
-            fill_range(&mut next, *track, *phrase, *range, fill)?;
-        }
-        Action::SetMark {
-            track,
-            phrase,
-            range,
-            scope,
-            mark,
-        } => {
-            for index in range.first..=range.last {
-                mark_step(step_mut(&mut next, *track, *phrase, index)?, *scope, *mark);
-            }
-        }
-        Action::Clear {
-            track,
-            phrase,
-            range,
-            scope,
-        } => {
-            for index in range.first..=range.last {
-                clear_step(step_mut(&mut next, *track, *phrase, index)?, *scope);
-            }
-        }
-        Action::Shift {
-            track,
-            phrase,
-            range,
-            scope,
-            by,
-            kind,
-            scale,
-        } => {
-            // An empty length moves from the track's `Gate`, as that's what it plays at.
-            let owner = next.tracks.get(*track).ok_or(EditError::NoTrack(*track))?;
-            let (gate, most) = (owner.gate_length(), owner.speed.most_nudge());
-            for index in range.first..=range.last {
-                shift_step(
-                    step_mut(&mut next, *track, *phrase, index)?,
-                    *scope,
-                    *by,
-                    *kind,
-                    *scale,
-                    gate,
-                    most,
-                );
-            }
-        }
-        Action::FitToScale {
-            track,
-            phrase,
-            scale,
-        } => {
-            let stored = next
-                .tracks
-                .get(*track)
-                .and_then(|state| state.phrases.get(phrase))
-                .map_or(0, |found| found.steps().len());
-            for index in 0..stored {
-                let step = step_mut(&mut next, *track, *phrase, index)?;
-                if let Note::On(midi) = step.note {
-                    step.note = Note::On(scale.fitted(midi));
-                }
-            }
-        }
-        Action::Paste {
-            track,
-            phrase,
-            at,
-            group,
-            block,
-            times,
-            merge,
-        } => {
-            let target = phrase_mut(&mut next, *track, *phrase)?;
-            let write = if *merge { merge_step } else { paste_step };
-            let total = block.steps.len().saturating_mul(*times);
-            target.grow_to(at.saturating_add(total));
-            let sources = block.steps.iter().cycle().take(total);
-            for (offset, source) in sources.enumerate() {
-                let Some(step) = target.step_mut(at + offset) else {
-                    break;
-                };
-                write(step, source, block.scope, *group).map_err(|_| EditError::ColumnMismatch)?;
-            }
-        }
-        Action::Double { track, phrase } => {
-            phrase_mut(&mut next, *track, *phrase)?.double();
-        }
-        Action::SetSkipSize(size) => next.skip = *size,
-        Action::SetLimiter(on) => next.limiter = *on,
-        Action::SetSongName(name) => {
-            if !is_project_name(name) {
-                return Err(EditError::SongName);
-            }
-            next.name.clone_from(name);
-        }
-        Action::SetSeed(seed) => next.seed = *seed,
-        Action::SetLaunch(launch) => next.launch = *launch,
-        Action::SetChainLabel {
-            track,
-            chain,
-            label,
-        } => {
-            let owner = track_mut(&mut next, *track)?;
-            let old = owner.chains.get(chain).ok_or(EditError::NoChain(*chain))?;
-            let mut labelled = Chain::clone(old);
-            labelled.label.clone_from(label);
-            owner.chains.insert(*chain, Arc::new(labelled));
-        }
-        Action::SetGroove(groove) => next.groove = *groove,
-        Action::SetTrackGroove { track, groove } => {
-            next.tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .groove = *groove;
-        }
-        Action::SetCustomGroove { custom, groove } => {
-            if *custom >= CUSTOM_GROOVES {
-                return Err(EditError::CustomGroove);
-            }
-            // The ones before it are made too, on the grid, as they'd have played.
-            if next.grooves.len() <= *custom {
-                next.grooves.resize(*custom + 1, Groove::default());
-            }
-            next.grooves[*custom] = *groove;
-        }
-        Action::SetTrackBase {
-            track,
-            control,
-            value,
-        } => {
-            let track = next
-                .tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?;
-            track.set_control(*control, *value);
-            // At the top, a fine part goes.
-            if let Some(id) = control.setting() {
-                track.set_fine(id, track.fine(id));
-            }
-        }
-        Action::SetInsert {
-            track,
-            slot,
-            insert,
-        } => {
-            if let Some(held) = next
-                .tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .inserts
-                .get_mut(*slot)
-            {
-                *held = *insert;
-            }
-            // An empty slot has nothing to switch out, so what goes in next starts in.
-            if *insert == Insert::Empty
-                && let Some(bypassed) = next.tracks[*track].bypassed.get_mut(*slot)
-            {
-                *bypassed = false;
-            }
-        }
-        Action::LoadSound {
-            track,
-            preset,
-            sample,
-        } => {
-            let owner = track_mut(&mut next, *track)?;
-            if !owner.is_sound() {
-                return Err(EditError::NotSound);
-            }
-            preset.apply(owner, *sample);
-        }
-        Action::LoadPatch {
-            track,
-            patch,
-            placement,
-        } => {
-            let owner = track_mut(&mut next, *track)?;
-            if !owner.is_sound() {
-                return Err(EditError::NotSound);
-            }
-            patch.add_to(owner, placement);
-        }
-        Action::LoadEffect {
-            track,
-            slot,
-            insert,
-            fine,
-        } => {
-            let owner = track_mut(&mut next, *track)?;
-            if let Some(held) = owner.inserts.get_mut(*slot) {
-                *held = *insert;
-                owner.fine.retain(
-                    |id, _| !matches!(id.owner().0, Owner::Slot { slot: at, .. } if at == *slot),
-                );
-                for (id, value) in fine {
-                    owner.set_fine(*id, *value);
-                }
-            }
-        }
-        Action::SetBypass {
-            track,
-            slot,
-            bypassed,
-        } => {
-            if let Some(held) = next
-                .tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .bypassed
-                .get_mut(*slot)
-            {
-                *held = *bypassed;
-            }
-        }
-        Action::SetMod {
-            track,
-            slot,
-            modulator,
-        } => {
-            if !modulator.in_range() {
-                return Err(EditError::Mod);
-            }
-            *next
-                .tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .mods
-                .get_mut(*slot)
-                .ok_or(EditError::Mod)? = *modulator;
-        }
-        Action::SetMacro { track, at, value } => {
-            let held = track_mut(&mut next, *track)?
-                .macros
-                .get_mut(*at)
-                .ok_or(EditError::Macro)?;
-            held.value = (*value).min(0xFF00);
-        }
-        Action::MapMacro { track, at, map } => {
-            if *at >= MACROS || !map.in_range() {
-                return Err(EditError::Macro);
-            }
-            let macros = &mut track_mut(&mut next, *track)?.macros;
-            for (place, held) in macros.iter_mut().enumerate() {
-                match held.map_of(map.target) {
-                    Some(found) if place == *at => held.maps[found] = *map,
-                    Some(found) => {
-                        held.maps.remove(found);
-                    }
-                    None if place == *at => held.maps.push(*map),
-                    None => {}
-                }
-            }
-        }
-        Action::UnmapMacro { track, target } => {
-            for held in &mut track_mut(&mut next, *track)?.macros {
-                held.maps.retain(|map| map.target != *target);
-            }
-        }
-        Action::NameMacro { track, at, name } => {
-            if name.as_deref().is_some_and(|name| !valid_name(name)) {
-                return Err(EditError::Macro);
-            }
-            track_mut(&mut next, *track)?
-                .macros
-                .get_mut(*at)
-                .ok_or(EditError::Macro)?
-                .name
-                .clone_from(name);
-        }
-        Action::SetReset { section, reset } => {
-            if *reset == Some(0) {
-                return Err(EditError::Reset);
-            }
-            section_mut(&mut next, *section)?.reset = *reset;
-        }
-        Action::AddSection { at } => next.insert_section(*at),
-        Action::CloneSection { at } => {
-            let copy = section_mut(&mut next, *at)?.clone();
-            next.sections.insert(*at + 1, copy);
-        }
-        Action::RemoveSection { at } => {
-            if next.sections.len() <= 1 {
-                return Err(EditError::LastSection);
-            }
-            section_mut(&mut next, *at)?;
-            next.sections.remove(*at);
-        }
-        Action::SetSectionLength { section, length } => {
-            if *length == Some(0) {
-                return Err(EditError::Reset);
-            }
-            section_mut(&mut next, *section)?.length = *length;
-        }
-        Action::SetSectionRepeat { section, repeat } => {
-            section_mut(&mut next, *section)?.repeat = *repeat;
-        }
-        Action::SetSectionStart { section, start } => {
-            section_mut(&mut next, *section)?.start = *start;
-        }
-        Action::SetSectionChain {
-            section,
-            track,
-            chain,
-        } => {
-            let owner = track_mut(&mut next, *track)?;
-            if let Some(chain) = chain
-                && !owner.chains.contains_key(chain)
-            {
-                owner.add_chain(*chain);
-            }
-            *section_mut(&mut next, *section)?
-                .chains
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))? = *chain;
-        }
-        Action::SetTrackLevel { track, level } => {
-            next.tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .level = (*level).min(MAX_LEVEL);
-        }
-        Action::SetTrackTrim { track, trim } => {
-            next.tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .trim = *trim;
-        }
-        Action::SetTrackRole { track, role } => {
-            next.tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .role = *role;
-        }
-        Action::SetTrackChoke { track, choke } => {
-            check_choke(*choke)?;
-            next.tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .choke = *choke;
-        }
-        Action::SetTrackGroup { first, last, group } => {
-            if let Some(group) = *group
-                && !(1..=MAX_GROUPS).contains(&usize::from(group))
-            {
-                return Err(EditError::Group(group));
-            }
-            if first > last || *last >= next.sound_tracks() {
-                return Err(EditError::GroupMember);
-            }
-            for track in &mut next.tracks[*first..=*last] {
-                track.group = *group;
-            }
-        }
-        Action::SetTrackGateLength { track, gate_length } => {
-            next.tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .gate_length = *gate_length;
-        }
-        Action::SetTrackSpeed { track, speed } => {
-            next.tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .speed = *speed;
-        }
-        Action::SetTrackReset { track, reset } => {
-            if reset.is_some_and(|steps| !(1..=MAX_TRACK_RESET).contains(&steps)) {
-                return Err(EditError::TrackReset);
-            }
-            track_mut(&mut next, *track)?.reset = *reset;
-        }
-        Action::SetTrackGlide { track, glide } => {
-            next.tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .glide = *glide;
-        }
-        Action::SetTrackSafe { track, on } => track_mut(&mut next, *track)?.safe = *on,
-        Action::SetAccumulation {
-            track,
-            accumulation,
-        } => {
-            if !accumulation.in_range() {
-                return Err(EditError::Accumulation);
-            }
-            next.tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .accumulation = *accumulation;
-        }
-        Action::SetArpeggio { track, arpeggio } => {
-            if !arpeggio.in_range() {
-                return Err(EditError::Arpeggio);
-            }
-            next.tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .arpeggio = *arpeggio;
-        }
-        Action::SetLength {
-            track,
-            phrase,
-            length,
-        } => {
-            phrase_mut(&mut next, *track, *phrase)?.set_len(*length);
-        }
-        Action::SlideLoop { track, phrase, by } => {
-            phrase_mut(&mut next, *track, *phrase)?.slide(*by);
-        }
-        Action::SetOrder {
-            track,
-            phrase,
-            order,
-        } => {
-            phrase_mut(&mut next, *track, *phrase)?.set_order(*order);
-        }
-        Action::SetLane {
-            track,
-            phrase,
-            slot,
-            lane,
-        } => {
-            phrase_mut(&mut next, *track, *phrase)?.set_lane(*slot, *lane);
-        }
-        Action::RotateLoop { track, phrase, by } => {
-            phrase_mut(&mut next, *track, *phrase)?.rotate(*by);
-        }
-        Action::SetMilliBpm(millibpm) => {
-            if !(MIN_MILLIBPM..=MAX_MILLIBPM).contains(millibpm) {
-                return Err(EditError::Tempo);
-            }
-            next.millibpm = *millibpm;
-        }
-        Action::AddTracks(count) => {
-            if next.sound_tracks() + count > MAX_SOUND_TRACKS {
-                return Err(EditError::TooManyTracks);
-            }
-            for _ in 0..*count {
-                next.add_track();
-            }
-        }
-        Action::RemoveLastTrack => {
-            if next.sound_tracks() <= 1 {
-                return Err(EditError::LastTrack);
-            }
-            next.remove_last_sound_track();
-        }
-        Action::SetTrackSample { track, sample } => {
-            let owner = next
-                .tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?;
-            owner.set_setting(SettingId::SAMPLE, *sample);
-            // Choosing a sample means wanting to hear it.
-            if *sample != 0 {
-                owner.machine = Machine::Sampler;
-            }
-        }
-        Action::SetBankEntry { number, entry } => {
-            next.bank.set(*number, entry.clone());
-        }
-        Action::SetSlices { number, starts } => {
-            reslice(&mut next, *number, |_| Ok(starts.clone()))?;
-        }
-        Action::SplitSlice { number, at } => reslice(&mut next, *number, |points| {
-            points.split_starts(*at).ok_or(EditError::Split)
-        })?,
-        Action::JoinSlices { number, slice } => reslice(&mut next, *number, |points| {
-            points
-                .join_starts(usize::from(*slice))
-                .ok_or(EditError::Join(*slice))
-        })?,
-        Action::SetTrackName { track, name } => {
-            let owner = next
-                .tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?;
-            if owner.is_group() && !name.is_empty() && !is_group_name(name) {
-                return Err(EditError::GroupName);
-            }
-            // A fixed track without a name goes back to its letter.
-            owner.name = if name.is_empty() {
-                owner.kind.letter().to_owned()
-            } else {
-                name.clone()
-            };
-        }
-        Action::LoadKit(sounds) => {
-            if sounds.len() > MAX_SOUND_TRACKS {
-                return Err(EditError::TooManyTracks);
-            }
-            while next.sound_tracks() < sounds.len() {
-                next.add_track();
-            }
-            for (track, sound) in next.tracks.iter_mut().zip(sounds) {
-                check_choke(sound.choke)?;
-                track.set_setting(SettingId::SAMPLE, sound.sample);
-                track.machine = Machine::Sampler;
-                track.name = sound.name.clone();
-                track.choke = sound.choke;
-            }
-        }
-        Action::SetChainEntry {
-            track,
-            chain,
-            slot,
-            entry,
-        } => {
-            check_transpose(entry)?;
-            ensure_phrase(track_mut(&mut next, *track)?, entry.phrase);
-            let target = chain_mut(&mut next, *track, *chain)?
-                .entries
-                .get_mut(*slot)
-                .ok_or(EditError::NoRow {
-                    chain: *chain,
-                    slot: *slot,
-                })?;
-            *target = *entry;
-        }
-        Action::InsertChainEntry {
-            track,
-            chain,
-            at,
-            entry,
-        } => {
-            check_transpose(entry)?;
-            ensure_phrase(track_mut(&mut next, *track)?, entry.phrase);
-            let entries = &mut chain_mut(&mut next, *track, *chain)?.entries;
-            let at = (*at).min(entries.len());
-            entries.insert(at, *entry);
-        }
-        Action::RemoveChainEntry { track, chain, at } => {
-            let entries = &mut chain_mut(&mut next, *track, *chain)?.entries;
-            if entries.len() <= 1 {
-                return Err(EditError::LastRow);
-            }
-            if *at >= entries.len() {
-                return Err(EditError::NoRow {
-                    chain: *chain,
-                    slot: *at,
-                });
-            }
-            entries.remove(*at);
-        }
-        Action::ClonePhrase {
-            track,
-            chain,
-            slot,
-            new,
-        } => {
-            let entry = chain_mut(&mut next, *track, *chain)?
-                .entries
-                .get_mut(*slot)
-                .ok_or(EditError::NoRow {
-                    chain: *chain,
-                    slot: *slot,
-                })?;
-            let old = std::mem::replace(&mut entry.phrase, *new);
-            let owner = track_mut(&mut next, *track)?;
-            let copy = owner
-                .phrases
-                .get(&old)
-                .cloned()
-                .ok_or(EditError::NoPhrase(old))?;
-            owner.phrases.insert(*new, copy);
-        }
-        Action::CloneChain { section, track } => {
-            let old = section_mut(&mut next, *section)?
-                .chains
-                .get(*track)
-                .copied()
-                .flatten()
-                .ok_or(EditError::NoTrack(*track))?;
-            let owner = track_mut(&mut next, *track)?;
-            let mut copy = Chain::clone(owner.chains.get(&old).ok_or(EditError::NoChain(old))?);
-            // A phrase used twice in the chain stays one phrase in the copy.
-            let mut made: Vec<(u32, u32)> = Vec::new();
-            for entry in &mut copy.entries {
-                if let Some((_, new)) = made.iter().find(|(from, _)| *from == entry.phrase) {
-                    entry.phrase = *new;
-                    continue;
-                }
-                let phrase = owner
-                    .phrases
-                    .get(&entry.phrase)
-                    .cloned()
-                    .ok_or(EditError::NoPhrase(entry.phrase))?;
-                let new = lowest_unused(&owner.phrases);
-                owner.phrases.insert(new, phrase);
-                made.push((entry.phrase, new));
-                entry.phrase = new;
-            }
-            let new = lowest_unused(&owner.chains);
-            owner.chains.insert(new, Arc::new(copy));
-            next.sections[*section].chains[*track] = Some(new);
-        }
-        Action::Bloom {
-            track,
-            chain,
-            slot,
-            scale,
-            bloom,
-        } => {
-            grow_bloom(&mut next, *track, *chain, *slot, *scale, bloom)?;
-        }
-        Action::SetTrackChain {
-            section,
-            track,
-            chain,
-        } => {
-            let owner = track_mut(&mut next, *track)?;
-            if !owner.chains.contains_key(chain) {
-                owner.add_chain(*chain);
-            }
-            *section_mut(&mut next, *section)?
-                .chains
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))? = Some(*chain);
-        }
-        Action::SetTrackMachine { track, machine } => {
-            next.tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .machine = *machine;
-        }
-        Action::SetTrackSetting {
-            track,
-            setting,
-            value,
-        } => {
-            next.tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .set_setting(*setting, *value);
-            let track = &mut next.tracks[*track];
-            track.set_fine(*setting, track.fine(*setting));
-        }
-        Action::SetTrackFine {
-            track,
-            setting,
-            fine,
-        } => {
-            next.tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .set_fine(*setting, *fine);
-        }
-        Action::SetFilterType { track, filter } => {
-            next.tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .filter = *filter;
-        }
-        Action::SetFilterMode { track, mode } => {
-            next.tracks
-                .get_mut(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .filter_mode = *mode;
-        }
+        Action::SetNote { .. }
+        | Action::SetStep { .. }
+        | Action::SetField { .. }
+        | Action::Shape { .. }
+        | Action::Fill { .. }
+        | Action::SetMark { .. }
+        | Action::Clear { .. }
+        | Action::Shift { .. }
+        | Action::FitToScale { .. }
+        | Action::Paste { .. } => steps::edit(&mut next, action)?,
+        Action::Generate { .. }
+        | Action::Reshape { .. }
+        | Action::ApplyGenerator { .. }
+        | Action::RemoveGenerator { .. }
+        | Action::Double { .. }
+        | Action::SetLength { .. }
+        | Action::SlideLoop { .. }
+        | Action::SetOrder { .. }
+        | Action::SetLane { .. }
+        | Action::RotateLoop { .. } => phrases::edit(&mut next, action)?,
+        Action::SetSkipSize(_)
+        | Action::SetLimiter(_)
+        | Action::SetSongName(_)
+        | Action::SetSeed(_)
+        | Action::SetLaunch(_)
+        | Action::SetGroove(_)
+        | Action::SetCustomGroove { .. }
+        | Action::SetMilliBpm(_) => song_wide::edit(&mut next, action)?,
+        Action::SetReset { .. }
+        | Action::AddSection { .. }
+        | Action::CloneSection { .. }
+        | Action::RemoveSection { .. }
+        | Action::SetSectionLength { .. }
+        | Action::SetSectionRepeat { .. }
+        | Action::SetSectionStart { .. }
+        | Action::SetSectionChain { .. }
+        | Action::SetTrackChain { .. } => sections::edit(&mut next, action)?,
+        Action::SetChainLabel { .. }
+        | Action::SetChainEntry { .. }
+        | Action::InsertChainEntry { .. }
+        | Action::RemoveChainEntry { .. }
+        | Action::ClonePhrase { .. }
+        | Action::CloneChain { .. }
+        | Action::Bloom { .. } => chains::edit(&mut next, action)?,
+        Action::SetTrackGroove { .. }
+        | Action::SetTrackBase { .. }
+        | Action::SetTrackLevel { .. }
+        | Action::SetTrackTrim { .. }
+        | Action::SetTrackRole { .. }
+        | Action::SetTrackChoke { .. }
+        | Action::SetTrackGroup { .. }
+        | Action::SetTrackGateLength { .. }
+        | Action::SetTrackSpeed { .. }
+        | Action::SetTrackReset { .. }
+        | Action::SetTrackGlide { .. }
+        | Action::SetTrackSafe { .. }
+        | Action::SetAccumulation { .. }
+        | Action::SetArpeggio { .. }
+        | Action::AddTracks(_)
+        | Action::RemoveLastTrack
+        | Action::SetTrackName { .. } => tracks::edit(&mut next, action)?,
+        Action::SetInsert { .. }
+        | Action::LoadSound { .. }
+        | Action::LoadPatch { .. }
+        | Action::LoadEffect { .. }
+        | Action::SetBypass { .. }
+        | Action::SetMod { .. }
+        | Action::SetMacro { .. }
+        | Action::MapMacro { .. }
+        | Action::UnmapMacro { .. }
+        | Action::NameMacro { .. }
+        | Action::SetTrackMachine { .. }
+        | Action::SetTrackSetting { .. }
+        | Action::SetTrackFine { .. }
+        | Action::SetFilterType { .. }
+        | Action::SetFilterMode { .. } => sound::edit(&mut next, action)?,
+        Action::SetTrackSample { .. }
+        | Action::SetBankEntry { .. }
+        | Action::SetSlices { .. }
+        | Action::SplitSlice { .. }
+        | Action::JoinSlices { .. }
+        | Action::LoadKit(_) => bank::edit(&mut next, action)?,
     }
     hold_generators(&mut next);
     follow_generators(song, &mut next);
     Ok(Arc::new(next))
-}
-
-/// Write one value across a selection of a phrase's rows.
-fn fill_range(
-    next: &mut Song,
-    track: usize,
-    phrase: u32,
-    range: StepRange,
-    fill: &Fill,
-) -> Result<(), EditError> {
-    let most = most_nudge(next, track)?;
-    for index in range.first..=range.last {
-        let target = step_mut(next, track, phrase, index)?;
-        let has_note = matches!(target.note, Note::On(_));
-        match fill {
-            Fill::Note { note, velocity } => {
-                target.note = *note;
-                if matches!(note, Note::On(_)) {
-                    target.velocity.get_or_insert(*velocity);
-                }
-            }
-            Fill::Velocity(velocity) if has_note => target.velocity = *velocity,
-            Fill::Velocity(_) => {}
-            Fill::Gate(gate) => target.gate = *gate,
-            Fill::GateLength(length) if has_note => {
-                if length.is_some() || target.gate.is_some() {
-                    target.gate = Some(Gate {
-                        length: *length,
-                        ..target.gate.unwrap_or_default()
-                    });
-                }
-            }
-            Fill::GateLength(_) => {}
-            Fill::Nudge(nudge) if has_note || *nudge == 0 => {
-                target.nudge = (*nudge).clamp(-most, most);
-            }
-            Fill::Nudge(_) => {}
-            Fill::Slot(slot, value) => {
-                *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? = snapped(*value);
-            }
-            Fill::SlotFine(slot, fine) => {
-                let slot = target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)?;
-                if slot.command.is_some_and(FxCommand::has_fine) {
-                    *slot = snapped(FxSlot {
-                        value: slot.value & 0xFF00 | u16::from(*fine),
-                        ..*slot
-                    });
-                }
-            }
-            // Typing coarse digits keeps the fine part, and over an `SLI` by a letter
-            // locks the slice by its number instead.
-            Fill::SlotValue(slot, value) => {
-                let slot = target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)?;
-                if let Some(command) = slot.command {
-                    let fine = if command.has_fine() { slot.fine() } else { 0 };
-                    *slot = snapped(FxSlot {
-                        value: u16::from(*value) << 8 | u16::from(fine),
-                        ..*slot
-                    });
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Grow a chain row's phrase into branches, each a copy following the one before, and lay them
-/// along the chain in the bloom's path.
-fn grow_bloom(
-    next: &mut Song,
-    track: usize,
-    chain: u32,
-    slot: usize,
-    scale: Scale,
-    bloom: &Bloom,
-) -> Result<(), EditError> {
-    if !(1..=MAX_BRANCHES).contains(&bloom.branches) {
-        return Err(EditError::Branches);
-    }
-    let entry = *chain_mut(next, track, chain)?
-        .entries
-        .get(slot)
-        .ok_or(EditError::NoRow { chain, slot })?;
-    let owner = track_mut(next, track)?;
-    let trunk = owner
-        .phrases
-        .get(&entry.phrase)
-        .cloned()
-        .ok_or(EditError::NoPhrase(entry.phrase))?;
-    let rows = StepRange::between(trunk.start(), trunk.start() + trunk.len() - 1);
-    let column = ShapeColumn::Note {
-        scale,
-        writes: None,
-    };
-    let mut grown = vec![entry.phrase];
-    for nth in 1..=usize::from(bloom.branches) {
-        let id = lowest_unused(&owner.phrases);
-        if id > LAST_PHRASE {
-            return Err(EditError::NoPhrasesLeft(bloom.branches));
-        }
-        let before = grown[nth - 1];
-        let source = Source {
-            track,
-            phrase: before,
-        };
-        let generator = Generator::new(column, Span::rows(rows), bloom.branch(source, nth));
-        let read = Arc::clone(&owner.phrases[&before]);
-        let mut branch = Phrase::clone(&trunk);
-        branch.add_generator(generator, Some(read.loop_steps()));
-        owner.phrases.insert(id, Arc::new(branch));
-        grown.push(id);
-    }
-    let path = bloom
-        .path
-        .places(usize::from(bloom.branches), bloom.seed)
-        .into_iter()
-        .map(|place| ChainEntry {
-            phrase: grown[place],
-            transpose: entry.transpose,
-        });
-    chain_mut(next, track, chain)?
-        .entries
-        .splice(slot..=slot, path);
-    Ok(())
-}
-
-fn check_transpose(entry: &ChainEntry) -> Result<(), EditError> {
-    if (MIN_TRANSPOSE..=MAX_TRANSPOSE).contains(&entry.transpose) {
-        Ok(())
-    } else {
-        Err(EditError::Transpose)
-    }
-}
-
-fn ensure_phrase(track: &mut Track, phrase: u32) {
-    track
-        .phrases
-        .entry(phrase)
-        .or_insert_with(|| Arc::new(Phrase::new(DEFAULT_PHRASE_STEPS)));
-}
-
-fn chain_mut(song: &mut Song, track: usize, chain: u32) -> Result<&mut Chain, EditError> {
-    let target = track_mut(song, track)?
-        .chains
-        .get_mut(&chain)
-        .ok_or(EditError::NoChain(chain))?;
-    Ok(Arc::make_mut(target))
 }
 
 fn phrase_mut(song: &mut Song, track: usize, phrase: u32) -> Result<&mut Phrase, EditError> {
@@ -1694,21 +820,4 @@ fn phrase_mut(song: &mut Song, track: usize, phrase: u32) -> Result<&mut Phrase,
         .get_mut(&phrase)
         .ok_or(EditError::NoPhrase(phrase))?;
     Ok(Arc::make_mut(target))
-}
-
-/// The furthest a track's nudges go at its speed, which a nudge written to it is kept within.
-fn most_nudge(song: &Song, track: usize) -> Result<i8, EditError> {
-    let owner = song.tracks.get(track).ok_or(EditError::NoTrack(track))?;
-    Ok(owner.speed.most_nudge())
-}
-
-fn step_mut(
-    song: &mut Song,
-    track: usize,
-    phrase: u32,
-    step: usize,
-) -> Result<&mut Step, EditError> {
-    phrase_mut(song, track, phrase)?
-        .step_mut(step)
-        .ok_or(EditError::NoStep { phrase, step })
 }
