@@ -16,7 +16,6 @@
 //! - [`offline`]: the subcommands that run without a screen.
 
 #![warn(unreachable_pub)]
-#![warn(clippy::float_cmp, clippy::match_same_arms, clippy::redundant_clone)]
 
 pub mod app;
 pub mod controls;

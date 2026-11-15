@@ -184,6 +184,7 @@ impl Sound {
     }
 
     /// Each measure of this saved sound beside the same of a new one, and whether it's in its band.
+    #[allow(clippy::float_cmp, reason = "silence against silence is exactly equal")]
     pub fn against(&self, now: &Sound) -> [Row; 5] {
         let decibel_row = |name, was: f64, now: f64, band| Row {
             name,
@@ -256,6 +257,7 @@ pub fn rms(samples: impl IntoIterator<Item = impl Borrow<f32>>) -> f32 {
 
 /// Render twice and check the two are the same, sample for sample, so what's random follows the
 /// song's seed and nothing carries over from one render to the next. Gives the render back.
+#[allow(clippy::float_cmp, reason = "the renders are the same bit for bit")]
 pub fn repeats(what: &str, render: impl Fn() -> Vec<f32>) -> Vec<f32> {
     let (first, second) = (render(), render());
     if first != second {
