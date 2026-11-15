@@ -36,6 +36,7 @@
 
 use super::diode_filter::{Complex, OnePole, tanh};
 use crate::dsp::blocks::flush::tiny_by_fields;
+use crate::dsp::blocks::one_pole;
 
 /// The loop's resonance at no `Res` and at full. It self-oscillates from about 2.
 const LEAST_RESONANCE: f32 = 0.1;
@@ -137,7 +138,7 @@ impl Settings {
         let resonance = tuning.resonance + drive * DRIVE_RESONANCE;
         let past = (resonance * tuning.over_ringing - 1.0).max(0.0);
         let raised = tuning.analog * (1.0 + tuning.pull * past);
-        let g = raised / (1.0 + raised);
+        let g = one_pole::gain(raised);
         let squared = resonance * resonance;
         // Vital's solve for the feedback within the sample, close to exact for low cutoffs.
         let solve = 1.0 / ((1.0 - resonance * (g - g * g)) * (1.0 + g));
@@ -271,8 +272,7 @@ mod tests {
     fn a_quiet_signal_meets_the_worked_out_response() {
         let rate = 96_000.0_f32;
         for cutoff in [200.0, 1_000.0, 8_000.0] {
-            let g = (std::f32::consts::PI * cutoff / rate).tan();
-            let coefficient = g / (1.0 + g);
+            let coefficient = one_pole::gain((std::f32::consts::PI * cutoff / rate).tan());
             // From about `Res DB` it rings by itself.
             for res in [0.0, 0.5, 0.8] {
                 let settings = Settings::new(&Tuning::new(coefficient, res), 0.0, 1.0);
@@ -302,8 +302,7 @@ mod tests {
 
     #[test]
     fn a_quiet_sound_comes_through_at_its_level_with_no_resonance() {
-        let g = (std::f32::consts::PI * 1_000.0 / 96_000.0).tan();
-        let coefficient = g / (1.0 + g);
+        let coefficient = one_pole::gain((std::f32::consts::PI * 1_000.0 / 96_000.0).tan());
         let settings = Settings::new(&Tuning::new(coefficient, 0.0), 0.0, 1.0);
         let low = response(&settings, &LOW, &LOW, 10.0 / 96_000.0);
         assert!((10.0 * low.log10()).abs() < 0.05, "{low}");

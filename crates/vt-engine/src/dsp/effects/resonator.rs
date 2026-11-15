@@ -23,12 +23,12 @@
 
 use vt_model::insert::{Resonator as Settings, shift_semitones};
 
+use crate::dsp::blocks::clip::soft_clip;
 use crate::dsp::blocks::plaits_parts::{CosineOscillator, STIFFNESS, interpolate, tan_fast};
 use crate::dsp::blocks::response::{Gain, svf, warped};
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::SlotEffect;
-use crate::dsp::voices::drums::soft_clip;
 
 /// How many modes there are, as many as Plaits has.
 pub(in crate::dsp) const MODES: usize = 24;

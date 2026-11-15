@@ -30,8 +30,8 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use super::drums::soft_clip;
 use super::virtual_analog::Settings;
+use crate::dsp::blocks::clip::soft_clip;
 use crate::dsp::blocks::drift::Drift;
 use crate::dsp::blocks::oversampler::Oversampler;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient as smoothing_coefficient};

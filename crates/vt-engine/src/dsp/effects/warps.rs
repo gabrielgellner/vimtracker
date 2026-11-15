@@ -37,13 +37,13 @@ use vt_model::insert::{
     ALGORITHM_FADE_START, ALGORITHM_MODULATOR, Warps as Settings, algorithm_knob, shift_semitones,
 };
 
+use crate::dsp::blocks::clip::soft_clip;
 use crate::dsp::blocks::oversampler::PairOversampler;
 use crate::dsp::blocks::plaits_parts::{DcBlocker, Svf};
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::effects::distort::saturating_gains;
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::SlotEffect;
-use crate::dsp::voices::drums::soft_clip;
 
 /// Where `Algo` is at `FF`, out of 256.
 const TOP_OF_ALGO: f32 = 255.0 / 256.0;

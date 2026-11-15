@@ -22,6 +22,7 @@
 //! <http://www.gnu.org/licenses/>.
 
 use crate::dsp::blocks::flush::tiny_by_fields;
+use crate::dsp::blocks::one_pole;
 
 /// The feedback at no resonance and at full.
 const LEAST_RESONANCE: f32 = 0.7;
@@ -56,10 +57,7 @@ impl OnePole {
     /// One sample with no saturation.
     #[inline]
     pub(crate) fn tick_plain(&mut self, input: f32, coefficient: f32) -> f32 {
-        let delta = coefficient * (input - self.state);
-        self.state += delta;
-        self.current = self.state;
-        self.state += delta;
+        self.current = one_pole::low_pass(&mut self.state, input, coefficient);
         self.current
     }
 
