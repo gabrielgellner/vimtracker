@@ -602,7 +602,6 @@ impl App {
         if self.modes.view == View::Sample {
             // So `h` and `l` move the cursor's line by a pixel of these.
             self.sample_page.cell_width = Some(graphics.cell().0);
-            let _ = self.sample_page_here();
             let wants = self.sample_page.panels(&self.ctx());
             let ids = graphics.sample_panels(&wants, rate, out)?;
             self.sample_page.take_panels(ids, &wants, rate);
@@ -682,10 +681,9 @@ pub fn draw_screen(
     // place.
     app.track_page.lfo_cycles_at = Default::default();
     app.track_page.gen_panels_at = Vec::new();
+    // Laid out for the room first, so what it shows settles in the columns it's drawn with.
     if app.modes.view == View::Sample {
-        // Laid out for the room first, so it settles on the columns it's drawn with.
         app.sample_page.lay_out(view);
-        let _ = app.sample_page_here();
     }
     match draw_view_noting(frame, view, app, app.modes.view) {
         PageNotes::Nothing => {}

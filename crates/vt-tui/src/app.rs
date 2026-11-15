@@ -700,6 +700,7 @@ impl App {
         self.follow_sampling();
         let working = self.loader.is_waiting() || self.services.analyst.is_waiting();
         self.work_since = working.then(|| self.work_since.unwrap_or(now));
+        self.settle_sample_page();
     }
 
     /// The work going on in the background, by name, and the spinner's turn for it. Only work
