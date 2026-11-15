@@ -1,7 +1,7 @@
 //! The recording tests' own clock: an app of two tracks to record on, and keys and frames given
 //! at times counted in steps from the start.
 
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::KeyCode;
@@ -35,9 +35,15 @@ pub const SECONDS_PER_STEP: f64 = 0.125;
 /// The time on the recording tests' own clock this many steps from the start. The app is given
 /// these times for its frames and its keys, so where a note lands and how long it lasts come
 /// from the frames played, never from how fast the test happens to run (#292).
+///
+/// The clock starts when a test first reads it. It's the thread's, as each test runs on a thread
+/// of its own, so a test that also presses keys at the time they're pressed, as `press` does,
+/// finds the two clocks together, however long the tests before it in the binary ran.
 pub fn time_at(at: f64) -> Instant {
-    static START: OnceLock<Instant> = OnceLock::new();
-    *START.get_or_init(Instant::now) + Duration::from_secs_f64(at.max(0.0) * SECONDS_PER_STEP)
+    thread_local! {
+        static START: Instant = Instant::now();
+    }
+    START.with(|start| *start) + Duration::from_secs_f64(at.max(0.0) * SECONDS_PER_STEP)
 }
 
 /// Keys pressed, tapped or held at a time on the recording tests' clock.
