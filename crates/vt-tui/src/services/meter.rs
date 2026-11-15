@@ -348,6 +348,7 @@ mod tests {
     const SECOND: f32 = 1.0;
 
     #[test]
+    #[allow(clippy::float_cmp, reason = "a column keeps the reading as it was")]
     fn a_reduction_history_sweeps_two_bars_and_writes_over_the_last_pass() {
         let mut history = ReductionHistory::default();
         assert_eq!(history.head(64), 0);

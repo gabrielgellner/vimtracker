@@ -122,7 +122,7 @@ fn a_lane_changed_while_playing_stays_on_its_step() {
     let mut engine = engine(&song);
     // Place 4 reads the lane's row 1, so the next is its row 2.
     assert_eq!(send_at(&mut engine, 4), 0x20);
-    let mut longer = song.clone();
+    let mut longer = song;
     let phrase = Arc::make_mut(longer.tracks[0].phrases.get_mut(&10).unwrap());
     *phrase.step_mut(3).unwrap() = "--- -- sna:40h --- ---".parse().unwrap();
     phrase.set_lane(0, lane(0, 4));

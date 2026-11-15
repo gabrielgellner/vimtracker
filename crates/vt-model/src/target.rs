@@ -54,6 +54,10 @@ impl SettingId {
     /// Whether this track has it now: a voice's settings while it plays that voice, and an
     /// effect's while that effect is in its slot, in a mode that has it. A fixed track has no sound of its own to filter
     /// or tune, only a group of them sends, and the master has no pan.
+    #[allow(
+        clippy::match_same_arms,
+        reason = "each owner's arms together, some with why"
+    )]
     pub fn exists_on(self, track: &Track) -> bool {
         match self.owner() {
             (Owner::Track, _) if self == Self::VOL || self == Self::LEVEL => true,
@@ -108,14 +112,16 @@ impl SettingId {
             (Owner::Slot { slot, .. } | Owner::Bypass(slot), _) => {
                 format!("{} {}", slot + 1, self.name())
             }
-            (Owner::Mod(slot), _) if !here => format!("M{} {} ---", slot + 1, self.name()),
+            (Owner::Mod(slot) | Owner::ModOwn(slot), _) if !here => {
+                format!("M{} {} ---", slot + 1, self.name())
+            }
             // A Steps slot's phase is where each note starts it.
             (Owner::Mod(slot), 1) if track.mods[slot].kind == ModKind::Steps => {
                 format!("M{} Start", slot + 1)
             }
-            (Owner::Mod(slot), _) => format!("M{} {}", slot + 1, self.name()),
-            (Owner::ModOwn(slot), _) if !here => format!("M{} {} ---", slot + 1, self.name()),
-            (Owner::ModOwn(slot), _) => format!("M{} {}", slot + 1, self.name()),
+            (Owner::Mod(slot) | Owner::ModOwn(slot), _) => {
+                format!("M{} {}", slot + 1, self.name())
+            }
             // A macro with a name, or holding something, says so after its number.
             (Owner::Macro(at), _) => match track.macros[at].shown_name() {
                 Some(name) => format!("{} {name}", self.name()),

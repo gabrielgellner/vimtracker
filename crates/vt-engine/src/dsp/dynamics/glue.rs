@@ -391,6 +391,10 @@ impl PeakClip {
 
     /// One frame through it.
     #[inline]
+    #[allow(
+        clippy::float_cmp,
+        reason = "the switch's ramp lands on its target exactly"
+    )]
     pub(crate) fn process(&mut self, frame: [f32; 2], rate: u32) -> [f32; 2] {
         if self.on == self.target {
             return if self.on == 0.0 {

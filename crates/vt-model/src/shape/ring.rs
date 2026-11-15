@@ -480,7 +480,7 @@ mod tests {
     fn over_notes_there_it_keeps_their_velocity_clears_the_rest_and_leaves_an_off() {
         let note: Step = "C-3 40 --- --- ---".parse().unwrap();
         let off: Step = "OFF -- --- --- ---".parse().unwrap();
-        let mut steps = vec![note.clone(); 16];
+        let mut steps = vec![note; 16];
         steps[5] = off;
         steps[9] = Step::default();
         let range = StepRange::between(0, 15);

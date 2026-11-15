@@ -773,6 +773,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::float_cmp, reason = "the sides are the same bit for bit")]
     fn width_spreads_it_across_the_sides() {
         let input = drums(RATE as usize, 0.5, RATE);
         let mono = played(

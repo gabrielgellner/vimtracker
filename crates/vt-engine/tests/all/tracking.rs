@@ -151,7 +151,7 @@ fn a_track_slot_leaves_the_tracks_other_rolls_as_they_were() {
     let mut held = played.clone();
     held.dedup();
     assert!(held.len() < 8 && held.len() > 2, "{played:02X?}");
-    let mut rolling = plain.clone();
+    let mut rolling = plain;
     rolling.tracks[0].mods[3] = ModSlot::tracking(
         Some(SettingId::RES),
         Tracking {

@@ -76,6 +76,10 @@ fn step_kinds(modulator: &mut ModSlot, field: ModField, up: bool, large: bool) {
     }
 }
 
+#[allow(
+    clippy::match_same_arms,
+    reason = "an arm for each control, in the page's order"
+)]
 pub(super) fn adjust_control(
     services: &mut Services,
     control: Control,
@@ -233,6 +237,10 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
 
 /// Put the setting under the cursor back to its default. If it's there already, nothing changes
 /// and no undo step is left.
+#[allow(
+    clippy::match_same_arms,
+    reason = "an arm for each control, in the page's order"
+)]
 pub(super) fn reset_control(services: &mut Services, control: Control) {
     let track = services.page_track();
     match control {

@@ -188,7 +188,7 @@ fn a_wrap_keeps_the_running_count_so_a_groove_doesnt_change() {
 #[test]
 fn an_empty_row_doesnt_change_a_song_of_one() {
     let looped = song(&[&[A], &STEPS]);
-    let mut alone = looped.clone();
+    let mut alone = looped;
     alone.sections[0].length = Some(4);
     alone.sections[0].chains = vec![Some(11)];
     alone.sections.truncate(1);

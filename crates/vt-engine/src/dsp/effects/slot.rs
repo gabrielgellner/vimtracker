@@ -832,6 +832,10 @@ impl InsertState {
     /// infinity heard as silence, and whether its sides are the same. It keeps nothing, so it's
     /// passed by without working through the rest (#187). None for any other slot.
     #[inline]
+    #[allow(
+        clippy::float_cmp,
+        reason = "the switch's ramp lands on its target exactly"
+    )]
     pub(crate) fn passed_through(&self, input: [f32; 2], same: bool) -> Option<([f32; 2], bool)> {
         if !self.is_empty() || self.on.value != self.on.target {
             return None;
@@ -873,6 +877,10 @@ impl InsertState {
         let input = input.map(|sample| if sample.is_finite() { sample } else { 0.0 });
         let kept = same && self.mono() == Mono::Linked;
         let wet = self.effect(input, same, smoothing, rate, keys);
+        #[allow(
+            clippy::float_cmp,
+            reason = "the switch's ramp lands on its target exactly"
+        )]
         let out = if self.on.value == self.on.target {
             if self.on.target > 0.0 { wet } else { input }
         } else {
@@ -1362,6 +1370,7 @@ mod tests {
     /// A burst of a loud sine with noise on it, different on each side, then silence for at most
     /// `seconds`, until the slot has given exact silence for a second and, if `settles`, has
     /// settled. Returns when, in seconds, or none if it never did.
+    #[allow(clippy::float_cmp, reason = "silence is exact zeros")]
     fn falls_silent(insert: Insert, seconds: usize, settles: bool) -> Option<f32> {
         let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
         let keys = Keys::default();

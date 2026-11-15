@@ -288,6 +288,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::float_cmp, reason = "the sustain holds its level exactly")]
     fn it_rises_to_full_settles_on_the_sustain_and_ends_at_silence() {
         let envelope = adsr(100, 100, 50, 100);
         let levels = levels(&envelope, 200);

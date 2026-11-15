@@ -145,7 +145,7 @@ pub(super) fn edit(next: &mut Song, action: &Action) -> Result<(), EditError> {
             }
             // A fixed track without a name goes back to its letter.
             owner.name = if name.is_empty() {
-                owner.kind.letter().to_owned()
+                owner.kind.letter()
             } else {
                 name.clone()
             };

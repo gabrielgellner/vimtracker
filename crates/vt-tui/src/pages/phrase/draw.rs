@@ -140,10 +140,9 @@ fn step_text(step: &Step, track: Option<&Track>) -> String {
     let nudge = format!("{:<NUDGE_WIDTH$}", nudge_text(step.nudge, most));
     let mut text = format!("{} {velocity} {nudge} {gate} {length}", step.note);
     for slot in &step.fx {
-        let name = match (slot.command, track) {
-            (Some(command), Some(_)) => command.name(),
-            (Some(command), None) => command.name().to_owned(),
-            (None, _) => COMMAND_EMPTY.to_owned(),
+        let name = match slot.command {
+            Some(command) => command.name(),
+            None => COMMAND_EMPTY.to_owned(),
         };
         let name: String = name.chars().take(COMMAND_WIDTH - 1).collect();
         let mark = if slot.is_value() {

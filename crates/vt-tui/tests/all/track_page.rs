@@ -3306,7 +3306,7 @@ fn a_returns_sends_in_lists_what_sends_to_it_and_follows_the_song() {
     let hats = format!("{:<10}0C00 ▕▍        ▏", name(2).trim_end());
     assert_eq!(
         sends_in(&app),
-        [hats.clone(), "G1        1800 ▕▊        ▏".to_owned()]
+        [hats, "G1        1800 ▕▊        ▏".to_owned()]
     );
     // It follows the song: a send turned up joins, in the song's order, and one turned down to
     // nothing leaves.

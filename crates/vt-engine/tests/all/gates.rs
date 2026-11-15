@@ -132,7 +132,7 @@ fn a_lane_runs_on_steps_and_a_column_without_one_follows_the_rows() {
     // Row 0 lasts steps 0 to 3, so its FX hold all that time.
     assert_eq!(send(&following, 2), 0x10);
     assert_eq!(send(&following, 4), 0x20);
-    let mut drifting = following.clone();
+    let mut drifting = following;
     Arc::make_mut(drifting.tracks[0].phrases.get_mut(&0).unwrap())
         .set_lane(0, Some(Lane::new(0, 3)));
     // The lane moves on each step, inside the long row.

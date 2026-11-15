@@ -394,15 +394,13 @@ impl App {
     /// Which rows of the binding table apply now. Normal mode's keys depend on the view.
     pub fn key_scope(&self) -> Mode {
         match (self.modes.mode, self.modes.view) {
-            (Mode::Keys, View::Track) => Mode::Track,
-            (Mode::Keys, View::Sample) => Mode::Sample,
+            (Mode::Keys | Mode::Normal, View::Track) => Mode::Track,
             (Mode::Normal, View::Chain) => Mode::Chain,
-            (Mode::Normal, View::Track) => Mode::Track,
             (Mode::Normal, View::Mixer) => Mode::Mixer,
             (Mode::Normal, View::Audio) => Mode::Audio,
             (Mode::Normal, View::Project) => Mode::Project,
             (Mode::Normal, View::Sample) if self.sample_page.anchor.is_some() => Mode::SampleVisual,
-            (Mode::Normal, View::Sample) => Mode::Sample,
+            (Mode::Keys | Mode::Normal, View::Sample) => Mode::Sample,
             (Mode::Normal, View::Song) => Mode::Song,
             (mode, _) => mode,
         }
