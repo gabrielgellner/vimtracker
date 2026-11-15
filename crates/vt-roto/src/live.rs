@@ -1,6 +1,7 @@
-//! Devices shown on the Roto, as Bitwig Studio's script shows a device's remote controls. Most
-//! are macro plugins sent live, of as many pages of eight knobs as they need; the Roto asks for
-//! each knob of the page it shows with `CONTROL MAPPED`, and is answered with the knob's name,
+//! Devices shown on the Roto, as Bitwig Studio's script shows a device's remote controls.
+//!
+//! Most are macro plugins sent live, of as many pages of eight knobs as they need; the Roto asks
+//! for each knob of the page it shows with `CONTROL MAPPED`, and is answered with the knob's name,
 //! feel and position in `LEARN PARAM` and its name and colour in `SET PLUGIN CONTROL DETAILS`. A
 //! device with buttons is one of the program's own stored setups ([`crate::store`]), sent as a
 //! normal plugin under its setup's hash: the Roto asks for its knobs, answered the same way with

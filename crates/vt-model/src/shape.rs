@@ -1,3 +1,5 @@
+//! Shapes: filling a column across a selection, or reworking the values already there.
+//!
 //! Filling a column across a selection with a shaped ramp, random values, a walk, pink noise, a
 //! wave, two values in turn, or a short list of them in turn, or reworking the values already
 //! there. On the Note column, the steps are the scale's degrees while it's on, `Acid` writes a 303

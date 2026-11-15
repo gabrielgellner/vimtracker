@@ -1,12 +1,14 @@
-//! The sample page's settings: whether points snap to zero crossings, how readily a sound counts
-//! as starting, how many steps it lasts and how it keeps to the tempo, for the whole entry, and how the slice under the cursor plays, its gain, pan, tune, direction and fades, or the entry's own with no slices. `K`
+//! The sample page's settings, for the whole entry and for the slice under the cursor.
+//!
+//! They are whether points snap to zero crossings, how readily a sound counts as starting, how many
+//! steps it lasts and how it keeps to the tempo, for the whole entry, and how the slice under the
+//! cursor plays, its gain, pan, tune, direction and fades, or the entry's own with no slices. `K`
 //! on the waveform chooses one to change, which puts the page's focus on it in the settings rows;
 //! there `h` and `l` go along them, `=` `-` and `+` `_` change it by a small or a large step, `K`
-//! lists its values, `x` puts it back, and `Esc` goes back to the waveform. `j` and `k` still go
-//! by slice, so a setting can be set slice after slice. `>` and `<` move the slice's gain and `~`
+//! lists its values, `x` puts it back, and `Esc` goes back to the waveform. `j` and `k` still go by
+//! slice, so a setting can be set slice after slice. `>` and `<` move the slice's gain and `~`
 //! reverses it from the waveform too. Each change is one undo step on the bank entry, which the
-//! page makes through the [`Services`] it's given; the pickers it builds are opened by the
-//! program.
+//! page makes through the [`Services`] it's given; the pickers it builds are opened by the program.
 
 use vt_model::action::Action;
 use vt_model::bank::{BankEntry, Hints, MOST_PAN, MOST_STEPS, Warp};

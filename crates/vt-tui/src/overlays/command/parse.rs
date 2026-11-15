@@ -1542,105 +1542,166 @@ mod tests {
 
     #[test]
     fn commands_parse() {
-        assert_eq!(
-            parse("w"),
-            Ok(Line::Write {
-                path: None,
-                force: false
-            })
-        );
-        assert_eq!(
-            parse("w a/b"),
-            Ok(Line::Write {
-                path: Some("a/b".into()),
-                force: false
-            })
-        );
-        assert_eq!(
-            parse("w!"),
-            Ok(Line::Write {
-                path: None,
-                force: true
-            })
-        );
-        assert_eq!(parse("q!"), Ok(Line::Quit { force: true }));
-        assert_eq!(parse("len 32"), Ok(Line::Len(32)));
-        assert_eq!(parse("seed 42"), Ok(Line::Seed(42)));
-        assert_eq!(
-            parse("render a b.wav --rows 8 --tail"),
-            Ok(Line::Render {
-                path: Some("a b.wav".into()),
-                rows: Some(8),
-                tail: true,
-                stems: false,
-                each_track: false,
-            })
-        );
-        assert_eq!(
-            parse("render out --stems"),
-            Ok(Line::Render {
-                path: Some("out".into()),
-                rows: None,
-                tail: false,
-                stems: true,
-                each_track: false,
-            })
-        );
-        assert_eq!(
-            parse("render out --split"),
-            Ok(Line::Render {
-                path: Some("out".into()),
-                rows: None,
-                tail: false,
-                stems: true,
-                each_track: true,
-            }),
-            "a stem of each track is stems"
-        );
-        assert_eq!(
-            parse("render --tail"),
-            Ok(Line::Render {
-                path: None,
-                rows: None,
-                tail: true,
-                stems: false,
-                each_track: false,
-            }),
-            "the explorer chooses where"
-        );
-        assert!(parse("render a.wav --rows 0").is_err());
-        assert!(parse("seed x").is_err());
         let groove = |name: &str| GrooveId::named(name).unwrap();
-        assert_eq!(parse("swing 66"), Ok(Line::Groove(groove("Swing 66"))));
-        assert_eq!(parse("swing 50"), Ok(Line::Groove(GrooveId::STRAIGHT)));
-        assert_eq!(parse("swing 66.7"), Err(LineError::Swing));
-        assert_eq!(parse("swing 68"), Err(LineError::Swing));
-        assert_eq!(parse("groove mpc-58"), Ok(Line::Groove(groove("MPC 58"))));
-        assert_eq!(
-            parse("groove Swing 66"),
-            Ok(Line::Groove(groove("swing66")))
-        );
-        assert_eq!(parse("groove"), Ok(Line::PickGroove { track: false }));
-        assert_eq!(parse("groove fast"), Err(LineError::Groove));
-        let custom = Line::TrackGroove(Some(groove("Custom 2")));
-        assert_eq!(parse("tgroove custom-2"), Ok(custom));
-        assert_eq!(parse("tgroove off"), Ok(Line::TrackGroove(None)));
-        assert_eq!(parse("tgroove"), Ok(Line::PickGroove { track: true }));
-        assert!(parse("tswing 60").is_err(), "a groove replaces it");
-        assert_eq!(parse("reset 64"), Ok(Line::Reset(Some(64))));
-        assert_eq!(parse("reset off"), Ok(Line::Reset(None)));
-        assert!(parse("reset 0").is_err());
-        assert!(parse("reset").is_err());
-        assert_eq!(parse("reset 0x40"), Ok(Line::Reset(Some(64))));
-        assert_eq!(parse("len 16"), Ok(Line::Len(16)));
-        assert_eq!(parse("len 0x10"), Ok(Line::Len(16)));
-        assert_eq!(parse("len 0xfF"), Ok(Line::Len(255)));
-        assert_eq!(
-            parse("len 10"),
-            Ok(Line::Len(10)),
-            "plain numbers stay decimal"
-        );
+        let write = |path: Option<&str>, force| Line::Write {
+            path: path.map(Into::into),
+            force,
+        };
+        let edit = |path: Option<&str>, force| Line::Edit {
+            path: path.map(Into::into),
+            force,
+        };
+        let new = |path: Option<&str>, force| Line::New {
+            path: path.map(Into::into),
+            force,
+        };
+        let render = |path: Option<&str>, rows, tail, stems, each_track| Line::Render {
+            path: path.map(Into::into),
+            rows,
+            tail,
+            stems,
+            each_track,
+        };
+        let record = |what, quantise| Line::Record { what, quantise };
+        let cases = [
+            ("w", Ok(write(None, false))),
+            ("w a/b", Ok(write(Some("a/b"), false))),
+            ("w!", Ok(write(None, true))),
+            ("q!", Ok(Line::Quit { force: true })),
+            ("len 32", Ok(Line::Len(32))),
+            ("seed 42", Ok(Line::Seed(42))),
+            (
+                "render a b.wav --rows 8 --tail",
+                Ok(render(Some("a b.wav"), Some(8), true, false, false)),
+            ),
+            (
+                "render out --stems",
+                Ok(render(Some("out"), None, false, true, false)),
+            ),
+            // A stem of each track is stems.
+            (
+                "render out --split",
+                Ok(render(Some("out"), None, false, true, true)),
+            ),
+            // The explorer chooses where.
+            ("render --tail", Ok(render(None, None, true, false, false))),
+            ("swing 66", Ok(Line::Groove(groove("Swing 66")))),
+            ("swing 50", Ok(Line::Groove(GrooveId::STRAIGHT))),
+            ("swing 66.7", Err(LineError::Swing)),
+            ("swing 68", Err(LineError::Swing)),
+            ("groove mpc-58", Ok(Line::Groove(groove("MPC 58")))),
+            ("groove Swing 66", Ok(Line::Groove(groove("swing66")))),
+            ("groove", Ok(Line::PickGroove { track: false })),
+            ("groove fast", Err(LineError::Groove)),
+            (
+                "tgroove custom-2",
+                Ok(Line::TrackGroove(Some(groove("Custom 2")))),
+            ),
+            ("tgroove off", Ok(Line::TrackGroove(None))),
+            ("tgroove", Ok(Line::PickGroove { track: true })),
+            ("reset 64", Ok(Line::Reset(Some(64)))),
+            ("reset off", Ok(Line::Reset(None))),
+            ("reset 0x40", Ok(Line::Reset(Some(64)))),
+            ("len 16", Ok(Line::Len(16))),
+            ("len 0x10", Ok(Line::Len(16))),
+            ("len 0xfF", Ok(Line::Len(255))),
+            // Plain numbers stay decimal.
+            ("len 10", Ok(Line::Len(10))),
+            ("tvol C0", Ok(Line::TrackLevel(0xC0))),
+            ("tvol", Err(LineError::TrackLevel)),
+            ("tvol 100", Err(LineError::TrackLevel)),
+            ("track add", Ok(Line::TrackAdd(1))),
+            ("track add 4", Ok(Line::TrackAdd(4))),
+            ("track add 0", Err(LineError::Track)),
+            ("track del", Ok(Line::TrackDel)),
+            ("set skip=8", Ok(Line::SetSkip(8))),
+            ("set skip", Err(LineError::Set)),
+            ("set scale=dorian", Ok(Line::SetScale(ScaleKind::Dorian))),
+            (
+                "set scale=harmonic minor",
+                Ok(Line::SetScale(ScaleKind::HarmonicMinor)),
+            ),
+            (
+                "set scale=Minor-Pentatonic",
+                Ok(Line::SetScale(ScaleKind::MinorPentatonic)),
+            ),
+            ("set scale=on", Ok(Line::ScaleOn(true))),
+            ("set scale=off", Ok(Line::ScaleOn(false))),
+            ("set scale=nope", Err(LineError::Set)),
+            ("set root=F#", Ok(Line::SetRoot(6))),
+            ("set root=h", Err(LineError::Set)),
+            ("scale", Ok(Line::PickScale)),
+            ("scale fit", Ok(Line::FitToScale)),
+            ("scale nope", Err(LineError::Scale)),
+            ("set limiter=off", Ok(Line::SetLimiter(false))),
+            ("set limiter=on", Ok(Line::SetLimiter(true))),
+            ("set limiter=2", Err(LineError::Set)),
+            ("set other=1", Err(LineError::Set)),
+            // Read-only is switched by name, as Vim's `readonly` is.
+            ("set readonly", Ok(Line::ReadOnly(true))),
+            ("set ro", Ok(Line::ReadOnly(true))),
+            ("set readwrite", Ok(Line::ReadOnly(false))),
+            ("set rw", Ok(Line::ReadOnly(false))),
+            ("set noreadonly", Ok(Line::ReadOnly(false))),
+            ("set noro", Ok(Line::ReadOnly(false))),
+            ("set noreadonlyx", Err(LineError::Set)),
+            ("set no", Err(LineError::Set)),
+            ("set norw", Err(LineError::Set)),
+            ("name bd", Ok(Line::Name(Some("BD".into())))),
+            ("name", Ok(Line::Name(None))),
+            // A group's name parses, and only a group's track takes it.
+            ("name drums", Ok(Line::Name(Some("DRUMS".into())))),
+            ("name 1A", Ok(Line::Name(Some("1A".into())))),
+            ("name drumss", Err(LineError::Name)),
+            ("name B-", Err(LineError::Name)),
+            ("sample a b.wav", Ok(Line::Sample(Some("a b.wav".into())))),
+            ("sample", Ok(Line::Sample(None))),
+            ("e", Ok(edit(None, false))),
+            ("e!", Ok(edit(None, true))),
+            ("e! songs/two", Ok(edit(Some("songs/two"), true))),
+            ("new", Ok(new(None, false))),
+            ("new! songs/three", Ok(new(Some("songs/three"), true))),
+            ("kit", Ok(Line::Kit(None))),
+            ("kit 909", Ok(Line::Kit(Some("909".into())))),
+            ("kit 909 all", Ok(Line::KitTracks("909".into()))),
+            ("bank", Ok(Line::Bank)),
+            ("bank clean", Ok(Line::BankClean)),
+            ("bank all", Err(LineError::Bank)),
+            ("normalize -0.3", Ok(Line::Normalize(Some(-30)))),
+            ("normalize", Ok(Line::Normalize(Some(0)))),
+            ("normalize off", Ok(Line::Normalize(None))),
+            ("normalize 1", Err(LineError::Normalize)),
+            ("normalize -61", Err(LineError::Normalize)),
+            ("normalize loud", Err(LineError::Normalize)),
+            ("trim", Ok(Line::Trim)),
+            ("record", Ok(record(None, None))),
+            (
+                "record bar 3",
+                Ok(record(
+                    Some(RecordWhat::Track(3)),
+                    Some(RecordQuantise::Bar),
+                )),
+            ),
+            (
+                "record input now",
+                Ok(record(Some(RecordWhat::Input), Some(RecordQuantise::Now))),
+            ),
+            ("record stop", Ok(Line::RecordStop)),
+            ("record cancel", Ok(Line::RecordCancel)),
+            ("record master input", Err(LineError::Record)),
+            ("record loud", Err(LineError::Record)),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(parse(input), expected, "{input}");
+        }
+        // These fail, whatever the error.
         for wrong in [
+            "render a.wav --rows 0",
+            "seed x",
+            // A groove replaces it.
+            "tswing 60",
+            "reset 0",
+            "reset",
             "len 0x",
             "len 0x0",
             "len 0",
@@ -1652,142 +1713,6 @@ mod tests {
         ] {
             assert!(parse(wrong).is_err(), "{wrong}");
         }
-        assert_eq!(parse("tvol C0"), Ok(Line::TrackLevel(0xC0)));
-        assert_eq!(parse("tvol"), Err(LineError::TrackLevel));
-        assert_eq!(parse("tvol 100"), Err(LineError::TrackLevel));
-        assert_eq!(parse("track add"), Ok(Line::TrackAdd(1)));
-        assert_eq!(parse("track add 4"), Ok(Line::TrackAdd(4)));
-        assert_eq!(parse("track del"), Ok(Line::TrackDel));
-        assert_eq!(parse("set skip=8"), Ok(Line::SetSkip(8)));
-        assert_eq!(parse("set skip"), Err(LineError::Set));
-        assert_eq!(
-            parse("set scale=dorian"),
-            Ok(Line::SetScale(ScaleKind::Dorian))
-        );
-        assert_eq!(
-            parse("set scale=harmonic minor"),
-            Ok(Line::SetScale(ScaleKind::HarmonicMinor))
-        );
-        assert_eq!(
-            parse("set scale=Minor-Pentatonic"),
-            Ok(Line::SetScale(ScaleKind::MinorPentatonic))
-        );
-        assert_eq!(parse("set scale=on"), Ok(Line::ScaleOn(true)));
-        assert_eq!(parse("set scale=off"), Ok(Line::ScaleOn(false)));
-        assert_eq!(parse("set scale=nope"), Err(LineError::Set));
-        assert_eq!(parse("set root=F#"), Ok(Line::SetRoot(6)));
-        assert_eq!(parse("set root=h"), Err(LineError::Set));
-        assert_eq!(parse("scale"), Ok(Line::PickScale));
-        assert_eq!(parse("scale fit"), Ok(Line::FitToScale));
-        assert_eq!(parse("scale nope"), Err(LineError::Scale));
-        assert_eq!(parse("set limiter=off"), Ok(Line::SetLimiter(false)));
-        assert_eq!(parse("set limiter=on"), Ok(Line::SetLimiter(true)));
-        assert_eq!(parse("set limiter=2"), Err(LineError::Set));
-        assert_eq!(parse("set other=1"), Err(LineError::Set));
-        // Read-only is switched by name, as Vim's `readonly` is.
-        for (word, on) in [
-            ("readonly", true),
-            ("ro", true),
-            ("readwrite", false),
-            ("rw", false),
-            ("noreadonly", false),
-            ("noro", false),
-        ] {
-            assert_eq!(
-                parse(&format!("set {word}")),
-                Ok(Line::ReadOnly(on)),
-                "{word}"
-            );
-        }
-        assert_eq!(parse("set noreadonlyx"), Err(LineError::Set));
-        assert_eq!(parse("set no"), Err(LineError::Set));
-        assert_eq!(parse("set norw"), Err(LineError::Set));
-        assert_eq!(parse("track add 0"), Err(LineError::Track));
-        assert_eq!(parse("name bd"), Ok(Line::Name(Some("BD".into()))));
-        assert_eq!(parse("name"), Ok(Line::Name(None)));
-        // A group's name parses, and only a group's track takes it.
-        assert_eq!(parse("name drums"), Ok(Line::Name(Some("DRUMS".into()))));
-        assert_eq!(parse("name 1A"), Ok(Line::Name(Some("1A".into()))));
-        assert_eq!(parse("name drumss"), Err(LineError::Name));
-        assert_eq!(parse("name B-"), Err(LineError::Name));
-        assert_eq!(
-            parse("sample a b.wav"),
-            Ok(Line::Sample(Some("a b.wav".into())))
-        );
-        assert_eq!(parse("sample"), Ok(Line::Sample(None)));
-        assert_eq!(
-            parse("e"),
-            Ok(Line::Edit {
-                path: None,
-                force: false
-            })
-        );
-        assert_eq!(
-            parse("e!"),
-            Ok(Line::Edit {
-                path: None,
-                force: true
-            })
-        );
-        assert_eq!(
-            parse("e! songs/two"),
-            Ok(Line::Edit {
-                path: Some("songs/two".into()),
-                force: true
-            })
-        );
-        assert_eq!(
-            parse("new"),
-            Ok(Line::New {
-                path: None,
-                force: false
-            })
-        );
-        assert_eq!(
-            parse("new! songs/three"),
-            Ok(Line::New {
-                path: Some("songs/three".into()),
-                force: true
-            })
-        );
-        assert_eq!(parse("kit"), Ok(Line::Kit(None)));
-        assert_eq!(parse("kit 909"), Ok(Line::Kit(Some("909".into()))));
-        assert_eq!(parse("kit 909 all"), Ok(Line::KitTracks("909".into())));
-        assert_eq!(parse("bank"), Ok(Line::Bank));
-        assert_eq!(parse("bank clean"), Ok(Line::BankClean));
-        assert_eq!(parse("bank all"), Err(LineError::Bank));
-        assert_eq!(parse("normalize -0.3"), Ok(Line::Normalize(Some(-30))));
-        assert_eq!(parse("normalize"), Ok(Line::Normalize(Some(0))));
-        assert_eq!(parse("normalize off"), Ok(Line::Normalize(None)));
-        assert_eq!(parse("normalize 1"), Err(LineError::Normalize));
-        assert_eq!(parse("normalize -61"), Err(LineError::Normalize));
-        assert_eq!(parse("normalize loud"), Err(LineError::Normalize));
-        assert_eq!(parse("trim"), Ok(Line::Trim));
-        assert_eq!(
-            parse("record"),
-            Ok(Line::Record {
-                what: None,
-                quantise: None
-            })
-        );
-        assert_eq!(
-            parse("record bar 3"),
-            Ok(Line::Record {
-                what: Some(RecordWhat::Track(3)),
-                quantise: Some(RecordQuantise::Bar)
-            })
-        );
-        assert_eq!(
-            parse("record input now"),
-            Ok(Line::Record {
-                what: Some(RecordWhat::Input),
-                quantise: Some(RecordQuantise::Now)
-            })
-        );
-        assert_eq!(parse("record stop"), Ok(Line::RecordStop));
-        assert_eq!(parse("record cancel"), Ok(Line::RecordCancel));
-        assert_eq!(parse("record master input"), Err(LineError::Record));
-        assert_eq!(parse("record loud"), Err(LineError::Record));
     }
 
     #[test]
