@@ -174,4 +174,12 @@ impl Page for MixerPage {
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
         crate::views::mixer::draw(frame, area, self, ctx);
     }
+
+    fn column(&self, ctx: &Ctx) -> String {
+        let control = self.control_here(ctx);
+        ctx.track_here().map_or_else(
+            || control.label().to_owned(),
+            |track| control.name_on(track).to_owned(),
+        )
+    }
 }

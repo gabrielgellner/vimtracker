@@ -34,9 +34,10 @@ use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
 use vt_model::selection::{Extent, Field};
 use vt_model::song::{ChainEntry, Phrase, Section, Song, Track};
-use vt_model::step::Step;
+use vt_model::step::{FxSlot, Gate, Step};
 
 use crate::app::{App, AudioState, Cursor, Entry, Modes, Selection, TrackLive, which_key_due};
+use crate::audio::SlowdownReadout;
 use crate::folding::Folds;
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
@@ -71,8 +72,8 @@ pub enum Outcome {
 /// the mixer, the project page's two sub-pages and the sample page (#739).
 pub(crate) trait Page {
     /// Its rows of the binding table, as `(keys, Cmd, description)`, in the order which-key and
-    /// `Space k` list them. The table is still assembled in one place, `input::bindings`, under
-    /// the page's mode.
+    /// `Space k` list them. The table is assembled in one place, `input::bindings`, under the
+    /// page's mode.
     const KEYS: &'static [(&'static str, Cmd, &'static str)];
 
     /// What its drawing notes for after the frame, such as where it drew what the terminal places
@@ -85,6 +86,15 @@ pub(crate) trait Page {
 
     /// Draw it.
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) -> Self::Drawn;
+
+    /// The name of what the cursor is on, which the status line shows.
+    fn column(&self, ctx: &Ctx) -> String;
+
+    /// What the status line says under it while nothing else is said there, such as what the keys
+    /// do in a mode of the page's own and how to leave it, or nothing.
+    fn hint(&self, _ctx: &Ctx) -> Option<String> {
+        None
+    }
 
     /// What pictures it shows this frame, as data, for `Graphics` to send before ratatui draws.
     /// Most pages have none.
@@ -124,7 +134,7 @@ pub struct PageState<'a> {
     audio: &'a AudioState,
     wheel: WheelSetting,
     cpu_percent: u64,
-    slowed: bool,
+    slowdown: &'a SlowdownReadout,
 }
 
 /// What a page is given to run a key: the shared services, to read and change, and the modes that
@@ -170,13 +180,12 @@ impl App {
             audio: &self.audio,
             wheel: self.wheel.setting,
             cpu_percent: self.cpu.percent(),
-            slowed: self.slowdown.slowed(),
+            slowdown: &self.slowdown,
         }
     }
 
     /// Run a command on the page on screen, the second place a key goes in [`App::run`]'s order:
-    /// through [`Page::key`] on a page that's a component, and then `App`'s commands across
-    /// pages for what it passed back, or the page's own `run_*` on the pages that aren't yet.
+    /// through its [`Page::key`], and then what it passes back through `App`'s own for the page.
     /// Returns false if it's none of theirs.
     pub(crate) fn run_page(&mut self, cmd: Cmd) -> bool {
         match self.modes.view {
@@ -210,19 +219,12 @@ impl App {
             },
             _ => self.track_page.key(cmd, times, &mut ctx),
         };
-        match outcome {
-            Outcome::Done => true,
-            Outcome::Refused(why) => {
-                self.services.status = why.to_owned();
-                true
-            }
-            Outcome::Passed if self.run_across_pages(cmd, times) => true,
-            Outcome::Passed => {
-                self.track_page = kept;
-                self.modes.count = count;
-                false
-            }
+        if self.settled(outcome, true) || self.run_across_pages(cmd, times) {
+            return true;
         }
+        self.track_page = kept;
+        self.modes.count = count;
+        false
     }
 
     /// Run a command on the project page's Song or Audio sub-page: the page's own key, a move,
@@ -239,19 +241,11 @@ impl App {
             View::Audio => self.audio_page.key(cmd, times, &mut ctx),
             _ => self.project_page.key(cmd, times, &mut ctx),
         };
-        match outcome {
-            Outcome::Done => {
-                self.modes.count = None;
-                true
+        self.settled(outcome, true)
+            || match self.modes.view {
+                View::Audio => self.run_audio_page(cmd),
+                _ => self.run_project_page(cmd),
             }
-            Outcome::Refused(why) => {
-                self.modes.count = None;
-                self.services.status = why.to_owned();
-                true
-            }
-            Outcome::Passed if self.modes.view == View::Audio => self.run_audio_page(cmd),
-            Outcome::Passed => self.run_project_page(cmd),
-        }
     }
 
     /// Run a command on the sample page: the page's own key, and then what it passes back, which
@@ -274,18 +268,8 @@ impl App {
             services: &mut self.services,
             modes: &self.modes,
         };
-        match self.sample_page.key(cmd, times, &mut ctx) {
-            Outcome::Done => {
-                self.modes.count = None;
-                true
-            }
-            Outcome::Refused(why) => {
-                self.modes.count = None;
-                self.services.status = why.to_owned();
-                true
-            }
-            Outcome::Passed => self.run_sample_passed(cmd, &shown),
-        }
+        let outcome = self.sample_page.key(cmd, times, &mut ctx);
+        self.settled(outcome, true) || self.run_sample_passed(cmd, &shown)
     }
 
     /// Run a command in the song view: the view's own key, and then what it passes back, a move
@@ -297,18 +281,8 @@ impl App {
             services: &mut self.services,
             modes: &self.modes,
         };
-        match self.song_view.key(cmd, times, &mut ctx) {
-            Outcome::Done => {
-                self.modes.count = None;
-                true
-            }
-            Outcome::Refused(why) => {
-                self.modes.count = None;
-                self.services.status = why.to_owned();
-                true
-            }
-            Outcome::Passed => self.run_song_passed(cmd),
-        }
+        let outcome = self.song_view.key(cmd, times, &mut ctx);
+        self.settled(outcome, true) || self.run_song_passed(cmd)
     }
 
     /// Run a command in the chain view: the view's own key, and then what it passes back, a move
@@ -320,18 +294,8 @@ impl App {
             services: &mut self.services,
             modes: &self.modes,
         };
-        match self.chain_view.key(cmd, times, &mut ctx) {
-            Outcome::Done => {
-                self.modes.count = None;
-                true
-            }
-            Outcome::Refused(why) => {
-                self.modes.count = None;
-                self.services.status = why.to_owned();
-                true
-            }
-            Outcome::Passed => self.run_chain_passed(cmd),
-        }
+        let outcome = self.chain_view.key(cmd, times, &mut ctx);
+        self.settled(outcome, true) || self.run_chain_passed(cmd)
     }
 
     /// Run a command in the phrase view: the view's own key, a move or one over the view, or
@@ -344,9 +308,17 @@ impl App {
             services: &mut self.services,
             modes: &self.modes,
         };
-        match self.phrase_view.key(cmd, times, &mut ctx) {
+        let outcome = self.phrase_view.key(cmd, times, &mut ctx);
+        self.settled(outcome, PhraseView::takes_count(cmd))
+    }
+
+    /// Settle what a page's key did: a key it did takes the count if `takes_count` says so, and
+    /// one it refused takes it and says why on the status line. Returns false for a key it passed
+    /// back, for the next in the order to have.
+    pub(crate) fn settled(&mut self, outcome: Outcome, takes_count: bool) -> bool {
+        match outcome {
             Outcome::Done => {
-                if PhraseView::takes_count(cmd) {
+                if takes_count {
                     self.modes.count = None;
                 }
                 true
@@ -636,7 +608,13 @@ impl<'a> Ctx<'a> {
 
     /// Whether power saving has slowed the CPU, so the figure is more than it would be.
     pub fn slowed(&self) -> bool {
-        self.page.slowed
+        self.page.slowdown.slowed()
+    }
+
+    /// What the leaf before the CPU figure means, while it shows, as `slowed ×3.6 by power saving,
+    /// about 8% at full speed`.
+    pub fn slowed_meaning(&self) -> Option<String> {
+        self.page.slowdown.explanation(self.page.cpu_percent)
     }
 
     /// What the sample page shows for the cursor's track, or why it can't show it: the entry the
@@ -675,6 +653,16 @@ impl<'a> Ctx<'a> {
     /// The contents of the phrase under the cursor.
     pub fn phrase_here(&self) -> Option<&'a Arc<Phrase>> {
         self.services.phrase_here()
+    }
+
+    /// An FX slot of the row under the cursor.
+    pub fn slot_here(&self, slot: usize) -> Option<FxSlot> {
+        self.services.current_slot(slot)
+    }
+
+    /// The gate cell under the cursor.
+    pub fn gate_here(&self) -> Option<Gate> {
+        self.services.current_gate()
     }
 
     /// Where the cursor's phrase's loop sits.

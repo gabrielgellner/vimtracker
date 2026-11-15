@@ -15,7 +15,7 @@ use vt_model::playable::{Playable, Span};
 use crate::app::{App, Momentary};
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
-use crate::sample_page::Shown;
+use crate::sample_page::{SamplePage, Shown};
 
 /// The keys that play slices in the keys mode, by row: the home row from `a`, then the row above
 /// from `q`, eight each, so the home row plays `00` to `07` and the row above `08` to `0F`. That's
@@ -181,27 +181,6 @@ impl App {
         self.services.status.clear();
     }
 
-    /// What the keys mode's keys play, and how to leave it, for under the status line while it's
-    /// on. `h`, `j` and `k` are pads here, so it says that `Esc` gives them back.
-    pub fn pads_hint(&self, shown: &Shown) -> String {
-        let from = self.sample_page.pads_from;
-        let count = shown.slice_count();
-        let last = (from + PADS).min(count).saturating_sub(1);
-        let rows = PAD_ROWS.map(|row| row.chars().map(String::from).collect::<Vec<_>>().join(" "));
-        if count <= PADS {
-            format!(
-                "{} play slices 00 to 07, {} 08 to 0F; Esc leaves, for h j k l to move again",
-                rows[0], rows[1]
-            )
-        } else {
-            format!(
-                "{} {} play slices {from:02X} to {last:02X}; < > the next or last {PADS}, Esc \
-                 leaves, for h j k l to move again",
-                rows[0], rows[1]
-            )
-        }
-    }
-
     /// A key in the sample page's keys mode. The pads play their slices, `<` and `>` go a page of
     /// them back or on, as they change octave on the track page's keyboard, `Esc` leaves, and
     /// every other key works on the page as it does, so `;` plays the slice the cursor is on.
@@ -265,5 +244,28 @@ impl App {
     /// played.
     pub fn sample_playheads(&self, shown: &Shown) -> Vec<u64> {
         self.sample_page.playheads(shown, &self.services.playheads)
+    }
+}
+
+impl SamplePage {
+    /// What the keys mode's keys play, and how to leave it, for under the status line while it's
+    /// on. `h`, `j` and `k` are pads here, so it says that `Esc` gives them back.
+    pub(crate) fn pads_hint(&self, shown: &Shown) -> String {
+        let from = self.pads_from;
+        let count = shown.slice_count();
+        let last = (from + PADS).min(count).saturating_sub(1);
+        let rows = PAD_ROWS.map(|row| row.chars().map(String::from).collect::<Vec<_>>().join(" "));
+        if count <= PADS {
+            format!(
+                "{} play slices 00 to 07, {} 08 to 0F; Esc leaves, for h j k l to move again",
+                rows[0], rows[1]
+            )
+        } else {
+            format!(
+                "{} {} play slices {from:02X} to {last:02X}; < > the next or last {PADS}, Esc \
+                 leaves, for h j k l to move again",
+                rows[0], rows[1]
+            )
+        }
     }
 }

@@ -584,4 +584,39 @@ impl Page for PhraseView {
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
         crate::views::phrase::draw(frame, area, self, ctx);
     }
+
+    fn column(&self, ctx: &Ctx) -> String {
+        match ctx.cursor().field {
+            Field::Note => "Note".to_owned(),
+            Field::Velocity => "Velocity".to_owned(),
+            Field::Nudge => "Nudge".to_owned(),
+            Field::Gate => "Gate".to_owned(),
+            Field::GateLength if ctx.gate_here().and_then(|gate| gate.length).is_some() => {
+                "Gate length".to_owned()
+            }
+            Field::GateLength => "Gate length, the track's".to_owned(),
+            Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
+                fx_name(ctx, slot)
+            }
+        }
+    }
+}
+
+/// An FX cell's name: what it locks, by its group and name, and whether it's on this track, or
+/// which part of an empty cell the cursor is on.
+fn fx_name(ctx: &Ctx, slot: usize) -> String {
+    let command = ctx.slot_here(slot).and_then(|cell| cell.command);
+    match (command, ctx.track_here()) {
+        (Some(FxCommand::Set(id)), Some(track)) if id.exists_on(track) => {
+            format!("{}: {}", id.group(), id.name())
+        }
+        (Some(FxCommand::Set(id)), _) => {
+            format!("{}: {}, not on this track", id.group(), id.name())
+        }
+        (Some(event), _) => event.meaning(),
+        (None, _) if matches!(ctx.cursor().field, Field::FxValue(_)) => {
+            format!("FX{} value", slot + 1)
+        }
+        (None, _) => format!("FX{} command", slot + 1),
+    }
 }

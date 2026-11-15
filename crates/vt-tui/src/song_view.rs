@@ -300,6 +300,39 @@ impl Page for SongView {
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
         crate::views::song::draw(frame, area, self, ctx);
     }
+
+    fn column(&self, ctx: &Ctx) -> String {
+        match self.column {
+            LENGTH_COLUMN => "Length".to_owned(),
+            REPEAT_COLUMN => "Rpt".to_owned(),
+            START_COLUMN => "Start".to_owned(),
+            column => {
+                let index = column - COLUMNS_BEFORE_TRACKS;
+                let name = match ctx.song().tracks.get(index) {
+                    Some(track) if !track.is_sound() => track.kind.title().to_owned(),
+                    _ => format!("Track {:02}", index + 1),
+                };
+                let label = self.label(ctx);
+                if label.is_empty() {
+                    format!("{name} chain")
+                } else {
+                    format!("{name} chain: {label}")
+                }
+            }
+        }
+    }
+}
+
+impl SongView {
+    /// The label of the chain under the cursor, or nothing.
+    fn label<'a>(&self, ctx: &Ctx<'a>) -> &'a str {
+        self.track()
+            .and_then(|track| {
+                let chain = ctx.section_here()?.chains.get(track).copied().flatten()?;
+                ctx.song().tracks.get(track)?.chains.get(&chain)
+            })
+            .map_or("", |chain| chain.label.as_str())
+    }
 }
 
 impl App {
@@ -419,17 +452,6 @@ impl App {
             .get(track)
             .copied()
             .flatten()
-    }
-
-    /// The label of the chain under the cursor, or nothing.
-    pub fn song_label(&self) -> &str {
-        self.song_view
-            .track()
-            .and_then(|track| {
-                let chain = self.cell_chain(track)?;
-                self.song().tracks.get(track)?.chains.get(&chain)
-            })
-            .map_or("", |chain| chain.label.as_str())
     }
 
     /// `K`: list this track's chains to choose from, with the one in this cell highlighted.

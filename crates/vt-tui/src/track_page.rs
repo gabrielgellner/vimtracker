@@ -705,6 +705,19 @@ impl crate::page::Page for TrackPage {
         crate::views::track::draw(frame, area, self, ctx)
     }
 
+    fn column(&self, ctx: &Ctx) -> String {
+        let track = ctx.track_here();
+        let control = self.control(track);
+        track.map_or_else(
+            || control.label().to_owned(),
+            |track| control.name_on(track).to_owned(),
+        )
+    }
+
+    fn hint(&self, ctx: &Ctx) -> Option<String> {
+        self.zoom_hint(ctx)
+    }
+
     fn panels(&self, ctx: &Ctx) -> Vec<PanelWant> {
         self.pictures(ctx)
     }
@@ -793,13 +806,12 @@ impl App {
             }
             _ => {
                 let control = self.track_control();
-                match self
+                let outcome = self
                     .track_page
-                    .edit(cmd, times, control, &mut self.services)
-                {
-                    Outcome::Done => {}
-                    Outcome::Refused(why) => self.services.status = why.to_owned(),
-                    Outcome::Passed => return false,
+                    .edit(cmd, times, control, &mut self.services);
+                // The count was taken before the page had the key.
+                if !self.settled(outcome, false) {
+                    return false;
                 }
             }
         }

@@ -419,6 +419,10 @@ impl Page for ProjectPage {
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
         crate::views::project::draw(frame, area, self, ctx);
     }
+
+    fn column(&self, ctx: &Ctx) -> String {
+        self.control(ctx.song()).label().to_owned()
+    }
 }
 
 impl App {
