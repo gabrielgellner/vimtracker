@@ -20,7 +20,7 @@
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use super::virtual_analog::{Settings, next_blep, this_blep};
-use crate::dsp::blocks::plaits_parts::{Limiter, Svf, random, tan_accurate};
+use crate::dsp::blocks::plaits_parts::{Limiter, Svf, tan_accurate};
 use crate::rng::Pcg32;
 use crate::voice::SynthEngine;
 
@@ -73,7 +73,7 @@ impl ClockedNoise {
             next_sample = 0.0;
             self.frequency += step;
             let frequency = self.frequency;
-            let raw_sample = random(rng) * 2.0 - 1.0;
+            let raw_sample = rng.unit() * 2.0 - 1.0;
             let raw_amount = (4.0 * (frequency - 0.25)).clamp(0.0, 1.0);
             self.phase += frequency;
             if self.phase >= 1.0 {

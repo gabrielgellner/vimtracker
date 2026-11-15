@@ -30,6 +30,18 @@ impl Pcg32 {
         shifted.rotate_right((old >> 59) as u32)
     }
 
+    /// The next value as noise on `0..1`.
+    #[inline]
+    pub(crate) fn unit(&mut self) -> f32 {
+        self.next_u32() as f32 / 4_294_967_296.0
+    }
+
+    /// The next value as noise on `-1..1`.
+    #[inline]
+    pub(crate) fn bipolar(&mut self) -> f32 {
+        self.next_u32() as f32 / 2_147_483_648.0 - 1.0
+    }
+
     /// Whether a chance of `value` out of 255 comes up. `00` never does and `FF` always does.
     pub(crate) fn chance(&mut self, value: u8) -> bool {
         (self.next_u32() % 255) < u32::from(value)

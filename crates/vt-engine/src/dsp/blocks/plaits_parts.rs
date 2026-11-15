@@ -23,19 +23,11 @@
 
 use std::f32::consts::PI;
 
-use crate::rng::Pcg32;
-
 use super::clip::soft_limit;
 use super::flush::Tiny;
 use super::line::hermite_soras;
 use super::one_pole;
 use super::sides::SameBits;
-
-/// Noise on `0..1`.
-#[inline]
-pub(in crate::dsp) fn random(rng: &mut Pcg32) -> f32 {
-    rng.next_u32() as f32 / 4_294_967_296.0
-}
 
 /// `tan(pi f)` closely enough for frequencies below about 8 kHz.
 #[inline]

@@ -778,7 +778,7 @@ mod tests {
         (0..frames)
             .map(|frame| {
                 let since = (frame % (rate as usize / 4)) as f32 / rate as f32;
-                let noise = rng.next_u32() as f32 / 2_147_483_648.0 - 1.0;
+                let noise = rng.bipolar();
                 noise * level * (-since / 0.02).exp()
             })
             .collect()

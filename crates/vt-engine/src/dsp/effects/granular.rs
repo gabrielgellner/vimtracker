@@ -39,6 +39,7 @@ use vt_model::insert::{
 
 use crate::dsp::blocks::line::hermite;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::blocks::xorshift::Xorshift;
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::dsp::filters::filter::soft_clip;
@@ -482,7 +483,7 @@ pub(crate) struct Granular {
     peak: f32,
     peak_smoothed: f32,
     release: f32,
-    random_state: u32,
+    random_state: Xorshift,
     rate: u32,
     smoothing: f32,
 }
@@ -519,7 +520,7 @@ impl Granular {
             peak: 0.5,
             peak_smoothed: 0.5,
             release: 1.0 / (rate_f * LIMITER_RELEASE_SECONDS),
-            random_state: 0x2545_F491,
+            random_state: Xorshift::new(0x2545_F491),
             rate,
             smoothing: coefficient(rate),
         };
@@ -578,15 +579,6 @@ impl Granular {
         self.random.settle();
     }
 
-    /// A number from 0 to 1 that's hard to guess, the same each time it starts.
-    #[inline]
-    fn uniform(&mut self) -> f32 {
-        self.random_state ^= self.random_state << 13;
-        self.random_state ^= self.random_state >> 17;
-        self.random_state ^= self.random_state << 5;
-        self.random_state as f32 / u32::MAX as f32
-    }
-
     /// Record a frame, unless it's frozen. Just after freezing it keeps a little of what comes in,
     /// and when it records again it fades from that into what's coming in, so where the
     /// recording stopped and starts again joins smoothly.
@@ -640,7 +632,7 @@ impl Granular {
         self.trigger.phase -= 1.0;
         let late = self.trigger.phase / step;
         if random {
-            self.trigger.ratio = -1.0 / log_one_minus(0.1 + 0.9 * self.uniform());
+            self.trigger.ratio = -1.0 / log_one_minus(0.1 + 0.9 * self.random_state.unit());
         }
         Some(late)
     }
@@ -653,7 +645,7 @@ impl Granular {
         if random <= 0.0 {
             return base;
         }
-        (base + (self.uniform() - base) * random).clamp(0.0, 1.0)
+        (base + (self.random_state.unit() - base) * random).clamp(0.0, 1.0)
     }
 
     /// Start a grain, a share of a frame late, in the place of the best one to steal.
@@ -672,7 +664,7 @@ impl Granular {
         let playing = self.player.playing() + 1;
         let amplitude = 1.0 / (playing as f32).sqrt();
         let spread = 0.5 * playing as f32 * self.spread.value / 255.0;
-        let (u, v) = (self.uniform(), self.uniform());
+        let (u, v) = (self.random_state.unit(), self.random_state.unit());
         let pan = 0.5 + (u - 0.5) * (spread * v).min(1.0);
 
         let (longest, safety) = (self.player.longest(), self.player.safety());
