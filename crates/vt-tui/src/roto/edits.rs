@@ -11,22 +11,20 @@
 //! no undo step.
 
 use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Reset};
-use vt_model::action::{Action, TrackControl};
+use vt_model::action::Action;
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::{Adsr, Ahd, Curve, Lpg, MAX_RATCHET};
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
-use vt_model::lfo::{Fade, LfoMode, Rate, Shape, note_rates};
+use vt_model::lfo::{Rate, note_rates};
 use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot, Polarity};
 use vt_model::settings::{Kind, SettingId, gate_percent, gate_value};
 use vt_model::shape::GenParam;
 use vt_model::shape::params::Units as GenUnits;
 use vt_model::song::{FilterType, Machine, Role, Song, Track, trim_text};
 use vt_model::speed::Speed;
-use vt_model::steps::{Loop, MAX_MUTATE, STEPS, StepRate, StepsMode};
-use vt_model::tracking::Source;
+use vt_model::steps::StepRate;
 use vt_roto::live::{share_of, step_at};
 
 use crate::shaping::with_live;
@@ -210,20 +208,7 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
             })
         }
         Control::Base(which) => {
-            let coarse = match which {
-                TrackControl::Cutoff => track.cutoff,
-                TrackControl::Resonance => track.resonance,
-                TrackControl::Pan => track.pan,
-                TrackControl::SendA => track.send_a,
-                TrackControl::SendB => track.send_b,
-                TrackControl::Drive => track.drive,
-                TrackControl::Punch => track.punch,
-                TrackControl::LowCut => track.low_cut,
-                TrackControl::HighCut => track.high_cut,
-                TrackControl::Pitch => track.pitch,
-                TrackControl::VelocityDelta => track.velocity_delta,
-                TrackControl::Quantise => track.quantise,
-            };
+            let coarse = track.control(which);
             let set = |value| Action::SetTrackBase {
                 track: at,
                 control: which,
@@ -319,83 +304,47 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
         Control::Mod(slot, field) => {
             let was = track.mods[slot];
             let mut modulator = was;
-            let (adsr, ahd, drum, lpg, lfo) = (
-                &mut modulator.adsr,
-                &mut modulator.ahd,
-                &mut modulator.drum,
-                &mut modulator.lpg,
-                &mut modulator.lfo,
-            );
-            let ahd_kind = was.kind == ModKind::Ahd;
-            let drum_kind = was.kind == ModKind::Drum;
-            let lpg_kind = was.kind == ModKind::Lpg;
-            let steps = &mut modulator.steps;
-            let numbers: Vec<u8> = (0..STEPS as u8).collect();
             match field {
                 // What a slot is, the app's alone.
-                ModField::Type => return None,
-                ModField::Rate if was.kind == ModKind::Steps => {
-                    steps.rate = pick(&StepRate::ALL, position);
-                }
-                ModField::Length => steps.length = pick(&numbers, position) + 1,
-                ModField::Start => steps.start = pick(&numbers, position),
-                ModField::Loop => steps.looping = pick(&Loop::ALL, position),
-                ModField::Mutate => steps.mutate = whole(position, u32::from(MAX_MUTATE)) as u8,
-                ModField::Smooth => steps.smooth = depth_at(position),
-                ModField::Step(at) => steps.values[usize::from(at)] = depth_at(position),
-                ModField::Low | ModField::High => {
-                    let tracking = &mut modulator.track;
-                    let (lowest, highest) = tracking.source.span();
-                    let at = lowest + whole(position, u32::from(highest - lowest)) as u8;
-                    let bounds = tracking.bounds_mut();
-                    if field == ModField::Low {
-                        bounds.low = at;
-                    } else {
-                        bounds.high = at;
-                    }
-                }
-                ModField::Mode => match was.kind {
-                    ModKind::Steps => steps.mode = pick(&StepsMode::ALL, position),
-                    ModKind::Track => modulator.track.source = pick(&Source::ALL, position),
-                    ModKind::Adsr => adsr.curve = pick(&Curve::ALL, position),
-                    ModKind::Ahd => ahd.curve = pick(&Curve::ALL, position),
-                    ModKind::Drum => drum.curve = pick(&Curve::ALL, position),
-                    ModKind::Lpg => return None,
-                    ModKind::Lfo => lfo.mode = pick(&LfoMode::ALL, position),
-                },
-                ModField::Polarity => modulator.polarity = Some(pick(&Polarity::ALL, position)),
+                ModField::Type | ModField::Reset => return None,
                 ModField::Destination => {
                     modulator.destination =
                         destination_at(SettingId::for_mod(track, slot), position);
                 }
-                ModField::Depth => modulator.depth = depth_at(position),
-                ModField::Attack if ahd_kind => ahd.attack_ms = time_at(position),
-                ModField::Attack if lpg_kind => lpg.attack_ms = time_at(position),
-                ModField::Decay if lpg_kind => lpg.decay_ms = time_at(position),
-                ModField::Colour => lpg.colour = whole(position, 0xFF) as u8,
-                ModField::Attack => adsr.attack_ms = time_at(position),
-                ModField::Decay if ahd_kind => ahd.decay_ms = time_at(position),
-                ModField::Decay if drum_kind => drum.decay_ms = time_at(position),
-                ModField::Peak => drum.peak_ms = time_at(position),
-                ModField::Body => drum.body = whole(position, 100) as u8,
-                ModField::Ratchet => {
-                    let strikes: Vec<u8> = (1..=MAX_RATCHET).collect();
-                    drum.ratchet = pick(&strikes, position);
+                ModField::Rate if was.kind == ModKind::Steps => {
+                    modulator.steps.rate = pick(&StepRate::ALL, position);
                 }
-                ModField::Decay => adsr.decay_ms = time_at(position),
+                ModField::Rate => modulator.lfo.rate = rate_at(was.lfo.rate, position),
                 ModField::Hold => {
                     let steps = hold_steps();
                     let at = whole(position, steps.len() as u32 - 1) as usize;
-                    ahd.hold = steps[at.min(steps.len() - 1)];
+                    modulator.ahd.hold = steps[at.min(steps.len() - 1)];
                 }
-                ModField::Release => adsr.release_ms = time_at(position),
-                ModField::Sustain => adsr.sustain = whole(position, 100) as u8,
-                ModField::Reset => return None,
-                ModField::Shape => lfo.shape = pick(&Shape::ALL, position),
-                ModField::Rate => lfo.rate = rate_at(lfo.rate, position),
-                ModField::Phase => lfo.phase = whole(position, 359) as u16,
-                ModField::Deform => lfo.deform = depth_at(position),
-                ModField::Fade => lfo.fade = pick(&Fade::ALL, position),
+                _ => {
+                    let (lowest, highest) = was.bounds(field)?;
+                    let top = (highest - lowest) as u32;
+                    let to = match field {
+                        ModField::Attack | ModField::Decay | ModField::Release | ModField::Peak => {
+                            i32::from(time_at(position))
+                        }
+                        ModField::Depth
+                        | ModField::Deform
+                        | ModField::Smooth
+                        | ModField::Step(_) => i32::from(depth_at(position)),
+                        // One of a list, or a count or a place, by the step the knob is on.
+                        ModField::Mode
+                        | ModField::Polarity
+                        | ModField::Shape
+                        | ModField::Fade
+                        | ModField::Loop
+                        | ModField::Length
+                        | ModField::Start
+                        | ModField::Ratchet => lowest + step_at(position, top as usize + 1) as i32,
+                        // A number from its lowest to its highest.
+                        _ => lowest + whole(position, top) as i32,
+                    };
+                    modulator.set_field(field, to);
+                }
             }
             changed(modulator, was, |modulator| Action::SetMod {
                 track: at,
@@ -480,43 +429,15 @@ fn switched(control: Control, at: usize, track: &Track, on: bool) -> Option<Acti
             slot,
             insert: track.inserts[slot].with_value(param, u8::from(on)),
         }),
-        Control::Mod(slot, ModField::Reset) if track.mods[slot].kind == ModKind::Ahd => {
+        Control::Mod(slot, ModField::Reset) => {
+            let mut modulator = track.mods[slot];
+            modulator.set_field(ModField::Reset, i32::from(on));
             Some(Action::SetMod {
                 track: at,
                 slot,
-                modulator: ModSlot {
-                    ahd: Ahd {
-                        reset: on,
-                        ..track.mods[slot].ahd
-                    },
-                    ..track.mods[slot]
-                },
+                modulator,
             })
         }
-        Control::Mod(slot, ModField::Reset) if track.mods[slot].kind == ModKind::Lpg => {
-            Some(Action::SetMod {
-                track: at,
-                slot,
-                modulator: ModSlot {
-                    lpg: Lpg {
-                        reset: on,
-                        ..track.mods[slot].lpg
-                    },
-                    ..track.mods[slot]
-                },
-            })
-        }
-        Control::Mod(slot, ModField::Reset) => Some(Action::SetMod {
-            track: at,
-            slot,
-            modulator: ModSlot {
-                adsr: Adsr {
-                    reset: on,
-                    ..track.mods[slot].adsr
-                },
-                ..track.mods[slot]
-            },
-        }),
         // A slot's polarity on its button, `Bi` lit.
         Control::Mod(slot, ModField::Polarity) => Some(Action::SetMod {
             track: at,

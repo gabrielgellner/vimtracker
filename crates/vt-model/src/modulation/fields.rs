@@ -7,6 +7,7 @@ use crate::constants::MAX_ENVELOPE_MS;
 use crate::envelope::{Curve, Hold, MAX_HOLD_MS, MAX_RATCHET};
 use crate::grid::Grid;
 use crate::lfo::{Fade, LfoMode, MAX_DEFORM, Shape};
+use crate::listed::Listed;
 use crate::settings::{MOD_OWN_SETTINGS, SettingId};
 use crate::steps::{Loop, MAX_MUTATE, MAX_STEP, STEPS, StepsMode};
 use crate::tracking::Source;
@@ -341,6 +342,27 @@ pub const MOD_SPECS: [ModSpec; ModKind::ALL.len()] = [
         grid: two([[Some(0), Some(1), Some(2)], [None; 3]]),
     },
 ];
+
+impl ModKind {
+    /// What its mode can be, by name and meaning, in the order [`ModSlot::field`] counts them: an
+    /// envelope's curves, an LFO's and Steps' modes, and Track's sources. None for a type without
+    /// one.
+    pub fn modes(self) -> Vec<(&'static str, &'static str)> {
+        fn named<X: Listed>() -> Vec<(&'static str, &'static str)> {
+            X::ALL
+                .iter()
+                .map(|each| (each.name(), each.meaning()))
+                .collect()
+        }
+        match self {
+            Self::Adsr | Self::Ahd | Self::Drum => named::<Curve>(),
+            Self::Lfo => named::<LfoMode>(),
+            Self::Steps => named::<StepsMode>(),
+            Self::Track => named::<Source>(),
+            Self::Lpg => Vec::new(),
+        }
+    }
+}
 
 /// A count as a setting's value, which every count here fits.
 fn whole(count: usize) -> i32 {

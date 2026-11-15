@@ -33,6 +33,7 @@ use crate::input::command_history::CommandHistory;
 use crate::input::keys::{KEYBOARD_FLAGS, Key};
 use crate::input::mode::{Mode, View};
 use crate::kitty::{self, Graphics, Placements, SampleLines};
+use crate::page::Page;
 use crate::places::RecentPlaces;
 use crate::theme;
 use crate::views;
@@ -592,7 +593,7 @@ impl App {
         if self.modes.view == View::Track && self.services.track_here().is_some() {
             let wants = self.track_page.panels(&self.ctx());
             let ids = graphics.panels(&wants, rate, out)?;
-            self.track_page.take_images(ids, &wants, rate);
+            self.track_page.take_panels(ids, &wants, rate);
             if let (Some(view), Some(track)) = (self.mapping.as_mut(), self.services.track_here()) {
                 view.images = graphics.panels(&view.panels(track), rate, out)?;
             }
