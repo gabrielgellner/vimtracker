@@ -2154,8 +2154,10 @@ fn each_tutorial_songs_patch_on_disk_is_what_its_builder_makes() {
     assert_eq!(files, wanted, "a file for each, and no others");
 }
 
+/// What's on disk is what the builders make (above), so each song is heard once, from its
+/// builder, in the test after this.
 #[test]
-fn every_tutorial_song_is_read_only_loads_plays_and_stays_below_full_scale() {
+fn every_tutorial_song_is_read_only_and_loads() {
     let mut names: Vec<String> = std::fs::read_dir(songs_folder())
         .unwrap()
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
@@ -2169,21 +2171,11 @@ fn every_tutorial_song_is_read_only_loads_plays_and_stays_below_full_scale() {
             song.bank.is_empty(),
             "{name} plays synths only, so it needs no samples"
         );
-        let version = Arc::new(Published::new(
-            Arc::new(song),
-            Arc::new(SamplePool::default()),
-        ));
-        let out = render_loop(version, RATE, RenderOptions::default());
-        assert!(out.len() > RATE as usize, "{name} plays for over a second");
-        let peak = out.iter().fold(0.0_f32, |peak, s| peak.max(s.abs()));
-        let rms = (out.iter().map(|s| s * s).sum::<f32>() / out.len() as f32).sqrt();
-        assert!(rms > 0.02, "{name} is nearly silent: RMS {rms}");
-        assert!(peak < 0.99, "{name} reaches full scale: peak {peak}");
     }
 }
 
 /// Their live generators rest, so the engine plays each as written, sample for sample as before
-/// it could render them (decision 288).
+/// it could render them (decision 288), and each plays for over a second, below full scale.
 #[test]
 fn every_tutorial_song_renders_as_it_did_before_the_engine_ran_generators() {
     for (name, song) in songs() {
@@ -2193,6 +2185,11 @@ fn every_tutorial_song_renders_as_it_did_before_the_engine_ran_generators() {
         ));
         let out = render_loop(version, RATE, RenderOptions::default());
         support::golden(&format!("tutorial-{name}"), &out);
+        assert!(out.len() > RATE as usize, "{name} plays for over a second");
+        let peak = out.iter().fold(0.0_f32, |peak, s| peak.max(s.abs()));
+        let rms = (out.iter().map(|s| s * s).sum::<f32>() / out.len() as f32).sqrt();
+        assert!(rms > 0.02, "{name} is nearly silent: RMS {rms}");
+        assert!(peak < 0.99, "{name} reaches full scale: peak {peak}");
     }
 }
 
