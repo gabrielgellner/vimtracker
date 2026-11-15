@@ -784,6 +784,10 @@ crates/vt-tui/src/
   screenshot.rs  screenshot/  the manual's screenshots as SVGs
 ```
 
+What only the crate uses is `pub(crate)`, and `lib.rs` warns on `unreachable_pub`, so the
+dead-code lint sees it; what the tests, the examples and `main.rs` use is `pub`, `App`'s fields
+among it, as the tests drive the program through them (#733).
+
 **`App`** (`app.rs`) is the program's state and what each key does. It needs no terminal, so tests
 drive it directly. It holds the shared services, `App::services`, beside the pages (`track_page`,
 `mixer_page`, `project_page`, `audio_page`, `sample_page`, `song_view`, `chain_view` and
@@ -901,8 +905,8 @@ over it. Each page's drawing is the `draw` module in its folder, as each overlay
 own. `widgets/` holds what pages are built from, so a new page uses them rather than working out
 its layout again:
 
-*   `table`: `Columns`, a page's fixed column widths and the room between them, for ratatui
-    `Table`s and for `Layout` cells that hold images.
+*   `table`: `Columns`, a page's fixed column widths side by side, for ratatui `Table`s, with
+    the cells of a row filled from the left and a value too long cut with `…`.
 *   `bar`: `ValueBar`, a value's bar. `meter`: a meter's cells.
 *   `setting`: a setting's name and value, drawn from a `CellLook`, a plain value the page builds
     with `Ctx::look` or `Ctx::look_on`: where the cursor is on the cell (`Focus`), the mode, what
@@ -1003,7 +1007,7 @@ entry, and `generators.rs`, which works through the live generators' sources and
     whatever the count; `stepped_fine` on the fine digits; `typed` for `i`'s text, by the view's
     `reads` and its `why_not`; `reset` for `x`; and `choices` for `K`'s list, which
     `pickers::choice_picker` opens, each item a `Pick::Param` that `set` writes. A Roto knob's
-    turn (`roto/edits.rs`) finds its value in the same view, `edit::shared` and `edit::places`,
+    turn (`roto/edits.rs`) finds its value in the same view, `edit::shared` and `edit::at_place`,
     and writes it with `set`. `editing.rs`, `typing.rs` and `pickers.rs` keep their own arms only
     for what the view doesn't write: the live mute and solo, the song's limiter (its status line),
     a sampler's sample, slice and tune, the groove a track follows, a gate back to the track's
