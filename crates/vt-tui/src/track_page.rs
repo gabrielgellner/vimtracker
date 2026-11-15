@@ -21,6 +21,7 @@ mod pictures;
 mod sound;
 pub(crate) mod tuning;
 mod typing;
+pub(crate) mod view;
 
 pub use controls::{AccumulatorField, ArpField, Control, ModField};
 pub use device::{
@@ -29,6 +30,7 @@ pub use device::{
 pub use fx::TakenInsert;
 pub(crate) use generators::macros_device;
 pub(crate) use modulation::modulator_bypassed;
+pub use view::{ParamView, Steps, set, view};
 
 use std::sync::Arc;
 
