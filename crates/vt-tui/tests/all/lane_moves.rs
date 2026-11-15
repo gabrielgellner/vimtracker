@@ -185,8 +185,8 @@ fn the_title_shows_what_a_lane_is_heard_as_and_its_own_and_the_playhead_the_row_
     app.services.apply(&moved);
     assert!(title(&app).contains("FX1:6/4 (4/2)"), "{}", title(&app));
     // Heard at 6 rows of 4 steps, step 18 is the lane's row 4, a copy of its first, row 2.
-    app.services.transport = Transport::Playing;
-    app.services.jam[0].chain = Some(0);
+    app.services.reported.transport = Transport::Playing;
+    app.services.reported.jam[0].chain = Some(0);
     app.set_playhead(18);
     app.phrase_view.top = 0;
     let buffer = screen(&app);

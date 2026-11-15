@@ -134,7 +134,7 @@ fn walk_steps_the_velocities_from_from_and_1_f_sums_its_depth() {
 #[test]
 fn a_walk_of_notes_steps_in_degrees_and_says_so() {
     let (mut app, _rt) = app_with(&[E; 16]);
-    app.services.scale.on = true;
+    app.services.live.scale.on = true;
     keys(&mut app, "vGSKwalk<Enter>");
     let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.verb(), "Generate");
@@ -142,7 +142,11 @@ fn a_walk_of_notes_steps_in_degrees_and_says_so() {
     // From the root, in the major scale, never more than two degrees, a major third, at a time.
     let walked = notes(&app);
     assert_eq!(walked[0], panel.shape.from);
-    assert!(walked.iter().all(|note| app.services.scale.contains(*note)));
+    assert!(
+        walked
+            .iter()
+            .all(|note| app.services.live.scale.contains(*note))
+    );
     assert!(walked.windows(2).all(|pair| pair[0].abs_diff(pair[1]) <= 4));
     let screen = drawn(&app);
     let text = screen.join("\n");
@@ -165,7 +169,7 @@ fn a_walk_of_notes_steps_in_degrees_and_says_so() {
     assert_eq!(app.overlays.shape.as_ref().unwrap().shape.walk.step, 3);
     // With the scale off, it's semitones.
     keys(&mut app, "<Enter>");
-    app.services.scale.on = false;
+    app.services.live.scale.on = false;
     keys(&mut app, "vGSKwalk<Enter>");
     assert!(drawn(&app).join("\n").contains("Step    2 semitones"));
 }

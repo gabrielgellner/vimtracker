@@ -88,6 +88,24 @@ pub struct Services {
     /// page's `h` and `l`, which speed up as they're held.
     pub(crate) repeating: bool,
     pub(crate) last_tick: Instant,
+    /// What the engine last said (#834).
+    pub reported: Reported,
+    /// The controls kept outside undo (#834).
+    pub live: Live,
+    pub(crate) fader_wishes: Vec<crate::services::automating::Wish>,
+    /// The main output's level.
+    pub meter: Meter,
+    /// The main output's recent sound, for the scope above the meter.
+    pub scope: crate::services::scope::Scope,
+    /// Each track's level, for the mixer.
+    pub track_meters: Vec<Meter>,
+    /// Changes each time random values are wanted anew: a shape's seed, a roll, a bloom's.
+    pub(crate) shape_seed: u64,
+}
+
+/// The mirror of the engine's last report: where it's playing and what it's playing with, for
+/// the pages to draw. Nothing here is undone or saved.
+pub struct Reported {
     pub transport: Transport,
     pub playhead: usize,
     /// How far through the playhead's step the engine last said it was, and when that was read.
@@ -100,60 +118,94 @@ pub struct Services {
     pub playing_section: usize,
     /// The sections being kept playing, set with `:loop`, and by the song view's `Enter` and `C`.
     pub looping: Option<SectionLoop>,
-    /// Whether the `:loop` is waiting for the launch grid's next line, as the engine last said.
+    /// Whether the `:loop` is waiting for the launch grid's next line.
     pub loop_waiting: bool,
-    /// Whether a realign is waiting for the launch grid, as the engine last said.
+    /// Whether a realign is waiting for the launch grid.
     pub realigning: bool,
-    /// Whether each track's own realign is waiting for the launch grid, as the engine last said.
+    /// Whether each track's own realign is waiting for the launch grid.
     pub realigning_tracks: [bool; MAX_TRACKS],
-    /// What each track is launched onto and cued to, as the engine last said.
+    /// What each track is launched onto and cued to.
     pub jam: Vec<JamState>,
-    /// Live mute and solo per track, kept outside undo and written to the song on save.
-    pub levels: Vec<TrackLive>,
     /// What the cursor's track is playing with right now, and the track the engine reports.
     pub live: Option<LiveValues>,
     /// What each mod slot moved each row's note by on `Pitch` the last time it was heard, and
-    /// what the row's own `RND`s moved it by, by track, phrase and row, in semitones, as the engine
-    /// reports them, for `Space g A` (#569, decision 323).
+    /// what the row's own `RND`s moved it by, by track, phrase and row, in semitones, for
+    /// `Space g A` (#569, decision 323).
     pub(crate) heard_pitches: HashMap<(usize, u32, usize), NotePitch>,
     /// The pass each live generator that varies was last heard on and the seeds it played, by
-    /// track, phrase and its place in the phrase's list, as the engine reports them, for
-    /// `Space g a` on the Gen page to keep (decision 293).
+    /// track, phrase and its place in the phrase's list, for `Space g a` on the Gen page to keep
+    /// (decision 293).
     pub(crate) heard_passes: HashMap<(usize, u32, usize), GenPass>,
     /// Each row of a live generator as it was last heard, by track, phrase, the generator's place
-    /// in the phrase's list and the stored row, where something moved it from what's written,
-    /// as the engine reports them: for the playhead's row, the overview, the phrase's `~` and the
-    /// status line to show, and `Space g a` and `Space g A` to keep (decision 300).
+    /// in the phrase's list and the stored row, where something moved it from what's written:
+    /// for the playhead's row, the overview, the phrase's `~` and the status line to show, and
+    /// `Space g a` and `Space g A` to keep (decision 300).
     pub(crate) heard_rows: HashMap<(usize, u32, usize, usize), GenRow>,
     /// Every track's faders as they're heard: where the steps have them, and which a hand has
-    /// taken over, as the engine last said, with what's been asked of it since (decision 174).
+    /// taken over, with what's been asked of it since in `Services::fader_wishes` (decision 174).
     pub(crate) faders: [Faders; MAX_TRACKS],
-    pub(crate) fader_wishes: Vec<crate::services::automating::Wish>,
     /// Where each voice playing a sample through the cursor's track is in it, for the sample
     /// page's playheads.
     pub playheads: [Option<Playhead>; PLAYHEADS],
-    /// The main output's level.
-    pub meter: Meter,
-    /// The main output's recent sound, for the scope above the meter.
-    pub scope: crate::services::scope::Scope,
-    /// Each track's level, for the mixer.
-    pub track_meters: Vec<Meter>,
-    /// The scale, kept outside undo and written to the song on save as the live mutes and solos
-    /// are, as it's for entering notes and isn't part of what's undone.
+}
+
+impl Default for Reported {
+    fn default() -> Self {
+        Self {
+            transport: Transport::Stopped,
+            playhead: 0,
+            progress: 0.0,
+            places: [TrackPlace::default(); MAX_TRACKS],
+            report_at: Instant::now(),
+            playing_section: 0,
+            looping: None,
+            loop_waiting: false,
+            realigning: false,
+            realigning_tracks: [false; MAX_TRACKS],
+            jam: vec![JamState::default(); MAX_TRACKS],
+            live: None,
+            heard_pitches: HashMap::new(),
+            heard_passes: HashMap::new(),
+            heard_rows: HashMap::new(),
+            faders: [Faders::default(); MAX_TRACKS],
+            playheads: [None; PLAYHEADS],
+        }
+    }
+}
+
+/// The live controls, kept outside undo: the mutes and solos, the scale, Insert's jump and
+/// read-only are written to the song on save, and the rest are never saved.
+pub struct Live {
+    /// Live mute and solo per track.
+    pub levels: Vec<TrackLive>,
+    /// The scale, as it's for entering notes and isn't part of what's undone.
     pub scale: Scale,
-    /// Whether entering in Insert moves on by the grid, likewise.
+    /// Whether entering in Insert moves on by the grid.
     pub auto_jump: bool,
-    /// Whether the song is read-only, so `:w` to its own folder refuses (decision 313), likewise.
+    /// Whether the song is read-only, so `:w` to its own folder refuses (decision 313).
     pub read_only: bool,
-    /// Whether fill is on, for `CND`'s `FILL` and `!FILL`. It's a live control, never saved.
+    /// Whether fill is on, for `CND`'s `FILL` and `!FILL`.
     pub fill: bool,
     /// The octave the keys play and enter notes in, as note names number it: 3, where `a` is
     /// `C-3`, middle C.
     pub octave: i8,
     /// The velocity new notes are written with, like the octave.
     pub note_velocity: u8,
-    /// Changes each time random values are wanted anew: a shape's seed, a roll, a bloom's.
-    pub(crate) shape_seed: u64,
+}
+
+impl Live {
+    /// As a song saved them, with fill off and the keys on middle C.
+    pub(crate) fn from_song(song: &Song) -> Self {
+        Self {
+            levels: live_from(song),
+            scale: song.scale,
+            auto_jump: song.auto_jump,
+            read_only: song.read_only,
+            fill: false,
+            octave: 3,
+            note_velocity: DEFAULT_NOTE_VELOCITY,
+        }
+    }
 }
 
 impl Services {
@@ -165,9 +217,8 @@ impl Services {
         handle: Handle,
         rate: u32,
     ) -> Self {
-        let levels = live_from(&song);
+        let live = Live::from_song(&song);
         let folds = Folds::from_view(&song.view);
-        let (scale, auto_jump, read_only) = (song.scale, song.auto_jump, song.read_only);
         Self {
             history: History::new(Arc::new(song)),
             cursor: Cursor {
@@ -194,34 +245,12 @@ impl Services {
             now: Instant::now(),
             repeating: false,
             last_tick: Instant::now(),
-            transport: Transport::Stopped,
-            playhead: 0,
-            progress: 0.0,
-            places: [TrackPlace::default(); MAX_TRACKS],
-            report_at: Instant::now(),
-            playing_section: 0,
-            looping: None,
-            loop_waiting: false,
-            realigning: false,
-            realigning_tracks: [false; MAX_TRACKS],
-            jam: vec![JamState::default(); MAX_TRACKS],
-            levels,
-            live: None,
-            heard_pitches: HashMap::new(),
-            heard_passes: HashMap::new(),
-            heard_rows: HashMap::new(),
-            faders: [Faders::default(); MAX_TRACKS],
+            reported: Reported::default(),
+            live,
             fader_wishes: Vec::new(),
-            playheads: [None; PLAYHEADS],
             meter: Meter::default(),
             scope: crate::services::scope::Scope::new(rate),
             track_meters: vec![Meter::default(); MAX_TRACKS],
-            scale,
-            auto_jump,
-            read_only,
-            fill: false,
-            octave: 3,
-            note_velocity: DEFAULT_NOTE_VELOCITY,
             shape_seed: 0,
         }
     }
@@ -282,13 +311,16 @@ impl Services {
     /// How far a track is through this chain, if it's playing it, counting every time round it
     /// since it started, as the engine does to deal a dealt order, for finding the row playing.
     pub(crate) fn playing_place(&self, track: usize, chain: u32) -> Option<usize> {
-        let moving = matches!(self.transport, Transport::Playing | Transport::Paused);
-        let jam = self.jam.get(track)?;
+        let moving = matches!(
+            self.reported.transport,
+            Transport::Playing | Transport::Paused
+        );
+        let jam = self.reported.jam.get(track)?;
         if !moving || jam.chain != Some(chain) {
             return None;
         }
         let length = (self.song().tracks.get(track)?.chain_steps(chain) as i64).max(1);
-        let place = self.places.get(track)?.count - jam.started;
+        let place = self.reported.places.get(track)?.count - jam.started;
         let laps = place.div_euclid(length).max(0);
         Some((laps * length + place.rem_euclid(length)) as usize)
     }
@@ -313,7 +345,7 @@ impl Services {
     /// The note the cursor's track's row playing was heard at, before its chain's transpose,
     /// where an accumulator or an `RND` moved it.
     pub(crate) fn heard_note(&self) -> Option<u8> {
-        self.places.get(self.cursor.track)?.accumulated
+        self.reported.places.get(self.cursor.track)?.accumulated
     }
 
     /// Where each FX column of the cursor's phrase with a lane of its own is reading, if it's the
@@ -324,7 +356,7 @@ impl Services {
         if self.playhead_step().is_none() {
             return playheads;
         }
-        let Some(place) = self.places.get(self.cursor.track) else {
+        let Some(place) = self.reported.places.get(self.cursor.track) else {
             return playheads;
         };
         for (slot, playhead) in playheads.iter_mut().enumerate() {
@@ -346,7 +378,8 @@ impl Services {
             let place = self.playing_place(track, chain)?;
             let position = owner.chain_position(chain, place, self.dealer(track))?;
             let phrase = owner.phrases.get(&position.phrase)?;
-            let count = self.places.get(track)?.count - self.jam.get(track)?.started;
+            let count =
+                self.reported.places.get(track)?.count - self.reported.jam.get(track)?.started;
             Some(std::array::from_fn(|slot| {
                 let lane = phrase.lane(slot)?;
                 Some(LaneRead::placed(lane, lane.heard(owner.lanes[slot]), count))
@@ -359,7 +392,7 @@ impl Services {
     /// last read it while this phrase plays, or as the track's `Length` and `Rate` have it.
     pub(crate) fn heard_lanes(&self, phrase: &Phrase) -> [Option<Heard>; FX_SLOTS] {
         let playing = self.playhead_step().is_some();
-        let place = self.places.get(self.cursor.track);
+        let place = self.reported.places.get(self.cursor.track);
         let track = self.track_here();
         std::array::from_fn(|slot| {
             let lane = phrase.lane(slot)?;
@@ -462,7 +495,7 @@ impl Services {
     /// track plays then, unless playback is using the tracks. What it starts, which lasts while
     /// the key is down, if it sounds.
     pub(crate) fn audition(&mut self, section_step: usize) -> Option<Momentary> {
-        if self.transport == Transport::Playing {
+        if self.reported.transport == Transport::Playing {
             self.status = "Audition works while stopped or paused".to_owned();
             return None;
         }

@@ -219,7 +219,7 @@ fn a_mute_button_mutes_its_track_lit_while_muted_and_the_keys_light_it_too() {
     roto_says(&ports, LEVELS);
     assert!(tick_until(&mut app, &ports, |fake| fake.light(7).is_some()));
     press_button(&ports, 3);
-    assert!(tick_until_app(&mut app, |app| app.services.levels[3].mute));
+    assert!(tick_until_app(&mut app, |app| app.services.live.levels[3].mute));
     assert!(tick_until(&mut app, &ports, |fake| {
         fake.light(3) == Some(true)
             && fake
@@ -227,12 +227,12 @@ fn a_mute_button_mutes_its_track_lit_while_muted_and_the_keys_light_it_too() {
                 .is_some_and(|states| !states[3] && states[2])
     }));
     press_button(&ports, 3);
-    assert!(tick_until_app(&mut app, |app| !app.services.levels[3].mute));
+    assert!(tick_until_app(&mut app, |app| !app.services.live.levels[3].mute));
     assert!(tick_until(&mut app, &ports, |fake| fake.light(3) == Some(false)));
     // The keys mute the cursor's track, and the Roto shows it.
     app.services.cursor.track = 5;
     press(&mut app, " m");
-    assert!(app.services.levels[5].mute, "{}", app.services.status);
+    assert!(app.services.live.levels[5].mute, "{}", app.services.status);
     assert!(tick_until(&mut app, &ports, |fake| fake.light(5) == Some(true)));
 }
 
@@ -262,7 +262,7 @@ fn sel_puts_pan_or_a_send_on_the_knobs_and_solos_on_the_buttons() {
     );
     assert!(tick_until_app(&mut app, |app| app.song().tracks[1].pan == 0xFF));
     press_button(&ports, 4);
-    assert!(tick_until_app(&mut app, |app| app.services.levels[4].solo));
+    assert!(tick_until_app(&mut app, |app| app.services.live.levels[4].solo));
     assert!(tick_until(&mut app, &ports, |fake| {
         fake.light(4) == Some(true)
             && fake
@@ -336,7 +336,7 @@ fn func_focuses_one_track_level_pan_and_sends_and_plugin_mode_shows_it_too() {
     });
     press_button(&ports, 0);
     settle(&mut app, 30);
-    assert!(!app.services.levels[3].mute);
+    assert!(!app.services.live.levels[3].mute);
     // PLUGIN mode shows the same track's devices.
     roto_says(&ports, FromRoto::SetPluginMode);
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
@@ -389,7 +389,7 @@ fn the_arrows_page_the_banks_to_the_groups_and_both_reach_the_returns_and_master
         == 0));
     press_button(&ports, 2);
     settle(&mut app, 30);
-    assert!(!app.services.levels[master].mute);
+    assert!(!app.services.live.levels[master].mute);
     // Back to the tracks, at the bank it was on.
     roto_says(&ports, FromRoto::SetAllTracksMode(AllTracks::Audio));
     assert!(tick_until(&mut app, &ports, |fake| fake.first_track == 8));
@@ -513,20 +513,20 @@ fn the_transport_buttons_play_stop_and_light_as_it_plays() {
     };
     transport(&ports, 0);
     let deadline = Instant::now() + Duration::from_secs(5);
-    while app.services.transport != Transport::Playing && Instant::now() < deadline {
+    while app.services.reported.transport != Transport::Playing && Instant::now() < deadline {
         block(&mut realtime, &mut app);
         std::thread::sleep(Duration::from_millis(2));
     }
-    assert_eq!(app.services.transport, Transport::Playing);
+    assert_eq!(app.services.reported.transport, Transport::Playing);
     assert!(tick_until(&mut app, &ports, |fake| fake.transport_light(0)
         == Some(true)));
     transport(&ports, 1);
     let deadline = Instant::now() + Duration::from_secs(5);
-    while app.services.transport == Transport::Playing && Instant::now() < deadline {
+    while app.services.reported.transport == Transport::Playing && Instant::now() < deadline {
         block(&mut realtime, &mut app);
         std::thread::sleep(Duration::from_millis(2));
     }
-    assert_eq!(app.services.transport, Transport::Paused);
+    assert_eq!(app.services.reported.transport, Transport::Paused);
     assert!(tick_until(&mut app, &ports, |fake| fake.transport_light(0)
         == Some(false)));
 }
@@ -551,11 +551,11 @@ fn the_rotos_play_level_and_mute_reach_what_the_engine_plays() {
         },
     );
     let deadline = Instant::now() + Duration::from_secs(5);
-    while app.services.transport != Transport::Playing && Instant::now() < deadline {
+    while app.services.reported.transport != Transport::Playing && Instant::now() < deadline {
         block(&mut realtime, &mut app);
         std::thread::sleep(Duration::from_millis(2));
     }
-    assert_eq!(app.services.transport, Transport::Playing);
+    assert_eq!(app.services.reported.transport, Transport::Playing);
     // Two seconds: a whole loop of the phrase, and its note.
     const LOOP: usize = 2 * 96_000;
     let heard = crate::common::loudest(&mut realtime, LOOP);
@@ -582,7 +582,7 @@ fn the_rotos_play_level_and_mute_reach_what_the_engine_plays() {
     let up = crate::common::loudest(&mut realtime, LOOP);
     assert!(up > 0.05, "{up}");
     press_button(&ports, 0);
-    assert!(tick_until_app(&mut app, |app| app.services.levels[0].mute));
+    assert!(tick_until_app(&mut app, |app| app.services.live.levels[0].mute));
     assert!(heard_until(&mut app, &mut realtime, |engine| engine
         .jam(0)
         .mute));

@@ -80,7 +80,7 @@ impl Services {
     /// Mutes a track, or unmutes it, as the keys do: not an undo step, as it's how the song
     /// plays that it changes, but saved with the song.
     pub(crate) fn switch_mute(&mut self, track: usize) {
-        if let Some(live) = self.levels.get_mut(track) {
+        if let Some(live) = self.live.levels.get_mut(track) {
             live.mute = !live.mute;
             let mute = live.mute;
             self.handle.send(Command::SetMute { track, mute });
@@ -97,7 +97,7 @@ impl Services {
 
     /// Solos a track, or takes its solo off, as the keys do.
     pub(crate) fn switch_solo(&mut self, track: usize) {
-        if let Some(live) = self.levels.get_mut(track) {
+        if let Some(live) = self.live.levels.get_mut(track) {
             live.solo = !live.solo;
             let solo = live.solo;
             self.handle.send(Command::SetSolo { track, solo });
@@ -111,16 +111,16 @@ impl App {
     pub(crate) fn fit_levels(&mut self) {
         // Those of the fixed tracks stay with them, and the engine clears any no longer used.
         let tracks = self.song().tracks.len();
-        let was = self.services.levels.len();
+        let was = self.services.live.levels.len();
         let (from, to) = (
             was.saturating_sub(FIXED_TRACKS),
             tracks.saturating_sub(FIXED_TRACKS),
         );
         if tracks > was {
             let added = std::iter::repeat_n(TrackLive::default(), tracks - was);
-            self.services.levels.splice(from..from, added);
+            self.services.live.levels.splice(from..from, added);
         } else {
-            self.services.levels.drain(to..from);
+            self.services.live.levels.drain(to..from);
         }
     }
 
@@ -142,7 +142,7 @@ impl App {
             return;
         }
         let track = self.services.cursor.track;
-        let Some(live) = self.services.levels.get(track).copied() else {
+        let Some(live) = self.services.live.levels.get(track).copied() else {
             return;
         };
         let name = format!("Track {:02}", track + 1);
@@ -151,7 +151,7 @@ impl App {
         } else {
             (live.mute, if live.mute { "unmutes" } else { "mutes" })
         };
-        if self.services.transport != Transport::Playing {
+        if self.services.reported.transport != Transport::Playing {
             if solo {
                 self.services.switch_solo(track);
             } else {
@@ -174,7 +174,13 @@ impl App {
         if !self.services.handle.send(command) {
             return;
         }
-        let jam = self.services.jam.get(track).copied().unwrap_or_default();
+        let jam = self
+            .services
+            .reported
+            .jam
+            .get(track)
+            .copied()
+            .unwrap_or_default();
         let (waiting, what, key) = if solo {
             (jam.solo_waiting, "solo", "s")
         } else {
@@ -193,7 +199,7 @@ impl App {
     /// realign waiting for it. It moves where playback is rather than the song, so it isn't an
     /// undo step.
     pub(crate) fn realign(&mut self) {
-        if self.services.transport != Transport::Playing {
+        if self.services.reported.transport != Transport::Playing {
             self.services.status = "Realign works while playing".to_owned();
             return;
         }
@@ -201,7 +207,7 @@ impl App {
             return;
         }
         // The engine decides, and the transport shows it from its next report.
-        self.services.status = if self.services.realigning {
+        self.services.status = if self.services.reported.realigning {
             "Realign taken back".to_owned()
         } else {
             let when = self.grid_when();
@@ -220,7 +226,7 @@ impl App {
             self.services.status = format!("{} plays no chain to realign", owner.kind.title());
             return;
         }
-        if self.services.transport != Transport::Playing {
+        if self.services.reported.transport != Transport::Playing {
             self.services.status = "Realign works while playing".to_owned();
             return;
         }
@@ -229,7 +235,7 @@ impl App {
         }
         let name = format!("Track {:02}", track + 1);
         // The engine decides, and the transport shows it from its next report.
-        self.services.status = if self.services.realigning_tracks[track] {
+        self.services.status = if self.services.reported.realigning_tracks[track] {
             format!("{name}'s realign taken back")
         } else {
             let when = self.grid_when();
@@ -320,13 +326,13 @@ impl App {
 
     /// Turn fill on or off, saying which.
     pub(crate) fn set_fill(&mut self, on: bool) {
-        self.services.fill = on;
+        self.services.live.fill = on;
         self.services.handle.send(Command::SetFill { on });
         self.services.status = if on { "Fill on" } else { "Fill off" }.to_owned();
     }
 
     pub(super) fn clear_live(&mut self) {
-        self.services.levels.fill(TrackLive::default());
+        self.services.live.levels.fill(TrackLive::default());
         self.send_live();
         self.services.dirty = true;
     }
