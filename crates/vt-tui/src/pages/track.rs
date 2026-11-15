@@ -770,9 +770,9 @@ impl App {
     /// order:
     /// 1. A turn of a setting a macro holds is refused, saying where to turn it
     ///    ([`App::refuses_turn`]), before anything can turn it.
-    /// 2. The Gen page's edits, on the generator under the cursor ([`TrackPage::gen_edit`]). They
-    ///    go by the page the track page is on, so the mixer's keys reach them too while the track
-    ///    page is left on Gen, and there they find no generator.
+    /// 2. The Gen page's edits, on the generator under the cursor ([`TrackPage::gen_edit`]), only
+    ///    while the track page is on screen: the mixer keeps its keys though the track page is
+    ///    left on Gen.
     /// 3. `App`'s commands across pages, `/`, `M`, `gm` and the Keys mode, none of which the Gen
     ///    page takes, and `Enter` on the Gen page, which opens the shape panel.
     /// 4. `r`, `Enter` and `Space g a` off the Gen page, which say where they work, but for
@@ -803,7 +803,9 @@ impl App {
                 self.modes.mode = Mode::Keys;
                 self.services.status = "a w s e d f play, < > change octave, ; stops".to_owned();
             }
-            Cmd::ReopenGenerator if self.track_page.on_gen(control) => self.open_gen_panel(),
+            Cmd::ReopenGenerator if self.track_page.on_gen(self.modes.view, control) => {
+                self.open_gen_panel()
+            }
             Cmd::RollGenerator | Cmd::ReopenGenerator => {
                 self.services.status =
                     "r and Enter work on a generator, on the Gen page".to_owned();
