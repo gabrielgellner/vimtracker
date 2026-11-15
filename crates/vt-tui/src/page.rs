@@ -44,7 +44,7 @@ use crate::roto::Roto;
 use crate::sample_page::{Shown, is_sample_motion};
 use crate::services::Services;
 use crate::shaping::LiveGen;
-use crate::track_page::Control;
+use crate::track_page::{Control, ParamView};
 use crate::views::widgets::setting::{CellLook, Focus};
 use crate::wheel::WheelSetting;
 
@@ -301,6 +301,12 @@ impl<'a> Ctx<'a> {
             value_label: jump.and_then(|jump| jump.label(control)),
             ..self.look(focus)
         }
+    }
+
+    /// One of the track page's settings on a track of the song, as a widget draws it, with an
+    /// accumulator's limits counted as the scale lock has them.
+    pub fn param_view(&self, control: Control, track: &Track) -> Option<ParamView> {
+        crate::track_page::view(control, track, self.song(), self.app.scale.on)
     }
 
     /// Whether the song plays, as the engine last said.

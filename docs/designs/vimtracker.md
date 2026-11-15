@@ -945,6 +945,18 @@ the shape panel.
     track and the fixed tracks' Outputs, `modulation.rs` the Mod page's devices, and
     `fx.rs` the slots; `controls.rs` has `Control`, what each setting is called and holds on a
     track.
+*   **Each setting resolved once** (`view.rs`, the UI plan's U7, #739). `view(control, track,
+    song, scale)` gives a `ParamView`: its value within its bounds, its fine byte, its default,
+    its `nudge` and `jump` up and down from where it is (an envelope's time steps by 1 ms below
+    10 ms and 5 ms from it, so `-` from 10 ms is 9 ms), whether it wraps, its bar, whether it's a
+    switch, its choices and whether `K` numbers them, its cell's text, the status line's text
+    (`1.21 kHz`, or what it does, empty where the cell says it all), how `i` types it, its units
+    and whether it's engaged or dim. `set(control, at, track, song, value, fine)` is the action
+    that writes a value back. The cells and titles, the status line, the mixer, the zoom's tiles
+    and the Roto's value text read the view. It's vt-tui's, not the model's, as it's resolved from
+    `Control`, from a live generator, and by the scale lock the program keeps outside the song;
+    what it holds is description only, with nothing of the cursor, the modes or the report.
+    `Ctx::param_view` resolves one with the program's scale.
 *   **Macros on the page** (`macroing.rs`, decision 285). `M` maps the setting under the cursor,
     `Control::setting_for_macro`, through a picker; `gm` opens `App::mapping`, a `MappingView` in
     `Mode::Mapping`, drawn by `views/mapping.rs`. A setting a macro holds refuses a turn in
@@ -987,7 +999,8 @@ the shape panel.
     page's in `views/track/modulation.rs`: a device's frame and title (`widgets::device`), its grid
     read through `TrackCells` (`views/track/cells.rs`), the one `CellSource` for every page's
     settings and devices' titles, which turns each `Control` into a `widgets::param::ParamCell`
-    (`widgets::grid`: `CellWidths::FX`, `CellWidths::SOUND`, whose
+    from its `ParamView` and what only the page knows, the engine's report, the faders and the
+    modes (`widgets::grid`: `CellWidths::FX`, `CellWidths::SOUND`, whose
     value has room for its fine digits, and `CellWidths::COMPACT`, with no bar, for the Mod page's
     half-width devices), its panel (`widgets::panel`), and, for the Mod page's two columns,
     `widgets::device::rack_areas`.
