@@ -404,6 +404,11 @@ impl Services {
             .map_or(Extent::whole(0), |phrase| phrase.extent())
     }
 
+    /// Put the cursor on the first step its phrase plays.
+    pub(crate) fn go_to_loop_start(&mut self) {
+        self.cursor.step = self.extent().start;
+    }
+
     /// The position in the section where the cursor's phrase starts playing.
     pub(crate) fn slot_start(&self) -> usize {
         let Some(track) = self.track_here() else {

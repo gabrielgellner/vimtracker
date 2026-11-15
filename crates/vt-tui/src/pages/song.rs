@@ -1,13 +1,17 @@
 //! What keys do in the song view: a row per section, and a column for each track's chain.
 //!
 //! `SongView` is the view as a component (#320): the column its cursor is on and the sections
-//! `V` selects, its keys on that column, the value edits, `Enter`'s launch and `V`, and its
-//! drawing, in `draw`, given a [`Ctx`]. It's a [`Page`], with its rows of the binding
-//! table, [`Page::KEYS`], here beside it. Going to another section moves the cursor every page
-//! shares and the phrase view's first row, so it's `App`'s, as are the keys that end on one, `a`,
-//! `gc`, `dd` and `C`, and those that open a picker, Insert, or the tree's `gC` and `gd`.
+//! `V` selects, its keys, and its drawing, in `draw`, given a [`Ctx`]. It's a [`Page`], with its
+//! rows of the binding table, [`Page::KEYS`], here beside it. Its keys are all its own: the moves
+//! along a row and to other sections, the edits, `a`, `gc`, `dd` and `C`, `Enter`'s launch, `V`,
+//! `;`, `gC`, Insert's typing, and `K`'s picker. What only `App` can do they ask for in their
+//! [`Outcome`]: the picker, Insert, an audition held while the key is down, and the phrase view
+//! starting afresh on another section (#784). The tree's `gd`, and `:loop` and `:label`, which
+//! read the song view's cursor, stay `App`'s.
 
 pub mod draw;
+
+use std::sync::Arc;
 
 use ratatui::Frame;
 use ratatui::crossterm::event::KeyCode;
@@ -19,9 +23,9 @@ use vt_model::constants::BAR_STEPS;
 use vt_model::selection::Motion;
 use vt_model::song::{Repeat, SectionStart, lowest_unused};
 
-use crate::app::{App, Entry};
+use crate::app::{App, Entry, Momentary};
 use crate::input::bindings::Cmd;
-use crate::input::mode::{Mode, View};
+use crate::input::mode::View;
 use crate::input::typed::{HEX, Typed};
 use crate::overlays::picker::{Item, Pick, Picker};
 use crate::pages::{Ctx, CtxMut, Outcome, Page};
@@ -85,7 +89,14 @@ impl SongView {
 
     /// Run one of the view's own keys `times` times, or pass it back.
     fn key_on(&mut self, cmd: Cmd, times: usize, services: &mut Services) -> Outcome {
+        let section = services.cursor.section;
         match cmd {
+            Cmd::Move(Motion::Down) => {
+                return go_to_section(section.saturating_add(times), services);
+            }
+            Cmd::Move(Motion::Up) => return go_to_section(section.saturating_sub(times), services),
+            Cmd::Move(Motion::First) => return go_to_section(0, services),
+            Cmd::Move(Motion::Last) => return go_to_section(usize::MAX, services),
             Cmd::Move(Motion::Left) => self.column = self.step_column(-(times as isize), services),
             Cmd::Move(Motion::Right) => self.column = self.step_column(times as isize, services),
             Cmd::Move(Motion::RowStart) => self.column = 0,
@@ -105,9 +116,149 @@ impl SongView {
                     None => Some(services.cursor.section),
                 };
             }
+            Cmd::PickValue => return self.chain_picker(services),
+            Cmd::EnterInsert => return Outcome::Insert(Entry::default()),
+            Cmd::AddSection => {
+                services.apply(&Action::AddSection { at: section + 1 });
+                return go_to_section(section + 1, services);
+            }
+            Cmd::CloneSection => {
+                services.apply(&Action::CloneSection { at: section });
+                return go_to_section(section + 1, services);
+            }
+            Cmd::CloneChain => self.clone_chain(services),
+            Cmd::Capture => return capture(services),
+            Cmd::RemoveRow => {
+                services.apply(&Action::RemoveSection { at: section });
+                return go_to_section(section, services);
+            }
+            Cmd::Audition => {
+                services.handle.send(Command::Audition {
+                    section,
+                    section_step: 0,
+                    track: None,
+                });
+                return Outcome::Hold(Momentary::Audition);
+            }
             _ => return Outcome::Passed,
         }
         Outcome::Done
+    }
+
+    /// The chain under the cursor, on a track's column.
+    fn cell_chain(track: usize, services: &Services) -> Option<u32> {
+        services
+            .section_here()?
+            .chains
+            .get(track)
+            .copied()
+            .flatten()
+    }
+
+    /// `K`: list this track's chains to choose from, with the one in this cell highlighted.
+    fn chain_picker(&self, services: &mut Services) -> Outcome {
+        let Some(track) = self.track() else {
+            services.status = "K chooses a chain from a track's column".to_owned();
+            return Outcome::Done;
+        };
+        let current = Self::cell_chain(track, services);
+        let chains_of = &services.song().tracks[track].chains;
+        let mut chains = vec![None];
+        chains.extend(chains_of.keys().copied().map(Some));
+        let position = chains.iter().position(|chain| *chain == current);
+        let items = chains
+            .iter()
+            .map(|chain| {
+                let (label, meaning) = chain.map_or_else(
+                    || ("--".to_owned(), String::new()),
+                    |id| (format!("{id:02X}"), chains_of[&id].label.clone()),
+                );
+                Item::new(label, Pick::SectionChain(*chain)).meaning(meaning)
+            })
+            .collect();
+        Outcome::Open(Box::new(Picker::new("Chains", items).opened_on(position)))
+    }
+
+    /// Put a chosen chain in the cell under the cursor.
+    pub(crate) fn pick_chain(&self, chain: Option<u32>, services: &mut Services) {
+        let Some(track) = self.track() else {
+            return;
+        };
+        if Self::cell_chain(track, services) != chain {
+            services.apply(&Action::SetSectionChain {
+                section: services.cursor.section,
+                track,
+                chain,
+            });
+        }
+    }
+
+    /// `gC`: copy the chain under the cursor and its phrases, for this cell alone.
+    fn clone_chain(&self, services: &mut Services) {
+        let Some(track) = self.track() else {
+            services.status = "gC copies a chain from a track's column".to_owned();
+            return;
+        };
+        services.cursor.track = track;
+        services.clone_chain();
+    }
+
+    /// Type a length or a repeat count in decimal, ending with `Enter`, or a chain ID's two hex
+    /// digits, into what Insert has typed. Returns whether Insert goes on.
+    pub(crate) fn insert(&self, key: KeyCode, entry: &mut Entry, services: &mut Services) -> bool {
+        let section = services.cursor.section;
+        match key {
+            KeyCode::Esc => {
+                *entry = Entry::default();
+                return false;
+            }
+            KeyCode::Backspace => {
+                entry.text.pop();
+            }
+            KeyCode::Enter => {
+                let text = entry.text.take();
+                if self.column == LENGTH_COLUMN {
+                    match text.parse() {
+                        Ok(length) if length > 0 => services.apply(&Action::SetSectionLength {
+                            section,
+                            length: Some(length),
+                        }),
+                        _ => {
+                            services.status = "A length is a number of steps, 1 or more".to_owned()
+                        }
+                    }
+                } else if self.column == REPEAT_COLUMN {
+                    match text.parse::<u16>() {
+                        Ok(times) if times > 0 => services.apply(&Action::SetSectionRepeat {
+                            section,
+                            repeat: Repeat::new(i64::from(times)),
+                        }),
+                        _ => {
+                            services.status = "A repeat is a number of times, 1 or more".to_owned()
+                        }
+                    }
+                }
+                return false;
+            }
+            KeyCode::Char(c) if self.column < START_COLUMN && c.is_ascii_digit() => {
+                entry.text.push(c);
+            }
+            KeyCode::Char(c) if c.is_ascii_hexdigit() => {
+                if let Typed::Commit(text) = entry.text.key(key, HEX) {
+                    if let (Some(track), Ok(chain)) = (self.track(), u32::from_str_radix(&text, 16))
+                    {
+                        services.apply(&Action::SetSectionChain {
+                            section,
+                            track,
+                            chain: Some(chain),
+                        });
+                    }
+                    return false;
+                }
+            }
+            _ => {}
+        }
+        true
     }
 
     fn adjust(&self, by: i64, large: bool, services: &mut Services) {
@@ -291,9 +442,8 @@ impl Page for SongView {
 
     type Drawn = ();
 
-    /// Run a key as the program gives it to the view: a move along the columns, an edit of the
-    /// cell, `Enter` or `V`, [`SongView::key_on`], or passed back, for a move to another section,
-    /// a key that ends on one, a picker, Insert, or the tree.
+    /// Run a key as the program gives it to the view, [`SongView::key_on`], or pass it back, for
+    /// the tree's `gd` and what means the same on every page.
     fn key(&mut self, cmd: Cmd, times: usize, ctx: &mut CtxMut) -> Outcome {
         self.key_on(cmd, times, ctx.services)
     }
@@ -337,175 +487,72 @@ impl SongView {
     }
 }
 
+/// Edit another section, at its start, so the phrase view starts afresh there.
+fn go_to_section(section: usize, services: &mut Services) -> Outcome {
+    let last = services.song().sections.len() - 1;
+    services.cursor.section = section.min(last);
+    services.cursor.slot = 0;
+    services.go_to_loop_start();
+    Outcome::Moved
+}
+
+/// `C`: add a section below the one playing, holding what each track is playing, and carry on
+/// in it without a break.
+fn capture(services: &mut Services) -> Outcome {
+    if services.transport != Transport::Playing {
+        return Outcome::Refused("C captures what's playing, so start the song first");
+    }
+    let song = Arc::clone(services.song());
+    let Some(playing) = song.sections.get(services.playing_section) else {
+        return Outcome::Done;
+    };
+    let chains: Vec<Option<u32>> = (0..song.tracks.len())
+        .map(|track| {
+            let row = playing.chains.get(track).copied().flatten();
+            services
+                .jam
+                .get(track)
+                .and_then(|jam| jam.playing)
+                .unwrap_or(row)
+        })
+        .collect();
+    if chains.iter().all(Option::is_none) {
+        return Outcome::Refused("Nothing is playing to capture");
+    }
+    let at = services.playing_section + 1;
+    // Playing on with the source's settings keeps its timing and realigning as they were.
+    let length = song.section_length(playing);
+    let (start, reset) = (playing.start, playing.reset);
+    let mut actions = vec![
+        Action::AddSection { at },
+        Action::SetSectionStart { section: at, start },
+        Action::SetReset { section: at, reset },
+    ];
+    if length > 0 {
+        actions.push(Action::SetSectionLength {
+            section: at,
+            length: Some(length),
+        });
+    }
+    for (track, chain) in chains.into_iter().enumerate() {
+        actions.push(Action::SetSectionChain {
+            section: at,
+            track,
+            chain,
+        });
+    }
+    services.apply(&Action::Batch(actions));
+    services.handle.send(Command::ContinueIn {
+        section: at,
+        length,
+    });
+    services.looping = Some(SectionLoop::one(at));
+    let moved = go_to_section(at, services);
+    services.status = format!("Captured to section {:02}, and staying on it", at + 1);
+    moved
+}
+
 impl App {
-    /// Edit another section, at its start.
-    fn go_to_section(&mut self, section: usize) {
-        let last = self.song().sections.len() - 1;
-        self.services.cursor.section = section.min(last);
-        self.services.cursor.slot = 0;
-        self.go_to_loop_start();
-    }
-
-    /// Run a command the song view passed back: a move to another section, a key that ends on
-    /// one, a picker, Insert, `gC` or `;`. Returns false if it means the same as anywhere.
-    pub(crate) fn run_song_passed(&mut self, cmd: Cmd) -> bool {
-        let count = self.modes.count.take();
-        let times = count.unwrap_or(1).max(1);
-        let section = self.services.cursor.section;
-        match cmd {
-            Cmd::Move(Motion::Down) => self.go_to_section(section.saturating_add(times)),
-            Cmd::Move(Motion::Up) => self.go_to_section(section.saturating_sub(times)),
-            Cmd::Move(Motion::First) => self.go_to_section(0),
-            Cmd::Move(Motion::Last) => self.go_to_section(usize::MAX),
-            Cmd::PickValue => self.open_chain_picker(),
-            Cmd::EnterInsert => {
-                self.modes.entry = Entry::default();
-                self.modes.mode = Mode::Insert;
-            }
-            Cmd::AddSection => {
-                self.services.apply(&Action::AddSection { at: section + 1 });
-                self.go_to_section(section + 1);
-            }
-            Cmd::CloneSection => {
-                self.services.apply(&Action::CloneSection { at: section });
-                self.go_to_section(section + 1);
-            }
-            Cmd::CloneChain => self.clone_section_chain(),
-            Cmd::Capture => self.capture(),
-            Cmd::RemoveRow => {
-                self.services.apply(&Action::RemoveSection { at: section });
-                self.go_to_section(section);
-            }
-            Cmd::Audition => self.audition_section(section, 0),
-            _ => {
-                self.modes.count = count;
-                return false;
-            }
-        }
-        true
-    }
-
-    /// Type a length or a repeat count in decimal, ending with `Enter`, or a chain ID's two hex
-    /// digits.
-    pub(crate) fn insert_song(&mut self, key: KeyCode) {
-        match key {
-            KeyCode::Esc => {
-                self.modes.entry = Entry::default();
-                self.modes.mode = Mode::Normal;
-            }
-            KeyCode::Backspace => {
-                self.modes.entry.text.pop();
-            }
-            KeyCode::Enter => {
-                let text = self.modes.entry.text.take();
-                self.modes.mode = Mode::Normal;
-                if self.song_view.column == LENGTH_COLUMN {
-                    match text.parse() {
-                        Ok(length) if length > 0 => {
-                            self.services.apply(&Action::SetSectionLength {
-                                section: self.services.cursor.section,
-                                length: Some(length),
-                            })
-                        }
-                        _ => {
-                            self.services.status =
-                                "A length is a number of steps, 1 or more".to_owned()
-                        }
-                    }
-                } else if self.song_view.column == REPEAT_COLUMN {
-                    match text.parse::<u16>() {
-                        Ok(times) if times > 0 => self.services.apply(&Action::SetSectionRepeat {
-                            section: self.services.cursor.section,
-                            repeat: Repeat::new(i64::from(times)),
-                        }),
-                        _ => {
-                            self.services.status =
-                                "A repeat is a number of times, 1 or more".to_owned()
-                        }
-                    }
-                }
-            }
-            KeyCode::Char(c) if self.song_view.column < START_COLUMN && c.is_ascii_digit() => {
-                self.modes.entry.text.push(c);
-            }
-            KeyCode::Char(c) if c.is_ascii_hexdigit() => {
-                if let Typed::Commit(text) = self.modes.entry.text.key(key, HEX) {
-                    self.modes.mode = Mode::Normal;
-                    if let (Some(track), Ok(chain)) =
-                        (self.song_view.track(), u32::from_str_radix(&text, 16))
-                    {
-                        self.services.apply(&Action::SetSectionChain {
-                            section: self.services.cursor.section,
-                            track,
-                            chain: Some(chain),
-                        });
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    /// The chain under the cursor, on a track's column.
-    fn cell_chain(&self, track: usize) -> Option<u32> {
-        self.services
-            .section_here()?
-            .chains
-            .get(track)
-            .copied()
-            .flatten()
-    }
-
-    /// `K`: list this track's chains to choose from, with the one in this cell highlighted.
-    fn open_chain_picker(&mut self) {
-        let Some(track) = self.song_view.track() else {
-            self.services.status = "K chooses a chain from a track's column".to_owned();
-            return;
-        };
-        let current = self.cell_chain(track);
-        let mut chains = vec![None];
-        chains.extend(self.song().tracks[track].chains.keys().copied().map(Some));
-        let position = chains.iter().position(|chain| *chain == current);
-        let items = chains
-            .iter()
-            .map(|chain| {
-                let (label, meaning) = chain.map_or_else(
-                    || ("--".to_owned(), String::new()),
-                    |id| {
-                        let label = &self.song().tracks[track].chains[&id].label;
-                        (format!("{id:02X}"), label.clone())
-                    },
-                );
-                Item::new(label, Pick::SectionChain(*chain)).meaning(meaning)
-            })
-            .collect();
-        self.show_picker(Picker::new("Chains", items).opened_on(position));
-    }
-
-    /// Put a chosen chain in the cell under the cursor.
-    pub(crate) fn pick_section_chain(&mut self, chain: Option<u32>) {
-        let Some(track) = self.song_view.track() else {
-            return;
-        };
-        if self.cell_chain(track) != chain {
-            self.services.apply(&Action::SetSectionChain {
-                section: self.services.cursor.section,
-                track,
-                chain,
-            });
-        }
-    }
-
-    /// `gC`: copy the chain under the cursor and its phrases, for this cell alone.
-    fn clone_section_chain(&mut self) {
-        let Some(track) = self.song_view.track() else {
-            self.services.status = "gC copies a chain from a track's column".to_owned();
-            return;
-        };
-        self.services.cursor.track = track;
-        self.clone_chain();
-    }
-
     /// `:label`: name the chain under the cursor, in the song and chain views.
     pub(crate) fn label_chain(&mut self, label: Option<String>) {
         let track = match self.modes.view {
@@ -520,7 +567,7 @@ impl App {
             self.services.status = ":label names a chain from a track's column".to_owned();
             return;
         };
-        let Some(chain) = self.cell_chain(track) else {
+        let Some(chain) = SongView::cell_chain(track, &self.services) else {
             self.services.status = "This track has no chain".to_owned();
             return;
         };
@@ -562,75 +609,15 @@ impl App {
         }
     }
 
-    /// `C`: add a section below the one playing, holding what each track is playing, and carry on
-    /// in it without a break.
-    fn capture(&mut self) {
-        if self.services.transport != Transport::Playing {
-            self.services.status = "C captures what's playing, so start the song first".to_owned();
-            return;
-        }
-        let song = self.song();
-        let Some(playing) = song.sections.get(self.services.playing_section) else {
-            return;
-        };
-        let chains: Vec<Option<u32>> = (0..song.tracks.len())
-            .map(|track| {
-                let row = playing.chains.get(track).copied().flatten();
-                self.services
-                    .jam
-                    .get(track)
-                    .and_then(|jam| jam.playing)
-                    .unwrap_or(row)
-            })
-            .collect();
-        if chains.iter().all(Option::is_none) {
-            self.services.status = "Nothing is playing to capture".to_owned();
-            return;
-        }
-        let at = self.services.playing_section + 1;
-        // Playing on with the source's settings keeps its timing and realigning as they were.
-        let length = song.section_length(playing);
-        let (start, reset) = (playing.start, playing.reset);
-        let mut actions = vec![
-            Action::AddSection { at },
-            Action::SetSectionStart { section: at, start },
-            Action::SetReset { section: at, reset },
-        ];
-        if length > 0 {
-            actions.push(Action::SetSectionLength {
-                section: at,
-                length: Some(length),
-            });
-        }
-        for (track, chain) in chains.into_iter().enumerate() {
-            actions.push(Action::SetSectionChain {
-                section: at,
-                track,
-                chain,
-            });
-        }
-        self.services.apply(&Action::Batch(actions));
-        self.services.handle.send(Command::ContinueIn {
-            section: at,
-            length,
-        });
-        self.services.looping = Some(SectionLoop::one(at));
-        self.go_to_section(at);
-        self.services.status = format!("Captured to section {:02}, and staying on it", at + 1);
-    }
-
-    /// The sections selected with `V`, from where it started to the cursor's, if they are.
-    pub(crate) fn selected_sections(&self) -> Option<SectionLoop> {
-        self.song_view
-            .selected(self.modes.view, self.services.cursor.section)
-    }
-
     /// `:loop`: keep playing the sections selected with `V`, or the section being edited, or go
     /// back to playing the song if that one is already looping. While playing, a loop starts on
     /// the next line of the launch grid, with its first section if the one playing isn't in it.
     pub(crate) fn toggle_loop(&mut self) {
         let section = self.services.cursor.section;
-        self.services.looping = match (self.selected_sections(), self.services.looping) {
+        let selected = self
+            .song_view
+            .selected(self.modes.view, self.services.cursor.section);
+        self.services.looping = match (selected, self.services.looping) {
             (Some(selected), _) => Some(selected),
             (None, Some(looping)) if looping.holds(section) => None,
             (None, _) => Some(SectionLoop::one(section)),

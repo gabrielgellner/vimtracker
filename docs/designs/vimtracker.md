@@ -826,10 +826,13 @@ and the phrase view. A `Page` has its rows of the binding table, `Page::KEYS`, k
 assembled by `input/bindings.rs` under its mode; `Page::key`, which runs one of its keys with a
 count through a `CtxMut` and says what it did as an `Outcome`, done, refused with why, or passed
 back, or done and asking for what only `App` can do, a picker opened (`Outcome::Open`), a view
-shown (`Show`, or `Jump` as a jump `Ctrl-O` comes back from) or a `:` line run (`Run`), which
-`App::settled` does once the page has given its borrows back (#784); `Page::draw`, given a `Ctx`; and `Page::panels` and `Page::take_panels`, its pictures as data
-for `Graphics` and the ids they're given. `App` holds one of each page and dispatches by `View` with
-a plain `match`, so there's no `dyn`. A key goes, in this order, to the first that takes it:
+shown (`Show`, or `Jump` as a jump `Ctrl-O` comes back from), a `:` line run (`Run`), Insert
+started with what's typed already (`Insert`), what the key started held while it's down (`Hold`),
+or the phrase view started afresh after a move onto another phrase (`Moved`), which
+`App::settled` does once the page has given its borrows back (#784); `Page::draw`, given a `Ctx`;
+and `Page::panels` and `Page::take_panels`, its pictures as data for `Graphics` and the ids
+they're given. `App` holds one of each page and dispatches by `View` with a plain `match`, so
+there's no `dyn`. A key goes, in this order, to the first that takes it:
 
 1.  the overlay for the `Mode`: the picker, the shape panel, the mapping view, the command line,
     Insert, a jump, a guide or help (`App::handle_key`);
@@ -838,7 +841,7 @@ a plain `match`, so there's no `dyn`. A key goes, in this order, to the first th
     `App::run_across_pages`, the commands across pages (`i`'s mode, `/`, `M`, `gm`, the Keys mode,
     the Gen page's keys and the pickers) and then the track page's edits, which the mixer shares;
     for the others, each page's own, `App::run_project_page`, `run_audio_page`,
-    `run_sample_passed`, `run_song_passed` and `run_chain_passed`, while the phrase view's go on;
+    `run_sample_passed` and `run_chain_passed`, while the song view's and the phrase view's go on;
 4.  the tree of chains and phrases (`App::run_tree`);
 5.  the grammar's operators, the motion after one, and the Visual modes (`App::run_grammar`);
 6.  the global `match` in `App::run`.
@@ -1137,12 +1140,14 @@ drawn through a `Ctx`. What it passes back is `App`'s, in `App::run_sample_passe
 through the track, the pads, `'` and `m`'s letters and `]'` `['`'s jumps, and opening the picker.
 Whether an entry is still recording is `App`'s too, so `App::sample_shown` says so before the
 page's own `SamplePage::shown`.
-`SongView` (`pages/song.rs`) has the column its cursor is on and the sections `V` selects, its
-moves along the columns, the value edits of the cell, `Enter`'s launch and `V`, and its drawing,
-through a `Ctx`. `App::run_song_view` hands it a key and then runs what it passes back, which stays
-`impl App`: a move to another section and the keys that end on one (`a`, `gc`, `dd`, `C`), as
-going to a section moves the cursor every page shares and the phrase view's first row, the chain
-picker, Insert, `gC` and `;`. The sections `:loop` keeps playing are `Services::looping`, as
+`SongView` (`pages/song.rs`) has the column its cursor is on and the sections `V` selects, all of
+its keys and Insert's typing on it, and its drawing, through a `Ctx`: the moves along the columns
+and to other sections, the value edits of the cell, the keys that end on another section (`a`,
+`gc`, `dd`, `C`), `Enter`'s launch, `V`, `gC` and `;`. What only `App` can do it asks for in its
+`Outcome` (#784): the chain picker (`Open`), Insert (`Insert`), the audition `;` holds while it's
+down (`Hold`), and, going to another section, the phrase view starting afresh with the cursor's
+step at its top (`Moved`). Only `gd`, the tree's, and `:loop` and `:label` stay `impl App`. The
+sections `:loop` keeps playing are `Services::looping`, as
 `:loop` works from every view and the status line shows them.
 
 `ChainView` (`pages/chain.rs`) has the column its cursor is on and the row `yy` and `dd` last
