@@ -108,6 +108,11 @@ tests' signals in `vt-engine`'s `src/dsp/signals.rs`. One file's tests run with
   the render sounded like: its peak, RMS, DC, where it ends and how bright it is. A changed hash
   fails with each of them before and after and whether it stayed in its band, as a small fix
   keeps it; say in the commit why a sound that left one moved, and the bless's diff shows how.
+- **Views.** `vt-tui`'s `tests/golden/views.txt` is every setting as a widget draws and edits
+  it (`tests/all/view_dump.rs`): what its cell and the status line say, how it steps, what `K`
+  lists and what a value set to it becomes, on every machine, filter, effect, mod type, fill and
+  column. Any difference fails. A new device or setting adds its lines, and `VT_BLESS=1` writes
+  the file again, so the diff shows exactly what a change to a setting's description moved.
 - **Screenshots.** The manual's pictures in `docs/manual/src/images/` are goldens too: the test
   of `vt-tui`'s `screenshots` example makes each one and compares it with the committed SVG, byte
   for byte, so a change to what a page draws fails `just ci` until they're made again. After a

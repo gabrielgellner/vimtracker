@@ -64,6 +64,7 @@ mod tonnetz;
 mod track_page;
 mod tracks;
 mod variation;
+mod view_dump;
 mod walks;
 mod wheel;
 mod world_rhythms;
