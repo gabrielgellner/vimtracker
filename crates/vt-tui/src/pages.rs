@@ -205,7 +205,7 @@ impl App {
     /// What of its own state the pages show, as it is now.
     fn page_state(&self) -> PageState<'_> {
         let covered = self.overlays.picker.is_some()
-            || self.overlays.guide.is_some()
+            || self.overlays.guide.open.is_some()
             || self.overlays.shape.is_some()
             || matches!(self.modes.mode, Mode::Help | Mode::Picker | Mode::Guide)
             || (self.modes.mode == Mode::Command && self.overlays.command_menu.is_some());
@@ -385,13 +385,23 @@ impl App {
             }
             Outcome::Hold(started) => self.held.started = Some(started),
             Outcome::Moved => self.phrase_view.top = self.services.cursor.step,
-            Outcome::Close => {
-                self.overlays.picker = None;
-                // A shape waiting for its command is given up.
-                self.overlays.shape_command = None;
-                self.modes.mode = self.mode_after_picker();
-                self.leave_explorer();
-            }
+            Outcome::Close => match self.modes.mode {
+                Mode::Help => {
+                    self.overlays.help.scroll = 0;
+                    self.modes.mode = Mode::Normal;
+                }
+                Mode::Guide => {
+                    self.overlays.guide.open = None;
+                    self.modes.mode = Mode::Normal;
+                }
+                _ => {
+                    self.overlays.picker = None;
+                    // A shape waiting for its command is given up.
+                    self.overlays.shape_command = None;
+                    self.modes.mode = self.mode_after_picker();
+                    self.leave_explorer();
+                }
+            },
             Outcome::Choose(pick) => {
                 let naming = self.explorer.naming.take();
                 self.overlays.picker = None;
