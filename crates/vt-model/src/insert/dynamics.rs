@@ -418,55 +418,24 @@ impl Compressor {
         source_track(self.source, sounds)
     }
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::CompressorType => self.kind as u8,
-            Setting::Threshold => self.threshold,
-            Setting::Ratio => self.ratio,
-            Setting::Attack => self.attack,
-            Setting::Release => self.release,
-            Setting::ConsoleRatio => self.console_ratio,
-            Setting::ConsoleAttack => self.console_attack,
-            Setting::ConsoleRelease => self.console_release,
-            Setting::GlueRatio => self.glue_ratio,
-            Setting::GlueAttack => self.glue_attack,
-            Setting::GlueRelease => self.glue_release,
-            Setting::Range => self.range,
-            Setting::PeakClip => self.peak_clip,
-            Setting::Source => self.source,
-            Setting::AutoGain => self.auto,
-            Setting::Mix => self.mix,
-            Setting::Makeup => self.makeup,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut compressor = self;
-        match setting {
-            Setting::CompressorType => compressor.kind = CompressorType::ALL[usize::from(value)],
-            Setting::Threshold => compressor.threshold = value,
-            Setting::Ratio => compressor.ratio = value,
-            Setting::Attack => compressor.attack = value,
-            Setting::Release => compressor.release = value,
-            Setting::ConsoleRatio => compressor.console_ratio = value,
-            Setting::ConsoleAttack => compressor.console_attack = value,
-            Setting::ConsoleRelease => compressor.console_release = value,
-            Setting::GlueRatio => compressor.glue_ratio = value,
-            Setting::GlueAttack => compressor.glue_attack = value,
-            Setting::GlueRelease => compressor.glue_release = value,
-            Setting::Range => compressor.range = value,
-            Setting::PeakClip => compressor.peak_clip = value,
-            Setting::Source => compressor.source = value,
-            Setting::AutoGain => compressor.auto = value,
-            Setting::Mix => compressor.mix = value,
-            Setting::Makeup => compressor.makeup = value,
-            _ => {}
-        }
-        compressor
+    effect_settings! {
+        kind: CompressorType => CompressorType,
+        threshold => Threshold,
+        ratio => Ratio,
+        attack => Attack,
+        release => Release,
+        console_ratio => ConsoleRatio,
+        console_attack => ConsoleAttack,
+        console_release => ConsoleRelease,
+        glue_ratio => GlueRatio,
+        glue_attack => GlueAttack,
+        glue_release => GlueRelease,
+        range => Range,
+        peak_clip => PeakClip,
+        source => Source,
+        auto => AutoGain,
+        mix => Mix,
+        makeup => Makeup,
     }
 }
 
@@ -557,30 +526,11 @@ impl Limiter {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::Input => self.input,
-            Setting::Ceiling => self.ceiling,
-            Setting::LimitRelease => self.release,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut limiter = self;
-        match setting {
-            Setting::Input => limiter.input = value,
-            Setting::Ceiling => limiter.ceiling = value,
-            Setting::LimitRelease => limiter.release = value,
-            Setting::Mix => limiter.mix = value,
-            Setting::Gain => limiter.gain = value,
-            _ => {}
-        }
-        limiter
+    effect_settings! {
+        input => Input,
+        ceiling => Ceiling,
+        release => LimitRelease,
+        mix => Mix,
+        gain => Gain,
     }
 }

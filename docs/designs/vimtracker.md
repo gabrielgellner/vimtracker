@@ -293,7 +293,10 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     `EffectSpec` row each in `insert/kind.rs`'s `EFFECTS`, by `EffectKind`, with its key, name,
     meaning and `Param`s, and each `Param` states its kind, with the units it reads in, and its
     place in the effect, so the table, the slot's title and its usual grid take them as they are
-    (decision 339).
+    (decision 339). A synth voice's come in the same way, from its `VoiceSpec` row in
+    `machine.rs`'s `VOICES`, by `SynthVoice`, with its key, name, meaning and entries (in
+    `settings/voices.rs`), and what its Machine device takes from it: the setting its title shows,
+    any placing of its grid of its own, its role and its gate.
 
 **Decisions:** 29, 30, 59, 60, 158, 159 and 161, the [M14](#m14-design-one-list-of-settings) and
 [M14b](#m14b-design-kinds-of-setting) designs, and the three crates of the
@@ -879,9 +882,15 @@ built from, so a new page uses them rather than working out its layout again:
         and side, full width or a half with `HALF_GAP` between, going by whole bands to keep the
         cursor's in view where fewer fit.
     *   `grid`: `SettingsGrid`, up to four columns of three rows with holes, at `CellWidths`, read
-        through the `CellSource` trait (a setting's name, value and `ValueBar`), so it knows
-        nothing of `App`; and `faded`, for a device switched out. `CellWidths::FX` has bars, and
-        `CellWidths::COMPACT` none, for a half-width device whose panel shows what its values do.
+        through the `CellSource` trait, whose one method gives a cell's `CellParts` (its name,
+        value and `ValueBar`), so it knows nothing of `App`; and `faded`, for a device switched
+        out. `CellWidths::FX` has bars, and `CellWidths::COMPACT` none, for a half-width device
+        whose panel shows what its values do.
+    *   `param`: `ParamCell`, one setting's cell, which lays out its name, value and bar the one
+        way every page has them, from the text the page formats, a `Face` (hex, hex with fine
+        digits, a word, a toggle or a number), a `Place` on its bar, a `ParamState` (what's
+        heard, a fader, a macro's range, a `Tone`, a taken-over mark, a word after it) and a
+        `CellLook`; and `heard`, what a value plays with now, from the engine's report (#421).
     *   `panel`: `GraphicPanel`, faint square boxes side by side, with an image's placeholders or a
         meter's cells inside and a caption in the bottom border, such as `GR`.
 
@@ -968,7 +977,9 @@ the shape panel.
     the cursor doesn't stop in it.
 *   **Drawing** is in `views/track.rs`, with the Sound page's in `views/track/sound.rs` and the Mod
     page's in `views/track/modulation.rs`: a device's frame and title (`widgets::device`), its grid
-    read through a `CellSource` (`widgets::grid`: `CellWidths::FX`, `CellWidths::SOUND`, whose
+    read through `TrackCells` (`views/track/cells.rs`), the one `CellSource` for every page's
+    settings and devices' titles, which turns each `Control` into a `widgets::param::ParamCell`
+    (`widgets::grid`: `CellWidths::FX`, `CellWidths::SOUND`, whose
     value has room for its fine digits, and `CellWidths::COMPACT`, with no bar, for the Mod page's
     half-width devices), its panel (`widgets::panel`), and, for the Mod page's two columns,
     `widgets::device::rack_areas`.
