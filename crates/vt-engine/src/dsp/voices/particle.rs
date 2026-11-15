@@ -22,6 +22,7 @@
 use super::virtual_analog::Settings;
 use crate::dsp::blocks::plaits_parts::{CosineOscillator, Limiter, Svf, random, tan_dirty};
 use crate::rng::Pcg32;
+use crate::voice::SynthEngine;
 
 /// How many frames are worked out at once, as in Plaits.
 const BLOCK: usize = 24;
@@ -222,6 +223,31 @@ impl Default for ParticleNoise {
     }
 }
 
+impl SynthEngine for ParticleNoise {
+    const NOISE: bool = true;
+
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    /// Choose its noise, so each note differs but a render repeats.
+    fn seed_noise(&mut self, seed: u32) {
+        self.rng = Pcg32::new(u64::from(seed), 3);
+    }
+
+    /// The next frame, at a frequency as a fraction of the sample rate.
+    #[inline]
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+        if self.at == BLOCK {
+            self.render(frequency.clamp(1e-5, 0.49), settings);
+            self.at = 0;
+        }
+        let sample = self.output[self.at];
+        self.at += 1;
+        sample * LEVEL
+    }
+}
+
 impl ParticleNoise {
     pub fn new() -> Self {
         Self {
@@ -234,23 +260,6 @@ impl ParticleNoise {
             at: BLOCK,
             fresh: true,
         }
-    }
-
-    /// Choose its noise, so each note differs but a render repeats.
-    pub fn seed(&mut self, seed: u32) {
-        self.rng = Pcg32::new(u64::from(seed), 3);
-    }
-
-    /// The next frame, at a frequency as a fraction of the sample rate.
-    #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
-        if self.at == BLOCK {
-            self.render(frequency.clamp(1e-5, 0.49), settings);
-            self.at = 0;
-        }
-        let sample = self.output[self.at];
-        self.at += 1;
-        sample * LEVEL
     }
 
     fn render(&mut self, f0: f32, settings: Settings) {
@@ -309,7 +318,7 @@ mod tests {
 
     fn run(hertz: f32, settings: Settings, frames: usize) -> Vec<f32> {
         let mut voice = ParticleNoise::new();
-        voice.seed(7);
+        voice.seed_noise(7);
         (0..frames)
             .map(|_| voice.next(hertz / RATE, settings))
             .collect()

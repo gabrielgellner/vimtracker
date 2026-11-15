@@ -21,6 +21,7 @@
 
 use super::virtual_analog::{BLOCK, Moving, Settings};
 use crate::dsp::blocks::sine_table::sine_pm;
+use crate::voice::SynthEngine;
 
 const OVERSAMPLING: usize = 4;
 #[allow(clippy::excessive_precision)]
@@ -74,8 +75,8 @@ pub struct Fm {
     fresh: bool,
 }
 
-impl Fm {
-    pub fn new(rate: u32) -> Self {
+impl SynthEngine for Fm {
+    fn new(rate: u32) -> Self {
         Self {
             rate: rate as f32,
             carrier_phase: 0,
@@ -94,7 +95,7 @@ impl Fm {
 
     /// The next frame, at a frequency as a fraction of the sample rate.
     #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
         if self.at == BLOCK {
             self.render(frequency, settings);
             self.at = 0;
@@ -103,7 +104,9 @@ impl Fm {
         self.at += 1;
         sample * LEVEL
     }
+}
 
+impl Fm {
     fn render(&mut self, frequency: f32, settings: Settings) {
         let Settings {
             harmonics,

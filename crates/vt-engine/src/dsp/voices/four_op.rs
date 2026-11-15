@@ -16,6 +16,7 @@ use wide::f32x4;
 
 use super::virtual_analog::{BLOCK, Settings};
 use crate::dsp::blocks::oversampler::Decimator;
+use crate::voice::SynthEngine;
 use vt_model::settings::{FOUR_OP_ALGORITHMS, FOUR_OP_EACH, FOUR_OP_SHARED};
 
 /// How many operators, one to a lane.
@@ -331,8 +332,8 @@ pub struct FourOp {
     fresh: bool,
 }
 
-impl FourOp {
-    pub fn new(rate: u32) -> Self {
+impl SynthEngine for FourOp {
+    fn new(rate: u32) -> Self {
         Self {
             rate: rate.max(1) as f32,
             phase: f32x4::ZERO,
@@ -370,13 +371,13 @@ impl FourOp {
     }
 
     /// Let go of the note: every operator's envelope goes to its release.
-    pub fn release(&mut self) {
+    fn release(&mut self) {
         self.stage = [Stage::Release; OPERATORS];
     }
 
     /// The next frame, at a frequency as a fraction of the sample rate.
     #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
         if self.at == BLOCK {
             let plan = self.plan(frequency, settings);
             self.play(&plan);
@@ -386,7 +387,9 @@ impl FourOp {
         self.at += 1;
         sample * LEVEL_OUT
     }
+}
 
+impl FourOp {
     /// Work out what the settings and the note make of each operator, which holds until either
     /// moves: its pitch, how far its level reaches, its envelope's rates, its wave and warp.
     fn prepare(&self, frequency: f32, settings: Settings) -> Prepared {

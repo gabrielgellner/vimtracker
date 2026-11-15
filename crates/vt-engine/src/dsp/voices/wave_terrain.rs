@@ -26,6 +26,7 @@ use super::virtual_analog::{BLOCK, Moving, Settings};
 use super::wavetable::{PER_BANK, WAVE, stored};
 use crate::dsp::blocks::plaits_parts::{DcBlocker, interpolate};
 use crate::dsp::blocks::sine_table::SINE;
+use crate::voice::SynthEngine;
 
 /// The path is traced at twice the rate, and each pair of heights averaged, to tame aliasing.
 const OVERSAMPLING: usize = 2;
@@ -204,6 +205,24 @@ impl Default for WaveTerrain {
     }
 }
 
+impl SynthEngine for WaveTerrain {
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    /// The next frame, at a frequency as a fraction of the sample rate.
+    #[inline]
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+        if self.at == BLOCK {
+            self.render(frequency.clamp(1e-5, 0.49), settings);
+            self.at = 0;
+        }
+        let sample = self.dc_blocker.process(self.output[self.at]);
+        self.at += 1;
+        sample * LEVEL
+    }
+}
+
 impl WaveTerrain {
     pub fn new() -> Self {
         Self {
@@ -215,18 +234,6 @@ impl WaveTerrain {
             fresh: true,
             dc_blocker: DcBlocker::new(DC_POLE),
         }
-    }
-
-    /// The next frame, at a frequency as a fraction of the sample rate.
-    #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
-        if self.at == BLOCK {
-            self.render(frequency.clamp(1e-5, 0.49), settings);
-            self.at = 0;
-        }
-        let sample = self.dc_blocker.process(self.output[self.at]);
-        self.at += 1;
-        sample * LEVEL
     }
 
     fn render(&mut self, f0: f32, settings: Settings) {
