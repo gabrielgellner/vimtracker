@@ -11,12 +11,12 @@ use ratatui::text::{Line, Span};
 use vt_engine::track_state::LiveValues;
 use vt_model::action::TrackControl;
 use vt_model::insert::Insert;
-use vt_model::macros::{GenColumn, MacroTarget};
 use vt_model::settings::SettingId;
 use vt_model::shape::Context;
 use vt_model::song::Track;
 
 use crate::automating::fader_of;
+use crate::macroing::holding;
 use crate::page::Ctx;
 use crate::shaping::LiveGen;
 use crate::theme;
@@ -205,24 +205,18 @@ impl<'a> TrackCells<'a> {
         (set, heard(set, live, then))
     }
 
-    /// The range a macro holding a setting can take it over, on its bar's 0 to 255. Only a bar
-    /// shows it.
+    /// The range a macro holding a setting can take it over, on its bar's 0 to 255, which a bar
+    /// draws and a cell with none marks it held by. A generator's setting with no bounds, such as
+    /// its `Wave`, is held across its whole list.
     fn macro_range(&self, control: Control) -> Option<(u8, u8)> {
         let Control::Gen { param, .. } = control else {
             return macro_range(control, self.track);
         };
-        let (live, context) = self.generator.as_ref()?;
-        let bounds = param.bounds(context)?;
-        let target = MacroTarget::Gen {
-            column: GenColumn::of(live.generator.column),
-            param,
+        let (_, map) = holding(control, self.track).next()?;
+        let (_, context) = self.generator.as_ref()?;
+        let Some(bounds) = param.bounds(context) else {
+            return Some((0, u8::MAX));
         };
-        let ctx = self.ctx;
-        let (_, map) = ctx
-            .song()
-            .tracks
-            .get(ctx.cursor().track)?
-            .macro_holding(target)?;
         Some((
             share(map.number_at(0.0), bounds),
             share(map.number_at(255.0), bounds),

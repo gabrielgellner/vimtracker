@@ -740,12 +740,24 @@ impl Track {
     /// Which macro holds a setting, and its mapping there, if one does: a setting is on one
     /// macro at most.
     pub fn macro_holding(&self, target: MacroTarget) -> Option<(usize, &MacroMap)> {
-        self.macros.iter().enumerate().find_map(|(at, held)| {
-            held.maps
-                .iter()
-                .find(|map| map.target == target)
-                .map(|map| (at, map))
-        })
+        self.macros_holding(target).next()
+    }
+
+    /// Every macro holding a setting, with its mapping there, in the macros' order. `MapMacro`
+    /// keeps a setting on one macro at most, so there's one at most from the program's own edits.
+    pub fn macros_holding(
+        &self,
+        target: MacroTarget,
+    ) -> impl Iterator<Item = (usize, &MacroMap)> + '_ {
+        self.macros
+            .iter()
+            .enumerate()
+            .filter_map(move |(at, held)| {
+                held.maps
+                    .iter()
+                    .find(|map| map.target == target)
+                    .map(|map| (at, map))
+            })
     }
 
     /// Whether any of its macros holds anything.

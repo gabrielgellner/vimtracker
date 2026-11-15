@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use crate::constants::UNITY_LEVEL;
 
 use super::{
-    AMOUNT_PARAM, GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Param, Place, Setting, Units, WET_MIX_PARAM,
-    from_middle, hex_param, is_zero, unity_gain,
+    AMOUNT_PARAM, Columns, GAIN_PARAM, Kind, MIX_PARAM, Mode, OFF_ON, Param, Place, Shown, Units,
+    WET_MIX_PARAM, from_middle, hex_param, is_zero, place_of, places_of, unity_gain,
 };
 
 /// What a distortion does to the sound. The waveshapers come first; the guitar pedals after them
@@ -69,7 +69,6 @@ pub(super) const TYPE_PARAM: Param = Param {
     key: "type",
     // Choosing a mode chooses a sound, so steps don't lock it.
     label: None,
-    setting: Setting::Type,
     kind: Kind::Stepped {
         choices: &DISTORT_TYPE_NAMES,
         wraps: true,
@@ -83,7 +82,6 @@ const BITS_PARAM: Param = Param {
     name: "Bits",
     key: "bits",
     label: Some("BITS"),
-    setting: Setting::Bits,
     kind: Kind::Stepped {
         choices: &BIT_NAMES,
         wraps: false,
@@ -96,7 +94,6 @@ const RATE_PARAM: Param = Param {
     name: "Rate",
     key: "rate",
     label: Some("RATE"),
-    setting: Setting::Rate,
     kind: Kind::Continuous {
         top: 0xFF,
         middle: false,
@@ -111,7 +108,6 @@ const MU_LAW_PARAM: Param = Param {
     name: "Mu-law",
     key: "mulaw",
     label: Some("MULW"),
-    setting: Setting::MuLaw,
     kind: Kind::Stepped {
         choices: &OFF_ON,
         wraps: true,
@@ -125,7 +121,6 @@ const FOLLOW_PARAM: Param = Param {
     name: "Track",
     key: "track",
     label: Some("TRCK"),
-    setting: Setting::FollowNote,
     kind: Kind::Stepped {
         choices: &OFF_ON,
         wraps: true,
@@ -138,7 +133,6 @@ const PEDAL_TONE_PARAM: Param = Param {
     name: "Tone",
     key: "tone",
     label: Some("TONE"),
-    setting: Setting::Tone,
     kind: Kind::Continuous {
         top: 0xFF,
         middle: true,
@@ -161,21 +155,32 @@ pub(crate) const DISTORT_PARAMS: [Param; 9] = [
     FOLLOW_PARAM,
 ];
 /// What the shaping modes have: how hard it drives.
-pub(super) const SHAPING_PARAMS: [Param; 4] = [TYPE_PARAM, AMOUNT_PARAM, MIX_PARAM, GAIN_PARAM];
+const SHAPING: Mode = Mode {
+    shown: &places_of(&DISTORT_PARAMS, ["type", "amount", "mix", "gain"]),
+    grid: None,
+};
 /// The pedals have a tone control as well.
-pub(super) const PEDAL_PARAMS: [Param; 5] = [
-    TYPE_PARAM,
-    AMOUNT_PARAM,
-    PEDAL_TONE_PARAM,
-    MIX_PARAM,
-    GAIN_PARAM,
-];
+const PEDAL: Mode = Mode {
+    shown: &places_of(&DISTORT_PARAMS, ["type", "amount", "tone", "mix", "gain"]),
+    grid: None,
+};
 /// `Crush` has whole bits in place of an `Amount`.
-pub(super) const CRUSH_PARAMS: [Param; 5] =
-    [TYPE_PARAM, BITS_PARAM, MU_LAW_PARAM, MIX_PARAM, GAIN_PARAM];
+const CRUSH: Mode = Mode {
+    shown: &places_of(&DISTORT_PARAMS, ["type", "bits", "mulaw", "mix", "gain"]),
+    grid: None,
+};
 /// `Down` has how long it holds each sample.
-pub(super) const DOWN_PARAMS: [Param; 5] =
-    [TYPE_PARAM, RATE_PARAM, FOLLOW_PARAM, MIX_PARAM, GAIN_PARAM];
+const DOWN: Mode = Mode {
+    shown: &places_of(&DISTORT_PARAMS, ["type", "rate", "track", "mix", "gain"]),
+    grid: None,
+};
+/// Each type's mode, in the order of [`DistortType::ALL`].
+pub(super) const DISTORT_SHOWN: Shown = Shown::ByType {
+    type_at: place_of(&DISTORT_PARAMS, "type"),
+    modes: &[
+        SHAPING, SHAPING, SHAPING, SHAPING, CRUSH, DOWN, PEDAL, PEDAL,
+    ],
+};
 
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 pub(super) const LEAST_BITS: u8 = 2;
@@ -238,15 +243,15 @@ impl Distort {
     };
 
     effect_settings! {
-        kind: DistortType => Type,
-        amount => Amount,
-        bits => Bits via (bits_place, bits_kept),
-        rate => Rate,
-        mu_law => MuLaw,
-        track => FollowNote,
-        mix => Mix,
-        gain => Gain,
-        tone => Tone,
+        kind: DistortType,
+        amount,
+        bits via (bits_place, bits_kept),
+        rate,
+        mix,
+        gain,
+        tone,
+        mu_law,
+        track,
     }
 }
 
@@ -279,26 +284,14 @@ pub fn tape_drive_db(value: f32) -> f32 {
 
 /// A tape's, in the order the page shows them.
 pub(crate) const TAPE_PARAMS: [Param; 8] = [
-    hex_param(
-        "Drive",
-        "drive",
-        "DRIV",
-        Setting::TapeDrive,
-        Tape::DEFAULT.drive,
-    )
-    .units(Units::TapeDrive)
-    .centred(),
-    hex_param("Tone", "tone", "TONE", Setting::Tone, Tape::DEFAULT.tone).centred(),
-    hex_param("Bias", "bias", "BIAS", Setting::Bias, Tape::DEFAULT.bias).centred(),
-    hex_param("Bump", "bump", "BUMP", Setting::Bump, Tape::DEFAULT.bump),
-    hex_param("Wow", "wow", "WOW", Setting::Wow, Tape::DEFAULT.wow),
-    hex_param(
-        "Flutter",
-        "flutter",
-        "FLUT",
-        Setting::Flutter,
-        Tape::DEFAULT.flutter,
-    ),
+    hex_param("Drive", "drive", "DRIV", Tape::DEFAULT.drive)
+        .units(Units::TapeDrive)
+        .centred(),
+    hex_param("Tone", "tone", "TONE", Tape::DEFAULT.tone).centred(),
+    hex_param("Bias", "bias", "BIAS", Tape::DEFAULT.bias).centred(),
+    hex_param("Bump", "bump", "BUMP", Tape::DEFAULT.bump),
+    hex_param("Wow", "wow", "WOW", Tape::DEFAULT.wow),
+    hex_param("Flutter", "flutter", "FLUT", Tape::DEFAULT.flutter),
     Param {
         default: 0xFF,
         ..MIX_PARAM
@@ -348,14 +341,14 @@ impl Tape {
     };
 
     effect_settings! {
-        drive => TapeDrive,
-        tone => Tone,
-        bias => Bias,
-        bump => Bump,
-        wow => Wow,
-        flutter => Flutter,
-        mix => Mix,
-        gain => Gain,
+        drive,
+        tone,
+        bias,
+        bump,
+        wow,
+        flutter,
+        mix,
+        gain,
     }
 }
 
@@ -391,40 +384,17 @@ pub fn exciter_release_ms(value: f32) -> f32 {
 /// highs it drives start; then how its detector rises and falls; then how much is added, and the
 /// gain.
 pub(crate) const EXCITER_PARAMS: [Param; 6] = [
-    hex_param(
-        "Drive",
-        "drive",
-        "DRIV",
-        Setting::Drive,
-        Exciter::DEFAULT.drive,
-    ),
-    hex_param(
-        "Tone",
-        "tone",
-        "TONE",
-        Setting::ExciterTone,
-        Exciter::DEFAULT.tone,
-    )
-    .units(Units::ExciterTone),
-    hex_param(
-        "Attack",
-        "attack",
-        "ATK",
-        Setting::ExciterAttack,
-        Exciter::DEFAULT.attack,
-    )
-    .units(Units::ExciterAttack),
-    hex_param(
-        "Release",
-        "release",
-        "REL",
-        Setting::ExciterRelease,
-        Exciter::DEFAULT.release,
-    )
-    .units(Units::ExciterRelease),
+    hex_param("Drive", "drive", "DRIV", Exciter::DEFAULT.drive),
+    hex_param("Tone", "tone", "TONE", Exciter::DEFAULT.tone).units(Units::ExciterTone),
+    hex_param("Attack", "attack", "ATK", Exciter::DEFAULT.attack).units(Units::ExciterAttack),
+    hex_param("Release", "release", "REL", Exciter::DEFAULT.release).units(Units::ExciterRelease),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
+
+/// Where its settings sit on the FX page.
+pub(super) const EXCITER_GRID: Columns =
+    &[&["drive", "tone"], &["attack", "release"], &["mix", "gain"]];
 
 /// An exciter's settings: Chowdhury's model of the Aphex Aural Exciter, as Surge ships it. One a
 /// file doesn't have starts as new.
@@ -461,11 +431,11 @@ impl Exciter {
     };
 
     effect_settings! {
-        drive => Drive,
-        tone => ExciterTone,
-        attack => ExciterAttack,
-        release => ExciterRelease,
-        mix => Mix,
-        gain => Gain,
+        drive,
+        tone,
+        attack,
+        release,
+        mix,
+        gain,
     }
 }

@@ -29,6 +29,7 @@ use crate::views::widgets::grid::{CellWidths, GRID_HEIGHT, faded};
 use crate::views::widgets::image;
 use crate::views::widgets::meter::{amount_across, hanging_cell, hanging_eighths};
 use crate::views::widgets::panel::GraphicPanel;
+use crate::views::widgets::setting;
 use crate::views::widgets::table::take_top;
 
 /// How tall the zoomed slot's graphics are inside their boxes, in rows: the meter's 24 dB at 1.5
@@ -164,7 +165,12 @@ fn draw_tile(
         .title
         .iter()
         .flatten()
-        .map(|control| fade(Line::raw(cells.title_text(*control))))
+        // An empty slot's `Empty` is dim. A device draws its title's spans, so the style goes on the
+        // span rather than the line.
+        .map(|control| {
+            let text = cells.title_text(*control);
+            fade(Line::from(Span::styled(text, setting::resting(empty))))
+        })
         .collect();
     let tile = Device::new(device.identity.clone());
     let tile = match empty {

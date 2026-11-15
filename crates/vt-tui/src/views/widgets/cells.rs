@@ -329,6 +329,53 @@ fn a_macro_holding_a_setting_draws_its_range_behind_the_fill() {
 }
 
 #[test]
+fn a_macro_holding_a_setting_with_no_bar_marks_it_after_its_value() {
+    let mut song = Song::new(2);
+    for id in [SettingId::SPEED, SettingId::FILTER_MODE] {
+        song.tracks[0].macros[0]
+            .maps
+            .push(MacroMap::whole(MacroTarget::Setting(id)));
+    }
+    let (mut app, _realtime) = app_with(song);
+    press(&mut app, " 5");
+    // The macro at 00 takes it to its first choice.
+    assert_drawn(
+        &cell(&app, "Speed", 29),
+        &[
+            "Speed     1/32 •             ",
+            "aaaaaaaaaa.....b.............",
+            "a fg OVERLAY2",
+            "b fg OVERLAY0",
+        ],
+    );
+    // The mark stays faint after the cursor's colour.
+    let speed = named(&app, "Speed");
+    put(&mut app, speed);
+    assert_drawn(
+        &cell(&app, "Speed", 29),
+        &[
+            "Speed     1/32 •             ",
+            "aaaaaaaaaabbbb.c.............",
+            "a fg OVERLAY2",
+            "b fg BASE bg ROSEWATER",
+            "c fg OVERLAY0",
+        ],
+    );
+    // A title's control has it too.
+    assert_drawn(
+        &row(&app, 11, 0, 26),
+        &[
+            "╭─ Filter  LP  12 dB • ───",
+            "aabccccccbbbbbbbbbbbbdbaaa",
+            "a fg SURFACE1",
+            "b fg TEXT",
+            "c fg OVERLAY2",
+            "d fg OVERLAY0",
+        ],
+    );
+}
+
+#[test]
 fn a_setting_left_alone_or_doing_nothing_here_is_dim() {
     let (app, _realtime) = on_sound();
     assert_drawn(
