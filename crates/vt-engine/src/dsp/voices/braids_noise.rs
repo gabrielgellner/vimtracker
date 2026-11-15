@@ -21,10 +21,10 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use super::Settings;
 use super::braids_parts::{
     BRAIDS_BLOCK, INNER, Lcg, MODERATE_OVERDRIVE, Macro, Model, Pitch, sine, waveshape, whole,
 };
-use super::virtual_analog::Settings;
 
 /// Noise through two resonant peaks, one at the note and one up to five octaves either way.
 pub(crate) type TwinPeaks = Macro<TwinPeaksModel>;
@@ -416,8 +416,8 @@ impl Model for DigitalModulationModel {
 mod tests {
     use super::*;
     use crate::dsp::signals::{differs, rms};
+    use crate::dsp::voices::SynthEngine;
     use crate::dsp::voices::virtual_analog::VirtualAnalog;
-    use crate::voice::SynthEngine;
 
     const RATE: u32 = 48_000;
 

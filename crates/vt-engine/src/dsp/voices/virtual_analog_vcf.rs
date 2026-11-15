@@ -19,12 +19,13 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use super::Settings;
 use super::variable_shape::VariableShape;
-use super::virtual_analog::{BLOCK, DRIFT, Moving, Settings};
+use super::virtual_analog::{BLOCK, DRIFT, Moving};
 use crate::dsp::blocks::clip::soft_clip;
 use crate::dsp::blocks::drift::Drift;
 use crate::dsp::blocks::plaits_parts::{DcBlocker, Svf};
-use crate::voice::SynthEngine;
+use crate::dsp::voices::SynthEngine;
 
 /// How loud it is against the other machines. Its filter and clipping leave it near the virtual
 /// analog voice's level already: at 220 Hz with the filter half open, a saw is a decibel under it

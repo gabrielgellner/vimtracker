@@ -20,10 +20,11 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use super::Settings;
 use super::braids_parts::{
     AnalogOscillator, INNER, Macro, Model, NO_SYNC, Pitch, Shape, VIOLENT_OVERDRIVE, mix, waveshape,
 };
-use super::virtual_analog::{Moving, Settings};
+use super::virtual_analog::Moving;
 
 /// The CS-80-like saw: each cycle starts on a step, held for `Notch`, at a level `Depth` sets.
 pub(crate) type CSaw = Macro<CSawModel>;
@@ -297,8 +298,8 @@ impl Model for TripleModel {
 mod tests {
     use super::*;
     use crate::dsp::signals::{differs, rms};
+    use crate::dsp::voices::SynthEngine;
     use crate::dsp::voices::virtual_analog::VirtualAnalog;
-    use crate::voice::SynthEngine;
 
     const RATE: u32 = 48_000;
 

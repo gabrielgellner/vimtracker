@@ -21,8 +21,9 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use super::Settings;
 use super::braids_parts::{INNER, Macro, Model, Pitch, sine};
-use super::virtual_analog::{Settings, next_blep, this_blep};
+use super::virtual_analog::{next_blep, this_blep};
 
 /// Two sines at fixed pitches, in a bell-shaped window that restarts each cycle of the note.
 pub(crate) type Vosim = Macro<VosimModel>;
@@ -221,8 +222,8 @@ impl Model for FofModel {
 mod tests {
     use super::*;
     use crate::dsp::signals::{differs, rms};
+    use crate::dsp::voices::SynthEngine;
     use crate::dsp::voices::virtual_analog::VirtualAnalog;
-    use crate::voice::SynthEngine;
 
     const RATE: u32 = 48_000;
 

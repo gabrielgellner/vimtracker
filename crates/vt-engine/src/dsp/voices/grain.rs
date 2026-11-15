@@ -19,10 +19,11 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use super::virtual_analog::{BLOCK, Moving, Settings, next_blep, this_blep};
+use super::Settings;
+use super::virtual_analog::{BLOCK, Moving, next_blep, this_blep};
 use crate::dsp::blocks::plaits_parts::OnePole;
 use crate::dsp::blocks::sine_table::SINE;
-use crate::voice::SynthEngine;
+use crate::dsp::voices::SynthEngine;
 
 /// The highest frequency an oscillator runs at, as a fraction of the sample rate.
 const MAX_FREQUENCY: f32 = 0.25;

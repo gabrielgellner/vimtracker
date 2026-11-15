@@ -20,8 +20,9 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use super::Settings;
 use super::braids_parts::{INNER, Macro, Model, Pitch, mix, sine};
-use super::virtual_analog::{Moving, Settings};
+use super::virtual_analog::Moving;
 
 /// A resonant filter's sound, faked as Casio's CZ did: a sine at the cutoff, restarted each cycle
 /// of the note and windowed by a saw or a triangle, blended with a square made the same way.
@@ -228,8 +229,8 @@ impl Model for ChaoticFmModel {
 mod tests {
     use super::*;
     use crate::dsp::signals::{differs, rms};
+    use crate::dsp::voices::SynthEngine;
     use crate::dsp::voices::virtual_analog::VirtualAnalog;
-    use crate::voice::SynthEngine;
 
     const RATE: u32 = 48_000;
 

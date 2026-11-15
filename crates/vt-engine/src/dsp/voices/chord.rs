@@ -20,10 +20,11 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use super::Settings;
 use super::chord_bank::{ChordBank, VOICES};
-use super::virtual_analog::{BLOCK, Moving, Settings, next_blep, this_blep};
+use super::virtual_analog::{BLOCK, Moving, next_blep, this_blep};
 use super::wavetable::{PER_BANK, WAVE, stored};
-use crate::voice::SynthEngine;
+use crate::dsp::voices::SynthEngine;
 
 /// The highest frequency a wavetable voice runs at, as a fraction of the sample rate.
 const MAX_FREQUENCY: f32 = 0.25;

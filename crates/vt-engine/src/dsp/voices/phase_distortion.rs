@@ -19,11 +19,12 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use super::Settings;
 use super::fm::ratio;
 use super::variable_shape::VariableShape;
-use super::virtual_analog::{BLOCK, Settings};
+use super::virtual_analog::BLOCK;
 use crate::dsp::blocks::sine_table::SINE;
-use crate::voice::SynthEngine;
+use crate::dsp::voices::SynthEngine;
 
 /// It runs at twice the rate, then drops every other frame, as Plaits does.
 const OVERSAMPLING: usize = 2;
