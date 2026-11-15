@@ -754,6 +754,19 @@ numbered `"{at:02X}  {name}"` (`pickers.rs:480`), and with a meaning (`pickers.r
 that list things that aren't choices of a value stay their own: grooves, samples, presets,
 patches, the macro picker.
 
+**As U8 built it** (`widgets/param/edit.rs`, `track_page/pickers.rs`). The view gained what the
+edits read: `pace` (`Even`, `Once` for the track's own lists and an effect's, which a count has
+never moved further, `Time`, `Hold` and `Bars`, whose steps are worked out again after each step
+of a count), `reads` and `why_not` for `typed`, `title` for `K`'s list, and `choices` as `Choice`s
+with a meaning and a heading. `stepped_fine` gives the value as well as the fine byte, as a fine
+step carries. A machine's own lists still step as hex, `+` moving `10` and stopping at the last,
+as they did. `choice_picker(track, control, list)` replaces ten of the pickers; the machines'
+glyphs, the roles' colours and the presets after a machine or a slot are added by the control.
+The mod slot's type, rate, fade and reset, the groove, the sample, slice and tune lists and the
+macro's patches stay their own, as do the 30 of the 42 `open_*_picker`s that aren't the track
+page's settings. A Roto knob's turn writes through `set` too, with `edit::shared` and
+`edit::places` for where its position lands.
+
 ### 3.6 The grid and page container
 
 The container exists. It is three steps, and the gaps are small:

@@ -207,9 +207,10 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     // The sampler at the top, on its own, and every voice folded under its kind.
     let picker = app.picker.as_ref().unwrap();
     let top: Vec<_> = picker.shown().map(|item| item.pick.clone()).collect();
-    let sampler = vt_tui::input::picker::Pick::Machine {
+    let sampler = vt_tui::input::picker::Pick::Param {
         track: 0,
-        machine: Machine::Sampler,
+        control: vt_tui::track_page::Control::Machine,
+        value: 0,
     };
     assert_eq!(top, [sampler]);
     for (at, (kind, voices)) in SynthVoice::KINDS.iter().enumerate() {

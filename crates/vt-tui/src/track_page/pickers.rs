@@ -1,29 +1,31 @@
-//! `K` and `i` on a setting that's a choice: a list of what it can be.
+//! `K` and `i` on a setting that's a choice: a list of what it can be. Every setting the page
+//! describes lists its choices one way, [`choice_picker`] from its view's; only the lists of
+//! things that aren't a value's choices keep their own: a sampler's sample, slice and tune, the
+//! groove a track can follow, a macro's patches, and a mod slot's type, rate, fade and reset.
 
 use ratatui::style::Style;
-use vt_model::accumulator::{Accumulation, MOST_DEGREES, Reset};
-use vt_model::arpeggio::{Arpeggio, MOST_OCTAVES, retrig_meaning};
-use vt_model::insert::Insert;
-use vt_model::lfo::{Fade, Lfo, Shape, note_rates};
-use vt_model::listed::Listed;
-use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot, Polarity};
-use vt_model::settings::{Kind, SettingId};
-use vt_model::song::{FilterType, Machine, Role};
-use vt_model::speed::Speed;
-use vt_model::steps::{Loop, StepRate, Steps};
+use vt_model::accumulator::MOST_DEGREES;
+use vt_model::arpeggio::MOST_OCTAVES;
+use vt_model::lfo::{Fade, Lfo, note_rates};
+use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot};
+use vt_model::preset::PresetKind;
+use vt_model::settings::SettingId;
+use vt_model::song::{Machine, Role, Track};
+use vt_model::steps::{StepRate, Steps};
 
 use crate::app::App;
 use crate::glyphs;
 use crate::input::command::{Line, PatchLine, PresetLine};
 use crate::input::picker::{Item, Pick, Picker};
 use crate::theme;
-use crate::track_page::view::IN_SCALE_PITCH;
-use vt_model::preset::PresetKind;
+use crate::views::widgets::param::edit::{self, ChoiceList};
 
 use super::controls::no_modes;
 use super::editing::toggle_control;
+use super::view::view;
+use super::{AccumulatorField, ArpField, Control, ModField};
 
-/// The titles of each slot's lists, as a list's title is fixed text.
+/// The titles of each slot's lists of types, as a list's title is fixed text.
 const TYPE_TITLES: [&str; MOD_SLOTS] = [
     "Mod 1 type",
     "Mod 2 type",
@@ -32,56 +34,6 @@ const TYPE_TITLES: [&str; MOD_SLOTS] = [
     "Mod 5 type",
     "Mod 6 type",
 ];
-const MODE_TITLES: [&str; MOD_SLOTS] = [
-    "Mod 1 mode",
-    "Mod 2 mode",
-    "Mod 3 mode",
-    "Mod 4 mode",
-    "Mod 5 mode",
-    "Mod 6 mode",
-];
-const SOURCE_TITLES: [&str; MOD_SLOTS] = [
-    "Mod 1 source",
-    "Mod 2 source",
-    "Mod 3 source",
-    "Mod 4 source",
-    "Mod 5 source",
-    "Mod 6 source",
-];
-const CURVE_TITLES: [&str; MOD_SLOTS] = [
-    "Mod 1 curve",
-    "Mod 2 curve",
-    "Mod 3 curve",
-    "Mod 4 curve",
-    "Mod 5 curve",
-    "Mod 6 curve",
-];
-const POLARITY_TITLES: [&str; MOD_SLOTS] = [
-    "Mod 1 polarity",
-    "Mod 2 polarity",
-    "Mod 3 polarity",
-    "Mod 4 polarity",
-    "Mod 5 polarity",
-    "Mod 6 polarity",
-];
-const DESTINATION_TITLES: [&str; MOD_SLOTS] = [
-    "Mod 1 destination",
-    "Mod 2 destination",
-    "Mod 3 destination",
-    "Mod 4 destination",
-    "Mod 5 destination",
-    "Mod 6 destination",
-];
-use super::{AccumulatorField, ArpField, Control, ModField};
-
-/// A picker's items for every one of a [`Listed`] type's values, in order, each with what it does
-/// and picking what `pick` makes of it.
-fn items_of<X: Listed>(pick: impl Fn(X) -> Pick) -> Vec<Item> {
-    X::ALL
-        .iter()
-        .map(|each| Item::new(each.name(), pick(*each)).meaning(each.meaning()))
-        .collect()
-}
 
 /// A list of what a machine or a slot can be, with loading and saving a preset of it after them,
 /// as Ableton's hot-swap is on a device's title (decision 310).
@@ -143,337 +95,112 @@ const PATCHES: &str = "Patches";
 /// The heading the preset items are listed under.
 const PRESETS: &str = "Presets";
 
+/// The picker for a setting's choices, as its view lists them, opened on the one it has, each
+/// item setting the `track`th track's setting to its place in the list. The machines draw with
+/// their glyphs and the roles in their colours, and the machines and an effect slot's are
+/// followed by loading and saving a preset.
+pub(crate) fn choice_picker(track: usize, control: Control, list: ChoiceList) -> Picker {
+    let items = list.items.into_iter().enumerate().map(|(at, choice)| {
+        let pick = Pick::Param {
+            track,
+            control,
+            value: at as i32,
+        };
+        let item = Item::new(choice.name, pick)
+            .meaning(choice.meaning)
+            .category(choice.group);
+        match control {
+            Control::Machine => Item {
+                label: format!("{} {}", glyphs::machine(Machine::ALL[at]), item.label),
+                ..item
+            },
+            Control::Role => {
+                let colour = theme::role(Role::ALL[at]);
+                item.styled(colour.map_or_else(Style::new, |colour| Style::new().fg(colour)))
+            }
+            _ => item,
+        }
+    });
+    let items = items.collect();
+    let items = match control {
+        Control::Machine => with_presets(items, PresetKind::Sound),
+        Control::Insert(_) => with_presets(items, PresetKind::Effect),
+        _ => items,
+    };
+    Picker::new(list.title, items).opened_on(list.at)
+}
+
+/// What the status line says for `K` on a setting that isn't a list.
+fn no_list(control: Control, track: &Track) -> String {
+    match control {
+        Control::InsertParam(..) => "This is a value: = and - change it, and i types it".to_owned(),
+        Control::Accumulator(AccumulatorField::Up | AccumulatorField::Down) => format!(
+            "A limit is a number of degrees from 1 to {MOST_DEGREES}: i types it, = and - move it"
+        ),
+        Control::Arpeggio(ArpField::Octaves) => {
+            format!("Octaves is a number from 1 to {MOST_OCTAVES}: i types it, = and - move it")
+        }
+        Control::FilterMode => no_modes(track.filter),
+        Control::Mod(..) => {
+            "K chooses from a list on Type, Mode, Loop, Polarity, Dest, Shape, Rate, Fade and Reset"
+                .to_owned()
+        }
+        _ => {
+            "K chooses from a list on Machine, Voice, Patch, File, Type, Mode, Groove, Speed, Dest, Shape, Rate and Reset"
+                .to_owned()
+        }
+    }
+}
+
 impl App {
     pub(super) fn open_control_picker(&mut self) {
         let control = self.track_control();
-        // Something that's only on or off switches, as there's nothing to choose between.
-        if matches!(
-            control,
-            Control::Mute | Control::Solo | Control::Limiter | Control::Safe
-        ) {
-            toggle_control(&mut self.services, control);
-            return;
-        }
-        if self.track_control() == Control::Sample {
-            self.open_bank_picker();
-            return;
-        }
-        if matches!(control, Control::Tune | Control::Cents) {
-            self.open_tuning_picker(control);
-            return;
-        }
-        if self.track_control().setting_on(&self.services.page_track()) == Some(SettingId::SLICE) {
-            self.open_slice_picker();
-            return;
-        }
-        if let Control::Insert(slot) = control {
-            self.open_insert_picker(slot);
-            return;
-        }
-        if let Control::InsertParam(slot, param) = control {
-            self.open_insert_param_picker(slot, param);
-            return;
-        }
-        if self.track_control() == Control::FilterType {
-            self.open_filter_picker();
-            return;
-        }
-        if self.track_control() == Control::FilterMode {
-            self.open_filter_mode_picker();
-            return;
-        }
-        if control == Control::Role {
-            self.open_role_picker();
-            return;
-        }
-        if self.track_control() == Control::Speed {
-            self.open_speed_picker();
-            return;
-        }
-        if self.track_control() == Control::Machine {
-            self.open_machine_picker();
-            return;
-        }
-        if self.track_control() == Control::Groove {
-            self.open_groove_picker(true);
-            return;
-        }
-        if let Some(id) = self.track_control().setting_on(&self.services.page_track())
-            && let Kind::Stepped { choices, .. } = id.entry().kind
-        {
-            self.open_setting_picker(id, choices);
-            return;
-        }
-        if let Control::Accumulator(field) = self.track_control() {
-            self.open_accumulator_picker(field);
-            return;
-        }
-        if let Control::Arpeggio(field) = self.track_control() {
-            self.open_arpeggio_picker(field);
-            return;
-        }
-        // A macro is the patch's knob, so its list is adding a patch and saving one.
-        if let Control::Macro(_) = control {
-            self.show_picker(Picker::new("Patches", with_patches(Vec::new())));
-            return;
-        }
-        let Control::Mod(slot, field) = self.track_control() else {
-            self.services.status =
-                "K chooses from a list on Machine, Voice, Patch, File, Type, Mode, Groove, Speed, Dest, Shape, Rate and Reset"
-                    .to_owned();
-            return;
-        };
-        self.open_mod_picker(slot, field);
-    }
-
-    /// List the filter types, with what each does and the current one highlighted.
-    /// List the effects a slot can hold, with the current one highlighted.
-    fn open_insert_picker(&mut self, slot: usize) {
-        let track = self.services.cursor.track;
-        let current = self.services.page_track().inserts[slot];
-        let items = Insert::ALL
-            .map(|insert| {
-                Item::new(
-                    insert.name(),
-                    Pick::Insert {
-                        track,
-                        slot,
-                        // Choosing what's already there keeps its settings.
-                        insert: if insert.name() == current.name() {
-                            current
-                        } else {
-                            insert
-                        },
-                    },
-                )
-                .meaning(insert.meaning())
-            })
-            .to_vec();
-        let items = with_presets(items, PresetKind::Effect);
-        let position = Insert::ALL
-            .iter()
-            .position(|insert| insert.name() == current.name());
-        self.show_picker(Picker::new("Effect", items).opened_on(position));
-    }
-
-    /// List the choices of a slot's setting, with the current one highlighted.
-    fn open_insert_param_picker(&mut self, slot: usize, param: usize) {
-        let track = self.services.cursor.track;
-        let current = self.services.page_track().inserts[slot];
-        let Some(found) = current
-            .params()
-            .get(param)
-            .filter(|p| !p.choices().is_empty())
-        else {
-            self.services.status = "This is a value: = and - change it, and i types it".to_owned();
-            return;
-        };
-        let items = found
-            .choices()
-            .iter()
-            .enumerate()
-            .map(|(index, choice)| {
-                Item::new(
-                    *choice,
-                    Pick::Insert {
-                        track,
-                        slot,
-                        insert: current.with_value(param, index as u8),
-                    },
-                )
-            })
-            .collect();
-        let position = usize::from(current.value(param));
-        self.show_picker(Picker::new(found.name, items).opened_on(Some(position)));
-    }
-
-    fn open_filter_picker(&mut self) {
-        let track = self.services.cursor.track;
-        let current = self.services.page_track().filter;
-        let items = items_of(|filter| Pick::FilterType { track, filter });
-        let position = FilterType::ALL.iter().position(|filter| *filter == current);
-        self.show_picker(Picker::new("Filter type", items).opened_on(position));
-    }
-
-    /// List what one of the accumulator's settings can be, with what each does and the one it has
-    /// highlighted. Its limits are numbers, typed or moved instead.
-    fn open_accumulator_picker(&mut self, field: AccumulatorField) {
-        let track = self.services.cursor.track;
-        let now = self.services.page_track().accumulation;
-        let pick = |accumulation| Pick::Accumulation {
-            track,
-            accumulation,
-        };
-        let (title, items): (&str, Vec<Item>) = match field {
-            AccumulatorField::Up | AccumulatorField::Down => {
-                self.services.status = format!(
-                    "A limit is a number of degrees from 1 to {MOST_DEGREES}: i types it, = and - move it"
-                );
-                return;
-            }
-            AccumulatorField::Moves => (
-                "Accumulator moves",
-                items_of(|moves| pick(Accumulation { moves, ..now })),
-            ),
-            AccumulatorField::AtLimit => (
-                "Accumulator at its limit",
-                items_of(|at_limit| pick(Accumulation { at_limit, ..now })),
-            ),
-            AccumulatorField::Adds => (
-                "Accumulator adds",
-                items_of(|adds| pick(Accumulation { adds, ..now })),
-            ),
-            AccumulatorField::Reset => (
-                "Accumulator starts again",
-                Reset::all()
-                    .map(|reset| {
-                        Item::new(reset.name(), pick(Accumulation { reset, ..now }))
-                            .meaning(reset.meaning())
-                    })
-                    .collect(),
-            ),
-        };
-        let position = items.iter().position(|item| item.pick == pick(now));
-        self.show_picker(Picker::new(title, items).opened_on(position));
-    }
-
-    /// List what one of the arpeggio's settings can be, with what each does and the one it has
-    /// highlighted. Its octaves are a number, typed or moved instead.
-    fn open_arpeggio_picker(&mut self, field: ArpField) {
-        let track = self.services.cursor.track;
-        let now = self.services.page_track().arpeggio;
-        let pick = |arpeggio| Pick::Arpeggio { track, arpeggio };
-        let (title, items): (&str, Vec<Item>) = match field {
-            ArpField::Octaves => {
-                self.services.status = format!(
-                    "Octaves is a number from 1 to {MOST_OCTAVES}: i types it, = and - move it"
-                );
-                return;
-            }
-            ArpField::Rate => ("Arp rate", items_of(|rate| pick(Arpeggio { rate, ..now }))),
-            ArpField::Mode => ("Arp mode", items_of(|mode| pick(Arpeggio { mode, ..now }))),
-            ArpField::Retrig => (
-                "Arp retrig",
-                [false, true]
-                    .map(|retrig| {
-                        let name = if retrig { "on" } else { "off" };
-                        Item::new(name, pick(Arpeggio { retrig, ..now }))
-                            .meaning(retrig_meaning(retrig))
-                    })
-                    .to_vec(),
-            ),
-        };
-        let position = items.iter().position(|item| item.pick == pick(now));
-        self.show_picker(Picker::new(title, items).opened_on(position));
-    }
-
-    /// List the speeds a track's steps can go at, with the one it plays highlighted.
-    fn open_speed_picker(&mut self) {
-        let track = self.services.cursor.track;
-        let current = self.services.page_track().speed;
-        let items = items_of(|speed| Pick::Speed { track, speed });
-        let position = Speed::ALL.iter().position(|speed| *speed == current);
-        self.show_picker(Picker::new("Speed", items).opened_on(position));
-    }
-
-    /// List the roles, each in its colour with what it's for, `Auto` saying what the machine
-    /// makes it, and the track's highlighted.
-    fn open_role_picker(&mut self) {
-        let track = self.services.cursor.track;
         let page = self.services.page_track();
-        let items = Role::ALL
-            .map(|role| {
-                let meaning = match role {
-                    Role::Auto => format!("As its machine is for: {}", page.machine.role().name()),
-                    _ => role.meaning().to_owned(),
-                };
-                let style =
-                    theme::role(role).map_or_else(Style::new, |colour| Style::new().fg(colour));
-                Item::new(role.name(), Pick::Role { track, role })
-                    .meaning(meaning)
-                    .styled(style)
-            })
-            .to_vec();
-        let position = Role::ALL.iter().position(|role| *role == page.role);
-        self.show_picker(Picker::new("Role", items).opened_on(position));
-    }
-
-    /// List the modes the track's filter type offers, with what each does and the one it plays
-    /// highlighted.
-    fn open_filter_mode_picker(&mut self) {
-        let track = self.services.cursor.track;
-        let page = self.services.page_track();
-        let modes = page.filter.modes();
-        if modes.is_empty() {
-            self.services.status = no_modes(page.filter);
-            return;
+        match control {
+            // Something that's only on or off switches, as there's nothing to choose between.
+            Control::Mute | Control::Solo | Control::Limiter | Control::Safe => {
+                toggle_control(&mut self.services, control);
+            }
+            Control::Sample => self.open_bank_picker(),
+            Control::Tune | Control::Cents => self.open_tuning_picker(control),
+            _ if control.setting_on(&page) == Some(SettingId::SLICE) => self.open_slice_picker(),
+            // A track can follow the project's, which isn't one of the grooves.
+            Control::Groove => self.open_groove_picker(true),
+            // A macro is the patch's knob, so its list is adding a patch and saving one.
+            Control::Macro(_) => {
+                self.show_picker(Picker::new("Patches", with_patches(Vec::new())));
+            }
+            Control::Mod(
+                slot,
+                field @ (ModField::Type | ModField::Rate | ModField::Fade | ModField::Reset),
+            ) => self.open_mod_picker(slot, field),
+            // The Gen page's lists are its own (`generators`).
+            Control::Gen { .. } | Control::NewGenerator(_) => {
+                self.services.status = no_list(control, &page);
+            }
+            _ => {
+                let shown = view(control, &page, self.services.song(), false);
+                match shown.as_ref().and_then(edit::choices) {
+                    Some(list) => {
+                        let picker = choice_picker(self.services.cursor.track, control, list);
+                        self.show_picker(picker);
+                    }
+                    None => self.services.status = no_list(control, &page),
+                }
+            }
         }
-        let items = modes
-            .iter()
-            .map(|mode| {
-                Item::new(mode.name(), Pick::FilterMode { track, mode: *mode })
-                    .meaning(mode.meaning())
-            })
-            .collect();
-        let playing = page.filter.plays(page.filter_mode);
-        let position = modes.iter().position(|mode| *mode == playing);
-        self.show_picker(Picker::new("Filter mode", items).opened_on(position));
     }
 
-    /// List the machines, each with its glyph, a sampler, a synth or a drum, and what it does,
-    /// the sampler at the top and each voice under its kind, and the current one highlighted.
-    fn open_machine_picker(&mut self) {
-        let track = self.services.cursor.track;
-        let current = self.services.page_track().machine;
-        let items = Machine::ALL
-            .map(|machine| {
-                let label = format!("{} {}", glyphs::machine(machine), machine.name());
-                Item::new(label, Pick::Machine { track, machine })
-                    .meaning(machine.meaning())
-                    .category(machine.category())
-            })
-            .to_vec();
-        let items = with_presets(items, PresetKind::Sound);
-        let position = Machine::ALL.iter().position(|machine| *machine == current);
-        self.show_picker(Picker::new("Machine", items).opened_on(position));
-    }
-
-    /// List what a machine's setting can be, such as 6-op's patches, with the current one
-    /// highlighted.
-    fn open_setting_picker(&mut self, setting: SettingId, choices: &'static [&'static str]) {
-        let track = self.services.cursor.track;
-        let current = self.services.page_track().setting(setting);
-        let items = (0..choices.len().min(0x100))
-            .map(|at| {
-                Item::new(
-                    format!("{at:02X}  {}", choices[at]),
-                    Pick::Setting {
-                        track,
-                        setting,
-                        value: at as u8,
-                    },
-                )
-            })
-            .collect();
-        self.show_picker(Picker::new(setting.name(), items).opened_on(Some(usize::from(current))));
-    }
-
-    /// List what a mod slot's setting can be, with the current one highlighted: its type, its
-    /// type's mode, where it goes, or an envelope's or an LFO's own that are lists.
+    /// List what a mod slot's setting can be that isn't one of its view's choices, with the
+    /// current one highlighted: its type, which changes what the device is, a rate or a fade,
+    /// which aren't one number, and an envelope's reset, on first.
     fn open_mod_picker(&mut self, slot: usize, field: ModField) {
         let track = self.services.cursor.track;
-        let page = self.services.page_track();
-        let modulator = page.mods[slot];
+        let modulator = self.services.page_track().mods[slot];
         let pick = |modulator| Pick::Mod {
             track,
             slot,
             modulator,
-        };
-        // The slot with the setting at one of its choices, as the slot counts them.
-        let chosen = |at: usize| {
-            let mut chosen = modulator;
-            chosen.set_field(field, at as i32);
-            pick(chosen)
         };
         let (lfo, steps) = (modulator.lfo, modulator.steps);
         let (title, items): (&'static str, Vec<Item>) = match field {
@@ -484,91 +211,12 @@ impl App {
                 });
                 (TYPE_TITLES[slot], with_patches(kinds.to_vec()))
             }
-            // An envelope's curve, how notes start an LFO or Steps, or what Track follows.
-            ModField::Mode if modulator.kind.has_mode() => {
-                let titles = match modulator.kind {
-                    ModKind::Lfo | ModKind::Steps => MODE_TITLES,
-                    ModKind::Track => SOURCE_TITLES,
-                    _ => CURVE_TITLES,
-                };
-                let modes = modulator
-                    .kind
-                    .modes()
-                    .into_iter()
-                    .enumerate()
-                    .map(|(at, (name, meaning))| Item::new(name, chosen(at)).meaning(meaning))
-                    .collect();
-                (titles[slot], modes)
-            }
             ModField::Rate if modulator.kind == ModKind::Steps => {
                 let rates = StepRate::ALL.map(|rate| {
                     let steps = Steps { rate, ..steps };
                     Item::new(rate.to_string(), pick(ModSlot { steps, ..modulator }))
                 });
                 ("Steps rate", rates.to_vec())
-            }
-            ModField::Loop => {
-                let loops = Loop::ALL.map(|looping| {
-                    let steps = Steps { looping, ..steps };
-                    Item::new(looping.to_string(), pick(ModSlot { steps, ..modulator }))
-                        .meaning(looping.meaning())
-                });
-                ("Steps loop", loops.to_vec())
-            }
-            ModField::Polarity => {
-                let both = Polarity::ALL.map(|polarity| {
-                    let chosen = ModSlot {
-                        polarity: Some(polarity),
-                        ..modulator
-                    };
-                    Item::new(polarity.name(), pick(chosen)).meaning(polarity.meaning())
-                });
-                (POLARITY_TITLES[slot], both.to_vec())
-            }
-            ModField::Destination => {
-                let off = Item::new(
-                    "---",
-                    pick(ModSlot {
-                        destination: None,
-                        in_scale: false,
-                        ..modulator
-                    }),
-                )
-                .meaning("Off");
-                // `Pitch` twice: as it is, and moving the note along the song's scale.
-                let on = SettingId::for_mod(&page, slot)
-                    .into_iter()
-                    .flat_map(|destination| {
-                        let scaled = (destination == SettingId::PITCH).then_some(true);
-                        [Some(false), scaled]
-                            .into_iter()
-                            .flatten()
-                            .map(move |in_scale| (destination, in_scale))
-                    })
-                    .map(|(destination, in_scale)| {
-                        let (name, meaning) = if in_scale {
-                            (
-                                IN_SCALE_PITCH.to_owned(),
-                                "Moves the note along the song's scale".to_owned(),
-                            )
-                        } else {
-                            (destination.name_on(&page), destination.meaning())
-                        };
-                        Item::new(
-                            name,
-                            pick(ModSlot {
-                                destination: Some(destination),
-                                in_scale,
-                                ..modulator
-                            }),
-                        )
-                        .meaning(meaning)
-                        .category(destination.group())
-                    });
-                (
-                    DESTINATION_TITLES[slot],
-                    std::iter::once(off).chain(on).collect(),
-                )
             }
             ModField::Reset => {
                 let choices = [true, false].map(|reset| {
@@ -577,25 +225,11 @@ impl App {
                     } else {
                         ("off", "Each note goes on from where it is")
                     };
-                    Item::new(name, chosen(usize::from(reset))).meaning(meaning)
+                    let mut chosen = modulator;
+                    chosen.set_field(field, i32::from(reset));
+                    Item::new(name, pick(chosen)).meaning(meaning)
                 });
                 ("Envelope reset", choices.to_vec())
-            }
-            ModField::Shape => {
-                let shapes = Shape::ALL.map(|shape| {
-                    let lfo = Lfo { shape, ..lfo };
-                    let item = Item::new(shape.name(), pick(ModSlot { lfo, ..modulator }));
-                    // The attractors say what they are, and Rössler's name is found without its
-                    // umlaut.
-                    match shape {
-                        Shape::Lorenz => {
-                            item.meaning("chaos round two wings, never quite repeating")
-                        }
-                        Shape::Rossler => item.meaning("Rossler's chaos round one loop"),
-                        _ => item,
-                    }
-                });
-                ("LFO shape", shapes.to_vec())
             }
             ModField::Rate => {
                 let rates = note_rates()
@@ -607,7 +241,7 @@ impl App {
                     .collect();
                 ("LFO rate. i types any other", rates)
             }
-            ModField::Fade => {
+            _ => {
                 let fades = Fade::ALL.map(|fade| {
                     let lfo = Lfo { fade, ..lfo };
                     let meaning = match fade {
@@ -619,22 +253,8 @@ impl App {
                 });
                 ("LFO fade", fades.to_vec())
             }
-            _ => {
-                self.services.status =
-                    "K chooses from a list on Type, Mode, Loop, Polarity, Dest, Shape, Rate, Fade and Reset"
-                        .to_owned();
-                return;
-            }
         };
-        // A polarity that follows its type opens on the one it plays.
-        let current = match field {
-            ModField::Polarity => ModSlot {
-                polarity: Some(modulator.polarity()),
-                ..modulator
-            },
-            _ => modulator,
-        };
-        let position = items.iter().position(|item| item.pick == pick(current));
+        let position = items.iter().position(|item| item.pick == pick(modulator));
         self.show_picker(Picker::new(title, items).opened_on(position));
     }
 }

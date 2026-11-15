@@ -16,6 +16,8 @@ pub(crate) mod editing;
 mod fx;
 mod generators;
 mod modulation;
+#[cfg(test)]
+mod parity;
 mod pickers;
 mod pictures;
 mod sound;

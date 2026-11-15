@@ -186,6 +186,13 @@ pub enum Pick {
         track: usize,
         machine: Machine,
     },
+    /// One of the choices of a setting the track page describes, for a track, by its place in
+    /// the setting's list (`track_page::view`).
+    Param {
+        track: usize,
+        control: crate::track_page::Control,
+        value: i32,
+    },
     /// A value for one of a track's machine's settings, such as 6-op's patch.
     Setting {
         track: usize,

@@ -1,6 +1,6 @@
 //! A knob turned on the Roto as an edit of the song: the way back from [`super::devices`], a
-//! knob's position to the setting's value it stands for, as the same `Action` a key would give,
-//! and the value as the app writes it, for the Roto to show. Pure, like the mapping: a track and
+//! knob's position to the setting's value it stands for, written as a key writes it, by the
+//! setting's view and `track_page::set` (#739), and the value as the app writes it, for the Roto to show. Pure, like the mapping: a track and
 //! its song in, an action out, so it's tested with no Roto at all.
 //!
 //! **Where a position lands** is where the mapping puts that value, so a knob left alone sends
@@ -10,27 +10,22 @@
 //! note division. A knob that lands where the setting already is gives no action, so it leaves
 //! no undo step.
 
-use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Reset};
 use vt_model::action::Action;
-use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES};
-use vt_model::constants::{MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::groove::GrooveId;
-use vt_model::insert::Insert;
-use vt_model::kit::CHOKE_GROUPS;
+use vt_model::envelope::Hold;
 use vt_model::lfo::{Rate, note_rates};
-use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot, Polarity};
-use vt_model::settings::{Kind, SettingId, gate_percent, gate_value};
+use vt_model::modulation::{ModKind, ModSlot};
+use vt_model::settings::{Kind, SettingId};
 use vt_model::shape::GenParam;
 use vt_model::shape::params::Units as GenUnits;
-use vt_model::song::{FilterType, Machine, Role, Song, Track, trim_text};
-use vt_model::speed::Speed;
+use vt_model::song::{Song, Track, trim_text};
 use vt_model::steps::StepRate;
 use vt_roto::live::{share_of, step_at};
 
 use crate::shaping::{live_shown, with_live};
 use crate::track_page::tuning::{tuning, tuning_most};
-use crate::track_page::{AccumulatorField, ArpField, Control, ModField, view};
+use crate::track_page::{Control, ModField, ParamView, set, view};
 use crate::views::track::toggle_on;
+use crate::views::widgets::param::edit;
 
 use super::devices::{hold_steps, knob, rate_position, time_steps};
 
@@ -47,44 +42,6 @@ fn pick<T: Copy>(items: &[T], position: u16) -> T {
 /// The action for a value, if it's a change.
 fn changed<T: PartialEq>(now: T, was: T, action: impl FnOnce(T) -> Action) -> Option<Action> {
     (now != was).then(|| action(now))
-}
-
-/// A setting of the registry at a position, as its coarse value and, if it has them, its fine
-/// part, with the actions that set what changed: `coarse` makes the action for the coarse value.
-fn registry(
-    id: SettingId,
-    position: u16,
-    coarse: u8,
-    fine: Option<u8>,
-    set_coarse: impl FnOnce(u8) -> Action,
-    set_fine: impl FnOnce(u8) -> Action,
-) -> Option<Action> {
-    match id.entry().kind {
-        Kind::Continuous { top, .. } => match fine {
-            Some(was_fine) => {
-                let at = whole(position, u32::from(top) << 8);
-                let (to, to_fine) = ((at >> 8) as u8, (at & 0xFF) as u8);
-                let mut actions = Vec::new();
-                if to != coarse {
-                    actions.push(set_coarse(to));
-                }
-                // There's no fine part at the top.
-                let to_fine = if to == top { 0 } else { to_fine };
-                if to_fine != was_fine {
-                    actions.push(set_fine(to_fine));
-                }
-                match actions.len() {
-                    0 => None,
-                    1 => actions.pop(),
-                    _ => Some(Action::Batch(actions)),
-                }
-            }
-            None => changed(whole(position, u32::from(top)) as u8, coarse, set_coarse),
-        },
-        Kind::Stepped { choices, .. } => {
-            changed(step_at(position, choices.len()) as u8, coarse, set_coarse)
-        }
-    }
 }
 
 /// An envelope's time at a position, by the steps `=` takes.
@@ -118,12 +75,6 @@ fn rate_at(rate: Rate, position: u16) -> Rate {
         .unwrap_or(rate)
 }
 
-/// A depth either side of none at a position.
-fn depth_at(position: u16) -> i16 {
-    let top = MAX_DEPTH;
-    whole(position, (2 * top) as u32) as i16 - top
-}
-
 /// A destination among a list of choices with none first, at a position.
 fn destination_at(choices: Vec<SettingId>, position: u16) -> Option<SettingId> {
     let at = step_at(position, choices.len() + 1);
@@ -132,7 +83,9 @@ fn destination_at(choices: Vec<SettingId>, position: u16) -> Option<SettingId> {
 
 /// What the knob for a control on a track, the `at`th of the song's, does turned to a position:
 /// the action that puts its setting there, or nothing if it's there already or the knob is a
-/// hole.
+/// hole. A knob takes the keys' way: it finds the value its position stands for in the setting's
+/// view, by `param::edit`, and writes it with [`set`], so only the sample, its tune, a mod slot's
+/// destination and rate and a generator's settings have edits of their own here.
 pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option<Action> {
     let track = song.tracks.get(at)?;
     if !control.exists_on(track) {
@@ -143,58 +96,21 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
     if knob(control, track, song).is_some_and(|shown| shown.position == position) {
         return None;
     }
-    if let Some(on) = toggle_on(control, track, song) {
-        let now = step_at(position, 2) == 1;
-        if now == on {
-            return None;
-        }
-        return switched(control, at, track, now);
-    }
+    let share = share_of(position);
     match control {
         Control::Gen {
             phrase,
             generator,
             param,
-        } => gen_turned(song, at, phrase, generator, param, position),
-        Control::NewGenerator(_) => None,
-        Control::Machine => changed(pick(&Machine::ALL, position), track.machine, |machine| {
-            Action::SetTrackMachine { track: at, machine }
-        }),
+        } => return gen_turned(song, at, phrase, generator, param, position),
+        Control::NewGenerator(_) | Control::Mute | Control::Solo => return None,
         Control::Sample => {
             let numbers: Vec<u8> = std::iter::once(0)
                 .chain(song.bank.iter().map(|(number, _)| number))
                 .collect();
-            changed(pick(&numbers, position), track.sample(), |sample| {
+            return changed(pick(&numbers, position), track.sample(), |sample| {
                 Action::SetTrackSample { track: at, sample }
-            })
-        }
-        Control::Setting(_) => {
-            let id = control.setting_on(track)?;
-            registry(
-                id,
-                position,
-                track.setting(id),
-                control.fine_on(track).map(|id| track.fine(id)),
-                |value| Action::SetTrackSetting {
-                    track: at,
-                    setting: id,
-                    value,
-                },
-                |fine| Action::SetTrackFine {
-                    track: at,
-                    setting: id,
-                    fine,
-                },
-            )
-        }
-        // A turn of a macro, coarse and fine together, one undo step.
-        Control::Macro(macro_at) => {
-            let to = whole(position, 0xFF00) as u16;
-            changed(to, track.macros[macro_at].value, |value| Action::SetMacro {
-                track: at,
-                at: macro_at,
-                value,
-            })
+            });
         }
         // The sample's own, as an edit of its bank entry, as the keys make.
         Control::Tune | Control::Cents => {
@@ -202,262 +118,182 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
             let most = i32::from(tuning_most(control));
             let to = whole(position, (2 * most) as u32) as i32 - most;
             let entry = tuning.with(control, Some(to as i8));
-            (entry != *tuning.entry).then_some(Action::SetBankEntry {
+            return (entry != *tuning.entry).then_some(Action::SetBankEntry {
                 number: tuning.number,
                 entry: Some(entry),
-            })
+            });
         }
-        Control::Base(which) => {
-            let coarse = track.control(which);
-            let set = |value| Action::SetTrackBase {
-                track: at,
-                control: which,
-                value,
+        // The knob's list of destinations has `Pitch` once, keeping whether it's in scale.
+        Control::Mod(slot, ModField::Destination) => {
+            let was = track.mods[slot];
+            let modulator = ModSlot {
+                destination: destination_at(SettingId::for_mod(track, slot), position),
+                ..was
             };
-            match which.setting() {
-                Some(id) => registry(
-                    id,
-                    position,
-                    coarse,
-                    control.fine_on(track).map(|id| track.fine(id)),
-                    set,
-                    |fine| Action::SetTrackFine {
-                        track: at,
-                        setting: id,
-                        fine,
-                    },
-                ),
-                None => changed(whole(position, 0xFF) as u8, coarse, set),
-            }
-        }
-        Control::Level => {
-            let top = SettingId::LEVEL.entry().kind.top();
-            changed(
-                whole(position, u32::from(top)) as u8,
-                track.level,
-                |level| Action::SetTrackLevel { track: at, level },
-            )
-        }
-        Control::Trim => changed(whole(position, 0xFF) as u8, track.trim, |trim| {
-            Action::SetTrackTrim { track: at, trim }
-        }),
-        Control::Groove => {
-            let grooves: Vec<GrooveId> = GrooveId::all().collect();
-            let chosen = pick(&grooves, position);
-            let playing = track.groove.unwrap_or(song.groove);
-            (chosen != playing).then_some(Action::SetTrackGroove {
+            return changed(modulator, was, |modulator| Action::SetMod {
                 track: at,
-                groove: Some(chosen),
-            })
+                slot,
+                modulator,
+            });
         }
-        Control::Choke => {
-            let choke = step_at(position, usize::from(CHOKE_GROUPS) + 1) as u8;
-            changed((choke > 0).then_some(choke), track.choke, |choke| {
-                Action::SetTrackChoke { track: at, choke }
-            })
-        }
-        Control::Group => {
-            let group = step_at(position, MAX_GROUPS + 1) as u8;
-            changed((group > 0).then_some(group), track.group, |group| {
-                Action::SetTrackGroup {
-                    first: at,
-                    last: at,
-                    group,
-                }
-            })
-        }
-        Control::Role => changed(pick(&Role::ALL, position), track.role, |role| {
-            Action::SetTrackRole { track: at, role }
-        }),
-        Control::GateLength => {
-            let percent = whole(position, 99) as u8 + 1;
-            (percent != gate_percent(track.gate_length())).then_some(Action::SetTrackGateLength {
-                track: at,
-                gate_length: Some(gate_value(percent)),
-            })
-        }
-        Control::Speed => changed(pick(&Speed::ALL, position), track.speed, |speed| {
-            Action::SetTrackSpeed { track: at, speed }
-        }),
-        Control::Reset => {
-            let reset = whole(position, u32::from(MAX_TRACK_RESET)) as u16;
-            changed((reset > 0).then_some(reset), track.reset, |reset| {
-                Action::SetTrackReset { track: at, reset }
-            })
-        }
-        Control::Glide => changed(whole(position, 0xFF) as u8, track.glide, |glide| {
-            Action::SetTrackGlide { track: at, glide }
-        }),
-        Control::FilterType => changed(pick(&FilterType::ALL, position), track.filter, |filter| {
-            Action::SetFilterType { track: at, filter }
-        }),
-        Control::FilterMode => {
-            let modes = track.filter.modes();
-            if modes.is_empty() {
-                return None;
-            }
-            let playing = track.filter.plays(track.filter_mode);
-            changed(pick(modes, position), playing, |mode| {
-                Action::SetFilterMode { track: at, mode }
-            })
-        }
-        Control::Mod(slot, field) => {
+        Control::Mod(slot, ModField::Rate) => {
             let was = track.mods[slot];
             let mut modulator = was;
-            match field {
-                // What a slot is, the app's alone.
-                ModField::Type | ModField::Reset => return None,
-                ModField::Destination => {
-                    modulator.destination =
-                        destination_at(SettingId::for_mod(track, slot), position);
-                }
-                ModField::Rate if was.kind == ModKind::Steps => {
-                    modulator.steps.rate = pick(&StepRate::ALL, position);
-                }
-                ModField::Rate => modulator.lfo.rate = rate_at(was.lfo.rate, position),
-                ModField::Hold => {
-                    let steps = hold_steps();
-                    let at = whole(position, steps.len() as u32 - 1) as usize;
-                    modulator.ahd.hold = steps[at.min(steps.len() - 1)];
-                }
-                _ => {
-                    let (lowest, highest) = was.bounds(field)?;
-                    let top = (highest - lowest) as u32;
-                    let to = match field {
-                        ModField::Attack | ModField::Decay | ModField::Release | ModField::Peak => {
-                            i32::from(time_at(position))
-                        }
-                        ModField::Depth
-                        | ModField::Deform
-                        | ModField::Smooth
-                        | ModField::Step(_) => i32::from(depth_at(position)),
-                        // One of a list, or a count or a place, by the step the knob is on.
-                        ModField::Mode
-                        | ModField::Polarity
-                        | ModField::Shape
-                        | ModField::Fade
-                        | ModField::Loop
-                        | ModField::Length
-                        | ModField::Start
-                        | ModField::Ratchet => lowest + step_at(position, top as usize + 1) as i32,
-                        // A number from its lowest to its highest.
-                        _ => lowest + whole(position, top) as i32,
-                    };
-                    modulator.set_field(field, to);
-                }
+            match was.kind {
+                ModKind::Steps => modulator.steps.rate = pick(&StepRate::ALL, position),
+                _ => modulator.lfo.rate = rate_at(was.lfo.rate, position),
             }
-            changed(modulator, was, |modulator| Action::SetMod {
+            return changed(modulator, was, |modulator| Action::SetMod {
                 track: at,
                 slot,
                 modulator,
-            })
+            });
         }
-        Control::Accumulator(field) => {
-            let was = track.accumulation;
-            let mut accumulation = was;
-            let degrees: Vec<u8> = (1..=MOST_DEGREES).collect();
-            match field {
-                AccumulatorField::Up => accumulation.up = pick(&degrees, position),
-                AccumulatorField::Down => accumulation.down = pick(&degrees, position),
-                AccumulatorField::Moves => accumulation.moves = pick(&Moves::ALL, position),
-                AccumulatorField::AtLimit => accumulation.at_limit = pick(&AtLimit::ALL, position),
-                AccumulatorField::Adds => accumulation.adds = pick(&Adds::ALL, position),
-                AccumulatorField::Reset => {
-                    let resets: Vec<Reset> = Reset::all().collect();
-                    accumulation.reset = pick(&resets, position);
-                }
-            }
-            changed(accumulation, was, |accumulation: Accumulation| {
-                Action::SetAccumulation {
-                    track: at,
-                    accumulation,
-                }
-            })
-        }
-        Control::Arpeggio(field) => {
-            let was = track.arpeggio;
-            let mut arpeggio = was;
-            let octaves: Vec<u8> = (1..=MOST_OCTAVES).collect();
-            match field {
-                ArpField::Rate => arpeggio.rate = pick(&ArpRate::ALL, position),
-                ArpField::Mode => arpeggio.mode = pick(&ArpMode::ALL, position),
-                ArpField::Octaves => arpeggio.octaves = pick(&octaves, position),
-                ArpField::Retrig => return None,
-            }
-            changed(arpeggio, was, |arpeggio: Arpeggio| Action::SetArpeggio {
-                track: at,
-                arpeggio,
-            })
-        }
-        Control::Insert(slot) => {
-            let chosen = pick(&Insert::ALL, position);
-            (chosen.name() != track.inserts[slot].name()).then_some(Action::SetInsert {
-                track: at,
-                slot,
-                insert: chosen,
-            })
-        }
-        Control::InsertParam(slot, param) => {
-            let insert = track.inserts[slot];
-            let found = insert.params().get(param)?;
-            let set = insert.value(param);
-            let to = if found.choices().is_empty() {
-                let (id, _) = control.value_on(track)?;
-                match id.entry().kind {
-                    Kind::Continuous { top, .. } => whole(position, u32::from(top)) as u8,
-                    Kind::Stepped { choices, .. } => step_at(position, choices.len()) as u8,
-                }
-            } else {
-                step_at(position, found.choices().len()) as u8
-            };
-            changed(to, set, |to| Action::SetInsert {
-                track: at,
-                slot,
-                insert: insert.with_value(param, to),
-            })
-        }
-        // The mixer's, which no device has.
-        Control::Mute | Control::Solo | Control::Limiter | Control::Safe => None,
+        // What a slot is, the app's alone.
+        Control::Mod(_, ModField::Type) => return None,
+        _ => {}
     }
+    let shown = view(control, track, song, false)?;
+    let steps = || edit::at_place(&shown, step_at(position, edit::places(&shown)));
+    // A switch by a two-step knob.
+    if toggle_on(control, track, song).is_some() {
+        return write(
+            control,
+            at,
+            track,
+            song,
+            &shown,
+            i32::from(step_at(position, 2) == 1),
+        );
+    }
+    let value = match control {
+        Control::Setting(_) | Control::Base(_) => {
+            // The registry's, which a setting of the track's own may not be.
+            let kind = control
+                .setting_on(track)
+                .or_else(|| match control {
+                    Control::Base(which) => which.setting(),
+                    _ => None,
+                })
+                .map(|id| id.entry().kind);
+            // A knob goes as far as the registry's top, which on the level scale is short of
+            // where the keys stop.
+            let knob = match kind {
+                Some(Kind::Stepped { choices, .. }) => {
+                    return write(
+                        control,
+                        at,
+                        track,
+                        song,
+                        &shown,
+                        edit::at_place(&shown, step_at(position, choices.len())),
+                    );
+                }
+                Some(Kind::Continuous { top, .. }) => ParamView {
+                    bounds: (0, i32::from(top)),
+                    ..shown.clone()
+                },
+                None => shown.clone(),
+            };
+            match shown.fine {
+                Some(_) => {
+                    let (value, fine) = edit::shared_fine(&knob, share);
+                    return with_fine(control, at, track, song, &shown, value, fine);
+                }
+                None => edit::shared(&knob, share),
+            }
+        }
+        // The level scale stops short of the fader's top.
+        Control::Level => {
+            let top = SettingId::LEVEL.entry().kind.top();
+            whole(position, u32::from(top)) as i32
+        }
+        Control::Mod(
+            _,
+            ModField::Attack | ModField::Decay | ModField::Release | ModField::Peak,
+        ) => i32::from(time_at(position)),
+        Control::Mod(_, ModField::Hold) => {
+            let steps = hold_steps();
+            let at = whole(position, steps.len() as u32 - 1) as usize;
+            match steps[at.min(steps.len() - 1)] {
+                Hold::Note => -1,
+                Hold::Ms(ms) => i32::from(ms),
+            }
+        }
+        // One of a list, or a count or a place, by the step the knob is on.
+        Control::Mod(
+            _,
+            ModField::Mode
+            | ModField::Polarity
+            | ModField::Shape
+            | ModField::Fade
+            | ModField::Loop
+            | ModField::Length
+            | ModField::Start
+            | ModField::Ratchet,
+        ) => steps(),
+        // An effect's value by its registry's, as a step locks it.
+        Control::InsertParam(..) if shown.choices.is_empty() => {
+            let (id, _) = control.value_on(track)?;
+            match id.entry().kind {
+                Kind::Continuous { top, .. } => whole(position, u32::from(top)) as i32,
+                Kind::Stepped { choices, .. } => step_at(position, choices.len()) as i32,
+            }
+        }
+        // A number from its lowest to its highest.
+        Control::Macro(_)
+        | Control::Trim
+        | Control::GateLength
+        | Control::Reset
+        | Control::Glide
+        | Control::Mod(..) => edit::shared(&shown, share),
+        _ => steps(),
+    };
+    write(control, at, track, song, &shown, value)
 }
 
-/// An off/on setting switched, by a two-step knob.
-fn switched(control: Control, at: usize, track: &Track, on: bool) -> Option<Action> {
-    match control {
-        Control::InsertParam(slot, param) => Some(Action::SetInsert {
+/// The action that puts a setting at a value, if that's a change. A mod slot's is a change if it
+/// changes the slot, as a polarity that follows its type becomes its own.
+fn write(
+    control: Control,
+    at: usize,
+    track: &Track,
+    song: &Song,
+    shown: &ParamView,
+    value: i32,
+) -> Option<Action> {
+    let action = set(control, at, track, song, value, None)?;
+    let changes = match (&action, control) {
+        (Action::SetMod { modulator, .. }, Control::Mod(slot, _)) => *modulator != track.mods[slot],
+        _ => value != shown.value,
+    };
+    changes.then_some(action)
+}
+
+/// The actions that put a setting with a fine part at a value and a fine byte, each only where
+/// it's a change.
+fn with_fine(
+    control: Control,
+    at: usize,
+    track: &Track,
+    song: &Song,
+    shown: &ParamView,
+    value: i32,
+    fine: u8,
+) -> Option<Action> {
+    let mut actions = Vec::new();
+    actions.extend(write(control, at, track, song, shown, value));
+    if Some(fine) != shown.fine {
+        actions.push(Action::SetTrackFine {
             track: at,
-            slot,
-            insert: track.inserts[slot].with_value(param, u8::from(on)),
-        }),
-        Control::Mod(slot, ModField::Reset) => {
-            let mut modulator = track.mods[slot];
-            modulator.set_field(ModField::Reset, i32::from(on));
-            Some(Action::SetMod {
-                track: at,
-                slot,
-                modulator,
-            })
-        }
-        // A slot's polarity on its button, `Bi` lit.
-        Control::Mod(slot, ModField::Polarity) => Some(Action::SetMod {
-            track: at,
-            slot,
-            modulator: ModSlot {
-                polarity: Some(if on { Polarity::Bi } else { Polarity::Uni }),
-                ..track.mods[slot]
-            },
-        }),
-        Control::Arpeggio(ArpField::Retrig) => Some(Action::SetArpeggio {
-            track: at,
-            arpeggio: Arpeggio {
-                retrig: on,
-                ..track.arpeggio
-            },
-        }),
-        // The song's limiter, on the master's output.
-        Control::Limiter => Some(Action::SetLimiter(on)),
-        Control::Safe => Some(Action::SetTrackSafe { track: at, on }),
-        _ => None,
+            setting: control.fine_on(track)?,
+            fine,
+        });
+    }
+    match actions.len() {
+        0 => None,
+        1 => actions.pop(),
+        _ => Some(Action::Batch(actions)),
     }
 }
 

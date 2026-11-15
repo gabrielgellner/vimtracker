@@ -957,6 +957,18 @@ the shape panel.
     `Control`, from a live generator, and by the scale lock the program keeps outside the song;
     what it holds is description only, with nothing of the cursor, the modes or the report.
     `Ctx::param_view` resolves one with the program's scale.
+*   **Each setting edited one way** (`widgets/param/edit.rs`, the UI plan's U8, #739). Pure
+    functions over the `ParamView` say where a key takes a value: `stepped` for `=` `-` `+` `_`
+    and a count, by the view's `pace` where a step depends on the value or a list steps once
+    whatever the count; `stepped_fine` on the fine digits; `typed` for `i`'s text, by the view's
+    `reads` and its `why_not`; `reset` for `x`; and `choices` for `K`'s list, which
+    `pickers::choice_picker` opens, each item a `Pick::Param` that `set` writes. A Roto knob's
+    turn (`roto/edits.rs`) finds its value in the same view, `edit::shared` and `edit::places`,
+    and writes it with `set`. `editing.rs`, `typing.rs` and `pickers.rs` keep their own arms only
+    for what the view doesn't write: the live mute and solo, the song's limiter (its status line),
+    a sampler's sample, slice and tune, the groove a track follows, a gate back to the track's
+    own, a filter's kept mode, a mod slot's type, rate and fade, a macro's patches and the Gen
+    page's.
 *   **Macros on the page** (`macroing.rs`, decision 285). `M` maps the setting under the cursor,
     `Control::setting_for_macro`, through a picker; `gm` opens `App::mapping`, a `MappingView` in
     `Mode::Mapping`, drawn by `views/mapping.rs`. A setting a macro holds refuses a turn in
