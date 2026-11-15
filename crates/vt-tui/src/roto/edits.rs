@@ -1,6 +1,6 @@
 //! A knob turned on the Roto as an edit of the song: the way back from [`super::devices`], a
 //! knob's position to the setting's value it stands for, written as a key writes it, by the
-//! setting's view and `track_page::set` (#739), and the value as the app writes it, for the Roto
+//! setting's view and `pages::track::set` (#739), and the value as the app writes it, for the Roto
 //! to show. Pure, like the mapping: a track and its song in, an action out, so it's tested with
 //! no Roto at all.
 //!
@@ -21,11 +21,11 @@ use vt_model::song::{Song, Track, trim_text};
 use vt_model::steps::StepRate;
 use vt_roto::live::{share_of, step_at};
 
-use crate::shaping::live_shown;
-use crate::track_page::tuning::{tuning, tuning_most};
-use crate::track_page::{Control, ParamView, set, view};
-use crate::views::track::toggle_on;
-use crate::views::widgets::param::edit;
+use crate::overlays::shape::live_shown;
+use crate::pages::track::draw::toggle_on;
+use crate::pages::track::tuning::{tuning, tuning_most};
+use crate::pages::track::{Control, ParamView, set, view};
+use crate::widgets::param::edit;
 
 use super::devices::{hold_steps, knob, knob_view, places, rate_position, time_steps};
 

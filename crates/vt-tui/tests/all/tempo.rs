@@ -17,7 +17,7 @@ use vt_model::song::{Machine, Song};
 use vt_tui::app::App;
 use vt_tui::input::keys::{Key, parse_sequence};
 use vt_tui::input::mode::View;
-use vt_tui::sample_settings::SampleSetting;
+use vt_tui::pages::sample::settings::SampleSetting;
 
 const RATE: u32 = 48_000;
 

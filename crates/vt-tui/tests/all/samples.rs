@@ -271,7 +271,7 @@ fn a_bundle_keeps_working_after_its_sources_are_gone() {
 #[test]
 fn a_step_locks_a_sample_from_the_bank() {
     use vt_model::step::FxCommand;
-    use vt_tui::views::status::value_shown;
+    use vt_tui::screen::status::value_shown;
     let (mut app, _realtime) = app();
     let kit = kit_file();
     command(&mut app, &format!("kit {} all", kit.display()));

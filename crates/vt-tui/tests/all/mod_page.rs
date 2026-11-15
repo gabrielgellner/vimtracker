@@ -15,18 +15,18 @@ use vt_model::settings::SettingId;
 use vt_model::song::{Track, TrackKind};
 use vt_model::steps::{Loop, StepRate, Steps, StepsMode};
 use vt_tui::app::App;
+use vt_tui::graphics::{DEFAULT_CELL, Graphics, dot_pixels};
 use vt_tui::input::bindings::Cmd;
 use vt_tui::input::mode::Mode;
-use vt_tui::kitty::{DEFAULT_CELL, Graphics, dot_pixels};
+use vt_tui::pages::track::{AccumulatorField, ArpField, Control, DeviceCursor, Page, TrackPage};
 use vt_tui::screenshot::sent_placements;
-use vt_tui::track_page::{AccumulatorField, ArpField, Control, DeviceCursor, Page, TrackPage};
 
 /// How many LFOs a new track's slots have, its last three.
 const LFOS: usize = 3;
 
 use crate::common::*;
+use vt_tui::graphics::{PanelIds, PanelKey};
 use vt_tui::input::mode::View;
-use vt_tui::kitty::{PanelIds, PanelKey};
 
 /// Every setting a new track's mod slots have under their types, the three ADSRs' and the three
 /// LFOs', then the accumulator's and the arpeggio's.
@@ -421,7 +421,7 @@ fn each_slots_type_mode_and_destination_are_in_its_title() {
     // value's own colour. `Mod 1`'s title is on the page's third row, its arrow 29 in after its
     // curve and its polarity's `--`, and `Mod 3`'s two bands down, its arrow 30 in after its `Uni`.
     let buffer = track_page_buffer(&app);
-    let dim = vt_tui::theme::dim().fg.unwrap();
+    let dim = vt_tui::widgets::theme::dim().fg.unwrap();
     assert_eq!(buffer[(29, 2)].symbol(), "→");
     assert_eq!(buffer[(31, 2)].symbol(), "V");
     assert_ne!(buffer[(31, 2)].fg, dim, "Mod 1's Vol");
@@ -544,7 +544,7 @@ fn the_default_mod_page_shows_six_slots_as_three_envelopes_beside_three_lfos() {
     press(&mut app, " 5L");
     let lines = screen_cells(&mut app);
     let text = lines.join("\n");
-    let switch = vt_tui::views::widgets::toggle::text(true);
+    let switch = vt_tui::widgets::toggle::text(true);
     for (slot, controls) in [
         (1, "ADSR  Exp  --  → Vol"),
         (2, "ADSR  Exp  Uni  → Cut"),
@@ -608,8 +608,8 @@ fn the_mod_page_goes_by_whole_bands_where_fewer_fit() {
 
 #[test]
 fn b_switches_a_modulator_out_and_back_with_its_toggle_in_the_title() {
-    use vt_tui::glyphs::{SWITCH_OFF, SWITCH_ON};
-    use vt_tui::theme;
+    use vt_tui::widgets::glyphs::{SWITCH_OFF, SWITCH_ON};
+    use vt_tui::widgets::theme;
     let (mut app, _realtime) = app();
     press(&mut app, " 5L");
     let lfo = |app: &App| app.song().tracks[0].mods[3];
@@ -910,7 +910,7 @@ fn an_envelopes_depth_is_a_destination_of_the_envelope_before_it() {
 
 #[test]
 fn a_switched_out_envelopes_shape_is_sent_faint_and_its_own_comes_back() {
-    use vt_tui::kitty::Graphics;
+    use vt_tui::graphics::Graphics;
     let (mut app, _realtime) = app();
     let mut graphics = Graphics::new();
     press(&mut app, " 5L");
@@ -929,7 +929,7 @@ fn a_switched_out_envelopes_shape_is_sent_faint_and_its_own_comes_back() {
 
 #[test]
 fn a_slots_picture_follows_its_type() {
-    use vt_tui::kitty::Graphics;
+    use vt_tui::graphics::Graphics;
     let (mut app, _realtime) = app();
     let mut graphics = Graphics::new();
     press(&mut app, " 5L");
@@ -1978,7 +1978,7 @@ fn a_steps_rate_length_and_start_step_and_type() {
 
 #[test]
 fn the_step_playing_is_lit_in_the_playheads_colour() {
-    use vt_tui::theme;
+    use vt_tui::widgets::theme;
     let (mut app, _realtime) = with_steps();
     let mut live = LiveValues::default();
     live.steps[3] = Some(2);

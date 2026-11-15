@@ -7,9 +7,9 @@ use std::path::{Path, PathBuf};
 use ratatui::crossterm::event::KeyCode;
 use vt_model::tag::{Source, Tag};
 use vt_tui::app::App;
-use vt_tui::config::Settings;
-use vt_tui::explorer::Icon;
-use vt_tui::input::picker::Row;
+use vt_tui::overlays::picker::Row;
+use vt_tui::overlays::picker::explorer::Icon;
+use vt_tui::services::config::Settings;
 
 use crate::common::*;
 
@@ -58,7 +58,7 @@ fn drawn(app: &App) -> String {
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     let mut picker = app.picker.clone().unwrap();
     terminal
-        .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), &mut picker))
+        .draw(|frame| vt_tui::overlays::picker::draw::draw(frame, frame.area(), &mut picker))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..42)

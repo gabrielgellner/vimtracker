@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use vt_model::song::{Chain, ChainEntry, Machine, Phrase, Song, SynthVoice};
 use vt_model::step::{FxCommand, FxSlot, Step};
-use vt_tui::dsp_probe::{Loaded, parse, prepare};
-use vt_tui::track_notes::{Choice, Line, LineNote, line, write};
+use vt_tui::offline::dsp_probe::{Loaded, parse, prepare};
+use vt_tui::offline::track_notes::{Choice, Line, LineNote, line, write};
 
 /// A sixteenth at 120 BPM, in seconds.
 const STEP: f64 = 0.125;

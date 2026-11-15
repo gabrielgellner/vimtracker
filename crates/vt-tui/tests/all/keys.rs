@@ -523,9 +523,9 @@ fn cmd_with_the_movement_keys_does_as_the_adjust_keys_on_every_page() {
     // The project page's tempo.
     press(&mut app, " 9");
     assert_eq!(app.modes.view, View::Project);
-    project_cursor_on(&mut app, vt_tui::project_page::ProjectControl::Bpm);
+    project_cursor_on(&mut app, vt_tui::pages::project::ProjectControl::Bpm);
     cmd_keys_do_as_their_adjust_keys(&mut app, "on the tempo");
-    project_cursor_on(&mut app, vt_tui::project_page::ProjectControl::Groove);
+    project_cursor_on(&mut app, vt_tui::pages::project::ProjectControl::Groove);
     cmd_keys_do_as_their_adjust_keys(&mut app, "on the groove");
 
     // The mixer's Trim, Level and Pan.
@@ -553,10 +553,10 @@ fn cmd_with_the_movement_keys_does_as_the_adjust_keys_in_the_fx_rack() {
     special(&mut app, KeyCode::Enter);
     cmd_keys_do_as_their_adjust_keys(&mut app, "on a slot's effect");
     press(&mut app, "l");
-    assert_eq!(vt_tui::views::status::column_name(&app), "Type");
+    assert_eq!(vt_tui::screen::status::column_name(&app), "Type");
     cmd_keys_do_as_their_adjust_keys(&mut app, "on the type in a slot's title");
     press(&mut app, "j");
-    assert_eq!(vt_tui::views::status::column_name(&app), "Attack");
+    assert_eq!(vt_tui::screen::status::column_name(&app), "Attack");
     cmd_keys_do_as_their_adjust_keys(&mut app, "in a device's grid");
 }
 
@@ -918,7 +918,7 @@ fn in_insert_every_note_key_writes_and_held_keys_sound_together() {
 
 #[test]
 fn the_transport_is_glyphs_with_the_waits_named() {
-    use vt_tui::glyphs::{PLAY, STOP, WAITING};
+    use vt_tui::widgets::glyphs::{PLAY, STOP, WAITING};
     let (mut app, mut rt) = app();
     assert!(status_line(&app).contains(&format!(" {STOP}  120 BPM")));
     special(&mut app, KeyCode::Tab);
@@ -931,7 +931,7 @@ fn the_transport_is_glyphs_with_the_waits_named() {
 
 #[test]
 fn the_space_digits_show_the_mixer_each_track_page_and_the_project() {
-    use vt_tui::track_page::Page;
+    use vt_tui::pages::track::Page;
     let (mut app, _realtime) = app();
     press(&mut app, " 4");
     assert_eq!(app.modes.view, View::Mixer);

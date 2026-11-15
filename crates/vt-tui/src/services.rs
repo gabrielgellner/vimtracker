@@ -4,6 +4,19 @@
 //! borrow them mutably while it borrows itself, and an edit on a page applies an action as one in
 //! `App` does.
 
+pub mod analysing;
+pub mod audio;
+pub mod automating;
+pub mod autosave;
+pub mod banking;
+pub mod config;
+pub mod folding;
+pub mod heard;
+pub mod loading;
+pub mod meter;
+pub mod sampling;
+pub mod scope;
+
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -23,12 +36,12 @@ use vt_model::scale::Scale;
 use vt_model::selection::{Extent, Field};
 use vt_model::song::{ChainEntry, Phrase, Section, Song, Track};
 
-use crate::analysing::Analyst;
 use crate::app::{Cursor, TrackLive};
-use crate::config::Settings;
-use crate::folding::{Folds, Order};
 use crate::input::mode::View;
-use crate::meter::Meter;
+use crate::services::analysing::Analyst;
+use crate::services::config::Settings;
+use crate::services::folding::{Folds, Order};
+use crate::services::meter::Meter;
 
 /// How many versions sent are kept for a report to be of. The callback takes each within a block,
 /// so only a few are ever waiting; these are for when it has stopped.
@@ -113,14 +126,14 @@ pub struct Services {
     /// Every track's faders as they're heard: where the steps have them, and which a hand has
     /// taken over, as the engine last said, with what's been asked of it since (decision 174).
     pub(crate) faders: [Faders; MAX_TRACKS],
-    pub(crate) fader_wishes: Vec<crate::automating::Wish>,
+    pub(crate) fader_wishes: Vec<crate::services::automating::Wish>,
     /// Where each voice playing a sample through the cursor's track is in it, for the sample
     /// page's playheads.
     pub playheads: [Option<Playhead>; PLAYHEADS],
     /// The main output's level.
     pub meter: Meter,
     /// The main output's recent sound, for the scope above the meter.
-    pub scope: crate::scope::Scope,
+    pub scope: crate::services::scope::Scope,
     /// Each track's level, for the mixer.
     pub track_meters: Vec<Meter>,
     /// The scale, kept outside undo and written to the song on save as the live mutes and solos
@@ -197,7 +210,7 @@ impl Services {
             fader_wishes: Vec::new(),
             playheads: [None; PLAYHEADS],
             meter: Meter::default(),
-            scope: crate::scope::Scope::new(rate),
+            scope: crate::services::scope::Scope::new(rate),
             track_meters: vec![Meter::default(); MAX_TRACKS],
             scale,
             auto_jump,

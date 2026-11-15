@@ -27,18 +27,17 @@ use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 
 use crate::app::App;
-use crate::audio::{self, AudioChoice, AudioError, AudioStats, Input, Output};
-use crate::config::Settings;
-use crate::input::command_history::CommandHistory;
+use crate::graphics::{self, Graphics, PanelIds, Placements, SampleLines};
 use crate::input::keys::{KEYBOARD_FLAGS, Key};
 use crate::input::mode::{Mode, View};
-use crate::kitty::{self, Graphics, PanelIds, Placements, SampleLines};
-use crate::page::Page;
-use crate::places::RecentPlaces;
-use crate::theme;
-use crate::views;
-use crate::views::sample::WaveOnScreen;
-use crate::wheel;
+use crate::input::wheel;
+use crate::overlays::command::history::CommandHistory;
+use crate::overlays::picker::places::RecentPlaces;
+use crate::pages::Page;
+use crate::pages::sample::draw::WaveOnScreen;
+use crate::services::audio::{self, AudioChoice, AudioError, AudioStats, Input, Output};
+use crate::services::config::Settings;
+use crate::widgets::theme;
 
 /// Why the program stopped with an error.
 #[derive(Debug, Error)]
@@ -169,7 +168,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     if !terminal::supports_keyboard_enhancement().unwrap_or(false) {
         return Err(RunError::NoKeyboardProtocol);
     }
-    if !kitty::supports_graphics()? {
+    if !graphics::supports_graphics()? {
         return Err(RunError::NoGraphicsProtocol);
     }
     // While the song and its samples load.
@@ -225,7 +224,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     {
         status = note;
     }
-    app.library = crate::ableton::default_samples();
+    app.library = crate::offline::ableton::default_samples();
     if let Some(path) = Settings::path() {
         let (settings, note) = Settings::load(&path);
         app.services.settings = settings;
@@ -244,7 +243,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
             status = note;
         }
     }
-    if let Some(folder) = crate::config::config_folder() {
+    if let Some(folder) = crate::services::config::config_folder() {
         let path = folder.join(vt_model::tag::TAGS_FILE);
         let (library, note) = vt_model::tag::TagLibrary::load(&path);
         app.tag_library = std::sync::Arc::new(library);
@@ -278,12 +277,12 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
         .map(|folder| folder.join(crate::roto::LOCK_FILE));
     app.start_roto_if_on();
     // Off unless it was turned on here before, so the terminal keeps its mouse otherwise.
-    if let Some(path) = crate::wheel::WheelSetting::path() {
-        app.wheel.setting = crate::wheel::WheelSetting::load_from(&path);
+    if let Some(path) = crate::input::wheel::WheelSetting::path() {
+        app.wheel.setting = crate::input::wheel::WheelSetting::load_from(&path);
         app.wheel.setting_path = Some(path);
     }
     // So the value follows the fingers whichever way the system scrolls.
-    app.wheel.natural = crate::wheel::natural_scrolling();
+    app.wheel.natural = crate::input::wheel::natural_scrolling();
     app.services.status = status;
     app.offer_restore();
     let mut graphics = Graphics::new();
@@ -643,8 +642,8 @@ impl App {
         let ctx = self.ctx();
         let sample = SampleLines {
             page,
-            marks: views::sample::marks_placed(page, &ctx, now),
-            playheads: views::sample::lines_placed(page, &ctx, now),
+            marks: crate::pages::sample::draw::marks_placed(page, &ctx, now),
+            playheads: crate::pages::sample::draw::lines_placed(page, &ctx, now),
             cursor: self.modes.view == View::Sample
                 && page.cursor_line
                 && page.wave_images().is_some()
@@ -669,13 +668,14 @@ pub fn draw_screen(
     let [body, status] =
         Layout::vertical([Constraint::Min(1), Constraint::Length(2)]).areas(frame.area());
     app.follow_cursor(usize::from(
-        body.height.saturating_sub(views::phrase::ROWS_AROUND_STEPS),
+        body.height
+            .saturating_sub(crate::pages::phrase::draw::ROWS_AROUND_STEPS),
     ));
     // The sample page's waveform has the whole width, as a sample editor's does.
     let (view, meter) = if app.modes.view == View::Sample {
         (body, None)
     } else {
-        views::meter::split(body)
+        crate::screen::meter::split(body)
     };
     // Only the Mod page's LFO cycles and the Gen page's previews have dots for the terminal to
     // place.
@@ -699,41 +699,41 @@ pub fn draw_screen(
     } else {
         view
     };
-    views::system::draw(frame, free, app, stats);
+    crate::screen::system::draw(frame, free, app, stats);
     app.scope_shown = false;
     if let Some(column) = meter {
-        let (scope, meter) = views::meter::split_scope(column);
+        let (scope, meter) = crate::screen::meter::split_scope(column);
         app.scope_shown = scope.is_some();
         if let (Some(area), Some(id)) = (scope, app.scope_image) {
-            views::meter::draw_scope(frame, area, id);
+            crate::screen::meter::draw_scope(frame, area, id);
         }
-        views::meter::draw(frame, meter, &app.services.meter, app.song().limiter);
+        crate::screen::meter::draw(frame, meter, &app.services.meter, app.song().limiter);
     }
-    views::status::draw(frame, status, app);
-    views::help::draw_popup(frame, body, app, now);
+    crate::screen::status::draw(frame, status, app);
+    crate::overlays::help::draw_popup(frame, body, app, now);
     if app.modes.mode == Mode::Help {
-        views::help::draw_help(frame, body, app);
+        crate::overlays::help::draw_help(frame, body, app);
     }
-    app.guide_page = views::guide::page(body.height);
-    app.guide_width = views::guide::text_width(body.width);
+    app.guide_page = crate::overlays::guides::draw::page(body.height);
+    app.guide_width = crate::overlays::guides::draw::text_width(body.width);
     if let Some(guide) = app.guide {
-        views::guide::draw(frame, body, guide, app.guide_scroll);
+        crate::overlays::guides::draw::draw(frame, body, guide, app.guide_scroll);
     }
     if let Some(panel) = &app.shape {
-        views::shape::draw(frame, view, app, panel);
+        crate::overlays::shape::draw::draw(frame, view, app, panel);
     }
     if let Some(mapping) = &app.mapping {
-        views::mapping::draw(frame, view, app, mapping);
+        crate::overlays::mapping::draw::draw(frame, view, app, mapping);
     }
     if let Some(picker) = &mut app.picker {
-        views::picker::draw(frame, body, picker);
+        crate::overlays::picker::draw::draw(frame, body, picker);
     }
     if let Some(menu) = &mut app.command_menu
         && app.modes.mode == Mode::Command
     {
         // Under the names it finishes, after the `:`.
         let column = 1 + menu.column(&app.command_line);
-        views::picker::draw_menu(frame, status, column, &mut menu.picker);
+        crate::overlays::picker::draw::draw_menu(frame, status, column, &mut menu.picker);
     }
 }
 
@@ -741,7 +741,7 @@ pub fn draw_screen(
 enum PageNotes {
     Nothing,
     /// Where the track page drew the pictures that carry a dot.
-    Track(views::track::Drawn),
+    Track(crate::pages::track::draw::Drawn),
     /// Where the sample page's waveform is on screen, if it's drawn.
     Sample(Option<WaveOnScreen>),
 }

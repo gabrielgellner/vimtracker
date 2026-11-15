@@ -7,10 +7,10 @@ use vt_model::generator::Generator;
 use vt_model::shape::{FillKind, GenParam, Where};
 use vt_tui::app::App;
 use vt_tui::input::mode::{Mode, View};
-use vt_tui::track_page::{Control, Page};
+use vt_tui::pages::track::{Control, Page};
 
 use crate::common::*;
-use vt_tui::kitty::PanelKey;
+use vt_tui::graphics::PanelKey;
 
 const E: &str = "--- -- --- --- ---";
 
@@ -346,7 +346,7 @@ fn a_phrase_with_none_has_only_the_macros_and_empty() {
 
 #[test]
 fn each_device_has_a_preview_sent_again_only_as_its_column_changes() {
-    use vt_tui::kitty::Graphics;
+    use vt_tui::graphics::Graphics;
     let (mut app, _rt) = on_gen_page();
     let mut graphics = Graphics::new();
     let sync = |app: &mut App, graphics: &mut Graphics| {
@@ -383,7 +383,7 @@ fn each_device_has_a_preview_sent_again_only_as_its_column_changes() {
 #[test]
 fn the_row_playing_rides_the_preview_as_a_dot() {
     use vt_engine::engine::Transport;
-    use vt_tui::kitty::Graphics;
+    use vt_tui::graphics::Graphics;
     let (mut app, _rt) = on_gen_page();
     let mut graphics = Graphics::new();
     let frame = |app: &mut App, graphics: &mut Graphics| {

@@ -23,13 +23,13 @@ use vt_model::song::{Machine, Song, SynthVoice, Track, TrackKind};
 use vt_tui::app::App;
 use vt_tui::input::bindings::Cmd;
 use vt_tui::input::mode::Mode;
-use vt_tui::page::Outcome;
-use vt_tui::theme;
-use vt_tui::track_page::{Control, DeviceCursor, Page, TrackPage};
-use vt_tui::views::status::column_name;
+use vt_tui::pages::Outcome;
+use vt_tui::pages::track::{Control, DeviceCursor, Page, TrackPage};
+use vt_tui::screen::status::column_name;
+use vt_tui::widgets::theme;
 
 use crate::common::*;
-use vt_tui::kitty::PanelKey;
+use vt_tui::graphics::PanelKey;
 
 /// The author's screen: kitty full screen on a MacBook.
 const WIDTH: u16 = 163;
@@ -414,7 +414,7 @@ fn panel_rows(text: &[String], top: usize) -> Vec<String> {
 
 #[test]
 fn the_output_meter_shows_each_side_after_the_trim_with_its_held_peak_and_scale() {
-    use vt_tui::meter::{FLOOR_DB, Held};
+    use vt_tui::services::meter::{FLOOR_DB, Held};
     for mode in [Mode::Normal, Mode::Keys] {
         let (mut app, _realtime) = playing(Machine::Plaits(SynthVoice::Kick));
         app.modes.mode = mode;
@@ -456,7 +456,7 @@ fn the_output_meter_shows_each_side_after_the_trim_with_its_held_peak_and_scale(
 
 #[test]
 fn the_output_meter_reads_the_cursors_track_after_its_trim_as_it_plays() {
-    use vt_tui::meter::FLOOR_DB;
+    use vt_tui::services::meter::FLOOR_DB;
     let mut song = Song::new(2);
     song.tracks[0].machine = Machine::Plaits(SynthVoice::Kick);
     *Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap())
@@ -495,7 +495,7 @@ fn the_filter_curve_under_an_lfo_on_cut_is_sent_at_most_every_other_frame() {
     use vt_model::constants::{FRAME_MS, TICKS_PER_QUARTER};
     use vt_model::lfo::{Lfo, Rate, Shape};
     use vt_model::modulation::ModSlot;
-    use vt_tui::kitty::Graphics;
+    use vt_tui::graphics::Graphics;
     let mut song = Song::new(2);
     song.tracks[0].machine = Machine::Plaits(SynthVoice::Acid);
     song.tracks[0].cutoff = 0x80;
@@ -628,9 +628,9 @@ fn a_fixed_tracks_output_and_what_feeds_it_fit_the_page_and_the_keys_box_at_163_
                 let x = lines[y].chars().position(|c| c == '╭').unwrap();
                 screen[(x as u16, y as u16)].fg
             };
-            assert_eq!(corner(top), vt_tui::theme::OVERLAY2);
+            assert_eq!(corner(top), vt_tui::widgets::theme::OVERLAY2);
             if feed.is_some() {
-                assert_eq!(corner(top + 9), vt_tui::theme::SURFACE1);
+                assert_eq!(corner(top + 9), vt_tui::widgets::theme::SURFACE1);
             }
             // Every row ends at the frame, as the Sound page's devices do.
             let edge = (0..WIDTH)
@@ -660,8 +660,8 @@ fn a_fixed_tracks_output_and_what_feeds_it_fit_the_page_and_the_keys_box_at_163_
 
 #[test]
 fn the_masters_limiter_is_a_toggle_after_its_level_and_switches_the_songs_with_undo() {
-    use vt_tui::views::status::value_shown;
-    use vt_tui::views::widgets::toggle;
+    use vt_tui::screen::status::value_shown;
+    use vt_tui::widgets::toggle;
     let (mut app, _realtime) = on_fixed(TrackKind::Master);
     // The toggle where the value would be, after the name's room, in its own colour.
     let limiter = |app: &mut App| {
@@ -676,7 +676,7 @@ fn the_masters_limiter_is_a_toggle_after_its_level_and_switches_the_songs_with_u
     assert!(app.song().limiter);
     assert_eq!(
         limiter(&mut app),
-        (toggle::glyph(true), vt_tui::theme::GREEN)
+        (toggle::glyph(true), vt_tui::widgets::theme::GREEN)
     );
     // Beside `Trim`, after `Level` down the columns, as the master plays them.
     press(&mut app, "kl");
@@ -697,7 +697,7 @@ fn the_masters_limiter_is_a_toggle_after_its_level_and_switches_the_songs_with_u
     press(&mut app, "h");
     assert_eq!(
         limiter(&mut app),
-        (toggle::glyph(false), vt_tui::theme::OVERLAY0)
+        (toggle::glyph(false), vt_tui::widgets::theme::OVERLAY0)
     );
     press(&mut app, "l");
     press(&mut app, "u");

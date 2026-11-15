@@ -8,7 +8,7 @@ use vt_model::shape::{DrumPart, FillKind, GenParam};
 use vt_model::song::{Machine, Phrase, Song, SynthVoice};
 use vt_model::step::{MAX_VELOCITY, Note, Step};
 use vt_tui::app::App;
-use vt_tui::track_page::Page;
+use vt_tui::pages::track::Page;
 
 use crate::common::*;
 

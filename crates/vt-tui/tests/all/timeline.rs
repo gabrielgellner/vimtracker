@@ -66,22 +66,26 @@ fn the_timeline_gives_a_row_a_line_for_each_pulse() {
     // A continuation line is dim: a line under the note it holds, and nothing else.
     let text = |y: u16| -> String { (9..30).map(|x| buffer[(x, y)].symbol()).collect() };
     assert_eq!(text(3).trim_end(), " │");
-    assert_eq!(Some(buffer[(10, 3)].fg), vt_tui::theme::faint().fg);
+    assert_eq!(Some(buffer[(10, 3)].fg), vt_tui::widgets::theme::faint().fg);
     // The FX band carries on through it.
-    assert_eq!(buffer[(28, 3)].bg, vt_tui::theme::FX_BAND);
+    assert_eq!(buffer[(28, 3)].bg, vt_tui::widgets::theme::FX_BAND);
     // Beats are lines that start on a beat. Row 02 lasts steps 3 to 5, so the rule before the
     // beat at step 4 is under its own line, and row 03's second line is before step 8's.
-    let beat = Some(vt_tui::theme::SURFACE1);
+    let beat = Some(vt_tui::widgets::theme::SURFACE1);
     assert_eq!(rule_under(&buffer, 5), beat);
     assert_eq!(rule_under(&buffer, 9), beat);
     assert_eq!(rule_under(&buffer, 2), None);
     // Only row 00 starts on a beat: the others fall between, row 04 on step 10.
     assert_eq!(
         buffer[(5, 2)].fg,
-        vt_tui::theme::YELLOW,
+        vt_tui::widgets::theme::YELLOW,
         "row 00 is on a beat"
     );
-    assert_ne!(buffer[(5, 12)].fg, vt_tui::theme::YELLOW, "row 04 isn't");
+    assert_ne!(
+        buffer[(5, 12)].fg,
+        vt_tui::widgets::theme::YELLOW,
+        "row 04 isn't"
+    );
 }
 
 #[test]
@@ -115,7 +119,7 @@ fn a_slower_track_leaves_lines_blank_and_a_faster_one_marks_them() {
     for line in 0..16 {
         let expected = format!(
             "{}{}",
-            vt_tui::views::phrase::MORE_STARTS,
+            vt_tui::pages::phrase::draw::MORE_STARTS,
             note_name(line as usize * 2)
         );
         assert_eq!(beside(&buffer, 0, line).0, expected, "line {line}");
@@ -139,7 +143,7 @@ fn j_and_k_skip_continuation_lines_and_counts_count_rows() {
     assert_eq!(gutter(8), "    03");
     assert_eq!(
         Some(buffer[(9, 8)].bg),
-        vt_tui::theme::cursor(app.modes.mode).bg,
+        vt_tui::widgets::theme::cursor(app.modes.mode).bg,
         "the cursor is on row 03's own line"
     );
     press(&mut app, "3k");
@@ -147,7 +151,10 @@ fn j_and_k_skip_continuation_lines_and_counts_count_rows() {
     // A selection covers rows, and their continuation lines with them.
     press(&mut app, "Vj");
     let buffer = screen(&app);
-    assert_eq!(Some(buffer[(10, 3)].bg), vt_tui::theme::selected().bg);
+    assert_eq!(
+        Some(buffer[(10, 3)].bg),
+        vt_tui::widgets::theme::selected().bg
+    );
 }
 
 #[test]

@@ -7,8 +7,8 @@ use ratatui::crossterm::event::KeyCode;
 use ratatui::style::Color;
 use vt_engine::link::Realtime;
 use vt_tui::app::App;
-use vt_tui::config::Settings;
 use vt_tui::input::mode::Mode;
+use vt_tui::services::config::Settings;
 
 use crate::common::*;
 
@@ -149,7 +149,8 @@ fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
         app.services.status
     );
     assert_eq!(
-        app.recent_places.of(vt_tui::explorer::Purpose::Kit),
+        app.recent_places
+            .of(vt_tui::overlays::picker::explorer::Purpose::Kit),
         [root.join("Ableton/Drum Machines")],
         "its folder is a recent place"
     );
@@ -188,7 +189,7 @@ fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
     press(&mut app, "jj");
     // The terminal is sent a waveform for each sound.
     let mut sent = Vec::new();
-    let mut graphics = vt_tui::kitty::Graphics::new();
+    let mut graphics = vt_tui::graphics::Graphics::new();
     app.send_pictures(&mut graphics, &mut sent).unwrap();
     let mut picker = app.picker.clone().unwrap();
     assert_eq!(picker.preview_images.len(), 3);
@@ -196,7 +197,7 @@ fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
     let backend = ratatui::backend::TestBackend::new(120, 24);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), &mut picker))
+        .draw(|frame| vt_tui::overlays::picker::draw::draw(frame, frame.area(), &mut picker))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let text: String = (0..24)
@@ -419,7 +420,7 @@ fn a_kit_sound_opens_to_its_variants_and_layers_and_a_missing_one_says_so() {
         .rows()
         .iter()
         .filter_map(|row| match row {
-            vt_tui::input::picker::Row::Item(item) if picker.depth(*item) == 3 => {
+            vt_tui::overlays::picker::Row::Item(item) if picker.depth(*item) == 3 => {
                 let item = picker.item(*item);
                 Some(format!("{}  {}", item.label, item.meaning))
             }
@@ -472,8 +473,8 @@ fn a_kit_sound_opens_to_its_variants_and_layers_and_a_missing_one_says_so() {
 }
 
 /// The icon of the first row shown with this name.
-fn icon_of(app: &App, label: &str) -> vt_tui::explorer::Icon {
-    use vt_tui::input::picker::Row;
+fn icon_of(app: &App, label: &str) -> vt_tui::overlays::picker::explorer::Icon {
+    use vt_tui::overlays::picker::Row;
     let picker = app.picker.as_ref().expect("the explorer is open");
     picker
         .rows()
@@ -491,7 +492,7 @@ fn glyph_colour(app: &App, glyph: char) -> Option<Color> {
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     let mut picker = app.picker.clone().unwrap();
     terminal
-        .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), &mut picker))
+        .draw(|frame| vt_tui::overlays::picker::draw::draw(frame, frame.area(), &mut picker))
         .unwrap();
     let buffer = terminal.backend().buffer();
     let at = buffer
@@ -509,8 +510,8 @@ fn glyph_colour(app: &App, glyph: char) -> Option<Color> {
 
 #[test]
 fn the_explorer_shows_what_each_row_is_with_an_icon() {
-    use vt_tui::explorer::Icon;
-    use vt_tui::glyphs;
+    use vt_tui::overlays::picker::explorer::Icon;
+    use vt_tui::widgets::glyphs;
     let (mut app, _realtime) = app();
     let kit = kit_file();
     let root = kit.parent().unwrap().to_path_buf();
@@ -557,11 +558,11 @@ fn the_explorer_shows_what_each_row_is_with_an_icon() {
     // A folder's icon is open or closed, in place of an arrow, and dim.
     assert_eq!(
         glyph_colour(&app, glyphs::FOLDER_OPEN),
-        Some(vt_tui::theme::OVERLAY2)
+        Some(vt_tui::widgets::theme::OVERLAY2)
     );
     assert_eq!(
         glyph_colour(&app, glyphs::FOLDER),
-        Some(vt_tui::theme::OVERLAY2)
+        Some(vt_tui::widgets::theme::OVERLAY2)
     );
     assert!(!picker_text(&app, 163, 42).contains('▸'), "no arrows");
 
@@ -573,7 +574,7 @@ fn the_explorer_shows_what_each_row_is_with_an_icon() {
     assert_eq!(icon_of(&app, "GH"), Icon::Missing);
     assert_eq!(
         glyph_colour(&app, glyphs::MISSING),
-        Some(vt_tui::theme::RED)
+        Some(vt_tui::widgets::theme::RED)
     );
     press(&mut app, "l");
     assert_eq!(
@@ -597,7 +598,10 @@ fn the_explorer_shows_what_each_row_is_with_an_icon() {
     special(&mut app, KeyCode::Enter);
     assert!(sample_of(&app, 0).unwrap().ends_with("Fill 120 bpm.wav"));
     command(&mut app, "sample");
-    assert_eq!(glyph_colour(&app, glyphs::LOOP), Some(vt_tui::theme::GREEN));
+    assert_eq!(
+        glyph_colour(&app, glyphs::LOOP),
+        Some(vt_tui::widgets::theme::GREEN)
+    );
 }
 
 #[test]
@@ -678,7 +682,7 @@ fn a_samples_preview_is_read_in_the_background_with_its_waveform_length_and_rate
 
     // Its waveform is sent as an image, and drawn under the note.
     let mut sent = Vec::new();
-    let mut graphics = vt_tui::kitty::Graphics::new();
+    let mut graphics = vt_tui::graphics::Graphics::new();
     app.send_pictures(&mut graphics, &mut sent).unwrap();
     let sent = String::from_utf8_lossy(&sent);
     assert_eq!(sent.matches("c=28,r=4").count(), 1, "28 by 4");
@@ -720,8 +724,8 @@ fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
     let library = sample_library(&mut app);
     command(&mut app, "sample");
     press(&mut app, "l");
-    let on = vt_tui::glyphs::SWITCH_ON;
-    let off = vt_tui::glyphs::SWITCH_OFF;
+    let on = vt_tui::widgets::glyphs::SWITCH_ON;
+    let off = vt_tui::widgets::glyphs::SWITCH_OFF;
     let hint = |app: &App| {
         let text = picker_text(app, 163, 42);
         text.lines()
@@ -743,7 +747,7 @@ fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         let mut picker = app.picker.clone().unwrap();
         terminal
-            .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), &mut picker))
+            .draw(|frame| vt_tui::overlays::picker::draw::draw(frame, frame.area(), &mut picker))
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         let area = buffer.area;
@@ -767,7 +771,10 @@ fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
         }
         buffer[(x, y)].fg
     };
-    assert_eq!(switch_colour(&app, on, "preview"), vt_tui::theme::GREEN);
+    assert_eq!(
+        switch_colour(&app, on, "preview"),
+        vt_tui::widgets::theme::GREEN
+    );
     // With the preview off the box is at its narrowest, and the hint still fits.
     press(&mut app, "P");
     let line = hint(&app);
@@ -777,7 +784,10 @@ fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
         )),
         "{line}"
     );
-    assert_eq!(switch_colour(&app, off, "preview"), vt_tui::theme::OVERLAY0);
+    assert_eq!(
+        switch_colour(&app, off, "preview"),
+        vt_tui::widgets::theme::OVERLAY0
+    );
     press(&mut app, "A");
     let line = hint(&app);
     assert!(
@@ -786,11 +796,17 @@ fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
     );
     assert_eq!(
         switch_colour(&app, off, "audition"),
-        vt_tui::theme::OVERLAY0
+        vt_tui::widgets::theme::OVERLAY0
     );
     press(&mut app, "PA");
-    assert_eq!(switch_colour(&app, on, "audition"), vt_tui::theme::GREEN);
-    assert_eq!(switch_colour(&app, off, "hidden"), vt_tui::theme::OVERLAY0);
+    assert_eq!(
+        switch_colour(&app, on, "audition"),
+        vt_tui::widgets::theme::GREEN
+    );
+    assert_eq!(
+        switch_colour(&app, off, "hidden"),
+        vt_tui::widgets::theme::OVERLAY0
+    );
     press(&mut app, "H");
     let line = hint(&app);
     assert!(
@@ -799,7 +815,10 @@ fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
         )),
         "{line}"
     );
-    assert_eq!(switch_colour(&app, on, "hidden"), vt_tui::theme::GREEN);
+    assert_eq!(
+        switch_colour(&app, on, "hidden"),
+        vt_tui::widgets::theme::GREEN
+    );
     std::fs::remove_dir_all(&library).unwrap();
 }
 

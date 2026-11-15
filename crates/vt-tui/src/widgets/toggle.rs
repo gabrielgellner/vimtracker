@@ -1,0 +1,77 @@
+//! A toggle: the switch glyph for anything that's on or off (decision 101). In a device's title it
+//! says whether the device is in, in a setting's place whether a two-state setting is on, and in a
+//! window's hint whether its key's switch is, so one idea has one look everywhere. It's green when
+//! on and faint when off; the words `On` and `Off` are left to the status line.
+//!
+//! A toggle is three cells wide: its glyph, then two plain spaces (decisions 157 and 256). All three
+//! are always written, on or off, so nothing after a toggle moves when it flips. On screen, the
+//! terminal shows a picture of a pill over the three cells, as big in any font and in the colour
+//! the toggle was written in, with the glyph hidden under it (decision 256, `graphics::switches`);
+//! tests and screenshots read the glyph.
+
+use ratatui::style::Style;
+use ratatui::text::Span;
+
+use crate::widgets::glyphs;
+use crate::widgets::theme;
+
+/// How many cells a toggle takes: its glyph and the two spaces after it, which its picture covers.
+pub const WIDTH: usize = 3;
+
+/// The glyph for on or off.
+pub fn glyph(on: bool) -> char {
+    if on {
+        glyphs::SWITCH_ON
+    } else {
+        glyphs::SWITCH_OFF
+    }
+}
+
+/// A toggle's own colour: green when on, faint when off.
+pub fn style(on: bool) -> Style {
+    if on { theme::active() } else { theme::faint() }
+}
+
+/// A toggle as text: its glyph, then two plain spaces, three cells.
+pub fn text(on: bool) -> String {
+    format!("{}  ", glyph(on))
+}
+
+/// A toggle in its own colour, its three cells together, so a place that draws one can't leave a
+/// cell to something its picture would cover.
+pub fn span(on: bool) -> Span<'static> {
+    Span::styled(text(on), style(on))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_toggle_is_three_cells_on_or_off_and_ends_in_two_plain_spaces() {
+        for on in [false, true] {
+            assert_eq!((span(on).width(), WIDTH), (3, 3));
+            assert!(
+                text(on).ends_with("  "),
+                "two plain spaces, which its picture covers"
+            );
+        }
+    }
+
+    #[test]
+    fn a_toggle_is_green_on_and_faint_off_in_all_three_cells() {
+        use ratatui::text::Line;
+
+        use crate::widgets::pin::{assert_drawn, drawn};
+        let line = Line::from(vec![span(true), span(false)]);
+        assert_drawn(
+            &drawn(line, 6, 1),
+            &[
+                "\u{f205}  \u{f204}  ",
+                "aaabbb",
+                "a fg GREEN",
+                "b fg OVERLAY0",
+            ],
+        );
+    }
+}

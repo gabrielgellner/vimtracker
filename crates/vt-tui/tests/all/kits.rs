@@ -5,10 +5,10 @@ use std::time::Instant;
 use ratatui::crossterm::event::KeyCode;
 use vt_model::constants::FIXED_TRACKS;
 use vt_tui::app::App;
-use vt_tui::config::Settings;
 use vt_tui::input::keys::parse_sequence;
 use vt_tui::input::mode::Mode;
-use vt_tui::input::picker::Pick;
+use vt_tui::overlays::picker::Pick;
+use vt_tui::services::config::Settings;
 
 use crate::common::*;
 

@@ -29,7 +29,10 @@ fn space_r_arms_recording_only_while_playing_and_stopping_or_leaving_disarms() {
     let mut at = play_from_the_top(&mut app, &mut rt);
     press_at(&mut app, at, " r");
     assert!(app.recording());
-    let (play, record) = (vt_tui::glyphs::PLAY, vt_tui::glyphs::RECORD);
+    let (play, record) = (
+        vt_tui::widgets::glyphs::PLAY,
+        vt_tui::widgets::glyphs::RECORD,
+    );
     assert!(
         status_line(&app).contains(&format!(" {play} {record}  ")),
         "{}",

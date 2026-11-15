@@ -132,7 +132,7 @@ fn the_playhead_row_title_and_status_line_show_what_a_mac_lock_made_heard() {
     assert_eq!(velocities(app.song())[8], Some(0x40), "written as it was");
     // On row 8's velocity, the status line says both.
     press(&mut app, "8jl");
-    let said = vt_tui::views::status::value_shown(&app).unwrap_or_default();
+    let said = vt_tui::screen::status::value_shown(&app).unwrap_or_default();
     assert_eq!(said, "40 written; 7F heard on pass 1");
 }
 

@@ -51,7 +51,7 @@ use vt_model::settings::{FOUR_OP_EACH, FOUR_OP_SHARED};
 use vt_model::shape::{FillKind, GenParam, Where};
 use vt_model::steps::STEPS;
 
-use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec};
+use crate::pages::track::{AccumulatorField, ArpField, Control, DeviceSpec};
 
 /// A setting in a layout's slot: its key, and how it differs from what its kind gives it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

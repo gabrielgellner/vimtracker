@@ -111,7 +111,7 @@ pub fn tap(app: &mut App, keys: &str) {
 }
 
 /// An item as a list shows it: its name, and its meaning beside it.
-pub fn listed(item: &vt_tui::input::picker::Item) -> String {
+pub fn listed(item: &vt_tui::overlays::picker::Item) -> String {
     if item.meaning.is_empty() {
         item.label.clone()
     } else {
@@ -346,7 +346,7 @@ pub fn fx_page_text(app: &App) -> Vec<String> {
 /// or off, three cells with the plain spaces its picture covers, or on an empty slot the room for
 /// one, then what's after it.
 pub fn slot_title(slot: usize, switch: Option<bool>, controls: &str) -> String {
-    use vt_tui::views::widgets::toggle;
+    use vt_tui::widgets::toggle;
     let switch = match switch {
         Some(on) => toggle::text(on),
         None => " ".repeat(toggle::WIDTH),
@@ -357,7 +357,7 @@ pub fn slot_title(slot: usize, switch: Option<bool>, controls: &str) -> String {
 /// A mod slot's title, as `device_title` gives it: its name, its switch on or off, three cells
 /// with the plain spaces its picture covers, then what follows, its type, mode and destination.
 pub fn modulator_title(identity: &str, on: bool, controls: &str) -> String {
-    let switch = vt_tui::views::widgets::toggle::text(on);
+    let switch = vt_tui::widgets::toggle::text(on);
     format!("╭─ {identity}  {switch} {controls}")
 }
 
@@ -397,7 +397,7 @@ pub fn status_line(app: &App) -> String {
     let backend = ratatui::backend::TestBackend::new(160, 2);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::views::status::draw(frame, frame.area(), app))
+        .draw(|frame| vt_tui::screen::status::draw(frame, frame.area(), app))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..160).map(|x| buffer[(x, 0)].symbol()).collect()
@@ -441,7 +441,7 @@ pub fn toggles_flipped(
     before: &ratatui::buffer::Buffer,
     after: &ratatui::buffer::Buffer,
 ) -> Vec<(u16, u16)> {
-    use vt_tui::glyphs::{SWITCH_OFF, SWITCH_ON};
+    use vt_tui::widgets::glyphs::{SWITCH_OFF, SWITCH_ON};
     let switch = |symbol: &str| {
         [SWITCH_ON, SWITCH_OFF]
             .iter()
@@ -454,7 +454,7 @@ pub fn toggles_flipped(
         for x in 0..area.width {
             for buffer in [before, after] {
                 if switch(buffer[(x, y)].symbol()) {
-                    for after in 1..vt_tui::views::widgets::toggle::WIDTH as u16 {
+                    for after in 1..vt_tui::widgets::toggle::WIDTH as u16 {
                         let space = &buffer[(x + after, y)];
                         assert_eq!(
                             space.symbol(),
@@ -540,7 +540,7 @@ pub fn from_column(line: &str, column: usize) -> String {
 /// The explorer's rows as they're shown: each indented by its depth, a folder with its arrow, and
 /// a folder at the top by why it's there.
 pub fn explorer_rows(app: &App) -> Vec<String> {
-    use vt_tui::input::picker::Row;
+    use vt_tui::overlays::picker::Row;
     let picker = app.picker.as_ref().expect("the explorer is open");
     picker
         .rows()
@@ -686,7 +686,7 @@ pub fn rule_under(buffer: &ratatui::buffer::Buffer, y: u16) -> Option<ratatui::s
 
 /// An app on the audio page, playing through the first of two devices.
 pub fn on_the_audio_page() -> (App, Realtime) {
-    use vt_tui::audio::DeviceInfo;
+    use vt_tui::services::audio::DeviceInfo;
     let (mut app, realtime) = app();
     app.audio.devices = vec![
         DeviceInfo {
@@ -732,7 +732,7 @@ pub fn picker_text(app: &App, width: u16, height: u16) -> String {
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     let mut picker = app.picker.clone().unwrap();
     terminal
-        .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), &mut picker))
+        .draw(|frame| vt_tui::overlays::picker::draw::draw(frame, frame.area(), &mut picker))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..height)
@@ -746,8 +746,8 @@ pub fn picker_text(app: &App, width: u16, height: u16) -> String {
 }
 
 /// Put the project page's cursor on a setting.
-pub fn project_cursor_on(app: &mut App, control: vt_tui::project_page::ProjectControl) {
-    use vt_tui::project_page::PROJECT_ROWS;
+pub fn project_cursor_on(app: &mut App, control: vt_tui::pages::project::ProjectControl) {
+    use vt_tui::pages::project::PROJECT_ROWS;
     let (row, field) = PROJECT_ROWS
         .iter()
         .enumerate()
@@ -777,7 +777,7 @@ pub fn mod_images(app: &App) -> [u32; vt_model::modulation::MOD_SLOTS] {
     std::array::from_fn(|slot| {
         app.track_page
             .images
-            .get(vt_tui::kitty::PanelKey::Mod(slot))
+            .get(vt_tui::graphics::PanelKey::Mod(slot))
             .unwrap_or(0)
     })
 }
@@ -787,7 +787,7 @@ pub fn slot_images(app: &App) -> [Option<u32>; vt_model::insert::INSERTS] {
     std::array::from_fn(|slot| {
         app.track_page
             .images
-            .get(vt_tui::kitty::PanelKey::Slot(slot))
+            .get(vt_tui::graphics::PanelKey::Slot(slot))
     })
 }
 

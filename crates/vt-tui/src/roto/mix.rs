@@ -14,9 +14,9 @@ use vt_roto::sysex::AllTracks;
 
 use super::{devices, edits};
 use crate::app::TrackLive;
-use crate::automating::as_heard;
-use crate::meter::{Meter, height_of};
-use crate::track_page::Control;
+use crate::pages::track::Control;
+use crate::services::automating::as_heard;
+use crate::services::meter::{Meter, height_of};
 use vt_engine::track_state::Faders;
 
 /// The sends, in order: what each send's knob moves.

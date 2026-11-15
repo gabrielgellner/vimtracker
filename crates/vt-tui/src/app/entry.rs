@@ -1,7 +1,7 @@
 //! Typing into the grid: notes, values, FX commands, gates, lengths and nudges, in Insert and
 //! Replace, and the scale and grid they go by.
 
-use crate::accent_slide::Written;
+use crate::app::accent_slide::Written;
 use ratatui::crossterm::event::KeyCode;
 use vt_engine::link::Command;
 use vt_model::accumulator::{MOST_DEGREES, amount};

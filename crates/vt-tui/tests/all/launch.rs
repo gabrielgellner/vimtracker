@@ -9,7 +9,7 @@ use crate::common::*;
 
 /// The status line's transport while playing with a realign waiting.
 fn realign_shown() -> String {
-    use vt_tui::glyphs::{PLAY, WAITING};
+    use vt_tui::widgets::glyphs::{PLAY, WAITING};
     format!(" {PLAY} {WAITING} REALIGN  ")
 }
 
@@ -54,7 +54,7 @@ fn space_a_realigns_the_cursors_track_on_the_launch_grid_while_playing() {
 
 #[test]
 fn space_g_m_mutes_the_cursors_track_on_the_launch_grid_while_playing() {
-    use vt_tui::glyphs::{PLAY, WAITING};
+    use vt_tui::widgets::glyphs::{PLAY, WAITING};
     let (mut app, mut rt) = app();
     // Stopped, there's no grid to wait for, so it switches at once.
     tap(&mut app, " gm");

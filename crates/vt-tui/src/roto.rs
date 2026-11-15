@@ -56,10 +56,10 @@ use vt_roto::store::{self, Serial, Synced, Versions};
 use vt_roto::sysex::{CONTROLS, ControlType, FromRoto, SwitchMode, ToRoto, TransportStatus};
 use vt_roto::transport::{LinkError, Ports, SerialLink, SystemPorts};
 
-use crate::track_page::Control;
+use crate::pages::track::Control;
 
 use crate::app::{App, TrackLive};
-use crate::automating::as_heard;
+use crate::services::automating::as_heard;
 
 /// The setting's file, in the config folder beside `audio.ron`.
 pub const SETTING_FILE: &str = "roto.ron";
@@ -105,7 +105,7 @@ pub struct RotoSetting {
 impl RotoSetting {
     /// Where it's kept: `roto.ron` in the config folder.
     pub fn path() -> Option<PathBuf> {
-        crate::config::config_folder().map(|folder| folder.join(SETTING_FILE))
+        crate::services::config::config_folder().map(|folder| folder.join(SETTING_FILE))
     }
 
     /// The setting kept at `path`, or off if there's none or it won't read.

@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use ratatui::crossterm::event::KeyCode;
 use vt_model::step::Note;
 use vt_tui::input::mode::Mode;
-use vt_tui::views::help::{POPUP_DELAY, draw_popup};
+use vt_tui::overlays::help::{POPUP_DELAY, draw_popup};
 
 use crate::common::*;
 

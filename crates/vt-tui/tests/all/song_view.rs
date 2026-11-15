@@ -56,7 +56,7 @@ fn the_song_view_adds_copies_and_removes_sections() {
 
 #[test]
 fn the_song_view_edits_length_start_and_chains() {
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app();
     press(&mut app, " 1");
     assert_eq!(column_name(&app), "Length");
@@ -336,7 +336,7 @@ fn enter_says_when_the_launch_will_start() {
 
 #[test]
 fn a_label_names_the_chain_under_the_cursor() {
-    use vt_tui::views::status::column_name;
+    use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app();
     press(&mut app, " 1lll");
     assert_eq!(column_name(&app), "Track 01 chain");
@@ -510,7 +510,7 @@ fn loop_and_transport_keys_reach_the_section_being_edited() {
 
 #[test]
 fn capital_v_over_sections_then_loop_loops_them_from_the_next_launch_line() {
-    use vt_tui::glyphs::{PLAY, WAITING};
+    use vt_tui::widgets::glyphs::{PLAY, WAITING};
     let (mut app, mut rt) = app();
     with_a_sound(&mut app);
     // Three sections, and the cursor on the second.
@@ -594,7 +594,7 @@ fn the_status_line_counts_sections_when_there_are_several() {
         let backend = ratatui::backend::TestBackend::new(120, 2);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
-            .draw(|frame| vt_tui::views::status::draw(frame, frame.area(), app))
+            .draw(|frame| vt_tui::screen::status::draw(frame, frame.area(), app))
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
         (0..120)

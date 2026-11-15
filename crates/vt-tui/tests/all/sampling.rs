@@ -117,7 +117,7 @@ fn space_r_armed_records_the_master_from_the_song_start_to_a_bar_into_a_new_entr
     assert_eq!(app.services.transport, Transport::Playing);
     let line = status_line(&app);
     assert!(
-        line.contains(vt_tui::glyphs::RECORD) && line.contains(" 01 "),
+        line.contains(vt_tui::widgets::glyphs::RECORD) && line.contains(" 01 "),
         "{line}"
     );
     tap(&mut app, " R");
@@ -282,7 +282,10 @@ fn r_on_the_sample_page_records_and_shows_the_recording_once_it_stops() {
     app.finish_analysis();
     let shown = app.sample_shown().unwrap();
     assert_eq!(shown.number, number);
-    assert_eq!(app.sampling.source, vt_tui::sampling::Source::Track(0));
+    assert_eq!(
+        app.sampling.source,
+        vt_tui::services::sampling::Source::Track(0)
+    );
     fs::remove_dir_all(&folder).unwrap();
 }
 
