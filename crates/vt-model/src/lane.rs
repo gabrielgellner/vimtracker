@@ -9,8 +9,9 @@ use crate::constants::MAX_PHRASE_STEPS;
 /// The most of a track's steps a lane's row lasts, as Kria's divisions go.
 pub const MOST_DIVISION: usize = 16;
 
-/// What a lane's `Rate` multiplies its own division by, in order: `÷16` to `÷2`, `×1`, then `×2`
-/// to `×16`. A larger division is a slower lane.
+/// What a lane's `Rate` does to its own division, in order from the slowest to the fastest, as
+/// `=` goes up it: `÷16` to `÷2`, which play it that many times slower, `×1`, then `×2` to `×16`,
+/// that many times faster, as a clock divider's `÷2` gives half the pulses (decision 349).
 pub const LANE_RATES: [&str; 31] = [
     "÷16", "÷15", "÷14", "÷13", "÷12", "÷11", "÷10", "÷9", "÷8", "÷7", "÷6", "÷5", "÷4", "÷3",
     "÷2", "×1", "×2", "×3", "×4", "×5", "×6", "×7", "×8", "×9", "×10", "×11", "×12", "×13", "×14",
@@ -73,8 +74,8 @@ impl Lane {
     }
 
     /// How it's heard with a track's `Length` and `Rate` for its column at these values: its own
-    /// length moved by that many rows, from 1 to [`MAX_PHRASE_STEPS`], and its own division times
-    /// the rate, rounded to the nearest step, from 1 to [`MOST_DIVISION`].
+    /// length moved by that many rows, from 1 to [`MAX_PHRASE_STEPS`], and its own division slowed
+    /// or sped up by the rate, rounded to the nearest step, from 1 to [`MOST_DIVISION`].
     pub fn heard(self, moved: LaneMove) -> Heard {
         Heard {
             length: self.heard_length(length_rows(moved.length)),
@@ -94,19 +95,20 @@ pub fn length_rows(value: u8) -> i32 {
     i32::from(value) - i32::from(LENGTH_AS_WRITTEN)
 }
 
-/// A division times a `Rate`, by its place in [`LANE_RATES`], rounded to the nearest whole step and
-/// kept from 1 to [`MOST_DIVISION`].
+/// A division at a `Rate`, by its place in [`LANE_RATES`]: times `n` at `÷n`, slower, and over `n`
+/// at `×n`, faster, rounded to the nearest whole step and kept from 1 to [`MOST_DIVISION`], so a
+/// lane of a step a row goes no faster.
 pub fn rate_division(division: usize, rate: usize) -> usize {
     let division = division.clamp(1, MOST_DIVISION);
     let rate = rate.min(LANE_RATES.len() - 1);
     let at_rest = usize::from(RATE_AS_WRITTEN);
     let heard = match rate.checked_sub(at_rest) {
-        Some(above) => division * (above + 1),
-        // Halves round up, so a division of 3 at `÷2` is 2.
-        None => {
-            let by = at_rest + 1 - rate;
+        // Halves round up, so a division of 3 at `×2` is 2.
+        Some(above) => {
+            let by = above + 1;
             (2 * division + by) / (2 * by)
         }
+        None => division * (at_rest + 1 - rate),
     };
     heard.clamp(1, MOST_DIVISION)
 }
@@ -180,17 +182,25 @@ mod tests {
     }
 
     #[test]
-    fn a_rate_multiplies_the_division_rounded_and_kept_to_its_range() {
+    fn a_divided_rate_is_slower_and_a_multiplied_one_faster_kept_to_the_range() {
         assert_eq!(LANE_RATES[usize::from(RATE_AS_WRITTEN)], "×1");
         assert_eq!(rate_division(1, 15), 1);
-        assert_eq!(rate_division(1, 16), 2, "×2");
-        assert_eq!(rate_division(1, 30), 16, "×16");
-        assert_eq!(rate_division(3, 30), 16, "kept to 16");
-        assert_eq!(rate_division(8, 14), 4, "÷2");
-        assert_eq!(rate_division(3, 14), 2, "1.5 rounds up");
-        assert_eq!(rate_division(1, 0), 1, "never below a step");
-        assert_eq!(rate_division(16, 0), 1, "÷16");
-        assert_eq!(rate_division(5, 13), 2, "÷3 of 5 is 1.67");
+        assert_eq!(rate_division(1, 14), 2, "÷2, half as fast");
+        assert_eq!(rate_division(1, 0), 16, "÷16");
+        assert_eq!(rate_division(3, 0), 16, "kept to 16");
+        assert_eq!(rate_division(8, 16), 4, "×2, twice as fast");
+        assert_eq!(rate_division(3, 16), 2, "1.5 rounds up");
+        assert_eq!(rate_division(1, 30), 1, "never faster than a row a step");
+        assert_eq!(rate_division(1, 16), 1);
+        assert_eq!(rate_division(16, 30), 1, "×16");
+        assert_eq!(rate_division(5, 17), 2, "×3 of 5 is 1.67");
+        // Up the list is faster, never slower.
+        for division in 1..=MOST_DIVISION {
+            let heard: Vec<usize> = (0..LANE_RATES.len())
+                .map(|rate| rate_division(division, rate))
+                .collect();
+            assert!(heard.windows(2).all(|two| two[1] <= two[0]), "{heard:?}");
+        }
     }
 
     #[test]
@@ -203,14 +213,15 @@ mod tests {
         assert_eq!((heard.length, heard.division), (7, 3));
         let moved = LaneMove {
             length: 0x82,
-            rate: 16,
+            rate: 14,
         };
         assert_eq!(
             lane.heard(moved),
             Heard {
                 length: 9,
                 division: 6
-            }
+            },
+            "÷2"
         );
         assert_eq!(length_rows(0x00), -128);
         assert_eq!(length_rows(0xFF), 127);

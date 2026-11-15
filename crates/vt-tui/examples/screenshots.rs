@@ -136,7 +136,7 @@ const SHOTS: &[Shot] = &[
         voice: Some(SynthVoice::VirtualAnalog),
         ..PLAIN
     },
-    // The same lane turned from the track, `FX1 Length` at `+2` and `Rate` at `×2`: the title
+    // The same lane turned from the track, `FX1 Length` at `+2` and `Rate` at `÷2`: the title
     // shows what's heard and its own, and its playhead the row a copy reads.
     Shot {
         name: "lane-moved",
@@ -147,11 +147,11 @@ const SHOTS: &[Shot] = &[
         song: Some(lane_moved),
         ..PLAIN
     },
-    // The Gen page's `FX1 Lane` for that lane, its `Length` turned to `+2` and `Rate` to `×2`.
+    // The Gen page's `FX1 Lane` for that lane, its `Length` turned to `+2` and `Rate` to `÷2`.
     Shot {
         name: "track-gen-lane",
         rows: LANE,
-        keys: "lllll:lane 3<Enter> 8}==l=",
+        keys: "lllll:lane 3<Enter> 8}==l-",
         play: 21,
         voice: Some(SynthVoice::VirtualAnalog),
         size: FULL,
@@ -366,11 +366,12 @@ fn song(rows: &[&str], voice: Option<SynthVoice>) -> Song {
 
 /// Name the four tracks, put the first two in group 1, and send three of them and the group to
 /// return B, by different amounts, for its Sends in.
-/// FX 1's `Length` two rows up and its `Rate` at `×2`, which move every lane on that column.
+/// FX 1's `Length` two rows up and its `Rate` at `÷2`, half as fast, which move every lane on that
+/// column.
 fn lane_moved(song: &mut Song) {
     song.tracks[0].lanes[0] = vt_model::lane::LaneMove {
         length: 0x82,
-        rate: 16,
+        rate: 14,
     };
 }
 

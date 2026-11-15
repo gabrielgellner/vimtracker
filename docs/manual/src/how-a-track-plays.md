@@ -212,7 +212,7 @@ which move every phrase's lane on that column from its own, as a macro, a mod sl
 first; nothing is written, so at `+0` and `×1` it's as written:
 
 ```text
-FX1's lane is rows a b c d, Length +2, Rate ×2
+FX1's lane is rows a b c d, Length +2, Rate ÷2
 
 count:      0  1  2  3  4  5  6  7  8  9  10 11 12
 lane row:   a  a  b  b  c  c  d  d  a  a  b  b  a     6 rows heard, each 2 steps
