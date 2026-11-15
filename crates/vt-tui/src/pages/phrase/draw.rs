@@ -688,7 +688,11 @@ pub(crate) fn level_glyph(ctx: &Ctx, track: usize) -> Option<(char, Style)> {
     if jam.mute_waiting || jam.solo_waiting {
         return Some((glyphs::WAITING, theme::dim()));
     }
-    let (muted, soloed) = (group::muted(ctx, track), group::soloed(ctx, track));
+    let (song, levels) = (ctx.song(), ctx.levels());
+    let (muted, soloed) = (
+        group::muted(song, levels, track),
+        group::soloed(song, levels, track),
+    );
     let order = [
         (muted == Switched::Own, glyphs::MUTE, muted),
         (muted.is_on(), glyphs::MUTE, muted),
