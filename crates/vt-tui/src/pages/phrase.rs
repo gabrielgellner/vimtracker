@@ -7,11 +7,13 @@
 //! keys are the moves, the keys over the view (`H` `M` `L`, `C-d` `C-u`, `C-e` `C-y`), reaching
 //! another track from a selection, `zi` and `Space i`, run through the `Services`, and it's drawn
 //! by `draw`, given a [`Ctx`]. The grammar's operators, registers, Visual modes and `.`,
-//! the edits and Insert's typing, the tree's keys, the loop's, recording and the pickers stay
-//! `App`'s, as they change the modes or reach what spans the pages, and read the selection here.
+//! the edits and Insert's typing, the tree's keys, the loop's and recording stay `App`'s, as they
+//! change the modes or reach what spans the pages, and read the selection here. The lists `K`
+//! opens on a cell, and `:order`'s, are built in `pickers`, and shown by `App`.
 
 pub mod draw;
 pub(crate) mod inspector;
+pub(crate) mod pickers;
 pub(crate) mod timeline;
 
 use ratatui::Frame;

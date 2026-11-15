@@ -8,6 +8,7 @@ pub(crate) mod draw;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
+use crate::overlays::picker::{Item, Pick, Picker};
 use crate::widgets::theme;
 
 /// One guide. Its title is its first heading.
@@ -61,6 +62,15 @@ pub(crate) const GUIDES: [Guide; 14] = [
         source: include_str!("../../guides/meter.md"),
     },
 ];
+
+/// The list of guides, in the order to learn them, which `Space ?` opens.
+pub(crate) fn picker() -> Picker {
+    let items = GUIDES
+        .iter()
+        .map(|guide| Item::new(guide.title(), Pick::Guide(*guide)))
+        .collect();
+    Picker::new("Guides", items)
+}
 
 impl Guide {
     /// The first heading.

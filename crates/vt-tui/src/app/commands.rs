@@ -19,6 +19,7 @@ use vt_model::song::{Lane, Song};
 use crate::overlays::command::parse::Line;
 
 use super::{App, Cursor, READ_ONLY, folder_name, name_song};
+use crate::pages::phrase::PhraseView;
 use crate::pages::track::editing::{set_limiter, set_track_groove};
 use crate::services::live_from;
 
@@ -55,7 +56,7 @@ impl App {
             Line::Mark { letter, slice } => self.set_mark(letter, slice),
             Line::Marks => self.open_marks_picker(),
             Line::DelMarks(letters) => self.delete_marks(letters.as_deref()),
-            Line::Kit(Some(name)) => self.use_kit(&self.kit_path(&name)),
+            Line::Kit(Some(name)) => self.use_kit(&self.services.kit_path(&name)),
             Line::Bank => self.open_bank_picker(),
             Line::BankClean => self.clean_bank(),
             Line::Normalize(level) => self.normalize_sample(level),
@@ -63,8 +64,8 @@ impl App {
             Line::Record { what, quantise } => self.record_command(what, quantise),
             Line::RecordStop => self.stop_sampling(),
             Line::RecordCancel => self.cancel_sampling(),
-            Line::KitTracks(name) => self.load_kit(&self.kit_path(&name)),
-            Line::Kit(None) => self.open_kit_picker(),
+            Line::KitTracks(name) => self.load_kit(&self.services.kit_path(&name)),
+            Line::Kit(None) => self.open_kit_explorer(),
             Line::Name(name) => self.name_track(name),
             Line::Bpm(millibpm) => self.services.apply(&Action::SetMilliBpm(millibpm)),
             Line::GrabTempo => self.grab_tempo(),
@@ -153,7 +154,7 @@ impl App {
                 on,
                 ..self.services.scale
             }),
-            Line::PickScale => self.open_scale_picker(),
+            Line::PickScale => self.open_picker(self.services.scale_picker()),
             Line::FitToScale => self.fit_to_scale(),
             Line::SetLimiter(on) => set_limiter(&mut self.services, on),
             Line::ReadOnly(on) => self.set_read_only(on),
@@ -163,7 +164,7 @@ impl App {
                 self.services.status = format!("The project plays with {groove}");
             }
             Line::TrackGroove(groove) => set_track_groove(&mut self.services, groove),
-            Line::PickGroove { track } => self.open_groove_picker(track),
+            Line::PickGroove { track } => self.open_picker(self.services.groove_picker(track)),
             Line::Reset(reset) => self.services.apply(&Action::SetReset {
                 section: self.services.cursor.section,
                 reset,
@@ -199,8 +200,10 @@ impl App {
                 }
                 None => self.services.status = ":lane works on an FX column".to_owned(),
             },
-            Line::Order(Some(order)) => self.set_order(order),
-            Line::Order(None) => self.open_order_picker(),
+            Line::Order(Some(order)) => self.services.set_order(order),
+            Line::Order(None) => {
+                self.settled(PhraseView::order_picker(&self.services), true);
+            }
             Line::Bloom {
                 branches: None,
                 mutation: None,

@@ -8,17 +8,21 @@ use std::time::{Duration, SystemTime};
 
 use vt_engine::link::Command;
 use vt_model::bank::BankEntry;
-use vt_model::kit::KitEntry;
+use vt_model::kit::{KitEntry, load_kit};
 use vt_model::names::numbered;
 use vt_model::project;
+use vt_model::sample::load_sample;
 
 use crate::app::App;
+use crate::graphics;
 use crate::input::mode::Mode;
 use crate::overlays::command::parse;
-use crate::overlays::picker::draw::{PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH};
-use crate::overlays::picker::explorer::{Purpose, place_name};
+use crate::overlays::picker::draw::{
+    PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH, PREVIEW_WAVE_HEIGHT, PREVIEW_WAVE_WIDTH,
+};
+use crate::overlays::picker::explorer::{Purpose, kit_item, place_name};
 use crate::overlays::picker::places::RecentPlaces;
-use crate::overlays::picker::{Item, KitChoice, Pick, Picker, Preview, Root, Shown};
+use crate::overlays::picker::{Item, KitChoice, Pick, Picker, Preview, PreviewLine, Root, Shown};
 use crate::screen::status::format_bpm;
 use crate::services::Services;
 use crate::services::config::home_folder;
@@ -239,6 +243,59 @@ pub(crate) fn project_preview(item: usize, folder: &Path) -> Shown {
     }
 }
 
+/// What a kit's preview shows: its name, how many sounds it has and where it came from, and each
+/// sound with its label, its name and its waveform. Waveforms already worked out are used again.
+pub(crate) fn kit_preview(
+    item: usize,
+    path: &Path,
+    rate: u32,
+    waves: &mut HashMap<PathBuf, Option<Vec<(usize, usize)>>>,
+) -> Shown {
+    let kit = match load_kit(path) {
+        Ok(kit) => kit,
+        Err(error) => {
+            let heading = path
+                .file_stem()
+                .map(|stem| stem.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            return Shown::new(item, heading, error.to_string());
+        }
+    };
+    let count = match kit.sounds.len() {
+        1 => "1 sound".to_owned(),
+        count => format!("{count} sounds"),
+    };
+    let note = if kit.source.is_empty() {
+        count
+    } else {
+        format!("{count} from {}", kit.source)
+    };
+    let lines = kit
+        .sounds
+        .iter()
+        .map(|sound| PreviewLine {
+            label: sound.label.clone(),
+            name: sound.name.clone(),
+            wave: waves
+                .entry(sound.path.clone())
+                .or_insert_with(|| {
+                    load_sample(&sound.path, rate).ok().map(|sample| {
+                        graphics::waveform_spans(
+                            &sample.frames,
+                            PREVIEW_WAVE_WIDTH,
+                            PREVIEW_WAVE_HEIGHT,
+                        )
+                    })
+                })
+                .clone(),
+        })
+        .collect();
+    Shown {
+        lines,
+        ..Shown::new(item, kit.name, note)
+    }
+}
+
 impl App {
     /// The folders the explorer starts from for a purpose, at the top of its list: the recent
     /// ones, then the project's, the settings' own, for samples the kit folders and the sample
@@ -433,6 +490,25 @@ impl App {
         self.open_explorer(Purpose::Kit, roots, on.as_deref());
     }
 
+    /// Make a kit's sounds the ones to choose from for a track. Nothing is loaded until one is.
+    pub(crate) fn use_kit(&mut self, path: &Path) {
+        match load_kit(path) {
+            Ok(kit) if kit.sounds.is_empty() => {
+                self.services.status = format!("{} has no sounds", path.display());
+            }
+            Ok(kit) => {
+                self.services.status = format!(
+                    "Kit {}: {} sounds. :sample chooses one for this track",
+                    kit.name,
+                    kit.sounds.len()
+                );
+                self.explorer.kit = kit.sounds;
+                self.explorer.kit_file = Some(path.to_path_buf());
+            }
+            Err(error) => self.services.status = error.to_string(),
+        }
+    }
+
     /// Put the command line on a chosen folder, waiting for the name, with Tab to complete it.
     pub(crate) fn name_in(&mut self, folder: &Path) {
         let Some(naming) = self.explorer.naming.take() else {
@@ -582,6 +658,19 @@ impl App {
         self.explorer.naming = None;
     }
 
+    /// Choose this track's sample in the explorer, with the kit's sounds first.
+    pub(crate) fn open_default_sample_picker(&mut self) {
+        let kit_name = self
+            .explorer
+            .kit_file
+            .as_deref()
+            .and_then(Path::file_stem)
+            .map(|stem| format!("Kit {}", stem.to_string_lossy()))
+            .unwrap_or_else(|| "Kit".to_owned());
+        let kit = self.explorer.kit.iter().map(kit_item).collect();
+        self.open_sample_explorer(kit, kit_name);
+    }
+
     /// Choose this track's sample, from the kit's sounds and the usual places, on the track's own
     /// sample. With no sample, it's on the kit's first sound.
     pub(crate) fn open_sample_explorer(&mut self, kit: Vec<Item>, kit_name: String) {
@@ -642,6 +731,26 @@ impl App {
 }
 
 impl Services {
+    /// A kit at a path, or by name in the first of the settings' kit folders that has it. A
+    /// name found nowhere is looked for in the first folder, so the error names it.
+    pub(crate) fn kit_path(&self, name: &Path) -> PathBuf {
+        if name.is_file() {
+            return name.to_path_buf();
+        }
+        let candidates: Vec<PathBuf> = self
+            .settings
+            .kit_folders()
+            .iter()
+            .map(|folder| folder.join(name).with_extension("ron"))
+            .collect();
+        candidates
+            .iter()
+            .find(|candidate| candidate.is_file())
+            .or(candidates.first())
+            .cloned()
+            .unwrap_or_else(|| name.with_extension("ron"))
+    }
+
     /// The project's name, which is the song's own: the random one it was given when it was
     /// made, its folder's when it's saved somewhere new, or what the project page names it.
     pub fn project_name(&self) -> String {

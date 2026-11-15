@@ -11,8 +11,11 @@ use vt_model::step::{HIGHEST_OCTAVE, LOWEST_OCTAVE, MAX_NOTE, MIN_NOTE, octave_s
 use crate::input::bindings::{Binding, Cmd, Resolved, adjusting_key, degree_key, note_key};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
+use crate::overlays::guides;
+use crate::overlays::picker::{Item, Pick, Picker};
 use crate::pages::sample::SampleKey;
 use crate::pages::sample::marking::MarkWait;
+use crate::pages::track::Page;
 
 use super::accent_slide::{HeldFlag, Moved, Written};
 use super::{App, Entry, HOLD_TIME, KEYS_NOTES, Momentary, which_key_due};
@@ -434,6 +437,53 @@ impl App {
         self.show_view(view);
     }
 
+    /// Record a view as most recently used.
+    pub(crate) fn note_view(&mut self, view: View) {
+        self.recent_views.retain(|other| *other != view);
+        self.recent_views.insert(0, view);
+    }
+
+    /// Open the view picker, with the view before this one highlighted so `Enter` flips back. The
+    /// track page is listed by the page it shows, where it's in the order, and then its other
+    /// pages after every view; each item has the key that shows it beside it, from the table.
+    pub(crate) fn open_view_picker(&mut self) {
+        self.modes.count = None;
+        let key = |cmd: Cmd| {
+            self.table
+                .rows()
+                .find(|binding| binding.mode == Mode::Normal && binding.cmd == cmd)
+                .map_or("", |binding| binding.keys)
+        };
+        let shown = self.track_page.page;
+        let page_item = |page: Page| {
+            Item::new(page.name().to_lowercase(), Pick::TrackPage(page))
+                .meaning(key(Cmd::ShowTrackPage(page)))
+        };
+        let mut items: Vec<Item> = self
+            .recent_views
+            .iter()
+            .map(|view| match view {
+                View::Track => page_item(shown),
+                // The project's sub-pages are `Space 9`, then `H` or `L`.
+                View::Project | View::Audio => {
+                    let side = if *view == View::Audio { "L" } else { "H" };
+                    Item::new(view.name(), Pick::View(*view))
+                        .meaning(format!("{}, {side}", key(Cmd::ShowProject)))
+                }
+                _ => Item::new(view.name(), Pick::View(*view)).meaning(key(Cmd::ShowView(*view))),
+            })
+            .collect();
+        items.extend(
+            Page::ALL
+                .into_iter()
+                .filter(|page| *page != shown)
+                .map(page_item),
+        );
+        let mut picker = Picker::new("Views", items).opened_on(Some(0));
+        picker.move_highlight(1);
+        self.show_picker(picker);
+    }
+
     /// Every key, for `Space k`.
     pub fn help_rows(&self) -> Vec<String> {
         let mut rows = Vec::new();
@@ -497,7 +547,7 @@ impl App {
             KeyCode::Char('G') => last,
             KeyCode::Char('?') => {
                 self.overlays.guide = None;
-                self.open_guide_picker();
+                self.show_picker(guides::picker());
                 return;
             }
             KeyCode::Char('q') | KeyCode::Esc => {
@@ -550,12 +600,12 @@ impl App {
             Cmd::ShowTrackPage(page) => self.show_track_page(page),
             Cmd::ShowProject => self.show_project(),
             Cmd::Picker => self.open_view_picker(),
-            Cmd::TrackPicker => self.open_track_picker(),
+            Cmd::TrackPicker => self.open_picker(self.services.track_picker()),
             Cmd::Help => {
                 self.overlays.help_scroll = 0;
                 self.modes.mode = Mode::Help;
             }
-            Cmd::Guides => self.open_guide_picker(),
+            Cmd::Guides => self.show_picker(guides::picker()),
             Cmd::PickValue => self.open_field_picker(),
             Cmd::Shape => self.open_shape(),
             // The sample page's marks: `'` and `m` wait for a letter, as an operator waits for a

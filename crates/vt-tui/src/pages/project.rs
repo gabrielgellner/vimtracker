@@ -7,10 +7,12 @@
 //! its moves, its edits, in `editing`, and its drawing, in `draw`, given a [`Ctx`]. It's a
 //! [`Page`], with its rows of the binding table, [`Page::KEYS`], here beside it. An edit that runs
 //! its row's command asks for it in its [`Outcome`], as one that opens a picker, the explorer or
-//! the Audio sub-page does (#784).
+//! the Audio sub-page does (#784). The lists of grooves and scales `:groove` and `:scale` open
+//! are built in `pickers`.
 
 pub mod draw;
 pub(crate) mod editing;
+pub(crate) mod pickers;
 
 use ratatui::Frame;
 use ratatui::layout::Rect;

@@ -20,6 +20,7 @@ use crate::input::bindings::{Cmd, Resolved};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::typed::{HEX, Typed};
+use crate::pages::phrase::PhraseView;
 use crate::services::Services;
 
 use super::{App, Entry, GRID_SIZES, LONGEST_LABEL, next_note_velocity, snap_by};
@@ -503,7 +504,8 @@ impl App {
                     }
                     None => {
                         self.services.status = format!("{name} isn't a label on this track");
-                        self.open_fx_picker(slot, &name.to_lowercase());
+                        let query = name.to_lowercase();
+                        self.show_picker(PhraseView::fx_picker(&self.services, slot, &query));
                     }
                 }
             }
