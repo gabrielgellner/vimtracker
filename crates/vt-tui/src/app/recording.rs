@@ -94,7 +94,7 @@ impl App {
             self.services.status = "Recording off".to_owned();
         } else if self.modes.view != View::Phrase {
             self.services.status = "Recording arms in the phrase view".to_owned();
-        } else if self.services.transport != Transport::Playing {
+        } else if self.services.reported.transport != Transport::Playing {
             self.services.status = "Recording arms while playing".to_owned();
         } else {
             self.recording = Some(Recording {
@@ -111,7 +111,7 @@ impl App {
         let Some(mut recording) = self.recording.take() else {
             return;
         };
-        let playing = self.services.transport == Transport::Playing;
+        let playing = self.services.reported.transport == Transport::Playing;
         for take in std::mem::take(&mut recording.takes) {
             let now = if playing {
                 self.heard_steps(take.track)
@@ -131,11 +131,12 @@ impl App {
             self.services.status = "This track isn't playing".to_owned();
             return;
         };
-        let velocity = self.flagged_velocity(self.services.note_velocity);
+        let velocity = self.flagged_velocity(self.services.live.note_velocity);
         let slide = self.flagged_slide();
         self.use_flags();
         let ticks = self
             .services
+            .reported
             .places
             .get(track)
             .map_or(TICKS_PER_STEP, |place| u64::from(place.ticks.max(1)));
@@ -211,7 +212,7 @@ impl App {
         let mut rows = Vec::new();
         let mut speeds = Vec::new();
         for &track in tracks {
-            let now = self.carried_by(self.services.places[track], Duration::ZERO);
+            let now = self.carried_by(self.services.reported.places[track], Duration::ZERO);
             let Some((phrase, stored)) = self.next_row(track, now) else {
                 continue;
             };
@@ -231,9 +232,11 @@ impl App {
                     .filter(free)
                     .find(|&c| step.fx[c].command.is_none())
             });
-            speeds.push(rate.map_or(self.services.places[track].speed, |column| {
-                Speed::from_index(usize::from(step.fx[column].coarse()))
-            }));
+            speeds.push(
+                rate.map_or(self.services.reported.places[track].speed, |column| {
+                    Speed::from_index(usize::from(step.fx[column].coarse()))
+                }),
+            );
             rows.push(Next {
                 track,
                 phrase,
@@ -303,7 +306,7 @@ impl App {
     /// The row a track plays next after this point in its own steps, as its phrase and stored
     /// step, found in its own chain as [`row_to_record`](Self::row_to_record) finds a row.
     fn next_row(&self, track: usize, now: f64) -> Option<(u32, usize)> {
-        let jam = self.services.jam.get(track)?;
+        let jam = self.services.reported.jam.get(track)?;
         let chain = jam.chain?;
         let song = self.song();
         let owner = song.tracks.get(track)?;
@@ -330,7 +333,8 @@ impl App {
         if self.recording.is_none() {
             return;
         }
-        if self.services.transport != Transport::Playing || self.modes.view != View::Phrase {
+        if self.services.reported.transport != Transport::Playing || self.modes.view != View::Phrase
+        {
             self.stop_recording();
             return;
         }
@@ -373,8 +377,8 @@ impl App {
     /// the clock since, less the output's latency.
     fn heard_song(&self) -> f64 {
         let place = TrackPlace {
-            count: self.services.playhead as i64,
-            progress: self.services.progress,
+            count: self.services.reported.playhead as i64,
+            progress: self.services.reported.progress,
             ticks: TICKS_PER_STEP as u32,
             speed: Speed::Sixteenth,
             ..TrackPlace::default()
@@ -385,7 +389,14 @@ impl App {
     /// Where a track is as it's heard, in steps of its own running count, which the engine
     /// reports, as long as its speed makes them.
     fn heard_steps(&self, track: usize) -> f64 {
-        self.carried_on(self.services.places.get(track).copied().unwrap_or_default())
+        self.carried_on(
+            self.services
+                .reported
+                .places
+                .get(track)
+                .copied()
+                .unwrap_or_default(),
+        )
     }
 
     /// Where a place the engine last reported has got to at the frame or key being handled, less
@@ -400,7 +411,7 @@ impl App {
         let elapsed = self
             .services
             .now
-            .saturating_duration_since(self.services.report_at)
+            .saturating_duration_since(self.services.reported.report_at)
             .min(MOST_ELAPSED);
         let steps_per_quarter = TICKS_PER_QUARTER as f64 / f64::from(place.ticks.max(1));
         let steps_per_second = f64::from(self.song().millibpm) / 60_000.0 * steps_per_quarter;
@@ -413,7 +424,7 @@ impl App {
     /// found in the track's own chain, and the groove counts the track's own steps, as playing
     /// does. Everything here is in the track's steps, which its pushes and nudges are shares of.
     fn row_to_record(&self, track: usize, now: f64) -> Option<Row> {
-        let jam = self.services.jam.get(track)?;
+        let jam = self.services.reported.jam.get(track)?;
         let chain = jam.chain?;
         let song = self.song();
         let owner = song.tracks.get(track)?;

@@ -146,8 +146,8 @@ fn rotating_while_recording_writes_held_rates_on_each_tracks_next_row() {
 
     // Heard from there: the first track plays eighths from its row 3.
     play_to(&mut app, &mut rt, &mut at, 4.5);
-    assert_eq!(app.services.places[0].speed, Eighth);
-    assert_eq!(app.services.places[1].speed, Sixteenth);
+    assert_eq!(app.services.reported.places[0].speed, Eighth);
+    assert_eq!(app.services.reported.places[1].speed, Sixteenth);
 
     // A second press turns them on from what the rows now hold, on the rows after.
     press(&mut app, " O");

@@ -293,7 +293,7 @@ impl App {
 
     /// A move on the selection, counted in its unit.
     fn moved(&self, kind: Shift, by: i32, scope: Scope) -> Adjustment {
-        let (unit, size) = Unit::of(kind, scope, self.services.scale.on);
+        let (unit, size) = Unit::of(kind, scope, self.services.live.scale.on);
         Adjustment::Moved(unit, by.saturating_mul(size))
     }
 
@@ -673,7 +673,12 @@ impl App {
             Op::Copy => self.copy_block(range, scope, tracks, true),
             Op::ShiftUp | Op::ShiftDown => {
                 let by = if op == Op::ShiftUp { 1 } else { -1 };
-                let scale = self.services.scale.on.then_some(self.services.scale);
+                let scale = self
+                    .services
+                    .live
+                    .scale
+                    .on
+                    .then_some(self.services.live.scale);
                 self.edit_across(range, tracks, |track, phrase, range| Action::Shift {
                     track,
                     phrase,
@@ -942,7 +947,7 @@ impl App {
         let fill = match field {
             Field::Note => Fill::Note {
                 note: value.note,
-                velocity: self.services.note_velocity,
+                velocity: self.services.live.note_velocity,
             },
             Field::Velocity => Fill::Velocity(value.velocity),
             Field::Nudge => Fill::Nudge(value.nudge),
@@ -968,7 +973,12 @@ impl App {
         tracks: TrackSpan,
         kind: Shift,
     ) {
-        let scale = self.services.scale.on.then_some(self.services.scale);
+        let scale = self
+            .services
+            .live
+            .scale
+            .on
+            .then_some(self.services.live.scale);
         self.edit_across(range, tracks, |track, phrase, range| Action::Shift {
             track,
             phrase,

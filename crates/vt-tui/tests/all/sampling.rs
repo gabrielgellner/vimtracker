@@ -114,7 +114,7 @@ fn space_r_armed_records_the_master_from_the_song_start_to_a_bar_into_a_new_entr
     );
     play(&mut app);
     run(&mut app, &mut rt, BAR + STEP);
-    assert_eq!(app.services.transport, Transport::Playing);
+    assert_eq!(app.services.reported.transport, Transport::Playing);
     let line = status_line(&app);
     assert!(
         line.contains(vt_tui::widgets::glyphs::RECORD) && line.contains(" 01 "),

@@ -887,10 +887,10 @@ fn r_replaces_a_note_and_keeps_everything_else() {
 fn r_ignores_the_note_velocity_setting() {
     let (mut app, _rt) = app_with(&[FULL]);
     keys(&mut app, "ic<Esc>");
-    assert_eq!(app.services.note_velocity, 0x54);
+    assert_eq!(app.services.live.note_velocity, 0x54);
     keys(&mut app, "rj");
     assert_eq!(steps(&app)[0], "B-3 70 vol:10 pan:20 cut:30");
-    assert_eq!(app.services.note_velocity, 0x54);
+    assert_eq!(app.services.live.note_velocity, 0x54);
 }
 
 #[test]
@@ -1923,7 +1923,7 @@ fn shape_on_the_note_column_re_pitches_in_degrees_and_snaps() {
         "C#3 30 --- --- ---",
     ];
     let (mut app, _rt) = app_with(&start);
-    app.services.scale.on = true;
+    app.services.live.scale.on = true;
     keys(&mut app, "vGS");
     assert_eq!(app.modes.mode, Mode::Shape);
     let panel = |app: &App| app.overlays.shape.clone().unwrap();
@@ -2039,8 +2039,8 @@ fn s_on_an_empty_note_column_writes_notes_in_key_with_the_rhythm_where_picks() {
     use vt_model::shape::{ShapeColumn, Where};
     let start = [E; 8];
     let (mut app, _rt) = app_with(&start);
-    app.services.scale.on = true;
-    app.services.note_velocity = 0x50;
+    app.services.live.scale.on = true;
+    app.services.live.note_velocity = 0x50;
     let depth = app.services.history.undo_depth();
     keys(&mut app, "vGS");
     assert_eq!(app.modes.mode, Mode::Shape);
@@ -2088,7 +2088,7 @@ fn s_on_an_empty_note_column_writes_notes_in_key_with_the_rhythm_where_picks() {
     // A random fill stays in key, and the same seed picks the same.
     keys(&mut app, "kkkkkkKrandom<Enter>");
     let picked = notes_of(&app);
-    let scale = app.services.scale;
+    let scale = app.services.live.scale;
     for note in picked.iter().filter(|note| *note != "---") {
         let Ok(vt_model::step::Note::On(midi)) = note.parse() else {
             panic!("{note}");
@@ -2271,7 +2271,7 @@ fn pitch_classes(app: &App) -> Vec<String> {
 fn acid_writes_a_riff_with_accents_and_slides_and_keeps_its_pitches_on_a_roll() {
     use vt_model::shape::GenParam;
     let (mut app, _rt) = app_with(&[E; 16]);
-    app.services.note_velocity = 0x50;
+    app.services.live.note_velocity = 0x50;
     let depth = app.services.history.undo_depth();
     keys(&mut app, "vGSKacid<Enter>");
     let panel = app.overlays.shape.clone().unwrap();
@@ -3217,7 +3217,7 @@ fn a_nudge_is_typed_as_a_sign_and_a_digit_and_cleared_on_its_own() {
     );
     // Auto-jump moves on once the digit's in.
     let (mut app, _rt) = app_with(&[A, A]);
-    assert!(!app.services.auto_jump);
+    assert!(!app.services.live.auto_jump);
     keys(&mut app, "lli;4");
     assert_eq!(app.services.cursor.step, 1);
     assert_eq!(app.services.cursor.field, Field::Nudge);
@@ -3337,7 +3337,7 @@ fn the_running_total_counts_each_columns_own_steps() {
     assert_eq!(app.services.status, "0 steps");
     // On notes, with the scale on, `=` and `-` move through it in degrees, `+` in semitones.
     let (mut app, _rt) = app_with(&[N]);
-    app.services.scale.on = true;
+    app.services.live.scale.on = true;
     keys(&mut app, "v==+");
     assert_eq!(app.services.status, "+12 semitones, +2 degrees");
 }

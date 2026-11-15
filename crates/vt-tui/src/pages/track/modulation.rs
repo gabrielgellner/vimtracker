@@ -139,6 +139,7 @@ impl App {
             .is_some_and(|track| track.mods[slot].kind == ModKind::Steps);
         let drawn = self
             .services
+            .reported
             .live
             .filter(|_| reported)
             .map(|live| live.drawn[slot])
@@ -253,7 +254,12 @@ impl App {
             if !owner.mods.iter().any(baked) && rnds.is_empty() {
                 continue;
             }
-            let Some(pitch) = self.services.heard_pitches.get(&(track, phrase, step)) else {
+            let Some(pitch) = self
+                .services
+                .reported
+                .heard_pitches
+                .get(&(track, phrase, step))
+            else {
                 unheard += 1;
                 continue;
             };

@@ -342,7 +342,7 @@ impl SongView {
     /// `Enter`: play the chain under the cursor on its track when its launch timing next allows, or
     /// stop the track then on a `--`. The song stays on this section, so the jam doesn't move on.
     fn launch(&self, services: &mut Services) -> Outcome {
-        if services.transport != Transport::Playing {
+        if services.reported.transport != Transport::Playing {
             return Outcome::Refused("Enter launches a chain while playing");
         }
         let Some(track) = self.track() else {
@@ -352,21 +352,23 @@ impl SongView {
             .section_here()
             .and_then(|here| here.chains.get(track).copied().flatten());
         services.handle.send(Command::Launch { track, chain });
-        if services.looping.is_none() {
-            services.looping = Some(SectionLoop::one(services.playing_section));
-            services.handle.send(Command::Loop(services.looping));
+        if services.reported.looping.is_none() {
+            services.reported.looping = Some(SectionLoop::one(services.reported.playing_section));
+            services
+                .handle
+                .send(Command::Loop(services.reported.looping));
         }
         let when = services.song().launch.when();
         services.status = match chain {
             Some(chain) => format!(
                 "Track {:02} plays chain {chain:02X} {when}. Staying on section {:02}",
                 track + 1,
-                services.playing_section + 1
+                services.reported.playing_section + 1
             ),
             None => format!(
                 "Track {:02} stops {when}. Staying on section {:02}",
                 track + 1,
-                services.playing_section + 1
+                services.reported.playing_section + 1
             ),
         };
         Outcome::Done
@@ -485,17 +487,18 @@ fn go_to_section(section: usize, services: &mut Services) -> Outcome {
 /// `C`: add a section below the one playing, holding what each track is playing, and carry on
 /// in it without a break.
 fn capture(services: &mut Services) -> Outcome {
-    if services.transport != Transport::Playing {
+    if services.reported.transport != Transport::Playing {
         return Outcome::Refused("C captures what's playing, so start the song first");
     }
     let song = Arc::clone(services.song());
-    let Some(playing) = song.sections.get(services.playing_section) else {
+    let Some(playing) = song.sections.get(services.reported.playing_section) else {
         return Outcome::Done;
     };
     let chains: Vec<Option<u32>> = (0..song.tracks.len())
         .map(|track| {
             let row = playing.chains.get(track).copied().flatten();
             services
+                .reported
                 .jam
                 .get(track)
                 .and_then(|jam| jam.playing)
@@ -505,7 +508,7 @@ fn capture(services: &mut Services) -> Outcome {
     if chains.iter().all(Option::is_none) {
         return Outcome::Refused("Nothing is playing to capture");
     }
-    let at = services.playing_section + 1;
+    let at = services.reported.playing_section + 1;
     // Playing on with the source's settings keeps its timing and realigning as they were.
     let length = song.section_length(playing);
     let (start, reset) = (playing.start, playing.reset);
@@ -532,7 +535,7 @@ fn capture(services: &mut Services) -> Outcome {
         section: at,
         length,
     });
-    services.looping = Some(SectionLoop::one(at));
+    services.reported.looping = Some(SectionLoop::one(at));
     let moved = go_to_section(at, services);
     services.status = format!("Captured to section {:02}, and staying on it", at + 1);
     moved
@@ -603,15 +606,15 @@ impl App {
         let selected = self
             .song_view
             .selected(self.modes.view, self.services.cursor.section);
-        self.services.looping = match (selected, self.services.looping) {
+        self.services.reported.looping = match (selected, self.services.reported.looping) {
             (Some(selected), _) => Some(selected),
             (None, Some(looping)) if looping.holds(section) => None,
             (None, _) => Some(SectionLoop::one(section)),
         };
         self.services
             .handle
-            .send(Command::Loop(self.services.looping));
-        let Some(looping) = self.services.looping else {
+            .send(Command::Loop(self.services.reported.looping));
+        let Some(looping) = self.services.reported.looping else {
             self.services.status = "Playing the song".to_owned();
             return;
         };
@@ -620,7 +623,7 @@ impl App {
         } else {
             format!("sections {:02}-{:02}", looping.first + 1, looping.last + 1)
         };
-        self.services.status = if self.services.transport == Transport::Playing {
+        self.services.status = if self.services.reported.transport == Transport::Playing {
             let when = self.grid_when();
             format!("Looping {sections} {when}")
         } else {

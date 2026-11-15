@@ -34,7 +34,7 @@ fn added_tracks_save_load_and_play() {
     let (mut app, mut rt) = app();
     command(&mut app, "track add 3");
     assert_eq!(app.song().sound_tracks(), 5);
-    assert_eq!(app.services.levels.len(), 5 + FIXED_TRACKS);
+    assert_eq!(app.services.live.levels.len(), 5 + FIXED_TRACKS);
     press(&mut app, "WWWW");
     assert_eq!(app.services.cursor.track, 4);
     press(&mut app, "ia");
@@ -63,7 +63,7 @@ fn only_the_last_track_can_be_removed_and_one_stays() {
     assert!(app.services.status.contains("at least one"));
     press(&mut app, "uj");
     assert_eq!(app.song().sound_tracks(), 2);
-    assert_eq!(app.services.levels.len(), 2 + FIXED_TRACKS);
+    assert_eq!(app.services.live.levels.len(), 2 + FIXED_TRACKS);
 }
 
 #[test]
@@ -89,18 +89,18 @@ fn a_fixed_tracks_mute_stays_with_it_as_tracks_come_and_go() {
     press(&mut app, "WW");
     assert_eq!(app.song().tracks[app.services.cursor.track].name, "A");
     press(&mut app, " m");
-    assert!(app.services.levels[return_a].mute);
+    assert!(app.services.live.levels[return_a].mute);
     command(&mut app, "track add");
     assert!(
-        app.services.levels[return_a + 1].mute,
+        app.services.live.levels[return_a + 1].mute,
         "return A is here now"
     );
     assert!(
-        !app.services.levels[2].mute,
+        !app.services.live.levels[2].mute,
         "and the new track isn't muted"
     );
     command(&mut app, "track del");
-    assert!(app.services.levels[return_a].mute);
+    assert!(app.services.live.levels[return_a].mute);
 }
 
 #[test]
@@ -109,14 +109,14 @@ fn the_master_cant_be_muted_or_soloed() {
     let master = 4 + MAX_GROUPS;
     press(&mut app, &"W".repeat(master));
     press(&mut app, " m");
-    assert!(!app.services.levels[master].mute);
+    assert!(!app.services.live.levels[master].mute);
     assert!(
         app.services.status.contains("master"),
         "{}",
         app.services.status
     );
     press(&mut app, " s");
-    assert!(!app.services.levels[master].solo);
+    assert!(!app.services.live.levels[master].solo);
 }
 
 #[test]
@@ -133,19 +133,22 @@ fn track_count_is_limited_to_the_constant() {
 fn mute_isnt_in_undo_history_but_is_saved() {
     let (mut app, _rt) = app();
     tap(&mut app, " m");
-    assert!(app.services.levels[0].mute);
+    assert!(app.services.live.levels[0].mute);
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     press(&mut app, "u");
     assert_eq!(notes(&app)[0], Note::Empty);
-    assert!(app.services.levels[0].mute, "undo must not change a mute");
+    assert!(
+        app.services.live.levels[0].mute,
+        "undo must not change a mute"
+    );
     let path = folder();
     command(&mut app, &format!("w {}", path.display()));
     let (mut other, _rt2) = self::app();
     command(&mut other, &format!("e {}", path.display()));
-    assert!(other.services.levels[0].mute);
+    assert!(other.services.live.levels[0].mute);
     press(&mut other, " M");
-    assert!(!other.services.levels[0].mute);
+    assert!(!other.services.live.levels[0].mute);
 }
 
 #[test]

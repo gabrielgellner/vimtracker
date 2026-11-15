@@ -143,16 +143,16 @@ impl App {
             Line::SetScale(kind) => self.services.set_scale(Scale {
                 on: true,
                 kind,
-                ..self.services.scale
+                ..self.services.live.scale
             }),
             Line::SetRoot(root) => self.services.set_scale(Scale {
                 on: true,
                 root,
-                ..self.services.scale
+                ..self.services.live.scale
             }),
             Line::ScaleOn(on) => self.services.set_scale(Scale {
                 on,
-                ..self.services.scale
+                ..self.services.live.scale
             }),
             Line::PickScale => self.open_picker(self.services.scale_picker()),
             Line::FitToScale => self.fit_to_scale(),
@@ -272,7 +272,7 @@ impl App {
         let same = path
             .as_deref()
             .is_none_or(|p| Some(p) == self.services.folder.as_deref());
-        if same && self.services.read_only && !force {
+        if same && self.services.live.read_only && !force {
             self.services.status = READ_ONLY.to_owned();
             return;
         }
@@ -304,7 +304,7 @@ impl App {
                 self.services.folder = Some(folder.clone());
                 self.services.dirty = false;
                 self.forget_autosave();
-                self.services.status = if self.services.read_only {
+                self.services.status = if self.services.live.read_only {
                     format!("Saved {}, which stays read-only", folder.display())
                 } else {
                     format!("Saved {}", folder.display())
@@ -317,8 +317,8 @@ impl App {
     /// `:set readonly` and `:set readwrite`. Like the scale, it isn't an edit to undo, but it's
     /// saved with the song, so switching it marks the song changed.
     fn set_read_only(&mut self, on: bool) {
-        if self.services.read_only != on {
-            self.services.read_only = on;
+        if self.services.live.read_only != on {
+            self.services.live.read_only = on;
             self.services.dirty = true;
         }
         self.services.status = if on {
@@ -390,17 +390,17 @@ impl App {
         let mut pool = SamplePool::clone(&self.services.samples);
         let errors = project::load_samples(folder.as_deref(), &song, self.services.rate, &mut pool);
         self.services.samples = Arc::new(pool);
-        self.services.levels = live_from(&song);
-        self.services.scale = song.scale;
-        self.services.auto_jump = song.auto_jump;
-        self.services.read_only = song.read_only;
+        self.services.live.levels = live_from(&song);
+        self.services.live.scale = song.scale;
+        self.services.live.auto_jump = song.auto_jump;
+        self.services.live.read_only = song.read_only;
         self.services.folds = Folds::from_view(&song.view);
         self.send_live();
         self.services.history = History::new(Arc::new(song));
         // Another song's rows and generators aren't these.
-        self.services.heard_pitches.clear();
-        self.services.heard_passes.clear();
-        self.services.heard_rows.clear();
+        self.services.reported.heard_pitches.clear();
+        self.services.reported.heard_passes.clear();
+        self.services.reported.heard_rows.clear();
         self.services.folder = folder;
         self.services.cursor = Cursor {
             step: self.services.cursor.step,

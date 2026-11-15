@@ -35,7 +35,7 @@ fn semicolon_turns_auto_jump_on_and_entering_moves_on_by_the_grid() {
     let (mut app, _rt) = app();
     let depth = app.services.history.undo_depth();
     tap(&mut app, "i;");
-    assert!(app.services.auto_jump);
+    assert!(app.services.live.auto_jump);
     assert_eq!(
         app.services.history.undo_depth(),
         depth,
@@ -53,7 +53,7 @@ fn semicolon_turns_auto_jump_on_and_entering_moves_on_by_the_grid() {
     assert_eq!(app.services.cursor.step, 8);
     assert_eq!(notes(&app)[8], Note::Empty);
     tap(&mut app, ";");
-    assert!(!app.services.auto_jump);
+    assert!(!app.services.live.auto_jump);
     tap(&mut app, "a");
     assert_eq!(app.services.cursor.step, 8);
 
@@ -64,7 +64,7 @@ fn semicolon_turns_auto_jump_on_and_entering_moves_on_by_the_grid() {
     command(&mut app, &format!("w {}", path.display()));
     let (mut other, _realtime) = self::app();
     command(&mut other, &format!("e {}", path.display()));
-    assert!(other.services.auto_jump, "{}", other.services.status);
+    assert!(other.services.live.auto_jump, "{}", other.services.status);
     std::fs::remove_dir_all(&path).unwrap();
 }
 
@@ -92,7 +92,7 @@ fn the_octave_is_numbered_as_live_numbers_it_from_c3_at_middle_c() {
     assert_eq!(Note::On(60).to_string(), "C-3");
     // Down to the lowest octave, which is -1, and no further.
     tap(&mut app, "zzzzzzzzza");
-    assert_eq!(app.services.octave, -1);
+    assert_eq!(app.services.live.octave, -1);
     assert!(
         status_line(&app).contains("Oct -1 "),
         "{}",
@@ -102,7 +102,7 @@ fn the_octave_is_numbered_as_live_numbers_it_from_c3_at_middle_c() {
     assert_eq!(Note::On(12).to_string(), "c_1");
     // And up to the highest, 8, where the keys stop at `G-8`.
     tap(&mut app, "xxxxxxxxxxxxa");
-    assert_eq!(app.services.octave, 8);
+    assert_eq!(app.services.live.octave, 8);
     assert_eq!(notes(&app)[2], Note::On(120));
     assert_eq!(Note::On(120).to_string(), "C-8");
 }
@@ -195,13 +195,16 @@ fn the_ableton_layout_plays_and_c_and_v_set_the_velocity_written() {
     tap(&mut app, "xa");
     assert_eq!(notes(&app)[0], Note::On(72));
     tap(&mut app, "zz");
-    assert_eq!(app.services.octave, 2);
+    assert_eq!(app.services.live.octave, 2);
 
     let velocity = |app: &App| app.song().tracks[0].phrases[&0].steps()[0].velocity;
     tap(&mut app, "a");
     assert_eq!(velocity(&app), Some(0x64), "filled in from the default");
     tap(&mut app, "c");
-    assert_eq!(app.services.note_velocity, 0x54, "only the top digit moves");
+    assert_eq!(
+        app.services.live.note_velocity, 0x54,
+        "only the top digit moves"
+    );
     tap(&mut app, "a");
     assert_eq!(velocity(&app), Some(0x54));
     assert_eq!(notes(&app)[0], Note::On(48));
@@ -213,24 +216,24 @@ fn the_ableton_layout_plays_and_c_and_v_set_the_velocity_written() {
 
     tap(&mut app, "i");
     tap(&mut app, "v");
-    assert_eq!(app.services.note_velocity, 0x64, "back on the default");
+    assert_eq!(app.services.live.note_velocity, 0x64, "back on the default");
     tap(&mut app, "v");
-    assert_eq!(app.services.note_velocity, 0x74);
+    assert_eq!(app.services.live.note_velocity, 0x74);
     tap(&mut app, "v");
-    assert_eq!(app.services.note_velocity, 0x7F);
+    assert_eq!(app.services.live.note_velocity, 0x7F);
     tap(&mut app, "v");
-    assert_eq!(app.services.note_velocity, 0x7F);
+    assert_eq!(app.services.live.note_velocity, 0x7F);
     tap(&mut app, "c");
     assert_eq!(
-        app.services.note_velocity, 0x74,
+        app.services.live.note_velocity, 0x74,
         "steps back on from the top"
     );
     tap(&mut app, "c");
-    assert_eq!(app.services.note_velocity, 0x64);
+    assert_eq!(app.services.live.note_velocity, 0x64);
     for _ in 0..12 {
         tap(&mut app, "c");
     }
-    assert_eq!(app.services.note_velocity, 0x04);
+    assert_eq!(app.services.live.note_velocity, 0x04);
 }
 
 #[test]
@@ -292,7 +295,7 @@ fn left_and_right_move_by_the_grid_from_the_cursor() {
 
     // With auto-jump the cursor is already on the next cell, and an arrow goes on from there.
     let (mut app, _realtime) = self::app();
-    app.services.auto_jump = true;
+    app.services.live.auto_jump = true;
     tap(&mut app, "8Gi");
     tap(&mut app, "a");
     assert_eq!(app.services.cursor.step, 11);
@@ -366,7 +369,7 @@ fn the_note_heard_while_typing_uses_the_velocity() {
 #[test]
 fn length_changes_work_while_playing() {
     let (mut app, _realtime) = app();
-    app.services.transport = Transport::Playing;
+    app.services.reported.transport = Transport::Playing;
     command(&mut app, "len 4");
     assert_eq!(app.song().tracks[0].phrases[&0].len(), 4);
     command(&mut app, "double");
@@ -536,7 +539,7 @@ fn let_go_of(app: &mut App, c: char) {
 fn a_tapped_accent_goes_on_the_note_just_written_and_off_again() {
     let (mut app, _rt) = app();
     command(&mut app, "set skip=4");
-    app.services.auto_jump = true;
+    app.services.live.auto_jump = true;
     tap(&mut app, "ia");
     assert_eq!(app.services.cursor.step, 4, "auto-jump moved on");
     let depth = app.services.history.undo_depth();
@@ -557,7 +560,7 @@ fn a_tapped_accent_goes_on_the_note_just_written_and_off_again() {
     assert_eq!(rows_here(&app)[0].velocity, Some(0x64));
     assert_eq!(app.services.status, "Accent off");
     tap(&mut app, "v");
-    assert_eq!(app.services.note_velocity, 0x74);
+    assert_eq!(app.services.live.note_velocity, 0x74);
     tap(&mut app, "'");
     tap(&mut app, "'");
     assert_eq!(
@@ -619,7 +622,7 @@ fn a_tapped_slide_puts_hld_on_the_gate_and_keeps_its_pulses_and_length() {
     use vt_model::step::{Gate, GateKind};
     let (mut app, _rt) = app();
     command(&mut app, "set skip=4");
-    app.services.auto_jump = true;
+    app.services.live.auto_jump = true;
     tap(&mut app, "ia");
     tap(&mut app, "/");
     let hold = Gate {
@@ -765,7 +768,7 @@ fn a_note_recorded_with_a_flag_held_is_written_with_it() {
 fn a_tapped_octave_key_moves_the_note_just_written_and_again_puts_it_back() {
     let (mut app, _rt) = app();
     command(&mut app, "set skip=4");
-    app.services.auto_jump = true;
+    app.services.live.auto_jump = true;
     tap(&mut app, "ia");
     let depth = app.services.history.undo_depth();
     tap(&mut app, "k");
@@ -777,7 +780,10 @@ fn a_tapped_octave_key_moves_the_note_just_written_and_again_puts_it_back() {
         "one change to undo"
     );
     assert_eq!(app.services.cursor.step, 4, "the cursor stays");
-    assert_eq!(app.services.octave, 3, "the octave written in is as it was");
+    assert_eq!(
+        app.services.live.octave, 3,
+        "the octave written in is as it was"
+    );
     tap(&mut app, "k");
     assert_eq!(
         notes(&app)[0],
@@ -825,7 +831,7 @@ fn a_tapped_octave_key_moves_the_note_just_written_and_again_puts_it_back() {
     press(&mut app, "gg");
     tap(&mut app, "i");
     tap(&mut app, "zzzz");
-    assert_eq!(app.services.octave, -1);
+    assert_eq!(app.services.live.octave, -1);
     tap(&mut app, "a");
     special(&mut app, KeyCode::Left);
     tap(&mut app, ",");
@@ -853,7 +859,10 @@ fn notes_played_with_an_octave_key_held_go_in_an_octave_up_or_down() {
         [60, 74, 76, 53].map(Note::On),
         "letting go moves nothing"
     );
-    assert_eq!(app.services.octave, 3, "the sticky octave is as it was");
+    assert_eq!(
+        app.services.live.octave, 3,
+        "the sticky octave is as it was"
+    );
 
     // With an accent held too, and with both octave keys, neither way.
     hold(&mut app, '\'');
