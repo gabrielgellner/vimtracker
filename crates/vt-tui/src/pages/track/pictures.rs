@@ -10,7 +10,9 @@ use vt_model::insert::INSERTS;
 use vt_model::modulation::{MOD_SLOTS, ModKind};
 use vt_model::song::{Machine, Track};
 
-use super::{Control, Page, TrackPage};
+use crate::controls::{Control, Page};
+
+use super::TrackPage;
 use crate::graphics::generators::GenDrawing;
 use crate::graphics::plot::{LfoDrawing, Shade, TrackDrawing};
 use crate::graphics::slots::SlotDrawing;

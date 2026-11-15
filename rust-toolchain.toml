@@ -1,0 +1,6 @@
+# The compiler every build and test uses. The audio goldens are hashes of exact bits, and the
+# bits depend on how the code is compiled, so the compiler is pinned as `realfft` and `wide` are
+# (CONTRIBUTING.md, decision 353). Bump it on purpose, in a pull request of its own.
+[toolchain]
+channel = "1.100.0"
+components = ["rustfmt", "clippy"]

@@ -141,8 +141,8 @@ mod tests {
     use vt_model::action::TrackControl;
 
     use super::*;
+    use crate::controls::Control;
     use crate::pages::Ctx;
-    use crate::pages::track::Control;
     use crate::widgets::pin::{app, assert_drawn, drawn, press};
 
     const CUT: Control = Control::Base(TrackControl::Cutoff);

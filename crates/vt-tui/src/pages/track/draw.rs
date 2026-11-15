@@ -8,14 +8,14 @@ use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
 use vt_model::action::TrackControl;
 use vt_model::insert::Insert;
-use vt_model::modulation::ModField;
-use vt_model::song::{Song, Track, TrackKind};
+use vt_model::song::{Track, TrackKind};
 
+use crate::controls::{Control, DeviceSpec, Page};
 use crate::graphics::PanelKey;
 use crate::input::mode::Mode;
 use crate::pages::Ctx;
 use crate::pages::phrase::draw::level_glyph;
-use crate::pages::track::{ArpField, Control, DeviceSpec, Page, TrackPage};
+use crate::pages::track::TrackPage;
 use crate::widgets;
 use crate::widgets::device::{DEVICE_HEIGHT, Device};
 use crate::widgets::glyphs;
@@ -78,25 +78,6 @@ const EMPTY_SLOT: &str = "Empty";
 const EMPTY_HINT_ROW: u16 = ROW_STEP;
 /// Cells in a value's bar, each split into eighths. An odd number, so a centre has a cell.
 const BAR_CELLS: usize = 9;
-
-/// Whether a setting that's off or on, and nothing else, is on, or nothing for any other: an
-/// effect's `Off`/`On` list, an envelope's `Reset`, the arpeggio's `Retrig`, the filter's
-/// `Safe`, and the master's `Limiter`, which is the song's. They show as a toggle, and the status
-/// line still says the word.
-pub(crate) fn toggle_on(control: Control, track: &Track, song: &Song) -> Option<bool> {
-    match control {
-        Control::Limiter => Some(song.limiter),
-        Control::Safe => Some(track.safe),
-        Control::InsertParam(slot, param) => {
-            let insert = track.inserts[slot];
-            let found = insert.params().get(param)?;
-            found.is_toggle().then(|| insert.value(param) != 0)
-        }
-        Control::Mod(slot, ModField::Reset) => Some(track.mods[slot].envelope().reset()),
-        Control::Arpeggio(ArpField::Retrig) => Some(track.arpeggio.retrig),
-        _ => None,
-    }
-}
 
 /// Whether the cursor is in a sound track's Machine device, on the machine, its type, its
 /// sample or one of its settings, so its thumbnail is the focused one.

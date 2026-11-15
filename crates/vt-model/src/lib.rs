@@ -1,7 +1,5 @@
 //! Song data, actions and project files for vimtracker.
 
-#![warn(clippy::float_cmp, clippy::match_same_arms, clippy::redundant_clone)]
-
 pub mod accumulator;
 pub mod action;
 pub mod analysis;

@@ -19,10 +19,11 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use super::virtual_analog::{BLOCK, Moving, Settings, next_integrated_blep, this_integrated_blep};
+use super::Settings;
+use super::virtual_analog::{BLOCK, Moving, next_integrated_blep, this_integrated_blep};
 use super::waveshaping_tables::{FOLD, SHAPES};
 use crate::dsp::blocks::line::hermite_soras;
-use crate::voice::SynthEngine;
+use crate::dsp::voices::SynthEngine;
 
 const MAX_FREQUENCY: f32 = 0.25;
 const MIN_FREQUENCY: f32 = 0.000_001;

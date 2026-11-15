@@ -20,11 +20,11 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use super::Settings;
 use super::braids_parts::{
     AnalogOscillator, INNER, MODERATE_OVERDRIVE, Macro, Model, NO_SYNC, Pitch, Shape, sine,
     waveshape,
 };
-use super::virtual_analog::Settings;
 
 /// A sine ring modulated by two more, each up to 32 semitones either way of the note.
 pub(crate) type Ring = Macro<RingModel>;
@@ -170,8 +170,8 @@ impl Model for ToyModel {
 mod tests {
     use super::*;
     use crate::dsp::signals::{differs, rms};
+    use crate::dsp::voices::SynthEngine;
     use crate::dsp::voices::virtual_analog::VirtualAnalog;
-    use crate::voice::SynthEngine;
 
     const RATE: u32 = 48_000;
 

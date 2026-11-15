@@ -1,11 +1,11 @@
 //! Editing a setting from its view: where `=`, `-`, `+` and `_` take it, its fine part, what
 //! `i`'s text sets it to, what `x` puts back and what `K` lists (the UI plan's §3.3). These read
 //! only the [`ParamView`], so they know no device and no track: the page writes what they give back
-//! with `pages::track::set`, the one way every described setting is written.
+//! with `controls::set`, the one way every described setting is written.
 
 use vt_model::step::Note;
 
-use super::view::{Choice, ParamView, Reads, Steps};
+use crate::controls::param::{Choice, ParamView, Reads, Steps};
 
 /// How many small steps of a fine part a large one is.
 const FINE_JUMP: i64 = 0x10;
@@ -208,7 +208,7 @@ mod tests {
     use vt_model::song::{Song, Track};
 
     use super::*;
-    use crate::pages::track::{Control, view};
+    use crate::controls::{Control, view};
 
     fn shown(control: Control, track: &Track) -> ParamView {
         view(control, track, &Song::new(1), false).unwrap()

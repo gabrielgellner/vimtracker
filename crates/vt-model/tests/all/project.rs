@@ -356,6 +356,7 @@ fn a_new_project_refuses_an_existing_song() {
 }
 
 #[test]
+#[allow(clippy::float_cmp, reason = "the sides are the same bit for bit")]
 fn mono_16_bit_loads_as_stereo() {
     let dir = folder();
     let path = dir.join("mono.wav");

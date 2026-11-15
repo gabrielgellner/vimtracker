@@ -8,41 +8,11 @@ use vt_model::song::Track;
 
 use crate::app::App;
 
-use super::{Control, DEVICE_COLUMNS, DEVICE_ROWS, DeviceSpec, Page, TrackPage};
+use super::TrackPage;
+use crate::controls::{DEVICE_ROWS, Page};
 use crate::input::mode::View;
 use crate::pages::Ctx;
 use crate::services::Services;
-
-/// The FX page's devices: a slot each, top to bottom.
-pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
-    track
-        .inserts
-        .iter()
-        .enumerate()
-        .map(|(slot, insert)| DeviceSpec::slot(slot, *insert))
-        .collect()
-}
-
-impl DeviceSpec {
-    /// A slot on the FX page: its effect over the grid's first column, its type over the second
-    /// and, for Beads, its quality over the third, then its effect's grid. An empty slot has only
-    /// its effect.
-    pub fn slot(slot: usize, insert: Insert) -> Self {
-        let mut title = [None; DEVICE_COLUMNS];
-        title[0] = Some(Control::Insert(slot));
-        title[1] = insert.type_param().map(|at| Control::InsertParam(slot, at));
-        title[2] = insert
-            .title_param()
-            .map(|at| Control::InsertParam(slot, at));
-        let device = Self::new((slot + 1).to_string(), title, insert.grid(), |at| {
-            Control::InsertParam(slot, at)
-        });
-        Self {
-            switchable: insert != Insert::Empty,
-            ..device
-        }
-    }
-}
 
 /// An effect taken out of a slot, waiting to be put in another.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

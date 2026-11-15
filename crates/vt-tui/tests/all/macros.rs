@@ -7,8 +7,8 @@ use ratatui::crossterm::event::KeyCode;
 use vt_model::macros::MacroTarget;
 use vt_model::settings::SettingId;
 use vt_tui::app::App;
+use vt_tui::controls::Control;
 use vt_tui::input::mode::{Mode, View};
-use vt_tui::pages::track::Control;
 
 use crate::common::*;
 use vt_tui::graphics::PanelKey;
@@ -323,7 +323,7 @@ fn the_macros_band_turns_a_macro_and_colon_macro_names_it() {
     press(&mut app, "M1");
     // The Gen page, its first band the macros.
     press(&mut app, "LLL");
-    assert_eq!(app.track_page.page, vt_tui::pages::track::Page::Gen);
+    assert_eq!(app.track_page.page, vt_tui::controls::Page::Gen);
     press(&mut app, "gg0");
     assert_eq!(app.track_control(), Control::Macro(0));
     press(&mut app, "iFF");
@@ -545,7 +545,7 @@ fn jump_back(app: &mut App) {
 
 #[test]
 fn gd_on_a_setting_a_macro_holds_goes_to_its_mapping_on_the_gen_page_and_c_o_comes_back() {
-    use vt_tui::pages::track::Page;
+    use vt_tui::controls::Page;
     let (mut app, _realtime) = on_cut();
     // Res on macro 1, then Cut, its second mapping.
     press(&mut app, "jM1kM1");
@@ -593,7 +593,7 @@ fn gd_on_a_generators_setting_goes_up_the_gen_page_to_its_macro_as_a_jump() {
 
 #[test]
 fn gd_on_a_setting_no_macro_holds_says_what_it_opens() {
-    use vt_tui::pages::track::Page;
+    use vt_tui::controls::Page;
     let (mut app, _realtime) = on_cut();
     press(&mut app, "gd");
     assert_eq!(app.track_page.page, Page::Sound, "it stays");

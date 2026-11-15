@@ -10,8 +10,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use crate::app::App;
+use crate::controls::macro_name;
 use crate::graphics::PanelKey;
-use crate::overlays::mapping::{MapField, MappingView, bend_text, end_text, macro_name};
+use crate::overlays::mapping::{MapField, MappingView, bend_text, end_text};
 use crate::widgets::theme;
 use crate::widgets::{image, popup};
 

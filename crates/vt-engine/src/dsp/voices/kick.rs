@@ -21,9 +21,10 @@
 
 use std::f32::consts::PI;
 
-use super::virtual_analog::{BLOCK, Moving, Settings};
+use super::Settings;
+use super::virtual_analog::{BLOCK, Moving};
 use crate::dsp::blocks::clip::soft_clip;
-use crate::voice::SynthEngine;
+use crate::dsp::voices::SynthEngine;
 
 #[inline]
 fn diode(x: f32) -> f32 {

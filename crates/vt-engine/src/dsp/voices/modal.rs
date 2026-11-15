@@ -21,10 +21,10 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use super::virtual_analog::Settings;
+use super::Settings;
 use crate::dsp::blocks::plaits_parts::{CosineOscillator, Limiter, tan_fast};
 use crate::dsp::effects::resonator::{MODES, Modes, semitones};
-use crate::voice::SynthEngine;
+use crate::dsp::voices::SynthEngine;
 
 /// How many frames are worked out at once, as in Plaits.
 const BLOCK: usize = 24;
