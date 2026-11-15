@@ -8,10 +8,139 @@ pub(crate) mod draw;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
+use ratatui::Frame;
+use ratatui::layout::Rect;
+
 use crate::controls::Page;
-use crate::input::mode::View;
+use crate::input::bindings::Cmd;
+use crate::input::keys::Key;
+use crate::input::mode::{Mode, View};
+use crate::overlays::Overlay;
 use crate::overlays::picker::{Item, Pick, Picker};
+use crate::pages::{Ctx, CtxMut, Outcome};
 use crate::widgets::theme;
+
+/// The guide that's open, if one is, how far it has scrolled, and how many of its rows fit and
+/// how wide its text is, as the screen was when last drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuideView {
+    pub open: Option<Guide>,
+    pub scroll: usize,
+    pub page: usize,
+    pub width: usize,
+}
+
+impl Default for GuideView {
+    fn default() -> Self {
+        Self {
+            open: None,
+            scroll: 0,
+            page: 16,
+            width: 76,
+        }
+    }
+}
+
+/// A key of an open guide.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GuideKey {
+    Down,
+    Up,
+    HalfPageDown,
+    HalfPageUp,
+    Top,
+    Bottom,
+    /// `?`: the list of guides, on this one.
+    Guides,
+    Close,
+}
+
+impl GuideView {
+    /// Open a guide at its top.
+    pub(crate) fn show(&mut self, guide: Guide) {
+        self.open = Some(guide);
+        self.scroll = 0;
+    }
+}
+
+impl Overlay for GuideView {
+    const MODE: Mode = Mode::Guide;
+
+    const KEYS: &'static [(&'static str, Cmd, &'static str)] = &[
+        ("j", Cmd::InGuide(GuideKey::Down), "Scroll down"),
+        ("Down", Cmd::InGuide(GuideKey::Down), "Scroll down"),
+        ("k", Cmd::InGuide(GuideKey::Up), "Scroll up"),
+        ("Up", Cmd::InGuide(GuideKey::Up), "Scroll up"),
+        (
+            "C-d",
+            Cmd::InGuide(GuideKey::HalfPageDown),
+            "Half a page down",
+        ),
+        ("C-u", Cmd::InGuide(GuideKey::HalfPageUp), "Half a page up"),
+        ("g", Cmd::InGuide(GuideKey::Top), "The top"),
+        ("G", Cmd::InGuide(GuideKey::Bottom), "The bottom"),
+        ("?", Cmd::InGuide(GuideKey::Guides), "The list of guides"),
+        ("q", Cmd::InGuide(GuideKey::Close), "Close"),
+        ("Esc", Cmd::InGuide(GuideKey::Close), "Close"),
+    ];
+
+    fn key(&mut self, cmd: Cmd, _ctx: &mut CtxMut) -> Outcome {
+        let Some(guide) = self.open else {
+            return Outcome::Close;
+        };
+        let Cmd::InGuide(key) = cmd else {
+            return Outcome::Passed;
+        };
+        // It stops when its last row reaches the bottom of the window.
+        let last = guide.lines(self.width).len().saturating_sub(self.page);
+        let half = (self.page / 2).max(1);
+        self.scroll = match key {
+            GuideKey::HalfPageDown => self.scroll + half,
+            GuideKey::HalfPageUp => self.scroll.saturating_sub(half),
+            GuideKey::Down => self.scroll + 1,
+            GuideKey::Up => self.scroll.saturating_sub(1),
+            GuideKey::Top => 0,
+            GuideKey::Bottom => last,
+            GuideKey::Guides => {
+                self.open = None;
+                return Outcome::Open(Box::new(picker(guide)));
+            }
+            GuideKey::Close => return Outcome::Close,
+        }
+        .min(last);
+        Outcome::Done
+    }
+
+    /// Only `Ctrl` with `d` or `u` is read with what's held: the rest mean what they do alone.
+    fn reads(&self, key: Key) -> Key {
+        use ratatui::crossterm::event::KeyCode;
+        match key.code {
+            KeyCode::Char('d' | 'u') if key.ctrl => Key {
+                ctrl: true,
+                ..Key::new(key.code)
+            },
+            code => Key::new(code),
+        }
+    }
+
+    /// Any other key does nothing, but for keeping the scroll within the guide.
+    fn text(&mut self, _key: Key, _ctx: &mut CtxMut) -> Outcome {
+        let Some(guide) = self.open else {
+            return Outcome::Close;
+        };
+        let last = guide.lines(self.width).len().saturating_sub(self.page);
+        self.scroll = self.scroll.min(last);
+        Outcome::Done
+    }
+
+    fn draw(&mut self, frame: &mut Frame, area: Rect, _ctx: &Ctx) {
+        self.page = draw::page(area.height);
+        self.width = draw::text_width(area.width);
+        if let Some(guide) = self.open {
+            draw::draw(frame, area, guide, self.scroll);
+        }
+    }
+}
 
 /// One guide. Its title is its first heading.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

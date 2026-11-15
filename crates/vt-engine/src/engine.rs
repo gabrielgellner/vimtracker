@@ -186,7 +186,8 @@ pub struct Engine {
     lfo_countdown: u32,
     /// Whether fill is on, which `CND`'s `FILL` and `!FILL` read.
     fill: bool,
-    /// The scale an `ACU` moves notes through, a live control as it's outside undo.
+    /// The scale an `ACU` moves notes through and a slot in scale moves the pitch along, a live
+    /// control as it's outside undo.
     scale: Scale,
     /// Whether every track goes back to its start at the next line of the realign grid, as a
     /// key asks while playing.
@@ -417,7 +418,7 @@ impl Engine {
         let ticks_per_frame = TICKS_PER_QUARTER as f64 * f64::from(self.millibpm)
             / (60.0 * f64::from(self.rate) * 1000.0);
         SongTime {
-            scale: self.current.song.scale,
+            scale: self.scale,
             tick: self.origin_tick as f64 + self.frames_since_origin as f64 * ticks_per_frame,
             clock: self.clock,
             rate: self.rate,

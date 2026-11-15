@@ -923,7 +923,9 @@ each has a line that's typed into, so `Overlay::text` takes a key as text, every
 the explorer's `H` is passed back on a plain list and starts a search; and there's no count,
 as an overlay that counts keeps its own digits. `overlays::press` gives an overlay a key that
 way, with the keys of a sequence typed so far in `Grammar::pending`, as Normal's are. The
-picker is the first behind it; the others still read their keys in `App`'s methods.
+picker, `Space k`'s list (`Help`) and an open guide (`GuideView`) are behind it, the last two
+given their keys by `overlays::give` straight from `App::handle_key`; the others still read
+their keys in `App`'s methods.
 
 A key goes, in this order, to the first that takes it:
 
