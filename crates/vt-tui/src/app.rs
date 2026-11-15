@@ -44,6 +44,7 @@ use crate::pages::project::ProjectPage;
 use crate::pages::song::SongView;
 use crate::pages::track::TrackPage;
 use crate::services::Services;
+use crate::services::autosave::Autosave;
 
 pub(crate) mod accent_slide;
 mod commands;
@@ -267,8 +268,8 @@ pub struct App {
     pub chain_view: ChainView,
     /// The jump list, which `Ctrl-O`, `Ctrl-I` and `''` go through.
     pub jumps: Jumps,
-    pub(crate) last_autosave: Option<Instant>,
-    pub(crate) autosaved: Option<Arc<Song>>,
+    /// When the autosave was last due, and what it last wrote.
+    pub autosave: Autosave,
     /// The field a replace started on, since typing an FX command moves on to its value.
     pub(crate) replacing: Option<Field>,
     pub command_line: String,
@@ -415,8 +416,7 @@ impl App {
             picker: None,
             chain_view: ChainView::default(),
             jumps: Jumps::default(),
-            last_autosave: None,
-            autosaved: None,
+            autosave: Autosave::default(),
             replacing: None,
             command_line: String::new(),
             command_menu: None,
