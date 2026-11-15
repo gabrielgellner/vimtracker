@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::analysis::SILENCE_DB;
 use crate::bank::ContentHash;
+use crate::ron_file;
 use crate::song::Machine;
 
 /// The tag library's file, in the config folder.
@@ -409,14 +410,12 @@ impl TagLibrary {
     /// The tags kept at `path`, saved there again as they change. No file starts with none, and
     /// a file that won't read starts with none and says why, and isn't written over.
     pub fn load(path: &Path) -> (Self, Option<String>) {
-        let note = |error: &dyn std::fmt::Display| Some(format!("{}: {error}", path.display()));
-        let (files, note, writable) = match fs::read_to_string(path) {
-            Ok(text) => match ron::from_str::<LibraryFile>(&text) {
-                Ok(file) => (file.files, None, true),
-                Err(error) => (BTreeMap::new(), note(&error), false),
-            },
-            Err(error) if error.kind() == io::ErrorKind::NotFound => (BTreeMap::new(), None, true),
-            Err(error) => (BTreeMap::new(), note(&error), false),
+        let (files, note, writable) = match ron_file::read::<LibraryFile>(path) {
+            Ok(file) => (file.files, None, true),
+            Err(ron_file::Error::Io { source, .. }) if source.kind() == io::ErrorKind::NotFound => {
+                (BTreeMap::new(), None, true)
+            }
+            Err(error) => (BTreeMap::new(), Some(error.to_string()), false),
         };
         let mut library = Self {
             files,
@@ -511,18 +510,10 @@ impl TagLibrary {
         let Some(path) = &self.path else {
             return Ok(());
         };
-        let folder = path.parent().unwrap_or(Path::new("."));
-        fs::create_dir_all(folder)?;
         let file = LibraryFile {
             files: self.files.clone(),
         };
-        let text = ron::ser::to_string_pretty(&file, ron::ser::PrettyConfig::default())
-            .map_err(io::Error::other)?;
-        let partial = folder.join(format!("{TAGS_FILE}.{}.part", std::process::id()));
-        fs::write(&partial, text)?;
-        fs::rename(&partial, path).inspect_err(|_| {
-            let _ = fs::remove_file(&partial);
-        })
+        Ok(ron_file::write(path, &file)?)
     }
 }
 

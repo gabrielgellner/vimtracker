@@ -337,7 +337,7 @@ fn a_failed_save_leaves_the_previous_file() {
     let song = Song::new(1);
     save_song(&dir, &song).unwrap();
     // A directory in the temporary file's place makes the write fail.
-    fs::create_dir(dir.join(".song.ron.tmp")).unwrap();
+    fs::create_dir(vt_model::ron_file::temporary(&dir.join("song.ron"))).unwrap();
     let mut changed = song.clone();
     changed.millibpm = 90_000;
     assert!(save_song(&dir, &changed).is_err());

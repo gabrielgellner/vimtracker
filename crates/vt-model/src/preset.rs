@@ -18,7 +18,6 @@ pub use factory::{FACTORY, FACTORY_PATCHES, factory_patch};
 pub use patch::{PatchGen, PatchPreset, Placement, Short};
 
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -30,6 +29,7 @@ use crate::bank::BankEntry;
 use crate::insert::{INSERTS, Insert};
 use crate::macros::{MACROS, Macro};
 use crate::modulation::{MOD_SLOTS, ModSlot, default_mod};
+use crate::ron_file;
 use crate::settings::{Owner, SettingId};
 use crate::song::{FilterMode, FilterType, Machine, Track};
 
@@ -105,10 +105,14 @@ pub enum PresetError {
     Holds { path: String, detail: String },
 }
 
-fn io_at(path: &Path) -> impl Fn(std::io::Error) -> PresetError + '_ {
-    move |source| PresetError::Io {
-        path: path.display().to_string(),
-        source,
+/// A file's error as a preset's, a value that won't write said as one that won't read.
+impl From<ron_file::Error> for PresetError {
+    fn from(error: ron_file::Error) -> Self {
+        match error {
+            ron_file::Error::Io { path, source } => Self::Io { path, source },
+            ron_file::Error::Parse { path, detail }
+            | ron_file::Error::Serialize { path, detail } => Self::Parse { path, detail },
+        }
     }
 }
 
@@ -565,27 +569,18 @@ pub trait Preset: Serialize + for<'de> Deserialize<'de> {
     fn tags(&mut self) -> &mut Vec<String>;
 }
 
-/// Only the format, so a later one gives a clear message rather than a field error.
-#[derive(Deserialize)]
-struct FormatProbe {
-    format: u32,
-}
-
-/// A preset from its file's text, checking its format first and what it holds after, `path`
-/// naming it in what's said if it won't read.
+/// A preset from its file's text, checking its format first, so a later one gives a clear message
+/// rather than a field error, and what it holds after, `path` naming it in what's said if it won't
+/// read.
 pub(crate) fn read<P: Preset>(text: &str, path: &Path) -> Result<P, PresetError> {
-    let parse_error = |error: &dyn std::fmt::Display| PresetError::Parse {
-        path: path.display().to_string(),
-        detail: error.to_string(),
-    };
-    let probe: FormatProbe = ron::from_str(text).map_err(|e| parse_error(&e))?;
-    if probe.format > PRESET_FORMAT {
+    let found = ron_file::probe(text, path, "format")?;
+    if found > PRESET_FORMAT {
         return Err(PresetError::Format {
             path: path.display().to_string(),
-            found: probe.format,
+            found,
         });
     }
-    let preset: P = ron::from_str(text).map_err(|e| parse_error(&e))?;
+    let preset: P = ron_file::parse(text, path)?;
     preset.check().map_err(|detail| PresetError::Holds {
         path: path.display().to_string(),
         detail,
@@ -595,8 +590,7 @@ pub(crate) fn read<P: Preset>(text: &str, path: &Path) -> Result<P, PresetError>
 
 /// Read a preset, as `load::<SoundPreset>(path)`.
 pub fn load<P: Preset>(path: &Path) -> Result<P, PresetError> {
-    let text = fs::read_to_string(path).map_err(io_at(path))?;
-    read(&text, path)
+    read(&ron_file::read_text(path)?, path)
 }
 
 /// Give a preset its own tags, writing its file again with nothing else changed.
@@ -612,25 +606,13 @@ pub fn save<T: Serialize>(path: &Path, preset: &T, overwrite: bool) -> Result<()
     if path.exists() && !overwrite {
         return Err(PresetError::Taken(path.display().to_string()));
     }
-    let folder = path.parent().unwrap_or(Path::new("."));
-    fs::create_dir_all(folder).map_err(io_at(folder))?;
-    let text =
-        ron::ser::to_string_pretty(preset, ron::ser::PrettyConfig::default()).map_err(|error| {
-            PresetError::Parse {
-                path: path.display().to_string(),
-                detail: error.to_string(),
-            }
-        })?;
-    let name = path
-        .file_name()
-        .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
-    let temporary = folder.join(format!(".{name}.tmp"));
-    fs::write(&temporary, text).map_err(io_at(&temporary))?;
-    fs::rename(&temporary, path).map_err(io_at(path))
+    Ok(ron_file::write(path, preset)?)
 }
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
     use crate::insert::EffectKind;
     use crate::macros::{MacroMap, MacroTarget};

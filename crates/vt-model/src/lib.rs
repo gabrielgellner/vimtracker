@@ -35,6 +35,7 @@ pub mod playable;
 pub mod preset;
 pub mod project;
 pub mod riff;
+pub mod ron_file;
 pub mod sample;
 pub mod samples;
 pub mod scale;
