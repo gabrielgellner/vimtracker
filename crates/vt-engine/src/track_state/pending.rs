@@ -3,6 +3,7 @@
 
 use vt_model::accumulator::{Accumulation, Moves, Walk};
 use vt_model::arpeggio::{ArpMode, Cycle};
+use vt_model::constants::FX_SLOTS;
 use vt_model::groove::Groove;
 use vt_model::modulation::MOD_SLOTS;
 use vt_model::speed::Speed;
@@ -11,6 +12,7 @@ use crate::rng::Pcg32;
 use crate::voice::NoteOn;
 
 use super::TrackState;
+use super::lanes::LaneRead;
 
 /// A note waiting for its delayed start.
 #[derive(Debug, Clone, Copy)]
@@ -112,13 +114,14 @@ impl Clock {
 
 /// A step a track has worked out, for where it's heard: where it falls on the grid, its running
 /// count, how long it lasts and the speed it plays at, which a step cut short by a change of speed
-/// doesn't last the whole of.
+/// doesn't last the whole of, and where each FX column's lane read at it.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Worked {
     pub grid: u64,
     pub count: i64,
     pub ticks: u64,
     pub speed: Speed,
+    pub lanes: [Option<LaneRead>; FX_SLOTS],
 }
 
 /// A step, or one part of it, worked out but not yet played, as its groove or nudge lands it later
@@ -144,8 +147,11 @@ pub(crate) struct PendingStep {
     /// The chain the track plays it from and the place in it, found when it's worked out, as a
     /// part landing after the next step is worked out mustn't look again.
     pub place: Option<(u32, usize)>,
-    /// The count its lanes read at.
+    /// The count of the track's steps since its chain started.
     pub count: i64,
+    /// Where each FX column's lane read, as the step was worked out, so a part landing after the
+    /// next step is worked out reads what it read.
+    pub lanes: [Option<LaneRead>; FX_SLOTS],
     /// What its row's `CHA` and `CND` decided, once the step's first part has decided them.
     pub plays: Option<Decided>,
     /// Which of its track's chain starts it was worked out after, which its accumulators count

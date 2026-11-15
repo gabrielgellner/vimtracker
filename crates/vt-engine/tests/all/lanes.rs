@@ -45,7 +45,7 @@ fn song(phrases: Vec<Phrase>) -> Song {
 }
 
 fn lane(start: usize, length: usize) -> Option<Lane> {
-    Some(Lane { start, length })
+    Some(Lane::new(start, length))
 }
 
 /// Three held sends in a lane of three.

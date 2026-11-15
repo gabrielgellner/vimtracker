@@ -5,6 +5,7 @@
 
 use crate::constants::{MAX_LEVEL, UNITY_LEVEL};
 use crate::groove::GROOVE_CHOICES;
+use crate::lane::{LANE_RATES, LENGTH_AS_WRITTEN, RATE_AS_WRITTEN};
 use crate::song::{FILTER_MODE_NAMES, FULL_GATE};
 use crate::speed::{SPEED_NAMES, Speed};
 use crate::step::FxCommand;
@@ -23,7 +24,7 @@ pub use units::{
     ACID_SHORTEST_DECAY, BAND_DB, Kind, LEAST_Q, LONGEST_GLIDE_MS, MOST_Q, SHORTEST_GATE,
     SHORTEST_GLIDE_MS, Units, acid_cutoff_hz, acid_cutoff_position, acid_decay_ms, acid_drive_db,
     band_db, band_q, gate_delta, gate_percent, gate_share, gate_value, glide_ms, glide_value,
-    moved_velocity, quantised_nudge, slide_ms, velocity_delta,
+    moved_velocity, quantised_nudge, rows_text, slide_ms, velocity_delta,
 };
 pub use voices::{
     FOUR_OP_ALGORITHMS, FOUR_OP_EACH, FOUR_OP_SHARED, MAX_MACHINE_SETTINGS, voice_entries,
@@ -233,6 +234,36 @@ const SLOT_OWN: [Entry; 1] = [Entry {
     default: 0,
 }];
 
+/// Each FX column's lane's, which move every phrase's lane on that column from its own (decision
+/// 347): how many rows it's heard for, one a step either side of `80`, and what its division is
+/// multiplied by. With the column's number after each, as `LLEN1`.
+const LANE: [Entry; 2] = [
+    Entry {
+        key: "length",
+        name: "Length",
+        label: Some("LLEN"),
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: true,
+            units: Units::Rows,
+        },
+        default: LENGTH_AS_WRITTEN,
+    },
+    Entry {
+        key: "rate",
+        name: "Rate",
+        label: Some("LRAT"),
+        kind: Kind::Stepped {
+            choices: &LANE_RATES,
+            wraps: false,
+        },
+        default: RATE_AS_WRITTEN,
+    },
+];
+
+/// How many settings each FX column's lane has.
+pub const LANE_SETTINGS: usize = LANE.len();
+
 /// What a slot's bypass can be: heard, at `00`, or switched out, at `01`.
 pub const BYPASS_CHOICES: [&str; 2] = ["In", "Bypassed"];
 
@@ -280,6 +311,7 @@ mod tests {
                 (Owner::ModOwn(slot), at) => SettingId::mod_own(slot, at),
                 (Owner::Accumulation, at) => SettingId::accumulation(at),
                 (Owner::Arpeggio, at) => SettingId::arpeggio(at),
+                (Owner::Lane(slot), at) => SettingId::lane(slot, at),
             };
             assert_eq!(back, Some(id), "{}", id.key());
             let mod_own = matches!(id.owner().0, Owner::ModOwn(_));
@@ -364,7 +396,8 @@ mod tests {
                     assert!(label.starts_with(&(slot + 1).to_string()), "{label}");
                     &label[1..]
                 }
-                Owner::Mod(slot) | Owner::Macro(slot) => {
+                // A lane's end in its FX column's number, as a mod slot's end in the slot's.
+                Owner::Mod(slot) | Owner::Macro(slot) | Owner::Lane(slot) => {
                     assert!(label.ends_with(&(slot + 1).to_string()), "{label}");
                     &label[..label.len() - 1]
                 }
@@ -403,6 +436,7 @@ mod tests {
                     (0..MOD.len()).filter_map(move |at| SettingId::modulator(slot, at))
                 })))
                 .chain(labels(SettingId::macros()))
+                .chain(labels(SettingId::lanes()))
                 .chain(EVENTS.map(|event| event.name().to_owned()))
         };
         for voice in SynthVoice::ALL {

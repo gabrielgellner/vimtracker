@@ -1,7 +1,8 @@
 //! Edits to tracks, and how each one plays and sits in the mix.
 
-use crate::constants::{MAX_GROUPS, MAX_LEVEL, MAX_SOUND_TRACKS, MAX_TRACK_RESET};
+use crate::constants::{FX_SLOTS, MAX_GROUPS, MAX_LEVEL, MAX_SOUND_TRACKS, MAX_TRACK_RESET};
 use crate::label::is_group_name;
+use crate::lane::LANE_RATES;
 use crate::song::Song;
 
 use super::{Action, EditError, check_choke, track_mut};
@@ -113,6 +114,12 @@ pub(super) fn edit(next: &mut Song, action: &Action) -> Result<(), EditError> {
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
                 .arpeggio = *arpeggio;
+        }
+        Action::SetLaneMove { track, slot, moved } => {
+            if *slot >= FX_SLOTS || usize::from(moved.rate) >= LANE_RATES.len() {
+                return Err(EditError::LaneMove);
+            }
+            track_mut(next, *track)?.lanes[*slot] = *moved;
         }
         Action::AddTracks(count) => {
             if next.sound_tracks() + count > MAX_SOUND_TRACKS {

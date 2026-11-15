@@ -47,6 +47,17 @@
                     ),
                 ],
             ),
+            (
+                name: Some("Length loop"),
+                value: 13056,
+                maps: [
+                    (
+                        target: Setting("lane1.length"),
+                        min: 32000,
+                        max: 35840,
+                    ),
+                ],
+            ),
         ],
         generators: [
             (

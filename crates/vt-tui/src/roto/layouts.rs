@@ -51,7 +51,7 @@ use vt_model::settings::{FOUR_OP_EACH, FOUR_OP_SHARED};
 use vt_model::shape::{FillKind, GenParam, Where};
 use vt_model::steps::STEPS;
 
-use crate::pages::track::{AccumulatorField, ArpField, Control, DeviceSpec};
+use crate::pages::track::{AccumulatorField, ArpField, Control, DeviceSpec, LaneField};
 
 /// A setting in a layout's slot: its key, and how it differs from what its kind gives it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -1779,6 +1779,14 @@ const GEN_ACID_LOOPS: DeviceLayout = live(
         ],
     )],
 );
+/// An FX column's lane's `Length` and `Rate`, its own device as on the Gen page (decision 347).
+const GEN_LANE: DeviceLayout = live(
+    "gen/lane",
+    &[knobs(
+        "Lane",
+        [s("length"), s("rate"), GAP, GAP, GAP, GAP, GAP, GAP],
+    )],
+);
 /// A canon's moves; it writes every row, so it has no `Where`. Then its mutations, a Bloom
 /// branch's, on a page of their own, with `Vary` on knob 6 as elsewhere, as it draws once it
 /// mutates (decision 307).
@@ -2204,7 +2212,7 @@ fn each_once(
 /// Every live generator's layout, a fill's each, and `Acid`'s loops', apart from [`ALL`], as a
 /// generator is a phrase's rather than a kind of device a track always has.
 pub static GENERATORS: LazyLock<Vec<&'static DeviceLayout>> =
-    LazyLock::new(|| each_once(BY_FILL.into_iter().chain([&GEN_ACID_LOOPS])));
+    LazyLock::new(|| each_once(BY_FILL.into_iter().chain([&GEN_ACID_LOOPS, &GEN_LANE])));
 
 /// A live generator's layout, by its fill.
 pub(crate) fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
@@ -2265,8 +2273,9 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
         Some(Control::Accumulator(_)) => &ACCUMULATOR,
         Some(Control::Arpeggio(_)) => &ARPEGGIO,
         Some(Control::Macro(_)) => &MACROS,
-        // An `Acid`'s loops, on a device of their own.
+        // An `Acid`'s loops, on a device of their own, and an FX column's lane.
         Some(Control::Gen { param, .. }) if param.is_loop() => &GEN_ACID_LOOPS,
+        Some(Control::Lane(..)) => &GEN_LANE,
         Some(control @ Control::Gen { .. }) => generator_layout(
             generator_of(control, track).map_or(FillKind::Ramp, |found| found.shape.kind),
         ),
@@ -2439,5 +2448,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             ArpField::Octaves => "octaves",
             ArpField::Retrig => "retrig",
         },
+        Control::Lane(_, LaneField::Length) => "length",
+        Control::Lane(_, LaneField::Rate) => "rate",
     }
 }

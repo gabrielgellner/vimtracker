@@ -1,4 +1,5 @@
-//! The Gen page: a device for each live generator of the phrase under the cursor, then `Empty`,
+//! The Gen page: a device for each live generator of the phrase under the cursor, each FX
+//! column's `Lane` where it has one, then `Empty`,
 //! stacked down the page as the FX page's slots are. Each has its preview at its right, the
 //! large panel the Sound page's filter has, of what it writes across its span, with the row
 //! playing as a dot the terminal places (`graphics/generators.rs`).
@@ -218,6 +219,54 @@ fn draw_loops(
     frame.render_widget(grid, Device::settings_area(area));
 }
 
+/// A lane's length and division in words, as `4 rows` or `4 rows of 2 steps`.
+fn lane_words(length: usize, division: usize) -> String {
+    let rows = if length == 1 { "row" } else { "rows" };
+    match division {
+        1 => format!("{length} {rows}"),
+        _ => format!("{length} {rows} of {division} steps"),
+    }
+}
+
+/// An FX column's `Lane`: the track's `Length` and `Rate` for the column, which move every
+/// phrase's lane on it, and at the end of its title, dim, how the lane of the phrase on the page
+/// is heard against its own (decision 347).
+fn draw_lane(
+    frame: &mut Frame,
+    area: Rect,
+    page: &TrackPage,
+    ctx: &Ctx,
+    track: &Track,
+    device: &DeviceSpec,
+    focused: bool,
+) {
+    let Some(slot) = device.lane_slot() else {
+        return;
+    };
+    let phrase = page.phrase.and_then(|id| track.phrases.get(&id));
+    let after = phrase.and_then(|phrase| {
+        let lane = phrase.lane(slot)?;
+        let own = lane_words(lane.length, lane.division);
+        let heard = ctx.heard_lanes(phrase)[slot]?;
+        Some(
+            if (heard.length, heard.division) == (lane.length, lane.division) {
+                format!("· here {own}, as written")
+            } else {
+                let heard = lane_words(heard.length, heard.division);
+                format!("· here {heard}, its own {own}")
+            },
+        )
+    });
+    let widget = Device::new(device.identity.clone())
+        .after(Line::styled(after.unwrap_or_default(), theme::dim()))
+        .focused(focused);
+    frame.render_widget(widget, area);
+    let cells = TrackCells::new(page, ctx, track);
+    let rows = device.grid.iter().copied().map(Vec::from).collect();
+    let grid = SettingsGrid::new(&cells, rows, GEN_CELLS);
+    frame.render_widget(grid, Device::settings_area(area));
+}
+
 fn lcm(a: u64, b: u64) -> u64 {
     fn gcd(a: u64, b: u64) -> u64 {
         if b == 0 { a } else { gcd(b, a % b) }
@@ -279,6 +328,9 @@ pub(super) fn draw(
             }
             _ if device.is_loops() => {
                 draw_loops(frame, area, page, ctx, track, device, at == cursor);
+            }
+            (_, Some(Control::Lane(..))) => {
+                draw_lane(frame, area, page, ctx, track, device, at == cursor);
             }
             (Some(Control::Gen { generator, .. }), _) => {
                 let focused = at == cursor;

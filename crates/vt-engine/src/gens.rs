@@ -733,13 +733,7 @@ mod tests {
         }
         let notes = Phrase::from_steps(vec!["C-3 64 --- --- ---".parse().unwrap(); 16]);
         let mut rests = Phrase::new(rows);
-        rests.set_lane(
-            0,
-            Some(Lane {
-                start: 0,
-                length: 7,
-            }),
-        );
+        rests.set_lane(0, Some(Lane::new(0, 7)));
         song.tracks[0].phrases.insert(0, Arc::new(rests));
         song.tracks[1].phrases.insert(0, Arc::new(notes));
         let span = Span::rows(StepRange::between(0, rows - 1));

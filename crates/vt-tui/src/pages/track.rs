@@ -26,7 +26,7 @@ pub(crate) mod tuning;
 mod typing;
 pub(crate) mod view;
 
-pub use controls::{AccumulatorField, ArpField, Control};
+pub use controls::{AccumulatorField, ArpField, Control, LaneField};
 pub(crate) use device::{DEVICE_COLUMNS, DEVICE_ROWS, DeviceWidth, rack_places};
 pub use device::{DeviceCursor, DeviceSpec};
 pub(crate) use fx::TakenInsert;

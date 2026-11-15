@@ -543,7 +543,7 @@ fn setting_of(
         (Owner::Macro(_), _) => Err(wrong(format!(
             "{key} is a macro, which a probe doesn't run yet"
         ))),
-        (Owner::Accumulation | Owner::Arpeggio, _) => Err(wrong(format!(
+        (Owner::Accumulation | Owner::Arpeggio | Owner::Lane(_), _) => Err(wrong(format!(
             "{key} works on a song's steps, which a probe has none of"
         ))),
         (Owner::Track, _) if !TRACK_SETTINGS.contains(&id) => Err(wrong(format!(
@@ -645,7 +645,8 @@ fn set_on(track: &mut Track, id: SettingId, value: u8) {
             | Owner::ModOwn(_)
             | Owner::Macro(_)
             | Owner::Accumulation
-            | Owner::Arpeggio,
+            | Owner::Arpeggio
+            | Owner::Lane(_),
             _,
         ) => {}
     }

@@ -1,8 +1,8 @@
 # Lanes: a length a macro turns, and a rate of their own
 
-**Status:** the design for #709, the last issue of M33, written before it's built, on 2026-11-15.
-The user's answers of that day are folded in, as each section says. No code is changed. The
-build records it as decisions.
+**Status:** built for #709, the last issue of M33, as decisions 346 to 348, on 2026-11-15. The
+design was written before it, with the user's answers of that day folded in, as each section
+says; **As built**, at the end, says where the build differs and what it settled.
 
 #709 asks for two things:
 - an FX column's lane (`:lane 4`) should have a length a macro can turn;
@@ -248,3 +248,43 @@ renders have to come out unchanged, and a test plays a long chain of lanes both 
 - Kria's wait-for-the-loop way (§5), as a later switch if the immediate way feels wrong on hardware.
 - Writing a held length into the phrase, as `Space g a` keeps a generated pass. It's not part of
   #709.
+
+## As built
+
+What the build did where this study left a choice, or where it found the study's way wouldn't
+hold:
+
+- **One read a step, carried with it.** §6 had every lane sum call `TrackState::lane_row(slot,
+  count)`. A track works its steps out ahead of hearing them, up to 28 with a groove that lands
+  steps early, and a nudged row's part lands after the next step is worked out, so a run moved on
+  at each call would be read out of order. `Engine::work_out` reads every lane once, through
+  `lane_row`, before the step's choices are made, and what it read rides with the step
+  (`PendingStep::lanes`, `Worked::lanes`): `fire_track`'s FX, `CND`'s pass, the generators'
+  passes and `chosen_ahead` all read that. The run is kept for the step it waits for, so an edit
+  can see where it was going.
+- **A slow row's locks are put again.** §3 had its FX run on its first step only and a lock hold
+  "because it's a lock"; but a lock ends at the next note, so over a note on every step a lane's
+  lock at `/4` would have lasted one step of four. Its later steps put a lock or a hold of it
+  again, so it holds through the row, while every event and a glide still act once. A `GRV`,
+  `RATE` or `QNT` in a slow row is chosen on each of its steps the same way.
+- **The labels** are `LLEN1` and `LRAT1`, `2` and `3` for the others, the label rule making room
+  for a lane's to end in its column's number, as a mod slot's do.
+- **`Length`'s range** is the whole byte, `-128` to `+127`, a row a step: `Pitch`'s scale, so a
+  value reads as rows from `80` and none does nothing; ±64 would have left half the byte idle or
+  made a step half a row.
+- **`Rate` multiplies the division,** as §2 has it, so `×2` is the slower, each row twice as long,
+  and `÷` does nothing to a division of 1. The status line says so in words.
+- **The Gen page's device** is named for its column, `FX1 Lane`, and says how this phrase's lane is
+  heard at the end of its title, `· here 6 rows, its own 4 rows`. It turns with the track page's
+  keys, not the Gen page's reshaping ones. Making a column live put the cursor a device short of
+  the new one since the macros' band came first; it now finds the device.
+- **A pause keeps a lane's place,** so playing on carries on from its row; a lane is placed
+  again whenever its track's chain starts again, which play, a seek and a reset all do.
+- **Drawing without playing** (`App::set_playhead`, the screenshots and tests) places each lane
+  from the count at the track's settings, as the engine does from the top.
+- **An edit with a lane moved** keeps the stored row it was going to read, and its place in a row
+  of several steps; one whose lane is as it was carries on exactly, in a copy too. Its offset for
+  later placing is worked out at the length and division heard.
+- **A glide in a lane** takes its rows' steps as heard; it still looks for the next value among the
+  lane's own rows, not its copies.
+- **The Roto** sends `÷` as `/`, as its font has neither.

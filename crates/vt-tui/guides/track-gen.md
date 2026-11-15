@@ -31,6 +31,22 @@ again, `in step again every 420 rows, the phrase every 105 passes`. A value with
 as its bar shows how many of how many; the status line says it in full, `Hits, 9
 of the 16 rows`.
 
+**A lane's Length and Rate.** Each FX column with a lane in the phrase has a
+device of its own, `FX1 Lane`, under that column's generator if it has one, as
+`Loops` sits under `Acid`, and where its column comes if not. Its two settings are
+the track's, not the phrase's: they move every phrase's lane on that column from
+its own (see **Lanes** in the editing guide). `Length` is rows up or down, `+0` as
+written, centred as `Pitch` is; at `+2` a lane of 4 plays 6 rows, its own again
+from the first, and at `-3` 1 row. `Rate` is a list from `÷16` to `×16`, `×1` as
+written, which multiplies the lane's own division, so at `×2` each of its rows
+lasts twice its own steps, and `÷2` halves a division of 8 to 4; it's rounded to a
+step, from 1 to 16. At the end of its title, dim, it says how this phrase's lane
+is heard against its own: `· here 6 rows, its own 4 rows`. `=` `-` `+` `_`, `i`,
+`K` on `Rate`, `x`, `M` and `gd` work on them as on any of the track's settings,
+a step's `LLEN1` and `LRAT1` lock them, and a mod slot can go to them. A column
+without a lane has no device, and the settings keep their values: a macro mapped
+there does nothing until a phrase gives that column a lane.
+
 On its right is a picture of what it writes across its span: notes as short
 lines at their pitch, from the lowest to the highest there, a small piano roll;
 velocities and lengths as bars, and nudges up or down from the middle; and an FX

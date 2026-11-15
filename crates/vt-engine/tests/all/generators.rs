@@ -86,13 +86,7 @@ pub fn moving_song() -> Song {
         .insert(0, Arc::new(Phrase::from_steps(vec![rest; 16])));
     song.tracks[1].machine = Machine::Plaits(SynthVoice::VirtualAnalog);
     let mut hits = Phrase::from_steps(vec![hit; 16]);
-    hits.set_lane(
-        1,
-        Some(Lane {
-            start: 0,
-            length: 5,
-        }),
-    );
+    hits.set_lane(1, Some(Lane::new(0, 5)));
     song.tracks[1].phrases.insert(0, Arc::new(hits));
     let acid = ShapeColumn::Note {
         scale: song.scale,

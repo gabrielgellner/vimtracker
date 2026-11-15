@@ -27,10 +27,11 @@ use vt_engine::engine::{PLAYHEADS, Playhead, SectionLoop, TrackPlace, Transport}
 use vt_engine::gens::{GenPass, GenRow};
 use vt_engine::link::{Command, Handle, JamState};
 use vt_engine::published::Published;
-use vt_engine::track_state::{Faders, LiveValues, NotePitch};
+use vt_engine::track_state::{Faders, LaneRead, LiveValues, NotePitch};
 use vt_model::action::{Action, edit};
 use vt_model::constants::{DEFAULT_NOTE_VELOCITY, FX_SLOTS, MAX_TRACKS, TICKS_PER_STEP};
 use vt_model::history::History;
+use vt_model::lane::Heard;
 use vt_model::order::Dealer;
 use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
@@ -316,19 +317,60 @@ impl Services {
     }
 
     /// Where each FX column of the cursor's phrase with a lane of its own is reading, if it's the
-    /// one playing.
+    /// one playing: the stored row, as the engine reports it read, so on a lane heard longer than
+    /// its own, the row it's copying (decision 348).
     pub(crate) fn lane_playheads(&self, phrase: &Phrase) -> [Option<usize>; FX_SLOTS] {
         let mut playheads = [None; FX_SLOTS];
-        let Some(jam) = self.playhead_step().and(self.jam.get(self.cursor.track)) else {
+        if self.playhead_step().is_none() {
+            return playheads;
+        }
+        let Some(place) = self.places.get(self.cursor.track) else {
             return playheads;
         };
-        let count = self.places[self.cursor.track].count - jam.started;
         for (slot, playhead) in playheads.iter_mut().enumerate() {
             *playhead = phrase
                 .lane(slot)
-                .map(|lane| lane.step_at(count + jam.lane_offsets[slot]));
+                .and(place.lanes[slot])
+                .map(|read| read.row);
         }
         playheads
+    }
+
+    /// Where each FX column's lane of the phrase a track plays at the place it's at reads, worked out
+    /// from its count at the track's `Length` and `Rate`, as the engine places a lane: for drawing
+    /// without playing.
+    pub(crate) fn placed_lanes(&self, track: usize) -> [Option<LaneRead>; FX_SLOTS] {
+        let found = || {
+            let owner = self.song().tracks.get(track)?;
+            let chain = (*self.section_here()?.chains.get(track)?)?;
+            let place = self.playing_place(track, chain)?;
+            let position = owner.chain_position(chain, place, self.dealer(track))?;
+            let phrase = owner.phrases.get(&position.phrase)?;
+            let count = self.places.get(track)?.count - self.jam.get(track)?.started;
+            Some(std::array::from_fn(|slot| {
+                let lane = phrase.lane(slot)?;
+                Some(LaneRead::placed(lane, lane.heard(owner.lanes[slot]), count))
+            }))
+        };
+        found().unwrap_or([None; FX_SLOTS])
+    }
+
+    /// How each FX column's lane of the cursor's phrase is heard, for those with one: as the engine
+    /// last read it while this phrase plays, or as the track's `Length` and `Rate` have it.
+    pub(crate) fn heard_lanes(&self, phrase: &Phrase) -> [Option<Heard>; FX_SLOTS] {
+        let playing = self.playhead_step().is_some();
+        let place = self.places.get(self.cursor.track);
+        let track = self.track_here();
+        std::array::from_fn(|slot| {
+            let lane = phrase.lane(slot)?;
+            match place
+                .and_then(|place| place.lanes[slot])
+                .filter(|_| playing)
+            {
+                Some(read) => Some(read.heard),
+                None => Some(lane.heard(track.map(|track| track.lanes[slot]).unwrap_or_default())),
+            }
+        })
     }
 
     /// A track's name, or its number if it has none.

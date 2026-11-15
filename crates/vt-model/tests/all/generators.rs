@@ -267,10 +267,7 @@ fn on_an_fx_column_with_a_lane_it_owns_the_lanes_steps_and_follows_the_lane() {
             track: 0,
             phrase: 0,
             slot: 0,
-            lane: Some(Lane {
-                start: 0,
-                length: 3,
-            }),
+            lane: Some(Lane::new(0, 3)),
         },
     )
     .unwrap();
@@ -290,10 +287,7 @@ fn on_an_fx_column_with_a_lane_it_owns_the_lanes_steps_and_follows_the_lane() {
             track: 0,
             phrase: 0,
             slot: 0,
-            lane: Some(Lane {
-                start: 0,
-                length: 5,
-            }),
+            lane: Some(Lane::new(0, 5)),
         },
     )
     .unwrap();
@@ -308,10 +302,7 @@ fn on_an_fx_column_with_a_lane_it_owns_the_lanes_steps_and_follows_the_lane() {
             track: 0,
             phrase: 0,
             slot: 0,
-            lane: Some(Lane {
-                start: 2,
-                length: 2,
-            }),
+            lane: Some(Lane::new(2, 2)),
         },
     )
     .unwrap();

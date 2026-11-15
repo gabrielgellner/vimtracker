@@ -87,6 +87,8 @@ impl SettingId {
             (Owner::Macro(_), _) => true,
             (Owner::ModOwn(slot), at) => track.mods[slot].own_value(at).is_some(),
             (Owner::Accumulation | Owner::Arpeggio, _) => track.is_sound(),
+            // Whether or not a phrase gives the column a lane: one without does nothing.
+            (Owner::Lane(_), _) => track.is_sound(),
         }
     }
 
@@ -121,6 +123,7 @@ impl SettingId {
             },
             (Owner::Accumulation, _) => format!("ACU {}", self.name()),
             (Owner::Arpeggio, _) => format!("ARP {}", self.name()),
+            (Owner::Lane(slot), _) => format!("FX{} {}", slot + 1, self.name()),
             _ if here => self.name().to_owned(),
             _ => format!("{} ---", self.name()),
         }
@@ -156,6 +159,14 @@ impl SettingId {
             (Owner::Accumulation, _) => "How far below its note an accumulator goes".to_owned(),
             (Owner::Arpeggio, 0) => "How fast an arpeggio plays its notes".to_owned(),
             (Owner::Arpeggio, _) => "How many octaves an arpeggio climbs".to_owned(),
+            (Owner::Lane(slot), 0) => format!(
+                "How many rows FX{}'s lane plays, up or down from its own",
+                slot + 1
+            ),
+            (Owner::Lane(slot), _) => format!(
+                "How long each row of FX{}'s lane lasts, times its own",
+                slot + 1
+            ),
             (Owner::Sampler, 0) => "Which of the bank's samples plays".to_owned(),
             (Owner::Sampler, 1) => "Which of the sample's slices plays".to_owned(),
             (Owner::Sampler, 2) => "Where in the slice a note starts".to_owned(),
@@ -179,8 +190,8 @@ impl SettingId {
         }
     }
 
-    /// What's on a track to choose from, in order: its own, its machine's, and its slots' effects',
-    /// in the modes they're in, each slot's with its bypass after them.
+    /// What's on a track to choose from, in order: its own, its machine's, its slots' effects',
+    /// in the modes they're in, each slot's with its bypass after them, and its FX columns' lanes'.
     pub fn on_track(track: &Track) -> Vec<Self> {
         let mut settings: Vec<Self> = TRACK_ORDER
             .into_iter()
@@ -203,6 +214,7 @@ impl SettingId {
                 settings.extend(Self::bypass(slot));
             }
         }
+        settings.extend(Self::lanes().filter(|id| id.exists_on(track)));
         settings
     }
 
@@ -340,7 +352,7 @@ mod tests {
     use crate::song::{Machine, Song, SynthVoice};
 
     #[test]
-    fn a_track_offers_its_own_then_its_machines_then_its_slots_settings() {
+    fn a_track_offers_its_own_then_its_machines_then_its_slots_then_its_lanes_settings() {
         let mut track = Track {
             machine: Machine::Plaits(SynthVoice::String),
             ..Track::default()
@@ -348,14 +360,16 @@ mod tests {
         let offered = SettingId::on_track(&track);
         let own = TRACK_ORDER.len();
         assert_eq!(offered[..own], TRACK_ORDER);
-        assert_eq!(offered.len(), own + 4);
+        let lanes = SettingId::lanes().count();
+        assert_eq!(lanes, 6, "Length and Rate for each FX column");
+        assert_eq!(offered.len(), own + 4 + lanes);
         assert_eq!(
             offered[own],
             SettingId::voice(SynthVoice::String, 0).unwrap()
         );
         track.inserts[1] = Insert::ALL[2];
         let offered = SettingId::on_track(&track);
-        assert_eq!(offered.len(), own + 4 + 11 + 1);
+        assert_eq!(offered.len(), own + 4 + 11 + 1 + lanes);
         assert_eq!(
             offered[own + 4],
             SettingId::slot(1, EffectKind::Delay, 0).unwrap()
@@ -364,6 +378,15 @@ mod tests {
             offered[own + 4 + 11],
             SettingId::bypass(1).unwrap(),
             "the slot's bypass after its effect's"
+        );
+        let length = SettingId::lane(0, 0).unwrap();
+        assert_eq!(offered[own + 4 + 11 + 1], length, "the lanes' last");
+        assert_eq!(length.name_on(&track), "FX1 Length");
+        assert_eq!(length.key(), "lane1.length");
+        assert_eq!(length.label().as_deref(), Some("LLEN1"));
+        assert_eq!(
+            SettingId::lane(2, 1).unwrap().label().as_deref(),
+            Some("LRAT3")
         );
         assert_eq!(SettingId::bypass(1).unwrap().name_on(&track), "2 Bypass");
         assert_eq!(SettingId::bypass(0).unwrap().name_on(&track), "1 ---");

@@ -198,16 +198,44 @@ same row plays short one pass and long the next. `VDLT` is its twin for velocity
 a lane of it is an accent pattern that drifts against the notes, and the notes keep
 the velocities they're written with.
 
+### A slow lane, and one turned from the track
+
+`:lane 4/2` gives the lane 4 rows that each last 2 of the track's steps, and `:lane /3` changes
+only how long its rows last: it moves on a row every so many steps, as Kria's divisions do. A
+slow row is read as a row of several pulses is: its FX run on its first step, so a `RET` or a
+`CHA` acts once a row, and a lock or a hold of it holds through the rest. The title says
+`FX1:4/2`.
+
+Each FX column also has a `Length` and a `Rate` on the track, on the Gen page's `FX1 Lane`,
+which move every phrase's lane on that column from its own, as a macro, a mod slot or a step's
+`LLEN1` and `LRAT1` can. A lane heard longer than its own plays its own rows again from the
+first; nothing is written, so at `+0` and `×1` it's as written:
+
+```text
+FX1's lane is rows a b c d, Length +2, Rate ×2
+
+count:      0  1  2  3  4  5  6  7  8  9  10 11 12
+lane row:   a  a  b  b  c  c  d  d  a  a  b  b  a     6 rows heard, each 2 steps
+```
+
+The title shows what's heard first and its own after, dim, `FX1:5/2 (3)` for the lane of 3
+below, and its playhead the row being read, a copy's own. A turn takes effect at the lane's next
+row: it counts along from where it is, and playing from a step works its place out again there.
+
+![A lane turned from the track, heard longer than its own](images/lane-moved.svg)
+
+![The Gen page's FX1 Lane, its Length and Rate](images/track-gen-lane.svg)
+
 ### The two side by side
 
 | | No lane | With a lane |
 |---|---|---|
 | Its loop | The phrase's loop | Its own start and length |
 | The row it reads | The note's row | Its count, wrapped to its lane |
-| When its FX run | Each row's first pulse | Every step |
+| When its FX run | Each row's first pulse | Each of its rows' first step, every step at `/1` |
 | Long and skipped note rows | Follows them | Ignores them, and drifts |
 | Changing the phrase's loop | Changes it too | Leaves it alone |
-| Made with | Nothing: it's the default | `:lane 3` |
+| Made with | Nothing: it's the default | `:lane 3`, or `:lane 4/2` for slow rows |
 | Back to following the notes | | `:lane` |
 
 ## What starts the count over

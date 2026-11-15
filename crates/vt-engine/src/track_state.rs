@@ -6,8 +6,9 @@ use vt_model::macros::MACROS;
 use vt_model::modulation::MOD_SLOTS;
 use vt_model::playable::Playable;
 use vt_model::settings::{
-    FADER_COUNT, FADERS, MAX_MACHINE_SETTINGS, MOD_OWN_SETTINGS, PLAYED_SETTINGS, PlayMode,
-    SAMPLER_SETTINGS, SettingId, gate_delta, gate_share, glide_ms, moved_velocity, quantised_nudge,
+    FADER_COUNT, FADERS, LANE_SETTINGS, MAX_MACHINE_SETTINGS, MOD_OWN_SETTINGS, PLAYED_SETTINGS,
+    PlayMode, SAMPLER_SETTINGS, SettingId, gate_delta, gate_share, glide_ms, moved_velocity,
+    quantised_nudge,
 };
 use vt_model::song::{DEFAULT_ACCENT, FilterType, SynthVoice, Track};
 use vt_model::step::slice_letter;
@@ -22,6 +23,7 @@ use crate::rng::Pcg32;
 use crate::timing::SlotTimes;
 use crate::voice::{Cut, NoteOn, Voice};
 
+mod lanes;
 mod live;
 mod mods;
 mod pending;
@@ -32,6 +34,7 @@ mod values;
 #[cfg(test)]
 mod tests;
 
+pub use lanes::LaneRead;
 pub use live::{Drawn, Faders, LfoNow, LiveValues};
 pub use pending::NotePitch;
 
@@ -43,6 +46,7 @@ pub(crate) use pending::{
 pub(crate) use shaping::{MasterRest, ShapedFrame};
 pub(crate) use values::base_of;
 
+use lanes::{LaneRun, lanes_at_rest};
 use live::FaderRun;
 use mods::{EnvelopeRun, LfoStart, MOVED, Rest, SlotRun};
 use pending::WORKED_KEPT;
@@ -83,8 +87,14 @@ pub(crate) struct TrackState {
     /// The rolls a `Random` accumulator takes, apart from `rng` so `CHA` rolls as it did.
     pub accumulator_rng: Pcg32,
     /// What's added to the count for each FX column's lane, so a lane changed while playing stays
-    /// on its step. Anything that sets `started` again sets these back to 0.
+    /// on its step, where it's placed from the count. Anything that sets `started` again sets
+    /// these back to 0.
     pub lane_offsets: [i64; FX_SLOTS],
+    /// Where each FX column's lane is as it plays, counted along a row at a time (decision 348).
+    lane_runs: [LaneRun; FX_SLOTS],
+    /// The held values of each FX column's `Length` and `Rate`, on the `00` to `FF` scale, which a
+    /// lane reads as each of its rows starts.
+    lane_held: [[f32; LANE_SETTINGS]; FX_SLOTS],
     pub voice: Voice,
     pub tail: Voice,
     /// What this track has played since the meters last asked, after its level and pan.
@@ -287,6 +297,8 @@ impl TrackState {
             playing: None,
             started: 0,
             lane_offsets: [0; FX_SLOTS],
+            lane_runs: [LaneRun::default(); FX_SLOTS],
+            lane_held: [lanes_at_rest(); FX_SLOTS],
             row: Decided::PLAYS,
             passed: false,
             tied: false,
@@ -431,6 +443,7 @@ impl TrackState {
     pub(crate) fn restart(&mut self, started: i64) {
         self.started = started;
         self.lane_offsets = [0; FX_SLOTS];
+        self.unplace_lanes();
         self.tied = false;
         self.chain_starts += 1;
     }

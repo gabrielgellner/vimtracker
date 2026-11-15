@@ -111,6 +111,8 @@ pub enum Units {
     Glide,
     /// An envelope's time, as [`time_at`] gives it.
     EnvelopeTime,
+    /// Rows either side of `80`, one a step, as a lane's `Length` moves its lane (decision 347).
+    Rows,
 }
 
 /// The acid voice's cutoff at either end of its range, in Hz, where its filter resonates.
@@ -255,7 +257,10 @@ impl Kind {
     /// as a step between two of its values can be heard, and one on the level scale doesn't, as a
     /// quarter of a dB is its natural step, nor does a list's (decision 175).
     pub fn has_fine(self) -> bool {
-        matches!(self, Self::Continuous { units, .. } if units != Units::Decibels)
+        matches!(
+            self,
+            Self::Continuous { units, .. } if units != Units::Decibels && units != Units::Rows
+        )
     }
 
     /// Whether it goes round past either end, as a phase does.
@@ -364,6 +369,7 @@ impl Kind {
                     glide_ms(coarse as f32).map_or_else(|| "Off".to_owned(), milliseconds)
                 }
                 Units::EnvelopeTime => format!("{} ms", time_at(coarse as f32)),
+                Units::Rows => rows_text((coarse.round() as i32 - 128).clamp(-128, 127)),
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {
                     let cents = ((coarse - 128.0) * 100.0).round() as i32;
@@ -384,6 +390,12 @@ impl Kind {
 fn side(coarse: f64) -> f64 {
     let from_middle = coarse - 128.0;
     from_middle / if from_middle < 0.0 { 128.0 } else { 127.0 }
+}
+
+/// A count of rows either way, as `+2 rows` or `-1 row`.
+pub fn rows_text(rows: i32) -> String {
+    let unit = if rows.abs() == 1 { "row" } else { "rows" };
+    format!("{rows:+} {unit}")
 }
 
 /// A time as it reads best: `0.25 ms`, `12 ms` or `1.00 s`.

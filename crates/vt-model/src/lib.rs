@@ -19,6 +19,7 @@ pub mod history;
 pub mod insert;
 pub mod kit;
 pub mod label;
+pub mod lane;
 pub mod lfo;
 pub mod listed;
 pub mod machine;

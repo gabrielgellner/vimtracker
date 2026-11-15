@@ -387,7 +387,9 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 solo, fill, realigns, launches, the scale, which track to watch, and a hand taking a fader over
 from the steps or giving it back (`TakeOver` and `GiveBack`, decision 174). The engine resolves each
 against its own state, so two quick presses can't act on an out-of-date view of it. **Telemetry**
-comes back each block: where playback is, each track's place and levels, each track's faders as
+comes back each block: where playback is, each track's place and levels, with where each of its
+lanes read at the step heard and how it was heard (`TrackPlace::lanes`, decision 348, in place of
+the offsets the app once worked the row out from), each track's faders as
 they're heard (`Faders`: where `LEV`, `PAN`, `SNA` and `SNB` put them, what `VOL` and modulation make
 of them, and which the steps drive and a hand has taken over, from `TrackState::faders`), the watched
 track's live values, and up to four sample playheads. Each report says which version it's of (`Telemetry::version`, the `Published::id` playing), and the app keeps the songs it has sent until a report is of a later one, so a bar draws what's playing against the setting it was worked out from (`Services::reported_track`, decision 210). The live values carry the watched track's peak right after its trim
@@ -450,13 +452,16 @@ Song                               song.ron, refused unless format_version is FO
  |   |- pitch, velocity_delta, quantise, choke, gate_length, speed, reset, glide, groove
  |   |- group                      the group a sound track plays through, or none
  |   |- accumulation, arpeggio     how ACU and ARP play on it
+ |   |- lanes[3]                   LaneMove: each FX column's Length and Rate, which move every
+ |   |                             phrase's lane on it from its own; saved only once one isn't at rest
  |   |- mods[6]                    ModSlot: kind, destination, depth, bypassed, polarity, in_scale,
  |   |                             each type's own settings (adsr, ahd, drum, lpg, lfo, steps,
  |   |                             track), kept while another type plays
  |   |- macros[8]                  Macro: name, value, maps[(setting, min, max)], saved only once
  |   |                             one isn't empty
  |   |- chains{id}                 Chain: entries[(phrase, transpose)], label
- |   '- phrases{id}                Phrase: steps[], start, length, lanes[3], order, generators[]
+ |   '- phrases{id}                Phrase: steps[], start, length, lanes[3] (start, length,
+ |       |                         division), order, generators[]
  |       |- Step                   note, velocity, nudge, gate, fx[]
  |       |   '- FxSlot             command, value (coarse and fine), mark
  |       '- Generator              a live shape: column, span (rows or the lane), Shape, and the
@@ -2680,6 +2685,8 @@ Made with the author's agreement on 2026-11-07, after a review. Not built yet. E
 **An example.** A phrase loop of 16, with FX 1's loop rows 0 to 2. FX 1 reads rows 0, 1, 2, 0 and so on. The phrase's second pass starts at place 16, and FX 1 reads row `16 % 3 = 1` there. If instead the chain goes on to a phrase of 8 rows with its own FX 1 loop of 3, that phrase starts at place 16, and FX 1 reads its row `16 % 3 = 1`.
 
 **Built** as designed. A lane shows its length in the title, like `FX1:3`, dims the rows outside it, and has its own `>`.
+
+**A length a macro turns and a rate of their own** (#709, decisions 346 to 348, [lanes.md](lanes.md)). A lane has a division, its rows each lasting 1 to 16 of the track's steps, and each FX column a `Length` and a `Rate` on the track, an owner of the registry's, `Owner::Lane`, which move every phrase's lane on the column from its own; heard longer, a lane plays its own rows again. So a lane no longer reads from the formula above while it plays: each counts along a row at a time (`track_state/lanes.rs`), read once a step as the step is worked out, and is placed from the formula, at what's heard, only on play, a seek, a reset or a new entry of the chain. The offsets stay, for placing, and the report carries the row each read.
 
 **Making a lane, revised with the author after using it.** At first `gs`, `ge` and `:len` on an FX column made it a lane. That turned out to catch a habit: reaching for `ge` to shorten the phrase while on an FX column quietly gave that column a lane, and it stopped following the notes. So a lane is now asked for by name. `:lane 3` makes the cursor's FX column a lane of 3 steps from the cursor's step, and `:lane` alone puts it back to following the notes. On a column that's already a lane, `gs`, `ge` and `:len` set the lane. On one that isn't, they set the phrase's loop, as on the notes. Sliding the loop moves lanes with it, as a lane is set where the loop is. Doubling the loop leaves a lane's length alone.
 

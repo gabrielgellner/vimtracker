@@ -81,13 +81,7 @@ fn song(rows: &Rows) -> Result<Song, String> {
     let stored = phrase.steps().len();
     phrase.set_len(rows.rows);
     for slot in 0..rows.lanes {
-        phrase.set_lane(
-            slot,
-            Some(Lane {
-                start: 0,
-                length: stored,
-            }),
-        );
+        phrase.set_lane(slot, Some(Lane::new(0, stored)));
     }
     track.phrases.insert(0, Arc::new(phrase));
     Ok(song)

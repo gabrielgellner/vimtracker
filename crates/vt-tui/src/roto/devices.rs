@@ -189,7 +189,8 @@ impl Family {
             | Units::Glide
             | Units::LoopTime
             | Units::ExciterAttack
-            | Units::ExciterRelease => Self::Time,
+            | Units::ExciterRelease
+            | Units::Rows => Self::Time,
             Units::Depth | Units::Degrees => Self::Modulation,
             _ => Self::Character,
         }
@@ -722,6 +723,11 @@ fn identity(
                 format!("vimtracker/gen/{}/loops", lower(&column)),
             )
         }
+        // An FX column's lane, as `FX1 Lane`.
+        Page::Gen if spec.lane_slot().is_some() => (
+            spec.identity.clone(),
+            format!("vimtracker/gen/{}", lower(&spec.identity)),
+        ),
         // A generator by its column and its fill, as `Note Ramp`.
         Page::Gen => {
             let Some(Control::Gen {

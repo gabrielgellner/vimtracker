@@ -323,13 +323,18 @@ fn empty_makes_another_column_live() {
     keys(&mut app, "nudge<Enter>");
     let live = generators(&app);
     assert_eq!(live.len(), 2, "{}", app.services.status);
-    // Its device comes after Note's, and the cursor is on it.
+    // Its device comes after the macros' and Note's, and the cursor is on it.
     assert_eq!(
         app.track_page
             .device_cursor(app.services.track_here())
             .unwrap()
             .device,
-        1
+        2
+    );
+    assert!(
+        matches!(app.track_control(), Control::Gen { generator: 1, .. }),
+        "{:?}",
+        app.track_control()
     );
     let text = fx_page_text(&app).join("\n");
     assert!(text.contains("Ramp  Notes · Nudge 00–07"), "{text}");

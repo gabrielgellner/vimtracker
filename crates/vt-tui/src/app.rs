@@ -435,9 +435,9 @@ impl App {
                 progress: 0.0,
                 ticks: ticks as u32,
                 speed,
-                skipped: false,
-                accumulated: None,
+                ..TrackPlace::default()
             };
+            self.services.places[track].lanes = self.services.placed_lanes(track);
         }
     }
 

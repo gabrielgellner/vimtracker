@@ -426,6 +426,7 @@ impl Track {
             }
             (Owner::Accumulation, at) => return self.accumulation.own_value(at),
             (Owner::Arpeggio, at) => return self.arpeggio.own_value(at),
+            (Owner::Lane(slot), at) => self.lanes[slot].value(at),
             (Owner::Track, _) => match id {
                 SettingId::VOL => UNITY_LEVEL,
                 SettingId::LEVEL => self.level,
@@ -485,6 +486,7 @@ impl Track {
             (Owner::ModOwn(n), at) => self.mods[n].set_own(at, scaled),
             (Owner::Accumulation, at) => self.accumulation.set_own(at, scaled),
             (Owner::Arpeggio, at) => self.arpeggio.set_own(at, scaled),
+            (Owner::Lane(slot), at) => self.lanes[slot].set(at, coarse),
             (Owner::Bypass(slot), _) => self.bypassed[slot] = coarse != 0,
             (Owner::Voice(_) | Owner::Sampler, _) => {
                 self.set_setting(id, coarse);

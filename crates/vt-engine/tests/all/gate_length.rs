@@ -297,13 +297,7 @@ fn ldlt_in_a_drifting_lane_gives_a_row_a_different_length_each_pass() {
     ];
     let mut song = gated(&rows, 0x80);
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
-    phrase.set_lane(
-        0,
-        Some(Lane {
-            start: 0,
-            length: 3,
-        }),
-    );
+    phrase.set_lane(0, Some(Lane::new(0, 3)));
     let out = render(&song, 12);
     // The 4-row phrase's first row reads the 3-row lane's rows 0, 1 and 2 in turn.
     for (pass, value) in [0x40, 0x80, 0xC0].into_iter().enumerate() {

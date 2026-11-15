@@ -255,7 +255,6 @@ impl Engine {
                 cued: track.cued,
                 chain: track.playing,
                 started: track.started,
-                lane_offsets: track.lane_offsets,
                 mute: track.mute,
                 solo: track.solo,
                 mute_waiting: track.mute_waiting,

@@ -334,13 +334,7 @@ fn a_lane_plays_on_the_grooved_steps() {
     // A lane of volume, three long, under one long note: its second step turns it down late.
     let mut laned = song(&[&["C-3 --", "--- -- vol:00", "--- --", "--- --"]]);
     let phrase = Arc::make_mut(laned.tracks[0].phrases.get_mut(&0).unwrap());
-    phrase.set_lane(
-        0,
-        Some(Lane {
-            start: 0,
-            length: 3,
-        }),
-    );
+    phrase.set_lane(0, Some(Lane::new(0, 3)));
     laned.grooves = vec![Groove::swing(750)];
     laned.groove = GrooveId::custom(0).unwrap();
     let out = render(&laned, flat_pool(), 3, 0);

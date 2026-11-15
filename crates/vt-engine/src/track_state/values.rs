@@ -487,6 +487,11 @@ impl TrackState {
                 self.played_held[ACCUMULATION_SETTINGS + at] = value;
                 return;
             }
+            // Read as each of the lane's rows starts.
+            (Owner::Lane(slot), at) => {
+                self.lane_held[slot][at] = value;
+                return;
+            }
             _ => return,
         }
         self.voice.set_synth(self.synth_settings());

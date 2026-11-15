@@ -690,8 +690,11 @@ arpeggio makes a small `Arp` patch (`Rate`, `Mode`, `Oct`).
 
 **Shipped** by decision 318, built into the program under `Factory`: these six, with `Drunk walk`,
 `Marbles X` and `Variations` added; `Kria`'s `Octave rate` left out, and its length loop carried
-with its lane but no macro, as a lane's length isn't a setting to turn; and no `Arp`, as an
-arpeggio does nothing on a track without `ARP`s in its rows.
+with its lane; and no `Arp`, as an arpeggio does nothing on a track without `ARP`s in its rows.
+Since #709 (decisions 346 to 348, `lanes.md`) a lane's length is a setting, the track's `FX1
+Length`, relative to each phrase's own, so `Kria` has a third macro, `Length loop`, turning it
+from `-3` to `+12`, a lane of 1 to 16. The Gen page shows it on an FX column's `Lane` device,
+under the column's generator, as `Loops` sits under `Acid`.
 
 ---
 
