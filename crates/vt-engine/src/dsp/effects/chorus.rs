@@ -38,6 +38,8 @@ use std::f32::consts::TAU;
 use vt_model::insert::{Chorus as Settings, ChorusType};
 
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::{Rung, SlotEffect};
 
 /// The rate Rings' delays and wobbles are tuned at.
 const TUNING_RATE: f32 = 48_000.0;
@@ -359,6 +361,38 @@ impl Chorus {
                 [left * 0.33, right * 0.33]
             }
         }
+    }
+}
+
+impl SlotEffect for Chorus {
+    type Settings = Settings;
+
+    /// A chorus's.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, _frames: u64) {
+        self.follow(settings);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        self.frames() as u32
+    }
+}
+
+impl Rung for Chorus {
+    #[inline]
+    fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.process(input)
     }
 }
 

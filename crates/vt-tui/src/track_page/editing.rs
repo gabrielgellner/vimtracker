@@ -3,20 +3,17 @@
 //! track page and the mixer both turn them.
 
 use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Reset};
-use vt_model::action::{Action, TrackControl};
+use vt_model::action::Action;
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{BAR_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::{Curve, Hold, MAX_HOLD_MS, MAX_RATCHET};
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
-use vt_model::lfo::{LfoMode, MAX_DEFORM, Shape};
-use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot, default_mod};
+use vt_model::modulation::{ModKind, ModSlot, default_mod};
 use vt_model::settings::{SettingId, gate_percent, gate_value};
 use vt_model::song::{FilterType, Machine, Role, Track};
 use vt_model::speed::Speed;
-use vt_model::steps::{Loop, MAX_MUTATE, MAX_STEP, STEPS, Steps, StepsMode};
-use vt_model::tracking::{Source, Tracking};
+use vt_model::tracking::Source;
 
 use crate::services::Services;
 
@@ -42,7 +39,7 @@ const HEX_JUMP: i64 = 0x10;
 const TIME_JUMP: u16 = 10;
 
 /// How far a large step moves a sustain, in percent.
-const SUSTAIN_JUMP: i16 = 10;
+const SUSTAIN_JUMP: i32 = 10;
 
 /// The next item in a list, going round.
 fn next_in<T: Copy + PartialEq>(items: &[T], current: T, up: bool) -> T {
@@ -61,7 +58,8 @@ fn time_step(value: u16) -> u16 {
 }
 
 /// Move one setting of a mod slot one notch, under its type. The type itself is chosen with `K`
-/// alone, as it changes what the device is.
+/// alone, as it changes what the device is. A list or a switch goes round, as a phase does, and a
+/// number stops at its ends.
 fn adjust_mod(
     modulator: &mut ModSlot,
     slot: usize,
@@ -78,32 +76,8 @@ fn adjust_mod(
             value.saturating_sub(time_step(value.saturating_sub(1)) * size)
         }
     };
-    let kind = modulator.kind;
-    let (adsr, ahd, drum, lpg, lfo) = (
-        &mut modulator.adsr,
-        &mut modulator.ahd,
-        &mut modulator.drum,
-        &mut modulator.lpg,
-        &mut modulator.lfo,
-    );
-    let steps = &mut modulator.steps;
-    let ahd_kind = kind == ModKind::Ahd;
-    let lpg_kind = kind == ModKind::Lpg;
     match field {
-        ModField::Type => {}
-        ModField::Mode => match kind {
-            ModKind::Adsr => adsr.curve = next_in(&Curve::ALL, adsr.curve, up),
-            ModKind::Ahd => ahd.curve = next_in(&Curve::ALL, ahd.curve, up),
-            ModKind::Drum => drum.curve = next_in(&Curve::ALL, drum.curve, up),
-            ModKind::Lfo => lfo.mode = next_in(&LfoMode::ALL, lfo.mode, up),
-            ModKind::Steps => steps.mode = next_in(&StepsMode::ALL, steps.mode, up),
-            ModKind::Track => {
-                let tracking = &mut modulator.track;
-                tracking.source = next_in(&Source::ALL, tracking.source, up);
-            }
-            ModKind::Lpg => {}
-        },
-        ModField::Polarity => modulator.polarity = Some(modulator.polarity().other()),
+        ModField::Type => return,
         // `Pitch` comes twice, as it is and in scale.
         ModField::Destination => {
             let mut choices = vec![(None, false)];
@@ -115,126 +89,77 @@ fn adjust_mod(
             }
             let here = (modulator.destination, modulator.goes_in_scale());
             (modulator.destination, modulator.in_scale) = next_in(&choices, here, up);
+            return;
         }
-        ModField::Depth => {
-            let size = if large { HEX_JUMP as i16 } else { 1 };
-            let moved = modulator.depth + if up { size } else { -size };
-            modulator.depth = moved.clamp(-MAX_DEPTH, MAX_DEPTH);
+        // A rate and a fade step through their own kinds.
+        ModField::Rate => {
+            let (steps, lfo) = (&mut modulator.steps, &mut modulator.lfo);
+            match (modulator.kind, large) {
+                (ModKind::Steps, _) => steps.rate = steps.rate.nudged(up, large),
+                (_, true) => lfo.rate = lfo.rate.jumped(up),
+                (_, false) => lfo.rate = lfo.rate.nudged(up),
+            }
+            return;
         }
-        ModField::Attack if ahd_kind => ahd.attack_ms = time(ahd.attack_ms),
-        ModField::Attack if lpg_kind => lpg.attack_ms = time(lpg.attack_ms),
-        ModField::Attack => adsr.attack_ms = time(adsr.attack_ms),
-        ModField::Decay if ahd_kind => ahd.decay_ms = time(ahd.decay_ms),
-        ModField::Decay if kind == ModKind::Drum => drum.decay_ms = time(drum.decay_ms),
-        ModField::Decay if lpg_kind => lpg.decay_ms = time(lpg.decay_ms),
-        ModField::Colour => {
-            let size = if large { HEX_JUMP as u8 } else { 1 };
-            lpg.colour = if up {
-                lpg.colour.saturating_add(size)
-            } else {
-                lpg.colour.saturating_sub(size)
-            };
+        ModField::Fade => {
+            modulator.lfo.fade = modulator.lfo.fade.nudged(up, large);
+            return;
         }
-        ModField::Decay => adsr.decay_ms = time(adsr.decay_ms),
-        ModField::Peak => drum.peak_ms = time(drum.peak_ms),
-        ModField::Body => {
-            let size = if large { SUSTAIN_JUMP } else { 1 };
-            let by = if up { size } else { -size };
-            drum.body = (i16::from(drum.body) + by).clamp(0, 100) as u8;
-        }
-        ModField::Ratchet => {
-            let by = if up { 1 } else { -1 };
-            drum.ratchet = (i16::from(drum.ratchet) + by).clamp(1, i16::from(MAX_RATCHET)) as u8;
+        _ => {}
+    }
+    let (Some(value), Some((lowest, highest))) = (modulator.field(field), modulator.bounds(field))
+    else {
+        return;
+    };
+    let by = |small: i32, jump: i32| {
+        let size = if large { jump } else { small };
+        if up { size } else { -size }
+    };
+    let to = match field {
+        ModField::Mode
+        | ModField::Polarity
+        | ModField::Reset
+        | ModField::Shape
+        | ModField::Loop => lowest + (value - lowest + by(1, 1)).rem_euclid(highest - lowest + 1),
+        ModField::Attack | ModField::Decay | ModField::Release | ModField::Peak => {
+            i32::from(time(value as u16))
         }
         // `Note` is below no time, so `-` from 0 ms holds for the note.
-        ModField::Hold => {
-            ahd.hold = match (ahd.hold, up) {
-                (Hold::Note, true) => Hold::Ms(0),
-                (Hold::Note, false) | (Hold::Ms(0), false) => Hold::Note,
-                (Hold::Ms(ms), _) => Hold::Ms(time(ms).min(MAX_HOLD_MS)),
-            };
-        }
-        ModField::Release => adsr.release_ms = time(adsr.release_ms),
-        ModField::Sustain => {
-            let size = if large { SUSTAIN_JUMP } else { 1 };
-            let by = if up { size } else { -size };
-            adsr.sustain = (i16::from(adsr.sustain) + by).clamp(0, 100) as u8;
-        }
-        ModField::Reset if ahd_kind => ahd.reset = !ahd.reset,
-        ModField::Reset if lpg_kind => lpg.reset = !lpg.reset,
-        ModField::Reset => adsr.reset = !adsr.reset,
-        ModField::Shape => lfo.shape = next_in(&Shape::ALL, lfo.shape, up),
-        ModField::Rate if kind == ModKind::Steps => steps.rate = steps.rate.nudged(up, large),
-        ModField::Rate if large => lfo.rate = lfo.rate.jumped(up),
-        ModField::Rate => lfo.rate = lfo.rate.nudged(up),
+        ModField::Hold => match value {
+            -1 if up => 0,
+            -1 | 0 if !up => -1,
+            ms => i32::from(time(ms as u16)),
+        },
+        // An attractor's large step goes from one axis to the next.
         ModField::Phase => {
-            // An attractor's large step goes from one axis to the next.
-            let size = match (large, lfo.shape.is_attractor()) {
-                (true, true) => AXIS_JUMP,
-                (true, false) => PHASE_JUMP,
-                (false, _) => PHASE_NUDGE,
-            };
-            let by = if up { size } else { -size };
-            lfo.phase = (i32::from(lfo.phase) + by).rem_euclid(360) as u16;
-        }
-        ModField::Deform => {
-            let size = if large { HEX_JUMP as i16 } else { 1 };
-            let moved = lfo.deform + if up { size } else { -size };
-            lfo.deform = moved.clamp(-MAX_DEFORM, MAX_DEFORM);
-        }
-        ModField::Fade => lfo.fade = lfo.fade.nudged(up, large),
-        ModField::Length => {
-            let by = if up { 1 } else { -1 };
-            steps.length = (i16::from(steps.length) + by).clamp(1, STEPS as i16) as u8;
-        }
-        ModField::Start => {
-            let by = if up { 1 } else { -1 };
-            steps.start = (i16::from(steps.start) + by).clamp(0, STEPS as i16 - 1) as u8;
-        }
-        ModField::Loop => steps.looping = next_in(&Loop::ALL, steps.looping, up),
-        ModField::Mutate => {
-            let size = if large { MUTATE_JUMP } else { 1 };
-            let by = if up { size } else { -size };
-            steps.mutate = (i16::from(steps.mutate) + by).clamp(0, i16::from(MAX_MUTATE)) as u8;
-        }
-        ModField::Smooth => {
-            let size = if large { HEX_JUMP as i16 } else { 1 };
-            let moved = steps.smooth + if up { size } else { -size };
-            steps.smooth = moved.clamp(-MAX_STEP, MAX_STEP);
-        }
-        // A large step is an octave, as a step's value on `Pitch` is semitones.
-        ModField::Step(at) => {
-            let size = if large { OCTAVE } else { 1 };
-            let value = &mut steps.values[usize::from(at)];
-            *value = (*value + if up { size } else { -size }).clamp(-MAX_STEP, MAX_STEP);
-        }
-        // A large step is an octave of notes, or `10` in hex.
-        ModField::Low | ModField::High => {
-            let tracking = &mut modulator.track;
-            let source = tracking.source;
-            let size = match (large, source) {
-                (false, _) => 1,
-                (true, Source::Note) => OCTAVE,
-                (true, _) => HEX_JUMP as i16,
-            };
-            let bounds = tracking.bounds_mut();
-            let value = if field == ModField::Low {
-                &mut bounds.low
+            let jump = if modulator.lfo.shape.is_attractor() {
+                AXIS_JUMP
             } else {
-                &mut bounds.high
+                PHASE_JUMP
             };
-            let (lowest, highest) = source.span();
-            let moved = i16::from(*value) + if up { size } else { -size };
-            *value = moved.clamp(i16::from(lowest), i16::from(highest)) as u8;
+            value + by(PHASE_NUDGE, jump)
         }
-    }
+        ModField::Body | ModField::Sustain => value + by(1, SUSTAIN_JUMP),
+        ModField::Mutate => value + by(1, MUTATE_JUMP),
+        ModField::Ratchet | ModField::Length | ModField::Start => value + by(1, 1),
+        // A large step is an octave, as a step's value on `Pitch` is semitones.
+        ModField::Step(_) => value + by(1, OCTAVE),
+        // A large step on a map of notes is an octave.
+        ModField::Low | ModField::High if modulator.track.source == Source::Note => {
+            value + by(1, OCTAVE)
+        }
+        // The rest are in hex, a large step `10`: a depth, a colour, a deform, Smooth, and a map
+        // of velocities or rolls.
+        _ => value + by(1, HEX_JUMP as i32),
+    };
+    modulator.set_field(field, to);
 }
 
 /// How far a large step moves one of Steps' values: an octave, `0C`.
-const OCTAVE: i16 = 12;
+const OCTAVE: i32 = 12;
 
 /// How far a large step moves `Mutate`, in percent.
-const MUTATE_JUMP: i16 = 10;
+const MUTATE_JUMP: i32 = 10;
 
 /// A mod slot with one setting back at its default: the slot's own for what every type shares,
 /// and for a type's own the default that type has in this slot. `Type` goes back to the slot's
@@ -242,19 +167,6 @@ const MUTATE_JUMP: i16 = 10;
 /// switch, as choosing a type does.
 fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
     let fresh = default_mod(slot);
-    let (mut adsr, mut ahd, mut drum, mut lpg, mut lfo) = (
-        modulator.adsr,
-        modulator.ahd,
-        modulator.drum,
-        modulator.lpg,
-        modulator.lfo,
-    );
-    let mut steps = modulator.steps;
-    let new = Steps::default();
-    let mut tracking = modulator.track;
-    let untouched = Tracking::default();
-    let ahd_kind = modulator.kind == ModKind::Ahd;
-    let lpg_kind = modulator.kind == ModKind::Lpg;
     match field {
         ModField::Type => {
             return ModSlot {
@@ -262,12 +174,12 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
                 adsr: if fresh.kind == ModKind::Adsr {
                     fresh.adsr
                 } else {
-                    adsr
+                    modulator.adsr
                 },
                 lfo: if fresh.kind == ModKind::Lfo {
                     fresh.lfo
                 } else {
-                    lfo
+                    modulator.lfo
                 },
                 ..modulator
             };
@@ -286,63 +198,31 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
                 ..modulator
             };
         }
-        ModField::Depth => {
-            return ModSlot {
-                depth: fresh.depth,
-                ..modulator
-            };
+        // A rate isn't one number, as it's a division, steps or hertz.
+        ModField::Rate => {
+            let mut reset = modulator;
+            if modulator.kind == ModKind::Steps {
+                reset.steps.rate = fresh.steps.rate;
+            } else {
+                reset.lfo.rate = fresh.lfo.rate;
+            }
+            return reset;
         }
-        ModField::Mode => match modulator.kind {
-            ModKind::Adsr => adsr.curve = fresh.adsr.curve,
-            ModKind::Ahd => ahd.curve = fresh.ahd.curve,
-            ModKind::Drum => drum.curve = fresh.drum.curve,
-            ModKind::Lfo => lfo.mode = fresh.lfo.mode,
-            ModKind::Steps => steps.mode = new.mode,
-            ModKind::Track => tracking.source = untouched.source,
-            ModKind::Lpg => {}
-        },
-        ModField::Attack if ahd_kind => ahd.attack_ms = fresh.ahd.attack_ms,
-        ModField::Attack if lpg_kind => lpg.attack_ms = fresh.lpg.attack_ms,
-        ModField::Attack => adsr.attack_ms = fresh.adsr.attack_ms,
-        ModField::Decay if ahd_kind => ahd.decay_ms = fresh.ahd.decay_ms,
-        ModField::Decay if modulator.kind == ModKind::Drum => drum.decay_ms = fresh.drum.decay_ms,
-        ModField::Decay if lpg_kind => lpg.decay_ms = fresh.lpg.decay_ms,
-        ModField::Colour => lpg.colour = fresh.lpg.colour,
-        ModField::Decay => adsr.decay_ms = fresh.adsr.decay_ms,
-        ModField::Peak => drum.peak_ms = fresh.drum.peak_ms,
-        ModField::Body => drum.body = fresh.drum.body,
-        ModField::Ratchet => drum.ratchet = fresh.drum.ratchet,
-        ModField::Hold => ahd.hold = fresh.ahd.hold,
-        ModField::Reset if ahd_kind => ahd.reset = fresh.ahd.reset,
-        ModField::Reset if lpg_kind => lpg.reset = fresh.lpg.reset,
-        ModField::Sustain => adsr.sustain = fresh.adsr.sustain,
-        ModField::Release => adsr.release_ms = fresh.adsr.release_ms,
-        ModField::Reset => adsr.reset = fresh.adsr.reset,
-        ModField::Shape => lfo.shape = fresh.lfo.shape,
-        ModField::Rate if modulator.kind == ModKind::Steps => steps.rate = new.rate,
-        ModField::Rate => lfo.rate = fresh.lfo.rate,
-        ModField::Phase => lfo.phase = fresh.lfo.phase,
-        ModField::Deform => lfo.deform = fresh.lfo.deform,
-        ModField::Fade => lfo.fade = fresh.lfo.fade,
-        ModField::Length => steps.length = new.length,
-        ModField::Start => steps.start = new.start,
-        ModField::Loop => steps.looping = new.looping,
-        ModField::Mutate => steps.mutate = new.mutate,
-        ModField::Smooth => steps.smooth = new.smooth,
-        ModField::Step(at) => steps.values[usize::from(at)] = 0,
-        ModField::Low => tracking.bounds_mut().low = untouched.bounds_of(tracking.source).low,
-        ModField::High => tracking.bounds_mut().high = untouched.bounds_of(tracking.source).high,
+        _ => {}
     }
-    ModSlot {
-        adsr,
-        ahd,
-        drum,
-        lpg,
-        lfo,
-        steps,
-        track: tracking,
-        ..modulator
+    // The slot as it starts under this type, with Track's map of the source it follows.
+    let mut default = ModSlot {
+        kind: modulator.kind,
+        ..fresh
+    };
+    if matches!(field, ModField::Low | ModField::High) {
+        default.track.source = modulator.track.source;
     }
+    let mut reset = modulator;
+    if let Some(value) = default.field(field) {
+        reset.set_field(field, value);
+    }
+    reset
 }
 
 /// How far a large step moves an accumulator's limit: an octave of a seven-note scale.
@@ -547,23 +427,7 @@ pub(super) fn adjust_control(
             });
         }
         Control::Tune | Control::Cents => adjust_tuning(services, control, up, count, large),
-        Control::Base(which) => {
-            let value = match which {
-                TrackControl::Cutoff => track.cutoff,
-                TrackControl::Resonance => track.resonance,
-                TrackControl::Pan => track.pan,
-                TrackControl::SendA => track.send_a,
-                TrackControl::SendB => track.send_b,
-                TrackControl::Drive => track.drive,
-                TrackControl::Punch => track.punch,
-                TrackControl::LowCut => track.low_cut,
-                TrackControl::HighCut => track.high_cut,
-                TrackControl::Pitch => track.pitch,
-                TrackControl::VelocityDelta => track.velocity_delta,
-                TrackControl::Quantise => track.quantise,
-            };
-            set_hex(services, control, change(value));
-        }
+        Control::Base(which) => set_hex(services, control, change(track.control(which))),
         Control::Level => set_hex(services, control, change(track.level)),
         Control::Trim => set_hex(services, control, change(track.trim)),
         Control::Insert(slot) => set_insert(services, slot, track.inserts[slot].stepped(up)),
@@ -814,22 +678,8 @@ pub(super) fn reset_control(services: &mut Services, control: Control) {
     match control {
         Control::Gen { .. } | Control::NewGenerator(_) => {}
         Control::Base(which) => {
-            let value = |track: &Track| match which {
-                TrackControl::Cutoff => track.cutoff,
-                TrackControl::Resonance => track.resonance,
-                TrackControl::Pan => track.pan,
-                TrackControl::SendA => track.send_a,
-                TrackControl::SendB => track.send_b,
-                TrackControl::Drive => track.drive,
-                TrackControl::Punch => track.punch,
-                TrackControl::LowCut => track.low_cut,
-                TrackControl::HighCut => track.high_cut,
-                TrackControl::Pitch => track.pitch,
-                TrackControl::VelocityDelta => track.velocity_delta,
-                TrackControl::Quantise => track.quantise,
-            };
-            if value(&track) != value(&fresh) {
-                set_hex(services, control, value(&fresh));
+            if track.control(which) != fresh.control(which) {
+                set_hex(services, control, fresh.control(which));
             }
         }
         Control::Macro(at) => set_macro(services, at, 0),

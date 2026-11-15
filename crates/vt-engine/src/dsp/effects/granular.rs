@@ -38,6 +38,8 @@ use vt_model::insert::{
 };
 
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::dsp::filters::filter::soft_clip;
 
 /// How many grains can play at once, as Beads'.
@@ -757,6 +759,38 @@ impl Granular {
             CEILING / self.peak_smoothed
         };
         out.map(|side| soft_clip(side * gain / HEADROOM) * HEADROOM)
+    }
+}
+
+impl SlotEffect for Granular {
+    type Settings = Settings;
+
+    /// A granular effect's, which records Beads' four seconds.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, _frames: u64) {
+        self.follow(settings);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        self.quiet_frames()
+    }
+}
+
+impl Rung for Granular {
+    #[inline]
+    fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.process(input)
     }
 }
 

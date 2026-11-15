@@ -475,18 +475,21 @@ impl App {
         .min(last);
     }
 
+    /// Run a command the binding table resolved. A key goes, in this order, to the first that
+    /// takes it, each passing back what isn't its own:
+    ///
+    /// 1. the overlay for the mode, the picker, the shape panel, the mapping view, the command
+    ///    line, Insert, a jump, a guide or help, which [`App::handle_key`] gives its keys to
+    ///    before they reach the table;
+    /// 2. the page on screen, [`App::run_page`], through `Page::key` on a page that's a component;
+    /// 3. `App`'s commands across pages, for what that page passed back, such as `i`, `/`, `M`,
+    ///    `gm`, the Keys mode and the pickers, and then the track page's edits
+    ///    ([`App::run_across_pages`]);
+    /// 4. the tree of chains and phrases, [`App::run_tree`];
+    /// 5. the grammar's motions, operators and Visual modes, [`App::run_grammar`];
+    /// 6. what a key means anywhere, the `match` here.
     pub(crate) fn run(&mut self, cmd: Cmd) {
-        let handled = match self.modes.view {
-            View::Chain => self.run_chain(cmd),
-            View::Track => self.run_track_page(cmd),
-            View::Mixer => self.run_mixer(cmd),
-            View::Audio => self.run_audio_page(cmd),
-            View::Project => self.run_project_page(cmd),
-            View::Sample => self.run_sample_page(cmd),
-            View::Song => self.run_song(cmd),
-            View::Phrase => false,
-        };
-        if handled || self.run_tree(cmd) || self.run_grammar(cmd) {
+        if self.run_page(cmd) || self.run_tree(cmd) || self.run_grammar(cmd) {
             return;
         }
         match cmd {

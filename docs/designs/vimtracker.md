@@ -722,16 +722,18 @@ module per file, each keeping its port's licence notice:
 |---|---|---|
 | `voices/` | What makes a track's sound from its notes, and the parts only voices use | `acid`, `additive`, `braids_analog`, `braids_digital`, `braids_filter_fm`, `braids_noise`, `braids_physical`, `braids_parts` (how Braids' models run at twice the rate, its analog oscillator and waveshapers), `braids_vocal`, `braids_waves`, `chiptune`, `chord`, `chord_bank`, `drums`, `fm`, `four_op` (four operators in `wide`'s `f32x4` lanes, an operator a lane), `grain`, `kick`, `modal`, `noise`, `particle`, `phase_distortion`, `six_op`, `speech`, `string_model`, `supersaw` (its saws four at a time in `wide`'s `f32x4` lanes), `swarm`, `variable_shape`, `virtual_analog`, `virtual_analog_vcf`, `wave_terrain`, `waveshaping`, `waveshaping_tables`, `wavetable`, and `tables/` with Plaits' waves, DX7 patches and words and Braids' waves |
 | `filters/` | The track's filter and the character filters it switches between, and the slot effects that are filters | `filter`, `diode_filter`, `dirty_filter`, `korg35`, `obx` (the OB-X's two-pole filter, after OB-Xf's), `comb`, `lpg`, `vowel` |
-| `effects/` | The other slot effects, and what plays a slot | `beads` (Mutable Instruments' Beads, whose grains are `granular`'s and whose wow and flutter are `tape`'s), `chorus`, `clouds` (Mutable Instruments' Clouds, whose reverb and pitch shifter are `reverb`'s and `pitch_shifter`'s, with its phase vocoder in `clouds/spectral`, on `realfft`), `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `echo` (the Space Echo, a Roland RE-201's tape loop, whose reverb is `spring`'s), `exciter`, `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `rotary`, `space`, `spring`, `stutter`, `sweep` (sines swept through a slot, for the tests that hold its curve to what's heard), `tail` (how a reverb's tail dies away, for its drawing), `tape`, `warps`, and `tables/` with Warps' fold |
+| `effects/` | The other slot effects, and what plays a slot | `beads` (Mutable Instruments' Beads, whose grains are `granular`'s and whose wow and flutter are `tape`'s), `chorus`, `clouds` (Mutable Instruments' Clouds, whose reverb and pitch shifter are `reverb`'s and `pitch_shifter`'s, with its phase vocoder in `clouds/spectral`, on `realfft`), `delay`, `distort` (also `Distortion`, what a slot keeps for it), `echo` (the Space Echo, a Roland RE-201's tape loop, whose reverb is `spring`'s), `exciter`, `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take, by `EffectKind`, and `memories!`, the one list of the effects that take one, which writes `Memory` and every `match` that hands a call on to them), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `rotary`, `slot` (`InsertState`, which plays whichever effect a slot has, `Keys`, what it hears from other tracks, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `space`, `spring`, `stutter`, `sweep` (sines swept through a slot, for the tests that hold its curve to what's heard), `tail` (how a reverb's tail dies away, for its drawing), `tape`, `warps`, and `tables/` with Warps' fold |
 | `dynamics/` | The mixing tools | `compressor` (the `Comp` slot, an enum of its types, the `Auto` and `Makeup` they share, and `Clean`), `console` (its `Console` type, fitted to Bus FORCE), `glue` (its `Glue` type, fitted to Live's Glue Compressor, and the `Peak Clip` the slot runs after its mix), `limiter`, `eq` |
 | `blocks/` | Small parts the others share, which use nothing else in `dsp` | `clip` (a clamp that's safe in a feedback loop, #461), `drift` (what makes each note of an analog voice a little different, decisions 190 and 191), `flush` (a filter's state let go once it's far below anything heard, #260), `oversampler` (also its `Decimator`, for a sound made at twice the rate), `response` (what a filter does to a steady sine, from its coefficients, for the FX page's curves, decision 333), `sides` (a state for each side, worked out once for both while a sound is the same on both, as every `OneSide` effect keeps its own), `smoother`, `sine_table`, `plaits_parts` |
 
-A new voice, filter, effect or dynamics tool goes in its folder. A part that two folders would
-share, such as the antiderivative antialiasing, 4x oversampling and state variable filter of #260,
-goes in `blocks/`. A binary table sits in a `tables/` beside the modules that read it, so their
-`include_bytes!` paths stay short. `dsp.rs` re-exports the modules used outside `dsp` at their old
-paths, such as `dsp::filter` and `dsp::compressor`, so the rest of the engine and `vt-tui` name them
-as before.
+A new voice, filter, effect or dynamics tool goes in its folder. A slot effect with a long buffer
+implements `SlotEffect` (and `Rung`, if the slot plays it through `ring`) and takes one line of
+`memories!`; the slot reaches it by `match`, never `dyn` (decision 340). A part that two folders
+would share, such as the antiderivative antialiasing, 4x oversampling and state variable filter of
+#260, goes in `blocks/`. A binary table sits in a `tables/` beside the modules that read it, so
+their `include_bytes!` paths stay short. `dsp.rs` re-exports the modules used outside `dsp` at their
+old paths, such as `dsp::filter` and `dsp::compressor`, so the rest of the engine and `vt-tui` name
+them as before.
 
 Where the unclear ones went: `comb`, `lpg` and `vowel` are slot effects, but filters by what they do,
 as Vital files its comb and formant filters. `resonator` is the `Reso` slot effect's code; the `Modal`
@@ -776,6 +778,24 @@ apply an action at once, and the modes to read; `Ctx`, which a page is drawn wit
 reads through `App`, as drawing is given `&App` and some of what's drawn, such as a live
 generator's sources, is `App`'s to work out.
 
+**`Page`** (`page.rs`, #739) is a page as a component, which the track page and the mixer are so
+far: its rows of the binding table, `Page::KEYS`, kept beside it and assembled by
+`input/bindings.rs` under its mode; `Page::key`, which runs one of its keys with a count through a
+`CtxMut` and says what it did as an `Outcome`, done, refused with why, or passed back; `Page::draw`,
+given a `Ctx`; and `Page::panels` and `Page::take_panels`, its pictures as data for `Graphics` and
+the ids they're given. `App` holds one of each page and dispatches by `View` with a plain `match`,
+so there's no `dyn`. A key goes, in this order, to the first that takes it:
+
+1.  the overlay for the `Mode`: the picker, the shape panel, the mapping view, the command line,
+    Insert, a jump, a guide or help (`App::handle_key`);
+2.  the page on screen (`App::run_page`), through `Page::key` for a component, or the page's own
+    `run_*` for the pages that aren't yet;
+3.  `App`'s commands across pages, for what the page passed back: `i`'s mode, `/`, `M`, `gm`, the
+    Keys mode, the pickers, and then the track page's edits, which the mixer shares;
+4.  the tree of chains and phrases (`App::run_tree`);
+5.  the grammar's motions, operators and Visual modes (`App::run_grammar`);
+6.  the global `match` in `App::run`.
+
 **`TypedValue`** (`input/typed.rs`) is what's typed into a value: Insert's in `Modes`, the shape
 panel's row and the mapping view's end. `TypedValue::key` takes a key by a `Rule`, a shape
 setting's `Typing` or plain text up to a length, and says whether it's still typing, committed or
@@ -814,7 +834,9 @@ only name Normal's keys on those pages, for the binding table.
     cursor is put on its fine part for the press and back after. A gesture's presses are squashed
     into one undo step (`History::squash_to`, as the Roto's touch to let-go), and in a selection
     `Adjustments::join_from` keeps its running total in step (decisions 162 and 163).
-*   **`bindings.rs`:** the binding table, one list of mode, key sequence, `Cmd` and description. The
+*   **`bindings.rs`:** the binding table, one list of mode, key sequence, `Cmd` and description,
+    assembled from its own rows and each component page's `Page::KEYS`, and pinned row by row in
+    `bindings.tsv` by a test (`VT_PIN_BINDINGS=1` pins it again after a change on purpose). The
     which-key popup and `Space k` are generated from it. `CMD_ADJUSTS` is the one rule for Cmd
     with `h` `j` `k` `l`: `bindings` gives every mode that binds `=` `-` `+` `_` their Cmd keys
     beside them, unless the mode binds one itself, and `adjusting_key` turns them into those keys

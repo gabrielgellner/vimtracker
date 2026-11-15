@@ -1,17 +1,16 @@
 //! `K` and `i` on a setting that's a choice: a list of what it can be.
 
 use ratatui::style::Style;
-use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Reset};
-use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES, retrig_meaning};
-use vt_model::envelope::{Adsr, Ahd, Curve, Drum, Lpg};
+use vt_model::accumulator::{Accumulation, MOST_DEGREES, Reset};
+use vt_model::arpeggio::{Arpeggio, MOST_OCTAVES, retrig_meaning};
 use vt_model::insert::Insert;
-use vt_model::lfo::{Fade, Lfo, LfoMode, Shape, note_rates};
+use vt_model::lfo::{Fade, Lfo, Shape, note_rates};
+use vt_model::listed::Listed;
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot, Polarity};
 use vt_model::settings::{Kind, SettingId};
 use vt_model::song::{FilterType, Machine, Role};
 use vt_model::speed::Speed;
-use vt_model::steps::{Loop, StepRate, Steps, StepsMode};
-use vt_model::tracking::{Source, Tracking};
+use vt_model::steps::{Loop, StepRate, Steps};
 
 use crate::app::App;
 use crate::glyphs;
@@ -74,6 +73,15 @@ const DESTINATION_TITLES: [&str; MOD_SLOTS] = [
     "Mod 6 destination",
 ];
 use super::{AccumulatorField, ArpField, Control, ModField};
+
+/// A picker's items for every one of a [`Listed`] type's values, in order, each with what it does
+/// and picking what `pick` makes of it.
+fn items_of<X: Listed>(pick: impl Fn(X) -> Pick) -> Vec<Item> {
+    X::ALL
+        .iter()
+        .map(|each| Item::new(each.name(), pick(*each)).meaning(each.meaning()))
+        .collect()
+}
 
 /// A list of what a machine or a slot can be, with loading and saving a preset of it after them,
 /// as Ableton's hot-swap is on a device's title (decision 310).
@@ -282,12 +290,7 @@ impl App {
     fn open_filter_picker(&mut self) {
         let track = self.services.cursor.track;
         let current = self.services.page_track().filter;
-        let items = FilterType::ALL
-            .map(|filter| {
-                Item::new(filter.name(), Pick::FilterType { track, filter })
-                    .meaning(filter.meaning())
-            })
-            .to_vec();
+        let items = items_of(|filter| Pick::FilterType { track, filter });
         let position = FilterType::ALL.iter().position(|filter| *filter == current);
         self.show_picker(Picker::new("Filter type", items).opened_on(position));
     }
@@ -310,30 +313,15 @@ impl App {
             }
             AccumulatorField::Moves => (
                 "Accumulator moves",
-                Moves::ALL
-                    .map(|moves| {
-                        Item::new(moves.name(), pick(Accumulation { moves, ..now }))
-                            .meaning(moves.meaning())
-                    })
-                    .to_vec(),
+                items_of(|moves| pick(Accumulation { moves, ..now })),
             ),
             AccumulatorField::AtLimit => (
                 "Accumulator at its limit",
-                AtLimit::ALL
-                    .map(|at_limit| {
-                        Item::new(at_limit.name(), pick(Accumulation { at_limit, ..now }))
-                            .meaning(at_limit.meaning())
-                    })
-                    .to_vec(),
+                items_of(|at_limit| pick(Accumulation { at_limit, ..now })),
             ),
             AccumulatorField::Adds => (
                 "Accumulator adds",
-                Adds::ALL
-                    .map(|adds| {
-                        Item::new(adds.name(), pick(Accumulation { adds, ..now }))
-                            .meaning(adds.meaning())
-                    })
-                    .to_vec(),
+                items_of(|adds| pick(Accumulation { adds, ..now })),
             ),
             AccumulatorField::Reset => (
                 "Accumulator starts again",
@@ -362,24 +350,8 @@ impl App {
                 );
                 return;
             }
-            ArpField::Rate => (
-                "Arp rate",
-                ArpRate::ALL
-                    .map(|rate| {
-                        Item::new(rate.name(), pick(Arpeggio { rate, ..now }))
-                            .meaning(rate.meaning())
-                    })
-                    .to_vec(),
-            ),
-            ArpField::Mode => (
-                "Arp mode",
-                ArpMode::ALL
-                    .map(|mode| {
-                        Item::new(mode.name(), pick(Arpeggio { mode, ..now }))
-                            .meaning(mode.meaning())
-                    })
-                    .to_vec(),
-            ),
+            ArpField::Rate => ("Arp rate", items_of(|rate| pick(Arpeggio { rate, ..now }))),
+            ArpField::Mode => ("Arp mode", items_of(|mode| pick(Arpeggio { mode, ..now }))),
             ArpField::Retrig => (
                 "Arp retrig",
                 [false, true]
@@ -399,11 +371,7 @@ impl App {
     fn open_speed_picker(&mut self) {
         let track = self.services.cursor.track;
         let current = self.services.page_track().speed;
-        let items = Speed::ALL
-            .map(|speed| {
-                Item::new(speed.name(), Pick::Speed { track, speed }).meaning(speed.meaning())
-            })
-            .to_vec();
+        let items = items_of(|speed| Pick::Speed { track, speed });
         let position = Speed::ALL.iter().position(|speed| *speed == current);
         self.show_picker(Picker::new("Speed", items).opened_on(position));
     }
@@ -501,14 +469,13 @@ impl App {
             slot,
             modulator,
         };
-        let (adsr, ahd, drum, lpg, lfo) = (
-            modulator.adsr,
-            modulator.ahd,
-            modulator.drum,
-            modulator.lpg,
-            modulator.lfo,
-        );
-        let steps = modulator.steps;
+        // The slot with the setting at one of its choices, as the slot counts them.
+        let chosen = |at: usize| {
+            let mut chosen = modulator;
+            chosen.set_field(field, at as i32);
+            pick(chosen)
+        };
+        let (lfo, steps) = (modulator.lfo, modulator.steps);
         let (title, items): (&'static str, Vec<Item>) = match field {
             ModField::Type => {
                 let kinds = ModKind::ALL.map(|kind| {
@@ -517,48 +484,21 @@ impl App {
                 });
                 (TYPE_TITLES[slot], with_patches(kinds.to_vec()))
             }
-            ModField::Mode if modulator.kind == ModKind::Adsr => {
-                let curves = Curve::ALL.map(|curve| {
-                    let adsr = Adsr { curve, ..adsr };
-                    Item::new(curve.name(), pick(ModSlot { adsr, ..modulator }))
-                        .meaning(curve.meaning())
-                });
-                (CURVE_TITLES[slot], curves.to_vec())
-            }
-            ModField::Mode if modulator.kind == ModKind::Ahd => {
-                let curves = Curve::ALL.map(|curve| {
-                    let ahd = Ahd { curve, ..ahd };
-                    Item::new(curve.name(), pick(ModSlot { ahd, ..modulator }))
-                        .meaning(curve.meaning())
-                });
-                (CURVE_TITLES[slot], curves.to_vec())
-            }
-            ModField::Mode if modulator.kind == ModKind::Drum => {
-                let curves = Curve::ALL.map(|curve| {
-                    let drum = Drum { curve, ..drum };
-                    Item::new(curve.name(), pick(ModSlot { drum, ..modulator }))
-                        .meaning(curve.meaning())
-                });
-                (CURVE_TITLES[slot], curves.to_vec())
-            }
-            ModField::Mode if modulator.kind == ModKind::Steps => {
-                let modes = StepsMode::ALL.map(|mode| {
-                    let steps = Steps { mode, ..steps };
-                    Item::new(mode.name(), pick(ModSlot { steps, ..modulator }))
-                        .meaning(mode.meaning())
-                });
-                (MODE_TITLES[slot], modes.to_vec())
-            }
-            ModField::Mode if modulator.kind == ModKind::Track => {
-                let sources = Source::ALL.map(|source| {
-                    let track = Tracking {
-                        source,
-                        ..modulator.track
-                    };
-                    Item::new(source.name(), pick(ModSlot { track, ..modulator }))
-                        .meaning(source.meaning())
-                });
-                (SOURCE_TITLES[slot], sources.to_vec())
+            // An envelope's curve, how notes start an LFO or Steps, or what Track follows.
+            ModField::Mode if modulator.kind.has_mode() => {
+                let titles = match modulator.kind {
+                    ModKind::Lfo | ModKind::Steps => MODE_TITLES,
+                    ModKind::Track => SOURCE_TITLES,
+                    _ => CURVE_TITLES,
+                };
+                let modes = modulator
+                    .kind
+                    .modes()
+                    .into_iter()
+                    .enumerate()
+                    .map(|(at, (name, meaning))| Item::new(name, chosen(at)).meaning(meaning))
+                    .collect();
+                (titles[slot], modes)
             }
             ModField::Rate if modulator.kind == ModKind::Steps => {
                 let rates = StepRate::ALL.map(|rate| {
@@ -574,14 +514,6 @@ impl App {
                         .meaning(looping.meaning())
                 });
                 ("Steps loop", loops.to_vec())
-            }
-            ModField::Mode if modulator.kind == ModKind::Lfo => {
-                let modes = LfoMode::ALL.map(|mode| {
-                    let lfo = Lfo { mode, ..lfo };
-                    Item::new(mode.name(), pick(ModSlot { lfo, ..modulator }))
-                        .meaning(mode.meaning())
-                });
-                (MODE_TITLES[slot], modes.to_vec())
             }
             ModField::Polarity => {
                 let both = Polarity::ALL.map(|polarity| {
@@ -645,23 +577,7 @@ impl App {
                     } else {
                         ("off", "Each note goes on from where it is")
                     };
-                    let chosen = if modulator.kind == ModKind::Ahd {
-                        ModSlot {
-                            ahd: Ahd { reset, ..ahd },
-                            ..modulator
-                        }
-                    } else if modulator.kind == ModKind::Lpg {
-                        ModSlot {
-                            lpg: Lpg { reset, ..lpg },
-                            ..modulator
-                        }
-                    } else {
-                        ModSlot {
-                            adsr: Adsr { reset, ..adsr },
-                            ..modulator
-                        }
-                    };
-                    Item::new(name, pick(chosen)).meaning(meaning)
+                    Item::new(name, chosen(usize::from(reset))).meaning(meaning)
                 });
                 ("Envelope reset", choices.to_vec())
             }
