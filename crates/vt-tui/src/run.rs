@@ -433,13 +433,15 @@ fn main_loop(
             }
         }
         app.tick();
-        app.cpu
+        app.readouts
+            .cpu
             .sample(stats.load.load(Ordering::Relaxed), Instant::now());
-        app.slowdown
+        app.readouts
+            .slowdown
             .sample(stats.slowdown.load(Ordering::Relaxed), Instant::now());
         if power_asked.is_none_or(|asked| asked.elapsed() >= POWER_EVERY) {
             power_asked = Some(Instant::now());
-            app.slowdown.power = audio::PowerState::now();
+            app.readouts.slowdown.power = audio::PowerState::now();
         }
         app.autosave_if_due(Instant::now());
         woken |=
@@ -616,10 +618,10 @@ impl App {
             picker.preview_images.clone_from(ids);
             picker.preview_wave = *wave;
         }
-        if self.scope_shown
+        if self.readouts.scope_shown
             && let Some(id) = graphics.scope(&self.services.scope, out)?
         {
-            self.scope_image = Some(id);
+            self.readouts.scope_image = Some(id);
         }
         graphics.finish(out)
     }
@@ -700,11 +702,11 @@ pub fn draw_screen(
         view
     };
     crate::screen::system::draw(frame, free, app, stats);
-    app.scope_shown = false;
+    app.readouts.scope_shown = false;
     if let Some(column) = meter {
         let (scope, meter) = crate::screen::meter::split_scope(column);
-        app.scope_shown = scope.is_some();
-        if let (Some(area), Some(id)) = (scope, app.scope_image) {
+        app.readouts.scope_shown = scope.is_some();
+        if let (Some(area), Some(id)) = (scope, app.readouts.scope_image) {
             crate::screen::meter::draw_scope(frame, area, id);
         }
         crate::screen::meter::draw(frame, meter, &app.services.meter, app.song().limiter);

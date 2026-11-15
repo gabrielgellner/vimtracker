@@ -11,7 +11,8 @@ use crate::overlays::picker::exploring::Naming;
 use crate::overlays::picker::places::RecentPlaces;
 use crate::pages::audio::AudioPage;
 use crate::pages::chain::ChainView;
-use crate::services::audio::{AudioChoice, DeviceInfo, LoadReadout, SlowdownReadout};
+use crate::screen::Readouts;
+use crate::services::audio::{AudioChoice, DeviceInfo};
 use crate::services::loading::Loader;
 use crate::widgets::glyphs;
 use ratatui::crossterm::event::KeyCode;
@@ -281,13 +282,8 @@ pub struct App {
     pub(crate) recording: Option<Recording>,
     /// The recorder: what `Space R` records, and the recording going on.
     pub sampling: crate::services::sampling::Sampling,
-    /// The id of the scope's image, and whether the last screen drawn had room for it.
-    pub scope_image: Option<u32>,
-    pub scope_shown: bool,
-    /// The CPU figure on the status line.
-    pub cpu: LoadReadout,
-    /// How slowed the audio thread is, for the leaf beside it.
-    pub slowdown: SlowdownReadout,
+    /// The CPU and slowdown figures, and the scope's image.
+    pub readouts: Readouts,
     pub should_quit: bool,
     /// The key last pressed, as it is on the keyboard, until it's let go.
     key_down: Option<KeyCode>,
@@ -423,10 +419,7 @@ impl App {
             command_history: CommandHistory::default(),
             recording: None,
             sampling: crate::services::sampling::Sampling::default(),
-            scope_image: None,
-            scope_shown: true,
-            cpu: LoadReadout::default(),
-            slowdown: SlowdownReadout::default(),
+            readouts: Readouts::default(),
             should_quit: false,
             key_down: None,
             repeats_ignored: false,

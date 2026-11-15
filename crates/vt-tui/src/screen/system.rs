@@ -51,13 +51,13 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&Audi
             s.errors.load(Ordering::Relaxed),
         )
     });
-    let (text, trouble) = text(app.cpu.percent(), late, xruns);
+    let (text, trouble) = text(app.readouts.cpu.percent(), late, xruns);
     let style = if trouble {
         theme::warning()
     } else {
         theme::dim()
     };
-    let line: Line = leaf(app.slowdown.slowed())
+    let line: Line = leaf(app.readouts.slowdown.slowed())
         .into_iter()
         .chain([Span::styled(text, style)])
         .collect();

@@ -128,7 +128,8 @@ fn the_audio_page_shows_what_plays_and_when_it_stops() {
 fn slowed_for_a_while(app: &mut App, thousandths: u64) {
     let start = Instant::now();
     for frame in 0..600 {
-        app.slowdown
+        app.readouts
+            .slowdown
             .sample(thousandths, start + Duration::from_millis(33 * frame));
     }
 }
@@ -247,10 +248,10 @@ fn the_scope_sends_a_picture_only_when_it_changes_and_draws_above_the_meter() {
     };
     // Silence is a flat line, sent once.
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    let flat = app.scope_image.unwrap();
+    let flat = app.readouts.scope_image.unwrap();
     block(&mut realtime, &mut app);
     assert_eq!(sync(&mut app, &mut graphics), 0, "still silent");
-    assert_eq!(app.scope_image, Some(flat));
+    assert_eq!(app.readouts.scope_image, Some(flat));
 
     special(&mut app, KeyCode::Tab);
     for _ in 0..8 {
@@ -259,22 +260,22 @@ fn the_scope_sends_a_picture_only_when_it_changes_and_draws_above_the_meter() {
     // It's brought up to date every other frame, so one of the next two sends it.
     let sent = sync(&mut app, &mut graphics) + sync(&mut app, &mut graphics);
     assert_eq!(sent, 1, "the note is heard");
-    assert_ne!(app.scope_image, Some(flat));
+    assert_ne!(app.readouts.scope_image, Some(flat));
 
     // A picture after every frame, for longer than there are ids, never takes the one on screen.
     let mut ids = std::collections::HashSet::new();
     for _ in 0..600 {
         block(&mut realtime, &mut app);
-        let before = app.scope_image;
+        let before = app.readouts.scope_image;
         let mut out = Vec::new();
         app.send_pictures(&mut graphics, &mut out).unwrap();
         let out = String::from_utf8(out).unwrap();
-        let shown = app.scope_image.unwrap();
+        let shown = app.readouts.scope_image.unwrap();
         assert!(
             !out.contains(&format!("a=d,d=I,i={shown},")),
             "the shown picture is kept"
         );
-        if app.scope_image != before {
+        if app.readouts.scope_image != before {
             ids.insert(shown);
         }
     }
@@ -291,9 +292,9 @@ fn the_scope_sends_a_picture_only_when_it_changes_and_draws_above_the_meter() {
     assert_eq!(corner.symbol(), "\u{10EEEE}\u{305}\u{305}");
     assert_eq!(
         corner.fg,
-        vt_tui::graphics::id_color(app.scope_image.unwrap())
+        vt_tui::graphics::id_color(app.readouts.scope_image.unwrap())
     );
-    assert!(app.scope_shown);
+    assert!(app.readouts.scope_shown);
 
     // On a screen too short for it, it isn't drawn, and nothing more is sent.
     let backend = ratatui::backend::TestBackend::new(120, 10);
@@ -301,7 +302,7 @@ fn the_scope_sends_a_picture_only_when_it_changes_and_draws_above_the_meter() {
     terminal
         .draw(|frame| vt_tui::run::draw_screen(frame, &mut app, None, Instant::now()))
         .unwrap();
-    assert!(!app.scope_shown);
+    assert!(!app.readouts.scope_shown);
     block(&mut realtime, &mut app);
     let sent = sync(&mut app, &mut graphics) + sync(&mut app, &mut graphics);
     assert_eq!(sent, 0);

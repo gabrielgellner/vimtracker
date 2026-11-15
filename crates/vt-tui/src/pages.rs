@@ -221,8 +221,8 @@ impl App {
             recording: self.sampling_shown(),
             audio: &self.audio,
             wheel: self.wheel.setting,
-            cpu_percent: self.cpu.percent(),
-            slowdown: &self.slowdown,
+            cpu_percent: self.readouts.cpu.percent(),
+            slowdown: &self.readouts.slowdown,
         }
     }
 
