@@ -6,6 +6,7 @@
 
 use vt_model::selection::{Motion, Target};
 
+use crate::controls::Page;
 use crate::input::keys::{Key, parse, parse_sequence};
 use crate::input::mode::{Mode, View};
 use crate::pages::Page as _;
@@ -16,7 +17,7 @@ use crate::pages::phrase::PhraseView;
 use crate::pages::project::ProjectPage;
 use crate::pages::sample::{SampleKey, SamplePage};
 use crate::pages::song::SongView;
-use crate::pages::track::{Page, TrackPage};
+use crate::pages::track::TrackPage;
 
 /// An operator key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -26,7 +26,7 @@ fn fx_line(app: &App, slot: usize) -> String {
 
 #[test]
 fn l_reaches_the_fx_page_and_then_the_gen_page() {
-    use vt_tui::pages::track::Page;
+    use vt_tui::controls::Page;
     let (mut app, _realtime) = on_fx_page();
     assert_eq!(app.track_page.page, Page::Fx);
     press(&mut app, "L");
@@ -185,7 +185,7 @@ fn the_effect_list_chooses_one_and_keeps_settings_if_it_is_already_there() {
 
 #[test]
 fn a_jump_finds_a_slots_settings_only_where_they_exist() {
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "/amo");
@@ -407,7 +407,7 @@ fn braces_go_to_the_same_setting_in_the_next_slot() {
 
 #[test]
 fn a_jump_labels_a_slots_effect_once() {
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "/effect");
     let jump = app.modes.field_jump.as_ref().unwrap();
@@ -644,7 +644,7 @@ fn b_bypasses_a_slot_and_brings_it_back_with_undo() {
 
 #[test]
 fn zero_and_dollar_go_to_the_ends_of_a_slots_row() {
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     let (mut app, _rt) = app();
     press(&mut app, " 5LL");
     press(&mut app, "K");
@@ -1200,7 +1200,7 @@ fn a_curve_under_an_lfo_is_sent_every_other_frame_and_costs_a_few_kilobytes() {
 #[test]
 fn four_devices_fit_beside_the_main_meter_and_inside_the_keys_box_at_163x42() {
     use vt_model::insert::{Compressor, CompressorType, Insert};
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     let (mut app, _realtime) = on_fx_page();
     four_devices(&mut app);
     let compressor = |app: &App| match app.song().tracks[0].inserts[0] {
@@ -1424,9 +1424,10 @@ fn the_track_pages_cursor_goes_through_a_rack_on_its_own() {
     use vt_model::insert::Insert;
     use vt_model::selection::Motion;
     use vt_model::song::Track;
+    use vt_tui::controls::{Control, Page};
     use vt_tui::input::bindings::Cmd;
     use vt_tui::pages::Outcome;
-    use vt_tui::pages::track::{Control, DeviceCursor, Page, TrackPage};
+    use vt_tui::pages::track::{DeviceCursor, TrackPage};
     let effect = |name| {
         *Insert::ALL
             .iter()

@@ -15,8 +15,8 @@ use vt_model::action::TrackControl;
 use vt_model::selection::Motion;
 use vt_model::song::Track;
 
+use crate::controls::Control;
 use crate::input::bindings::Cmd;
-use crate::pages::track::Control;
 use crate::pages::{Ctx, CtxMut, Outcome, Page};
 
 /// The mixer's columns.

@@ -20,7 +20,6 @@ use crate::widgets::theme;
 use crate::widgets::toggle;
 
 pub(crate) mod edit;
-pub(crate) mod view;
 
 /// How wide a value's coarse digits are, before its fine ones, so what's typed in their place
 /// keeps the fine digits where they are.

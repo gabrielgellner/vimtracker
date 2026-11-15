@@ -48,6 +48,8 @@ use vt_model::step::{FxSlot, Gate, Step};
 use crate::app::{
     App, AudioState, Cursor, Entry, Modes, Momentary, Selection, TrackLive, which_key_due,
 };
+use crate::controls::Control;
+use crate::controls::param::ParamView;
 use crate::graphics::{PanelIds, PanelWant};
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
@@ -58,7 +60,6 @@ use crate::overlays::help::POPUP_DELAY;
 use crate::overlays::picker::Picker;
 use crate::overlays::picker::exploring::Naming;
 use crate::pages::sample::{SamplePage, Shown, is_sample_motion};
-use crate::pages::track::Control;
 use crate::roto::Roto;
 use crate::services::Services;
 use crate::services::audio::SlowdownReadout;
@@ -66,7 +67,6 @@ use crate::services::folding::Folds;
 use crate::services::generators::LiveGen;
 use crate::services::meter::Meter;
 use crate::services::sampling::still_recording;
-use crate::widgets::param::view::ParamView;
 use crate::widgets::setting::{CellLook, Focus};
 
 /// What a key did, as far as the page alone can tell, and what it asks for that only `App` can
@@ -490,7 +490,7 @@ impl<'a> Ctx<'a> {
     /// One of the track page's settings on a track of the song, as a widget draws it, with an
     /// accumulator's limits counted as the scale lock has them.
     pub(crate) fn param_view(&self, control: Control, track: &Track) -> Option<ParamView> {
-        crate::pages::track::view(control, track, self.song(), self.services.live.scale.on)
+        crate::controls::view(control, track, self.song(), self.services.live.scale.on)
     }
 
     /// Whether the song plays, as the engine last said.

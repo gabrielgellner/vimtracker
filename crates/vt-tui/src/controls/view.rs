@@ -4,7 +4,7 @@
 //! status line, the mixer and the Roto's value text read the view, so a setting's value is worked
 //! out here and nowhere else.
 //!
-//! The view lives in vt-tui, not the model: it's resolved from the page's [`Control`], which is the
+//! The view lives in vt-tui, not the model: it's resolved from a [`Control`], which is the
 //! program's, and a Gen setting's from the program's live generator, and the status line's text of
 //! an accumulator's limit says degrees or semitones by the scale lock, which the program keeps
 //! outside the song until it saves. What it holds is description only, with nothing of the
@@ -34,15 +34,12 @@ use vt_model::song::{FilterType, Machine, Role, Song, SynthVoice, Track, reset_n
 use vt_model::speed::Speed;
 use vt_model::tracking::Source;
 
-use crate::overlays::mapping::macro_name;
-use crate::pages::track::draw::toggle_on;
-use crate::roto::layouts::key;
 use crate::services::banking::{sample_shown, sample_text};
 use crate::services::generators::with_live;
 
+use super::param::{Choice, Pace, ParamView, Reads, Steps};
 use super::tuning::{tuning, tuning_shown, tuning_text};
-use super::{AccumulatorField, ArpField, Control, LaneField};
-use crate::widgets::param::view::{Choice, Pace, ParamView, Reads, Steps};
+use super::{AccumulatorField, ArpField, Control, LaneField, key, macro_name};
 
 /// What a slot going to `Pitch` in scale shows as its destination.
 pub(crate) const IN_SCALE_PITCH: &str = "Pitch in scale";
@@ -277,6 +274,25 @@ fn label(control: Control, track: &Track) -> Cow<'static, str> {
         Control::Macro(at) => Cow::Owned(macro_name(&track.macros[at], at)),
         Control::Gen { param, .. } => Cow::Borrowed(param.name()),
         _ => Cow::Borrowed(control.label_on(track)),
+    }
+}
+
+/// Whether a setting that's off or on, and nothing else, is on, or nothing for any other: an
+/// effect's `Off`/`On` list, an envelope's `Reset`, the arpeggio's `Retrig`, the filter's
+/// `Safe`, and the master's `Limiter`, which is the song's. They show as a toggle, and the status
+/// line still says the word.
+pub(crate) fn toggle_on(control: Control, track: &Track, song: &Song) -> Option<bool> {
+    match control {
+        Control::Limiter => Some(song.limiter),
+        Control::Safe => Some(track.safe),
+        Control::InsertParam(slot, param) => {
+            let insert = track.inserts[slot];
+            let found = insert.params().get(param)?;
+            found.is_toggle().then(|| insert.value(param) != 0)
+        }
+        Control::Mod(slot, ModField::Reset) => Some(track.mods[slot].envelope().reset()),
+        Control::Arpeggio(ArpField::Retrig) => Some(track.arpeggio.retrig),
+        _ => None,
     }
 }
 
@@ -1350,8 +1366,8 @@ mod tests {
     use vt_model::song::TrackKind;
 
     use super::*;
+    use crate::controls::Page;
     use crate::input::mode::{Mode, View};
-    use crate::pages::track::Page;
     use crate::widgets::pin::{app_with, press};
 
     /// A song with every machine, effect and mod type, and settings where a step's size depends on

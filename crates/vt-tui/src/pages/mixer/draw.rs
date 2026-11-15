@@ -17,9 +17,9 @@ use vt_model::song::{Song, Track, level_gain};
 
 use vt_engine::engine::Transport;
 
+use crate::controls::Control;
 use crate::pages::Ctx;
 use crate::pages::mixer::{MIXER, MixerPage};
-use crate::pages::track::Control;
 use crate::services::automating::fader_of;
 use crate::services::meter::{height_of, to_db};
 use crate::widgets::glyphs;

@@ -24,8 +24,8 @@ use vt_model::song::{Machine, Phrase, Role, Song, SynthVoice, TrackKind};
 use vt_model::step::Step;
 
 use crate::app::App;
+use crate::controls::{Control, Page};
 use crate::input::mode::View;
-use crate::pages::track::{Control, Page};
 use crate::widgets::pin::{app, app_with, assert_drawn, cut, press, special};
 
 const CUT: Control = Control::Base(TrackControl::Cutoff);

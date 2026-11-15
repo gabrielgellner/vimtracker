@@ -6,8 +6,8 @@ use vt_engine::link::Realtime;
 use vt_model::generator::Generator;
 use vt_model::shape::{FillKind, GenParam, Where};
 use vt_tui::app::App;
+use vt_tui::controls::{Control, Page};
 use vt_tui::input::mode::{Mode, View};
-use vt_tui::pages::track::{Control, Page};
 
 use crate::common::*;
 use vt_tui::graphics::PanelKey;

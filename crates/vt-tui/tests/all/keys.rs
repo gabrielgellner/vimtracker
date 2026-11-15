@@ -934,7 +934,7 @@ fn the_transport_is_glyphs_with_the_waits_named() {
 
 #[test]
 fn the_space_digits_show_the_mixer_each_track_page_and_the_project() {
-    use vt_tui::pages::track::Page;
+    use vt_tui::controls::Page;
     let (mut app, _realtime) = app();
     press(&mut app, " 4");
     assert_eq!(app.modes.view, View::Mixer);

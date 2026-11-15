@@ -4,7 +4,7 @@
 use vt_model::shape::GenParam;
 use vt_model::step::Note;
 use vt_tui::app::App;
-use vt_tui::pages::track::Control;
+use vt_tui::controls::Control;
 
 use super::keys;
 

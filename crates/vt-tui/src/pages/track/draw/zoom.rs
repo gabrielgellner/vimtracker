@@ -20,9 +20,10 @@ use super::{
     MeterScale, REDUCTION_CAPTION, REDUCTION_METER_WIDTH, TrackCells, heard_bypassed,
     reduction_cell, slot_frame, slot_grid,
 };
+use crate::controls::{Control, DeviceSpec, Page};
 use crate::graphics::PanelKey;
 use crate::pages::Ctx;
-use crate::pages::track::{Control, DeviceSpec, Page, TrackPage};
+use crate::pages::track::TrackPage;
 use crate::widgets::device::{DEVICE_HEIGHT, Device};
 use crate::widgets::grid::{CellWidths, GRID_HEIGHT, faded};
 use crate::widgets::image;

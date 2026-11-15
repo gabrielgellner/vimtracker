@@ -4,11 +4,11 @@
 use ratatui::crossterm::event::KeyCode;
 
 use crate::app::App;
+use crate::controls::Control;
 use crate::input::bindings::Cmd;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::pages::mixer::MIXER_ROWS;
-use crate::pages::track::Control;
 
 /// The labels, with the easiest keys first.
 const LABELS: &str = "asdfghjklqwertyuiopzxcvbnm";
