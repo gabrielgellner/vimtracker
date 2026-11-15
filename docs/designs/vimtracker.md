@@ -291,7 +291,7 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 | Crate | Owns | May depend on |
 |---|---|---|
 | `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, every RON file read and written one way, each write atomic (`ron_file.rs`), kits, presets, sample decoding and resampling, sample analysis, and reading WAV markers and `.ot` files | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `realfft`, `thiserror` and `xxhash-rust` |
-| `vt-engine` | `Published`, the queues to and from the callback (`link.rs`), transport and sequencing (`engine.rs` and `engine/`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), which is the crate's own, with what others draw of it in `pictures.rs` and the parts the tests play on their own in `parts.rs`, the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues, `hound` to write WAVs, `wide` for `Supersaw`'s four lanes, `realfft` for `Clouds`' spectral mode and `thiserror` |
+| `vt-engine` | `Published`, the queues to and from the callback (`link.rs`) and their lengths (`queues.rs`), transport and sequencing (`engine.rs` and `engine/`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), which is the crate's own, with what others draw of it in `pictures.rs` and the parts the tests play on their own in `parts.rs`, the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues, `hound` to write WAVs, `wide` for `Supersaw`'s four lanes, `realfft` for `Clouds`' spectral mode and `thiserror` |
 | `vt-roto` | Melbourne Instruments' Roto-Control: its SysEx, CC and serial protocols, typed each way (`sysex.rs`, `cc.rs`, `serial.rs`), the handshake (`session.rs`), the link's thread with finding the ports and reconnecting (`link.rs`, `transport.rs`), devices in PLUGIN mode, live or stored, with their buttons' lights, the Roto's track list and what changed sent back (`live.rs`), MIX mode's banks, track focus, lights and meters (`mix.rs`), a device's pages of eight knobs and eight buttons as data (`layout.rs`), vimtracker's own stored setups, written only under its own hashes and only when they change (`store.rs`), a fake Roto in memory (`fake.rs`, built only with the `fake` feature, which its own tests and vt-tui's turn on as a dev-dependency, so a release build leaves it out), and `roto-probe` | No other vimtracker crate: `midir` for MIDI, `serialport` (without `libudev`) for the serial port, `thiserror` and `xxhash-rust` |
 | `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, the mouse wheel as a knob (`input/wheel.rs`), the Roto's setting, every kind of device's layout on it (`roto/layouts.rs`), its devices as the Roto shows them, and its knobs' and buttons' moves as edits (`roto.rs`, `roto/devices.rs`, `roto/edits.rs`), the song as MIX mode's strips (`roto/mix.rs`), the faders as the steps automate them and a hand takes them over (`services/automating.rs`), and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
 
@@ -2047,13 +2047,18 @@ These applied to every issue of M1 to M3, as first written. Some rows have been 
 | `FX_SLOTS` | 3 | FX slots per step |
 | `DEFAULT_MILLIBPM` | 120000 | New project tempo, in thousandths of a BPM |
 | `HISTORY_LIMIT` | 1000 | Undo versions kept |
+
+**The queues' lengths** are the engine's own, in `vt-engine/src/queues.rs`, as it makes each of them in `link::connect`; `link` gives out `INPUT_QUEUE`, the one the program makes itself. Changing these needs a document update too.
+
+| Constant | Value | Meaning |
+|---|---|---|
 | `PUBLISH_QUEUE` | 1 | Song versions waiting for the callback |
 | `RETURN_QUEUE` | 16 | Versions waiting to be freed |
 | `COMMAND_QUEUE` | 64 | Transport, preview and mute messages |
 | `TELEMETRY_QUEUE` | 64 | Playhead and load messages; newest dropped when full |
 | `NOTE_PITCH_QUEUE` | 256 | What the mod slots moved each note's pitch by; newest dropped when full |
 
-**Tuning values** can change by ear with no document update: `SMOOTHING_MS` (10), `DECLICK_FRAMES` (64), `PREVIEW_MS` (250), `FRAME_MS` (33), and `AUTOSAVE_SECONDS` (60).
+**Tuning values** can change by ear with no document update: in `vt-model`'s `constants.rs`, `SMOOTHING_MS` (10), `DECLICK_FRAMES` (64) and `PREVIEW_MS` (250); and the program's own, in `vt-tui`, `FRAME_MS` (33) in `run.rs` and `AUTOSAVE_SECONDS` (60) in `services/autosave.rs`.
 
 **Step text format.** Fields are separated by one space, and an FX slot is a command and value with no space. A hold or glide adds one letter, as in `CUT40h`.
 
