@@ -1,33 +1,33 @@
 //! A knob turned on the Roto as an edit of the song: the way back from [`super::devices`], a
 //! knob's position to the setting's value it stands for, written as a key writes it, by the
-//! setting's view and `track_page::set` (#739), and the value as the app writes it, for the Roto to show. Pure, like the mapping: a track and
-//! its song in, an action out, so it's tested with no Roto at all.
+//! setting's view and `track_page::set` (#739), and the value as the app writes it, for the Roto
+//! to show. Pure, like the mapping: a track and its song in, an action out, so it's tested with
+//! no Roto at all.
 //!
 //! **Where a position lands** is where the mapping puts that value, so a knob left alone sends
-//! back what it was sent: a list's step by [`step_at`], a value by its share of the way from
-//! the bottom to its top, a setting with fine digits to its fine part, an envelope's time by the
-//! steps `=` takes, and an LFO's rate the nearest of its own kind, a note division staying a
-//! note division. A knob that lands where the setting already is gives no action, so it leaves
-//! no undo step.
+//! back what it was sent: both read the knob's places and range from the setting's view
+//! (`devices::places` and `devices::knob_view`, #784), a list's step by [`step_at`], a value by
+//! its share of the way from the bottom to its top, a setting with fine digits to its fine part,
+//! an envelope's time by the steps `=` takes, and an LFO's rate the nearest of its own kind, a
+//! note division staying a note division. A knob that lands where the setting already is gives
+//! no action, so it leaves no undo step.
 
 use vt_model::action::Action;
 use vt_model::envelope::Hold;
 use vt_model::lfo::{Rate, note_rates};
 use vt_model::modulation::{ModKind, ModSlot};
-use vt_model::settings::{Kind, SettingId};
-use vt_model::shape::GenParam;
-use vt_model::shape::params::Units as GenUnits;
+use vt_model::settings::SettingId;
 use vt_model::song::{Song, Track, trim_text};
 use vt_model::steps::StepRate;
 use vt_roto::live::{share_of, step_at};
 
-use crate::shaping::{live_shown, with_live};
+use crate::shaping::live_shown;
 use crate::track_page::tuning::{tuning, tuning_most};
 use crate::track_page::{Control, ModField, ParamView, set, view};
 use crate::views::track::toggle_on;
 use crate::views::widgets::param::edit;
 
-use super::devices::{hold_steps, knob, rate_position, time_steps};
+use super::devices::{hold_steps, knob, knob_view, places, rate_position, time_steps};
 
 /// A value from 0 to a top, for a knob's position.
 fn whole(position: u16, top: u32) -> u32 {
@@ -84,8 +84,9 @@ fn destination_at(choices: Vec<SettingId>, position: u16) -> Option<SettingId> {
 /// What the knob for a control on a track, the `at`th of the song's, does turned to a position:
 /// the action that puts its setting there, or nothing if it's there already or the knob is a
 /// hole. A knob takes the keys' way: it finds the value its position stands for in the setting's
-/// view, by `param::edit`, and writes it with [`set`], so only the sample, its tune, a mod slot's
-/// destination and rate and a generator's settings have edits of their own here.
+/// view, as its feel does ([`knob_view`] and [`places`]), by `param::edit`, and writes it with
+/// [`set`], so only the sample, its tune, a mod slot's destination and rate, and an envelope's
+/// times have edits of their own here.
 pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option<Action> {
     let track = song.tracks.get(at)?;
     if !control.exists_on(track) {
@@ -98,11 +99,6 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
     }
     let share = share_of(position);
     match control {
-        Control::Gen {
-            phrase,
-            generator,
-            param,
-        } => return gen_turned(song, at, phrase, generator, param, position),
         Control::NewGenerator(_) | Control::Mute | Control::Solo => return None,
         Control::Sample => {
             let numbers: Vec<u8> = std::iter::once(0)
@@ -153,8 +149,9 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
         Control::Mod(_, ModField::Type) => return None,
         _ => {}
     }
-    let shown = view(control, track, song, false)?;
-    let steps = || edit::at_place(&shown, step_at(position, edit::places(&shown)));
+    // A generator's setting with no number now, as a rate typed that isn't listed, is turned
+    // from where it's heard.
+    let shown = knob_view(control, track, song).or_else(|| view(control, track, song, false))?;
     // A switch by a two-step knob.
     if toggle_on(control, track, song).is_some() {
         return write(
@@ -167,47 +164,6 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
         );
     }
     let value = match control {
-        Control::Setting(_) | Control::Base(_) => {
-            // The registry's, which a setting of the track's own may not be.
-            let kind = control
-                .setting_on(track)
-                .or_else(|| match control {
-                    Control::Base(which) => which.setting(),
-                    _ => None,
-                })
-                .map(|id| id.entry().kind);
-            // A knob goes as far as the registry's top, which on the level scale is short of
-            // where the keys stop.
-            let knob = match kind {
-                Some(Kind::Stepped { choices, .. }) => {
-                    return write(
-                        control,
-                        at,
-                        track,
-                        song,
-                        &shown,
-                        edit::at_place(&shown, step_at(position, choices.len())),
-                    );
-                }
-                Some(Kind::Continuous { top, .. }) => ParamView {
-                    bounds: (0, i32::from(top)),
-                    ..shown.clone()
-                },
-                None => shown.clone(),
-            };
-            match shown.fine {
-                Some(_) => {
-                    let (value, fine) = edit::shared_fine(&knob, share);
-                    return with_fine(control, at, track, song, &shown, value, fine);
-                }
-                None => edit::shared(&knob, share),
-            }
-        }
-        // The level scale stops short of the fader's top.
-        Control::Level => {
-            let top = SettingId::LEVEL.entry().kind.top();
-            whole(position, u32::from(top)) as i32
-        }
         Control::Mod(
             _,
             ModField::Attack | ModField::Decay | ModField::Release | ModField::Peak,
@@ -220,40 +176,23 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                 Hold::Ms(ms) => i32::from(ms),
             }
         }
-        // One of a list, or a count or a place, by the step the knob is on.
-        Control::Mod(
-            _,
-            ModField::Mode
-            | ModField::Polarity
-            | ModField::Shape
-            | ModField::Fade
-            | ModField::Loop
-            | ModField::Length
-            | ModField::Start
-            | ModField::Ratchet,
-        ) => steps(),
-        // An effect's value by its registry's, as a step locks it.
-        Control::InsertParam(..) if shown.choices.is_empty() => {
-            let (id, _) = control.value_on(track)?;
-            match id.entry().kind {
-                Kind::Continuous { top, .. } => whole(position, u32::from(top)) as i32,
-                Kind::Stepped { choices, .. } => step_at(position, choices.len()) as i32,
+        // One of a list, or a count or a place, by the step the knob is on; and a number by its
+        // share of the way from its lowest to its highest, with any fine part.
+        _ => match places(control, track, song, &shown) {
+            Some(names) => edit::at_place(&shown, step_at(position, names.len())),
+            None if shown.fine.is_some() => {
+                let (value, fine) = edit::shared_fine(&shown, share);
+                return with_fine(control, at, track, song, &shown, value, fine);
             }
-        }
-        // A number from its lowest to its highest.
-        Control::Macro(_)
-        | Control::Trim
-        | Control::GateLength
-        | Control::Reset
-        | Control::Glide
-        | Control::Mod(..) => edit::shared(&shown, share),
-        _ => steps(),
+            None => edit::shared(&shown, share),
+        },
     };
     write(control, at, track, song, &shown, value)
 }
 
 /// The action that puts a setting at a value, if that's a change. A mod slot's is a change if it
-/// changes the slot, as a polarity that follows its type becomes its own.
+/// changes the slot, as a polarity that follows its type becomes its own, and a generator's if it
+/// changes its shape as it's set.
 fn write(
     control: Control,
     at: usize,
@@ -265,6 +204,19 @@ fn write(
     let action = set(control, at, track, song, value, None)?;
     let changes = match (&action, control) {
         (Action::SetMod { modulator, .. }, Control::Mod(slot, _)) => *modulator != track.mods[slot],
+        (
+            Action::Reshape {
+                phrase,
+                generator,
+                shape,
+                ..
+            },
+            _,
+        ) => track
+            .phrases
+            .get(phrase)
+            .and_then(|found| found.generators().get(*generator))
+            .is_none_or(|found| found.shape != *shape),
         _ => value != shown.value,
     };
     changes.then_some(action)
@@ -295,37 +247,6 @@ fn with_fine(
         1 => actions.pop(),
         _ => Some(Action::Batch(actions)),
     }
-}
-
-/// A generator's setting at a knob's position, as the edit the page's would be: a list's or a
-/// switch's choice by its step, a number by its share of the way from its lowest to its
-/// highest, its column written again through `Reshape`.
-fn gen_turned(
-    song: &Song,
-    at: usize,
-    phrase: u32,
-    generator: usize,
-    param: GenParam,
-    position: u16,
-) -> Option<Action> {
-    let track = song.tracks.get(at)?;
-    let shape = with_live(song, track, phrase, generator, |found, context| {
-        let (low, high) = param.bounds(context)?;
-        let number = if param.units() == GenUnits::Named {
-            low + step_at(position, (high - low + 1) as usize) as i32
-        } else {
-            low + whole(position, (high - low) as u32) as i32
-        };
-        let mut shape = found.shape;
-        param.set_number(&mut shape, context, number);
-        (shape != found.shape).then_some(shape)
-    })??;
-    Some(Action::Reshape {
-        track: at,
-        phrase,
-        generator,
-        shape,
-    })
 }
 
 /// A setting's value as the app writes it, for the Roto to show as its knob turns: in its units
