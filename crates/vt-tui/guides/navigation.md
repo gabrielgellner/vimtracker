@@ -230,5 +230,7 @@ the last 100, with one run again moved to the end.
 ## When you forget
 
 Press `Space` or another prefix and wait: a popup lists what can come next.
-`Space k` lists every key, and `Space ?` opens these guides.
+`Space k` lists every key, and `Space ?` opens these guides, on the one for the page
+you're on: the mixer's is the Sound page's, and the phrase view's this one. In a guide,
+`?` goes back to the list, on the guide you were reading.
 <!-- ANCHOR_END: rest -->

@@ -528,6 +528,11 @@ impl App {
     }
 
     /// Scroll an open guide, stopping when its last row reaches the bottom of the window.
+    /// The guide for the page or view showing, which `Space ?` opens the list of guides on.
+    fn guide_here(&self) -> guides::Guide {
+        guides::for_view(self.modes.view, self.track_page.page)
+    }
+
     fn guide_key(&mut self, key: Key) {
         let Some(guide) = self.overlays.guide else {
             self.modes.mode = Mode::Normal;
@@ -546,8 +551,9 @@ impl App {
             KeyCode::Char('g') => 0,
             KeyCode::Char('G') => last,
             KeyCode::Char('?') => {
-                self.overlays.guide = None;
-                self.show_picker(guides::picker());
+                let reading = self.overlays.guide.take();
+                let on = reading.unwrap_or_else(|| self.guide_here());
+                self.show_picker(guides::picker(on));
                 return;
             }
             KeyCode::Char('q') | KeyCode::Esc => {
@@ -605,7 +611,7 @@ impl App {
                 self.overlays.help_scroll = 0;
                 self.modes.mode = Mode::Help;
             }
-            Cmd::Guides => self.show_picker(guides::picker()),
+            Cmd::Guides => self.show_picker(guides::picker(self.guide_here())),
             Cmd::PickValue => self.open_field_picker(),
             Cmd::Shape => self.open_shape(),
             // The sample page's marks: `'` and `m` wait for a letter, as an operator waits for a
