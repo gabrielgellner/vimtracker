@@ -716,21 +716,22 @@ pub fn draw_screen(
         crate::screen::meter::draw(frame, meter, &app.services.meter, app.song().limiter);
     }
     crate::screen::status::draw(frame, status, app);
+    // An overlay may keep something of how it was drawn, so each is lent apart from the rest.
     if app.modes.mode == Mode::Help {
-        crate::overlays::help::draw_help(frame, body, app);
+        let mut help = std::mem::take(&mut app.overlays.help);
+        help.draw(frame, body, &app.ctx());
+        app.overlays.help = help;
     }
-    app.overlays.guide_page = crate::overlays::guides::draw::page(body.height);
-    app.overlays.guide_width = crate::overlays::guides::draw::text_width(body.width);
-    if let Some(guide) = app.overlays.guide {
-        crate::overlays::guides::draw::draw(frame, body, guide, app.overlays.guide_scroll);
-    }
+    // A guide keeps how many of its rows fit, which its keys go by, open or not.
+    let mut guide = app.overlays.guide;
+    guide.draw(frame, body, &app.ctx());
+    app.overlays.guide = guide;
     if let Some(panel) = &app.overlays.shape {
         crate::overlays::shape::draw::draw(frame, view, app, panel);
     }
     if let Some(mapping) = &app.overlays.mapping {
         crate::overlays::mapping::draw::draw(frame, view, app, mapping);
     }
-    // The picker keeps how far it has scrolled as it's drawn, so it's lent apart from the rest.
     if let Some(mut picker) = app.overlays.picker.take() {
         picker.draw(frame, body, &app.ctx());
         app.overlays.picker = Some(picker);

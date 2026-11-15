@@ -418,8 +418,7 @@ impl App {
             Pick::GenCommand { field, command } => self.pick_gen_column(field, Some(command)),
             Pick::ShapeCommand(command) => self.pick_shape_command(command),
             Pick::Guide(guide) => {
-                self.overlays.guide = Some(guide);
-                self.overlays.guide_scroll = 0;
+                self.overlays.guide.show(guide);
                 self.modes.mode = Mode::Guide;
             }
             Pick::KitTracks(path) => {

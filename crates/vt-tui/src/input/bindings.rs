@@ -10,6 +10,8 @@ use crate::controls::Page;
 use crate::input::keys::{Key, parse, parse_sequence};
 use crate::input::mode::{Mode, View};
 use crate::overlays::Overlay as _;
+use crate::overlays::guides::{GuideKey, GuideView};
+use crate::overlays::help::{Help, HelpKey};
 use crate::overlays::picker::{Picker, PickerKey};
 use crate::pages::Page as _;
 use crate::pages::audio::AudioPage;
@@ -198,6 +200,10 @@ pub enum Cmd {
     Sample(SampleKey),
     /// A key of the picker's list.
     InPicker(PickerKey),
+    /// A key of `Space k`'s list.
+    InHelp(HelpKey),
+    /// A key of an open guide.
+    InGuide(GuideKey),
 }
 
 /// One row of the table.
@@ -423,6 +429,8 @@ pub fn bindings() -> Vec<Binding> {
     }
     // The overlays' rows, each under its own mode.
     add(Picker::MODE, Picker::KEYS);
+    add(Help::MODE, Help::KEYS);
+    add(GuideView::MODE, GuideView::KEYS);
     with_cmd_adjusts(rows)
 }
 

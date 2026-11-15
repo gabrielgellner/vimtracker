@@ -237,7 +237,7 @@ mod tests {
         let (mut app, _realtime) = app();
         press(&mut app, " ?");
         special(&mut app, KeyCode::Enter);
-        let title = format!(" {} ", app.overlays.guide.expect("a guide").title());
+        let title = format!(" {} ", app.overlays.guide.open.expect("a guide").title());
         assert_eq!(
             window(&screen(&mut app, Instant::now()), &title),
             Rect::new(31, 0, 100, 40)
