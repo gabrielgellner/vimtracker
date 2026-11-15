@@ -37,10 +37,10 @@ use vt_model::steps::{Loop, MAX_MUTATE, STEPS, StepsMode};
 use vt_model::tracking::Source;
 
 use crate::overlays::mapping::macro_name;
-use crate::overlays::shape::with_live;
 use crate::pages::track::draw::toggle_on;
 use crate::roto::layouts::key;
 use crate::services::banking::{sample_shown, sample_text};
+use crate::services::generators::with_live;
 
 use super::tuning::{tuning, tuning_shown, tuning_text};
 use super::{AccumulatorField, ArpField, Control};

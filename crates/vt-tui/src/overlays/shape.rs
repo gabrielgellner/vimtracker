@@ -1,52 +1,40 @@
 //! The shape panel: fill a selected column with a ramp, random values, a walk, a wave, two values
 //! in turn or a short list of them, or rework the values there, heard while it's adjusted. On the
 //! Note column it can also follow another track's phrase.
+//!
+//! What a live generator is read as, which the Gen page, the Roto and macros share with the
+//! panel, is in [`crate::services::generators`]; making one live, reopening it and applying it
+//! are in [`live`].
 
 pub mod draw;
+mod live;
 
 use std::sync::Arc;
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, edit};
-use vt_model::generator::{Generator, Span, applied, reads, unfollowed};
-use vt_model::scale::Scale;
-use vt_model::selection::{Field, Scope, StepRange};
+use vt_model::generator::Span;
+use vt_model::selection::{Field, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
     Channel, Context, DrumPart, FillKind, GenParam, Grids, Shape, ShapeColumn, Source, Starts,
-    TonnetzVoice, VARIATION_NOTES, Values, Walk, Where, default_ends, default_step, divisions_seed,
-    drum_parts, is_empty, on_track, open_rows, track_seed, variation_notes,
+    TonnetzVoice, Walk, Where, default_ends, default_step, divisions_seed, drum_parts, is_empty,
+    on_track, open_rows, track_seed, variation_notes,
 };
 use vt_model::song::{Machine, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
-use vt_model::step::{FxCommand, MAX_NOTE, Note, Step};
+use vt_model::step::{FxCommand, Note, Step};
 
 use crate::app::{App, Selection, TrackSpan};
 use crate::input::bindings::{Cmd, adjusting_key};
 use crate::input::keys::Key;
-use crate::input::mode::{Mode, View};
+use crate::input::mode::Mode;
 use crate::input::typed::{Typed, TypedValue};
 use crate::overlays::picker::{Item, Pick, Picker};
-use crate::services::Services;
+use crate::services::generators::{Part, column_label, settle, too_few};
 
 /// The title of the list offering a beat after a kit's sounds are loaded as tracks.
 pub const KIT_BEAT_PICKER: &str = "Start a beat";
-
-/// One track's part of what the panel shapes: the phrase it's on, its rows, and its column, whose
-/// FX command is the first on its own rows, or the one chosen for a column with none.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Part {
-    pub track: usize,
-    pub phrase: u32,
-    pub range: StepRange,
-    pub column: ShapeColumn,
-    /// Whether its column was empty, so it's generated rather than reshaped: notes of its own on
-    /// the Note column, or the chosen command on an FX column.
-    pub generate: bool,
-    /// The part of Grids' beat it plays: the one its sound plays, or across tracks, the first
-    /// the others leave.
-    pub drum: DrumPart,
-}
 
 /// The rows a shape fills on a column it generates on. Where it would choose the notes or the
 /// commands already there, which an empty column hasn't, it takes every row.
@@ -73,27 +61,6 @@ fn first_hit(steps: &[Step], range: StepRange) -> bool {
     steps
         .get(range.first)
         .is_some_and(|step| matches!(step.note, Note::On(_)))
-}
-
-/// A shape saved elsewhere, as a patch's generator, made to fit a column: a `Where` the column
-/// doesn't offer becomes the one it starts with, as a reshape's `Notes` is a generated column's
-/// `All rows`. A fill it doesn't offer is refused, saying so.
-fn fitted(shape: Shape, column: ShapeColumn) -> Result<Shape, String> {
-    if !column.fills().contains(&shape.kind) {
-        return Err(format!(
-            "The patch's {} generator can't go on {}",
-            shape.kind.name(),
-            column_label(column)
-        ));
-    }
-    let same =
-        |place: &Where| std::mem::discriminant(place) == std::mem::discriminant(&shape.place);
-    let place = if column.wheres().iter().any(same) {
-        shape.place
-    } else {
-        column.default_where()
-    };
-    Ok(Shape { place, ..shape })
 }
 
 /// The open panel. The song underneath it is a preview until `Enter` keeps it.
@@ -320,77 +287,6 @@ impl ShapePanel {
     }
 }
 
-/// A live generator as the Gen page edits it: a copy of it, with its phrase's steps as they'd be
-/// without it, the phrases a `Follow` can read and the loop it reads, and what `x` puts back.
-#[derive(Debug, Clone)]
-pub(crate) struct LiveGen {
-    pub generator: Generator,
-    pub under: Vec<Step>,
-    sources: Vec<Source>,
-    source: Option<Vec<Step>>,
-    pub starts: Starts,
-}
-
-impl LiveGen {
-    /// What its settings act on. It always covers rows, as [`Services::live_generator`] gives
-    /// one only then.
-    pub(crate) fn context(&self) -> Context<'_> {
-        let rows = self.generator.rows().unwrap_or(StepRange::between(0, 0));
-        let source = (self.generator.shape.kind == FillKind::Follow)
-            .then_some(self.source.as_deref())
-            .flatten();
-        self.generator
-            .context(&self.under, &self.sources, source)
-            .unwrap_or(Context {
-                column: self.generator.column,
-                open: open_rows(&self.under, rows, self.generator.column),
-                generates: false,
-                sources: &self.sources,
-                source,
-            })
-    }
-
-    /// A shape it's given, made whole as the panel makes it: a list starts as the two ends, and
-    /// a `Follow` reads a phrase it can.
-    pub(crate) fn settle(&self, shape: &mut Shape) {
-        settle(shape, &self.sources, self.starts.source);
-    }
-}
-
-/// Why a `Variation` with so many notes to learn from is refused, if it is.
-fn too_few(shape: &Shape, notes: usize) -> Option<String> {
-    (shape.kind == FillKind::Variation && notes < VARIATION_NOTES).then(|| match notes {
-        0 => format!("Variation learns from the notes there: it needs {VARIATION_NOTES}"),
-        1 => format!("Variation needs {VARIATION_NOTES} notes to learn from, and there's 1"),
-        notes => {
-            format!("Variation needs {VARIATION_NOTES} notes to learn from, and there are {notes}")
-        }
-    })
-}
-
-impl LiveGen {
-    /// Why a shape it's given would be refused: a `Variation` with too few notes under it.
-    pub(crate) fn refusal(&self, shape: &Shape) -> Option<String> {
-        let rows = self.generator.rows()?;
-        too_few(shape, variation_notes(&self.under, rows))
-    }
-}
-
-/// A shape made whole after a change: a list starts as the two ends, so it sounds as `Alternate`
-/// did until it's typed, and a `Follow` follows a phrase it can, the one it starts on if what it
-/// holds isn't one.
-fn settle(shape: &mut Shape, sources: &[Source], start: Option<Source>) {
-    if shape.kind == FillKind::List && shape.values.is_empty() {
-        shape.values = Values::new(&[shape.from, shape.to]);
-    }
-    if shape.kind == FillKind::Follow
-        && !sources.contains(&shape.follow.source)
-        && let Some(source) = start.or(sources.first().copied())
-    {
-        shape.follow.source = source;
-    }
-}
-
 /// The shape the panel opens with on a column, from and to these, on these rows: a ramp, with
 /// every other fill's settings as they start.
 fn starting_shape(column: ShapeColumn, (from, to): (u8, u8), place: Where) -> Shape {
@@ -406,100 +302,11 @@ fn starting_shape(column: ShapeColumn, (from, to): (u8, u8), place: Where) -> Sh
     }
 }
 
-/// Read a song's live generator, one of a track's phrase's by its place in its list, with what
-/// its settings act on, from the song alone, as the Roto and the page's text do: `None` if
-/// there's no such generator. A `Follow`'s sources aren't listed here, so its `Source` has no
-/// choices; [`Services::live_generator`] lists them, for the app's own edits.
-pub(crate) fn with_live<R>(
-    song: &Song,
-    track: &Track,
-    phrase: u32,
-    index: usize,
-    read: impl FnOnce(&Generator, &Context) -> R,
-) -> Option<R> {
-    let found = track.phrases.get(&phrase)?;
-    let generator = found.generators().get(index)?;
-    let under = generator.under(found.steps());
-    let source = generator
-        .source()
-        .and_then(|source| song.source_phrase(source))
-        .map(|followed| followed.loop_steps());
-    let context = generator.context(&under, &[], source)?;
-    Some(read(generator, &context))
-}
-
-/// A live generator's setting as the Gen page shows it, from the song alone, or nothing if
-/// there's no such generator.
-pub(crate) fn live_shown(
-    song: &Song,
-    track: &Track,
-    phrase: u32,
-    index: usize,
-    param: GenParam,
-) -> String {
-    with_live(song, track, phrase, index, |generator, context| {
-        param.shown(&generator.shape, context)
-    })
-    .unwrap_or_default()
-}
-
-/// A live generator's name in the phrase's heading: its column, and for a `Follow` what it
-/// follows, like `Note←T02:05`.
-pub(crate) fn generator_label(generator: &Generator) -> String {
-    let column = column_label(generator.column);
-    match generator.source() {
-        Some(source) => format!("{column}←{source}"),
-        None => column,
-    }
-}
-
-/// A column's short name, as the phrase's heading names its live ones.
-pub(crate) fn column_label(column: ShapeColumn) -> String {
-    match column {
-        ShapeColumn::Note { .. } => "Note".to_owned(),
-        ShapeColumn::Velocity => "Vel".to_owned(),
-        ShapeColumn::Nudge { .. } => "Nudge".to_owned(),
-        ShapeColumn::Length => "Len".to_owned(),
-        ShapeColumn::Fx { slot, .. } => format!("FX{}", slot + 1),
-    }
-}
-
-/// Whether the cursor on a field is on a live generator's column.
-pub(crate) fn on_column(field: Field, column: ShapeColumn) -> bool {
-    match (field, column) {
-        (Field::Note, ShapeColumn::Note { .. })
-        | (Field::Velocity, ShapeColumn::Velocity)
-        | (Field::Nudge, ShapeColumn::Nudge { .. })
-        | (Field::Gate | Field::GateLength, ShapeColumn::Length) => true,
-        (
-            Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot),
-            ShapeColumn::Fx { slot: owned, .. },
-        ) => slot == owned,
-        _ => false,
-    }
-}
-
 /// Why a selection shapes nothing yet.
 enum Refusal {
     Reason(&'static str),
     /// An FX column on this track is empty, so the command to write on it is chosen first.
     Command(usize),
-}
-
-impl Services {
-    /// Say so if an edit applied a live generator, as it changed one of its cells by hand.
-    pub(crate) fn say_applied(&mut self, next: &Arc<Song>) {
-        if let Some(source) = unfollowed(self.song(), next).first() {
-            self.status = format!(
-                "{source} is gone, so what followed it is plain notes now. u brings it back"
-            );
-        } else if let Some(column) = applied(self.song(), next).first() {
-            self.status = format!(
-                "{} was live: it's plain values now. u makes it live again",
-                column_label(*column)
-            );
-        }
-    }
 }
 
 impl App {
@@ -826,85 +633,6 @@ impl App {
         })
     }
 
-    /// Make a column of the phrase under the cursor live over its loop, or its lane, with the
-    /// shape the panel opens with, as `vG`, `S` and `L` would, for the Gen page's `Empty`. An
-    /// empty FX column lists the commands first. Says whether it did.
-    pub(crate) fn make_live(&mut self, field: Field, command: Option<FxCommand>) -> bool {
-        let selection = self.loop_selection(field);
-        let panel = match self.new_panel(selection, field, command) {
-            Ok(panel) => panel,
-            Err(Refusal::Reason(reason)) => {
-                self.services.status = reason.to_owned();
-                return false;
-            }
-            Err(Refusal::Command(track)) => {
-                let (_, items) =
-                    self.fx_command_items(track, |command| Pick::GenCommand { field, command });
-                self.show_picker(Picker::new("FX commands", items).searching(""));
-                self.services.status =
-                    "Choose the command to write on the empty FX column".to_owned();
-                return false;
-            }
-        };
-        self.services.apply(&panel.live_action());
-        let name = column_label(panel.parts[0].column);
-        self.services.status = format!("{name} is live: turn it here, Enter opens the panel on it");
-        true
-    }
-
-    /// A column of the phrase under the cursor over its loop, as `vG` selects it.
-    fn loop_selection(&self, field: Field) -> Selection {
-        let extent = self.services.extent();
-        let track = self.services.cursor.track;
-        Selection {
-            range: StepRange::between(extent.start, extent.start + extent.length.max(1) - 1),
-            scope: Scope::column(field.group()),
-            tracks: TrackSpan::between(track, track),
-        }
-    }
-
-    /// The edit that puts a patch's generator live on a column of the phrase under the cursor,
-    /// over its loop or its lane, judged as `S` judges the column: an empty Note column is
-    /// generated and notes are reshaped, and the generator already live there, `live`, is
-    /// reshaped in place (decision 311). Or why it can't go there.
-    pub(crate) fn patch_generator(
-        &mut self,
-        field: Field,
-        command: Option<FxCommand>,
-        shape: Shape,
-        live: Option<usize>,
-    ) -> Result<Action, String> {
-        let track = self.services.cursor.track;
-        let phrase = self
-            .services
-            .phrase_id()
-            .ok_or("This track has no phrase here for the patch's generators")?;
-        if let Some(generator) = live {
-            let column = self
-                .services
-                .phrase_here()
-                .and_then(|found| found.generators().get(generator))
-                .map(|found| found.column)
-                .ok_or("That generator has gone")?;
-            return Ok(Action::Reshape {
-                track,
-                phrase,
-                generator,
-                shape: fitted(shape, column)?,
-            });
-        }
-        let selection = self.loop_selection(field);
-        let mut panel = match self.new_panel(selection, field, command) {
-            Ok(panel) => panel,
-            Err(Refusal::Reason(reason)) => return Err(reason.to_owned()),
-            Err(Refusal::Command(_)) => {
-                return Err("The patch's FX generator has no command".to_owned());
-            }
-        };
-        panel.shape = fitted(shape, panel.parts[0].column)?;
-        Ok(panel.live_action())
-    }
-
     /// Show the panel's result, without adding an undo step.
     fn preview_shape(&mut self) {
         let Some(panel) = &self.overlays.shape else {
@@ -989,97 +717,6 @@ impl App {
             }
             (None, false) => {}
         }
-    }
-
-    /// The live generator under the cursor: its phrase, and its place in the phrase's list. On the
-    /// cursor's column, it's the one covering the cursor's row, or else the nearest.
-    pub(crate) fn generator_here(&self) -> Option<(u32, usize)> {
-        let phrase = self.services.phrase_id()?;
-        let step = self.services.cursor.step;
-        self.services
-            .phrase_here()?
-            .generators()
-            .iter()
-            .enumerate()
-            .filter(|(_, generator)| on_column(self.services.cursor.field, generator.column))
-            .filter_map(|(index, generator)| {
-                let rows = generator.rows()?;
-                let away = if step < rows.first {
-                    rows.first - step
-                } else {
-                    step.saturating_sub(rows.last)
-                };
-                Some((away, index))
-            })
-            .min()
-            .map(|(_, index)| (phrase, index))
-    }
-
-    /// Open the panel again on the live generator under the cursor, on its saved shape.
-    pub(crate) fn reopen_generator(&mut self) {
-        let Some((phrase, index)) = self.generator_here() else {
-            self.services.status =
-                "No live column here. Select rows, press S, then L to keep it live".to_owned();
-            return;
-        };
-        let base = Arc::clone(self.song());
-        let track = self.services.cursor.track;
-        let found = &base.tracks[track].phrases[&phrase];
-        let generator = &found.generators()[index];
-        let Some(range) = generator.rows() else {
-            return;
-        };
-        // It generates if its column is empty without it.
-        let under = generator.under(found.steps());
-        let part = Part {
-            track,
-            phrase,
-            range,
-            column: generator.column,
-            generate: is_empty(&under, range, generator.column),
-            drum: generator.shape.grids.part(),
-        };
-        let shape = generator.shape;
-        let (sources, default_source) = match part.column {
-            ShapeColumn::Note { .. } => {
-                self.services
-                    .follow_sources(&base, &[part], self.modes.view)
-            }
-            _ => (Vec::new(), None),
-        };
-        self.overlays.shape = Some(ShapePanel {
-            selection: Selection {
-                range,
-                scope: Scope::column(self.services.cursor.field.group()),
-                tracks: TrackSpan::between(track, track),
-            },
-            parts: vec![part],
-            column: part.column,
-            shape,
-            row: GenParam::Fill,
-            typing: None,
-            live: Some(index),
-            base,
-            under: Some(under),
-            sources,
-            default_source,
-        });
-        self.modes.mode = Mode::Shape;
-        self.preview_shape();
-    }
-
-    /// Apply the live generator under the cursor, leaving its values as plain ones: as last heard
-    /// where something moved it as it played (decision 300).
-    pub(crate) fn apply_generator_here(&mut self) {
-        let Some((phrase, generator)) = self.generator_here() else {
-            self.services.status = "No live column here to apply".to_owned();
-            return;
-        };
-        let track = self.services.cursor.track;
-        let name =
-            generator_label(&self.song().tracks[track].phrases[&phrase].generators()[generator]);
-        self.services
-            .apply_generator(track, phrase, generator, &name);
     }
 
     /// Put back what was there before the panel opened.
@@ -1428,142 +1065,5 @@ impl App {
         if let Some(reason) = refused {
             self.services.status = reason.to_owned();
         }
-    }
-}
-
-impl Services {
-    /// Roll a shape's seed again, as `r` does: with `Acid`'s pitches kept, only its second die,
-    /// the accents, slides and octaves; and a `Ring` starts again from its new seed, letting go of
-    /// a register it kept, as an `Acid`'s loops start again from their first rows.
-    pub(crate) fn roll(&mut self, shape: &mut Shape) {
-        self.shape_seed = self.shape_seed.wrapping_add(1);
-        let seed = self.shape_seed;
-        if shape.kind == FillKind::Acid && shape.acid.keep {
-            shape.acid.roll = shape.acid.roll.wrapping_add(seed).wrapping_add(1);
-        } else {
-            shape.seed = self.song().seed.wrapping_add(seed);
-            shape.ring.kept = None;
-            shape.acid.at = 0;
-        }
-    }
-
-    /// The part of Grids' beat a track's sound plays, if it says: an 808 voice's, or its name's.
-    fn drum_of(&self, track: usize) -> Option<DrumPart> {
-        let track = self.song().tracks.get(track)?;
-        DrumPart::of_sound(track.machine, &track.name)
-    }
-
-    /// The phrases these parts can follow, and the one to start on: the phrase beside them on the
-    /// nearest track that has one, looking before the first part's track and then after it, as a
-    /// canon's theme is usually above its answers, or what that phrase follows, if it does. The
-    /// phrase beside is level with the cursor on a view.
-    fn follow_sources(
-        &self,
-        song: &Song,
-        parts: &[Part],
-        view: View,
-    ) -> (Vec<Source>, Option<Source>) {
-        let own: Vec<Source> = parts
-            .iter()
-            .map(|part| Source {
-                track: part.track,
-                phrase: part.phrase,
-            })
-            .collect();
-        let sources: Vec<Source> = song
-            .tracks
-            .iter()
-            .enumerate()
-            .take(song.sound_tracks())
-            .flat_map(|(track, owner)| {
-                owner.phrases.keys().map(move |phrase| Source {
-                    track,
-                    phrase: *phrase,
-                })
-            })
-            .filter(|source| !own.iter().any(|here| reads(song, *source, *here)))
-            .collect();
-        let first = parts.first().map_or(0, |part| part.track);
-        let before = (0..first).rev();
-        let after = first + 1..song.sound_tracks();
-        let mut beside = before.chain(after).find_map(|track| {
-            let (phrase, _) = self.phrase_beside(track, view)?;
-            let source = Source { track, phrase };
-            sources.contains(&source).then_some(source)
-        });
-        // One that follows another itself gives way to what it follows, so each voice of a canon
-        // starts on the theme. Cycles are refused, so this ends.
-        while let Some(followed) = beside
-            .and_then(|source| song.source_phrase(source))
-            .and_then(|phrase| phrase.generators().iter().find_map(Generator::source))
-            .filter(|source| sources.contains(source))
-        {
-            beside = Some(followed);
-        }
-        (sources, beside)
-    }
-
-    /// Where a shape on an empty column starts and ends: for notes, an octave up from the scale's
-    /// root, or C with it off, in the octave notes are typed in; and the command's whole range.
-    fn generated_ends(&self, column: ShapeColumn) -> (u8, u8) {
-        match column {
-            ShapeColumn::Note { scale, .. } => {
-                let root = Scale {
-                    root: if scale.on { scale.root } else { 0 },
-                    ..scale
-                };
-                let low = root.degree(0, self.octave).min(MAX_NOTE - 12);
-                (low, low + 12)
-            }
-            column => (column.lowest(), column.highest()),
-        }
-    }
-
-    /// One of the track's live generators, with what its settings act on, if there's one there:
-    /// a `Follow` starts on the phrase beside it, level with the cursor on a view.
-    pub(crate) fn live_generator(
-        &self,
-        track: usize,
-        phrase: u32,
-        index: usize,
-        view: View,
-    ) -> Option<LiveGen> {
-        let song = self.song();
-        let found = song.tracks.get(track)?.phrases.get(&phrase)?;
-        let generator = found.generators().get(index)?.clone();
-        let rows = generator.rows()?;
-        let under = generator.under(found.steps());
-        let generates = is_empty(&under, rows, generator.column);
-        let part = Part {
-            track,
-            phrase,
-            range: rows,
-            column: generator.column,
-            generate: generates,
-            drum: generator.shape.grids.part(),
-        };
-        let (sources, default_source) = match generator.column {
-            ShapeColumn::Note { .. } => self.follow_sources(song, &[part], view),
-            _ => (Vec::new(), None),
-        };
-        let source = song
-            .source_phrase(generator.shape.follow.source)
-            .map(|phrase| phrase.loop_steps().to_vec());
-        let ends = if generates {
-            self.generated_ends(generator.column)
-        } else {
-            default_ends(&under, rows, generator.column)
-        };
-        Some(LiveGen {
-            generator,
-            under,
-            sources,
-            source,
-            starts: Starts {
-                ends,
-                source: default_source,
-                part: self.drum_of(track),
-            },
-        })
     }
 }

@@ -25,9 +25,9 @@ use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
 use crate::input::mode::View;
 use crate::overlays::picker::{Item, Pick, Picker};
-use crate::overlays::shape::{LiveGen, generator_label};
 use crate::pages::{CtxMut, Outcome};
 use crate::services::Services;
+use crate::services::generators::{LiveGen, generator_label};
 
 use super::{Control, DEVICE_COLUMNS, DEVICE_ROWS, DeviceSpec, DeviceWidth, Page, TrackPage};
 
