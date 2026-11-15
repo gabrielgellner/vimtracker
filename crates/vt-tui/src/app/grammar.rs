@@ -140,9 +140,10 @@ impl Unit {
             Shift::Nudge => (Self::Nudge, 1),
             Shift::NudgeLarge => (Self::Nudge, LARGE_NUDGE),
             Shift::Large if scope.first == 0 => (Self::Semitone, 12),
-            Shift::Chromatic if scope.first == 0 => (Self::Semitone, 1),
             Shift::Increment | Shift::Operator if scope.first == 0 && scale_on => (Self::Degree, 1),
-            Shift::Increment | Shift::Operator if scope.first == 0 => (Self::Semitone, 1),
+            Shift::Chromatic | Shift::Increment | Shift::Operator if scope.first == 0 => {
+                (Self::Semitone, 1)
+            }
             Shift::Large | Shift::FineLarge | Shift::LengthLarge => (Self::LargeStep, 1),
             _ => (Self::Step, 1),
         }

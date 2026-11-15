@@ -255,9 +255,8 @@ impl Engine {
                         .copied()
                         .filter(|slot| lane.first || holds_through(slot))
                 }),
-                (None, Some(_)) => None,
                 (_, None) if first => view.fx(number).copied(),
-                (_, None) => None,
+                (None, Some(_)) | (_, None) => None,
             };
             if let Some(slot) = slot.filter(|slot| slot.command == Some(FxCommand::Set(id))) {
                 chosen = Some(slot.coarse());
@@ -530,14 +529,13 @@ impl Engine {
         let epoch = self.epoch(index, &pending, chain);
         let mut accumulating = None;
         match event {
-            Note::Empty => {}
             Note::Off if plays => {
                 self.release_modulation(index);
                 self.tracks[index].voice.release();
                 self.tracks[index].retrigger = None;
                 self.tracks[index].arp = None;
             }
-            Note::Off => {}
+            Note::Empty | Note::Off => {}
             Note::On(_) if !plays => {}
             Note::On(midi) => {
                 let heard = self.accumulate(index, epoch, key, midi, accumulates.filter(|_| adds));

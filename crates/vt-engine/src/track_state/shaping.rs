@@ -323,6 +323,10 @@ impl TrackState {
             (self.pan.next(smoothing) + self.pan_offset.next(fast) + self.pan_envelope.next(fast))
                 .clamp(0.0, 1.0);
         // At the centre, what the effect gave comes through untouched, where `pan_gains` is only close.
+        #[allow(
+            clippy::float_cmp,
+            reason = "only the exact centre leaves the sides untouched"
+        )]
         let (left, right) = if position == 0.5 {
             (1.0, 1.0)
         } else {

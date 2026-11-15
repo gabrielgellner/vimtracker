@@ -88,6 +88,10 @@ fn destination_at(choices: Vec<SettingId>, position: u16) -> Option<SettingId> {
 /// view, as its feel does ([`knob_view`] and [`places`]), by `param::edit`, and writes it with
 /// [`set`], so only the sample, its tune, a mod slot's destination and rate, and an envelope's
 /// times have edits of their own here.
+#[allow(
+    clippy::match_same_arms,
+    reason = "an arm for each control, in the page's order"
+)]
 pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option<Action> {
     let track = song.tracks.get(at)?;
     if !control.exists_on(track) {

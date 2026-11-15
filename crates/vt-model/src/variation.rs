@@ -118,8 +118,8 @@ impl Roll {
 /// semitone on a setting in semitones, and `10` on the rest.
 pub fn lock_step(id: SettingId) -> u16 {
     match id.entry().kind {
-        Kind::Stepped { .. } => 1,
-        Kind::Continuous {
+        Kind::Stepped { .. }
+        | Kind::Continuous {
             units: Units::Semitones,
             ..
         } => 1,

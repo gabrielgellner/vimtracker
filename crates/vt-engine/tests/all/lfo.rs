@@ -434,7 +434,7 @@ fn a_page_change_is_heard_now_and_leaves_what_a_step_set() {
     assert!(out[out.len() - 1].abs() < 1e-3);
 
     // Changing something else leaves the step's pan alone.
-    let mut other = start.clone();
+    let mut other = start;
     other.tracks[0].cutoff = 0xF0;
     engine.swap(version(other.clone(), Arc::clone(&samples)));
     engine.process(&mut out);

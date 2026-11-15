@@ -602,7 +602,6 @@ impl Mix {
             FilterMode::HighPass24 => (LADDER_HIGH_24, DIRTY_HIGH, DIRTY_HIGH),
             FilterMode::Notch => (LADDER_NOTCH, DIRTY_NOTCH, DIRTY_NOTCH),
             // Only the ladder has these, so `Dirty`'s are its first's.
-            FilterMode::LowPass24Fat => (LADDER_LOW_24, DIRTY_LOW, DIRTY_LOW),
             FilterMode::LowPass18 => (LADDER_LOW_18, DIRTY_LOW, DIRTY_LOW),
             FilterMode::LowPass6 => (LADDER_LOW_6, DIRTY_LOW, DIRTY_LOW),
             FilterMode::BandPass12 => (band(LADDER_BAND_12, BAND_12_LEVELS), DIRTY_LOW, DIRTY_LOW),
@@ -626,7 +625,8 @@ impl Mix {
                 DIRTY_LOW,
                 DIRTY_LOW,
             ),
-            FilterMode::Slope12
+            FilterMode::LowPass24Fat
+            | FilterMode::Slope12
             | FilterMode::Slope24
             | FilterMode::LowPass24
             | FilterMode::Full

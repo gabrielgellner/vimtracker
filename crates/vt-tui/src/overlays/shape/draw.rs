@@ -97,7 +97,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
             .song()
             .tracks
             .get(panel.parts[0].track)
-            .map_or_else(|| command.name().to_owned(), |track| command.name_on(track)),
+            .map_or_else(|| command.name(), |track| command.name_on(track)),
     };
     let (mut filled, mut rows_shaped) = (0, 0);
     let source = panel.source_steps();

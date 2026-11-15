@@ -437,8 +437,9 @@ impl Recorder {
         };
         if let Some(take) = self.take.take() {
             let end = match (ending, self.state) {
-                (Ending::Stopped, _) | (Ending::Full, _) => self.end,
-                (Ending::Cancelled, State::After { .. }) => self.end,
+                (Ending::Stopped | Ending::Full, _) | (Ending::Cancelled, State::After { .. }) => {
+                    self.end
+                }
                 (Ending::Cancelled, _) => take.written(),
             };
             self.event(RecorderEvent::Ended(Recorded {

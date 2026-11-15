@@ -246,7 +246,7 @@ fn humanise_is_random_within_its_ticks_and_repeats_from_the_seed() {
         .filter(|(step, at)| **at != step * STEP)
         .count();
     assert!(off_grid > 8, "most steps move: {first:?}");
-    let mut seeded = played.clone();
+    let mut seeded = played;
     seeded.seed = 99;
     assert_ne!(
         first,

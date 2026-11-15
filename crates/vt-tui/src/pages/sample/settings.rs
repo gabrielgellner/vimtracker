@@ -104,9 +104,8 @@ impl SampleSetting {
     fn steps(self, rate: u32) -> (i32, i32) {
         match self {
             Self::Gain => (100, 600),
-            Self::Pan => (1, 10),
+            Self::Pan | Self::Sens => (1, 10),
             Self::Tune => (1, 12),
-            Self::Sens => (1, 10),
             Self::Steps => (1, BAR_STEPS as i32),
             Self::Snap | Self::Reverse | Self::Warp => (1, 1),
             Self::FadeIn | Self::FadeOut => {
@@ -136,14 +135,13 @@ impl SampleSetting {
     /// A value as the row says it.
     pub fn text(self, value: i32, rate: u32) -> String {
         match self {
-            Self::Snap => if value != 0 { "on" } else { "off" }.to_owned(),
+            Self::Snap | Self::Reverse => if value != 0 { "on" } else { "off" }.to_owned(),
             Self::Sens => format!("{value}%"),
             Self::Steps => steps_text(value),
             Self::Warp => warp_of(value).name().to_owned(),
             Self::Gain => format!("{:+.1} dB", value as f32 / 100.0),
             Self::Pan => pan_text(value as i8),
             Self::Tune => format!("{value:+} st"),
-            Self::Reverse => if value != 0 { "on" } else { "off" }.to_owned(),
             Self::FadeIn | Self::FadeOut => fade_text(value, rate),
         }
     }
