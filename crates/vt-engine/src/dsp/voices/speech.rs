@@ -26,6 +26,7 @@ use super::virtual_analog::{BLOCK, Moving, Settings, next_blep, this_blep};
 use crate::dsp::blocks::plaits_parts::{DcBlocker, HysteresisQuantizer, Limiter, Svf, tan_dirty};
 use crate::dsp::blocks::sine_table::SINE;
 use crate::rng::Pcg32;
+use crate::voice::SynthEngine;
 
 /// How loud it is against the other machines, through Plaits' limiter as Plaits has it. Plaits
 /// takes it at 0.7; this is a little louder, as its formant models are quiet beside `VA`.
@@ -848,8 +849,10 @@ pub struct Speech {
     at: usize,
 }
 
-impl Speech {
-    pub fn new(rate: u32) -> Self {
+impl SynthEngine for Speech {
+    const NOISE: bool = true;
+
+    fn new(rate: u32) -> Self {
         let rate = rate as f32;
         Self {
             naive: NaiveSpeech::new(rate),
@@ -867,13 +870,13 @@ impl Speech {
     }
 
     /// Seed the noise of its unvoiced sounds, so each note differs but a render repeats.
-    pub fn seed(&mut self, seed: u32) {
+    fn seed_noise(&mut self, seed: u32) {
         self.rng = Pcg32::new(u64::from(seed), 5);
     }
 
     /// The next frame, at a frequency as a fraction of the sample rate.
     #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
         if self.at == BLOCK {
             self.render(frequency, settings);
             self.at = 0;
@@ -882,7 +885,9 @@ impl Speech {
         self.at += 1;
         sample
     }
+}
 
+impl Speech {
     fn render(&mut self, frequency: f32, settings: Settings) {
         // Each note is a trigger, as Plaits takes one with its trigger patched.
         let trigger = !self.struck;
@@ -971,7 +976,7 @@ mod tests {
 
     fn run(hertz: f32, values: [f32; 5], frames: usize) -> Vec<f32> {
         let mut voice = Speech::new(RATE);
-        voice.seed(7);
+        voice.seed_noise(7);
         (0..frames)
             .map(|_| voice.next(hertz / RATE as f32, settings(values)))
             .collect()

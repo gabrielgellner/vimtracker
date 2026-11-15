@@ -23,6 +23,8 @@
 use vt_model::insert::Reverb as Settings;
 
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::effects::memory::{REVERB_QUIET_SECONDS, SongPlace};
+use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::dsp::effects::tail::{self, Complex, TAIL_HZ, Tail};
 use crate::dsp::filters::filter::{Coefficients, Trim};
 
@@ -368,6 +370,42 @@ impl Reverb {
         lines.write(two_delay, 0, right);
 
         [left * WET, right * WET]
+    }
+}
+
+impl SlotEffect for Reverb {
+    type Settings = Settings;
+
+    /// A reverb's.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, frames: u64) {
+        self.follow(settings, frames);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, rate: u32) -> u32 {
+        (REVERB_QUIET_SECONDS * rate as f32) as u32
+    }
+
+    fn keep_time(&mut self, frames: u64, _song: SongPlace) {
+        self.keep_time(frames);
+    }
+}
+
+impl Rung for Reverb {
+    #[inline]
+    fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.process(input)
     }
 }
 

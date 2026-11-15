@@ -31,8 +31,10 @@ use vt_model::insert::{
 };
 
 use crate::dsp::blocks::clip::within;
-use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::blocks::smoother::Smoothed;
+use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::resonator::semitones;
+use crate::dsp::effects::slot::SlotEffect;
 
 /// The poles of the two chains of first-order all-passes, as multiples of the lowest frequency the
 /// pair keeps a quarter turn apart: the first six for the real chain, the rest for the imaginary.
@@ -163,7 +165,6 @@ pub struct FreqShifter {
     shelf_coefficient: f32,
     dc_coefficient: f32,
     rate: u32,
-    smoothing: f32,
 }
 
 impl FreqShifter {
@@ -190,7 +191,6 @@ impl FreqShifter {
             shelf_coefficient: 1.0 - (-TAU * SHELF_HZ / rate as f32).exp(),
             dc_coefficient: 1.0 - TAU * DC_HZ / rate as f32,
             rate,
-            smoothing: coefficient(rate),
         };
         shifter.follow(Settings::DEFAULT);
         shifter.settle();
@@ -233,12 +233,6 @@ impl FreqShifter {
         self.track.settle();
         self.delay.settle();
         self.feedback.settle();
-    }
-
-    /// One frame in, at middle C, for the pool's own use.
-    #[inline]
-    pub fn process_alone(&mut self, input: [f32; 2]) -> [f32; 2] {
-        self.process(input, MIDDLE_C, self.smoothing)
     }
 
     /// A line's sound a number of frames back, `0` being what was just written, read between
@@ -310,6 +304,31 @@ impl FreqShifter {
             out[side] = heard;
         }
         out
+    }
+}
+
+impl SlotEffect for FreqShifter {
+    type Settings = Settings;
+
+    /// A frequency shifter's, with lines for its longest delay.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, _frames: u64) {
+        self.follow(settings);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        self.frames() as u32
     }
 }
 

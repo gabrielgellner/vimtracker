@@ -23,6 +23,7 @@
 use super::chord_bank::{ChordBank, VOICES};
 use super::virtual_analog::{BLOCK, Moving, Settings, next_blep, this_blep};
 use super::wavetable::{PER_BANK, WAVE, stored};
+use crate::voice::SynthEngine;
 
 /// The highest frequency a wavetable voice runs at, as a fraction of the sample rate.
 const MAX_FREQUENCY: f32 = 0.25;
@@ -289,6 +290,24 @@ impl Default for Chord {
     }
 }
 
+impl SynthEngine for Chord {
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    /// The next frame, at a frequency as a fraction of the sample rate.
+    #[inline]
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+        if self.at == BLOCK {
+            self.render(frequency.clamp(0.0, 0.5), settings);
+            self.at = 0;
+        }
+        let sample = self.output[self.at];
+        self.at += 1;
+        sample * LEVEL
+    }
+}
+
 impl Chord {
     pub fn new() -> Self {
         Self {
@@ -301,18 +320,6 @@ impl Chord {
             at: BLOCK,
             fresh: true,
         }
-    }
-
-    /// The next frame, at a frequency as a fraction of the sample rate.
-    #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
-        if self.at == BLOCK {
-            self.render(frequency.clamp(0.0, 0.5), settings);
-            self.at = 0;
-        }
-        let sample = self.output[self.at];
-        self.at += 1;
-        sample * LEVEL
     }
 
     fn render(&mut self, frequency: f32, settings: Settings) {

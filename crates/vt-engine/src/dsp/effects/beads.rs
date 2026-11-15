@@ -50,6 +50,7 @@ use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::clouds::{mu_law_decode, mu_law_encode, soft_clip};
 use crate::dsp::effects::granular::{GrainPlayer, Launch};
 use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::dsp::effects::tape::Wobble;
 use crate::rng::Pcg32;
 
@@ -2052,6 +2053,46 @@ impl Rates {
             first: 0,
             count: 0,
         }
+    }
+}
+
+impl SlotEffect for Beads {
+    type Settings = Settings;
+
+    /// Beads', which records the longest of the module's qualities too.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, song: SongPlace, frames: u64) {
+        self.follow(settings, song, frames);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        self.quiet_frames()
+    }
+
+    fn keep_time(&mut self, frames: u64, song: SongPlace) {
+        self.keep_time(frames, song);
+    }
+
+    fn seed(&mut self, rng: Pcg32) {
+        self.seed(rng);
+    }
+}
+
+impl Rung for Beads {
+    #[inline]
+    fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.process(input)
     }
 }
 

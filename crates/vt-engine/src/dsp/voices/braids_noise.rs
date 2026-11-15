@@ -158,6 +158,7 @@ pub struct TwinPeaksModel {
 
 impl Model for TwinPeaksModel {
     const LEVEL: f32 = 0.8;
+    const NOISE: bool = true;
 
     fn new() -> Self {
         Self {
@@ -209,6 +210,7 @@ pub struct ClockedNoiseModel {
 
 impl Model for ClockedNoiseModel {
     const LEVEL: f32 = 0.4;
+    const NOISE: bool = true;
 
     fn new() -> Self {
         Self {
@@ -295,6 +297,7 @@ pub struct GranularCloudModel {
 
 impl Model for GranularCloudModel {
     const LEVEL: f32 = 1.0;
+    const NOISE: bool = true;
 
     fn new() -> Self {
         Self {
@@ -413,6 +416,7 @@ impl Model for DigitalModulationModel {
 mod tests {
     use super::*;
     use crate::dsp::voices::virtual_analog::VirtualAnalog;
+    use crate::voice::SynthEngine;
 
     const RATE: u32 = 48_000;
 
@@ -424,7 +428,7 @@ mod tests {
 
     fn run<M: Model>(hertz: f32, values: [f32; 2], frames: usize) -> Vec<f32> {
         let mut voice = Macro::<M>::new(RATE);
-        voice.seed(7);
+        voice.seed_noise(7);
         (0..frames)
             .map(|_| voice.next(hertz / RATE as f32, settings(values)))
             .collect()
@@ -503,7 +507,7 @@ mod tests {
     fn each_note_has_its_own_noise_and_a_render_repeats() {
         let with = |seed| {
             let mut voice = Macro::<TwinPeaksModel>::new(RATE);
-            voice.seed(seed);
+            voice.seed_noise(seed);
             (0..4_800)
                 .map(|_| voice.next(220.0 / RATE as f32, settings([0.5, 0.5])))
                 .collect::<Vec<f32>>()

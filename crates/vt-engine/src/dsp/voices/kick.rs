@@ -22,6 +22,7 @@
 use std::f32::consts::PI;
 
 use super::virtual_analog::{BLOCK, Moving, Settings};
+use crate::voice::SynthEngine;
 
 #[inline]
 fn diode(x: f32) -> f32 {
@@ -67,8 +68,8 @@ pub struct Kick {
     at: usize,
 }
 
-impl Kick {
-    pub fn new(rate: u32) -> Self {
+impl SynthEngine for Kick {
+    fn new(rate: u32) -> Self {
         Self {
             rate: rate as f32,
             trigger: true,
@@ -92,7 +93,7 @@ impl Kick {
 
     /// The next frame, at a frequency as a fraction of the sample rate.
     #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
         if self.at == BLOCK {
             self.render(frequency.max(1e-5), settings);
             self.at = 0;
@@ -101,7 +102,9 @@ impl Kick {
         self.at += 1;
         sample
     }
+}
 
+impl Kick {
     fn render(&mut self, f0: f32, settings: Settings) {
         let Settings {
             harmonics,

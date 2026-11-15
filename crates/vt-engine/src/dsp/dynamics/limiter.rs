@@ -12,7 +12,9 @@
 
 use vt_model::insert::{Limiter as Settings, ceiling_db, input_db, limit_release_ms};
 
-use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::blocks::smoother::Smoothed;
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::SlotEffect;
 
 /// How far ahead it looks, in ms. Everything through it comes out this late.
 pub const LOOK_AHEAD_MS: f32 = 2.0;
@@ -55,8 +57,6 @@ pub struct Limiter {
     /// How much of the last gain the release keeps each frame.
     keep: f32,
     rate: u32,
-    /// The settings' glide when it's run without one given.
-    smoothing: f32,
 }
 
 impl Limiter {
@@ -85,7 +85,6 @@ impl Limiter {
             ceiling: Smoothed::at(1.0),
             keep: 0.0,
             rate,
-            smoothing: coefficient(rate),
         };
         limiter.follow(Settings::DEFAULT);
         limiter.settle();
@@ -137,12 +136,6 @@ impl Limiter {
     pub fn settle(&mut self) {
         self.drive.settle();
         self.ceiling.settle();
-    }
-
-    /// One frame in, at its own glide, and the limited frame out.
-    #[inline]
-    pub fn process_alone(&mut self, input: [f32; 2]) -> [f32; 2] {
-        self.process(input, self.smoothing)[0]
     }
 
     /// The least gain asked for over the window, with this frame's added.
@@ -214,9 +207,35 @@ impl Limiter {
     }
 }
 
+impl SlotEffect for Limiter {
+    type Settings = Settings;
+
+    /// A limiter's, which looks as far ahead at any rate.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, _frames: u64) {
+        self.follow(settings);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        self.frames() as u32
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::blocks::smoother::coefficient;
     use std::f32::consts::TAU;
 
     const RATE: u32 = 48_000;
