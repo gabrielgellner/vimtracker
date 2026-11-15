@@ -71,11 +71,70 @@ pub use space::*;
 /// How many a track has.
 pub const INSERTS: usize = 4;
 
-/// One of a track's slots.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Insert {
-    #[default]
-    Empty,
+/// Writes [`Insert`] and [`EffectKind`] from one list of the effects, `Variant(Settings)`: both
+/// enums, both `ALL`s, [`Insert::kind`], and the forwarding of [`Insert::read`] and
+/// [`Insert::write`] to each effect's own, which its `effect_settings!` writes. The list is in the
+/// order [`SettingId`](crate::settings::SettingId) numbers their settings, which is also
+/// [`EFFECTS`]'s, and is never reordered. A new effect is a line here, a row of `EFFECTS` and its
+/// `effect_settings!`.
+macro_rules! effects {
+    ($($effect:ident($settings:ident)),+ $(,)?) => {
+        /// One of a track's slots.
+        #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+        pub enum Insert {
+            #[default]
+            Empty,
+            $($effect($settings),)+
+        }
+
+        /// An effect a slot can hold, apart from its settings: a dense index for tables.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        #[repr(u8)]
+        pub enum EffectKind {
+            $($effect,)+
+        }
+
+        impl EffectKind {
+            /// In the order [`SettingId`](crate::settings::SettingId) numbers their settings,
+            /// which is [`Insert::ALL`]'s without `Empty`. Never reordered: a track's saved
+            /// `settings` map is in this order.
+            pub const ALL: [Self; Self::COUNT] = [$(Self::$effect,)+];
+            pub const COUNT: usize = [$(Self::$effect,)+].len();
+        }
+
+        impl Insert {
+            /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
+            pub const ALL: [Self; EffectKind::COUNT + 1] =
+                [Self::Empty, $(Self::$effect($settings::DEFAULT),)+];
+
+            /// The effect it holds, if any.
+            pub const fn kind(self) -> Option<EffectKind> {
+                match self {
+                    Self::Empty => None,
+                    $(Self::$effect(_) => Some(EffectKind::$effect),)+
+                }
+            }
+
+            /// Its effect's own `read`, or nothing if it's empty.
+            fn read_own(self, at: usize) -> Option<u8> {
+                match self {
+                    Self::Empty => None,
+                    $(Self::$effect(settings) => Some(settings.read(at)),)+
+                }
+            }
+
+            /// Its effect's own `written`, or itself if it's empty.
+            fn written_own(self, at: usize, value: u8) -> Self {
+                match self {
+                    Self::Empty => self,
+                    $(Self::$effect(settings) => Self::$effect(settings.written(at, value)),)+
+                }
+            }
+        }
+    };
+}
+
+effects! {
     Distort(Distort),
     Delay(Delay),
     Reverb(Reverb),
@@ -311,38 +370,6 @@ fn source_track(source: u8, sounds: usize) -> Option<usize> {
 }
 
 impl Insert {
-    /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 28] = [
-        Self::Empty,
-        Self::Distort(Distort::DEFAULT),
-        Self::Delay(Delay::DEFAULT),
-        Self::Reverb(Reverb::DEFAULT),
-        Self::Chorus(Chorus::DEFAULT),
-        Self::Eq(Equaliser::DEFAULT),
-        Self::Compressor(Compressor::DEFAULT),
-        Self::Limit(Limiter::DEFAULT),
-        Self::Phaser(Phaser::DEFAULT),
-        Self::Flanger(Flanger::DEFAULT),
-        Self::Tape(Tape::DEFAULT),
-        Self::Plate(Plate::DEFAULT),
-        Self::Pitch(Pitch::DEFAULT),
-        Self::Grains(Grains::DEFAULT),
-        Self::Warps(Warps::DEFAULT),
-        Self::Lpg(LowPassGate::DEFAULT),
-        Self::Reso(Resonator::DEFAULT),
-        Self::Comb(Comb::DEFAULT),
-        Self::Vowel(Vowel::DEFAULT),
-        Self::FreqShift(FreqShift::DEFAULT),
-        Self::Spring(Spring::DEFAULT),
-        Self::Space(Space::DEFAULT),
-        Self::Rotary(Rotary::DEFAULT),
-        Self::Exciter(Exciter::DEFAULT),
-        Self::Stutter(Stutter::DEFAULT),
-        Self::Clouds(Clouds::DEFAULT),
-        Self::Beads(Beads::DEFAULT),
-        Self::Echo(Echo::DEFAULT),
-    ];
-
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
     pub const RETURN_DELAY: Self = Self::Delay(Delay {
         mix: 0xFF,
@@ -411,36 +438,7 @@ impl Insert {
     /// and a compressor every type's, so one not shown now still reads.
     pub fn read(self, at: usize) -> Option<u8> {
         self.kind()?.params().get(at)?;
-        Some(match self {
-            Self::Empty => return None,
-            Self::Distort(distort) => distort.read(at),
-            Self::Delay(delay) => delay.read(at),
-            Self::Reverb(reverb) => reverb.read(at),
-            Self::Chorus(chorus) => chorus.read(at),
-            Self::Eq(eq) => eq.read(at),
-            Self::Compressor(compressor) => compressor.read(at),
-            Self::Limit(limiter) => limiter.read(at),
-            Self::Phaser(phaser) => phaser.read(at),
-            Self::Flanger(flanger) => flanger.read(at),
-            Self::Tape(tape) => tape.read(at),
-            Self::Plate(plate) => plate.read(at),
-            Self::Pitch(pitch) => pitch.read(at),
-            Self::Grains(grains) => grains.read(at),
-            Self::Warps(warps) => warps.read(at),
-            Self::Lpg(gate) => gate.read(at),
-            Self::Reso(resonator) => resonator.read(at),
-            Self::Comb(comb) => comb.read(at),
-            Self::Vowel(vowel) => vowel.read(at),
-            Self::FreqShift(shifter) => shifter.read(at),
-            Self::Spring(spring) => spring.read(at),
-            Self::Space(space) => space.read(at),
-            Self::Rotary(rotary) => rotary.read(at),
-            Self::Exciter(exciter) => exciter.read(at),
-            Self::Stutter(stutter) => stutter.read(at),
-            Self::Clouds(clouds) => clouds.read(at),
-            Self::Beads(beads) => beads.read(at),
-            Self::Echo(echo) => echo.read(at),
-        })
+        self.read_own(at)
     }
 
     /// The same with a setting moved, on the scale `read` gives, landing on a whole value within its
@@ -452,36 +450,7 @@ impl Insert {
             return self;
         };
         let whole = value.round().clamp(0.0, f32::from(param.kind.top())) as u8;
-        match self {
-            Self::Empty => self,
-            Self::Distort(distort) => Self::Distort(distort.written(at, whole)),
-            Self::Delay(delay) => Self::Delay(delay.written(at, whole)),
-            Self::Reverb(reverb) => Self::Reverb(reverb.written(at, whole)),
-            Self::Chorus(chorus) => Self::Chorus(chorus.written(at, whole)),
-            Self::Eq(eq) => Self::Eq(eq.written(at, whole)),
-            Self::Compressor(compressor) => Self::Compressor(compressor.written(at, whole)),
-            Self::Limit(limiter) => Self::Limit(limiter.written(at, whole)),
-            Self::Phaser(phaser) => Self::Phaser(phaser.written(at, whole)),
-            Self::Flanger(flanger) => Self::Flanger(flanger.written(at, whole)),
-            Self::Tape(tape) => Self::Tape(tape.written(at, whole)),
-            Self::Plate(plate) => Self::Plate(plate.written(at, whole)),
-            Self::Pitch(pitch) => Self::Pitch(pitch.written(at, whole)),
-            Self::Grains(grains) => Self::Grains(grains.written(at, whole)),
-            Self::Warps(warps) => Self::Warps(warps.written(at, whole)),
-            Self::Lpg(gate) => Self::Lpg(gate.written(at, whole)),
-            Self::Reso(resonator) => Self::Reso(resonator.written(at, whole)),
-            Self::Comb(comb) => Self::Comb(comb.written(at, whole)),
-            Self::Vowel(vowel) => Self::Vowel(vowel.written(at, whole)),
-            Self::FreqShift(shifter) => Self::FreqShift(shifter.written(at, whole)),
-            Self::Spring(spring) => Self::Spring(spring.written(at, whole)),
-            Self::Stutter(stutter) => Self::Stutter(stutter.written(at, whole)),
-            Self::Exciter(exciter) => Self::Exciter(exciter.written(at, whole)),
-            Self::Rotary(rotary) => Self::Rotary(rotary.written(at, whole)),
-            Self::Space(space) => Self::Space(space.written(at, whole)),
-            Self::Clouds(clouds) => Self::Clouds(clouds.written(at, whole)),
-            Self::Beads(beads) => Self::Beads(beads.written(at, whole)),
-            Self::Echo(echo) => Self::Echo(echo.written(at, whole)),
-        }
+        self.written_own(at, whole)
     }
 
     /// The setting that changes the effect's character, by its place among those it has now: the

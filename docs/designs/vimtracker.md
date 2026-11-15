@@ -386,7 +386,7 @@ against its own state, so two quick presses can't act on an out-of-date view of 
 comes back each block: where playback is, each track's place and levels, each track's faders as
 they're heard (`Faders`: where `LEV`, `PAN`, `SNA` and `SNB` put them, what `VOL` and modulation make
 of them, and which the steps drive and a hand has taken over, from `TrackState::faders`), the watched
-track's live values, and up to four sample playheads. Each report says which version it's of (`Telemetry::version`, the `Published::id` playing), and the app keeps the songs it has sent until a report is of a later one, so a bar draws what's playing against the setting it was worked out from (`App::reported_track`, decision 210). The live values carry the watched track's peak right after its trim
+track's live values, and up to four sample playheads. Each report says which version it's of (`Telemetry::version`, the `Published::id` playing), and the app keeps the songs it has sent until a report is of a later one, so a bar draws what's playing against the setting it was worked out from (`Services::reported_track`, decision 210). The live values carry the watched track's peak right after its trim
 (`LiveValues::after_trim`), which `TrackState` keeps as it trims each frame and
 `Engine::take_after_trim` takes, for the Output device's meter, and where each mod slot running as
 an LFO is in its wave, or where a Track slot's last note is on its map (`LiveValues::mods`, a phase
@@ -774,9 +774,12 @@ given the view), with `Services::move_track` and `go_to_track_at` moving it acro
 typed: the view, the mode, what Insert has typed, a field jump under way and the count. A page
 reads and changes the program through two borrows, in `page.rs`: `CtxMut`, which a page's keys are
 run with, is the services, lent mutably apart from the page, so a key can change the page and
-apply an action at once, and the modes to read; `Ctx`, which a page is drawn with, only reads, and
-reads through `App`, as drawing is given `&App` and some of what's drawn, such as a live
-generator's sources, is `App`'s to work out.
+apply an action at once, and the modes to read; `Ctx`, which a page is drawn with, only reads: the
+services and the modes, and a `PageState` `App` fills as it lends it, the little of its own a page
+shows, which is whether anything is drawn over the page, the selection a replace or the shape panel
+holds, the recording and the audio's readouts (#784). What a page reads is worked out by the
+services, given the view where it depends on it, as a live generator's sources do, so the scale,
+the octave and the rest of what entering notes reads are the services' too.
 
 **`Page`** (`page.rs`, #739) is a page as a component, which the track page, the mixer, the
 project page's Song and Audio sub-pages, the sample page, the song view, the chain view and the
@@ -1253,7 +1256,7 @@ These need no terminal and no sound device, so they run anywhere.
     runs the Acid's nuance suite against Acid V and ABL3 and ranks our gaps, and `filter_refs.py`
     checks each track filter circuit against The Drop's and an Arturia filter's. `--response` also
     writes the track filter's response as the Sound page draws it. The Python side doesn't run in
-    CI, while `crates/vt-tui/tests/probe.rs` checks that the specs in `tools/compare/specs/` parse
+    CI, while `crates/vt-tui/tests/all/probe.rs` checks that the specs in `tools/compare/specs/` parse
     and prepare on our side.
 *   **`vimtracker notes <project> <out.toml>`** (`track_notes.rs`) reads a project, never writing
     to it, and writes one sound track's notes once through its chain, the first in any section
@@ -1294,10 +1297,10 @@ every pair of values still met, and all of them under `cargo test --release`.
 | Tutorial songs | `crates/vt-engine/tests/all/tutorial_songs.rs`, which builds the songs in `docs/manual/src/tutorials/songs/` | That each song on disk is what its builder makes, so a format change can't leave them stale, and that each loads, plays and stays below full scale. `just tutorial-songs` writes them again |
 | DSP | Unit tests beside each module in `dsp/` | Each voice, filter and effect on its own |
 | Real-time safety | The tests in `crates/vt-engine/src/link.rs`, `gens.rs`, `slowdown.rs` and `dsp/filters/filter.rs`, under `rt_guard` | That a block, a generator's render, the slowdown check and the track filter allocate and free nothing |
-| Interface | `crates/vt-tui/tests/`, a file for each part of the program, such as the keys (`keys.rs`), the track page's settings and keys (`track_page.rs`), its Sound page's rack (`sound_page.rs`), its Mod page's rack (`mod_page.rs`), its FX page (`fx_page.rs`), the sample page (`sample_page.rs`), live recording (`recording.rs`) and `grammar.rs`, with the helpers they share in `common/` | Keys pressed into an `App` connected to a real engine, whose `Realtime` the test runs. A held key can't be pressed from a test, so held keys go through `App::key_released` and `App::key_repeated`, mostly in `keys.rs` and `recording.rs` |
+| Interface | `crates/vt-tui/tests/all/`, one binary with a module for each part of the program, such as the keys (`keys.rs`), the track page's settings and keys (`track_page.rs`), its Sound page's rack (`sound_page.rs`), its Mod page's rack (`mod_page.rs`), its FX page (`fx_page.rs`), the sample page (`sample_page.rs`), live recording (`recording.rs`) and `grammar.rs`, with the helpers they share in `common/` | Keys pressed into an `App` connected to a real engine, whose `Realtime` the test runs. A held key can't be pressed from a test, so held keys go through `App::key_released` and `App::key_repeated`, mostly in `keys.rs` and `recording.rs` |
 | Roto-Control | `crates/vt-roto/tests/`: `handshake.rs`, `live.rs`, `protocol.rs` and `store.rs`, against the fake Roto, and unit tests in its modules | Every message of both protocols written and read back, the handshake and the link's thread, live devices, and vimtracker's own stored setups, with no hardware and no MIDI ports |
 | Graphics | Unit tests in `kitty/` and `views/` | The commands sent, and the PNGs, pinned by their size and CRC |
-| Other paths | `crates/vt-tui/tests/probe.rs`, `notes.rs`, `analysis.rs` and `ableton.rs` | `probe`'s specs, `notes`' timing of a song's track, the analysis thread and its cache, and importing kits from Ableton |
+| Other paths | `crates/vt-tui/tests/all/probe.rs`, `notes.rs`, `analysis.rs` and `ableton.rs` | `probe`'s specs, `notes`' timing of a song's track, the analysis thread and its cache, and importing kits from Ableton |
 | Comparison harness | `tools/compare/tests/`, with `uv run python -m unittest discover tests` | The Live bridge, against stand-ins for Live's objects. Not in CI, as nothing in `tools/compare` is |
 | Screenshots | `just screenshots`, from `crates/vt-tui/examples/screenshots.rs`, into `docs/manual/src/images/` | Not a test: the SVGs are committed, so a change to what's drawn shows in the PR's diff |
 
@@ -2113,7 +2116,7 @@ Issues create the files they name. Files marked **copy** come from `gmuse`, are 
 *   `src/shape.rs`: Shape mode session.
 *   `src/views/phrase.rs`, `chain.rs`, `instrument.rs`, `status.rs`, `picker.rs`, `help.rs`, `scope.rs`: one view per file.
 *   `src/probe.rs`: the `probe-keys` subcommand.
-*   `tests/*.rs`: key-sequence tests.
+*   `tests/all/*.rs`: key-sequence tests, one binary, with what they share in `tests/all/common/`.
 
 Transport behaviour follows `audio::transported` and `audio::cued` in `gmuse` where they apply.
 

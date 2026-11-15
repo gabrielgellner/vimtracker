@@ -16,7 +16,6 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 
-use crate::app::App;
 use crate::input::mode::{Mode, View};
 use crate::kitty;
 use crate::page::Ctx;
@@ -27,7 +26,6 @@ use crate::sample_wave::{
     END_COLOR, LOOP_COLOR, MARK_COLOR, POINT_PIXELS, SLICE_COLOR, SLICE_PIXELS, START_COLOR,
 };
 use crate::theme;
-use crate::views::help::POPUP_DELAY;
 use crate::views::widgets::param::{Face, ParamCell, ParamState, Tone};
 use crate::views::widgets::setting::{CellLook, Focus};
 
@@ -188,17 +186,6 @@ pub fn wave_columns(page_width: u16) -> usize {
     usize::from(page_width.saturating_sub(2 * MARGIN))
 }
 
-/// Whether something is drawn over the page, which the cursor's line, placed by the terminal
-/// above the text, would show through.
-pub fn overlaid(app: &App, now: Instant) -> bool {
-    app.picker.is_some()
-        || app.guide.is_some()
-        || app.shape.is_some()
-        || matches!(app.modes.mode, Mode::Help | Mode::Picker | Mode::Guide)
-        || (app.modes.mode == Mode::Command && app.command_menu.is_some())
-        || !app.popup_rows(now, POPUP_DELAY).is_empty()
-}
-
 /// A number of frames as a time: seconds to the thousandth, with minutes from a minute up.
 pub fn time(frames: u64, rate: u32) -> String {
     clock(frames as f64 / f64::from(rate.max(1)), 3)
@@ -259,7 +246,7 @@ pub(crate) fn draw_page(
     ctx: &Ctx,
 ) -> Option<WaveOnScreen> {
     let (width, height) = page_size(area);
-    let shown = ctx.sample_shown();
+    let shown = ctx.sample_shown(state);
     let page = Rect::new(0, 0, width, height);
     let mut buffer = Buffer::empty(page);
     buffer.set_style(page, theme::screen());

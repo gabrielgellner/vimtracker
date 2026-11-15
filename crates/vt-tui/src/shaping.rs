@@ -7,15 +7,13 @@ use std::sync::Arc;
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, edit};
 use vt_model::generator::{Generator, Span, applied, reads, unfollowed};
-use vt_model::lfo::Shape as Wave;
 use vt_model::scale::Scale;
 use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
-    Acid, Bits, Channel, Context, DEFAULT_RATE, DrumPart, FillKind, Follow, GenParam, Grids, Pink,
-    Random, Shape, ShapeColumn, Source, Starts, TonnetzVoice, VARIATION_NOTES, Values, Walk, Where,
-    default_ends, default_step, divisions_seed, drum_parts, is_empty, on_track, open_rows,
-    track_seed, variation_notes,
+    Channel, Context, DrumPart, FillKind, GenParam, Grids, Shape, ShapeColumn, Source, Starts,
+    TonnetzVoice, VARIATION_NOTES, Values, Walk, Where, default_ends, default_step, divisions_seed,
+    drum_parts, is_empty, on_track, open_rows, track_seed, variation_notes,
 };
 use vt_model::song::{Machine, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
@@ -24,7 +22,7 @@ use vt_model::step::{FxCommand, MAX_NOTE, Note, Step};
 use crate::app::{App, Selection, TrackSpan};
 use crate::input::bindings::{Cmd, adjusting_key};
 use crate::input::keys::Key;
-use crate::input::mode::Mode;
+use crate::input::mode::{Mode, View};
 use crate::input::picker::{Item, Pick, Picker};
 use crate::input::typed::{Typed, TypedValue};
 use crate::services::Services;
@@ -332,8 +330,8 @@ pub struct LiveGen {
 }
 
 impl LiveGen {
-    /// What its settings act on. It always covers rows, as [`App::live_generator`] gives one
-    /// only then.
+    /// What its settings act on. It always covers rows, as [`Services::live_generator`] gives
+    /// one only then.
     pub fn context(&self) -> Context<'_> {
         let rows = self.generator.rows().unwrap_or(StepRange::between(0, 0));
         let source = (self.generator.shape.kind == FillKind::Follow)
@@ -397,38 +395,19 @@ fn starting_shape(column: ShapeColumn, (from, to): (u8, u8), place: Where) -> Sh
     Shape {
         from,
         to,
-        curve: 0,
-        s: 0,
-        kind: FillKind::Ramp,
-        wave: Wave::Sine,
-        rate: DEFAULT_RATE,
-        phase: 0,
-        run: 1,
-        values: Values::default(),
         place,
-        seed: 0,
-        acid: Acid::default(),
-        follow: Follow::default(),
         walk: Walk {
             step: default_step(column),
             ..Walk::default()
         },
-        pink: Pink::default(),
-        bits: Bits::default(),
-        grids: Grids::default(),
-        random: Random::default(),
-        vary: 0,
-        variation: vt_model::shape::Variation::default(),
-        divisions: vt_model::shape::Divisions::default(),
-        ring: vt_model::shape::Ring::default(),
-        tonnetz: vt_model::shape::Tonnetz::default(),
+        ..Shape::default()
     }
 }
 
 /// Read a song's live generator, one of a track's phrase's by its place in its list, with what
 /// its settings act on, from the song alone, as the Roto and the page's text do: `None` if
 /// there's no such generator. A `Follow`'s sources aren't listed here, so its `Source` has no
-/// choices; the app's own edits list them ([`App::live_generator`]).
+/// choices; [`Services::live_generator`] lists them, for the app's own edits.
 pub fn with_live<R>(
     song: &Song,
     track: &Track,
@@ -549,8 +528,8 @@ impl App {
             // An empty Note column takes notes of its own, at the velocity notes are typed with.
             Field::Note => (
                 ShapeColumn::Note {
-                    scale: self.scale,
-                    writes: (!notes).then_some(self.note_velocity),
+                    scale: self.services.scale,
+                    writes: (!notes).then_some(self.services.note_velocity),
                 },
                 !notes,
             ),
@@ -644,16 +623,12 @@ impl App {
         Ok(parts)
     }
 
-    /// The part of Grids' beat a track's sound plays, if it says: an 808 voice's, or its name's.
-    fn drum_of(&self, track: usize) -> Option<DrumPart> {
-        let track = self.song().tracks.get(track)?;
-        DrumPart::of_sound(track.machine, &track.name)
-    }
-
     /// The part each of these tracks plays, in order: its sound's, or the first the others leave.
     fn drums_of(&self, tracks: &[usize]) -> Vec<DrumPart> {
-        let known: Vec<Option<DrumPart>> =
-            tracks.iter().map(|track| self.drum_of(*track)).collect();
+        let known: Vec<Option<DrumPart>> = tracks
+            .iter()
+            .map(|track| self.services.drum_of(*track))
+            .collect();
         drum_parts(&known)
     }
 
@@ -666,7 +641,8 @@ impl App {
             .iter()
             .copied()
             .filter(|&track| {
-                self.drum_of(track)
+                self.services
+                    .drum_of(track)
                     .is_some_and(|part| !std::mem::replace(&mut found[part.index()], true))
             })
             .collect();
@@ -690,10 +666,10 @@ impl App {
     pub(crate) fn write_kit_beat(&mut self, tracks: &[usize]) {
         let song = Arc::clone(self.song());
         let column = ShapeColumn::Note {
-            scale: self.scale,
-            writes: Some(self.note_velocity),
+            scale: self.services.scale,
+            writes: Some(self.services.note_velocity),
         };
-        let ends = self.generated_ends(column);
+        let ends = self.services.generated_ends(column);
         self.shape_seed = self.shape_seed.wrapping_add(1);
         let seed = song.seed.wrapping_add(self.shape_seed);
         let drums = self.drums_of(tracks);
@@ -802,7 +778,7 @@ impl App {
             column => column,
         };
         let (from, to) = if first.generate {
-            self.generated_ends(first.column)
+            self.services.generated_ends(first.column)
         } else {
             default_ends(steps, first.range, first.column)
         };
@@ -813,7 +789,9 @@ impl App {
             column.default_where()
         };
         let (sources, default_source) = match column {
-            ShapeColumn::Note { .. } => self.follow_sources(&base, &parts),
+            ShapeColumn::Note { .. } => {
+                self.services.follow_sources(&base, &parts, self.modes.view)
+            }
             _ => (Vec::new(), None),
         };
         let mut shape = starting_shape(column, (from, to), place);
@@ -923,66 +901,6 @@ impl App {
         };
         panel.shape = fitted(shape, panel.parts[0].column)?;
         Ok(panel.live_action())
-    }
-
-    /// The phrases these parts can follow, and the one to start on: the phrase beside them on the
-    /// nearest track that has one, looking before the first part's track and then after it, as a
-    /// canon's theme is usually above its answers, or what that phrase follows, if it does.
-    fn follow_sources(&self, song: &Song, parts: &[Part]) -> (Vec<Source>, Option<Source>) {
-        let own: Vec<Source> = parts
-            .iter()
-            .map(|part| Source {
-                track: part.track,
-                phrase: part.phrase,
-            })
-            .collect();
-        let sources: Vec<Source> = song
-            .tracks
-            .iter()
-            .enumerate()
-            .take(song.sound_tracks())
-            .flat_map(|(track, owner)| {
-                owner.phrases.keys().map(move |phrase| Source {
-                    track,
-                    phrase: *phrase,
-                })
-            })
-            .filter(|source| !own.iter().any(|here| reads(song, *source, *here)))
-            .collect();
-        let first = parts.first().map_or(0, |part| part.track);
-        let before = (0..first).rev();
-        let after = first + 1..song.sound_tracks();
-        let mut beside = before.chain(after).find_map(|track| {
-            let (phrase, _) = self.phrase_beside(track)?;
-            let source = Source { track, phrase };
-            sources.contains(&source).then_some(source)
-        });
-        // One that follows another itself gives way to what it follows, so each voice of a canon
-        // starts on the theme. Cycles are refused, so this ends.
-        while let Some(followed) = beside
-            .and_then(|source| song.source_phrase(source))
-            .and_then(|phrase| phrase.generators().iter().find_map(Generator::source))
-            .filter(|source| sources.contains(source))
-        {
-            beside = Some(followed);
-        }
-        (sources, beside)
-    }
-
-    /// Where a shape on an empty column starts and ends: for notes, an octave up from the scale's
-    /// root, or C with it off, in the octave notes are typed in; and the command's whole range.
-    fn generated_ends(&self, column: ShapeColumn) -> (u8, u8) {
-        match column {
-            ShapeColumn::Note { scale, .. } => {
-                let root = Scale {
-                    root: if scale.on { scale.root } else { 0 },
-                    ..scale
-                };
-                let low = root.degree(0, self.octave).min(MAX_NOTE - 12);
-                (low, low + 12)
-            }
-            column => (column.lowest(), column.highest()),
-        }
     }
 
     /// Show the panel's result, without adding an undo step.
@@ -1116,7 +1034,10 @@ impl App {
         };
         let shape = generator.shape;
         let (sources, default_source) = match part.column {
-            ShapeColumn::Note { .. } => self.follow_sources(&base, &[part]),
+            ShapeColumn::Note { .. } => {
+                self.services
+                    .follow_sources(&base, &[part], self.modes.view)
+            }
             _ => (Vec::new(), None),
         };
         self.shape = Some(ShapePanel {
@@ -1198,8 +1119,8 @@ impl App {
                 // Notes go through the scale as it is now.
                 let column = match column {
                     ShapeColumn::Note { .. } => ShapeColumn::Note {
-                        scale: self.scale,
-                        writes: generate.then_some(self.note_velocity),
+                        scale: self.services.scale,
+                        writes: generate.then_some(self.services.note_velocity),
                     },
                     column => column,
                 };
@@ -1216,7 +1137,7 @@ impl App {
         let (from, to) = if !fresh {
             (shape.from, shape.to)
         } else if generate {
-            self.generated_ends(column)
+            self.services.generated_ends(column)
         } else {
             default_ends(steps_on(track, phrase), first, column)
         };
@@ -1357,52 +1278,6 @@ impl App {
         }
     }
 
-    /// One of the track's live generators, with what its settings act on, if there's one there.
-    pub(crate) fn live_generator(
-        &self,
-        track: usize,
-        phrase: u32,
-        index: usize,
-    ) -> Option<LiveGen> {
-        let song = self.song();
-        let found = song.tracks.get(track)?.phrases.get(&phrase)?;
-        let generator = found.generators().get(index)?.clone();
-        let rows = generator.rows()?;
-        let under = generator.under(found.steps());
-        let generates = is_empty(&under, rows, generator.column);
-        let part = Part {
-            track,
-            phrase,
-            range: rows,
-            column: generator.column,
-            generate: generates,
-            drum: generator.shape.grids.part(),
-        };
-        let (sources, default_source) = match generator.column {
-            ShapeColumn::Note { .. } => self.follow_sources(song, &[part]),
-            _ => (Vec::new(), None),
-        };
-        let source = song
-            .source_phrase(generator.shape.follow.source)
-            .map(|phrase| phrase.loop_steps().to_vec());
-        let ends = if generates {
-            self.generated_ends(generator.column)
-        } else {
-            default_ends(&under, rows, generator.column)
-        };
-        Some(LiveGen {
-            generator,
-            under,
-            sources,
-            source,
-            starts: Starts {
-                ends,
-                source: default_source,
-                part: self.drum_of(track),
-            },
-        })
-    }
-
     fn change_shape(&mut self, change: impl FnOnce(&mut ShapePanel)) {
         if let Some(panel) = &mut self.shape {
             change(panel);
@@ -1437,7 +1312,7 @@ impl App {
     fn shape_ends(&self, panel: &ShapePanel) -> (u8, u8) {
         let first = panel.parts[0];
         if first.generate {
-            self.generated_ends(first.column)
+            self.services.generated_ends(first.column)
         } else {
             default_ends(panel.base_steps(&first), first.range, first.column)
         }
@@ -1489,7 +1364,7 @@ impl App {
                             .base
                             .source_phrase(source)
                             .map_or(0, |phrase| phrase.loop_steps().len());
-                        let name = crate::views::phrase::track_name(self, source.track);
+                        let name = self.services.track_name(source.track);
                         item.meaning(format!("Track {name}, {rows} rows"))
                     }
                     (_, Some(meaning)) => item.meaning(meaning),
@@ -1556,5 +1431,127 @@ impl App {
         if let Some(reason) = refused {
             self.services.status = reason.to_owned();
         }
+    }
+}
+
+impl Services {
+    /// The part of Grids' beat a track's sound plays, if it says: an 808 voice's, or its name's.
+    fn drum_of(&self, track: usize) -> Option<DrumPart> {
+        let track = self.song().tracks.get(track)?;
+        DrumPart::of_sound(track.machine, &track.name)
+    }
+
+    /// The phrases these parts can follow, and the one to start on: the phrase beside them on the
+    /// nearest track that has one, looking before the first part's track and then after it, as a
+    /// canon's theme is usually above its answers, or what that phrase follows, if it does. The
+    /// phrase beside is level with the cursor on a view.
+    fn follow_sources(
+        &self,
+        song: &Song,
+        parts: &[Part],
+        view: View,
+    ) -> (Vec<Source>, Option<Source>) {
+        let own: Vec<Source> = parts
+            .iter()
+            .map(|part| Source {
+                track: part.track,
+                phrase: part.phrase,
+            })
+            .collect();
+        let sources: Vec<Source> = song
+            .tracks
+            .iter()
+            .enumerate()
+            .take(song.sound_tracks())
+            .flat_map(|(track, owner)| {
+                owner.phrases.keys().map(move |phrase| Source {
+                    track,
+                    phrase: *phrase,
+                })
+            })
+            .filter(|source| !own.iter().any(|here| reads(song, *source, *here)))
+            .collect();
+        let first = parts.first().map_or(0, |part| part.track);
+        let before = (0..first).rev();
+        let after = first + 1..song.sound_tracks();
+        let mut beside = before.chain(after).find_map(|track| {
+            let (phrase, _) = self.phrase_beside(track, view)?;
+            let source = Source { track, phrase };
+            sources.contains(&source).then_some(source)
+        });
+        // One that follows another itself gives way to what it follows, so each voice of a canon
+        // starts on the theme. Cycles are refused, so this ends.
+        while let Some(followed) = beside
+            .and_then(|source| song.source_phrase(source))
+            .and_then(|phrase| phrase.generators().iter().find_map(Generator::source))
+            .filter(|source| sources.contains(source))
+        {
+            beside = Some(followed);
+        }
+        (sources, beside)
+    }
+
+    /// Where a shape on an empty column starts and ends: for notes, an octave up from the scale's
+    /// root, or C with it off, in the octave notes are typed in; and the command's whole range.
+    fn generated_ends(&self, column: ShapeColumn) -> (u8, u8) {
+        match column {
+            ShapeColumn::Note { scale, .. } => {
+                let root = Scale {
+                    root: if scale.on { scale.root } else { 0 },
+                    ..scale
+                };
+                let low = root.degree(0, self.octave).min(MAX_NOTE - 12);
+                (low, low + 12)
+            }
+            column => (column.lowest(), column.highest()),
+        }
+    }
+
+    /// One of the track's live generators, with what its settings act on, if there's one there:
+    /// a `Follow` starts on the phrase beside it, level with the cursor on a view.
+    pub(crate) fn live_generator(
+        &self,
+        track: usize,
+        phrase: u32,
+        index: usize,
+        view: View,
+    ) -> Option<LiveGen> {
+        let song = self.song();
+        let found = song.tracks.get(track)?.phrases.get(&phrase)?;
+        let generator = found.generators().get(index)?.clone();
+        let rows = generator.rows()?;
+        let under = generator.under(found.steps());
+        let generates = is_empty(&under, rows, generator.column);
+        let part = Part {
+            track,
+            phrase,
+            range: rows,
+            column: generator.column,
+            generate: generates,
+            drum: generator.shape.grids.part(),
+        };
+        let (sources, default_source) = match generator.column {
+            ShapeColumn::Note { .. } => self.follow_sources(song, &[part], view),
+            _ => (Vec::new(), None),
+        };
+        let source = song
+            .source_phrase(generator.shape.follow.source)
+            .map(|phrase| phrase.loop_steps().to_vec());
+        let ends = if generates {
+            self.generated_ends(generator.column)
+        } else {
+            default_ends(&under, rows, generator.column)
+        };
+        Some(LiveGen {
+            generator,
+            under,
+            sources,
+            source,
+            starts: Starts {
+                ends,
+                source: default_source,
+                part: self.drum_of(track),
+            },
+        })
     }
 }

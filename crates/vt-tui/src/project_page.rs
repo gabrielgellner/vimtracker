@@ -607,13 +607,20 @@ impl App {
                 self.line(Line::Seed(seed));
             }
             ProjectControl::Scale => {
-                let scale = next_in(&scales(self.scale), scale_here(self.scale), up);
+                let scale = next_in(
+                    &scales(self.services.scale),
+                    scale_here(self.services.scale),
+                    up,
+                );
                 self.set_scale(scale);
             }
             ProjectControl::Root => {
                 let roots: Vec<u8> = (0..ROOTS.len() as u8).collect();
-                let root = next_in(&roots, self.scale.root, up);
-                self.set_scale(Scale { root, ..self.scale });
+                let root = next_in(&roots, self.services.scale.root, up);
+                self.set_scale(Scale {
+                    root,
+                    ..self.services.scale
+                });
             }
             ProjectControl::Grid => {
                 let skip = song.skip;
@@ -627,12 +634,12 @@ impl App {
                 }
             }
             ProjectControl::AutoJump => {
-                if self.auto_jump != up {
+                if self.services.auto_jump != up {
                     self.toggle_auto_jump();
                 }
             }
             ProjectControl::ReadOnly => {
-                if self.read_only != up {
+                if self.services.read_only != up {
                     self.line(Line::ReadOnly(up));
                 }
             }
@@ -700,23 +707,23 @@ impl App {
                 self.line(Line::Reset(None));
             }
             ProjectControl::Seed if song.seed != 0 => self.line(Line::Seed(0)),
-            ProjectControl::Scale if self.scale.on => {
+            ProjectControl::Scale if self.services.scale.on => {
                 self.set_scale(Scale {
                     on: false,
-                    ..self.scale
+                    ..self.services.scale
                 });
             }
-            ProjectControl::Root if self.scale.root != 0 => {
+            ProjectControl::Root if self.services.scale.root != 0 => {
                 self.set_scale(Scale {
                     root: 0,
-                    ..self.scale
+                    ..self.services.scale
                 });
             }
             ProjectControl::Grid if song.skip != BEAT_STEPS as u32 => {
                 self.line(Line::SetSkip(BEAT_STEPS as u32));
             }
-            ProjectControl::AutoJump if self.auto_jump => self.toggle_auto_jump(),
-            ProjectControl::ReadOnly if self.read_only => self.line(Line::ReadOnly(false)),
+            ProjectControl::AutoJump if self.services.auto_jump => self.toggle_auto_jump(),
+            ProjectControl::ReadOnly if self.services.read_only => self.line(Line::ReadOnly(false)),
             ProjectControl::Name => {
                 self.services.status =
                     "i renames the project, and C-r there rolls a new name".to_owned();
@@ -744,8 +751,8 @@ impl App {
                 ("Launch. i types a number of steps", at)
             }
             ProjectControl::Scale => {
-                let choices = scales(self.scale);
-                let here = scale_here(self.scale);
+                let choices = scales(self.services.scale);
+                let here = scale_here(self.services.scale);
                 items = choices
                     .iter()
                     .map(|scale| {
@@ -758,11 +765,14 @@ impl App {
             ProjectControl::Root => {
                 items = (0..ROOTS.len() as u8)
                     .map(|root| {
-                        let scale = Scale { root, ..self.scale };
+                        let scale = Scale {
+                            root,
+                            ..self.services.scale
+                        };
                         Item::new(scale.root_name(), Pick::ScaleTo(scale))
                     })
                     .collect();
-                ("Root", Some(usize::from(self.scale.root)))
+                ("Root", Some(usize::from(self.services.scale.root)))
             }
             ProjectControl::Grid => {
                 let skip = self.song().skip;
@@ -782,7 +792,7 @@ impl App {
                 ("The groove to draw and change", Some(shown.index()))
             }
             ProjectControl::AutoJump => return self.toggle_auto_jump(),
-            ProjectControl::ReadOnly => return self.line(Line::ReadOnly(!self.read_only)),
+            ProjectControl::ReadOnly => return self.line(Line::ReadOnly(!self.services.read_only)),
             ProjectControl::Audio => return self.jump_to_view(View::Audio),
             ProjectControl::Save => {
                 return self.line(Line::Write {
@@ -860,7 +870,7 @@ impl App {
         }
         self.modes.entry = Entry::default();
         if control == ProjectControl::Name {
-            self.modes.entry.text = self.project_name().into();
+            self.modes.entry.text = self.services.project_name().into();
         }
         self.modes.mode = Mode::Insert;
     }
@@ -912,7 +922,7 @@ impl App {
             return;
         }
         match control {
-            ProjectControl::Name if text == self.project_name() => {}
+            ProjectControl::Name if text == self.services.project_name() => {}
             ProjectControl::Name if is_project_name(text) => {
                 self.services.apply(&Action::SetSongName(text.to_owned()));
                 self.services.status = match &self.services.folder {
@@ -941,7 +951,10 @@ impl App {
             ProjectControl::Seed => self.project_line(&format!("seed {text}")),
             ProjectControl::Grid => self.project_line(&format!("set skip={text}")),
             ProjectControl::Root => match parse_root(text) {
-                Some(root) => self.set_scale(Scale { root, ..self.scale }),
+                Some(root) => self.set_scale(Scale {
+                    root,
+                    ..self.services.scale
+                }),
                 None => self.services.status = "A root is a note, such as d or f#".to_owned(),
             },
             _ => {}

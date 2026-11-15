@@ -131,7 +131,7 @@ impl App {
             self.services.status = "This track isn't playing".to_owned();
             return;
         };
-        let velocity = self.flagged_velocity(self.note_velocity);
+        let velocity = self.flagged_velocity(self.services.note_velocity);
         let slide = self.flagged_slide();
         self.use_flags();
         let ticks = self

@@ -1298,7 +1298,7 @@ impl Page for SamplePage {
     /// The waveform and the overview of the whole sample under it, as the view and the points
     /// have them, or none with no sample to show.
     fn panels(&self, ctx: &Ctx) -> Vec<PanelWant> {
-        let Ok(shown) = ctx.sample_shown() else {
+        let Ok(shown) = ctx.sample_shown(self) else {
             return Vec::new();
         };
         let wave = Wave {
