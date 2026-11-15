@@ -32,6 +32,7 @@ use super::{CHILD, CLUSTERS, MARKOV, Role, SHARE, STATES, World};
 mod spec;
 mod table;
 
+pub use crate::param::Typing;
 pub use table::GEN_PARAMS;
 
 /// How far a small and a large step move a curve, here and in a macro mapping's `Curve` and `S`.
@@ -223,29 +224,6 @@ impl Choice {
             Self::Vary(passes) => shape.vary = passes,
         }
     }
-}
-
-/// How a setting's value is typed after `i`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Typing {
-    /// It isn't: `i` lists its choices, as `K` does.
-    Listed,
-    /// It isn't: it's one of two, so `i` turns it over.
-    Toggled,
-    /// Two hex digits, kept as soon as the second is typed.
-    Hex,
-    /// Hex values, up to [`super::MAX_VALUES`], a space coming by itself after each two digits.
-    HexList,
-    /// A note's name or a nudge, alone or in a list with spaces between, kept with `Enter`.
-    Named { list: bool },
-    /// A rate, like `1/4`, `2 bars` or `x3`.
-    Rate,
-    /// A whole number of up to four digits, with a sign before it if `signed`.
-    Whole { signed: bool },
-    /// A hex digit for each of the scale's degrees, from the root, kept with `Enter`.
-    Weights,
-    /// The letters of a `Tonnetz`' moves, `P`, `L` and `R`, kept with `Enter`.
-    Moves,
 }
 
 /// How a setting's values read.

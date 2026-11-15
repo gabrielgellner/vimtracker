@@ -29,6 +29,7 @@ pub mod names;
 pub mod octatrack;
 pub mod onsets;
 pub mod order;
+pub mod param;
 pub mod patch_names;
 pub mod phrase;
 pub mod playable;
