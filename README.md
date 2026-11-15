@@ -25,10 +25,11 @@ program, on `Space ?`.
     and synth voices ported from Mutable Instruments' Plaits and Braids, with an acid voice of its
     own fitted to Arturia's Acid V and AudioRealism's ABL3. Kits, including one for each of
     Ableton Live's drum racks.
-*   **A track** has a machine, a trim, a filter of nine types, four effect slots, three LFOs, three
-    envelopes and two sends. Effects include delays, reverbs, compressors, an EQ, a limiter,
-    distortion and guitar pedals, chorus, phaser, flanger, tape, pitch, granular, resonator, comb
-    and vowel filters, and Mutable's Warps and Streams.
+*   **A track** has a machine, a trim, a filter of ten types, four effect slots, six modulation
+    slots, each an envelope, a low-pass gate, an LFO, steps or a note's tracking, and two sends.
+    Effects include delays, reverbs, compressors, an EQ, a limiter, distortion and guitar pedals,
+    chorus, phaser, flanger, tape, pitch, granular, resonator, comb and vowel filters, and
+    Mutable's Warps and Streams.
 *   **Mixing.** Four groups, two returns and a master, each a track with its own slots, on a mixer
     page.
 *   **Playing in.** Held keys sound while they're down, play chords, and record into a playing
@@ -149,7 +150,7 @@ These run in any terminal, with no sound device unless asked:
 | `vimtracker notes <project> <out.toml> [--track name] [--machine key]` | Write one track's notes from a song as a probe spec's, for tools/compare. The project is only read |
 | `vimtracker probe-keys` | Show what your terminal sends, with the kitty keyboard protocol on as the program has it |
 | `vimtracker kits import-ableton` | Write a kit for each of Ableton Live's drum racks |
-| `vimtracker roto-probe` | List the MIDI and serial ports, and connect to a Roto-Control if one is plugged in: its firmware and API versions, its mode and the setups it stores, all only read |
+| `vimtracker roto-probe` | List the MIDI and serial ports, and connect to a Roto-Control if one is plugged in: its firmware and API versions, its mode and the setups it stores, all only read. `--clear-own` instead removes vimtracker's own setups from it, asking first |
 
 `cargo build --profile profiling` builds with symbols for a profiler.
 

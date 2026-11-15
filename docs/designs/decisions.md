@@ -7,8 +7,11 @@ the ones that name it. The design itself is in [vimtracker.md](vimtracker.md), w
 
 *   **Adding one:** append it at the end, after the last one, with the next number, the issue or
     PR it comes from, its prior art, and the date it was added. A number taken by work still in
-    review can leave a gap, or put two out of order, for a while. Two gaps stayed: 112 and 115
-    were never used.
+    review can leave a gap, or put two out of order, for a while. Some gaps stayed: as of
+    2026-11-14, 34 numbers have no decision, and nothing cites them: 112, 115, 188, 189, 196, 199,
+    201, 205, 208, 211, 218, 222, 224, 225, 228, 229, 235 to 238, 243, 245 to 248, 257, 262, 263,
+    267, 271, 272, 274, 292 and 336. Two stayed out of order: 315 comes after 317, and 320 after
+    322. None is renumbered, as other documents cite decisions by number.
 *   **Changed later:** an earlier decision ends with a pointer to each later one that changes,
     replaces or reverses part of it, as "Changed by decision 29" or "Decision 138 makes it four",
     so a decision read alone says whether it still holds.
