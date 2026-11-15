@@ -146,8 +146,11 @@ impl App {
                 self.jump_to_view(View::Sample);
             }
             View::Track => {
-                self.services.status =
-                    "g d opens the sample page from the sample, in the Machine's title".to_owned();
+                if !self.open_macro_here() {
+                    self.services.status =
+                        "g d opens the sample page from the sample, in the Machine's title, and a macro from a setting it holds"
+                            .to_owned();
+                }
             }
             View::Phrase => {
                 if !self.open_slice_of_step() {
