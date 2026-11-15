@@ -7,7 +7,7 @@ use vt_model::constants::MAX_LEVEL;
 use vt_model::envelope::{Adsr, Ahd, Curve, Drum, Hold, Lpg};
 use vt_model::lfo::{Fade, Lfo, LfoMode, Rate, Shape};
 use vt_model::modulation::{
-    MOD_LOCKED_FIELDS, MOD_OWN_FIELDS, MOD_SPECS, ModField, ModKind, ModSlot, Polarity,
+    MOD_LOCKED_FIELDS, MOD_OWN_FIELDS, MOD_SPECS, ModField, ModKind, ModSlot, ModUnits, Polarity,
 };
 use vt_model::settings::{MOD_OWN_SETTINGS, SettingId};
 use vt_model::song::Track;
@@ -395,6 +395,54 @@ fn a_types_modes_are_its_lists_in_the_order_its_mode_counts_them() {
     assert_eq!(names(ModKind::Steps), StepsMode::ALL.map(StepsMode::name));
     assert_eq!(names(ModKind::Track), Source::ALL.map(Source::name));
     assert_eq!(ModKind::Track.modes()[0].1, Source::ALL[0].meaning());
+}
+
+#[test]
+fn each_setting_a_type_has_shows_as_text_and_a_lists_choices_are_its_values() {
+    for kind in ModKind::ALL {
+        let slot = distinct(kind);
+        for field in FIELDS.into_iter().filter(|field| field.on(kind)) {
+            let text = slot.text(field);
+            let listed = field.units() == ModUnits::Listed;
+            match field {
+                // Where it goes is its track's to name and list.
+                ModField::Destination => assert_eq!(text, None),
+                ModField::Step(16) => assert_eq!(text, None, "past the last"),
+                _ => assert!(
+                    text.is_some_and(|text| !text.is_empty()),
+                    "{kind:?} {field:?}"
+                ),
+            }
+            let choices = slot.choices(field);
+            if listed && field != ModField::Destination {
+                let (lowest, highest) = slot.bounds(field).unwrap();
+                assert_eq!(
+                    (lowest, highest),
+                    (0, choices.len() as i32 - 1),
+                    "{field:?}"
+                );
+                let at = slot.field(field).unwrap() as usize;
+                assert_eq!(slot.text(field).as_deref(), Some(&*choices[at].0));
+            } else {
+                assert!(choices.is_empty(), "{kind:?} {field:?}");
+            }
+        }
+    }
+    let steps = distinct(ModKind::Steps);
+    assert_eq!(
+        steps.text(ModField::Rate).as_deref(),
+        Some("--"),
+        "a note each"
+    );
+    assert_eq!(steps.text(ModField::Start).as_deref(), Some("4"), "from 1");
+    let mut lfo = distinct(ModKind::Lfo);
+    lfo.lfo.phase = 120;
+    lfo.lfo.shape = Shape::Lorenz;
+    assert_eq!(lfo.text(ModField::Phase).as_deref(), Some("y"));
+    lfo.lfo.shape = Shape::Sine;
+    assert_eq!(lfo.text(ModField::Phase).as_deref(), Some("120°"));
+    let ahd = distinct(ModKind::Ahd);
+    assert_eq!(ahd.text(ModField::Depth).as_deref(), Some("-42"));
 }
 
 #[test]
