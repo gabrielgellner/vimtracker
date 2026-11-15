@@ -24,7 +24,7 @@ use std::time::Instant;
 
 use vt_engine::engine::{PLAYHEADS, Playhead, SectionLoop, TrackPlace, Transport};
 use vt_engine::gens::{GenPass, GenRow};
-use vt_engine::link::{Handle, JamState};
+use vt_engine::link::{Command, Handle, JamState};
 use vt_engine::published::Published;
 use vt_engine::track_state::{Faders, LiveValues, NotePitch};
 use vt_model::action::{Action, edit};
@@ -36,7 +36,7 @@ use vt_model::scale::Scale;
 use vt_model::selection::{Extent, Field};
 use vt_model::song::{ChainEntry, Phrase, Section, Song, Track};
 
-use crate::app::{Cursor, TrackLive};
+use crate::app::{Cursor, Momentary, TrackLive};
 use crate::input::mode::View;
 use crate::services::analysing::Analyst;
 use crate::services::config::Settings;
@@ -407,6 +407,22 @@ impl Services {
     /// Put the cursor on the first step its phrase plays.
     pub(crate) fn go_to_loop_start(&mut self) {
         self.cursor.step = self.extent().start;
+    }
+
+    /// Hear the row the cursor's track is on at a step of the section, with the row each other
+    /// track plays then, unless playback is using the tracks. What it starts, which lasts while
+    /// the key is down, if it sounds.
+    pub(crate) fn audition(&mut self, section_step: usize) -> Option<Momentary> {
+        if self.transport == Transport::Playing {
+            self.status = "Audition works while stopped or paused".to_owned();
+            return None;
+        }
+        self.handle.send(Command::Audition {
+            section: self.cursor.section,
+            section_step,
+            track: Some(self.cursor.track),
+        });
+        Some(Momentary::Audition)
     }
 
     /// The position in the section where the cursor's phrase starts playing.

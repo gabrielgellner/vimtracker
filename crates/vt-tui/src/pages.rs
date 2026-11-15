@@ -329,7 +329,7 @@ impl App {
             modes: &self.modes,
         };
         let outcome = self.chain_view.key(cmd, times, &mut ctx);
-        self.settled(outcome, true) || self.run_chain_passed(cmd)
+        self.settled(outcome, true)
     }
 
     /// Run a command in the phrase view: the view's own key, a move or one over the view, or

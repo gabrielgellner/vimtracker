@@ -841,7 +841,7 @@ there's no `dyn`. A key goes, in this order, to the first that takes it:
     `App::run_across_pages`, the commands across pages (`i`'s mode, `/`, `M`, `gm`, the Keys mode,
     the Gen page's keys and the pickers) and then the track page's edits, which the mixer shares;
     for the others, each page's own, `App::run_project_page`, `run_audio_page`,
-    `run_sample_passed` and `run_chain_passed`, while the song view's and the phrase view's go on;
+    and `run_sample_passed`, while the song view's, the chain view's and the phrase view's go on;
 4.  the tree of chains and phrases (`App::run_tree`);
 5.  the grammar's operators, the motion after one, and the Visual modes (`App::run_grammar`);
 6.  the global `match` in `App::run`.
@@ -1151,12 +1151,12 @@ sections `:loop` keeps playing are `Services::looping`, as
 `:loop` works from every view and the status line shows them.
 
 `ChainView` (`pages/chain.rs`) has the column its cursor is on and the row `yy` and `dd` last
-copied, its moves between the columns, the edits of a row, `x`, `yy` and `p`, and its drawing,
-through a `Ctx`. `App::run_chain_view` hands it a key and then runs what it passes back, in an
-`impl App` beside it: a move to another row, as it moves the cursor every page shares
-and the phrase view's first row, `dd`, which keeps the cursor on a row, the phrase picker, Insert
-and `;`; what neither takes goes on to the tree, as before. The cursor's chain and its rows are
-`Services::chain_id` and `chain_entries`.
+copied, all of its keys but the tree's and Insert's typing on it, and its drawing, through a
+`Ctx`: the moves between the columns and to other rows, the edits of a row, `x`, `yy`, `p`, `dd`,
+which keeps the cursor on a row, and `;`. What only `App` can do it asks for in its `Outcome`
+(#784): the phrase picker, Insert, the audition `;` holds, and, going to another row, the phrase
+view starting afresh (`Moved`). What it passes back goes on to the tree, as before. The cursor's
+chain and its rows are `Services::chain_id` and `chain_entries`.
 
 `PhraseView` (`pages/phrase.rs`) has where the view is scrolled to and how many lines fit, whether
 it's laid out in time and shows the row inspector, and the selection: where it started, how far
