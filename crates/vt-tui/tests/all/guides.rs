@@ -17,10 +17,13 @@ fn space_question_opens_guides_and_space_k_lists_keys() {
     press(&mut app, "note");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.mode, Mode::Guide);
-    assert_eq!(app.overlays.guide.map(|g| g.title()), Some("Note entry"));
+    assert_eq!(
+        app.overlays.guide.open.map(|g| g.title()),
+        Some("Note entry")
+    );
     press(&mut app, "q");
     assert_eq!(app.modes.mode, Mode::Normal);
-    assert_eq!(app.overlays.guide, None);
+    assert_eq!(app.overlays.guide.open, None);
     press(&mut app, " k");
     assert_eq!(app.modes.mode, Mode::Help);
 }
@@ -64,7 +67,7 @@ fn question_in_a_guide_goes_back_to_the_list_on_that_guide() {
     press(&mut app, " ?gg");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
-        app.overlays.guide.map(|g| g.title()),
+        app.overlays.guide.open.map(|g| g.title()),
         Some("Your first loop")
     );
     press(&mut app, "?");
@@ -77,20 +80,21 @@ fn a_guide_stops_scrolling_at_its_end() {
     let (mut app, _realtime) = app();
     press(&mut app, " ?");
     special(&mut app, KeyCode::Enter);
-    app.overlays.guide_page = 10;
+    app.overlays.guide.page = 10;
     let last = app
         .overlays
         .guide
+        .open
         .unwrap()
-        .lines(app.overlays.guide_width)
+        .lines(app.overlays.guide.width)
         .len()
         - 10;
     press(&mut app, "G");
-    assert_eq!(app.overlays.guide_scroll, last);
+    assert_eq!(app.overlays.guide.scroll, last);
     press(&mut app, "j");
-    assert_eq!(app.overlays.guide_scroll, last);
+    assert_eq!(app.overlays.guide.scroll, last);
     press(&mut app, "g");
-    assert_eq!(app.overlays.guide_scroll, 0);
+    assert_eq!(app.overlays.guide.scroll, 0);
     press(&mut app, "?");
     assert_eq!(app.modes.mode, Mode::Picker);
     assert_eq!(
@@ -170,5 +174,16 @@ fn the_space_popup_is_wide_enough_for_every_description() {
             "{keys} {description} is cut off:\n{}",
             screen.join("\n")
         );
+    }
+}
+
+#[test]
+fn the_keys_of_help_and_of_a_guide_are_in_the_binding_table() {
+    let (app, _realtime) = app();
+    let help = app.help_rows();
+    for (mode, row) in [("Help", "Scroll down"), ("Guide", "The list of guides")] {
+        let at = help.iter().position(|line| line == mode).unwrap();
+        let rows = help[at + 1..].iter().take_while(|line| !line.is_empty());
+        assert!(rows.clone().any(|line| line.contains(row)), "{mode}");
     }
 }

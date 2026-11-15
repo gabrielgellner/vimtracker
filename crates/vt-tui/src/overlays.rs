@@ -13,14 +13,19 @@ use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::Rect;
 use vt_model::selection::Field;
 
-use crate::app::Selection;
+use std::time::Instant;
+
+use crate::app::grammar::Grammar;
+use crate::app::{Modes, Selection};
 use crate::input::bindings::{Cmd, Resolved, Table};
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
 use crate::pages::{Ctx, CtxMut, Outcome};
+use crate::services::Services;
 use command::completion::CommandMenu;
 use command::history::CommandHistory;
-use guides::Guide;
+use guides::GuideView;
+use help::Help;
 use mapping::MappingView;
 use picker::Picker;
 use shape::ShapePanel;
@@ -43,6 +48,12 @@ pub(crate) trait Overlay {
     /// Run one of its keys from the table, or pass it back where it means nothing as things
     /// are, to be taken as text.
     fn key(&mut self, cmd: Cmd, ctx: &mut CtxMut) -> Outcome;
+
+    /// A key as it reads one, where it takes no notice of what's held with it: the same key
+    /// without that.
+    fn reads(&self, key: Key) -> Key {
+        key
+    }
 
     /// Whether every key is text for now: a search, a value or a name is being typed.
     fn takes_text(&self) -> bool {
@@ -112,6 +123,7 @@ pub(crate) fn press<O: Overlay>(
     key: Key,
     ctx: &mut CtxMut,
 ) -> Outcome {
+    let key = overlay.reads(key);
     if overlay.takes_text() {
         return overlay.text(key, ctx);
     }
@@ -130,9 +142,33 @@ pub(crate) fn press<O: Overlay>(
     }
 }
 
+/// Give an overlay a key as the program does, [`press`], with what `App` lends it: the table,
+/// the keys of a sequence typed so far, which which-key lists what follows from when the first
+/// was typed, and what a page is given to run a key.
+pub(crate) fn give<O: Overlay>(
+    overlay: &mut O,
+    table: &Table,
+    grammar: &mut Grammar,
+    services: &mut Services,
+    modes: &Modes,
+    key: Key,
+    now: Instant,
+) -> Outcome {
+    let was_waiting = !grammar.pending.is_empty();
+    let mut ctx = CtxMut { services, modes };
+    let outcome = press(overlay, table, &mut grammar.pending, key, &mut ctx);
+    match (was_waiting, grammar.pending.is_empty()) {
+        (false, false) => grammar.pending_since = Some(now),
+        (_, true) => grammar.pending_since = None,
+        (true, false) => {}
+    }
+    outcome
+}
+
 /// The overlays that are open, and what they keep between their openings: the picker, the `:`
 /// line and its history, how far the help and the guide have scrolled, the shape panel and a
 /// macro's mapping view.
+#[derive(Default)]
 pub struct Overlays {
     /// The open picker or explorer.
     pub picker: Option<Picker>,
@@ -142,36 +178,14 @@ pub struct Overlays {
     pub command_menu: Option<CommandMenu>,
     /// The command lines run before, which `Up` and `Down` go through.
     pub command_history: CommandHistory,
-    /// How far the which-key help has scrolled.
-    pub help_scroll: usize,
+    /// `Space k`'s list of every key, and how far it has scrolled.
+    pub help: Help,
     /// The open guide, how far it has scrolled, and how many of its rows fit.
-    pub guide: Option<Guide>,
-    pub guide_scroll: usize,
-    pub guide_page: usize,
-    pub guide_width: usize,
+    pub guide: GuideView,
     /// The open shape panel.
     pub shape: Option<ShapePanel>,
     /// The open mapping view of a macro.
     pub mapping: Option<MappingView>,
     /// A selection to shape once the command for its empty FX column is chosen, and its field.
     pub(crate) shape_command: Option<(Selection, Field)>,
-}
-
-impl Default for Overlays {
-    fn default() -> Self {
-        Self {
-            picker: None,
-            command_line: String::new(),
-            command_menu: None,
-            command_history: CommandHistory::default(),
-            help_scroll: 0,
-            guide: None,
-            guide_scroll: 0,
-            guide_page: 16,
-            guide_width: 76,
-            shape: None,
-            mapping: None,
-            shape_command: None,
-        }
-    }
 }
