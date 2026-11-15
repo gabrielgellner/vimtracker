@@ -19,7 +19,7 @@ pub mod meter;
 pub mod panel;
 pub mod param;
 #[cfg(test)]
-mod pin;
+pub(crate) mod pin;
 pub mod popup;
 pub mod role;
 pub mod setting;

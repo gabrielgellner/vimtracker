@@ -40,7 +40,7 @@ use crate::kitty::{PanelIds, PanelWant};
 use crate::meter::Meter;
 use crate::services::Services;
 use crate::shaping::LiveGen;
-use crate::track_page::Control;
+use crate::track_page::{Control, ParamView};
 use crate::views::widgets::setting::{CellLook, Focus};
 
 /// What a key did, as far as the page alone can tell.
@@ -234,6 +234,12 @@ impl<'a> Ctx<'a> {
             value_label: jump.and_then(|jump| jump.label(control)),
             ..self.look(focus)
         }
+    }
+
+    /// One of the track page's settings on a track of the song, as a widget draws it, with an
+    /// accumulator's limits counted as the scale lock has them.
+    pub fn param_view(&self, control: Control, track: &Track) -> Option<ParamView> {
+        crate::track_page::view(control, track, self.song(), self.app.scale.on)
     }
 
     /// Whether the song plays, as the engine last said.

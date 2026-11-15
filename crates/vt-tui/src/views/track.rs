@@ -7,27 +7,17 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
 use vt_model::action::TrackControl;
-use vt_model::envelope::Hold;
 use vt_model::insert::Insert;
 use vt_model::macros::MacroTarget;
-use vt_model::modulation::{ModKind, depth_text, note_shape_slot};
-use vt_model::settings::{SettingId, gate_percent};
-use vt_model::song::{Song, SynthVoice, Track, TrackKind, reset_name};
-use vt_model::speed::Speed;
-use vt_model::steps::StepsMode;
+use vt_model::song::{Song, Track, TrackKind};
 
 use crate::app::App;
-use crate::banking::sample_text;
 use crate::glyphs;
 use crate::input::mode::Mode;
 use crate::kitty::PanelKey;
 use crate::page::Ctx;
-use crate::shaping::live_shown;
 use crate::theme;
-use crate::track_page::tuning::{tuning, tuning_text};
-use crate::track_page::{
-    AccumulatorField, ArpField, Control, DeviceSpec, ModField, Page, TrackPage,
-};
+use crate::track_page::{ArpField, Control, DeviceSpec, ModField, Page, TrackPage};
 use crate::views::phrase::level_glyph;
 use crate::views::widgets;
 use crate::views::widgets::device::{DEVICE_HEIGHT, Device};
@@ -43,6 +33,8 @@ use cells::TrackCells;
 mod cells;
 mod generators;
 mod modulation;
+#[cfg(test)]
+mod parity;
 mod sound;
 mod zoom;
 
@@ -89,205 +81,6 @@ const EMPTY_SLOT: &str = "Empty";
 const EMPTY_HINT_ROW: u16 = ROW_STEP;
 /// Cells in a value's bar, each split into eighths. An odd number, so a centre has a cell.
 const BAR_CELLS: usize = 9;
-
-/// Whether a setting is left at its default, which matters less, so its value is dim: a track
-/// following the project's groove shows what it plays, dimmed as it isn't its own.
-fn at_default(control: Control, track: &Track) -> bool {
-    control == Control::Groove && track.groove.is_none()
-        || control == Control::GateLength && track.gate_length.is_none()
-        || control == Control::Speed && track.speed == Speed::Sixteenth
-        || control == Control::Reset && track.reset.is_none()
-        || control == Control::Glide && track.glide == 0
-        || control == Control::FilterMode && !track.filter.has_modes()
-        || control == Control::Base(TrackControl::Punch) && !track.filter.has_punch()
-        || control == Control::Safe && !track.filter.has_safe()
-        || control == Control::Role && track.role.is_auto()
-}
-
-/// A setting's value as text.
-pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
-    let hex = |value: u8| format!("{value:02X}");
-    match control {
-        Control::Gen {
-            phrase,
-            generator,
-            param,
-        } => live_shown(song, track, phrase, generator, param),
-        Control::NewGenerator(_) => "Empty".to_owned(),
-        Control::Machine => track.machine.name().to_owned(),
-        Control::Setting(_) => control
-            .setting_on(track)
-            .map_or_else(String::new, |id| hex(track.setting(id))),
-        Control::Base(TrackControl::Cutoff) => hex(track.cutoff),
-        Control::Base(TrackControl::Resonance) => hex(track.resonance),
-        Control::Base(TrackControl::Pan) => hex(track.pan),
-        Control::Base(TrackControl::SendA) => hex(track.send_a),
-        Control::Base(TrackControl::SendB) => hex(track.send_b),
-        Control::Base(TrackControl::Drive) => hex(track.drive),
-        Control::Base(TrackControl::Punch) => hex(track.punch),
-        Control::Base(TrackControl::LowCut) => hex(track.low_cut),
-        Control::Base(TrackControl::HighCut) => hex(track.high_cut),
-        Control::Base(TrackControl::Pitch) => hex(track.pitch),
-        Control::Base(TrackControl::VelocityDelta) => hex(track.velocity_delta),
-        Control::Base(TrackControl::Quantise) => hex(track.quantise),
-        Control::Group => track
-            .group
-            .map_or_else(|| "Off".to_owned(), |group| format!("G{group}")),
-        // `Auto` shows what it goes by, which the page dims as its default.
-        Control::Role => track.role().name().to_owned(),
-        Control::Choke => track
-            .choke
-            .map_or_else(|| "Off".to_owned(), |group| group.to_string()),
-        Control::GateLength => format!("{}%", gate_percent(track.gate_length())),
-        Control::Speed => track.speed.name().to_owned(),
-        Control::Reset => reset_name(track.reset),
-        // Off, `Acid` slides by its own `Slide`, as a 303 does.
-        Control::Glide if track.glide == 0 && track.voice() == Some(SynthVoice::Acid) => {
-            "Slide".to_owned()
-        }
-        Control::Glide => SettingId::GLIDE
-            .entry()
-            .kind
-            .shown(u16::from(track.glide) << 8),
-        Control::Sample => sample_text(song, track.sample()),
-        // With no sample, there's nothing to tune.
-        Control::Tune | Control::Cents => tuning(song, track).map_or_else(
-            || "--".to_owned(),
-            |tuning| tuning_text(control, tuning.value(control)),
-        ),
-        Control::Mute | Control::Solo => String::new(),
-        Control::Limiter => if song.limiter { "on" } else { "off" }.to_owned(),
-        Control::Safe => if track.safe { "on" } else { "off" }.to_owned(),
-        Control::FilterType => track.filter.name().to_owned(),
-        // The MS-20's have none, so it doesn't apply.
-        Control::FilterMode if !track.filter.has_modes() => "--".to_owned(),
-        Control::FilterMode => track.filter.plays(track.filter_mode).name().to_owned(),
-        Control::Level => hex(track.level),
-        Control::Trim => hex(track.trim),
-        Control::Groove => track.groove.unwrap_or(song.groove).name().to_owned(),
-        Control::Mod(slot, field) => mod_value(track, slot, field),
-        Control::Accumulator(field) => {
-            let accumulation = track.accumulation;
-            match field {
-                AccumulatorField::Up => accumulation.up.to_string(),
-                AccumulatorField::Down => accumulation.down.to_string(),
-                AccumulatorField::Moves => accumulation.moves.name().to_owned(),
-                AccumulatorField::AtLimit => accumulation.at_limit.name().to_owned(),
-                AccumulatorField::Adds => accumulation.adds.name().to_owned(),
-                AccumulatorField::Reset => accumulation.reset.name(),
-            }
-        }
-        Control::Arpeggio(field) => {
-            let arpeggio = track.arpeggio;
-            match field {
-                ArpField::Rate => arpeggio.rate.name().to_owned(),
-                ArpField::Mode => arpeggio.mode.name().to_owned(),
-                ArpField::Octaves => arpeggio.octaves.to_string(),
-                ArpField::Retrig => if arpeggio.retrig { "on" } else { "off" }.to_owned(),
-            }
-        }
-        Control::Insert(slot) => track.inserts[slot].name().to_owned(),
-        Control::Macro(at) => format!("{:04X}", track.macros[at].value),
-        Control::InsertParam(slot, param) => {
-            let insert = track.inserts[slot];
-            match insert.params().get(param) {
-                Some(found) if !found.choices().is_empty() => found
-                    .choices()
-                    .get(usize::from(insert.value(param)))
-                    .copied()
-                    .unwrap_or("")
-                    .to_owned(),
-                Some(_) => hex(insert.value(param)),
-                None => String::new(),
-            }
-        }
-    }
-}
-
-/// What a slot going to `Pitch` in scale shows as its destination.
-pub(crate) const IN_SCALE_PITCH: &str = "Pitch in scale";
-
-/// A mod slot's setting as the page shows it, under the slot's type.
-fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
-    let modulator = &track.mods[slot];
-    let (adsr, ahd, drum, lpg, lfo) = (
-        &modulator.adsr,
-        &modulator.ahd,
-        &modulator.drum,
-        &modulator.lpg,
-        &modulator.lfo,
-    );
-    let steps = &modulator.steps;
-    let ahd_kind = modulator.kind == ModKind::Ahd;
-    let lpg_kind = modulator.kind == ModKind::Lpg;
-    let ms = |value: u16| format!("{value} ms");
-    let on = |on: bool| if on { "on" } else { "off" }.to_owned();
-    match field {
-        ModField::Type => modulator.kind.name().to_owned(),
-        ModField::Mode => modulator.mode_name().unwrap_or("--").to_owned(),
-        // The note-shaping slot's level is the note's, one way only.
-        ModField::Polarity if note_shape_slot(&track.mods) == Some(slot) => "--".to_owned(),
-        ModField::Polarity => modulator.polarity().name().to_owned(),
-        ModField::Destination if modulator.goes_in_scale() => IN_SCALE_PITCH.to_owned(),
-        ModField::Destination => modulator
-            .destination
-            .map_or_else(|| "---".to_owned(), |d| d.name_on(track)),
-        // The slot that shapes each note does so with its level, rather than moving a value.
-        ModField::Depth if note_shape_slot(&track.mods) == Some(slot) => "--".to_owned(),
-        ModField::Depth => depth_text(modulator.depth),
-        ModField::Attack if ahd_kind => ms(ahd.attack_ms),
-        ModField::Attack if lpg_kind => ms(lpg.attack_ms),
-        ModField::Decay if lpg_kind => ms(lpg.decay_ms),
-        ModField::Colour => format!("{:02X}", lpg.colour),
-        ModField::Attack => ms(adsr.attack_ms),
-        ModField::Decay if ahd_kind => ms(ahd.decay_ms),
-        ModField::Decay if modulator.kind == ModKind::Drum => ms(drum.decay_ms),
-        ModField::Peak => ms(drum.peak_ms),
-        ModField::Body => format!("{}%", drum.body),
-        ModField::Ratchet => drum.ratchet.to_string(),
-        ModField::Decay => ms(adsr.decay_ms),
-        ModField::Hold => match ahd.hold {
-            Hold::Note => "Note".to_owned(),
-            Hold::Ms(hold) => ms(hold),
-        },
-        ModField::Sustain => format!("{}%", adsr.sustain),
-        ModField::Release => ms(adsr.release_ms),
-        ModField::Reset if ahd_kind => on(ahd.reset),
-        ModField::Reset if lpg_kind => on(lpg.reset),
-        ModField::Reset => on(adsr.reset),
-        ModField::Shape => lfo.shape.name().to_owned(),
-        // One a note, Steps have no rate.
-        ModField::Rate if modulator.kind == ModKind::Steps => match steps.mode {
-            StepsMode::Note => "--".to_owned(),
-            _ => steps.rate.to_string(),
-        },
-        ModField::Rate => lfo.rate.to_string(),
-        ModField::Length => steps.length.to_string(),
-        ModField::Start => (steps.start + 1).to_string(),
-        ModField::Loop => steps.looping.to_string(),
-        ModField::Mutate => format!("{}%", steps.mutate),
-        ModField::Smooth => depth_text(steps.smooth),
-        ModField::Step(at) => depth_text(steps.values[usize::from(at)]),
-        // An attractor's is the axis heard, named where it's one alone.
-        ModField::Phase if lfo.shape.is_attractor() => match lfo.phase {
-            0 => "x".to_owned(),
-            120 => "y".to_owned(),
-            240 => "z".to_owned(),
-            phase => format!("{phase}°"),
-        },
-        ModField::Phase => format!("{}°", lfo.phase),
-        ModField::Deform => depth_text(lfo.deform),
-        ModField::Fade => lfo.fade.to_string(),
-        ModField::Low => {
-            let tracking = &modulator.track;
-            tracking.source.text(tracking.bounds().low)
-        }
-        ModField::High => {
-            let tracking = &modulator.track;
-            tracking.source.text(tracking.bounds().high)
-        }
-    }
-}
 
 /// Whether a setting that's off or on, and nothing else, is on, or nothing for any other: an
 /// effect's `Off`/`On` list, an envelope's `Reset`, the arpeggio's `Retrig`, the filter's
