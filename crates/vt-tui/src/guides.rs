@@ -15,7 +15,7 @@ pub struct Guide {
 }
 
 /// Every guide, in the order to learn them.
-pub const GUIDES: [Guide; 11] = [
+pub const GUIDES: [Guide; 14] = [
     Guide {
         source: include_str!("../guides/first-loop.md"),
     },
@@ -41,7 +41,16 @@ pub const GUIDES: [Guide; 11] = [
         source: include_str!("../guides/sample-editor.md"),
     },
     Guide {
-        source: include_str!("../guides/tracks.md"),
+        source: include_str!("../guides/track-sound.md"),
+    },
+    Guide {
+        source: include_str!("../guides/track-mod.md"),
+    },
+    Guide {
+        source: include_str!("../guides/track-fx.md"),
+    },
+    Guide {
+        source: include_str!("../guides/track-gen.md"),
     },
     Guide {
         source: include_str!("../guides/saving.md"),
@@ -262,8 +271,10 @@ mod tests {
     #[test]
     fn paragraphs_wrap_to_the_window_and_lose_no_words() {
         let words = |text: &str| -> Vec<String> {
+            // A code span ending in a space, as `:preset save `, leaves a lone mark, no word.
             text.split_whitespace()
                 .map(|word| word.replace(['`', '*'], ""))
+                .filter(|word| !word.is_empty())
                 .collect()
         };
         for guide in GUIDES {
@@ -390,12 +401,16 @@ mod tests {
     }
 
     #[test]
-    fn every_effect_its_types_and_its_settings_are_in_the_track_page_guide() {
-        let tracks = GUIDES[8].source;
-        assert_eq!(GUIDES[8].title(), "The track page, envelopes and LFOs");
+    fn every_effect_its_types_and_its_settings_are_in_the_fx_page_guide() {
+        let effects = GUIDES[10].source;
+        assert_eq!(GUIDES[10].title(), "The FX page and its effects");
         let mut missing = Vec::new();
         for effect in vt_model::insert::Insert::ALL {
-            if !names(tracks, effect.name()) {
+            // An empty slot says `Empty` on the FX page, not its name `---`.
+            if effect == vt_model::insert::Insert::Empty {
+                continue;
+            }
+            if !names(effects, effect.name()) {
                 missing.push(effect.name().to_owned());
             }
             // Each type or mode has settings of its own, so every one is checked.
@@ -418,7 +433,7 @@ mod tests {
                     named[at] = type_name;
                 }
                 for name in named {
-                    if !names(tracks, name) {
+                    if !names(effects, name) {
                         let kind = type_name.unwrap_or(effect.name());
                         missing.push(format!("{} {kind}: {name}", effect.name()));
                     }

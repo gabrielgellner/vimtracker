@@ -17,7 +17,7 @@ use crate::glyphs;
 use crate::input::command::{Line, PatchLine, PresetLine};
 use crate::input::picker::{Item, Pick, Picker};
 use crate::theme;
-use crate::views::track::IN_SCALE_PITCH;
+use crate::track_page::view::IN_SCALE_PITCH;
 use vt_model::preset::PresetKind;
 
 use super::controls::no_modes;

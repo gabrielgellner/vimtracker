@@ -38,7 +38,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `PAN` | Pan: `00` is left, `80` centre, `FF` right |
 | `CUT` | Filter cutoff, from 20 Hz to 20 kHz |
 | `RES` | Filter resonance |
-| `MODE` | The filter's mode, by its place: see the track page's guide |
+| `MODE` | The filter's mode, by its place: see the Sound page's guide |
 | `SNA` | Send to return `A` |
 | `SNB` | Send to return `B` |
 | `PNCH` | A voice's setting, by its own label, like Punch on `Kick` |
@@ -105,7 +105,8 @@ a slot's title, the `Type` of a `Distort`, `Chorus` or `Comp` and the `Mode` of 
 `LEV`, `VOL`, `SNA` and `SNB` are on the level scale in **Phrases and chains**.
 The others start from the values on the track page, `Space 5`, each time playback
 starts from the top. An LFO on that page keeps moving a value around wherever
-a step has put it. See **The track page, envelopes and LFOs**.
+a step has put it. See **The Sound page, output and groups** and **The Mod page, envelopes
+and LFOs**.
 
 Each value has a mark beside it, which says how long it lasts:
 

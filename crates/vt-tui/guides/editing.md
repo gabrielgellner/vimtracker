@@ -293,7 +293,7 @@ a note on them, or across tracks the tracks with a note on the first row. The
 row is a ring, so the first cell's neighbour is the last. Across tracks, every
 track plays one automaton, the row they start from worked out once for all of
 them, so a track's `gl` has `Rule` and no `Start`. Kept live, `Vary` steps it
-on: see **The Gen page** in **The track page**.
+on: see **The Gen page, macros, presets and patches**.
 
 The ramp's ends land on the first and last rows it changes, and rows keep their
 spacing along it. A velocity only ever goes on a note, so for Velocity, Every,
