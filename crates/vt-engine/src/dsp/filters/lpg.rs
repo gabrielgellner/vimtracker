@@ -43,6 +43,8 @@ use crate::dsp::blocks::plaits_parts::{Svf, tan_accurate};
 use crate::dsp::blocks::response::{Gain, svf, warped};
 use crate::dsp::blocks::sides::{Sides, same_bits_by_eq, same_bits_by_fields};
 use crate::dsp::blocks::smoother::Smoothed;
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::{Mono, SlotEffect};
 
 /// The rate Streams runs at, which its per-sample constants are for.
 const STREAMS_RATE: f64 = 31_089.0;
@@ -495,6 +497,29 @@ pub fn response(settings: Settings, (level, cutoff): (f32, f32), rate: u32) -> i
             .scale(f64::from(level) * mix)
             .plus(Gain::real(1.0 - mix))
             .db()
+    }
+}
+
+impl SlotEffect for LowPassGate {
+    type Settings = Settings;
+
+    /// Its follower and vactrol hear both sides, but each filter works its side alone.
+    const MONO: Mono = Mono::OneSide;
+
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    /// It takes its settings frame by frame instead.
+    fn follow(&mut self, _settings: Settings, _song: SongPlace, _frames: u64) {}
+
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// None: it's worked every frame, so the slot never waits on its tail.
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        0
     }
 }
 

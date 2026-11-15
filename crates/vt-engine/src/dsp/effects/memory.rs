@@ -22,7 +22,7 @@ use crate::dsp::effects::plate::Plate;
 use crate::dsp::effects::resonator::Resonator;
 use crate::dsp::effects::reverb::Reverb;
 use crate::dsp::effects::rotary::Rotary;
-use crate::dsp::effects::slot::{Rung, SlotEffect};
+use crate::dsp::effects::slot::{Facts, Rung, SlotEffect, follow_fresh};
 use crate::dsp::effects::space::Space;
 use crate::dsp::effects::spring::Spring;
 use crate::dsp::effects::stutter::Stutter;
@@ -83,6 +83,14 @@ macro_rules! memories {
             buffered
         };
 
+        /// What each effect that keeps a long buffer says of itself to its slot, by
+        /// [`EffectKind`], and nothing for the rest.
+        pub const BUFFERED_FACTS: [Option<Facts>; EffectKind::COUNT] = {
+            let mut facts = [None; EffectKind::COUNT];
+            $(facts[EffectKind::$kind as usize] = Some(Facts::of::<$dsp>());)+
+            facts
+        };
+
         impl Memory {
             /// What an effect keeps, made on the edit thread, if it keeps a long buffer.
             pub fn new(kind: EffectKind, rate: u32) -> Option<Self> {
@@ -120,12 +128,13 @@ macro_rules! memories {
                 }
             }
 
-            /// Take what's set now, where the song is and at its tempo.
+            /// Take what's set now, where the song is and at its tempo, and jump there if it's only
+            /// just started, `fresh`.
             #[inline]
-            pub fn follow(&mut self, insert: Insert, song: SongPlace, frames: u64) {
+            pub fn follow(&mut self, insert: Insert, song: SongPlace, frames: u64, fresh: bool) {
                 match (self, insert) {
                     $((Self::$kind(dsp), Insert::$kind(settings)) => {
-                        SlotEffect::follow(&mut **dsp, settings, song, frames);
+                        follow_fresh(&mut **dsp, settings, song, frames, fresh);
                     })+
                     _ => {}
                 }
@@ -162,13 +171,6 @@ macro_rules! memories {
             pub fn strike(&mut self) {
                 match self {
                     $(Self::$kind(dsp) => SlotEffect::strike(&mut **dsp),)+
-                }
-            }
-
-            /// Jump to what's set, as it's only just started.
-            pub fn settle(&mut self) {
-                match self {
-                    $(Self::$kind(dsp) => SlotEffect::settle(&mut **dsp),)+
                 }
             }
 
@@ -334,8 +336,7 @@ mod tests {
                 frames_per_tick: frames as f64 / 3840.0,
                 ..SongPlace::STILL
             };
-            memory.follow(Insert::Delay(settings), song, 0);
-            memory.settle();
+            memory.follow(Insert::Delay(settings), song, 0, true);
             assert_eq!(memory.process([1.0, 1.0]), [0.0, 0.0]);
             for _ in 1..frames {
                 assert_eq!(memory.process([0.0, 0.0]), [0.0, 0.0]);

@@ -29,6 +29,8 @@ use crate::dsp::blocks::flush::{flush, tiny_by_fields};
 use crate::dsp::blocks::oversampler::Oversampler;
 use crate::dsp::blocks::sides::{SameBits, Sides, same_bits_by_fields};
 use crate::dsp::blocks::smoother::Smoothed;
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::{Mixing, Mono, SlotEffect};
 
 /// The diode's curve, `25 β (exp(α x) - 1)`, with Chowdhury's `α = 0.05 / 0.0259` and `β = 0.2`.
 const DIODE_ALPHA: f32 = 0.05 / 0.0259;
@@ -220,6 +222,35 @@ impl Exciter {
             });
             within(made, -MOST_WET, MOST_WET)
         })
+    }
+}
+
+impl SlotEffect for Exciter {
+    type Settings = Settings;
+
+    /// Each side is worked alone, the same way, with nothing between them.
+    const MONO: Mono = Mono::OneSide;
+    const MIXING: Mixing = Mixing::Added;
+
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, _frames: u64) {
+        self.follow(settings);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// None: it's worked every frame, so the slot never waits on its tail.
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        0
     }
 }
 
