@@ -1,24 +1,58 @@
 use std::path::Path;
 
 use super::*;
+use crate::input::bindings::Table;
 use crate::input::keys::parse;
 use crate::overlays::picker::explorer::{Icon, Purpose};
+use crate::overlays::{self, Meant};
 
 const VIEWS: [&str; 6] = ["table", "song", "chain", "phrase", "instrument", "groove"];
 
 /// Press keys as typed, with a named key in angle brackets, such as `<Esc>`.
 fn press(picker: &mut Picker, keys: &str) -> Outcome {
-    let mut outcome = Outcome::Stay;
+    let mut outcome = Outcome::Done;
+    let mut pending = Vec::new();
     let mut rest = keys;
     while let Some(c) = rest.chars().next() {
         let (key, after) = match rest.find('>').filter(|_| c == '<') {
             Some(end) => (parse(&rest[1..end]).unwrap(), &rest[end + 1..]),
             None => (Key::char(c), &rest[c.len_utf8()..]),
         };
-        outcome = picker.key(key);
+        outcome = key_in(picker, &mut pending, key);
         rest = after;
     }
     outcome
+}
+
+/// A key as the program gives the picker one: through the binding table on the list, and as
+/// text otherwise.
+pub(super) fn key_in(picker: &mut Picker, pending: &mut Vec<Key>, key: Key) -> Outcome {
+    static TABLE: std::sync::LazyLock<Table> = std::sync::LazyLock::new(Table::default);
+    if picker.focus != Focus::List {
+        return picker.typed(key);
+    }
+    match overlays::meant(&TABLE, Mode::Picker, pending, key) {
+        Meant::Cmd(Cmd::InPicker(of)) => match picker.run(of) {
+            Outcome::Passed => picker.typed(key),
+            outcome => outcome,
+        },
+        Meant::Cmd(_) => Outcome::Passed,
+        Meant::Text(key) => picker.typed(key),
+        Meant::Wait => {
+            if !pending.is_empty() {
+                picker.forget_count();
+            }
+            Outcome::Done
+        }
+    }
+}
+
+/// What a key chose, if it chose.
+fn chosen(outcome: Outcome) -> Option<Pick> {
+    match outcome {
+        Outcome::Choose(pick) => Some(pick),
+        _ => None,
+    }
 }
 
 fn label(picker: &Picker) -> &str {
@@ -124,8 +158,8 @@ fn the_explorer_opens_folders_with_l_and_closes_them_with_h() {
     // l on a file chooses it, and Enter does too.
     press(&mut picker, "jl");
     assert_eq!(
-        press(&mut picker, "l"),
-        Outcome::Choose(Pick::Sample(root.join("loops/break.wav")))
+        chosen(press(&mut picker, "l")),
+        Some(Pick::Sample(root.join("loops/break.wav")))
     );
     std::fs::remove_dir_all(&root).unwrap();
 }
@@ -259,8 +293,8 @@ fn p_and_a_switch_the_preview_and_playing_and_enter_chooses_a_folder_to_save_in(
     assert_eq!(picker.query, "A", "nothing plays, so A searches");
     press(&mut picker, "<Backspace><Esc>l");
     assert_eq!(
-        press(&mut picker, "<Enter>"),
-        Outcome::Choose(Pick::Folder(root.join("drums"))),
+        chosen(press(&mut picker, "<Enter>")),
+        Some(Pick::Folder(root.join("drums"))),
         "and Enter chooses"
     );
     std::fs::remove_dir_all(&root).unwrap();
@@ -288,10 +322,7 @@ fn a_group_of_items_given_up_front_starts_open() {
     let mut picker = Picker::explorer(Purpose::Sample, roots, None).revealing(Some(1));
     assert_eq!(label(&picker), "BD");
     assert_eq!(shown_rows(&picker), ["v root", "  BD", "  SD", "> root"]);
-    assert_eq!(
-        press(&mut picker, "j<Enter>"),
-        Outcome::Choose(Pick::Track(1))
-    );
+    assert_eq!(chosen(press(&mut picker, "j<Enter>")), Some(Pick::Track(1)));
     press(&mut picker, "h");
     assert_eq!(shown_rows(&picker), ["> root", "> root"]);
     std::fs::remove_dir_all(&root).unwrap();
@@ -398,7 +429,7 @@ fn a_search_flattens_the_tree_and_escape_clears_it_then_closes() {
         "back on what it found, its category open"
     );
     assert!(picker.category(1).2);
-    assert_eq!(press(&mut picker, "<Esc>"), Outcome::Close);
+    assert!(matches!(press(&mut picker, "<Esc>"), Outcome::Close));
 }
 
 #[test]
@@ -409,16 +440,16 @@ fn enter_chooses_and_l_chooses_wider_where_it_can() {
     ];
     let mut picker = Picker::new("Kits", items);
     assert_eq!(
-        press(&mut picker, "L"),
-        Outcome::Choose(Pick::KitTracks("909.ron".into()))
+        chosen(press(&mut picker, "L")),
+        Some(Pick::KitTracks("909.ron".into()))
     );
     assert_eq!(
-        press(&mut picker, "<Enter>"),
-        Outcome::Choose(Pick::Kit("909.ron".into()))
+        chosen(press(&mut picker, "<Enter>")),
+        Some(Pick::Kit("909.ron".into()))
     );
     assert_eq!(
-        press(&mut picker, "jL"),
-        Outcome::Choose(Pick::Kit("808.ron".into())),
+        chosen(press(&mut picker, "jL")),
+        Some(Pick::Kit("808.ron".into())),
         "nothing wider is the usual choice"
     );
 }
@@ -430,8 +461,8 @@ fn digits_then_enter_choose_by_number_and_zero_starts_a_search() {
         .collect();
     let mut picker = Picker::new("Tracks", items);
     assert_eq!(
-        press(&mut picker, "11<Enter>"),
-        Outcome::Choose(Pick::Track(11))
+        chosen(press(&mut picker, "11<Enter>")),
+        Some(Pick::Track(11))
     );
     let mut picker = Picker::new("Tracks", picker.items.clone());
     press(&mut picker, "04");
@@ -645,7 +676,7 @@ fn zz_zt_and_zb_move_the_view_round_the_cursor_without_moving_it() {
         "and moving doesn't push it past the end"
     );
     // A `z` waiting is let go by `Esc` rather than closing the list.
-    assert_eq!(press(&mut picker, "z<Esc>"), Outcome::Stay);
+    assert!(matches!(press(&mut picker, "z<Esc>"), Outcome::Done));
 }
 
 #[test]

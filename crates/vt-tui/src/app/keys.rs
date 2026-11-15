@@ -324,7 +324,7 @@ impl App {
             Mode::Command => self.command_key(key),
             Mode::Help => self.help_key(key),
             Mode::Guide => self.guide_key(key),
-            Mode::Picker => self.picker_key(key),
+            Mode::Picker => self.picker_key(key, now),
             Mode::Shape => self.shape_key(key),
             Mode::Mapping => self.mapping_key(key),
             Mode::Jump => self.jump_key(key),
