@@ -30,16 +30,17 @@ its "today" and its counts are `main` before the plan; the design's
 | E6, V3, G3, the Roto's lookups by kind | #778 |
 | S2, as the UI plan's U7 and U8 | #772, #782 |
 | §0's macro for the effect list, `effects!` | #786 |
+| S2's Roto `feel` from the view | #788 |
 
 Where it differs from the plan:
 - §0's one list for the effects came after the rest, as `effects!` in #786 (the third architecture
   review's item 6, #784), with the test literals of `Shape` ending in `..Shape::default()`, as G2
   meant.
-- S2's "the Roto's `feel`, `pick` and `key` read it": the knob's position still has a match on each
-  `Control` (#784's item 3).
+- S2's "the Roto's `feel`, `pick` and `key` read it" came after too, in #788 (#784's item 3). A
+  knob's name still comes from `label_on`.
 - The Gen page keeps keys of its own, and `GenParam::step` its own steps (#784's item 11).
 
-What's left: those two items, and the UI plan's U13 (#733).
+What's left: #784's item 11, and the UI plan's U13 (#733).
 
 ## 0. The answer in brief
 

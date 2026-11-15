@@ -44,10 +44,12 @@ Where it differs from the plan:
 - U10 was five PRs, a to e.
 - `Ctx` read through `&App` until the third architecture review's item 1 (#784) made it the
   services, the modes and a `PageState`, in #787.
+- The Roto's knob feel kept a match on each `Control` until #784's item 3 read it from the view,
+  in #788.
 - Pages still pass keys back to `App` only to reach the picker, the views and `:` lines (#784's
-  item 2), and the Roto's knob position still has a match on each `Control` (item 3).
+  item 2).
 
-What's left: U13, the module layout (#733), and #784's other items: 2, 3, 4 and 9 to 13.
+What's left: U13, the module layout (#733), and #784's other items: 2, 4 and 9 to 13.
 
 ---
 
