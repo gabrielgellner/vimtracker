@@ -68,6 +68,9 @@ pub struct Services {
     /// engine's last report, so what's recorded goes by the times the app is given and never
     /// reads the clock itself.
     pub(crate) now: Instant,
+    /// Whether the key being handled is the terminal repeating one that's held, for the sample
+    /// page's `h` and `l`, which speed up as they're held.
+    pub(crate) repeating: bool,
     pub(crate) last_tick: Instant,
     pub transport: Transport,
     pub playhead: usize,
@@ -154,6 +157,7 @@ impl Services {
             live_song: None,
             watched: 0,
             now: Instant::now(),
+            repeating: false,
             last_tick: Instant::now(),
             transport: Transport::Stopped,
             playhead: 0,
