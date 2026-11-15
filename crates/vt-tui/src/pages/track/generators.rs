@@ -232,18 +232,18 @@ pub(super) fn type_gen(services: &mut Services, view: View, control: Control, te
 
 impl TrackPage {
     /// Whether a key on the setting under the cursor, `control`, is the Gen page's: the track
-    /// page is on Gen, and the cursor isn't on the macros' band, first on the page, which turns as
-    /// the other pages' settings do. It reads the page the track page is on, so it's also true on
-    /// the mixer while the track page is left on Gen, where `control` is the mixer's and the edits
-    /// find no generator in it.
-    pub(super) fn on_gen(&self, control: Control) -> bool {
-        self.page == Page::Gen && !matches!(control, Control::Macro(_))
+    /// page is on screen, `view`, and on Gen, and the cursor isn't on the macros' band, first on
+    /// the page, which turns as the other pages' settings do. The mixer, which the track page may
+    /// be left on Gen behind, keeps its own keys.
+    pub(super) fn on_gen(&self, view: View, control: Control) -> bool {
+        view == View::Track && self.page == Page::Gen && !matches!(control, Control::Macro(_))
     }
 
     /// Run one of the Gen page's edits, which reshape the generator setting under the cursor,
     /// `control`, `times` being its count, at least 1: `=` `-` `+` `_`, `x`, `K`, `i`,
     /// `Space g a`, `dd` and `r`, and `p`, which is refused. `Enter`, which opens the shape panel
-    /// in the phrase view, is passed back, as is any other key, and every key off the Gen page.
+    /// in the phrase view, is passed back, as is any other key, and every key off the Gen page or on
+    /// the mixer.
     pub(super) fn gen_edit(
         &self,
         cmd: Cmd,
@@ -251,7 +251,7 @@ impl TrackPage {
         control: Control,
         ctx: &mut CtxMut,
     ) -> Outcome {
-        if !self.on_gen(control) {
+        if !self.on_gen(ctx.modes.view, control) {
             return Outcome::Passed;
         }
         let mut edit = GenEdit {

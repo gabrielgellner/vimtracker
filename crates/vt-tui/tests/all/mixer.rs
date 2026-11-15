@@ -181,6 +181,40 @@ fn the_mixers_mute_and_solo_reach_the_engine() {
     );
 }
 
+/// The track page's Gen page doesn't reach the mixer: left on it, the mixer's keys turn its
+/// settings as they do from any other page.
+#[test]
+fn the_mixers_keys_work_while_the_track_page_is_left_on_gen() {
+    use vt_tui::pages::track::Page;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 5LLL");
+    assert_eq!(app.track_page.page, Page::Gen);
+    press(&mut app, " 4");
+    assert_eq!(app.modes.view, View::Mixer);
+    press(&mut app, "=");
+    assert_eq!(app.song().tracks[0].level, 0xE1);
+    press(&mut app, "-");
+    assert_eq!(app.song().tracks[0].level, 0xE0);
+    press(&mut app, "_");
+    assert_eq!(app.song().tracks[0].level, 0xD0);
+    press(&mut app, "+");
+    assert_eq!(app.song().tracks[0].level, 0xE0);
+    press(&mut app, "lj");
+    press(&mut app, "i40");
+    assert_eq!(app.song().tracks[1].pan, 0x40);
+    press(&mut app, "x");
+    assert_eq!(app.song().tracks[1].pan, 0x80);
+    press(&mut app, "Gk0K");
+    assert!(app.services.levels[0].mute);
+    press(&mut app, "ji");
+    assert!(app.services.levels[0].solo);
+    assert_eq!(
+        app.track_page.page,
+        Page::Gen,
+        "the track page stays on Gen"
+    );
+}
+
 #[test]
 fn a_long_mixer_scrolls_to_keep_the_track_in_view() {
     let (mut app, _realtime) = app();
