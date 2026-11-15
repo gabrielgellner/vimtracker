@@ -71,6 +71,7 @@ fn came_from(
 }
 
 #[test]
+#[allow(clippy::float_cmp, reason = "the dry sound passes bit for bit")]
 fn a_lock_repeats_the_piece_after_it_on_the_grid() {
     let notes = ["C-3 -- --- --- ---"];
     let dry = render(Stutter::DEFAULT, &notes, STEP * 6);
@@ -94,6 +95,7 @@ fn a_lock_repeats_the_piece_after_it_on_the_grid() {
 }
 
 #[test]
+#[allow(clippy::float_cmp, reason = "the dry sound passes bit for bit")]
 fn each_lock_starts_it_again_even_where_trig_is_on_already() {
     let notes = ["C-3 -- --- --- ---", "D-3 -- --- --- ---"];
     let dry = render(Stutter::DEFAULT, &notes, STEP * 4);
@@ -112,6 +114,7 @@ fn each_lock_starts_it_again_even_where_trig_is_on_already() {
 }
 
 #[test]
+#[allow(clippy::float_cmp, reason = "the dry sound passes bit for bit")]
 fn a_lock_on_an_empty_step_stutters_what_is_playing() {
     let notes = ["C-3 -- --- --- ---", "--- -- --- --- ---"];
     let dry = render(Stutter::DEFAULT, &notes, STEP * 4);

@@ -295,6 +295,7 @@ fn a_case_can_set_the_filter_type() {
 }
 
 #[test]
+#[allow(clippy::float_cmp, reason = "silence is exact zeros")]
 fn an_impulse_is_one_sample_then_silence() {
     let input = Input::Impulse {
         level: -20.0,
