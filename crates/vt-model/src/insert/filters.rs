@@ -100,37 +100,15 @@ impl Equaliser {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::LowFrequency => self.low_frequency,
-            Setting::Low => self.low,
-            Setting::MidFrequency => self.mid_frequency,
-            Setting::Mid => self.mid,
-            Setting::MidQ => self.mid_q,
-            Setting::HighFrequency => self.high_frequency,
-            Setting::High => self.high,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut eq = self;
-        match setting {
-            Setting::LowFrequency => eq.low_frequency = value,
-            Setting::Low => eq.low = value,
-            Setting::MidFrequency => eq.mid_frequency = value,
-            Setting::Mid => eq.mid = value,
-            Setting::MidQ => eq.mid_q = value,
-            Setting::HighFrequency => eq.high_frequency = value,
-            Setting::High => eq.high = value,
-            Setting::Gain => eq.gain = value,
-            _ => {}
-        }
-        eq
+    effect_settings! {
+        low_frequency => LowFrequency,
+        low => Low,
+        mid_frequency => MidFrequency,
+        mid => Mid,
+        mid_q => MidQ,
+        high_frequency => HighFrequency,
+        high => High,
+        gain => Gain,
     }
 }
 
@@ -263,37 +241,15 @@ impl LowPassGate {
         source_track(self.source, sounds)
     }
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::GateMode => self.mode as u8,
-            Setting::Amount => self.amount,
-            Setting::Base => self.base,
-            Setting::Resonance => self.resonance,
-            Setting::Response => self.response,
-            Setting::Source => self.source,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut gate = self;
-        match setting {
-            Setting::GateMode => gate.mode = GateMode::ALL[usize::from(value)],
-            Setting::Amount => gate.amount = value,
-            Setting::Base => gate.base = value,
-            Setting::Resonance => gate.resonance = value,
-            Setting::Response => gate.response = value,
-            Setting::Source => gate.source = value,
-            Setting::Mix => gate.mix = value,
-            Setting::Gain => gate.gain = value,
-            _ => {}
-        }
-        gate
+    effect_settings! {
+        mode: GateMode => GateMode,
+        amount => Amount,
+        base => Base,
+        resonance => Resonance,
+        response => Response,
+        source => Source,
+        mix => Mix,
+        gain => Gain,
     }
 }
 
@@ -396,37 +352,15 @@ impl Resonator {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::Shift => self.tune,
-            Setting::Material => self.material,
-            Setting::Bright => self.bright,
-            Setting::Decay => self.decay,
-            Setting::Pickup => self.position,
-            Setting::Width => self.width,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut resonator = self;
-        match setting {
-            Setting::Shift => resonator.tune = value,
-            Setting::Material => resonator.material = value,
-            Setting::Bright => resonator.bright = value,
-            Setting::Decay => resonator.decay = value,
-            Setting::Pickup => resonator.position = value,
-            Setting::Width => resonator.width = value,
-            Setting::Mix => resonator.mix = value,
-            Setting::Gain => resonator.gain = value,
-            _ => {}
-        }
-        resonator
+    effect_settings! {
+        tune => Shift,
+        material => Material,
+        bright => Bright,
+        decay => Decay,
+        position => Pickup,
+        width => Width,
+        mix => Mix,
+        gain => Gain,
     }
 }
 
@@ -534,35 +468,14 @@ impl Comb {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::CombMode => self.mode as u8,
-            Setting::Shift => self.tune,
-            Setting::FlangerFeedback => self.feedback,
-            Setting::Bright => self.tone,
-            Setting::Spread => self.spread,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut comb = self;
-        match setting {
-            Setting::CombMode => comb.mode = CombMode::ALL[usize::from(value)],
-            Setting::Shift => comb.tune = value,
-            Setting::FlangerFeedback => comb.feedback = value,
-            Setting::Bright => comb.tone = value,
-            Setting::Spread => comb.spread = value,
-            Setting::Mix => comb.mix = value,
-            Setting::Gain => comb.gain = value,
-            _ => {}
-        }
-        comb
+    effect_settings! {
+        mode: CombMode => CombMode,
+        tune => Shift,
+        feedback => FlangerFeedback,
+        tone => Bright,
+        spread => Spread,
+        mix => Mix,
+        gain => Gain,
     }
 }
 
@@ -662,32 +575,12 @@ impl Vowel {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::Vowel => self.vowel,
-            Setting::VoiceSize => self.size,
-            Setting::Resonance => self.resonance,
-            Setting::KeyTrack => self.track,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut vowel = self;
-        match setting {
-            Setting::Vowel => vowel.vowel = value,
-            Setting::VoiceSize => vowel.size = value,
-            Setting::Resonance => vowel.resonance = value,
-            Setting::KeyTrack => vowel.track = value,
-            Setting::Mix => vowel.mix = value,
-            Setting::Gain => vowel.gain = value,
-            _ => {}
-        }
-        vowel
+    effect_settings! {
+        vowel => Vowel,
+        size => VoiceSize,
+        resonance => Resonance,
+        track => KeyTrack,
+        mix => Mix,
+        gain => Gain,
     }
 }
