@@ -7,6 +7,15 @@ version = "0.2.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/gabrielgellner/vimtracker"
+# The compiler `rust-toolchain.toml` pins.
+rust-version = "1.100.0"
+
+# What every crate warns on, taken with `lints.workspace = true`. A crate's own extra, such as
+# `unreachable_pub` in `vt-engine` and `vt-tui`, stays in its `lib.rs`.
+[workspace.lints.clippy]
+float_cmp = "warn"
+match_same_arms = "warn"
+redundant_clone = "warn"
 
 [workspace.dependencies]
 # Caret ranges, as `Cargo.lock` keeps builds reproducible, and `=` only for a crate whose

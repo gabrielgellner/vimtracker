@@ -4,7 +4,6 @@
 //! the parts the tests play on their own are in [`parts`].
 
 #![warn(unreachable_pub)]
-#![warn(clippy::float_cmp, clippy::match_same_arms, clippy::redundant_clone)]
 
 pub(crate) mod dsp;
 pub mod engine;

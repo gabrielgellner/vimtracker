@@ -177,6 +177,7 @@ fn the_rightmost_slot_wins() {
 }
 
 #[test]
+#[allow(clippy::float_cmp, reason = "any difference shows the LFO moving")]
 fn an_lfo_carries_on_around_a_lock_as_around_a_hold() {
     let with = |text: &str| {
         let mut start = song(&[text]);

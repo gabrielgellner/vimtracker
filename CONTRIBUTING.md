@@ -2,7 +2,9 @@
 
 ## Tools
 
-- [Rust](https://rustup.rs/), the stable toolchain.
+- [Rust](https://rustup.rs/), through rustup, which installs the version `rust-toolchain.toml`
+  pins, with rustfmt and clippy, the first time `cargo` runs here (see
+  [The compiler and the lints](#the-compiler-and-the-lints)).
 - [just](https://github.com/casey/just), which runs the recipes in the `justfile`. Run `just`
   to list them.
 - [mdBook](https://rust-lang.github.io/mdBook/), for the manual.
@@ -149,6 +151,24 @@ sounds in memory, so `hound`, `symphonia` and `rubato` take ranges too. A new cr
 golden hears is pinned the same way, with a comment saying which goldens (decision 352). The lock
 also holds what those crates bring in, such as `rustfft` under `realfft`, which `cargo update`
 moves, so run the tests after one.
+
+### The compiler and the lints
+
+`rust-toolchain.toml` pins the compiler to one stable release, and the workflows install the
+version it names. The audio goldens are hashes of exact bits, and a new compiler can order or
+vectorise the same arithmetic differently, so the compiler is pinned for the reason `realfft` and
+`wide` are (decision 353): a `rustup update` then can't fail a golden with no change to the code.
+Bump it on purpose, in a pull request of its own that changes `rust-toolchain.toml` and
+`rust-version` in `Cargo.toml` to the same version and nothing else, and run `just ci` and
+`cargo test --workspace --release` on it. If a hash moves, that pull request blesses it and says
+why, with the before and after the bless prints.
+
+The lints every crate warns on are in `Cargo.toml`'s `[workspace.lints]`, and each crate takes
+them with `[lints] workspace = true`, so they reach its tests, examples and binaries as well as
+its library. Add a lint for all four crates there, not as an attribute in a `lib.rs`. A crate's
+own extra stays in its `lib.rs`: `unreachable_pub` in `vt-engine` and `vt-tui`. Where a lint is
+wrong for one function, as `float_cmp` is for a test that two renders match bit for bit, allow it
+there with a reason: `#[allow(clippy::float_cmp, reason = "silence is exact zeros")]`.
 
 ## The manual
 

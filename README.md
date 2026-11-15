@@ -76,7 +76,8 @@ vimtracker --version
 A file downloaded with a browser instead is quarantined by macOS, which then won't open it;
 `xattr -d com.apple.quarantine vimtracker` lets it run.
 
-**From source,** with the stable [Rust](https://rustup.rs/) toolchain:
+**From source,** with [Rust](https://rustup.rs/) through rustup, which installs the version
+`rust-toolchain.toml` pins:
 
 ```sh
 cargo install --path crates/vt-tui --locked     # or: just install
