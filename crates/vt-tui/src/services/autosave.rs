@@ -4,13 +4,15 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::KeyCode;
-use vt_model::constants::AUTOSAVE_SECONDS;
 use vt_model::project;
 use vt_model::song::Song;
 
 use crate::app::App;
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
+
+/// How often unsaved work is written aside.
+const AUTOSAVE_SECONDS: u64 = 60;
 
 /// When the autosave was last due, and the song it last wrote.
 #[derive(Debug, Default)]

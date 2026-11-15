@@ -14,6 +14,17 @@ change. Why the code is shaped this way is in [device-interface.md](device-inter
 - **Every key is for ever:** an effect's or a voice's `key`, each setting's `key`, each
   `GenParam` key and each Roto layout's `kind`. Pick them once.
 
+**Why the screen's grid is in the model and the Roto's layout isn't.** Each family's descriptor
+row in `vt-model` ends with a grid: where the device's settings sit on its page of the screen.
+Its Roto layout is in `vt-tui/src/roto/layouts.rs`. Both are layouts of a device for a surface,
+keyed by setting, and by the Roto's own rule (it's laid out for itself, never from the page's
+grid) the grid could as well sit in `vt-tui`. It stays in the row because the page is the
+device's canonical face, as an Elektron machine's parameter page is part of the machine, and
+because the model's own tests check it with the row it belongs to (`machine.rs`'s and
+`insert/tests.rs`'s). The Roto is one surface that may or may not be plugged in, laid out by hand
+for eight knobs, so its layouts live with the program that drives it. So a new device's grid goes
+in its row and its Roto layout in `layouts.rs`, and neither is worked out from the other.
+
 **The pins.** Each list below ends with what shows the change. These are what they mean:
 - **`stable_names`** (`vt-model/tests/all/stable_names.rs`) keeps every name a song stores in
   `vt-model/tests/golden/*.txt`. A new device adds lines. Write them with
@@ -58,10 +69,14 @@ change. Why the code is shaped this way is in [device-interface.md](device-inter
    - **With a long buffer:** one line of `memories!` in `dsp/effects/memory.rs`, under `rung:`, or
      under `played_by_slot:` with an arm of its own in `slot.rs`'s `effect` if it needs the note or
      another track.
-   - **Small enough for every slot:** a `KEPT_IN_SLOT` row in `dsp/effects/slot.rs`, an
-     `InsertState` field with its default, and its arms in `take`, `effect`, `without_memory` and
-     `kept_as`. The compiler asks only for `without_memory`'s. A missed `effect` arm rings a buffer
-     it hasn't, so its wet sound is silent, and its golden render is what shows it.
+   - **Small enough for every slot:** one line of `kept!` in `dsp/effects/slot.rs`, under
+     `settling:` if a frame of silence can leave it as it was, bit for bit, which takes `SameBits`
+     and `Default` of its DSP, or under `moving:` if it goes on by itself, as a phaser's sweep
+     does. The macro writes its `Kept` variant, its `KEPT_IN_SLOT` row, its fresh state, and the
+     forwarding of `follow` and of the comparison a settled slot is found by. Then its arm in
+     `InsertState::effect`, which plays it, and in `InsertState::settle`, which says whether
+     playing from the top jumps it to its settings. The compiler asks for both, as neither `match`
+     has a catch-all.
 
    `FACTS` won't build if the effect is in neither list or in both, or lacks the `Mix` or `Gain`
    its `MIXING` needs. `slot.rs`'s `the_slot_reads_each_effects_levels_from_its_own_settings`

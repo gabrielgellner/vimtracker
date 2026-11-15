@@ -7,11 +7,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use rtrb::{Consumer, Producer, RingBuffer};
-use vt_model::constants::{
-    COMMAND_QUEUE, FILE_QUEUE, GEN_HEARD_QUEUE, INPUT_MOST_WAITING, MAX_TRACKS, MEMORY_QUEUE,
-    NOTE_PITCH_QUEUE, PUBLISH_QUEUE, RECORDER_QUEUE, RETURN_QUEUE, SCOPE_QUEUE, TAKE_QUEUE,
-    TELEMETRY_QUEUE,
-};
+use vt_model::constants::MAX_TRACKS;
 use vt_model::growing::Growing;
 use vt_model::insert::EffectKind;
 
@@ -23,6 +19,11 @@ use crate::engine::{Engine, PLAYHEADS, Playhead, SectionLoop, TrackPlace, Transp
 use crate::gens::GenReport;
 use crate::mixer::Reading;
 use crate::published::{Handover, Published, Span};
+pub use crate::queues::INPUT_QUEUE;
+use crate::queues::{
+    COMMAND_QUEUE, FILE_QUEUE, GEN_HEARD_QUEUE, INPUT_MOST_WAITING, MEMORY_QUEUE, NOTE_PITCH_QUEUE,
+    PUBLISH_QUEUE, RECORDER_QUEUE, RETURN_QUEUE, SCOPE_QUEUE, TAKE_QUEUE, TELEMETRY_QUEUE,
+};
 use crate::recorder::{RecordQuantise, RecordSource, RecorderEvent};
 #[cfg(test)]
 use crate::track_state::Drawn;
@@ -1872,7 +1873,7 @@ mod tests {
         song.sample_on(2, "recording");
         let engine = Engine::new(48_000, published(song, &pool));
         let (mut handle, mut rt) = connect(engine);
-        let (mut input, heard) = RingBuffer::new(vt_model::constants::INPUT_QUEUE);
+        let (mut input, heard) = RingBuffer::new(INPUT_QUEUE);
         rt.listen(heard);
         assert!(handle.send(Command::PlayFrom { step: 0 }));
         assert!(handle.record(
