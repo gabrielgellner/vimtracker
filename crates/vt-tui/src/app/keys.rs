@@ -165,7 +165,7 @@ impl App {
         match held.what {
             Momentary::Mute { track, was } | Momentary::Solo { track, was } => {
                 let mute = matches!(held.what, Momentary::Mute { .. });
-                match self.services.levels.get_mut(track) {
+                match self.services.live.levels.get_mut(track) {
                     Some(live) if long => {
                         if mute {
                             live.mute = was;
@@ -348,14 +348,14 @@ impl App {
                 self.services.status.clear();
             }
             KeyCode::Char('<') if plain => {
-                self.services.octave = (self.services.octave - 1).max(LOWEST_OCTAVE)
+                self.services.live.octave = (self.services.live.octave - 1).max(LOWEST_OCTAVE)
             }
             KeyCode::Char('>') if plain => {
-                self.services.octave = (self.services.octave + 1).min(HIGHEST_OCTAVE)
+                self.services.live.octave = (self.services.live.octave + 1).min(HIGHEST_OCTAVE)
             }
             KeyCode::Char(c) if plain && KEYS_NOTES.contains(c) => {
                 if let Some(note) = self.played_key(c) {
-                    self.hold_note(key, note, self.services.note_velocity);
+                    self.hold_note(key, note, self.services.live.note_velocity);
                 }
             }
             _ => {
@@ -371,11 +371,16 @@ impl App {
     /// The note a key plays in the current octave. With a scale, the home row goes up through it
     /// from the root, and the row above is silent, so every key is in key.
     pub(super) fn played_key(&self, c: char) -> Option<u8> {
-        if self.services.scale.on {
-            degree_key(c).map(|degree| self.services.scale.degree(degree, self.services.octave))
+        if self.services.live.scale.on {
+            degree_key(c).map(|degree| {
+                self.services
+                    .live
+                    .scale
+                    .degree(degree, self.services.live.octave)
+            })
         } else {
             note_key(c).map(|semitones| {
-                let midi = octave_start(self.services.octave) + i16::from(semitones);
+                let midi = octave_start(self.services.live.octave) + i16::from(semitones);
                 midi.clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8
             })
         }
@@ -689,18 +694,18 @@ impl App {
             Cmd::PreviousGroupTrack => self.move_to_group(-1),
             Cmd::ToggleMute => {
                 let track = self.services.cursor.track;
-                if let Some(was) = self.services.levels.get(track).map(|live| live.mute) {
+                if let Some(was) = self.services.live.levels.get(track).map(|live| live.mute) {
                     self.services.toggle_mute();
-                    if self.services.levels[track].mute != was {
+                    if self.services.live.levels[track].mute != was {
                         self.held.started = Some(Momentary::Mute { track, was });
                     }
                 }
             }
             Cmd::ToggleSolo => {
                 let track = self.services.cursor.track;
-                if let Some(was) = self.services.levels.get(track).map(|live| live.solo) {
+                if let Some(was) = self.services.live.levels.get(track).map(|live| live.solo) {
                     self.services.toggle_solo();
-                    if self.services.levels[track].solo != was {
+                    if self.services.live.levels[track].solo != was {
                         self.held.started = Some(Momentary::Solo { track, was });
                     }
                 }
@@ -714,7 +719,7 @@ impl App {
                 self.held.repeats_ignored = true;
             }
             Cmd::ToggleFill => {
-                let was = self.services.fill;
+                let was = self.services.live.fill;
                 self.set_fill(!was);
                 self.held.started = Some(Momentary::Fill { was });
             }

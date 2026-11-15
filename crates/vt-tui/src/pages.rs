@@ -490,32 +490,32 @@ impl<'a> Ctx<'a> {
     /// One of the track page's settings on a track of the song, as a widget draws it, with an
     /// accumulator's limits counted as the scale lock has them.
     pub(crate) fn param_view(&self, control: Control, track: &Track) -> Option<ParamView> {
-        crate::pages::track::view(control, track, self.song(), self.services.scale.on)
+        crate::pages::track::view(control, track, self.song(), self.services.live.scale.on)
     }
 
     /// Whether the song plays, as the engine last said.
     pub fn transport(&self) -> Transport {
-        self.services.transport
+        self.services.reported.transport
     }
 
     /// The section the engine is on.
     pub fn playing_section(&self) -> usize {
-        self.services.playing_section
+        self.services.reported.playing_section
     }
 
     /// The sections being kept playing, set with `:loop`.
     pub fn looping(&self) -> Option<SectionLoop> {
-        self.services.looping
+        self.services.reported.looping
     }
 
     /// Whether the `:loop` is waiting for the launch grid's next line, as the engine last said.
     pub fn loop_waiting(&self) -> bool {
-        self.services.loop_waiting
+        self.services.reported.loop_waiting
     }
 
     /// What the cursor's track is playing with right now, as the engine last said.
     pub fn live(&self) -> Option<LiveValues> {
-        self.services.live
+        self.services.reported.live
     }
 
     /// The cursor's track as the latest report's live values were worked out from.
@@ -525,12 +525,12 @@ impl<'a> Ctx<'a> {
 
     /// What each track is launched onto and cued to, as the engine last said.
     pub fn jam(&self) -> &'a [JamState] {
-        &self.services.jam
+        &self.services.reported.jam
     }
 
     /// Each track's live mute and solo.
     pub fn levels(&self) -> &'a [TrackLive] {
-        &self.services.levels
+        &self.services.live.levels
     }
 
     /// How far a track is through this chain, if it's playing it, counting every time round it.
@@ -623,17 +623,17 @@ impl<'a> Ctx<'a> {
 
     /// The scale notes are entered in.
     pub fn scale(&self) -> Scale {
-        self.services.scale
+        self.services.live.scale
     }
 
     /// Whether entering in Insert moves on by the grid.
     pub fn auto_jump(&self) -> bool {
-        self.services.auto_jump
+        self.services.live.auto_jump
     }
 
     /// Whether `:w` refuses to write over the project.
     pub fn read_only(&self) -> bool {
-        self.services.read_only
+        self.services.live.read_only
     }
 
     /// The audio output as it plays, and what the audio page chooses from.
@@ -680,7 +680,7 @@ impl<'a> Ctx<'a> {
     /// Where each voice playing a sample through the cursor's track is in it, as the engine last
     /// said.
     pub fn playheads(&self) -> &'a [Option<Playhead>; PLAYHEADS] {
-        &self.services.playheads
+        &self.services.reported.playheads
     }
 
     /// Whether something is drawn over the page, which a picture placed above the text would show
@@ -764,6 +764,7 @@ impl<'a> Ctx<'a> {
     pub(crate) fn row_skipped(&self) -> bool {
         let services = self.services;
         services
+            .reported
             .places
             .get(services.cursor.track)
             .is_some_and(|place| place.skipped)

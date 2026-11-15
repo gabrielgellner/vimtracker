@@ -178,9 +178,9 @@ fn the_rotos_mix_mode_knobs_follow_the_faders_the_steps_drive() {
     let faders: Vec<_> = (0..app.song().tracks.len())
         .map(|at| app.services.faders(at))
         .collect();
-    let [tracks, _] = strips(app.song(), &app.services.levels, &faders);
+    let [tracks, _] = strips(app.song(), &app.services.live.levels, &faders);
     assert_eq!(tracks[0].level, Some(level_position(f64::from(0x80_u8))));
-    let unmoved = strips(app.song(), &app.services.levels, &[]);
+    let unmoved = strips(app.song(), &app.services.live.levels, &[]);
     assert_eq!(
         unmoved[0][0].level,
         Some(level_position(f64::from(0xE0_u8)))
@@ -191,6 +191,6 @@ fn the_rotos_mix_mode_knobs_follow_the_faders_the_steps_drive() {
     let faders: Vec<_> = (0..app.song().tracks.len())
         .map(|at| app.services.faders(at))
         .collect();
-    let [tracks, _] = strips(app.song(), &app.services.levels, &faders);
+    let [tracks, _] = strips(app.song(), &app.services.live.levels, &faders);
     assert_eq!(tracks[0].level, Some(level_position(f64::from(0x81_u8))));
 }

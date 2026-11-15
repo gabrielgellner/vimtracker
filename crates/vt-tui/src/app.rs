@@ -278,7 +278,7 @@ impl App {
     /// Why `:e`, `:new` or `:q` refused unsaved changes, and the ways on: `or` is the forced
     /// command and what it does. A read-only song's `:w` refuses too, so it's offered `:w path`.
     pub(crate) fn unsaved(&self, or: &str) -> String {
-        if self.services.read_only {
+        if self.services.live.read_only {
             format!("Unsaved changes to a read-only song: :w path to save a copy, or {or}")
         } else {
             format!("Unsaved changes: :w to save, or {or}")
@@ -344,14 +344,14 @@ impl App {
         self.explorer.loader = Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT));
         self.explorer.file_playing = None;
         self.services.scope = crate::services::scope::Scope::new(rate);
-        self.services.transport = Transport::Stopped;
-        self.services.playhead = 0;
-        self.services.places = [TrackPlace::default(); MAX_TRACKS];
-        self.services.live = None;
+        self.services.reported.transport = Transport::Stopped;
+        self.services.reported.playhead = 0;
+        self.services.reported.places = [TrackPlace::default(); MAX_TRACKS];
+        self.services.reported.live = None;
         // The new engine starts on the song as it is.
         self.services.sent.clear();
         self.services.live_song = Some(Arc::clone(self.song()));
-        self.services.jam = vec![JamState::default(); MAX_TRACKS];
+        self.services.reported.jam = vec![JamState::default(); MAX_TRACKS];
         // Sent again when the next frame finds it differs.
         self.services.watched = usize::MAX;
         self.send_live();
@@ -363,9 +363,9 @@ impl App {
     /// loading a song.
     fn send_live(&mut self) {
         self.services.handle.send(Command::SetScale {
-            scale: self.services.scale,
+            scale: self.services.live.scale,
         });
-        for (track, live) in self.services.levels.clone().into_iter().enumerate() {
+        for (track, live) in self.services.live.levels.clone().into_iter().enumerate() {
             self.services.handle.send(Command::SetMute {
                 track,
                 mute: live.mute,
@@ -380,11 +380,11 @@ impl App {
     /// The song as saved: with live mute, solo, the scale and the folds written into it.
     pub(crate) fn song_to_save(&self) -> Arc<Song> {
         let mut song = Song::clone(self.song());
-        song.scale = self.services.scale;
-        song.auto_jump = self.services.auto_jump;
-        song.read_only = self.services.read_only;
+        song.scale = self.services.live.scale;
+        song.auto_jump = self.services.live.auto_jump;
+        song.read_only = self.services.live.read_only;
         song.view = self.services.folds.view();
-        for (track, live) in song.tracks.iter_mut().zip(&self.services.levels) {
+        for (track, live) in song.tracks.iter_mut().zip(&self.services.live.levels) {
             track.mute = live.mute;
             track.solo = live.solo;
         }
@@ -425,19 +425,19 @@ impl App {
     /// Put the playhead at a step of the song's, with each track at the step of its own playing
     /// then, as the engine reports them, for drawing without playing.
     pub fn set_playhead(&mut self, step: usize) {
-        self.services.playhead = step;
+        self.services.reported.playhead = step;
         let tracks = self.song().tracks.len().min(MAX_TRACKS);
         for track in 0..tracks {
             let speed = self.song().tracks[track].speed;
             let ticks = speed.ticks();
-            self.services.places[track] = TrackPlace {
+            self.services.reported.places[track] = TrackPlace {
                 count: (step as u64 * TICKS_PER_STEP / ticks) as i64,
                 progress: 0.0,
                 ticks: ticks as u32,
                 speed,
                 ..TrackPlace::default()
             };
-            self.services.places[track].lanes = self.services.placed_lanes(track);
+            self.services.reported.places[track].lanes = self.services.placed_lanes(track);
         }
     }
 
@@ -485,29 +485,30 @@ impl App {
             meter.update(report.map(|report| report.tracks[index]), seconds);
         }
         if let Some(report) = report {
-            self.services.playhead = report.position;
-            self.services.progress = report.progress;
-            self.services.places = report.places;
-            self.services.report_at = now;
-            self.services.playing_section = report.section;
-            self.services.transport = report.transport;
-            self.services.realigning = report.realigning;
-            self.services.loop_waiting = report.loop_waiting;
-            self.services.realigning_tracks = report.realigning_tracks;
-            self.services.live = (report.watched == track).then_some(report.live);
+            self.services.reported.playhead = report.position;
+            self.services.reported.progress = report.progress;
+            self.services.reported.places = report.places;
+            self.services.reported.report_at = now;
+            self.services.reported.playing_section = report.section;
+            self.services.reported.transport = report.transport;
+            self.services.reported.realigning = report.realigning;
+            self.services.reported.loop_waiting = report.loop_waiting;
+            self.services.reported.realigning_tracks = report.realigning_tracks;
+            self.services.reported.live = (report.watched == track).then_some(report.live);
             self.services.follow_version(report.version);
             self.services.follow_faders(&report.faders, now);
-            self.services.playheads = if report.watched == track {
+            self.services.reported.playheads = if report.watched == track {
                 report.playheads
             } else {
                 [None; PLAYHEADS]
             };
-        } else if now.saturating_duration_since(self.services.report_at) > PLAYHEADS_KEPT {
+        } else if now.saturating_duration_since(self.services.reported.report_at) > PLAYHEADS_KEPT {
             // Audio has stopped, so nothing is playing.
-            self.services.playheads = [None; PLAYHEADS];
+            self.services.reported.playheads = [None; PLAYHEADS];
         }
         let reduction = self
             .services
+            .reported
             .live
             .map_or([0.0; vt_model::insert::INSERTS], |live| live.reduction);
         for (held, now) in self.track_page.slot_reduction.iter_mut().zip(reduction) {
@@ -526,21 +527,21 @@ impl App {
         }
         while let Some((track, pitch)) = self.services.handle.note_pitch() {
             let row = (track, pitch.row.phrase, pitch.row.row);
-            self.services.heard_pitches.insert(row, pitch);
+            self.services.reported.heard_pitches.insert(row, pitch);
         }
         while let Some((track, report)) = self.services.handle.gen_heard() {
             self.hear_generator(track, report);
         }
         while let Some((track, state)) = self.services.handle.jam_change() {
             // A mute or solo waiting for the grid has landed, so the live controls follow it.
-            if state.switches_landed != self.services.jam[track].switches_landed
-                && let Some(live) = self.services.levels.get_mut(track)
+            if state.switches_landed != self.services.reported.jam[track].switches_landed
+                && let Some(live) = self.services.live.levels.get_mut(track)
             {
                 live.mute = state.mute;
                 live.solo = state.solo;
                 self.services.dirty = true;
             }
-            self.services.jam[track] = state;
+            self.services.reported.jam[track] = state;
         }
         self.take_loaded();
         self.take_analyses();
@@ -575,7 +576,11 @@ impl App {
     /// `--when-focus-on title:vimtracker` matches it, so its `Cmd` shortcuts can be left to this
     /// window alone.
     pub fn window_title(&self) -> String {
-        let read_only = if self.services.read_only { " [RO]" } else { "" };
+        let read_only = if self.services.live.read_only {
+            " [RO]"
+        } else {
+            ""
+        };
         format!("vimtracker: {}{read_only}", self.services.project_name())
     }
 }

@@ -104,7 +104,7 @@ fn steps_onto<'a>(mut track: Cow<'a, Track>, faders: &Faders) -> Cow<'a, Track> 
 impl Services {
     /// The engine's report of a track's faders, with what's been asked of it since on top.
     pub fn faders(&self, track: usize) -> Faders {
-        self.faders.get(track).copied().unwrap_or_default()
+        self.reported.faders.get(track).copied().unwrap_or_default()
     }
 
     /// A track as it's heard, its faders where the steps have them while they drive them.
@@ -133,10 +133,10 @@ impl Services {
     /// Take the engine's report of every track's faders, keeping what's been asked since that it
     /// doesn't say yet.
     pub(crate) fn follow_faders(&mut self, report: &[Faders], now: Instant) {
-        for (kept, reported) in self.faders.iter_mut().zip(report) {
+        for (kept, reported) in self.reported.faders.iter_mut().zip(report) {
             *kept = *reported;
         }
-        let faders = &mut self.faders;
+        let faders = &mut self.reported.faders;
         self.fader_wishes.retain(|wish| {
             let Some(faders) = faders.get_mut(wish.track) else {
                 return false;
@@ -167,7 +167,7 @@ impl Services {
     }
 
     pub(crate) fn wish(&mut self, track: usize, fader: usize, taken: bool) {
-        if let Some(faders) = self.faders.get_mut(track) {
+        if let Some(faders) = self.reported.faders.get_mut(track) {
             faders.taken[fader] = taken;
         }
         self.fader_wishes
@@ -225,7 +225,7 @@ impl App {
     pub(crate) fn give_back_on_opening(&mut self) {
         self.services.handle.send(Command::GiveBack { track: None });
         self.services.fader_wishes.clear();
-        self.services.faders = [Faders::default(); vt_model::constants::MAX_TRACKS];
+        self.services.reported.faders = [Faders::default(); vt_model::constants::MAX_TRACKS];
     }
 
     /// The status line's word on a fader's value, after it in real units: from the steps, or

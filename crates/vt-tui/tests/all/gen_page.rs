@@ -402,8 +402,8 @@ fn the_row_playing_rides_the_preview_as_a_dot() {
         String::from_utf8_lossy(&placed).into_owned()
     };
     assert_eq!(frame(&mut app, &mut graphics), "", "stopped, no dot");
-    app.services.transport = Transport::Playing;
-    app.services.jam[0].chain = Some(0);
+    app.services.reported.transport = Transport::Playing;
+    app.services.reported.jam[0].chain = Some(0);
     app.set_playhead(3);
     let placed = frame(&mut app, &mut graphics);
     assert_eq!(placed.matches("a=p,").count(), 1, "{placed:?}");

@@ -201,8 +201,8 @@ fn a_new_engine_keeps_the_song_its_undo_and_the_mutes() {
     app.reconnect(handle, samples, 44_100);
     assert_eq!(app.services.rate, 44_100);
     assert!(Arc::ptr_eq(&song, app.song()));
-    assert!(app.services.levels[0].mute, "still muted");
-    assert_eq!(app.services.transport, Transport::Stopped);
+    assert!(app.services.live.levels[0].mute, "still muted");
+    assert_eq!(app.services.reported.transport, Transport::Stopped);
     press(&mut app, "u");
     assert_eq!(
         notes(&app)[0],

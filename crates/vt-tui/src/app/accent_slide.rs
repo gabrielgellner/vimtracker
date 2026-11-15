@@ -326,8 +326,8 @@ impl App {
     /// The velocity taking an accent off leaves: the one notes are written with, unless that's
     /// an accent itself, and then the one a new song writes with.
     fn unaccented(&self) -> u8 {
-        if self.services.note_velocity < ACCENT_VELOCITY {
-            self.services.note_velocity
+        if self.services.live.note_velocity < ACCENT_VELOCITY {
+            self.services.live.note_velocity
         } else {
             DEFAULT_NOTE_VELOCITY
         }

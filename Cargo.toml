@@ -9,42 +9,45 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/gabrielgellner/vimtracker"
 
 [workspace.dependencies]
+# Caret ranges, as `Cargo.lock` keeps builds reproducible, and `=` only for a crate whose
+# arithmetic a golden render hears (CONTRIBUTING.md, decision 352).
 vt-model = { path = "crates/vt-model" }
 vt-engine = { path = "crates/vt-engine" }
 vt-roto = { path = "crates/vt-roto" }
-serde = { version = "=1.0.229", features = ["derive", "rc"] }
-ron = "=0.12.3"
-hound = "=3.5.1"
-symphonia = { version = "=0.6.1", default-features = false, features = ["aiff", "flac", "pcm", "wav"] }
-rubato = "=5.0.1"
+serde = { version = "1.0.229", features = ["derive", "rc"] }
+ron = "0.12.3"
+hound = "3.5.1"
+symphonia = { version = "0.6.1", default-features = false, features = ["aiff", "flac", "pcm", "wav"] }
+rubato = "5.0.1"
 # The onset function's spectra, and `Clouds`' spectral mode. MIT or Apache-2.0. Already in the
-# tree, through rubato.
+# tree, through rubato. Pinned exactly, as `Clouds`' golden renders hear its arithmetic.
 realfft = "=3.5.1"
-thiserror = "=2.0.21"
-base64 = "=0.23.1"
-rtrb = "=0.4.1"
+thiserror = "2.0.21"
+base64 = "0.23.1"
+rtrb = "0.4.1"
 # Four lanes at once for the voices that run the same code side by side, as `Supersaw`'s stack
-# does. Zlib, Apache-2.0 or MIT.
+# does. Zlib, Apache-2.0 or MIT. Pinned exactly, as the Supersaw's and the 4-op's golden renders
+# hear its arithmetic.
 wide = "=1.7.1"
-ratatui = "=0.30.2"
-cpal = "=0.18.2"
-clap = { version = "=4.6.7", features = ["derive"] }
-nucleo-matcher = "=0.3.1"
-flate2 = "=1.1.10"
-roxmltree = "=0.21.2"
-libc = "=0.2.191"
-xxhash-rust = { version = "=0.8.19", features = ["xxh3"] }
+ratatui = "0.30.2"
+cpal = "0.18.2"
+clap = { version = "4.6.7", features = ["derive"] }
+nucleo-matcher = "0.3.1"
+flate2 = "1.1.10"
+roxmltree = "0.21.2"
+libc = "0.2.191"
+xxhash-rust = { version = "0.8.19", features = ["xxh3"] }
 # Low Power Mode and the thermal state, for the CPU figure's leaf. Both are already in the tree,
 # through cpal.
-objc2 = "=0.6.5"
-objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSProcessInfo", "NSString", "NSUserDefaults"] }
+objc2 = "0.6.5"
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSProcessInfo", "NSString", "NSUserDefaults"] }
 # The Roto-Control's MIDI ports, through CoreMIDI on macOS and ALSA on Linux, which cpal already
 # links for audio.
-midir = "=0.11.1"
+midir = "0.11.1"
 # The Roto-Control's USB serial port, for reading and writing its setups. Without libudev, so
 # Linux needs no more than the ALSA headers the audio output already does.
-serialport = { version = "=4.10.1", default-features = false }
-toml = { version = "=1.2.1", default-features = false, features = ["std", "parse", "display", "serde"] }
+serialport = { version = "4.10.1", default-features = false }
+toml = { version = "1.2.1", default-features = false, features = ["std", "parse", "display", "serde"] }
 
 # The engine and the model optimised in debug builds, and so in the tests, which take a few
 # times as long unoptimised (#663). Debug assertions and overflow checks stay on, as the rest of

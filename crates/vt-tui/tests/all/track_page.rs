@@ -568,7 +568,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
     press(&mut app, " 5");
     let cut = |app: &App| from_name(app, "Cut");
     assert!(cut(&app).contains("FF00 ▕█████████▏"), "{}", cut(&app));
-    app.services.live = Some(vt_engine::track_state::LiveValues {
+    app.services.reported.live = Some(vt_engine::track_state::LiveValues {
         level: 0xE0,
         pan: 0x80,
         cutoff: 0x40,
@@ -2039,21 +2039,21 @@ fn the_filter_curve_moves_with_what_plays() {
     };
 
     // Each new value draws it once, and it holds while the value does.
-    app.services.live = Some(live(0x40, track.resonance));
+    app.services.reported.live = Some(live(0x40, track.resonance));
     assert_eq!(sync(&mut app, &mut graphics).0, 1);
     let moved = app.track_page.images.get(PanelKey::Filter).unwrap();
     assert_ne!(moved, still);
     // Holding, it sends nothing new, and the image it replaced is forgotten.
     assert_eq!(sync(&mut app, &mut graphics), (0, 1));
     assert_eq!(sync(&mut app, &mut graphics), (0, 0));
-    app.services.live = Some(live(0x40, 0xC0));
+    app.services.reported.live = Some(live(0x40, 0xC0));
     assert_eq!(sync(&mut app, &mut graphics).0, 1);
     assert_ne!(app.track_page.images.get(PanelKey::Filter).unwrap(), moved);
 
     // Back on the setting the next frame, as an LFO moves it, it keeps the last for a frame, so
     // it's sent at most every other frame, and then it's drawn from the setting again.
     let resonant = app.track_page.images.get(PanelKey::Filter).unwrap();
-    app.services.live = Some(live(track.cutoff, track.resonance));
+    app.services.reported.live = Some(live(track.cutoff, track.resonance));
     assert_eq!(sync(&mut app, &mut graphics).0, 0);
     assert_eq!(
         app.track_page.images.get(PanelKey::Filter).unwrap(),
@@ -2393,7 +2393,7 @@ fn semicolon_on_the_track_page_plays_the_sound_from_the_keyboard() {
     press(&mut app, "a");
     assert!(loudest(&mut realtime, 4800) > 0.01, "a plays a note");
     press(&mut app, ">");
-    assert_eq!(app.services.octave, 4, "> goes up an octave");
+    assert_eq!(app.services.live.octave, 4, "> goes up an octave");
     assert!(Arc::ptr_eq(&before, app.song()), "nothing is written");
     // The page's own keys still work, so a setting changes while it plays.
     press(&mut app, "j");
@@ -3229,8 +3229,8 @@ fn a_groups_page_lists_its_tracks_with_their_mutes_and_solos() {
     };
     assert_eq!(tracks(&app), ["02", "03", "04"]);
     // Each with its own mute or solo.
-    app.services.levels[2].mute = true;
-    app.services.levels[3].solo = true;
+    app.services.live.levels[2].mute = true;
+    app.services.live.levels[3].solo = true;
     let glyph = |glyph: char| format!("03 {glyph}");
     assert_eq!(
         tracks(&app),
@@ -3240,8 +3240,8 @@ fn a_groups_page_lists_its_tracks_with_their_mutes_and_solos() {
             format!("04 {}", vt_tui::widgets::glyphs::SOLO)
         ]
     );
-    app.services.levels[2].mute = false;
-    app.services.levels[3].solo = false;
+    app.services.live.levels[2].mute = false;
+    app.services.live.levels[3].solo = false;
     // It follows the song: a track that joins, or leaves, as the cursor stays on the group.
     command(&mut app, "group 1 6");
     assert_eq!(tracks(&app), ["02", "03", "04", "06"]);

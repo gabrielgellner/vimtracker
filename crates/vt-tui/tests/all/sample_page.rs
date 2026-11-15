@@ -1716,7 +1716,7 @@ fn space_c_plays_from_the_cursor_to_the_end_and_tab_stays_the_songs() {
     keys(&mut app, "Tab");
     play(&mut realtime, &mut app, 100);
     assert_eq!(
-        app.services.transport,
+        app.services.reported.transport,
         Transport::Playing,
         "Tab plays the song"
     );
@@ -1842,15 +1842,15 @@ fn each_playhead_is_a_green_line_placed_at_its_pixel_and_nothing_is_sent_while_n
     // The track's note of the entry, and what the page played, each have a line. A note of
     // another entry doesn't.
     app.sample_page.heard = app.sample_page.shown;
-    app.services.playheads[0] = Some(Playhead {
+    app.services.reported.playheads[0] = Some(Playhead {
         entry: Some(1),
         frame: FIT * 10,
     });
-    app.services.playheads[1] = Some(Playhead {
+    app.services.reported.playheads[1] = Some(Playhead {
         entry: Some(2),
         frame: FIT * 20,
     });
-    app.services.playheads[2] = Some(Playhead {
+    app.services.reported.playheads[2] = Some(Playhead {
         entry: None,
         frame: FIT * 30 + 400,
     });
@@ -1862,7 +1862,7 @@ fn each_playhead_is_a_green_line_placed_at_its_pixel_and_nothing_is_sent_while_n
         "{sent:?}"
     );
     // Moving one places only it again, a pixel along.
-    app.services.playheads[0] = Some(Playhead {
+    app.services.reported.playheads[0] = Some(Playhead {
         entry: Some(1),
         frame: FIT * 10 + 200,
     });
@@ -1871,7 +1871,7 @@ fn each_playhead_is_a_green_line_placed_at_its_pixel_and_nothing_is_sent_while_n
     assert_eq!(placements(&sent, &id), BTreeMap::from([(1, 31)]));
     assert!(sent.len() < 100, "{} bytes: {sent:?}", sent.len());
     // When it stops, its lines are taken off, and then nothing more is sent.
-    app.services.playheads = [None; PLAYHEADS];
+    app.services.reported.playheads = [None; PLAYHEADS];
     let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
     assert_eq!(sent.matches(&format!("a=d,d=i,i={id},")).count(), 2);
     let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
@@ -1881,7 +1881,7 @@ fn each_playhead_is_a_green_line_placed_at_its_pixel_and_nothing_is_sent_while_n
 #[test]
 fn as_its_column_a_playhead_is_its_columns_background() {
     let (mut app, _realtime) = on_page();
-    app.services.playheads[0] = Some(Playhead {
+    app.services.reported.playheads[0] = Some(Playhead {
         entry: Some(1),
         frame: FIT * 10 + 5,
     });
