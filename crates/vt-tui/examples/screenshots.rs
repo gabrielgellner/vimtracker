@@ -496,7 +496,7 @@ fn band(song: &mut Song) {
         let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
         write_rows(song, track, &rows);
     }
-    for track in &mut song.tracks[..4] {
+    for track in song.tracks.iter_mut().take(4) {
         track.group = Some(1);
     }
     let group = song.fixed_track(TrackKind::Group(1)).expect("a group");
