@@ -8,7 +8,9 @@ pub(crate) mod draw;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
+use crate::input::mode::View;
 use crate::overlays::picker::{Item, Pick, Picker};
+use crate::pages::track::Page;
 use crate::widgets::theme;
 
 /// One guide. Its title is its first heading.
@@ -17,59 +19,93 @@ pub struct Guide {
     pub source: &'static str,
 }
 
+const FIRST_LOOP: Guide = Guide {
+    source: include_str!("../../guides/first-loop.md"),
+};
+const NAVIGATION: Guide = Guide {
+    source: include_str!("../../guides/navigation.md"),
+};
+const NOTE_ENTRY: Guide = Guide {
+    source: include_str!("../../guides/note-entry.md"),
+};
+const EDITING: Guide = Guide {
+    source: include_str!("../../guides/editing.md"),
+};
+const FX: Guide = Guide {
+    source: include_str!("../../guides/fx.md"),
+};
+const CHAINS: Guide = Guide {
+    source: include_str!("../../guides/chains.md"),
+};
+const SOUNDS: Guide = Guide {
+    source: include_str!("../../guides/sounds.md"),
+};
+const SAMPLE_EDITOR: Guide = Guide {
+    source: include_str!("../../guides/sample-editor.md"),
+};
+const TRACK_SOUND: Guide = Guide {
+    source: include_str!("../../guides/track-sound.md"),
+};
+const TRACK_MOD: Guide = Guide {
+    source: include_str!("../../guides/track-mod.md"),
+};
+const TRACK_FX: Guide = Guide {
+    source: include_str!("../../guides/track-fx.md"),
+};
+const TRACK_GEN: Guide = Guide {
+    source: include_str!("../../guides/track-gen.md"),
+};
+const SAVING: Guide = Guide {
+    source: include_str!("../../guides/saving.md"),
+};
+const METER: Guide = Guide {
+    source: include_str!("../../guides/meter.md"),
+};
+
 /// Every guide, in the order to learn them.
 pub(crate) const GUIDES: [Guide; 14] = [
-    Guide {
-        source: include_str!("../../guides/first-loop.md"),
-    },
-    Guide {
-        source: include_str!("../../guides/navigation.md"),
-    },
-    Guide {
-        source: include_str!("../../guides/note-entry.md"),
-    },
-    Guide {
-        source: include_str!("../../guides/editing.md"),
-    },
-    Guide {
-        source: include_str!("../../guides/fx.md"),
-    },
-    Guide {
-        source: include_str!("../../guides/chains.md"),
-    },
-    Guide {
-        source: include_str!("../../guides/sounds.md"),
-    },
-    Guide {
-        source: include_str!("../../guides/sample-editor.md"),
-    },
-    Guide {
-        source: include_str!("../../guides/track-sound.md"),
-    },
-    Guide {
-        source: include_str!("../../guides/track-mod.md"),
-    },
-    Guide {
-        source: include_str!("../../guides/track-fx.md"),
-    },
-    Guide {
-        source: include_str!("../../guides/track-gen.md"),
-    },
-    Guide {
-        source: include_str!("../../guides/saving.md"),
-    },
-    Guide {
-        source: include_str!("../../guides/meter.md"),
-    },
+    FIRST_LOOP,
+    NAVIGATION,
+    NOTE_ENTRY,
+    EDITING,
+    FX,
+    CHAINS,
+    SOUNDS,
+    SAMPLE_EDITOR,
+    TRACK_SOUND,
+    TRACK_MOD,
+    TRACK_FX,
+    TRACK_GEN,
+    SAVING,
+    METER,
 ];
 
-/// The list of guides, in the order to learn them, which `Space ?` opens.
-pub(crate) fn picker() -> Picker {
+/// The list of guides, in the order to learn them, which `Space ?` opens on `on`.
+pub(crate) fn picker(on: Guide) -> Picker {
     let items = GUIDES
         .iter()
         .map(|guide| Item::new(guide.title(), Pick::Guide(*guide)))
         .collect();
-    Picker::new("Guides", items)
+    Picker::new("Guides", items).revealing(GUIDES.iter().position(|guide| *guide == on))
+}
+
+/// The guide for where the program is: the track page's own for each of its pages, the one
+/// with the mixer, the project page or the sample page in it, and on the phrase view the moves.
+pub(crate) fn for_view(view: View, page: Page) -> Guide {
+    match view {
+        View::Phrase => NAVIGATION,
+        View::Chain | View::Song => CHAINS,
+        View::Track => match page {
+            Page::Sound => TRACK_SOUND,
+            Page::Mod => TRACK_MOD,
+            Page::Fx => TRACK_FX,
+            Page::Gen => TRACK_GEN,
+        },
+        View::Mixer => TRACK_SOUND,
+        View::Audio => METER,
+        View::Project => SAVING,
+        View::Sample => SAMPLE_EDITOR,
+    }
 }
 
 impl Guide {
