@@ -28,6 +28,8 @@ use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::response::{Gain, one_pole, svf, warped};
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::delay::{MOST_TAPS, Repeats, Tap};
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::dsp::effects::spring::Spring;
 use crate::rng::Pcg32;
 
@@ -766,6 +768,42 @@ pub fn repeats(settings: Settings, frames_per_tick: f64, rate: u32) -> Repeats {
 
 /// How quiet a repeat is when it's no longer drawn, as a gain: -60 dB.
 const QUIETEST_TAP: f32 = 0.001;
+
+impl SlotEffect for Echo {
+    type Settings = Settings;
+
+    /// A Space Echo's, whose tape holds its slowest speed, and its spring.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, song: SongPlace, _frames: u64) {
+        self.follow(settings, song.frames_per_tick);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        self.quiet_frames()
+    }
+
+    fn seed(&mut self, rng: Pcg32) {
+        self.seed(rng);
+    }
+}
+
+impl Rung for Echo {
+    #[inline]
+    fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.process(input)
+    }
+}
 
 #[cfg(test)]
 mod tests {

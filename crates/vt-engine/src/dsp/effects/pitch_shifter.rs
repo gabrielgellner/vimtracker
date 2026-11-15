@@ -33,6 +33,8 @@ use vt_model::insert::{
 };
 
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::dsp::filters::filter::soft_clip;
 
 /// The most of what comes out that goes back in, well short of all, so stacked shifts die away.
@@ -180,6 +182,38 @@ impl PitchShifter {
         }
         self.last = out;
         out
+    }
+}
+
+impl SlotEffect for PitchShifter {
+    type Settings = Settings;
+
+    /// A pitch shifter's, long enough for its longest window.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, _frames: u64) {
+        self.follow(settings);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        self.frames() as u32
+    }
+}
+
+impl Rung for PitchShifter {
+    #[inline]
+    fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.process(input)
     }
 }
 

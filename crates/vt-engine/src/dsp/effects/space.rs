@@ -41,6 +41,8 @@ use vt_model::insert::Space as Settings;
 
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::effects::memory::{REVERB_QUIET_SECONDS, SongPlace};
+use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::dsp::effects::tail::Tail;
 use crate::rng::Pcg32;
 
@@ -452,6 +454,38 @@ impl Space {
             *out = side.after * WET;
         }
         out
+    }
+}
+
+impl SlotEffect for Space {
+    type Settings = Settings;
+
+    /// A space's, long enough for the biggest tank.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, _frames: u64) {
+        self.follow(settings);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, rate: u32) -> u32 {
+        (REVERB_QUIET_SECONDS * rate as f32) as u32
+    }
+}
+
+impl Rung for Space {
+    #[inline]
+    fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.process(input)
     }
 }
 

@@ -29,6 +29,49 @@ pub const DEFAULT_NOTE: f32 = 60.0;
 /// enough that a step's lock of its bypass lands with the step.
 pub const BYPASS_FADE_MS: f32 = 5.0;
 
+/// What a slot effect with a long buffer does, besides how it's played: it's made on the edit
+/// thread, follows what's set, is emptied for the pool and says how long its tail lasts. A slot
+/// reaches it through [`Memory`]'s `match`es, which `memories!` writes, never through `dyn`
+/// (decision 340). Nothing here may allocate but `new`, which runs on the edit thread.
+///
+/// Each effect's own methods mostly have these names already, and an `impl` hands each call on to
+/// them: a method of the type's own is picked over the trait's, so `self.follow(settings)` inside
+/// one isn't a call back into it.
+pub trait SlotEffect: Sized {
+    /// Its settings, as its `Insert` holds them.
+    type Settings: Copy;
+
+    /// Made on the edit thread, with its long buffers.
+    fn new(rate: u32) -> Self;
+    /// Take what's set now, where the song is and this many frames in.
+    fn follow(&mut self, settings: Self::Settings, song: SongPlace, frames: u64);
+    /// Jump to what's set, as it's only just started.
+    fn settle(&mut self) {}
+    /// Empty what it keeps, before the pool hands it out again.
+    fn clear(&mut self);
+    /// How many quiet frames in a row mean nothing's left in it.
+    fn quiet_frames(&self, rate: u32) -> u32;
+    /// Move what goes by the frame rather than by what it's done to where it is this many frames
+    /// in, as taking its settings does.
+    fn keep_time(&mut self, _frames: u64, _song: SongPlace) {}
+    /// Give what draws random numbers its own generator, from the track's.
+    fn seed(&mut self, _rng: Pcg32) {}
+    /// Whether it's about to play something of its own with nothing going in, so it has to be
+    /// woken.
+    fn waking(&self) -> bool {
+        false
+    }
+    /// A step has switched the slot's trigger on.
+    fn strike(&mut self) {}
+}
+
+/// A slot effect the slot plays through its `ring`: a frame in, and what's wet out, with nothing
+/// more from the slot. The limiter, Warps, the resonator, the comb and the frequency shifter aren't
+/// rung: the slot plays each itself, handing it the note, its glide or another track.
+pub trait Rung: SlotEffect {
+    fn process(&mut self, input: [f32; 2]) -> [f32; 2];
+}
+
 /// Each track's sound after its slots and before its level and mute, from the latest frame, for a
 /// compressor that hears another track. A track renders in order, so one later than the listener
 /// is heard a frame late, which is far too little to hear.
