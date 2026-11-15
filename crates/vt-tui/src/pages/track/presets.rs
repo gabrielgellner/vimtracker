@@ -284,7 +284,7 @@ impl App {
     /// the track's level, pan, sends, name and phrases, or an effect into the slot under it.
     pub(crate) fn load_preset(&mut self, kind: PresetKind, path: &Path) {
         if kind == PresetKind::Patch {
-            let over = std::mem::take(&mut self.patch_over);
+            let over = std::mem::take(&mut self.explorer.patch_over);
             self.add_patch(path, over);
             return;
         }

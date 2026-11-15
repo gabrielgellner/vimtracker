@@ -17,10 +17,10 @@ fn space_question_opens_guides_and_space_k_lists_keys() {
     press(&mut app, "note");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.mode, Mode::Guide);
-    assert_eq!(app.guide.map(|g| g.title()), Some("Note entry"));
+    assert_eq!(app.overlays.guide.map(|g| g.title()), Some("Note entry"));
     press(&mut app, "q");
     assert_eq!(app.modes.mode, Mode::Normal);
-    assert_eq!(app.guide, None);
+    assert_eq!(app.overlays.guide, None);
     press(&mut app, " k");
     assert_eq!(app.modes.mode, Mode::Help);
 }
@@ -30,17 +30,26 @@ fn a_guide_stops_scrolling_at_its_end() {
     let (mut app, _realtime) = app();
     press(&mut app, " ?");
     special(&mut app, KeyCode::Enter);
-    app.guide_page = 10;
-    let last = app.guide.unwrap().lines(app.guide_width).len() - 10;
+    app.overlays.guide_page = 10;
+    let last = app
+        .overlays
+        .guide
+        .unwrap()
+        .lines(app.overlays.guide_width)
+        .len()
+        - 10;
     press(&mut app, "G");
-    assert_eq!(app.guide_scroll, last);
+    assert_eq!(app.overlays.guide_scroll, last);
     press(&mut app, "j");
-    assert_eq!(app.guide_scroll, last);
+    assert_eq!(app.overlays.guide_scroll, last);
     press(&mut app, "g");
-    assert_eq!(app.guide_scroll, 0);
+    assert_eq!(app.overlays.guide_scroll, 0);
     press(&mut app, "?");
     assert_eq!(app.modes.mode, Mode::Picker);
-    assert_eq!(app.picker.as_ref().map(|p| p.query.as_str()), Some(""));
+    assert_eq!(
+        app.overlays.picker.as_ref().map(|p| p.query.as_str()),
+        Some("")
+    );
 }
 
 /// What the note entry and navigation guides promise.

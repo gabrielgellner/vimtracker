@@ -729,7 +729,7 @@ fn k_on_a_slots_type_changes_it_keeping_where_it_goes_and_each_types_settings() 
     assert_eq!(app.track_control(), Control::Mod(1, ModField::Type));
     press(&mut app, "K");
     assert_eq!(app.track_control(), Control::Mod(1, ModField::Type));
-    let picker = app.picker.as_ref().expect("the type picker");
+    let picker = app.overlays.picker.as_ref().expect("the type picker");
     assert_eq!(picker.title, "Mod 2 type");
     let depth = app.services.history.undo_depth();
     press(&mut app, "/lfo");
@@ -823,7 +823,7 @@ fn k_on_an_lfos_mode_sets_whether_notes_start_it() {
     press(&mut app, &format!("{}l", to_lfo(0)));
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Mode));
     press(&mut app, "K");
-    assert_eq!(app.picker.as_ref().unwrap().title, "Mod 4 mode");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().title, "Mod 4 mode");
     press(&mut app, "j");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().tracks[0].mods[3].lfo.mode, LfoMode::Trig);
@@ -871,7 +871,7 @@ fn an_lfos_fade_is_under_its_phase_as_a_signed_length() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(fade(&app), Fade::Out(3840));
     press(&mut app, "K");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.title, "LFO fade");
     assert_eq!(picker.items().len(), Fade::ALL.len());
     press(&mut app, "/+2 bars");
@@ -1366,7 +1366,7 @@ fn k_on_a_polarity_lists_one_way_and_both() {
     press(&mut app, &format!("{}ll", to_lfo(0)));
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Polarity));
     press(&mut app, "K");
-    let picker = app.picker.as_ref().expect("the polarity picker");
+    let picker = app.overlays.picker.as_ref().expect("the polarity picker");
     assert_eq!(picker.title, "Mod 4 polarity");
     let labels: Vec<String> = picker.items().iter().map(listed).collect();
     assert_eq!(labels.len(), 2, "{labels:?}");
@@ -1484,7 +1484,7 @@ fn an_envelopes_curve_is_its_mode_in_the_title_and_its_picture_follows_it() {
     assert_eq!(app.track_control(), Control::Mod(0, ModField::Mode));
     assert!(status_line(&app).contains("Curve"), "{}", status_line(&app));
     press(&mut app, "K");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.title, "Mod 1 curve");
     assert_eq!(
         picker
@@ -1536,7 +1536,7 @@ fn an_ahd_slot_holds_for_a_time_or_the_note_with_its_own_settings_and_picture() 
     let slot = |app: &App| app.song().tracks[0].mods[1];
     // Mod 2, the filter's envelope, made an AHD: the second type listed, after ADSR.
     press(&mut app, "}K");
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     let listed: Vec<&str> = picker
         .items()
         .iter()
@@ -1819,7 +1819,7 @@ fn a_slot_made_steps_with_no_depth_is_given_ff_and_its_title_has_its_mode_and_lo
     press(&mut app, "=");
     assert_eq!(slot(&app).steps.looping, Loop::From(1));
     press(&mut app, "K");
-    assert_eq!(app.picker.as_ref().unwrap().title, "Steps loop");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().title, "Steps loop");
     press(&mut app, "/bounce");
     special(&mut app, KeyCode::Enter);
     assert_eq!(slot(&app).steps.looping, Loop::Bounce);
@@ -2044,7 +2044,7 @@ fn pitch_in_scale_is_a_destination_of_its_own_for_every_type() {
     press(&mut app, " 5L");
     // Mod 4, an LFO: its destination's list has `Pitch` and then `Pitch in scale`.
     press(&mut app, &format!("{}$K", to_lfo(0)));
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     let labels: Vec<&str> = picker
         .items()
         .iter()
@@ -2141,7 +2141,7 @@ fn a_track_slot_follows_velocity_with_its_source_in_the_title_and_its_map_down_t
     press(&mut app, "=");
     assert_eq!(slot(&app).track.source, Source::Random);
     press(&mut app, "K");
-    assert_eq!(app.picker.as_ref().unwrap().title, "Mod 4 source");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().title, "Mod 4 source");
     press(&mut app, "/note");
     special(&mut app, KeyCode::Enter);
     assert_eq!(slot(&app).track.source, Source::Note);

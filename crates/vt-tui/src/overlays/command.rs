@@ -16,10 +16,10 @@ use crate::services::config::home_folder;
 
 impl App {
     pub(crate) fn command_key(&mut self, key: Key) {
-        if self.command_menu.is_some() && self.menu_key(key) {
+        if self.overlays.command_menu.is_some() && self.menu_key(key) {
             return;
         }
-        let menu_was_open = self.command_menu.is_some();
+        let menu_was_open = self.overlays.command_menu.is_some();
         match key.code {
             KeyCode::Esc => {
                 self.leave_command_line();
@@ -27,8 +27,8 @@ impl App {
             }
             KeyCode::Enter => {
                 self.leave_command_line();
-                let text = std::mem::take(&mut self.command_line);
-                let kept = self.command_history.add(&text);
+                let text = std::mem::take(&mut self.overlays.command_line);
+                let kept = self.overlays.command_history.add(&text);
                 match parse::parse(&text) {
                     Ok(line) => self.line(line),
                     Err(error) => self.services.status = error.to_string(),
@@ -44,25 +44,29 @@ impl App {
             KeyCode::Tab => self.complete(false),
             KeyCode::BackTab => self.complete(true),
             KeyCode::Up => {
-                if let Some(line) = self.command_history.older(&self.command_line) {
-                    self.command_line = line;
+                if let Some(line) = self
+                    .overlays
+                    .command_history
+                    .older(&self.overlays.command_line)
+                {
+                    self.overlays.command_line = line;
                 }
             }
             KeyCode::Down => {
-                if let Some(line) = self.command_history.newer() {
-                    self.command_line = line;
+                if let Some(line) = self.overlays.command_history.newer() {
+                    self.overlays.command_line = line;
                 }
             }
             KeyCode::Backspace => {
-                self.command_history.stop();
-                if self.command_line.pop().is_none() {
+                self.overlays.command_history.stop();
+                if self.overlays.command_line.pop().is_none() {
                     self.leave_command_line();
                 }
             }
             KeyCode::Char('r') if key.ctrl => self.roll_name(),
             KeyCode::Char(c) if !key.ctrl => {
-                self.command_history.stop();
-                self.command_line.push(c);
+                self.overlays.command_history.stop();
+                self.overlays.command_line.push(c);
             }
             _ => {}
         }
@@ -73,15 +77,15 @@ impl App {
 
     fn leave_command_line(&mut self) {
         self.modes.mode = Mode::Normal;
-        self.command_menu = None;
-        self.command_history.stop();
+        self.overlays.command_menu = None;
+        self.overlays.command_history.stop();
     }
 
     /// A key while the list of matches is open, which says whether the list took it. Tab and
     /// Shift-Tab, the arrows, and `C-n` `C-p` move through it, `Enter` puts the highlighted match
     /// in the line, and `Esc` closes it, keeping what's typed.
     fn menu_key(&mut self, key: Key) -> bool {
-        let Some(menu) = self.command_menu.as_mut() else {
+        let Some(menu) = self.overlays.command_menu.as_mut() else {
             return false;
         };
         match key.code {
@@ -91,11 +95,12 @@ impl App {
             KeyCode::Char('p') if key.ctrl => menu.step(-1),
             KeyCode::Enter => {
                 if let Some(text) = menu.highlighted() {
-                    self.command_line = replaced(&self.command_line, menu.start, text);
+                    self.overlays.command_line =
+                        replaced(&self.overlays.command_line, menu.start, text);
                 }
-                self.command_menu = None;
+                self.overlays.command_menu = None;
             }
-            KeyCode::Esc => self.command_menu = None,
+            KeyCode::Esc => self.overlays.command_menu = None,
             _ => return false,
         }
         true
@@ -113,7 +118,7 @@ impl App {
             .map(|folder| folder.join(vt_model::preset::PresetKind::Patch.folder()));
         let home = home_folder();
         complete(
-            &self.command_line,
+            &self.overlays.command_line,
             Places {
                 kit_folders: &kit_folders,
                 home: home.as_deref(),
@@ -126,15 +131,17 @@ impl App {
     /// Tab: put the only match in place, or fill in the part every match shares and list them,
     /// with the first highlighted, or the last for Shift-Tab.
     fn complete(&mut self, backwards: bool) {
-        self.command_history.stop();
+        self.overlays.command_history.stop();
         let found = self.complete_line();
         match found.candidates.as_slice() {
             [] => {}
             [only] => {
-                self.command_line = replaced(&self.command_line, found.start, &only.text);
+                self.overlays.command_line =
+                    replaced(&self.overlays.command_line, found.start, &only.text);
             }
             _ => {
-                self.command_line = replaced(&self.command_line, found.start, found.common());
+                self.overlays.command_line =
+                    replaced(&self.overlays.command_line, found.start, found.common());
                 let mut menu = CommandMenu {
                     picker: found.picker(),
                     start: found.start,
@@ -142,7 +149,7 @@ impl App {
                 if backwards {
                     menu.step(-1);
                 }
-                self.command_menu = Some(menu);
+                self.overlays.command_menu = Some(menu);
             }
         }
     }
@@ -150,7 +157,7 @@ impl App {
     /// After typing with the list open: list what still matches, keeping the highlight on the
     /// same match if it's still there, or close it once nothing does or a new word starts.
     fn narrow_menu(&mut self) {
-        let Some(menu) = &self.command_menu else {
+        let Some(menu) = &self.overlays.command_menu else {
             return;
         };
         let kept = menu.highlighted().map(str::to_owned);
@@ -159,7 +166,7 @@ impl App {
             || found.candidates.is_empty()
             || self.modes.mode != Mode::Command
         {
-            self.command_menu = None;
+            self.overlays.command_menu = None;
             return;
         }
         let mut picker = found.picker();
@@ -170,7 +177,7 @@ impl App {
         {
             picker.selected = at;
         }
-        self.command_menu = Some(CommandMenu {
+        self.overlays.command_menu = Some(CommandMenu {
             picker,
             start: found.start,
         });

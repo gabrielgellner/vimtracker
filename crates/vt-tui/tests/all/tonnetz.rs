@@ -46,7 +46,7 @@ fn drawn(app: &App) -> String {
 
 /// Go down the panel to a setting.
 fn to_row(app: &mut App, param: GenParam) {
-    while app.shape.as_ref().unwrap().row != param {
+    while app.overlays.shape.as_ref().unwrap().row != param {
         keys(app, "j");
     }
 }
@@ -55,7 +55,7 @@ fn to_row(app: &mut App, param: GenParam) {
 fn on_the_chord_voice_each_row_is_a_root_with_its_chord_locked() {
     let (mut app, _rt) = app_with(1, Machine::Plaits(SynthVoice::Chord));
     keys(&mut app, "vGSK/tonnetz<Enter>");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.shape.kind, FillKind::Tonnetz);
     assert_eq!(panel.shape.tonnetz.voice, Some(TonnetzVoice::Chord));
     {
@@ -81,7 +81,7 @@ fn on_the_chord_voice_each_row_is_a_root_with_its_chord_locked() {
     // The moves typed as letters, spaces or none.
     to_row(&mut app, GenParam::MoveList);
     keys(&mut app, "ilr<Enter>");
-    let list = app.shape.as_ref().unwrap().shape.tonnetz.list;
+    let list = app.overlays.shape.as_ref().unwrap().shape.tonnetz.list;
     assert_eq!(list.as_slice(), [TonnetzMove::L, TonnetzMove::R]);
     keys(&mut app, "<Enter>");
     let written = steps(&app, 0);
@@ -109,15 +109,15 @@ fn on_the_chord_voice_each_row_is_a_root_with_its_chord_locked() {
 fn on_another_voice_it_writes_the_roots_and_draws_its_moves_at_random() {
     let (mut app, _rt) = app_with(1, Machine::Plaits(SynthVoice::VirtualAnalog));
     keys(&mut app, "vGSK/tonnetz<Enter>");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.shape.tonnetz.voice, Some(TonnetzVoice::Root));
     to_row(&mut app, GenParam::Moves);
     keys(&mut app, "=");
-    let shape = app.shape.as_ref().unwrap().shape;
+    let shape = app.overlays.shape.as_ref().unwrap().shape;
     assert_eq!(shape.tonnetz.moves, Moves::Random);
     {
         use GenParam::*;
-        let rows = app.shape.as_ref().unwrap().rows();
+        let rows = app.overlays.shape.as_ref().unwrap().rows();
         assert!(rows.contains(&PWeight) && rows.contains(&Vary), "{rows:?}");
         assert!(!rows.contains(&MoveList), "{rows:?}");
     }
@@ -141,7 +141,7 @@ fn on_another_voice_it_writes_the_roots_and_draws_its_moves_at_random() {
 fn across_three_tracks_each_plays_a_voice_and_one_moves_at_a_time() {
     let (mut app, _rt) = app_with(3, Machine::Plaits(SynthVoice::VirtualAnalog));
     keys(&mut app, "vGWWSK/tonnetz<Enter>");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.parts.len(), 3);
     assert_eq!(panel.shape.tonnetz.voice, None);
     assert!(!panel.rows().contains(&GenParam::Voice), "each track's own");

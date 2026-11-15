@@ -180,7 +180,7 @@ fn typing_in_the_machine_list_finds_a_voice_under_any_kind() {
         assert_eq!(app.song().tracks[0].machine, Machine::Plaits(voice));
         // It opens on the chosen voice, with its kind open.
         press(&mut app, "K");
-        let picker = app.picker.as_ref().unwrap();
+        let picker = app.overlays.picker.as_ref().unwrap();
         let at = SynthVoice::KINDS
             .iter()
             .position(|(_, voices)| voices.contains(&voice))
@@ -204,7 +204,7 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     let depth = app.services.history.undo_depth();
     press(&mut app, "K");
     // The sampler at the top, on its own, and every voice folded under its kind.
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     let top: Vec<_> = picker.shown().map(|item| item.pick.clone()).collect();
     let sampler = vt_tui::overlays::picker::Pick::Param {
         track: 0,
@@ -351,7 +351,7 @@ fn six_op_patch_counts_patches_and_k_lists_them_by_name() {
     assert_eq!(patch(&app), 0x5F);
 
     press(&mut app, "K");
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 96);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().shown().count(), 96);
     press(&mut app, "MARIMBA");
     special(&mut app, KeyCode::Enter);
     assert!(
@@ -756,7 +756,7 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     press(&mut app, "W");
     press(&mut app, &format!("L{}$K/", to_lfo(1)));
     assert_eq!(app.modes.mode, Mode::Picker);
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
         33,
@@ -785,7 +785,7 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     typed_rate_on_second_lfo(&mut app);
     press(&mut app, "kk$K");
     assert_eq!(
-        listed(app.picker.as_ref().unwrap().current().unwrap()),
+        listed(app.overlays.picker.as_ref().unwrap().current().unwrap()),
         "Res  Filter resonance"
     );
     special(&mut app, KeyCode::Esc);
@@ -867,14 +867,14 @@ fn the_track_page_sets_the_filters_type_and_drive() {
     assert_eq!(track(&app).filter, FilterType::LowPass);
     press(&mut app, "K");
     assert_eq!(app.modes.mode, Mode::Picker);
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 10);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().shown().count(), 10);
     press(&mut app, "/ladder");
     special(&mut app, KeyCode::Enter);
     assert_eq!(track(&app).filter, FilterType::Ladder);
     press(&mut app, "i");
     assert_eq!(app.modes.mode, Mode::Picker, "i lists it too");
     assert_eq!(
-        app.picker.as_ref().unwrap().selected,
+        app.overlays.picker.as_ref().unwrap().selected,
         4,
         "opens on what's set"
     );
@@ -926,7 +926,7 @@ fn the_track_page_sets_the_filters_mode_for_its_type() {
     assert!(title_line(&app, "Filter").contains("LP24"));
     press(&mut app, "K");
     assert_eq!(app.modes.mode, Mode::Picker);
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 18);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().shown().count(), 18);
     press(&mut app, "/hp24");
     special(&mut app, KeyCode::Enter);
     assert_eq!(track(&app).filter_mode, FilterMode::HighPass24);
@@ -1170,6 +1170,7 @@ fn the_sample_row_lists_the_bank_steps_through_it_and_clears() {
     press(&mut app, "K");
     assert_eq!(app.modes.mode, Mode::Picker);
     let labels: Vec<String> = app
+        .overlays
         .picker
         .as_ref()
         .unwrap()
@@ -1301,7 +1302,7 @@ fn the_track_page_sets_envelopes() {
     press(&mut app, "j$K");
     assert_eq!(app.modes.mode, Mode::Picker);
     assert_eq!(
-        listed(app.picker.as_ref().unwrap().current().unwrap()),
+        listed(app.overlays.picker.as_ref().unwrap().current().unwrap()),
         "Cut  Filter cutoff",
         "opens on what's chosen"
     );
@@ -1419,7 +1420,7 @@ fn every_list_setting_on_the_track_page_has_a_picker() {
 
     // The picker opens on what's set.
     press(&mut app, "0jK");
-    assert_eq!(app.picker.as_ref().unwrap().selected, 4);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().selected, 4);
     special(&mut app, KeyCode::Esc);
 
     // On a list setting, i opens it too. On Rate, i types.
@@ -2695,7 +2696,11 @@ fn the_mod_page_sets_the_accumulator_and_says_what_each_setting_does() {
     // The others are lists, which `K` shows with what each does.
     press(&mut app, "j");
     press(&mut app, "K");
-    let picker = app.picker.as_ref().expect("the choices are listed");
+    let picker = app
+        .overlays
+        .picker
+        .as_ref()
+        .expect("the choices are listed");
     assert_eq!(picker.title, "Accumulator moves");
     let items: Vec<String> = picker.items().iter().map(listed).collect();
     assert_eq!(
@@ -2805,7 +2810,7 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     assert_eq!(arpeggio(&app), Arpeggio::default());
     // `K` lists them with how many notes each plays to a step.
     press(&mut app, "K");
-    let picker = app.picker.as_ref().expect("the rates are listed");
+    let picker = app.overlays.picker.as_ref().expect("the rates are listed");
     assert_eq!(picker.title, "Arp rate");
     assert_eq!(picker.current().unwrap().label, "Tick");
     let items: Vec<String> = picker.items().iter().map(listed).collect();
@@ -2822,6 +2827,7 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     assert_eq!(arpeggio(&app).mode, ArpMode::Random);
     press(&mut app, "K");
     let items: Vec<String> = app
+        .overlays
         .picker
         .as_ref()
         .unwrap()
@@ -3436,7 +3442,7 @@ fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
     // A step switches it out by its digit.
     press(&mut app, " 3lllllK");
     press(&mut app, &format!("{INSERTS}byp"));
-    let item = app.picker.as_ref().unwrap().current().unwrap();
+    let item = app.overlays.picker.as_ref().unwrap().current().unwrap();
     assert_eq!(listed(item), format!("{INSERTS}BYP  {INSERTS} Bypass"));
     special(&mut app, KeyCode::Enter);
     press(&mut app, "01");

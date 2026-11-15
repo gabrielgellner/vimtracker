@@ -35,9 +35,9 @@ fn saving_needs_a_folder_then_round_trips() {
     command(&mut app, "w");
     assert!(app.services.dirty);
     assert_eq!(app.modes.mode, Mode::Picker, "the explorer chooses where");
-    assert_eq!(app.picker.as_ref().unwrap().title, "Save in");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().title, "Save in");
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.naming, None, "nothing waits for a name");
+    assert_eq!(app.explorer.naming, None, "nothing waits for a name");
     let path = folder();
     command(&mut app, &format!("w {}", path.display()));
     assert!(!app.services.dirty, "{}", app.services.status);
@@ -383,17 +383,27 @@ fn e_with_no_folder_opens_a_project_from_beside_this_one_with_its_preview() {
     );
     command(&mut app, "e");
     assert_eq!(app.modes.mode, Mode::Picker);
-    assert_eq!(app.picker.as_ref().unwrap().title, "Open a project");
+    assert_eq!(
+        app.overlays.picker.as_ref().unwrap().title,
+        "Open a project"
+    );
     assert_eq!(
         explorer_rows(&app)[..4],
         ["v projects", "  > ideas", "    one", "    two"],
         "projects and folders only, on this one"
     );
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.current().unwrap().label, "one");
     assert_eq!(picker.marked(), picker.current_index());
     press(&mut app, "j");
-    let shown = app.picker.as_ref().unwrap().preview.clone().unwrap();
+    let shown = app
+        .overlays
+        .picker
+        .as_ref()
+        .unwrap()
+        .preview
+        .clone()
+        .unwrap();
     assert_eq!(shown.heading, "two");
     assert_eq!(shown.note, "137.63 BPM  4 tracks");
     assert_eq!(shown.details, ["Saved just now"]);
@@ -405,7 +415,8 @@ fn e_with_no_folder_opens_a_project_from_beside_this_one_with_its_preview() {
     );
     assert_eq!(app.song().millibpm, 137_630);
     assert_eq!(
-        app.recent_places
+        app.explorer
+            .recent_places
             .of(vt_tui::overlays::picker::explorer::Purpose::Project),
         std::slice::from_ref(&root)
     );
@@ -468,7 +479,10 @@ fn e_bang_with_no_folder_opens_what_the_explorer_chooses_without_refusing() {
     command(&mut app, "bpm 90");
     command(&mut app, "e!");
     assert_eq!(app.modes.mode, Mode::Picker);
-    assert_eq!(app.picker.as_ref().unwrap().title, "Open a project");
+    assert_eq!(
+        app.overlays.picker.as_ref().unwrap().title,
+        "Open a project"
+    );
     press(&mut app, "j");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.mode, Mode::Normal);
@@ -517,9 +531,9 @@ fn new_bang_starts_a_project_and_discards_unsaved_changes() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.mode, Mode::Command);
     assert!(
-        app.command_line.starts_with("new! "),
+        app.overlays.command_line.starts_with("new! "),
         "{}",
-        app.command_line
+        app.overlays.command_line
     );
     special(&mut app, KeyCode::Esc);
 
@@ -537,7 +551,8 @@ fn new_bang_starts_a_project_and_discards_unsaved_changes() {
 fn saving_a_new_project_chooses_a_folder_then_names_it_on_the_command_line() {
     let root = projects();
     let (mut app, _realtime) = app();
-    app.recent_places
+    app.explorer
+        .recent_places
         .add(vt_tui::overlays::picker::explorer::Purpose::Save, &root)
         .unwrap();
     press(&mut app, "ia");
@@ -548,7 +563,7 @@ fn saving_a_new_project_chooses_a_folder_then_names_it_on_the_command_line() {
         ["v recent", "  > ideas", "  > one", "  > two"],
         "folders only, the recent place first"
     );
-    let picker = app.picker.as_ref().unwrap();
+    let picker = app.overlays.picker.as_ref().unwrap();
     assert!(!picker.has_previews(), "nothing to show");
     // l opens a folder, and Enter chooses one.
     press(&mut app, "k");
@@ -558,7 +573,7 @@ fn saving_a_new_project_chooses_a_folder_then_names_it_on_the_command_line() {
     let shown = vt_tui::overlays::picker::explorer::place_name(&root, Some(&home));
     // The project's random name is filled in after the folder, so Enter saves it.
     let name = app.services.project_name();
-    assert_eq!(app.command_line, format!("w {shown}/{name}"));
+    assert_eq!(app.overlays.command_line, format!("w {shown}/{name}"));
     assert!(
         app.services.status.contains("name"),
         "{}",
@@ -574,9 +589,9 @@ fn saving_a_new_project_chooses_a_folder_then_names_it_on_the_command_line() {
 
     // :new does the same, with a new name, which can be typed over.
     command(&mut app, "new");
-    assert_eq!(app.picker.as_ref().unwrap().title, "Save in");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().title, "Save in");
     special(&mut app, KeyCode::Enter);
-    let line = app.command_line.clone();
+    let line = app.overlays.command_line.clone();
     assert!(line.starts_with(&format!("new {shown}/")), "{line}");
     assert!(!line.ends_with(&format!("/{name}")), "{line} is a new name");
     for _ in line.rsplit('/').next().unwrap().chars() {
@@ -615,13 +630,20 @@ fn a_new_project_has_a_random_name_numbered_in_a_folder_that_has_it() {
     );
     // A folder with the name already in it gets it numbered, as the project keeps its name.
     std::fs::create_dir_all(root.join(&name)).unwrap();
-    app.recent_places
+    app.explorer
+        .recent_places
         .add(vt_tui::overlays::picker::explorer::Purpose::Save, &root)
         .unwrap();
     command(&mut app, "w");
     press(&mut app, "k");
     special(&mut app, KeyCode::Enter);
-    let given = app.command_line.rsplit('/').next().unwrap().to_owned();
+    let given = app
+        .overlays
+        .command_line
+        .rsplit('/')
+        .next()
+        .unwrap()
+        .to_owned();
     assert_eq!(
         given,
         format!("{name}-2"),
@@ -632,7 +654,13 @@ fn a_new_project_has_a_random_name_numbered_in_a_folder_that_has_it() {
     command(&mut app, "new");
     press(&mut app, "k");
     special(&mut app, KeyCode::Enter);
-    let fresh = app.command_line.rsplit('/').next().unwrap().to_owned();
+    let fresh = app
+        .overlays
+        .command_line
+        .rsplit('/')
+        .next()
+        .unwrap()
+        .to_owned();
     assert!(random_name_like(&fresh), "{fresh}");
     assert_ne!(fresh, name);
     std::fs::remove_dir_all(&root).unwrap();
@@ -647,12 +675,12 @@ fn ctrl_r_rolls_a_new_name_on_a_name_line() {
     press(&mut app, ":");
     press(&mut app, &typed);
     app.key(roll, Instant::now());
-    let first = app.command_line.clone();
+    let first = app.overlays.command_line.clone();
     let folder = format!("w {}/", root.display());
     assert!(first.starts_with(&folder), "{first}");
     assert!(random_name_like(&first[folder.len()..]), "{first}");
     app.key(roll, Instant::now());
-    assert_ne!(app.command_line, first, "each press rolls again");
+    assert_ne!(app.overlays.command_line, first, "each press rolls again");
     assert_eq!(app.modes.mode, Mode::Command);
     special(&mut app, KeyCode::Enter);
     let saved = app.services.folder.clone().unwrap();
@@ -666,22 +694,26 @@ fn ctrl_r_rolls_a_new_name_on_a_name_line() {
     // A render's extension and flags stay.
     command(&mut app, "render --tail");
     special(&mut app, KeyCode::Enter);
-    let line = app.command_line.clone();
+    let line = app.overlays.command_line.clone();
     let project = app.services.project_name();
     assert!(line.ends_with(&format!("/{project}.wav --tail")), "{line}");
     app.key(roll, Instant::now());
     assert!(
-        app.command_line.ends_with(".wav --tail"),
+        app.overlays.command_line.ends_with(".wav --tail"),
         "{}",
-        app.command_line
+        app.overlays.command_line
     );
-    assert!(!app.command_line.contains(&format!("/{project}.wav")));
+    assert!(
+        !app.overlays
+            .command_line
+            .contains(&format!("/{project}.wav"))
+    );
 
     // A line that names nothing is left alone.
     special(&mut app, KeyCode::Esc);
     press(&mut app, ":bpm 12");
     app.key(roll, Instant::now());
-    assert_eq!(app.command_line, "bpm 12");
+    assert_eq!(app.overlays.command_line, "bpm 12");
     std::fs::remove_dir_all(&root).unwrap();
 }
 
@@ -691,7 +723,7 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
     let (mut app, _realtime) = app();
     command(&mut app, &format!("e {}", root.join("one").display()));
     command(&mut app, "render --tail");
-    assert_eq!(app.picker.as_ref().unwrap().title, "Render into");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().title, "Render into");
     // Choosing a folder shows nothing beside it, so only `H` has a switch.
     let text = picker_text(&app, 163, 42);
     assert!(
@@ -707,7 +739,10 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
     special(&mut app, KeyCode::Enter);
     let home = std::env::var_os("HOME").map(PathBuf::from).unwrap();
     let shown = vt_tui::overlays::picker::explorer::place_name(&root.join("one"), Some(&home));
-    assert_eq!(app.command_line, format!("render {shown}/one.wav --tail"));
+    assert_eq!(
+        app.overlays.command_line,
+        format!("render {shown}/one.wav --tail")
+    );
     special(&mut app, KeyCode::Enter);
     assert!(
         root.join("one/one.wav").is_file(),
@@ -718,12 +753,16 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
     command(&mut app, "render");
     press(&mut app, "k");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.command_line, format!("render {shown}/one-2.wav"));
+    assert_eq!(
+        app.overlays.command_line,
+        format!("render {shown}/one-2.wav")
+    );
     special(&mut app, KeyCode::Esc);
 
     // A project with no folder yet renders under its random name.
     let (mut unsaved, _unsaved_realtime) = self::app();
     unsaved
+        .explorer
         .recent_places
         .add(vt_tui::overlays::picker::explorer::Purpose::Render, &root)
         .unwrap();
@@ -731,9 +770,12 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
     special(&mut unsaved, KeyCode::Enter);
     let name = unsaved.services.project_name();
     assert!(
-        unsaved.command_line.ends_with(&format!("/{name}.wav")),
+        unsaved
+            .overlays
+            .command_line
+            .ends_with(&format!("/{name}.wav")),
         "{}",
-        unsaved.command_line
+        unsaved.overlays.command_line
     );
     std::fs::remove_dir_all(&root).unwrap();
 }
@@ -997,13 +1039,18 @@ fn saving_a_project_somewhere_new_names_it_after_the_folder_and_keeps_the_name_a
     app.services
         .apply(&vt_model::action::Action::SetSongName("verse".to_owned()));
     // Saving starts with its name.
-    app.recent_places
+    app.explorer
+        .recent_places
         .add(vt_tui::overlays::picker::explorer::Purpose::Save, &root)
         .unwrap();
     command(&mut app, "w");
     tap(&mut app, "k");
     special(&mut app, KeyCode::Enter);
-    assert!(app.command_line.ends_with("/verse"), "{}", app.command_line);
+    assert!(
+        app.overlays.command_line.ends_with("/verse"),
+        "{}",
+        app.overlays.command_line
+    );
     special(&mut app, KeyCode::Enter);
     assert_eq!(
         app.services.folder.as_deref(),
@@ -1029,16 +1076,17 @@ fn saving_a_project_somewhere_new_names_it_after_the_folder_and_keeps_the_name_a
     let (mut copy, _copy_realtime) = self::app();
     copy.services
         .apply(&vt_model::action::Action::SetSongName("one".to_owned()));
-    copy.recent_places
+    copy.explorer
+        .recent_places
         .add(vt_tui::overlays::picker::explorer::Purpose::Save, &root)
         .unwrap();
     command(&mut copy, "w");
     tap(&mut copy, "k");
     special(&mut copy, KeyCode::Enter);
     assert!(
-        copy.command_line.ends_with("/one-2"),
+        copy.overlays.command_line.ends_with("/one-2"),
         "{}",
-        copy.command_line
+        copy.overlays.command_line
     );
     // A name typed in its place names the project after it.
     for _ in 0.."one-2".len() {
@@ -1070,7 +1118,11 @@ fn the_project_pages_actions_open_the_explorer_and_its_audio_row_the_audio_page(
         project_cursor_on(&mut app, action);
         special(&mut app, KeyCode::Enter);
         assert_eq!(app.modes.mode, Mode::Picker, "{action:?}");
-        assert_eq!(app.picker.as_ref().unwrap().title, title, "{action:?}");
+        assert_eq!(
+            app.overlays.picker.as_ref().unwrap().title,
+            title,
+            "{action:?}"
+        );
         special(&mut app, KeyCode::Esc);
         assert_eq!(
             app.modes.view,
@@ -1085,9 +1137,10 @@ fn the_project_pages_actions_open_the_explorer_and_its_audio_row_the_audio_page(
     assert_eq!(app.modes.mode, Mode::Command);
     let name = app.services.project_name();
     assert!(
-        app.command_line.starts_with("w ") && app.command_line.ends_with(&format!("/{name}")),
+        app.overlays.command_line.starts_with("w ")
+            && app.overlays.command_line.ends_with(&format!("/{name}")),
         "{}",
-        app.command_line
+        app.overlays.command_line
     );
     special(&mut app, KeyCode::Esc);
     // With changes, open and new refuse, as :e and :new do.

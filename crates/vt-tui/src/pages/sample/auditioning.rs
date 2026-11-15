@@ -249,10 +249,10 @@ impl App {
     /// every other key works on the page as it does, so `;` plays the slice the cursor is on.
     pub(crate) fn sample_keys_key(&mut self, key: Key, now: std::time::Instant) {
         use ratatui::crossterm::event::KeyCode;
-        let plain = self.pending.is_empty() && !key.ctrl && !key.alt;
+        let plain = self.grammar.pending.is_empty() && !key.ctrl && !key.alt;
         let shown = self.sample_page_here();
         match (key.code, shown) {
-            (KeyCode::Esc, _) if self.pending.is_empty() => {
+            (KeyCode::Esc, _) if self.grammar.pending.is_empty() => {
                 self.modes.mode = Mode::Normal;
                 self.services.status.clear();
             }
@@ -273,7 +273,7 @@ impl App {
                     .sample_page
                     .play_pad(&shown, number, &mut self.services)
                 {
-                    self.started = Some(started);
+                    self.held.started = Some(started);
                 }
             }
             _ => {

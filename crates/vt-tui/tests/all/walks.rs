@@ -28,7 +28,7 @@ fn notes(app: &App) -> Vec<u8> {
 
 /// The panel as drawn, a line a row.
 fn drawn(app: &App) -> Vec<String> {
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     let backend = ratatui::backend::TestBackend::new(42, 14);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
@@ -48,7 +48,7 @@ fn walk_steps_the_velocities_from_from_and_1_f_sums_its_depth() {
     let (mut app, _rt) = app_with(&[NOTE; 16]);
     let depth = app.services.history.undo_depth();
     keys(&mut app, "lvGSKwalk<Enter>");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.shape.kind, FillKind::Walk);
     assert_eq!(
         panel.rows(),
@@ -76,9 +76,9 @@ fn walk_steps_the_velocities_from_from_and_1_f_sums_its_depth() {
     );
     // `+` jumps the step by `10`, `i` types it in hex, `x` puts it back, and `=` turns `Edge`.
     keys(&mut app, "j+");
-    assert_eq!(app.shape.as_ref().unwrap().shape.walk.step, 0x20);
+    assert_eq!(app.overlays.shape.as_ref().unwrap().shape.walk.step, 0x20);
     keys(&mut app, "i08");
-    assert_eq!(app.shape.as_ref().unwrap().shape.walk.step, 0x08);
+    assert_eq!(app.overlays.shape.as_ref().unwrap().shape.walk.step, 0x08);
     let small = velocities(&app);
     assert!(
         small
@@ -86,18 +86,24 @@ fn walk_steps_the_velocities_from_from_and_1_f_sums_its_depth() {
             .all(|pair| pair[0].abs_diff(pair[1]) <= 0x08)
     );
     keys(&mut app, "x");
-    assert_eq!(app.shape.as_ref().unwrap().shape.walk.step, 0x10);
+    assert_eq!(app.overlays.shape.as_ref().unwrap().shape.walk.step, 0x10);
     keys(&mut app, "j=");
-    assert_eq!(app.shape.as_ref().unwrap().shape.walk.edge, Edge::Wrap);
+    assert_eq!(
+        app.overlays.shape.as_ref().unwrap().shape.walk.edge,
+        Edge::Wrap
+    );
     keys(&mut app, "i");
-    assert_eq!(app.shape.as_ref().unwrap().shape.walk.edge, Edge::Reflect);
+    assert_eq!(
+        app.overlays.shape.as_ref().unwrap().shape.walk.edge,
+        Edge::Reflect
+    );
     // `r` walks another way.
     let before = velocities(&app);
     keys(&mut app, "r");
     assert_ne!(velocities(&app), before);
     // The next fill along is `1/f`, with its `Depth` in place of the walk's settings.
     keys(&mut app, "kkkk=");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.row, GenParam::Fill);
     assert_eq!(panel.shape.kind, FillKind::Pink);
     assert_eq!(panel.shape.kind.name(), "1/f");
@@ -118,9 +124,9 @@ fn walk_steps_the_velocities_from_from_and_1_f_sums_its_depth() {
     keys(&mut app, "jjji9<Enter>");
     assert_eq!(app.services.status, "Depth runs from 2 to 8");
     keys(&mut app, "i6<Enter>++");
-    assert_eq!(app.shape.as_ref().unwrap().shape.pink.depth, 8);
+    assert_eq!(app.overlays.shape.as_ref().unwrap().shape.pink.depth, 8);
     keys(&mut app, "_");
-    assert_eq!(app.shape.as_ref().unwrap().shape.pink.depth, 6);
+    assert_eq!(app.overlays.shape.as_ref().unwrap().shape.pink.depth, 6);
     keys(&mut app, "<Enter>");
     assert_eq!(app.services.history.undo_depth(), depth + 1);
 }
@@ -130,7 +136,7 @@ fn a_walk_of_notes_steps_in_degrees_and_says_so() {
     let (mut app, _rt) = app_with(&[E; 16]);
     app.services.scale.on = true;
     keys(&mut app, "vGSKwalk<Enter>");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.verb(), "Generate");
     assert_eq!(panel.shape.walk.step, 2);
     // From the root, in the major scale, never more than two degrees, a major third, at a time.
@@ -152,11 +158,11 @@ fn a_walk_of_notes_steps_in_degrees_and_says_so() {
     }
     // `+` on Step adds an octave of degrees, and the most is two octaves.
     keys(&mut app, "jjj+");
-    assert_eq!(app.shape.as_ref().unwrap().shape.walk.step, 9);
+    assert_eq!(app.overlays.shape.as_ref().unwrap().shape.walk.step, 9);
     keys(&mut app, "+++");
-    assert_eq!(app.shape.as_ref().unwrap().shape.walk.step, 24);
+    assert_eq!(app.overlays.shape.as_ref().unwrap().shape.walk.step, 24);
     keys(&mut app, "i3<Enter>");
-    assert_eq!(app.shape.as_ref().unwrap().shape.walk.step, 3);
+    assert_eq!(app.overlays.shape.as_ref().unwrap().shape.walk.step, 3);
     // With the scale off, it's semitones.
     keys(&mut app, "<Enter>");
     app.services.scale.on = false;
@@ -182,5 +188,8 @@ fn dot_walks_another_selection_from_its_own_ends() {
 fn pink_finds_1_f_by_its_meaning() {
     let (mut app, _rt) = app_with(&[NOTE; 8]);
     keys(&mut app, "lvGSKpink<Enter>");
-    assert_eq!(app.shape.as_ref().unwrap().shape.kind, FillKind::Pink);
+    assert_eq!(
+        app.overlays.shape.as_ref().unwrap().shape.kind,
+        FillKind::Pink
+    );
 }

@@ -406,7 +406,7 @@ impl App {
                 format!("Macro {} holds nothing yet: M on a setting maps it", at + 1);
             return;
         }
-        self.mapping = Some(MappingView {
+        self.overlays.mapping = Some(MappingView {
             at,
             row,
             ..MappingView::default()
@@ -481,7 +481,7 @@ impl App {
 
     /// The mapping under the mapping view's cursor, with its place, if the view is open on one.
     fn mapping_row(&self) -> Option<(usize, MacroMap)> {
-        let view = self.mapping.as_ref()?;
+        let view = self.overlays.mapping.as_ref()?;
         let maps = &self.services.page_track().macros[view.at].maps;
         let row = view.row.min(maps.len().checked_sub(1)?);
         Some((row, maps[row]))
@@ -489,7 +489,7 @@ impl App {
 
     /// Say on the status line what the mapping under the cursor does.
     fn say_mapping(&mut self) {
-        let Some(view) = self.mapping.clone() else {
+        let Some(view) = self.overlays.mapping.clone() else {
             return;
         };
         let Some((_, map)) = self.mapping_row() else {
@@ -535,7 +535,7 @@ impl App {
 
     /// Put the mapping under the cursor's range at these ends.
     fn set_range(&mut self, map: MacroMap) {
-        let Some(view) = self.mapping.clone() else {
+        let Some(view) = self.overlays.mapping.clone() else {
             return;
         };
         self.services.apply(&Action::MapMacro {
@@ -549,7 +549,7 @@ impl App {
     /// `=` `-` `+` or `_`: move what's under the cursor up or down a small step or a large one,
     /// an end by a coarse step or `10` of them, and a bend by 5 or 25, as the shape panel's are.
     fn nudge_mapping(&mut self, up: bool, large: bool) {
-        let Some(view) = self.mapping.as_ref() else {
+        let Some(view) = self.overlays.mapping.as_ref() else {
             return;
         };
         let sign = if up { 1 } else { -1 };
@@ -562,7 +562,8 @@ impl App {
 
     /// Put the bend under the cursor, `Curve` or `S`, at a value, kept to -100 to 100.
     fn set_bend(&mut self, to: i32) {
-        let (Some(view), Some((_, map))) = (self.mapping.clone(), self.mapping_row()) else {
+        let (Some(view), Some((_, map))) = (self.overlays.mapping.clone(), self.mapping_row())
+        else {
             return;
         };
         let (curve, s) = (i32::from(map.curve), i32::from(map.s));
@@ -574,7 +575,8 @@ impl App {
 
     /// Move the bend under the cursor by so much.
     fn move_bend(&mut self, by: i32) {
-        let (Some(view), Some((_, map))) = (self.mapping.clone(), self.mapping_row()) else {
+        let (Some(view), Some((_, map))) = (self.overlays.mapping.clone(), self.mapping_row())
+        else {
             return;
         };
         let now = if view.field == MapField::Curve {
@@ -587,7 +589,8 @@ impl App {
 
     /// Move the end of the range under the cursor by so many coarse steps.
     fn move_end(&mut self, by: i32) {
-        let (Some(view), Some((_, map))) = (self.mapping.clone(), self.mapping_row()) else {
+        let (Some(view), Some((_, map))) = (self.overlays.mapping.clone(), self.mapping_row())
+        else {
             return;
         };
         let max = view.field == MapField::Max;
@@ -617,7 +620,7 @@ impl App {
             (true, Some(plain)) => plain,
             _ => key,
         };
-        let Some(view) = self.mapping.clone() else {
+        let Some(view) = self.overlays.mapping.clone() else {
             self.modes.mode = Mode::Normal;
             return;
         };
@@ -627,12 +630,12 @@ impl App {
         }
         let count = self.services.page_track().macros[view.at].maps.len();
         let deleting = view.deleting;
-        if let Some(view) = self.mapping.as_mut() {
+        if let Some(view) = self.overlays.mapping.as_mut() {
             view.deleting = false;
         }
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') => {
-                self.mapping = None;
+                self.overlays.mapping = None;
                 self.modes.mode = Mode::Normal;
                 self.services.status.clear();
             }
@@ -655,7 +658,7 @@ impl App {
                 }
             }
             KeyCode::Char('i') => {
-                if let Some(view) = self.mapping.as_mut() {
+                if let Some(view) = self.overlays.mapping.as_mut() {
                     view.typing = Some(TypedValue::default());
                 }
                 self.services.status = if view.field.bends() {
@@ -666,7 +669,7 @@ impl App {
             }
             KeyCode::Char('d') if deleting => self.unmap_row(),
             KeyCode::Char('d') => {
-                if let Some(view) = self.mapping.as_mut() {
+                if let Some(view) = self.overlays.mapping.as_mut() {
                     view.deleting = true;
                 }
             }
@@ -681,7 +684,7 @@ impl App {
     /// What's typed after `i`: hex digits for an end, set at the second, or a bend's signed number
     /// ended with `Enter`, as the shape panel's is; `Esc` gives up.
     fn mapping_typing(&mut self, code: KeyCode) {
-        let Some(view) = self.mapping.as_mut() else {
+        let Some(view) = self.overlays.mapping.as_mut() else {
             return;
         };
         let bends = view.field.bends();
@@ -717,7 +720,8 @@ impl App {
             }
             Typed::Commit(typed) => {
                 view.typing = None;
-                let (Some(view), Some((_, map))) = (self.mapping.clone(), self.mapping_row())
+                let (Some(view), Some((_, map))) =
+                    (self.overlays.mapping.clone(), self.mapping_row())
                 else {
                     return;
                 };
@@ -737,14 +741,14 @@ impl App {
     }
 
     fn mapping_move(&mut self, to: impl Fn(usize) -> usize) {
-        if let Some(view) = self.mapping.as_mut() {
+        if let Some(view) = self.overlays.mapping.as_mut() {
             view.row = to(view.row);
         }
         self.say_mapping();
     }
 
     fn mapping_across(&mut self, by: isize) {
-        if let Some(view) = self.mapping.as_mut() {
+        if let Some(view) = self.overlays.mapping.as_mut() {
             view.field = view.field.beside(by);
         }
         self.say_mapping();
@@ -763,7 +767,7 @@ impl App {
             target: map.target,
         });
         self.keep_mapping_open();
-        if self.mapping.is_some() {
+        if self.overlays.mapping.is_some() {
             self.services.status = format!("{name} is off the macro: u brings it back");
         } else {
             self.services.status =
@@ -773,7 +777,7 @@ impl App {
 
     /// Keep the view's cursor on a mapping after a change, closing it if the macro holds none.
     fn keep_mapping_open(&mut self) {
-        let Some(view) = self.mapping.as_mut() else {
+        let Some(view) = self.overlays.mapping.as_mut() else {
             return;
         };
         let count = self
@@ -784,7 +788,7 @@ impl App {
             .get(self.services.cursor.track)
             .map_or(0, |track| track.macros[view.at].maps.len());
         if count == 0 {
-            self.mapping = None;
+            self.overlays.mapping = None;
             self.modes.mode = Mode::Normal;
         } else {
             view.row = view.row.min(count - 1);
@@ -795,13 +799,13 @@ impl App {
     /// `:macro Name`: name the macro under the cursor, the mapping view's or the one the setting
     /// under the cursor is on; `:macro` alone gives it back its first mapping's name.
     pub(crate) fn name_macro(&mut self, name: &str) {
-        let at = match (&self.mapping, self.track_control()) {
+        let at = match (&self.overlays.mapping, self.track_control()) {
             (Some(view), _) => Some(view.at),
             (None, Control::Macro(at)) => Some(at),
             (None, _) => self.macro_here().map(|(_, at, _)| at),
         };
         let Some(at) = at.filter(|_| {
-            self.modes.view == crate::input::mode::View::Track || self.mapping.is_some()
+            self.modes.view == crate::input::mode::View::Track || self.overlays.mapping.is_some()
         }) else {
             self.services.status =
                 ":macro names the macro under the cursor, on the track page".to_owned();

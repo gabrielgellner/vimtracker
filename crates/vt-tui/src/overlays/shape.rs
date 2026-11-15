@@ -725,7 +725,7 @@ impl App {
 
     /// Open the panel on the selection, now its empty FX column has its command.
     pub(crate) fn pick_shape_command(&mut self, command: FxCommand) {
-        if let Some((selection, field)) = self.shape_command.take() {
+        if let Some((selection, field)) = self.overlays.shape_command.take() {
             self.open_shape_on(selection, field, Some(command));
         }
     }
@@ -740,7 +740,7 @@ impl App {
             Err(Refusal::Command(track)) => {
                 self.leave_selection(selection);
                 self.services.cursor.field = field;
-                self.shape_command = Some((selection, field));
+                self.overlays.shape_command = Some((selection, field));
                 let (_, items) = self.fx_command_items(track, Pick::ShapeCommand);
                 self.show_picker(Picker::new("FX commands", items).searching(""));
                 self.services.status =
@@ -750,7 +750,7 @@ impl App {
         };
         self.leave_selection(selection);
         self.services.cursor.field = field;
-        self.shape = Some(panel);
+        self.overlays.shape = Some(panel);
         self.modes.mode = Mode::Shape;
         self.preview_shape();
     }
@@ -907,7 +907,7 @@ impl App {
 
     /// Show the panel's result, without adding an undo step.
     fn preview_shape(&mut self) {
-        let Some(panel) = &self.shape else {
+        let Some(panel) = &self.overlays.shape else {
             return;
         };
         if let Ok(next) = edit(&panel.base, &panel.action()) {
@@ -919,11 +919,16 @@ impl App {
     /// Keep what's showing, as one undo step: as plain values, or live. A live generator reopened
     /// and kept as plain values is applied.
     fn keep_shape(&mut self, live: bool) {
-        if let Some(why) = self.shape.as_ref().and_then(ShapePanel::too_few_notes) {
+        if let Some(why) = self
+            .overlays
+            .shape
+            .as_ref()
+            .and_then(ShapePanel::too_few_notes)
+        {
             self.services.status = why;
             return;
         }
-        let Some(panel) = self.shape.take() else {
+        let Some(panel) = self.overlays.shape.take() else {
             return;
         };
         self.modes.mode = Mode::Normal;
@@ -1042,7 +1047,7 @@ impl App {
             }
             _ => (Vec::new(), None),
         };
-        self.shape = Some(ShapePanel {
+        self.overlays.shape = Some(ShapePanel {
             selection: Selection {
                 range,
                 scope: Scope::column(self.services.cursor.field.group()),
@@ -1079,7 +1084,7 @@ impl App {
 
     /// Put back what was there before the panel opened.
     fn cancel_shape(&mut self) {
-        let Some(panel) = self.shape.take() else {
+        let Some(panel) = self.overlays.shape.take() else {
             return;
         };
         self.modes.mode = Mode::Normal;
@@ -1089,7 +1094,7 @@ impl App {
 
     /// The mode a picker goes back to.
     pub(crate) fn mode_after_picker(&self) -> Mode {
-        if self.shape.is_some() {
+        if self.overlays.shape.is_some() {
             Mode::Shape
         } else {
             Mode::Normal
@@ -1222,7 +1227,11 @@ impl App {
             KeyCode::BackTab => return self.run(Cmd::PlayFromStart),
             _ => {}
         }
-        let typing = self.shape.as_ref().is_some_and(|p| p.typing.is_some());
+        let typing = self
+            .overlays
+            .shape
+            .as_ref()
+            .is_some_and(|p| p.typing.is_some());
         // Cmd with a movement key is the `=` `-` `+` or `_` it stands for, as everywhere, but
         // types nothing.
         let key = match (key.command, adjusting_key(key)) {
@@ -1254,7 +1263,7 @@ impl App {
                 }
             }),
             KeyCode::Char('r') => {
-                let Some(mut shape) = self.shape.as_ref().map(|panel| panel.shape) else {
+                let Some(mut shape) = self.overlays.shape.as_ref().map(|panel| panel.shape) else {
                     return;
                 };
                 self.services.roll(&mut shape);
@@ -1267,7 +1276,7 @@ impl App {
     }
 
     fn change_shape(&mut self, change: impl FnOnce(&mut ShapePanel)) {
-        if let Some(panel) = &mut self.shape {
+        if let Some(panel) = &mut self.overlays.shape {
             change(panel);
             settle(&mut panel.shape, &panel.sources, panel.default_source);
         }
@@ -1275,7 +1284,7 @@ impl App {
     }
 
     fn move_shape_row(&mut self, by: isize) {
-        if let Some(panel) = &mut self.shape {
+        if let Some(panel) = &mut self.overlays.shape {
             let rows = panel.rows();
             let at = rows.iter().position(|row| *row == panel.row).unwrap_or(0);
             let to = at.saturating_add_signed(by).min(rows.len() - 1);
@@ -1284,7 +1293,7 @@ impl App {
     }
 
     fn adjust_shape(&mut self, sign: i16, large: bool) {
-        let Some(panel) = &self.shape else {
+        let Some(panel) = &self.overlays.shape else {
             return;
         };
         let mut shape = panel.shape;
@@ -1308,7 +1317,7 @@ impl App {
 
     /// Put the current row back to what it started as.
     fn reset_shape_row(&mut self) {
-        let Some(panel) = &self.shape else {
+        let Some(panel) = &self.overlays.shape else {
             return;
         };
         let starts = Starts {
@@ -1332,7 +1341,7 @@ impl App {
     }
 
     fn open_shape_picker(&mut self) {
-        let Some(panel) = &self.shape else {
+        let Some(panel) = &self.overlays.shape else {
             return;
         };
         let context = panel.context();
@@ -1372,14 +1381,14 @@ impl App {
     }
 
     fn start_shape_typing(&mut self) {
-        let Some(panel) = &self.shape else {
+        let Some(panel) = &self.overlays.shape else {
             return;
         };
         match panel.row.typing(panel.column) {
             Typing::Listed => self.open_shape_picker(),
             Typing::Toggled => self.adjust_shape(1, false),
             _ => {
-                if let Some(panel) = &mut self.shape {
+                if let Some(panel) = &mut self.overlays.shape {
                     panel.typing = Some(TypedValue::default());
                 }
             }
@@ -1387,7 +1396,7 @@ impl App {
     }
 
     fn shape_typing_key(&mut self, code: KeyCode) {
-        let Some(panel) = &mut self.shape else {
+        let Some(panel) = &mut self.overlays.shape else {
             return;
         };
         let typing = panel.row.typing(panel.column);

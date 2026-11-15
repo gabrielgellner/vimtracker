@@ -60,7 +60,7 @@ fn line() -> Vec<String> {
 
 /// The panel as drawn, a line a row.
 fn drawn(app: &App) -> String {
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     let backend = ratatui::backend::TestBackend::new(52, 12);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
@@ -81,7 +81,7 @@ fn variation_writes_a_line_like_the_one_there_and_order_3_cold_writes_it_back() 
     let (mut app, _rt) = app_with(&LINE);
     let depth = app.services.history.undo_depth();
     keys(&mut app, "vGSK/variation<Enter>");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.shape.kind, FillKind::Variation);
     use GenParam::*;
     assert_eq!(panel.rows(), [Fill, Order, Temperature, Vary]);
@@ -100,7 +100,7 @@ fn variation_writes_a_line_like_the_one_there_and_order_3_cold_writes_it_back() 
     // Order 3 at temperature 0 hangs every row on the three before it, which the line has one
     // follower for each: it's written back as it was.
     keys(&mut app, "ji3<Enter>ji0<Enter>");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.shape.variation.order, 3);
     assert_eq!(panel.shape.variation.temperature, 0);
     assert_eq!(texts(&app), line());
@@ -109,7 +109,7 @@ fn variation_writes_a_line_like_the_one_there_and_order_3_cold_writes_it_back() 
     assert_ne!(texts(&app), line());
     let written = texts(&app);
     keys(&mut app, "L");
-    assert!(app.shape.is_none());
+    assert!(app.overlays.shape.is_none());
     assert_eq!(app.services.history.undo_depth(), depth + 1);
     assert_eq!(texts(&app), written);
     let generators = app.song().tracks[0].phrases[&0].generators();
@@ -136,7 +136,7 @@ fn a_line_of_too_few_notes_is_refused_with_a_message() {
     assert_eq!(texts(&app), before, "nothing is written");
     keys(&mut app, "<Enter>");
     assert_eq!(app.services.status, message);
-    assert!(app.shape.is_some(), "the panel stays open");
+    assert!(app.overlays.shape.is_some(), "the panel stays open");
     keys(&mut app, "L");
     assert_eq!(app.services.status, message);
     assert_eq!(app.services.history.undo_depth(), depth);

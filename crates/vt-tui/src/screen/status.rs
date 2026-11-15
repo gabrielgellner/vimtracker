@@ -504,7 +504,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         app.services.note_velocity,
     )));
     let message = if app.modes.mode == Mode::Command {
-        format!(":{}", app.command_line)
+        format!(":{}", app.overlays.command_line)
     } else if let Some(jump) = &app.modes.field_jump {
         format!("/{}", jump.query)
     } else if app.services.status.is_empty()

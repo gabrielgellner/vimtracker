@@ -196,7 +196,7 @@ impl App {
             note,
             velocity,
         });
-        self.started = Some(Momentary::AuditionNote {
+        self.held.started = Some(Momentary::AuditionNote {
             track: self.services.cursor.track,
             note,
         });

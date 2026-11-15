@@ -224,7 +224,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     {
         status = note;
     }
-    app.library = crate::offline::ableton::default_samples();
+    app.explorer.library = crate::offline::ableton::default_samples();
     if let Some(path) = Settings::path() {
         let (settings, note) = Settings::load(&path);
         app.services.settings = settings;
@@ -236,7 +236,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     }
     if let Some(path) = CommandHistory::default_path() {
         let (history, note) = CommandHistory::load(&path);
-        app.command_history = history;
+        app.overlays.command_history = history;
         if let Some(note) = note
             && status.is_empty()
         {
@@ -246,7 +246,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     if let Some(folder) = crate::services::config::config_folder() {
         let path = folder.join(vt_model::tag::TAGS_FILE);
         let (library, note) = vt_model::tag::TagLibrary::load(&path);
-        app.tag_library = std::sync::Arc::new(library);
+        app.explorer.tag_library = std::sync::Arc::new(library);
         if let Some(note) = note
             && status.is_empty()
         {
@@ -255,7 +255,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     }
     if let Some(path) = RecentPlaces::default_path() {
         let (places, note) = RecentPlaces::load(&path);
-        app.recent_places = places;
+        app.explorer.recent_places = places;
         if let Some(note) = note
             && status.is_empty()
         {
@@ -433,13 +433,15 @@ fn main_loop(
             }
         }
         app.tick();
-        app.cpu
+        app.readouts
+            .cpu
             .sample(stats.load.load(Ordering::Relaxed), Instant::now());
-        app.slowdown
+        app.readouts
+            .slowdown
             .sample(stats.slowdown.load(Ordering::Relaxed), Instant::now());
         if power_asked.is_none_or(|asked| asked.elapsed() >= POWER_EVERY) {
             power_asked = Some(Instant::now());
-            app.slowdown.power = audio::PowerState::now();
+            app.readouts.slowdown.power = audio::PowerState::now();
         }
         app.autosave_if_due(Instant::now());
         woken |=
@@ -594,7 +596,9 @@ impl App {
             let wants = self.track_page.panels(&self.ctx());
             let ids = graphics.panels(&wants, rate, out)?;
             self.track_page.take_panels(ids, &wants, rate);
-            if let (Some(view), Some(track)) = (self.mapping.as_mut(), self.services.track_here()) {
+            if let (Some(view), Some(track)) =
+                (self.overlays.mapping.as_mut(), self.services.track_here())
+            {
                 view.images = graphics.panels(&view.panels(track), rate, out)?;
             }
         }
@@ -608,18 +612,19 @@ impl App {
             self.sample_page.images = PanelIds::default();
         }
         let shown = self
+            .overlays
             .picker
             .as_ref()
             .and_then(|picker| picker.preview.clone());
         let preview = graphics.preview(shown, out)?;
-        if let (Some(picker), Some((ids, wave))) = (self.picker.as_mut(), preview) {
+        if let (Some(picker), Some((ids, wave))) = (self.overlays.picker.as_mut(), preview) {
             picker.preview_images.clone_from(ids);
             picker.preview_wave = *wave;
         }
-        if self.scope_shown
+        if self.readouts.scope_shown
             && let Some(id) = graphics.scope(&self.services.scope, out)?
         {
-            self.scope_image = Some(id);
+            self.readouts.scope_image = Some(id);
         }
         graphics.finish(out)
     }
@@ -700,11 +705,11 @@ pub fn draw_screen(
         view
     };
     crate::screen::system::draw(frame, free, app, stats);
-    app.scope_shown = false;
+    app.readouts.scope_shown = false;
     if let Some(column) = meter {
         let (scope, meter) = crate::screen::meter::split_scope(column);
-        app.scope_shown = scope.is_some();
-        if let (Some(area), Some(id)) = (scope, app.scope_image) {
+        app.readouts.scope_shown = scope.is_some();
+        if let (Some(area), Some(id)) = (scope, app.readouts.scope_image) {
             crate::screen::meter::draw_scope(frame, area, id);
         }
         crate::screen::meter::draw(frame, meter, &app.services.meter, app.song().limiter);
@@ -714,25 +719,25 @@ pub fn draw_screen(
     if app.modes.mode == Mode::Help {
         crate::overlays::help::draw_help(frame, body, app);
     }
-    app.guide_page = crate::overlays::guides::draw::page(body.height);
-    app.guide_width = crate::overlays::guides::draw::text_width(body.width);
-    if let Some(guide) = app.guide {
-        crate::overlays::guides::draw::draw(frame, body, guide, app.guide_scroll);
+    app.overlays.guide_page = crate::overlays::guides::draw::page(body.height);
+    app.overlays.guide_width = crate::overlays::guides::draw::text_width(body.width);
+    if let Some(guide) = app.overlays.guide {
+        crate::overlays::guides::draw::draw(frame, body, guide, app.overlays.guide_scroll);
     }
-    if let Some(panel) = &app.shape {
+    if let Some(panel) = &app.overlays.shape {
         crate::overlays::shape::draw::draw(frame, view, app, panel);
     }
-    if let Some(mapping) = &app.mapping {
+    if let Some(mapping) = &app.overlays.mapping {
         crate::overlays::mapping::draw::draw(frame, view, app, mapping);
     }
-    if let Some(picker) = &mut app.picker {
+    if let Some(picker) = &mut app.overlays.picker {
         crate::overlays::picker::draw::draw(frame, body, picker);
     }
-    if let Some(menu) = &mut app.command_menu
+    if let Some(menu) = &mut app.overlays.command_menu
         && app.modes.mode == Mode::Command
     {
         // Under the names it finishes, after the `:`.
-        let column = 1 + menu.column(&app.command_line);
+        let column = 1 + menu.column(&app.overlays.command_line);
         crate::overlays::picker::draw::draw_menu(frame, status, column, &mut menu.picker);
     }
 }

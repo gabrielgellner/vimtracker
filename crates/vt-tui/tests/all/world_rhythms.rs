@@ -35,7 +35,7 @@ fn generators(app: &App, track: usize) -> Vec<Generator> {
 
 /// The panel as drawn, a line a row.
 fn drawn(app: &App) -> String {
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     let backend = ratatui::backend::TestBackend::new(60, 18);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
@@ -66,7 +66,7 @@ fn a_rhythm_across_three_tracks_gives_each_the_next_part() {
     keys(&mut app, "vGWWS");
     down_to(&mut app, GenParam::Where);
     keys(&mut app, "K/rhythm<Enter>");
-    let panel = app.shape.clone().unwrap();
+    let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.shape.place, son(Role::Bell, 100));
     for row in [GenParam::Rhythm, GenParam::Role, GenParam::Child] {
         assert!(panel.rows().contains(&row), "{row:?}");

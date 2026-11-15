@@ -1021,7 +1021,7 @@ entry, and `generators.rs`, which works through the live generators' sources and
     own, a filter's kept mode, a mod slot's type, rate and fade, a macro's patches and the Gen
     page's.
 *   **Macros on the page** (`overlays/mapping.rs`, decision 285). `M` maps the setting under the cursor,
-    `Control::setting_for_macro`, through a picker; `gm` opens `App::mapping`, a `MappingView` in
+    `Control::setting_for_macro`, through a picker; `gm` opens `Overlays::mapping`, a `MappingView` in
     `Mode::Mapping`, drawn by `overlays/mapping/draw.rs`. A setting a macro holds refuses a turn in
     `run_across_pages` (`App::refuses_turn`), and the pages draw `Track::with_macros`, a copy with
     each mapped setting where its macro's turn puts it, never edited.

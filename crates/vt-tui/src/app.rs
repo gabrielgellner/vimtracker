@@ -1,49 +1,43 @@
 //! Application state, and what each key does. It runs without a terminal, so tests can drive it.
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::app::accent_slide::{HeldFlag, Moved, Written};
 use crate::overlays::picker::draw::{PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH};
-use crate::overlays::picker::exploring::Naming;
-use crate::overlays::picker::places::RecentPlaces;
+use crate::overlays::picker::exploring::Explorer;
 use crate::pages::audio::AudioPage;
 use crate::pages::chain::ChainView;
-use crate::services::audio::{AudioChoice, DeviceInfo, LoadReadout, SlowdownReadout};
+use crate::screen::Readouts;
+use crate::services::audio::{AudioChoice, DeviceInfo};
 use crate::services::loading::Loader;
 use crate::widgets::glyphs;
-use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::{PLAYHEADS, TrackPlace, Transport};
 use vt_engine::link::{Command, Handle, JamState};
 use vt_model::constants::{DEFAULT_NOTE_VELOCITY, MAX_TRACKS, TICKS_PER_STEP};
-use vt_model::kit::KitEntry;
 use vt_model::names::Names;
 use vt_model::samples::SamplePool;
-use vt_model::selection::{Block, Field, Scope, StepRange};
+use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::song::Song;
 use vt_model::step::{FxCommand, MAX_VELOCITY};
 
-use crate::app::grammar::{Adjustments, Change, SelectionPlace};
-use crate::app::jumps::Place;
+use crate::app::grammar::Grammar;
+use crate::app::jumps::Jumps;
+use crate::app::keys::HeldKeys;
 use crate::app::recording::Recording;
-use crate::input::bindings::{Op, Table};
+use crate::input::bindings::Table;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::typed::TypedValue;
-use crate::overlays::command::completion::CommandMenu;
-use crate::overlays::command::history::CommandHistory;
+use crate::overlays::Overlays;
 use crate::overlays::field_jump::FieldJump;
-use crate::overlays::guides::Guide;
-use crate::overlays::picker::Picker;
-use crate::overlays::shape::ShapePanel;
 use crate::pages::mixer::MixerPage;
 use crate::pages::phrase::PhraseView;
 use crate::pages::project::ProjectPage;
 use crate::pages::song::SongView;
 use crate::pages::track::TrackPage;
 use crate::services::Services;
+use crate::services::autosave::Autosave;
 
 pub(crate) mod accent_slide;
 mod commands;
@@ -187,22 +181,6 @@ pub enum Momentary {
     },
 }
 
-/// A key holding a note, on the keyboard or in Insert, and the note it started.
-#[derive(Debug, Clone, Copy)]
-struct HeldNote {
-    key: KeyCode,
-    track: usize,
-    note: u8,
-}
-
-/// A momentary change, the key it's held by, and when that key went down.
-#[derive(Debug, Clone, Copy)]
-struct Held {
-    key: KeyCode,
-    since: Instant,
-    what: Momentary,
-}
-
 /// The audio output as it plays, and what the audio page offers.
 #[derive(Debug, Clone, Default)]
 pub struct AudioState {
@@ -245,9 +223,6 @@ pub struct App {
     pub audio_page: AudioPage,
     /// The mouse wheel as a knob on the cursor's setting, while its setting is on.
     pub wheel: crate::input::wheel::Wheel,
-    /// The sample library the sample explorer lists, such as Ableton Live's, if this machine has
-    /// one: found as the program starts, and none in tests.
-    pub library: Option<PathBuf>,
     /// The mixer: the row its cursor is on.
     pub mixer_page: MixerPage,
     /// The song view: the column its cursor is on, and where `V` started selecting sections.
@@ -262,113 +237,35 @@ pub struct App {
     pub project_page: ProjectPage,
     /// Most recently used first, starting with the view on screen.
     pub recent_views: Vec<View>,
-    pub picker: Option<Picker>,
     /// The chain view: the column its cursor is on, and the row last copied.
     pub chain_view: ChainView,
-    pub(crate) jumps: Vec<Place>,
-    pub(crate) jump_index: usize,
-    /// Where the latest jump left from, for `''` to go back to, as Vim's previous context mark.
-    pub(crate) jumped_from: Option<Place>,
-    pub(crate) last_autosave: Option<Instant>,
-    pub(crate) autosaved: Option<Arc<Song>>,
-    /// The field a replace started on, since typing an FX command moves on to its value.
-    pub(crate) replacing: Option<Field>,
-    pub command_line: String,
-    /// The list of matches above the command line, while there's more than one.
-    pub command_menu: Option<CommandMenu>,
-    /// The command lines run before, which `Up` and `Down` go through.
-    pub command_history: CommandHistory,
+    /// What's drawn over the page: the picker, the `:` line, the help and the guides, the shape
+    /// panel and a macro's mapping view.
+    pub overlays: Overlays,
+    /// The jump list, which `Ctrl-O`, `Ctrl-I` and `''` go through.
+    pub jumps: Jumps,
+    /// When the autosave was last due, and what it last wrote.
+    pub autosave: Autosave,
     /// Live recording, while it's armed.
     pub(crate) recording: Option<Recording>,
     /// The recorder: what `Space R` records, and the recording going on.
     pub sampling: crate::services::sampling::Sampling,
-    /// The id of the scope's image, and whether the last screen drawn had room for it.
-    pub scope_image: Option<u32>,
-    pub scope_shown: bool,
-    /// The CPU figure on the status line.
-    pub cpu: LoadReadout,
-    /// How slowed the audio thread is, for the leaf beside it.
-    pub slowdown: SlowdownReadout,
+    /// The CPU and slowdown figures, and the scope's image.
+    pub readouts: Readouts,
     pub should_quit: bool,
-    /// The key last pressed, as it is on the keyboard, until it's let go.
-    key_down: Option<KeyCode>,
-    /// Whether the key that's down ignores its repeats, as a transport key and a held note do.
-    pub(crate) repeats_ignored: bool,
-    /// The keys holding notes, on the keyboard or in Insert, in the order they went down, so
-    /// they play a chord.
-    held_notes: Vec<HeldNote>,
-    /// The keys holding an accent, slide or octave in Insert, for the notes played while they're
-    /// down.
-    pub(crate) held_flags: Vec<HeldFlag>,
-    /// Where the last note played in Insert went, for an accent, slide or octave tapped after it.
-    pub(crate) last_written: Option<Written>,
-    /// The note a tapped octave key last moved, so the same key tapped again puts it back.
-    pub(crate) octave_moved: Option<Moved>,
-    /// What the key that's down started that lasts while it's held.
-    momentary: Option<Held>,
-    /// What the press being handled started, for [`App::press`] to tie to its key.
-    pub(crate) started: Option<Momentary>,
-    pub help_scroll: usize,
-    /// The open guide, how far it has scrolled, and how many of its rows fit.
-    pub guide: Option<Guide>,
-    pub guide_scroll: usize,
-    pub guide_page: usize,
-    pub guide_width: usize,
+    /// The keys that are down, and what they hold while they are.
+    pub held: HeldKeys,
     pub(crate) table: Table,
-    pub(crate) pending: Vec<Key>,
-    pub(crate) pending_since: Option<Instant>,
-    pub(crate) operator: Option<Op>,
-    pub(crate) operator_count: Option<usize>,
-    pub(crate) register: Option<char>,
-    pub(crate) awaiting_register: bool,
-    /// Whether `'` or `m` on the sample page waits for a letter: of the slice to go to, or to
-    /// name the slice under the cursor with.
-    pub(crate) awaiting_mark: Option<crate::pages::sample::marking::MarkWait>,
-    pub(crate) registers: HashMap<char, Block>,
-    /// What the changes kept on the selection have moved its values by, for the status line.
-    pub(crate) adjustments: Adjustments,
-    /// The selection a replace across it comes back to, once its value is in or it's cancelled.
-    pub(crate) replace_returns_to: Option<SelectionPlace>,
-    /// The open shape panel.
-    pub shape: Option<ShapePanel>,
-    /// The open mapping view of a macro.
-    pub mapping: Option<crate::overlays::mapping::MappingView>,
-    /// A selection to shape once the command for its empty FX column is chosen, and its field.
-    pub(crate) shape_command: Option<(Selection, Field)>,
-    /// The sounds of the kit in use, to choose from for a track.
-    pub kit: Vec<KitEntry>,
-    /// The file of the kit in use, which the kit picker opens on.
-    pub kit_file: Option<PathBuf>,
-    /// Reads the files the explorer previews and plays, off this thread.
-    pub loader: Loader,
+    /// The grammar: keys typed so far, the operator and register, and the change `.` repeats.
+    pub grammar: Grammar,
+    /// The file explorer: the kit in use, the files it reads and plays, its places and tags, and
+    /// what a folder chosen in it goes on to.
+    pub explorer: Explorer,
     /// When the loader or the analyst started on what they're doing, while they are, for the
     /// spinner on the status line.
     pub(crate) work_since: Option<Instant>,
-    /// Whether the explorer plays the sample its cursor moves onto, which `A` switches and the
-    /// next one opened keeps.
-    pub audition_files: bool,
-    /// The sample the explorer's cursor is on, to play once it's read, and the one playing.
-    pub file_wanted: Option<PathBuf>,
-    pub file_playing: Option<PathBuf>,
-    /// The folders the explorer was last used in.
-    pub recent_places: RecentPlaces,
-    /// The tags given to files by hand, by their content (decision 315).
-    pub tag_library: std::sync::Arc<vt_model::tag::TagLibrary>,
-    /// What each sample read for the explorer is by how its sound ends, `loop` or `one-shot`,
-    /// kept for the session.
-    pub heard_tags: std::collections::HashMap<PathBuf, &'static str>,
-    /// The command line a folder chosen in the explorer goes on to.
-    pub naming: Option<Naming>,
-    /// Whether the project the explorer opens throws away unsaved changes, as after `:e!`.
-    pub(crate) opening_discards: bool,
-    /// Whether the patch the explorer adds goes over the last mod slots and macros where there
-    /// are too few free, as after `:patch!`.
-    pub(crate) patch_over: bool,
     /// Makes the random names that name lines start with and `C-r` rolls, seeded from the clock.
     pub(crate) names: Names,
-    /// The selection a replace will fill, and the undo depth from before it started.
-    pub(crate) replacing_selection: Option<(Selection, usize)>,
-    pub(crate) last_change: Option<Change>,
 }
 
 /// The keys that play while the track page's keyboard is on, from C to F. The rest stay the
@@ -410,71 +307,23 @@ impl App {
             project_page: ProjectPage::default(),
             audio: AudioState::default(),
             audio_request: None,
-            library: None,
             audio_page: AudioPage::default(),
             wheel: crate::input::wheel::Wheel::default(),
             recent_views: View::ALL.to_vec(),
-            picker: None,
             chain_view: ChainView::default(),
-            jumps: Vec::new(),
-            jump_index: 0,
-            jumped_from: None,
-            last_autosave: None,
-            autosaved: None,
-            replacing: None,
-            command_line: String::new(),
-            command_menu: None,
-            command_history: CommandHistory::default(),
+            overlays: Overlays::default(),
+            jumps: Jumps::default(),
+            autosave: Autosave::default(),
             recording: None,
             sampling: crate::services::sampling::Sampling::default(),
-            scope_image: None,
-            scope_shown: true,
-            cpu: LoadReadout::default(),
-            slowdown: SlowdownReadout::default(),
+            readouts: Readouts::default(),
             should_quit: false,
-            key_down: None,
-            repeats_ignored: false,
-            held_notes: Vec::new(),
-            held_flags: Vec::new(),
-            last_written: None,
-            octave_moved: None,
-            momentary: None,
-            started: None,
-            help_scroll: 0,
-            guide: None,
-            guide_scroll: 0,
-            guide_page: 16,
-            guide_width: 76,
+            held: HeldKeys::default(),
             table: Table::default(),
-            pending: Vec::new(),
-            pending_since: None,
-            operator: None,
-            operator_count: None,
-            register: None,
-            awaiting_register: false,
-            awaiting_mark: None,
-            registers: HashMap::new(),
-            adjustments: Adjustments::default(),
-            replace_returns_to: None,
-            shape: None,
-            mapping: None,
-            shape_command: None,
-            kit: Vec::new(),
-            kit_file: None,
-            loader: Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT)),
+            grammar: Grammar::default(),
+            explorer: Explorer::new(rate),
             work_since: None,
-            audition_files: true,
-            file_wanted: None,
-            file_playing: None,
-            recent_places: RecentPlaces::default(),
-            tag_library: std::sync::Arc::default(),
-            heard_tags: std::collections::HashMap::new(),
-            naming: None,
-            opening_discards: false,
-            patch_over: false,
             names,
-            replacing_selection: None,
-            last_change: None,
         };
         app.services.live_song = Some(Arc::clone(app.song()));
         app.send_live();
@@ -492,8 +341,8 @@ impl App {
         samples.keep_analyses(&self.services.samples);
         self.services.samples = Arc::new(samples);
         self.services.rate = rate;
-        self.loader = Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT));
-        self.file_playing = None;
+        self.explorer.loader = Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT));
+        self.explorer.file_playing = None;
         self.services.scope = crate::services::scope::Scope::new(rate);
         self.services.transport = Transport::Stopped;
         self.services.playhead = 0;
@@ -541,7 +390,7 @@ impl App {
         }
         // While a mute or solo key is down it may yet be a hold, which goes back when it's let go,
         // so what's saved is how it was. A tap marks the song changed again when it's let go.
-        if let Some(held) = self.momentary {
+        if let Some(held) = self.held.momentary {
             match held.what {
                 Momentary::Mute { track, was } => {
                     if let Some(track) = song.tracks.get_mut(track) {
@@ -594,7 +443,7 @@ impl App {
 
     /// The keys typed so far in a sequence.
     pub fn pending(&self) -> &[Key] {
-        &self.pending
+        &self.grammar.pending
     }
 
     /// Put the cursor on the first step that plays, at the top of the screen.
@@ -699,7 +548,7 @@ impl App {
         self.wheel_frame(now);
         self.follow_recording();
         self.follow_sampling();
-        let working = self.loader.is_waiting() || self.services.analyst.is_waiting();
+        let working = self.explorer.loader.is_waiting() || self.services.analyst.is_waiting();
         self.work_since = working.then(|| self.work_since.unwrap_or(now));
         self.settle_sample_page();
     }
