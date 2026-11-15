@@ -22,12 +22,12 @@ use crate::app::App;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::overlays::mapping::held_text;
-use crate::overlays::shape::with_live;
 use crate::pages::Page;
 use crate::pages::phrase::draw::generator_cell_text;
 use crate::pages::track::{Control, view};
 use crate::services::Services;
 use crate::services::banking::sample_shown;
+use crate::services::generators::with_live;
 use crate::widgets::glyphs;
 use crate::widgets::theme;
 
@@ -143,7 +143,7 @@ fn heard_shown(app: &App, field: Field) -> Option<String> {
         .iter()
         .enumerate()
         .find(|(_, generator)| {
-            crate::overlays::shape::on_column(field, generator.column)
+            crate::services::generators::on_column(field, generator.column)
                 && generator
                     .rows()
                     .is_some_and(|rows| (rows.first..=rows.last).contains(&row))

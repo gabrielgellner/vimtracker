@@ -11,6 +11,7 @@ pub(crate) mod autosave;
 pub mod banking;
 pub mod config;
 pub(crate) mod folding;
+pub(crate) mod generators;
 pub(crate) mod heard;
 pub(crate) mod loading;
 pub mod meter;

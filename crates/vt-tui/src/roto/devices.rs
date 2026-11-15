@@ -37,12 +37,12 @@ use vt_roto::sysex::{CONTROLS, MAX_STEPS};
 use ratatui::style::Color;
 
 use super::layouts::{self, Setting, Turn};
-use crate::overlays::shape::{column_label, with_live};
 use crate::pages::track::draw::toggle_on;
 use crate::pages::track::tuning::{tuning, tuning_most};
 use crate::pages::track::{
     AccumulatorField, ArpField, Control, DeviceSpec, Page, macros_device, view,
 };
+use crate::services::generators::{column_label, with_live};
 use crate::widgets::param::view::{ParamView, Reads};
 use crate::widgets::theme;
 

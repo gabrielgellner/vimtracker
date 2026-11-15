@@ -866,7 +866,7 @@ fn title_details(ctx: &Ctx, phrase: &Phrase) -> Vec<Span<'static>> {
             let moving = ctx
                 .phrase_id()
                 .is_some_and(|id| ctx.generator_moving(ctx.cursor().track, id, at));
-            let name = crate::overlays::shape::generator_label(generator);
+            let name = crate::services::generators::generator_label(generator);
             if moving { format!("{name}~") } else { name }
         })
         .collect();

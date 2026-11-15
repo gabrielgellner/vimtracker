@@ -349,7 +349,7 @@ impl App {
             let names: Vec<String> = moving
                 .iter()
                 .rev()
-                .map(|at| crate::overlays::shape::generator_label(&held.generators()[*at]))
+                .map(|at| crate::services::generators::generator_label(&held.generators()[*at]))
                 .collect();
             let verb = if said.is_empty() {
                 "Applied"
