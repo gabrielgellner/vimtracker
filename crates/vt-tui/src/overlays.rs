@@ -168,6 +168,7 @@ pub(crate) fn give<O: Overlay>(
 /// The overlays that are open, and what they keep between their openings: the picker, the `:`
 /// line and its history, how far the help and the guide have scrolled, the shape panel and a
 /// macro's mapping view.
+#[derive(Default)]
 pub struct Overlays {
     /// The open picker or explorer.
     pub picker: Option<Picker>,
@@ -187,20 +188,4 @@ pub struct Overlays {
     pub mapping: Option<MappingView>,
     /// A selection to shape once the command for its empty FX column is chosen, and its field.
     pub(crate) shape_command: Option<(Selection, Field)>,
-}
-
-impl Default for Overlays {
-    fn default() -> Self {
-        Self {
-            picker: None,
-            command_line: String::new(),
-            command_menu: None,
-            command_history: CommandHistory::default(),
-            help: Help::default(),
-            guide: GuideView::default(),
-            shape: None,
-            mapping: None,
-            shape_command: None,
-        }
-    }
 }
