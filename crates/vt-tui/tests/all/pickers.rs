@@ -193,3 +193,32 @@ fn the_pickers_keys_are_in_the_binding_table_so_which_key_and_help_list_them() {
     let at = help.iter().position(|row| row == "Picker").unwrap();
     assert!(help[at + 1..].iter().any(|row| row.contains("z z")));
 }
+
+#[test]
+fn question_mark_in_a_picker_opens_the_keys_at_the_pickers_and_goes_back_to_it() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "  ");
+    press(&mut app, "3j");
+    let selected = app.overlays.picker.as_ref().unwrap().selected;
+    press(&mut app, "?");
+    assert_eq!(app.modes.mode, Mode::Help);
+    let at = app.help_rows().iter().position(|row| row == "Picker");
+    assert_eq!(Some(app.overlays.help.scroll), at, "at the picker's keys");
+    // Any key but `j` and `k` closes it, back to the picker as it was.
+    press(&mut app, "q");
+    assert_eq!(app.modes.mode, Mode::Picker);
+    let picker = app.overlays.picker.as_ref().unwrap();
+    assert_eq!((picker.selected, picker.query.as_str()), (selected, ""));
+    // In the search, it's typed.
+    press(&mut app, "/?");
+    assert_eq!(app.modes.mode, Mode::Picker);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().query, "?");
+    // `Space k` still closes to Normal.
+    special(&mut app, KeyCode::Esc);
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.modes.mode, Mode::Normal);
+    press(&mut app, " k");
+    assert_eq!(app.modes.mode, Mode::Help);
+    press(&mut app, "q");
+    assert_eq!(app.modes.mode, Mode::Normal);
+}

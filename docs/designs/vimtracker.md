@@ -922,7 +922,8 @@ with a plain `match`, so there's no `dyn`.
 **`Overlay`** (`overlays.rs`, #872) is the same seam for what's drawn over a page: `Overlay::KEYS`,
 its rows of the binding table under `Overlay::MODE`, so which-key and `Space k` list them;
 `Overlay::key`, given a `CtxMut`, which answers with the pages' `Outcome`, closing with nothing
-chosen (`Close`), with a choice for `App` to do (`Choose`), or tagging an item (`Tag`) among
+chosen (`Close`), with a choice for `App` to do (`Choose`), tagging an item (`Tag`), or
+`Space k`'s list opened at its own keys and closing back to it (`Keys`, the picker's `?`) among
 what it can ask for; and `Overlay::draw`. Where it differs from a page is what overlays are:
 each has a line that's typed into, so `Overlay::text` takes a key as text, every key while
 `Overlay::takes_text` and otherwise one the table doesn't bind or that `key` passed back, as
@@ -1690,6 +1691,15 @@ A generator is a pure function of its parameters, its target and a seed. The sha
 **mask**, `Where`, which chooses the rows to change (as Polyend's Fill tool does), with a **value source**, `Fill`, which
 chooses what to write or reworks what's there, and a `Shape` holds every setting of both, the seed included, as plain
 data. A generator that can still be changed is that panel kept live (decision 178), so there's one interface for both.
+
+**A live generator on a Note column follows the song's scale as it is now** (decision 360). Its column,
+`ShapeColumn::Note { scale, .. }`, carries the scale as the render's argument, and the program keeps it equal to the live
+scale, which is outside the song and outside undo: `Services::follow_scale` puts `vt_model::action::rescale_generators`'
+song, each such generator written again through the scale and each `Follow` of a phrase that changed after it, in the
+current version's place with `History::replace_current`, so with no undo step, and publishes it. It runs when the scale
+changes, when undo or redo brings a version back, and when a song opens; only the current version is ever changed, and a
+phrase with no such generator stays shared. So the phrase holds what's heard, the engine at rest plays it and moving
+renders from the same column, and nothing reads a scale the song no longer has.
 
 **Its settings are declared once,** in `vt-model`'s `shape/params.rs` (decision 278): a `GenParam` for each, with the key a
 mapping stores it by, its name, its units, which shapes have it (`exists_for`), and how it's shown, stepped, typed, put back,
