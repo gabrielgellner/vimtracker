@@ -921,9 +921,14 @@ each has a line that's typed into, so `Overlay::text` takes a key as text, every
 the explorer's `H` is passed back on a plain list and starts a search; and there's no count,
 as an overlay that counts keeps its own digits. `overlays::press` gives an overlay a key that
 way, with the keys of a sequence typed so far in `Grammar::pending`, as Normal's are. The
-picker, `Space k`'s list (`Help`) and an open guide (`GuideView`) are behind it, the last two
-given their keys by `overlays::give` straight from `App::handle_key`; the others still read
-their keys in `App`'s methods.
+picker, `Space k`'s list (`Help`), an open guide (`GuideView`) and the `:` line
+(`CommandLine`) are behind it, the last three given their keys by `overlays::give`. The `:` line
+answers `Run` with the line typed, `Close` on `Esc` or a line that doesn't parse, and
+`Enter(Normal)` on `Backspace` in an empty line; `App::command_line_key` lends it the folder of
+the presets `:preset` lists here, which only the track page knows, and once it's left by `Esc`
+or run, ends the song view's selection and says if the history couldn't be kept. The random
+names it rolls with `C-r` are `Services::names`. The others still read their keys in `App`'s
+methods.
 
 A key goes, in this order, to the first that takes it:
 

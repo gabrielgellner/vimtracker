@@ -323,7 +323,7 @@ impl App {
             }
             Mode::Insert => self.insert_key(key),
             Mode::Replace => self.replace_key(key),
-            Mode::Command => self.command_key(key),
+            Mode::Command => self.command_line_key(key, now),
             Mode::Help => {
                 let outcome = overlays::give(
                     &mut self.overlays.help,
@@ -623,12 +623,12 @@ impl App {
                 self.modes.mode = Mode::Insert;
             }
             Cmd::EnterCommand => {
-                self.overlays.command_line.clear();
+                self.overlays.command.line.clear();
                 // From a selection on the sample page, the line starts with its range, as Vim's
                 // does from Visual, and the selection ends.
                 if self.modes.view == View::Sample && self.sample_page.anchor.is_some() {
                     self.sample_page.end_selection();
-                    self.overlays.command_line.push_str("'<,'>");
+                    self.overlays.command.line.push_str("'<,'>");
                 }
                 self.modes.mode = Mode::Command;
             }

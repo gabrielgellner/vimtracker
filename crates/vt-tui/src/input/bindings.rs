@@ -10,6 +10,7 @@ use crate::controls::Page;
 use crate::input::keys::{Key, parse, parse_sequence};
 use crate::input::mode::{Mode, View};
 use crate::overlays::Overlay as _;
+use crate::overlays::command::{CommandKey, CommandLine};
 use crate::overlays::guides::{GuideKey, GuideView};
 use crate::overlays::help::{Help, HelpKey};
 use crate::overlays::picker::{Picker, PickerKey};
@@ -204,6 +205,8 @@ pub enum Cmd {
     InHelp(HelpKey),
     /// A key of an open guide.
     InGuide(GuideKey),
+    /// A key of the `:` line.
+    InCommand(CommandKey),
 }
 
 /// One row of the table.
@@ -431,6 +434,7 @@ pub fn bindings() -> Vec<Binding> {
     add(Picker::MODE, Picker::KEYS);
     add(Help::MODE, Help::KEYS);
     add(GuideView::MODE, GuideView::KEYS);
+    add(CommandLine::MODE, CommandLine::KEYS);
     with_cmd_adjusts(rows)
 }
 
