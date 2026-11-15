@@ -7,14 +7,13 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
 use vt_model::accumulator::{Accumulation, MOST_DEGREES, Moves, amount, amount_text};
-use vt_model::arpeggio::{Arpeggio, arp_text, octaves_text, retrig_meaning};
+use vt_model::arpeggio::{Arpeggio, arp_text, octaves_text};
 use vt_model::condition::Condition;
-use vt_model::constants::{BAR_STEPS, TICKS_PER_STEP};
+use vt_model::constants::TICKS_PER_STEP;
 use vt_model::lfo::{Rate, note_rates};
-
-use vt_model::settings::{SettingId, glide_ms};
-use vt_model::shape::{GenParam, Where};
-use vt_model::song::{SynthVoice, Track, trim_text};
+use vt_model::macros::{GenColumn, MacroTarget};
+use vt_model::settings::SettingId;
+use vt_model::song::Track;
 use vt_model::step::{FxCommand, Note};
 use vt_model::variation::{self, Varies};
 
@@ -23,10 +22,11 @@ use crate::banking::sample_shown;
 use crate::glyphs;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
+use crate::macroing::held_text;
+use crate::shaping::with_live;
 use crate::song_view::{COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, START_COLUMN};
 use crate::theme;
-use crate::track_page::tuning::tuning_shown;
-use crate::track_page::{AccumulatorField, ArpField, Control};
+use crate::track_page::{Control, view};
 use crate::tree::ChainColumn;
 use crate::views::phrase::{generator_cell_text, heard_note, playhead_step};
 
@@ -120,76 +120,61 @@ pub fn column_name(app: &App) -> String {
 }
 
 /// The value under the cursor in its setting's units, like `1.21 kHz`, where it's a setting the
-/// track has: a lock in the grid, or a row of the track page.
+/// track has: a lock in the grid, or a row of the track page, as its view says it.
 pub fn value_shown(app: &App) -> Option<String> {
     let track = app.services.track_here()?;
     if app.modes.view == View::Phrase {
         return heard_shown(app, app.services.cursor.field)
             .or_else(|| phrase_value(app, app.services.cursor.field));
     }
-    if app.modes.view == View::Track
-        && let Control::Accumulator(field) = app.track_control()
-    {
-        return Some(accumulator_shown(field, track.accumulation, app.scale.on));
-    }
-    if app.modes.view == View::Track
-        && let Control::Arpeggio(field) = app.track_control()
-    {
-        return Some(arpeggio_shown(field, track.arpeggio));
-    }
-    if app.modes.view == View::Track
-        && let Control::Gen {
-            phrase,
-            generator,
-            param,
-        } = app.track_control()
-    {
-        return Some(gen_shown(app, phrase, generator, param));
-    }
-    if app.modes.view == View::Track && app.track_control() == Control::Glide {
-        return Some(glide_shown(track));
-    }
-    if app.modes.view == View::Track && app.track_control() == Control::Sample {
-        return Some(sample_shown(app.song(), track.sample()));
-    }
-    if app.modes.view == View::Track
-        && matches!(app.track_control(), Control::Tune | Control::Cents)
-    {
-        return Some(tuning_shown(app.song(), track, app.track_control()));
-    }
-    if app.modes.view == View::Track && app.track_control() == Control::Limiter {
-        let on = if app.song().limiter { "on" } else { "off" };
-        return Some(on.to_owned());
-    }
-    if app.modes.view == View::Track && app.track_control() == Control::Safe {
-        return Some(safe_shown(track));
-    }
-    if app.modes.view == View::Track && app.track_control() == Control::Reset {
-        return Some(reset_shown(track.reset));
-    }
-    if matches!(app.modes.view, View::Track | View::Mixer) && app.track_control() == Control::Trim {
-        return Some(trim_text(track.trim));
-    }
     if !matches!(app.modes.view, View::Track | View::Mixer) {
         return None;
     }
+    let control = app.track_control();
+    let view = |track: &Track| view(control, track, app.song(), app.scale.on);
     // A fader the steps drive reads where they have it, and says so, as one a hand has taken over
     // from them does (decision 174).
-    let control = app.track_control();
     let heard = app.services.track_as_heard(app.services.cursor.track)?;
-    // A setting a macro holds reads where the macro puts it, and says which and how far.
+    // A setting of the registry a macro holds reads where the macro puts it, and says which and
+    // how far. `Glide` says what off does on its voice instead, as it's set.
     let heard = heard.with_macros();
-    let (id, value) = control.value_on(&heard)?;
+    let id = match control.value_on(&heard) {
+        Some((id, _)) if control != Control::Glide => id,
+        _ => {
+            let text = view(track)?.text;
+            return match control {
+                // As its macros turn it, and which macro holds it (decisions 294 and 300).
+                Control::Gen {
+                    phrase,
+                    generator,
+                    param,
+                } => {
+                    let column = with_live(app.song(), track, phrase, generator, |found, _| {
+                        found.column
+                    })?;
+                    let target = MacroTarget::Gen {
+                        column: GenColumn::of(column),
+                        param,
+                    };
+                    Some(match held_text(track, target) {
+                        Some(held) => format!("{text}: {held}"),
+                        None => text,
+                    })
+                }
+                _ => (!text.is_empty()).then_some(text),
+            };
+        }
+    };
     let note = app
         .fader_note(app.services.cursor.track, control)
         .unwrap_or("");
     let held = match control {
         Control::Macro(at) => format!(": holds {}", crate::macroing::holds(track, at)),
-        _ => crate::macroing::held_text(track, vt_model::macros::MacroTarget::Setting(id))
+        _ => held_text(track, MacroTarget::Setting(id))
             .map_or_else(String::new, |held| format!(": {held}")),
     };
-    id.exists_on(track)
-        .then(|| format!("{}{note}{held}", shown(id, value)))
+    let text = view(&heard)?.text;
+    id.exists_on(track).then(|| format!("{text}{note}{held}"))
 }
 
 /// On a cell of a live generator a macro or `Vary` moved, what's written and what was last heard
@@ -310,25 +295,6 @@ fn amount_shown(value: u8, accumulation: Accumulation, scale_on: bool) -> String
     }
 }
 
-/// What one of the track's accumulator settings does, as it's set.
-fn accumulator_shown(
-    field: AccumulatorField,
-    accumulation: Accumulation,
-    scale_on: bool,
-) -> String {
-    let unit = if scale_on { "degrees" } else { "semitones" };
-    match field {
-        AccumulatorField::Up => format!("{} {unit} above the note as written", accumulation.up),
-        AccumulatorField::Down => {
-            format!("{} {unit} below the note as written", accumulation.down)
-        }
-        AccumulatorField::Moves => lowered(accumulation.moves.meaning()),
-        AccumulatorField::AtLimit => lowered(accumulation.at_limit.meaning()),
-        AccumulatorField::Adds => lowered(accumulation.adds.meaning()),
-        AccumulatorField::Reset => lowered(&accumulation.reset.meaning()),
-    }
-}
-
 /// What an `ARP` goes round, and how the track plays it.
 fn arp_shown(value: u8, arpeggio: Arpeggio, scale_on: bool) -> String {
     format!(
@@ -339,69 +305,6 @@ fn arp_shown(value: u8, arpeggio: Arpeggio, scale_on: bool) -> String {
         octaves_text(arpeggio.octaves),
         if arpeggio.retrig { "retrig" } else { "legato" }
     )
-}
-
-/// How long a track's ties glide, and what off does on its voice.
-/// What a track's own `Reset` does, as it's set.
-fn reset_shown(reset: Option<u16>) -> String {
-    let Some(steps) = reset else {
-        return "Off: its chain plays on".to_owned();
-    };
-    let bars = usize::from(steps) / BAR_STEPS;
-    let length = match bars {
-        _ if !usize::from(steps).is_multiple_of(BAR_STEPS) => format!("{steps} steps"),
-        1 => "bar".to_owned(),
-        _ => format!("{bars} bars"),
-    };
-    format!("its chain starts again every {length} of the song")
-}
-
-fn safe_shown(track: &Track) -> String {
-    let on = if track.safe { "on" } else { "off" };
-    if !track.filter.has_safe() {
-        format!("{on}: {} never rings by itself", track.filter.name())
-    } else if track.safe {
-        "on: Res stops short of ringing by itself".to_owned()
-    } else {
-        "off: Res rings by itself from about D9".to_owned()
-    }
-}
-
-fn glide_shown(track: &Track) -> String {
-    match glide_ms(f32::from(track.glide)) {
-        Some(_) => SettingId::GLIDE
-            .entry()
-            .kind
-            .shown(u16::from(track.glide) << 8),
-        None if track.voice() == Some(SynthVoice::Acid) => {
-            "Off: a tie slides by Acid's own Slide".to_owned()
-        }
-        None => "Off: a tie jumps to the next note".to_owned(),
-    }
-}
-
-/// What one of the track's arpeggio settings does, as it's set.
-fn arpeggio_shown(field: ArpField, arpeggio: Arpeggio) -> String {
-    match field {
-        ArpField::Rate => lowered(arpeggio.rate.meaning()),
-        ArpField::Mode => lowered(arpeggio.mode.meaning()),
-        ArpField::Octaves if arpeggio.octaves == 1 => {
-            "1 octave: the notes alone, not climbing".to_owned()
-        }
-        ArpField::Octaves => format!(
-            "{}: the notes climb that many before it starts again",
-            octaves_text(arpeggio.octaves)
-        ),
-        ArpField::Retrig => lowered(retrig_meaning(arpeggio.retrig)),
-    }
-}
-
-/// A meaning to follow a name on the status line, its first letter small.
-fn lowered(text: &str) -> String {
-    let mut letters = text.chars();
-    letters.next().map_or_else(String::new, |first| {
-        first.to_lowercase().chain(letters).collect()
-    })
 }
 
 /// How far a nudge moves its row, in 24ths of a sixteenth, which is the same time on every track.
@@ -672,35 +575,6 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     if width > 0 {
         let at = Rect::new(area.right() - width, area.y, width, 1);
         frame.render_widget(Paragraph::new(right), at);
-    }
-}
-
-/// A generator's setting in its units, as `9 of the 16 rows` for Euclid's hits.
-fn gen_shown(app: &App, phrase: u32, generator: usize, param: GenParam) -> String {
-    let Some(live) = app.live_generator(app.services.cursor.track, phrase, generator) else {
-        return String::new();
-    };
-    let context = live.context();
-    // As its macros turn it, and which macro holds it (decisions 294 and 300).
-    let shape = &live.generator.heard();
-    let shown = match (param, shape.place) {
-        (GenParam::Hits, Where::Euclid { hits, .. }) => {
-            let open = context.open;
-            format!("{} of the {open} rows", usize::from(hits).min(open))
-        }
-        _ => param.shown(shape, &context),
-    };
-    let target = vt_model::macros::MacroTarget::Gen {
-        column: vt_model::macros::GenColumn::of(live.generator.column),
-        param,
-    };
-    let held = app
-        .services
-        .track_here()
-        .and_then(|track| crate::macroing::held_text(track, target));
-    match held {
-        Some(held) => format!("{shown}: {held}"),
-        None => shown,
     }
 }
 

@@ -47,11 +47,13 @@
 //! **Left out:** its side-chain EQ, as `Source` is the side-chain here.
 
 use vt_model::insert::{
-    Compressor as Settings, GLUE_AUTO_RELEASE, GLUE_RATIOS, range_db, threshold_db,
+    Compressor as Settings, CompressorType, GLUE_AUTO_RELEASE, GLUE_RATIOS, range_db, threshold_db,
 };
 
 use crate::dsp::blocks::sides::same_bits_by_fields;
 use crate::dsp::blocks::smoother::Smoothed;
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::SlotEffect;
 
 /// Below this, a level counts as silence, about -120 dB, so the log stays finite.
 const FLOOR: f32 = 1e-6;
@@ -409,6 +411,33 @@ impl PeakClip {
             (self.on - by).max(self.target)
         };
         frame.map(|sample| sample + (clipped(sample) - sample) * self.on)
+    }
+}
+
+/// Glue's clip, which a slot keeps beside its compressor and gives the compressor's settings.
+impl SlotEffect for PeakClip {
+    type Settings = Settings;
+
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, _frames: u64) {
+        // Only Glue has its clip, which the other types keep while they're shown.
+        self.switch(settings.kind == CompressorType::Glue && settings.peak_clip > 0);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// None: it's worked every frame, so the slot never waits on its tail.
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        0
     }
 }
 
