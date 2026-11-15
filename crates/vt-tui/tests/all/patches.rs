@@ -550,20 +550,17 @@ fn the_browser_adds_a_shipped_patch_and_kria_brings_its_lane() {
     let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(
         picker.current().unwrap().meaning,
-        "FX1 generator, 2 slots, 2 macros"
+        "FX1 generator, 2 slots, 3 macros"
     );
     special(&mut app, KeyCode::Enter);
     assert_eq!(
         app.services.status,
-        "Track 01 has Kria in mod slots 3 and 4, macros 1 and 2 and live FX1 on phrase 00, keeping its sound: u undoes it"
+        "Track 01 has Kria in mod slots 3 and 4, macros 1, 2 and 3 and live FX1 on phrase 00, keeping its sound: u undoes it"
     );
     let track = &app.song().tracks[0];
     assert_eq!(
         track.phrases[&0].lane(0),
-        Some(vt_model::song::Lane {
-            start: 0,
-            length: 4
-        }),
+        Some(vt_model::song::Lane::new(0, 4)),
         "the length loop has its lane of 4"
     );
     let written: Vec<String> = ["gate:20", "gate:C0", "gate:08", "gate:E6"]
@@ -574,11 +571,16 @@ fn the_browser_adds_a_shipped_patch_and_kria_brings_its_lane() {
         })
         .collect();
     assert_eq!(fx1(&app, 0)[..4], written);
-    let names: Vec<_> = track.macros[..2].iter().map(|m| m.name.clone()).collect();
+    let names: Vec<_> = track.macros[..3].iter().map(|m| m.name.clone()).collect();
     assert_eq!(
         names,
-        [Some("Pitch loop".into()), Some("Octave loop".into())]
+        [
+            Some("Pitch loop".into()),
+            Some("Octave loop".into()),
+            Some("Length loop".into())
+        ]
     );
+    assert_eq!(key_of(&track.macros[2].maps[0]), "lane1.length");
     assert_eq!(key_of(&track.macros[0].maps[0]), "mod3.length");
     assert_eq!(track.mods[3].steps.length, 3, "the octave loop's 3 steps");
 }

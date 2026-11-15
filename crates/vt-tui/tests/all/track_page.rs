@@ -807,8 +807,8 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
-        33,
-        "what a sample track has, its Sample, Slice, Start and Length, Pitch in scale, none, Mod 6's three and its Rate, the accumulator's and arpeggio's four, and the eight macros"
+        39,
+        "what a sample track has, its Sample, Slice, Start and Length, its lanes' six, Pitch in scale, none, Mod 6's three and its Rate, the accumulator's and arpeggio's four, and the eight macros"
     );
     assert!(
         picker

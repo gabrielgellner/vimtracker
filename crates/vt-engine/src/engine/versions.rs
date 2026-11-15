@@ -4,8 +4,8 @@
 use std::sync::Arc;
 
 use vt_model::constants::{
-    FIXED_TRACKS, MAX_MILLIBPM, MAX_SOUND_TRACKS, MAX_TRACKS, MIN_MILLIBPM, TICKS_PER_QUARTER,
-    TICKS_PER_STEP,
+    FIXED_TRACKS, FX_SLOTS, MAX_MILLIBPM, MAX_SOUND_TRACKS, MAX_TRACKS, MIN_MILLIBPM,
+    TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
 use vt_model::insert::Insert;
 use vt_model::samples::SampleId;
@@ -264,27 +264,47 @@ impl Engine {
                 continue;
             };
             let new_count = place - state.started;
-            for (slot, lane_offset) in state.lane_offsets.iter_mut().enumerate() {
+            let (was_entry, entry) = ((was_at.phrase, was_at.slot), (at.phrase, at.slot));
+            for slot in 0..FX_SLOTS {
                 let (old_lane, lane) = (old_phrase.lane(slot), phrase.lane(slot));
-                if !moved && old_lane == lane && was_at.phrase == at.phrase {
+                let same = was_at.phrase == at.phrase;
+                if !moved && old_lane == lane && same {
                     continue;
                 }
                 let Some(lane) = lane else {
-                    *lane_offset = 0;
+                    state.lane_offsets[slot] = 0;
                     continue;
                 };
-                // The step this column was going to read, which it keeps if its lane still has it.
-                let was_reading = match old_lane {
-                    Some(old_lane) => old_lane.step_at(count + *lane_offset),
+                // Where this column was going to read, which it keeps if its lane still has the
+                // step, as the lane counts it now (decision 348).
+                let ahead =
+                    old_lane.map(|old| (old, state.lane_ahead(slot, old, was_entry, count)));
+                let was_reading = match ahead {
+                    Some((old, ahead)) => old.stored(ahead.row),
                     None => old_phrase.start() + was_at.step,
                 };
-                let target = if was_at.phrase == at.phrase && lane.contains(was_reading) {
-                    was_reading
-                } else {
-                    lane.start
+                let kept = same && lane.contains(was_reading);
+                let row = if kept { was_reading - lane.start } else { 0 };
+                // Placed from the count after, as on a new phrase in the chain, it reads that row,
+                // as far through it as it was.
+                let heard = state.heard_lane(slot, lane);
+                let division = heard.division.max(1) as i64;
+                let within = match ahead {
+                    Some((_, ahead)) if kept && ahead.left > 0 => {
+                        division - (ahead.left as i64).min(division)
+                    }
+                    _ => 0,
                 };
-                let offset = (target - lane.start) as i64 - new_count;
-                *lane_offset = offset.rem_euclid(lane.length.max(1) as i64);
+                let offset = row as i64 * division + within - new_count;
+                let cycle = heard.length.max(1) as i64 * division;
+                state.lane_offsets[slot] = offset.rem_euclid(cycle);
+                // A lane that's as it was carries on where it is, in a copy of its rows too.
+                match ahead {
+                    Some((old, ahead)) if same && old == lane => {
+                        state.put_lane(slot, entry, new_count, ahead);
+                    }
+                    _ => state.unplace_lane(slot),
+                }
             }
         }
     }

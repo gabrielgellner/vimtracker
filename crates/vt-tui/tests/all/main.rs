@@ -28,6 +28,7 @@ mod heard_generators;
 mod keys;
 mod kit_dialog;
 mod kits;
+mod lane_moves;
 mod launch;
 mod macros;
 mod marbles_rhythms;

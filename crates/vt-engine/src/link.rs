@@ -8,9 +8,9 @@ use std::time::{Duration, Instant};
 
 use rtrb::{Consumer, Producer, RingBuffer};
 use vt_model::constants::{
-    COMMAND_QUEUE, FILE_QUEUE, FX_SLOTS, GEN_HEARD_QUEUE, INPUT_MOST_WAITING, MAX_TRACKS,
-    MEMORY_QUEUE, NOTE_PITCH_QUEUE, PUBLISH_QUEUE, RECORDER_QUEUE, RETURN_QUEUE, SCOPE_QUEUE,
-    TAKE_QUEUE, TELEMETRY_QUEUE,
+    COMMAND_QUEUE, FILE_QUEUE, GEN_HEARD_QUEUE, INPUT_MOST_WAITING, MAX_TRACKS, MEMORY_QUEUE,
+    NOTE_PITCH_QUEUE, PUBLISH_QUEUE, RECORDER_QUEUE, RETURN_QUEUE, SCOPE_QUEUE, TAKE_QUEUE,
+    TELEMETRY_QUEUE,
 };
 use vt_model::growing::Growing;
 use vt_model::insert::EffectKind;
@@ -139,8 +139,6 @@ pub struct JamState {
     pub chain: Option<u32>,
     /// The step of the track's own running count that chain began at.
     pub started: i64,
-    /// What's added to that count for each FX column's lane.
-    pub lane_offsets: [i64; FX_SLOTS],
     /// Its mute and solo, and whether each switches at the next line of the launch grid.
     pub mute: bool,
     pub solo: bool,
@@ -768,6 +766,8 @@ mod tests {
         total
     }
 
+    /// Lanes changing, their divisions too, and each track's `Length` and `Rate` for every FX
+    /// column turned every block (decision 348).
     #[test]
     fn lanes_changing_while_playing_never_allocate_in_the_callback() {
         let pool = samples();
@@ -779,12 +779,16 @@ mod tests {
             let mut next = song(8, 16);
             for track in next.tracks.iter_mut().take(8) {
                 let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
-                for slot in 0..FX_SLOTS {
+                for (slot, moved) in track.lanes.iter_mut().enumerate() {
                     let lane = vt_model::song::Lane {
-                        start: (round + slot) % 4,
-                        length: 1 + (round * 3 + slot) % 7,
+                        division: 1 + (round + slot) % 5,
+                        ..vt_model::song::Lane::new((round + slot) % 4, 1 + (round * 3 + slot) % 7)
                     };
                     phrase.set_lane(slot, Some(lane));
+                    *moved = vt_model::lane::LaneMove {
+                        length: (0x7C + (round * 5 + slot) % 9) as u8,
+                        rate: ((round * 7 + slot) % vt_model::lane::LANE_RATES.len()) as u8,
+                    };
                 }
             }
             handle.publish(published(next, &pool));

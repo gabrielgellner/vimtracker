@@ -377,8 +377,7 @@ impl App {
             progress: self.services.progress,
             ticks: TICKS_PER_STEP as u32,
             speed: Speed::Sixteenth,
-            skipped: false,
-            accumulated: None,
+            ..TrackPlace::default()
         };
         self.carried_on(place)
     }

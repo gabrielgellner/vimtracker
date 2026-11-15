@@ -10,14 +10,15 @@ use crate::arpeggio::{Arpeggio, MOST_OCTAVES};
 use crate::bank::BankEntry;
 use crate::bloom::{Bloom, MAX_BRANCHES};
 use crate::constants::{
-    MAX_ENVELOPE_MS, MAX_GROUPS, MAX_PROJECT_NAME_CHARS, MAX_SOUND_TRACKS, MAX_TRACK_RESET,
-    MAX_TRANSPOSE, MIN_TRANSPOSE,
+    FX_SLOTS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_PROJECT_NAME_CHARS, MAX_SOUND_TRACKS,
+    MAX_TRACK_RESET, MAX_TRANSPOSE, MIN_TRANSPOSE,
 };
 use crate::generator::Span;
 use crate::groove::{CUSTOM_GROOVES, Groove, GrooveId};
 use crate::insert::Insert;
 use crate::kit::CHOKE_GROUPS;
 use crate::label::GROUP_NAME_CHARS;
+use crate::lane::{LANE_RATES, LaneMove};
 use crate::macros::{MACRO_NAME_LENGTH, MACROS, MacroMap, MacroTarget};
 use crate::modulation::ModSlot;
 use crate::order::Order;
@@ -406,6 +407,13 @@ pub enum Action {
         track: usize,
         arpeggio: Arpeggio,
     },
+    /// Set what a track's `Length` and `Rate` for an FX column move every phrase's lane on that
+    /// column by (decision 347).
+    SetLaneMove {
+        track: usize,
+        slot: usize,
+        moved: LaneMove,
+    },
     /// Change the length of a phrase's loop, keeping every step.
     SetLength {
         track: usize,
@@ -701,6 +709,8 @@ pub enum EditError {
     Accumulation,
     #[error("an arpeggio climbs from 1 to {MOST_OCTAVES} octaves")]
     Arpeggio,
+    #[error("a lane's Rate is one of its {} choices, on FX1 to FX{FX_SLOTS}", LANE_RATES.len())]
+    LaneMove,
     #[error(
         "a track has macros 1 to {MACROS}, each turning settings within their range, never another macro, and named with up to {MACRO_NAME_LENGTH} plain characters"
     )]
@@ -784,6 +794,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
         | Action::SetTrackSafe { .. }
         | Action::SetAccumulation { .. }
         | Action::SetArpeggio { .. }
+        | Action::SetLaneMove { .. }
         | Action::AddTracks(_)
         | Action::RemoveLastTrack
         | Action::SetTrackName { .. } => tracks::edit(&mut next, action)?,

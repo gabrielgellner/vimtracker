@@ -3,7 +3,9 @@
 
 use std::sync::Arc;
 
-use vt_model::constants::{DEFAULT_NOTE_VELOCITY, MAX_TRACKS, PREVIEW_MS, TICKS_PER_STEP};
+use vt_model::constants::{
+    DEFAULT_NOTE_VELOCITY, FX_SLOTS, MAX_TRACKS, PREVIEW_MS, TICKS_PER_STEP,
+};
 use vt_model::envelope::{Adsr, Envelope};
 use vt_model::sample::SampleData;
 use vt_model::settings::{PlayMode, SettingId};
@@ -292,10 +294,12 @@ impl Engine {
                 .get(&position.phrase)
                 .map_or(0, |phrase| phrase.start())
                 + position.step;
+            // A note's own row, which no lane's generator reaches.
             let read = Read {
                 chain: *chain,
                 count: place as i64,
                 position,
+                lanes: [None; FX_SLOTS],
             };
             let step = self.view_row(index, read, row, step, Played::Ahead);
             let Note::On(midi) = step.note else {

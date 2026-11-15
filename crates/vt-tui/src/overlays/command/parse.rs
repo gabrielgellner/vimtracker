@@ -11,6 +11,7 @@ use vt_model::constants::{MAX_GROUPS, MAX_LABEL_CHARS};
 use vt_model::groove::{GrooveId, SWING_PERCENTS};
 use vt_model::kit::MAX_TUNE;
 use vt_model::label::{GROUP_NAME_CHARS, is_group_name, is_name};
+use vt_model::lane::MOST_DIVISION;
 use vt_model::order::Order;
 use vt_model::shape::MAX_MUTATION;
 use vt_model::song::{LAUNCH_WORDS, Launch};
@@ -153,8 +154,8 @@ pub enum Line {
     GrabTempo,
     /// A loop's length.
     Len(usize),
-    /// Give the cursor's FX column a lane this long, or none to follow the notes again.
-    Lane(Option<usize>),
+    /// Give the cursor's FX column a lane, change its division, or none to follow the notes again.
+    Lane(LaneLine),
     /// Play this phrase's rows in an order, or choose one from a list.
     Order(Option<Order>),
     /// Grow branches from this phrase, after Qu-Bit's Bloom, with as many branches, as much
@@ -548,7 +549,9 @@ pub enum LineError {
     Bpm,
     #[error(":len takes a number of steps, 1 or more, with 0x for hex: 0x10")]
     Len,
-    #[error(":lane takes a number of steps, 1 or more, or nothing to follow the notes again")]
+    #[error(
+        ":lane takes a number of rows, 1 or more, with how many steps each lasts after a slash, 1 to {MOST_DIVISION}, as 4/2 or /3, or nothing to follow the notes again"
+    )]
     Lane,
     #[error(":gen takes apply, to apply the live column under the cursor")]
     Gen,
@@ -656,6 +659,38 @@ fn millibpm(text: &str) -> Option<u32> {
 
 /// Read a number of steps, 1 or more: decimal, or hex after `0x` as in Rust, since rows are numbered
 /// in hex on screen.
+/// What `:lane` asks for: none, to follow the notes again; or a lane of so many rows, each lasting
+/// so many of the track's steps after a slash, as `4/2`, either left out to keep the lane's own,
+/// as `/3` (decision 346).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaneLine {
+    Off,
+    Set {
+        length: Option<usize>,
+        division: Option<usize>,
+    },
+}
+
+/// `:lane`'s argument.
+fn lane(text: &str) -> Option<LaneLine> {
+    if text.is_empty() {
+        return Some(LaneLine::Off);
+    }
+    let (length, division) = match text.split_once('/') {
+        Some((length, division)) => (length, Some(division)),
+        None => (text, None),
+    };
+    let length = match length {
+        "" if division.is_some() => None,
+        _ => Some(steps(length)?),
+    };
+    let division = match division {
+        Some(division) => Some(steps(division).filter(|steps| *steps <= MOST_DIVISION)?),
+        None => None,
+    };
+    Some(LaneLine::Set { length, division })
+}
+
 fn steps(text: &str) -> Option<usize> {
     let parsed = match text.strip_prefix("0x") {
         Some(digits) => usize::from_str_radix(digits, 16).ok(),
@@ -1240,12 +1275,7 @@ pub(crate) const COMMANDS: [Command; 49] = [
         name: "lane",
         meaning: "Give this FX column a lane",
         takes: Takes::Nothing,
-        parse: |argument| match argument {
-            "" => Ok(Line::Lane(None)),
-            _ => steps(argument)
-                .map(|length| Line::Lane(Some(length)))
-                .ok_or(LineError::Lane),
-        },
+        parse: |argument| lane(argument).map(Line::Lane).ok_or(LineError::Lane),
     },
     Command {
         name: "order",
@@ -1961,9 +1991,19 @@ mod tests {
     fn bad_commands_are_refused() {
         assert_eq!(parse("len 0"), Err(LineError::Len));
         assert_eq!(parse("len"), Err(LineError::Len));
-        assert_eq!(parse("lane"), Ok(Line::Lane(None)));
-        assert_eq!(parse("lane 3"), Ok(Line::Lane(Some(3))));
+        assert_eq!(parse("lane"), Ok(Line::Lane(LaneLine::Off)));
+        let set = |length, division| Ok(Line::Lane(LaneLine::Set { length, division }));
+        assert_eq!(parse("lane 3"), set(Some(3), None));
+        assert_eq!(parse("lane 4/2"), set(Some(4), Some(2)));
+        assert_eq!(parse("lane /3"), set(None, Some(3)));
         assert_eq!(parse("lane 0"), Err(LineError::Lane));
+        assert_eq!(
+            parse("lane 4/17"),
+            Err(LineError::Lane),
+            "16 steps a row at most"
+        );
+        assert_eq!(parse("lane 4/0"), Err(LineError::Lane));
+        assert_eq!(parse("lane /"), Err(LineError::Lane));
         assert_eq!(parse("order"), Ok(Line::Order(None)));
         assert_eq!(
             parse("order Up-Down-Inc"),

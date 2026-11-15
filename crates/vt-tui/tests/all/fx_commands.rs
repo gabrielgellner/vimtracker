@@ -586,13 +586,7 @@ fn lane_makes_an_fx_column_a_lane_and_the_loop_keys_then_set_it() {
         vt_model::selection::Field::FxCommand(0)
     );
     command(&mut app, "lane 3");
-    assert_eq!(
-        lane_of(&app, 0),
-        Some(Lane {
-            start: 2,
-            length: 3
-        })
-    );
+    assert_eq!(lane_of(&app, 0), Some(Lane::new(2, 3)));
     assert!(
         app.services.status.contains("FX 1"),
         "{}",
@@ -600,29 +594,11 @@ fn lane_makes_an_fx_column_a_lane_and_the_loop_keys_then_set_it() {
     );
     // Now it has a lane, the loop keys set it rather than the phrase.
     press(&mut app, "jjjjge");
-    assert_eq!(
-        lane_of(&app, 0),
-        Some(Lane {
-            start: 2,
-            length: 5
-        })
-    );
+    assert_eq!(lane_of(&app, 0), Some(Lane::new(2, 5)));
     command(&mut app, "len 4");
-    assert_eq!(
-        lane_of(&app, 0),
-        Some(Lane {
-            start: 2,
-            length: 4
-        })
-    );
+    assert_eq!(lane_of(&app, 0), Some(Lane::new(2, 4)));
     press(&mut app, "kgs");
-    assert_eq!(
-        lane_of(&app, 0),
-        Some(Lane {
-            start: 5,
-            length: 4
-        })
-    );
+    assert_eq!(lane_of(&app, 0), Some(Lane::new(5, 4)));
     assert_eq!(
         app.song().tracks[0].phrases[&0].len(),
         16,
@@ -637,14 +613,7 @@ fn lane_makes_an_fx_column_a_lane_and_the_loop_keys_then_set_it() {
     command(&mut app, "lane");
     assert_eq!(lane_of(&app, 0), None, "following the notes again");
     press(&mut app, "u");
-    assert_eq!(
-        lane_of(&app, 0),
-        Some(Lane {
-            start: 5,
-            length: 4
-        }),
-        "one undo each"
-    );
+    assert_eq!(lane_of(&app, 0), Some(Lane::new(5, 4)), "one undo each");
 }
 
 #[test]

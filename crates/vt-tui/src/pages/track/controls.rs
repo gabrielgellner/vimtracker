@@ -2,6 +2,7 @@
 //! their values on a track, and which can be listed or typed.
 
 use vt_model::action::TrackControl;
+use vt_model::constants::FX_SLOTS;
 use vt_model::lfo::phase_value;
 use vt_model::macros::MACROS;
 use vt_model::modulation::ModField;
@@ -29,6 +30,33 @@ pub enum ArpField {
     Octaves,
     Retrig,
 }
+
+/// One of an FX column's lane's settings, on the Gen page, which move every phrase's lane on that
+/// column from its own (decision 347).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaneField {
+    Length,
+    Rate,
+}
+
+impl LaneField {
+    /// Its place among the lane's settings in the registry, and the track's [`LaneMove`].
+    ///
+    /// [`LaneMove`]: vt_model::lane::LaneMove
+    pub const fn at(self) -> usize {
+        match self {
+            Self::Length => 0,
+            Self::Rate => 1,
+        }
+    }
+}
+
+/// What the status line calls each FX column's lane's settings.
+const LANE_NAMES: [[&str; 2]; FX_SLOTS] = [
+    ["FX1 Length", "FX1 Rate"],
+    ["FX2 Length", "FX2 Rate"],
+    ["FX3 Length", "FX3 Rate"],
+];
 
 /// One setting on the page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,6 +120,9 @@ pub enum Control {
     InsertParam(usize, usize),
     /// One of the track's macros, by its place, from 0 to 7 (decision 285).
     Macro(usize),
+    /// One of an FX column's lane's settings, by the column's place, on the Gen page (decision
+    /// 347).
+    Lane(usize, LaneField),
 }
 
 pub(super) const fn base(control: TrackControl) -> Control {
@@ -154,6 +185,8 @@ impl Control {
             }
             Self::Gen { param, .. } => param.name(),
             Self::NewGenerator(_) => "Empty",
+            Self::Lane(_, LaneField::Length) => "Length",
+            Self::Lane(_, LaneField::Rate) => "Rate",
         }
     }
 
@@ -179,6 +212,7 @@ impl Control {
                 .params()
                 .get(param)
                 .map_or_else(|| self.label(), |found| found.name),
+            Self::Lane(slot, field) => LANE_NAMES[slot.min(FX_SLOTS - 1)][field.at()],
             // The sample's, which the status line says, as the track's `Pitch` is another.
             Self::Tune => "Sample tune",
             Self::Cents => "Sample cents",
@@ -218,6 +252,10 @@ impl Control {
                 u16::from(track.filter.plays(track.filter_mode).index()) << 8,
             )),
             Self::Macro(at) => Some((SettingId::macro_at(at)?, track.macros[at].value)),
+            Self::Lane(slot, field) => Some((
+                SettingId::lane(slot, field.at())?,
+                u16::from(track.lanes.get(slot)?.value(field.at())) << 8,
+            )),
             Self::InsertParam(slot, param) => {
                 let insert = track.inserts[slot];
                 let (effect, at) = (insert.kind()?, insert.kept_at(param)?);
@@ -302,7 +340,8 @@ impl Control {
             | Self::Reset
             | Self::Glide
             | Self::Accumulator(_)
-            | Self::Arpeggio(_) => track.is_sound(),
+            | Self::Arpeggio(_)
+            | Self::Lane(..) => track.is_sound(),
             Self::Base(TrackControl::Pan) | Self::Mute | Self::Solo => {
                 track.kind != TrackKind::Master
             }
@@ -379,6 +418,7 @@ impl Control {
                         | AccumulatorField::Reset
                 )
                 | Self::Arpeggio(ArpField::Rate | ArpField::Mode | ArpField::Retrig)
+                | Self::Lane(_, LaneField::Rate)
         )
     }
 }

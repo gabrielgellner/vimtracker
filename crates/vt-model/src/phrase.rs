@@ -4,30 +4,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS};
 use crate::generator::{Generator, GeneratorFile, Span};
+pub use crate::lane::Lane;
+use crate::lane::MOST_DIVISION;
 use crate::order::{Deal, Order, Round};
 use crate::selection::{Extent, StepRange};
 use crate::shape::{Shape, ShapeColumn, Source};
 use crate::step::{FxCommand, FxSlot, Step};
-
-/// Where an FX column loops on its own, among a phrase's stored steps. It drifts against the
-/// notes, which follow the phrase's loop.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Lane {
-    pub start: usize,
-    pub length: usize,
-}
-
-impl Lane {
-    /// Whether a stored step is in it.
-    pub fn contains(self, step: usize) -> bool {
-        (self.start..self.start + self.length).contains(&step)
-    }
-
-    /// The stored step it reads at this count, which can be below 0 after playing from a step.
-    pub fn step_at(self, count: i64) -> usize {
-        self.start + count.rem_euclid(self.length.max(1) as i64) as usize
-    }
-}
 
 /// One track's sequence of steps, reusable by ID.
 ///
@@ -67,6 +49,7 @@ fn fitted(lane: Option<Lane>, stored: usize) -> Option<Lane> {
     (lane.start < stored).then(|| Lane {
         start: lane.start,
         length: lane.length.clamp(1, stored - lane.start),
+        division: lane.division.clamp(1, MOST_DIVISION),
     })
 }
 
@@ -562,15 +545,15 @@ pub(crate) mod tests {
         phrase.set_lane(
             1,
             Some(Lane {
-                start: 4,
-                length: 3,
+                division: 2,
+                ..Lane::new(4, 3)
             }),
         );
         assert_eq!(
             phrase.lane(1),
             Some(Lane {
-                start: 4,
-                length: 3
+                division: 2,
+                ..Lane::new(4, 3)
             })
         );
         assert_eq!(phrase.lane(0), None, "others follow the phrase");
@@ -578,13 +561,7 @@ pub(crate) mod tests {
         assert_eq!(ron::from_str::<Phrase>(&text).unwrap(), phrase);
 
         // A lane past the end stores the steps it needs.
-        phrase.set_lane(
-            2,
-            Some(Lane {
-                start: 14,
-                length: 6,
-            }),
-        );
+        phrase.set_lane(2, Some(Lane::new(14, 6)));
         assert_eq!(phrase.steps().len(), 20);
         // Sliding the loop moves it with the loop, whether steps are added in front or not.
         phrase.slide(-2);
@@ -599,13 +576,7 @@ pub(crate) mod tests {
         // Doubling the loop moves one after it down with its steps.
         let mut doubled = Phrase::new(4);
         doubled.grow_to(8);
-        doubled.set_lane(
-            0,
-            Some(Lane {
-                start: 5,
-                length: 2,
-            }),
-        );
+        doubled.set_lane(0, Some(Lane::new(5, 2)));
         doubled.double();
         assert_eq!(doubled.lane(0).unwrap().start, 9);
     }
@@ -625,13 +596,10 @@ pub(crate) mod tests {
             generators: Vec::new(),
             lanes: [
                 Some(Lane {
-                    start: 1,
-                    length: 9,
+                    division: 40,
+                    ..Lane::new(1, 9)
                 }),
-                Some(Lane {
-                    start: 5,
-                    length: 1,
-                }),
+                Some(Lane::new(5, 1)),
                 None,
             ],
         };
@@ -639,22 +607,18 @@ pub(crate) mod tests {
         assert_eq!(
             phrase.lane(0),
             Some(Lane {
-                start: 1,
-                length: 1
+                division: MOST_DIVISION,
+                ..Lane::new(1, 1)
             })
         );
         assert_eq!(phrase.lane(1), None, "it starts past the steps");
     }
 
     #[test]
-    fn a_lane_reads_by_count_and_a_glide_looks_within_it() {
-        let lane = Lane {
-            start: 2,
-            length: 3,
-        };
-        let read: Vec<usize> = (0..7).map(|count| lane.step_at(count)).collect();
+    fn a_lane_reads_its_rows_and_a_glide_looks_within_it() {
+        let lane = Lane::new(2, 3);
+        let read: Vec<usize> = (0..7).map(|row| lane.stored(row)).collect();
         assert_eq!(read, [2, 3, 4, 2, 3, 4, 2]);
-        assert_eq!(lane.step_at(-1), 4);
         let steps = [
             "--- -- cut:10 --- ---",
             "--- -- --- --- ---",

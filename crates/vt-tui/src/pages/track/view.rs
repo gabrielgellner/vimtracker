@@ -21,13 +21,14 @@ use vt_model::generator::Generator;
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
+use vt_model::lane::{LANE_RATES, LaneMove, RATE_AS_WRITTEN, length_rows};
 use vt_model::lfo::Shape;
 use vt_model::listed::Listed;
 use vt_model::modulation::{
     MOD_SLOTS, ModField, ModKind, ModSlot, Polarity, default_mod, depth_text, note_shape_slot,
 };
 use vt_model::settings::{
-    Kind, LONGEST_GLIDE_MS, SettingId, Units, gate_percent, gate_value, glide_ms,
+    Kind, LONGEST_GLIDE_MS, SettingId, Units, gate_percent, gate_value, glide_ms, rows_text,
 };
 use vt_model::shape::params::{Typing, Units as GenUnits};
 use vt_model::shape::{Context, GenParam, Where};
@@ -43,7 +44,7 @@ use crate::services::banking::{sample_shown, sample_text};
 use crate::services::generators::with_live;
 
 use super::tuning::{tuning, tuning_shown, tuning_text};
-use super::{AccumulatorField, ArpField, Control};
+use super::{AccumulatorField, ArpField, Control, LaneField};
 use crate::widgets::param::view::{Choice, Pace, ParamView, Reads, Steps};
 
 /// What a slot going to `Pitch` in scale shows as its destination.
@@ -538,6 +539,7 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
         Control::Mod(slot, field) => mod_view(of, track, slot, field),
         Control::Accumulator(field) => accumulator_view(of, track.accumulation, field, scale),
         Control::Arpeggio(field) => arpeggio_view(of, track.arpeggio, field),
+        Control::Lane(slot, field) => lane_view(of, *track.lanes.get(slot)?, slot, field),
         Control::Gen {
             phrase,
             generator,
@@ -619,6 +621,7 @@ fn at_default(control: Control, track: &Track) -> bool {
         || control == Control::Safe && !track.filter.has_safe()
         || control == Control::Role && track.role.is_auto()
         || matches!(control, Control::Mod(slot, ModField::Destination) if track.mods[slot].destination.is_none())
+        || matches!(control, Control::Lane(slot, field) if track.lanes.get(slot).is_some_and(|moved| moved.value(field.at()) == LaneMove::default().value(field.at())))
 }
 
 /// Whether a sampler's `Tune` or `Cents` is dim: with no sample to tune, or the sample's own left
@@ -1087,6 +1090,67 @@ fn arpeggio_view(of: ParamView, arpeggio: Arpeggio, field: ArpField) -> ParamVie
     view.text(arpeggio_shown(field, arpeggio))
 }
 
+/// One of an FX column's lane's settings: `Length` in rows either side of none, centred as
+/// `Pitch` is, and `Rate` from its list (decision 347).
+fn lane_view(of: ParamView, moved: LaneMove, slot: usize, field: LaneField) -> ParamView {
+    let view = match field {
+        LaneField::Length => {
+            let rows = length_rows(moved.length);
+            ParamView {
+                centred: true,
+                bar: Some(moved.length),
+                ..of.whole(rows, (-128, 127), 0, format!("{rows:+}"))
+            }
+            .steps(Steps::even(1), Steps::even(HEX_JUMP))
+            .reads(NUMBER, "Length is a number of rows from -128 to +127")
+        }
+        LaneField::Rate => of.listed(
+            LANE_RATES.iter().map(|rate| Choice::named(*rate)),
+            usize::from(moved.rate),
+            usize::from(RATE_AS_WRITTEN),
+            false,
+        ),
+    };
+    view.text(lane_shown(slot, field, moved))
+}
+
+/// What one of an FX column's lane's settings does, as it's set.
+fn lane_shown(slot: usize, field: LaneField, moved: LaneMove) -> String {
+    let column = format!("FX{}", slot + 1);
+    match field {
+        LaneField::Length => {
+            let rows = length_rows(moved.length);
+            let by = rows_text(rows);
+            match rows {
+                0 => format!("{by}: each phrase's lane on {column} plays its own rows"),
+                1.. => {
+                    format!("{by}: each phrase's lane on {column} plays {rows} more, its own again")
+                }
+                _ => format!(
+                    "{by}: each phrase's lane on {column} plays {} fewer of its own",
+                    -rows
+                ),
+            }
+        }
+        LaneField::Rate => {
+            let rate = LANE_RATES[usize::from(moved.rate).min(LANE_RATES.len() - 1)];
+            match moved.rate.cmp(&RATE_AS_WRITTEN) {
+                std::cmp::Ordering::Equal => {
+                    format!("{rate}: each row of a lane on {column} lasts its own steps")
+                }
+                std::cmp::Ordering::Greater => format!(
+                    "{rate}: each row of a lane on {column} lasts {} times its own steps",
+                    moved.rate - RATE_AS_WRITTEN + 1
+                ),
+                std::cmp::Ordering::Less => format!(
+                    "{rate}: each row of a lane on {column} lasts its own steps over {}, at least one",
+                    RATE_AS_WRITTEN + 1 - moved.rate
+                ),
+            }
+        }
+    }
+}
+
 /// One of a live generator's settings, as it's heard, with what any macro holding its settings
 /// gives them (decision 294): a brief beside its bar, and in full without one.
 fn gen_view(of: ParamView, generator: &Generator, context: &Context, param: GenParam) -> ParamView {
@@ -1326,6 +1390,18 @@ pub fn set(
             Action::SetAccumulation {
                 track: at,
                 accumulation,
+            }
+        }
+        Control::Lane(slot, field) => {
+            let mut moved = *track.lanes.get(slot)?;
+            match field {
+                LaneField::Length => moved.length = (value + 128).clamp(0, 255) as u8,
+                LaneField::Rate => moved.rate = byte,
+            }
+            Action::SetLaneMove {
+                track: at,
+                slot,
+                moved,
             }
         }
         Control::Arpeggio(field) => {

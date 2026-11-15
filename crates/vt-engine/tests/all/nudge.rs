@@ -58,7 +58,7 @@ fn with_own(mut song: Song, groove: Groove) -> Song {
 /// The first FX column made a lane of its own, this many steps long.
 fn with_lane(mut song: Song, length: usize) -> Song {
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
-    phrase.set_lane(0, Some(Lane { start: 0, length }));
+    phrase.set_lane(0, Some(Lane::new(0, length)));
     song
 }
 

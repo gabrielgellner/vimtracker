@@ -125,9 +125,49 @@ fn every_generator_puts_each_setting_on_one_knob_and_the_app_keeps_what_it_is() 
             }
         }
     }
+    // An FX column's lane's layout is checked on its own, below.
+    used.insert("gen/lane");
     let all: std::collections::BTreeSet<&str> =
         GENERATORS.iter().map(|layout| layout.kind).collect();
-    assert_eq!(used, all, "every generator layout is some fill's");
+    assert_eq!(
+        used, all,
+        "every generator layout is some fill's, or a lane's"
+    );
+}
+
+#[test]
+fn an_fx_columns_lane_is_a_device_of_its_own_with_its_length_and_rate_on_knobs() {
+    use vt_tui::pages::track::LaneField;
+    let mut song = song_with(shape(FillKind::Ramp, Where::Notes));
+    let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
+    phrase.set_lane(0, Some(vt_model::song::Lane::new(0, 4)));
+    let track = &song.tracks[0];
+    let devices = live_devices(track, Some(0), &song, false);
+    let device = devices.last().unwrap();
+    assert_eq!(device.name.to_string(), "FX1 Lane");
+    assert!(!device.stored, "live, as it has no buttons");
+    let listed = track_devices(track, Some(0));
+    let spec = &listed.last().unwrap().2;
+    assert_eq!(layout_of(spec, track).kind, "gen/lane");
+    let knobs: Vec<Control> = placement(spec, track, false)
+        .knobs
+        .iter()
+        .flatten()
+        .map(|(control, _)| *control)
+        .collect();
+    assert_eq!(
+        knobs,
+        [
+            Control::Lane(0, LaneField::Length),
+            Control::Lane(0, LaneField::Rate)
+        ]
+    );
+    // Turning `Length` to its top is the most rows it adds, as the page's `=` would.
+    let length = knobs[0];
+    let action = turned(length, 0, &song, KNOB_TOP).unwrap();
+    let next = edit(&Arc::new(song.clone()), &action).unwrap();
+    assert_eq!(next.tracks[0].lanes[0].length, 0xFF);
+    assert!(knob(knobs[1], track, &song).is_some(), "Rate's list");
 }
 
 #[test]

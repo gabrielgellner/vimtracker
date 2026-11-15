@@ -748,6 +748,12 @@ impl<'a> Ctx<'a> {
         self.services.lane_playheads(phrase)
     }
 
+    /// How each FX column of the cursor's phrase with a lane of its own is heard, as the track's
+    /// `Length` and `Rate` move it.
+    pub(crate) fn heard_lanes(&self, phrase: &Phrase) -> [Option<vt_model::lane::Heard>; FX_SLOTS] {
+        self.services.heard_lanes(phrase)
+    }
+
     /// The note the cursor's track's row playing was heard at, where an accumulator or an `RND`
     /// moved it.
     pub(crate) fn heard_note(&self) -> Option<u8> {

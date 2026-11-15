@@ -1212,3 +1212,9 @@
 1211 acu.down
 1212 arp.rate
 1213 arp.octaves
+1214 lane1.length
+1215 lane1.rate
+1216 lane2.length
+1217 lane2.rate
+1218 lane3.length
+1219 lane3.rate

@@ -26,7 +26,9 @@ use thiserror::Error;
 use crate::accumulator::Accumulation;
 use crate::arpeggio::Arpeggio;
 use crate::bank::BankEntry;
+use crate::constants::FX_SLOTS;
 use crate::insert::{INSERTS, Insert};
+use crate::lane::LaneMove;
 use crate::macros::{MACROS, Macro};
 use crate::modulation::{MOD_SLOTS, ModSlot, default_mod};
 use crate::ron_file;
@@ -194,7 +196,8 @@ fn holds(machine: Machine, id: SettingId) -> bool {
         | Owner::Macro(_)
         | Owner::ModOwn(_)
         | Owner::Accumulation
-        | Owner::Arpeggio => true,
+        | Owner::Arpeggio
+        | Owner::Lane(_) => true,
     }
 }
 
@@ -309,6 +312,10 @@ pub struct Patch {
     pub accumulation: Accumulation,
     #[serde(default, skip_serializing_if = "is_default_arpeggio")]
     pub arpeggio: Arpeggio,
+    /// Each FX column's `Length` and `Rate`, which move its lanes (decision 347): on its own, only
+    /// those its macros or slots reach, by the column they were saved on.
+    #[serde(default, skip_serializing_if = "lanes_at_rest")]
+    pub lanes: [LaneMove; FX_SLOTS],
     /// The macros from the first, with their names, values, mappings and ranges, left out when
     /// none holds anything.
     #[serde(default, skip_serializing_if = "no_macros")]
@@ -325,6 +332,10 @@ fn is_default_accumulation(accumulation: &Accumulation) -> bool {
 
 fn is_default_arpeggio(arpeggio: &Arpeggio) -> bool {
     *arpeggio == Arpeggio::default()
+}
+
+fn lanes_at_rest(lanes: &[LaneMove; FX_SLOTS]) -> bool {
+    lanes.iter().all(|moved| moved.at_rest())
 }
 
 fn no_macros(macros: &[Macro]) -> bool {
@@ -375,6 +386,7 @@ impl SoundPreset {
             mods: track.mods.to_vec(),
             accumulation: track.accumulation,
             arpeggio: track.arpeggio,
+            lanes: track.lanes,
             macros: track.macros.to_vec(),
             generators: Vec::new(),
         };
@@ -420,6 +432,7 @@ impl SoundPreset {
         });
         track.accumulation = patch.accumulation;
         track.arpeggio = patch.arpeggio;
+        track.lanes = patch.lanes;
         track.macros = std::array::from_fn(|at| patch.macros.get(at).cloned().unwrap_or_default());
     }
 }

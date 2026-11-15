@@ -28,6 +28,7 @@ mod goldens;
 mod grid_mutes;
 mod groove;
 mod groups;
+mod lane_moves;
 mod lanes;
 mod lfo;
 mod live_lengths;

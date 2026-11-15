@@ -267,13 +267,7 @@ fn a_lane_keeps_its_own_forward_loop() {
     // With one, its column reads its steps forward, so the silent one is first.
     let mut lane = rows_only.clone();
     let phrase = Arc::make_mut(lane.tracks[0].phrases.get_mut(&0).unwrap());
-    phrase.set_lane(
-        0,
-        Some(Lane {
-            start: 0,
-            length: 4,
-        }),
-    );
+    phrase.set_lane(0, Some(Lane::new(0, 4)));
     assert!(level(&lane, 0) < 0.001);
     assert!(level(&lane, 3) > 0.1);
 }

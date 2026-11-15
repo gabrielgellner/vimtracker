@@ -5,6 +5,8 @@ use vt_engine::link::Command;
 use vt_model::action::Action;
 use vt_model::selection::Field;
 use vt_model::song::Lane;
+
+use crate::overlays::command::parse::LaneLine;
 use vt_model::step::{MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note};
 
 use super::{App, Momentary};
@@ -82,10 +84,7 @@ impl App {
         self.services
             .phrase_here()
             .and_then(|phrase| phrase.lane(slot))
-            .unwrap_or(Lane {
-                start: extent.start,
-                length: extent.length,
-            })
+            .unwrap_or(Lane::new(extent.start, extent.length))
     }
 
     /// Give the cursor's FX column a lane, or none to follow the phrase's loop again.
@@ -103,18 +102,62 @@ impl App {
             lane,
         });
         self.services.status = match lane {
+            Some(lane) if lane.division > 1 => format!(
+                "FX {} loops on its own, {} rows of {} steps each",
+                slot + 1,
+                lane.length,
+                lane.division
+            ),
             Some(lane) => format!("FX {} loops on its own, {} steps", slot + 1, lane.length),
             None => format!("FX {} follows the phrase's loop", slot + 1),
         };
+    }
+
+    /// `:lane`: give the cursor's FX column a lane from its row, of a length and a division, the
+    /// division its lane's own if it has one and none's given; change only the division of the
+    /// lane it has, with `/3`; or take its lane away (decision 346).
+    pub(super) fn lane_line(&mut self, line: LaneLine) {
+        let Some(slot) = self.fx_column() else {
+            self.services.status = ":lane works on an FX column".to_owned();
+            return;
+        };
+        let had = self
+            .services
+            .phrase_here()
+            .and_then(|phrase| phrase.lane(slot));
+        let lane = match line {
+            LaneLine::Off => None,
+            LaneLine::Set {
+                length: Some(length),
+                division,
+            } => Some(Lane {
+                division: division.or(had.map(|lane| lane.division)).unwrap_or(1),
+                ..Lane::new(self.services.cursor.step, length)
+            }),
+            LaneLine::Set {
+                length: None,
+                division: Some(division),
+            } => match had {
+                Some(lane) => Some(Lane { division, ..lane }),
+                None => {
+                    self.services.status =
+                        ":lane /3 changes a lane's division: give the column a lane first"
+                            .to_owned();
+                    return;
+                }
+            },
+            LaneLine::Set { .. } => had,
+        };
+        self.set_lane(slot, lane);
     }
 
     /// Start the loop on the cursor's step. The notes stay where they are and the numbers change.
     /// On an FX column, its lane starts there instead, keeping its length.
     pub(super) fn start_loop_here(&mut self) {
         if let Some(slot) = self.lane_slot() {
-            let length = self.lane_here(slot).length;
+            let lane = self.lane_here(slot);
             let start = self.services.cursor.step;
-            self.set_lane(slot, Some(Lane { start, length }));
+            self.set_lane(slot, Some(Lane { start, ..lane }));
             return;
         }
         let by = self.services.extent().row(self.services.cursor.step);
@@ -131,15 +174,15 @@ impl App {
     /// stored, and a dim step below the loop brings the steps before it in.
     pub(super) fn end_loop_here(&mut self) {
         if let Some(slot) = self.lane_slot() {
-            let start = self.lane_here(slot).start;
+            let lane = self.lane_here(slot);
             let Some(length) = (self.services.cursor.step + 1)
-                .checked_sub(start)
+                .checked_sub(lane.start)
                 .filter(|l| *l > 0)
             else {
                 self.services.status = "A lane can't end above its start".to_owned();
                 return;
             };
-            self.set_lane(slot, Some(Lane { start, length }));
+            self.set_lane(slot, Some(Lane { length, ..lane }));
             return;
         }
         let Ok(row) = usize::try_from(self.services.extent().row(self.services.cursor.step)) else {

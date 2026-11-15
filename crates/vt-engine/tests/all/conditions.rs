@@ -353,13 +353,7 @@ fn a_failed_condition_skips_the_rows_locks_and_events_but_not_its_lanes() {
     // A column with a lane of its own keeps its own loop.
     let mut lane = locks.clone();
     let phrase = Arc::make_mut(lane.tracks[0].phrases.get_mut(&0).unwrap());
-    phrase.set_lane(
-        1,
-        Some(Lane {
-            start: 0,
-            length: 2,
-        }),
-    );
+    phrase.set_lane(1, Some(Lane::new(0, 2)));
     assert!(
         level(&lane, 1) < 0.001,
         "the lane locks it on a skipped row"
@@ -371,13 +365,7 @@ fn a_condition_in_a_lane_counts_the_lanes_own_loops() {
     // A lane of one step goes round on every step, so its 1:2 holds on every other one.
     let mut lane = song(&[&["C-3 -- cnd:12"; 4]]);
     let phrase = Arc::make_mut(lane.tracks[0].phrases.get_mut(&0).unwrap());
-    phrase.set_lane(
-        0,
-        Some(Lane {
-            start: 0,
-            length: 1,
-        }),
-    );
+    phrase.set_lane(0, Some(Lane::new(0, 1)));
     assert_eq!(hits(&lane, 8, 0), [0, 2, 4, 6]);
 }
 

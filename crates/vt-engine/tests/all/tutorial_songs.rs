@@ -533,13 +533,7 @@ fn kria() -> Song {
     }
     voice(&mut song, 0, "KR", SynthVoice::VirtualAnalog, &texts(&lead));
     let mut phrase = (*song.tracks[0].phrases[&0]).clone();
-    phrase.set_lane(
-        0,
-        Some(Lane {
-            start: 0,
-            length: 4,
-        }),
-    );
+    phrase.set_lane(0, Some(Lane::new(0, 4)));
     song.tracks[0].phrases.insert(0, Arc::new(phrase));
     pluck(&mut song, 0, 300, 50, 80);
     song.tracks[0].cutoff = 0x90;
@@ -812,10 +806,7 @@ fn live_generators() -> Song {
             track: 2,
             phrase: 0,
             slot: 0,
-            lane: Some(Lane {
-                start: 0,
-                length: 12,
-            }),
+            lane: Some(Lane::new(0, 12)),
         },
     );
     let cutoff = FxCommand::Set(SettingId::from_key("acid.cutoff").unwrap());
@@ -1880,8 +1871,8 @@ fn deja_vu_patch() -> PatchPreset {
 
 /// Kria: the pitch loop and the octave loop, `Steps` slots in `Free`, each with its loop's
 /// length on a macro from 1 step to 16; and the length loop, the lane of 4 on FX 1, made live as
-/// the `List` of its four values, which comes with its lane though no macro holds it, as a lane's
-/// length isn't a setting to turn.
+/// the `List` of its four values, which comes with its lane, its length on a macro of its own,
+/// `Length loop`, turning `FX1 Length` from -3 to +12, a lane of 1 to 16 (decision 347).
 fn kria_patch() -> PatchPreset {
     let song = kria();
     let written = first_phrase(&song.tracks[0]).steps().to_vec();
@@ -1914,6 +1905,13 @@ fn kria_patch() -> PatchPreset {
         "Octave loop",
         "mod5.length",
         (0x0000, 0x0F00),
+    );
+    panel_knob(
+        &mut track,
+        2,
+        "Length loop",
+        "lane1.length",
+        (0x7D00, 0x8C00),
     );
     let mut preset = patch_of(&track);
     let phrase = first_phrase(&track);

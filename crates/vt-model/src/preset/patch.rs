@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use super::{PRESET_FORMAT, Patch, Preset, PresetKind};
 use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS};
 use crate::generator::{Generator, Span};
+use crate::lane::LaneMove;
 use crate::macros::{GenColumn, MACROS, Macro, MacroTarget};
 use crate::modulation::MOD_SLOTS;
 use crate::settings::{Owner, SettingId};
@@ -126,11 +127,21 @@ pub struct Placement {
 
 impl Placement {
     /// A setting of the patch's on the track: one of its slots' or macros' renumbered to where
-    /// that went, and any other as it is.
+    /// that went, an FX column's lane's to the column its generator went on, and any other as it
+    /// is.
     pub fn setting(&self, id: SettingId) -> SettingId {
+        if let (Owner::Lane(slot), at) = id.owner() {
+            return SettingId::lane(self.column(slot), at).unwrap_or(id);
+        }
         let mods = |at: usize| self.mods.get(at).copied();
         let macros = |at: usize| self.macros.get(at).copied();
         renumber(id, mods, macros).unwrap_or(id)
+    }
+
+    /// The FX column an FX column of the patch's goes on: where its generator was put, or the
+    /// same one.
+    pub fn column(&self, slot: usize) -> usize {
+        self.fx.get(&slot).copied().unwrap_or(slot)
     }
 }
 
@@ -148,6 +159,7 @@ struct Parts {
     macros: BTreeSet<usize>,
     accumulation: bool,
     arpeggio: bool,
+    lanes: BTreeSet<usize>,
 }
 
 impl Parts {
@@ -158,6 +170,7 @@ impl Parts {
             Owner::Macro(at) => self.macros.insert(at),
             Owner::Accumulation => !std::mem::replace(&mut self.accumulation, true),
             Owner::Arpeggio => !std::mem::replace(&mut self.arpeggio, true),
+            Owner::Lane(slot) => self.lanes.insert(slot),
             _ => false,
         }
     }
@@ -169,6 +182,7 @@ impl Parts {
             Owner::Macro(at) => self.macros.contains(&at),
             Owner::Accumulation => self.accumulation,
             Owner::Arpeggio => self.arpeggio,
+            Owner::Lane(slot) => self.lanes.contains(&slot),
             _ => false,
         }
     }
@@ -325,6 +339,10 @@ impl Patch {
             } else {
                 Default::default()
             },
+            lanes: std::array::from_fn(|slot| match parts.lanes.contains(&slot) {
+                true => track.lanes[slot],
+                false => LaneMove::default(),
+            }),
             macros: patch_macros,
             generators,
         })
@@ -354,6 +372,11 @@ impl Patch {
     /// Whether it holds the arpeggio, as something in it reaches it.
     pub fn holds_arpeggio(&self) -> bool {
         self.reaches().any(|id| id.owner().0 == Owner::Arpeggio)
+    }
+
+    /// Whether it holds an FX column's `Length` and `Rate`, as something in it reaches one.
+    pub fn holds_lane(&self, slot: usize) -> bool {
+        self.reaches().any(|id| id.owner().0 == Owner::Lane(slot))
     }
 
     /// Where its slots and macros go on a track: into free ones, a free slot being one going
@@ -454,6 +477,9 @@ impl Patch {
         }
         if self.holds_arpeggio() {
             track.arpeggio = self.arpeggio;
+        }
+        for slot in (0..FX_SLOTS).filter(|slot| self.holds_lane(*slot)) {
+            track.lanes[placement.column(slot)] = self.lanes[slot];
         }
     }
 
@@ -838,13 +864,7 @@ mod tests {
             .map(|_| "C-3 -- --- --- ---".parse().unwrap())
             .collect();
         let mut phrase = Phrase::from_steps(steps);
-        phrase.set_lane(
-            0,
-            Some(Lane {
-                start: 0,
-                length: 3,
-            }),
-        );
+        phrase.set_lane(0, Some(Lane::new(0, 3)));
         let column = ShapeColumn::Fx {
             slot: 0,
             command: FxCommand::Set(SettingId::CUT),

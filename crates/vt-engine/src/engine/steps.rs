@@ -19,9 +19,12 @@ use vt_model::variation::{Roll, Variation, Varies, varied_lock, varied_ratchet, 
 
 use crate::gens::{Passes, Played, RowAt};
 use crate::track_state::{
-    Accumulating, Arpeggiating, Decided, DelayedNote, Epoch, Part, PendingStep, Retrigger, RowKey,
-    TrackState, Worked,
+    Accumulating, Arpeggiating, Decided, DelayedNote, Epoch, LaneRead, Part, PendingStep,
+    Retrigger, RowKey, Worked,
 };
+
+/// Where each FX column's lane reads at a step, for those with one.
+pub(super) type LaneReads = [Option<LaneRead>; FX_SLOTS];
 
 use super::Engine;
 
@@ -35,14 +38,17 @@ impl Engine {
         let clock = self.tracks[index].clock;
         let (grid, running) = (clock.beat, clock.count);
         self.tracks[index].playing = self.track_chain(index);
+        let place = self.track_place(index, running);
+        let count = running - self.tracks[index].started;
+        // Each lane is read once a step, here, in order, so it counts along (decision 348).
+        let lanes = self.read_lanes(index, place, count);
         // The groove counts the track's own steps from the start or the last reset, not its
         // loop, so an odd length stays on the beat, and a track at an eighth swings its eighths.
-        let (groove, speed) = self.step_choices(index, running);
+        let (groove, speed) = self.step_choices(index, running, &lanes);
         let ticks = speed.ticks();
         let humanise = self.tracks[index].humanise(groove.humanise());
         let at = running.max(0) as usize;
         let push = (i64::from(groove.push(at)) + humanise).clamp(-groove_lead, i64::from(MAX_PUSH));
-        let place = self.track_place(index, running);
         let step = PendingStep {
             at: self.landing(grid, push, ticks),
             running: at,
@@ -52,7 +58,8 @@ impl Engine {
             step: grid,
             leads: true,
             place,
-            count: running - self.tracks[index].started,
+            count,
+            lanes,
             plays: None,
             start: self.tracks[index].chain_starts,
         };
@@ -60,7 +67,7 @@ impl Engine {
         // never lands before the last row's. The push is a share of the step and the nudge the
         // same time on every track, so they're added as ticks times a sixteenth's.
         let row_at = if nudges {
-            let nudge = self.row_nudge(index, running, ticks);
+            let nudge = self.row_nudge(index, running, ticks, &lanes);
             let sixteenth = TICKS_PER_STEP as i64;
             let moved = push * ticks as i64 + nudge * sixteenth;
             let at = self.landed(grid, moved.max(-(lead as i64) * sixteenth));
@@ -93,6 +100,7 @@ impl Engine {
             count: running,
             ticks: next - grid,
             speed,
+            lanes,
         });
         state.clock.advance(ticks);
         for part in parts.into_iter().flatten() {
@@ -109,8 +117,8 @@ impl Engine {
     /// under half the step it plays at, so a `RATE` to a faster step keeps its time unless that's
     /// too far, and brought toward the grid by the track's `QNT`, which is read before the row
     /// plays, as `GRV` is.
-    fn row_nudge(&mut self, index: usize, running: i64, ticks: u64) -> i64 {
-        let Some(row @ (_, view)) = self.row_ahead(index, running) else {
+    fn row_nudge(&mut self, index: usize, running: i64, ticks: u64, lanes: &LaneReads) -> i64 {
+        let Some(row @ (_, view)) = self.row_ahead(index, running, lanes) else {
             return 0;
         };
         if view.nudge == 0 {
@@ -118,13 +126,45 @@ impl Engine {
         }
         let most = most_nudge(ticks);
         let written = i64::from(view.nudge.clamp(-most, most)) * NUDGE_TICKS as i64;
-        let chosen = self.chosen_ahead(index, running, Some(row), SettingId::QUANTISE);
+        let chosen = self.chosen_ahead(index, running, Some(row), SettingId::QUANTISE, lanes);
         self.tracks[index].quantised(written, chosen)
     }
 
+    /// Where each FX column's lane reads at the step a track is working out, at this place in its
+    /// chain and count since it started, read once, as that step is worked out
+    /// ([`TrackState::lane_row`]).
+    fn read_lanes(&mut self, index: usize, place: Option<(u32, usize)>, count: i64) -> LaneReads {
+        let mut lanes = [None; FX_SLOTS];
+        let Some((chain, place)) = place else {
+            return lanes;
+        };
+        let current = Arc::clone(&self.current);
+        let Some(owner) = current.song.tracks.get(index) else {
+            return lanes;
+        };
+        let Some(position) = owner.chain_position(chain, place, self.dealer(index)) else {
+            return lanes;
+        };
+        let Some(phrase) = owner.phrases.get(&position.phrase) else {
+            return lanes;
+        };
+        let entry = (position.phrase, position.slot);
+        for (slot, read) in lanes.iter_mut().enumerate() {
+            if let Some(lane) = phrase.lane(slot) {
+                *read = Some(self.tracks[index].lane_row(slot, lane, entry, count));
+            }
+        }
+        lanes
+    }
+
     /// The row a track plays at this count of its steps, looked at before it plays: where it is
-    /// in its chain, and the row as it's heard.
-    fn row_ahead(&mut self, index: usize, running: i64) -> Option<(ChainPosition, RowView)> {
+    /// in its chain, and the row as it's heard, with its lanes where they read.
+    fn row_ahead(
+        &mut self,
+        index: usize,
+        running: i64,
+        lanes: &LaneReads,
+    ) -> Option<(ChainPosition, RowView)> {
         let (chain, place) = self.track_place(index, running)?;
         let current = Arc::clone(&self.current);
         let owner = current.song.tracks.get(index)?;
@@ -137,6 +177,7 @@ impl Engine {
             chain,
             count,
             position,
+            lanes: *lanes,
         };
         Some((
             position,
@@ -161,7 +202,7 @@ impl Engine {
             row,
         };
         let (current, state) = (&self.current, &self.tracks[index]);
-        let passes = || passes(&current.song, state, index, read);
+        let passes = || passes(&current.song, index, read);
         self.gens.view(
             &current.song,
             &current.unders,
@@ -176,13 +217,14 @@ impl Engine {
     /// What a row chooses of a setting read before it plays, as `GRV`, `RATE` and `QNT` are: one
     /// on its row or in a lane at it, the last column's winning as they run left to right, or else
     /// what the track holds, which a note on the row's first pulse ends any lock of, as playing it
-    /// will.
+    /// will. A lane's row lasting several steps chooses on each, as its lock holds through it.
     fn chosen_ahead(
         &mut self,
         index: usize,
         running: i64,
         row: Option<(ChainPosition, RowView)>,
         id: SettingId,
+        lanes: &LaneReads,
     ) -> u8 {
         let Some((position, view)) = row else {
             return self.tracks[index].held_choice(id, false);
@@ -202,20 +244,20 @@ impl Engine {
             chain,
             count,
             position,
+            lanes: *lanes,
         };
         let mut chosen = None;
         for number in (0..FX_SLOTS).rev() {
-            let slot = match phrase.and_then(|phrase| Some((phrase, phrase.lane(number)?))) {
-                Some((phrase, lane)) => {
-                    let at = lane.step_at(count + self.tracks[index].lane_offsets[number]);
-                    phrase.steps().get(at).and_then(|step| {
-                        self.view_row(index, read, at, step, Played::Ahead)
-                            .fx(number)
-                            .copied()
-                    })
-                }
-                None if first => view.fx(number).copied(),
-                None => None,
+            let slot = match (phrase, lanes[number]) {
+                (Some(phrase), Some(lane)) => phrase.steps().get(lane.row).and_then(|step| {
+                    self.view_row(index, read, lane.row, step, Played::Ahead)
+                        .fx(number)
+                        .copied()
+                        .filter(|slot| lane.first || holds_through(slot))
+                }),
+                (None, Some(_)) => None,
+                (_, None) if first => view.fx(number).copied(),
+                (_, None) => None,
             };
             if let Some(slot) = slot.filter(|slot| slot.command == Some(FxCommand::Set(id))) {
                 chosen = Some(slot.coarse());
@@ -229,16 +271,16 @@ impl Engine {
     /// The groove a track's step plays with and its speed, worked out before it's played, as each
     /// says when the step lands: a `GRV` or `RATE` on its row or in a lane at it, or else what the
     /// track holds (`chosen_ahead`). A `GRV` of `00` is the project's.
-    fn step_choices(&mut self, index: usize, running: i64) -> (Groove, Speed) {
+    fn step_choices(&mut self, index: usize, running: i64, lanes: &LaneReads) -> (Groove, Speed) {
         // With no `GRV` or `RATE` in the song, there's no row to look on, and the track holds its
         // own.
         let row = if self.current.groove_steps || self.current.speed_steps {
-            self.row_ahead(index, running)
+            self.row_ahead(index, running, lanes)
         } else {
             None
         };
-        let groove = self.chosen_ahead(index, running, row, SettingId::GROOVE);
-        let speed = self.chosen_ahead(index, running, row, SettingId::SPEED);
+        let groove = self.chosen_ahead(index, running, row, SettingId::GROOVE, lanes);
+        let speed = self.chosen_ahead(index, running, row, SettingId::SPEED, lanes);
         let song = &self.current.song;
         let groove = match usize::from(groove).checked_sub(1) {
             Some(at) => GrooveId::from_index(at).unwrap_or(GrooveId::STRAIGHT),
@@ -280,6 +322,7 @@ impl Engine {
             chain,
             count,
             position,
+            lanes: pending.lanes,
         };
         let row_at = phrase.map_or(0, |phrase| phrase.start()) + position.step;
         let played = if position.pulse == 0 {
@@ -309,30 +352,33 @@ impl Engine {
         };
         // Each FX column reads its own lane's step if it has one, and the note's row if not. What
         // each reads is kept whether it runs on this pulse or not, for an `RND` to see what's to
-        // its left.
+        // its left. A lane's row lasting several steps runs its FX on its first, as a row's own
+        // run on its first pulse, so a `RET` or a `CHA` acts once; a lock or a hold of it is put
+        // again on the rest, so it holds through the row though a note there ends the last's.
         let mut lane_steps = [None; FX_SLOTS];
         let mut fx = [FxSlot::default(); FX_SLOTS];
         let mut read_fx = [FxSlot::default(); FX_SLOTS];
         for (number, slot) in fx.iter_mut().enumerate() {
-            let lane = phrase.and_then(|phrase| Some((phrase, phrase.lane(number)?)));
-            let found = match lane {
+            let found = match phrase.zip(pending.lanes[number]) {
                 Some((phrase, lane)) => {
-                    let at = lane.step_at(count + self.tracks[index].lane_offsets[number]);
-                    lane_steps[number] = Some(at);
-                    phrase.steps().get(at).and_then(|step| {
-                        self.view_row(index, read, at, step, Played::Lane(number))
+                    lane_steps[number] = Some(lane.row);
+                    let played = match lane.first {
+                        true => Played::Lane(number),
+                        false => Played::Ahead,
+                    };
+                    let found = phrase.steps().get(lane.row).and_then(|step| {
+                        self.view_row(index, read, lane.row, step, played)
                             .fx(number)
                             .copied()
-                    })
+                    });
+                    read_fx[number] = found.unwrap_or_default();
+                    found.filter(|slot| lane.first || holds_through(slot))
                 }
                 None => {
                     read_fx[number] = step.fx(number).copied().unwrap_or_default();
                     step.fx(number).copied().filter(|slot| row_fx(slot))
                 }
             };
-            if lane_steps[number].is_some() {
-                read_fx[number] = found.unwrap_or_default();
-            }
             *slot = found.unwrap_or_default();
         }
         let mut delay_units = None;
@@ -358,7 +404,7 @@ impl Engine {
                     decided.note &= rolled;
                     chance = Some(chance.unwrap_or(true) && rolled);
                 }
-                if !self.conditions_hold(index, &fx, &lane_steps, &pending, position, chance) {
+                if !self.conditions_hold(index, &fx, &pending, position, chance) {
                     decided = Decided {
                         note: false,
                         fx: false,
@@ -428,12 +474,14 @@ impl Engine {
                 FxCommand::Arp => arpeggiates = Some(slot.coarse()),
                 FxCommand::Set(id) if slot.mark == Mark::Glide => {
                     let value = command;
+                    // A lane's rows last its division heard.
+                    let rows = pending.lanes[number].map_or(1, |lane| lane.heard.division);
                     let to = phrase.and_then(|phrase| {
                         match lane_steps[number] {
                             Some(at) => phrase.next_in_lane(number, at, value),
                             None => phrase.glide_to(position.visit, position.deal, number, value),
                         }
-                        .map(|(steps, to)| (to, steps as f64 * pending.ticks as f64))
+                        .map(|(steps, to)| (to, (steps * rows) as f64 * pending.ticks as f64))
                     });
                     let now = self.song_time();
                     self.tracks[index].start_glide(id, slot.value, to, now);
@@ -757,7 +805,6 @@ impl Engine {
         &mut self,
         index: usize,
         fx: &[FxSlot; FX_SLOTS],
-        lane_steps: &[Option<usize>; FX_SLOTS],
         pending: &PendingStep,
         position: ChainPosition,
         chance: Option<bool>,
@@ -775,8 +822,8 @@ impl Engine {
             let Some(condition) = Condition::from_value(slot.coarse()) else {
                 continue;
             };
-            let pass = match lane_steps[number] {
-                Some(_) => self.lane_pass(index, number, pending, position),
+            let pass = match pending.lanes[number] {
+                Some(lane) => lane.laps,
                 None => self.row_pass(index, pending, position),
             };
             let result = condition.holds(Situation {
@@ -808,28 +855,6 @@ impl Engine {
         };
         phrase_pass(owner, chain, pending.count, position)
     }
-
-    /// How many times round its own loop a lane has been since the track's chain started.
-    fn lane_pass(
-        &self,
-        index: usize,
-        number: usize,
-        pending: &PendingStep,
-        position: ChainPosition,
-    ) -> i64 {
-        let lane = self
-            .current
-            .song
-            .tracks
-            .get(index)
-            .and_then(|owner| owner.phrases.get(&position.phrase))
-            .and_then(|phrase| phrase.lane(number));
-        let Some(lane) = lane else {
-            return 0;
-        };
-        let count = pending.count + self.tracks[index].lane_offsets[number];
-        count.div_euclid(lane.length.max(1) as i64)
-    }
 }
 
 /// What a row's `RND`s do to its note, in scale degrees with the scale on and semitones with it
@@ -855,13 +880,14 @@ fn retrigger_factor(digit: u8) -> f32 {
     }
 }
 
-/// Where a track is reading a row: its chain, the count of its steps since that started, and the
-/// place in it.
+/// Where a track is reading a row: its chain, the count of its steps since that started, the
+/// place in it, and where its lanes read at that step.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Read {
     pub chain: u32,
     pub count: i64,
     pub position: ChainPosition,
+    pub lanes: LaneReads,
 }
 
 /// How many times a track has played its phrase before, since its chain started, at a count of its
@@ -884,21 +910,21 @@ fn phrase_pass(owner: &Track, chain: u32, count: i64, position: ChainPosition) -
 }
 
 /// The pass a row is read on, for its phrase's generators: of the phrase, and of each FX column's
-/// lane, as many times round its own loop as the lane has been.
-fn passes(song: &Song, state: &TrackState, index: usize, read: Read) -> Passes {
+/// lane, as many times round the length it's heard at as the lane has been.
+fn passes(song: &Song, index: usize, read: Read) -> Passes {
     let Some(owner) = song.tracks.get(index) else {
         return Passes::default();
     };
-    let phrase = owner.phrases.get(&read.position.phrase);
     Passes {
         rows: phrase_pass(owner, read.chain, read.count, read.position),
-        lanes: std::array::from_fn(|number| {
-            let lane = phrase.and_then(|phrase| phrase.lane(number));
-            lane.map_or(0, |lane| {
-                (read.count + state.lane_offsets[number]).div_euclid(lane.length.max(1) as i64)
-            })
-        }),
+        lanes: read.lanes.map(|lane| lane.map_or(0, |lane| lane.laps)),
     }
+}
+
+/// Whether a lane's FX is put again on its row's later steps: a lock or a hold, which holds through
+/// the row, and not an event or a glide, which act once, as its row starts (decision 346).
+fn holds_through(slot: &FxSlot) -> bool {
+    matches!(slot.command, Some(FxCommand::Set(_))) && slot.mark != Mark::Glide
 }
 
 /// What a row's note does on a pulse: a rest's ends the note on its first, a `Multi` plays on

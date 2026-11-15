@@ -95,13 +95,7 @@ fn a_lane_of_it_is_an_accent_pattern_that_drifts_against_the_notes() {
     ];
     let mut song = song(&rows);
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
-    phrase.set_lane(
-        0,
-        Some(Lane {
-            start: 0,
-            length: 3,
-        }),
-    );
+    phrase.set_lane(0, Some(Lane::new(0, 3)));
     let out = render(&song, 12);
     // The 4-row phrase's notes meet the 3-row lane's accent on every third step.
     let loud = level(&out, 0);

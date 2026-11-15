@@ -190,16 +190,10 @@ impl App {
             Line::Solo => self.services.toggle_solo(),
             Line::Len(length) if self.lane_slot().is_some() => {
                 let slot = self.lane_slot().unwrap_or(0);
-                let start = self.lane_here(slot).start;
-                self.set_lane(slot, Some(Lane { start, length }));
+                let lane = self.lane_here(slot);
+                self.set_lane(slot, Some(Lane { length, ..lane }));
             }
-            Line::Lane(length) => match self.fx_column() {
-                Some(slot) => {
-                    let start = self.services.cursor.step;
-                    self.set_lane(slot, length.map(|length| Lane { start, length }));
-                }
-                None => self.services.status = ":lane works on an FX column".to_owned(),
-            },
+            Line::Lane(lane) => self.lane_line(lane),
             Line::Order(Some(order)) => self.services.set_order(order),
             Line::Order(None) => {
                 self.settled(PhraseView::order_picker(&self.services), true);

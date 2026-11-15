@@ -32,7 +32,11 @@ pub(super) fn write(
 ) {
     let only_changes = matches!(
         control,
-        Control::Macro(_) | Control::Accumulator(_) | Control::Arpeggio(_) | Control::Safe
+        Control::Macro(_)
+            | Control::Accumulator(_)
+            | Control::Arpeggio(_)
+            | Control::Safe
+            | Control::Lane(..)
     );
     if only_changes && value == view.value {
         return;

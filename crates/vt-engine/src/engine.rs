@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use vt_model::constants::{
-    MAX_GROUPS, MAX_MILLIBPM, MAX_TRACKS, MIN_MILLIBPM, TICKS_PER_QUARTER, TICKS_PER_STEP,
+    FX_SLOTS, MAX_GROUPS, MAX_MILLIBPM, MAX_TRACKS, MIN_MILLIBPM, TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
 use vt_model::scale::Scale;
 use vt_model::song::{Song, trim_gain};
@@ -18,7 +18,7 @@ use crate::preview::{Files, Previews};
 use crate::published::Published;
 use crate::recorder::Recorder;
 use crate::timing::Stopwatch;
-use crate::track_state::{MasterRest, SongTime, TrackState};
+use crate::track_state::{LaneRead, MasterRest, SongTime, TrackState};
 
 mod block;
 mod controls;
@@ -47,6 +47,10 @@ pub struct TrackPlace {
     /// The note the row heard was played at, before its chain's transpose, when an accumulator
     /// or an `RND` moved it from the note as written.
     pub accumulated: Option<u8>,
+    /// Where each FX column's lane read at that step, and how it was heard, for its playhead and
+    /// the phrase view's title: with a track's `Length` or `Rate` moving it, the row can't be
+    /// worked out from the count (decision 348).
+    pub lanes: [Option<LaneRead>; FX_SLOTS],
 }
 
 /// How many voices of one track the sample page can show a playhead for: the track's note and
@@ -371,6 +375,7 @@ impl Engine {
             speed,
             skipped: false,
             accumulated: None,
+            lanes: [None; FX_SLOTS],
         };
         let moved = self.transport != Transport::Stopped && self.frames_since_origin > 0;
         if !moved {
@@ -385,6 +390,7 @@ impl Engine {
             speed: worked.speed,
             skipped: !state.row.note,
             accumulated: state.accumulated,
+            lanes: worked.lanes,
         })
     }
 

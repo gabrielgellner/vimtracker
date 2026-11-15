@@ -126,13 +126,7 @@ fn a_lanes_value_is_read_at_its_step() {
     ];
     let mut laned = song(&rows, 0x00);
     let phrase = Arc::make_mut(laned.tracks[0].phrases.get_mut(&0).unwrap());
-    phrase.set_lane(
-        0,
-        Some(Lane {
-            start: 0,
-            length: 2,
-        }),
-    );
+    phrase.set_lane(0, Some(Lane::new(0, 2)));
     assert_eq!(
         hits(&laned, 4)[1..],
         [STEP - 6 * NUDGE, 2 * STEP, 3 * STEP - 6 * NUDGE]

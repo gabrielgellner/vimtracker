@@ -334,10 +334,7 @@ impl App {
         else {
             return vec![action];
         };
-        let lane = Lane {
-            start: self.services.extent().start,
-            length,
-        };
+        let lane = Lane::new(self.services.extent().start, length);
         vec![
             Action::SetLane {
                 track,

@@ -10,6 +10,7 @@ use ratatui::widgets::Paragraph;
 use vt_model::constants::{BAR_STEPS, BEAT_STEPS, FX_SLOTS, TICKS_PER_STEP};
 use vt_model::generator::Span as GenSpan;
 use vt_model::label::GROUP_NAME_CHARS;
+use vt_model::lane::{Heard, Lane};
 use vt_model::selection::{Extent, Field, Scope, StepRange};
 use vt_model::shape::{ShapeColumn, Source};
 use vt_model::song::{Phrase, Song, Track};
@@ -840,6 +841,44 @@ fn title(ctx: &Ctx, phrase: &Phrase, width: u16) -> Line<'static> {
     Line::from(title)
 }
 
+/// A lane's length and division as the title shows them, `4` or `4/2`, the division only where a
+/// row lasts more than a step, or where `with_division` says.
+fn lane_text(length: usize, division: usize, with_division: bool) -> String {
+    match division > 1 || with_division {
+        true => format!("{length}/{division}"),
+        false => length.to_string(),
+    }
+}
+
+/// What the title says of a phrase's lanes: each one's length and division, `FX1:4/2`, and while
+/// the track's `Length` or `Rate` moves one, what's heard first and its own after, dim, as
+/// `FX1:6/4 (4/2)` (decision 347).
+fn lane_details(phrase: &Phrase, heard: &[Option<Heard>; FX_SLOTS]) -> Vec<Span<'static>> {
+    let mut spans = vec![];
+    for slot in 0..FX_SLOTS {
+        let Some(lane) = phrase.lane(slot) else {
+            continue;
+        };
+        let Lane {
+            length, division, ..
+        } = lane;
+        let own = lane_text(length, division, false);
+        let gap = if spans.is_empty() { "  " } else { " " };
+        match heard[slot].filter(|heard| (heard.length, heard.division) != (length, division)) {
+            Some(heard) => {
+                let shown = lane_text(heard.length, heard.division, division > 1);
+                spans.push(Span::raw(format!("{gap}FX{}:{shown}", slot + 1)));
+                spans.push(Span::styled(format!(" ({own})"), theme::dim()));
+            }
+            None => spans.push(Span::styled(
+                format!("{gap}FX{}:{own}", slot + 1),
+                theme::dim(),
+            )),
+        }
+    }
+    spans
+}
+
 /// What the title says about the phrase after the chain: an order other than forward and its
 /// lanes' lengths, its live columns, and how many phrases follow it.
 fn title_details(ctx: &Ctx, phrase: &Phrase) -> Vec<Span<'static>> {
@@ -850,12 +889,7 @@ fn title_details(ctx: &Ctx, phrase: &Phrase) -> Vec<Span<'static>> {
     if !phrase.order().is_forward() {
         details.push(phrase.order().to_string());
     }
-    let lanes: Vec<String> = (0..FX_SLOTS)
-        .filter_map(|slot| Some(format!("FX{}:{}", slot + 1, phrase.lane(slot)?.length)))
-        .collect();
-    if !lanes.is_empty() {
-        details.push(lanes.join(" "));
-    }
+    let lanes = lane_details(phrase, &ctx.heard_lanes(phrase));
     // Its live columns are named, in the shape panel's colour, as their cells are drawn, each with
     // `~` after it where what was heard of it isn't what's written (decision 300).
     let mut live_names: Vec<String> = phrase
@@ -887,6 +921,7 @@ fn title_details(ctx: &Ctx, phrase: &Phrase) -> Vec<Span<'static>> {
             theme::dim(),
         ));
     }
+    after.extend(lanes);
     if !live_names.is_empty() {
         after.push(Span::styled(
             format!("  {} {}", glyphs::LIVE, live_names.join(",")),
@@ -920,6 +955,8 @@ struct Grid<'a> {
     across: Option<(TrackSpan, isize, isize)>,
     timeline_on: bool,
     lane_playheads: [Option<usize>; FX_SLOTS],
+    /// How each lane is heard, whose rows past a shortened length are dim.
+    heard_lanes: [Option<Heard>; FX_SLOTS],
     /// The playhead's row, and the line it's on: the line of its pulse in the timeline.
     playhead: Option<usize>,
     playhead_line: Option<(usize, usize)>,
@@ -965,6 +1002,7 @@ impl<'a> Grid<'a> {
         });
         let timeline_on = view.timeline_on();
         let lane_playheads = ctx.lane_playheads(phrase);
+        let heard_lanes = ctx.heard_lanes(phrase);
         let extent = phrase.extent();
         let stored = phrase.steps().len();
         // The playhead's row, and the line it's on: the line of its pulse in the timeline.
@@ -1035,6 +1073,7 @@ impl<'a> Grid<'a> {
             across,
             timeline_on,
             lane_playheads,
+            heard_lanes,
             playhead,
             playhead_line,
             body_width,
@@ -1347,16 +1386,18 @@ impl<'a> Grid<'a> {
     /// for what the track doesn't have, the values, and the band they sit on.
     fn fx_styles(&self, ctx: &Ctx, step: &Step, index: usize, styles: &mut [Style]) {
         let len = styles.len();
-        // A column with a lane plays its own rows: they're lit, and the rest of it is dim.
+        // A column with a lane plays its own rows: they're lit, and the rest of it is dim, as are
+        // its rows past the length it's heard at, when that's shorter.
         for (slot, lane_playhead) in self.lane_playheads.iter().enumerate() {
             let Some(lane) = self.phrase.lane(slot) else {
                 continue;
             };
+            let heard = self.heard_lanes[slot].map_or(lane.length, |heard| heard.length);
             let (start, end) = slot_columns(slot);
             let end = end.min(len);
             let style = if *lane_playhead == Some(index) {
                 theme::active()
-            } else if lane.contains(index) {
+            } else if lane.contains(index) && index < lane.start + heard {
                 Style::new()
             } else {
                 theme::faint()

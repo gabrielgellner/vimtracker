@@ -37,6 +37,7 @@ fn in_ascii(character: char) -> Option<&'static str> {
     Some(match character {
         '°' => "deg",
         '×' => "x",
+        '÷' => "/",
         '–' | '—' | '−' => "-",
         '·' | '•' => ".",
         '…' => "...",

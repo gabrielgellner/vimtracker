@@ -2,7 +2,8 @@
 
 use super::mods::{ACCUMULATION, ARPEGGIO, MACRO, MACRO_NAMES, MOD, MOD_OWN};
 use super::sampler::SAMPLER;
-use super::{Entry, SLOT_OWN, TRACK, TRACK_GROUPS, voice_entries, voice_key};
+use super::{Entry, LANE, SLOT_OWN, TRACK, TRACK_GROUPS, voice_entries, voice_key};
+use crate::constants::FX_SLOTS;
 use crate::insert::{EFFECTS, EffectKind, INSERTS};
 use crate::machine::SynthVoice;
 use crate::macros::MACROS;
@@ -88,6 +89,7 @@ const MACROS_START: usize = SAMPLER_START + SAMPLER.len();
 const MOD_OWN_START: usize = MACROS_START + MACROS;
 const ACCUMULATION_START: usize = MOD_OWN_START + MOD_SLOTS * MOD_OWN.len();
 const ARPEGGIO_START: usize = ACCUMULATION_START + ACCUMULATION.len();
+const LANES_START: usize = ARPEGGIO_START + ARPEGGIO.len();
 
 /// What a setting belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,6 +114,9 @@ pub enum Owner {
     /// The accumulator's and the arpeggio's, which only macros and modulation move.
     Accumulation,
     Arpeggio,
+    /// One of the track's FX columns' lanes, by the column's place, which move every phrase's lane
+    /// on that column from its own (decision 347).
+    Lane(usize),
 }
 
 /// A setting's place in the table.
@@ -172,7 +177,7 @@ impl SettingId {
     pub const PLAY: Self = Self(SAMPLER_START as u16 + 4);
 
     /// How many settings there are.
-    pub const COUNT: usize = ARPEGGIO_START + ARPEGGIO.len();
+    pub const COUNT: usize = LANES_START + FX_SLOTS * LANE.len();
 
     /// Every setting, in the table's order.
     pub fn all() -> impl Iterator<Item = Self> {
@@ -282,6 +287,20 @@ impl SettingId {
         }
     }
 
+    /// One of an FX column's lane's: 0 is `Length`, 1 is `Rate`.
+    pub const fn lane(slot: usize, setting: usize) -> Option<Self> {
+        if slot < FX_SLOTS && setting < LANE.len() {
+            Some(Self((LANES_START + slot * LANE.len() + setting) as u16))
+        } else {
+            None
+        }
+    }
+
+    /// Every FX column's lane's settings, in order.
+    pub fn lanes() -> impl Iterator<Item = Self> {
+        (0..FX_SLOTS).flat_map(|slot| (0..LANE.len()).filter_map(move |at| Self::lane(slot, at)))
+    }
+
     /// Which macro it is, if it's one.
     pub const fn macro_place(self) -> Option<usize> {
         let at = self.index();
@@ -304,6 +323,10 @@ impl SettingId {
     /// What it belongs to, and its place among that owner's settings.
     pub fn owner(self) -> (Owner, usize) {
         let at = self.index();
+        if at >= LANES_START {
+            let within = at - LANES_START;
+            return (Owner::Lane(within / LANE.len()), within % LANE.len());
+        }
         if at >= ARPEGGIO_START {
             return (Owner::Arpeggio, at - ARPEGGIO_START);
         }
@@ -368,6 +391,7 @@ impl SettingId {
             (Owner::ModOwn(_), at) => MOD_OWN[at],
             (Owner::Accumulation, at) => ACCUMULATION[at],
             (Owner::Arpeggio, at) => ARPEGGIO[at],
+            (Owner::Lane(_), at) => LANE[at],
         }
     }
 
@@ -386,6 +410,7 @@ impl SettingId {
             Owner::ModOwn(slot) => format!("mod{}.{key}", slot + 1),
             Owner::Accumulation => format!("acu.{key}"),
             Owner::Arpeggio => format!("arp.{key}"),
+            Owner::Lane(slot) => format!("lane{}.{key}", slot + 1),
         }
     }
 
@@ -400,7 +425,9 @@ impl SettingId {
         let label = self.entry().label?;
         Some(match self.owner().0 {
             Owner::Slot { slot, .. } | Owner::Bypass(slot) => format!("{}{label}", slot + 1),
-            Owner::Mod(slot) | Owner::Macro(slot) => format!("{label}{}", slot + 1),
+            Owner::Mod(slot) | Owner::Macro(slot) | Owner::Lane(slot) => {
+                format!("{label}{}", slot + 1)
+            }
             _ => label.to_owned(),
         })
     }
@@ -423,6 +450,7 @@ impl SettingId {
             (Owner::ModOwn(slot), _) => format!("Mod {}", slot + 1),
             (Owner::Accumulation, _) => "Accumulator".to_owned(),
             (Owner::Arpeggio, _) => "Arpeggio".to_owned(),
+            (Owner::Lane(slot), _) => format!("FX{} lane", slot + 1),
         }
     }
 }

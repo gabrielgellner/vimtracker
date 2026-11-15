@@ -13,10 +13,12 @@ use crate::arpeggio::Arpeggio;
 use crate::bank::{Bank, BankEntry, ContentHash};
 use crate::constants::{
     BAR_STEPS, BEAT_STEPS, DB_PER_LEVEL, DB_PER_TRIM, DEFAULT_MILLIBPM, DEFAULT_PHRASE_STEPS,
-    FIXED_TRACKS, FORMAT_VERSION, MAX_GROUPS, MAX_LEVEL, MAX_TRACK_RESET, UNITY_LEVEL, UNITY_TRIM,
+    FIXED_TRACKS, FORMAT_VERSION, FX_SLOTS, MAX_GROUPS, MAX_LEVEL, MAX_TRACK_RESET, UNITY_LEVEL,
+    UNITY_TRIM,
 };
 use crate::groove::{Groove, GrooveId};
 use crate::insert::{INSERTS, Insert};
+use crate::lane::LaneMove;
 use crate::macros::{MACROS, Macro, MacroMap, MacroTarget};
 use crate::modulation::{MOD_SLOTS, ModSlot, default_mods};
 use crate::order::{Deal, Dealer};
@@ -249,6 +251,10 @@ pub struct Track {
     /// starts again.
     #[serde(default, skip_serializing_if = "is_default_arpeggio")]
     pub arpeggio: Arpeggio,
+    /// What its `Length` and `Rate` for each FX column move every phrase's lane on that column by,
+    /// from the lane's own (decision 347). Saved only while one isn't at rest.
+    #[serde(default, skip_serializing_if = "lanes_at_rest")]
+    pub lanes: [LaneMove; FX_SLOTS],
     /// Its mod slots, worked out in order, each able to move only those after it.
     #[serde(default = "default_mods")]
     pub mods: [ModSlot; MOD_SLOTS],
@@ -286,6 +292,10 @@ fn is_default_accumulation(accumulation: &Accumulation) -> bool {
 
 fn is_default_arpeggio(arpeggio: &Arpeggio) -> bool {
     *arpeggio == Arpeggio::default()
+}
+
+fn lanes_at_rest(lanes: &[LaneMove; FX_SLOTS]) -> bool {
+    lanes.iter().all(|moved| moved.at_rest())
 }
 
 fn no_macros(macros: &[Macro; MACROS]) -> bool {
@@ -522,7 +532,8 @@ impl Track {
             | Owner::Macro(_)
             | Owner::ModOwn(_)
             | Owner::Accumulation
-            | Owner::Arpeggio => None,
+            | Owner::Arpeggio
+            | Owner::Lane(_) => None,
         }
     }
 
@@ -667,6 +678,7 @@ impl Default for Track {
             glide: 0,
             accumulation: Accumulation::default(),
             arpeggio: Arpeggio::default(),
+            lanes: [LaneMove::default(); FX_SLOTS],
             mods: default_mods(),
             macros: Default::default(),
             chains: BTreeMap::new(),
