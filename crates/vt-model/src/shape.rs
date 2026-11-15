@@ -2178,7 +2178,7 @@ mod tests {
         assert_ne!(first, list);
         assert_eq!(first, dealt(1));
         assert_ne!(first, dealt(2));
-        let mut sorted = first.clone();
+        let mut sorted = first;
         sorted.sort_unstable();
         assert_eq!(sorted, list, "the same values");
     }
@@ -2408,7 +2408,7 @@ mod tests {
             ["E-3", "C#3", "C-3"]
         );
         let shuffled = named(&tune, major, reworking(FillKind::Shuffle, 0, 0));
-        let mut sorted = shuffled.clone();
+        let mut sorted = shuffled;
         sorted.sort();
         assert_eq!(sorted, ["C-3", "D-3", "E-3", "G-3"]);
         // Scale lands on degrees between the two ends.

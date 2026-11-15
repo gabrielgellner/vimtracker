@@ -82,6 +82,10 @@ enum Owns {
 }
 
 /// What a shape owns of each row.
+#[allow(
+    clippy::match_same_arms,
+    reason = "each kind's arm says why it owns what it does"
+)]
 fn owns(shape: &Shape) -> Owns {
     match shape.kind {
         FillKind::Acid => Owns::Note,
@@ -227,8 +231,8 @@ impl Generator {
     pub fn shares(&self, column: ShapeColumn) -> bool {
         match (self.column, column) {
             (ShapeColumn::Fx { slot, .. }, ShapeColumn::Fx { slot: other, .. }) => slot == other,
-            (ShapeColumn::Note { .. }, ShapeColumn::Note { .. }) => true,
-            (ShapeColumn::Nudge { .. }, ShapeColumn::Nudge { .. }) => true,
+            (ShapeColumn::Note { .. }, ShapeColumn::Note { .. })
+            | (ShapeColumn::Nudge { .. }, ShapeColumn::Nudge { .. }) => true,
             (mine, other) => mine == other,
         }
     }

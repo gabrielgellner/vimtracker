@@ -1368,6 +1368,7 @@ impl Clouds {
 
     /// A frame of the looping delay, or of its loop while frozen.
     #[inline]
+    #[allow(clippy::float_cmp, reason = "the gain is exactly 1 but in a crossfade")]
     fn play_loop(&mut self) -> [f32; 2] {
         let control = self.control;
         let longest = self.loop_longest();

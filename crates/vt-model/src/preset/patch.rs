@@ -844,7 +844,7 @@ mod tests {
         assert_eq!(placed, ["DEP3", "MAC3"]);
 
         // A patch file whose generator locks a slot it hasn't is named.
-        let mut outside = patch.clone();
+        let mut outside = patch;
         outside.generators[0].command = Some("mod2.depth".to_owned());
         let error = outside.check_alone().unwrap_err();
         assert!(error.contains("mod2.depth"), "{error}");
@@ -878,7 +878,7 @@ mod tests {
         );
         assert_eq!(patch.check_alone(), Ok(()));
 
-        let mut on_notes = patch.clone();
+        let mut on_notes = patch;
         on_notes.generators[0].column = GenColumn::Note;
         on_notes.generators[0].command = None;
         let error = on_notes.check_alone().unwrap_err();

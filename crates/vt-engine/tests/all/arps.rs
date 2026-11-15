@@ -218,7 +218,7 @@ fn with_the_scale_on_x_and_y_are_degrees() {
         kind: ScaleKind::Major,
     };
     assert_eq!(notes(&major, TICK, 3), named("C E G"));
-    let mut minor = major.clone();
+    let mut minor = major;
     minor.scale.kind = ScaleKind::Minor;
     assert_eq!(notes(&minor, TICK, 3), named("C D# G"));
     // Off, the same value is semitones.

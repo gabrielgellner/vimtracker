@@ -97,7 +97,7 @@ impl Mode {
     pub fn label(self) -> &'static str {
         match self {
             Self::Normal | Self::OperatorPending => "NORMAL",
-            Self::VisualField => "VISUAL",
+            Self::VisualField | Self::SampleVisual => "VISUAL",
             Self::VisualStep => "V-STEP",
             Self::Insert => "INSERT",
             Self::Replace => "REPLACE",
@@ -117,7 +117,6 @@ impl Mode {
             Self::Audio => "AUDIO",
             Self::Project => "PROJECT",
             Self::Sample => "SAMPLE",
-            Self::SampleVisual => "VISUAL",
         }
     }
 

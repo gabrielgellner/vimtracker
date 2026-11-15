@@ -2303,7 +2303,7 @@ fn marbles_t_hat_and_percussion_take_every_row_between_them() {
         hat.iter().zip(&percussion).all(|(a, b)| a != b)
     };
     assert!(between(&song));
-    let mut turned = song.clone();
+    let mut turned = song;
     for track in 0..2 {
         let mut shape = turned.tracks[track].phrases[&0].generators()[0].shape;
         if let Where::Complementary { share, .. } = &mut shape.place {

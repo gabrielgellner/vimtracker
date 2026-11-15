@@ -110,7 +110,7 @@ fn a_macro_reaches_a_slots_own_settings_the_accumulators_and_the_arpeggios_throu
     assert_eq!(state.heard_arpeggio(&track).octaves, 4);
     assert_eq!(track.mods[4].steps.mutate, 10, "the song keeps its own");
     // With nothing on them, they're the song's, and a slot is read as it is.
-    let mut free = written.clone();
+    let mut free = written;
     free.macros[0].maps.clear();
     let state = from_the_top(&free);
     assert_eq!(state.heard_mod(&free, 4), free.mods[4]);

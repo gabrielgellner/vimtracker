@@ -494,6 +494,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::float_cmp, reason = "the sides are the same bit for bit")]
     fn tremolo_swells_the_highs_and_middle_and_hardly_the_bass() {
         let settings = Settings {
             fast: FAST_SPEED,

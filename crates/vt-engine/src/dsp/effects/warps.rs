@@ -262,6 +262,10 @@ impl Oscillator {
     }
 
     /// Follow a MIDI note, working out the increment and the noise's filter only when it moves.
+    #[allow(
+        clippy::float_cmp,
+        reason = "worked out again only when the note moves at all"
+    )]
     fn tune(&mut self, note: f32) {
         if note == self.note {
             return;

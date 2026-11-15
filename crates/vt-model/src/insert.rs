@@ -23,23 +23,35 @@ macro_rules! effect_settings {
     ) => {
         /// A setting's value, by its place among those it keeps, on the scale a step gives.
         pub(super) fn read(self, at: usize) -> u8 {
-            #[allow(non_camel_case_types)]
-            enum Field { $($field),+ }
-            $(if at == Field::$field as usize {
-                return effect_settings!(@read self.$field $(, $choices)? $(, via $place)?);
-            })+
-            0
+            effect_settings!(@places $($field),+);
+            match at {
+                $(places::$field => {
+                    effect_settings!(@read self.$field $(, $choices)? $(, via $place)?)
+                })+
+                _ => 0,
+            }
         }
 
         /// The same with a setting changed, on the scale `read` gives.
         pub(super) fn written(self, at: usize, value: u8) -> Self {
+            effect_settings!(@places $($field),+);
+            let mut settings = self;
+            match at {
+                $(places::$field => {
+                    settings.$field = effect_settings!(@write value $(, $choices)? $(, via $kept)?);
+                })+
+                _ => {}
+            }
+            settings
+        }
+    };
+    // Each field's place, as a constant named after it, for `read` and `written` to match on.
+    (@places $($field:ident),+) => {
+        #[allow(non_upper_case_globals)]
+        mod places {
             #[allow(non_camel_case_types)]
             enum Field { $($field),+ }
-            let mut settings = self;
-            $(if at == Field::$field as usize {
-                settings.$field = effect_settings!(@write value $(, $choices)? $(, via $kept)?);
-            })+
-            settings
+            $(pub(super) const $field: usize = Field::$field as usize;)+
         }
     };
     (@read $stored:expr) => { $stored };

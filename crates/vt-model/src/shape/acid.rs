@@ -319,6 +319,7 @@ pub(super) fn riff(
 /// every step left, as `Spread` 0 does once the step at the bias point is taken, it's the one
 /// nearest where the draw lands, the lower of two as near, so a narrow spread gathers the riff
 /// round the bias point.
+#[allow(clippy::float_cmp, reason = "a tie in distance goes to the lower step")]
 fn leaned(steps: &mut [u8], wanted: usize, low: u8, high: u8, seed: u64, random: &Random) {
     let span = usize::from(high - low) + 1;
     let place = |step: u8| usize::from(step - low);

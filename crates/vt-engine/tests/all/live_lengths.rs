@@ -117,7 +117,7 @@ fn a_track_that_didnt_change_keeps_its_count() {
     let plain = song(&[16]);
     let mut engine = played_to(&plain, 20);
     let started = engine.jam(0).started;
-    let mut renamed = plain.clone();
+    let mut renamed = plain;
     renamed.tracks[0].name = "BD".to_owned();
     engine.swap(version(&renamed));
     assert_eq!(engine.jam(0).started, started);

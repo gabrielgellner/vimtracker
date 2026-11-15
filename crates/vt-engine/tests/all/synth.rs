@@ -176,7 +176,7 @@ fn renders_and_stems_are_the_same_each_time() {
         render_loop(version(whole.clone()), RATE, RenderOptions::default())
     });
     assert!(heard.iter().any(|sample| *sample != 0.0));
-    let stems = render_stems(&version(whole.clone()), RATE, RenderOptions::default());
+    let stems = render_stems(&version(whole), RATE, RenderOptions::default());
     assert_eq!(stems.len(), 1);
     assert!(stems[0].samples.iter().any(|sample| *sample != 0.0));
 }

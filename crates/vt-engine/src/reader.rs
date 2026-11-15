@@ -404,6 +404,10 @@ impl Reader {
     /// The next frame, before it moves on, or none once it's past the sample. A loop's turn
     /// comes first, so the frame read is always in the loop.
     #[inline]
+    #[allow(
+        clippy::float_cmp,
+        reason = "the edge's ramp lands on its target exactly"
+    )]
     pub(crate) fn next(&mut self, data: Frames<'_>) -> Option<[f32; 2]> {
         let clock = self.tempo.and_then(|tempo| tempo.clock);
         if let Some(looping) = self.region.looping {
@@ -726,9 +730,7 @@ mod tests {
         for frame in &frames {
             assert!(growing.push(*frame));
         }
-        let whole = SampleData {
-            frames: frames.clone(),
-        };
+        let whole = SampleData { frames };
         for speed in [1.0, 0.37, 1.73, 0.5] {
             let span = Span::whole(1000);
             let cut = Cut::default();

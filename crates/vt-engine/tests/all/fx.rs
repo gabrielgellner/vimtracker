@@ -923,7 +923,7 @@ fn granular_frozen_keeps_playing_a_tone_after_it_stops_and_free_goes_quiet() {
     assert!(
         loudness(&frozen[last.clone()]) > 0.05,
         "{}",
-        loudness(&frozen[last.clone()])
+        loudness(&frozen[last])
     );
     assert!(
         loudness(&free[last.clone()]) < 1e-4,

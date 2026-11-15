@@ -1068,6 +1068,7 @@ impl Steps {
 
     /// Where the song is now, as its tick, whether it's playing, and how far it goes a frame. A
     /// jump goes there, just before it, so a song played from a step starts on that step.
+    #[allow(clippy::float_cmp, reason = "both are whole numbers of steps")]
     fn sync(&mut self, tick: f64, playing: bool, ticks_per_frame: f64) {
         self.playing = playing;
         self.ticks_per_frame = ticks_per_frame;
@@ -1824,6 +1825,10 @@ impl Beads {
     /// The delay's taps, a frame of the recording: each read straight and through its pitch
     /// shifter, crossfaded by how far the pitch is from none, then filtered by `Size`.
     #[inline]
+    #[allow(
+        clippy::float_cmp,
+        reason = "the tone is worked out again only when `Size` moves at all"
+    )]
     fn play_taps(&mut self, knobs: &Knobs) -> [f32; 2] {
         let speed = (knobs.semitones / 12.0).exp2();
         let shifted = (100.0 * ((speed - 1.0).abs() - 0.01)).clamp(0.0, 1.0);

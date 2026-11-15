@@ -3,6 +3,8 @@
 //! the one place that knows an ADSR's `Attack` is `adsr.attack_ms` and an AHD's is
 //! `ahd.attack_ms`.
 
+use std::borrow::Cow;
+
 use crate::constants::MAX_ENVELOPE_MS;
 use crate::envelope::{Curve, Hold, MAX_HOLD_MS, MAX_RATCHET};
 use crate::grid::Grid;
@@ -12,7 +14,7 @@ use crate::settings::{MOD_OWN_SETTINGS, SettingId};
 use crate::steps::{Loop, MAX_MUTATE, MAX_STEP, STEPS, StepsMode};
 use crate::tracking::Source;
 
-use super::{MAX_DEPTH, ModKind, ModSlot, Polarity};
+use super::{MAX_DEPTH, ModKind, ModSlot, Polarity, default_mod, depth_text};
 
 /// One setting of a mod slot: its type, its mode, where it goes and how far, which every type has
 /// in its own way, then each type's own, which mean what they do under the slot's type.
@@ -135,6 +137,41 @@ impl ModField {
         }
     }
 
+    /// How it reads and steps, which the Mod page builds its view from (#833).
+    pub fn units(self) -> ModUnits {
+        match self {
+            Self::Type
+            | Self::Mode
+            | Self::Polarity
+            | Self::Destination
+            | Self::Shape
+            | Self::Loop => ModUnits::Listed,
+            Self::Reset => ModUnits::Switch,
+            Self::Attack | Self::Decay | Self::Release | Self::Peak => ModUnits::Time,
+            Self::Hold => ModUnits::Hold,
+            Self::Sustain | Self::Body | Self::Mutate => ModUnits::Percent,
+            Self::Ratchet => ModUnits::Count {
+                what: "how many strikes",
+                from_one: false,
+            },
+            Self::Length => ModUnits::Count {
+                what: "how many steps",
+                from_one: false,
+            },
+            Self::Start => ModUnits::Count {
+                what: "a step",
+                from_one: true,
+            },
+            Self::Colour => ModUnits::Hex,
+            Self::Depth | Self::Smooth | Self::Deform => ModUnits::Signed,
+            Self::Step(_) => ModUnits::Step,
+            Self::Phase => ModUnits::Degrees,
+            Self::Rate => ModUnits::Rate,
+            Self::Fade => ModUnits::Fade,
+            Self::Low | Self::High => ModUnits::Mapped,
+        }
+    }
+
     /// Its place among a slot's type's own settings in the registry, if macros and modulation
     /// move it: an index of [`MOD_OWN_FIELDS`].
     pub fn own(self) -> Option<usize> {
@@ -156,6 +193,40 @@ impl ModField {
             (None, None) => None,
         }
     }
+}
+
+/// How one of a slot's settings reads and steps, whatever type has it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModUnits {
+    /// One of a list, by its place in [`ModSlot::choices`], or where it goes, by the track's.
+    Listed,
+    /// Off or on.
+    Switch,
+    /// Milliseconds, whose steps grow as it gets longer.
+    Time,
+    /// An AHD's hold: milliseconds, or `Note` below none.
+    Hold,
+    Percent,
+    /// How many, `what` saying of what, shown counted from 1 where `from_one`.
+    Count {
+        what: &'static str,
+        from_one: bool,
+    },
+    /// Hex from `00`.
+    Hex,
+    /// Hex either side of none, with its sign.
+    Signed,
+    /// One of Steps' values: signed hex, whose large step is an octave, as on `Pitch` it's
+    /// semitones.
+    Step,
+    /// Degrees round a cycle, going round past either end.
+    Degrees,
+    /// A division or hertz, or Steps' own rate, which steps through its kinds.
+    Rate,
+    /// An LFO's fade, which steps through its kinds.
+    Fade,
+    /// Track's map: a note or hex, by what it follows.
+    Mapped,
 }
 
 /// One mod type described: its name and what it is, and which settings it has and where they sit
@@ -348,20 +419,19 @@ impl ModKind {
     /// envelope's curves, an LFO's and Steps' modes, and Track's sources. None for a type without
     /// one.
     pub fn modes(self) -> Vec<(&'static str, &'static str)> {
-        fn named<X: Listed>() -> Vec<(&'static str, &'static str)> {
-            X::ALL
-                .iter()
-                .map(|each| (each.name(), each.meaning()))
-                .collect()
-        }
         match self {
-            Self::Adsr | Self::Ahd | Self::Drum => named::<Curve>(),
-            Self::Lfo => named::<LfoMode>(),
-            Self::Steps => named::<StepsMode>(),
-            Self::Track => named::<Source>(),
+            Self::Adsr | Self::Ahd | Self::Drum => named::<Curve>().collect(),
+            Self::Lfo => named::<LfoMode>().collect(),
+            Self::Steps => named::<StepsMode>().collect(),
+            Self::Track => named::<Source>().collect(),
             Self::Lpg => Vec::new(),
         }
     }
+}
+
+/// The names and meanings of every one of `X`.
+fn named<X: Listed>() -> impl Iterator<Item = (&'static str, &'static str)> {
+    X::ALL.iter().map(|each| (each.name(), each.meaning()))
 }
 
 /// A count as a setting's value, which every count here fits.
@@ -489,6 +559,87 @@ impl ModSlot {
             ModField::Low => i32::from(self.track.bounds().low),
             ModField::High => i32::from(self.track.bounds().high),
             ModField::Rate | ModField::Destination => return None,
+        })
+    }
+
+    /// What the `slot`th slot's setting goes back to under this type, as the slot starts, with
+    /// Track's map's ends those of the source it follows.
+    pub fn default_field(&self, slot: usize, field: ModField) -> Option<i32> {
+        let mut fresh = ModSlot {
+            kind: self.kind,
+            ..default_mod(slot)
+        };
+        if matches!(field, ModField::Low | ModField::High) {
+            fresh.track.source = self.track.source;
+        }
+        fresh.field(field)
+    }
+
+    /// What one of its lists can be, by name and meaning, in the order [`ModSlot::field`] counts
+    /// them: its type, its mode, its polarity, an LFO's shape and Steps' loop. None for the
+    /// others; where it goes is its track's.
+    pub fn choices(&self, field: ModField) -> Vec<(Cow<'static, str>, &'static str)> {
+        let borrowed = |(name, meaning)| (Cow::Borrowed(name), meaning);
+        match field {
+            ModField::Type => named::<ModKind>().map(borrowed).collect(),
+            ModField::Mode => self.kind.modes().into_iter().map(borrowed).collect(),
+            ModField::Polarity => named::<Polarity>().map(borrowed).collect(),
+            // The attractors say what they are, and Rössler's name is found without its umlaut.
+            ModField::Shape => Shape::ALL
+                .iter()
+                .map(|shape| {
+                    let meaning = match shape {
+                        Shape::Lorenz => "chaos round two wings, never quite repeating",
+                        Shape::Rossler => "Rossler's chaos round one loop",
+                        _ => "",
+                    };
+                    borrowed((shape.name(), meaning))
+                })
+                .collect(),
+            ModField::Loop => Loop::ALL
+                .iter()
+                .map(|each| (Cow::Owned(each.to_string()), each.meaning()))
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// One of its settings as its cell shows it, by its [`ModField::units`]: `120 ms`, `63%`,
+    /// `-42`, `Note` for an AHD's hold, and an attractor's phase by the axis heard where it's one
+    /// alone. None for one its type hasn't, or for where it goes, which its track names.
+    pub fn text(&self, field: ModField) -> Option<String> {
+        let Some(value) = self.field(field) else {
+            // A rate isn't one number. One a note, Steps have none.
+            return (field == ModField::Rate && field.on(self.kind)).then(|| {
+                match (self.kind, self.steps.mode) {
+                    (ModKind::Steps, StepsMode::Note) => "--".to_owned(),
+                    (ModKind::Steps, _) => self.steps.rate.to_string(),
+                    _ => self.lfo.rate.to_string(),
+                }
+            });
+        };
+        let attractor = self.lfo.shape.is_attractor();
+        Some(match field.units() {
+            ModUnits::Listed => {
+                let at = usize::try_from(value).ok()?;
+                self.choices(field).into_iter().nth(at)?.0.into_owned()
+            }
+            ModUnits::Switch => if value != 0 { "on" } else { "off" }.to_owned(),
+            ModUnits::Hold if value < 0 => "Note".to_owned(),
+            ModUnits::Time | ModUnits::Hold => format!("{value} ms"),
+            ModUnits::Percent => format!("{value}%"),
+            ModUnits::Count { from_one, .. } => (value + i32::from(from_one)).to_string(),
+            ModUnits::Hex => format!("{value:02X}"),
+            ModUnits::Signed | ModUnits::Step => depth_text(value as i16),
+            ModUnits::Degrees => match value {
+                0 if attractor => "x".to_owned(),
+                120 if attractor => "y".to_owned(),
+                240 if attractor => "z".to_owned(),
+                _ => format!("{value}°"),
+            },
+            ModUnits::Fade => self.lfo.fade.to_string(),
+            ModUnits::Mapped => self.track.source.text(value as u8),
+            ModUnits::Rate => return None,
         })
     }
 
