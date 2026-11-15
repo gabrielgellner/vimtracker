@@ -230,7 +230,7 @@ fn the_input_records_once_one_is_open_and_a_silent_right_side_makes_it_mono() {
     );
     assert!(app.sampling.live.is_none());
     // A fake input in place of a device, with sound on its left side only.
-    let (mut input, heard) = rtrb::RingBuffer::new(vt_model::constants::INPUT_QUEUE);
+    let (mut input, heard) = rtrb::RingBuffer::new(vt_engine::link::INPUT_QUEUE);
     rt.listen(heard);
     app.audio.input = Some("Fake input".to_owned());
     command(&mut app, "record input now");

@@ -20,7 +20,7 @@ use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, render_stems, write_wav};
 use vt_model::analysis;
-use vt_model::constants::{DEFAULT_TRACKS, FRAME_MS};
+use vt_model::constants::DEFAULT_TRACKS;
 use vt_model::modulation::MOD_SLOTS;
 use vt_model::project::{self, ProjectError};
 use vt_model::samples::SamplePool;
@@ -377,6 +377,9 @@ impl<W: std::io::Write> std::io::Write for Noted<W> {
     }
 }
 
+/// Tuning: time between redraws.
+pub const FRAME_MS: u64 = 33;
+
 fn main_loop(
     terminal: &mut ratatui::DefaultTerminal,
     app: &mut App,
@@ -562,7 +565,7 @@ fn hear_input(
     };
     let opened = Input::open(id, rate).and_then(|input| {
         let name = input.name.clone();
-        let (into, heard) = rtrb::RingBuffer::new(vt_model::constants::INPUT_QUEUE);
+        let (into, heard) = rtrb::RingBuffer::new(vt_engine::link::INPUT_QUEUE);
         let stream = input.start(into, Arc::clone(stats))?;
         realtime.listen(heard);
         Ok((stream, name))
