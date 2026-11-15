@@ -13,12 +13,12 @@ use vt_model::sample::{SampleData, SampleInfo, load_sample_with_info};
 use crate::graphics;
 
 /// How many files read are kept. A long file can be large, so it's only a few.
-pub const KEPT: usize = 4;
+pub(crate) const KEPT: usize = 4;
 
 /// The longest the tests and the screenshots wait for a file to be read. One is read in well under
 /// a second, but a heavily loaded machine has taken over ten, and a wait ends as soon as the file
 /// is in, so a long limit costs nothing.
-pub const WAIT: Duration = Duration::from_secs(60);
+pub(crate) const WAIT: Duration = Duration::from_secs(60);
 
 /// A file read: its sound at the program's rate, what the file held, and its waveform folded for
 /// the preview.
@@ -32,7 +32,7 @@ pub struct Loaded {
 }
 
 /// A file read, or why it couldn't be.
-pub type Read = Result<Arc<Loaded>, String>;
+pub(crate) type Read = Result<Arc<Loaded>, String>;
 
 /// The thread that reads files, started when the first is asked for.
 pub struct Loader {
@@ -107,7 +107,7 @@ impl Loader {
     }
 
     /// Take in the files read since last asked, and say which they were.
-    pub fn poll(&mut self) -> Vec<PathBuf> {
+    pub(crate) fn poll(&mut self) -> Vec<PathBuf> {
         let mut done = Vec::new();
         while let Some(Ok((path, read))) = self.results.as_ref().map(Receiver::try_recv) {
             self.keep(path.clone(), read);
@@ -118,7 +118,7 @@ impl Loader {
 
     /// Wait up to `limit` for the file asked for, taking in any others on the way, for tests and
     /// the screenshots.
-    pub fn wait(&mut self, limit: Duration) -> Vec<PathBuf> {
+    pub(crate) fn wait(&mut self, limit: Duration) -> Vec<PathBuf> {
         let until = Instant::now() + limit;
         let mut done = self.poll();
         while self.waiting.is_some() {

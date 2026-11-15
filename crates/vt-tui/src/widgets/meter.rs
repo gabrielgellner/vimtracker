@@ -10,10 +10,10 @@ use crate::services::meter::{FLOOR_DB, db_at, height_of};
 use crate::widgets::theme;
 
 /// Partial blocks, from one eighth of a cell up to a whole one.
-pub const EIGHTHS: [char; 9] = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+pub(crate) const EIGHTHS: [char; 9] = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 
 /// A bar of one channel for one row, counting rows up from the bottom, some cells wide.
-pub fn level_cell(
+pub(crate) fn level_cell(
     row: usize,
     rows: usize,
     average: f32,
@@ -46,13 +46,18 @@ pub fn level_cell(
 
 /// How much of a row a bar hanging down from the top fills, in eighths, for a share of its whole
 /// height from 0 to 1, counting rows down from the top.
-pub fn hanging_eighths(share: f32, row: usize, rows: usize) -> usize {
+pub(crate) fn hanging_eighths(share: f32, row: usize, rows: usize) -> usize {
     let total = share.clamp(0.0, 1.0) * (rows * 8) as f32;
     (total.round() as usize).saturating_sub(row * 8).min(8)
 }
 
 /// One row of a bar hanging down from the top, filled this many eighths, on a background.
-pub fn hanging_cell(filled: usize, color: Color, behind: Color, width: usize) -> Span<'static> {
+pub(crate) fn hanging_cell(
+    filled: usize,
+    color: Color,
+    behind: Color,
+    width: usize,
+) -> Span<'static> {
     // There are no blocks that hang from the top, so a partial one is drawn the other way around.
     let (symbol, fg, bg): (char, Color, Color) = match filled {
         0 => (' ', color, behind),
@@ -67,7 +72,7 @@ const LEFT_EIGHTHS: [char; 7] = ['▏', '▎', '▍', '▌', '▋', '▊', '▉'
 
 /// An amount as a bar going right in one colour, filled in eighths, for a share of its whole length
 /// from 0 to 1, this many cells long: a gain reduction meter laid on its side.
-pub fn amount_across(share: f32, cells: usize, style: Style) -> Span<'static> {
+pub(crate) fn amount_across(share: f32, cells: usize, style: Style) -> Span<'static> {
     let total = (share.clamp(0.0, 1.0) * (cells * 8) as f32).round() as usize;
     let text: String = (0..cells)
         .map(|cell| match total.saturating_sub(cell * 8).min(8) {
@@ -82,7 +87,7 @@ pub fn amount_across(share: f32, cells: usize, style: Style) -> Span<'static> {
 /// A level as a bar across, a character for each `per_cell` dB up from `floor`, each filled in
 /// eighths and in the level colour at its middle, with a faint mark in the cell of the highest it
 /// was lately, `held`, while the bar is below it.
-pub fn level_across(
+pub(crate) fn level_across(
     db: f32,
     held: f32,
     floor: f32,

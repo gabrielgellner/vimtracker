@@ -13,13 +13,13 @@ use crate::widgets;
 use crate::widgets::theme;
 
 /// A popup's border, in the window's colours, for its titles to go on.
-pub fn border() -> Block<'static> {
+pub(crate) fn border() -> Block<'static> {
     widgets::window_border().style(theme::window())
 }
 
 /// Draw a popup's border over what's under it, clearing its area first, and give the area inside
 /// the border, for what's in it.
-pub fn draw(frame: &mut Frame, area: Rect, border: Block) -> Rect {
+pub(crate) fn draw(frame: &mut Frame, area: Rect, border: Block) -> Rect {
     let inside = border.inner(area);
     frame.render_widget(Clear, area);
     frame.render_widget(border, area);
@@ -32,7 +32,7 @@ fn within(area: Rect, width: u16, height: u16) -> (u16, u16) {
 }
 
 /// A window this big in the middle of an area, or as much of it as fits.
-pub fn centred(area: Rect, width: u16, height: u16) -> Rect {
+pub(crate) fn centred(area: Rect, width: u16, height: u16) -> Rect {
     let (width, height) = within(area, width, height);
     Rect {
         x: area.x + (area.width - width) / 2,
@@ -43,7 +43,7 @@ pub fn centred(area: Rect, width: u16, height: u16) -> Rect {
 }
 
 /// A window this big in an area's top left corner, or as much of it as fits.
-pub fn top_left(area: Rect, width: u16, height: u16) -> Rect {
+pub(crate) fn top_left(area: Rect, width: u16, height: u16) -> Rect {
     let (width, height) = within(area, width, height);
     Rect {
         width,
@@ -53,7 +53,7 @@ pub fn top_left(area: Rect, width: u16, height: u16) -> Rect {
 }
 
 /// A window this big in an area's top right corner, or as much of it as fits.
-pub fn top_right(area: Rect, width: u16, height: u16) -> Rect {
+pub(crate) fn top_right(area: Rect, width: u16, height: u16) -> Rect {
     let (width, height) = within(area, width, height);
     Rect {
         x: area.right() - width,
@@ -64,7 +64,7 @@ pub fn top_right(area: Rect, width: u16, height: u16) -> Rect {
 }
 
 /// A window this big in an area's bottom right corner, or as much of it as fits.
-pub fn bottom_right(area: Rect, width: u16, height: u16) -> Rect {
+pub(crate) fn bottom_right(area: Rect, width: u16, height: u16) -> Rect {
     let (width, height) = within(area, width, height);
     Rect {
         x: area.right() - width,
@@ -76,7 +76,7 @@ pub fn bottom_right(area: Rect, width: u16, height: u16) -> Rect {
 
 /// A window this big ending just above a row of the screen, from a column into an area, or as
 /// much of it as fits between the area's top and the row, moved left to stay inside it.
-pub fn above(area: Rect, row: u16, column: u16, width: u16, height: u16) -> Rect {
+pub(crate) fn above(area: Rect, row: u16, column: u16, width: u16, height: u16) -> Rect {
     let width = width.min(area.width);
     let height = height.min(row.saturating_sub(area.y));
     Rect {

@@ -13,7 +13,7 @@ const FINE_JUMP: i64 = 0x10;
 /// What `K` lists for a setting: its title, its choices as they're labelled, and the one it has,
 /// if it's one of them.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ChoiceList {
+pub(crate) struct ChoiceList {
     pub title: &'static str,
     /// Each choice, by its place, which is the value it sets.
     pub items: Vec<Choice>,
@@ -24,7 +24,7 @@ pub struct ChoiceList {
 /// kept within its bounds, or round them where it wraps. A step that depends on where the value is
 /// is worked out again after each, by its pace; and a list that steps once whatever the count
 /// moves one choice.
-pub fn stepped(view: &ParamView, up: bool, large: bool, count: usize) -> i32 {
+pub(crate) fn stepped(view: &ParamView, up: bool, large: bool, count: usize) -> i32 {
     let by = |nudge: Steps, jump: Steps| {
         let steps = if large { jump } else { nudge };
         i64::from(if up { steps.up } else { -steps.down })
@@ -62,7 +62,7 @@ fn within(view: &ParamView, value: i64) -> i32 {
 /// Where `=`, `-`, `+` and `_` take a value with a fine part, on its fine digits: the fine byte
 /// moved by one or `10`, `count` times, carrying into the value past `FF` or below `00`, and
 /// stopping at its top with no fine part. The value and the fine byte it leaves.
-pub fn stepped_fine(view: &ParamView, up: bool, large: bool, count: usize) -> (i32, u8) {
+pub(crate) fn stepped_fine(view: &ParamView, up: bool, large: bool, count: usize) -> (i32, u8) {
     let size = if large { FINE_JUMP } else { 1 } * count as i64;
     let value = i64::from(view.value) << 8 | i64::from(view.fine.unwrap_or(0));
     let (low, high) = (i64::from(view.bounds.0) << 8, i64::from(view.bounds.1) << 8);
@@ -72,7 +72,7 @@ pub fn stepped_fine(view: &ParamView, up: bool, large: bool, count: usize) -> (i
 
 /// What `i`'s text sets a value to, as the view reads it, or why not, for the status line. A
 /// value that only hex digits are typed into, which can't be wrong, says nothing.
-pub fn typed(view: &ParamView, text: &str) -> Result<i32, String> {
+pub(crate) fn typed(view: &ParamView, text: &str) -> Result<i32, String> {
     let (low, high) = view.bounds;
     let refused = || view.why_not.clone().into_owned();
     let kept = |value: Option<i32>, lowest: i32| {
@@ -151,30 +151,21 @@ pub fn typed(view: &ParamView, text: &str) -> Result<i32, String> {
     }
 }
 
-/// How many places a knob has for a value it turns through a step at a time: one for each of its
-/// choices, or each whole number within its bounds.
-pub fn places(view: &ParamView) -> usize {
-    match view.choices.is_empty() {
-        true => (view.bounds.1 - view.bounds.0 + 1).max(1) as usize,
-        false => view.choices.len(),
-    }
-}
-
 /// The value a knob on its `step`th place puts it at, counted from its lowest.
-pub fn at_place(view: &ParamView, step: usize) -> i32 {
+pub(crate) fn at_place(view: &ParamView, step: usize) -> i32 {
     view.bounds.0 + step as i32
 }
 
 /// Where a knob turned a share of the way from a value's lowest to its highest puts it, to the
 /// nearest.
-pub fn shared(view: &ParamView, share: f64) -> i32 {
+pub(crate) fn shared(view: &ParamView, share: f64) -> i32 {
     let (low, high) = view.bounds;
     low + (share * f64::from(high - low)).round() as i32
 }
 
 /// The same for a value with a fine part, to the nearest of its fine steps: the value and its
 /// fine byte, which is 0 at its top.
-pub fn shared_fine(view: &ParamView, share: f64) -> (i32, u8) {
+pub(crate) fn shared_fine(view: &ParamView, share: f64) -> (i32, u8) {
     let (low, high) = (view.bounds.0 << 8, view.bounds.1 << 8);
     let at = low + (share * f64::from(high - low)).round() as i32;
     let value = at >> 8;
@@ -183,13 +174,13 @@ pub fn shared_fine(view: &ParamView, share: f64) -> (i32, u8) {
 }
 
 /// What `x` puts back.
-pub fn reset(view: &ParamView) -> i32 {
+pub(crate) fn reset(view: &ParamView) -> i32 {
     view.default
 }
 
 /// `K`'s list for a setting, opened on the value it has, with a machine's own lists numbered,
 /// or none for a value that isn't a choice.
-pub fn choices(view: &ParamView) -> Option<ChoiceList> {
+pub(crate) fn choices(view: &ParamView) -> Option<ChoiceList> {
     if view.choices.is_empty() {
         return None;
     }

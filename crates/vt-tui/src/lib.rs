@@ -13,6 +13,8 @@
 //! - [`roto`]: the Roto-Control.
 //! - [`offline`]: the subcommands that run without a screen.
 
+#![warn(unreachable_pub)]
+
 pub mod app;
 pub mod graphics;
 pub mod input;

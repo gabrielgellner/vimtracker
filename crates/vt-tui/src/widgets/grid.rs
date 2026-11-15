@@ -14,13 +14,13 @@ use crate::widgets::bar::{BAR_ENDS, ValueBar};
 use crate::widgets::theme;
 
 /// How far apart the grid's rows are: a row, then a blank line.
-pub const ROW_STEP: u16 = 2;
+pub(crate) const ROW_STEP: u16 = 2;
 /// How many lines a grid of three rows takes.
-pub const GRID_HEIGHT: u16 = 2 * ROW_STEP + 1;
+pub(crate) const GRID_HEIGHT: u16 = 2 * ROW_STEP + 1;
 
 /// What each cell of a grid shows, for the setting it holds. It's one method, so a cell's parts
 /// are worked out together, once.
-pub trait CellSource {
+pub(crate) trait CellSource {
     /// What names a setting.
     type Id: Copy;
     /// Its name, value and bar, in cells of these widths.
@@ -29,7 +29,7 @@ pub trait CellSource {
 
 /// The parts of a setting's cell.
 #[derive(Debug, Clone, PartialEq)]
-pub struct CellParts {
+pub(crate) struct CellParts {
     /// Its name, dim, with any labels a jump has put on it, in the name's room.
     pub name: Line<'static>,
     /// Its value, in the cursor's colour under the cursor, or what's being typed in its place.
@@ -40,13 +40,13 @@ pub struct CellParts {
 
 /// The room each part of a cell has, so the columns line up down a page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CellWidths {
+pub(crate) struct CellWidths {
     /// A setting's name and the space after it.
     pub name: u16,
     /// Its value and the space after it.
     pub value: u16,
     /// The cells inside a bar, each split into eighths, or none for a compact cell with no bar.
-    pub bar_cells: usize,
+    pub(crate) bar_cells: usize,
     /// The gap before the next column.
     pub gap: u16,
 }
@@ -54,7 +54,7 @@ pub struct CellWidths {
 impl CellWidths {
     /// The FX page's: two hex digits, and the Sound page's 9-cell bars, so a bar looks the same on
     /// both. That's 27 columns a cell.
-    pub const FX: Self = Self {
+    pub(crate) const FX: Self = Self {
         name: 10,
         value: 3,
         bar_cells: 9,
@@ -63,21 +63,21 @@ impl CellWidths {
 
     /// The FX page's zoomed in on a slot: the same, with bars nearly twice as long, 17 cells, so
     /// four columns fill the device's width in the keyboard's box. That's 35 columns a cell.
-    pub const ZOOM: Self = Self {
+    pub(crate) const ZOOM: Self = Self {
         bar_cells: 17,
         ..Self::FX
     };
     /// The Sound page's: four digits, a value's coarse ones and its fine ones set back, as `A000`,
     /// with the same bars, so a column lines up with the FX page's but for its value. That's 29
     /// columns a cell.
-    pub const SOUND: Self = Self {
+    pub(crate) const SOUND: Self = Self {
         value: 5,
         ..Self::FX
     };
 
     /// Compact cells, for a half-width device, where a panel rather than a bar shows the values:
     /// a name, a value as long as `2 bars` or `8000 ms`, and no bar. That's 21 columns a cell.
-    pub const COMPACT: Self = Self {
+    pub(crate) const COMPACT: Self = Self {
         name: 10,
         value: 8,
         bar_cells: 0,
@@ -93,13 +93,13 @@ impl CellWidths {
     }
 
     /// A whole column, with its gap.
-    pub fn column(self) -> u16 {
+    pub(crate) fn column(self) -> u16 {
         self.name + self.value + self.bar() + self.gap
     }
 }
 
 /// A grid of settings, read through a source, a row of places for each of its rows.
-pub struct SettingsGrid<'a, S: CellSource> {
+pub(crate) struct SettingsGrid<'a, S: CellSource> {
     source: &'a S,
     rows: Vec<Vec<Option<S::Id>>>,
     widths: CellWidths,
@@ -107,7 +107,7 @@ pub struct SettingsGrid<'a, S: CellSource> {
 }
 
 impl<'a, S: CellSource> SettingsGrid<'a, S> {
-    pub fn new(source: &'a S, rows: Vec<Vec<Option<S::Id>>>, widths: CellWidths) -> Self {
+    pub(crate) fn new(source: &'a S, rows: Vec<Vec<Option<S::Id>>>, widths: CellWidths) -> Self {
         Self {
             source,
             rows,
@@ -119,7 +119,7 @@ impl<'a, S: CellSource> SettingsGrid<'a, S> {
     /// The same grid faint, as a device switched out is, but for what's in this style, the
     /// cursor's.
     #[must_use]
-    pub fn faded(self, keep: Option<Style>) -> Self {
+    pub(crate) fn faded(self, keep: Option<Style>) -> Self {
         Self { fade: keep, ..self }
     }
 }
@@ -171,7 +171,7 @@ impl<S: CellSource> Widget for SettingsGrid<'_, S> {
 
 /// A line faint, as a device switched out is, but for what's in the style to keep, the cursor's.
 /// An image's placeholders keep their colour, which says which image they are.
-pub fn faded(line: Line<'static>, keep: Style) -> Line<'static> {
+pub(crate) fn faded(line: Line<'static>, keep: Style) -> Line<'static> {
     Line::from(
         line.spans
             .into_iter()

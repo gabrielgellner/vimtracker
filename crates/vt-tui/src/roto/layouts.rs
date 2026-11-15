@@ -1635,7 +1635,7 @@ const SPACE: DeviceLayout = live(
 pub const WHERE_FIRST: &str = "where1";
 pub const WHERE_SECOND: &str = "where2";
 /// `Grids`' density knob's key: its own part's, whichever it plays.
-pub const PART_DENSITY: &str = "partdensity";
+pub(crate) const PART_DENSITY: &str = "partdensity";
 
 const GEN_RAMP: DeviceLayout = live(
     "gen/ramp",
@@ -2207,7 +2207,7 @@ pub static GENERATORS: LazyLock<Vec<&'static DeviceLayout>> =
     LazyLock::new(|| each_once(BY_FILL.into_iter().chain([&GEN_ACID_LOOPS])));
 
 /// A live generator's layout, by its fill.
-pub fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
+pub(crate) fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
     BY_FILL[kind as usize]
 }
 
@@ -2229,7 +2229,7 @@ pub static ALL: LazyLock<Vec<&'static DeviceLayout>> = LazyLock::new(|| {
 });
 
 /// A machine's layout.
-pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
+pub(crate) fn machine_layout(machine: Machine) -> &'static DeviceLayout {
     match machine {
         Machine::Sampler => &SAMPLER,
         Machine::Plaits(voice) => BY_VOICE[voice as usize],
@@ -2237,7 +2237,7 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
 }
 
 /// An effect's layout, in the type or mode it's in, as its settings change with it.
-pub fn effect_layout(insert: Insert) -> &'static DeviceLayout {
+pub(crate) fn effect_layout(insert: Insert) -> &'static DeviceLayout {
     let Some(kind) = insert.kind() else {
         return &EMPTY;
     };

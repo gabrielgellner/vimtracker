@@ -38,7 +38,7 @@ fn column_order(column: ShapeColumn) -> usize {
 
 /// A phrase's live generators, by their places in its list, in the order the page shows them:
 /// by column as the phrase view has them, and on one column, the top one first.
-pub fn order(generators: &[Generator]) -> Vec<usize> {
+pub(super) fn order(generators: &[Generator]) -> Vec<usize> {
     let mut order: Vec<usize> = (0..generators.len()).collect();
     order.sort_by_key(|at| {
         let generator = &generators[*at];

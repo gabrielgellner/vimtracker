@@ -13,7 +13,7 @@ use crate::widgets::theme;
 /// tracks all share, so a folded group of drums still reads as drums, or the bus's while they're
 /// for different things; a return's and the master's the bus's. A sound track with no role, and a
 /// group with no tracks, have none.
-pub fn colour(song: &Song, track: usize) -> Option<Color> {
+pub(crate) fn colour(song: &Song, track: usize) -> Option<Color> {
     let this = song.tracks.get(track)?;
     match this.kind {
         TrackKind::Sound => theme::role(this.role()),
@@ -31,7 +31,7 @@ pub fn colour(song: &Song, track: usize) -> Option<Color> {
 }
 
 /// The style that draws the rule, to patch over a name's, or none.
-pub fn rule(song: &Song, track: usize) -> Style {
+pub(crate) fn rule(song: &Song, track: usize) -> Style {
     colour(song, track).map_or_else(Style::new, |colour| {
         Style::new()
             .add_modifier(Modifier::UNDERLINED)
@@ -41,7 +41,7 @@ pub fn rule(song: &Song, track: usize) -> Style {
 
 /// A name in a style, with the track's rule under it: under its text, not the spaces either side,
 /// so the rule is as long as the name.
-pub fn ruled(song: &Song, track: usize, name: &str, style: Style) -> Vec<Span<'static>> {
+pub(crate) fn ruled(song: &Song, track: usize, name: &str, style: Style) -> Vec<Span<'static>> {
     let body = name.trim();
     let before = name.len() - name.trim_start().len();
     let after = name.len() - before - body.len();

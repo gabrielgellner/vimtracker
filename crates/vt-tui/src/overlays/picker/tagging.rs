@@ -13,7 +13,7 @@ use crate::overlays::picker::explorer::{self, Kind};
 use crate::overlays::picker::{KitChoice, Pick};
 
 /// Tags as the status line lists them, each after a `#`.
-pub fn listed(tags: &[Tag]) -> String {
+pub(crate) fn listed(tags: &[Tag]) -> String {
     let names: Vec<String> = tags.iter().map(|tag| format!("#{}", tag.name)).collect();
     names.join(" ")
 }

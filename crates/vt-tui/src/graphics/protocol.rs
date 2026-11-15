@@ -18,7 +18,7 @@ use super::encoding::png;
 pub(crate) const PLACEHOLDER: char = '\u{10EEEE}';
 /// The most characters an image can cover across or down: one for each mark that numbers a row or a
 /// column.
-pub const MOST_CELLS: usize = 297;
+pub(crate) const MOST_CELLS: usize = 297;
 /// The marks that give a placeholder's row and column, all of kitty's `rowcolumn-diacritics.txt`,
 /// which Ghostty's `graphics_unicode.zig` has in the same order.
 pub(crate) const POSITIONS: [char; MOST_CELLS] = [
@@ -350,7 +350,7 @@ fn command(out: &mut impl Write, controls: &str, data: &[u8]) -> io::Result<()> 
 }
 
 /// A PNG to send, and how many characters it covers.
-pub struct Image<'a> {
+pub(crate) struct Image<'a> {
     pub id: u32,
     pub png: &'a [u8],
     pub columns: usize,
@@ -358,7 +358,7 @@ pub struct Image<'a> {
 }
 
 /// Send an image, in pieces. `q=2` keeps the terminal from answering, as its answers would arrive as key presses.
-pub fn transmit(out: &mut impl Write, image: &Image) -> io::Result<()> {
+pub(crate) fn transmit(out: &mut impl Write, image: &Image) -> io::Result<()> {
     let encoded = STANDARD.encode(image.png);
     let mut chunks = encoded.as_bytes().chunks(CHUNK).peekable();
     let mut first = true;
@@ -411,7 +411,12 @@ pub struct Placement {
 /// An image can be placed in many places at once, each under a placement id of its own. It's
 /// drawn above the text, and the terminal's cursor is put back where it was. An offset down of
 /// none is left out, as the sample page's lines and marks have.
-pub fn place_at(out: &mut impl Write, id: u32, placement: u32, at: Placement) -> io::Result<()> {
+pub(crate) fn place_at(
+    out: &mut impl Write,
+    id: u32,
+    placement: u32,
+    at: Placement,
+) -> io::Result<()> {
     let Placement {
         column,
         row,
@@ -434,17 +439,17 @@ pub fn place_at(out: &mut impl Write, id: u32, placement: u32, at: Placement) ->
 }
 
 /// Take one placement of an image off the screen, keeping the image to place again.
-pub fn unplace(out: &mut impl Write, id: u32, placement: u32) -> io::Result<()> {
+pub(crate) fn unplace(out: &mut impl Write, id: u32, placement: u32) -> io::Result<()> {
     command(out, &format!("a=d,d=i,i={id},p={placement},q=2"), &[])
 }
 
 /// Take every placement of an image off the screen, keeping the image to place again.
-pub fn unplace_all(out: &mut impl Write, id: u32) -> io::Result<()> {
+pub(crate) fn unplace_all(out: &mut impl Write, id: u32) -> io::Result<()> {
     command(out, &format!("a=d,d=i,i={id},q=2"), &[])
 }
 
 /// Have the terminal forget an image, with every placement of it.
-pub fn forget(out: &mut impl Write, id: u32) -> io::Result<()> {
+pub(super) fn forget(out: &mut impl Write, id: u32) -> io::Result<()> {
     command(out, &format!("a=d,d=I,i={id},q=2"), &[])
 }
 
@@ -472,7 +477,7 @@ pub(super) fn answer(reply: &[u8]) -> Option<bool> {
 /// Whether the terminal draws images with the graphics protocol. It asks the terminal to take a PNG
 /// of one dot and not show it, as the program's own images are, and reads the answer before
 /// anything else reads the keyboard.
-pub fn supports_graphics() -> io::Result<bool> {
+pub(crate) fn supports_graphics() -> io::Result<bool> {
     let mut tty = OpenOptions::new().read(true).write(true).open("/dev/tty")?;
     let mut reader: File = tty.try_clone()?;
     terminal::enable_raw_mode()?;

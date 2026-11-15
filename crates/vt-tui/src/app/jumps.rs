@@ -10,7 +10,7 @@ const JUMP_LIMIT: usize = 100;
 
 /// Somewhere `Ctrl-O` can go back to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Place {
+pub(crate) struct Place {
     view: View,
     cursor: Cursor,
     /// Where on the track page or the mixer, as a jump can land on another of their settings.

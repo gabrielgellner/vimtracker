@@ -27,7 +27,7 @@ const CELLS: u16 = toggle::WIDTH as u16;
 /// green on and faint off as `toggle::style` has them, dim where it does nothing, or the cursor's.
 /// Each look is one picture, sent once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Look {
+pub(crate) struct Look {
     pub on: bool,
     pub color: [u8; 3],
 }
@@ -42,7 +42,7 @@ const FILL: f32 = 0.4;
 /// glyph found is hidden in its cell, drawn in its background's colour, for the picture placed
 /// over it. A glyph whose spaces have gone, as under the edge of a window drawn over it, is left as
 /// it is.
-pub fn find(buffer: &mut Buffer) -> BTreeMap<(u16, u16), Look> {
+pub(super) fn find(buffer: &mut Buffer) -> BTreeMap<(u16, u16), Look> {
     let area = buffer.area;
     let mut found = BTreeMap::new();
     for y in area.top()..area.bottom() {
@@ -91,7 +91,7 @@ pub fn find(buffer: &mut Buffer) -> BTreeMap<(u16, u16), Look> {
 /// the character's height, which in most fonts is what sets it: 41 by 23 pixels in characters of
 /// 15 by 39. Its outline, an eighth of its height, and its knob are solid,
 /// with a gap between them, and on, its inside is filled part way.
-pub fn picture(look: Look, cell: (usize, usize)) -> Plot {
+pub(super) fn picture(look: Look, cell: (usize, usize)) -> Plot {
     let (width, height) = (usize::from(CELLS) * cell.0.max(1), cell.1.max(1));
     let mut plot = Plot::new(width, height);
     let end = (cell.0 as f32 * 0.1).round().max(1.0);
@@ -125,7 +125,7 @@ pub fn picture(look: Look, cell: (usize, usize)) -> Plot {
 }
 
 /// A switch's picture as a PNG, for characters of this size.
-pub fn png(look: Look, cell: (usize, usize)) -> Vec<u8> {
+pub(super) fn png(look: Look, cell: (usize, usize)) -> Vec<u8> {
     picture(look, cell).png(look.color)
 }
 

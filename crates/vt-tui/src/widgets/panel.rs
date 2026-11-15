@@ -33,19 +33,24 @@ impl Part {
 
 /// A panel's parts, left to right.
 #[derive(Default)]
-pub struct GraphicPanel {
+pub(crate) struct GraphicPanel {
     parts: Vec<Part>,
 }
 
 impl GraphicPanel {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
     /// The same with a box after the others, round these lines, this wide inside, with a caption
     /// in its bottom border or not.
     #[must_use]
-    pub fn boxed(mut self, lines: Vec<Line<'static>>, width: u16, caption: Option<&str>) -> Self {
+    pub(crate) fn boxed(
+        mut self,
+        lines: Vec<Line<'static>>,
+        width: u16,
+        caption: Option<&str>,
+    ) -> Self {
         self.parts.push(Part {
             lines,
             width,
@@ -58,7 +63,7 @@ impl GraphicPanel {
     /// The same with lines right after the last box, against it, in line with the rows inside it,
     /// such as a meter's scale.
     #[must_use]
-    pub fn beside(mut self, lines: Vec<Line<'static>>, width: u16) -> Self {
+    pub(crate) fn beside(mut self, lines: Vec<Line<'static>>, width: u16) -> Self {
         self.parts.push(Part {
             lines,
             width,
@@ -69,7 +74,7 @@ impl GraphicPanel {
     }
 
     /// Whether it has nothing to show.
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.parts.is_empty()
     }
 
@@ -83,13 +88,13 @@ impl GraphicPanel {
     }
 
     /// How wide it is, with its boxes' edges and the gaps between them.
-    pub fn width(&self) -> u16 {
+    pub(crate) fn width(&self) -> u16 {
         let parts: u16 = self.parts.iter().map(Part::outer).sum();
         parts + self.gaps().sum::<u16>()
     }
 
     /// How tall it is, its tallest box with its edges.
-    pub fn height(&self) -> u16 {
+    pub(crate) fn height(&self) -> u16 {
         let lines = self.parts.iter().map(|part| part.lines.len());
         lines.max().map_or(0, |lines| lines as u16 + 2)
     }
@@ -101,7 +106,7 @@ impl GraphicPanel {
 
     /// Where the inside of its first box starts, drawn in an area: the character at the top left
     /// of a picture in it, for the terminal to place something over it.
-    pub fn inside_at(&self, area: Rect) -> (u16, u16) {
+    pub(crate) fn inside_at(&self, area: Rect) -> (u16, u16) {
         (area.x + 1, self.top(area) + 1)
     }
 }

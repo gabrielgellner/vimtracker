@@ -2,8 +2,8 @@
 //! `Down` going back through what was run before, as Vim's history does, and `C-r` rolling a new
 //! random name on a name line.
 
-pub mod completion;
-pub mod history;
+pub(crate) mod completion;
+pub(crate) mod history;
 pub mod parse;
 
 use ratatui::crossterm::event::KeyCode;

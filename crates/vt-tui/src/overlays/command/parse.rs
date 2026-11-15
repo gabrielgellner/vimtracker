@@ -30,7 +30,7 @@ pub enum PresetLine {
 }
 
 /// `:preset`'s words.
-pub const PRESET_WORDS: [&str; 2] = ["save", "load"];
+pub(crate) const PRESET_WORDS: [&str; 2] = ["save", "load"];
 
 /// Read `:preset`'s argument, or `:preset!`'s, which only saves.
 fn preset(argument: &str, force: bool) -> Result<Line, LineError> {
@@ -250,12 +250,12 @@ pub enum SampleChange {
 }
 
 /// The words `:sample` takes to change the track's sample, rather than a file to load.
-pub const SAMPLE_WORDS: [&str; 9] = [
+pub(crate) const SAMPLE_WORDS: [&str; 9] = [
     "start", "end", "loop", "reverse", "fade", "gain", "tune", "bars", "steps",
 ];
 
 /// The most bars `:sample bars` takes.
-pub const MOST_BARS: u16 = 256;
+pub(crate) const MOST_BARS: u16 = 256;
 
 /// A change to the slices of the sample the current track plays, from `:slice`. A slice's own
 /// setting that's none plays as the entry does.
@@ -285,7 +285,7 @@ pub enum SliceChange {
 }
 
 /// The words `:slice` takes, beside a number of slices.
-pub const SLICE_WORDS: [&str; 9] = [
+pub(crate) const SLICE_WORDS: [&str; 9] = [
     "clear",
     "transients",
     "beat",
@@ -298,10 +298,10 @@ pub const SLICE_WORDS: [&str; 9] = [
 ];
 
 /// What `:slice beat` cuts by with no length: a sixteenth, a step.
-pub const DEFAULT_BEAT: u32 = 16;
+pub(crate) const DEFAULT_BEAT: u32 = 16;
 
 /// The shortest note `:slice beat` takes, as `1/128`.
-pub const SHORTEST_BEAT: u32 = 128;
+pub(crate) const SHORTEST_BEAT: u32 = 128;
 
 /// One end of a range of a sample's frames, as Vim's addresses name lines.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -336,7 +336,7 @@ fn address(text: &str) -> Option<(Address, &str)> {
 
 /// A command line's range, if it starts with one, as `'<,'>slice transients` does, and the rest of
 /// it. It's an error if it starts as a range but isn't one.
-pub fn split_range(text: &str) -> Result<(Option<SliceRange>, &str), LineError> {
+pub(crate) fn split_range(text: &str) -> Result<(Option<SliceRange>, &str), LineError> {
     let text = text.trim_start();
     if let Some(rest) = text.strip_prefix('%') {
         return Ok((Some(SliceRange::Whole), rest.trim_start()));
@@ -362,7 +362,7 @@ fn note_length(text: &str) -> Option<u32> {
 }
 
 /// The most an entry's gain can be moved by `:sample gain`, in dB either way.
-pub const MOST_SAMPLE_DB: f32 = 24.0;
+pub(crate) const MOST_SAMPLE_DB: f32 = 24.0;
 
 /// A time as `:sample` takes it, in microseconds: seconds, as `1.5` or `1.5s`, or milliseconds,
 /// as `250ms`.
@@ -673,7 +673,7 @@ pub(crate) fn swing(text: &str) -> Option<GrooveId> {
 
 /// A groove's name as the command line writes it: lower case, with a hyphen for each space, so
 /// `Swing 66` is `swing-66`.
-pub fn groove_word(id: GrooveId) -> String {
+pub(crate) fn groove_word(id: GrooveId) -> String {
     id.name().to_lowercase().replace(' ', "-")
 }
 
@@ -741,7 +741,7 @@ fn bloom(argument: &str) -> Result<Line, LineError> {
 
 /// `:render`'s flags, which its parser reads and Tab completes. `--split` renders stems of each
 /// track rather than each group, so it means `--stems` too.
-pub const RENDER_FLAGS: [&str; 4] = ["--rows", "--tail", "--stems", "--split"];
+pub(crate) const RENDER_FLAGS: [&str; 4] = ["--rows", "--tail", "--stems", "--split"];
 
 /// Read `:render`'s arguments. Anything that isn't a flag is the path, which can hold spaces.
 fn render(argument: &str) -> Result<Line, LineError> {
@@ -909,8 +909,8 @@ pub struct Switch {
     pub name: &'static str,
     pub short: &'static str,
     /// The opposite's name and short name, which switch it off.
-    pub opposite: &'static str,
-    pub opposite_short: &'static str,
+    pub(crate) opposite: &'static str,
+    pub(crate) opposite_short: &'static str,
     /// What switching it on and off does.
     pub on: &'static str,
     pub off: &'static str,
@@ -936,7 +936,7 @@ impl Switch {
 }
 
 /// Every option `:set` switches by name, which the parser reads and Tab completes.
-pub const SWITCHES: [Switch; 1] = [Switch {
+pub(crate) const SWITCHES: [Switch; 1] = [Switch {
     name: "readonly",
     short: "ro",
     opposite: "readwrite",
@@ -952,7 +952,7 @@ fn optional_path(argument: &str) -> Option<PathBuf> {
 }
 
 /// Every command, in the order Tab lists them, which the parser reads and Tab completes.
-pub const COMMANDS: [Command; 49] = [
+pub(crate) const COMMANDS: [Command; 49] = [
     Command {
         name: "w",
         meaning: "Save, or save to a new folder",
@@ -1391,7 +1391,7 @@ pub const COMMANDS: [Command; 49] = [
 ];
 
 /// The word after a kit that puts its sounds on tracks.
-pub const KIT_ALL: &str = "all";
+pub(crate) const KIT_ALL: &str = "all";
 
 /// The command with this name.
 pub fn find(name: &str) -> Option<&'static Command> {

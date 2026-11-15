@@ -39,7 +39,7 @@ use crate::app::App;
 use crate::input::mode::View;
 
 /// The longest a recording can be, in seconds: ten minutes.
-pub const MOST_SECONDS: u64 = 600;
+pub(crate) const MOST_SECONDS: u64 = 600;
 
 /// How far ahead of what's written chunks are made, in seconds, so a slow frame here never leaves
 /// the recorder without room.
@@ -96,7 +96,7 @@ pub struct Live {
     latency: u64,
     /// Whether the recorder has started writing it, and whether it's been asked to stop.
     pub started: bool,
-    pub stopping: bool,
+    pub(crate) stopping: bool,
     /// Whether it was started from the sample page, which shows it once it's done.
     from_page: bool,
 }
@@ -476,7 +476,7 @@ impl App {
 
     /// The recording's seconds so far, and its entry's number, for the status line: none while
     /// nothing records, and no seconds while it waits to start.
-    pub fn sampling_shown(&self) -> Option<(u8, Option<f64>)> {
+    pub(crate) fn sampling_shown(&self) -> Option<(u8, Option<f64>)> {
         let live = self.sampling.live.as_ref()?;
         let seconds = live.started.then(|| {
             let written = live

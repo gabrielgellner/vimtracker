@@ -7,10 +7,10 @@ use vt_model::grid::{GRID_COLUMNS, GRID_ROWS, Grid};
 use super::Control;
 
 /// How many columns of settings a device has, its grid's.
-pub const DEVICE_COLUMNS: usize = GRID_COLUMNS;
+pub(crate) const DEVICE_COLUMNS: usize = GRID_COLUMNS;
 
 /// How many rows the cursor goes through in a device: its title, then its grid's.
-pub const DEVICE_ROWS: usize = 1 + GRID_ROWS;
+pub(crate) const DEVICE_ROWS: usize = 1 + GRID_ROWS;
 
 /// How much of a rack's width a device takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -31,7 +31,7 @@ pub struct DeviceSpec {
     /// Which device it is, such as a slot's digit, dim at the start of its title.
     pub identity: String,
     /// Whether `b` can switch it out, which gives its title a switch.
-    pub switchable: bool,
+    pub(crate) switchable: bool,
     /// How much of the rack's width it takes. Two half-width devices in a row share a band of the
     /// rack, the first on the left.
     pub width: DeviceWidth,
@@ -85,7 +85,7 @@ pub struct DeviceCursor {
 /// Where a device sits in its rack: in which band, top to bottom, and on which side, 0 for the
 /// left or the whole width and 1 for the right.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RackPlace {
+pub(crate) struct RackPlace {
     pub band: usize,
     pub side: usize,
 }
@@ -93,7 +93,7 @@ pub struct RackPlace {
 /// Where each device sits in a rack, in the order they're given, which is the order they're read
 /// in: a full-width device has a band of its own, and a half-width one goes beside the one before
 /// it if that's a half on the left, and starts a band on the left otherwise.
-pub fn rack_places(devices: &[DeviceSpec]) -> Vec<RackPlace> {
+pub(crate) fn rack_places(devices: &[DeviceSpec]) -> Vec<RackPlace> {
     let mut places: Vec<RackPlace> = Vec::with_capacity(devices.len());
     for (at, device) in devices.iter().enumerate() {
         let beside = at > 0
@@ -118,7 +118,11 @@ pub fn rack_places(devices: &[DeviceSpec]) -> Vec<RackPlace> {
 
 /// The device above or below one in its rack: the one on the same side in the band there, or that
 /// band's only one, if there's a band there.
-pub fn device_above_below(devices: &[DeviceSpec], device: usize, below: bool) -> Option<usize> {
+pub(crate) fn device_above_below(
+    devices: &[DeviceSpec],
+    device: usize,
+    below: bool,
+) -> Option<usize> {
     let places = rack_places(devices);
     let here = *places.get(device)?;
     let band = if below {
@@ -137,7 +141,7 @@ pub fn device_above_below(devices: &[DeviceSpec], device: usize, below: bool) ->
 }
 
 /// The device beside one in its band, on its right or its left, if there's one there.
-pub fn device_beside(devices: &[DeviceSpec], device: usize, right: bool) -> Option<usize> {
+pub(crate) fn device_beside(devices: &[DeviceSpec], device: usize, right: bool) -> Option<usize> {
     let places = rack_places(devices);
     let here = *places.get(device)?;
     let side = if right {
@@ -150,7 +154,7 @@ pub fn device_beside(devices: &[DeviceSpec], device: usize, right: bool) -> Opti
 
 /// The devices in one's column of the rack, top to bottom: those above it, it, and those below it,
 /// each the one above or below the last.
-pub fn rack_column(devices: &[DeviceSpec], device: usize) -> Vec<usize> {
+pub(crate) fn rack_column(devices: &[DeviceSpec], device: usize) -> Vec<usize> {
     let mut column = vec![device];
     while let Some(above) = device_above_below(devices, column[column.len() - 1], false) {
         column.push(above);

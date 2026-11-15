@@ -46,13 +46,13 @@ pub struct AudioStats {
     pub lost: AtomicBool,
     /// How long from the callback to the sound leaving the device, in microseconds, as the device
     /// reports it: the buffer and the device's own delay, which on Bluetooth is most of it.
-    pub latency: AtomicU64,
+    pub(crate) latency: AtomicU64,
     /// How many times slower than full speed the system is running the callback, in thousandths,
     /// as it last looked, or 0 before it has.
     pub slowdown: AtomicU64,
     /// How long from the sound reaching the input to its callback, in microseconds, as the input
     /// device reports it, while one is open.
-    pub input_latency: AtomicU64,
+    pub(crate) input_latency: AtomicU64,
 }
 
 impl AudioStats {
@@ -135,9 +135,9 @@ impl Default for SlowdownReadout {
 
 impl SlowdownReadout {
     /// The leaf shows once the smoothed factor is over this.
-    pub const SHOW_ABOVE: f64 = 1.6;
+    pub(crate) const SHOW_ABOVE: f64 = 1.6;
     /// And goes once it's under this.
-    pub const HIDE_BELOW: f64 = 1.3;
+    pub(crate) const HIDE_BELOW: f64 = 1.3;
     /// How quickly the factor follows the looks: it goes nearly two thirds of the way to a new
     /// one in this long.
     const SETTLING: Duration = Duration::from_secs(2);
@@ -173,7 +173,7 @@ impl SlowdownReadout {
 
     /// What the leaf means, for a CPU figure, while it shows: how slowed, and the figure at full
     /// speed, as `slowed ×3.6 by power saving, about 8% at full speed`.
-    pub fn explanation(&self, cpu: u64) -> Option<String> {
+    pub(crate) fn explanation(&self, cpu: u64) -> Option<String> {
         if !self.slowed {
             return None;
         }
@@ -202,7 +202,7 @@ impl SlowdownReadout {
 /// Start working out the slowdown check's time at full speed on this machine, on a thread of its
 /// own that asks for the performance cores, for 100 ms while other work goes on. Join it before
 /// audio starts.
-pub fn measure_full_speed() -> std::thread::JoinHandle<Duration> {
+pub(crate) fn measure_full_speed() -> std::thread::JoinHandle<Duration> {
     std::thread::spawn(|| {
         ask_for_performance_cores();
         full_speed_here()
@@ -277,7 +277,7 @@ fn read_full_speed(text: &str) -> Option<Duration> {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PowerState {
     /// Low Power Mode is on.
-    pub low_power: bool,
+    pub(crate) low_power: bool,
     /// The Mac is hot enough that the system is slowing it to cool down: a thermal state of
     /// serious or critical.
     pub hot: bool,
@@ -444,7 +444,7 @@ pub fn devices() -> Vec<DeviceInfo> {
 
 /// Every input the recorder can record: one with f32 at any rate, in mono or stereo. The rates
 /// listed are those it can match the output at.
-pub fn input_devices() -> Vec<DeviceInfo> {
+pub(crate) fn input_devices() -> Vec<DeviceInfo> {
     let host = cpal::default_host();
     let default = host
         .default_input_device()
@@ -708,37 +708,37 @@ impl Output {
 
 /// What one callback of a measured stream took, for `vimtracker bench --device`.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct CallbackTime {
+pub(crate) struct CallbackTime {
     /// The frames the device asked for.
     pub frames: u32,
     /// The whole callback, as the status line times it.
-    pub callback: Duration,
+    pub(crate) callback: Duration,
     /// The callback's end of the queues, the engine and the report.
     pub process: Duration,
     /// The engine alone.
     pub engine: Duration,
     /// The callback's thread's own CPU time, which leaves out any time it was put aside for
     /// another thread.
-    pub cpu: Duration,
+    pub(crate) cpu: Duration,
     /// The slowdown check's look, if it took one after this callback.
-    pub look: Option<Look>,
+    pub(crate) look: Option<Look>,
     /// How long the check took, looking or not.
-    pub looking: Duration,
+    pub(crate) looking: Duration,
 }
 
 /// How the system runs the callback's thread, as it says from inside the first callback.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct CallbackThread {
+pub(crate) struct CallbackThread {
     /// Whether it has a real-time policy: so much computation in each period, before a deadline.
-    pub real_time: bool,
+    pub(crate) real_time: bool,
     /// That policy's period, computation and constraint, in microseconds.
-    pub period_us: u32,
-    pub computation_us: u32,
-    pub constraint_us: u32,
+    pub(crate) period_us: u32,
+    pub(crate) computation_us: u32,
+    pub(crate) constraint_us: u32,
 }
 
 /// The CPU time the calling thread has had.
-pub fn thread_cpu_time() -> Duration {
+pub(crate) fn thread_cpu_time() -> Duration {
     let mut time = libc::timespec {
         tv_sec: 0,
         tv_nsec: 0,
@@ -792,7 +792,7 @@ fn this_thread() -> CallbackThread {
 }
 
 /// What a measured stream sends back.
-pub struct Measured {
+pub(crate) struct Measured {
     /// Each callback's times, as they come.
     pub times: rtrb::Consumer<CallbackTime>,
     /// The thread the callbacks run on, once the first has.
@@ -809,7 +809,7 @@ impl Output {
     /// Play through the device as [`Output::start`] does, timing each callback, but send the
     /// device only silence. For `vimtracker bench --device`, which hears nothing. The times of
     /// up to `blocks` callbacks wait to be read.
-    pub fn start_measured(
+    pub(crate) fn start_measured(
         self,
         realtime: Realtime,
         blocks: usize,

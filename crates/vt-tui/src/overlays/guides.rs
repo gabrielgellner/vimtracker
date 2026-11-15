@@ -3,7 +3,7 @@
 //! A line that's an HTML comment, as the anchors the manual includes a guide in pieces by, isn't
 //! shown.
 
-pub mod draw;
+pub(crate) mod draw;
 
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -17,7 +17,7 @@ pub struct Guide {
 }
 
 /// Every guide, in the order to learn them.
-pub const GUIDES: [Guide; 14] = [
+pub(crate) const GUIDES: [Guide; 14] = [
     Guide {
         source: include_str!("../../guides/first-loop.md"),
     },

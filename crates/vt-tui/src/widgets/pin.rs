@@ -30,7 +30,7 @@ use crate::widgets::theme;
 const LETTERS: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 /// A widget drawn into an empty buffer this big.
-pub fn drawn(widget: impl Widget, width: u16, height: u16) -> Buffer {
+pub(crate) fn drawn(widget: impl Widget, width: u16, height: u16) -> Buffer {
     let area = Rect::new(0, 0, width, height);
     let mut buffer = Buffer::empty(area);
     widget.render(area, &mut buffer);
@@ -38,7 +38,7 @@ pub fn drawn(widget: impl Widget, width: u16, height: u16) -> Buffer {
 }
 
 /// Part of a buffer, as a buffer of its own.
-pub fn cut(buffer: &Buffer, area: Rect) -> Buffer {
+pub(crate) fn cut(buffer: &Buffer, area: Rect) -> Buffer {
     let mut part = Buffer::empty(Rect::new(0, 0, area.width, area.height));
     for y in 0..area.height {
         for x in 0..area.width {
@@ -49,7 +49,7 @@ pub fn cut(buffer: &Buffer, area: Rect) -> Buffer {
 }
 
 /// A buffer as lines: each row's text and its style key, then what each letter in the keys means.
-pub fn lines(buffer: &Buffer) -> Vec<String> {
+pub(crate) fn lines(buffer: &Buffer) -> Vec<String> {
     let area = buffer.area;
     let mut styles: Vec<Style> = Vec::new();
     let mut lines = Vec::new();
@@ -146,7 +146,7 @@ fn colour_name(colour: Color) -> String {
 /// That a buffer draws these lines, as [`lines`] gives them. If it doesn't, what it draws is
 /// printed in the same form, to be checked by eye and pasted in.
 #[track_caller]
-pub fn assert_drawn(buffer: &Buffer, expected: &[&str]) {
+pub(crate) fn assert_drawn(buffer: &Buffer, expected: &[&str]) {
     let drawn = lines(buffer);
     if drawn != expected {
         let pasted: String = drawn
@@ -158,12 +158,12 @@ pub fn assert_drawn(buffer: &Buffer, expected: &[&str]) {
 }
 
 /// An app with a song of two tracks and a real engine, as the app's tests start with.
-pub fn app() -> (App, Realtime) {
+pub(crate) fn app() -> (App, Realtime) {
     app_with(Song::new(2))
 }
 
 /// An app with this song and a real engine.
-pub fn app_with(song: Song) -> (App, Realtime) {
+pub(crate) fn app_with(song: Song) -> (App, Realtime) {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, realtime) = connect(Engine::new(48_000, version));
@@ -171,7 +171,7 @@ pub fn app_with(song: Song) -> (App, Realtime) {
 }
 
 /// Each key pressed in turn, a space being the leader.
-pub fn press(app: &mut App, keys: &str) {
+pub(crate) fn press(app: &mut App, keys: &str) {
     let now = Instant::now();
     for c in keys.chars() {
         app.key(Key::char(c), now);
@@ -179,6 +179,6 @@ pub fn press(app: &mut App, keys: &str) {
 }
 
 /// A key that isn't a character, such as Enter or Esc.
-pub fn special(app: &mut App, code: KeyCode) {
+pub(crate) fn special(app: &mut App, code: KeyCode) {
     app.key(Key::new(code), Instant::now());
 }

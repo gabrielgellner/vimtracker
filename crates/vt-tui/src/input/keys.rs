@@ -8,7 +8,7 @@ use thiserror::Error;
 /// What the program asks of the kitty keyboard protocol, from start to quitting: every key as an
 /// escape code, with whether it's a press, a repeat or a release, and the shifted character, so
 /// `>` reads as `>`.
-pub const KEYBOARD_FLAGS: KeyboardEnhancementFlags =
+pub(crate) const KEYBOARD_FLAGS: KeyboardEnhancementFlags =
     KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
         .union(KeyboardEnhancementFlags::REPORT_EVENT_TYPES)
         .union(KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS)
@@ -31,15 +31,6 @@ pub struct Key {
     /// moment early still types them.
     pub shift: bool,
 }
-
-/// The leader key.
-pub const LEADER: Key = Key {
-    code: KeyCode::Char(' '),
-    ctrl: false,
-    alt: false,
-    command: false,
-    shift: false,
-};
 
 impl Key {
     /// A plain key.
@@ -93,7 +84,7 @@ impl Key {
 
     /// A key the program never acts on: one that only changes others, as Shift and Caps Lock do,
     /// which the protocol reports as keys of their own, or a media key, left to the system.
-    pub fn ignored(self) -> bool {
+    pub(crate) fn ignored(self) -> bool {
         matches!(
             self.code,
             KeyCode::Modifier(_)
@@ -106,7 +97,7 @@ impl Key {
 
     /// The key on the keyboard, whatever was held with it: `:` is `;`, and `Shift-Tab` is `Tab`.
     /// A key can be let go after Shift, so its press and release can read differently.
-    pub fn physical(self) -> KeyCode {
+    pub(crate) fn physical(self) -> KeyCode {
         match self.code {
             KeyCode::Char(c) => KeyCode::Char(unshift_of(c)),
             KeyCode::BackTab => KeyCode::Tab,

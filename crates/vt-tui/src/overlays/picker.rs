@@ -33,17 +33,18 @@ use crate::services::audio::AudioChoice;
 
 pub mod draw;
 pub mod explorer;
-pub mod exploring;
-pub mod picking;
-pub mod places;
-pub mod tagging;
+pub(crate) mod exploring;
+pub(crate) mod picking;
+pub(crate) mod places;
+pub(crate) mod tagging;
 mod tree;
-pub use tree::{Root, Tree};
+pub use tree::Root;
+pub(crate) use tree::Tree;
 
 /// How many rows the list keeps in view beyond the cursor, as Vim's `scrolloff` does, so moving
 /// down a long list shows what's coming. It's the context Vim's popup menu keeps, and is shrunk to
 /// fit a short list, as snacks' list shrinks the window's `scrolloff`.
-pub const SCROLL_MARGIN: usize = 3;
+pub(crate) const SCROLL_MARGIN: usize = 3;
 
 /// One of a kit's sounds as it's chosen: its file, what its bank entry is called and how it
 /// plays, and the label its track takes as its name and its choke group.
@@ -256,7 +257,7 @@ impl Item {
     }
 
     /// With its name drawn in this style.
-    pub fn styled(self, style: Style) -> Self {
+    pub(crate) fn styled(self, style: Style) -> Self {
         Self { style, ..self }
     }
 
@@ -285,7 +286,7 @@ impl Item {
     }
 
     /// With these tags.
-    pub fn tagged(self, tags: Vec<Tag>) -> Self {
+    pub(crate) fn tagged(self, tags: Vec<Tag>) -> Self {
         Self { tags, ..self }
     }
 
@@ -501,7 +502,7 @@ impl Picker {
     }
 
     /// Open on the item already chosen, unfolding its category, and mark it.
-    pub fn opened_on(mut self, item: Option<usize>) -> Self {
+    pub(crate) fn opened_on(mut self, item: Option<usize>) -> Self {
         self.current = item.filter(|item| *item < self.items.len());
         if let Some(item) = self.current {
             self.reveal(item);
@@ -510,7 +511,7 @@ impl Picker {
     }
 
     /// Open on an item without marking it as chosen, such as the first of a kit's sounds.
-    pub fn revealing(mut self, item: Option<usize>) -> Self {
+    pub(crate) fn revealing(mut self, item: Option<usize>) -> Self {
         if let Some(item) = item.filter(|item| *item < self.items.len()) {
             self.reveal(item);
         }
@@ -518,7 +519,7 @@ impl Picker {
     }
 
     /// Open on the search, with this already typed.
-    pub fn searching(mut self, query: &str) -> Self {
+    pub(crate) fn searching(mut self, query: &str) -> Self {
         self.focus = Focus::Search;
         if !query.is_empty() {
             self.set_query(query.to_owned());
@@ -535,7 +536,7 @@ impl Picker {
     }
 
     /// Whether any item is in a category.
-    pub fn has_categories(&self) -> bool {
+    pub(crate) fn has_categories(&self) -> bool {
         !self.categories.is_empty()
     }
 
@@ -563,7 +564,7 @@ impl Picker {
 
     /// Where a row's matched letters are in its label, then its meaning, then its category, each
     /// after a space.
-    pub fn matched(&self, row: usize) -> &[u32] {
+    pub(crate) fn matched(&self, row: usize) -> &[u32] {
         self.matched.get(row).map_or(&[], Vec::as_slice)
     }
 
@@ -600,7 +601,7 @@ impl Picker {
     }
 
     /// How many items match the search, which is all of them before typing.
-    pub fn matching(&self) -> usize {
+    pub(crate) fn matching(&self) -> usize {
         if self.tree.is_some() && self.is_searching() {
             self.hits.iter().filter(|hit| **hit).count()
         } else if self.is_searching() {
@@ -611,7 +612,7 @@ impl Picker {
     }
 
     /// Whether the list is the search's matches rather than the tree.
-    pub fn is_searching(&self) -> bool {
+    pub(crate) fn is_searching(&self) -> bool {
         !self.query.trim().is_empty()
     }
 
@@ -628,19 +629,19 @@ impl Picker {
     }
 
     /// Move the cursor, stopping at the ends.
-    pub fn move_highlight(&mut self, by: isize) {
+    pub(crate) fn move_highlight(&mut self, by: isize) {
         let last = self.rows.len().saturating_sub(1);
         self.selected = self.selected.saturating_add_signed(by).min(last);
     }
 
     /// The first row shown.
-    pub fn first_shown(&self) -> usize {
+    pub(crate) fn first_shown(&self) -> usize {
         self.first_shown
     }
 
     /// Fit the list to the rows it's drawn in, which `zz` and `C-d` then go by, scrolling only as
     /// far as keeps the cursor in view with its margin.
-    pub fn scroll_within(&mut self, room: usize) {
+    pub(crate) fn scroll_within(&mut self, room: usize) {
         self.room = room;
         self.scroll(self.first_shown);
     }
@@ -685,7 +686,7 @@ impl Picker {
 
     /// Change the search. Matches are ranked best first, and an empty search goes back to the
     /// tree with the cursor still on what it was on.
-    pub fn set_query(&mut self, query: String) {
+    pub(crate) fn set_query(&mut self, query: String) {
         let kept = self.current_index();
         self.query = query;
         if self.tree.is_some() && !self.search().tags.is_empty() {
@@ -930,8 +931,10 @@ impl Picker {
 }
 
 /// The positions of the labels that match, best first. The order they came in breaks ties, so a
-/// list in order of recent use keeps that order, and an empty search keeps every label.
-pub fn rank(labels: &[&str], needle: &str) -> Vec<usize> {
+/// list in order of recent use keeps that order, and an empty search keeps every label. The
+/// tests' shorthand for [`rank_with_positions`].
+#[cfg(test)]
+pub(crate) fn rank(labels: &[&str], needle: &str) -> Vec<usize> {
     let texts: Vec<(&str, &str)> = labels.iter().map(|label| (*label, *label)).collect();
     rank_with_positions(&texts, needle)
         .into_iter()
@@ -939,13 +942,13 @@ pub fn rank(labels: &[&str], needle: &str) -> Vec<usize> {
         .collect()
 }
 
-/// [`rank`], for items found by more than their name: each is its name, then all the text a
+/// The positions of the items that match, best first, each found by more than its name: each is its name, then all the text a
 /// search looks through, which starts with the name, as an item's name, meaning and category do.
 /// Each word of the search matches on its own, its letters in order, so `pi sc` finds `Pitch in
 /// scale`. A name the search is, then one it starts, then one all its words are in, come before
 /// a match that needs the rest, so `note` takes `Note` before `Trig`, whose meaning says `note`.
 /// With where in each text its matched letters are, counted in characters.
-pub fn rank_with_positions(texts: &[(&str, &str)], needle: &str) -> Vec<(usize, Vec<u32>)> {
+pub(crate) fn rank_with_positions(texts: &[(&str, &str)], needle: &str) -> Vec<(usize, Vec<u32>)> {
     if needle.trim().is_empty() {
         return (0..texts.len()).map(|at| (at, Vec::new())).collect();
     }

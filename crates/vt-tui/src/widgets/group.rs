@@ -22,7 +22,7 @@ pub fn number(song: &Song, track: usize) -> Option<u8> {
 }
 
 /// A group's name, if it's been given one, rather than its letters, as `DRUMS` rather than `G1`.
-pub fn given_name(track: &Track) -> Option<&str> {
+pub(crate) fn given_name(track: &Track) -> Option<&str> {
     (track.is_group() && !track.name.is_empty() && track.name != track.kind.letter())
         .then_some(track.name.as_str())
 }
@@ -84,7 +84,7 @@ pub enum Switched {
 }
 
 impl Switched {
-    pub fn is_on(self) -> bool {
+    pub(crate) fn is_on(self) -> bool {
         self != Self::Off
     }
 

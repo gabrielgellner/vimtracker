@@ -30,7 +30,7 @@ fn frames(micros: u64, rate: u32) -> u64 {
 }
 
 /// A slice's pan as it's said: `C` in the middle, or how far to the left or right, as `25 L`.
-pub fn pan_text(pan: i8) -> String {
+pub(crate) fn pan_text(pan: i8) -> String {
     match pan {
         0 => "C".to_owned(),
         pan if pan < 0 => format!("{} L", pan.unsigned_abs()),
@@ -39,7 +39,7 @@ pub fn pan_text(pan: i8) -> String {
 }
 
 /// The bank entry a step plays: the one its own `SMP` locks, or else its track's `Sample`.
-pub fn entry_of_step(step: Option<&Step>, own: u8) -> u8 {
+pub(crate) fn entry_of_step(step: Option<&Step>, own: u8) -> u8 {
     step.and_then(|step| {
         step.fx
             .iter()
@@ -616,7 +616,7 @@ impl Services {
     /// What the status line says of a step's `SLI`: which slice of the sample the step plays,
     /// where it starts and how long it is, and for one by a letter, which slice the letter names,
     /// or that it names none, so the track's own plays.
-    pub fn slice_shown(&self, cell: FxSlot) -> String {
+    pub(crate) fn slice_shown(&self, cell: FxSlot) -> String {
         match (cell.slice_mark(), self.slice_of_lock(cell)) {
             (Some(letter), Ok(slice)) => format!("'{letter} names {}", self.slice_said(slice)),
             (Some(letter), Err(own)) => format!(
@@ -662,7 +662,7 @@ impl Services {
 
     /// What the Sound page says beside a track's `Slice`: how many slices its sample has, and
     /// where the one it plays starts, as `of 16 at 0.484 s`, or `whole` with none.
-    pub fn slice_choice(&self, track: &vt_model::song::Track) -> String {
+    pub(crate) fn slice_choice(&self, track: &vt_model::song::Track) -> String {
         let Some(entry) = self.song().bank.get(track.sample()) else {
             return "whole".to_owned();
         };

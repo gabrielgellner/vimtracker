@@ -33,10 +33,10 @@ use crate::widgets::theme;
 /// mono one.
 pub const WAVE_ROWS: u16 = 28;
 /// The rows above the waveform: the header, a gap and the ruler.
-pub const WAVE_TOP: u16 = 3;
+pub(crate) const WAVE_TOP: u16 = 3;
 /// The page's size on the author's screen. A smaller window shows part of it.
-pub const PAGE_WIDTH: u16 = 163;
-pub const PAGE_HEIGHT: u16 = WAVE_TOP + WAVE_ROWS + 5;
+pub(crate) const PAGE_WIDTH: u16 = 163;
+pub(crate) const PAGE_HEIGHT: u16 = WAVE_TOP + WAVE_ROWS + 5;
 /// The waveform's column either side of it.
 const MARGIN: u16 = 1;
 /// Where a point is shown in the ruler, above its line, when the terminal isn't placing its mark
@@ -48,7 +48,7 @@ const TICK_SPACING: f64 = 12.0;
 /// Where the waveform is on screen, for the cursor's line and the ruler's marks, which the
 /// terminal places itself.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WaveOnScreen {
+pub(crate) struct WaveOnScreen {
     /// The screen column of the waveform's first column, which is off the left when the page is
     /// scrolled.
     pub left: i32,
@@ -85,7 +85,7 @@ impl MarkKind {
     }
 
     /// How wide its line in the waveform is, in pixels, which is how wide the mark's tip is.
-    pub fn line_pixels(self) -> usize {
+    pub(crate) fn line_pixels(self) -> usize {
         match self {
             Self::Slice => SLICE_PIXELS,
             _ => POINT_PIXELS,
@@ -112,7 +112,7 @@ pub struct Mark {
 impl Mark {
     /// The pixel across its line starts at, counted from the waveform's left, for characters
     /// this wide, as the waveform draws the line. It's off the left for a frame before the view.
-    pub fn line_pixel(&self, state: &SamplePage, cell_width: usize) -> i64 {
+    pub(crate) fn line_pixel(&self, state: &SamplePage, cell_width: usize) -> i64 {
         let across = cell_width.max(1) as i128;
         ((i128::from(self.frame) - i128::from(state.first_frame())) * across)
             .div_euclid(i128::from(state.zoom.max(1))) as i64
@@ -131,7 +131,7 @@ impl Mark {
 
 /// How far a mark reaches either side of its line, in pixels, for characters this wide: a third
 /// of a character, so it's about as wide as `▾`, 12 pixels on the author's screen.
-pub fn mark_reach(cell_width: usize) -> usize {
+pub(crate) fn mark_reach(cell_width: usize) -> usize {
     (cell_width / 3).max(1)
 }
 
@@ -162,7 +162,7 @@ pub fn marks(shown: &Shown) -> Vec<Mark> {
 /// Whether the terminal places the ruler's marks at their lines' pixels, rather than the ruler
 /// drawing each as `▾` over its column: when the pictures are drawn and nothing is drawn over the
 /// page, which a placed image would show through.
-pub fn marks_placed(page: &SamplePage, ctx: &Ctx, now: Instant) -> bool {
+pub(crate) fn marks_placed(page: &SamplePage, ctx: &Ctx, now: Instant) -> bool {
     ctx.view() == View::Sample
         && page.wave_images().is_some()
         && page.cell_width.is_some()
@@ -172,17 +172,17 @@ pub fn marks_placed(page: &SamplePage, ctx: &Ctx, now: Instant) -> bool {
 /// Whether the terminal places the cursor and the playheads as thin lines at their frames' pixels,
 /// rather than the page drawing their columns' backgrounds: when the marks are placed and the
 /// cursor is a line, as `zc` has it, so the playheads follow the cursor's style.
-pub fn lines_placed(page: &SamplePage, ctx: &Ctx, now: Instant) -> bool {
+pub(crate) fn lines_placed(page: &SamplePage, ctx: &Ctx, now: Instant) -> bool {
     marks_placed(page, ctx, now) && page.cursor_line
 }
 
 /// The page's size in this much room: at least the author's screen's.
-pub fn page_size(area: Rect) -> (u16, u16) {
+pub(crate) fn page_size(area: Rect) -> (u16, u16) {
     (area.width.max(PAGE_WIDTH), area.height.max(PAGE_HEIGHT))
 }
 
 /// How many columns the waveform has on a page this wide.
-pub fn wave_columns(page_width: u16) -> usize {
+pub(crate) fn wave_columns(page_width: u16) -> usize {
     usize::from(page_width.saturating_sub(2 * MARGIN))
 }
 

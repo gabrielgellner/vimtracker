@@ -11,9 +11,9 @@ use vt_model::preset::PresetKind;
 use crate::overlays::picker::explorer::Purpose;
 
 /// The file's name, in the config folder.
-pub const PLACES_FILE: &str = "places.ron";
+pub(crate) const PLACES_FILE: &str = "places.ron";
 /// How many are kept of each kind, the oldest going first.
-pub const MAX_PLACES: usize = 3;
+pub(crate) const MAX_PLACES: usize = 3;
 
 /// The folders, newest first.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,7 +38,7 @@ pub struct RecentPlaces {
 
 impl RecentPlaces {
     /// Where they're kept, if there's a config folder.
-    pub fn default_path() -> Option<PathBuf> {
+    pub(crate) fn default_path() -> Option<PathBuf> {
         crate::services::config::config_folder().map(|folder| folder.join(PLACES_FILE))
     }
 

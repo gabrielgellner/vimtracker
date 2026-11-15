@@ -34,7 +34,7 @@ fn reachable(track: &Track, generator: &Generator) -> bool {
 pub(crate) struct HeardRows {
     pub rows: Vec<(usize, Step)>,
     pub heard: usize,
-    pub unheard: usize,
+    pub(crate) unheard: usize,
     /// The pass the last of them was heard on.
     pub pass: i64,
 }

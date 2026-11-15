@@ -6,7 +6,7 @@ use std::ops::Range;
 
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
-use ratatui::layout::{Constraint, Flex, Layout, Rect};
+use ratatui::layout::{Constraint, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, Row, Table, Widget};
@@ -14,65 +14,54 @@ use ratatui::widgets::{Cell, Row, Table, Widget};
 /// What stands in for the end of a value that doesn't fit.
 const CUT: &str = "…";
 
-/// A table's columns: how wide each is, and the room between them.
+/// A table's columns: how wide each is, side by side with no room between them.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Columns {
+pub(crate) struct Columns {
     widths: Vec<u16>,
-    spacing: u16,
     /// Whether the last column takes whatever room is left, rather than its width.
     open_ended: bool,
 }
 
 impl Columns {
     /// Columns of these widths, side by side.
-    pub fn new(widths: impl Into<Vec<u16>>) -> Self {
+    pub(crate) fn new(widths: impl Into<Vec<u16>>) -> Self {
         Self {
             widths: widths.into(),
-            spacing: 0,
             open_ended: false,
         }
     }
 
-    /// The same columns with this much room between each and the next.
-    #[must_use]
-    pub fn spaced(self, spacing: u16) -> Self {
-        Self { spacing, ..self }
-    }
-
     /// The same columns, the last taking whatever room is left, with its text never cut.
     #[must_use]
-    pub fn open_ended(self) -> Self {
+    pub(crate) fn open_ended(self) -> Self {
         Self {
             open_ended: true,
             ..self
         }
     }
 
-    /// How wide a cell is that starts in a column and spans some, with the room between them.
-    pub fn room(&self, first: usize, span: usize) -> usize {
+    /// How wide a cell is that starts in a column and spans some.
+    pub(crate) fn room(&self, first: usize, span: usize) -> usize {
         let last = first + span;
         if self.open_ended && last >= self.widths.len() {
             return usize::MAX;
         }
-        let widths: usize = self
-            .widths
+        self.widths
             .iter()
             .skip(first)
             .take(span)
             .map(|width| usize::from(*width))
-            .sum();
-        widths + usize::from(self.spacing) * span.saturating_sub(1)
+            .sum()
     }
 
     /// How wide the columns are together, leaving out an open end.
-    pub fn width(&self) -> u16 {
+    pub(crate) fn width(&self) -> u16 {
         let count = self.widths.len() - usize::from(self.open_ended);
-        let widths: u16 = self.widths.iter().take(count).sum();
-        widths + self.spacing * self.widths.len().saturating_sub(1) as u16
+        self.widths.iter().take(count).sum()
     }
 
     /// A row of cells to fill from the left.
-    pub fn row(&self) -> Cells<'_> {
+    pub(crate) fn row(&self) -> Cells<'_> {
         Cells {
             columns: self,
             at: 0,
@@ -95,38 +84,16 @@ impl Columns {
             .collect()
     }
 
-    /// Where a cell that starts in a column and spans some is, over all of an area's rows, laid out
-    /// as the table's columns are. It's for a cell holding a widget or a terminal's image, rather
-    /// than text. Past the area's right edge, it's cut, as the table is.
-    pub fn area_of(&self, area: Rect, first: usize, span: usize) -> Rect {
-        let whole = Rect {
-            width: self.width().max(area.width),
-            ..area
-        };
-        let columns = Layout::horizontal(self.constraints())
-            .flex(Flex::Start)
-            .spacing(self.spacing)
-            .split(whole);
-        let last = (first + span.max(1) - 1).min(columns.len() - 1);
-        let (start, end) = (columns[first.min(last)], columns[last]);
-        Rect {
-            x: start.x,
-            width: end.right() - start.x,
-            ..area
-        }
-        .intersection(area)
-    }
-
     /// Draw rows at the top of an area and take them off it, so what's drawn next goes under them.
-    pub fn stack(&self, frame: &mut Frame, area: &mut Rect, rows: Vec<Row<'static>>) {
+    pub(crate) fn stack(&self, frame: &mut Frame, area: &mut Rect, rows: Vec<Row<'static>>) {
         let top = take_top(area, rows.len() as u16);
         self.draw(frame, top, rows);
     }
 
     /// Draw rows in an area. With too little room for the columns, the table is cut at the area's
     /// right edge, as a paragraph is, rather than its columns squeezed to fit.
-    pub fn draw(&self, frame: &mut Frame, area: Rect, rows: Vec<Row<'static>>) {
-        let table = Table::new(rows, self.constraints()).column_spacing(self.spacing);
+    pub(crate) fn draw(&self, frame: &mut Frame, area: Rect, rows: Vec<Row<'static>>) {
+        let table = Table::new(rows, self.constraints()).column_spacing(0);
         let width = self.width();
         if width <= area.width {
             frame.render_widget(table, area);
@@ -148,7 +115,7 @@ impl Columns {
 }
 
 /// A row's cells, put in from the left, each spanning one column or more.
-pub struct Cells<'a> {
+pub(crate) struct Cells<'a> {
     columns: &'a Columns,
     /// The column the next cell starts in.
     at: usize,
@@ -157,12 +124,12 @@ pub struct Cells<'a> {
 
 impl Cells<'_> {
     /// A cell in the next column.
-    pub fn cell(&mut self, line: impl Into<Line<'static>>) -> &mut Self {
+    pub(crate) fn cell(&mut self, line: impl Into<Line<'static>>) -> &mut Self {
         self.span(line, 1)
     }
 
     /// A cell across the next few columns, cut to fit them.
-    pub fn span(&mut self, line: impl Into<Line<'static>>, columns: usize) -> &mut Self {
+    pub(crate) fn span(&mut self, line: impl Into<Line<'static>>, columns: usize) -> &mut Self {
         let room = self.columns.room(self.at, columns);
         self.cells
             .push((fitted(line.into(), room), columns.max(1) as u16));
@@ -171,7 +138,7 @@ impl Cells<'_> {
     }
 
     /// Leave the next few columns empty.
-    pub fn skip(&mut self, columns: usize) -> &mut Self {
+    pub(crate) fn skip(&mut self, columns: usize) -> &mut Self {
         if columns > 0 {
             self.cells.push((Line::default(), columns as u16));
             self.at += columns;
@@ -180,20 +147,12 @@ impl Cells<'_> {
     }
 
     /// Leave the columns empty up to this one.
-    pub fn to(&mut self, column: usize) -> &mut Self {
+    pub(crate) fn to(&mut self, column: usize) -> &mut Self {
         self.skip(column.saturating_sub(self.at))
     }
 
-    /// Change each cell's text, such as to fade it.
-    pub fn map(&mut self, change: impl Fn(Line<'static>) -> Line<'static>) -> &mut Self {
-        for (line, _) in &mut self.cells {
-            *line = change(std::mem::take(line));
-        }
-        self
-    }
-
     /// The row, to put in a table.
-    pub fn done(&mut self) -> Row<'static> {
+    pub(crate) fn done(&mut self) -> Row<'static> {
         Row::new(
             std::mem::take(&mut self.cells)
                 .into_iter()
@@ -203,12 +162,12 @@ impl Cells<'_> {
 }
 
 /// An empty row, a line high, to part groups of rows. A `Row`'s own default has no height.
-pub fn blank_row() -> Row<'static> {
+pub(crate) fn blank_row() -> Row<'static> {
     Row::new(Vec::<Cell>::new())
 }
 
 /// A line cut to fit a width, ending in `…` where something's left out.
-pub fn fitted(line: Line<'static>, width: usize) -> Line<'static> {
+pub(crate) fn fitted(line: Line<'static>, width: usize) -> Line<'static> {
     if line.width() <= width {
         return line;
     }
@@ -244,7 +203,7 @@ pub fn fitted(line: Line<'static>, width: usize) -> Line<'static> {
 /// Which of a row of columns of these widths fit in the room, as many as can, around the one at
 /// `at`: half of them before it where there are, as many as are left after. Empty if not even one
 /// fits.
-pub fn centred_run(widths: &[usize], at: usize, room: usize) -> Range<usize> {
+pub(crate) fn centred_run(widths: &[usize], at: usize, room: usize) -> Range<usize> {
     let count = widths.len();
     (1..=count)
         .rev()
@@ -257,7 +216,7 @@ pub fn centred_run(widths: &[usize], at: usize, room: usize) -> Range<usize> {
 }
 
 /// The top rows of an area, taken off it, as far as it goes.
-pub fn take_top(area: &mut Rect, rows: u16) -> Rect {
+pub(crate) fn take_top(area: &mut Rect, rows: u16) -> Rect {
     let rows = rows.min(area.height);
     let top = Rect {
         height: rows,
@@ -307,10 +266,10 @@ mod tests {
     }
 
     #[test]
-    fn a_cell_spanning_columns_has_their_room_and_the_gaps_between() {
-        let columns = Columns::new([10, 2, 3, 11]).spaced(1);
-        assert_eq!(columns.room(1, 3), 18);
-        assert_eq!(columns.width(), 29);
+    fn a_cell_spanning_columns_has_their_room() {
+        let columns = Columns::new([10, 2, 3, 11]);
+        assert_eq!(columns.room(1, 3), 16);
+        assert_eq!(columns.width(), 26);
         let open = Columns::new([10, 2]).open_ended();
         assert_eq!(open.room(1, 1), usize::MAX);
         assert_eq!(open.width(), 10);

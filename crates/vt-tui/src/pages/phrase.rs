@@ -11,8 +11,8 @@
 //! `App`'s, as they change the modes or reach what spans the pages, and read the selection here.
 
 pub mod draw;
-pub mod inspector;
-pub mod timeline;
+pub(crate) mod inspector;
+pub(crate) mod timeline;
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -39,7 +39,7 @@ pub struct PhraseView {
     pub top: usize,
     pub height: usize,
     /// It's collapsed to a line a row, rather than laid out in time (decision 122).
-    pub rows_collapsed: bool,
+    pub(crate) rows_collapsed: bool,
     /// It shows the row inspector right of the overview, for this session (decision 255).
     pub inspector: bool,
     /// Where a selection started: its step, and the columns the cursor was on.

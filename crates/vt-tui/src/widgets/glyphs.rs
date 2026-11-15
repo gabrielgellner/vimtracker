@@ -26,7 +26,7 @@ pub const SWITCH_OFF: char = '\u{f204}';
 /// Playing: `nf-md-play`, U+F040A.
 pub const PLAY: char = '\u{f040a}';
 /// Paused: `nf-md-pause`, U+F03E4.
-pub const PAUSE: char = '\u{f03e4}';
+pub(crate) const PAUSE: char = '\u{f03e4}';
 /// Stopped: `nf-md-stop`, U+F04DB.
 pub const STOP: char = '\u{f04db}';
 /// Recording: `nf-md-record`, U+F044A.
@@ -111,7 +111,7 @@ pub fn mark(mark: Mark) -> char {
 }
 /// A live generator, in the phrase's title before the columns it keeps live, as it makes their
 /// values: a wand, `nf-md-auto_fix`, U+F0068 (decision 182).
-pub const LIVE: char = '\u{f0068}';
+pub(crate) const LIVE: char = '\u{f0068}';
 /// A phrase or chain that plays in more than one place on its track, after its number, so `*`
 /// means only unsaved changes: `nf-md-link`, U+F0337.
 pub const LINK: char = '\u{f0337}';
@@ -124,12 +124,12 @@ pub const SPINNER: [char; 6] = [
     '\u{ee06}', '\u{ee07}', '\u{ee08}', '\u{ee09}', '\u{ee0a}', '\u{ee0b}',
 ];
 /// How long the spinner shows each turn.
-pub const SPINNER_TURN: Duration = Duration::from_millis(100);
+pub(crate) const SPINNER_TURN: Duration = Duration::from_millis(100);
 /// How long work goes on before the spinner shows, so quick work doesn't flash it.
-pub const SPINNER_AFTER: Duration = Duration::from_millis(300);
+pub(crate) const SPINNER_AFTER: Duration = Duration::from_millis(300);
 
 /// The spinner's turn some time after the work started.
-pub fn spinner(elapsed: Duration) -> char {
+pub(crate) fn spinner(elapsed: Duration) -> char {
     let turn = elapsed.as_millis() / SPINNER_TURN.as_millis();
     SPINNER[(turn % SPINNER.len() as u128) as usize]
 }
@@ -147,25 +147,25 @@ pub const FOLDER_OPEN: char = '\u{f0770}';
 /// A project's folder, which holds a `song.ron`: `nf-md-folder_music`, U+F1359.
 pub const PROJECT: char = '\u{f1359}';
 /// A kit, as a grid of pads: `nf-md-view_grid`, U+F0570.
-pub const KIT: char = '\u{f0570}';
+pub(crate) const KIT: char = '\u{f0570}';
 /// One of a kit's sounds, as one pad: `nf-md-square_rounded`, U+F14FB.
-pub const KIT_SOUND: char = '\u{f14fb}';
+pub(crate) const KIT_SOUND: char = '\u{f14fb}';
 /// One of a kit's sounds with variants or velocity layers, which opens to them, as pads stacked:
 /// `nf-md-checkbox_multiple_blank`, U+F0136.
-pub const KIT_SOUND_LAYERED: char = '\u{f0136}';
+pub(crate) const KIT_SOUND_LAYERED: char = '\u{f0136}';
 /// One of a kit's sounds marked to load as a track, in the kit dialog: `nf-md-checkbox_marked`,
 /// U+F0132.
-pub const KIT_SOUND_MARKED: char = '\u{f0132}';
+pub(crate) const KIT_SOUND_MARKED: char = '\u{f0132}';
 /// The same for a sound with variants or layers: `nf-md-checkbox_multiple_marked`, U+F0137.
-pub const KIT_SOUND_LAYERED_MARKED: char = '\u{f0137}';
+pub(crate) const KIT_SOUND_LAYERED_MARKED: char = '\u{f0137}';
 /// A sample: `nf-md-waveform`, U+F147D, as Ableton's browser shows one.
 pub const SAMPLE: char = '\u{f147d}';
 /// An effect preset, as a slot's faders: `nf-md-tune_vertical`, U+F066A. A sound preset is drawn
 /// with its machine's icon.
-pub const EFFECT: char = '\u{f066a}';
+pub(crate) const EFFECT: char = '\u{f066a}';
 /// A patch preset, behaviour without a sound, with the live generator's wand, as it's what makes
 /// the notes move.
-pub const PATCH: char = LIVE;
+pub(crate) const PATCH: char = LIVE;
 /// A sample that's a loop, by its folder or the tempo in its name: `nf-md-repeat`, U+F0456.
 pub const LOOP: char = '\u{f0456}';
 /// A file that isn't there, or a file or folder that couldn't be read: `nf-md-alert`, U+F0026,

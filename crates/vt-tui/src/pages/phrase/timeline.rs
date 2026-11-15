@@ -12,7 +12,7 @@ use vt_model::step::Step;
 
 /// When each of these rows starts, in steps from the first, as each lasts its pulses. A row of no
 /// pulses starts with the row after it.
-pub fn starts(steps: &[Step]) -> Vec<usize> {
+pub(crate) fn starts(steps: &[Step]) -> Vec<usize> {
     steps
         .iter()
         .scan(0, |time, step| {
@@ -25,7 +25,7 @@ pub fn starts(steps: &[Step]) -> Vec<usize> {
 
 /// How many lines a stored row takes: one for each of its pulses in the timeline while it plays,
 /// and one otherwise. A skipped row still takes one, so it can be edited.
-pub fn row_lines(phrase: &Phrase, index: usize, timeline: bool) -> usize {
+pub(crate) fn row_lines(phrase: &Phrase, index: usize, timeline: bool) -> usize {
     match phrase.steps().get(index) {
         Some(step) if timeline && phrase.extent().plays(index) => step.pulses().max(1),
         _ => 1,
@@ -34,7 +34,7 @@ pub fn row_lines(phrase: &Phrase, index: usize, timeline: bool) -> usize {
 
 /// One line of the phrase view.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Line {
+pub(crate) struct Line {
     /// The row it's part of, which is past the stored rows for a line kept for a longer track.
     pub index: usize,
     /// Which of the row's pulses: 0 for the row's own line, and more for its continuation lines.
@@ -48,7 +48,7 @@ pub struct Line {
 
 /// The lines of a phrase's first `rows` rows, its stored ones and any past them, laid out in time
 /// or a line a row.
-pub fn lines(phrase: &Phrase, timeline: bool, rows: usize) -> Vec<Line> {
+pub(crate) fn lines(phrase: &Phrase, timeline: bool, rows: usize) -> Vec<Line> {
     let extent = phrase.extent();
     let starts = starts(phrase.loop_steps());
     let loop_end = extent.start + extent.length;
@@ -84,7 +84,7 @@ pub fn lines(phrase: &Phrase, timeline: bool, rows: usize) -> Vec<Line> {
 
 /// The ticks a line covers, from row `00`, at a track's step of this many ticks: none before row
 /// `00` or on a line that takes no time.
-pub fn ticks_of(line: &Line, ticks: u64) -> Option<Range<u64>> {
+pub(crate) fn ticks_of(line: &Line, ticks: u64) -> Option<Range<u64>> {
     let time = u64::try_from(line.time).ok().filter(|_| line.lasts)?;
     Some(time * ticks..(time + 1) * ticks)
 }
@@ -92,7 +92,7 @@ pub fn ticks_of(line: &Line, ticks: u64) -> Option<Range<u64>> {
 /// The rows of another track's phrase that start within these ticks of its row `00`, at its own
 /// step of `ticks`, given when each row starts: the first, and how many. A skipped row doesn't
 /// play, so it doesn't count.
-pub fn starting_in(
+pub(crate) fn starting_in(
     steps: &[Step],
     starts: &[usize],
     ticks: u64,

@@ -18,7 +18,7 @@ use crate::services::banking::sample_text;
 
 /// What a key after `'` or `m` on the sample page is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MarkWait {
+pub(crate) enum MarkWait {
     /// `'`: a letter's slice, `<` or `>` for the last selection's ends, or `'` for the latest
     /// jump's start.
     Jump,

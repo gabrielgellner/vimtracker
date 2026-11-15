@@ -19,19 +19,19 @@ use crate::widgets::setting::{self, CellLook, Focus, name_line, value_spans};
 use crate::widgets::theme;
 use crate::widgets::toggle;
 
-pub mod edit;
-pub mod view;
+pub(crate) mod edit;
+pub(crate) mod view;
 
 /// How wide a value's coarse digits are, before its fine ones, so what's typed in their place
 /// keeps the fine digits where they are.
 const COARSE_WIDTH: usize = 2;
 /// After a value a macro holds that has no bar to draw the macro's range on, after the dot Live
 /// puts on a control it automates: faint, as the range is behind a bar (decision 341).
-pub const MACRO_MARK: &str = "•";
+pub(crate) const MACRO_MARK: &str = "•";
 
 /// How a setting's value reads in its cell.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Face {
+pub(crate) enum Face {
     /// Hex digits, as `80` or a macro's `8000`, with a bar.
     Hex,
     /// Two coarse hex digits and the fine ones set back after them, dim, as `A000`.
@@ -47,7 +47,7 @@ pub enum Face {
 
 /// How a value is coloured while the cursor isn't on it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Tone {
+pub(crate) enum Tone {
     /// Plain, or a toggle in its own colour.
     Plain,
     /// Left at its default, or doing nothing on this track: dim.
@@ -61,7 +61,7 @@ pub enum Tone {
 /// Where a setting is set along its bar, 0 to 255, and whether its bar is a mark either side of a
 /// centre, as pan's is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Place {
+pub(crate) struct Place {
     pub set: u8,
     pub centred: bool,
 }
@@ -69,14 +69,14 @@ pub struct Place {
 /// What the page knows of a setting now: worked out from the engine's report, the macros and the
 /// faders by the page, never by the widget.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ParamState {
+pub(crate) struct ParamState {
     /// What it plays with now, on the bar's 0 to 255, from [`heard`] (#421).
     pub heard: u8,
     /// Filled to the fader with a mark at what's heard, rather than the other way (decision 174).
     pub fader: bool,
     /// The range a macro holding it can take it over, which its bar draws behind the fill. A cell
     /// with no bar has [`MACRO_MARK`] after its value instead.
-    pub macro_range: Option<(u8, u8)>,
+    pub(crate) macro_range: Option<(u8, u8)>,
     /// How its value is coloured while the cursor isn't on it.
     pub tone: Tone,
     /// A hand has taken this fader over from the steps.
@@ -89,7 +89,7 @@ pub struct ParamState {
 impl ParamState {
     /// A setting in this tone, held by no macro, with nothing after it. One with a bar sets
     /// `heard` too.
-    pub fn new(tone: Tone) -> Self {
+    pub(crate) fn new(tone: Tone) -> Self {
         Self {
             heard: 0,
             fader: false,
@@ -104,21 +104,21 @@ impl ParamState {
 /// One setting's cell: its name and how its value reads, where it sits on its bar if it has one,
 /// how it is now, and how the modes show it.
 #[derive(Debug, Clone)]
-pub struct ParamCell<'a> {
+pub(crate) struct ParamCell<'a> {
     pub name: Cow<'a, str>,
-    pub face: Face,
+    pub(crate) face: Face,
     /// Its value as text, as the page formats it. A toggle's is the word the status line says,
     /// which only shows while Insert types over it.
     pub text: String,
     /// Where it's set along its bar, or nothing for a value with no bar.
     pub place: Option<Place>,
-    pub state: ParamState,
-    pub look: CellLook<'a>,
+    pub(crate) state: ParamState,
+    pub(crate) look: CellLook<'a>,
 }
 
 impl ParamCell<'_> {
     /// Its name, value and bar, for a grid to place in cells of these widths.
-    pub fn parts(&self, widths: CellWidths) -> CellParts {
+    pub(crate) fn parts(&self, widths: CellWidths) -> CellParts {
         let bar = self.bar(widths.bar_cells);
         CellParts {
             name: self.name(widths.name),
@@ -129,7 +129,7 @@ impl ParamCell<'_> {
 
     /// Its name, dim, with any labels a jump has put on it, in this much room, and a fader a hand
     /// has taken over from the steps marked after it.
-    pub fn name(&self, room: u16) -> Line<'static> {
+    pub(crate) fn name(&self, room: u16) -> Line<'static> {
         let mut line = name_line(&self.look, &self.name, room);
         if self.state.taken {
             line.push_span(Span::raw(" "));
@@ -142,7 +142,7 @@ impl ParamCell<'_> {
     /// under the cursor and in its tone otherwise, with a jump's label over its first letter; then
     /// a fine part, set back, the mark of a macro holding it if it has no bar to show the macro's
     /// range on, and a word after it where it has them.
-    pub fn value(&self) -> Line<'static> {
+    pub(crate) fn value(&self) -> Line<'static> {
         self.value_line(self.place.is_some())
     }
 
@@ -218,7 +218,7 @@ impl ParamCell<'_> {
 /// this way it follows the hand at once, and what modulation adds keeps moving it (#421). With no
 /// report of the same setting, it's what's set. It's in a macro's 16 bits, 0 to `FF00`; a byte is
 /// the same shifted up by 8.
-pub fn heard(set: u16, live: Option<u16>, then: Option<u16>) -> u16 {
+pub(crate) fn heard(set: u16, live: Option<u16>, then: Option<u16>) -> u16 {
     match (live, then) {
         (Some(live), Some(then)) => {
             (i32::from(live) + i32::from(set) - i32::from(then)).clamp(0, 0xFF00) as u16
@@ -228,7 +228,7 @@ pub fn heard(set: u16, live: Option<u16>, then: Option<u16>) -> u16 {
 }
 
 /// [`heard`] for a byte, as the bars have their values.
-pub fn heard_byte(set: u8, live: Option<u8>, then: Option<u8>) -> u8 {
+pub(crate) fn heard_byte(set: u8, live: Option<u8>, then: Option<u8>) -> u8 {
     let wide = |value: u8| u16::from(value) << 8;
     (heard(wide(set), live.map(wide), then.map(wide)) >> 8) as u8
 }

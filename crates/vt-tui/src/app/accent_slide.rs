@@ -19,11 +19,11 @@ use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 
 /// The velocity an accent writes: full, as a 303's accent is all or nothing.
-pub const ACCENTED: u8 = MAX_VELOCITY;
+pub(crate) const ACCENTED: u8 = MAX_VELOCITY;
 
 /// What a key puts on a note.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Flag {
+pub(crate) enum Flag {
     Accent,
     Slide,
     OctaveUp,

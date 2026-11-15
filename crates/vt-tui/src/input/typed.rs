@@ -42,7 +42,7 @@ pub enum Rule {
 }
 
 /// Two hex digits, kept as soon as the second is typed.
-pub const HEX: Rule = Rule::Typing(Typing::Hex);
+pub(crate) const HEX: Rule = Rule::Typing(Typing::Hex);
 
 impl From<Typing> for Rule {
     fn from(typing: Typing) -> Self {
@@ -145,7 +145,7 @@ impl TypedValue {
     }
 
     /// Take the last character back.
-    pub fn pop(&mut self) -> Option<char> {
+    pub(crate) fn pop(&mut self) -> Option<char> {
         self.text.pop()
     }
 

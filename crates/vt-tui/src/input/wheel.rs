@@ -35,10 +35,10 @@ pub const SETTING_FILE: &str = "wheel.ron";
 
 /// Asks the terminal for its mouse's buttons and wheel, as SGR reports: no motion, as nothing
 /// uses it, and every button is let through to be ignored but the wheel.
-pub const CAPTURE_ON: &str = "\x1b[?1000h\x1b[?1006h";
+pub(crate) const CAPTURE_ON: &str = "\x1b[?1000h\x1b[?1006h";
 
 /// Gives the mouse back to the terminal, for selecting text.
-pub const CAPTURE_OFF: &str = "\x1b[?1006l\x1b[?1000l";
+pub(crate) const CAPTURE_OFF: &str = "\x1b[?1006l\x1b[?1000l";
 
 /// The wheel's feel, all in one place for tuning by hand (decision 163).
 pub mod feel {
@@ -46,7 +46,7 @@ pub mod feel {
 
     /// How quickly the wheel's speed forgets a tick: its speed is how many ticks came in about
     /// the last this long, each counting less as it ages.
-    pub const SPEED_TIME: Duration = Duration::from_millis(100);
+    pub(crate) const SPEED_TIME: Duration = Duration::from_millis(100);
 
     /// A speed at or below this, about 25 ticks a second held, is a slow or steady turn, every
     /// tick the least step, so the change is in proportion to the swipe. On a MacBook's trackpad
@@ -60,13 +60,13 @@ pub mod feel {
 
     /// The least step on a setting's fine digits: a 16th of `=`'s, a step of their first digit,
     /// so even a slow tick is seen to move.
-    pub const FINE_LEAST: u64 = 16;
+    pub(crate) const FINE_LEAST: u64 = 16;
 
     /// The least step on the tempo, in hundredths of a BPM: a tenth.
-    pub const TEMPO_LEAST: u64 = 10;
+    pub(crate) const TEMPO_LEAST: u64 = 10;
 
     /// The least step on the sample page, as a part of `=`'s pixel: a 16th, or a frame.
-    pub const PIXEL_PARTS: u64 = 16;
+    pub(crate) const PIXEL_PARTS: u64 = 16;
 
     /// How long a turn's ticks must stop before a tick the other way is taken at once. Sooner
     /// than that, it's a trackpad's bounce.
@@ -74,7 +74,7 @@ pub mod feel {
 
     /// How many ticks the other way in a row are taken as a turn even with no pause: a quick,
     /// deliberate change of direction.
-    pub const TURN_TICKS: u32 = 3;
+    pub(crate) const TURN_TICKS: u32 = 3;
 }
 
 /// Whether the wheel turns the cursor's setting, remembered for this machine rather than the
@@ -104,7 +104,7 @@ impl WheelSetting {
     }
 
     /// Keep it at `path` for next time.
-    pub fn save_to(&self, path: &Path) -> std::io::Result<()> {
+    pub(crate) fn save_to(&self, path: &Path) -> std::io::Result<()> {
         if let Some(folder) = path.parent() {
             std::fs::create_dir_all(folder)?;
         }
@@ -116,7 +116,7 @@ impl WheelSetting {
 /// Whether macOS scrolls naturally, as System Settings' "Natural scrolling" says. It's on unless
 /// it's been turned off, when the key is written.
 #[cfg(target_os = "macos")]
-pub fn natural_scrolling() -> bool {
+pub(crate) fn natural_scrolling() -> bool {
     use objc2_foundation::{NSUserDefaults, ns_string};
     objc2::rc::autoreleasepool(|_| {
         let defaults = NSUserDefaults::standardUserDefaults();
@@ -126,12 +126,12 @@ pub fn natural_scrolling() -> bool {
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn natural_scrolling() -> bool {
+pub(crate) fn natural_scrolling() -> bool {
     false
 }
 
 /// Asks the terminal for the mouse's reports, or gives the mouse back.
-pub fn capture(out: &mut impl Write, on: bool) -> std::io::Result<()> {
+pub(crate) fn capture(out: &mut impl Write, on: bool) -> std::io::Result<()> {
     out.write_all(if on { CAPTURE_ON } else { CAPTURE_OFF }.as_bytes())?;
     out.flush()
 }
@@ -143,7 +143,7 @@ pub struct Wheel {
     /// Where the setting is saved when it changes, or nowhere, as in tests.
     pub setting_path: Option<PathBuf>,
     /// How long the wheel stays still before a gesture's undo step closes.
-    pub pause: Duration,
+    pub(crate) pause: Duration,
     /// Whether macOS scrolls naturally, the screen following the fingers, which turns the
     /// terminal's up into the fingers going down. Asked for as the program starts.
     pub natural: bool,
@@ -389,7 +389,7 @@ impl App {
 
     /// Ends the wheel's gesture, if one is going, making what it owes and its ticks one undo
     /// step. A key ends it.
-    pub fn end_wheel_gesture(&mut self) {
+    pub(crate) fn end_wheel_gesture(&mut self) {
         self.make_owed_wheel_change();
         let Some(gesture) = self.wheel.gesture.take() else {
             return;
@@ -416,7 +416,7 @@ impl App {
     }
 
     /// Turns the value with the fingers or against them, keeping the choice for this machine.
-    pub fn set_wheel_reversed(&mut self, reversed: bool) {
+    pub(crate) fn set_wheel_reversed(&mut self, reversed: bool) {
         self.wheel.setting.reversed = reversed;
         self.services.status = if reversed {
             "The wheel turns against the fingers"
@@ -442,7 +442,7 @@ impl App {
     }
 
     /// Turns the wheel on or off, keeping the choice for this machine.
-    pub fn set_wheel(&mut self, on: bool) {
+    pub(crate) fn set_wheel(&mut self, on: bool) {
         if self.wheel.setting.on == on {
             return;
         }

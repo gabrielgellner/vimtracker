@@ -61,7 +61,7 @@ impl TrackPage {
     }
 
     /// What's said under the zoomed slot's box: a delay's or a reverb's time scale.
-    pub fn zoom_caption(&self) -> Option<&str> {
+    pub(crate) fn zoom_caption(&self) -> Option<&str> {
         self.zoom_caption
             .as_ref()
             .and_then(|(_, caption)| caption.as_deref())

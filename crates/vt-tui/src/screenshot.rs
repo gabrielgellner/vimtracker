@@ -290,12 +290,15 @@ fn placeholders_from(buffer: &Buffer, x: u16, y: u16, across: bool) -> u16 {
 }
 
 /// The whole buffer as an SVG, with the images sent to the terminal where their placeholders are.
-/// Runs of cells that look the same are drawn together.
-pub fn to_svg(buffer: &Buffer, images: &HashMap<u32, Vec<u8>>) -> String {
+/// Runs of cells that look the same are drawn together. The tests' shorthand for
+/// [`to_svg_placed`] with nothing placed.
+#[cfg(test)]
+pub(crate) fn to_svg(buffer: &Buffer, images: &HashMap<u32, Vec<u8>>) -> String {
     to_svg_placed(buffer, images, &Placements::default())
 }
 
-/// The whole buffer as [`to_svg`] draws it, with the images the program places itself over it,
+/// The whole buffer as an SVG, with the images sent to the terminal where their placeholders are
+/// and the images the program places itself over it,
 /// where they're placed, each scaled from the character size it was drawn for to the picture's.
 pub fn to_svg_placed(
     buffer: &Buffer,

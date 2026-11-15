@@ -32,7 +32,7 @@ use crate::widgets::glyphs;
 use crate::widgets::theme;
 
 /// Show a tempo without trailing zeros.
-pub fn format_bpm(millibpm: u32) -> String {
+pub(crate) fn format_bpm(millibpm: u32) -> String {
     let whole = millibpm / 1000;
     let fraction = millibpm % 1000;
     if fraction == 0 {
@@ -293,7 +293,7 @@ pub(crate) fn grid_name(skip: u32) -> String {
 /// records. Fill changes what the conditions play, so it's named
 /// while it's on, and a realign, a cued launch, a mute or solo armed for the grid and a loop are
 /// named, with the glyph for waiting, until the launch grid comes round.
-pub fn transport_spans(app: &App) -> Vec<Span<'static>> {
+pub(crate) fn transport_spans(app: &App) -> Vec<Span<'static>> {
     let (glyph, style) = match app.services.transport {
         Transport::Playing => (glyphs::PLAY, theme::active()),
         Transport::Paused => (glyphs::PAUSE, theme::dim()),
@@ -350,7 +350,7 @@ pub fn transport_spans(app: &App) -> Vec<Span<'static>> {
 /// What goes at the right of the status line, only while there's any: a spinner while work goes on
 /// in the background, and a warning glyph in the warning colour, with a count, once audio has
 /// dropped out.
-pub fn right_spans(app: &App) -> Vec<Span<'static>> {
+pub(crate) fn right_spans(app: &App) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
     if let Some((work, turn)) = app.background_work() {
         spans.push(Span::styled(format!("{turn} {work}  "), theme::dim()));

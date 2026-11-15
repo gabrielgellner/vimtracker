@@ -45,17 +45,17 @@ use crate::pages::song::SongView;
 use crate::pages::track::TrackPage;
 use crate::services::Services;
 
-pub mod accent_slide;
+pub(crate) mod accent_slide;
 mod commands;
 mod cursor;
 mod entry;
-pub mod grammar;
+pub(crate) mod grammar;
 mod jumps;
 mod keys;
 mod loops;
 pub mod recording;
 pub(crate) mod tracks;
-pub mod tree;
+pub(crate) mod tree;
 
 /// A run of steps and columns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -149,7 +149,7 @@ pub struct TrackLive {
 /// How long a key has to be down to count as held rather than tapped, for the keys that act
 /// differently held: a held mute or solo goes back when it's let go, and a held audition stops.
 /// Polyend's Tracker takes a button as held after 333 ms.
-pub const HOLD_TIME: Duration = Duration::from_millis(300);
+pub(crate) const HOLD_TIME: Duration = Duration::from_millis(300);
 
 /// How long the playheads stay without a report from the audio thread, after which audio has
 /// stopped and nothing is playing.
@@ -223,12 +223,12 @@ pub struct AudioState {
     pub devices: Vec<DeviceInfo>,
     /// The inputs the recorder can hear, the one open by name, if one is, and how long from the
     /// sound reaching it to its callback, in microseconds.
-    pub inputs: Vec<DeviceInfo>,
+    pub(crate) inputs: Vec<DeviceInfo>,
     pub input: Option<String>,
-    pub input_latency_us: u64,
+    pub(crate) input_latency_us: u64,
     /// The slowdown check's time at full speed, measured as the program starts, for each stream
     /// it opens.
-    pub full_speed: Duration,
+    pub(crate) full_speed: Duration,
 }
 
 /// The whole program's state.

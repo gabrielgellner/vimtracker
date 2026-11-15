@@ -14,7 +14,7 @@ use vt_engine::dsp::dynamics::eq::response_db as eq_response_db;
 use vt_engine::dsp::effects::distort::transfer;
 use vt_engine::dsp::filters::filter::track_response_db;
 use vt_model::attractor::{Attractor, System, view};
-use vt_model::envelope::{Adsr, Envelope};
+use vt_model::envelope::Envelope;
 use vt_model::insert::{Compressor, Distort, Equaliser, threshold_db};
 use vt_model::lfo::{self, Lfo, LfoMode, deformed_wave};
 use vt_model::macros::{MacroMap, response};
@@ -51,17 +51,17 @@ const DASH: (usize, usize) = (5, 3);
 
 /// What a compressor's curve covers, in dB, both in and out, from `0` at the top and right. It's
 /// as far down as the threshold goes.
-pub const DYNAMICS_RANGE_DB: f32 = 60.0;
+pub(crate) const DYNAMICS_RANGE_DB: f32 = 60.0;
 /// The levels a compressor's gridlines are at, in dB, across and down.
 const DYNAMICS_GRID_DB: [f32; 2] = [-20.0, -40.0];
 /// How far up and down an EQ's curve goes, in dB.
-pub const EQ_RANGE_DB: f32 = 18.0;
+pub(crate) const EQ_RANGE_DB: f32 = 18.0;
 /// The frequencies a frequency plot marks, in Hz.
 const DECADES_HZ: [f32; 3] = [100.0, 1000.0, 10_000.0];
 /// What a filter curve's height covers, in dB, with the frequency across it from 20 Hz to 20 kHz.
 /// It has more room below than above, as a filter takes away more than it adds.
-pub const CURVE_BOTTOM_DB: f32 = -36.0;
-pub const CURVE_TOP_DB: f32 = 24.0;
+pub(crate) const CURVE_BOTTOM_DB: f32 = -36.0;
+pub(crate) const CURVE_TOP_DB: f32 = 24.0;
 
 /// How a panel's picture is shown: dim, brighter while the cursor is in its device, or faint
 /// while the device is switched out.
@@ -95,7 +95,7 @@ impl Shade {
 
 /// How strong a gridline is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Mark {
+pub(crate) enum Mark {
     Grid,
     Fainter,
 }
@@ -111,18 +111,18 @@ impl Mark {
 
 /// A picture of a curve over gridlines, before it's a PNG.
 #[derive(Debug, Clone)]
-pub struct Plot {
+pub(crate) struct Plot {
     pub width: usize,
     pub height: usize,
     /// How much of each pixel the line covers, in eighths, row by row from the top left.
-    pub cover: Vec<u8>,
+    pub(crate) cover: Vec<u8>,
     /// Each pixel's gridline, if it has one: its palette entry, or `0`.
     marks: Vec<u8>,
 }
 
 impl Plot {
     /// Nothing yet, this many pixels across and down.
-    pub fn new(width: usize, height: usize) -> Self {
+    pub(crate) fn new(width: usize, height: usize) -> Self {
         let (width, height) = (width.max(1), height.max(1));
         Self {
             width,
@@ -134,7 +134,7 @@ impl Plot {
 
     /// Where a point falls in pixels, at `x` from 0 to 1 across and `level` from 0 at the bottom
     /// to 1 at the top, as [`point_at`] has it.
-    pub fn at(&self, x: f32, level: f32) -> (f32, f32) {
+    pub(crate) fn at(&self, x: f32, level: f32) -> (f32, f32) {
         point_at((self.width, self.height), x, level)
     }
 
@@ -148,7 +148,7 @@ impl Plot {
 
     /// A line through points in pixels, `LINE_PIXELS` wide. Each pixel near it is covered by as
     /// much as the nearest segment is in it, which keeps its edges smooth.
-    pub fn line(&mut self, points: &[(f32, f32)]) {
+    pub(crate) fn line(&mut self, points: &[(f32, f32)]) {
         let reach = LINE_PIXELS / 2.0 + 0.5;
         for pair in points.windows(2) {
             let (from, to) = (pair[0], pair[1]);
@@ -171,7 +171,7 @@ impl Plot {
 
     /// A curve of `level_at` across the picture, each `x` from 0 to 1, starting from `start` at
     /// the left edge, with a point at each of `corners` too, so a sharp one stays sharp.
-    pub fn curve(&mut self, level_at: impl Fn(f32) -> f32, start: f32, corners: &[f32]) {
+    pub(crate) fn curve(&mut self, level_at: impl Fn(f32) -> f32, start: f32, corners: &[f32]) {
         let count = self.width * POINTS_PER_PIXEL;
         let mut across: Vec<f32> = (0..=count).map(|step| step as f32 / count as f32).collect();
         across.extend(corners.iter().filter(|x| (0.0..=1.0).contains(*x)));
@@ -202,23 +202,23 @@ impl Plot {
     }
 
     /// A dotted gridline across the whole picture at a level.
-    pub fn across(&mut self, level: f32, mark: Mark) {
+    pub(crate) fn across(&mut self, level: f32, mark: Mark) {
         self.broken((0.0, level), (1.0, level), mark, DOT);
     }
 
     /// A dotted gridline down the whole picture at `x`.
-    pub fn down(&mut self, x: f32, mark: Mark) {
+    pub(crate) fn down(&mut self, x: f32, mark: Mark) {
         self.broken((x, 1.0), (x, 0.0), mark, DOT);
     }
 
     /// A dotted gridline from one point to another, each `(x, level)`.
-    pub fn dotted(&mut self, from: (f32, f32), to: (f32, f32), mark: Mark) {
+    pub(crate) fn dotted(&mut self, from: (f32, f32), to: (f32, f32), mark: Mark) {
         self.broken(from, to, mark, DOT);
     }
 
     /// A dotted gridline along a curve of `level_at` across the picture, each `x` from 0 to 1, its
     /// dots spaced along the curve, as a straight one's are.
-    pub fn traced(&mut self, level_at: impl Fn(f32) -> f32, mark: Mark) {
+    pub(crate) fn traced(&mut self, level_at: impl Fn(f32) -> f32, mark: Mark) {
         let (on, off) = DOT;
         let mut along = 0.0_f32;
         let mut last = self.at(0.0, level_at(0.0));
@@ -246,12 +246,12 @@ impl Plot {
     }
 
     /// A dashed gridline up from the bottom at `x`, to a level.
-    pub fn dashed_up(&mut self, x: f32, level: f32, mark: Mark) {
+    pub(crate) fn dashed_up(&mut self, x: f32, level: f32, mark: Mark) {
         self.broken((x, 0.0), (x, level), mark, DASH);
     }
 
     /// Each pixel's palette entry: the line where it covers any of the pixel, over a gridline.
-    pub fn pixels(&self) -> Vec<u8> {
+    pub(crate) fn pixels(&self) -> Vec<u8> {
         self.cover
             .iter()
             .zip(&self.marks)
@@ -261,7 +261,7 @@ impl Plot {
 
     /// As a PNG with the line in a colour and the gridlines faint. It's always compressed: a
     /// mostly empty picture comes to a few kilobytes.
-    pub fn png(&self, color: [u8; 3]) -> Vec<u8> {
+    pub(crate) fn png(&self, color: [u8; 3]) -> Vec<u8> {
         let grid = rgb(theme::OVERLAY0);
         let mut colors = vec![color; usize::from(STEPS)];
         colors.extend([grid, grid]);
@@ -275,7 +275,7 @@ impl Plot {
 /// Where a point falls in pixels in a picture this many across and down, at `x` from 0 to 1 across
 /// and `level` from 0 at the bottom to 1 at the top. The line's centre is kept half its width in
 /// from the edges, so it's whole at the top and bottom.
-pub fn point_at((width, height): (usize, usize), x: f32, level: f32) -> (f32, f32) {
+pub(crate) fn point_at((width, height): (usize, usize), x: f32, level: f32) -> (f32, f32) {
     let margin = LINE_PIXELS / 2.0;
     let across = margin + x.clamp(0.0, 1.0) * (width.max(1) as f32 - 2.0 * margin);
     let down = margin + (1.0 - level.clamp(0.0, 1.0)) * (height.max(1) as f32 - 2.0 * margin);
@@ -301,12 +301,12 @@ fn frequency_x(hz: f32) -> f32 {
 }
 
 /// The frequency at `x` across a frequency plot.
-pub fn frequency_at(x: f32) -> f32 {
+pub(crate) fn frequency_at(x: f32) -> f32 {
     20.0 * 1000_f32.powf(x)
 }
 
 /// Where a level in dB is on a compressor's curve, in or out, from 0 at -60 dB to 1 at 0.
-pub fn dynamics_level(db: f32) -> f32 {
+pub(crate) fn dynamics_level(db: f32) -> f32 {
     db / DYNAMICS_RANGE_DB + 1.0
 }
 
@@ -315,7 +315,7 @@ pub fn dynamics_level(db: f32) -> f32 {
 /// knee and all. Under it, faint, are gridlines at -20 and -40 dB both ways, the 1:1 diagonal, so
 /// how far the curve bends from it is the compression, and a dashed line up to the curve at the
 /// threshold.
-pub fn compressor(settings: Compressor, (width, height): (usize, usize)) -> Plot {
+pub(crate) fn compressor(settings: Compressor, (width, height): (usize, usize)) -> Plot {
     let mut plot = Plot::new(width, height);
     for db in DYNAMICS_GRID_DB {
         plot.across(dynamics_level(db), Mark::Grid);
@@ -338,14 +338,14 @@ fn decades(plot: &mut Plot) {
 }
 
 /// Where a level in dB is on an EQ's curve, from 0 at -18 dB to 1 at +18 dB.
-pub fn eq_level(db: f32) -> f32 {
+pub(crate) fn eq_level(db: f32) -> f32 {
     db / (2.0 * EQ_RANGE_DB) + 0.5
 }
 
 /// An EQ's curve: what it does at each frequency, from 20 Hz to 20 kHz across it, as the filter's
 /// curve is drawn, and from -18 dB to +18 dB up it, a little more than a band can do, over a
 /// dotted line at 0 dB and fainter ones down it at 100 Hz, 1 kHz and 10 kHz.
-pub fn eq(settings: Equaliser, rate: u32, (width, height): (usize, usize)) -> Plot {
+pub(crate) fn eq(settings: Equaliser, rate: u32, (width, height): (usize, usize)) -> Plot {
     let mut plot = Plot::new(width, height);
     decades(&mut plot);
     plot.across(eq_level(0.0), Mark::Grid);
@@ -358,7 +358,7 @@ pub fn eq(settings: Equaliser, rate: u32, (width, height): (usize, usize)) -> Pl
 /// to 1 comes out as, across, from -1 to 1 up, as [`transfer`] has it, `Mix` and all, over dotted
 /// lines through nothing both ways and a fainter 1:1 diagonal, so how far the curve leaves it is
 /// what the distortion does. A type without a curve draws its gridlines alone.
-pub fn distort(settings: Distort, (width, height): (usize, usize)) -> Plot {
+pub(crate) fn distort(settings: Distort, (width, height): (usize, usize)) -> Plot {
     let mut plot = Plot::new(width, height);
     plot.across(0.5, Mark::Grid);
     plot.down(0.5, Mark::Grid);
@@ -372,7 +372,7 @@ pub fn distort(settings: Distort, (width, height): (usize, usize)) -> Plot {
 }
 
 /// Where a level in dB is on a filter's curve, from 0 at its bottom to 1 at its top.
-pub fn filter_level(db: f32) -> f32 {
+pub(crate) fn filter_level(db: f32) -> f32 {
     (db - CURVE_BOTTOM_DB) / (CURVE_TOP_DB - CURVE_BOTTOM_DB)
 }
 
@@ -397,7 +397,7 @@ pub(crate) fn filter_from(settings: FilterSettings, rate: u32, size: (usize, usi
 /// 20 kHz across and -36 dB to +24 dB up, over a dotted line at 0 dB and fainter ones down it at
 /// 100 Hz, 1 kHz and 10 kHz, as the EQ's is. A dashed line rises from the bottom to the curve at
 /// `Cut`, as the compressor's does at its threshold, unless the filter is open and out of the way.
-pub fn filter(track: &Track, rate: u32, (width, height): (usize, usize)) -> Plot {
+pub(crate) fn filter(track: &Track, rate: u32, (width, height): (usize, usize)) -> Plot {
     let mut plot = Plot::new(width, height);
     decades(&mut plot);
     plot.across(filter_level(0.0), Mark::Grid);
@@ -421,15 +421,16 @@ fn filter_open(track: &Track) -> bool {
 
 /// An envelope's shape, from silence, with a point at the end of each stage so its corners are
 /// sharp, over a dotted baseline and fainter dotted lines down it between the stages, so each of
-/// its times has a part of the picture to point at.
-pub fn envelope(envelope: &Adsr, size: (usize, usize)) -> Plot {
+/// its times has a part of the picture to point at. The tests' shorthand for [`envelope_in`].
+#[cfg(test)]
+pub(crate) fn envelope(envelope: &vt_model::envelope::Adsr, size: (usize, usize)) -> Plot {
     envelope_in(&Envelope::Adsr(*envelope), Polarity::Uni, size)
 }
 
 /// An envelope's shape in a polarity: over its baseline one way, or its centre line both ways, as
 /// what it moves is then at rest half way up. An AHD's hold is a stage of its own, with its lines
 /// either side.
-pub fn envelope_in(
+pub(crate) fn envelope_in(
     envelope: &Envelope,
     polarity: Polarity,
     (width, height): (usize, usize),
@@ -469,7 +470,7 @@ const PEAK_STEPS: usize = 24;
 /// it worked out, as [`Plot::curve`] works them out, that's higher than both of its neighbours,
 /// found again more closely between them. A comb's or a resonator's peak can be narrower than the
 /// two points a pixel the curve has, and so would be drawn short of its top, or not at all.
-pub fn peaks(level_at: &impl Fn(f32) -> f32, width: usize) -> Vec<f32> {
+pub(crate) fn peaks(level_at: &impl Fn(f32) -> f32, width: usize) -> Vec<f32> {
     let count = width * POINTS_PER_PIXEL;
     let x = |step: usize| step as f32 / count as f32;
     let levels: Vec<f32> = (0..=count).map(|step| level_at(x(step))).collect();
@@ -496,8 +497,8 @@ pub fn peaks(level_at: &impl Fn(f32) -> f32, width: usize) -> Vec<f32> {
 /// A slot effect that filters, as its curve on the FX page's zoom is drawn from (decision 333):
 /// what it does to a quiet sound at each frequency, in dB, and where its dashed line goes up, at
 /// the note it's tuned to or the cutoff it's at. A low-pass gate's has how far it opens too.
-pub struct Filtering<F, G> {
-    pub db_at: F,
+pub(crate) struct Filtering<F, G> {
+    pub(crate) db_at: F,
     pub marked: Option<f32>,
     pub opened: Option<G>,
 }
@@ -507,7 +508,7 @@ pub struct Filtering<F, G> {
 /// 1 kHz and 10 kHz. Its peaks are drawn to their tops however narrow, a dashed line rises to it
 /// at the frequency marked, and a low-pass gate's curve opened all the way is a fainter dotted
 /// curve, so what lies between is how far it moves.
-pub fn filtering<F: Fn(f32) -> f32, G: Fn(f32) -> f32>(
+pub(crate) fn filtering<F: Fn(f32) -> f32, G: Fn(f32) -> f32>(
     filtering: Filtering<F, G>,
     (width, height): (usize, usize),
 ) -> Plot {
@@ -529,7 +530,7 @@ pub fn filtering<F: Fn(f32) -> f32, G: Fn(f32) -> f32>(
 
 /// How far down a delay's repeats and a reverb's tail are drawn, in dB: as far as a reverb's
 /// decay time measures.
-pub const TIME_RANGE_DB: f32 = 60.0;
+pub(crate) const TIME_RANGE_DB: f32 = 60.0;
 
 /// Where a level, as a gain, is up a time plot, from 0 at -60 dB to 1 at 0 dB and over.
 fn time_level(gain: f32) -> f32 {
@@ -541,7 +542,12 @@ fn time_level(gain: f32) -> f32 {
 /// middle to 0 dB at the top and bottom: a ping-pong's cross from side to side and a straight
 /// one's stand both ways. The sound itself, with `Mix`, is the first at the left. Fainter dotted
 /// lines down it mark the beats, `beat` seconds apart, so the repeats can be read against them.
-pub fn repeats(sounds: &[(f32, [f32; 2])], beat: f32, span: f32, size: (usize, usize)) -> Plot {
+pub(crate) fn repeats(
+    sounds: &[(f32, [f32; 2])],
+    beat: f32,
+    span: f32,
+    size: (usize, usize),
+) -> Plot {
     let mut plot = Plot::new(size.0, size.1);
     plot.across(0.5, Mark::Grid);
     let span = span.max(1e-3);
@@ -568,7 +574,13 @@ pub fn repeats(sounds: &[(f32, [f32; 2])], beat: f32, span: f32, size: (usize, u
 /// nothing until its pre-delay, `pre`, then falling in a straight line, `seconds[0]` to fall all
 /// the way at its lows, with a dotted line falling as its highs do, in `seconds[1]`. Dotted lines
 /// across at -20 and -40 dB, as the compressor's, and fainter ones down it every `every` seconds.
-pub fn tail(pre: f32, seconds: [f32; 2], span: f32, every: f32, size: (usize, usize)) -> Plot {
+pub(crate) fn tail(
+    pre: f32,
+    seconds: [f32; 2],
+    span: f32,
+    every: f32,
+    size: (usize, usize),
+) -> Plot {
     let mut plot = Plot::new(size.0, size.1);
     let span = span.max(1e-3);
     for db in DYNAMICS_GRID_DB {
@@ -610,11 +622,11 @@ const JUMP: f32 = 1e-4;
 /// their sign is in it. One way only, its dotted line is where it's at rest, the bottom of the
 /// wave, rather than its centre.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LfoDrawing {
+pub(crate) struct LfoDrawing {
     pub shape: lfo::Shape,
     pub phase: u16,
     pub flipped: bool,
-    pub unipolar: bool,
+    pub(crate) unipolar: bool,
     /// How far its wave is bent, as its `Deform` says.
     pub deform: i16,
     /// Whether it plays only half its cycle from each note, as `Half` does, then stays: the
@@ -624,7 +636,7 @@ pub struct LfoDrawing {
 
 impl LfoDrawing {
     /// What an LFO's settings draw, with the depth of its slot.
-    pub fn of(lfo: &Lfo, depth: i16) -> Self {
+    pub(crate) fn of(lfo: &Lfo, depth: i16) -> Self {
         if lfo.shape.is_attractor() {
             // Its phase is the axis heard, and its deform its parameter, which both change it.
             Self {
@@ -663,7 +675,7 @@ impl LfoDrawing {
 
     /// The same, in a polarity, which moves its dotted line.
     #[must_use]
-    pub fn in_polarity(self, polarity: Polarity) -> Self {
+    pub(crate) fn in_polarity(self, polarity: Polarity) -> Self {
         Self {
             unipolar: polarity == Polarity::Uni,
             ..self
@@ -677,7 +689,7 @@ impl LfoDrawing {
 
     /// Where a wave's value, from -1 to 1, is up the picture, from 0 at the bottom to 1 at the top,
     /// upside down for a negative depth.
-    pub fn level_of(self, value: f32) -> f32 {
+    pub(crate) fn level_of(self, value: f32) -> f32 {
         let value = if self.flipped { -value } else { value };
         0.5 + 0.5 * value.clamp(-1.0, 1.0)
     }
@@ -686,7 +698,7 @@ impl LfoDrawing {
     /// The right edge has the end of the cycle, rather than the start of the next, so a saw's fall
     /// isn't drawn up the edge. A half cycle stays where its half ends, just short of it, as the
     /// engine does.
-    pub fn level_at(self, x: f32) -> f32 {
+    pub(crate) fn level_at(self, x: f32) -> f32 {
         let turns = f64::from(x.min(self.span() - JUMP)) + self.start();
         self.level_of(deformed_wave(self.shape, turns, 0, self.deform_share()))
     }
@@ -698,7 +710,7 @@ impl LfoDrawing {
 
     /// Where a point so far round the wave, from 0 to 1, is across the cycle drawn. An attractor's
     /// is already where it is across its picture, from 0 to 1.
-    pub fn x_of(self, turns: f64) -> f32 {
+    pub(crate) fn x_of(self, turns: f64) -> f32 {
         if self.shape.is_attractor() {
             return turns.clamp(0.0, 1.0) as f32;
         }
@@ -733,13 +745,13 @@ impl LfoDrawing {
 
 /// Whether an LFO's cycle draws its wave: every shape but the random ones, whose values aren't
 /// known ahead, so drawing a made-up staircase would say something untrue.
-pub fn lfo_draws_its_wave(shape: lfo::Shape) -> bool {
+pub(crate) fn lfo_draws_its_wave(shape: lfo::Shape) -> bool {
     !matches!(shape, lfo::Shape::Random | lfo::Shape::Smooth)
 }
 
 /// One cycle of an LFO, from its `Phase`, at full height, over a dotted centre line. A random one
 /// has the centre line alone, and an attractor is traced side on, as [`attractor_trace`] has it.
-pub fn lfo_cycle(drawing: LfoDrawing, (width, height): (usize, usize)) -> Plot {
+pub(crate) fn lfo_cycle(drawing: LfoDrawing, (width, height): (usize, usize)) -> Plot {
     let mut plot = Plot::new(width, height);
     // One way only, it's at rest where the wave is lowest, or highest flipped.
     let rest = if drawing.unipolar {
@@ -766,7 +778,7 @@ const TRACED_POINTS: usize = 32;
 /// up the picture, as a wave's value is, and the next axis round across it, so the picture is the
 /// attractor itself seen side on, whose shape is the same wherever it started, and the dot rides
 /// it where the LFO is. It traces 16 cycles from its seed, after settling, at its deform.
-pub fn attractor_trace(
+pub(crate) fn attractor_trace(
     drawing: LfoDrawing,
     system: System,
 ) -> [(f32, f32); TRACED_CYCLES * TRACED_POINTS] {
@@ -791,16 +803,16 @@ pub fn attractor_trace(
 /// beside it, and the source's whole span is across the picture, so the map's place shows where in
 /// the notes, the velocities or the rolls it rises.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TrackDrawing {
+pub(crate) struct TrackDrawing {
     pub source: Source,
     pub bounds: Bounds,
     pub flipped: bool,
-    pub unipolar: bool,
+    pub(crate) unipolar: bool,
 }
 
 impl TrackDrawing {
     /// What a Track slot's settings draw.
-    pub fn of(slot: &ModSlot) -> Self {
+    pub(crate) fn of(slot: &ModSlot) -> Self {
         Self {
             source: slot.track.source,
             bounds: slot.track.bounds(),
@@ -810,12 +822,12 @@ impl TrackDrawing {
     }
 
     /// Where a value of its source is across the picture, from 0 to 1.
-    pub fn x_of(self, value: f32) -> f32 {
+    pub(crate) fn x_of(self, value: f32) -> f32 {
         self.source.along(value)
     }
 
     /// Where a level of the map, from 0 to 1, is up the picture, upside down for a negative depth.
-    pub fn level_of(self, level: f32) -> f32 {
+    pub(crate) fn level_of(self, level: f32) -> f32 {
         if self.flipped { 1.0 - level } else { level }
     }
 
@@ -829,7 +841,7 @@ impl TrackDrawing {
 
 /// A Track slot's map across its source's span: flat to `Low`, rising to `High` and flat after,
 /// with a faint line down at each and a dotted line where it's at rest, as an envelope's has.
-pub fn track_map(drawing: TrackDrawing, (width, height): (usize, usize)) -> Plot {
+pub(crate) fn track_map(drawing: TrackDrawing, (width, height): (usize, usize)) -> Plot {
     let mut plot = Plot::new(width, height);
     let rest = if drawing.unipolar {
         drawing.level_of(0.0)
@@ -852,7 +864,7 @@ pub fn track_map(drawing: TrackDrawing, (width, height): (usize, usize)) -> Plot
 /// turns its setting, and where the macro is turned, from 0 to 1, so it's drawn again only when
 /// one of those changes, never for how far apart its ends are.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct MappingDrawing {
+pub(crate) struct MappingDrawing {
     pub curve: i8,
     pub s: i8,
     /// Which way its ends go: `Less` for a setting it turns up, `Greater` down.
@@ -862,7 +874,7 @@ pub struct MappingDrawing {
 
 impl MappingDrawing {
     /// What a mapping with its macro at `value`, `0000` to `FF00`, draws.
-    pub fn of(map: &MacroMap, value: u16) -> Self {
+    pub(crate) fn of(map: &MacroMap, value: u16) -> Self {
         Self {
             curve: map.curve,
             s: map.s,
@@ -883,7 +895,7 @@ impl MappingDrawing {
     }
 
     /// Where its setting is up the picture with the macro `along` its turn.
-    pub fn level_at(self, along: f32) -> f32 {
+    pub(crate) fn level_at(self, along: f32) -> f32 {
         self.level_of(response(along, self.curve, self.s))
     }
 }
@@ -891,7 +903,7 @@ impl MappingDrawing {
 /// A macro mapping's response: the macro's turn across, from `00` at the left to `FF` at the
 /// right, and its setting up, along its curve, over the straight line it bends, dotted, as the
 /// compressor's 1:1 is, with a fainter line down where the macro is turned.
-pub fn mapping(drawing: MappingDrawing, (width, height): (usize, usize)) -> Plot {
+pub(crate) fn mapping(drawing: MappingDrawing, (width, height): (usize, usize)) -> Plot {
     let mut plot = Plot::new(width, height);
     let line = |along: f32| drawing.level_of(along);
     plot.dotted((0.0, line(0.0)), (1.0, line(1.0)), Mark::Grid);
@@ -903,7 +915,7 @@ pub fn mapping(drawing: MappingDrawing, (width, height): (usize, usize)) -> Plot
 
 /// A round dot this many pixels across, smooth at its edge, as a PNG in a colour: what's placed on
 /// an LFO's cycle where it is now.
-pub fn dot(diameter: usize, color: [u8; 3]) -> Vec<u8> {
+pub(crate) fn dot(diameter: usize, color: [u8; 3]) -> Vec<u8> {
     let mut plot = Plot::new(diameter, diameter);
     let radius = diameter as f32 / 2.0;
     for y in 0..plot.height {
@@ -919,7 +931,7 @@ pub fn dot(diameter: usize, color: [u8; 3]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vt_model::envelope::Curve;
+    use vt_model::envelope::{Adsr, Curve};
 
     /// Where the line's middle is down a column of pixels, weighting each by how much of it the
     /// line covers, if the line is in it.

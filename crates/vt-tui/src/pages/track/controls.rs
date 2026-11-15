@@ -188,7 +188,7 @@ impl Control {
 
     /// The setting this is on this track, and its value there, for the status line to show in
     /// its units. The filters' drive and cuts aren't settings yet.
-    pub fn value_on(self, track: &Track) -> Option<(SettingId, u16)> {
+    pub(crate) fn value_on(self, track: &Track) -> Option<(SettingId, u16)> {
         let base = |id: SettingId, value: u8| {
             Some((id, u16::from(value) << 8 | u16::from(track.fine(id))))
         };
@@ -230,7 +230,7 @@ impl Control {
     /// The setting of the registry this is on this track, for a macro to hold: what
     /// [`Control::value_on`] gives, and a mod slot's type's own, the accumulator's and the
     /// arpeggio's that macros and modulation move, while the slot's type has it.
-    pub fn setting_for_macro(self, track: &Track) -> Option<SettingId> {
+    pub(crate) fn setting_for_macro(self, track: &Track) -> Option<SettingId> {
         if let Some((id, _)) = self.value_on(track) {
             return Some(id);
         }
@@ -264,7 +264,7 @@ impl Control {
     /// The setting whose fine part this shows on the Sound page, if it has one: the track's own
     /// that steps can set too, and its machine's that sweep, but not those on the level scale. An
     /// effect's settings are whole, as effects only hear those.
-    pub fn fine_on(self, track: &Track) -> Option<SettingId> {
+    pub(crate) fn fine_on(self, track: &Track) -> Option<SettingId> {
         let id = match self {
             Self::Base(which) => which.setting()?,
             Self::Setting(_) => self.setting_on(track)?,
@@ -274,7 +274,7 @@ impl Control {
     }
 
     /// The setting of the track's machine this is, if it's one.
-    pub fn setting_on(self, track: &Track) -> Option<SettingId> {
+    pub(crate) fn setting_on(self, track: &Track) -> Option<SettingId> {
         match self {
             Self::Setting(setting) => track.machine_setting(setting),
             _ => None,

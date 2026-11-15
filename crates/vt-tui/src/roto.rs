@@ -66,7 +66,7 @@ pub const SETTING_FILE: &str = "roto.ron";
 
 /// Which version of each of vimtracker's stored setups is on the Roto, in the program's cache
 /// folder, so a setup is written again only when it changes.
-pub const VERSIONS_FILE: &str = "roto-setups.ron";
+pub(crate) const VERSIONS_FILE: &str = "roto-setups.ron";
 
 /// How many times the serial port is tried, and how long apart, before the devices with buttons
 /// are left live.
@@ -74,10 +74,11 @@ const SERIAL_TRIES: usize = 3;
 const SERIAL_RETRY: Duration = Duration::from_secs(1);
 
 /// Opens the Roto's serial port, or the fake Roto's, for writing vimtracker's setups.
-pub type OpenSerial = Arc<dyn Fn() -> Result<Box<dyn Serial + Send>, LinkError> + Send + Sync>;
+pub(crate) type OpenSerial =
+    Arc<dyn Fn() -> Result<Box<dyn Serial + Send>, LinkError> + Send + Sync>;
 
 /// The versions of vimtracker's setups last written, kept at `path`, or none if there's no file.
-pub fn load_versions(path: &Path) -> Versions {
+pub(crate) fn load_versions(path: &Path) -> Versions {
     std::fs::read_to_string(path)
         .ok()
         .and_then(|text| ron::from_str(&text).ok())
@@ -85,7 +86,7 @@ pub fn load_versions(path: &Path) -> Versions {
 }
 
 /// Keeps the versions of vimtracker's setups at `path`.
-pub fn save_versions(versions: &Versions, path: &Path) -> std::io::Result<()> {
+pub(crate) fn save_versions(versions: &Versions, path: &Path) -> std::io::Result<()> {
     if let Some(folder) = path.parent() {
         std::fs::create_dir_all(folder)?;
     }
@@ -117,7 +118,7 @@ impl RotoSetting {
     }
 
     /// Keep it at `path` for next time.
-    pub fn save_to(&self, path: &Path) -> std::io::Result<()> {
+    pub(crate) fn save_to(&self, path: &Path) -> std::io::Result<()> {
         if let Some(folder) = path.parent() {
             std::fs::create_dir_all(folder)?;
         }
@@ -179,7 +180,7 @@ pub const LOCK_FILE: &str = "roto.lock";
 const TAKEN_RETRY: Duration = Duration::from_secs(1);
 
 /// Makes the ports the link opens: the system's, or a test's fake Roto.
-pub type MakePorts = Box<dyn Fn() -> Box<dyn Ports>>;
+pub(crate) type MakePorts = Box<dyn Fn() -> Box<dyn Ports>>;
 
 /// The least time between two values shown on one knob's screen: 12 a second, as Ableton's
 /// script has it (`VALUE_UPDATE_FPS`). The last is always shown.
@@ -188,11 +189,11 @@ pub const VALUE_EVERY: Duration = Duration::from_millis(1000 / 12);
 /// How long after the last move, with no knob touched, a gesture's undo step closes: long enough
 /// for a knob's last move to arrive after it's let go, or for a knob turned without a touch, as
 /// a hard twist can be, to be one step.
-pub const GESTURE_PAUSE: Duration = Duration::from_millis(300);
+pub(crate) const GESTURE_PAUSE: Duration = Duration::from_millis(300);
 
 /// The least time between two of the meters' readings sent to the Roto: 12 a second, as Ableton's
 /// script has it (`AUDIO_METER_FPS`).
-pub const METERS_EVERY: Duration = Duration::from_millis(1000 / 12);
+pub(crate) const METERS_EVERY: Duration = Duration::from_millis(1000 / 12);
 
 /// The Roto's transport buttons, in the order it numbers them (CC 28 to 37), as the vendor's
 /// scripts use them: play, stop and record are vimtracker's; session record, loop, punch in and
@@ -214,7 +215,7 @@ struct Gesture {
 /// while its switches are up, and pressing a device to choose it, makes the real Roto (firmware
 /// 3.3.0) switch it as the button goes down, and show it as SEL is let go, asking for its knobs
 /// and sometimes saying `ROTO SELECT PLUGIN`: 3 to 4 seconds apart when the author tried it.
-pub const SELECT_TAKES_BACK: Duration = Duration::from_secs(10);
+pub(crate) const SELECT_TAKES_BACK: Duration = Duration::from_secs(10);
 
 /// A device SEL just switched in or out, which choosing it straight after takes back.
 #[derive(Debug, Clone)]
@@ -281,7 +282,7 @@ pub struct Roto {
     /// that doesn't give one: then every device is shown live.
     pub serial: Option<OpenSerial>,
     /// Where the stored setups' versions are kept between runs, or nowhere.
-    pub versions_path: Option<PathBuf>,
+    pub(crate) versions_path: Option<PathBuf>,
     /// Where the file is that says which vimtracker has the Roto, or nowhere, as in most tests.
     pub lock_path: Option<PathBuf>,
     /// That file, held locked while this one has the Roto; the system lets go of it if the
@@ -378,7 +379,7 @@ pub fn clear_own_setups(
 }
 
 /// The system's serial port to the Roto, found as `roto-probe` finds it.
-pub fn system_serial() -> OpenSerial {
+pub(crate) fn system_serial() -> OpenSerial {
     Arc::new(|| SerialLink::find().map(|link| Box::new(link) as Box<dyn Serial + Send>))
 }
 

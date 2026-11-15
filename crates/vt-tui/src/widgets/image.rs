@@ -8,7 +8,7 @@ use crate::graphics;
 use crate::widgets::theme;
 
 /// An image's placeholders, a span for each row, in its colour.
-pub fn rows(id: u32, width: usize, height: usize) -> Vec<Span<'static>> {
+pub(crate) fn rows(id: u32, width: usize, height: usize) -> Vec<Span<'static>> {
     let style = Style::new().fg(graphics::id_color(id));
     graphics::placeholder_lines(width, height)
         .into_iter()
@@ -18,7 +18,7 @@ pub fn rows(id: u32, width: usize, height: usize) -> Vec<Span<'static>> {
 
 /// An image in a box, a line for each row. The box is square and faint, as it's part of the page's
 /// grid rather than a window over it.
-pub fn boxed(id: u32, width: usize, height: usize) -> Vec<Line<'static>> {
+pub(crate) fn boxed(id: u32, width: usize, height: usize) -> Vec<Line<'static>> {
     let rule = "─".repeat(width);
     let edge = theme::faint();
     let mut lines = vec![Line::styled(format!("┌{rule}┐"), edge)];

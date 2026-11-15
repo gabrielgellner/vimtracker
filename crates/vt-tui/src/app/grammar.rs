@@ -25,7 +25,7 @@ const YANK_REGISTER: char = '0';
 
 /// What `.` repeats.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Change {
+pub(crate) enum Change {
     Operator {
         op: Op,
         cover: Cover,
@@ -66,7 +66,7 @@ pub enum Change {
 
 /// What a repeated change covers, relative to the cursor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Cover {
+pub(crate) enum Cover {
     /// The field under the cursor.
     Cursor,
     /// A vertical or horizontal motion from the cursor.
@@ -149,7 +149,7 @@ enum Adjustment {
 /// add up to (decision 148). Each is its own undo step, and undo and redo while it's selected take
 /// them back and bring them again.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Adjustments {
+pub(crate) struct Adjustments {
     /// Each undo step's changes, in order: one each, or several for a wheel's gesture.
     done: Vec<Vec<Adjustment>>,
     /// What undo took back, the latest last, with nothing for an undo step from before the
@@ -191,7 +191,7 @@ impl Adjustments {
 
     /// What the moves since the selection started, or since its last fill, add up to, as
     /// "+11 semitones" or "+1 large step, -2 steps"; nothing if none has been made.
-    pub fn total(&self) -> Option<String> {
+    pub(crate) fn total(&self) -> Option<String> {
         let done: Vec<Adjustment> = self.done.concat();
         let since = done
             .iter()
@@ -229,7 +229,7 @@ impl Adjustments {
 
 /// A selection as it was, to come back to.
 #[derive(Debug, Clone)]
-pub struct SelectionPlace {
+pub(crate) struct SelectionPlace {
     mode: Mode,
     cursor: Cursor,
     anchor: Option<(usize, Scope)>,

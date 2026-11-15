@@ -32,7 +32,7 @@ pub struct Naming {
 }
 
 /// How long ago something was, roughly, as a file browser says it.
-pub fn ago(elapsed: Duration) -> String {
+pub(crate) fn ago(elapsed: Duration) -> String {
     let minutes = elapsed.as_secs() / 60;
     let (count, unit) = match minutes {
         0 => return "just now".to_owned(),
@@ -48,7 +48,7 @@ pub fn ago(elapsed: Duration) -> String {
 }
 
 /// A sample's length, rate and channels, as the preview gives them: `1.25 s  44.1 kHz  stereo`.
-pub fn sample_note(info: &vt_model::sample::SampleInfo) -> String {
+pub(crate) fn sample_note(info: &vt_model::sample::SampleInfo) -> String {
     let seconds = info.seconds();
     let length = if seconds < 10.0 {
         format!("{seconds:.2} s")
@@ -77,7 +77,7 @@ fn name_of(path: &Path) -> String {
 
 /// The names in a folder, without their extensions and in lower case, which a new name mustn't
 /// be. A folder that can't be read has none.
-pub fn taken_in(folder: &Path) -> HashSet<String> {
+pub(crate) fn taken_in(folder: &Path) -> HashSet<String> {
     let Ok(entries) = std::fs::read_dir(folder) else {
         return HashSet::new();
     };
@@ -105,7 +105,7 @@ const NAMED_BY: [&str; 4] = ["w", "new", "new!", "render"];
 /// A name line with a new name from `name_in`, given the folder as typed, in place of the last
 /// part of its path. The folder, an extension and `:render`'s flags are kept, and a render with no
 /// name yet gets `.wav`, or nothing for `--stems`. Any other line gives nothing.
-pub fn rolled_line(line: &str, name_in: impl FnOnce(&str) -> String) -> Option<String> {
+pub(crate) fn rolled_line(line: &str, name_in: impl FnOnce(&str) -> String) -> Option<String> {
     let (command, argument) = parse::split(line);
     if !NAMED_BY.contains(&command) {
         return None;
@@ -142,7 +142,7 @@ pub fn rolled_line(line: &str, name_in: impl FnOnce(&str) -> String) -> Option<S
 
 /// What a sample's preview shows: its name, then its length, rate and channels and its waveform
 /// once it's been read, or why it couldn't be.
-pub fn sample_preview(item: usize, path: &Path, read: Option<&Read>) -> Shown {
+pub(crate) fn sample_preview(item: usize, path: &Path, read: Option<&Read>) -> Shown {
     let name = name_of(path);
     match read {
         None => Shown::new(item, name, "Loading"),
@@ -155,7 +155,7 @@ pub fn sample_preview(item: usize, path: &Path, read: Option<&Read>) -> Shown {
 }
 
 /// What a project's preview shows: its name, its tempo and tracks, and when it was saved.
-pub fn project_preview(item: usize, folder: &Path) -> Shown {
+pub(crate) fn project_preview(item: usize, folder: &Path) -> Shown {
     let mut name = name_of(folder);
     match project::load_song(folder) {
         Ok(song) => {

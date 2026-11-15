@@ -13,7 +13,7 @@ use crate::overlays::picker::explorer::{self, Icon, Purpose};
 use super::{Item, KitChoice, Outcome, Pick, Picker, Row};
 
 /// The most a search by tag reads below the open folders, so one over the home folder stops.
-pub const MOST_READ: usize = 20_000;
+pub(crate) const MOST_READ: usize = 20_000;
 
 /// The top of the explorer's tree: a folder it starts from, with why it's there dim beside it, or
 /// items given up front under a name, such as the kit's sounds or the shipped patches, drawn
@@ -67,7 +67,7 @@ pub struct Tree {
     /// The tags given by hand, for what's listed (decision 315).
     pub library: Arc<TagLibrary>,
     /// Whether a search by tag stopped reading at [`MOST_READ`].
-    pub read_short: bool,
+    pub(crate) read_short: bool,
     roots: Vec<Root>,
     home: Option<PathBuf>,
     pub(super) nodes: Vec<Node>,
@@ -76,13 +76,13 @@ pub struct Tree {
 }
 
 /// The kit dialog's hint, in a kit's sounds or with any marked.
-pub const MARKING_HINT: &str = "Space mark  a all  Enter load";
+pub(crate) const MARKING_HINT: &str = "Space mark  a all  Enter load";
 
 /// The hint while `T` types an item's tags.
-pub const TAGGING_HINT: &str = "Enter tag  Tab complete  Esc back";
+pub(crate) const TAGGING_HINT: &str = "Enter tag  Tab complete  Esc back";
 
 /// The end of a hint that says `T` tags, left off where it can't: on a shipped patch.
-pub const TAG_HINT: &str = "  T tag";
+pub(crate) const TAG_HINT: &str = "  T tag";
 
 /// Where the cursor was and which folders were open, kept while the tree is read again.
 struct Remembered {
@@ -199,7 +199,7 @@ impl Picker {
     }
 
     /// With every folder at the top of the explorer's tree open.
-    pub fn opening_roots(mut self) -> Self {
+    pub(crate) fn opening_roots(mut self) -> Self {
         let top = self
             .tree
             .as_ref()
@@ -217,7 +217,7 @@ impl Picker {
         self.tree.as_ref()
     }
 
-    pub fn tree_mut(&mut self) -> Option<&mut Tree> {
+    pub(crate) fn tree_mut(&mut self) -> Option<&mut Tree> {
         self.tree.as_mut()
     }
 
@@ -251,7 +251,7 @@ impl Picker {
 
     /// A sample that couldn't be read, which the explorer then shows with a warning wherever
     /// it's listed.
-    pub fn mark_unreadable(&mut self, path: &Path) {
+    pub(crate) fn mark_unreadable(&mut self, path: &Path) {
         let Some(tree) = self.tree.as_mut() else {
             return;
         };
@@ -603,7 +603,7 @@ impl Picker {
 
     /// The items listing a sample file, as a file or as a kit's sound, so a tag given to it shows
     /// wherever it's listed.
-    pub fn items_of_file(&self, path: &Path) -> Vec<usize> {
+    pub(crate) fn items_of_file(&self, path: &Path) -> Vec<usize> {
         self.items
             .iter()
             .enumerate()
@@ -718,7 +718,7 @@ impl Picker {
     }
 
     /// Use these tags given by hand for what's read from now on.
-    pub fn set_library(&mut self, library: Arc<TagLibrary>) {
+    pub(crate) fn set_library(&mut self, library: Arc<TagLibrary>) {
         if let Some(tree) = self.tree.as_mut() {
             tree.library = library;
         }
@@ -726,7 +726,7 @@ impl Picker {
 
     /// Every tag on what's been read, and every one given by hand anywhere, for `Tab` to
     /// complete one from as it's typed.
-    pub fn tags_in_use(&self) -> Vec<String> {
+    pub(crate) fn tags_in_use(&self) -> Vec<String> {
         let mut names: Vec<String> = self
             .items
             .iter()
@@ -927,7 +927,7 @@ impl Picker {
     }
 
     /// Whether this is the kit dialog, which marks a kit's sounds to load as tracks.
-    pub fn marks_sounds(&self) -> bool {
+    pub(crate) fn marks_sounds(&self) -> bool {
         self.tree
             .as_ref()
             .is_some_and(|tree| tree.purpose == Purpose::Kit)
@@ -959,7 +959,7 @@ impl Picker {
     }
 
     /// Whether an item is marked to load.
-    pub fn is_marked(&self, item: usize) -> bool {
+    pub(crate) fn is_marked(&self, item: usize) -> bool {
         let (Some(tree), Some(path)) = (self.tree.as_ref(), self.path(item)) else {
             return false;
         };
@@ -1079,7 +1079,7 @@ impl Picker {
 /// a name has to hold. The last word, while it's a tag being typed, is kept apart too, for the tag
 /// row.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Search {
+pub(super) struct Search {
     pub tags: Vec<String>,
     pub name: String,
     pub typing: Option<String>,
@@ -1087,7 +1087,7 @@ pub struct Search {
 
 impl Search {
     /// A search as typed. Where nothing listed has tags, `#` is only a letter of a name.
-    pub fn of(query: &str, tags: bool) -> Self {
+    pub(super) fn of(query: &str, tags: bool) -> Self {
         let mut search = Self::default();
         if !tags {
             search.name = query.trim().to_owned();
@@ -1108,7 +1108,7 @@ impl Search {
         search
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(super) fn is_empty(&self) -> bool {
         self.tags.is_empty() && self.name.is_empty()
     }
 
@@ -1129,7 +1129,7 @@ impl Search {
     /// search's, which only something chosen can have, and its name holds the rest exactly,
     /// ignoring case. A `#` alone is anything chosen, so it lists all that's below the open
     /// folders.
-    pub fn find(&self, item: &Item, chosen: bool) -> Option<Vec<u32>> {
+    pub(super) fn find(&self, item: &Item, chosen: bool) -> Option<Vec<u32>> {
         if !self.tags.is_empty() {
             let has = |wanted: &String| {
                 wanted.is_empty()

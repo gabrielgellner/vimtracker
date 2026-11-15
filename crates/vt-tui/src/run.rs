@@ -81,14 +81,14 @@ pub struct RenderRequest {
 }
 
 /// What a stem render reports.
-pub fn stems_written(count: usize, folder: &Path) -> String {
+pub(crate) fn stems_written(count: usize, folder: &Path) -> String {
     let stems = if count == 1 { "stem" } else { "stems" };
     format!("Rendered {count} {stems} to {}", folder.display())
 }
 
 /// Write one file per stem that would be heard, as `01-BD.wav` or `02.wav` for a track and
 /// `G1.wav` or `G1-DR.wav` for a group, and return how many.
-pub fn write_stems(
+pub(crate) fn write_stems(
     version: &Published,
     folder: &Path,
     rate: u32,

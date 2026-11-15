@@ -55,7 +55,7 @@ const LONGEST_TYPED: usize = 12;
 /// The project page's sub-pages, in order, moved between with `H` and `L`: the song's own
 /// settings, then the audio of the machine it plays on, which is kept in the config folder
 /// rather than the song (decision 297). Each is a view of its own, so each keeps its cursor.
-pub const PROJECT_PAGES: [View; 2] = [View::Project, View::Audio];
+pub(crate) const PROJECT_PAGES: [View; 2] = [View::Project, View::Audio];
 
 /// One row's setting, or what it does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -180,7 +180,7 @@ impl ProjectControl {
     }
 
     /// Whether this is something to do rather than a value.
-    pub fn is_action(self) -> bool {
+    pub(crate) fn is_action(self) -> bool {
         self.meaning().is_some()
     }
 

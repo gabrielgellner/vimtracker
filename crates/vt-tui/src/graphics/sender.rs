@@ -46,7 +46,7 @@ const PANEL_FRAMES: usize = SCOPE_FRAMES;
 /// pointing down at the bottom of a character, its tip as wide as its line in the waveform, so
 /// placed over the line it sits on it. It's [`mark_reach`] pixels either side of the line across,
 /// and a pixel more than that down, so its sides slope at 45 degrees, as `▾`'s do.
-pub fn mark_png(kind: MarkKind, cell: (usize, usize)) -> Vec<u8> {
+pub(crate) fn mark_png(kind: MarkKind, cell: (usize, usize)) -> Vec<u8> {
     mark_picture(kind, cell).png()
 }
 
@@ -75,7 +75,7 @@ pub fn dot_pixels(cell: (usize, usize)) -> usize {
 /// at `corner`: centred where the LFO is now, across at its place in the cycle drawn and up at its
 /// wave's value, upside down for a negative depth as the cycle is, and kept inside the picture. A
 /// Track slot's goes on its map where its last note is.
-pub fn dot_placement(
+pub(crate) fn dot_placement(
     cell: (usize, usize),
     corner: (u16, u16),
     modulator: &ModSlot,
@@ -115,7 +115,7 @@ pub fn dot_placement(
 /// Where a dot this many pixels across goes, centred on a point `(x, level)` from 0 to 1 of a
 /// picture this many characters across and down whose top left is at `corner`, and kept inside
 /// it.
-pub fn placed_dot(
+pub(crate) fn placed_dot(
     cell: (usize, usize),
     corner: (u16, u16),
     (columns, rows): (usize, usize),
@@ -349,7 +349,7 @@ impl Graphics {
     /// Start a frame: have the terminal forget the images the screen has moved on from. Then the
     /// pictures the screen is about to show are sent, with [`Graphics::panels`] and the rest,
     /// and [`Graphics::finish`] ends it.
-    pub fn begin(&mut self, out: &mut impl Write) -> io::Result<()> {
+    pub(crate) fn begin(&mut self, out: &mut impl Write) -> io::Result<()> {
         for id in self.retired.drain(..) {
             forget(out, id)?;
         }
@@ -379,7 +379,7 @@ impl Graphics {
     /// Find the on/off switches on the screen ratatui has just drawn, for [`Graphics::place`] to
     /// place their pictures over, and hide their glyphs under them (decision 256). Called on the
     /// frame being drawn, before it reaches the terminal.
-    pub fn find_switches(&mut self, buffer: &mut Buffer) {
+    pub(crate) fn find_switches(&mut self, buffer: &mut Buffer) {
         self.switches_wanted = switches::find(buffer);
     }
 

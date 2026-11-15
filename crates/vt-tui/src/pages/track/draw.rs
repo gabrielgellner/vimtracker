@@ -37,7 +37,7 @@ mod zoom;
 
 pub(crate) use generators::playing_row as gen_playing_row;
 
-pub use modulation::CyclesAt;
+pub(crate) use modulation::CyclesAt;
 pub(crate) use modulation::{MOD_PANEL_HEIGHT, MOD_PANEL_WIDTH, mod_being_edited};
 pub(crate) use zoom::{ZOOM_CURVE_WIDTH, ZOOM_EQ_WIDTH, ZOOM_PANEL_HEIGHT};
 
@@ -381,11 +381,11 @@ fn slot_panel(page: &TrackPage, ctx: &Ctx, track: &Track, slot: usize) -> Graphi
 
 /// Where the pictures that carry a dot are, as the track page drew them.
 #[derive(Debug, Clone, Default)]
-pub struct Drawn {
+pub(crate) struct Drawn {
     /// The Mod page's LFO cycles and Track maps, by slot.
     pub cycles: CyclesAt,
     /// The Gen page's previews, by their generator's place in its phrase's list.
-    pub previews: Vec<(usize, (u16, u16))>,
+    pub(crate) previews: Vec<(usize, (u16, u16))>,
 }
 
 /// Draw the page, as its `Page::draw`, giving back where the Mod page's LFO cycles and the Gen

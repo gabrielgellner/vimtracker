@@ -52,7 +52,7 @@ pub(crate) fn mod_being_edited(page: &TrackPage, ctx: &Ctx) -> Option<usize> {
 /// Where each LFO's cycle or Track slot's map is on screen, by its slot and the character at its
 /// top left, for the terminal to place its dot over: none for a slot of another type or one that
 /// isn't drawn.
-pub type CyclesAt = [Option<(u16, u16)>; MOD_SLOTS];
+pub(crate) type CyclesAt = [Option<(u16, u16)>; MOD_SLOTS];
 
 /// A modulator's panel: an envelope's shape or an LFO's cycle, in a box, once its image has been
 /// sent.

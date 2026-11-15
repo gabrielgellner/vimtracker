@@ -66,7 +66,7 @@ pub struct Report {
 
 /// The newest Live in `/Applications`, by its version and then Suite before Standard and the
 /// rest, as its Core Library folder.
-pub fn default_library() -> Option<PathBuf> {
+pub(crate) fn default_library() -> Option<PathBuf> {
     let entries = fs::read_dir("/Applications").ok()?;
     let mut lives: Vec<(u32, u32, PathBuf)> = entries
         .flatten()
@@ -90,7 +90,7 @@ pub fn default_library() -> Option<PathBuf> {
 
 /// The `Samples` folder of the Live that `default_library` finds, with its `Loops`, `One Shots`
 /// and `Multisamples`, which the imported kits play from.
-pub fn default_samples() -> Option<PathBuf> {
+pub(crate) fn default_samples() -> Option<PathBuf> {
     default_library()
         .map(|library| library.join("Samples"))
         .filter(|samples| samples.is_dir())
@@ -678,7 +678,7 @@ fn sort_parts(parts: &[Part], sending: i32) -> Sorted<'_> {
 }
 
 /// The Rytm's name for a drum, guessed from words in a pad's name or its sample's path.
-pub fn guess_label(text: &str) -> Option<String> {
+pub(crate) fn guess_label(text: &str) -> Option<String> {
     let lower = text.to_lowercase();
     let words: Vec<&str> = lower
         .split(|c: char| !c.is_ascii_alphanumeric())

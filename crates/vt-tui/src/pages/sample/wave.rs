@@ -27,10 +27,10 @@ use crate::widgets::theme;
 /// The colours of the picture, by their numbers in it.
 pub const WAVE: u8 = 1;
 /// The sound before the start or after the end, which doesn't play.
-pub const OUTSIDE: u8 = 2;
+pub(crate) const OUTSIDE: u8 = 2;
 pub const ZERO: u8 = 3;
 pub const START: u8 = 4;
-pub const END: u8 = 5;
+pub(crate) const END: u8 = 5;
 pub const LOOP: u8 = 6;
 pub const SLICE: u8 = 7;
 
@@ -41,12 +41,12 @@ pub const END_COLOR: Color = theme::RED;
 pub const LOOP_COLOR: Color = theme::BLUE;
 pub const SLICE_COLOR: Color = theme::PEACH;
 /// The letters naming slices, which aren't points of their own but stand beside their slices'.
-pub const MARK_COLOR: Color = theme::MAUVE;
+pub(crate) const MARK_COLOR: Color = theme::MAUVE;
 
 /// How wide a point's line is, in pixels.
-pub const POINT_PIXELS: usize = 2;
+pub(crate) const POINT_PIXELS: usize = 2;
 /// How wide a slice's line is, thinner than the points', as there can be many.
-pub const SLICE_PIXELS: usize = 1;
+pub(crate) const SLICE_PIXELS: usize = 1;
 /// The fewest pixels a frame has to itself for it to be drawn as a dot as well as a line.
 const DOT_SPACING: f64 = 6.0;
 /// How far a dot reaches from its frame, in pixels, either way.
@@ -353,7 +353,7 @@ impl Wave {
 
 /// An entry's points as the waveform draws them, where they are and nothing else, so changing a
 /// slice's own settings or a letter doesn't send the picture again.
-pub fn drawn_points(points: &Points) -> Points {
+pub(crate) fn drawn_points(points: &Points) -> Points {
     let mut drawn = points.clone();
     drawn.marks.clear();
     for slice in &mut drawn.slices {
@@ -368,7 +368,7 @@ pub fn drawn_points(points: &Points) -> Points {
 /// as the sample page's waveform is, with the start's teal line and the end's red one, the sound
 /// between them in the text's colour and the rest dim.
 #[derive(Debug, Clone)]
-pub struct Thumbnail {
+pub(crate) struct Thumbnail {
     /// The file's analysis, held so another file can't be mistaken for it.
     pub analysis: Arc<Analysis>,
     /// Its frames at the program's rate, if they're in, to draw closer than the analysis goes.
@@ -393,7 +393,7 @@ impl Thumbnail {
     /// `Start` and `Length` as they're set, cut as the engine cuts a note's span: `Start` and
     /// `Length` are shares of the slice from where it starts in play order, and `Thru` plays on
     /// past the slice to the entry's end.
-    pub fn of(
+    pub(crate) fn of(
         entry: &BankEntry,
         analysis: Arc<Analysis>,
         frames: Option<(Arc<SampleData>, Rates)>,
@@ -439,7 +439,7 @@ impl Thumbnail {
 
     /// Its picture, `columns` by `rows` characters of `cell` pixels each, both channels together
     /// in one lane: the sound that plays in `sound` and the rest in `outside`.
-    pub fn picture(
+    pub(crate) fn picture(
         &self,
         (columns, rows): (usize, usize),
         cell: (usize, usize),

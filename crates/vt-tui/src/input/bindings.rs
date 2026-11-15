@@ -337,7 +337,7 @@ pub const CMD_ADJUSTS: [(&str, &str); 4] = [("=", "D-l"), ("-", "D-h"), ("+", "D
 
 /// The key a Cmd key stands for by [`CMD_ADJUSTS`], for the keys read outside the table, as the
 /// shape panel's are.
-pub fn adjusting_key(key: Key) -> Option<Key> {
+pub(crate) fn adjusting_key(key: Key) -> Option<Key> {
     CMD_ADJUSTS
         .iter()
         .find(|(_, with_cmd)| parse(with_cmd).is_ok_and(|named| named == key))
@@ -488,7 +488,7 @@ impl Table {
     }
 
     /// What could come next after these keys, for the popup.
-    pub fn continuations(&self, mode: Mode, keys: &[Key]) -> Vec<(String, &'static str)> {
+    pub(crate) fn continuations(&self, mode: Mode, keys: &[Key]) -> Vec<(String, &'static str)> {
         self.rows
             .iter()
             .filter(|(binding, row)| {
@@ -515,7 +515,7 @@ impl Default for Table {
 
 /// The notes Insert mode's keys play, as semitones above the current octave's C: a piano's
 /// octave, the home row its white keys and the row above its black, as in Ableton.
-pub fn note_key(key: char) -> Option<u8> {
+pub(crate) fn note_key(key: char) -> Option<u8> {
     Some(match key {
         'a' => 0,
         'w' => 1,
@@ -535,7 +535,7 @@ pub fn note_key(key: char) -> Option<u8> {
 
 /// A key's place along a scale, with `a` on the root: the home row counts up through the first
 /// seven notes and the row above through the next, as Push's In Key Sequential layout does.
-pub fn degree_key(key: char) -> Option<usize> {
+pub(crate) fn degree_key(key: char) -> Option<usize> {
     "asdfghjqwertyu".chars().position(|degree| degree == key)
 }
 

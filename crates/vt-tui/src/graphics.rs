@@ -10,27 +10,28 @@
 
 use ratatui::style::Color;
 
-pub mod curve;
+pub(crate) mod curve;
 mod encoding;
-pub mod generators;
+pub(crate) mod generators;
 mod panels;
-pub mod plot;
+pub(crate) mod plot;
 mod protocol;
 mod sender;
 pub(crate) mod slots;
 mod switches;
 
-pub use encoding::{Picture, scope_png, spans_png, waveform_spans};
+pub use encoding::Picture;
+pub(crate) use encoding::waveform_spans;
 pub use panels::{PanelIds, PanelKey};
 pub(crate) use panels::{PanelWant, Shape};
-pub use protocol::{
-    DEFAULT_CELL, Image, MOST_CELLS, Placement, id_color, place_at, placeholder_lines, store,
-    supports_graphics, transmit, unplace, unplace_all,
-};
+pub use protocol::{DEFAULT_CELL, id_color, placeholder_lines, store};
 pub(crate) use protocol::{PLACEHOLDER, POSITIONS};
-pub use sender::{
-    Graphics, Placements, SampleLines, dot_pixels, dot_placement, mark_png, placed_dot,
-};
+pub(crate) use protocol::{Placement, supports_graphics};
+// The screenshots' tests check what they place against the commands themselves.
+#[cfg(test)]
+pub(crate) use protocol::{Image, place_at, transmit, unplace};
+pub use sender::{Graphics, dot_pixels};
+pub(crate) use sender::{Placements, SampleLines, dot_placement, placed_dot};
 
 /// The grid of dots a waveform or the scope is drawn on, for each character.
 const CELL_DOTS_ACROSS: usize = 6;

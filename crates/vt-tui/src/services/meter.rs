@@ -14,7 +14,7 @@ const HOLD_SECONDS: f32 = 1.5;
 const AVERAGE_SECONDS: f32 = 0.3;
 
 /// The top of the scale, in dB. Levels can go higher, and the readout still shows them.
-pub const TOP_DB: f32 = 6.0;
+pub(crate) const TOP_DB: f32 = 6.0;
 
 /// The scale, as dB and height pairs, modelled on Ableton Live's: an even spread above `-20` for
 /// detail near full level, tightening below it. Live's manual gives no values, so these are a
@@ -31,7 +31,7 @@ const SCALE: [(f32, f32); 8] = [
 ];
 
 /// A linear level in dB, stopping at the floor.
-pub fn to_db(level: f32) -> f32 {
+pub(crate) fn to_db(level: f32) -> f32 {
     if level > 0.0 {
         (20.0 * level.log10()).max(FLOOR_DB)
     } else {
@@ -40,7 +40,7 @@ pub fn to_db(level: f32) -> f32 {
 }
 
 /// How high up the scale a level sits, from 0 to 1.
-pub fn height_of(db: f32) -> f32 {
+pub(crate) fn height_of(db: f32) -> f32 {
     let db = db.clamp(FLOOR_DB, TOP_DB);
     for pair in SCALE.windows(2) {
         let ((low_db, low), (high_db, high)) = (pair[0], pair[1]);
@@ -52,7 +52,7 @@ pub fn height_of(db: f32) -> f32 {
 }
 
 /// The level at a height on the scale, the reverse of [`height_of`].
-pub fn db_at(height: f32) -> f32 {
+pub(crate) fn db_at(height: f32) -> f32 {
     let height = height.clamp(0.0, 1.0);
     for pair in SCALE.windows(2) {
         let ((low_db, low), (high_db, high)) = (pair[0], pair[1]);
@@ -168,9 +168,9 @@ impl Meter {
 
 /// How many places a gain reduction history keeps across its sweep, finer than any box it's
 /// drawn in, so each column of one is the deepest of the places it covers.
-pub const HISTORY_PLACES: usize = 256;
+pub(crate) const HISTORY_PLACES: usize = 256;
 /// How long a gain reduction history's sweep is, in beats: two bars.
-pub const HISTORY_BEATS: f64 = 8.0;
+pub(crate) const HISTORY_BEATS: f64 = 8.0;
 
 /// What each FX slot of the cursor's track turned down over the last two bars, for the FX page's
 /// zoom (decision 329). It's a sweep: a place a little over a sixtieth of a second wide at 120 BPM

@@ -16,15 +16,15 @@
 //! Everything here is in frames at the file's own rate, as an entry's points are, so the cursor
 //! stays on the same sound whatever rate the program plays at.
 
-pub mod auditioning;
+pub(crate) mod auditioning;
 pub mod draw;
-pub mod marking;
-pub mod placing;
-pub mod points;
+pub(crate) mod marking;
+pub(crate) mod placing;
+pub(crate) mod points;
 pub mod settings;
-pub mod slicing;
+pub(crate) mod slicing;
 pub mod wave;
-pub mod waveform;
+pub(crate) mod waveform;
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -55,19 +55,19 @@ use crate::services::Services;
 
 /// How many columns the waveform has until the page is first drawn: the author's screen, 163
 /// characters across, less a column either side.
-pub const DEFAULT_COLUMNS: usize = 161;
+pub(crate) const DEFAULT_COLUMNS: usize = 161;
 
 /// How soon after a step a press of the same key still counts as the terminal repeating it, as
 /// kitty on macOS has sent a held key's repeats as presses.
-pub const REPEAT_PRESS: Duration = Duration::from_millis(60);
+pub(crate) const REPEAT_PRESS: Duration = Duration::from_millis(60);
 
 /// How long a held `h` or `l` can go between repeats and keep its speed. A longer gap starts it
 /// again from a pixel.
-pub const REPEAT_GAP: Duration = Duration::from_millis(250);
+pub(crate) const REPEAT_GAP: Duration = Duration::from_millis(250);
 
 /// How long a held `h` or `l` takes to build from a pixel a repeat to a column, counted from its
 /// first repeat.
-pub const SPEED_UP: Duration = Duration::from_millis(500);
+pub(crate) const SPEED_UP: Duration = Duration::from_millis(500);
 
 /// A key of the sample page's own, beside the motions it shares with the other views.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -151,9 +151,9 @@ pub struct SamplePage {
     /// out for other room, or none while it shows nothing.
     settled: Option<u64>,
     /// Whether the cursor is a thin line at its frame rather than its column's background.
-    pub cursor_line: bool,
+    pub(crate) cursor_line: bool,
     /// Where the waveform was last drawn on screen, if it was.
-    pub on_screen: Option<WaveOnScreen>,
+    pub(crate) on_screen: Option<WaveOnScreen>,
     /// A bank entry shown in place of a track's own, while that track is the cursor's, as `g d`
     /// on a step's `SLI` under an `SMP` of its own shows the sample the step plays.
     pub pinned: Option<(usize, u8)>,
@@ -167,14 +167,14 @@ pub struct SamplePage {
     /// file the preview voices have, so its playhead is shown over this entry and no other.
     pub heard: Option<(u8, ContentHash)>,
     /// How many times the page has played something, so a key let go stops only what it started.
-    pub hearings: u64,
+    pub(crate) hearings: u64,
     /// The slice the keys mode's first key plays, a multiple of [`PADS`](auditioning::PADS).
     pub pads_from: usize,
     /// Where a selection of frames started, while `v` is selecting: it reaches from there to the
     /// cursor, both included.
     pub anchor: Option<u64>,
     /// The first and last frame of the last selection, for `'<`, `'>` and `gv`.
-    pub last_selection: Option<(u64, u64)>,
+    pub(crate) last_selection: Option<(u64, u64)>,
     /// The setting the settings rows have the focus on, if they have it rather than the waveform.
     pub setting: Option<SampleSetting>,
     /// The ids of the pictures of the waveform and its overview, for the drawing to put
@@ -271,19 +271,6 @@ impl Shown {
         self.entry.edit.points.end_in(self.length())
     }
 
-    /// Where each slice starts, in order: the entry's start alone, as one slice, if it has none.
-    pub fn slice_starts(&self) -> Vec<u64> {
-        let points = &self.entry.edit.points;
-        if points.slices.is_empty() {
-            return vec![points.start.min(self.length())];
-        }
-        points
-            .slices
-            .iter()
-            .map(|slice| slice.start.min(self.length()))
-            .collect()
-    }
-
     /// How many slices it has to choose from: the entry as one, if it has none.
     pub fn slice_count(&self) -> usize {
         self.entry.edit.points.slice_count()
@@ -349,7 +336,7 @@ impl Shown {
 
     /// The place among these onsets of the sound a frame is in: the last to start at or before
     /// it, or the first if none has.
-    pub fn sound_at(onsets: &[u64], frame: u64) -> usize {
+    pub(crate) fn sound_at(onsets: &[u64], frame: u64) -> usize {
         onsets
             .iter()
             .rposition(|onset| *onset <= frame)
@@ -358,7 +345,7 @@ impl Shown {
 
     /// The first frame of a stretch louder than a level in any channel, as the pool holds the
     /// file's frames, if any is.
-    pub fn first_above(&self, frames: std::ops::Range<u64>, level: f32) -> Option<u64> {
+    pub(crate) fn first_above(&self, frames: std::ops::Range<u64>, level: f32) -> Option<u64> {
         let (data, rates) = self.frames.as_ref()?;
         let channels = self.analysis.channels().min(2);
         frames.into_iter().find(|frame| {
@@ -371,7 +358,7 @@ impl Shown {
 
     /// The first or last frame of a stretch whose sound is above [`SILENCE_DB`], in any channel.
     /// The pyramid finds the first bucket with sound in it, and the frames find where in it.
-    pub fn sound_edge(&self, frames: std::ops::Range<u64>, last: bool) -> Option<u64> {
+    pub(crate) fn sound_edge(&self, frames: std::ops::Range<u64>, last: bool) -> Option<u64> {
         let threshold = 10_f32.powf(SILENCE_DB / 20.0);
         let pyramid = &self.analysis.pyramid;
         let size = Pyramid::bucket_frames(0);
@@ -411,7 +398,7 @@ impl Shown {
 impl SamplePage {
     /// The page's text objects, while it selects: a sound is a word, and a slice a paragraph.
     /// They're its rows of the binding table beside [`Page::KEYS`], under its Visual mode.
-    pub const OBJECTS: &'static [(&'static str, Cmd, &'static str)] = &[
+    pub(crate) const OBJECTS: &'static [(&'static str, Cmd, &'static str)] = &[
         (
             "i s",
             Cmd::Sample(SampleKey::ThisSound),
@@ -426,7 +413,7 @@ impl SamplePage {
     }
 
     /// The column a frame is in, at the zoom shown.
-    pub fn column_of(&self, frame: u64) -> u64 {
+    pub(crate) fn column_of(&self, frame: u64) -> u64 {
         frame / self.zoom.max(1)
     }
 
@@ -441,7 +428,7 @@ impl SamplePage {
     }
 
     /// A frame's column on screen, counted from the view's left, if it's in view.
-    pub fn on_screen_column(&self, frame: u64) -> Option<usize> {
+    pub(crate) fn on_screen_column(&self, frame: u64) -> Option<usize> {
         let column = self.column_of(frame).checked_sub(self.column)?;
         (column < self.columns as u64).then_some(column as usize)
     }
@@ -453,7 +440,7 @@ impl SamplePage {
     }
 
     /// End a selection, keeping its ends for `'<`, `'>` and `gv`.
-    pub fn end_selection(&mut self) {
+    pub(crate) fn end_selection(&mut self) {
         if let Some(selected) = self.selection() {
             self.last_selection = Some((selected.start, selected.end - 1));
         }
@@ -613,7 +600,7 @@ impl SamplePage {
 
     /// The next zoom in: half as many frames a column, down to one. From the widest zoom, which
     /// needn't be a power of two, it's the power of two below it.
-    pub fn zoomed_in(zoom: u64) -> u64 {
+    pub(crate) fn zoomed_in(zoom: u64) -> u64 {
         if zoom <= 1 {
             1
         } else if zoom.is_power_of_two() {
@@ -624,7 +611,7 @@ impl SamplePage {
     }
 
     /// The next zoom out: twice as many frames a column, up to the widest.
-    pub fn zoomed_out(zoom: u64, fit: u64) -> u64 {
+    pub(crate) fn zoomed_out(zoom: u64, fit: u64) -> u64 {
         zoom.saturating_mul(2).min(fit)
     }
 }
@@ -632,7 +619,7 @@ impl SamplePage {
 impl SamplePage {
     /// The bank entry the page shows while a track is the cursor's: one a jump chose for it, or
     /// the one it plays, by its number, or why there's none.
-    pub fn entry_here<'a>(
+    pub(crate) fn entry_here<'a>(
         &self,
         song: &'a Song,
         track: usize,
@@ -659,7 +646,7 @@ impl SamplePage {
     }
 
     /// Bring the page up to date with what it shows, starting afresh if it's another sample.
-    pub fn settle_on(&mut self, shown: &Shown) {
+    pub(crate) fn settle_on(&mut self, shown: &Shown) {
         if self.shown != Some((shown.number, shown.analysis.hash)) {
             self.start_on(shown);
         }
@@ -669,7 +656,7 @@ impl SamplePage {
 
     /// Lay the page out for this much room, so the waveform has as many columns as it's drawn
     /// with, and what it shows settles inside them.
-    pub fn lay_out(&mut self, area: Rect) {
+    pub(crate) fn lay_out(&mut self, area: Rect) {
         let columns = wave_columns(page_size(area).0);
         if columns == self.columns {
             return;
@@ -681,7 +668,7 @@ impl SamplePage {
     }
 
     /// The ids of the waveform's picture and the overview's, while the terminal has both.
-    pub fn wave_images(&self) -> Option<(u32, u32)> {
+    pub(crate) fn wave_images(&self) -> Option<(u32, u32)> {
         let images = &self.images;
         images
             .get(PanelKey::SampleWave)
@@ -1398,7 +1385,7 @@ impl App {
 
     /// A bank entry by its number, with its analysis, as the page would show it, or why it can't:
     /// it's still recording, or as [`Shown::of`] says.
-    pub fn shown_of(&self, number: u8, entry: &BankEntry) -> Result<Shown, String> {
+    pub(crate) fn shown_of(&self, number: u8, entry: &BankEntry) -> Result<Shown, String> {
         if let Some(why) = self.still_recording(number) {
             return Err(why);
         }
@@ -1408,7 +1395,7 @@ impl App {
     /// The sample page's own modes, as the status line's badge names them: `PADS` for the keys
     /// mode, `VISUAL` while selecting, and `SETTINGS` with the focus on the settings rows, where
     /// `h` and `l` go along the rows rather than the waveform. None on the waveform.
-    pub fn sample_mode(&self) -> Option<&'static str> {
+    pub(crate) fn sample_mode(&self) -> Option<&'static str> {
         if self.modes.view != View::Sample {
             return None;
         }
@@ -1521,13 +1508,13 @@ fn zoom_by(page: &mut SamplePage, times: u64, closer: bool, length: u64) {
 /// How many pixels a held `h` or `l` moves each repeat, this long after its first repeat: one at
 /// first, building on a square's curve to a character's width, a column, after [`SPEED_UP`], so it
 /// creeps for fine placing and then crosses the sample.
-pub fn held_pixels(cell: u64, held: Duration) -> u64 {
+pub(crate) fn held_pixels(cell: u64, held: Duration) -> u64 {
     let along = (held.as_secs_f64() / SPEED_UP.as_secs_f64()).min(1.0);
     1 + (cell.saturating_sub(1) as f64 * along * along).round() as u64
 }
 
 /// How many of a file's frames a beat lasts at a tempo, in thousandths of a beat a minute.
-pub fn beat_frames(rate: u32, millibpm: u32) -> f64 {
+pub(crate) fn beat_frames(rate: u32, millibpm: u32) -> f64 {
     f64::from(rate) * 60_000.0 / f64::from(millibpm.max(1))
 }
 

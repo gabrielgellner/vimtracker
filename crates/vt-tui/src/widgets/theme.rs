@@ -8,25 +8,25 @@ use vt_model::song::Role;
 use crate::input::mode::Mode;
 
 pub const ROSEWATER: Color = Color::Rgb(0xf2, 0xd5, 0xcf);
-pub const PINK: Color = Color::Rgb(0xf4, 0xb8, 0xe4);
+pub(crate) const PINK: Color = Color::Rgb(0xf4, 0xb8, 0xe4);
 pub const MAUVE: Color = Color::Rgb(0xca, 0x9e, 0xe6);
-pub const MAROON: Color = Color::Rgb(0xea, 0x99, 0x9c);
+pub(crate) const MAROON: Color = Color::Rgb(0xea, 0x99, 0x9c);
 pub const RED: Color = Color::Rgb(0xe7, 0x82, 0x84);
 pub const PEACH: Color = Color::Rgb(0xef, 0x9f, 0x76);
 pub const YELLOW: Color = Color::Rgb(0xe5, 0xc8, 0x90);
 pub const GREEN: Color = Color::Rgb(0xa6, 0xd1, 0x89);
 pub const TEAL: Color = Color::Rgb(0x81, 0xc8, 0xbe);
-pub const SKY: Color = Color::Rgb(0x99, 0xd1, 0xdb);
-pub const BLUE: Color = Color::Rgb(0x8c, 0xaa, 0xee);
-pub const LAVENDER: Color = Color::Rgb(0xba, 0xbb, 0xf1);
+pub(crate) const SKY: Color = Color::Rgb(0x99, 0xd1, 0xdb);
+pub(crate) const BLUE: Color = Color::Rgb(0x8c, 0xaa, 0xee);
+pub(crate) const LAVENDER: Color = Color::Rgb(0xba, 0xbb, 0xf1);
 pub const TEXT: Color = Color::Rgb(0xc6, 0xd0, 0xf5);
 pub const SUBTEXT1: Color = Color::Rgb(0xb5, 0xbf, 0xe2);
 pub const OVERLAY2: Color = Color::Rgb(0x94, 0x9c, 0xbb);
 pub const OVERLAY0: Color = Color::Rgb(0x73, 0x79, 0x94);
 pub const SURFACE1: Color = Color::Rgb(0x51, 0x57, 0x6d);
-pub const SURFACE0: Color = Color::Rgb(0x41, 0x45, 0x59);
+pub(crate) const SURFACE0: Color = Color::Rgb(0x41, 0x45, 0x59);
 pub const BASE: Color = Color::Rgb(0x30, 0x34, 0x46);
-pub const MANTLE: Color = Color::Rgb(0x29, 0x2c, 0x3c);
+pub(crate) const MANTLE: Color = Color::Rgb(0x29, 0x2c, 0x3c);
 /// Under a step's FX, a shade darker than the screen, so they sit back from the notes.
 pub const FX_BAND: Color = MANTLE;
 
@@ -59,12 +59,12 @@ pub fn selected() -> Style {
 }
 
 /// A note outside the scale.
-pub fn out_of_scale() -> Style {
+pub(crate) fn out_of_scale() -> Style {
     Style::new().fg(PEACH)
 }
 
 /// A label to press to jump somewhere.
-pub fn jump_label() -> Style {
+pub(crate) fn jump_label() -> Style {
     Style::new().fg(BASE).bg(PEACH).add_modifier(Modifier::BOLD)
 }
 
@@ -90,7 +90,7 @@ pub fn faint() -> Style {
 }
 
 /// Something has gone wrong and needs noticing.
-pub fn warning() -> Style {
+pub(crate) fn warning() -> Style {
     Style::new().fg(RED).add_modifier(Modifier::BOLD)
 }
 
@@ -162,4 +162,4 @@ pub fn role(role: Role) -> Option<Color> {
 
 /// The rule under a bus's name, a return's, the master's, or a group's whose tracks are for
 /// different things: the grey of dim text, as a bus plays nothing of its own.
-pub const BUS: Color = OVERLAY2;
+pub(crate) const BUS: Color = OVERLAY2;

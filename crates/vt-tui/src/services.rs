@@ -4,18 +4,18 @@
 //! borrow them mutably while it borrows itself, and an edit on a page applies an action as one in
 //! `App` does.
 
-pub mod analysing;
+pub(crate) mod analysing;
 pub mod audio;
-pub mod automating;
-pub mod autosave;
+pub(crate) mod automating;
+pub(crate) mod autosave;
 pub mod banking;
 pub mod config;
-pub mod folding;
-pub mod heard;
-pub mod loading;
+pub(crate) mod folding;
+pub(crate) mod heard;
+pub(crate) mod loading;
 pub mod meter;
 pub mod sampling;
-pub mod scope;
+pub(crate) mod scope;
 
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
@@ -89,7 +89,7 @@ pub struct Services {
     pub transport: Transport,
     pub playhead: usize,
     /// How far through the playhead's step the engine last said it was, and when that was read.
-    pub progress: f32,
+    pub(crate) progress: f32,
     /// Where each track is heard, as its own steps count, which a track at another speed than the
     /// song's needs.
     pub places: [TrackPlace; MAX_TRACKS],
@@ -273,7 +273,7 @@ impl Services {
 
     /// How far a track is through this chain, if it's playing it, counting every time round it
     /// since it started, as the engine does to deal a dealt order, for finding the row playing.
-    pub fn playing_place(&self, track: usize, chain: u32) -> Option<usize> {
+    pub(crate) fn playing_place(&self, track: usize, chain: u32) -> Option<usize> {
         let moving = matches!(self.transport, Transport::Playing | Transport::Paused);
         let jam = self.jam.get(track)?;
         if !moving || jam.chain != Some(chain) {
@@ -340,13 +340,13 @@ impl Services {
 
     /// The cursor's track as the latest report's live values were worked out from, which is a
     /// frame or so behind the song while it's being changed.
-    pub fn reported_track(&self) -> Option<&Track> {
+    pub(crate) fn reported_track(&self) -> Option<&Track> {
         let song = self.live_song.as_ref().unwrap_or_else(|| self.song());
         song.tracks.get(self.cursor.track)
     }
 
     /// What a track's dealt orders are dealt from, as the engine deals them.
-    pub fn dealer(&self, track: usize) -> Dealer {
+    pub(crate) fn dealer(&self, track: usize) -> Dealer {
         Dealer::new(self.song().seed, track)
     }
 
@@ -358,7 +358,7 @@ impl Services {
 
     /// The step of its own that one track is at when another is at this one of its own, at their
     /// own speeds: the step playing then.
-    pub fn step_on(&self, track: usize, from: usize, step: usize) -> usize {
+    pub(crate) fn step_on(&self, track: usize, from: usize, step: usize) -> usize {
         let ticks = |index: usize| {
             self.song()
                 .tracks
@@ -405,13 +405,13 @@ impl Services {
     }
 
     /// Where the cursor's phrase's loop sits.
-    pub fn extent(&self) -> Extent {
+    pub(crate) fn extent(&self) -> Extent {
         self.phrase_here()
             .map_or(Extent::whole(0), |phrase| phrase.extent())
     }
 
     /// The position in the section where the cursor's phrase starts playing.
-    pub fn slot_start(&self) -> usize {
+    pub(crate) fn slot_start(&self) -> usize {
         let Some(track) = self.track_here() else {
             return 0;
         };

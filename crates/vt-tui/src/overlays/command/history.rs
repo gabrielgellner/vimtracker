@@ -5,9 +5,9 @@
 use std::path::{Path, PathBuf};
 
 /// The history file's name, in the config folder.
-pub const HISTORY_FILE: &str = "history.ron";
+pub(crate) const HISTORY_FILE: &str = "history.ron";
 /// How many lines are kept, the oldest going first.
-pub const MAX_LINES: usize = 100;
+pub(crate) const MAX_LINES: usize = 100;
 
 /// Where `Up` has got to: the line it's on, and what was typed before it started, which it
 /// searches for and `Down` comes back to.
@@ -36,7 +36,7 @@ impl CommandHistory {
     }
 
     /// Where it's kept, if there's a config folder.
-    pub fn default_path() -> Option<PathBuf> {
+    pub(crate) fn default_path() -> Option<PathBuf> {
         crate::services::config::config_folder().map(|folder| folder.join(HISTORY_FILE))
     }
 

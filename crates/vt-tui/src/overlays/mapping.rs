@@ -27,9 +27,9 @@ use crate::overlays::picker::{Item, Pick, Picker};
 use crate::pages::track::{Control, Page};
 
 /// The macro picker's title, which `M` opens and a digit chooses in at once.
-pub const MACRO_PICKER: &str = "Map to a macro";
+pub(crate) const MACRO_PICKER: &str = "Map to a macro";
 /// The list `gd` opens on a setting more than one macro holds, to go to one.
-pub const HOLDING_PICKER: &str = "Go to a macro";
+pub(crate) const HOLDING_PICKER: &str = "Go to a macro";
 
 /// How far a large step moves an end of a range, in coarse steps.
 const RANGE_JUMP: i32 = 0x10;
@@ -76,7 +76,7 @@ impl MapField {
 
 /// A `Curve` or `S` as the view and the status line show it, as the shape panel does: `+20`,
 /// `-5`, or `0` straight.
-pub fn bend_text(bend: i8) -> String {
+pub(crate) fn bend_text(bend: i8) -> String {
     if bend > 0 {
         format!("+{bend}")
     } else {
@@ -92,7 +92,7 @@ pub struct MappingView {
     /// The end or the bend the cursor's on.
     pub field: MapField,
     /// Whether `d` was pressed, waiting for a second to unmap.
-    pub deleting: bool,
+    pub(crate) deleting: bool,
     /// What's typed so far after `i`, if it's typing: hex digits for an end, a signed whole
     /// number for a bend.
     pub typing: Option<TypedValue>,
@@ -123,7 +123,7 @@ impl MappingView {
 
 /// An end of a mapping as the view shows it: a list's choice by name, and anything else as its
 /// coarse hex, as the track page shows it, or a generator's setting as its number.
-pub fn end_text(target: MacroTarget, value: u16) -> String {
+pub(crate) fn end_text(target: MacroTarget, value: u16) -> String {
     let Some(id) = target.setting() else {
         return (i32::from(value) - GEN_ZERO).to_string();
     };
@@ -150,7 +150,7 @@ fn end_shown(track: &Track, target: MacroTarget, value: u16) -> String {
 
 /// A macro's name as the band and the lists show it: its own or its first mapping's, or
 /// `Macro 3` while it holds nothing.
-pub fn macro_name(held: &Macro, at: usize) -> String {
+pub(crate) fn macro_name(held: &Macro, at: usize) -> String {
     held.shown_name()
         .unwrap_or_else(|| format!("Macro {}", at + 1))
 }
@@ -170,7 +170,7 @@ pub fn holds(track: &Track, at: usize) -> String {
 
 /// What the status line says of a setting a macro holds: its macro, and where the macro takes it,
 /// in its units, and for a generator's `Wave` or `Rate`, that it's by hand.
-pub fn held_text(track: &Track, target: MacroTarget) -> Option<String> {
+pub(crate) fn held_text(track: &Track, target: MacroTarget) -> Option<String> {
     let (at, map) = track.macro_holding(target)?;
     let by_hand = if target.by_hand() { ", by hand" } else { "" };
     Some(format!(
