@@ -1059,7 +1059,8 @@ view adds no lines for it.
 **Turned from the track.** Each FX column has a `Length` and a `Rate` on the
 Gen page's `Lane` device (`Space 8`), which move every phrase's lane on that
 column from its own: at `+2` a lane of 4 plays 6 rows and one of 7 plays 9, and
-at `×2` each row lasts twice its own steps. A lane heard longer than its own
+at `÷2` each row lasts twice its own steps, half as fast, and at `×2` half its
+own, though never under a step. A lane heard longer than its own
 plays its own rows again from the first, so `+2` on `a b c d` plays
 `a b c d a b`, and `+4` an exact double; shorter, it plays its first rows. Nothing
 is written, so `+0` gives the lane back as it was. While they move it, the title

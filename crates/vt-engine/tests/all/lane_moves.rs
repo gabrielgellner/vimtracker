@@ -218,7 +218,7 @@ fn turning_the_length_while_it_plays_carries_on_from_its_row() {
 }
 
 #[test]
-fn a_rate_multiplies_the_division_and_a_turn_applies_from_the_next_row() {
+fn a_divided_rate_slows_a_lane_and_a_turn_applies_from_the_next_row() {
     let original = song(vec![four(2)]);
     let mut engine = engine(&original);
     assert_eq!(
@@ -226,13 +226,13 @@ fn a_rate_multiplies_the_division_and_a_turn_applies_from_the_next_row() {
         [0x10, 0x10, 0x20, 0x20, 0x30, 0x30, 0x40, 0x40],
         "two steps a row"
     );
-    // `×2` doubles it from the next row on, and `÷2` halves it.
-    engine.swap(version(&moved(original.clone(), 0x80, 16)));
+    // `÷2` plays it half as fast from the next row on, rows of four steps, and `×2` twice as fast.
+    engine.swap(version(&moved(original.clone(), 0x80, 14)));
     assert_eq!(
         sends(&mut engine, 8),
         [0x10, 0x10, 0x10, 0x10, 0x20, 0x20, 0x20, 0x20]
     );
-    engine.swap(version(&moved(original, 0x80, 14)));
+    engine.swap(version(&moved(original, 0x80, 16)));
     assert_eq!(sends(&mut engine, 3), [0x30, 0x40, 0x10]);
 }
 
@@ -284,7 +284,7 @@ fn playing_from_a_step_places_a_lane_at_the_length_and_rate_heard_there() {
     // A phrase of 64, so every place is in the section's first time through.
     let mut long = phrase(64, &["sna:10h", "sna:20h", "sna:30h", "sna:40h"]);
     long.set_lane(0, Some(Lane::new(0, 4)));
-    let song = moved(song(vec![long]), 0x82, 16);
+    let song = moved(song(vec![long]), 0x82, 14);
     let mut top = engine(&song);
     let mut from_top = Vec::new();
     for _ in 0..40 {

@@ -38,9 +38,9 @@ the track's, not the phrase's: they move every phrase's lane on that column from
 its own (see **Lanes** in the editing guide). `Length` is rows up or down, `+0` as
 written, centred as `Pitch` is; at `+2` a lane of 4 plays 6 rows, its own again
 from the first, and at `-3` 1 row. `Rate` is a list from `÷16` to `×16`, `×1` as
-written, which multiplies the lane's own division, so at `×2` each of its rows
-lasts twice its own steps, and `÷2` halves a division of 8 to 4; it's rounded to a
-step, from 1 to 16. At the end of its title, dim, it says how this phrase's lane
+written, slower below it and faster above, as a clock divider's: at `÷2` each of
+its rows lasts twice its own steps, and `×2` halves a division of 8 to 4; it's
+rounded to a step, from 1 to 16, so a lane of a step a row goes no faster. At the end of its title, dim, it says how this phrase's lane
 is heard against its own: `· here 6 rows, its own 4 rows`. `=` `-` `+` `_`, `i`,
 `K` on `Rate`, `x`, `M` and `gd` work on them as on any of the track's settings,
 a step's `LLEN1` and `LRAT1` lock them, and a mod slot can go to them. A column

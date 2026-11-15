@@ -81,9 +81,11 @@ song format doesn't change. As registry settings they get, with nothing new:
   `÷16` … `÷2`, `×1`, `×2` … `×16`
 
   It multiplies a lane's own division, rounded to the nearest whole step, and kept from 1 to 16.
-  A multiplier rather than a ± because one more step on a division of 1 doubles the lane, while
-  on a division of 8 it hardly changes anything (the user's answer). As a list, `=` and `-` move
-  one choice and `+` and `_` sixteen, so `+` goes to the end (decision 345).
+  (Decision 349 turned it round: `÷2` now doubles the division, slower, and `×2` halves it,
+  faster, as the As built note says.) A multiplier rather than a ± because one more step on a
+  division of 1 doubles the lane, while on a division of 8 it hardly changes anything (the user's
+  answer). As a list, `=` and `-` move one choice and `+` and `_` sixteen, so `+` goes to the end
+  (decision 345).
 
 The labels for a step lock are left to the build. Something like `LLN1` and `LRT1` would do. The
 label tests check that none clash, and that only the mod slots' end in a digit; an FX slot's begin
@@ -272,8 +274,12 @@ hold:
 - **`Length`'s range** is the whole byte, `-128` to `+127`, a row a step: `Pitch`'s scale, so a
   value reads as rows from `80` and none does nothing; ±64 would have left half the byte idle or
   made a step half a row.
-- **`Rate` multiplies the division,** as §2 has it, so `×2` is the slower, each row twice as long,
-  and `÷` does nothing to a division of 1. The status line says so in words.
+- **`Rate` divides the lane's speed, not its division** (decision 349, amending 347, which built
+  §2's multiplier): `÷2` is the slower, each row twice its own steps, and `×2` the faster, half
+  its own steps, rounded, so `×` does nothing to a division of 1. That's a clock divider's `÷2`,
+  Kria's slower higher division, an Elektron track's faster `2×`, and `:lane 4/2`'s slower
+  `/2`. Up the list is faster, as the LFO's and Steps' `Rate` are (decision 301). The status line
+  says so in words, and that a row a step is as fast as a lane goes.
 - **The Gen page's device** is named for its column, `FX1 Lane`, and says how this phrase's lane is
   heard at the end of its title, `· here 6 rows, its own 4 rows`. It turns with the track page's
   keys, not the Gen page's reshaping ones. Making a column live put the cursor a device short of
