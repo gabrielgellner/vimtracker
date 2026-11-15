@@ -39,7 +39,7 @@ written, so its "today" is `main` before the plan; the design's
 | The answers to §1.5 and §9.3: faders with macros, the macro mark, `gd` to a macro | #764, #767, #768 |
 | #719's vt-tui part, one test binary | #785 |
 | U13 the folders (#733) | #793; §7 has what changed |
-| U13 `pub(crate)` and the dead-code lint (#733) | the second PR; §7 |
+| U13 `pub(crate)` and the dead-code lint (#733) | #794; §7 |
 
 Where it differs from the plan:
 - #719's vt-tui part landed after the pages, not before the split.
@@ -51,10 +51,42 @@ Where it differs from the plan:
 - Each view kept a `draw` taking `&App` for the tests, and the sample page settled on what it
   shows while it was drawn, until #784's item 4 gave the tests `run::draw_view` and settled the
   page after keys and each frame's work.
-- Pages still pass keys back to `App` only to reach the picker, the views and `:` lines (#784's
-  item 2).
+- Pages passed keys back to `App` only to reach the picker, the views and `:` lines until #784's
+  item 2 had them ask for those in their `Outcome` (`Open`, `Show`, `Jump`, `Run`, `Insert`,
+  `Enter`, `Explore`, `Hold` and `Moved`), which `App::settled` does.
 
-What's left: #784's other items, 2 and 10 to 13.
+**Reviews 3 and 4.** The third architecture review (#784) was about vt-tui; the fourth (#809)
+about vt-engine, vt-model and vt-roto, with a short list for vt-tui:
+
+| Review item | Built in |
+|---|---|
+| #784 item 1, `Ctx` from the services, the modes and a `PageState` | #787 |
+| #784 item 2, a page's requests in its `Outcome` | #797, #798, #799, #800, #801, #802 (and the mixer-on-Gen fix, #803) |
+| #784 item 3, the Roto's knob feel from the view | #788 |
+| #784 item 4, leftover wrappers, `run::draw_view` | #790 |
+| #784 item 5, U13's folders and `pub(crate)` | #793, #794 |
+| #784 item 7, one vt-tui test binary | #785 |
+| #784 item 9, the status line and the outcome match | #791 |
+| #784 item 10, `App`'s fields in groups: `overlays`, `grammar`, `held`, `explorer`, `jumps`, `readouts` and `autosave` | #804 |
+| #784 item 12, large files: `action.rs` and `params.rs`, `RotoDriver` in `roto.rs`, `shape.rs` split into the panel, `shape/live.rs` and `services/generators.rs`, `picking.rs`'s openers | #792, #796, #805, #807 |
+| #784 item 13, small duplicates | #795 |
+| #809 item 4, one `vt_model::ron_file` module, so the recent places, the command history, imported kits and every settings file are written atomically | #811, #812 |
+| #809 item 5, tests: vt-model's `render.rs` into `tests/all`, with the engine's `rt_guard.rs` through `#[path]`, and `dsp/signals.rs` | #814 |
+| #809 items 7, 9 and 11, small things: the Roto's fake behind the `fake` feature, one `copy_out` for both output callbacks | #816 |
+
+`App` has 27 fields, down from 141 on 11-13, and its `impl App` blocks are 49 files and 471
+methods.
+
+What's left, for the user to decide:
+- **An edit that changes nothing still makes an undo step** (#809 item 8). This one changes what
+  the user sees, so it waits for an answer.
+- **The dead-code lint for the integration tests** (#784): moving them inside the crate would give
+  the full lint, at the cost of recompiling the library on every test edit.
+- **The Roto's Source choices** (#784): `with_live` passes no follow sources, so a Follow
+  generator's Source has no choices on the Roto.
+
+The `GenParam` macro (#809 item 6) is left until a generator is next added; see
+[device-interface.md](device-interface.md)'s As built.
 
 ---
 
