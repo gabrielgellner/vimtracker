@@ -4,6 +4,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use vt_model::modulation::ModField;
 use vt_model::song::{Song, Track};
 use vt_model::steps::STEPS;
 use vt_roto::layout::{Slot, row_ends_cleanly};
@@ -13,7 +14,7 @@ use vt_tui::roto::devices::{
     FAMILY_COLOURS, Family, every_kind_of_device, knob, live_device, placement, stored_setups,
 };
 use vt_tui::roto::layouts::{ALL, DeviceLayout, Setting, app_only, key, layout_of, resolve};
-use vt_tui::track_page::{Control, DeviceSpec, ModField, Page};
+use vt_tui::track_page::{Control, DeviceSpec, Page};
 
 /// One of each kind of device, with its track, its song and its layout.
 fn kinds() -> Vec<(Song, usize, Page, usize)> {
@@ -515,7 +516,7 @@ fn a_slot_can_give_a_setting_another_colour_and_turn() {
         placed(Control::Speed, &speed, track, &song).unwrap().feel,
         Feel::Smooth
     );
-    let reset = Control::Mod(0, vt_tui::track_page::ModField::Reset);
+    let reset = Control::Mod(0, vt_model::modulation::ModField::Reset);
     let smooth_reset = Setting {
         key: "reset",
         ..speed
@@ -562,9 +563,9 @@ fn every_button_is_under_a_knob_so_the_roto_draws_its_label() {
 fn an_lfo_rate_turns_smoothly_and_a_note_value_stays_one() {
     use vt_model::action::edit;
     use vt_model::lfo::{Rate, note_rates};
+    use vt_model::modulation::ModField;
     use vt_roto::live::KNOB_TOP;
     use vt_tui::roto::edits::{turned, value_text};
-    use vt_tui::track_page::ModField;
     // A stored knob keeps at most 16 steps, and a note value has 24, so it's smooth, its value
     // shown as it turns.
     let mut song = Song::new(1);
@@ -624,7 +625,7 @@ fn everything_the_roto_is_sent_is_ascii_its_font_can_draw() {
     }
     // An LFO's phase, which the app writes in degrees.
     let song = Song::new(1);
-    let phase = Control::Mod(3, vt_tui::track_page::ModField::Phase);
+    let phase = Control::Mod(3, vt_model::modulation::ModField::Phase);
     let text = value_text(phase, &song.tracks[0], &song);
     assert_eq!(Label::new(&text).as_str(), "0deg", "{text}");
 }
@@ -632,9 +633,9 @@ fn everything_the_roto_is_sent_is_ascii_its_font_can_draw() {
 #[test]
 fn an_lfos_deform_is_a_knob_with_a_centre_notch_that_sets_it() {
     use vt_model::action::edit;
+    use vt_model::modulation::ModField;
     use vt_roto::live::KNOB_TOP;
     use vt_tui::roto::edits::{turned, value_text};
-    use vt_tui::track_page::ModField;
     let song = std::sync::Arc::new(Song::new(1));
     let track = &song.tracks[0];
     // `Mod 4`, read second.
@@ -688,10 +689,10 @@ fn a_samplers_tune_and_cents_are_the_last_knobs_with_a_notch_and_tune_the_sample
 #[test]
 fn a_modulators_polarity_button_is_lit_for_both_ways_and_a_press_flips_it() {
     use vt_model::action::edit;
+    use vt_model::modulation::ModField;
     use vt_model::modulation::Polarity;
     use vt_roto::live::{KNOB_TOP, position_of};
     use vt_tui::roto::edits::turned;
-    use vt_tui::track_page::ModField;
     let song = std::sync::Arc::new(Song::new(1));
     // Read `Mod 1`, `Mod 4`, `Mod 2`: an LFO, then an envelope, each stored with its buttons.
     for (device, slot, button, lit) in [(1, 3, 2, true), (2, 1, 4, false)] {
@@ -722,9 +723,9 @@ fn a_modulators_polarity_button_is_lit_for_both_ways_and_a_press_flips_it() {
 fn an_envelopes_curve_is_a_knob_of_three_after_its_depth() {
     use vt_model::action::edit;
     use vt_model::envelope::Curve;
+    use vt_model::modulation::ModField;
     use vt_roto::live::{KNOB_TOP, position_of};
     use vt_tui::roto::edits::{turned, value_text};
-    use vt_tui::track_page::ModField;
     assert_eq!(first_knobs(layout_named("adsr"))[5], "mode");
     let song = std::sync::Arc::new(Song::new(1));
     let track = &song.tracks[0];
@@ -756,10 +757,10 @@ fn an_envelopes_curve_is_a_knob_of_three_after_its_depth() {
 fn an_ahd_is_attack_hold_decay_then_depth_and_curve_stored_with_an_adsrs_buttons() {
     use vt_model::action::edit;
     use vt_model::envelope::{Curve, Hold};
+    use vt_model::modulation::ModField;
     use vt_model::modulation::ModKind;
     use vt_roto::live::KNOB_TOP;
     use vt_tui::roto::edits::{turned, value_text};
-    use vt_tui::track_page::ModField;
     let ahd = layout_named("ahd");
     assert!(ahd.stored);
     assert_eq!(
@@ -811,10 +812,10 @@ fn an_ahd_is_attack_hold_decay_then_depth_and_curve_stored_with_an_adsrs_buttons
 #[test]
 fn a_drum_is_peak_body_decay_and_ratchet_then_depth_and_curve_stored_for_its_polarity() {
     use vt_model::action::edit;
+    use vt_model::modulation::ModField;
     use vt_model::modulation::ModKind;
     use vt_roto::live::{KNOB_TOP, position_of};
     use vt_tui::roto::edits::{turned, value_text};
-    use vt_tui::track_page::ModField;
     let drum = layout_named("drum");
     assert!(drum.stored);
     assert_eq!(
@@ -875,10 +876,10 @@ fn a_drum_is_peak_body_decay_and_ratchet_then_depth_and_curve_stored_for_its_pol
 #[test]
 fn an_lpg_is_attack_decay_and_colour_then_depth_stored_with_an_envelopes_buttons() {
     use vt_model::action::edit;
+    use vt_model::modulation::ModField;
     use vt_model::modulation::ModKind;
     use vt_roto::live::KNOB_TOP;
     use vt_tui::roto::edits::{turned, value_text};
-    use vt_tui::track_page::ModField;
     let lpg = layout_named("lpg");
     assert!(lpg.stored);
     assert_eq!(
@@ -960,11 +961,11 @@ fn steps_are_a_live_step_sequencer_with_their_values_before_dest() {
 #[test]
 fn a_track_slot_is_low_high_depth_and_source_stored_with_its_polarity_under_depth() {
     use vt_model::action::edit;
+    use vt_model::modulation::ModField;
     use vt_model::modulation::ModKind;
     use vt_model::tracking::Source;
     use vt_roto::live::KNOB_TOP;
     use vt_tui::roto::edits::{turned, value_text};
-    use vt_tui::track_page::ModField;
     let tracking = layout_named("track");
     assert!(tracking.stored, "its polarity is a button");
     assert_eq!(first_knobs(tracking)[..4], ["low", "high", "depth", "mode"]);

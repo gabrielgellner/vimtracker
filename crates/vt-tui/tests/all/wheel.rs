@@ -9,10 +9,11 @@ use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use vt_engine::link::Realtime;
+use vt_model::selection::Field;
 use vt_model::settings::SettingId;
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
-use vt_tui::app::{App, Field};
+use vt_tui::app::App;
 use vt_tui::audio_page::AudioRow;
 use vt_tui::input::mode::{Mode, View};
 use vt_tui::wheel::{WheelSetting, feel, tick_size};

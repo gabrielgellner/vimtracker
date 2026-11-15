@@ -24,7 +24,7 @@ use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::Shape;
 use vt_model::listed::Listed;
 use vt_model::modulation::{
-    MOD_SLOTS, ModKind, ModSlot, Polarity, default_mod, depth_text, note_shape_slot,
+    MOD_SLOTS, ModField, ModKind, ModSlot, Polarity, default_mod, depth_text, note_shape_slot,
 };
 use vt_model::settings::{
     Kind, LONGEST_GLIDE_MS, SettingId, Units, gate_percent, gate_value, glide_ms,
@@ -43,7 +43,7 @@ use crate::shaping::with_live;
 use crate::views::track::toggle_on;
 
 use super::tuning::{tuning, tuning_shown, tuning_text};
-use super::{AccumulatorField, ArpField, Control, ModField};
+use super::{AccumulatorField, ArpField, Control};
 
 /// What a slot going to `Pitch` in scale shows as its destination.
 pub(crate) const IN_SCALE_PITCH: &str = "Pitch in scale";

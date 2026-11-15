@@ -27,7 +27,7 @@ use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{Fade, Rate};
 use vt_model::listed::{Listed, choices_of};
-use vt_model::modulation::{MAX_DEPTH, ModKind, Polarity};
+use vt_model::modulation::{MAX_DEPTH, ModField, ModKind, Polarity};
 use vt_model::settings::{Kind, SettingId, Units};
 use vt_model::shape::GenParam;
 use vt_model::shape::params::Units as GenUnits;
@@ -46,9 +46,7 @@ use super::layouts::{self, Setting, Turn};
 use crate::shaping::{column_label, with_live};
 use crate::theme;
 use crate::track_page::tuning::{tuning, tuning_most};
-use crate::track_page::{
-    AccumulatorField, ArpField, Control, DeviceSpec, ModField, Page, macros_device,
-};
+use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, Page, macros_device};
 use crate::views::track::toggle_on;
 
 /// What a setting is for, which gives its knob's colour, the same wherever the setting is.

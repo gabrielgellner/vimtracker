@@ -844,7 +844,7 @@ fn a_nudge_shows_dim_by_the_velocity_only_on_a_row_that_has_one() {
 
     // It's a stop of its own, after the velocity.
     press(&mut app, "ll");
-    assert_eq!(app.services.cursor.field, vt_tui::app::Field::Nudge);
+    assert_eq!(app.services.cursor.field, vt_model::selection::Field::Nudge);
     assert_eq!(column_name(&app), "Nudge");
     assert_eq!(
         value_shown(&app).as_deref(),

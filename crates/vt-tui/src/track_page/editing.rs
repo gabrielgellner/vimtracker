@@ -8,16 +8,16 @@
 
 use vt_model::action::Action;
 use vt_model::groove::GrooveId;
-use vt_model::modulation::{ModKind, ModSlot, default_mod};
+use vt_model::modulation::{ModField, ModKind, ModSlot, default_mod};
 use vt_model::song::Track;
 
 use crate::services::Services;
 use crate::views::widgets::param::edit;
 
+use super::Control;
 use super::controls::no_modes;
 use super::tuning::{adjust_tuning, set_tuning};
 use super::view::{ParamView, set, view};
-use super::{Control, ModField};
 
 /// Write a value into a setting, as its view counts it. A macro's, the accumulator's, the
 /// arpeggio's and `Safe` are only written when they change. The rest are written even where they

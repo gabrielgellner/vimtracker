@@ -46,12 +46,12 @@ use vt_roto::layout::{Layout, Page, Slot};
 use vt_roto::sysex::CONTROLS;
 
 use super::devices::Family;
-use vt_model::modulation::ModKind;
+use vt_model::modulation::{ModField, ModKind};
 use vt_model::settings::{FOUR_OP_EACH, FOUR_OP_SHARED};
 use vt_model::shape::{FillKind, GenParam, Where};
 use vt_model::steps::STEPS;
 
-use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, ModField};
+use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec};
 
 /// A setting in a layout's slot: its key, and how it differs from what its kind gives it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

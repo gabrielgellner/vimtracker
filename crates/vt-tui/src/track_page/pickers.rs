@@ -7,7 +7,7 @@ use ratatui::style::Style;
 use vt_model::accumulator::MOST_DEGREES;
 use vt_model::arpeggio::MOST_OCTAVES;
 use vt_model::lfo::{Fade, Lfo, note_rates};
-use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot};
+use vt_model::modulation::{MOD_SLOTS, ModField, ModKind, ModSlot};
 use vt_model::preset::PresetKind;
 use vt_model::settings::SettingId;
 use vt_model::song::{Machine, Role, Track};
@@ -23,7 +23,7 @@ use crate::views::widgets::param::edit::{self, ChoiceList};
 use super::controls::no_modes;
 use super::editing::toggle_control;
 use super::view::view;
-use super::{AccumulatorField, ArpField, Control, ModField};
+use super::{AccumulatorField, ArpField, Control};
 
 /// The titles of each slot's lists of types, as a list's title is fixed text.
 const TYPE_TITLES: [&str; MOD_SLOTS] = [

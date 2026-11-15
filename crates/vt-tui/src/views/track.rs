@@ -8,6 +8,7 @@ use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
 use vt_model::action::TrackControl;
 use vt_model::insert::Insert;
+use vt_model::modulation::ModField;
 use vt_model::song::{Song, Track, TrackKind};
 
 use crate::app::App;
@@ -16,7 +17,7 @@ use crate::input::mode::Mode;
 use crate::kitty::PanelKey;
 use crate::page::Ctx;
 use crate::theme;
-use crate::track_page::{ArpField, Control, DeviceSpec, ModField, Page, TrackPage};
+use crate::track_page::{ArpField, Control, DeviceSpec, Page, TrackPage};
 use crate::views::phrase::level_glyph;
 use crate::views::widgets;
 use crate::views::widgets::device::{DEVICE_HEIGHT, Device};

@@ -13,7 +13,7 @@
 use vt_model::action::Action;
 use vt_model::envelope::Hold;
 use vt_model::lfo::{Rate, note_rates};
-use vt_model::modulation::{ModKind, ModSlot};
+use vt_model::modulation::{ModField, ModKind, ModSlot};
 use vt_model::settings::{Kind, SettingId};
 use vt_model::shape::GenParam;
 use vt_model::shape::params::Units as GenUnits;
@@ -23,7 +23,7 @@ use vt_roto::live::{share_of, step_at};
 
 use crate::shaping::{live_shown, with_live};
 use crate::track_page::tuning::{tuning, tuning_most};
-use crate::track_page::{Control, ModField, ParamView, set, view};
+use crate::track_page::{Control, ParamView, set, view};
 use crate::views::track::toggle_on;
 use crate::views::widgets::param::edit;
 

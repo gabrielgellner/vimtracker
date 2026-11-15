@@ -22,8 +22,7 @@ use vt_model::kit::KitEntry;
 use vt_model::names::Names;
 use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
-pub use vt_model::selection::Field;
-use vt_model::selection::{Block, Scope, StepRange};
+use vt_model::selection::{Block, Field, Scope, StepRange};
 use vt_model::song::{Song, Track};
 use vt_model::step::{FxCommand, MAX_VELOCITY};
 

@@ -16,11 +16,12 @@ use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot};
 use vt_model::order::Order;
 use vt_model::sample::load_sample;
 use vt_model::scale::{Scale, ScaleKind};
+use vt_model::selection::Field;
 use vt_model::settings::{SettingId, gate_percent};
 use vt_model::song::{FULL_GATE, Machine, Role};
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark};
 
-use crate::app::{App, Entry, Field};
+use crate::app::{App, Entry};
 use crate::banking::Seed;
 use crate::explorer::Purpose;
 use crate::guides::GUIDES;

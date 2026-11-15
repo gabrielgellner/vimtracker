@@ -23,7 +23,7 @@ pub(crate) mod tuning;
 mod typing;
 pub(crate) mod view;
 
-pub use controls::{AccumulatorField, ArpField, Control, ModField};
+pub use controls::{AccumulatorField, ArpField, Control};
 pub use device::{
     DEVICE_COLUMNS, DEVICE_ROWS, DeviceCursor, DeviceSpec, DeviceWidth, RackPlace, rack_places,
 };
@@ -37,6 +37,7 @@ use std::sync::Arc;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use vt_model::insert::INSERTS;
+use vt_model::modulation::ModField;
 use vt_model::selection::Motion;
 use vt_model::song::Track;
 use vt_model::steps::STEPS;

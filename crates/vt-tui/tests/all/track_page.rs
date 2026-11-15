@@ -2123,7 +2123,7 @@ fn a_jump_finds_each_row_of_a_repeated_name_and_can_be_left() {
     assert_eq!(column_name(&app), "Depth");
     assert_eq!(
         app.track_control(),
-        vt_tui::track_page::Control::Mod(0, vt_tui::track_page::ModField::Depth)
+        vt_tui::track_page::Control::Mod(0, vt_model::modulation::ModField::Depth)
     );
 }
 
@@ -2187,7 +2187,8 @@ fn a_jumps_labels_cover_the_values_and_the_search_shows_below() {
 
 #[test]
 fn a_jumps_labels_also_follow_the_names_being_searched() {
-    use vt_tui::track_page::{Control, ModField};
+    use vt_model::modulation::ModField;
+    use vt_tui::track_page::Control;
     let (mut app, _realtime) = app();
     press(&mut app, " 5/cu");
     let line = from_name;
@@ -3413,8 +3414,9 @@ fn every_slot_envelope_and_lfo_fits_on_the_authors_screen() {
 fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
     use vt_model::insert::EffectKind;
     use vt_model::insert::{INSERTS, Insert};
+    use vt_model::modulation::ModField;
     use vt_model::step::FxCommand;
-    use vt_tui::track_page::{Control, ModField};
+    use vt_tui::track_page::Control;
     let (mut app, _realtime) = app();
     // A delay in the last slot.
     press(&mut app, " 5LL");

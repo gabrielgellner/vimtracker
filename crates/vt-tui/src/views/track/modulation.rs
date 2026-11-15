@@ -10,7 +10,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use vt_model::modulation::{MOD_SLOTS, ModKind};
+use vt_model::modulation::{MOD_SLOTS, ModField, ModKind};
 use vt_model::song::Track;
 use vt_model::steps::MAX_STEP;
 
@@ -18,7 +18,7 @@ use crate::kitty::PanelKey;
 use crate::page::Ctx;
 use crate::theme;
 use crate::track_page::{
-    Control, DeviceSpec, DeviceWidth, ModField, Page, TrackPage, modulator_bypassed, rack_places,
+    Control, DeviceSpec, DeviceWidth, Page, TrackPage, modulator_bypassed, rack_places,
 };
 use crate::views::widgets::device::{Device, rack_areas};
 use crate::views::widgets::grid::{CellWidths, SettingsGrid, faded};

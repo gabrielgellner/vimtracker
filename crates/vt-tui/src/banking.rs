@@ -13,11 +13,12 @@ use vt_model::label::GROUP_NAME_CHARS;
 use vt_model::project;
 use vt_model::samples::SamplePool;
 use vt_model::seeding;
+use vt_model::selection::Field;
 use vt_model::settings::SettingId;
 use vt_model::song::{Role, Song, TrackKind};
 use vt_model::step::{FxCommand, FxSlot, Mark};
 
-use crate::app::{App, Field};
+use crate::app::App;
 use crate::input::command::Line;
 use crate::input::picker::{Item, KitChoice, Pick, Picker, Preview};
 

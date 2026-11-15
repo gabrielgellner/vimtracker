@@ -10,13 +10,13 @@ use ratatui::widgets::Paragraph;
 use vt_model::constants::{BAR_STEPS, BEAT_STEPS, FX_SLOTS, TICKS_PER_STEP};
 use vt_model::generator::Span as GenSpan;
 use vt_model::label::GROUP_NAME_CHARS;
-use vt_model::selection::{Extent, Scope, StepRange};
+use vt_model::selection::{Extent, Field, Scope, StepRange};
 use vt_model::shape::{ShapeColumn, Source};
 use vt_model::song::{Phrase, Song, Track};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, GateKind, Mark, Note, Step, nudge_text};
 
-use crate::app::{App, Field, Selection, TrackSpan};
+use crate::app::{App, Selection, TrackSpan};
 use crate::folding::Order;
 use crate::glyphs;
 use crate::input::mode::Mode;
