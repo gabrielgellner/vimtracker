@@ -305,7 +305,7 @@ impl App {
                 self.load_preset(kind, &path);
             }
             Pick::FactoryPatch(name) => {
-                let over = std::mem::take(&mut self.explorer.patch_over);
+                let over = std::mem::take(&mut self.overlays.explorer.patch_over);
                 self.add_factory_patch(&name, over);
             }
             Pick::Prompt(text) => {
@@ -317,7 +317,7 @@ impl App {
             }
             Pick::Project(folder) => {
                 self.note_place_of(Purpose::Project, &folder);
-                let force = std::mem::take(&mut self.explorer.opening_discards);
+                let force = std::mem::take(&mut self.overlays.explorer.opening_discards);
                 self.line(crate::overlays::command::parse::Line::Edit {
                     path: Some(folder),
                     force,

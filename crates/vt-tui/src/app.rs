@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::overlays::picker::draw::{PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH};
-use crate::overlays::picker::exploring::Explorer;
+
 use crate::pages::audio::AudioPage;
 use crate::pages::chain::ChainView;
 use crate::screen::Readouts;
@@ -254,9 +254,6 @@ pub struct App {
     pub(crate) table: Table,
     /// The grammar: keys typed so far, the operator and register, and the change `.` repeats.
     pub grammar: Grammar,
-    /// The file explorer: the kit in use, the files it reads and plays, its places and tags, and
-    /// what a folder chosen in it goes on to.
-    pub explorer: Explorer,
     /// When the loader or the analyst started on what they're doing, while they are, for the
     /// spinner on the status line.
     pub(crate) work_since: Option<Instant>,
@@ -305,7 +302,7 @@ impl App {
             wheel: crate::input::wheel::Wheel::default(),
             recent_views: View::ALL.to_vec(),
             chain_view: ChainView::default(),
-            overlays: Overlays::default(),
+            overlays: Overlays::new(rate),
             jumps: Jumps::default(),
             autosave: Autosave::default(),
             recording: None,
@@ -315,7 +312,6 @@ impl App {
             held: HeldKeys::default(),
             table: Table::default(),
             grammar: Grammar::default(),
-            explorer: Explorer::new(rate),
             work_since: None,
         };
         app.services.live_song = Some(Arc::clone(app.song()));
@@ -338,8 +334,9 @@ impl App {
         samples.keep_analyses(&self.services.samples);
         self.services.samples = Arc::new(samples);
         self.services.rate = rate;
-        self.explorer.loader = Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT));
-        self.explorer.file_playing = None;
+        self.overlays.explorer.loader =
+            Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT));
+        self.overlays.explorer.file_playing = None;
         self.services.scope = crate::services::scope::Scope::new(rate);
         self.services.reported.transport = Transport::Stopped;
         self.services.reported.playhead = 0;
@@ -552,7 +549,8 @@ impl App {
         self.wheel_frame(now);
         self.follow_recording();
         self.follow_sampling();
-        let working = self.explorer.loader.is_waiting() || self.services.analyst.is_waiting();
+        let working =
+            self.overlays.explorer.loader.is_waiting() || self.services.analyst.is_waiting();
         self.work_since = working.then(|| self.work_since.unwrap_or(now));
         self.settle_sample_page();
     }

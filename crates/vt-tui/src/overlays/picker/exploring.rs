@@ -303,6 +303,7 @@ impl App {
     /// is listed once, and one that isn't there is passed over.
     pub(crate) fn places(&self, purpose: Purpose) -> Vec<Root> {
         let mut found: Vec<(PathBuf, &str)> = self
+            .overlays
             .explorer
             .recent_places
             .of(purpose)
@@ -330,7 +331,8 @@ impl App {
                         .map(|folder| (folder, "samples")),
                 );
                 found.extend(
-                    self.explorer
+                    self.overlays
+                        .explorer
                         .library
                         .clone()
                         .map(|folder| (folder, "library")),
@@ -389,19 +391,21 @@ impl App {
             Purpose::Kit => "Enter use  L on tracks  T tag",
             Purpose::Project => "Enter open",
             Purpose::Save | Purpose::Render => "l open  Enter choose",
-            Purpose::Preset(vt_model::preset::PresetKind::Patch) if self.explorer.patch_over => {
+            Purpose::Preset(vt_model::preset::PresetKind::Patch)
+                if self.overlays.explorer.patch_over =>
+            {
                 "Enter add over the last  T tag"
             }
             Purpose::Preset(vt_model::preset::PresetKind::Patch) => "Enter add  T tag",
             Purpose::Preset(_) => "Enter load  T tag",
         };
         let mut picker = Picker::explorer(purpose, roots, home_folder())
-            .with_tags(std::sync::Arc::clone(&self.explorer.tag_library))
+            .with_tags(std::sync::Arc::clone(&self.overlays.explorer.tag_library))
             .following(on)
             .opening_first()
             .hinted(hint);
         if let Some(tree) = picker.tree_mut() {
-            tree.audition &= self.explorer.audition_files;
+            tree.audition &= self.overlays.explorer.audition_files;
         }
         self.show_picker(picker);
     }
@@ -413,7 +417,7 @@ impl App {
             self.services.status = self.unsaved(":e! to discard them");
             return;
         }
-        self.explorer.opening_discards = force;
+        self.overlays.explorer.opening_discards = force;
         let roots = self.places(Purpose::Project);
         let on = self.services.folder.clone();
         self.open_explorer(Purpose::Project, roots, on.as_deref());
@@ -426,7 +430,7 @@ impl App {
         command: &'static str,
         after: String,
     ) {
-        self.explorer.naming = Some(Naming {
+        self.overlays.explorer.naming = Some(Naming {
             purpose,
             command,
             after,
@@ -466,7 +470,7 @@ impl App {
     /// Choose a kit, from the kit folders, on the kit in use.
     pub(crate) fn open_kit_explorer(&mut self) {
         let roots = self.places(Purpose::Kit);
-        let on = self.explorer.kit_file.clone();
+        let on = self.overlays.explorer.kit_file.clone();
         self.open_explorer(Purpose::Kit, roots, on.as_deref());
     }
 
@@ -482,8 +486,8 @@ impl App {
                     kit.name,
                     kit.sounds.len()
                 );
-                self.explorer.kit = kit.sounds;
-                self.explorer.kit_file = Some(path.to_path_buf());
+                self.overlays.explorer.kit = kit.sounds;
+                self.overlays.explorer.kit_file = Some(path.to_path_buf());
             }
             Err(error) => self.services.status = error.to_string(),
         }
@@ -491,7 +495,7 @@ impl App {
 
     /// Put the command line on a chosen folder, waiting for the name, with Tab to complete it.
     pub(crate) fn name_in(&mut self, folder: &Path) {
-        let Some(naming) = self.explorer.naming.take() else {
+        let Some(naming) = self.overlays.explorer.naming.take() else {
             return;
         };
         self.note_place(naming.purpose, folder);
@@ -507,7 +511,7 @@ impl App {
 
     /// Remember a folder something was chosen in, for the top of the explorer next time.
     pub(crate) fn note_place(&mut self, purpose: Purpose, folder: &Path) {
-        if let Err(error) = self.explorer.recent_places.add(purpose, folder) {
+        if let Err(error) = self.overlays.explorer.recent_places.add(purpose, folder) {
             self.services.status = format!("Couldn't keep the recent places: {error}");
         }
     }
@@ -516,7 +520,7 @@ impl App {
     pub(crate) fn explorer_preview(&mut self, item: usize, preview: &Preview) -> Option<Shown> {
         match preview {
             Preview::Sample(path) => {
-                let read = self.explorer.loader.want(path);
+                let read = self.overlays.explorer.loader.want(path);
                 match &read {
                     Some(Err(_)) => self.mark_unreadable(path),
                     Some(Ok(loaded)) => self.note_heard(path, loaded.heard),
@@ -532,14 +536,18 @@ impl App {
     /// Take in files read in the background: show the one under the explorer's cursor, and play
     /// it.
     pub(crate) fn take_loaded(&mut self) {
-        let done = self.explorer.loader.poll();
+        let done = self.overlays.explorer.loader.poll();
         self.show_loaded(&done);
     }
 
     /// Wait for the file under the explorer's cursor to be read, then take it in, for tests and
     /// the screenshots.
     pub fn finish_loading(&mut self) {
-        let done = self.explorer.loader.wait(crate::services::loading::WAIT);
+        let done = self
+            .overlays
+            .explorer
+            .loader
+            .wait(crate::services::loading::WAIT);
         self.show_loaded(&done);
     }
 
@@ -570,7 +578,7 @@ impl App {
         if !tree.purpose.auditions() {
             return None;
         }
-        self.explorer.audition_files = tree.audition;
+        self.overlays.explorer.audition_files = tree.audition;
         if !tree.audition {
             return None;
         }
@@ -584,17 +592,17 @@ impl App {
     /// Elektron's browsers do, once it's been read, and stop the last one when the cursor moves.
     pub(crate) fn follow_file(&mut self) {
         let wanted = self.file_to_play();
-        if wanted != self.explorer.file_wanted {
+        if wanted != self.overlays.explorer.file_wanted {
             self.stop_file();
-            self.explorer.file_wanted = wanted;
+            self.overlays.explorer.file_wanted = wanted;
         }
-        let Some(path) = self.explorer.file_wanted.clone() else {
+        let Some(path) = self.overlays.explorer.file_wanted.clone() else {
             return;
         };
-        if self.explorer.file_playing.is_some() {
+        if self.overlays.explorer.file_playing.is_some() {
             return;
         }
-        match self.explorer.loader.want(&path) {
+        match self.overlays.explorer.loader.want(&path) {
             Some(Ok(loaded)) => {
                 self.note_heard(&path, loaded.heard);
                 let track = self.services.cursor.track;
@@ -603,7 +611,7 @@ impl App {
                     .handle
                     .play_file(track, Arc::clone(&loaded.sample), None)
                 {
-                    self.explorer.file_playing = Some(path);
+                    self.overlays.explorer.file_playing = Some(path);
                     // It takes the place of anything the sample page was playing.
                     self.sample_page.heard = None;
                 }
@@ -611,7 +619,7 @@ impl App {
             // It won't play, and the preview says why.
             Some(Err(_)) => {
                 self.mark_unreadable(&path);
-                self.explorer.file_playing = Some(path);
+                self.overlays.explorer.file_playing = Some(path);
             }
             None => {}
         }
@@ -626,7 +634,7 @@ impl App {
 
     /// Stop the file the explorer is playing, if it is.
     pub(crate) fn stop_file(&mut self) {
-        if self.explorer.file_playing.take().is_some() {
+        if self.overlays.explorer.file_playing.take().is_some() {
             self.services.handle.send(Command::StopFile);
         }
     }
@@ -634,20 +642,21 @@ impl App {
     /// The explorer has closed: stop what it plays, and forget any name line it was for.
     pub(crate) fn leave_explorer(&mut self) {
         self.stop_file();
-        self.explorer.file_wanted = None;
-        self.explorer.naming = None;
+        self.overlays.explorer.file_wanted = None;
+        self.overlays.explorer.naming = None;
     }
 
     /// Choose this track's sample in the explorer, with the kit's sounds first.
     pub(crate) fn open_default_sample_picker(&mut self) {
         let kit_name = self
+            .overlays
             .explorer
             .kit_file
             .as_deref()
             .and_then(Path::file_stem)
             .map(|stem| format!("Kit {}", stem.to_string_lossy()))
             .unwrap_or_else(|| "Kit".to_owned());
-        let kit = self.explorer.kit.iter().map(kit_item).collect();
+        let kit = self.overlays.explorer.kit.iter().map(kit_item).collect();
         self.open_sample_explorer(kit, kit_name);
     }
 

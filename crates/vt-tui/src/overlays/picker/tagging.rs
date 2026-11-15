@@ -62,7 +62,7 @@ impl App {
     fn file_guesses(&self, path: &Path, label: &str) -> Vec<&'static str> {
         let mut guessed = tag::guess(path, label);
         let said = guessed.contains(&tag::LOOP) || guessed.contains(&tag::ONE_SHOT);
-        if let Some(heard) = self.explorer.heard_tags.get(path)
+        if let Some(heard) = self.overlays.explorer.heard_tags.get(path)
             && !said
         {
             guessed.push(heard);
@@ -84,7 +84,7 @@ impl App {
             .filter(|guess| !typed.iter().any(|name| name == *guess))
             .map(|guess| (*guess).to_owned())
             .collect();
-        Arc::make_mut(&mut self.explorer.tag_library)
+        Arc::make_mut(&mut self.overlays.explorer.tag_library)
             .set(path, given, taken_off)
             .map_err(|error| error.to_string())?;
         self.retag_file(path);
@@ -116,7 +116,11 @@ impl App {
             .collect();
         kind.set_tags(path, own)
             .map_err(|error| error.to_string())?;
-        let (read, _) = explorer::item(path, Kind::Preset(kind), &self.explorer.tag_library);
+        let (read, _) = explorer::item(
+            path,
+            Kind::Preset(kind),
+            &self.overlays.explorer.tag_library,
+        );
         if let Some(picker) = self.overlays.picker.as_mut() {
             picker.set_tags(item, read.tags);
         }
@@ -126,7 +130,7 @@ impl App {
     /// Work a file's tags out again wherever the explorer lists it, after its tags are given or
     /// its sound is heard.
     fn retag_file(&mut self, path: &Path) {
-        let library = Arc::clone(&self.explorer.tag_library);
+        let library = Arc::clone(&self.overlays.explorer.tag_library);
         let Some(picker) = self.overlays.picker.as_ref() else {
             return;
         };
@@ -156,8 +160,11 @@ impl App {
         let Some(heard) = heard else {
             return;
         };
-        if self.explorer.heard_tags.get(path) != Some(&heard) {
-            self.explorer.heard_tags.insert(path.to_path_buf(), heard);
+        if self.overlays.explorer.heard_tags.get(path) != Some(&heard) {
+            self.overlays
+                .explorer
+                .heard_tags
+                .insert(path.to_path_buf(), heard);
         }
         self.retag_file(path);
     }

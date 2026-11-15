@@ -428,11 +428,11 @@ impl App {
                 }
             },
             Outcome::Choose(pick) => {
-                let naming = self.explorer.naming.take();
+                let naming = self.overlays.explorer.naming.take();
                 self.overlays.picker = None;
                 self.modes.mode = self.mode_after_picker();
                 self.leave_explorer();
-                self.explorer.naming = naming;
+                self.overlays.explorer.naming = naming;
                 self.choose(pick);
             }
             Outcome::Land { row, field } => {

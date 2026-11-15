@@ -170,7 +170,12 @@ fn t_gives_a_sample_tags_by_its_content_and_takes_a_wrong_guess_off() {
     assert_eq!(app.services.status, "thump.wav: #kick #one-shot #punchy");
     let thump = library.join("drums/kicks/thump.wav");
     assert_eq!(
-        app.explorer.tag_library.of_file(&thump).unwrap().tags,
+        app.overlays
+            .explorer
+            .tag_library
+            .of_file(&thump)
+            .unwrap()
+            .tags,
         ["punchy"]
     );
     let text = drawn(&app);
@@ -190,7 +195,7 @@ fn t_gives_a_sample_tags_by_its_content_and_takes_a_wrong_guess_off() {
     assert_eq!(app.overlays.picker.as_ref().unwrap().tag_line, "punchy ");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.services.status, "thump.wav: #punchy");
-    let kept = app.explorer.tag_library.of_file(&thump).unwrap();
+    let kept = app.overlays.explorer.tag_library.of_file(&thump).unwrap();
     assert_eq!(kept.not, ["kick", "one-shot"]);
     press(&mut app, "#kick");
     assert_eq!(found(&app), ["kick loop.wav", "BD01.wav"]);
