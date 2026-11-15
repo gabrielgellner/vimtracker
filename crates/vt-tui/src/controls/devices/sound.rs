@@ -8,8 +8,8 @@ use vt_model::action::TrackControl;
 use vt_model::grid::GRID_ROWS;
 use vt_model::song::{Machine, Track, TrackKind};
 
-use super::controls::base;
-use super::{Control, DEVICE_COLUMNS, DeviceSpec, DeviceWidth};
+use super::{DEVICE_COLUMNS, DeviceSpec, DeviceWidth};
+use crate::controls::{Control, base};
 
 /// The Sound page's devices, top to bottom: on a sound track its machine, its filter, its output
 /// and how it plays, each a full-width device, the four filling the rows inside the keyboard's

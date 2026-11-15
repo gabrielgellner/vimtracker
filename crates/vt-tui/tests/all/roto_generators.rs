@@ -11,7 +11,7 @@ use vt_model::shape::{FillKind, GenParam, Role, Shape, ShapeColumn, Values, Wher
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
 use vt_roto::live::{Feel, KNOB_TOP};
-use vt_tui::pages::track::{Control, Page};
+use vt_tui::controls::{Control, Page};
 use vt_tui::roto::devices::{control_at, knob, live_devices, placement, track_devices};
 use vt_tui::roto::edits::turned;
 use vt_tui::roto::layouts::{GENERATORS, WHERE_FIRST, WHERE_SECOND, app_only, layout_of, resolve};
@@ -137,7 +137,7 @@ fn every_generator_puts_each_setting_on_one_knob_and_the_app_keeps_what_it_is() 
 
 #[test]
 fn an_fx_columns_lane_is_a_device_of_its_own_with_its_length_and_rate_on_knobs() {
-    use vt_tui::pages::track::LaneField;
+    use vt_tui::controls::LaneField;
     let mut song = song_with(shape(FillKind::Ramp, Where::Notes));
     let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
     phrase.set_lane(0, Some(vt_model::song::Lane::new(0, 4)));

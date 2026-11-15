@@ -11,10 +11,10 @@ use vt_model::preset::{
 };
 
 use crate::app::App;
+use crate::controls::{Control, Page};
 use crate::input::mode::View;
 use crate::overlays::command::parse::PresetLine;
 use crate::overlays::picker::explorer::{Purpose, place_name};
-use crate::pages::track::{Control, Page};
 use crate::services::config::home_folder;
 
 /// What a preset command acts on.

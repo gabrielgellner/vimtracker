@@ -39,7 +39,7 @@ fn to_track(app: &mut App, track: usize) {
 
 #[test]
 fn a_fixed_tracks_pages_only_show_what_it_has() {
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     let (mut app, _rt) = app();
     // Each fixed track's Output, with its settings where a sound track's are, and the keys that
     // reach each from the top: a return's, a group's and the master's.
@@ -208,7 +208,7 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     let top: Vec<_> = picker.shown().map(|item| item.pick.clone()).collect();
     let sampler = vt_tui::overlays::picker::Pick::Param {
         track: 0,
-        control: vt_tui::pages::track::Control::Machine,
+        control: vt_tui::controls::Control::Machine,
         value: 0,
     };
     assert_eq!(top, [sampler]);
@@ -1188,7 +1188,7 @@ fn the_track_page_sets_how_long_notes_last() {
 
 #[test]
 fn the_sample_row_lists_the_bank_steps_through_it_and_clears() {
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     use vt_tui::screen::status::value_shown;
     let (mut app, _realtime) = on_track_page();
     let track = |app: &App| app.song().tracks[0].clone();
@@ -1745,7 +1745,7 @@ fn the_track_page_shows_its_settings_in_columns() {
 
 #[test]
 fn a_tracks_groove_on_the_page_is_chosen_from_a_list() {
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     let (mut app, _realtime) = on_track_page();
     let groove = |name: &str| GrooveId::named(name);
     press(&mut app, "2}j$h");
@@ -1768,7 +1768,7 @@ fn a_tracks_groove_on_the_page_is_chosen_from_a_list() {
 
 #[test]
 fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
-    use vt_tui::pages::track::Page;
+    use vt_tui::controls::Page;
     let (mut app, _realtime) = on_track_page();
     assert_eq!(app.track_page.page, Page::Sound);
     press(&mut app, "H");
@@ -1812,7 +1812,7 @@ fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
 fn the_sample_setting_chooses_from_the_bank_and_x_clears_it() {
     let (mut app, _realtime) = on_track_page();
     press(&mut app, "ggl");
-    assert_eq!(app.track_control(), vt_tui::pages::track::Control::Sample);
+    assert_eq!(app.track_control(), vt_tui::controls::Control::Sample);
     // With nothing in the bank, K opens the explorer to add a file.
     press(&mut app, "K");
     assert_ne!(app.modes.mode, Mode::Normal);
@@ -2172,13 +2172,13 @@ fn a_jump_finds_each_row_of_a_repeated_name_and_can_be_left() {
     assert_eq!(column_name(&app), "Depth");
     assert_eq!(
         app.track_control(),
-        vt_tui::pages::track::Control::Mod(0, vt_model::modulation::ModField::Depth)
+        vt_tui::controls::Control::Mod(0, vt_model::modulation::ModField::Depth)
     );
 }
 
 #[test]
 fn ctrl_o_comes_back_from_a_jump_to_the_setting_it_left() {
-    use vt_tui::pages::track::Page;
+    use vt_tui::controls::Page;
     use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app();
     press(&mut app, " 5jj");
@@ -2237,7 +2237,7 @@ fn a_jumps_labels_cover_the_values_and_the_search_shows_below() {
 #[test]
 fn a_jumps_labels_also_follow_the_names_being_searched() {
     use vt_model::modulation::ModField;
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     let (mut app, _realtime) = app();
     press(&mut app, " 5/cu");
     let line = from_name;
@@ -2283,7 +2283,7 @@ fn a_jumps_labels_also_follow_the_names_being_searched() {
 
 #[test]
 fn a_jump_works_on_the_mixer_and_stays_on_the_cursors_track() {
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = app();
     press(&mut app, " 4l");
@@ -2423,7 +2423,7 @@ fn semicolon_on_the_track_page_plays_the_sound_from_the_keyboard() {
 
 #[test]
 fn j_and_k_come_back_to_the_column_a_shorter_row_moved_them_from() {
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     let (mut app, _rt) = app();
     press(&mut app, " 5LL");
     press(&mut app, "K");
@@ -2581,7 +2581,7 @@ fn the_filter_curve_and_the_envelopes_are_smooth_at_their_sizes() {
 #[test]
 fn a_tracks_speed_on_the_page_is_chosen_from_a_list() {
     use vt_model::speed::Speed;
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     use vt_tui::screen::status::value_shown;
     let (mut app, _realtime) = on_track_page();
     let speed = |app: &App| app.song().tracks[0].speed;
@@ -2622,7 +2622,7 @@ fn a_tracks_speed_on_the_page_is_chosen_from_a_list() {
 
 #[test]
 fn a_tracks_reset_on_the_page_is_typed_in_steps_or_bars() {
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     use vt_tui::screen::status::value_shown;
     let (mut app, _realtime) = on_track_page();
     let reset = |app: &App| app.song().tracks[0].reset;
@@ -2973,7 +2973,7 @@ fn a_return_has_no_arpeggio() {
 #[test]
 fn two_state_settings_are_toggles_on_the_fx_and_mod_pages_and_nothing_moves() {
     use vt_model::insert::Insert;
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     use vt_tui::widgets::glyphs::{SWITCH_OFF, SWITCH_ON};
     use vt_tui::widgets::theme;
     let (mut app, _realtime) = on_fx_page();
@@ -3057,7 +3057,7 @@ fn two_state_settings_are_toggles_on_the_fx_and_mod_pages_and_nothing_moves() {
 #[test]
 fn the_track_page_sets_how_long_a_tie_glides() {
     use vt_model::settings::glide_value;
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     use vt_tui::screen::status::value_shown;
     let (mut app, _realtime) = on_track_page();
     let glide = |app: &App| app.song().tracks[0].glide;
@@ -3375,7 +3375,7 @@ fn a_groups_icon_and_its_tracks_group_are_in_its_colour() {
 
 #[test]
 fn the_trim_sits_above_the_level_and_reads_in_db() {
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     use vt_tui::screen::status::value_shown;
     let (mut app, _realtime) = on_track_page();
     let trim = |app: &App| app.song().tracks[0].trim;
@@ -3473,7 +3473,7 @@ fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
     use vt_model::insert::{INSERTS, Insert};
     use vt_model::modulation::ModField;
     use vt_model::step::FxCommand;
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     let (mut app, _realtime) = app();
     // A delay in the last slot.
     press(&mut app, " 5LL");
@@ -3688,7 +3688,7 @@ fn a_tracks_role_is_its_machines_until_its_told_and_k_lists_them() {
 #[test]
 fn a_count_steps_a_list_that_many_choices_round_or_to_its_end() {
     use vt_model::speed::Speed;
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     let track = |app: &App| app.song().tracks[0].clone();
     // The filter's types go round.
     let (mut app, _realtime) = on_track_page();
@@ -3740,7 +3740,7 @@ fn a_count_steps_a_list_that_many_choices_round_or_to_its_end() {
 #[test]
 fn a_count_steps_the_effect_in_a_slot_that_many_effects() {
     use vt_model::insert::Insert;
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     let (mut app, _realtime) = on_fx_page();
     assert_eq!(app.track_control(), Control::Insert(0));
     let at = |app: &App| {

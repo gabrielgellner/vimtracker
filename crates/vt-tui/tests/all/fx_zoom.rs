@@ -6,8 +6,8 @@ use std::time::{Duration, Instant};
 use ratatui::crossterm::event::KeyCode;
 use vt_engine::track_state::LiveValues;
 use vt_tui::app::App;
+use vt_tui::controls::Page;
 use vt_tui::input::mode::Mode;
-use vt_tui::pages::track::Page;
 
 use crate::common::*;
 use vt_tui::graphics::{PanelIds, PanelKey};

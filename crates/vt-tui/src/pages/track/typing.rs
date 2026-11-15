@@ -13,10 +13,10 @@ use crate::input::typed::{HEX, Rule, Typed};
 use crate::services::Services;
 use crate::widgets::param::edit;
 
-use super::Control;
 use super::editing::{set_fine_here, set_mod, view_on, write};
 use super::generators::{gen_typing, type_gen};
 use super::tuning::type_tuning;
+use crate::controls::Control;
 
 /// The longest a generator's value can be typed: a list of eight notes and the spaces between.
 const GEN_TEXT: usize = 40;

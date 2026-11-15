@@ -26,12 +26,12 @@ use vt_model::settings::SettingId;
 use vt_model::song::{Machine, Song};
 use vt_model::step::FxCommand;
 use vt_tui::app::App;
+use vt_tui::controls::Control;
 use vt_tui::graphics::{Graphics, PanelIds};
 use vt_tui::input::keys::{Key, parse_sequence};
 use vt_tui::input::mode::{Mode, View};
 use vt_tui::pages::sample::settings::SampleSetting;
 use vt_tui::pages::sample::wave::{END_COLOR, LOOP_COLOR, SLICE_COLOR, START_COLOR};
-use vt_tui::pages::track::Control;
 use vt_tui::run::draw_screen;
 use vt_tui::screen::status::value_shown;
 

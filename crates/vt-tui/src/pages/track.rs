@@ -3,8 +3,9 @@
 //! `TrackPage` is the page as a component, which page shows, where its cursor is and the images it
 //! shows, with the moves that need only the cursor's track, its edits, [`TrackPage::edit`] and the
 //! Gen page's [`TrackPage::gen_edit`], given the [`Services`], and its drawing, in `draw`, given a
-//! [`Ctx`]. Each page's settings are in a file of its own (`sound`, `modulation`, `fx`,
-//! `generators`), each gives its devices to `Page::devices` if it's a rack (`device`), and
+//! [`Ctx`]. What's on each page, its devices and their settings, is [`crate::controls`]'s; `device` has where
+//! they sit in the page's rack and where the cursor is among them, `modulation`, `fx` and
+//! `generators` what each page's keys do, and
 //! `editing`, `typing` and `tuning` change the setting under the cursor, as functions over the
 //! services that the mixer shares; `pictures` says which pictures the page wants the terminal to
 //! have and where their dots go, as data for `Graphics`; `pickers`, which open the program's
@@ -12,7 +13,6 @@
 //! `TrackPage` is a [`crate::pages::Page`], with its rows of the binding table, `Page::KEYS`, here
 //! beside it.
 
-mod controls;
 mod device;
 pub mod draw;
 pub(crate) mod editing;
@@ -23,18 +23,12 @@ pub(crate) mod patches;
 mod pickers;
 mod pictures;
 pub(crate) mod presets;
-mod sound;
 pub(crate) mod tuning;
 mod typing;
-pub(crate) mod view;
 
-pub use controls::{AccumulatorField, ArpField, Control, LaneField};
-pub(crate) use device::{DEVICE_COLUMNS, DEVICE_ROWS, DeviceWidth, rack_places};
-pub use device::{DeviceCursor, DeviceSpec};
+pub use device::DeviceCursor;
+pub(crate) use device::rack_places;
 pub(crate) use fx::TakenInsert;
-pub(crate) use generators::macros_device;
-pub(crate) use modulation::modulator_bypassed;
-pub use view::{set, view};
 
 use std::sync::Arc;
 
@@ -47,6 +41,7 @@ use vt_model::song::Track;
 use vt_model::steps::STEPS;
 
 use crate::app::{App, Entry};
+use crate::controls::{Control, DEVICE_ROWS, DeviceSpec, Page};
 use crate::graphics::slots::SlotDrawing;
 use crate::graphics::{PanelIds, PanelWant};
 use crate::input::bindings::Cmd;
@@ -58,65 +53,6 @@ use crate::services::meter::{FLOOR_DB, Held, ReductionHistory};
 use device::{device_beside, rack_column};
 use editing::{adjust_control, adjust_fine, reset_control, set_fine_here};
 use modulation::toggle_modulator;
-
-/// A part of the track page.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Page {
-    #[default]
-    Sound,
-    Mod,
-    Fx,
-    /// The live generators of the phrase under the cursor.
-    Gen,
-}
-
-impl Page {
-    /// Every page, in order.
-    pub const ALL: [Self; 4] = [Self::Sound, Self::Mod, Self::Fx, Self::Gen];
-
-    /// The page's name on screen.
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Sound => "Sound",
-            Self::Mod => "Mod",
-            Self::Fx => "FX",
-            Self::Gen => "Gen",
-        }
-    }
-
-    /// Where the page is in [`Page::ALL`].
-    fn index(self) -> usize {
-        self as usize
-    }
-
-    /// The page next to this one, or this one at either end.
-    fn beside(self, next: bool) -> Self {
-        let at = Self::ALL.iter().position(|page| *page == self).unwrap_or(0);
-        let to = if next { at + 1 } else { at.saturating_sub(1) };
-        Self::ALL[to.min(Self::ALL.len() - 1)]
-    }
-
-    /// The page's devices, in the order they're read, each page's from its own file: the Sound
-    /// page's machine, filter, output and play, or a fixed track's output alone, the Mod page's
-    /// mod slots, accumulator and arpeggio, and the FX page's slots. The cursor, `j`, `k`,
-    /// `h`, `l`, `{` and `}` go through whatever devices a page gives, laid out as its rack
-    /// ([`rack_places`]). The Gen page's hang on a phrase as well, so they're
-    /// [`Page::devices_on`]'s, and here there are none.
-    pub fn devices(self, track: &Track) -> Vec<DeviceSpec> {
-        self.devices_on(track, None)
-    }
-
-    /// The page's devices, the Gen page's being a device for each live generator of this phrase
-    /// of the track, then `Empty`.
-    pub(crate) fn devices_on(self, track: &Track, phrase: Option<u32>) -> Vec<DeviceSpec> {
-        match self {
-            Self::Sound => sound::devices(track),
-            Self::Mod => modulation::devices(track),
-            Self::Fx => fx::devices(track),
-            Self::Gen => generators::devices(track, phrase),
-        }
-    }
-}
 
 /// The place nearest a row and field that holds a setting: in a row with none, the nearest row
 /// above with some, and on a hole, the nearest setting along the row, the left one of two as near.

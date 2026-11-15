@@ -8,11 +8,11 @@ use vt_model::bloom::{Bloom, Path};
 use vt_model::song::{ChainEntry, lowest_unused};
 
 use crate::app::App;
+use crate::controls::Control;
 use crate::input::bindings::Cmd;
 use crate::input::mode::View;
 use crate::overlays::command::parse::Line;
 use crate::overlays::picker::{Item, Pick, Picker};
-use crate::pages::track::Control;
 use crate::services::Services;
 
 impl App {

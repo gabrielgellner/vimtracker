@@ -20,10 +20,8 @@ use crate::widgets::glyphs;
 use crate::widgets::param::edit::{self, ChoiceList};
 use crate::widgets::theme;
 
-use super::controls::no_modes;
 use super::editing::toggle_control;
-use super::view::view;
-use super::{AccumulatorField, ArpField, Control};
+use crate::controls::{AccumulatorField, ArpField, Control, no_modes, view};
 
 /// The titles of each slot's lists of types, as a list's title is fixed text.
 const TYPE_TITLES: [&str; MOD_SLOTS] = [

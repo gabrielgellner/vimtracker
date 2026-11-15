@@ -13,10 +13,12 @@ use vt_model::grid::GRID_COLUMNS;
 use vt_model::shape::ShapeColumn;
 use vt_model::song::Track;
 
+use crate::controls::macro_name;
+use crate::controls::{Control, DeviceSpec};
 use crate::graphics::PanelKey;
-use crate::overlays::mapping::{holds, macro_name};
+use crate::overlays::mapping::holds;
 use crate::pages::Ctx;
-use crate::pages::track::{Control, DeviceSpec, TrackPage};
+use crate::pages::track::TrackPage;
 use crate::services::Services;
 use crate::services::generators::LiveGen;
 use crate::widgets::device::{DEVICE_HEIGHT, Device};

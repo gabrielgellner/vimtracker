@@ -14,11 +14,11 @@ use vt_model::modulation::{MOD_SLOTS, ModField, ModKind};
 use vt_model::song::Track;
 use vt_model::steps::MAX_STEP;
 
+use crate::controls::modulator_bypassed;
+use crate::controls::{Control, DeviceSpec, DeviceWidth, Page};
 use crate::graphics::PanelKey;
 use crate::pages::Ctx;
-use crate::pages::track::{
-    Control, DeviceSpec, DeviceWidth, Page, TrackPage, modulator_bypassed, rack_places,
-};
+use crate::pages::track::{TrackPage, rack_places};
 use crate::widgets::device::{Device, rack_areas};
 use crate::widgets::grid::{CellWidths, SettingsGrid, faded};
 use crate::widgets::image;

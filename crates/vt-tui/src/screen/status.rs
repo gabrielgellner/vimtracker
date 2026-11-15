@@ -19,12 +19,12 @@ use vt_model::step::{FxCommand, Note};
 use vt_model::variation::{self, Varies};
 
 use crate::app::App;
+use crate::controls::{Control, view};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::overlays::mapping::held_text;
 use crate::pages::Page;
 use crate::pages::phrase::draw::generator_cell_text;
-use crate::pages::track::{Control, view};
 use crate::services::Services;
 use crate::services::banking::sample_shown;
 use crate::services::generators::with_live;
