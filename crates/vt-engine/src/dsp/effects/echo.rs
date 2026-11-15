@@ -25,6 +25,7 @@ use vt_model::lfo::DIVISION_TICKS;
 use vt_model::song::level_gain;
 
 use crate::dsp::blocks::clip::within;
+use crate::dsp::blocks::line::Tape;
 use crate::dsp::blocks::one_pole::{gain as one_pole_gain, low_pass};
 use crate::dsp::blocks::response::{Gain, one_pole, svf, warped};
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
@@ -37,8 +38,6 @@ use crate::rng::Pcg32;
 /// The longest the first head can be behind the record head, in seconds: `Rate`'s slowest is a
 /// second, and `Sync` can ask for up to twice that at a slow tempo.
 const LONGEST_HEAD_SECONDS: f64 = 2.0;
-/// The closest a head reads to where the tape is written, leaving room to read between samples.
-const SHORTEST_FRAMES: f64 = 4.0;
 /// The most the wobble moves a read either way, in seconds, at the slowest speed, with room.
 const MOST_WOBBLE_SECONDS: f64 = 0.04;
 
@@ -331,8 +330,7 @@ impl Wobble {
 /// A Space Echo's tape, heads, loop and spring.
 #[derive(Debug, Clone)]
 pub struct Echo {
-    tape: Vec<[f32; 2]>,
-    write: usize,
+    tape: Tape,
     used: bool,
     sides: [Side; 2],
     /// The first head's delay the settings ask for, and where the motor's fast and slow one-poles
@@ -379,16 +377,13 @@ impl Echo {
     pub fn new(rate: u32) -> Self {
         let frames = |seconds: f64| (seconds * f64::from(rate)).ceil() as usize;
         let length = frames(LONGEST_HEAD_SECONDS * 3.0 + MOST_WOBBLE_SECONDS) + 8;
-        let mut tape = vec![[0.0; 2]; length];
-        tape.fill([0.0; 2]);
-        std::hint::black_box(&mut tape);
+        let tape = Tape::new(length);
         let mut spring = Box::new(Spring::new(rate));
         spring.follow(SPRING);
         spring.settle();
         let start = head_frames(Settings::DEFAULT, 1.0, rate);
         let mut echo = Self {
             tape,
-            write: 0,
             used: false,
             sides: [Side::default(); 2],
             target: start,
@@ -430,7 +425,7 @@ impl Echo {
     /// Forget what's on the tape and in the spring.
     pub(crate) fn clear(&mut self) {
         if self.used {
-            self.tape.fill([0.0; 2]);
+            self.tape.clear();
             self.pre.fill([0.0; 2]);
             self.used = false;
         }
@@ -516,34 +511,6 @@ impl Echo {
             as u32
     }
 
-    /// Where on the tape is this many frames back, less than its length.
-    #[inline]
-    fn back(&self, frames: usize) -> usize {
-        let length = self.tape.len();
-        let at = self.write + length - frames;
-        if at >= length { at - length } else { at }
-    }
-
-    /// One side of the tape this far back, read between samples through four of them.
-    #[inline]
-    fn read(&self, side: usize, frames: f64) -> f32 {
-        let frames = frames.clamp(SHORTEST_FRAMES, (self.tape.len() - 3) as f64);
-        let whole = frames as usize;
-        let between = (frames - whole as f64) as f32;
-        let at = |back: usize| self.tape[self.back(back)][side];
-        let current = at(whole);
-        if between == 0.0 {
-            return current;
-        }
-        let (a, b, c, d) = (at(whole - 1), current, at(whole + 1), at(whole + 2));
-        let half = (c - a) * 0.5;
-        let w = b - c;
-        let v = half + w;
-        let slope = v + w + (d - b) * 0.5;
-        let bend = v + slope;
-        (((slope * between - bend) * between + half) * between) + b
-    }
-
     /// Feed one frame in and get what's wet out.
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
@@ -587,7 +554,7 @@ impl Echo {
             let mut heard = 0.0;
             for (weight, frames) in heads.iter().zip(reads) {
                 if *weight > 0.0 {
-                    heard += weight * self.read(side, frames);
+                    heard += weight * self.tape.read(side, frames);
                 }
             }
             // A NaN read off the tape is held here, so it can't stay in the head's filters.
@@ -611,12 +578,7 @@ impl Echo {
             written[side] = SATURATION * (recorded / SATURATION).tanh();
             out[side] = repeat * echo;
         }
-        self.tape[self.write] = written;
-        self.write = if self.write + 1 == self.tape.len() {
-            0
-        } else {
-            self.write + 1
-        };
+        self.tape.push(written);
         self.pre[self.pre_at] = [input[0] * drive, input[1] * drive];
         self.pre_at = (self.pre_at + 1) % self.pre.len();
         self.used = true;
@@ -1251,8 +1213,7 @@ mod tests {
             ..PLAIN
         });
         through(&mut echo, &[0.5], 100);
-        let at = echo.back(10);
-        echo.tape[at] = [f32::NAN; 2];
+        *echo.tape.back_mut(10) = [f32::NAN; 2];
         let out = through(&mut echo, &[], RATE as usize * 6);
         assert!(out[RATE as usize..].iter().all(|s| s.is_finite()));
         assert!(out[out.len() - 100..].iter().all(|s| s.abs() < 1e-4));

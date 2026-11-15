@@ -22,6 +22,7 @@
 
 use vt_model::insert::Reverb as Settings;
 
+use crate::dsp::blocks::line::SharedLines;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::{REVERB_QUIET_SECONDS, SongPlace};
 use crate::dsp::effects::slot::{Rung, SlotEffect};
@@ -105,55 +106,10 @@ struct Line {
     length: usize,
 }
 
-/// The buffer all the lines share, each with its own place, moving together.
-#[derive(Debug, Clone)]
-struct Lines {
-    buffer: Vec<f32>,
-    mask: usize,
-    write: usize,
-}
-
-impl Lines {
-    #[inline]
-    fn read(&self, line: Line, offset: usize) -> f32 {
-        self.buffer[(self.write + line.base + offset) & self.mask]
-    }
-
-    #[inline]
-    fn tail(&self, line: Line) -> f32 {
-        self.read(line, line.length - 1)
-    }
-
-    #[inline]
-    fn write(&mut self, line: Line, offset: usize, value: f32) {
-        let at = (self.write + line.base + offset) & self.mask;
-        self.buffer[at] = value;
-    }
-
-    /// Read between samples.
-    #[inline]
-    fn between(&self, line: Line, offset: f32) -> f32 {
-        let whole = offset as usize;
-        let fraction = offset - whole as f32;
-        let a = self.read(line, whole);
-        let b = self.read(line, whole + 1);
-        a + (b - a) * fraction
-    }
-
-    /// A step through an allpass, going by what it read from the end of its line.
-    #[inline]
-    fn allpass(&mut self, line: Line, input: f32, into: f32) -> f32 {
-        let read = self.tail(line);
-        let sum = input + read * into;
-        self.write(line, 0, sum);
-        sum * -into + read
-    }
-}
-
 /// The stereo reverb.
 #[derive(Debug, Clone)]
 pub(crate) struct Reverb {
-    lines: Lines,
+    lines: SharedLines,
     diffusers: [Line; 4],
     /// Each side's loop: two allpasses and a delay.
     loops: [[Line; 3]; 2],
@@ -198,11 +154,7 @@ impl Reverb {
         // A power of two long, so reading round it is a mask.
         let pre_frames = ((LONGEST_PRE * rate as f32) as usize + 2).next_power_of_two();
         let mut reverb = Self {
-            lines: Lines {
-                buffer: vec![0.0; size],
-                mask: size - 1,
-                write: 0,
-            },
+            lines: SharedLines::new(size),
             diffusers: [lines[0], lines[1], lines[2], lines[3]],
             loops: [
                 [lines[4], lines[5], lines[6]],
@@ -233,7 +185,7 @@ impl Reverb {
 
     /// Forget what's in it.
     pub(crate) fn clear(&mut self) {
-        self.lines.buffer.fill(0.0);
+        self.lines.clear();
         self.pre.fill(0.0);
         self.damped = [0.0; 2];
         self.trim = Trim::default();
@@ -343,37 +295,37 @@ impl Reverb {
         let decay = self.decay.next(self.smoothing);
         let damping = self.damping.next(self.smoothing);
         let lines = &mut self.lines;
-        lines.write = lines.write.wrapping_sub(1) & lines.mask;
+        lines.advance();
 
         // Smear the first allpass inside itself. In Clouds this reads below 0, out of the line and
         // into old memory, which would go round again whatever `Decay` is, so here it stays in.
         let [first, _, _, _] = self.diffusers;
         let [read_at, write_at, moves] = self.smear;
-        let smeared = lines.between(first, read_at + moves * self.wobble[0]);
-        lines.write(first, write_at as usize, smeared);
+        let smeared = lines.between(first.base, read_at + moves * self.wobble[0]);
+        lines.write(first.base, write_at as usize, smeared);
 
         let mut diffused = incoming * self.input_gain;
         for line in self.diffusers {
-            diffused = lines.allpass(line, diffused, diffusion);
+            diffused = lines.allpass(line.base, line.length, diffused, diffusion);
         }
 
         let [[one_a, one_b, one_delay], [two_a, two_b, two_delay]] = self.loops;
         let [swing_at, swing_moves] = self.swing;
-        let from_two = lines.between(two_delay, swing_at + swing_moves * self.wobble[1]);
+        let from_two = lines.between(two_delay.base, swing_at + swing_moves * self.wobble[1]);
         let mut left = diffused + from_two * decay;
         self.damped[0] += damping * (left - self.damped[0]);
         left = self.damped[0];
-        left = lines.allpass(one_a, left, -diffusion);
-        left = lines.allpass(one_b, left, diffusion);
-        lines.write(one_delay, 0, left);
+        left = lines.allpass(one_a.base, one_a.length, left, -diffusion);
+        left = lines.allpass(one_b.base, one_b.length, left, diffusion);
+        lines.write(one_delay.base, 0, left);
 
-        let from_one = lines.tail(one_delay);
+        let from_one = lines.read(one_delay.base, one_delay.length - 1);
         let mut right = diffused + from_one * decay;
         self.damped[1] += damping * (right - self.damped[1]);
         right = self.damped[1];
-        right = lines.allpass(two_a, right, diffusion);
-        right = lines.allpass(two_b, right, -diffusion);
-        lines.write(two_delay, 0, right);
+        right = lines.allpass(two_a.base, two_a.length, right, diffusion);
+        right = lines.allpass(two_b.base, two_b.length, right, -diffusion);
+        lines.write(two_delay.base, 0, right);
 
         [left * WET, right * WET]
     }
