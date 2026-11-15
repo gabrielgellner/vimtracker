@@ -1661,7 +1661,9 @@ it renders again only when that changes, and lays its cells over each row it rea
 
 A project is a folder holding `song.ron`, and a `samples/` folder once it has been bundled. Samples are referred to where they are, by a full path, or a relative one if they are inside the project. `:w path` copies
 samples to a new folder. Saving writes to a temporary file and renames it, so a process crash cannot leave a partial song,
-and a failed save leaves the previous file intact. Loading first reads only `format_version` and compares it, then parses
+and a failed save leaves the previous file intact. The autosave, presets, the tag library, kits imported from Ableton, the
+recent places, the command history and the analysis cache are written the same way, through `vt-model`'s `ron_file.rs`
+(#809). Loading first reads only `format_version` and compares it, then parses
 the full `Song`. A different version is refused with a message naming both versions and suggesting rendering to WAV before
 updating. There is no migration code. Steps are saved as one readable string per step.
 

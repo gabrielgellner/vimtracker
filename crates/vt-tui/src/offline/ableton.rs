@@ -15,6 +15,7 @@ use flate2::read::GzDecoder;
 use roxmltree::{Document, Node};
 use thiserror::Error;
 use vt_model::kit::{CHOKE_GROUPS, KitFile, MAX_TUNE, SoundFile};
+use vt_model::ron_file;
 
 /// Where Live keeps its racks, inside its library.
 const RACKS: &str = "Racks/Drum Racks";
@@ -227,10 +228,8 @@ fn made_here(path: &Path) -> bool {
     fs::read_to_string(path).is_ok_and(|text| text.starts_with(MARK))
 }
 
+/// Write a kit file whole or not at all, so a stopped import leaves the one before.
 fn write_kit(target: &Path, kit: &KitFile, rack: &Path) -> Result<(), ImportError> {
-    if let Some(folder) = target.parent() {
-        fs::create_dir_all(folder).map_err(io_at(folder))?;
-    }
     let pretty = ron::ser::PrettyConfig::new()
         .depth_limit(4)
         .indentor("    ");
@@ -242,7 +241,10 @@ fn write_kit(target: &Path, kit: &KitFile, rack: &Path) -> Result<(), ImportErro
         "{MARK} from {}.\n// Running it again replaces this file, so copy it elsewhere to change it.\n{body}\n",
         rack.display()
     );
-    fs::write(target, text).map_err(io_at(target))
+    ron_file::write_atomic(target, text).map_err(|error| ImportError::Io {
+        path: target.display().to_string(),
+        source: error.into(),
+    })
 }
 
 /// Remove what the importer made before that it didn't make this time.

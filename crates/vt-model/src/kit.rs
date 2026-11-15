@@ -1,13 +1,13 @@
 //! Kits: a named list of sounds to put on tracks, in order. A kit refers to its sounds where
 //! they are, so making one copies nothing.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::label::is_name;
 use crate::project::ProjectError;
+use crate::ron_file;
 
 /// The choke groups a sound can be in, numbered from 1 as Ableton's are.
 pub const CHOKE_GROUPS: u8 = 16;
@@ -95,15 +95,11 @@ pub struct KitEntry {
 /// Read a kit file, its sounds in file order. A sound whose label can't be a name, or whose
 /// choke group, gain or tune is out of range, stops it.
 pub fn load_kit(path: &Path) -> Result<Kit, ProjectError> {
-    let text = fs::read_to_string(path).map_err(|source| ProjectError::Io {
-        path: path.display().to_string(),
-        source,
-    })?;
+    let file: KitFile = ron_file::read(path)?;
     let refuse = |detail: String| ProjectError::Parse {
         path: path.display().to_string(),
         detail,
     };
-    let file: KitFile = ron::from_str(&text).map_err(|error| refuse(error.to_string()))?;
     let folder = path.parent().unwrap_or_else(|| Path::new(""));
     let mut sounds: Vec<KitEntry> = Vec::with_capacity(file.sounds.len());
     for sound in &file.sounds {
