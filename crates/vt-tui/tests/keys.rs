@@ -883,7 +883,7 @@ fn in_insert_every_note_key_writes_and_held_keys_sound_together() {
     assert_eq!(voices(&mut realtime), 0);
 
     // Without it, the last key down wins the cell, and the chord is still heard.
-    app.auto_jump = false;
+    app.services.auto_jump = false;
     press(&mut app, "sf");
     assert_eq!(written_notes(&app)[3], Note::On(65));
     assert_eq!(app.services.cursor.step, 3);

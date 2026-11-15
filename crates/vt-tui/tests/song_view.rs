@@ -472,10 +472,15 @@ fn g_upper_c_copies_the_chain_in_the_cursors_column_alone() {
 #[test]
 fn a_chain_used_by_another_section_counts_as_shared() {
     let (mut app, _realtime) = app();
-    assert_eq!(app.chain_uses(), 1);
+    assert_eq!(app.services.chain_uses(), 1);
     press(&mut app, " 1gc");
-    assert_eq!(app.chain_uses(), 2);
-    assert_eq!(app.phrase_uses(app.services.phrase_id().unwrap()).len(), 2);
+    assert_eq!(app.services.chain_uses(), 2);
+    assert_eq!(
+        app.services
+            .phrase_uses(app.services.phrase_id().unwrap())
+            .len(),
+        2
+    );
 }
 
 #[test]

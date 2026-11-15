@@ -3,9 +3,8 @@
 //! `Sample` is on, so every track playing it hears it, and is one undo step.
 
 use vt_model::action::Action;
-use vt_model::bank::{BankEntry, Loop, MOST_STEPS};
+use vt_model::bank::{Loop, MOST_STEPS};
 use vt_model::constants::{BAR_STEPS, MAX_MILLIBPM, MIN_MILLIBPM};
-use vt_model::samples::Rates;
 
 use crate::app::App;
 use crate::banking::sample_text;
@@ -89,7 +88,7 @@ impl App {
             );
             return;
         };
-        let Some((rate, length)) = self.file_of(&entry) else {
+        let Some((rate, length)) = self.services.file_of(&entry) else {
             self.services.status = "Its file isn't loaded, so its length isn't known".to_owned();
             return;
         };
@@ -196,7 +195,7 @@ impl App {
             );
             return;
         };
-        let Some((rate, length)) = self.file_of(&entry) else {
+        let Some((rate, length)) = self.services.file_of(&entry) else {
             self.services.status = "Its file isn't loaded, so its length isn't known".to_owned();
             return;
         };
@@ -247,17 +246,5 @@ impl App {
             sample_text(self.song(), number),
             steps_text(steps)
         );
-    }
-
-    /// The rate an entry's file was recorded at, and its length in the file's frames, if it's
-    /// loaded.
-    pub(crate) fn file_of(&self, entry: &BankEntry) -> Option<(u32, u64)> {
-        let id = self.services.samples.id_of(&entry.source()?.path)?;
-        let loaded = self.services.samples.get(id)?.frames.len() as u64;
-        // One made at the program's rate, as a recording is, is at the program's rate.
-        match self.services.samples.rates(id) {
-            Rates::SAME => Some((self.services.rate, loaded)),
-            rates => Some((rates.file.max(1), rates.file_frame(loaded))),
-        }
     }
 }

@@ -24,11 +24,12 @@ use crate::glyphs;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::macroing::held_text;
+use crate::services::Services;
 use crate::shaping::with_live;
 use crate::song_view::{COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, START_COLUMN};
 use crate::theme;
 use crate::track_page::{Control, view};
-use crate::views::phrase::{generator_cell_text, heard_note, playhead_step};
+use crate::views::phrase::generator_cell_text;
 
 /// Show a tempo without trailing zeros.
 pub fn format_bpm(millibpm: u32) -> String {
@@ -46,7 +47,10 @@ pub fn format_bpm(millibpm: u32) -> String {
 /// An FX cell's name: what it locks, by its group and name, and whether it's on this track, or
 /// which part of an empty cell the cursor is on.
 fn fx_name(app: &App, slot: usize) -> String {
-    let command = app.current_slot(slot).and_then(|cell| cell.command);
+    let command = app
+        .services
+        .current_slot(slot)
+        .and_then(|cell| cell.command);
     match (command, app.services.track_here()) {
         (Some(FxCommand::Set(id)), Some(track)) if id.exists_on(track) => {
             format!("{}: {}", id.group(), id.name())
@@ -76,7 +80,13 @@ pub fn column_name(app: &App) -> String {
             Field::Velocity => "Velocity".to_owned(),
             Field::Nudge => "Nudge".to_owned(),
             Field::Gate => "Gate".to_owned(),
-            Field::GateLength if app.current_gate().and_then(|gate| gate.length).is_some() => {
+            Field::GateLength
+                if app
+                    .services
+                    .current_gate()
+                    .and_then(|gate| gate.length)
+                    .is_some() =>
+            {
                 "Gate length".to_owned()
             }
             Field::GateLength => "Gate length, the track's".to_owned(),
@@ -125,13 +135,13 @@ pub fn value_shown(app: &App) -> Option<String> {
     let track = app.services.track_here()?;
     if app.modes.view == View::Phrase {
         return heard_shown(app, app.services.cursor.field)
-            .or_else(|| phrase_value(app, app.services.cursor.field));
+            .or_else(|| phrase_value(&app.services, app.services.cursor.field));
     }
     if !matches!(app.modes.view, View::Track | View::Mixer) {
         return None;
     }
     let control = app.track_control();
-    let view = |track: &Track| view(control, track, app.song(), app.scale.on);
+    let view = |track: &Track| view(control, track, app.song(), app.services.scale.on);
     // A fader the steps drive reads where they have it, and says so, as one a hand has taken over
     // from them does (decision 174).
     let heard = app.services.track_as_heard(app.services.cursor.track)?;
@@ -193,7 +203,9 @@ fn heard_shown(app: &App, field: Field) -> Option<String> {
                     .rows()
                     .is_some_and(|rows| (rows.first..=rows.last).contains(&row))
         })?;
-    let (heard, pass) = app.heard_cell(app.services.cursor.track, id, at, row)?;
+    let (heard, pass) = app
+        .services
+        .heard_cell(app.services.cursor.track, id, at, row)?;
     let written = phrase.steps().get(row)?;
     let shown =
         |step| generator_cell_text(step, &heard, generator.column, app.services.track_here());
@@ -208,55 +220,55 @@ fn heard_shown(app: &App, field: Field) -> Option<String> {
 /// A field of the row under the cursor in its setting's units, where it has them: the nudge, the
 /// note heard where an accumulator or an `RND` moved the row playing, an FX value, or the gate's length. The
 /// status line says it for the cursor's field and the row inspector for each of the row's.
-pub(crate) fn phrase_value(app: &App, field: Field) -> Option<String> {
-    let track = app.services.track_here()?;
+pub(crate) fn phrase_value(services: &Services, field: Field) -> Option<String> {
+    let track = services.track_here()?;
     let (id, value) = match field {
-        Field::Nudge => return Some(nudge_shown(app.current_nudge())),
+        Field::Nudge => return Some(nudge_shown(services.current_nudge())),
         // While an accumulator or an `RND` moves the row playing, the Note column says what it's
         // heard as, as the grid shows notes as written.
         Field::Note => {
-            playhead_step(app)?;
-            let heard = heard_note(app)?;
+            services.playhead_step()?;
+            let heard = services.heard_note()?;
             return Some(format!("the row playing is heard as {}", Note::On(heard)));
         }
         Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
-            let cell = app.current_slot(slot)?;
+            let cell = services.current_slot(slot)?;
             if cell.command == Some(FxCommand::Cnd) {
                 return Some(condition_shown(cell.coarse()));
             }
             if cell.command == Some(FxCommand::Arp) {
-                return Some(arp_shown(cell.coarse(), track.arpeggio, app.scale.on));
+                return Some(arp_shown(cell.coarse(), track.arpeggio, services.scale.on));
             }
             // What an `RND` varies is what's to its left.
             if cell.command == Some(FxCommand::Rnd) {
                 let left = slot
                     .checked_sub(1)
-                    .map(|left| app.current_slot(left).unwrap_or_default());
+                    .map(|left| services.current_slot(left).unwrap_or_default());
                 return Some(variation::text(
                     cell.coarse(),
                     Varies::of(left),
-                    app.scale.on,
+                    services.scale.on,
                 ));
             }
             if cell.command == Some(FxCommand::Acu) {
                 return Some(amount_shown(
                     cell.coarse(),
                     track.accumulation,
-                    app.scale.on,
+                    services.scale.on,
                 ));
             }
             if cell.command == Some(FxCommand::Set(SettingId::SAMPLE)) && track.is_sound() {
-                return Some(sample_shown(app.song(), cell.coarse()));
+                return Some(sample_shown(services.song(), cell.coarse()));
             }
             if cell.command == Some(FxCommand::Set(SettingId::SLICE)) && track.is_sound() {
-                return Some(app.slice_shown(cell));
+                return Some(services.slice_shown(cell));
             }
             let id = cell.command?.setting()?;
             (id, cell.value)
         }
         // With none of its own, the length is the track's `Gate`.
         Field::GateLength => {
-            let length = app.current_gate().and_then(|gate| gate.length);
+            let length = services.current_gate().and_then(|gate| gate.length);
             let length = length.unwrap_or_else(|| track.gate_length());
             (SettingId::GATE_LENGTH, u16::from(length) << 8)
         }
@@ -367,7 +379,7 @@ pub fn transport_spans(app: &App) -> Vec<Span<'static>> {
         }
         None => {}
     }
-    if app.fill {
+    if app.services.fill {
         spans.push(Span::raw(" FILL"));
     }
     let realigning = app.services.realigning || app.services.realigning_tracks.contains(&true);
@@ -454,7 +466,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     };
     let dirty = if app.services.dirty { " *" } else { "" };
     // After the changes' mark, as Vim's status line puts `[RO]` after `[+]`.
-    let read_only = if app.read_only { " [RO]" } else { "" };
+    let read_only = if app.services.read_only { " [RO]" } else { "" };
     let typed = if app.modes.entry.text.is_empty() {
         String::new()
     } else {
@@ -500,16 +512,16 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let reset = format!("{section}{reset}");
     // The grid only means something where notes are entered.
     let grid = if app.modes.view == View::Phrase {
-        let jump = if app.auto_jump { " Jump" } else { "" };
+        let jump = if app.services.auto_jump { " Jump" } else { "" };
         format!("  Grid {}{jump}", grid_name(app.song().skip))
     } else {
         String::new()
     };
-    let scale = if app.modes.view == View::Phrase && app.scale.on {
+    let scale = if app.modes.view == View::Phrase && app.services.scale.on {
         format!(
             "  Scale {} {}",
-            app.scale.root_name(),
-            app.scale.kind.short_name()
+            app.services.scale.root_name(),
+            app.services.scale.kind.short_name()
         )
     } else {
         String::new()
@@ -543,8 +555,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     status.push(Span::raw(format!(
         "  {} BPM  Groove {groove}  {reset}Oct {} Vel {:02X}{grid}{scale}  TVol {level:02X}{dirty}{read_only}{pending}{typed}",
         format_bpm(app.song().millibpm),
-        app.octave,
-        app.note_velocity,
+        app.services.octave,
+        app.services.note_velocity,
     )));
     let message = if app.modes.mode == Mode::Command {
         format!(":{}", app.command_line)

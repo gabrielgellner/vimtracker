@@ -18,6 +18,7 @@ use crate::input::command;
 use crate::input::mode::Mode;
 use crate::input::picker::{Item, KitChoice, Pick, Picker, Preview, Root, Shown};
 use crate::loading::Read;
+use crate::services::Services;
 use crate::views::status::format_bpm;
 
 /// What a folder chosen in the explorer goes on to: a command line, waiting for the name.
@@ -328,7 +329,7 @@ impl App {
         let is_taken = |name: &str| taken.contains(&name.to_lowercase());
         match naming.purpose {
             Purpose::Render => {
-                let stem = numbered(&self.project_name(), is_taken);
+                let stem = numbered(&self.services.project_name(), is_taken);
                 if is_stems(&naming.after) {
                     stem
                 } else {
@@ -336,15 +337,9 @@ impl App {
                 }
             }
             // Saving keeps the project's name, numbered if the folder has it, as a copy is.
-            _ if naming.command == "w" => numbered(&self.project_name(), is_taken),
+            _ if naming.command == "w" => numbered(&self.services.project_name(), is_taken),
             _ => self.names.fresh(is_taken),
         }
-    }
-
-    /// The project's name, which is the song's own: the random one it was given when it was
-    /// made, its folder's when it's saved somewhere new, or what the project page names it.
-    pub fn project_name(&self) -> String {
-        self.song().name.clone()
     }
 
     /// `C-r` on a name line: put a new random name in place of the one there, keeping the folder,
@@ -664,5 +659,13 @@ mod tests {
         );
         assert_eq!(sample_note(&info(48_000, 1, 12.5)), "12.5 s  48 kHz  mono");
         assert_eq!(sample_note(&info(48_000, 2, 125.0)), "2:05  48 kHz  stereo");
+    }
+}
+
+impl Services {
+    /// The project's name, which is the song's own: the random one it was given when it was
+    /// made, its folder's when it's saved somewhere new, or what the project page names it.
+    pub fn project_name(&self) -> String {
+        self.song().name.clone()
     }
 }

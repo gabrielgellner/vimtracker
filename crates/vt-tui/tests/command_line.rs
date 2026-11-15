@@ -66,7 +66,7 @@ fn tab_completes_a_command_name_in_place() {
     assert_eq!(app.command_line, "set scale=dorian");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.services.status, "Scale C Dorian", "it parses and runs");
-    assert!(app.scale.on);
+    assert!(app.services.scale.on);
 }
 
 #[test]

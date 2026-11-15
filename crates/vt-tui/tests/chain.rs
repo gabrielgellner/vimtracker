@@ -142,7 +142,7 @@ fn phrase_view_keys_move_through_the_chain_and_grr_lists_uses() {
 fn a_shared_chain_warns_on_clone_and_gc_big_separates_it() {
     let (mut app, _realtime) = app();
     press(&mut app, " 1gc 3");
-    assert_eq!(app.chain_uses(), 2);
+    assert_eq!(app.services.chain_uses(), 2);
     press(&mut app, "gc");
     assert!(
         app.services.status.contains("shared"),
@@ -150,7 +150,7 @@ fn a_shared_chain_warns_on_clone_and_gc_big_separates_it() {
         app.services.status
     );
     press(&mut app, "gC");
-    assert_eq!(app.chain_uses(), 1);
+    assert_eq!(app.services.chain_uses(), 1);
     assert_ne!(app.chain_id(), Some(0));
 }
 

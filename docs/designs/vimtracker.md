@@ -386,7 +386,7 @@ against its own state, so two quick presses can't act on an out-of-date view of 
 comes back each block: where playback is, each track's place and levels, each track's faders as
 they're heard (`Faders`: where `LEV`, `PAN`, `SNA` and `SNB` put them, what `VOL` and modulation make
 of them, and which the steps drive and a hand has taken over, from `TrackState::faders`), the watched
-track's live values, and up to four sample playheads. Each report says which version it's of (`Telemetry::version`, the `Published::id` playing), and the app keeps the songs it has sent until a report is of a later one, so a bar draws what's playing against the setting it was worked out from (`App::reported_track`, decision 210). The live values carry the watched track's peak right after its trim
+track's live values, and up to four sample playheads. Each report says which version it's of (`Telemetry::version`, the `Published::id` playing), and the app keeps the songs it has sent until a report is of a later one, so a bar draws what's playing against the setting it was worked out from (`Services::reported_track`, decision 210). The live values carry the watched track's peak right after its trim
 (`LiveValues::after_trim`), which `TrackState` keeps as it trims each frame and
 `Engine::take_after_trim` takes, for the Output device's meter, and where each mod slot running as
 an LFO is in its wave, or where a Track slot's last note is on its map (`LiveValues::mods`, a phase
@@ -774,9 +774,12 @@ given the view), with `Services::move_track` and `go_to_track_at` moving it acro
 typed: the view, the mode, what Insert has typed, a field jump under way and the count. A page
 reads and changes the program through two borrows, in `page.rs`: `CtxMut`, which a page's keys are
 run with, is the services, lent mutably apart from the page, so a key can change the page and
-apply an action at once, and the modes to read; `Ctx`, which a page is drawn with, only reads, and
-reads through `App`, as drawing is given `&App` and some of what's drawn, such as a live
-generator's sources, is `App`'s to work out.
+apply an action at once, and the modes to read; `Ctx`, which a page is drawn with, only reads: the
+services and the modes, and a `PageState` `App` fills as it lends it, the little of its own a page
+shows, which is whether anything is drawn over the page, the selection a replace or the shape panel
+holds, the recording and the audio's readouts (#784). What a page reads is worked out by the
+services, given the view where it depends on it, as a live generator's sources do, so the scale,
+the octave and the rest of what entering notes reads are the services' too.
 
 **`Page`** (`page.rs`, #739) is a page as a component, which the track page, the mixer, the
 project page's Song and Audio sub-pages, the sample page, the song view, the chain view and the
