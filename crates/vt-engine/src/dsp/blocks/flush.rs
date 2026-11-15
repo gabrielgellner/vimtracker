@@ -1,4 +1,4 @@
-//! Letting a filter's state fall to an exact zero once it's far below anything heard (#260).
+//! Letting a filter's state fall to an exact zero once it's far below anything heard.
 //!
 //! Left to itself after a sound, a filter's state falls into the denormal floats and, rounded
 //! there, can trade the smallest of them between its states for good, so what comes after it

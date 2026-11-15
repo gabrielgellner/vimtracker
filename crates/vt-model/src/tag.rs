@@ -1,5 +1,5 @@
 //! Tags: plain words such as `kick`, `loop` and `bass` that find samples, kits' sounds and presets
-//! across folders, after Ableton's browser tags, Elektron's sound tags and Splice's (decision 315).
+//! across folders, after Ableton's browser tags, Elektron's sound tags and Splice's.
 //!
 //! A file's tags are guessed from its folders and its name, from a kit's label for its sound, and
 //! from how its sound ends once it's been read, and given by hand. What's given by hand, and the

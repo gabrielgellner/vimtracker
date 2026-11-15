@@ -1,6 +1,6 @@
-//! The phrase view's timeline (decision 122): each row of the loop takes a line for each of its
-//! pulses, so a line is one of the track's own steps, and the other tracks' columns beside the
-//! grid line up by time rather than by row number. `z a` collapses it back to a line a row.
+//! The phrase view's timeline: each row of the loop takes a line for each of its pulses, so a line
+//! is one of the track's own steps, and the other tracks' columns beside the grid line up by time
+//! rather than by row number. `z a` collapses it back to a line a row.
 //!
 //! The cursor, counts, selections and the view's `top` all stay in rows. Only how many lines a
 //! row takes on screen changes, so scrolling works the screen out in lines here.

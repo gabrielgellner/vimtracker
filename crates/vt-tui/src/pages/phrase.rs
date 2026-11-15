@@ -1,15 +1,15 @@
 //! What the phrase view keeps of its own, and the keys that need nothing else: one track's steps,
 //! with the grid's cursor moving over them.
 //!
-//! `PhraseView` is the view as a component (#320): where it's scrolled to and how many lines fit,
-//! whether it's laid out in time and shows the row inspector, and where a selection started and
-//! how far it reaches. It's a [`Page`], with its rows of the binding table here beside it. Its own
-//! keys are the moves, the keys over the view (`H` `M` `L`, `C-d` `C-u`, `C-e` `C-y`), reaching
-//! another track from a selection, `zi` and `Space i`, run through the `Services`, and it's drawn
-//! by `draw`, given a [`Ctx`]. The grammar's operators, registers, Visual modes and `.`,
-//! the edits and Insert's typing, the tree's keys, the loop's and recording stay `App`'s, as they
-//! change the modes or reach what spans the pages, and read the selection here. The lists `K`
-//! opens on a cell, and `:order`'s, are built in `pickers`, and shown by `App`.
+//! `PhraseView` is the view as a component: where it's scrolled to and how many lines fit, whether
+//! it's laid out in time and shows the row inspector, and where a selection started and how far it
+//! reaches. It's a [`Page`], with its rows of the binding table here beside it. Its own keys are
+//! the moves, the keys over the view (`H` `M` `L`, `C-d` `C-u`, `C-e` `C-y`), reaching another
+//! track from a selection, `zi` and `Space i`, run through the `Services`, and it's drawn by
+//! `draw`, given a [`Ctx`]. The grammar's operators, registers, Visual modes and `.`, the edits and
+//! Insert's typing, the tree's keys, the loop's and recording stay `App`'s, as they change the
+//! modes or reach what spans the pages, and read the selection here. The lists `K` opens on a cell,
+//! and `:order`'s, are built in `pickers`, and shown by `App`.
 
 pub mod draw;
 pub(crate) mod inspector;
@@ -40,9 +40,9 @@ pub struct PhraseView {
     /// The first step on screen, and how many lines fit.
     pub top: usize,
     pub height: usize,
-    /// It's collapsed to a line a row, rather than laid out in time (decision 122).
+    /// It's collapsed to a line a row, rather than laid out in time.
     pub(crate) rows_collapsed: bool,
-    /// It shows the row inspector right of the overview, for this session (decision 255).
+    /// It shows the row inspector right of the overview, for this session.
     pub inspector: bool,
     /// Where a selection started: its step, and the columns the cursor was on.
     pub(crate) anchor: Option<(usize, Scope)>,

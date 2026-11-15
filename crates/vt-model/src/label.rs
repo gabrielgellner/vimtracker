@@ -1,7 +1,7 @@
 //! Track names, like `BD`, and group names, like `DRUMS`.
 
 /// The most characters a group's name has, as `DRUMS`: five, and the fold mark beside them, fit a
-/// mixer strip and a song view's group column (decision 308).
+/// mixer strip and a song view's group column.
 pub const GROUP_NAME_CHARS: usize = 5;
 
 /// Whether a name can be used: two letters or digits, the first a letter.

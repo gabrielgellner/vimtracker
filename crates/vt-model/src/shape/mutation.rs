@@ -2,9 +2,8 @@
 //! copies, each one of the kinds it allows: a note moved within the scale, the whole line moved
 //! up or down the scale, a few rows played backwards, a row ratcheted with `RET`, or a note
 //! dropped or added. A Bloom branch is a `Follow` of the branch before it that mutates, so each
-//! strays a little further from the trunk, and an edit to the trunk grows every branch again
-//! (decision 307). It works on the cells the copy left, allocating nothing, so the engine can
-//! render it as it plays.
+//! strays a little further from the trunk, and an edit to the trunk grows every branch again. It
+//! works on the cells the copy left, allocating nothing, so the engine can render it as it plays.
 
 use serde::{Deserialize, Serialize};
 

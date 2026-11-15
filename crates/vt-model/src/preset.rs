@@ -1,15 +1,15 @@
 //! Presets: a track's sound, or one slot's effect, saved on its own to load on any track of any
-//! song, as Elektron's sounds, the M8's instrument files and Ableton's device presets are
-//! (decision 310). Each is a small RON file in the presets folder, `sounds/` or `effects/`, with
-//! folders below those for sorting.
+//! song, as Elektron's sounds, the M8's instrument files and Ableton's device presets are. Each is
+//! a small RON file in the presets folder, `sounds/` or `effects/`, with folders below those for
+//! sorting.
 //!
 //! A sound preset is the sound and its patch: [`Sound`], what makes the sound, from the machine to
 //! the slots' effects, and [`Patch`], what plays it, the mod slots, the accumulator, the arpeggio
 //! and the eight macros. Loading one replaces both, which makes it a whole device with its knobs.
-//! A patch is also a preset of its own (decision 311), in `patches/`, which adds its parts to a
-//! track and keeps the track's sound; it's the same [`Patch`], holding only the parts its macros
-//! move, with the live generators they reach ([`patch`]). Some patches come with the program,
-//! made from the generators tutorial's songs ([`factory`]).
+//! A patch is also a preset of its own, in `patches/`, which adds its parts to a track and keeps
+//! the track's sound; it's the same [`Patch`], holding only the parts its macros move, with the
+//! live generators they reach ([`patch`]). Some patches come with the program, made from the
+//! generators tutorial's songs ([`factory`]).
 
 mod factory;
 mod patch;
@@ -299,9 +299,8 @@ copied!(
 
 /// What plays a sound rather than what it is: the mod slots, the accumulator, the arpeggio and
 /// the macros, as the study's §5.2 has a patch. In a sound preset it holds every slot and macro in
-/// order, numbered as the track's; on its own (decision 311) it holds only the parts its macros
-/// move, numbered from the first in the patch, which go into free ones, and the live generators
-/// they reach.
+/// order, numbered as the track's; on its own it holds only the parts its macros move, numbered
+/// from the first in the patch, which go into free ones, and the live generators they reach.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Patch {
@@ -312,8 +311,8 @@ pub struct Patch {
     pub accumulation: Accumulation,
     #[serde(default, skip_serializing_if = "is_default_arpeggio")]
     pub arpeggio: Arpeggio,
-    /// Each FX column's `Length` and `Rate`, which move its lanes (decision 347): on its own, only
-    /// those its macros or slots reach, by the column they were saved on.
+    /// Each FX column's `Length` and `Rate`, which move its lanes: on its own, only those its
+    /// macros or slots reach, by the column they were saved on.
     #[serde(default, skip_serializing_if = "lanes_at_rest")]
     pub lanes: [LaneMove; FX_SLOTS],
     /// The macros from the first, with their names, values, mappings and ranges, left out when
@@ -350,7 +349,7 @@ pub struct SoundPreset {
     pub sound: Sound,
     #[serde(default)]
     pub patch: Patch,
-    /// Its own tags, beside those its kind and machine give it (decision 315).
+    /// Its own tags, beside those its kind and machine give it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
 }
@@ -364,7 +363,7 @@ pub struct EffectPreset {
     pub effect: Insert,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub fine: BTreeMap<String, u8>,
-    /// Its own tags, beside those its kind and effect give it (decision 315).
+    /// Its own tags, beside those its kind and effect give it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
 }
@@ -578,7 +577,7 @@ pub trait Preset: Serialize + for<'de> Deserialize<'de> {
     /// Check what it holds fits a track, beyond what reading it checks.
     fn check(&self) -> Result<(), String>;
 
-    /// Its own tags (decision 315).
+    /// Its own tags.
     fn tags(&mut self) -> &mut Vec<String>;
 }
 
@@ -672,7 +671,7 @@ mod tests {
                 target: MacroTarget::Setting(SettingId::CUT),
                 min: 0x1000,
                 max: 0xF000,
-                // Bent, so a sound's mapping is seen to keep its curve (decision 314).
+                // Bent, so a sound's mapping is seen to keep its curve.
                 curve: 40,
                 s: -20,
             }],

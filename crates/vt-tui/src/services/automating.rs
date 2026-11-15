@@ -1,9 +1,9 @@
-//! The faders as the steps automate them (decision 174, `docs/designs/mixer-automation.md`): a
-//! track's `Level`, `Pan` and sends show the steps' values while `LEV`, `PAN`, `SNA` and `SNB`
-//! drive them, a hand moving one takes it over from the steps, and `Space e` and `Space E` give
-//! them back. The engine keeps which are taken, as it keeps the mutes, and says so in each report;
-//! what the app has asked for and the engine hasn't yet said is kept here for a moment, so nothing
-//! flickers back while the request is on its way.
+//! The faders as the steps automate them (`docs/designs/mixer-automation.md`): a track's `Level`,
+//! `Pan` and sends show the steps' values while `LEV`, `PAN`, `SNA` and `SNB` drive them, a hand
+//! moving one takes it over from the steps, and `Space e` and `Space E` give them back. The engine
+//! keeps which are taken, as it keeps the mutes, and says so in each report; what the app has asked
+//! for and the engine hasn't yet said is kept here for a moment, so nothing flickers back while the
+//! request is on its way.
 
 use std::borrow::Cow;
 use std::time::{Duration, Instant};

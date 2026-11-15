@@ -1,13 +1,13 @@
-//! A slot's compressor, of whichever type it's set to (#338): an enum matched each frame rather
-//! than boxed, so changing type allocates nothing.
+//! A slot's compressor, of whichever type it's set to: an enum matched each frame rather than
+//! boxed, so changing type allocates nothing.
 //!
 //! `Clean` is a feed-forward compressor after Giannoulis, Massberg and Reiss, "Digital Dynamic
 //! Range Compressor Design — A Tutorial and Analysis" (JAES 2012): a gain computer with a soft
 //! knee, worked out in dB, then their smooth decoupled peak detector on how much it turns down. Its
 //! release comes first, holding what a wave's peaks asked for through its troughs, then its attack
-//! smooths that, so the attack is a plain one-pole with no long tail (#334). Both sides are linked:
-//! the louder one decides, so the stereo picture doesn't move. What it hears can be another track,
-//! for ducking.
+//! smooths that, so the attack is a plain one-pole with no long tail. Both sides are linked: the
+//! louder one decides, so the stereo picture doesn't move. What it hears can be another track, for
+//! ducking.
 //!
 //! `Console` is in [`super::console`] and `Glue` in [`super::glue`].
 //!

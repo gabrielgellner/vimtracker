@@ -1,13 +1,13 @@
 //! What keys do in the chain view, `Space 2`: one track's chain, a row for each phrase it plays in
 //! order and its transpose, and the row past the end, which adds one.
 //!
-//! `ChainView` is the view as a component (#320): the column its cursor is on and the row last
-//! copied, its keys, and its drawing, in `draw`, given a [`Ctx`]. It's a [`Page`], with its rows
-//! of the binding table, [`Page::KEYS`], here beside it. Its keys are its own: the moves between
-//! the columns and to other rows, the edits of a row, `yy`, `p`, `dd`, `;`, Insert's typing, and
-//! `K`'s picker. What only `App` can do they ask for in their [`Outcome`]: the picker, Insert, an
-//! audition held while the key is down, and the phrase view starting afresh on another row
-//! (#784). The tree's own keys, `gd`, `grr`, `gc` and `gC`, are in `app/tree.rs`.
+//! `ChainView` is the view as a component: the column its cursor is on and the row last copied, its
+//! keys, and its drawing, in `draw`, given a [`Ctx`]. It's a [`Page`], with its rows of the binding
+//! table, [`Page::KEYS`], here beside it. Its keys are its own: the moves between the columns and
+//! to other rows, the edits of a row, `yy`, `p`, `dd`, `;`, Insert's typing, and `K`'s picker. What
+//! only `App` can do they ask for in their [`Outcome`]: the picker, Insert, an audition held while
+//! the key is down, and the phrase view starting afresh on another row. The tree's own keys, `gd`,
+//! `grr`, `gc` and `gC`, are in `app/tree.rs`.
 
 pub mod draw;
 

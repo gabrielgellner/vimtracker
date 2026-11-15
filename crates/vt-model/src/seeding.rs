@@ -1,7 +1,7 @@
-//! Seeds from the file (#279): the slices, trim, loop, gain, root note and tempo that other tools
-//! leave in a WAV's marker chunks or in an Octatrack `.ot` beside it, turned into a bank entry's
-//! points and hints when the file joins the bank. A seed is read once, and the song's copy wins
-//! after that. Nothing is written to or beside the file.
+//! Seeds from the file: the slices, trim, loop, gain, root note and tempo that other tools leave in
+//! a WAV's marker chunks or in an Octatrack `.ot` beside it, turned into a bank entry's points and
+//! hints when the file joins the bank. A seed is read once, and the song's copy wins after that.
+//! Nothing is written to or beside the file.
 //!
 //! An `.ot` beside the file seeds its points, as it's what the Octatrack saved of it on purpose;
 //! otherwise its `cue ` points are its slices and its `smpl` loop its loop. Its root note comes

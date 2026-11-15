@@ -174,8 +174,8 @@ enum Adjustment {
 }
 
 /// The changes made on a selection that stays until `Esc`, so the status line can say what they
-/// add up to (decision 148). Each is its own undo step, and undo and redo while it's selected take
-/// them back and bring them again.
+/// add up to. Each is its own undo step, and undo and redo while it's selected take them back and
+/// bring them again.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Adjustments {
     /// Each undo step's changes, in order: one each, or several for a wheel's gesture.

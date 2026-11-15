@@ -1,4 +1,4 @@
-//! Live generators as the engine plays them (decisions 288 and 293).
+//! Live generators as the engine plays them.
 //!
 //! At rest, what's heard is what's written: a phrase holds what each of its generators renders, so
 //! the engine reads it as it reads any other. A generator whose settings the engine holds at other
@@ -53,7 +53,7 @@ fn place_of(column: GenColumn) -> usize {
 /// `Shape`s, by column: what a generator on that column of any of the track's phrases plays with,
 /// as an absolute macro holds them. None is the shape's own. A number held directly
 /// ([`GenHolds::hold`]) wins over one a macro puts there, which the macros set each block as they
-/// set the registry's settings (decision 300).
+/// set the registry's settings.
 #[derive(Debug, Clone)]
 pub(crate) struct GenHolds {
     held: [[Option<i32>; PARAMS]; COLUMNS],
@@ -219,9 +219,9 @@ struct GenRun {
 }
 
 /// Which pass a generator that varies was heard on, and the seeds it played it with, as its row
-/// first played on that pass: what `Space g a` on the Gen page keeps (decision 293). It's reported
-/// for each live generator whose `Vary` is on, whether that pass is the written one or not, on a
-/// queue of its own (`GEN_HEARD_QUEUE`), as `NotePitch` is.
+/// first played on that pass: what `Space g a` on the Gen page keeps. It's reported for each live
+/// generator whose `Vary` is on, whether that pass is the written one or not, on a queue of its own
+/// (`GEN_HEARD_QUEUE`), as `NotePitch` is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GenPass {
     pub phrase: u32,
@@ -237,14 +237,14 @@ pub struct GenPass {
     /// `Space g a` keeps.
     pub ring: Option<Kept>,
     /// The count an `Acid` with loops started the pass at, which `Space g a` keeps so its loops
-    /// go on from there (decision 331).
+    /// go on from there.
     pub acid_at: Option<u64>,
 }
 
 /// A row of a live generator as it was heard: the cell it played there, if it played one of its
 /// own rather than what's written, and on which pass, for the playhead's row, the overview and
-/// the status line to show, and `Space g a` and `Space g A` to keep (decision 300). Reported for
-/// each row each live generator of a track plays while something reaches its generators.
+/// the status line to show, and `Space g a` and `Space g A` to keep. Reported for each row each
+/// live generator of a track plays while something reaches its generators.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GenRow {
     pub phrase: u32,
@@ -437,7 +437,7 @@ impl GenScratch {
     /// laid over, each rendered first if what it's heard with has changed since it last was. A
     /// row `played`, not only looked at ahead, reports the pass of each generator on it that
     /// varies, the first time it's heard on that pass, and the row as each generator on it played
-    /// it, or that nothing reaches them now (decision 300).
+    /// it, or that nothing reaches them now.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn view(
         &mut self,
@@ -483,7 +483,7 @@ impl GenScratch {
             let under = unders
                 .get(at.track, at.phrase, run.generator)
                 .unwrap_or_default();
-            // What the phrase holds: the shape as its macros hold it by hand, if they do (decision 294).
+            // What the phrase holds: the shape as its macros hold it by hand, if they do.
             let written = &generator.heard();
             let source = (written.kind == FillKind::Follow)
                 .then(|| song.source_phrase(written.follow.source))
@@ -789,7 +789,7 @@ mod tests {
 
     /// The song with macro 1 holding the `Acid`'s density and the `Cut` ramp's end, an LFO on it,
     /// a `MAC1` lock every third row, and macro 2 on the Euclid's hits, turned to `turn`, each
-    /// mapping bent (decision 314).
+    /// mapping bent.
     fn macro_song(rows: usize, turn: u16) -> Song {
         use vt_model::lfo::{Lfo, Rate};
         use vt_model::macros::{GenColumn, MacroMap, MacroTarget};
@@ -979,10 +979,10 @@ mod tests {
         }
     }
 
-    /// The most a `Cells` render steps (decision 326): on a column of 4,096 rows, 255
-    /// generations of 4,096 cells, and across tracks on 4,095 rows, 8,190 generations of 64
-    /// cells, the pass's first row just short of going round. Nothing allocates, and in a release
-    /// build each takes a sliver of the shortest step, at 400 BPM.
+    /// The most a `Cells` render steps: on a column of 4,096 rows, 255 generations of 4,096 cells,
+    /// and across tracks on 4,095 rows, 8,190 generations of 64 cells, the pass's first row just
+    /// short of going round. Nothing allocates, and in a release build each takes a sliver of the
+    /// shortest step, at 400 BPM.
     #[test]
     fn the_longest_cells_render_keeps_up() {
         use vt_model::shape::{Across, COLUMN_GENERATIONS, CellStart, Cells};

@@ -1,7 +1,7 @@
 //! The Sampler device's `Tune` and `Cents`: the sample's own tuning, in its bank entry, which the
 //! sample page's settings row and `:sample tune` set too, shown and changed from the track that
-//! plays it, as an MPC's pad `Tune` or Simpler's `Transpose` and `Detune` are on the sound
-//! (decision 264). The note then plays relative to it, and the track's `Pitch` transposes on top.
+//! plays it, as an MPC's pad `Tune` or Simpler's `Transpose` and `Detune` are on the sound. The
+//! note then plays relative to it, and the track's `Pitch` transposes on top.
 //!
 //! `Tune` is the slice's own where the slice the track's `Slice` is on has one, as `:slice tune`
 //! gives it, and the sample's otherwise, so tuning a sample once retunes every slice that plays as

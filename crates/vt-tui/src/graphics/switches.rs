@@ -1,6 +1,6 @@
-//! The on/off switches as small pictures (decision 256): a rounded pill three characters wide and
-//! one high, at the terminal's own pixels, with a round knob right when on and left when off, so a
-//! switch is as big whatever the font draws its glyph as.
+//! The on/off switches as small pictures: a rounded pill three characters wide and one high, at the
+//! terminal's own pixels, with a round knob right when on and left when off, so a switch is as big
+//! whatever the font draws its glyph as.
 //!
 //! The views still write each switch as its glyph and two plain spaces (`widgets::toggle`), which
 //! tests and screenshots read. Once the screen is drawn, [`find`] finds them there, in the colour

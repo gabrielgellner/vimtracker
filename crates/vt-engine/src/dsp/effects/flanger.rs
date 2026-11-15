@@ -33,7 +33,7 @@ const HEADROOM: f32 = 4.0;
 /// How far round the right side's sweep is from the left's, as Vital starts.
 const SIDE_APART: f32 = 1.0 / 3.0;
 /// Where the DC blocker on what's fed back starts letting through, in Hz. At the most feedback the
-/// loop turns DC up twenty times, which would push the soft clip off centre (#469).
+/// loop turns DC up twenty times, which would push the soft clip off centre.
 const DC_BLOCK_HZ: f32 = 10.0;
 
 /// A triangle from -1 to 1, at a place in its turn.

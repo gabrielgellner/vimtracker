@@ -4,7 +4,7 @@
 //! NaN, so here a NaN comes out at the low end instead, and goes round as a click that dies away.
 //! sst clips this way on purpose (`sst-basic-blocks/dsp/Clippers.h:115-129`).
 
-/// `x` held between `low` and `high`, with a NaN held to `low` (#461).
+/// `x` held between `low` and `high`, with a NaN held to `low`.
 #[inline]
 #[allow(clippy::manual_clamp)]
 pub(crate) fn within(x: f32, low: f32, high: f32) -> f32 {

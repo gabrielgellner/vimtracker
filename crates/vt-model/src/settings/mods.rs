@@ -66,7 +66,7 @@ pub const MOD_OWN_SETTINGS: usize = 10;
 pub const PLAYED_SETTINGS: usize = ACCUMULATION.len() + ARPEGGIO.len();
 
 /// A macro, the same entry for all eight but its name: where it's turned, from `00` to `FF` with a
-/// fine part, as a cutoff is (decision 282). With its number after it, as `MAC1`.
+/// fine part, as a cutoff is. With its number after it, as `MAC1`.
 pub(super) const MACRO: Entry = Entry {
     key: "macro",
     name: "Macro",
@@ -121,8 +121,8 @@ const fn percentage(key: &'static str, name: &'static str) -> Entry {
 }
 
 /// A mod slot's type's own settings that a macro or modulation can move, by what they are, so an
-/// ADSR's, an AHD's and an LPG's `Attack` are one: unlabelled, as steps can't lock them (decision
-/// 283). Each is on the slot only while its type has it. They're in
+/// ADSR's, an AHD's and an LPG's `Attack` are one: unlabelled, as steps can't lock them. Each is on
+/// the slot only while its type has it. They're in
 /// [`MOD_OWN_FIELDS`](crate::modulation::MOD_OWN_FIELDS)' order, which names them.
 pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
     time("attack", "Attack"),
@@ -173,8 +173,8 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
         },
         default: 0x80,
     },
-    // An LFO's and Steps' `Rate`, faster up the scale, through its own kind of rate (decision
-    // 301); the default is a new LFO's `1/4`.
+    // An LFO's and Steps' `Rate`, faster up the scale, through its own kind of rate; the default is
+    // a new LFO's `1/4`.
     Entry {
         key: "rate",
         name: "Rate",

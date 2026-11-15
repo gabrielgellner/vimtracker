@@ -25,11 +25,11 @@
 //! OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //!
 //! The Juno's three types are this program's own, written from how the DSP parts review describes
-//! a Roland Juno's chorus (decision 198): a bucket-brigade delay on each side, a few ms long,
-//! swept by one triangle, the sides in antiphase but for I+II's, which move together; its filters
-//! as a low-pass; and a DC block. Its delays are a Juno-60's as measured in pendragon-andyh's
-//! Juno60 analysis and checked against Arturia's Chorus JUN-6 (decision 244). TAL-NoiseMaker's
-//! chorus is GPL 2 only, so none of its code is used. Each delay is read through a first-order all-pass, as Dattorro's
+//! a Roland Juno's chorus: a bucket-brigade delay on each side, a few ms long, swept by one
+//! triangle, the sides in antiphase but for I+II's, which move together; its filters as a low-pass;
+//! and a DC block. Its delays are a Juno-60's as measured in pendragon-andyh's Juno60 analysis and
+//! checked against Arturia's Chorus JUN-6 (decision 244). TAL-NoiseMaker's chorus is GPL 2 only, so
+//! none of its code is used. Each delay is read through a first-order all-pass, as Dattorro's
 //! "Effect Design" describes, so its top end doesn't dull and brighten as the sweep moves it
 //! between samples.
 

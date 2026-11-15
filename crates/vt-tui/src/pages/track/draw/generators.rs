@@ -36,8 +36,8 @@ const PANEL_GAP: u16 = 2;
 /// a bar is brief, as `9` for hits, whose bar shows how many of how many.
 const GEN_CELLS: CellWidths = CellWidths::SOUND;
 
-/// A device of four columns, a `Follow` that mutates (decision 307), has shorter bars, so the
-/// fourth fits beside the preview too: 22 columns a cell.
+/// A device of four columns, a `Follow` that mutates, has shorter bars, so the fourth fits beside
+/// the preview too: 22 columns a cell.
 const GEN_FOUR_CELLS: CellWidths = CellWidths {
     bar_cells: 3,
     gap: 2,
@@ -230,7 +230,7 @@ fn lane_words(length: usize, division: usize) -> String {
 
 /// An FX column's `Lane`: the track's `Length` and `Rate` for the column, which move every
 /// phrase's lane on it, and at the end of its title, dim, how the lane of the phrase on the page
-/// is heard against its own (decision 347).
+/// is heard against its own.
 fn draw_lane(
     frame: &mut Frame,
     area: Rect,

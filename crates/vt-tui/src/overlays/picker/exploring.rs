@@ -58,7 +58,7 @@ pub struct Explorer {
     pub file_playing: Option<PathBuf>,
     /// The folders the explorer was last used in.
     pub recent_places: RecentPlaces,
-    /// The tags given to files by hand, by their content (decision 315).
+    /// The tags given to files by hand, by their content.
     pub tag_library: Arc<vt_model::tag::TagLibrary>,
     /// What each sample read for the explorer is by how its sound ends, `loop` or `one-shot`,
     /// kept for the session.

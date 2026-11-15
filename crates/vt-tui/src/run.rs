@@ -332,7 +332,7 @@ const STILL_EVERY: u32 = 8;
 /// When the screen is drawn. Drawing it the same as last time was most of what the interface did
 /// while nothing happened, so once it has come out the same for a while it's drawn only now and
 /// then, and at once again when a key, the mouse or the window brings something, the song
-/// changes, or the song plays (#547). The loop still runs every frame, so nothing else waits.
+/// changes, or the song plays. The loop still runs every frame, so nothing else waits.
 #[derive(Debug, Default)]
 struct Redraws {
     /// Frames in a row drawn the same as the one before.

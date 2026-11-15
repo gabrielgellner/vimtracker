@@ -1,8 +1,8 @@
 //! What the track page's settings show, in their grids' cells and in their devices' titles, worked
-//! out one way for all four pages (the UI plan's U4 and U7, #739): each setting becomes a
-//! [`ParamCell`] from its [`ParamView`], which says what it is and reads as on the track drawn,
-//! and from what only the page knows: the engine's report, the macros, the faders and the modes.
-//! The cell lays itself out.
+//! out one way for all four pages (the UI plan's U4 and U7): each setting becomes a [`ParamCell`]
+//! from its [`ParamView`], which says what it is and reads as on the track drawn, and from what
+//! only the page knows: the engine's report, the macros, the faders and the modes. The cell lays
+//! itself out.
 
 use std::borrow::Cow;
 
@@ -174,7 +174,7 @@ impl<'a> TrackCells<'a> {
     }
 
     /// What a setting with a bar is heard at now, set where it's set: from the engine's report,
-    /// moved by what the setting has moved since (#421). A generator's bar shows where it's set.
+    /// moved by what the setting has moved since. A generator's bar shows where it's set.
     fn heard(&self, control: Control, set: u8) -> u8 {
         let (live, report) = (self.ctx.live(), self.ctx.reported_track());
         match control {

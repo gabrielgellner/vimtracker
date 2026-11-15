@@ -1,8 +1,8 @@
 //! The Octatrack's `.ot` file, which it keeps beside a sample with the sample's attributes: its
 //! tempo, trim, loop, gain and up to 64 slices, in frames of the file. One beside a file seeds the
-//! file's bank entry when it joins the bank (#279), and `:export` writes one (#283), never beside a
-//! source. Nothing here reads or writes a file: [`OtFile::read`] takes bytes, and
-//! [`OtFile::to_bytes`] gives them.
+//! file's bank entry when it joins the bank, and `:export` writes one, never beside a source.
+//! Nothing here reads or writes a file: [`OtFile::read`] takes bytes, and [`OtFile::to_bytes`]
+//! gives them.
 //!
 //! Elektron doesn't publish the format. The layout is the one documented by Kai Drange's
 //! OctaChainer (`otwriter.h` and `otwriter.cpp`, GPL 2) and by Mike Robeson's `ot-tools-io` crate

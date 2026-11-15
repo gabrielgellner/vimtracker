@@ -47,14 +47,14 @@ use vt_model::settings::{
 
 /// How loud it is: a plain note with every knob at noon is as loud as Acid V's at 0 dB, and within
 /// 6 dB of the virtual analog voice on average, as its resonance makes its peaks high for its
-/// level (decision 117). It's a little under decision 117's 0.75, as the soft clip after it now
-/// leaves a plain note's peaks alone (decision 127), and under that again as the filter's
-/// saturation takes less of a plain note (decision 129), so the note is as loud as it was.
+/// level. It's a little under the 0.75 first fitted, as the soft clip after it now leaves a plain
+/// note's peaks alone, and under that again as the filter's saturation takes less of a plain note,
+/// so the note is as loud as it was.
 const LEVEL: f32 = 0.6768;
 /// Where the soft clip after the voice levels off, against full scale: 12 dB over, so a full
 /// accent's peaks reach 13 to 14 dB over a plain note's, as both references' do, rather than
-/// being rounded off at 5.6 dB (decision 127). A 303 driven hard into what follows it is still
-/// rounded off, and the track's level, its slots and the master's limiter come after it.
+/// being rounded off at 5.6 dB. A 303 driven hard into what follows it is still rounded off, and
+/// the track's level, its slots and the master's limiter come after it.
 const HEADROOM: f32 = 4.0;
 /// The square's share of each cycle spent high. A 303 makes its square by driving its saw hard
 /// into a transistor with an offset, which Open303 models as `tanh(70 saw + 4.37)`: that switches
@@ -63,8 +63,7 @@ const SQUARE_DUTY: f32 = 0.531;
 /// The filter envelope's decay on an accented note, as a time constant in ms, or the plain
 /// note's if `Decay` makes that shorter. A 303 shorts its Decay pot out on an accent, so it's
 /// the pot's shortest, which Whittle gives as 200 ms; the knob's shortest, 40 ms, fitted to
-/// Acid V's range (decision 117), left an accent at `Accent` 00 0.2 octaves darker than both
-/// references' (decision 127).
+/// Acid V's range, left an accent at `Accent` 00 0.2 octaves darker than both references'.
 const ACCENT_DECAY_MS: f32 = 70.0;
 /// The level envelope's fixed decay, as a time constant in ms. It falls to silence over about
 /// three seconds, as a 303's does.
@@ -81,9 +80,8 @@ const ACCENT_RELEASE_MS: f32 = 50.0;
 const ENVELOPE_TO_LEVEL: f32 = 0.45;
 const SOFTENING_MS: f32 = 1.55;
 /// How much the accent sweep adds to the level with `Accent` full, against the level envelope,
-/// which rises to one. Open303 adds 4; this is fitted to where Acid V and ABL3 agree (decision
-/// 127). It's all an accent adds to the level, as an accented note plays at a plain one's
-/// velocity.
+/// which rises to one. Open303 adds 4; this is fitted to where Acid V and ABL3 agree. It's all an
+/// accent adds to the level, as an accented note plays at a plain one's velocity.
 const ACCENT_TO_LEVEL: f32 = 7.0;
 /// The Accent knob's taper for the level: how far it's turned, squared, is how much louder an
 /// accent is, so it's about even in dB from a quarter of the way up, as Acid V's is.
@@ -94,7 +92,7 @@ const ACCENT_LEVEL_TAPER: f32 = 2.0;
 const ACCENT_OCTAVES: f32 = 3.33;
 /// The Accent knob's taper for the cutoff, steeper than the level's: both references' accents
 /// grow louder from a quarter of the way up but brighter only over the top half, and at `00`
-/// neither is any brighter than its envelope makes it (decision 127).
+/// neither is any brighter than its envelope makes it.
 const ACCENT_SWEEP_TAPER: f32 = 2.7;
 /// The accent sweep's capacitor charges through a diode and 147k, and drains through 100k, on
 /// 1 µF. It drains more slowly than accents come, so they build up.
@@ -102,8 +100,8 @@ const SWEEP_CHARGE_MS: f32 = 147.0;
 const SWEEP_DRAIN_MS: f32 = 100.0;
 /// What brings the capacitor's level up to the pulse's, where the two balance, and a little over
 /// that, so accents a sixteenth apart at full Res build up by about 0.4 octaves, as both
-/// references' do, while accents an eighth apart hardly do. Decision 124's 3.5 times, fitted to
-/// Acid V alone, built up three times as far at full Res (decision 127).
+/// references' do, while accents an eighth apart hardly do. The 3.5 times first fitted to Acid V
+/// alone built up three times as far at full Res.
 const SWEEP_GAIN: f32 = 1.05 * (SWEEP_CHARGE_MS + SWEEP_DRAIN_MS) / SWEEP_DRAIN_MS;
 /// How the Resonance knob turns the accent from following the pulse to following the
 /// capacitor's slower swell: as the knob to this power, so the swell takes over mostly in its
@@ -114,7 +112,7 @@ const SLIDE_SHARE: f32 = 1.0 / 3.0;
 /// How much longer a slide down takes than one up. Whittle gives a 303's slide as 100k into
 /// 0.22 µF, a time constant of 22 ms, which `Slide` at 00 is near, and both references glide up
 /// to 90% in 45 to 51 ms; but both take 51 to 59 ms down a fifth or an octave, which this
-/// matches (decision 127).
+/// matches.
 const FALLING_SLIDE: f32 = 1.3;
 /// The high-pass before the filter, in Hz, as Open303 measured a 303's.
 const HIGH_PASS_HZ: f32 = 44.486;
@@ -127,23 +125,23 @@ const HIGHEST_HZ: f32 = 20_000.0;
 /// How loud the saw goes into the filter, which is made up again after it. The ladder passes the
 /// bass at up to 1.9 times at no resonance, and a low note's saw swings to about ±1.6 once it's
 /// high-passed, so at full scale its last stage was clipped flat for up to a third of each cycle,
-/// which cut deep notches into the harmonics that moved with the note (#332). At 0.3 it stayed
-/// under the clip, but the ladder drives its first stage harder as the resonance rises, and its
-/// saturation there still flattened a high resonance's peak and cut a cliff just past it: the
-/// harmonic an octave over the peak was 6 to 8 dB further under it than ABL3's and Acid V's,
-/// whose filters fall evenly past their peaks, and at Res 85% with Env Mod full the peak sank
-/// about 5 dB over the note's first 40 ms, where theirs hold. At this level the ladder is nearly
-/// linear at a 303's level, so the chirp keeps its shape, and `Drive` still pushes it into the
-/// saturation and the clip (decision 129).
+/// which cut deep notches into the harmonics that moved with the note. At 0.3 it stayed under the
+/// clip, but the ladder drives its first stage harder as the resonance rises, and its saturation
+/// there still flattened a high resonance's peak and cut a cliff just past it: the harmonic an
+/// octave over the peak was 6 to 8 dB further under it than ABL3's and Acid V's, whose filters fall
+/// evenly past their peaks, and at Res 85% with Env Mod full the peak sank about 5 dB over the
+/// note's first 40 ms, where theirs hold. At this level the ladder is nearly linear at a 303's
+/// level, so the chirp keeps its shape, and `Drive` still pushes it into the saturation and the
+/// clip.
 const FILTER_LEVEL: f32 = 0.1;
 
 /// How the Resonance knob reaches the ladder, whose own law is a cube of what it's given: the
 /// feedback rises as the knob to this power, up to this share of the ladder's most. A cube left
 /// the knob's lower half with no peak and its top few steps with nearly all of it; this way the
 /// peak climbs about evenly in dB from a quarter of the way up, and the bass thins from the first
-/// step, as Acid V's does (decision 117). With the saturation no longer holding the peak down, it
-/// takes less feedback to stand as high over the fundamental as both references' do, and its
-/// curve is a little steeper (decision 129).
+/// step, as Acid V's does. With the saturation no longer holding the peak down, it takes less
+/// feedback to stand as high over the fundamental as both references' do, and its curve is a little
+/// steeper.
 const RESONANCE_CURVE: f32 = 1.2;
 const RESONANCE_TOP: f32 = 0.68;
 /// How much quieter the whole voice is with Resonance full, in dB, and the knob's curve to it.
@@ -153,7 +151,7 @@ const RESONANCE_LOSS_CURVE: f32 = 0.7;
 /// The Env Mod knob's taper: how far it's turned, to this power, is how far along Open303's
 /// measured range the envelope's sweep is. Acid V's knob does little until three quarters of the
 /// way and then sweeps most of its range; a square, like an audio-taper pot, keeps noon near
-/// Acid V's without leaving a dead stretch (decision 117).
+/// Acid V's without leaving a dead stretch.
 const ENVELOPE_MOD_TAPER: f32 = 2.0;
 /// How much wider the envelope's sweep is than Open303 measured, with Env Mod at 0 and full, so
 /// it spans what Acid V's does. A 303's can't be turned down to nothing.
@@ -168,7 +166,7 @@ const CENTRE_SHARE: f32 = 0.6;
 /// reaches about two octaves over the knob, loses 0.04 octaves at its top, and Env Mod full, about
 /// five, loses 0.57. With full Env Mod, both references' resonant peaks start that much lower than
 /// a sweep that stays exponential all the way, and fall more slowly at first, where ours had
-/// started high and fallen fastest at its top (decision 131).
+/// started high and fallen fastest at its top.
 const SWEEP_SOFTENING: f32 = 7.3;
 
 /// How many decibels double a level.
@@ -339,7 +337,7 @@ impl SynthEngine for Acid {
     /// Seed a voice starting from silence, so each differs but a render repeats. A 303's
     /// oscillator runs free, and its gate only opens the envelopes, so a note from silence starts
     /// anywhere in its cycle, whatever `Drift` is, and a note after it carries on from where the
-    /// last left it (decision 191).
+    /// last left it.
     fn seed_drift(&mut self, seed: u32, _settings: Settings) {
         self.drift.seed(seed);
         self.phase = self.drift.phase();
@@ -495,7 +493,7 @@ impl SynthEngine for Acid {
             .clamp(10.0, HIGHEST_HZ);
 
         // The oscillator, high-passed as a 303's is on its way to the filter, which is as good as
-        // a DC blocker, so it needs no other (decision 191).
+        // a DC blocker, so it needs no other.
         let increment = self.heard * self.detune;
         self.phase += increment;
         if self.phase >= 1.0 {
@@ -661,7 +659,7 @@ mod tests {
         // middle and top, with no resonance and with half. Its harmonics should follow the
         // filter's smooth slope, as Acid V's do: none falls far under its two neighbours. The
         // ladder's last stage clipping a full-scale saw cut 20 to 34 dB notches here, at a
-        // harmonic that moved with the note (#332).
+        // harmonic that moved with the note.
         for note in [32.7, 65.4, 98.0, 130.8] {
             for cutoff in [0.0, 0.5, 1.0] {
                 for resonance in [0.0, 0.5] {
@@ -738,7 +736,7 @@ mod tests {
     fn at_high_resonance_the_peak_stands_high_over_the_fundamental_through_the_chirp() {
         // Res 85% with Env Mod at noon, and 95% with it full, at Cutoff noon and Decay long: over
         // the note's first 200 ms the peak stands about as high over the fundamental as Acid V's
-        // and ABL3's, where the saturation had held the first under 14.5 dB (decision 129).
+        // and ABL3's, where the saturation had held the first under 14.5 dB.
         let (height, _) = mean_peak(&chirp([0.5, 0.85, 0.5, 0.8]), 40, 200);
         assert!((14.8..=17.5).contains(&height), "{height} dB at Res 85%");
         let (height, _) = mean_peak(&chirp([0.5, 0.95, 1.0, 0.8]), 40, 200);
@@ -749,7 +747,7 @@ mod tests {
     fn past_its_peak_the_filter_falls_evenly_rather_than_off_a_cliff() {
         // The harmonic an octave over the peak, under it: both references fall about 23 to 26 dB
         // there, as a four-pole filter does, where the saturation had cut a cliff 30 to 34 dB deep
-        // just past the peak (decision 129).
+        // just past the peak.
         for knobs in [[0.5, 0.85, 0.5, 0.8], [0.5, 0.85, 1.0, 0.2]] {
             let (_, octave) = mean_peak(&chirp(knobs), 40, 200);
             assert!(
@@ -763,7 +761,7 @@ mod tests {
     fn the_chirp_sweeps_down_from_where_the_envelope_throws_it() {
         // Res 95%, Env Mod full, Cutoff noon and Decay long: the peak starts near 4.2 kHz, where
         // Acid V's and ABL3's start, and is near 1.6 kHz by 150 ms, a little under theirs, 1.8 and
-        // 2.4 kHz (decisions 129 and 131).
+        // 2.4 kHz.
         let out = chirp([0.5, 0.95, 1.0, 0.8]);
         let (start, _, _) = resonant_peak(&out, 20.0);
         let (later, _, _) = resonant_peak(&out, 150.0);
@@ -775,7 +773,7 @@ mod tests {
     fn the_envelopes_push_on_the_cutoff_gives_as_it_grows() {
         // Under the knob's cutoff the sweep is as it was; over it, each octave more moves the
         // cutoff less: hardly at Env Mod noon's two octaves, and by over half an octave at Env
-        // Mod full's five (decision 131).
+        // Mod full's five.
         assert_eq!(softened_sweep(-1.0), -1.0);
         assert!((softened_sweep(1.94) - 1.94).abs() < 0.05);
         let full = softened_sweep(4.75);
@@ -791,7 +789,7 @@ mod tests {
         // Res 95%, Env Mod full and Decay long. Where both references agree, the peak starts
         // about 0.4 octaves under where an envelope exponential all the way threw ours, 5.8 kHz
         // at Cutoff noon and 3.5 at Cutoff 20%, and falls more slowly at first: from 20 to 120 ms
-        // Acid V's falls 0.65 octaves and ABL3's 0.93, where ours fell 1.37 (decision 131).
+        // Acid V's falls 0.65 octaves and ABL3's 0.93, where ours fell 1.37.
         let out = chirp([0.5, 0.95, 1.0, 0.8]);
         let (start, _, _) = resonant_peak(&out, 20.0);
         let (later, _, _) = resonant_peak(&out, 120.0);
@@ -821,7 +819,7 @@ mod tests {
     #[test]
     fn an_accent_is_louder_and_brighter() {
         // As on Acid V and ABL3, an accent is hardly louder with `Accent` at 00, about 4 dB at
-        // noon and about 10 dB full (decisions 124 and 127).
+        // noon and about 10 dB full.
         for (accent, least, most) in [(0.0, -1.0, 1.5), (0.5, 3.0, 6.0), (1.0, 8.0, 11.5)] {
             let settings = places([0.0, 0.5, 0.5, 0.5, 0.5, accent, 0.0, 0.0]);
             let plain_note = note(false, settings, 4_800);
@@ -915,9 +913,9 @@ mod tests {
     fn accents_a_sixteenth_apart_build_up_and_an_eighth_apart_hardly_do() {
         // With every knob at noon but `Accent` full: four accents in a row peak higher by the
         // last, and four with a sixteenth's rest between them build far less, as the capacitor
-        // drains in the rest. Decision 124 had them peak over 0.8 octaves higher, fitted to
+        // drains in the rest. The first fit had them peak over 0.8 octaves higher, fitted to
         // Acid V alone, whose accents build up even with `Accent` at 00; where it and ABL3 agree
-        // they build far less, so a third to a half of an octave here (decision 127).
+        // they build far less, so a third to a half of an octave here.
         let settings = places([0.0, 0.25, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0]);
         let built = |peaks: Vec<f32>| (peaks[3] / peaks[0]).log2();
         let in_a_row = built(accent_peaks_apart(4, settings, RATE as usize / 8));
@@ -1001,7 +999,7 @@ mod tests {
     fn a_slide_up_takes_about_46_ms_to_go_90_percent_and_one_down_about_60() {
         // A 303's slide is its 100k and 0.22 µF, a 22 ms time constant, so about 51 ms to 90%
         // (Whittle). Both references reach 90% up in 45 to 51 ms by any interval, and down a
-        // fifth or an octave in 51 to 59 (decision 127).
+        // fifth or an octave in 51 to 59.
         for (from, to) in [(65.4, 130.8), (65.4, 98.0), (65.4, 69.3)] {
             let up = ninety_percent_ms(from, to);
             assert!((42.0..=50.0).contains(&up), "{up} ms up to {to} Hz");
@@ -1028,7 +1026,7 @@ mod tests {
     fn a_plain_note_holds_for_8_ms_once_let_go_and_falls_to_nothing_by_17() {
         // As Whittle measured a 303: 8 ms at its level, then 8 ms of a straight fall. Through
         // the voice and its track's note shape, the harness reads 20 dB down in about 17 ms and
-        // 40 dB in about 23, between the references' (decision 127).
+        // 40 dB in about 23, between the references'.
         let mut acid = Acid::new(RATE);
         acid.trigger(false);
         for _ in 0..RATE / 4 {
@@ -1134,7 +1132,7 @@ mod tests {
                             }
                         }
                         // Up to the soft clip's ceiling, 12 dB over full scale, which a full
-                        // accent's peaks may reach (decision 127).
+                        // accent's peaks may reach.
                         let sample = acid.next(hertz / rate as f32, settings);
                         assert!(
                             sample.is_finite() && sample.abs() <= HEADROOM,

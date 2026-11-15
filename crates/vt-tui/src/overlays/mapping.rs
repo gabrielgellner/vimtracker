@@ -1,8 +1,8 @@
-//! Macros on the track page (decision 285, `docs/designs/generators-page.md` §4.3): `M` puts the
-//! setting under the cursor on one of the track's eight macros, or moves it, or takes it off; `gm`
-//! opens a macro's mapping, each setting it holds with its range; `gd` goes from a setting to the
-//! macro holding it (decision 341); `:macro` names one; and a setting a macro holds refuses a turn
-//! of its own, as Live greys a mapped control out.
+//! Macros on the track page (`docs/designs/generators-page.md` §4.3): `M` puts the setting under
+//! the cursor on one of the track's eight macros, or moves it, or takes it off; `gm` opens a
+//! macro's mapping, each setting it holds with its range; `gd` goes from a setting to the macro
+//! holding it; `:macro` names one; and a setting a macro holds refuses a turn of its own, as Live
+//! greys a mapped control out.
 
 pub mod draw;
 
@@ -35,7 +35,7 @@ pub(crate) const HOLDING_PICKER: &str = "Go to a macro";
 const RANGE_JUMP: i32 = 0x10;
 
 /// What of a mapping the view's cursor is on, across its row: the ends of its range, then its
-/// response's `Curve` and `S` (decision 314).
+/// response's `Curve` and `S`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MapField {
     #[default]
@@ -102,8 +102,7 @@ pub struct MappingView {
 
 impl MappingView {
     /// The picture the view wants on screen for the cursor's track: the response of the mapping
-    /// under its cursor (decision 314), drawn again as its `Curve`, its `S`, its way or its
-    /// macro's turn changes.
+    /// under its cursor, drawn again as its `Curve`, its `S`, its way or its macro's turn changes.
     pub(crate) fn panels(&self, track: &Track) -> Vec<PanelWant> {
         let held = &track.macros[self.at];
         let Some(map) = held

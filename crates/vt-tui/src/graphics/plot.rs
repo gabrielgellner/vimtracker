@@ -492,9 +492,9 @@ pub(crate) fn peaks(level_at: &impl Fn(f32) -> f32, width: usize) -> Vec<f32> {
         .collect()
 }
 
-/// A slot effect that filters, as its curve on the FX page's zoom is drawn from (decision 333):
-/// what it does to a quiet sound at each frequency, in dB, and where its dashed line goes up, at
-/// the note it's tuned to or the cutoff it's at. A low-pass gate's has how far it opens too.
+/// A slot effect that filters, as its curve on the FX page's zoom is drawn from: what it does to a
+/// quiet sound at each frequency, in dB, and where its dashed line goes up, at the note it's tuned
+/// to or the cutoff it's at. A low-pass gate's has how far it opens too.
 pub(crate) struct Filtering<F, G> {
     pub(crate) db_at: F,
     pub marked: Option<f32>,
@@ -858,9 +858,9 @@ pub(crate) fn track_map(drawing: TrackDrawing, (width, height): (usize, usize)) 
     plot
 }
 
-/// What a macro mapping's response draws (decision 314): its `Curve` and `S`, which way it
-/// turns its setting, and where the macro is turned, from 0 to 1, so it's drawn again only when
-/// one of those changes, never for how far apart its ends are.
+/// What a macro mapping's response draws: its `Curve` and `S`, which way it turns its setting, and
+/// where the macro is turned, from 0 to 1, so it's drawn again only when one of those changes,
+/// never for how far apart its ends are.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct MappingDrawing {
     pub curve: i8,

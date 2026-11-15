@@ -1,13 +1,13 @@
 //! What keys do in the song view: a row per section, and a column for each track's chain.
 //!
-//! `SongView` is the view as a component (#320): the column its cursor is on and the sections
-//! `V` selects, its keys, and its drawing, in `draw`, given a [`Ctx`]. It's a [`Page`], with its
-//! rows of the binding table, [`Page::KEYS`], here beside it. Its keys are all its own: the moves
-//! along a row and to other sections, the edits, `a`, `gc`, `dd` and `C`, `Enter`'s launch, `V`,
-//! `;`, `gC`, Insert's typing, and `K`'s picker. What only `App` can do they ask for in their
-//! [`Outcome`]: the picker, Insert, an audition held while the key is down, and the phrase view
-//! starting afresh on another section (#784). The tree's `gd`, and `:loop` and `:label`, which
-//! read the song view's cursor, stay `App`'s.
+//! `SongView` is the view as a component: the column its cursor is on and the sections `V` selects,
+//! its keys, and its drawing, in `draw`, given a [`Ctx`]. It's a [`Page`], with its rows of the
+//! binding table, [`Page::KEYS`], here beside it. Its keys are all its own: the moves along a row
+//! and to other sections, the edits, `a`, `gc`, `dd` and `C`, `Enter`'s launch, `V`, `;`, `gC`,
+//! Insert's typing, and `K`'s picker. What only `App` can do they ask for in their [`Outcome`]: the
+//! picker, Insert, an audition held while the key is down, and the phrase view starting afresh on
+//! another section. The tree's `gd`, and `:loop` and `:label`, which read the song view's cursor,
+//! stay `App`'s.
 
 pub mod draw;
 

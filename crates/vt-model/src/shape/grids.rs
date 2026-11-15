@@ -478,8 +478,8 @@ mod tests {
         assert_ne!(wild[..16], wild[16..32]);
     }
 
-    /// Its chaos is drawn from its seed, so `Vary` gives each pass chaos of its own (decision
-    /// 293): the first pass is the one written, and the next draws again.
+    /// Its chaos is drawn from its seed, so `Vary` gives each pass chaos of its own: the first pass
+    /// is the one written, and the next draws again.
     #[test]
     fn vary_draws_its_chaos_again_each_pass() {
         let steps = vec![Step::default(); 32];

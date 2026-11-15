@@ -84,7 +84,7 @@ pub enum Cmd {
     /// one waiting for it.
     RealignTrack,
     /// Rotate the speeds round the tracks selected or the cursor's group, or with `true` round
-    /// every track: each takes the next one's (decision 328).
+    /// every track: each takes the next one's.
     RotateSpeeds(bool),
     /// Give the cursor's track's faders, or every track's, back to the steps' automation.
     GiveBack,
@@ -128,7 +128,7 @@ pub enum Cmd {
     Audition,
     /// Switch an FX slot out or back in.
     Bypass,
-    /// Zoom the FX page in on the cursor's slot, or back out to the rack (decision 329).
+    /// Zoom the FX page in on the cursor's slot, or back out to the rack.
     ZoomSlot,
     /// Zoom the FX page back out to the rack.
     ZoomRack,
@@ -149,7 +149,7 @@ pub enum Cmd {
     /// switch those slots out.
     BakeMods,
     /// On the track page, put the setting under the cursor on a macro, move it to another, or
-    /// take it off (decision 285).
+    /// take it off.
     MapMacro,
     /// On the track page, open the mapping of the macro under the cursor, or of the one the
     /// setting under the cursor is on.
@@ -332,7 +332,7 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
 /// so the hand that moves can nudge without leaving the home row: left and right a small step, up
 /// and down a large one. This is the one place the rule is kept: every mode that binds `=`, `-`,
 /// `+` or `_` gets its Cmd key beside it, meaning the same, unless the mode binds that Cmd key
-/// itself, as the sample page's frame nudge does (decision 148).
+/// itself, as the sample page's frame nudge does.
 pub const CMD_ADJUSTS: [(&str, &str); 4] = [("=", "D-l"), ("-", "D-h"), ("+", "D-k"), ("_", "D-j")];
 
 /// The key a Cmd key stands for by [`CMD_ADJUSTS`], for the keys read outside the table, as the
@@ -344,8 +344,7 @@ pub(crate) fn adjusting_key(key: Key) -> Option<Key> {
         .and_then(|(plain, _)| parse(plain).ok())
 }
 
-/// Keys to fold a group's tracks into it, after Vim's folds, in every view that shows tracks
-/// (decisions 128 and 305).
+/// Keys to fold a group's tracks into it, after Vim's folds, in every view that shows tracks.
 const FOLDS: &[(&str, Cmd, &str)] = &[
     (
         "z a",

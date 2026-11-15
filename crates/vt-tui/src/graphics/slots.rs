@@ -1,6 +1,6 @@
-//! What an FX slot's drawing shows, in the rack and zoomed in on (decisions 329 and 333): a
-//! compressor's or an EQ's curve, a distortion's transfer curve, a filter effect's response, a
-//! delay's repeats or a reverb's tail, with the caption a zoomed one has under its box.
+//! What an FX slot's drawing shows, in the rack and zoomed in on: a compressor's or an EQ's curve,
+//! a distortion's transfer curve, a filter effect's response, a delay's repeats or a reverb's tail,
+//! with the caption a zoomed one has under its box.
 
 use vt_engine::pictures::{
     DEFAULT_NOTE, Tail, comb, delay, echo, lpg, plate, resonator, reverb, space, spring, transfer,
@@ -25,11 +25,10 @@ pub(crate) enum SlotDrawing {
     Compressor(Compressor),
     /// An EQ's curve, from all of its settings.
     Eq(Equaliser),
-    /// A distortion's transfer curve, which only the FX page's zoom draws (decision 329).
+    /// A distortion's transfer curve, which only the FX page's zoom draws.
     Distort(Distort),
-    /// The filter effects' curves, which only the zoom draws too (decision 333): a low-pass gate's
-    /// as far as it's open now, and a resonator's, comb's or vowel filter's at the note the track
-    /// is playing.
+    /// The filter effects' curves, which only the zoom draws too: a low-pass gate's as far as it's
+    /// open now, and a resonator's, comb's or vowel filter's at the note the track is playing.
     Lpg(LowPassGate, Opening),
     Reso(Resonator, Cents),
     Comb(Comb, Cents),

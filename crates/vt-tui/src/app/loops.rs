@@ -115,7 +115,7 @@ impl App {
 
     /// `:lane`: give the cursor's FX column a lane from its row, of a length and a division, the
     /// division its lane's own if it has one and none's given; change only the division of the
-    /// lane it has, with `/3`; or take its lane away (decision 346).
+    /// lane it has, with `/3`; or take its lane away.
     pub(super) fn lane_line(&mut self, line: LaneLine) {
         let Some(slot) = self.fx_column() else {
             self.services.status = ":lane works on an FX column".to_owned();

@@ -258,7 +258,7 @@ fn tuned(
 /// on its settings and the track's `note`, by the middle of its two sides, which `Width`'s wandering
 /// pickup leaves alone: its 24 modes' band-passes, from the tuning they play with, each as loud as
 /// its pickup hears it, added as it adds them, through the limiter's quiet 0.8, and mixed with the
-/// sound by `Mix`, before `Gain`. For drawing its curve on the FX page's zoom (decision 333).
+/// sound by `Mix`, before `Gain`. For drawing its curve on the FX page's zoom.
 pub fn response(settings: Settings, note: f32, rate: u32) -> impl Fn(f32) -> f32 {
     let mut modes = Modes::default();
     let value = |setting: u8| f32::from(setting) / 255.0;

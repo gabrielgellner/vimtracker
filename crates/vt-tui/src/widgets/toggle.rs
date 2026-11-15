@@ -1,13 +1,13 @@
-//! A toggle: the switch glyph for anything that's on or off (decision 101). In a device's title it
-//! says whether the device is in, in a setting's place whether a two-state setting is on, and in a
-//! window's hint whether its key's switch is, so one idea has one look everywhere. It's green when
-//! on and faint when off; the words `On` and `Off` are left to the status line.
+//! A toggle: the switch glyph for anything that's on or off. In a device's title it says whether
+//! the device is in, in a setting's place whether a two-state setting is on, and in a window's hint
+//! whether its key's switch is, so one idea has one look everywhere. It's green when on and faint
+//! when off; the words `On` and `Off` are left to the status line.
 //!
 //! A toggle is three cells wide: its glyph, then two plain spaces (decisions 157 and 256). All three
 //! are always written, on or off, so nothing after a toggle moves when it flips. On screen, the
 //! terminal shows a picture of a pill over the three cells, as big in any font and in the colour
-//! the toggle was written in, with the glyph hidden under it (decision 256, `graphics::switches`);
-//! tests and screenshots read the glyph.
+//! the toggle was written in, with the glyph hidden under it (`graphics::switches`); tests and
+//! screenshots read the glyph.
 
 use ratatui::style::Style;
 use ratatui::text::Span;

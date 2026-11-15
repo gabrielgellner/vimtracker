@@ -35,7 +35,7 @@ pub struct ValueBar {
     centred: bool,
     /// The cells between the ends.
     cells: usize,
-    /// How far a macro holding it can take it, drawn faint behind the fill (decision 285).
+    /// How far a macro holding it can take it, drawn faint behind the fill.
     range: Option<(u8, u8)>,
 }
 
@@ -100,9 +100,8 @@ impl ValueBar {
     /// for what's set once they're a cell or more apart. Over a filled cell, that mark is cut out
     /// of the fill. Nearer, the bar is drawn as what's playing alone, as the mark couldn't be told
     /// from the edge, and a value moving about its setting would have it come and go each frame
-    /// as a thin line flickering at the edge (#421).
-    /// A centred bar keeps a faint tick at its middle under the mark, so a value off centre reads
-    /// at a glance; the bright mark covers it at the centre.
+    /// as a thin line flickering at the edge. A centred bar keeps a faint tick at its middle under
+    /// the mark, so a value off centre reads at a glance; the bright mark covers it at the centre.
     pub fn spans(&self) -> Vec<Span<'static>> {
         let bright = Style::new().fg(theme::MAUVE);
         let bar = self.text(self.live);

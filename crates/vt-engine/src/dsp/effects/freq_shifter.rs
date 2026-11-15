@@ -58,7 +58,7 @@ const SHELF_GAIN: f32 = 0.85;
 const DC_HZ: f32 = 15.0;
 /// How far what's read back can get before it's held, 12 dB over full scale. Nothing finite gets
 /// near it, so it's there for a NaN, which comes out at an end and dies away rather than staying
-/// in the all-passes for good (#461).
+/// in the all-passes for good.
 const HEADROOM: f32 = 4.0;
 
 /// A second-order all-pass in transposed direct form, as sst writes it: its numerator is its

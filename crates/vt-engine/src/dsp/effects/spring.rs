@@ -74,7 +74,7 @@ const KNOCK_SECONDS: (f32, f32) = (0.0005, 0.001);
 /// what's in them bends in pitch rather than clicking.
 const SIZE_PER_SECOND: f32 = 1.0;
 /// What goes into the clip is held to where `fasttanh` is good, and what goes into the
-/// reflections to well over what any sound makes, so a NaN in either is held too (#461).
+/// reflections to well over what any sound makes, so a NaN in either is held too.
 const CLIP_EDGE: f32 = 5.0;
 const HEADROOM: f32 = 8.0;
 /// Where the knock's and the chaos's random numbers start, whenever it's cleared.

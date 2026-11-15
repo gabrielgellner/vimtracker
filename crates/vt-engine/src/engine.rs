@@ -39,7 +39,7 @@ pub struct TrackPlace {
     /// How long that step is, in ticks.
     pub ticks: u32,
     /// The speed that step plays at, as its `RATE`, a hold or the track's own gives it, which
-    /// rotating the speeds while recording turns from (decision 328).
+    /// rotating the speeds while recording turns from.
     pub speed: Speed,
     /// Whether the row heard skipped its note, as its `CHA` or `CND` decided.
     pub skipped: bool,
@@ -291,7 +291,7 @@ impl Engine {
     /// to their shapes with none: each of them on that column, on whichever of the track's phrases,
     /// is rendered again from its shape with it set, within its bounds, and heard so from the next
     /// row read. A list setting, such as the fill or the `Where`, is left to the shape. It's what
-    /// a macro holding a generator's setting will move (#623), and it outlasts versions.
+    /// a macro holding a generator's setting will move, and it outlasts versions.
     pub fn hold_generator(
         &mut self,
         track: usize,
@@ -310,8 +310,8 @@ impl Engine {
     }
 
     /// Hand what's been heard of every track's generators since the last call to `report`, by
-    /// track: each pass heard of one that varies and the seeds it played (decision 293), each row a
-    /// moving one played, and each that has come to rest (decision 300).
+    /// track: each pass heard of one that varies and the seeds it played, each row a moving one
+    /// played, and each that has come to rest.
     pub fn take_gen_reports(&mut self, report: impl FnMut(usize, GenReport)) {
         self.gens.take_reports(report);
     }

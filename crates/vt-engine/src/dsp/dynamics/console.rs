@@ -1,7 +1,6 @@
 //! The `Console` compressor, after the SSL G-series bus compressor as Jakob Erland's G-SSL clone
 //! documents its circuit (https://gyraf.dk/gy_pd/ssl/ssl.htm), tuned against the compressor in
-//! Arturia's Bus FORCE with `tools/compare` (#338, decision 118). Only Bus FORCE's outputs were
-//! measured.
+//! Arturia's Bus FORCE with `tools/compare` (decision 118). Only Bus FORCE's outputs were measured.
 //!
 //! **Feedback.** The G-SSL's detector doesn't hear the input itself: it hears a second, "dummy"
 //! VCA, fed the input and driven by the same control voltage as the main ones, so it hears what the

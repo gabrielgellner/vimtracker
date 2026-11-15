@@ -55,7 +55,7 @@ pub(crate) struct TakenInsert {
 }
 
 impl App {
-    /// Whether the FX page shows, zoomed in on the cursor's slot (decision 329).
+    /// Whether the FX page shows, zoomed in on the cursor's slot.
     pub fn fx_zoomed(&self) -> bool {
         self.modes.view == View::Track && self.track_page.page == Page::Fx && self.track_page.zoomed
     }

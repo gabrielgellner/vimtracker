@@ -173,11 +173,11 @@ pub(crate) const HISTORY_PLACES: usize = 256;
 pub(crate) const HISTORY_BEATS: f64 = 8.0;
 
 /// What each FX slot of the cursor's track turned down over the last two bars, for the FX page's
-/// zoom (decision 329). It's a sweep: a place a little over a sixtieth of a second wide at 120 BPM
-/// is written as the reports come in, left to right, and it starts again at the left after two
-/// bars at the song's tempo, so a steady beat's pumping stands still and the newest is where the
-/// sweep is. It's sampled from the engine's reports, a frame at a time, on the app's side, and
-/// holds all it will ever hold from the start.
+/// zoom. It's a sweep: a place a little over a sixtieth of a second wide at 120 BPM is written as
+/// the reports come in, left to right, and it starts again at the left after two bars at the song's
+/// tempo, so a steady beat's pumping stands still and the newest is where the sweep is. It's
+/// sampled from the engine's reports, a frame at a time, on the app's side, and holds all it will
+/// ever hold from the start.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReductionHistory {
     /// Each slot's reduction in each place, in dB.

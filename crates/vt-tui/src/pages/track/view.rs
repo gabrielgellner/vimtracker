@@ -1,8 +1,8 @@
 //! Each of the track page's settings resolved once, where it is, into what a widget draws and
-//! edits it by (`docs/designs/device-interface.md` §2.5, the UI plan's U7, #739): a
-//! [`ParamView`], from [`view`], and the action that writes a value back, from [`set`]. The cells,
-//! the titles, the status line, the mixer and the Roto's value text read the view, so a setting's
-//! value is worked out here and nowhere else.
+//! edits it by (`docs/designs/device-interface.md` §2.5, the UI plan's U7): a [`ParamView`], from
+//! [`view`], and the action that writes a value back, from [`set`]. The cells, the titles, the
+//! status line, the mixer and the Roto's value text read the view, so a setting's value is worked
+//! out here and nowhere else.
 //!
 //! The view lives in vt-tui, not the model: it's resolved from the page's [`Control`], which is the
 //! program's, and a Gen setting's from the program's live generator, and the status line's text of
@@ -914,7 +914,7 @@ fn arpeggio_view(of: ParamView, arpeggio: Arpeggio, field: ArpField) -> ParamVie
 }
 
 /// One of an FX column's lane's settings: `Length` in rows either side of none, centred as
-/// `Pitch` is, and `Rate` from its list (decision 347).
+/// `Pitch` is, and `Rate` from its list.
 fn lane_view(of: ParamView, moved: LaneMove, slot: usize, field: LaneField) -> ParamView {
     let view = match field {
         LaneField::Length => {
@@ -976,7 +976,7 @@ fn lane_shown(slot: usize, field: LaneField, moved: LaneMove) -> String {
 }
 
 /// One of a live generator's settings, as it's heard, with what any macro holding its settings
-/// gives them (decision 294): a brief beside its bar, and in full without one.
+/// gives them: a brief beside its bar, and in full without one.
 fn gen_view(of: ParamView, generator: &Generator, context: &Context, param: GenParam) -> ParamView {
     let shape = generator.heard();
     let choices = param.choices(context);

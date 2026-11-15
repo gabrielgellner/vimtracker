@@ -7,9 +7,9 @@
 //! it turns, one undo step a press.
 //!
 //! The page's edits are the track page's, [`TrackPage::gen_edit`], over the [`Services`]: `K`'s
-//! lists come back in an [`Outcome::Open`] and `i` in an [`Outcome::Insert`] (#784). `Enter`
-//! stays `App`'s, as it opens the shape panel on the generator, and so do the choices made from
-//! `K`'s lists, as the picker's are, a column made live building a shape panel too.
+//! lists come back in an [`Outcome::Open`] and `i` in an [`Outcome::Insert`]. `Enter` stays
+//! `App`'s, as it opens the shape panel on the generator, and so do the choices made from `K`'s
+//! lists, as the picker's are, a column made live building a shape panel too.
 
 use vt_model::action::Action;
 use vt_model::constants::FX_SLOTS;
@@ -66,8 +66,8 @@ const MACROS_GRID: [[Option<usize>; 2]; 4] = [
     [Some(3), Some(7)],
 ];
 
-/// The track's eight macros as a full-width band, two rows of four, with nothing in its title
-/// (decision 285). Its own device, so it can sit on whichever page it belongs on.
+/// The track's eight macros as a full-width band, two rows of four, with nothing in its title. Its
+/// own device, so it can sit on whichever page it belongs on.
 pub(crate) fn macros_device() -> DeviceSpec {
     DeviceSpec::new(
         "Macros",
@@ -177,7 +177,7 @@ impl DeviceSpec {
     }
 
     /// An FX column's lane's `Length` and `Rate`, the track's, which move every phrase's lane on
-    /// the column, as a device of its own, `Lane`, named for its column (decision 347).
+    /// the column, as a device of its own, `Lane`, named for its column.
     pub(crate) fn lane(slot: usize) -> Self {
         let mut grid = [[None; DEVICE_COLUMNS]; GRID_ROWS];
         grid[0][0] = Some(Control::Lane(slot, LaneField::Length));
@@ -512,12 +512,12 @@ impl GenEdit<'_> {
 
     /// Keep the variation of a generator that varies last heard: the seeds it played that pass
     /// become its own, and `Vary` goes back to `Once`, so the pass heard plays every pass and the
-    /// phrase holds it, as the Turing Machine's lock keeps the loop it has drifted to (decision
-    /// 293). The engine reports each pass as it's first heard; one reported from another
-    /// generator, on another column, isn't kept. A `Ring` keeps its register as that pass began,
-    /// so the pass heard plays first and the ring runs on from there, holding that loop once
-    /// `Change` is down (decision 324); an `Acid` with loops keeps the count that pass began at,
-    /// so the pass heard plays first and its loops go on from there (decision 331).
+    /// phrase holds it, as the Turing Machine's lock keeps the loop it has drifted to. The engine
+    /// reports each pass as it's first heard; one reported from another generator, on another
+    /// column, isn't kept. A `Ring` keeps its register as that pass began, so the pass heard plays
+    /// first and the ring runs on from there, holding that loop once `Change` is down; an `Acid`
+    /// with loops keeps the count that pass began at, so the pass heard plays first and its loops
+    /// go on from there.
     fn keep_variation(&mut self, phrase: u32, generator: usize, name: &str) {
         let track = self.services.cursor.track;
         let Some(live) = self.live(phrase, generator) else {

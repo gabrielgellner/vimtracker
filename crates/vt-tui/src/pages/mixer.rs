@@ -1,9 +1,9 @@
 //! The mixer, `Space 4`, a strip for each track.
 //!
-//! `MixerPage` is the page as a component (#320): the row its cursor is on, which goes up and down
-//! a strip's settings, with the moves that need only the cursor's track, and its drawing, in
-//! `draw`, given a [`Ctx`]. Across the strips, `h`, `l`, `0` and `$` move the program's own cursor
-//! to another track, through the [`CtxMut`] it's given, and the edits are the track page's, as the
+//! `MixerPage` is the page as a component: the row its cursor is on, which goes up and down a
+//! strip's settings, with the moves that need only the cursor's track, and its drawing, in `draw`,
+//! given a [`Ctx`]. Across the strips, `h`, `l`, `0` and `$` move the program's own cursor to
+//! another track, through the [`CtxMut`] it's given, and the edits are the track page's, as the
 //! mixer turns the same controls. It's a [`Page`], with its rows of the binding table,
 //! [`Page::KEYS`], here beside it.
 

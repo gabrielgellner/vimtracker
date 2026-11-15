@@ -777,7 +777,7 @@ fn filled<F: FnMut(usize, &Shaped)>(
             FillKind::Random => {
                 let span = high - low + 1;
                 let drawn = mix(shape.seed, held);
-                // Drawn evenly as it always was, unless it's shaped or weighed (decision 302).
+                // Drawn evenly as it always was, unless it's shaped or weighed.
                 let along = match odds {
                     Some(odds) => odds.pick(&shape.random, unit(drawn)) as u64,
                     None if shape.random.shaped() => {

@@ -414,7 +414,7 @@ impl Voice {
 
     /// Roll this note's drift from a seed, for a synth that drifts as an analog one does, once
     /// its settings are set, as `Drift` as it starts says how far its envelope's times move and
-    /// whether its oscillators start anywhere in their cycles (decision 190).
+    /// whether its oscillators start anywhere in their cycles.
     pub(crate) fn seed_drift(&mut self, seed: u32) {
         if let Some(synth) = &mut self.synth {
             synth.seed_drift(seed, self.settings);

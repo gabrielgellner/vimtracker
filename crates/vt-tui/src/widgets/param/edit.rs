@@ -1,7 +1,7 @@
 //! Editing a setting from its view: where `=`, `-`, `+` and `_` take it, its fine part, what
-//! `i`'s text sets it to, what `x` puts back and what `K` lists (the UI plan's §3.3, #739). These
-//! read only the [`ParamView`], so they know no device and no track: the page writes what they
-//! give back with `pages::track::set`, the one way every described setting is written.
+//! `i`'s text sets it to, what `x` puts back and what `K` lists (the UI plan's §3.3). These read
+//! only the [`ParamView`], so they know no device and no track: the page writes what they give back
+//! with `pages::track::set`, the one way every described setting is written.
 
 use vt_model::step::Note;
 

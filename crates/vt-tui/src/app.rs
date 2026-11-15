@@ -149,7 +149,7 @@ pub(crate) const HOLD_TIME: Duration = Duration::from_millis(300);
 /// stopped and nothing is playing.
 const PLAYHEADS_KEPT: Duration = Duration::from_millis(250);
 
-/// What `:w` says to a read-only song in its own folder (decision 313).
+/// What `:w` says to a read-only song in its own folder.
 const READ_ONLY: &str = "This song is read-only: :w path saves a copy, :w! writes over it";
 
 /// What a key started that lasts while it's down, and is undone or ended when it's let go.

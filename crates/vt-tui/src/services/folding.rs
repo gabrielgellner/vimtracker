@@ -1,7 +1,7 @@
-//! Folding groups (decisions 128 and 305): a folded group's tracks are put away into its own
-//! column in the song view, its strip on the mixer and a column of the phrase view's overview, as
-//! Ableton folds a group track, and an empty group folds away to nothing. The track order doesn't
-//! change, so a group's tracks are never moved next to it, only hidden.
+//! Folding groups: a folded group's tracks are put away into its own column in the song view, its
+//! strip on the mixer and a column of the phrase view's overview, as Ableton folds a group track,
+//! and an empty group folds away to nothing. The track order doesn't change, so a group's tracks
+//! are never moved next to it, only hidden.
 //!
 //! As in Vim, moves between tracks step over a folded one, a folded group is one stop for `W` and
 //! `B`, a cursor a fold closes over stands on its group, and the track picker opens the fold of a

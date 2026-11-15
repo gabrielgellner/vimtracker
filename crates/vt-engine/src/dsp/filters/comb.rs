@@ -680,7 +680,7 @@ fn read_gain(turn: f64, frames: f32) -> Gain {
 /// on its settings and the track's `note`: the loop it plays with, its reads between samples, its band's
 /// one-poles and the high-passes cleaning what goes in, worked out from their own coefficients,
 /// heard as a comb or a flanger, through the limiter's quiet 0.8, and mixed with the sound by
-/// `Mix`, before `Gain`. For drawing its curve on the FX page's zoom (decision 333).
+/// `Mix`, before `Gain`. For drawing its curve on the FX page's zoom.
 pub fn response(settings: Settings, note: f32, rate: u32) -> impl Fn(f32) -> f32 {
     let feedback = from_middle(f32::from(settings.feedback));
     let values = [

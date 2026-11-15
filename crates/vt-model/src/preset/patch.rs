@@ -1,19 +1,19 @@
-//! A patch on its own (decision 311): what plays a sound without the sound, after Live's MIDI
-//! Effect Rack presets, saved from a track and added to any other, which keeps its sound.
+//! A patch on its own: what plays a sound without the sound, after Live's MIDI Effect Rack presets,
+//! saved from a track and added to any other, which keeps its sound.
 //!
 //! Saving takes the macros that hold something and what they move: the mod slots they map to,
 //! the slots those go to in turn and the slots that go to any of them, the accumulator and the
 //! arpeggio if one is reached, and the live generators of the phrase under the cursor that a macro
-//! holds by its column, with any slot or macro an FX one of those locks (decision 317). Nothing of
-//! the sound: a map to the machine, the filter or an effect is kept by the setting's key, for a
-//! track that has it.
+//! holds by its column, with any slot or macro an FX one of those locks. Nothing of the sound: a
+//! map to the machine, the filter or an effect is kept by the setting's key, for a track that has
+//! it.
 //!
 //! Loading adds the parts to free mod slots and free macros, in order, renumbering every
 //! reference among them, its generators' locks too, and refuses when there are too few unless
 //! told to put them over the last ones (the study's §5.3).
 //!
 //! A generator on an FX column's lane keeps the lane's length, so it fills a lane as long on the
-//! track it's added to (decision 318, for Kria's length loop).
+//! track it's added to (for Kria's length loop).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -106,7 +106,7 @@ impl PatchGen {
 pub struct PatchPreset {
     pub format: u32,
     pub patch: Patch,
-    /// Its own tags, beside `patch`, which every patch has (decision 315).
+    /// Its own tags, beside `patch`, which every patch has.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
 }
@@ -890,7 +890,7 @@ mod tests {
         let root = std::env::temp_dir().join(format!("vt-patch-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let path = preset_path(&root, PresetKind::Patch, "Turing").unwrap();
-        // `Range` bent, so its curve is seen to come along, added and renumbered (decision 314).
+        // `Range` bent, so its curve is seen to come along, added and renumbered.
         let mut bent = turing();
         bent.macros[2].maps[0] = bent.macros[2].maps[0].bent(-60, 30);
         let preset = PatchPreset::of(&bent, None).unwrap();

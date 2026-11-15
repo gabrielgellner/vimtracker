@@ -15,8 +15,7 @@ use super::{Control, DEVICE_COLUMNS, DeviceSpec, DeviceWidth};
 /// and how it plays, each a full-width device, the four filling the rows inside the keyboard's
 /// box, as the FX page's slots do. A machine with more settings than a device holds, as 4-op's
 /// operators are, has devices of them after its own, and the page goes down by whole devices to
-/// keep the cursor's in view (decision 234). A group, a return and the master have only their
-/// output.
+/// keep the cursor's in view. A group, a return and the master have only their output.
 pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
     let output: &[&[Control]] = match track.kind {
         TrackKind::Sound => &OUTPUT,
@@ -57,9 +56,9 @@ const FILTER: [&[Control]; 3] = [
     &[base(TrackControl::LowCut), base(TrackControl::HighCut)],
 ];
 
-/// The output's, in the order the signal meets them down each column, as decision 136 has `Trim`
-/// before `Level`: its gain, fader and place, then what it sends and the group it goes through,
-/// then what it's for, which colours its name wherever it's named (decision 316).
+/// The output's, in the order the signal meets them down each column, with `Trim` before `Level`:
+/// its gain, fader and place, then what it sends and the group it goes through, then what it's for,
+/// which colours its name wherever it's named.
 const OUTPUT: [&[Control]; 3] = [
     &[Control::Trim, Control::Level, base(TrackControl::Pan)],
     &[
@@ -104,7 +103,7 @@ const PLAY: [&[Control]; 3] = [
 /// The machine's device: the machine in its title, and its type after it, the sample a sampler
 /// plays or a synth's setting that gives it its character, then its settings in its own grid. A
 /// sampler's has the sample's own `Tune` and `Cents` down the column after its own, which aren't
-/// the track's settings but the sample's (decision 264).
+/// the track's settings but the sample's.
 fn machine(machine: Machine) -> DeviceSpec {
     let kind = match machine {
         Machine::Sampler => Some(Control::Sample),

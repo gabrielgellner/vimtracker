@@ -10,7 +10,7 @@
 //!
 //! The Deluge's perc measure, one byte of "percussiveness" for each 128 frames, is a different
 //! thing: the slope of a smoothed first difference against its level, which steers its stretcher's
-//! grains rather than marking where sounds start (decision 226).
+//! grains rather than marking where sounds start.
 
 use std::ops::Range;
 

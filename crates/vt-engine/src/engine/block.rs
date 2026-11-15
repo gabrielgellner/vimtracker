@@ -121,12 +121,12 @@ impl Engine {
     }
 
     /// Which of the groups, returns and master can be left out of a run, as working them out would
-    /// give the same frame every frame and change nothing (#558). A group rests while none of its tracks plays, given
-    /// as each playing track's group, and the returns and master while no track plays at all and
-    /// every group rests; the master too once each of its slots has settled. A note, a preview or
-    /// an audition plays a track, and an edit, a lock or the transport changes what a bus is set
-    /// to, so each run asks again. Done once, a resting group or return hears its silence, which
-    /// is all that changes about it while it rests.
+    /// give the same frame every frame and change nothing. A group rests while none of its tracks
+    /// plays, given as each playing track's group, and the returns and master while no track plays
+    /// at all and every group rests; the master too once each of its slots has settled. A note, a
+    /// preview or an audition plays a track, and an edit, a lock or the transport changes what a
+    /// bus is set to, so each run asks again. Done once, a resting group or return hears its
+    /// silence, which is all that changes about it while it rests.
     fn resting_buses(&mut self, routes: &[Option<usize>], run: RunContext) -> RestingBuses {
         let mut resting = RestingBuses::default();
         if !self.resting {

@@ -33,7 +33,7 @@ use crate::widgets::theme;
 /// The width of a read-only note column for another track: its playhead marker, a note and a gap,
 /// so a marker has a cell of its own and the playing line reads as columns, not one string.
 const NEIGHBOUR_WIDTH: usize = 5;
-/// A group's column is wider, for its whole name over it with the fold mark (decision 308).
+/// A group's column is wider, for its whole name over it with the fold mark.
 const GROUP_NEIGHBOUR_WIDTH: usize = NEIGHBOUR_WIDTH + GROUP_NAME_CHARS - 2;
 /// The gap between the overview and the row inspector.
 const INSPECTOR_GAP: usize = 1;
@@ -65,8 +65,8 @@ const MARK_WIDTH: usize = 2;
 /// drawn as `EMPTY` once the text is laid out.
 const BLANK: char = '.';
 /// How an empty value cell is drawn: faint middle dots, as Renoise and OpenMPT draw theirs, as
-/// dashes line up with the beat and bar rules into one line and dots can't (#313). The note keeps
-/// `---`, the tracker's sign that nothing plays.
+/// dashes line up with the beat and bar rules into one line and dots can't. The note keeps `---`,
+/// the tracker's sign that nothing plays.
 const EMPTY: char = '\u{b7}';
 /// How an empty velocity cell shows, which plays at the track's velocity.
 const VELOCITY_EMPTY: &str = "..";
@@ -338,7 +338,7 @@ fn live_value(step: &Step, column: ShapeColumn) -> bool {
 /// Which tracks fit in the overview beside the grid, in order, with the focused one among them and
 /// those near it in view. Groups, returns and the master have their notes elsewhere, so they're
 /// left out unless one is the track being edited. A folded group's tracks are left out too, with
-/// a column of the group's own, named and empty, where the first of them would be (decision 128).
+/// a column of the group's own, named and empty, where the first of them would be.
 fn neighbours(ctx: &Ctx, width: usize) -> Vec<usize> {
     let song = ctx.song();
     let mut tracks: Vec<usize> = (0..song.tracks.len())
@@ -348,7 +348,7 @@ fn neighbours(ctx: &Ctx, width: usize) -> Vec<usize> {
                 || ctx.folds().holds(song, index)
         })
         .collect();
-    // In the order `W` and `B` go through them (decision 305).
+    // In the order `W` and `B` go through them.
     tracks.sort_by_key(|&track| ctx.folds().place(song, track, Order::Stops));
     let centre = tracks
         .iter()
@@ -434,7 +434,7 @@ struct Column<'a> {
     /// The row playing, and which of its pulses.
     playing: Option<(usize, usize)>,
     /// The note the row playing was heard as, where a moving generator played another than
-    /// what's written (decision 300).
+    /// what's written.
     heard: Option<Note>,
     /// When each row starts, in the track's own steps, and how many ticks its step lasts.
     starts: Vec<usize>,
@@ -851,7 +851,7 @@ fn lane_text(length: usize, division: usize, with_division: bool) -> String {
 
 /// What the title says of a phrase's lanes: each one's length and division, `FX1:4/2`, and while
 /// the track's `Length` or `Rate` moves one, what's heard first and its own after, dim, as
-/// `FX1:6/4 (4/2)` (decision 347).
+/// `FX1:6/4 (4/2)`.
 fn lane_details(phrase: &Phrase, heard: &[Option<Heard>; FX_SLOTS]) -> Vec<Span<'static>> {
     let mut spans = vec![];
     for slot in 0..FX_SLOTS {
@@ -890,7 +890,7 @@ fn title_details(ctx: &Ctx, phrase: &Phrase) -> Vec<Span<'static>> {
     }
     let lanes = lane_details(phrase, &ctx.heard_lanes(phrase));
     // Its live columns are named, in the shape panel's colour, as their cells are drawn, each with
-    // `~` after it where what was heard of it isn't what's written (decision 300).
+    // `~` after it where what was heard of it isn't what's written.
     let mut live_names: Vec<String> = phrase
         .generators()
         .iter()
@@ -1348,8 +1348,7 @@ impl<'a> Grid<'a> {
             }
         }
         // The row playing shows each moving generator's cells on it as they were heard, and a
-        // lane's generator the row its lane plays, as the grid otherwise shows what's written
-        // (decision 300).
+        // lane's generator the row its lane plays, as the grid otherwise shows what's written.
         if !typing {
             heard_over(
                 ctx,

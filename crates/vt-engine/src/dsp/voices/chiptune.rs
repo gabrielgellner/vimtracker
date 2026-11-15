@@ -70,7 +70,7 @@ impl SynthEngine for Chiptune {
     }
 
     /// Roll a note's drift from its seed, so each note differs but a render repeats. With `Drift`
-    /// up as the note starts, each square starts anywhere in its cycle (decision 190).
+    /// up as the note starts, each square starts anywhere in its cycle.
     fn seed_drift(&mut self, seed: u32, settings: Settings) {
         self.drift.seed(seed);
         if settings.at(DRIFT) > 0.0 {

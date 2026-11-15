@@ -1,6 +1,6 @@
-//! Tags in the explorer (decision 315): what `T` gives a sample, a kit's sound or a preset, kept
-//! in the tag library by the file's content or in the preset's own file, and the guess from how a
-//! sample's sound ends once it's been read for its preview.
+//! Tags in the explorer: what `T` gives a sample, a kit's sound or a preset, kept in the tag
+//! library by the file's content or in the preset's own file, and the guess from how a sample's
+//! sound ends once it's been read for its preview.
 
 use std::path::Path;
 use std::sync::Arc;

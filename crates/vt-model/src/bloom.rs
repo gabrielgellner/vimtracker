@@ -1,8 +1,8 @@
-//! Branches grown from a phrase, after Qu-Bit's Bloom (decision 307). The phrase is the trunk;
-//! each branch is a new phrase on the same track whose Note column is a live `Follow` of the
-//! branch before it, the first of the trunk, mutating what it copies, so each strays a little
-//! further from the trunk and an edit to the trunk grows every branch again. A path, the order
-//! the trunk and its branches play in, takes the trunk's place in its chain.
+//! Branches grown from a phrase, after Qu-Bit's Bloom. The phrase is the trunk; each branch is a
+//! new phrase on the same track whose Note column is a live `Follow` of the branch before it, the
+//! first of the trunk, mutating what it copies, so each strays a little further from the trunk and
+//! an edit to the trunk grows every branch again. A path, the order the trunk and its branches play
+//! in, takes the trunk's place in its chain.
 
 use crate::shape::{Follow, Mutations, Shape, Source, track_seed};
 
@@ -15,7 +15,7 @@ pub const LAST_PHRASE: u32 = 0xFF;
 pub const PATH_WORDS: [&str; 5] = ["forward", "trunk", "pendulum", "ping-pong", "shuffle"];
 
 /// The order a trunk and its branches play in, written into their chain. The fixed ones take the
-/// names `:order` gives the same moves (decision 87).
+/// names `:order` gives the same moves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Path {
     /// The trunk, then each branch in turn.

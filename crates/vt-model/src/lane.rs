@@ -1,6 +1,6 @@
 //! An FX column's lane: a run of a phrase's stored rows that the column loops on by itself, with
-//! a division of its own (decision 346), and what a track's `Length` and `Rate` for the column
-//! move it to as it's heard (decision 347, the lanes study, `docs/designs/lanes.md`).
+//! a division of its own, and what a track's `Length` and `Rate` for the column move it to as it's
+//! heard (the lanes study, `docs/designs/lanes.md`).
 
 use serde::{Deserialize, Serialize};
 
@@ -11,7 +11,7 @@ pub const MOST_DIVISION: usize = 16;
 
 /// What a lane's `Rate` does to its own division, in order from the slowest to the fastest, as
 /// `=` goes up it: `÷16` to `÷2`, which play it that many times slower, `×1`, then `×2` to `×16`,
-/// that many times faster, as a clock divider's `÷2` gives half the pulses (decision 349).
+/// that many times faster, as a clock divider's `÷2` gives half the pulses.
 pub const LANE_RATES: [&str; 31] = [
     "÷16", "÷15", "÷14", "÷13", "÷12", "÷11", "÷10", "÷9", "÷8", "÷7", "÷6", "÷5", "÷4", "÷3",
     "÷2", "×1", "×2", "×3", "×4", "×5", "×6", "×7", "×8", "×9", "×10", "×11", "×12", "×13", "×14",
@@ -114,8 +114,8 @@ pub fn rate_division(division: usize, rate: usize) -> usize {
 }
 
 /// What a track's `Length` and `Rate` for an FX column move every phrase's lane on that column
-/// by, relative to its own (decision 347): `Length` in rows either side of `80`, and `Rate` a
-/// place in [`LANE_RATES`]. A column without a lane isn't touched.
+/// by, relative to its own: `Length` in rows either side of `80`, and `Rate` a place in
+/// [`LANE_RATES`]. A column without a lane isn't touched.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LaneMove {
     #[serde(default = "length_as_written")]

@@ -1,7 +1,7 @@
-//! The recorder (#288): the master, a track's output or the audio input, written into a sample
-//! that grows as it's recorded, so a pattern can play it before it has stopped, as the Deluge's
-//! recordings are samples from their first frame. It's the resample of an Octatrack's track
-//! recorders, an M8's and a Digitakt's sampling.
+//! The recorder: the master, a track's output or the audio input, written into a sample that grows
+//! as it's recorded, so a pattern can play it before it has stopped, as the Deluge's recordings are
+//! samples from their first frame. It's the resample of an Octatrack's track recorders, an M8's and
+//! a Digitakt's sampling.
 //!
 //! - **It always listens.** A ring of the last quarter second of its source is kept while nothing
 //!   records, and a recording starts with it, so it holds the sound from just before it started,

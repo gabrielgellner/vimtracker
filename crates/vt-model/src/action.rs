@@ -247,7 +247,7 @@ pub enum Action {
         slot: usize,
         modulator: ModSlot,
     },
-    /// Turn one of a track's macros, from `0000` to `FF00` (decision 282).
+    /// Turn one of a track's macros, from `0000` to `FF00`.
     SetMacro {
         track: usize,
         at: usize,
@@ -278,21 +278,21 @@ pub enum Action {
         insert: Insert,
     },
     /// Make a sound track's sound and patch a sound preset's, its sampler playing this bank
-    /// entry, keeping its place in the song and its phrases (decision 310).
+    /// entry, keeping its place in the song and its phrases.
     LoadSound {
         track: usize,
         preset: Box<SoundPreset>,
         sample: u8,
     },
     /// Add a patch preset's mod slots, macros, accumulator and arpeggio to a sound track where
-    /// `placement` says, keeping its sound (decision 311). Its generators go on with `Generate`.
+    /// `placement` says, keeping its sound. Its generators go on with `Generate`.
     LoadPatch {
         track: usize,
         patch: Box<Patch>,
         placement: Placement,
     },
     /// Put an effect preset's effect in one of a track's slots, with the fine parts of its
-    /// settings there, in place of the slot's own (decision 310).
+    /// settings there, in place of the slot's own.
     LoadEffect {
         track: usize,
         slot: usize,
@@ -408,7 +408,7 @@ pub enum Action {
         arpeggio: Arpeggio,
     },
     /// Set what a track's `Length` and `Rate` for an FX column move every phrase's lane on that
-    /// column by (decision 347).
+    /// column by.
     SetLaneMove {
         track: usize,
         slot: usize,
@@ -551,7 +551,7 @@ pub enum Action {
     /// Grow branches from the phrase in a chain row, after Qu-Bit's Bloom: each a new phrase, a
     /// copy of it whose Note column is a live `Follow` of the branch before, mutating as it
     /// copies; and put the path through the trunk and its branches in the row's place, each with
-    /// its transpose (decision 307).
+    /// its transpose.
     Bloom {
         track: usize,
         chain: u32,

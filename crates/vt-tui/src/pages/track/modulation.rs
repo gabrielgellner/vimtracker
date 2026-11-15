@@ -113,9 +113,9 @@ pub(crate) fn modulator_bypassed(control: Control, track: &Track) -> Option<bool
 
 impl App {
     /// `Space g a` on a Steps slot: keep what its `Mutate` has drawn as its values, as one undo
-    /// step, so the loop heard stays when `Mutate` goes back to none (#530). The engine reports the
-    /// draws, as it hears them, and this makes the edit, so the song says what was heard and a
-    /// render plays it again. Only steps drawn change, so a value written since keeps its own.
+    /// step, so the loop heard stays when `Mutate` goes back to none. The engine reports the draws,
+    /// as it hears them, and this makes the edit, so the song says what was heard and a render
+    /// plays it again. Only steps drawn change, so a value written since keeps its own.
     pub(crate) fn keep_drift(&mut self) {
         let Control::Mod(slot, _) = self.track_control() else {
             self.services.status =
@@ -165,12 +165,12 @@ impl App {
 
     /// `Space g A`: make the phrase here what was last heard, as one undo step: write into its
     /// notes, or the selection's, the pitch the track's Steps and LFO slots on `Pitch` moved each
-    /// to the last time it was heard, and switch those slots out (#569); write in what each row's
-    /// own `RND`s on its note moved it to, and take those `RND`s out (decision 323); and apply each
-    /// live generator a macro or `Vary` moved, each row as it was heard and the rest as written
-    /// (decision 300). The engine reports each slot's and `RND`'s move as each note starts
-    /// (`NotePitch`), and each generator's row as it plays. A move of part of a semitone goes to
-    /// the nearest note, as the Note column has no finer step.
+    /// to the last time it was heard, and switch those slots out; write in what each row's own
+    /// `RND`s on its note moved it to, and take those `RND`s out; and apply each live generator a
+    /// macro or `Vary` moved, each row as it was heard and the rest as written. The engine reports
+    /// each slot's and `RND`'s move as each note starts (`NotePitch`), and each generator's row as
+    /// it plays. A move of part of a semitone goes to the nearest note, as the Note column has no
+    /// finer step.
     pub(crate) fn bake_pitch_mods(&mut self) {
         let selected = self.modes.mode.is_visual().then(|| {
             let selection = self.current_selection();

@@ -9,7 +9,7 @@ pub const MAX_HOLD_MS: u16 = 2000;
 
 /// An envelope's time in ms for a value on the registry's `00` to `FF` scale, as a macro or
 /// modulation moves one: none at `00`, then from 1 ms at `01` to [`MAX_ENVELOPE_MS`] at `FF`,
-/// evenly in ratio, so each step is about 3.6 % longer than the last (decision 283).
+/// evenly in ratio, so each step is about 3.6 % longer than the last.
 pub fn time_at(value: f32) -> u16 {
     if value < 1.0 {
         return 0;
@@ -43,10 +43,9 @@ const ANALOG_RISE_RATE: f32 = 1.098_612_3; // ln 3
 /// nine tenths of the way.
 const ANALOG_FALL_RATE: f32 = 6.907_755; // ln 1000
 
-/// How an envelope's stages bend, its mode (#46): one curve for the whole envelope rather than one
-/// for each stage, as #46 suggested trying first. A decay or release is Vital's `powerScale`,
-/// `(e^(p t) - 1) / (e^p - 1)`, of which Peaks' fall is the case `p = -4`, so `Exp` is the sound
-/// envelopes always had.
+/// How an envelope's stages bend, its mode: one curve for the whole envelope rather than one for
+/// each stage. A decay or release is Vital's `powerScale`, `(e^(p t) - 1) / (e^p - 1)`, of which
+/// Peaks' fall is the case `p = -4`, so `Exp` is the sound envelopes always had.
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
 )]
@@ -101,7 +100,7 @@ impl Curve {
     }
 
     /// How far through an attack it reaches `level`, from 0 to 1: [`Curve::rise`] turned round,
-    /// so an attack started from a level can start where its curve has it (#467).
+    /// so an attack started from a level can start where its curve has it.
     #[inline]
     pub fn rise_time(self, level: f32) -> f32 {
         let level = level.clamp(0.0, 1.0);
@@ -147,7 +146,7 @@ enum Attack {
 }
 
 /// Where an attack started from `from` rather than from nothing is: from where its curve reaches
-/// that level (#467), so it keeps its shape and is only as long as what's left of it, as an analog
+/// that level, so it keeps its shape and is only as long as what's left of it, as an analog
 /// envelope's capacitor charges on from where it is, and the stages after it come as much sooner.
 /// From nothing, it's worked out exactly as it always was.
 #[inline]
@@ -268,7 +267,7 @@ impl Adsr {
     }
 }
 
-/// How long an AHD holds at full before it decays (#85).
+/// How long an AHD holds at full before it decays.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Hold {
     /// While the note lasts, then the decay from its end, as the Digitakt's `HOLD NOTE`.
@@ -278,9 +277,9 @@ pub enum Hold {
     Ms(u16),
 }
 
-/// An AHD envelope's own settings (#85): an attack to full, a hold there for a time or while the
-/// note lasts, and a decay to nothing, with the same reset and curve as an ADSR's. Where it goes
-/// and how far are its mod slot's.
+/// An AHD envelope's own settings: an attack to full, a hold there for a time or while the note
+/// lasts, and a decay to nothing, with the same reset and curve as an ADSR's. Where it goes and how
+/// far are its mod slot's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Ahd {
     pub attack_ms: u16,
@@ -392,7 +391,7 @@ pub struct Drum {
     pub body: u8,
     pub decay_ms: u16,
     /// How many times the peak strikes, each `Peak` long, before the body decays: 1 for a drum,
-    /// 3 or 4 for an 808's clap (#45, after the review's MSEG ratchet).
+    /// 3 or 4 for an 808's clap (after the review's MSEG ratchet).
     pub ratchet: u8,
     /// How its body's decay bends, its mode. The peak's fall is always steep.
     pub curve: Curve,
@@ -493,10 +492,10 @@ const VACTROL_FLOOR: f32 = 0.001;
 const DARKEST: f32 = 0.003;
 const BRIGHTEST: f32 = 0.303;
 
-/// A low-pass gate's own settings (#45): a vactrol pinged by each note, after Mutable
-/// Instruments' Plaits (`LPGEnvelope`, MIT): a quick rise, then a fall that slows as it nears
-/// silence, which also closes the track's filter by `Colour`, so one slot dulls a note as it dies.
-/// Where it goes and how far are its mod slot's.
+/// A low-pass gate's own settings: a vactrol pinged by each note, after Mutable Instruments' Plaits
+/// (`LPGEnvelope`, MIT): a quick rise, then a fall that slows as it nears silence, which also
+/// closes the track's filter by `Colour`, so one slot dulls a note as it dies. Where it goes and
+/// how far are its mod slot's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Lpg {
     pub attack_ms: u16,

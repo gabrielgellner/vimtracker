@@ -178,8 +178,8 @@ impl TrackState {
         // its drive and the slots are hit. At 0 dB it's exactly 1, which leaves the voice as it is.
         let trim = self.input_trim.next(run.smoothing);
         // A NaN or an infinity from a voice would stay in the filter, and the utility filter
-        // after it, for good, so it's heard as a frame of silence instead, as the slots do (#461).
-        // Level, pan and the sends only scale the frame and keep nothing of it.
+        // after it, for good, so it's heard as a frame of silence instead, as the slots do. Level,
+        // pan and the sends only scale the frame and keep nothing of it.
         let input = [input[0] * trim, input[1] * trim]
             .map(|sample| if sample.is_finite() { sample } else { 0.0 });
         self.take_in_after_trim(input);
@@ -275,7 +275,7 @@ impl TrackState {
 
     /// Run a frame through the slots in order. Whether its two sides are the same is looked at
     /// once, and each slot passes it on to the next, so a chain of effects that keep a mono sound
-    /// mono works out one side all the way through (decision 147).
+    /// mono works out one side all the way through.
     #[inline]
     fn through_slots(
         &mut self,
@@ -375,8 +375,8 @@ impl TrackState {
     }
 
     /// Whether a group with nothing coming in would give silence and change nothing, frame after
-    /// frame, so it can be skipped until something comes in (#558): its slots aren't ringing, so it
-    /// does no work, and what it sends isn't moving.
+    /// frame, so it can be skipped until something comes in: its slots aren't ringing, so it does
+    /// no work, and what it sends isn't moving.
     pub(crate) fn group_rests(&self, run: RunContext) -> bool {
         let keeping_up = |target| self.smoother_for(target, run);
         !self.ringing(run.rate)
@@ -392,10 +392,10 @@ impl TrackState {
     }
 
     /// What the master gives for silence coming in, if it would give the same and change nothing
-    /// frame after frame (#558): its trim and level aren't moving, and each of its slots has
-    /// settled (`InsertState::settled`) on what the one before gives, hearing only what other
-    /// tracks give now. It's usually silence, but a filter can be left holding a value too small
-    /// to hear for good, and then that's what it gives.
+    /// frame after frame: its trim and level aren't moving, and each of its slots has settled
+    /// (`InsertState::settled`) on what the one before gives, hearing only what other tracks give
+    /// now. It's usually silence, but a filter can be left holding a value too small to hear for
+    /// good, and then that's what it gives.
     pub(crate) fn master_rests(
         &self,
         run: RunContext,

@@ -32,7 +32,7 @@ pub enum ArpField {
 }
 
 /// One of an FX column's lane's settings, on the Gen page, which move every phrase's lane on that
-/// column from its own (decision 347).
+/// column from its own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LaneField {
     Length,
@@ -84,7 +84,7 @@ pub enum Control {
     Choke,
     /// The group it plays through, or none for the master.
     Group,
-    /// What it's for, which its colour shows, or `Auto` to go by its machine (decision 316).
+    /// What it's for, which its colour shows, or `Auto` to go by its machine.
     Role,
     /// How much of its last pulse a note lasts, as a percentage.
     GateLength,
@@ -118,10 +118,9 @@ pub enum Control {
     NewGenerator(u32),
     /// One of the settings declared by what's in a slot.
     InsertParam(usize, usize),
-    /// One of the track's macros, by its place, from 0 to 7 (decision 285).
+    /// One of the track's macros, by its place, from 0 to 7.
     Macro(usize),
-    /// One of an FX column's lane's settings, by the column's place, on the Gen page (decision
-    /// 347).
+    /// One of an FX column's lane's settings, by the column's place, on the Gen page.
     Lane(usize, LaneField),
 }
 

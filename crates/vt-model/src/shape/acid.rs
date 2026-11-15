@@ -12,9 +12,9 @@
 //! and 0.1 on the rest, and gives a note an accent 30% of the time and a slide 10%.
 //!
 //! Each part of the line, its rhythm, pitches, octaves, accents and slides, can loop on a length
-//! of its own, after monome's Kria (decision 331): a part on a loop of 5 draws for 5 rows and
-//! goes round them, counting on from pass to pass, so loops of different lengths drift against
-//! each other and the whole repeats only at their least common multiple.
+//! of its own, after monome's Kria: a part on a loop of 5 draws for 5 rows and goes round them,
+//! counting on from pass to pass, so loops of different lengths drift against each other and the
+//! whole repeats only at their least common multiple.
 
 use serde::{Deserialize, Serialize};
 

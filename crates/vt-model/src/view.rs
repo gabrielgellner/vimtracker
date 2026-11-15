@@ -1,5 +1,5 @@
 //! How the views show a song, kept with it so a project opens as it was left: which groups are
-//! folded (decision 305). None of it changes how the song plays, and undo doesn't go back over it.
+//! folded. None of it changes how the song plays, and undo doesn't go back over it.
 
 use serde::{Deserialize, Serialize};
 

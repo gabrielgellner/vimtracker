@@ -37,7 +37,7 @@ impl History {
 
     /// Make a new version current, dropping the oldest past the limit, and clearing redo. One the
     /// same as the current version isn't a new one, as an edit that changed nothing makes: it
-    /// leaves no undo step and redo as it was, and says so with false (decision 343).
+    /// leaves no undo step and redo as it was, and says so with false.
     pub fn commit(&mut self, song: Arc<Song>) -> bool {
         // `Arc`'s `==` checks the pointer first, so the chains and phrases a version shares with
         // the last aren't compared, only those the edit copied.

@@ -183,10 +183,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         String::new()
     };
     let hint = match panel.shape.kind {
-        // Each pair of tracks shares one coin (decision 321).
+        // Each pair of tracks shares one coin.
         _ if pairs && panel.shape.kind.has_where() => "Each row goes to one track or the other",
         // A named rhythm's parts go to the tracks in turn, and a 12/8 one's pulses are a bar's
-        // triplet eighths (decision 327).
+        // triplet eighths.
         _ if rhythm.is_some() && panel.parts.len() > 1 => "Each track plays the next part",
         _ if rhythm.is_some_and(World::ternary) && speed != Some(Speed::EighthTriplet) => {
             "Its 12 rows make a bar on a 1/8T track"

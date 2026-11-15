@@ -1,8 +1,7 @@
-//! A track's eight macros, after Ableton Live's Rack macros (`docs/designs/generators-page.md`
-//! §4, decision 282): each is one knob that turns any number of the track's settings at once,
-//! each between a min and a max of its own. A macro is itself a setting, `MAC1` to `MAC8`, which a
-//! step locks and modulation moves, and it's absolute: at `00` each setting it holds is at its
-//! min and at `FF` at its max.
+//! A track's eight macros, after Ableton Live's Rack macros (`docs/designs/generators-page.md` §4):
+//! each is one knob that turns any number of the track's settings at once, each between a min and a
+//! max of its own. A macro is itself a setting, `MAC1` to `MAC8`, which a step locks and modulation
+//! moves, and it's absolute: at `00` each setting it holds is at its min and at `FF` at its max.
 
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -58,10 +57,9 @@ pub struct MacroMap {
     /// a coarse byte and a fine one. `min` above `max` turns it the other way.
     pub min: u16,
     pub max: u16,
-    /// Its response from `min` to `max`, bent as the shape panel's ramp is (decision 314):
-    /// `curve` bends it, above 0 moving early and below 0 late, and `s` then eases both ends,
-    /// above 0 an S and below 0 the reverse, each from -100 to 100 and 0 straight, as a new
-    /// mapping is.
+    /// Its response from `min` to `max`, bent as the shape panel's ramp is: `curve` bends it, above
+    /// 0 moving early and below 0 late, and `s` then eases both ends, above 0 an S and below 0 the
+    /// reverse, each from -100 to 100 and 0 straight, as a new mapping is.
     #[serde(default, skip_serializing_if = "is_straight")]
     pub curve: i8,
     #[serde(default, skip_serializing_if = "is_straight")]
@@ -76,10 +74,10 @@ pub enum MacroTarget {
     /// A setting of the registry: the track's own, its machine's, an effect's, a mod slot's, the
     /// accumulator's or the arpeggio's. Never a macro.
     Setting(SettingId),
-    /// A setting of the live generator on a column, in every phrase of the track with one there
-    /// (decision 294). Its ends are numbers in the setting's own, as [`GenParam::number`] gives
-    /// them, set off by [`GEN_ZERO`]. A turn writes the column again, and the engine holds the
-    /// setting where a lock or modulation puts the macro as it plays (decision 300).
+    /// A setting of the live generator on a column, in every phrase of the track with one there.
+    /// Its ends are numbers in the setting's own, as [`GenParam::number`] gives them, set off by
+    /// [`GEN_ZERO`]. A turn writes the column again, and the engine holds the setting where a lock
+    /// or modulation puts the macro as it plays.
     Gen {
         column: GenColumn,
         #[serde(with = "param_key")]
@@ -160,7 +158,7 @@ impl MacroTarget {
 
     /// Whether it's reached by hand alone: a generator's setting the engine can't hold as it
     /// plays, `Wave` or `Rate`, which a turn writes into its column but a lock or modulation
-    /// doesn't reach (decisions 294 and 300).
+    /// doesn't reach.
     pub fn by_hand(self) -> bool {
         matches!(self, Self::Gen { param, .. } if !param.held_in_engine())
     }
@@ -365,11 +363,10 @@ impl Track {
             .any(|map| matches!(map.target, MacroTarget::Gen { .. }))
     }
 
-    /// The shape a live generator of one of its phrases is heard with by hand (decision 294): its
-    /// own, with each setting a macro holds on its column put where the macro's turn puts it, kept
-    /// to the setting's bounds in that phrase. None if no macro holds any of its settings, or
-    /// only ones its shape hasn't. `steps` are the phrase's, and `source` the loop a `Follow`
-    /// reads.
+    /// The shape a live generator of one of its phrases is heard with by hand: its own, with each
+    /// setting a macro holds on its column put where the macro's turn puts it, kept to the
+    /// setting's bounds in that phrase. None if no macro holds any of its settings, or only ones
+    /// its shape hasn't. `steps` are the phrase's, and `source` the loop a `Follow` reads.
     pub fn held_shape(
         &self,
         generator: &Generator,
@@ -476,7 +473,7 @@ impl Track {
     /// each one either keeps a value or a fine part of that the other doesn't. What's the same
     /// costs comparisons and no look-ups, so a track an edit didn't touch names none, and the
     /// engine, which follows each new version's on the audio thread, needn't go through all of
-    /// the settings for it (#842).
+    /// the settings for it.
     pub fn settings_moved_from(&self, before: &Track) -> SettingSet {
         let mut moved = SettingSet::default();
         differing_keys(&self.settings, &before.settings, &mut moved);

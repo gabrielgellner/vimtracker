@@ -252,14 +252,14 @@ pub struct Track {
     #[serde(default, skip_serializing_if = "is_default_arpeggio")]
     pub arpeggio: Arpeggio,
     /// What its `Length` and `Rate` for each FX column move every phrase's lane on that column by,
-    /// from the lane's own (decision 347). Saved only while one isn't at rest.
+    /// from the lane's own. Saved only while one isn't at rest.
     #[serde(default, skip_serializing_if = "lanes_at_rest")]
     pub lanes: [LaneMove; FX_SLOTS],
     /// Its mod slots, worked out in order, each able to move only those after it.
     #[serde(default = "default_mods")]
     pub mods: [ModSlot; MOD_SLOTS],
-    /// Its eight macros, each turning any of its settings at once (decision 282). Saved only
-    /// while any isn't as a new track's.
+    /// Its eight macros, each turning any of its settings at once. Saved only while any isn't as a
+    /// new track's.
     #[serde(default, skip_serializing_if = "no_macros")]
     pub macros: [Macro; MACROS],
     /// The chains this track can play, numbered within it.
@@ -473,7 +473,7 @@ impl Track {
     }
 
     /// Set a setting's fine part. `00` isn't kept, and there's none at the setting's top, nor on
-    /// one with no fine part, as the level scale's sends have none (decision 175).
+    /// one with no fine part, as the level scale's sends have none.
     pub fn set_fine(&mut self, id: SettingId, fine: u8) {
         if fine == 0
             || !id.entry().kind.has_fine()
@@ -981,12 +981,12 @@ pub struct Song {
     pub tracks: Vec<Track>,
     pub sections: Vec<Section>,
     /// How the views show the song: its folded groups. Not undone, and the app keeps it while
-    /// the song is open and writes it in when saving (decision 305).
+    /// the song is open and writes it in when saving.
     #[serde(default, skip_serializing_if = "ViewState::is_empty")]
     pub view: ViewState,
     /// Whether the song is parked, as Vim's `readonly`: `:w` to its own folder refuses, and `:w!`
-    /// or a copy saved elsewhere are the ways to keep a change (decision 313). Left out when off.
-    /// Not undone, and the app keeps it while the song is open and writes it in when saving.
+    /// or a copy saved elsewhere are the ways to keep a change. Left out when off. Not undone, and
+    /// the app keeps it while the song is open and writes it in when saving.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub read_only: bool,
 }

@@ -342,7 +342,7 @@ fn kit(start: usize, argument: &str, places: Places) -> Completions {
 /// `:preset`'s word, then a preset's name from the presets folder, by its folders and name without
 /// `.ron`, as `:kit` completes a kit's. `:preset!` only saves; `:patch` and `:patch!` complete
 /// the patches' names, and both save and load, `load` the shipped patches' names too, after the
-/// folder's (decision 318).
+/// folder's.
 fn preset(start: usize, argument: &str, command: &'static str, places: Places) -> Completions {
     let patch = command.starts_with("patch");
     let Some((word, name)) = argument.split_once(char::is_whitespace) else {

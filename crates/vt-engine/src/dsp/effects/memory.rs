@@ -57,10 +57,10 @@ pub(crate) const REVERB_QUIET_SECONDS: f32 = 1.0;
 pub(crate) const SILENT: f32 = 0.00001;
 
 /// Makes [`Memory`], what one slot's effect keeps, from one list of the effects that keep a long
-/// buffer, with everything that hands a call on to one of them by `match` (decision 340). Each
-/// entry is the effect's name, which its [`EffectKind`], its `Insert` and its `Memory` share, and
-/// its DSP, which implements [`SlotEffect`]. The slot plays the first list's through its `ring`
-/// ([`Rung`]), and the second's itself, with its note, its glide or another track.
+/// buffer, with everything that hands a call on to one of them by `match`. Each entry is the
+/// effect's name, which its [`EffectKind`], its `Insert` and its `Memory` share, and its DSP, which
+/// implements [`SlotEffect`]. The slot plays the first list's through its `ring` ([`Rung`]), and
+/// the second's itself, with its note, its glide or another track.
 macro_rules! memories {
     (
         rung: $($rung:ident($rung_dsp:ty)),+ $(,)?;

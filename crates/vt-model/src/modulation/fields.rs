@@ -1,7 +1,6 @@
 //! What each mod type is and which settings it has, written once in [`MOD_SPECS`], and a slot's
-//! settings read and set by what they are rather than where its type keeps them (#726). This is
-//! the one place that knows an ADSR's `Attack` is `adsr.attack_ms` and an AHD's is
-//! `ahd.attack_ms`.
+//! settings read and set by what they are rather than where its type keeps them. This is the one
+//! place that knows an ADSR's `Attack` is `adsr.attack_ms` and an AHD's is `ahd.attack_ms`.
 
 use std::borrow::Cow;
 
@@ -24,7 +23,7 @@ pub enum ModField {
     /// The type's mode, as an envelope's curve or an LFO's `Free`, `Trig`, `Hold`, `One` or
     /// `Half`, for a type that has one.
     Mode,
-    /// Whether it moves what it reaches one way or both (#434).
+    /// Whether it moves what it reaches one way or both.
     Polarity,
     Destination,
     Depth,
@@ -137,7 +136,7 @@ impl ModField {
         }
     }
 
-    /// How it reads and steps, which the Mod page builds its view from (#833).
+    /// How it reads and steps, which the Mod page builds its view from.
     pub fn units(self) -> ModUnits {
         match self {
             Self::Type

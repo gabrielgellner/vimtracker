@@ -252,7 +252,7 @@ impl ThreeBands {
         self.bands.process(input, same, |bands, mut sample| {
             for (band, coefficients) in bands.iter_mut().zip(coefficients) {
                 // With nothing coming in, a band's state goes once it's tiny, so it falls to an
-                // exact zero rather than trading denormals for good, and the slot settles (#260).
+                // exact zero rather than trading denormals for good, and the slot settles.
                 if sample == 0.0 {
                     flush(band);
                 }

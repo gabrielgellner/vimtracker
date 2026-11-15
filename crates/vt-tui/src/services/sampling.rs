@@ -1,7 +1,7 @@
-//! Sampling (#288): `Space R`, `R` on the sample page and `:record` record the master, a track or
-//! the audio input into a new bank entry, the resample of an Octatrack, an M8 or a Digitakt. The
-//! entry is in the bank from its first frame, so a step's `SMP` can play it while it records, as
-//! the Deluge's recordings play.
+//! Sampling: `Space R`, `R` on the sample page and `:record` record the master, a track or the
+//! audio input into a new bank entry, the resample of an Octatrack, an M8 or a Digitakt. The entry
+//! is in the bank from its first frame, so a step's `SMP` can play it while it records, as the
+//! Deluge's recordings play.
 //!
 //! - **Starting.** A file name is rolled, a sample that grows as it's written goes in the pool
 //!   under it, and the entry goes in the bank's first free place as one undo step, its start after

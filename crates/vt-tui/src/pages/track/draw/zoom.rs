@@ -1,4 +1,4 @@
-//! The FX page zoomed in on one slot, `z i` (decision 329, option C of the FX page study,
+//! The FX page zoomed in on one slot, `z i` (option C of the FX page study,
 //! `docs/designs/fx-page.md`): a strip of every slot across the top, each a small device with its
 //! switch, its effect and the first row of its settings, then the cursor's slot as a device the
 //! page's width, its graphics 16 rows tall over its settings with bars nearly twice as long.

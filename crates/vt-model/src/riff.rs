@@ -1,7 +1,7 @@
 //! The markers other tools leave inside a WAV file, which `hound` and `symphonia` pass over: `cue `
 //! points and the `labl` names a `LIST` of type `adtl` gives them, the loops and root note of a
 //! `smpl` chunk, and the root note of an `inst` chunk. They seed a file's bank entry when it joins
-//! the bank (#279), and `:export` writes them into a new file (#283). Nothing here writes a file:
+//! the bank, and `:export` writes them into a new file. Nothing here writes a file:
 //! [`with_markers`] gives a copy of a WAV's bytes.
 //!
 //! The layouts are from Microsoft and IBM's *Multimedia Programming Interface and Data

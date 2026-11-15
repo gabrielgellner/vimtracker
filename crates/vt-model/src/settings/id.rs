@@ -21,7 +21,7 @@ const fn voices_size() -> usize {
 
 /// Where each voice's settings start among the voices', by the voice's number, worked out as the
 /// program is built. Searched for at run time, it went through every voice before, and `owner`
-/// did that for each voice in turn, which came to a fifth of a stopped song's time (#187).
+/// did that for each voice in turn, which came to a fifth of a stopped song's time.
 const VOICE_STARTS: [usize; SynthVoice::ALL.len()] = {
     let mut starts = [0; SynthVoice::ALL.len()];
     let mut start = 0;
@@ -106,7 +106,7 @@ pub enum Owner {
     Bypass(usize),
     /// The sampler machine's.
     Sampler,
-    /// One of the track's eight macros, by its place (decision 282).
+    /// One of the track's eight macros, by its place.
     Macro(usize),
     /// One of a mod slot's type's own settings, by the slot's place, which only macros and
     /// modulation move.
@@ -115,7 +115,7 @@ pub enum Owner {
     Accumulation,
     Arpeggio,
     /// One of the track's FX columns' lanes, by the column's place, which move every phrase's lane
-    /// on that column from its own (decision 347).
+    /// on that column from its own.
     Lane(usize),
 }
 
@@ -128,7 +128,7 @@ pub const FADER_COUNT: usize = 4;
 
 /// A track's faders, in the mixer's order: the settings a step's `LEV`, `PAN`, `SNA` and `SNB` set
 /// absolutely, which the mixer, the Output device and the Roto show as the steps move them, and
-/// which a hand takes over from the steps (decision 174).
+/// which a hand takes over from the steps.
 pub const FADERS: [SettingId; FADER_COUNT] = [
     SettingId::LEVEL,
     SettingId::PAN,

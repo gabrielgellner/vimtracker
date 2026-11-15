@@ -1,9 +1,9 @@
 //! The mixer: a strip for each track, with its level meter, its fader, its sends, mute and solo, laid
 //! out as Polyend Tracker's mixer is. The sound tracks, the groups, and the returns and master each
-//! stand apart, and a group's strip and the tracks in it share its colour (decision 126). A folded
-//! group's tracks are left out, with its name marked, and an empty group is folded away unless it's
-//! opened (decision 128). Over each part, on the row under the title, is its name on a rule, as a
-//! device's title is on its frame, the cursor's brighter (decision 144).
+//! stand apart, and a group's strip and the tracks in it share its colour. A folded group's tracks
+//! are left out, with its name marked, and an empty group is folded away unless it's opened. Over
+//! each part, on the row under the title, is its name on a rule, as a device's title is on its
+//! frame, the cursor's brighter.
 
 use std::borrow::Cow;
 
@@ -66,7 +66,7 @@ fn fader_eighths(level: u8, rows: usize) -> usize {
 /// A fader for one row, counting rows up from the bottom, showing where a track's level is: where
 /// the steps have it while they drive it. What's heard with `VOL` and modulation on top, where it's
 /// half a row or more away, is a thin line across the column on its row in the playing colour, and
-/// the fader stays where it is (decision 174).
+/// the fader stays where it is.
 fn fader_cell(row: usize, rows: usize, level: u8, heard: Option<u8>) -> Span<'static> {
     let eighths = fader_eighths(level, rows);
     let filled = eighths.saturating_sub(row * 8).min(8);
@@ -89,7 +89,7 @@ fn fader_cell(row: usize, rows: usize, level: u8, heard: Option<u8>) -> Span<'st
 
 /// The strips shown, and where the gaps between the parts go.
 struct Strips<'a> {
-    /// The tracks drawn, in order, with those folded away left out (decision 128).
+    /// The tracks drawn, in order, with those folded away left out.
     shown: Vec<usize>,
     /// Each as it's drawn, by its place: where its macros put what they hold, then its faders
     /// where the steps have them, as the track page has it. Worked out once a frame, so a strip's

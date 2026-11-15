@@ -1,13 +1,13 @@
 //! The Nerd Font symbols the program draws, each named after its Nerd Font name and codepoint.
-//! kitty and Ghostty both ship the symbols built in (decision 101), so they need no font set up.
-//! Each one means something, as a switch's state does, and none is there for decoration.
+//! kitty and Ghostty both ship the symbols built in, so they need no font set up. Each one means
+//! something, as a switch's state does, and none is there for decoration.
 //!
 //! Every one is a single cell wide, as the terminal counts it, so nothing after it moves. kitty and
 //! Ghostty may draw an icon over the space after it as well, which only makes it bigger. The
 //! explorer's icons are followed by a no-break space, `ICON_SPACE`, which they don't draw over, so
 //! each keeps to its cell and every row's icon is the same size. The switches are the other way
 //! round: always followed by two plain spaces, so they take three cells, which the terminal shows
-//! a picture of a pill over (decisions 157 and 256).
+//! a picture of a pill over.
 
 use std::time::Duration;
 
@@ -20,8 +20,7 @@ pub const SWITCH_ON: char = '\u{f205}';
 /// A switch that's off: `nf-fa-toggle_off`, U+F204, followed by a plain space as `SWITCH_ON` is.
 pub const SWITCH_OFF: char = '\u{f204}';
 
-// Transport, on the status line (decision 104). These stand in for the words, rather than
-// beside them.
+// Transport, on the status line. These stand in for the words, rather than beside them.
 
 /// Playing: `nf-md-play`, U+F040A.
 pub const PLAY: char = '\u{f040a}';
@@ -34,15 +33,15 @@ pub const RECORD: char = '\u{f044a}';
 /// Waiting for the launch grid, as a realign or a cued launch does: `nf-md-timer_sand`, U+F051F.
 pub const WAITING: char = '\u{f051f}';
 
-// Warnings, on the status line (decision 104).
+// Warnings, on the status line.
 
 /// Audio has dropped out: `nf-md-alert`, U+F0026.
 pub const WARNING: char = '\u{f0026}';
 /// Beside the CPU figure, the system is running the audio thread slowly to save power, so the
-/// figure reads higher than the same work at full speed (decision 150): `nf-md-leaf`, U+F032A.
+/// figure reads higher than the same work at full speed: `nf-md-leaf`, U+F032A.
 pub const LEAF: char = '\u{f032a}';
 
-// Machines and kinds of track, in a track's heading and the machine picker (decision 104).
+// Machines and kinds of track, in a track's heading and the machine picker.
 
 /// A sampler: `nf-md-waveform`, U+F147D.
 pub const SAMPLER: char = '\u{f147d}';
@@ -52,8 +51,8 @@ pub const SYNTH: char = '\u{f067d}';
 pub const DRUM: char = '\u{ee32}';
 /// A group, where its tracks are summed: `nf-md-call_merge`, U+F00F8.
 pub const GROUP: char = '\u{f00f8}';
-/// After a group's name, its tracks folded into it (decision 128), pushed together from both
-/// sides: `nf-md-arrow_collapse_horizontal`, U+F084C.
+/// After a group's name, its tracks folded into it, pushed together from both sides:
+/// `nf-md-arrow_collapse_horizontal`, U+F084C.
 pub const FOLDED: char = '\u{f084c}';
 /// A return, where sends come back: `nf-md-arrow_u_left_top`, U+F17B3.
 pub const RETURN: char = '\u{f17b3}';
@@ -63,8 +62,8 @@ pub const MASTER: char = '\u{f04c3}';
 pub const MUTE: char = '\u{f075f}';
 /// A soloed track: `nf-md-headphones`, U+F02CB.
 pub const SOLO: char = '\u{f02cb}';
-/// A fader a hand has taken over from the steps' automation, until `Space e` gives it back
-/// (decision 174): `nf-md-gesture_tap`, U+F0741.
+/// A fader a hand has taken over from the steps' automation, until `Space e` gives it back:
+/// `nf-md-gesture_tap`, U+F0741.
 pub const TAKEN: char = '\u{f0741}';
 
 /// A machine's icon: a sampler, a drum voice or any other synth voice.
@@ -88,7 +87,7 @@ pub fn track(track: &Track) -> char {
     }
 }
 
-// Steps (decision 104).
+// Steps.
 
 /// A value's `Lock` mark in the phrase grid, which holds it until the next note:
 /// `nf-md-lock`, U+F033E.
@@ -110,13 +109,13 @@ pub fn mark(mark: Mark) -> char {
     }
 }
 /// A live generator, in the phrase's title before the columns it keeps live, as it makes their
-/// values: a wand, `nf-md-auto_fix`, U+F0068 (decision 182).
+/// values: a wand, `nf-md-auto_fix`, U+F0068.
 pub(crate) const LIVE: char = '\u{f0068}';
 /// A phrase or chain that plays in more than one place on its track, after its number, so `*`
 /// means only unsaved changes: `nf-md-link`, U+F0337.
 pub const LINK: char = '\u{f0337}';
 
-// Spinners, while work goes on in the background (decision 104).
+// Spinners, while work goes on in the background.
 
 /// The six turns of Fira Code's spinner, which the Nerd Font symbols carry from U+EE06 to U+EE0B
 /// with no names of their own.
@@ -134,7 +133,7 @@ pub(crate) fn spinner(elapsed: Duration) -> char {
     SPINNER[(turn % SPINNER.len() as u128) as usize]
 }
 
-// Explorer (decision 103).
+// Explorer.
 
 /// The space after an icon: a no-break space, U+00A0. kitty and Ghostty draw a symbol over a plain
 /// space after it, two cells wide, but not over this, so each icon keeps to its own cell, as large

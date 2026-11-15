@@ -43,8 +43,7 @@ impl Machine {
     }
 
     /// Every machine, in the order the machine list, its `-` and `=` and the Roto's knob go
-    /// through them: `Sampler` first, as the most used, then the voices kind by kind
-    /// (decision 265).
+    /// through them: `Sampler` first, as the most used, then the voices kind by kind.
     pub const ALL: [Self; 1 + SynthVoice::ALL.len()] = {
         let mut all = [Self::Sampler; 1 + SynthVoice::ALL.len()];
         let mut at = 1;
@@ -80,7 +79,7 @@ impl Machine {
     }
 
     /// The category a list shows it under, or none for the top of the list: `Sampler` is at the
-    /// top, and each voice is under its kind (decision 265).
+    /// top, and each voice is under its kind.
     pub fn category(self) -> &'static str {
         match self {
             Self::Sampler => "",
@@ -147,8 +146,7 @@ impl Machine {
 
     /// The devices its settings go on past its own, for a machine with more than a device holds:
     /// 4-op's four operators, `Op 1` to `Op 4`, each its pitch, its sound and its envelope down
-    /// four columns, by their places among the machine's settings (decision 234). Other machines
-    /// have none.
+    /// four columns, by their places among the machine's settings. Other machines have none.
     pub fn operators(self) -> Vec<(String, Grid)> {
         if self != Self::Plaits(SynthVoice::FourOp) {
             return Vec::new();
@@ -167,9 +165,9 @@ impl Machine {
             .collect()
     }
 
-    /// What a track playing it is for until it's told (decision 316): the drum voices are drums,
-    /// `Acid` a bass, the chord voices a pad, the noises a texture and every other voice a synth;
-    /// a sample could be anything, so the sampler says nothing.
+    /// What a track playing it is for until it's told: the drum voices are drums, `Acid` a bass,
+    /// the chord voices a pad, the noises a texture and every other voice a synth; a sample could
+    /// be anything, so the sampler says nothing.
     pub fn role(self) -> Role {
         match self {
             Self::Sampler => Role::None,
@@ -180,8 +178,8 @@ impl Machine {
 
 crate::listed::listed!(Machine: meaning, category);
 
-/// What a sound track is for, which its colour shows wherever it's named (decision 316). `Auto`,
-/// where every track starts, goes by its machine; `None` has no colour.
+/// What a sound track is for, which its colour shows wherever it's named. `Auto`, where every track
+/// starts, goes by its machine; `None` has no colour.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Role {
     #[default]
@@ -403,7 +401,7 @@ impl SynthVoice {
     ];
 
     /// The kinds the machine list groups the voices under, in its order, each with its voices
-    /// in theirs (decision 265).
+    /// in theirs.
     pub const KINDS: [(&'static str, &'static [Self]); 8] = [
         (
             "Analog",
@@ -547,8 +545,8 @@ pub struct VoiceSpec {
     /// Where it places its settings on the Sound page, by key, column by column, or none to have
     /// them down each column in the order they're listed.
     pub grid: Option<&'static [&'static [&'static str]]>,
-    /// What a track playing it is for until it's told (decision 316): the drum voices are drums,
-    /// `Acid` a bass, the chord voices a pad, the noises a texture and every other voice a synth.
+    /// What a track playing it is for until it's told: the drum voices are drums, `Acid` a bass,
+    /// the chord voices a pad, the noises a texture and every other voice a synth.
     pub role: Role,
     /// How much of its last pulse a note lasts until a track sets its own `Gate`.
     pub gate: u8,

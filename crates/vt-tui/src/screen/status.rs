@@ -88,7 +88,7 @@ pub fn value_shown(app: &App) -> Option<String> {
     let control = app.track_control();
     let view = |track: &Track| view(control, track, app.song(), app.services.live.scale.on);
     // A fader the steps drive reads where they have it, and says so, as one a hand has taken over
-    // from them does (decision 174).
+    // from them does.
     let heard = app.services.track_as_heard(app.services.cursor.track)?;
     // A setting of the registry a macro holds reads where the macro puts it, and says which and
     // how far. `Glide` says what off does on its voice instead, as it's set.
@@ -98,7 +98,7 @@ pub fn value_shown(app: &App) -> Option<String> {
         _ => {
             let text = view(track)?.text;
             return match control {
-                // As its macros turn it, and which macro holds it (decisions 294 and 300).
+                // As its macros turn it, and which macro holds it.
                 Control::Gen {
                     phrase,
                     generator,
@@ -133,7 +133,7 @@ pub fn value_shown(app: &App) -> Option<String> {
 }
 
 /// On a cell of a live generator a macro or `Vary` moved, what's written and what was last heard
-/// there, as `C-2 written; D#2 heard on pass 3` (decision 300).
+/// there, as `C-2 written; D#2 heard on pass 3`.
 fn heard_shown(app: &App, field: Field) -> Option<String> {
     let id = app.services.phrase_id()?;
     let phrase = app.services.phrase_here()?;

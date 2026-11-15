@@ -1,5 +1,5 @@
-//! The `Distort` effect's guitar pedals (#361), each modelled on a pedal's circuit and tuned
-//! against a reference by its output alone, through `tools/compare`.
+//! The `Distort` effect's guitar pedals, each modelled on a pedal's circuit and tuned against a
+//! reference by its output alone, through `tools/compare`.
 //!
 //! - `Overdrive` is an Ibanez TS-808 Tube Screamer's clipping and tone stages, from ElectroSmash's
 //!   "Tube Screamer Analysis" and from D. T. Yeh, J. S. Abel and J. O. Smith, "Simplified,
@@ -59,15 +59,15 @@ const OVERDRIVE_TONE_HZ: f32 = 723.0;
 /// The tone stage, a treble cut and lift around an op-amp: its 220R and 220 nF to ground, from the
 /// tone pot's wiper, and the 1k in the op-amp's feedback. Turned fully up they lift the highs by
 /// 1 + 1k / 220R, 14.9 dB, from 593 Hz to 3.3 kHz; turned down they cut them as far; in the middle
-/// they do nothing (decision 266).
+/// they do nothing.
 const OVERDRIVE_TONE_SHUNT_RESISTOR: f32 = 220.0;
 const OVERDRIVE_TONE_SHUNT_CAPACITOR: f32 = 220e-9;
 const OVERDRIVE_TONE_FEEDBACK_RESISTOR: f32 = 1_000.0;
 /// Where its output's highs roll off.
 const OVERDRIVE_TOP_HZ: f32 = 12_000.0;
-/// Its `Level`, set so a 303 line at about -16 dBFS RMS, as the riff decision 130 fitted it on was,
-/// comes out as loud as it went in at `Amount`'s and `Tone`'s defaults: within 0.05 dB still with
-/// decision 266's darker tone stage, as most of a 303 line is under its mids.
+/// Its `Level`, set so a 303 line at about -16 dBFS RMS, as the riff it was fitted on was, comes
+/// out as loud as it went in at `Amount`'s and `Tone`'s defaults: within 0.05 dB still with the
+/// darker tone stage, as most of a 303 line is under its mids.
 const OVERDRIVE_LEVEL: f32 = 0.43;
 
 /// `Distortion`'s gain before it clips, in dB, at `Amount` `00`, and how much more `FF` adds:

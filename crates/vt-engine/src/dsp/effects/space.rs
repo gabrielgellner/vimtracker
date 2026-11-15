@@ -75,7 +75,7 @@ const MOST_DRIFT: f32 = 0.001;
 /// `Damp`, as the square of Galactic's `Brightness`.
 const DAMP_BRIGHTNESS: (f32, f32) = (1.0, 0.1);
 /// What the tank's feedback and what comes out of it are held to, far past anything a sound makes
-/// in it, so a NaN that reached it is held too and dies away (#461).
+/// in it, so a NaN that reached it is held too and dies away.
 const HEADROOM: f32 = 64.0;
 /// How often what's slow to work out is worked out again, in frames.
 const BLOCK: u32 = 32;

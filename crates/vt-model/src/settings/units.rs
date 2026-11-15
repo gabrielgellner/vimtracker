@@ -111,7 +111,7 @@ pub enum Units {
     Glide,
     /// An envelope's time, as [`time_at`] gives it.
     EnvelopeTime,
-    /// Rows either side of `80`, one a step, as a lane's `Length` moves its lane (decision 347).
+    /// Rows either side of `80`, one a step, as a lane's `Length` moves its lane.
     Rows,
 }
 

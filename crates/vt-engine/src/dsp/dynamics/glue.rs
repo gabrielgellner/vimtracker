@@ -1,8 +1,8 @@
 //! The `Glue` compressor, after Ableton Live's Glue Compressor, itself Cytomic's model of the SSL
-//! console's bus compressor, fitted to it with `tools/compare` through the Live bridge (#338,
-//! #364, decision 134). Only what Glue puts out was measured: its static curves, its attacks and
-//! releases at every place on its switches, its `Range`, and its detector against a tone of a
-//! tenth the pitch and two tones together.
+//! console's bus compressor, fitted to it with `tools/compare` through the Live bridge (decision
+//! 134). Only what Glue puts out was measured: its static curves, its attacks and releases at every
+//! place on its switches, its `Range`, and its detector against a tone of a tenth the pitch and two
+//! tones together.
 //!
 //! **Feedback.** Its 10 ms attack reaches 63% in 16 ms at 2:1, 12 ms at 4:1 and 6 ms at 10:1, as
 //! a detector hearing what it's already turned down does, the loop speeding it up, where a

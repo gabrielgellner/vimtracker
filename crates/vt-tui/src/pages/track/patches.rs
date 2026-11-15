@@ -1,9 +1,8 @@
-//! Patches on the track page (decision 311): the cursor's track's macros and what they move saved
-//! with `:patch save` into the presets folder's `patches`, and added to a track from the browser
-//! or by name, into its free mod slots and macros, with their generators on the phrase under the
-//! cursor, as one undo step that keeps the track's sound. The patches that come with the program
-//! are listed beside the folder's, under `Factory`, and read from the program itself (decision
-//! 318).
+//! Patches on the track page: the cursor's track's macros and what they move saved with `:patch
+//! save` into the presets folder's `patches`, and added to a track from the browser or by name,
+//! into its free mod slots and macros, with their generators on the phrase under the cursor, as one
+//! undo step that keeps the track's sound. The patches that come with the program are listed beside
+//! the folder's, under `Factory`, and read from the program itself.
 
 use std::path::Path;
 

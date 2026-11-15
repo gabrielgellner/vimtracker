@@ -145,10 +145,10 @@ pub fn group(number: u8) -> Color {
     GROUP_COLORS[usize::from(number.saturating_sub(1)) % GROUP_COLORS.len()]
 }
 
-/// The colour of what a sound track is for, the rule under its name wherever it's named
-/// (decision 316): five of the theme's calm shades, each a hue apart from the others and none a
-/// group's, the green of what's active, or the red of a warning, so a rule never reads as one of
-/// those. A track with no role has none.
+/// The colour of what a sound track is for, the rule under its name wherever it's named: five of
+/// the theme's calm shades, each a hue apart from the others and none a group's, the green of
+/// what's active, or the red of a warning, so a rule never reads as one of those. A track with no
+/// role has none.
 pub fn role(role: Role) -> Option<Color> {
     Some(match role {
         Role::Drums => MAROON,
