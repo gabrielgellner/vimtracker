@@ -302,6 +302,34 @@ fn starting_shape(column: ShapeColumn, (from, to): (u8, u8), place: Where) -> Sh
     }
 }
 
+/// The list of a generator setting's choices, as the panel and the Gen page list them: `param`'s
+/// in `context`, titled `title` and opened on the one `shape` has. Each item picks its choice
+/// through `pick` and says what it means, and a phrase a `Follow` can read is described by
+/// `follows`, where it's given. `None` if the setting isn't a list.
+pub(crate) fn choice_picker(
+    title: &'static str,
+    param: GenParam,
+    shape: &Shape,
+    context: &Context,
+    pick: impl Fn(Choice) -> Pick,
+    follows: Option<&dyn Fn(Source) -> String>,
+) -> Option<Picker> {
+    let choices = param.choices(context)?;
+    let position = param.chosen(shape, context).unwrap_or(0);
+    let items = choices
+        .into_iter()
+        .map(|choice| {
+            let item = Item::new(choice.name(), pick(choice));
+            match (choice, follows, choice.description()) {
+                (Choice::Source(source), Some(follows), _) => item.meaning(follows(source)),
+                (_, _, Some(meaning)) => item.meaning(meaning),
+                (_, _, None) => item,
+            }
+        })
+        .collect();
+    Some(Picker::new(title, items).opened_on(Some(position)))
+}
+
 /// Why a selection shapes nothing yet.
 enum Refusal {
     Reason(&'static str),
@@ -981,36 +1009,33 @@ impl App {
         let Some(panel) = &self.overlays.shape else {
             return;
         };
-        let context = panel.context();
-        let Some(choices) = panel.row.choices(&context) else {
-            self.services.status =
-                "K chooses from a list on Fill, Shape, Rate, Where, Source and Part".to_owned();
-            return;
-        };
-        let position = panel.row.chosen(&panel.shape, &context).unwrap_or(0);
-        let items = choices
-            .into_iter()
-            .map(|choice| {
-                let item = Item::new(choice.name(), Pick::ShapeChoice(choice));
-                match (choice, choice.description()) {
-                    (Choice::Source(source), _) => {
-                        let rows = panel
-                            .base
-                            .source_phrase(source)
-                            .map_or(0, |phrase| phrase.loop_steps().len());
-                        let name = self.services.track_name(source.track);
-                        item.meaning(format!("Track {name}, {rows} rows"))
-                    }
-                    (_, Some(meaning)) => item.meaning(meaning),
-                    (_, None) => item,
-                }
-            })
-            .collect();
         let title = match panel.row {
             GenParam::Source => "Follow",
             row => row.name(),
         };
-        self.show_picker(Picker::new(title, items).opened_on(Some(position)));
+        let follows = |source: Source| {
+            let rows = panel
+                .base
+                .source_phrase(source)
+                .map_or(0, |phrase| phrase.loop_steps().len());
+            let name = self.services.track_name(source.track);
+            format!("Track {name}, {rows} rows")
+        };
+        let picker = choice_picker(
+            title,
+            panel.row,
+            &panel.shape,
+            &panel.context(),
+            Pick::ShapeChoice,
+            Some(&follows),
+        );
+        match picker {
+            Some(picker) => self.show_picker(picker),
+            None => {
+                self.services.status =
+                    "K chooses from a list on Fill, Shape, Rate, Where, Source and Part".to_owned();
+            }
+        }
     }
 
     pub(crate) fn pick_shape_choice(&mut self, choice: Choice) {

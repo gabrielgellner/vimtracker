@@ -25,6 +25,7 @@ use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
 use crate::input::mode::View;
 use crate::overlays::picker::{Item, Pick, Picker};
+use crate::overlays::shape::choice_picker;
 use crate::pages::{CtxMut, Outcome};
 use crate::services::Services;
 use crate::services::generators::{LiveGen, generator_label};
@@ -230,6 +231,36 @@ pub(super) fn type_gen(services: &mut Services, view: View, control: Control, te
     .type_in(text);
 }
 
+/// Give a live generator of the cursor's track, by its phrase and its place in the phrase's
+/// list, the shape `change` makes from its own and what its settings act on, read for `view`:
+/// made whole and refused as the panel's are, then applied as one undo step if it's a change.
+fn reshape_live(
+    services: &mut Services,
+    view: View,
+    (phrase, generator): (u32, usize),
+    change: impl FnOnce(&mut Services, &mut Shape, &Context),
+) {
+    let track = services.cursor.track;
+    let Some(live) = services.live_generator(track, phrase, generator, view) else {
+        return;
+    };
+    let mut shape = live.generator.shape;
+    change(services, &mut shape, &live.context());
+    live.settle(&mut shape);
+    if let Some(why) = live.refusal(&shape) {
+        services.status = why;
+        return;
+    }
+    if shape != live.generator.shape {
+        services.apply(&Action::Reshape {
+            track,
+            phrase,
+            generator,
+            shape,
+        });
+    }
+}
+
 impl TrackPage {
     /// Whether a key on the setting under the cursor, `control`, is the Gen page's: the track
     /// page is on screen, `view`, and on Gen, and the cursor isn't on the macros' band, first on
@@ -304,25 +335,12 @@ impl GenEdit<'_> {
         let Some((phrase, generator, param)) = self.here() else {
             return;
         };
-        let track = self.services.cursor.track;
-        let Some(live) = self.live(phrase, generator) else {
-            return;
-        };
-        let mut shape = live.generator.shape;
-        change(self.services, param, &mut shape, &live.context());
-        live.settle(&mut shape);
-        if let Some(why) = live.refusal(&shape) {
-            self.services.status = why;
-            return;
-        }
-        if shape != live.generator.shape {
-            self.services.apply(&Action::Reshape {
-                track,
-                phrase,
-                generator,
-                shape,
-            });
-        }
+        reshape_live(
+            self.services,
+            self.view,
+            (phrase, generator),
+            |services, shape, context| change(services, param, shape, context),
+        );
     }
 
     /// `=` `-` `+` `_`, `count` times.
@@ -376,30 +394,23 @@ impl GenEdit<'_> {
             self.adjust(true, 1, false);
             return Outcome::Done;
         }
-        let Some(choices) = param.choices(&context) else {
+        let picker = choice_picker(
+            param.name(),
+            param,
+            &live.generator.shape,
+            &context,
+            |choice| Pick::GenChoice {
+                phrase,
+                generator,
+                choice,
+            },
+            None,
+        );
+        let Some(picker) = picker else {
             self.services.status =
                 format!("{} isn't a list: = and - turn it, i types it", param.name());
             return Outcome::Done;
         };
-        let position = param.chosen(&live.generator.shape, &context).unwrap_or(0);
-        let items = choices
-            .into_iter()
-            .map(|choice| {
-                let item = Item::new(
-                    choice.name(),
-                    Pick::GenChoice {
-                        phrase,
-                        generator,
-                        choice,
-                    },
-                );
-                match choice.description() {
-                    Some(meaning) => item.meaning(meaning),
-                    None => item,
-                }
-            })
-            .collect();
-        let picker = Picker::new(param.name(), items).opened_on(Some(position));
         Outcome::Open(Box::new(picker))
     }
 
@@ -552,28 +563,12 @@ impl GenEdit<'_> {
 impl App {
     /// A choice from `K`'s list, for a generator.
     pub(crate) fn pick_gen_choice(&mut self, phrase: u32, generator: usize, choice: Choice) {
-        let track = self.services.cursor.track;
-        let Some(live) = self
-            .services
-            .live_generator(track, phrase, generator, self.modes.view)
-        else {
-            return;
-        };
-        let mut shape = live.generator.shape;
-        choice.apply(&mut shape);
-        live.settle(&mut shape);
-        if let Some(why) = live.refusal(&shape) {
-            self.services.status = why;
-            return;
-        }
-        if shape != live.generator.shape {
-            self.services.apply(&Action::Reshape {
-                track,
-                phrase,
-                generator,
-                shape,
-            });
-        }
+        reshape_live(
+            &mut self.services,
+            self.modes.view,
+            (phrase, generator),
+            |_, shape, _| choice.apply(shape),
+        );
     }
 
     /// `Enter` on the Gen page: open the shape panel on the generator, in the phrase view, as
