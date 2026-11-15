@@ -401,10 +401,13 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     empties the return queue each frame, and the versions are freed there. A track's page is heard
     at once: `hand_over` looks up only the settings `Track::settings_moved_from` names, those of
     what differs between the track's two versions and those either keeps a value or a fine part of
-    that the other doesn't, so a track the edit didn't touch costs comparisons and no look-ups
-    (#842). It's worked out in the callback rather than with the version, as the version a
-    callback swaps from isn't always the one the next was built after: a waiting one can be
-    replaced.
+    that the other doesn't (#842). A track the edit didn't touch is the very `Arc<Track>` the
+    callback's version has, so `follow_base` and `keep_places` pass over it by
+    `Tracks::same`, one pointer compared, and only its macros, if it has any mapped, put what
+    they hold again (#871). It's worked out in the callback rather than with the version, as the
+    version a callback swaps from isn't always the one the next was built after: a waiting one
+    can be replaced. The callback drops no track either: its tracks are its version's, which
+    goes back whole.
 5.  **Long buffers**, for the effects with memory such as delays and reverbs, are made on the edit
     thread for what a version needs (`MemoryCount`) and sent ahead of it. Spare ones are asked back
     with `Command::ReleaseMemory`, and come back on a queue of their own to be freed.
