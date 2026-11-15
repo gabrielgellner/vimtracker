@@ -295,7 +295,7 @@ impl App {
             Cmd::PickValue | Cmd::EnterInsert => !on,
             _ => return false,
         };
-        self.set_roto(wanted);
+        self.services.set_roto(wanted);
         true
     }
 

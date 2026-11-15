@@ -16,7 +16,7 @@
 //! for Live and Bitwig. Nothing on screen changes what it shows, and it changes nothing on
 //! screen (the design note's rule).
 //!
-//! **Its knobs edit the song** through [`App::apply`], as keys do ([`edits`]): each knob's last
+//! **Its knobs edit the song** through [`Services::apply`], as keys do ([`edits`]): each knob's last
 //! move of a frame is one edit, and everything from touching a knob to letting go is one undo
 //! step. Each value is shown on the knob's screen as the app writes it, at most 12 times a
 //! second. After any edit, from the Roto, the keys or an undo, what changed is sent back, but a
@@ -59,6 +59,8 @@ use vt_roto::transport::{LinkError, Ports, SerialLink, SystemPorts};
 use crate::pages::track::Control;
 
 use crate::app::{App, TrackLive};
+use crate::input::mode::View;
+use crate::services::Services;
 use crate::services::automating::as_heard;
 
 /// The setting's file, in the config folder beside `audio.ron`.
@@ -580,24 +582,24 @@ impl Drop for Roto {
     }
 }
 
-impl App {
+impl Services {
     /// Starts driving the Roto as the program opens, if its setting is on.
     pub fn start_roto_if_on(&mut self) {
-        if self.services.roto.setting.on {
-            self.services.roto.start();
+        if self.roto.setting.on {
+            self.roto.start();
         }
     }
 
     /// Turns Roto support on or off, keeping the choice for this machine. On takes the Roto; off
     /// gives it back, so a running Live takes it.
     pub fn set_roto(&mut self, on: bool) {
-        if self.services.roto.setting.on == on && self.services.roto.is_linked() == on {
+        if self.roto.setting.on == on && self.roto.is_linked() == on {
             return;
         }
-        self.services.roto.setting.on = on;
+        self.roto.setting.on = on;
         if on {
-            self.services.roto.start();
-            self.services.status = if self.services.roto.connection == Connection::Taken {
+            self.roto.start();
+            self.status = if self.roto.connection == Connection::Taken {
                 "Roto-Control on, but another vimtracker has it: turn it off on that one's audio \
                  page, and this one takes it"
                     .to_owned()
@@ -607,27 +609,44 @@ impl App {
                     .to_owned()
             };
         } else {
-            self.services.roto.stop();
-            self.services.status =
+            self.roto.stop();
+            self.status =
                 "Roto-Control off: it's given back, and a running Live takes it".to_owned();
         }
-        if let Some(path) = self.services.roto.setting_path.clone()
-            && let Err(error) = self.services.roto.setting.save_to(&path)
+        if let Some(path) = self.roto.setting_path.clone()
+            && let Err(error) = self.roto.setting.save_to(&path)
         {
-            self.services.status = format!("{}: couldn't be saved: {error}", path.display());
+            self.status = format!("{}: couldn't be saved: {error}", path.display());
         }
+    }
+}
+
+/// What answers the Roto, frame by frame: its knobs' turns and its buttons' presses as edits, and
+/// what the song then shows sent back. It's lent the services, which hold the Roto, with the two
+/// things of `App`'s it reads: the view, for the phrase a track's live generators are from, and
+/// whether recording is armed, for the transport's lights. `App::tick_roto` makes one for each
+/// call, so each sees them as they are.
+struct RotoDriver<'a> {
+    services: &'a mut Services,
+    view: View,
+    recording: bool,
+}
+
+impl RotoDriver<'_> {
+    fn song(&self) -> &Arc<Song> {
+        self.services.song()
     }
 
     /// The phrase whose live generators are the Roto's track's last devices: the one level with
     /// the cursor on that track, as the Gen page shows the cursor's own.
-    fn roto_phrase(&self, at: usize) -> Option<u32> {
+    fn phrase(&self, at: usize) -> Option<u32> {
         self.services
-            .phrase_beside(at, self.modes.view)
+            .phrase_beside(at, self.view)
             .map(|(phrase, _)| phrase)
     }
 
     /// The devices PLUGIN mode shows, from the song as it is.
-    fn roto_devices(&self) -> Vec<LiveDevice> {
+    fn devices(&self) -> Vec<LiveDevice> {
         let tracks = &self.song().tracks;
         let at = if self.services.roto.track < tracks.len() {
             self.services.roto.track
@@ -641,7 +660,7 @@ impl App {
         let heard = as_heard(track, &self.services.faders(at));
         devices::live_devices(
             &heard,
-            self.roto_phrase(at),
+            self.phrase(at),
             self.song(),
             self.services.roto.stored_on_roto,
         )
@@ -649,17 +668,60 @@ impl App {
 
     /// A track as the Roto shows it, with its faders where the steps have them while they drive
     /// them.
-    fn roto_heard(&self, at: usize) -> Track {
+    fn heard(&self, at: usize) -> Track {
         self.services
             .track_as_heard(at)
             .map(std::borrow::Cow::into_owned)
             .unwrap_or_default()
     }
 
+    /// Answers a frame of the Roto's buttons and knobs once its events are read: the buttons
+    /// pressed, then each knob's last move, then what the song now shows sent back, the values,
+    /// the lights, and in MIX mode the meters.
+    fn answer(
+        &mut self,
+        presses: &[u8],
+        moves: [Option<u16>; CONTROLS],
+        let_go: bool,
+        now: Instant,
+    ) {
+        let mixing = self.services.roto.mode == RotoMode::Mix;
+        for button in presses {
+            if mixing {
+                self.mix_press(*button);
+            } else {
+                self.press(*button);
+            }
+        }
+        let turned = self.turn(moves, now);
+        self.close_gesture(now);
+        let faders_moved = self.faders_moved(now);
+        self.send_back(turned, let_go || faders_moved);
+        if faders_moved {
+            self.sent_faders(now);
+        }
+        self.services.roto.send_values(now);
+        // A button pressed is lit as its setting now is, whatever the Roto drew as it went down.
+        if mixing {
+            let lights = presses
+                .iter()
+                .filter_map(|button| self.services.roto.mix.relight(*button))
+                .collect();
+            self.services.roto.send_ccs(lights);
+            self.meters(now);
+        } else {
+            for button in presses {
+                self.services.roto.view.relight(*button);
+            }
+            self.services.roto.send_lights();
+        }
+        self.transport_lights();
+    }
+
     /// Whether the steps have moved a fader since the Roto was last sent them, at most as often
     /// as the meters are sent, so a glide's motor moves smoothly without flooding the Roto.
-    fn roto_faders_moved(&self, now: Instant) -> bool {
-        self.services.roto.sent_faders != self.roto_faders_shown()
+    fn faders_moved(&self, now: Instant) -> bool {
+        self.services.roto.sent_faders != self.faders_shown()
             && self
                 .services
                 .roto
@@ -668,14 +730,14 @@ impl App {
     }
 
     /// Note the faders as the Roto has just been sent them.
-    fn roto_sent_faders(&mut self, now: Instant) {
-        self.services.roto.sent_faders = self.roto_faders_shown();
+    fn sent_faders(&mut self, now: Instant) {
+        self.services.roto.sent_faders = self.faders_shown();
         self.services.roto.faders_sent = Some(now);
     }
 
     /// Each track's faders where the steps have them, for those they drive: what the Roto's knobs
     /// show that the song doesn't.
-    fn roto_faders_shown(&self) -> Vec<[Option<u16>; FADER_COUNT]> {
+    fn faders_shown(&self) -> Vec<[Option<u16>; FADER_COUNT]> {
         let tracks = self.song().tracks.len().min(self.services.faders.len());
         self.services.faders[..tracks]
             .iter()
@@ -686,22 +748,571 @@ impl App {
     }
 
     /// Sends the Roto everything PLUGIN mode shows: the track list and the track's devices.
-    fn roto_push(&mut self) {
+    fn push(&mut self) {
         let tracks = devices::live_tracks(self.song());
         let mut messages = self
             .services
             .roto
             .tracks
             .show(tracks, self.services.roto.track as u16);
-        messages.extend(self.services.roto.view.show(self.roto_devices()));
+        messages.extend(self.services.roto.view.show(self.devices()));
         self.services.roto.send(messages);
         self.services.roto.sent_song = Some(Arc::clone(self.song()));
+    }
+
+    /// A button of a stored device pressed: its off/on setting switched, as its two-step knob
+    /// on a live device does, on the Roto's track whatever the cursor is on. Its light is sent back
+    /// from the song, so it's lit only once the song has it on. One press is one undo step.
+    fn press(&mut self, button: u8) {
+        let Some(on) = self
+            .services
+            .roto
+            .view
+            .button(button)
+            .map(|switch| switch.is_on())
+        else {
+            return;
+        };
+        let at = self.services.roto.track;
+        let index = self.services.roto.view.index_of(button);
+        let device = usize::from(self.services.roto.view.selected_index());
+        let phrase = self.phrase(at);
+        let control = self.song().tracks.get(at).and_then(|track| {
+            devices::button_at(
+                track,
+                phrase,
+                device,
+                index,
+                self.services.roto.stored_on_roto,
+            )
+        });
+        if let Some(control) = control {
+            let position = if on { 0 } else { KNOB_TOP };
+            if let Some(action) = edits::turned(control, at, self.song(), position) {
+                self.apply(&action);
+            }
+        }
+    }
+
+    /// Takes the stored setups' check when it's done: the devices with buttons are shown as
+    /// vimtracker's stored setups from then on, or live if they couldn't be written.
+    fn poll_sync(&mut self) {
+        let Some(hear) = &self.services.roto.syncing else {
+            return;
+        };
+        let result = match hear.try_recv() {
+            Ok(result) => result,
+            Err(TryRecvError::Empty) => return,
+            Err(TryRecvError::Disconnected) => Err("its thread stopped".to_owned()),
+        };
+        self.services.roto.syncing = None;
+        let was = self.services.roto.stored_on_roto;
+        match result {
+            Ok((synced, versions)) => {
+                if let Some(path) = self.services.roto.versions_path.clone()
+                    && let Err(error) = save_versions(&versions, &path)
+                {
+                    self.services.status =
+                        format!("{}: couldn't be saved: {error}", path.display());
+                }
+                if !synced.written.is_empty() {
+                    self.services.status = format!(
+                        "Roto-Control: wrote {} of vimtracker's setups to it, for its devices' \
+                         buttons",
+                        synced.written.len()
+                    );
+                }
+                self.services.roto.stored_on_roto = true;
+                if (!was || !synced.written.is_empty())
+                    && matches!(self.services.roto.connection, Connection::Connected { .. })
+                {
+                    self.push();
+                }
+            }
+            Err(why) => {
+                self.services.status = format!(
+                    "Roto-Control: buttons need vimtracker's setups on it, which couldn't be \
+                     written, so they're knobs for now: {why}"
+                );
+                self.services.roto.stored_on_roto = false;
+                if was && matches!(self.services.roto.connection, Connection::Connected { .. }) {
+                    self.push();
+                }
+            }
+        }
+    }
+
+    /// The setting on a knob of the page shown, and the track it's on: in MIX mode a fader of a
+    /// track of the bank, or of track focus's track.
+    fn knob(&self, knob: u8) -> Option<(Control, usize)> {
+        if self.services.roto.mode == RotoMode::Mix {
+            let (place, fader) = self.services.roto.mix.knob(knob)?;
+            let at = mix::track_of(self.song(), place)?;
+            return mix::control_of(fader).map(|control| (control, at));
+        }
+        let at = self.services.roto.track;
+        let track = self.song().tracks.get(at)?;
+        let index = self.services.roto.view.index_of(knob);
+        let device = usize::from(self.services.roto.view.selected_index());
+        devices::control_at(
+            track,
+            self.phrase(at),
+            device,
+            index,
+            self.services.roto.stored_on_roto,
+        )
+        .map(|control| (control, at))
+    }
+
+    /// Each knob's last move of the frame as an edit of its own setting, on the Roto's track
+    /// whatever the cursor is on, and its value put up to be shown. Says which knobs moved.
+    fn turn(&mut self, moves: [Option<u16>; CONTROLS], now: Instant) -> [bool; CONTROLS] {
+        let mut turned = [false; CONTROLS];
+        for (knob, position) in moves.into_iter().enumerate() {
+            let Some(position) = position else {
+                continue;
+            };
+            let Some((control, at)) = self.knob(knob as u8) else {
+                continue;
+            };
+            let depth = self.services.history.undo_depth();
+            let gesture = self
+                .services
+                .roto
+                .gesture
+                .get_or_insert(Gesture { depth, last: now });
+            gesture.last = now;
+            // MIX mode's Level knob has a notch of its own, at 0 dB.
+            let action = if self.services.roto.mode == RotoMode::Mix {
+                mix::turned(control, at, self.song(), position)
+            } else {
+                edits::turned(control, at, self.song(), position)
+            };
+            if let Some(action) = action {
+                self.apply(&action);
+            }
+            turned[knob] = true;
+            let text = edits::value_text(control, &self.heard(at), self.song());
+            self.services.roto.show_value(knob as u8, &text);
+        }
+        turned
+    }
+
+    /// An edit from the Roto, which keeps the status line as it was unless it fails.
+    fn apply(&mut self, action: &Action) {
+        let status = std::mem::take(&mut self.services.status);
+        self.services.apply(action);
+        if self.services.status.is_empty() {
+            self.services.status = status;
+        }
+    }
+
+    /// Makes a gesture's edits one undo step, once no knob is touched and the last has settled.
+    fn close_gesture(&mut self, now: Instant) {
+        let Some(gesture) = self.services.roto.gesture else {
+            return;
+        };
+        if self.services.roto.touched.iter().any(|held| *held)
+            || now.duration_since(gesture.last) < self.services.roto.gesture_pause
+        {
+            return;
+        }
+        if self.services.history.undo_depth() > gesture.depth + 1 {
+            self.services.history.squash_to(gesture.depth);
+        }
+        self.services.roto.gesture = None;
+    }
+
+    /// Sends the Roto what changed since it was last sent the song, after an edit from it, the
+    /// keys or an undo: the track list if a track's name or group did, and the devices, with no
+    /// knob moved that's touched or that moved itself. A knob let go goes where its setting is now,
+    /// if the keys moved it meanwhile.
+    fn send_back(&mut self, turned: [bool; CONTROLS], let_go: bool) {
+        if !matches!(self.services.roto.connection, Connection::Connected { .. }) {
+            return;
+        }
+        if self.services.roto.mode == RotoMode::Mix {
+            self.mix_send_back(turned, let_go);
+            return;
+        }
+        let same = self
+            .services
+            .roto
+            .sent_song
+            .as_ref()
+            .is_some_and(|sent| Arc::ptr_eq(sent, self.song()));
+        if same && !let_go && !turned.iter().any(|moved| *moved) {
+            return;
+        }
+        let tracks = devices::live_tracks(self.song());
+        let mut messages = self
+            .services
+            .roto
+            .tracks
+            .update(tracks, self.services.roto.track as u16);
+        let devices = self.devices();
+        let refresh = self
+            .services
+            .roto
+            .view
+            .refresh(devices, self.services.roto.touched, turned);
+        messages.extend(refresh.messages);
+        self.services.roto.send(messages);
+        self.services.roto.move_knobs(&refresh.positions);
+        // A knob moved by the keys, an undo or a song shows its new value as it goes, as one
+        // turned by hand does.
+        for (knob, _) in &refresh.positions {
+            if let Some((control, at)) = self.knob(*knob) {
+                let text = edits::value_text(control, &self.heard(at), self.song());
+                self.services.roto.show_value(*knob, &text);
+            }
+        }
+        self.services.roto.sent_song = Some(Arc::clone(self.song()));
+    }
+
+    fn message(&mut self, message: &FromRoto) {
+        // `SET PLUGIN MODE` between a switch and its choice leaves the switch to be taken back;
+        // anything else ends it.
+        let switched = if matches!(message, FromRoto::SetPluginMode) {
+            None
+        } else {
+            self.services.roto.switched.take()
+        };
+        let recent = |switched: &Switched| switched.at.elapsed() < SELECT_TAKES_BACK;
+        match message {
+            // Holding SEL with its switches up and pressing a device switches it, and then, as
+            // SEL is let go, the real Roto shows that device and asks for its knobs, sometimes
+            // with `ROTO SELECT PLUGIN` and sometimes without. Asked for knobs with no choice of
+            // ours sent, after a switch, it has chosen the device it switched: that's the device
+            // whose knobs it's given, and the switch is taken back.
+            FromRoto::ControlMapped { .. } if switched.as_ref().is_some_and(recent) => {
+                let switched = switched.expect("checked above");
+                self.take_back(&switched);
+                self.services.roto.view.choose(switched.device);
+                let mut messages = self.services.roto.view.push();
+                messages.extend(self.services.roto.view.receive(message));
+                self.services.roto.send(messages);
+                self.services.roto.sent_song = Some(Arc::clone(self.song()));
+            }
+            FromRoto::SetPluginMode => {
+                self.services.roto.mode = RotoMode::Plugin;
+                self.services.roto.transport_buttons = false;
+                // As the song has it now; the Roto answers only what changed.
+                self.push();
+            }
+            FromRoto::SetMixAllTracksMode { .. }
+            | FromRoto::SetMixTrackMode(_)
+            | FromRoto::SetAllTracksMode(_) => {
+                self.services.roto.mode = RotoMode::Mix;
+                self.services.roto.transport_buttons = false;
+                self.mix_message(message);
+            }
+            // In MIX mode the arrows page its banks, and touching a knob chooses its track.
+            FromRoto::SetFirstTrack(_) | FromRoto::RotoSelectTrack(_)
+                if self.services.roto.mode == RotoMode::Mix =>
+            {
+                self.mix_message(message);
+            }
+            FromRoto::RequestSendTrackNames(_) | FromRoto::ToggleTrackGrouping(_) => {
+                self.mix_message(message);
+            }
+            // The transport button: the eight buttons are the transport's until a mode is
+            // chosen, lit as it plays and records.
+            FromRoto::RequestTransportStatus => {
+                self.services.roto.transport_buttons = true;
+                self.services.roto.transport_lights = None;
+                let status = self.transport_status();
+                self.services
+                    .roto
+                    .send(vec![ToRoto::TransportStatus(status)]);
+            }
+            FromRoto::SetFirstTrack(_) | FromRoto::RotoSelectTrack(_) => {
+                let (messages, chosen) = self.services.roto.tracks.receive(message);
+                self.services.roto.send(messages);
+                if let Some(track) = chosen {
+                    self.choose_track(usize::from(track));
+                }
+            }
+            FromRoto::SetPluginEnabled { index, enabled } => {
+                let device = self.services.roto.view.device_for(*index);
+                self.switch_device(usize::from(device), *enabled);
+            }
+            FromRoto::RotoSelectPlugin(index) => {
+                // Choosing a device never switches it too: the switch the Roto sent as its
+                // button went down is taken back.
+                let device = self.services.roto.view.device_for(*index);
+                if let Some(switched) = switched
+                    && switched.device == device
+                    && recent(&switched)
+                {
+                    self.take_back(&switched);
+                }
+                let messages = self.services.roto.view.receive(message);
+                self.services.roto.send(messages);
+                self.services.roto.sent_song = Some(Arc::clone(self.song()));
+            }
+            message => {
+                let messages = self.services.roto.view.receive(message);
+                self.services.roto.send(messages);
+            }
+        }
+    }
+
+    /// Takes back a switch SEL made, leaving no undo step if nothing has changed the song since,
+    /// or switching it back if something has.
+    fn take_back(&mut self, switched: &Switched) {
+        if Arc::ptr_eq(&switched.made, self.song()) && self.services.history.take_back().is_some() {
+            self.services.publish();
+        } else {
+            self.switch_device(usize::from(switched.device), !switched.enabled);
+            self.services.roto.switched = None;
+        }
+        // The devices as they are again, which the choice then sends.
+        let _ = self.services.roto.view.show(self.devices());
+    }
+
+    /// Shows a track's devices on the Roto, chosen on it with FUNC, keeping the device and page
+    /// where they are.
+    fn choose_track(&mut self, track: usize) {
+        if track >= self.song().tracks.len() {
+            return;
+        }
+        self.services.roto.track = track;
+        self.services.roto.gesture = None;
+        let messages = self.services.roto.view.show(self.devices());
+        self.services.roto.send(messages);
+        self.services.roto.sent_song = Some(Arc::clone(self.song()));
+    }
+
+    /// SEL on the Roto switching a device in or out: an FX slot's bypass, or a mod slot's switch,
+    /// as `b` does, on the Roto's track. A device with no switch, or an empty
+    /// slot, stays as it is, and the Roto is shown so again.
+    fn switch_device(&mut self, device: usize, enabled: bool) {
+        let at = self.services.roto.track;
+        let Some(track) = self.song().tracks.get(at).cloned() else {
+            return;
+        };
+        let action = match devices::device_switch(&track, device) {
+            Some(Control::Insert(slot))
+                if track.inserts[slot] != vt_model::insert::Insert::Empty
+                    && track.bypassed[slot] == enabled =>
+            {
+                Some(Action::SetBypass {
+                    track: at,
+                    slot,
+                    bypassed: !enabled,
+                })
+            }
+            Some(Control::Mod(slot, _)) if track.mods[slot].bypassed == enabled => {
+                let mut modulator = track.mods[slot];
+                modulator.bypassed = !enabled;
+                Some(Action::SetMod {
+                    track: at,
+                    slot,
+                    modulator,
+                })
+            }
+            _ => None,
+        };
+        if let Some(action) = action {
+            self.apply(&action);
+            self.services.roto.switched = Some(Switched {
+                device: device as u8,
+                enabled,
+                at: Instant::now(),
+                made: Arc::clone(self.song()),
+            });
+        }
+        // Its state as it is, which a device that can't be switched, or an empty slot, keeps. The
+        // real Roto (firmware 3.3.0) flips the light itself as the button's pressed, and shows
+        // it as sent the next time the list comes up.
+        let messages = self.services.roto.view.show(self.devices());
+        self.services.roto.send(messages);
+        self.services.roto.sent_song = Some(Arc::clone(self.song()));
+    }
+
+    /// Answers one of MIX mode's messages: what its new view shows, and the track the Roto chose
+    /// by touching a knob, which PLUGIN mode then shows the devices of, as Live's selected track
+    /// is both modes'.
+    fn mix_message(&mut self, message: &FromRoto) {
+        let place = mix::place_of(self.song(), self.services.roto.track);
+        self.services.roto.mix.select(place);
+        let lists = mix::strips(self.song(), &self.services.levels, &self.services.faders);
+        let (refresh, chosen) = self
+            .services
+            .roto
+            .mix
+            .receive(message, lists, mix::send_names());
+        self.services.roto.send(refresh.messages.clone());
+        self.services.roto.send_ccs(refresh.ccs());
+        if let Some(place) = chosen
+            && let Some(track) = mix::track_of(self.song(), place)
+        {
+            self.services.roto.track = track;
+        }
+        self.services.roto.sent_song = Some(Arc::clone(self.song()));
+        self.services.roto.sent_levels = self.services.levels.clone();
+    }
+
+    /// Sends MIX mode what changed since it was last sent the song and the mutes and solos: the
+    /// bank's names and colours, the knobs' positions, the buttons' lights and the meters' states,
+    /// with no knob moved that's touched or that moved itself.
+    fn mix_send_back(&mut self, turned: [bool; CONTROLS], let_go: bool) {
+        let same = self
+            .services
+            .roto
+            .sent_song
+            .as_ref()
+            .is_some_and(|sent| Arc::ptr_eq(sent, self.song()))
+            && self.services.roto.sent_levels == self.services.levels;
+        if same && !let_go && !turned.iter().any(|moved| *moved) {
+            return;
+        }
+        let place = mix::place_of(self.song(), self.services.roto.track);
+        self.services.roto.mix.select(place);
+        let lists = mix::strips(self.song(), &self.services.levels, &self.services.faders);
+        let refresh = self.services.roto.mix.refresh(
+            lists,
+            mix::send_names(),
+            self.services.roto.touched,
+            turned,
+        );
+        self.services.roto.send(refresh.messages.clone());
+        self.services.roto.send_ccs(refresh.ccs());
+        // A knob moved by the keys, an undo or a song shows its new value as it goes, as one
+        // turned by hand does.
+        for (knob, _) in &refresh.positions {
+            if let Some((control, at)) = self.knob(*knob) {
+                let text = edits::value_text(control, &self.heard(at), self.song());
+                self.services.roto.show_value(*knob, &text);
+            }
+        }
+        self.services.roto.sent_song = Some(Arc::clone(self.song()));
+        self.services.roto.sent_levels = self.services.levels.clone();
+    }
+
+    /// A button pressed in MIX mode: its track muted or unmuted, or soloed or not, as the keys
+    /// do, on its track whatever the cursor is on. The master can't be either, and arming has no
+    /// meaning yet, so those do nothing.
+    fn mix_press(&mut self, button: u8) {
+        let Some((place, switches)) = self.services.roto.mix.button(button) else {
+            return;
+        };
+        let Some(track) = mix::track_of(self.song(), place) else {
+            return;
+        };
+        if !self
+            .song()
+            .tracks
+            .get(track)
+            .is_some_and(|owner| Control::Mute.exists_on(owner))
+        {
+            return;
+        }
+        match switches {
+            SwitchMode::Mute => self.services.switch_mute(track),
+            SwitchMode::Solo => self.services.switch_solo(track),
+            SwitchMode::Arm => {}
+        }
+    }
+
+    /// The Roto asking for a knob's fader back at its default, as Ableton's script answers it: a
+    /// new track's level, pan or send, as one edit.
+    fn knob_to_default(&mut self, knob: u8) {
+        if self.services.roto.mode != RotoMode::Mix {
+            return;
+        }
+        let Some((control, at)) = self.knob(knob) else {
+            return;
+        };
+        let Some(position) = mix::default_position(control, &self.song().tracks[at], self.song())
+        else {
+            return;
+        };
+        if let Some(action) = mix::turned(control, at, self.song(), position) {
+            self.apply(&action);
+            let text = edits::value_text(control, &self.heard(at), self.song());
+            self.services.roto.show_value(knob, &text);
+        }
+    }
+
+    /// Sends the meters of the tracks MIX mode shows, 12 times a second, each as the mixer page
+    /// draws its peak, and only those that moved.
+    fn meters(&mut self, now: Instant) {
+        if !matches!(self.services.roto.connection, Connection::Connected { .. })
+            || self
+                .services
+                .roto
+                .meters_sent
+                .is_some_and(|sent| now.duration_since(sent) < METERS_EVERY)
+        {
+            return;
+        }
+        self.services.roto.meters_sent = Some(now);
+        let levels: Vec<(u8, [u8; 2])> = self
+            .services
+            .roto
+            .mix
+            .metered()
+            .into_iter()
+            .filter_map(|(meter, place)| {
+                let track = mix::track_of(self.song(), place)?;
+                let reading = self.services.track_meters.get(track)?;
+                Some((meter, mix::meter_levels(reading)))
+            })
+            .collect();
+        let ccs = self.services.roto.mix.meter_ccs(&levels);
+        self.services.roto.send_ccs(ccs);
+    }
+
+    /// The transport's state for its buttons' lights.
+    fn transport_status(&self) -> TransportStatus {
+        TransportStatus {
+            playing: self.services.transport == Transport::Playing,
+            recording: self.recording,
+            ..TransportStatus::default()
+        }
+    }
+
+    /// While the Roto's buttons are its transport's, lights PLAY while playing and RECORD while
+    /// recording, sending only a change.
+    fn transport_lights(&mut self) {
+        if !self.services.roto.transport_buttons {
+            return;
+        }
+        let status = self.transport_status();
+        let lights = (status.playing, status.recording);
+        if self.services.roto.transport_lights == Some(lights) {
+            return;
+        }
+        self.services.roto.transport_lights = Some(lights);
+        let light = |button: u8, lit: bool| {
+            cc::encode(ControlEvent::Transport {
+                index: button,
+                value: if lit { cc::ON } else { cc::OFF },
+            })
+        };
+        let mut ccs = light(PLAY_BUTTON, status.playing);
+        ccs.extend(light(RECORD_BUTTON, status.recording));
+        self.services.roto.send_ccs(ccs);
+    }
+}
+
+impl App {
+    /// The Roto's driver, as things are now.
+    fn roto(&mut self) -> RotoDriver<'_> {
+        let recording = self.recording();
+        RotoDriver {
+            services: &mut self.services,
+            view: self.modes.view,
+            recording,
+        }
     }
 
     /// Takes what the Roto said since the last frame, and answers it: knobs' moves become edits,
     /// one for each knob's last move, and what the song now shows goes back.
     pub(crate) fn tick_roto(&mut self) {
-        self.roto_poll_sync();
+        self.roto().poll_sync();
         // Another vimtracker had the Roto: it's this one's once that one lets it go.
         if self.services.roto.connection == Connection::Taken
             && self
@@ -742,7 +1353,7 @@ impl App {
                     // once in PLUGIN mode and are sent again when PLUGIN mode is chosen, from
                     // the bank the chosen device is in, as a new session has no bank of its own.
                     self.services.roto.view.bank_to_chosen();
-                    self.roto_push();
+                    self.roto().push();
                     // MIX mode's meters turn yellow and red where the app's own do, as
                     // Ableton's script sets its thresholds as it connects.
                     self.services.roto.send(vec![ToRoto::SetVuMeterThresholds {
@@ -768,7 +1379,7 @@ impl App {
                     };
                 }
                 Event::Session(Change::ApiVersion { .. }) => {}
-                Event::Session(Change::Message(message)) => self.roto_message(&message),
+                Event::Session(Change::Message(message)) => self.roto().message(&message),
                 Event::Control(ControlEvent::Knob { index, value }) => {
                     if let Some(slot) = moves.get_mut(usize::from(index)) {
                         *slot = Some(value);
@@ -780,9 +1391,9 @@ impl App {
                     }
                     if touched {
                         // Touching a knob shows what it's set to, as turning it does.
-                        if let Some((control, at)) = self.roto_knob(index) {
+                        if let Some((control, at)) = self.roto().knob(index) {
                             let text =
-                                edits::value_text(control, &self.roto_heard(at), self.song());
+                                edits::value_text(control, &self.roto().heard(at), self.song());
                             self.services.roto.show_value(index, &text);
                         }
                     } else {
@@ -804,545 +1415,12 @@ impl App {
                         self.roto_transport(index);
                     }
                 }
-                Event::Control(ControlEvent::Default { index }) => self.roto_default(index),
-            }
-        }
-        let mixing = self.services.roto.mode == RotoMode::Mix;
-        for button in &presses {
-            if mixing {
-                self.roto_mix_press(*button);
-            } else {
-                self.roto_press(*button);
-            }
-        }
-        let turned = self.roto_turn(moves, now);
-        self.roto_close_gesture(now);
-        let faders_moved = self.roto_faders_moved(now);
-        self.roto_send_back(turned, let_go || faders_moved);
-        if faders_moved {
-            self.roto_sent_faders(now);
-        }
-        self.services.roto.send_values(now);
-        // A button pressed is lit as its setting now is, whatever the Roto drew as it went down.
-        if mixing {
-            let lights = presses
-                .into_iter()
-                .filter_map(|button| self.services.roto.mix.relight(button))
-                .collect();
-            self.services.roto.send_ccs(lights);
-            self.roto_meters(now);
-        } else {
-            for button in presses {
-                self.services.roto.view.relight(button);
-            }
-            self.services.roto.send_lights();
-        }
-        self.roto_transport_lights();
-    }
-
-    /// A button of a stored device pressed: its off/on setting switched, as its two-step knob
-    /// on a live device does, on the Roto's track whatever the cursor is on. Its light is sent back
-    /// from the song, so it's lit only once the song has it on. One press is one undo step.
-    fn roto_press(&mut self, button: u8) {
-        let Some(on) = self
-            .services
-            .roto
-            .view
-            .button(button)
-            .map(|switch| switch.is_on())
-        else {
-            return;
-        };
-        let at = self.services.roto.track;
-        let index = self.services.roto.view.index_of(button);
-        let device = usize::from(self.services.roto.view.selected_index());
-        let phrase = self.roto_phrase(at);
-        let control = self.song().tracks.get(at).and_then(|track| {
-            devices::button_at(
-                track,
-                phrase,
-                device,
-                index,
-                self.services.roto.stored_on_roto,
-            )
-        });
-        if let Some(control) = control {
-            let position = if on { 0 } else { KNOB_TOP };
-            if let Some(action) = edits::turned(control, at, self.song(), position) {
-                self.roto_apply(&action);
-            }
-        }
-    }
-
-    /// Takes the stored setups' check when it's done: the devices with buttons are shown as
-    /// vimtracker's stored setups from then on, or live if they couldn't be written.
-    fn roto_poll_sync(&mut self) {
-        let Some(hear) = &self.services.roto.syncing else {
-            return;
-        };
-        let result = match hear.try_recv() {
-            Ok(result) => result,
-            Err(TryRecvError::Empty) => return,
-            Err(TryRecvError::Disconnected) => Err("its thread stopped".to_owned()),
-        };
-        self.services.roto.syncing = None;
-        let was = self.services.roto.stored_on_roto;
-        match result {
-            Ok((synced, versions)) => {
-                if let Some(path) = self.services.roto.versions_path.clone()
-                    && let Err(error) = save_versions(&versions, &path)
-                {
-                    self.services.status =
-                        format!("{}: couldn't be saved: {error}", path.display());
-                }
-                if !synced.written.is_empty() {
-                    self.services.status = format!(
-                        "Roto-Control: wrote {} of vimtracker's setups to it, for its devices' \
-                         buttons",
-                        synced.written.len()
-                    );
-                }
-                self.services.roto.stored_on_roto = true;
-                if (!was || !synced.written.is_empty())
-                    && matches!(self.services.roto.connection, Connection::Connected { .. })
-                {
-                    self.roto_push();
-                }
-            }
-            Err(why) => {
-                self.services.status = format!(
-                    "Roto-Control: buttons need vimtracker's setups on it, which couldn't be \
-                     written, so they're knobs for now: {why}"
-                );
-                self.services.roto.stored_on_roto = false;
-                if was && matches!(self.services.roto.connection, Connection::Connected { .. }) {
-                    self.roto_push();
+                Event::Control(ControlEvent::Default { index }) => {
+                    self.roto().knob_to_default(index)
                 }
             }
         }
-    }
-
-    /// The setting on a knob of the page shown, and the track it's on: in MIX mode a fader of a
-    /// track of the bank, or of track focus's track.
-    fn roto_knob(&self, knob: u8) -> Option<(Control, usize)> {
-        if self.services.roto.mode == RotoMode::Mix {
-            let (place, fader) = self.services.roto.mix.knob(knob)?;
-            let at = mix::track_of(self.song(), place)?;
-            return mix::control_of(fader).map(|control| (control, at));
-        }
-        let at = self.services.roto.track;
-        let track = self.song().tracks.get(at)?;
-        let index = self.services.roto.view.index_of(knob);
-        let device = usize::from(self.services.roto.view.selected_index());
-        devices::control_at(
-            track,
-            self.roto_phrase(at),
-            device,
-            index,
-            self.services.roto.stored_on_roto,
-        )
-        .map(|control| (control, at))
-    }
-
-    /// Each knob's last move of the frame as an edit of its own setting, on the Roto's track
-    /// whatever the cursor is on, and its value put up to be shown. Says which knobs moved.
-    fn roto_turn(&mut self, moves: [Option<u16>; CONTROLS], now: Instant) -> [bool; CONTROLS] {
-        let mut turned = [false; CONTROLS];
-        for (knob, position) in moves.into_iter().enumerate() {
-            let Some(position) = position else {
-                continue;
-            };
-            let Some((control, at)) = self.roto_knob(knob as u8) else {
-                continue;
-            };
-            let depth = self.services.history.undo_depth();
-            let gesture = self
-                .services
-                .roto
-                .gesture
-                .get_or_insert(Gesture { depth, last: now });
-            gesture.last = now;
-            // MIX mode's Level knob has a notch of its own, at 0 dB.
-            let action = if self.services.roto.mode == RotoMode::Mix {
-                mix::turned(control, at, self.song(), position)
-            } else {
-                edits::turned(control, at, self.song(), position)
-            };
-            if let Some(action) = action {
-                self.roto_apply(&action);
-            }
-            turned[knob] = true;
-            let text = edits::value_text(control, &self.roto_heard(at), self.song());
-            self.services.roto.show_value(knob as u8, &text);
-        }
-        turned
-    }
-
-    /// An edit from the Roto, which keeps the status line as it was unless it fails.
-    fn roto_apply(&mut self, action: &Action) {
-        let status = std::mem::take(&mut self.services.status);
-        self.services.apply(action);
-        if self.services.status.is_empty() {
-            self.services.status = status;
-        }
-    }
-
-    /// Makes a gesture's edits one undo step, once no knob is touched and the last has settled.
-    fn roto_close_gesture(&mut self, now: Instant) {
-        let Some(gesture) = self.services.roto.gesture else {
-            return;
-        };
-        if self.services.roto.touched.iter().any(|held| *held)
-            || now.duration_since(gesture.last) < self.services.roto.gesture_pause
-        {
-            return;
-        }
-        if self.services.history.undo_depth() > gesture.depth + 1 {
-            self.services.history.squash_to(gesture.depth);
-        }
-        self.services.roto.gesture = None;
-    }
-
-    /// Sends the Roto what changed since it was last sent the song, after an edit from it, the
-    /// keys or an undo: the track list if a track's name or group did, and the devices, with no
-    /// knob moved that's touched or that moved itself. A knob let go goes where its setting is now,
-    /// if the keys moved it meanwhile.
-    fn roto_send_back(&mut self, turned: [bool; CONTROLS], let_go: bool) {
-        if !matches!(self.services.roto.connection, Connection::Connected { .. }) {
-            return;
-        }
-        if self.services.roto.mode == RotoMode::Mix {
-            self.roto_mix_send_back(turned, let_go);
-            return;
-        }
-        let same = self
-            .services
-            .roto
-            .sent_song
-            .as_ref()
-            .is_some_and(|sent| Arc::ptr_eq(sent, self.song()));
-        if same && !let_go && !turned.iter().any(|moved| *moved) {
-            return;
-        }
-        let tracks = devices::live_tracks(self.song());
-        let mut messages = self
-            .services
-            .roto
-            .tracks
-            .update(tracks, self.services.roto.track as u16);
-        let devices = self.roto_devices();
-        let refresh = self
-            .services
-            .roto
-            .view
-            .refresh(devices, self.services.roto.touched, turned);
-        messages.extend(refresh.messages);
-        self.services.roto.send(messages);
-        self.services.roto.move_knobs(&refresh.positions);
-        // A knob moved by the keys, an undo or a song shows its new value as it goes, as one
-        // turned by hand does.
-        for (knob, _) in &refresh.positions {
-            if let Some((control, at)) = self.roto_knob(*knob) {
-                let text = edits::value_text(control, &self.roto_heard(at), self.song());
-                self.services.roto.show_value(*knob, &text);
-            }
-        }
-        self.services.roto.sent_song = Some(Arc::clone(self.song()));
-    }
-
-    fn roto_message(&mut self, message: &FromRoto) {
-        // `SET PLUGIN MODE` between a switch and its choice leaves the switch to be taken back;
-        // anything else ends it.
-        let switched = if matches!(message, FromRoto::SetPluginMode) {
-            None
-        } else {
-            self.services.roto.switched.take()
-        };
-        let recent = |switched: &Switched| switched.at.elapsed() < SELECT_TAKES_BACK;
-        match message {
-            // Holding SEL with its switches up and pressing a device switches it, and then, as
-            // SEL is let go, the real Roto shows that device and asks for its knobs, sometimes
-            // with `ROTO SELECT PLUGIN` and sometimes without. Asked for knobs with no choice of
-            // ours sent, after a switch, it has chosen the device it switched: that's the device
-            // whose knobs it's given, and the switch is taken back.
-            FromRoto::ControlMapped { .. } if switched.as_ref().is_some_and(recent) => {
-                let switched = switched.expect("checked above");
-                self.roto_take_back(&switched);
-                self.services.roto.view.choose(switched.device);
-                let mut messages = self.services.roto.view.push();
-                messages.extend(self.services.roto.view.receive(message));
-                self.services.roto.send(messages);
-                self.services.roto.sent_song = Some(Arc::clone(self.song()));
-            }
-            FromRoto::SetPluginMode => {
-                self.services.roto.mode = RotoMode::Plugin;
-                self.services.roto.transport_buttons = false;
-                // As the song has it now; the Roto answers only what changed.
-                self.roto_push();
-            }
-            FromRoto::SetMixAllTracksMode { .. }
-            | FromRoto::SetMixTrackMode(_)
-            | FromRoto::SetAllTracksMode(_) => {
-                self.services.roto.mode = RotoMode::Mix;
-                self.services.roto.transport_buttons = false;
-                self.roto_mix_message(message);
-            }
-            // In MIX mode the arrows page its banks, and touching a knob chooses its track.
-            FromRoto::SetFirstTrack(_) | FromRoto::RotoSelectTrack(_)
-                if self.services.roto.mode == RotoMode::Mix =>
-            {
-                self.roto_mix_message(message);
-            }
-            FromRoto::RequestSendTrackNames(_) | FromRoto::ToggleTrackGrouping(_) => {
-                self.roto_mix_message(message);
-            }
-            // The transport button: the eight buttons are the transport's until a mode is
-            // chosen, lit as it plays and records.
-            FromRoto::RequestTransportStatus => {
-                self.services.roto.transport_buttons = true;
-                self.services.roto.transport_lights = None;
-                let status = self.roto_transport_status();
-                self.services
-                    .roto
-                    .send(vec![ToRoto::TransportStatus(status)]);
-            }
-            FromRoto::SetFirstTrack(_) | FromRoto::RotoSelectTrack(_) => {
-                let (messages, chosen) = self.services.roto.tracks.receive(message);
-                self.services.roto.send(messages);
-                if let Some(track) = chosen {
-                    self.roto_choose_track(usize::from(track));
-                }
-            }
-            FromRoto::SetPluginEnabled { index, enabled } => {
-                let device = self.services.roto.view.device_for(*index);
-                self.roto_switch_device(usize::from(device), *enabled);
-            }
-            FromRoto::RotoSelectPlugin(index) => {
-                // Choosing a device never switches it too: the switch the Roto sent as its
-                // button went down is taken back.
-                let device = self.services.roto.view.device_for(*index);
-                if let Some(switched) = switched
-                    && switched.device == device
-                    && recent(&switched)
-                {
-                    self.roto_take_back(&switched);
-                }
-                let messages = self.services.roto.view.receive(message);
-                self.services.roto.send(messages);
-                self.services.roto.sent_song = Some(Arc::clone(self.song()));
-            }
-            message => {
-                let messages = self.services.roto.view.receive(message);
-                self.services.roto.send(messages);
-            }
-        }
-    }
-
-    /// Takes back a switch SEL made, leaving no undo step if nothing has changed the song since,
-    /// or switching it back if something has.
-    fn roto_take_back(&mut self, switched: &Switched) {
-        if Arc::ptr_eq(&switched.made, self.song()) && self.services.history.take_back().is_some() {
-            self.services.publish();
-        } else {
-            self.roto_switch_device(usize::from(switched.device), !switched.enabled);
-            self.services.roto.switched = None;
-        }
-        // The devices as they are again, which the choice then sends.
-        let _ = self.services.roto.view.show(self.roto_devices());
-    }
-
-    /// Shows a track's devices on the Roto, chosen on it with FUNC, keeping the device and page
-    /// where they are.
-    fn roto_choose_track(&mut self, track: usize) {
-        if track >= self.song().tracks.len() {
-            return;
-        }
-        self.services.roto.track = track;
-        self.services.roto.gesture = None;
-        let messages = self.services.roto.view.show(self.roto_devices());
-        self.services.roto.send(messages);
-        self.services.roto.sent_song = Some(Arc::clone(self.song()));
-    }
-
-    /// SEL on the Roto switching a device in or out: an FX slot's bypass, or a mod slot's switch,
-    /// as `b` does, on the Roto's track. A device with no switch, or an empty
-    /// slot, stays as it is, and the Roto is shown so again.
-    fn roto_switch_device(&mut self, device: usize, enabled: bool) {
-        let at = self.services.roto.track;
-        let Some(track) = self.song().tracks.get(at).cloned() else {
-            return;
-        };
-        let action = match devices::device_switch(&track, device) {
-            Some(Control::Insert(slot))
-                if track.inserts[slot] != vt_model::insert::Insert::Empty
-                    && track.bypassed[slot] == enabled =>
-            {
-                Some(Action::SetBypass {
-                    track: at,
-                    slot,
-                    bypassed: !enabled,
-                })
-            }
-            Some(Control::Mod(slot, _)) if track.mods[slot].bypassed == enabled => {
-                let mut modulator = track.mods[slot];
-                modulator.bypassed = !enabled;
-                Some(Action::SetMod {
-                    track: at,
-                    slot,
-                    modulator,
-                })
-            }
-            _ => None,
-        };
-        if let Some(action) = action {
-            self.roto_apply(&action);
-            self.services.roto.switched = Some(Switched {
-                device: device as u8,
-                enabled,
-                at: Instant::now(),
-                made: Arc::clone(self.song()),
-            });
-        }
-        // Its state as it is, which a device that can't be switched, or an empty slot, keeps. The
-        // real Roto (firmware 3.3.0) flips the light itself as the button's pressed, and shows
-        // it as sent the next time the list comes up.
-        let messages = self.services.roto.view.show(self.roto_devices());
-        self.services.roto.send(messages);
-        self.services.roto.sent_song = Some(Arc::clone(self.song()));
-    }
-
-    /// Answers one of MIX mode's messages: what its new view shows, and the track the Roto chose
-    /// by touching a knob, which PLUGIN mode then shows the devices of, as Live's selected track
-    /// is both modes'.
-    fn roto_mix_message(&mut self, message: &FromRoto) {
-        let place = mix::place_of(self.song(), self.services.roto.track);
-        self.services.roto.mix.select(place);
-        let lists = mix::strips(self.song(), &self.services.levels, &self.services.faders);
-        let (refresh, chosen) = self
-            .services
-            .roto
-            .mix
-            .receive(message, lists, mix::send_names());
-        self.services.roto.send(refresh.messages.clone());
-        self.services.roto.send_ccs(refresh.ccs());
-        if let Some(place) = chosen
-            && let Some(track) = mix::track_of(self.song(), place)
-        {
-            self.services.roto.track = track;
-        }
-        self.services.roto.sent_song = Some(Arc::clone(self.song()));
-        self.services.roto.sent_levels = self.services.levels.clone();
-    }
-
-    /// Sends MIX mode what changed since it was last sent the song and the mutes and solos: the
-    /// bank's names and colours, the knobs' positions, the buttons' lights and the meters' states,
-    /// with no knob moved that's touched or that moved itself.
-    fn roto_mix_send_back(&mut self, turned: [bool; CONTROLS], let_go: bool) {
-        let same = self
-            .services
-            .roto
-            .sent_song
-            .as_ref()
-            .is_some_and(|sent| Arc::ptr_eq(sent, self.song()))
-            && self.services.roto.sent_levels == self.services.levels;
-        if same && !let_go && !turned.iter().any(|moved| *moved) {
-            return;
-        }
-        let place = mix::place_of(self.song(), self.services.roto.track);
-        self.services.roto.mix.select(place);
-        let lists = mix::strips(self.song(), &self.services.levels, &self.services.faders);
-        let refresh = self.services.roto.mix.refresh(
-            lists,
-            mix::send_names(),
-            self.services.roto.touched,
-            turned,
-        );
-        self.services.roto.send(refresh.messages.clone());
-        self.services.roto.send_ccs(refresh.ccs());
-        // A knob moved by the keys, an undo or a song shows its new value as it goes, as one
-        // turned by hand does.
-        for (knob, _) in &refresh.positions {
-            if let Some((control, at)) = self.roto_knob(*knob) {
-                let text = edits::value_text(control, &self.roto_heard(at), self.song());
-                self.services.roto.show_value(*knob, &text);
-            }
-        }
-        self.services.roto.sent_song = Some(Arc::clone(self.song()));
-        self.services.roto.sent_levels = self.services.levels.clone();
-    }
-
-    /// A button pressed in MIX mode: its track muted or unmuted, or soloed or not, as the keys
-    /// do, on its track whatever the cursor is on. The master can't be either, and arming has no
-    /// meaning yet, so those do nothing.
-    fn roto_mix_press(&mut self, button: u8) {
-        let Some((place, switches)) = self.services.roto.mix.button(button) else {
-            return;
-        };
-        let Some(track) = mix::track_of(self.song(), place) else {
-            return;
-        };
-        if !self
-            .song()
-            .tracks
-            .get(track)
-            .is_some_and(|owner| Control::Mute.exists_on(owner))
-        {
-            return;
-        }
-        match switches {
-            SwitchMode::Mute => self.services.switch_mute(track),
-            SwitchMode::Solo => self.services.switch_solo(track),
-            SwitchMode::Arm => {}
-        }
-    }
-
-    /// The Roto asking for a knob's fader back at its default, as Ableton's script answers it: a
-    /// new track's level, pan or send, as one edit.
-    fn roto_default(&mut self, knob: u8) {
-        if self.services.roto.mode != RotoMode::Mix {
-            return;
-        }
-        let Some((control, at)) = self.roto_knob(knob) else {
-            return;
-        };
-        let Some(position) = mix::default_position(control, &self.song().tracks[at], self.song())
-        else {
-            return;
-        };
-        if let Some(action) = mix::turned(control, at, self.song(), position) {
-            self.roto_apply(&action);
-            let text = edits::value_text(control, &self.roto_heard(at), self.song());
-            self.services.roto.show_value(knob, &text);
-        }
-    }
-
-    /// Sends the meters of the tracks MIX mode shows, 12 times a second, each as the mixer page
-    /// draws its peak, and only those that moved.
-    fn roto_meters(&mut self, now: Instant) {
-        if !matches!(self.services.roto.connection, Connection::Connected { .. })
-            || self
-                .services
-                .roto
-                .meters_sent
-                .is_some_and(|sent| now.duration_since(sent) < METERS_EVERY)
-        {
-            return;
-        }
-        self.services.roto.meters_sent = Some(now);
-        let levels: Vec<(u8, [u8; 2])> = self
-            .services
-            .roto
-            .mix
-            .metered()
-            .into_iter()
-            .filter_map(|(meter, place)| {
-                let track = mix::track_of(self.song(), place)?;
-                let reading = self.services.track_meters.get(track)?;
-                Some((meter, mix::meter_levels(reading)))
-            })
-            .collect();
-        let ccs = self.services.roto.mix.meter_ccs(&levels);
-        self.services.roto.send_ccs(ccs);
+        self.roto().answer(&presses, moves, let_go, now);
     }
 
     /// One of the Roto's transport buttons pressed: PLAY plays from where it stopped, STOP pauses
@@ -1362,38 +1440,6 @@ impl App {
             RECORD_BUTTON => self.toggle_recording(),
             _ => {}
         }
-    }
-
-    /// The transport's state for its buttons' lights.
-    fn roto_transport_status(&self) -> TransportStatus {
-        TransportStatus {
-            playing: self.services.transport == Transport::Playing,
-            recording: self.recording(),
-            ..TransportStatus::default()
-        }
-    }
-
-    /// While the Roto's buttons are its transport's, lights PLAY while playing and RECORD while
-    /// recording, sending only a change.
-    fn roto_transport_lights(&mut self) {
-        if !self.services.roto.transport_buttons {
-            return;
-        }
-        let status = self.roto_transport_status();
-        let lights = (status.playing, status.recording);
-        if self.services.roto.transport_lights == Some(lights) {
-            return;
-        }
-        self.services.roto.transport_lights = Some(lights);
-        let light = |button: u8, lit: bool| {
-            cc::encode(ControlEvent::Transport {
-                index: button,
-                value: if lit { cc::ON } else { cc::OFF },
-            })
-        };
-        let mut ccs = light(PLAY_BUTTON, status.playing);
-        ccs.extend(light(RECORD_BUTTON, status.recording));
-        self.services.roto.send_ccs(ccs);
     }
 }
 
