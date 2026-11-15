@@ -19,6 +19,7 @@ use vt_model::insert::{
 use vt_model::lfo::SWEEP_TICKS;
 
 use crate::dsp::blocks::clip::within;
+use crate::dsp::blocks::line::StereoLine;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::{Rung, SlotEffect};
@@ -45,9 +46,7 @@ fn triangle(turns: f32) -> f32 {
 /// A flanger's delay lines and sweep.
 #[derive(Debug, Clone)]
 pub(crate) struct Flanger {
-    lines: [Vec<f32>; 2],
-    mask: usize,
-    write: usize,
+    line: StereoLine,
     /// Where the sweep is, in turns, and how far it goes each frame.
     phase: f32,
     step: f32,
@@ -74,9 +73,7 @@ impl Flanger {
         let longest = (2.0 * LONGEST_FLANGE_MS - SHORTEST_FLANGE_MS) * frames_per_ms;
         let size = (longest.ceil() as usize + 4).next_power_of_two();
         let mut flanger = Self {
-            lines: [vec![0.0; size], vec![0.0; size]],
-            mask: size - 1,
-            write: 0,
+            line: StereoLine::new(size),
             phase: 0.0,
             step: 0.0,
             depth: Smoothed::default(),
@@ -95,13 +92,11 @@ impl Flanger {
 
     /// The longest anything stays in it, in frames.
     pub(crate) fn frames(&self) -> usize {
-        self.mask + 1
+        self.line.frames()
     }
 
     pub(crate) fn clear(&mut self) {
-        for line in &mut self.lines {
-            line.fill(0.0);
-        }
+        self.line.clear();
         self.phase = 0.0;
         self.blocked = [[0.0; 2]; 2];
     }
@@ -130,20 +125,10 @@ impl Flanger {
     /// A line's sound a number of frames back, read between samples through four of them.
     #[inline]
     fn read(&self, side: usize, frames: f32) -> f32 {
-        let frames = frames.clamp(2.0, (self.mask - 2) as f32);
+        let frames = frames.clamp(2.0, (self.line.mask() - 2) as f32);
         let whole = frames as usize;
         let between = frames - whole as f32;
-        let line = &self.lines[side];
-        let at = |back: usize| line[self.write.wrapping_sub(back) & self.mask];
-        let (newer, current, older, oldest) =
-            (at(whole - 1), at(whole), at(whole + 1), at(whole + 2));
-        // A cubic through the four, after Hermite, so a whole number of frames reads exactly.
-        let slope_in = (older - newer) * 0.5;
-        let slope_out = (oldest - current) * 0.5;
-        let difference = current - older;
-        let bend = difference + slope_in;
-        let lift = bend + difference + slope_out;
-        ((lift * between - bend - lift) * between + slope_in) * between + current
+        self.line.hermite(side, whole, between)
     }
 
     /// Feed one frame in and get the delayed sound out, all wet.
@@ -164,7 +149,7 @@ impl Flanger {
             // What's just come in isn't in the line yet, so the newest there is a frame back.
             *read = self.read(side, swept - 1.0);
         }
-        self.write = (self.write + 1) & self.mask;
+        self.line.advance();
         for (side, sample) in input.into_iter().enumerate() {
             // What goes round loses its DC, as the BBD ensemble's and the spring's loops do in
             // Surge (`BBDEnsembleEffect.cpp:273-275`); what comes out keeps it. It's held to twice
@@ -175,7 +160,7 @@ impl Flanger {
             let blocked = read - *came + self.keep * *went;
             (*came, *went) = (read, blocked);
             let fed = sample + blocked * feedback;
-            self.lines[side][self.write] = soft_clip(fed / HEADROOM) * HEADROOM;
+            self.line.write(side, soft_clip(fed / HEADROOM) * HEADROOM);
         }
         out
     }
@@ -428,7 +413,7 @@ mod tests {
             ..Settings::DEFAULT
         });
         flanger.process([0.5; 2]);
-        flanger.lines[0][flanger.write] = f32::NAN;
+        flanger.line.write(0, f32::NAN);
         // Past the longest it reads back, it's only what went round, held to the clip's end.
         let longest = (LONGEST_FLANGE_MS * 2.0 / 1000.0 * RATE as f32) as usize;
         let out: Vec<f32> = (0..RATE * 10)

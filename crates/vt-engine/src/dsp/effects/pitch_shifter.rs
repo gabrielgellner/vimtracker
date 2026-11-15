@@ -32,6 +32,7 @@ use vt_model::insert::{
     LONGEST_GRAIN_MS, Pitch as Settings, SHORTEST_GRAIN_MS, fine_cents, grain_ms, shift_semitones,
 };
 
+use crate::dsp::blocks::line::StereoLine;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::{Rung, SlotEffect};
@@ -46,9 +47,7 @@ const HEADROOM: f32 = 4.0;
 /// A pitch shifter's lines and grains.
 #[derive(Debug, Clone)]
 pub(crate) struct PitchShifter {
-    lines: [Vec<f32>; 2],
-    mask: usize,
-    write: usize,
+    line: StereoLine,
     /// Where the first grain is across its window, from 0 to 1. The second is half a turn on.
     phase: f32,
     /// How far it shifts, in semitones.
@@ -73,9 +72,7 @@ impl PitchShifter {
         let longest = LONGEST_GRAIN_MS * frames_per_ms;
         let size = (longest.ceil() as usize + 4).next_power_of_two();
         let mut shifter = Self {
-            lines: [vec![0.0; size], vec![0.0; size]],
-            mask: size - 1,
-            write: 0,
+            line: StereoLine::new(size),
             phase: 0.0,
             semitones: Smoothed::default(),
             window: Smoothed::default(),
@@ -94,13 +91,11 @@ impl PitchShifter {
 
     /// The longest anything stays in it, in frames.
     pub(crate) fn frames(&self) -> usize {
-        self.mask + 1
+        self.line.frames()
     }
 
     pub(crate) fn clear(&mut self) {
-        for line in &mut self.lines {
-            line.fill(0.0);
-        }
+        self.line.clear();
         self.last = [0.0; 2];
         self.phase = 0.0;
     }
@@ -133,20 +128,10 @@ impl PitchShifter {
     /// newest, just written, is none back.
     #[inline]
     fn read(&self, side: usize, frames: f32) -> f32 {
-        let frames = frames.clamp(1.0, (self.mask - 2) as f32);
+        let frames = frames.clamp(1.0, (self.line.mask() - 2) as f32);
         let whole = frames as usize;
         let between = frames - whole as f32;
-        let line = &self.lines[side];
-        let at = |back: usize| line[self.write.wrapping_sub(back) & self.mask];
-        let (newer, current, older, oldest) =
-            (at(whole - 1), at(whole), at(whole + 1), at(whole + 2));
-        // A cubic through the four, after Hermite, so a whole number of frames reads exactly.
-        let slope_in = (older - newer) * 0.5;
-        let slope_out = (oldest - current) * 0.5;
-        let difference = current - older;
-        let bend = difference + slope_in;
-        let lift = bend + difference + slope_out;
-        ((lift * between - bend - lift) * between + slope_in) * between + current
+        self.line.hermite(side, whole, between)
     }
 
     /// Feed one frame in and get the shifted sound out, all wet.
@@ -173,11 +158,11 @@ impl PitchShifter {
             second -= window;
         }
 
-        self.write = (self.write + 1) & self.mask;
+        self.line.advance();
         let mut out = [0.0; 2];
         for (side, sample) in input.into_iter().enumerate() {
             let fed = sample + self.last[side] * feedback;
-            self.lines[side][self.write] = soft_clip(fed / HEADROOM) * HEADROOM;
+            self.line.write(side, soft_clip(fed / HEADROOM) * HEADROOM);
             out[side] = self.read(side, first) * fade + self.read(side, second) * (1.0 - fade);
         }
         self.last = out;
@@ -558,12 +543,12 @@ mod tests {
             RATE,
         );
         shifter.process([0.5; 2]);
-        shifter.lines[0][shifter.write] = f32::NAN;
+        shifter.line.write(0, f32::NAN);
         // Past its longest window, it's only what went round, held to the clip's end.
         let out: Vec<f32> = (0..RATE * 10)
             .flat_map(|_| shifter.process([0.0; 2]))
             .collect();
-        let window = shifter.lines[0].len();
+        let window = shifter.line.frames();
         assert!(out[window * 2..].iter().all(|s| s.is_finite()));
         assert!(out[out.len() - 100..].iter().all(|s| s.abs() < 1e-4));
     }

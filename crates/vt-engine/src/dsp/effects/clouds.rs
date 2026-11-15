@@ -41,6 +41,7 @@ use std::f32::consts::{FRAC_1_SQRT_2, FRAC_PI_2, PI, SQRT_2};
 
 use vt_model::insert::{Clouds as Settings, CloudsMode, shift_semitones};
 
+use crate::dsp::blocks::line::hermite_soras;
 use crate::dsp::blocks::plaits_parts::{Svf, soft_limit};
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::SongPlace;
@@ -319,16 +320,13 @@ impl Recording {
     /// the module reads.
     #[inline]
     fn hermite(&self, side: usize, index: usize, t: f32) -> f32 {
-        let xm1 = self.at(side, index);
-        let x0 = self.at(side, index + 1);
-        let x1 = self.at(side, index + 2);
-        let x2 = self.at(side, index + 3);
-        let c = (x1 - xm1) * 0.5;
-        let v = x0 - x1;
-        let w = c + v;
-        let a = w + v + (x2 - x0) * 0.5;
-        let b_neg = w + a;
-        (((a * t) - b_neg) * t + c) * t + x0
+        hermite_soras(
+            self.at(side, index),
+            self.at(side, index + 1),
+            self.at(side, index + 2),
+            self.at(side, index + 3),
+            t,
+        )
     }
 }
 

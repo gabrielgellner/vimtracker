@@ -43,6 +43,7 @@ use std::f32::consts::{PI, TAU};
 use vt_model::insert::{Tape as Settings, from_middle, tape_drive_db};
 
 use crate::dsp::blocks::clip::within;
+use crate::dsp::blocks::line::StereoLine;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::{Rung, SlotEffect};
@@ -468,9 +469,7 @@ impl Wobble {
 #[derive(Debug, Clone)]
 pub(crate) struct Tape {
     sides: [Side; 2],
-    lines: [Vec<f32>; 2],
-    mask: usize,
-    write: usize,
+    line: StereoLine,
     wobble: Wobble,
     at: usize,
     drive: Smoothed,
@@ -497,9 +496,7 @@ impl Tape {
         let bump = BUMP_HZ / rate as f32;
         let mut tape = Self {
             sides: [Side::default(); 2],
-            lines: [vec![0.0; size], vec![0.0; size]],
-            mask: size - 1,
-            write: 0,
+            line: StereoLine::new(size),
             wobble: Wobble::new(rate),
             at: 0,
             drive: Smoothed::default(),
@@ -526,7 +523,7 @@ impl Tape {
 
     /// The longest anything stays in its line, in frames.
     pub(crate) fn frames(&self) -> usize {
-        self.mask + 1
+        self.line.frames()
     }
 
     /// How many quiet frames in a row mean nothing's left in it: its line, and a tenth of a second
@@ -536,9 +533,7 @@ impl Tape {
     }
 
     pub(crate) fn clear(&mut self) {
-        for line in &mut self.lines {
-            line.fill(0.0);
-        }
+        self.line.clear();
         self.sides = [Side::default(); 2];
         self.wobble = Wobble::new(self.rate);
         self.at = 0;
@@ -612,20 +607,10 @@ impl Tape {
     /// A line's sound a number of frames back, read between samples through four of them.
     #[inline]
     fn read(&self, side: usize, frames: f32) -> f32 {
-        let frames = frames.clamp(1.0, (self.mask - 3) as f32);
+        let frames = frames.clamp(1.0, (self.line.mask() - 3) as f32);
         let whole = frames as usize;
         let between = frames - whole as f32;
-        let line = &self.lines[side];
-        let at = |back: usize| line[self.write.wrapping_sub(back) & self.mask];
-        let (newer, current, older, oldest) =
-            (at(whole - 1), at(whole), at(whole + 1), at(whole + 2));
-        // A cubic through the four, after Hermite, so a whole number of frames reads exactly.
-        let slope_in = (older - newer) * 0.5;
-        let slope_out = (oldest - current) * 0.5;
-        let difference = current - older;
-        let bend = difference + slope_in;
-        let lift = bend + difference + slope_out;
-        ((lift * between - bend - lift) * between + slope_in) * between + current
+        self.line.hermite(side, whole, between)
     }
 
     /// One frame through the tape, all wet.
@@ -636,11 +621,11 @@ impl Tape {
         let flutter = self.flutter.next(self.smoothing);
         let frame = self.frame();
         let delay = self.wobble.next(wow, flutter, self.rate);
-        self.write = (self.write + 1) & self.mask;
+        self.line.advance();
         let mut out = [0.0; 2];
         for (side, sample) in input.into_iter().enumerate() {
             let encoded = self.sides[side].before_line(sample * drive, &frame, &self.fixed);
-            self.lines[side][self.write] = encoded;
+            self.line.write(side, encoded);
             let wobbled = self.read(side, delay);
             out[side] = self.sides[side].after_line(wobbled, &frame, &self.fixed);
         }

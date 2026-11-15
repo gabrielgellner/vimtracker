@@ -26,6 +26,7 @@ use std::f32::consts::{FRAC_1_SQRT_2, TAU};
 use vt_model::insert::{FAST_SPEED, Rotary as Settings};
 
 use crate::dsp::blocks::clip::within;
+use crate::dsp::blocks::line::Lines;
 use crate::dsp::blocks::sine_table::SINE;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::SongPlace;
@@ -142,9 +143,7 @@ impl Ramp {
 #[derive(Debug, Clone)]
 pub(crate) struct Rotary {
     /// What goes to the horn, read back at each microphone's distance.
-    line: Vec<f32>,
-    mask: usize,
-    write: usize,
+    line: Lines<1>,
     crossover: LowPass,
     bass: LowPass,
     crossed: [f32; 2],
@@ -175,9 +174,7 @@ impl Rotary {
         let longest = DOPPLER_SECONDS * FURTHEST * rate as f32;
         let size = (longest.ceil() as usize + 4).next_power_of_two();
         let mut rotary = Self {
-            line: vec![0.0; size],
-            mask: size - 1,
-            write: 0,
+            line: Lines::new(size),
             crossover: LowPass::new(CROSSOVER_HZ, rate),
             bass: LowPass::new(BASS_HZ, rate),
             crossed: [0.0; 2],
@@ -206,12 +203,12 @@ impl Rotary {
 
     /// The longest anything stays in it, in frames.
     pub(crate) fn frames(&self) -> usize {
-        self.mask + 1
+        self.line.frames()
     }
 
     /// Forget what's in it, and start the rotors from the front.
     pub(crate) fn clear(&mut self) {
-        self.line.fill(0.0);
+        self.line.clear();
         self.crossed = [0.0; 2];
         self.bassed = [0.0; 2];
         self.horn = 0.0;
@@ -284,10 +281,10 @@ impl Rotary {
     /// The horn's line a number of frames back, read between samples through four of them.
     #[inline]
     fn read(&self, frames: f32) -> f32 {
-        let frames = frames.clamp(1.0, (self.mask - 3) as f32);
+        let frames = frames.clamp(1.0, (self.line.mask() - 3) as f32);
         let whole = frames as usize;
         let between = frames - whole as f32;
-        let at = |back: usize| self.line[self.write.wrapping_sub(back) & self.mask];
+        let at = |back: usize| self.line.at(0, back);
         let (newer, current, older, oldest) =
             (at(whole - 1), at(whole), at(whole + 1), at(whole + 2));
         // A cubic through the four, after Hermite, so a whole number of frames reads exactly.
@@ -329,8 +326,8 @@ impl Rotary {
             mono
         };
         let lower = self.crossover.step(&mut self.crossed, driven);
-        self.write = (self.write + 1) & self.mask;
-        self.line[self.write] = driven - lower;
+        self.line.advance();
+        self.line.write(0, driven - lower);
         let bass = self.bass.step(&mut self.bassed, lower);
         let middle = lower - bass;
         let mut out = [0.0; 2];
@@ -578,7 +575,7 @@ mod tests {
     fn a_nan_in_its_line_or_filters_dies_away() {
         let mut rotary = rotary(Settings::DEFAULT);
         rotary.process([0.5; 2], 1.0);
-        rotary.line[rotary.write] = f32::NAN;
+        rotary.line.write(0, f32::NAN);
         rotary.crossed = [f32::NAN; 2];
         rotary.bassed = [f32::NAN; 2];
         let mut last = [1.0; 2];

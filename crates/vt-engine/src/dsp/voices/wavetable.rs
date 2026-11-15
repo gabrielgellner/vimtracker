@@ -22,6 +22,7 @@
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use super::virtual_analog::Settings;
+use crate::dsp::blocks::line::hermite_soras;
 use crate::voice::SynthEngine;
 
 /// How many frames are worked out at once, as in Plaits, whose smoothing is set per block.
@@ -65,16 +66,13 @@ const WAVE_MAP: [u8; PER_BANK * 4] = wave_map();
 #[inline]
 fn read(x: usize, y: usize, z: usize, index: usize, fraction: f32) -> f32 {
     let wave = usize::from(WAVE_MAP[x + y * 8 + z * PER_BANK]);
-    let xm1 = stored(wave, index);
-    let x0 = stored(wave, index + 1);
-    let x1 = stored(wave, index + 2);
-    let x2 = stored(wave, index + 3);
-    let c = (x1 - xm1) * 0.5;
-    let v = x0 - x1;
-    let w = c + v;
-    let a = w + v + (x2 - x0) * 0.5;
-    let b_neg = w + a;
-    (((a * fraction) - b_neg) * fraction + c) * fraction + x0
+    hermite_soras(
+        stored(wave, index),
+        stored(wave, index + 1),
+        stored(wave, index + 2),
+        stored(wave, index + 3),
+        fraction,
+    )
 }
 
 /// Pulls a fraction towards 0 or 1, steeper for a larger amount.

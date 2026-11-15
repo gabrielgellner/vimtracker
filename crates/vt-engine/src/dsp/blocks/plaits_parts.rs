@@ -26,6 +26,7 @@ use std::f32::consts::PI;
 use crate::rng::Pcg32;
 
 use super::flush::Tiny;
+use super::line::hermite_soras;
 use super::sides::SameBits;
 
 /// Noise on `0..1`.
@@ -364,12 +365,7 @@ impl<const N: usize> DelayLine<N> {
         let x0 = self.line[t % N];
         let x1 = self.line[(t + 1) % N];
         let x2 = self.line[(t + 2) % N];
-        let c = (x1 - xm1) * 0.5;
-        let v = x0 - x1;
-        let w = c + v;
-        let a = w + v + (x2 - x0) * 0.5;
-        let b_neg = w + a;
-        (((a * fraction) - b_neg) * fraction + c) * fraction + x0
+        hermite_soras(xm1, x0, x1, x2, fraction)
     }
 }
 

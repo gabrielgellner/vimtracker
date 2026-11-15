@@ -37,6 +37,7 @@ use vt_model::insert::{
     shift_semitones,
 };
 
+use crate::dsp::blocks::line::hermite;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::{Rung, SlotEffect};
@@ -707,18 +708,15 @@ impl Granular {
         };
         let (newer, current, older, oldest) =
             (at(whole - 1), at(whole), at(whole + 1), at(whole + 2));
-        let mut out = [0.0; 2];
-        for side in 0..2 {
-            // A cubic through the four, after Hermite, so a whole number of frames reads exactly.
-            let slope_in = (older[side] - newer[side]) * 0.5;
-            let slope_out = (oldest[side] - current[side]) * 0.5;
-            let difference = current[side] - older[side];
-            let bend = difference + slope_in;
-            let lift = bend + difference + slope_out;
-            out[side] =
-                ((lift * between - bend - lift) * between + slope_in) * between + current[side];
-        }
-        out
+        std::array::from_fn(|side| {
+            hermite(
+                newer[side],
+                current[side],
+                older[side],
+                oldest[side],
+                between,
+            )
+        })
     }
 
     /// Feed one frame in and get the grains out, all wet.
