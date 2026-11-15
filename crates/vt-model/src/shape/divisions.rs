@@ -468,37 +468,16 @@ mod tests {
 
     use super::*;
     use crate::scale::Scale;
-    use crate::shape::{
-        Acid, Bits, DEFAULT_RATE, FillKind, Follow, Grids, Pink, Shape, Values, Walk, Where,
-        written,
-    };
+    use crate::shape::{FillKind, Shape, written};
 
     fn shape(divisions: Divisions, seed: u64) -> Shape {
         Shape {
             from: 36,
             to: 48,
-            curve: 0,
-            s: 0,
             kind: FillKind::Divisions,
-            wave: crate::lfo::Shape::Sine,
-            rate: DEFAULT_RATE,
-            phase: 0,
-            run: 1,
-            values: Values::default(),
-            place: Where::AllRows,
             seed,
-            acid: Acid::default(),
-            follow: Follow::default(),
-            walk: Walk::default(),
-            pink: Pink::default(),
-            bits: Bits::default(),
-            grids: Grids::default(),
-            random: crate::shape::Random::default(),
-            vary: 0,
-            variation: crate::shape::Variation::default(),
             divisions,
-            ring: crate::shape::Ring::default(),
-            tonnetz: crate::shape::Tonnetz::default(),
+            ..Shape::default()
         }
     }
 

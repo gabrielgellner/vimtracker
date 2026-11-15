@@ -4,10 +4,7 @@
 
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
-use vt_model::shape::{
-    Acid, Bits, DEFAULT_RATE, FillKind, Follow, Grids, Pink, Random, Shape, ShapeColumn, Values,
-    WEIGHTS, Walk, Where, values,
-};
+use vt_model::shape::{FillKind, Random, Shape, ShapeColumn, WEIGHTS, Where, values};
 use vt_model::step::Step;
 
 /// How many seeds each count is over, a phrase of `ROWS` notes each.
@@ -18,28 +15,11 @@ fn shape(from: u8, to: u8, random: Random) -> Shape {
     Shape {
         from,
         to,
-        curve: 0,
-        s: 0,
         kind: FillKind::Random,
-        wave: vt_model::lfo::Shape::Sine,
-        rate: DEFAULT_RATE,
-        phase: 0,
-        run: 1,
-        values: Values::default(),
         place: Where::Notes,
         seed: 1,
-        acid: Acid::default(),
-        follow: Follow::default(),
-        walk: Walk::default(),
-        pink: Pink::default(),
-        bits: Bits::default(),
-        grids: Grids::default(),
         random,
-        vary: 0,
-        variation: vt_model::shape::Variation::default(),
-        divisions: vt_model::shape::Divisions::default(),
-        ring: vt_model::shape::Ring::default(),
-        tonnetz: vt_model::shape::Tonnetz::default(),
+        ..Shape::default()
     }
 }
 

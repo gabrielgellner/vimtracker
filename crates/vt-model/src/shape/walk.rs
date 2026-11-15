@@ -186,38 +186,21 @@ pub(super) fn pink(pink: Pink, seed: u64, turn: usize) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lfo::Shape as Wave;
+
     use crate::scale::{Scale, ScaleKind};
     use crate::selection::StepRange;
-    use crate::shape::{Acid, Bits, DEFAULT_RATE, FillKind, Follow, Shape, Values, Where, values};
+    use crate::shape::{FillKind, Shape, Where, values};
     use crate::step::Step;
 
     fn walking(from: u8, to: u8, step: u8, edge: Edge, seed: u64) -> Shape {
         Shape {
             from,
             to,
-            curve: 0,
-            s: 0,
             kind: FillKind::Walk,
-            wave: Wave::Sine,
-            rate: DEFAULT_RATE,
-            phase: 0,
-            run: 1,
-            values: Values::default(),
             place: Where::Notes,
             seed,
-            acid: Acid::default(),
-            follow: Follow::default(),
             walk: Walk { step, edge },
-            pink: Pink::default(),
-            bits: Bits::default(),
-            grids: crate::shape::Grids::default(),
-            random: crate::shape::Random::default(),
-            vary: 0,
-            variation: crate::shape::Variation::default(),
-            divisions: crate::shape::Divisions::default(),
-            ring: crate::shape::Ring::default(),
-            tonnetz: crate::shape::Tonnetz::default(),
+            ..Shape::default()
         }
     }
 

@@ -753,34 +753,11 @@ mod tests {
 
     /// A ramp from `A0` to `A0` over every row, as an FX generator's shape.
     fn level() -> Shape {
-        use crate::shape::{
-            Acid, Bits, DEFAULT_RATE, Follow, Grids, Pink, Random, Values, Variation, Walk, Where,
-        };
         Shape {
             from: 0xA0,
             to: 0xA0,
-            curve: 0,
-            s: 0,
-            kind: FillKind::Ramp,
-            wave: crate::lfo::Shape::Sine,
-            rate: DEFAULT_RATE,
-            phase: 0,
-            run: 1,
-            values: Values::default(),
-            place: Where::AllRows,
             seed: 1,
-            acid: Acid::default(),
-            follow: Follow::default(),
-            walk: Walk::default(),
-            pink: Pink::default(),
-            bits: Bits::default(),
-            grids: Grids::default(),
-            random: Random::default(),
-            vary: 0,
-            variation: Variation::default(),
-            divisions: crate::shape::Divisions::default(),
-            ring: crate::shape::Ring::default(),
-            tonnetz: crate::shape::Tonnetz::default(),
+            ..Shape::default()
         }
     }
 

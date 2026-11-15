@@ -6,39 +6,39 @@ use crate::constants::{MAX_GROUPS, MAX_LEVEL, MAX_SOUND_TRACKS, UNITY_LEVEL};
 use crate::grid::{GRID_ROWS, Grid};
 use crate::settings::{Entry, Kind, Units};
 
-/// An effect's `read` and `written`, from one list of its fields and the setting each is, so a
-/// field is named once here rather than twice. It goes in the effect's `impl`. Each entry is one of:
-/// - `field => Setting`, a `u8` read and written as it is;
-/// - `field: Choices => Setting`, a type or mode, read as its place in `Choices::ALL`;
-/// - `field => Setting via (place, kept)`, kept on a scale of its own: `place` turns what's kept
-///   into what a step gives, and `kept` turns that back. Distort's `bits` is the one.
+/// An effect's `read` and `written`, from one list of its fields, so a field is named once here
+/// rather than twice. It goes in the effect's `impl`, and lists its fields in the order its
+/// `PARAMS` keeps their settings: the first field is the first setting. Each entry is one of:
+/// - `field`, a `u8` read and written as it is;
+/// - `field: Choices`, a type or mode, read as its place in `Choices::ALL`;
+/// - `field via (place, kept)`, kept on a scale of its own: `place` turns what's kept into what a
+///   step gives, and `kept` turns that back. Distort's `bits` is the one.
 ///
-/// A setting the effect doesn't have reads as `0` and writes as nothing. [`Insert::write`] only
-/// writes one it has, within its range.
+/// A place past its settings reads as `0` and writes as nothing. [`Insert::write`] only writes
+/// one it has, within its range.
 macro_rules! effect_settings {
     (
-        $($field:ident $(: $choices:ident)? => $setting:ident $(via ($place:path, $kept:path))?),+
+        $($field:ident $(: $choices:ident)? $(via ($place:path, $kept:path))?),+
         $(,)?
     ) => {
-        /// A setting's value, on the scale a step gives. One it doesn't have reads as nothing.
-        pub(super) fn read(self, setting: $crate::insert::Setting) -> u8 {
-            match setting {
-                $($crate::insert::Setting::$setting => {
-                    effect_settings!(@read self.$field $(, $choices)? $(, via $place)?)
-                })+
-                _ => 0,
-            }
+        /// A setting's value, by its place among those it keeps, on the scale a step gives.
+        pub(super) fn read(self, at: usize) -> u8 {
+            #[allow(non_camel_case_types)]
+            enum Field { $($field),+ }
+            $(if at == Field::$field as usize {
+                return effect_settings!(@read self.$field $(, $choices)? $(, via $place)?);
+            })+
+            0
         }
 
         /// The same with a setting changed, on the scale `read` gives.
-        pub(super) fn written(self, setting: $crate::insert::Setting, value: u8) -> Self {
+        pub(super) fn written(self, at: usize, value: u8) -> Self {
+            #[allow(non_camel_case_types)]
+            enum Field { $($field),+ }
             let mut settings = self;
-            match setting {
-                $($crate::insert::Setting::$setting => {
-                    settings.$field = effect_settings!(@write value $(, $choices)? $(, via $kept)?);
-                })+
-                _ => {}
-            }
+            $(if at == Field::$field as usize {
+                settings.$field = effect_settings!(@write value $(, $choices)? $(, via $kept)?);
+            })+
             settings
         }
     };
@@ -105,196 +105,6 @@ pub enum Insert {
     Echo(Echo),
 }
 
-/// What a slot's setting is, for what moves it to read and write it on its own scale.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Setting {
-    Type,
-    Amount,
-    Bits,
-    /// Whether `Crush` compands as mu-law does, and whether `Down` holds at a multiple of the note.
-    MuLaw,
-    FollowNote,
-    /// How long `Down` holds each sample, or how fast a chorus moves.
-    Rate,
-    /// A chorus's kind.
-    ChorusType,
-    /// How far a chorus's copies move.
-    Depth,
-    /// An EQ's bands: where each sits, how much each boosts or cuts, and how wide the middle is.
-    LowFrequency,
-    Low,
-    MidFrequency,
-    Mid,
-    MidQ,
-    HighFrequency,
-    High,
-    /// A compressor's: where it starts turning down, by how much, how fast, and what it hears.
-    Threshold,
-    Ratio,
-    Attack,
-    Release,
-    Source,
-    /// Whether a compressor makes up what it takes by itself, and how much it turns up what it's
-    /// turned down, in dB, after that.
-    AutoGain,
-    Makeup,
-    /// A compressor's character, and the console and Glue types' switches: each one's ratio,
-    /// attack and release, a place among its choices. Glue's `Range` is the most it turns down,
-    /// and its `Peak Clip` whether it soft clips what comes out, after everything else.
-    CompressorType,
-    ConsoleRatio,
-    ConsoleAttack,
-    ConsoleRelease,
-    GlueRatio,
-    GlueAttack,
-    GlueRelease,
-    Range,
-    PeakClip,
-    /// A limiter's: how hard it's driven, the most that comes out, and how fast it lets go.
-    Input,
-    Ceiling,
-    LimitRelease,
-    /// How long a phaser's or flanger's sweep takes, as a place in the list of sweeps.
-    SweepRate,
-    /// The frequency a phaser sweeps around, and how many all-passes it has.
-    Centre,
-    Stages,
-    /// A flanger's delay at the middle of its sweep, and its feedback, negative below `80`.
-    FlangerDelay,
-    FlangerFeedback,
-    /// A tape's: how hard it's driven, its tilt, its bias, its head bump, and its slow and fast
-    /// wobble.
-    TapeDrive,
-    Tone,
-    Bias,
-    Bump,
-    Wow,
-    Flutter,
-    /// A plate's: how big it is, scaling its tank's delays, and how far its tank's all-passes
-    /// wobble.
-    Size,
-    Excursion,
-    /// A pitch shifter's: how far it shifts, in whole semitones and then in cents, and how long
-    /// each of its grains is.
-    Shift,
-    Fine,
-    Grain,
-    /// A granular effect's: how far back its grains read, how long they are, their envelope, how
-    /// often they start, how wide they spread, whether recording stops, and how much each grain
-    /// strays from what's set.
-    Position,
-    Length,
-    Shape,
-    Density,
-    Spread,
-    Freeze,
-    Random,
-    /// Warps': where its algorithm knob is, what each algorithm's own setting is, how hard the
-    /// modulator is driven, and its oscillator's waveform.
-    Algorithm,
-    Timbre,
-    ModulatorLevel,
-    Wave,
-    /// A low-pass gate's: what it opens, where it rests closed, its filter's resonance, and how
-    /// slowly it responds.
-    GateMode,
-    Base,
-    Resonance,
-    Response,
-    /// A resonator's: how its partials spread, how long its high ones ring, and where it's struck
-    /// and heard. Its `Decay` and `Width` are the reverb's and the delay's.
-    Material,
-    Bright,
-    Pickup,
-    /// A comb's: whether it's a comb or a flanger. Its `Feedback` is the flanger's, its `Tone`
-    /// the resonator's `Bright` and its `Spread` the granular effect's.
-    CombMode,
-    /// A vowel filter's: where it is among the vowels, how big a voice it makes, and how far its
-    /// formants follow the note. Its `Res` is the low-pass gate's.
-    Vowel,
-    VoiceSize,
-    KeyTrack,
-    /// A frequency shifter's: how far it shifts, in Hz, how far apart its sides are shifted, and
-    /// the delay in its loop. Its `Feedback` is the delay's and its `Track` the vowel filter's.
-    ShiftHertz,
-    ShiftSpread,
-    LoopTime,
-    /// A spring reverb's: how long its springs are, how much its early reflections come back,
-    /// how much its all-passes smear a sound into a chirp, how much its loop's delay wanders, and
-    /// whether it's knocked. Its `Decay` and `Damp` are the reverb's.
-    SpringSize,
-    Reflections,
-    Spin,
-    Chaos,
-    Knock,
-    /// A stutter's: whether it's repeating, how long the piece it repeats is, as a note division
-    /// up to a beat, how many times it plays it again, and how much quieter each time.
-    Trig,
-    RepeatLength,
-    Repeats,
-    RepeatDecay,
-    /// An exciter's: where the highs it excites start, and how fast its level detector rises and
-    /// falls. Its `Drive` is the delay's.
-    ExciterTone,
-    ExciterAttack,
-    ExciterRelease,
-    /// A rotary speaker's: whether its rotors spin fast or slow, how long they take to change,
-    /// how far the horn's pitch wavers and how far its loudness swells. Its `Drive` and `Width`
-    /// are the delay's.
-    Fast,
-    Inertia,
-    Doppler,
-    Tremolo,
-    /// A space's: how big its tank is. Its `Decay` and `Damp` are the reverb's and its `Mod` the
-    /// plate's.
-    SpaceSize,
-    /// Clouds': its mode, where in its recording it reads, how long a piece, how many and how
-    /// regularly, their texture, how much of its reverb, and its recording's quality. Its `Pitch`
-    /// is the pitch shifter's, its `Blend` a `Mix`, and its `Spread`, `Feedback` and `Freeze` the
-    /// granular effect's and the delay's.
-    CloudsMode,
-    CloudsPosition,
-    CloudsSize,
-    CloudsDensity,
-    Texture,
-    ReverbAmount,
-    Quality,
-    /// Beads': its mode, where in its recording it reads, how often grains start or how long its
-    /// delay is, and whether that follows the song's steps. Its `Size` is the granular effect's
-    /// `Length`, its `Pitch` the pitch shifter's, its `Quality` Clouds' and the rest the granular
-    /// effect's, the delay's and Clouds'.
-    BeadsMode,
-    BeadsTime,
-    BeadsDensity,
-    Clock,
-    /// A Space Echo's: its mode, how fast its tape runs and whether that follows the song's tempo,
-    /// how hard it's driven, its tone and how loud its repeats are, each on its own scale. Its
-    /// `Intensity` is the delay's `Feedback`, its `Inertia` the rotary's, its `Wow` the tape's and
-    /// its `Reverb` Clouds'.
-    EchoMode,
-    EchoRate,
-    EchoSync,
-    EchoInput,
-    EchoBass,
-    EchoTreble,
-    EchoLevel,
-    Mix,
-    Gain,
-    /// A place in the list of note divisions.
-    Time,
-    Feedback,
-    PingPong,
-    /// Whether a delay glides to a new time or crossfades to it.
-    Retime,
-    Width,
-    LowCut,
-    HighCut,
-    Drive,
-    Pre,
-    Decay,
-    Damp,
-}
-
 /// One setting an effect declares. The pages, stepping, `x`, `K`, typing and the status line read
 /// these, so a new effect needs no new page code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -305,8 +115,6 @@ pub struct Param {
     /// The grid's short label, 3 or 4 letters, after the slot's digit. Without one, a step can't
     /// lock it.
     pub label: Option<&'static str>,
-    /// What it is, on its own scale.
-    pub setting: Setting,
     /// Its range and the units it reads in, or its choices. A choice that's a scale stops at its
     /// ends, and one that's a list goes round.
     pub kind: Kind,
@@ -413,7 +221,6 @@ const MIX_PARAM: Param = Param {
     name: "Mix",
     key: "mix",
     label: Some("MIX"),
-    setting: Setting::Mix,
     kind: Kind::Continuous {
         top: 0xFF,
         middle: false,
@@ -426,7 +233,6 @@ const GAIN_PARAM: Param = Param {
     name: "Gain",
     key: "gain",
     label: Some("GAIN"),
-    setting: Setting::Gain,
     kind: Kind::Continuous {
         top: MAX_LEVEL,
         middle: false,
@@ -439,7 +245,6 @@ const AMOUNT_PARAM: Param = Param {
     name: "Amount",
     key: "amount",
     label: Some("AMNT"),
-    setting: Setting::Amount,
     kind: Kind::Continuous {
         top: 0xFF,
         middle: false,
@@ -459,14 +264,12 @@ const fn hex_param(
     name: &'static str,
     key: &'static str,
     label: &'static str,
-    setting: Setting,
     default: u8,
 ) -> Param {
     Param {
         name,
         key,
         label: Some(label),
-        setting,
         kind: Kind::Continuous {
             top: 0xFF,
             middle: false,
@@ -563,81 +366,80 @@ impl Insert {
             .map_or("Nothing here", |kind| kind.spec().meaning)
     }
 
+    /// The mode its type is in, for an effect that shows each type's own settings.
+    fn mode(self) -> Option<&'static Mode> {
+        let Shown::ByType { type_at, modes } = self.kind()?.spec().shown else {
+            return None;
+        };
+        modes.get(usize::from(self.read(usize::from(type_at))?))
+    }
+
     /// The settings it has, in the mode it's in.
-    pub fn params(self) -> &'static [Param] {
-        match self {
-            Self::Distort(distort) => match distort.kind {
-                DistortType::Crush => &CRUSH_PARAMS,
-                DistortType::Down => &DOWN_PARAMS,
-                DistortType::Overdrive | DistortType::Distortion => &PEDAL_PARAMS,
-                _ => &SHAPING_PARAMS,
-            },
-            Self::Compressor(compressor) => match compressor.kind {
-                CompressorType::Clean => &CLEAN_PARAMS,
-                CompressorType::Console => &CONSOLE_PARAMS,
-                CompressorType::Glue => &GLUE_PARAMS,
-            },
-            _ => self.kind().map_or(&[], EffectKind::params),
+    pub fn params(self) -> Params {
+        let Some(kind) = self.kind() else {
+            return Params::NONE;
+        };
+        match self.mode() {
+            Some(mode) => Params::of(kind.params(), mode),
+            None => Params::all(kind.params()),
         }
+    }
+
+    /// Where a setting is among those its effect keeps, in any of its types and modes, by its
+    /// place among those it has now.
+    pub fn kept_at(self, param: usize) -> Option<usize> {
+        self.params().kept_at(param)
     }
 
     /// A setting's value, by its place among those it has now: a place in its choices, or the
     /// value itself.
     pub fn value(self, param: usize) -> u8 {
-        self.params()
-            .get(param)
-            .and_then(|found| self.read(found.setting))
+        self.kept_at(param)
+            .and_then(|at| self.read(at))
             .unwrap_or(0)
     }
 
     /// The same with a setting changed, by its place among those it has now.
     #[must_use]
     pub fn with_value(self, param: usize, value: u8) -> Self {
-        self.params()
-            .get(param)
-            .map_or(self, |found| self.write(found.setting, f32::from(value)))
+        self.kept_at(param)
+            .map_or(self, |at| self.write(at, f32::from(value)))
     }
 
-    /// The setting its effect keeps, in any of its types and modes, if it has it.
-    fn kept(self, setting: Setting) -> Option<&'static Param> {
-        let kind = self.kind()?;
-        kind.params().iter().find(|found| found.setting == setting)
-    }
-
-    /// A setting as a step gives it: a place for `Type` and `Bits`. Nothing if there's no effect
-    /// here that has it. A distortion keeps every mode's, and a compressor every type's, so one not
-    /// shown now still reads.
-    pub fn read(self, setting: Setting) -> Option<u8> {
-        self.kept(setting)?;
+    /// A setting as a step gives it, by its place among those its effect keeps: a place for `Type`
+    /// and `Bits`. Nothing if there's no effect here that has it. A distortion keeps every mode's,
+    /// and a compressor every type's, so one not shown now still reads.
+    pub fn read(self, at: usize) -> Option<u8> {
+        self.kind()?.params().get(at)?;
         Some(match self {
             Self::Empty => return None,
-            Self::Distort(distort) => distort.read(setting),
-            Self::Delay(delay) => delay.read(setting),
-            Self::Reverb(reverb) => reverb.read(setting),
-            Self::Chorus(chorus) => chorus.read(setting),
-            Self::Eq(eq) => eq.read(setting),
-            Self::Compressor(compressor) => compressor.read(setting),
-            Self::Limit(limiter) => limiter.read(setting),
-            Self::Phaser(phaser) => phaser.read(setting),
-            Self::Flanger(flanger) => flanger.read(setting),
-            Self::Tape(tape) => tape.read(setting),
-            Self::Plate(plate) => plate.read(setting),
-            Self::Pitch(pitch) => pitch.read(setting),
-            Self::Grains(grains) => grains.read(setting),
-            Self::Warps(warps) => warps.read(setting),
-            Self::Lpg(gate) => gate.read(setting),
-            Self::Reso(resonator) => resonator.read(setting),
-            Self::Comb(comb) => comb.read(setting),
-            Self::Vowel(vowel) => vowel.read(setting),
-            Self::FreqShift(shifter) => shifter.read(setting),
-            Self::Spring(spring) => spring.read(setting),
-            Self::Space(space) => space.read(setting),
-            Self::Rotary(rotary) => rotary.read(setting),
-            Self::Exciter(exciter) => exciter.read(setting),
-            Self::Stutter(stutter) => stutter.read(setting),
-            Self::Clouds(clouds) => clouds.read(setting),
-            Self::Beads(beads) => beads.read(setting),
-            Self::Echo(echo) => echo.read(setting),
+            Self::Distort(distort) => distort.read(at),
+            Self::Delay(delay) => delay.read(at),
+            Self::Reverb(reverb) => reverb.read(at),
+            Self::Chorus(chorus) => chorus.read(at),
+            Self::Eq(eq) => eq.read(at),
+            Self::Compressor(compressor) => compressor.read(at),
+            Self::Limit(limiter) => limiter.read(at),
+            Self::Phaser(phaser) => phaser.read(at),
+            Self::Flanger(flanger) => flanger.read(at),
+            Self::Tape(tape) => tape.read(at),
+            Self::Plate(plate) => plate.read(at),
+            Self::Pitch(pitch) => pitch.read(at),
+            Self::Grains(grains) => grains.read(at),
+            Self::Warps(warps) => warps.read(at),
+            Self::Lpg(gate) => gate.read(at),
+            Self::Reso(resonator) => resonator.read(at),
+            Self::Comb(comb) => comb.read(at),
+            Self::Vowel(vowel) => vowel.read(at),
+            Self::FreqShift(shifter) => shifter.read(at),
+            Self::Spring(spring) => spring.read(at),
+            Self::Space(space) => space.read(at),
+            Self::Rotary(rotary) => rotary.read(at),
+            Self::Exciter(exciter) => exciter.read(at),
+            Self::Stutter(stutter) => stutter.read(at),
+            Self::Clouds(clouds) => clouds.read(at),
+            Self::Beads(beads) => beads.read(at),
+            Self::Echo(echo) => echo.read(at),
         })
     }
 
@@ -645,40 +447,40 @@ impl Insert {
     /// range. It's how a stepped setting ends up stepping, whatever moved it. One there's no effect
     /// here to have stays as it was.
     #[must_use]
-    pub fn write(self, setting: Setting, value: f32) -> Self {
-        let Some(param) = self.kept(setting) else {
+    pub fn write(self, at: usize, value: f32) -> Self {
+        let Some(param) = self.kind().and_then(|kind| kind.params().get(at)) else {
             return self;
         };
         let whole = value.round().clamp(0.0, f32::from(param.kind.top())) as u8;
         match self {
             Self::Empty => self,
-            Self::Distort(distort) => Self::Distort(distort.written(setting, whole)),
-            Self::Delay(delay) => Self::Delay(delay.written(setting, whole)),
-            Self::Reverb(reverb) => Self::Reverb(reverb.written(setting, whole)),
-            Self::Chorus(chorus) => Self::Chorus(chorus.written(setting, whole)),
-            Self::Eq(eq) => Self::Eq(eq.written(setting, whole)),
-            Self::Compressor(compressor) => Self::Compressor(compressor.written(setting, whole)),
-            Self::Limit(limiter) => Self::Limit(limiter.written(setting, whole)),
-            Self::Phaser(phaser) => Self::Phaser(phaser.written(setting, whole)),
-            Self::Flanger(flanger) => Self::Flanger(flanger.written(setting, whole)),
-            Self::Tape(tape) => Self::Tape(tape.written(setting, whole)),
-            Self::Plate(plate) => Self::Plate(plate.written(setting, whole)),
-            Self::Pitch(pitch) => Self::Pitch(pitch.written(setting, whole)),
-            Self::Grains(grains) => Self::Grains(grains.written(setting, whole)),
-            Self::Warps(warps) => Self::Warps(warps.written(setting, whole)),
-            Self::Lpg(gate) => Self::Lpg(gate.written(setting, whole)),
-            Self::Reso(resonator) => Self::Reso(resonator.written(setting, whole)),
-            Self::Comb(comb) => Self::Comb(comb.written(setting, whole)),
-            Self::Vowel(vowel) => Self::Vowel(vowel.written(setting, whole)),
-            Self::FreqShift(shifter) => Self::FreqShift(shifter.written(setting, whole)),
-            Self::Spring(spring) => Self::Spring(spring.written(setting, whole)),
-            Self::Stutter(stutter) => Self::Stutter(stutter.written(setting, whole)),
-            Self::Exciter(exciter) => Self::Exciter(exciter.written(setting, whole)),
-            Self::Rotary(rotary) => Self::Rotary(rotary.written(setting, whole)),
-            Self::Space(space) => Self::Space(space.written(setting, whole)),
-            Self::Clouds(clouds) => Self::Clouds(clouds.written(setting, whole)),
-            Self::Beads(beads) => Self::Beads(beads.written(setting, whole)),
-            Self::Echo(echo) => Self::Echo(echo.written(setting, whole)),
+            Self::Distort(distort) => Self::Distort(distort.written(at, whole)),
+            Self::Delay(delay) => Self::Delay(delay.written(at, whole)),
+            Self::Reverb(reverb) => Self::Reverb(reverb.written(at, whole)),
+            Self::Chorus(chorus) => Self::Chorus(chorus.written(at, whole)),
+            Self::Eq(eq) => Self::Eq(eq.written(at, whole)),
+            Self::Compressor(compressor) => Self::Compressor(compressor.written(at, whole)),
+            Self::Limit(limiter) => Self::Limit(limiter.written(at, whole)),
+            Self::Phaser(phaser) => Self::Phaser(phaser.written(at, whole)),
+            Self::Flanger(flanger) => Self::Flanger(flanger.written(at, whole)),
+            Self::Tape(tape) => Self::Tape(tape.written(at, whole)),
+            Self::Plate(plate) => Self::Plate(plate.written(at, whole)),
+            Self::Pitch(pitch) => Self::Pitch(pitch.written(at, whole)),
+            Self::Grains(grains) => Self::Grains(grains.written(at, whole)),
+            Self::Warps(warps) => Self::Warps(warps.written(at, whole)),
+            Self::Lpg(gate) => Self::Lpg(gate.written(at, whole)),
+            Self::Reso(resonator) => Self::Reso(resonator.written(at, whole)),
+            Self::Comb(comb) => Self::Comb(comb.written(at, whole)),
+            Self::Vowel(vowel) => Self::Vowel(vowel.written(at, whole)),
+            Self::FreqShift(shifter) => Self::FreqShift(shifter.written(at, whole)),
+            Self::Spring(spring) => Self::Spring(spring.written(at, whole)),
+            Self::Stutter(stutter) => Self::Stutter(stutter.written(at, whole)),
+            Self::Exciter(exciter) => Self::Exciter(exciter.written(at, whole)),
+            Self::Rotary(rotary) => Self::Rotary(rotary.written(at, whole)),
+            Self::Space(space) => Self::Space(space.written(at, whole)),
+            Self::Clouds(clouds) => Self::Clouds(clouds.written(at, whole)),
+            Self::Beads(beads) => Self::Beads(beads.written(at, whole)),
+            Self::Echo(echo) => Self::Echo(echo.written(at, whole)),
         }
     }
 
@@ -702,94 +504,19 @@ impl Insert {
     /// Where its settings sit on the FX page, by their places among those it has now. Its type is
     /// in the title instead. Most effects have their own settings column by column in the order
     /// they're listed, then a column of what comes out, `Mix` and `Gain`, last. A few are placed by
-    /// what they mean: a compressor's detector, times and output each have a column, an EQ's
-    /// bands are its columns, and a delay's repeats, their tone and what comes out are its.
+    /// what they mean, as their descriptions' grids say: a compressor's detector, times and output
+    /// each have a column, an EQ's bands are its columns, and a delay's repeats, their tone and
+    /// what comes out are its.
     pub fn grid(self) -> Grid {
-        use Setting as S;
-        let placed: &[&[Setting]] = match self {
-            Self::Compressor(compressor) => match compressor.kind {
-                CompressorType::Clean => &[
-                    &[S::Threshold, S::Ratio],
-                    &[S::Attack, S::Release, S::Source],
-                    &[S::Makeup, S::AutoGain],
-                    &[S::Mix],
-                ],
-                CompressorType::Console => &[
-                    &[S::Threshold, S::ConsoleRatio],
-                    &[S::ConsoleAttack, S::ConsoleRelease, S::Source],
-                    &[S::Makeup, S::AutoGain],
-                    &[S::Mix],
-                ],
-                CompressorType::Glue => &[
-                    &[S::Threshold, S::GlueRatio, S::Range],
-                    &[S::GlueAttack, S::GlueRelease, S::Source],
-                    &[S::Makeup, S::AutoGain],
-                    &[S::Mix, S::PeakClip],
-                ],
-            },
-            Self::Eq(_) => &[
-                &[S::LowFrequency, S::Low],
-                &[S::MidFrequency, S::Mid, S::MidQ],
-                &[S::HighFrequency, S::High],
-                &[S::Gain],
-            ],
-            Self::Delay(_) => &[
-                &[S::Time, S::Feedback, S::PingPong],
-                &[S::LowCut, S::HighCut, S::Drive],
-                &[S::Retime, S::Wow],
-                &[S::Width, S::Mix, S::Gain],
-            ],
-            Self::Spring(_) => &[
-                &[S::Decay, S::SpringSize, S::Damp],
-                &[S::Spin, S::Reflections],
-                &[S::Chaos, S::Knock],
-                &[S::Mix, S::Gain],
-            ],
-            Self::Stutter(_) => &[
-                &[S::Trig],
-                &[S::RepeatLength, S::Repeats, S::RepeatDecay],
-                &[S::Mix, S::Gain],
-            ],
-            Self::Exciter(_) => &[
-                &[S::Drive, S::ExciterTone],
-                &[S::ExciterAttack, S::ExciterRelease],
-                &[S::Mix, S::Gain],
-            ],
-            Self::Rotary(_) => &[
-                &[S::Fast, S::Inertia],
-                &[S::Doppler, S::Tremolo],
-                &[S::Drive, S::Width],
-                &[S::Mix, S::Gain],
-            ],
-            // The module's big knobs, then its small ones with its freeze button, then what its
-            // `Blend` knob also does, then its quality over what comes out.
-            Self::Clouds(_) => &[
-                &[S::CloudsPosition, S::CloudsSize, S::Shift],
-                &[S::CloudsDensity, S::Texture, S::Freeze],
-                &[S::Spread, S::Feedback, S::ReverbAmount],
-                &[S::Quality, S::Mix, S::Gain],
-            ],
-            // The module's big knobs; its pitch, its attenuverters' randomness and its freeze
-            // button; its density, the clock it follows and its feedback; then its reverb over
-            // what comes out. Its mode and quality are in the title.
-            Self::Beads(_) => &[
-                &[S::BeadsTime, S::Length, S::Shape],
-                &[S::Shift, S::Random, S::Freeze],
-                &[S::BeadsDensity, S::Clock, S::Feedback],
-                &[S::ReverbAmount, S::Mix, S::Gain],
-            ],
-            // The tape's speed and how it gets there; the loop; the tone and the reverb; then the
-            // repeats' level over what comes out. Its mode is in the title.
-            Self::Echo(_) => &[
-                &[S::EchoRate, S::EchoSync, S::Inertia],
-                &[S::Feedback, S::EchoInput, S::Wow],
-                &[S::EchoBass, S::EchoTreble, S::ReverbAmount],
-                &[S::EchoLevel, S::Mix, S::Gain],
-            ],
-            _ => return self.default_grid(),
+        let placed = match self.mode() {
+            Some(mode) => mode.grid,
+            None => self.kind().and_then(|kind| kind.spec().grid),
+        };
+        let Some(placed) = placed else {
+            return self.default_grid();
         };
         let params = self.params();
-        let index = |setting: &Setting| params.iter().position(|found| found.setting == *setting);
+        let index = |key: &&str| params.iter().position(|found| found.key == *key);
         let columns: Vec<Vec<Option<usize>>> = placed
             .iter()
             .map(|column| column.iter().map(index).collect())
