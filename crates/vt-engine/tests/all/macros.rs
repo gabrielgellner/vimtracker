@@ -59,10 +59,9 @@ fn song(texts: &[&str]) -> Song {
 
 /// Where the delay's `Feedback` is among what slot 1 reports.
 fn feedback_place() -> usize {
-    Insert::Delay(Delay::DEFAULT)
-        .params()
-        .iter()
-        .position(|param| param.setting == EffectKind::Delay.params()[1].setting)
+    let delay = Insert::Delay(Delay::DEFAULT);
+    (0..delay.params().len())
+        .position(|param| delay.kept_at(param) == Some(1))
         .unwrap()
 }
 

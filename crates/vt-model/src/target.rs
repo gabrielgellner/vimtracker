@@ -67,13 +67,10 @@ impl SettingId {
             }
             (Owner::Track, _) => track.is_sound(),
             (Owner::Voice(voice), _) => track.voice() == Some(voice),
-            (Owner::Slot { slot, effect }, at) => track.inserts.get(slot).is_some_and(|insert| {
-                insert.kind() == Some(effect)
-                    && insert
-                        .params()
-                        .iter()
-                        .any(|param| param.setting == effect.params()[at].setting)
-            }),
+            (Owner::Slot { slot, effect }, at) => track
+                .inserts
+                .get(slot)
+                .is_some_and(|insert| insert.kind() == Some(effect) && insert.params().shows(at)),
             // A slot's depth and polarity do nothing on the one shaping the notes, only an LFO has
             // a deform, an LFO's phase is Steps' start, and Steps have no polarity to choose.
             (Owner::Mod(slot), 1) => {

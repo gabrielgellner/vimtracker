@@ -2651,7 +2651,7 @@ Plaits has the same problem in its settings. Its voices share the hardware's thr
 |---|---|
 | The track | Volume, pan, cutoff, resonance, sends, and pitch for modulation only |
 | Each machine | Its own, as many as it has, up to `MAX_MACHINE_SETTINGS`, which is 4 |
-| Each effect, in each of the 3 slots (four since decision 138) | Its own, as effects declare them now, by their `Setting` |
+| Each effect, in each of the 3 slots (four since decision 138) | Its own, as effects declare them now, by their places in `EffectSpec::params` |
 | Each LFO | Its depth and phase, for modulation only |
 
 Each entry has:
