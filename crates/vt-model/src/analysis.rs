@@ -487,14 +487,8 @@ pub fn analyse(
 }
 
 /// Write an analysis into a cache folder, whole or not at all, so a reader never sees half of one.
-fn keep(folder: &Path, analysis: &Analysis) -> io::Result<()> {
-    fs::create_dir_all(folder)?;
-    let file = cache_file(folder, analysis.hash);
-    let partial = folder.join(format!("{}.{}.part", analysis.hash, std::process::id()));
-    fs::write(&partial, analysis.encode())?;
-    fs::rename(&partial, &file).inspect_err(|_| {
-        let _ = fs::remove_file(&partial);
-    })
+fn keep(folder: &Path, analysis: &Analysis) -> Result<(), crate::ron_file::Error> {
+    crate::ron_file::write_atomic(&cache_file(folder, analysis.hash), analysis.encode())
 }
 
 #[cfg(test)]

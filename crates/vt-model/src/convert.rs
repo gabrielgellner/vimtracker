@@ -13,11 +13,11 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-use serde::Deserialize;
 use thiserror::Error;
 
 use crate::constants::TICKS_PER_STEP;
 use crate::project::{ProjectError, save_song};
+use crate::ron_file;
 use crate::shape::{Shape, ShapeColumn, Values};
 use crate::song::Song;
 use crate::speed::Speed;
@@ -31,15 +31,10 @@ const OLD_MOST: i8 = 11;
 /// Why a project could not be converted.
 #[derive(Debug, Error)]
 pub enum ConvertError {
-    #[error("{path}: {source}")]
-    Io {
-        path: String,
-        source: std::io::Error,
-    },
+    #[error(transparent)]
+    File(#[from] ron_file::Error),
     #[error("{path} uses format {found}, and only format {FROM_FORMAT} songs are converted")]
     Version { path: String, found: u32 },
-    #[error("{path}: {detail}")]
-    Parse { path: String, detail: String },
     #[error("{0} is already there, from an earlier conversion")]
     Backup(String),
     #[error(transparent)]
@@ -56,11 +51,6 @@ pub struct Converted {
     pub clamped: usize,
     /// Live Nudge generators whose settings were converted.
     pub generators: usize,
-}
-
-#[derive(Deserialize)]
-struct VersionProbe {
-    format_version: u32,
 }
 
 /// Convert a project folder's `song.ron`, and its autosave if it has one, writing each old file
@@ -90,11 +80,7 @@ fn convert_file(
         return Ok(Converted::default());
     }
     let shown = path.display().to_string();
-    let io = |source| ConvertError::Io {
-        path: shown.clone(),
-        source,
-    };
-    let text = fs::read_to_string(&path).map_err(io)?;
+    let text = ron_file::read_text(&path)?;
     let (song, converted) = match convert_text(&text, &shown) {
         // An autosave from after the change is left as it is.
         Err(ConvertError::Version { .. }) if !needed => return Ok(Converted::default()),
@@ -104,7 +90,10 @@ fn convert_file(
     if kept.exists() {
         return Err(ConvertError::Backup(kept.display().to_string()));
     }
-    fs::write(&kept, &text).map_err(io)?;
+    fs::write(&kept, &text).map_err(|source| ron_file::Error::Io {
+        path: shown.clone(),
+        source,
+    })?;
     if name == "song.ron" {
         save_song(folder, &song)?;
     } else {
@@ -115,15 +104,11 @@ fn convert_file(
 
 /// A format 10 song's text, read as format 11 with its nudges converted.
 pub fn convert_text(text: &str, path: &str) -> Result<(Song, Converted), ConvertError> {
-    let parse = |error: &dyn std::fmt::Display| ConvertError::Parse {
-        path: path.to_owned(),
-        detail: error.to_string(),
-    };
-    let probe: VersionProbe = ron::from_str(text).map_err(|e| parse(&e))?;
-    if probe.format_version != FROM_FORMAT {
+    let found = ron_file::probe(text, Path::new(path), "format_version")?;
+    if found != FROM_FORMAT {
         return Err(ConvertError::Version {
             path: path.to_owned(),
-            found: probe.format_version,
+            found,
         });
     }
     // The format's only other change: a Nudge column says how far its nudges go.
@@ -133,7 +118,7 @@ pub fn convert_text(text: &str, path: &str) -> Result<(Song, Converted), Convert
             &format!("column: Nudge(most: {OLD_MOST}),"),
         )
         .replace("column:Nudge,", &format!("column:Nudge(most:{OLD_MOST}),"));
-    let mut song: Song = ron::from_str(&text).map_err(|e| parse(&e))?;
+    let mut song: Song = ron_file::parse(&text, Path::new(path))?;
     song.format_version = crate::constants::FORMAT_VERSION;
     song.ensure_fixed_tracks();
     let converted = convert_song(&mut song);

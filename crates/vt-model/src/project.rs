@@ -6,12 +6,12 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use serde::Deserialize;
 use thiserror::Error;
 
 use crate::analysis::{AnalysisError, analyse};
 use crate::bank::ContentHash;
 use crate::constants::FORMAT_VERSION;
+use crate::ron_file;
 use crate::sample::{SampleError, is_sample_file};
 use crate::samples::SamplePool;
 use crate::song::Song;
@@ -42,6 +42,16 @@ pub enum ProjectError {
     Serialize(String),
 }
 
+impl From<ron_file::Error> for ProjectError {
+    fn from(error: ron_file::Error) -> Self {
+        match error {
+            ron_file::Error::Io { path, source } => Self::Io { path, source },
+            ron_file::Error::Parse { path, detail } => Self::Parse { path, detail },
+            ron_file::Error::Serialize { detail, .. } => Self::Serialize(detail),
+        }
+    }
+}
+
 /// Attach a path to an I/O error.
 fn io_at(path: &Path) -> impl Fn(io::Error) -> ProjectError + '_ {
     move |source| ProjectError::Io {
@@ -50,27 +60,17 @@ fn io_at(path: &Path) -> impl Fn(io::Error) -> ProjectError + '_ {
     }
 }
 
-/// Only the version, so a changed format gives a clear message rather than a field error.
-#[derive(Deserialize)]
-struct VersionProbe {
-    format_version: u32,
-}
-
-/// Parse a song's text, checking its version first.
+/// Parse a song's text, checking its version first: a song of any other format isn't read.
 fn parse_song(text: &str, path: &Path) -> Result<Song, ProjectError> {
-    let parse = |error: &dyn std::fmt::Display| ProjectError::Parse {
-        path: path.display().to_string(),
-        detail: error.to_string(),
-    };
-    let probe: VersionProbe = ron::from_str(text).map_err(|e| parse(&e))?;
-    if probe.format_version != FORMAT_VERSION {
+    let found = ron_file::probe(text, path, "format_version")?;
+    if found != FORMAT_VERSION {
         return Err(ProjectError::Version {
             path: path.display().to_string(),
-            found: probe.format_version,
+            found,
             expected: FORMAT_VERSION,
         });
     }
-    let mut song: Song = ron::from_str(text).map_err(|e| parse(&e))?;
+    let mut song: Song = ron_file::parse(text, path)?;
     song.ensure_fixed_tracks();
     // Generators' held shapes aren't saved: work them out once, as an edit would, so a song is
     // heard as held from the moment it loads. Its columns are already what that writes.
@@ -86,36 +86,24 @@ pub fn is_project(folder: &Path) -> bool {
 /// Read a project's song.
 pub fn load_song(folder: &Path) -> Result<Song, ProjectError> {
     let path = folder.join(SONG_FILE);
-    let text = fs::read_to_string(&path).map_err(io_at(&path))?;
-    parse_song(&text, &path)
+    parse_song(&ron_file::read_text(&path)?, &path)
 }
 
 /// Write a project's song through a temporary file and rename, so a process crash or failed
 /// write leaves the previous file intact.
 pub fn save_song(folder: &Path, song: &Song) -> Result<(), ProjectError> {
-    fs::create_dir_all(folder).map_err(io_at(folder))?;
-    write_song(folder, SONG_FILE, song)
-}
-
-fn write_song(folder: &Path, name: &str, song: &Song) -> Result<(), ProjectError> {
-    let text = ron::ser::to_string_pretty(song, ron::ser::PrettyConfig::default())
-        .map_err(|e| ProjectError::Serialize(e.to_string()))?;
-    let target = folder.join(name);
-    let temporary = folder.join(format!(".{name}.tmp"));
-    fs::write(&temporary, text).map_err(io_at(&temporary))?;
-    fs::rename(&temporary, &target).map_err(io_at(&target))
+    Ok(ron_file::write(&folder.join(SONG_FILE), song)?)
 }
 
 /// Write unsaved work beside the song, leaving the song itself alone.
 pub fn write_autosave(folder: &Path, song: &Song) -> Result<(), ProjectError> {
-    write_song(folder, AUTOSAVE_FILE, song)
+    Ok(ron_file::write(&folder.join(AUTOSAVE_FILE), song)?)
 }
 
 /// Read the autosave file.
 pub fn load_autosave(folder: &Path) -> Result<Song, ProjectError> {
     let path = folder.join(AUTOSAVE_FILE);
-    let text = fs::read_to_string(&path).map_err(io_at(&path))?;
-    parse_song(&text, &path)
+    parse_song(&ron_file::read_text(&path)?, &path)
 }
 
 /// Remove the autosave file, if there is one.
