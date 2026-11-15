@@ -1362,8 +1362,6 @@ These need no terminal and no sound device, so they run anywhere.
     with the same riff on ours (#565): it reads the clip's notes and knob moves out of Live, and
     `crates/vt-tui/examples/take_song.rs` builds the song from them with the program's own model,
     for `vimtracker render` to play and the harness to compare over time.
-*   **`vimtracker convert-nudges <project>`**, hidden from the help, converts a project saved in
-    format 10 to format 11 once, with `vt_model::convert`, keeping the old files beside the new.
 *   **`probe-keys`** prints the key events the terminal delivers, and **`kits import-ableton`**
     writes a kit for each of Ableton Live's drum racks.
 

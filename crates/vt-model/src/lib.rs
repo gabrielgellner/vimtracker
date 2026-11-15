@@ -9,7 +9,6 @@ pub mod bank;
 pub mod bloom;
 pub mod condition;
 pub mod constants;
-pub mod convert;
 pub mod envelope;
 pub mod filter;
 pub mod generator;
