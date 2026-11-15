@@ -454,12 +454,6 @@ impl Generator {
         self.first = range.first;
     }
 
-    /// The steps it keeps of its rows, what's under them and as it last left them, to convert a
-    /// song's nudges (`crate::convert`).
-    pub(crate) fn kept_steps_mut(&mut self) -> impl Iterator<Item = &mut Step> {
-        self.under.iter_mut().chain(self.seen.iter_mut())
-    }
-
     /// Move its rows along, for steps added in front of them.
     pub(crate) fn shift(&mut self, by: usize) {
         self.first += by;
