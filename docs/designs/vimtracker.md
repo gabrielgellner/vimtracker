@@ -922,7 +922,8 @@ with a plain `match`, so there's no `dyn`.
 **`Overlay`** (`overlays.rs`, #872) is the same seam for what's drawn over a page: `Overlay::KEYS`,
 its rows of the binding table under `Overlay::MODE`, so which-key and `Space k` list them;
 `Overlay::key`, given a `CtxMut`, which answers with the pages' `Outcome`, closing with nothing
-chosen (`Close`), with a choice for `App` to do (`Choose`), or tagging an item (`Tag`) among
+chosen (`Close`), with a choice for `App` to do (`Choose`), tagging an item (`Tag`), or
+`Space k`'s list opened at its own keys and closing back to it (`Keys`, the picker's `?`) among
 what it can ask for; and `Overlay::draw`. Where it differs from a page is what overlays are:
 each has a line that's typed into, so `Overlay::text` takes a key as text, every key while
 `Overlay::takes_text` and otherwise one the table doesn't bind or that `key` passed back, as

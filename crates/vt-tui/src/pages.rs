@@ -56,7 +56,7 @@ use crate::input::mode::{Mode, View};
 use crate::input::wheel::WheelSetting;
 use crate::overlays::command::parse::Line;
 use crate::overlays::field_jump::FieldJump;
-use crate::overlays::help::POPUP_DELAY;
+use crate::overlays::help::{Help, POPUP_DELAY};
 use crate::overlays::picker::exploring::Naming;
 use crate::overlays::picker::{Pick, Picker};
 use crate::pages::sample::{SamplePage, Shown, is_sample_motion};
@@ -113,6 +113,9 @@ pub enum Outcome {
     /// Done, and an item in the explorer is given these tags, as typed after `T`. The explorer
     /// stays open.
     Tag { item: usize, tags: Vec<String> },
+    /// Done, and `Space k`'s list of keys opens at this mode's, over what's open, which it goes
+    /// back to when it closes, as `?` in a picker opens it at the picker's.
+    Keys(Mode),
 }
 
 /// One of the program's pages as a component: its own state, its keys, its drawing and its
@@ -388,7 +391,7 @@ impl App {
             Outcome::Close => match self.modes.mode {
                 Mode::Help => {
                     self.overlays.help.scroll = 0;
-                    self.modes.mode = Mode::Normal;
+                    self.modes.mode = self.overlays.help.back;
                 }
                 Mode::Guide => {
                     self.overlays.guide.open = None;
@@ -414,6 +417,10 @@ impl App {
             Outcome::Tag { item, tags } => {
                 self.tag_item(item, tags);
                 self.refresh_preview();
+            }
+            Outcome::Keys(mode) => {
+                self.overlays.help = Help::at(self.help_rows(), mode, self.modes.mode);
+                self.modes.mode = Mode::Help;
             }
             Outcome::Done | Outcome::Refused(_) | Outcome::Passed => {}
         }
