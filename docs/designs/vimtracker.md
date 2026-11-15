@@ -570,14 +570,14 @@ Song                               song.ron, refused unless format_version is FO
     The cache folder, `$XDG_CACHE_HOME/vimtracker` or `~/Library/Caches/vimtracker` on macOS,
     holds the sample analyses and `full-speed.txt`. Autosave (`services/autosave.rs`) writes `song.autosave.ron` beside
     `song.ron` every `AUTOSAVE_SECONDS`, and offers it back after a crash. Each of these files is
-written through `vt_model::ron_file` (#809), all but `settings.ron`, which the program only
-writes once, as a template, when there's none: `write` and `write_atomic` write a temporary file
-beside it and rename it over, so a crash mid-write leaves the file before whole. The song, the
-autosave, presets, kits, the tags, the recent places and the command history are read through it
-too: `read` and `parse` say which file wouldn't read, and `probe` reads a format's number on its
-own first, each format keeping its own policy (a song refuses any other, a preset reads older
-ones, and a kit has none). The analysis cache's files, a project's imported samples and the kits
-imported from Ableton are written atomically the same way.
+    written through `vt_model::ron_file` (#809), all but `settings.ron`, which the program only
+    writes once, as a template, when there's none: `write` and `write_atomic` write a temporary file
+    beside it and rename it over, so a crash mid-write leaves the file before whole. The song, the
+    autosave, presets, kits, the tags, the recent places and the command history are read through it
+    too: `read` and `parse` say which file wouldn't read, and `probe` reads a format's number on its
+    own first, each format keeping its own policy (a song refuses any other, a preset reads older
+    ones, and a kit has none). The analysis cache's files, a project's imported samples and the kits
+    imported from Ableton are written atomically the same way.
 *   **Presets.** `vt-model`'s `preset.rs` reads and writes a sound preset, a `Sound` (the machine
     to the slots' effects, and a sampler's bank entry by its full path) and a `Patch` (the mod
     slots, accumulator, arpeggio and macros), and an effect preset, one slot's `Insert` with its
