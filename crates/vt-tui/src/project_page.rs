@@ -2,8 +2,15 @@
 //! its grooves, a row for the Audio sub-page, and the actions that save, render and open
 //! projects, and `H` and `L` between its sub-pages. Each row changes its value as its
 //! `:` command does, through the same parser, so the two can't disagree.
+//!
+//! `ProjectPage` is the Song sub-page as a component (#320): its cursor and the groove it shows,
+//! its moves, and its drawing, in `views::project`, given a [`Ctx`]. It's a [`Page`], with its
+//! rows of the binding table, [`Page::KEYS`], here beside it. The edits stay `App`'s, as they run
+//! the rows' commands.
 
+use ratatui::Frame;
 use ratatui::crossterm::event::KeyCode;
+use ratatui::layout::Rect;
 use std::sync::Arc;
 
 use vt_model::action::Action;
@@ -17,7 +24,7 @@ use vt_model::groove::{
 use vt_model::names::is_project_name;
 use vt_model::scale::{ROOTS, Scale, ScaleKind, parse_root};
 use vt_model::selection::Motion;
-use vt_model::song::{LAUNCH_WORDS, Launch};
+use vt_model::song::{LAUNCH_WORDS, Launch, Song};
 
 use crate::app::{App, Entry, GRID_SIZES};
 use crate::explorer::Purpose;
@@ -26,6 +33,7 @@ use crate::input::command::{Line, parse};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::{Item, Pick, Picker};
+use crate::page::{Ctx, CtxMut, Outcome, Page};
 use crate::views::status::grid_name;
 
 /// How far a small and a large step move the tempo, in thousandths of a BPM, and its fine part.
@@ -253,78 +261,175 @@ fn with_fraction(millibpm: u32, digits: &str) -> Option<u32> {
     Some(millibpm / 1000 * 1000 + thousandths)
 }
 
-impl App {
+/// The project page's Song sub-page as a component: where its cursor is, and the groove it draws
+/// and changes, kept while other views are shown. How long a groove's rows are depends on the
+/// groove it shows, so each move is given the song, and the page holds none of its own. Its edits
+/// are `App`'s, as each runs its row's `:` command. It's drawn with [`Page::draw`], given the rest
+/// of the program as a [`Ctx`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ProjectPage {
+    /// The row and setting the cursor is on, and whether it's on the tempo's fine part.
+    pub row: usize,
+    pub field: usize,
+    pub fine: bool,
+    /// Where `j` and `k` last left the cursor, as its row and field, and the field it was on
+    /// before a shorter row moved it in, as on the track page.
+    pub(crate) wanted: Option<(usize, usize, usize)>,
+    /// The groove the page draws and changes, or the project's if none was chosen.
+    pub groove_shown: Option<GrooveId>,
+}
+
+impl ProjectPage {
     /// What the cursor is on.
-    pub fn project_control(&self) -> ProjectControl {
-        let row = self.project_row.min(PROJECT_ROWS.len() - 1);
-        PROJECT_ROWS[row][self.project_field.min(self.project_row_length(row) - 1)]
+    pub fn control(&self, song: &Song) -> ProjectControl {
+        let row = self.row.min(PROJECT_ROWS.len() - 1);
+        PROJECT_ROWS[row][self.field.min(self.row_length(row, song) - 1)]
     }
 
     /// How many fields a row has: a groove's rows have one for each of its steps.
-    fn project_row_length(&self, row: usize) -> usize {
+    fn row_length(&self, row: usize, song: &Song) -> usize {
         let fields = PROJECT_ROWS[row];
         match fields.first() {
             Some(ProjectControl::Push(_) | ProjectControl::Velocity(_)) => {
-                self.shown_groove().1.steps().min(fields.len())
+                self.shown_groove(song).1.steps().min(fields.len())
             }
             _ => fields.len(),
         }
     }
 
     /// The groove the page draws, and its pushes.
-    pub fn shown_groove(&self) -> (GrooveId, Groove) {
-        let id = self.groove_shown.unwrap_or(self.song().groove);
-        (id, self.song().groove(id))
+    pub fn shown_groove(&self, song: &Song) -> (GrooveId, Groove) {
+        let id = self.groove_shown.unwrap_or(song.groove);
+        (id, song.groove(id))
     }
 
     /// Put the cursor on a row and a field of it, as near as there is. The field `j` and `k` aim
     /// for is this one from now on, as Vim's `0` and `l` set the column `j` keeps.
-    fn move_project(&mut self, row: usize, field: usize) {
-        self.project_wanted = None;
-        self.project_row = row.min(PROJECT_ROWS.len() - 1);
-        self.project_field = field.min(self.project_row_length(self.project_row) - 1);
-        self.project_fine = false;
+    fn move_to(&mut self, row: usize, field: usize, song: &Song) {
+        self.wanted = None;
+        self.row = row.min(PROJECT_ROWS.len() - 1);
+        self.field = field.min(self.row_length(self.row, song) - 1);
+        self.fine = false;
     }
 
     /// The field `j` and `k` aim for: the one before a shorter row moved the cursor in, if it hasn't
     /// moved since, as on the track page.
-    fn project_wanted_field(&self) -> usize {
-        match self.project_wanted {
-            Some((row, field, wanted))
-                if (row, field) == (self.project_row, self.project_field) =>
-            {
-                wanted
-            }
-            _ => self.project_field,
+    fn wanted_field(&self) -> usize {
+        match self.wanted {
+            Some((row, field, wanted)) if (row, field) == (self.row, self.field) => wanted,
+            _ => self.field,
         }
     }
 
     /// Up or down to a row, aiming for the field `j` and `k` aim for.
-    fn move_project_row(&mut self, row: usize) {
-        let wanted = self.project_wanted_field();
-        self.move_project(row, wanted);
-        self.project_wanted = Some((self.project_row, self.project_field, wanted));
+    fn move_row(&mut self, row: usize, song: &Song) {
+        let wanted = self.wanted_field();
+        self.move_to(row, wanted, song);
+        self.wanted = Some((self.row, self.field, wanted));
     }
 
     /// `l`: onto the tempo's fine part, and then on to the next.
-    fn project_right(&mut self) {
-        if !self.project_fine && self.project_control() == ProjectControl::Bpm {
-            self.project_fine = true;
+    fn right(&mut self, song: &Song) {
+        if !self.fine && self.control(song) == ProjectControl::Bpm {
+            self.fine = true;
         } else {
-            self.move_project(self.project_row, self.project_field.saturating_add(1));
+            self.move_to(self.row, self.field.saturating_add(1), song);
         }
     }
 
     /// `h`: back off the fine part, and onto the tempo's from the setting beside it.
-    fn project_left(&mut self) {
-        if self.project_fine {
-            self.project_fine = false;
+    fn left(&mut self, song: &Song) {
+        if self.fine {
+            self.fine = false;
             return;
         }
-        let before = self.project_field;
-        self.move_project(self.project_row, before.saturating_sub(1));
-        self.project_fine =
-            self.project_field != before && self.project_control() == ProjectControl::Bpm;
+        let before = self.field;
+        self.move_to(self.row, before.saturating_sub(1), song);
+        self.fine = self.field != before && self.control(song) == ProjectControl::Bpm;
+    }
+
+    /// Run one of the page's own keys, its moves, on a song. `times` is its count, at least 1,
+    /// and `count` the count as typed, as `gg` and `G` go to the row it names.
+    pub fn key_on(&mut self, cmd: Cmd, times: usize, count: Option<usize>, song: &Song) -> Outcome {
+        let last = PROJECT_ROWS.len() - 1;
+        match cmd {
+            Cmd::Move(Motion::Down) => {
+                self.move_row(self.row.saturating_add(times).min(last), song);
+            }
+            Cmd::Move(Motion::Up) => self.move_row(self.row.saturating_sub(times), song),
+            Cmd::Move(Motion::First) => {
+                self.move_row(count.map_or(0, |row| row.saturating_sub(1)), song);
+            }
+            Cmd::Move(Motion::Last) => {
+                let row = count.map_or(last, |row| row.saturating_sub(1)).min(last);
+                self.move_row(row, song);
+            }
+            Cmd::Move(Motion::Right) => (0..times).for_each(|_| self.right(song)),
+            Cmd::Move(Motion::Left) => (0..times).for_each(|_| self.left(song)),
+            Cmd::Move(Motion::RowStart) => self.move_to(self.row, 0, song),
+            Cmd::Move(Motion::RowEnd) => self.move_to(self.row, usize::MAX, song),
+            _ => return Outcome::Passed,
+        }
+        Outcome::Done
+    }
+}
+
+impl Page for ProjectPage {
+    const KEYS: &'static [(&'static str, Cmd, &'static str)] = &[
+        ("j", Cmd::Move(Motion::Down), "Next row"),
+        ("k", Cmd::Move(Motion::Up), "Previous row"),
+        ("g g", Cmd::Move(Motion::First), "First row, or row n"),
+        ("G", Cmd::Move(Motion::Last), "Last row, or row n"),
+        ("h", Cmd::Move(Motion::Left), "Previous setting"),
+        (
+            "l",
+            Cmd::Move(Motion::Right),
+            "Next setting, or the tempo's fine part",
+        ),
+        ("0", Cmd::Move(Motion::RowStart), "First setting"),
+        ("$", Cmd::Move(Motion::RowEnd), "Last setting"),
+        ("=", Cmd::Increase, "Increase the value, or switch on"),
+        ("-", Cmd::Decrease, "Decrease the value, or switch off"),
+        ("+", Cmd::IncreaseLarge, "Increase the value, a large step"),
+        ("_", Cmd::DecreaseLarge, "Decrease the value, a large step"),
+        ("C-a", Cmd::Increase, "Increase the value"),
+        ("C-x", Cmd::Decrease, "Decrease the value"),
+        ("x", Cmd::ClearField, "Back to a new project's"),
+        ("K", Cmd::PickValue, "Choose from a list, switch, or do it"),
+        (
+            "Enter",
+            Cmd::PickValue,
+            "Do this action, or open the Audio page",
+        ),
+        ("H", Cmd::PreviousPage, "Previous page: Song, Audio"),
+        ("L", Cmd::NextPage, "Next page: Song, Audio"),
+    ];
+
+    type Drawn = ();
+
+    /// Run a key as the program gives it to the page: one of its moves, [`ProjectPage::key_on`],
+    /// or passed back, for an edit, which runs its row's command, or `H` and `L`, which show the
+    /// sub-page beside it.
+    fn key(&mut self, cmd: Cmd, times: usize, ctx: &mut CtxMut) -> Outcome {
+        let count = ctx.modes.count;
+        self.key_on(cmd, times, count, ctx.song())
+    }
+
+    /// Draw the Song sub-page.
+    fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
+        crate::views::project::draw_page(frame, area, self, ctx);
+    }
+}
+
+impl App {
+    /// What the cursor is on.
+    pub fn project_control(&self) -> ProjectControl {
+        self.project_page.control(self.song())
+    }
+
+    /// The groove the page draws, and its pushes.
+    pub fn shown_groove(&self) -> (GrooveId, Groove) {
+        self.project_page.shown_groove(self.song())
     }
 
     /// `Space 9`: the project page, on whichever of its sub-pages showed last, as a jump.
@@ -348,28 +453,12 @@ impl App {
         self.show_view(PROJECT_PAGES[to.min(PROJECT_PAGES.len() - 1)]);
     }
 
-    /// Run a command on the project page. Returns false if it means the same as anywhere.
+    /// Run a command the project page passed back: an edit on the setting under the cursor, or
+    /// `H` and `L`. Returns false if it means the same as anywhere.
     pub(crate) fn run_project_page(&mut self, cmd: Cmd) -> bool {
         let count = self.modes.count.take();
         let times = count.unwrap_or(1).max(1);
-        let last = PROJECT_ROWS.len() - 1;
         match cmd {
-            Cmd::Move(Motion::Down) => {
-                self.move_project_row(self.project_row.saturating_add(times).min(last));
-            }
-            Cmd::Move(Motion::Up) => {
-                self.move_project_row(self.project_row.saturating_sub(times));
-            }
-            Cmd::Move(Motion::First) => {
-                self.move_project_row(count.map_or(0, |row| row.saturating_sub(1)));
-            }
-            Cmd::Move(Motion::Last) => {
-                self.move_project_row(count.map_or(last, |row| row.saturating_sub(1)).min(last));
-            }
-            Cmd::Move(Motion::Right) => (0..times).for_each(|_| self.project_right()),
-            Cmd::Move(Motion::Left) => (0..times).for_each(|_| self.project_left()),
-            Cmd::Move(Motion::RowStart) => self.move_project(self.project_row, 0),
-            Cmd::Move(Motion::RowEnd) => self.move_project(self.project_row, usize::MAX),
             Cmd::Increase => self.adjust_project(true, times, false),
             Cmd::Decrease => self.adjust_project(false, times, false),
             Cmd::IncreaseLarge => self.adjust_project(true, times, true),
@@ -403,7 +492,7 @@ impl App {
         let count = count.min(0x1000) as i64;
         match self.project_control() {
             ProjectControl::Bpm => {
-                let size = match (self.project_fine, large) {
+                let size = match (self.project_page.fine, large) {
                     (true, false) => FINE_NUDGE,
                     (true, true) => FINE_JUMP,
                     (false, false) => BPM_NUDGE,
@@ -434,7 +523,7 @@ impl App {
                 } else {
                     id.index().saturating_sub(1)
                 };
-                self.groove_shown = GrooveId::from_index(to);
+                self.project_page.groove_shown = GrooveId::from_index(to);
             }
             control @ (ProjectControl::GrooveSteps
             | ProjectControl::Humanise
@@ -573,7 +662,7 @@ impl App {
     fn reset_project_control(&mut self) {
         let song = Arc::clone(self.song());
         match self.project_control() {
-            ProjectControl::Bpm if self.project_fine => {
+            ProjectControl::Bpm if self.project_page.fine => {
                 let whole = song.millibpm / 1000 * 1000;
                 if whole != song.millibpm {
                     self.line(Line::Bpm(whole));
@@ -585,7 +674,7 @@ impl App {
             ProjectControl::Groove if song.groove != GrooveId::STRAIGHT => {
                 self.line(Line::Groove(GrooveId::STRAIGHT));
             }
-            ProjectControl::GrooveShown => self.groove_shown = None,
+            ProjectControl::GrooveShown => self.project_page.groove_shown = None,
             control if control.shapes_groove() => {
                 let (_, groove) = self.shown_groove();
                 let shaped = match control {
@@ -836,7 +925,7 @@ impl App {
                     "A name is up to {MAX_PROJECT_NAME_CHARS} characters, with no / and not starting with a dot"
                 );
             }
-            ProjectControl::Bpm if self.project_fine => {
+            ProjectControl::Bpm if self.project_page.fine => {
                 match with_fraction(self.song().millibpm, text) {
                     Some(millibpm) => self.line(Line::Bpm(millibpm)),
                     None => {
@@ -944,7 +1033,7 @@ impl App {
             self.services.apply(&Action::SetGroove(copy));
             self.services.history.squash_to(depth);
         }
-        self.groove_shown = Some(copy);
+        self.project_page.groove_shown = Some(copy);
         self.services.status = if plays {
             format!("{id} copied to {copy} to change it, which the project now plays")
         } else {

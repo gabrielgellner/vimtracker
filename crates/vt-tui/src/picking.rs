@@ -948,7 +948,7 @@ impl App {
             }),
             Pick::Line(line) => self.line(line),
             Pick::ScaleTo(scale) => self.set_scale(scale),
-            Pick::ShowGroove(groove) => self.groove_shown = Some(groove),
+            Pick::ShowGroove(groove) => self.project_page.groove_shown = Some(groove),
             Pick::Scale(kind) => self.set_scale(Scale {
                 on: true,
                 kind,
