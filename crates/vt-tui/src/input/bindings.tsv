@@ -911,3 +911,18 @@ Picker	T	InPicker(Tags)	In the explorer: change the tags
 Picker	Space	InPicker(Mark)	In a kit: mark the sound, or a count of them
 Picker	x	InPicker(Mark)	In a kit: mark the sound, or a count of them
 Picker	a	InPicker(MarkAll)	In a kit: mark every sound, or none
+Help	j	InHelp(Down)	Scroll down
+Help	Down	InHelp(Down)	Scroll down
+Help	k	InHelp(Up)	Scroll up
+Help	Up	InHelp(Up)	Scroll up
+Guide	j	InGuide(Down)	Scroll down
+Guide	Down	InGuide(Down)	Scroll down
+Guide	k	InGuide(Up)	Scroll up
+Guide	Up	InGuide(Up)	Scroll up
+Guide	C-d	InGuide(HalfPageDown)	Half a page down
+Guide	C-u	InGuide(HalfPageUp)	Half a page up
+Guide	g	InGuide(Top)	The top
+Guide	G	InGuide(Bottom)	The bottom
+Guide	?	InGuide(Guides)	The list of guides
+Guide	q	InGuide(Close)	Close
+Guide	Esc	InGuide(Close)	Close

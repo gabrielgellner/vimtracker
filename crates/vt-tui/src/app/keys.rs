@@ -12,7 +12,9 @@ use crate::controls::Page;
 use crate::input::bindings::{Binding, Cmd, Resolved, adjusting_key, degree_key, note_key};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
+use crate::overlays;
 use crate::overlays::guides;
+use crate::overlays::help::Help;
 use crate::overlays::picker::{Item, Pick, Picker};
 use crate::pages::sample::SampleKey;
 use crate::pages::sample::marking::MarkWait;
@@ -322,8 +324,30 @@ impl App {
             Mode::Insert => self.insert_key(key),
             Mode::Replace => self.replace_key(key),
             Mode::Command => self.command_key(key),
-            Mode::Help => self.help_key(key),
-            Mode::Guide => self.guide_key(key),
+            Mode::Help => {
+                let outcome = overlays::give(
+                    &mut self.overlays.help,
+                    &self.table,
+                    &mut self.grammar,
+                    &mut self.services,
+                    &self.modes,
+                    key,
+                    now,
+                );
+                self.settled(outcome, false);
+            }
+            Mode::Guide => {
+                let outcome = overlays::give(
+                    &mut self.overlays.guide,
+                    &self.table,
+                    &mut self.grammar,
+                    &mut self.services,
+                    &self.modes,
+                    key,
+                    now,
+                );
+                self.settled(outcome, false);
+            }
             Mode::Picker => self.picker_key(key, now),
             Mode::Shape => self.shape_key(key),
             Mode::Mapping => self.mapping_key(key),
@@ -509,19 +533,6 @@ impl App {
         rows
     }
 
-    fn help_key(&mut self, key: Key) {
-        match key.code {
-            KeyCode::Char('j') | KeyCode::Down => self.overlays.help_scroll += 1,
-            KeyCode::Char('k') | KeyCode::Up => {
-                self.overlays.help_scroll = self.overlays.help_scroll.saturating_sub(1);
-            }
-            _ => {
-                self.overlays.help_scroll = 0;
-                self.modes.mode = Mode::Normal;
-            }
-        }
-    }
-
     /// Hear a row, unless playback is using the tracks, for as long as the key is down if it's
     /// held.
     pub(crate) fn audition(&mut self, section_step: usize) {
@@ -530,43 +541,9 @@ impl App {
         }
     }
 
-    /// Scroll an open guide, stopping when its last row reaches the bottom of the window.
     /// The guide for the page or view showing, which `Space ?` opens the list of guides on.
     fn guide_here(&self) -> guides::Guide {
         guides::for_view(self.modes.view, self.track_page.page)
-    }
-
-    fn guide_key(&mut self, key: Key) {
-        let Some(guide) = self.overlays.guide else {
-            self.modes.mode = Mode::Normal;
-            return;
-        };
-        let last = guide
-            .lines(self.overlays.guide_width)
-            .len()
-            .saturating_sub(self.overlays.guide_page);
-        let half = (self.overlays.guide_page / 2).max(1);
-        self.overlays.guide_scroll = match key.code {
-            KeyCode::Char('d') if key.ctrl => self.overlays.guide_scroll + half,
-            KeyCode::Char('u') if key.ctrl => self.overlays.guide_scroll.saturating_sub(half),
-            KeyCode::Char('j') | KeyCode::Down => self.overlays.guide_scroll + 1,
-            KeyCode::Char('k') | KeyCode::Up => self.overlays.guide_scroll.saturating_sub(1),
-            KeyCode::Char('g') => 0,
-            KeyCode::Char('G') => last,
-            KeyCode::Char('?') => {
-                let reading = self.overlays.guide.take();
-                let on = reading.unwrap_or_else(|| self.guide_here());
-                self.show_picker(guides::picker(on));
-                return;
-            }
-            KeyCode::Char('q') | KeyCode::Esc => {
-                self.overlays.guide = None;
-                self.modes.mode = Mode::Normal;
-                return;
-            }
-            _ => self.overlays.guide_scroll,
-        }
-        .min(last);
     }
 
     /// Run a command the binding table resolved. A key goes, in this order, to the first that
@@ -611,7 +588,7 @@ impl App {
             Cmd::Picker => self.open_view_picker(),
             Cmd::TrackPicker => self.open_picker(self.services.track_picker()),
             Cmd::Help => {
-                self.overlays.help_scroll = 0;
+                self.overlays.help = Help::over(self.help_rows());
                 self.modes.mode = Mode::Help;
             }
             Cmd::Guides => self.show_picker(guides::picker(self.guide_here())),
