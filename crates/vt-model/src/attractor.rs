@@ -299,7 +299,7 @@ impl Attractor {
                 + h01 * self.to.at[axis]
                 + h11 * self.to.slope[axis];
             let (low, high) = axes[axis];
-            let (middle, half) = ((low + high) / 2.0, (high - low) / 2.0 * MARGIN);
+            let (middle, half) = (low.midpoint(high), (high - low) / 2.0 * MARGIN);
             (((value - middle) / half) as f32).clamp(-1.0, 1.0)
         })
     }

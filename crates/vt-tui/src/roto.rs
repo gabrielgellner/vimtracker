@@ -1,10 +1,11 @@
-//! The Roto-Control, as vimtracker drives it (`docs/designs/roto-control.md`): the setting that
-//! turns it on, kept for this machine in `roto.ron` beside `audio.ron`; the link to it while it's
-//! on; and what its PLUGIN mode shows, a track's devices, each laid out by its kind's layout
-//! ([`layouts`], [`devices`]): live, or for a device with off/on settings one of vimtracker's own
-//! setups stored on the Roto, written over its serial port on a thread of its own when they're
-//! missing or changed, so those settings are on its buttons. Off, as it starts, nothing is opened
-//! and the Roto is left to Live.
+//! The Roto-Control, as vimtracker drives it (`docs/designs/roto-control.md`).
+//!
+//! It's the setting that turns it on, kept for this machine in `roto.ron` beside `audio.ron`; the
+//! link to it while it's on; and what its PLUGIN mode shows, a track's devices, each laid out by
+//! its kind's layout ([`layouts`], [`devices`]): live, or for a device with off/on settings one of
+//! vimtracker's own setups stored on the Roto, written over its serial port on a thread of its own
+//! when they're missing or changed, so those settings are on its buttons. Off, as it starts,
+//! nothing is opened and the Roto is left to Live.
 //!
 //! Only one program may drive the Roto at a time (§6 of the note), so turning it on takes the
 //! Roto, and turning it off, or quitting, says `DAW STARTED` and closes the link, so a running

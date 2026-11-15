@@ -1,12 +1,13 @@
-//! The mouse wheel and the trackpad as a knob on the cursor's setting (#425): each tick is `=` or
-//! `-` where the cursor is, wherever those keys adjust something, a locked selection included,
-//! and with Shift `+` or `_`. Up and down and sideways are one knob, as a trackpad's fingers drift
-//! from one to the other: the value follows the fingers, rising as they go up or right, as a level
-//! bar fills, whichever way macOS scrolls the screen. Where the cursor's setting has a finer step
-//! than `=`, its fine digits, the tempo's fine part or the sample page's frame, a tick takes a
-//! part of that, the same for every tick of a slow or steady turn, so twice the swipe is twice the
-//! change, and only a fast swipe takes more at a time, up to one of `=`'s steps. Where the pointer
-//! is doesn't matter, and clicks and drags do nothing.
+//! The mouse wheel and the trackpad as a knob on the cursor's setting (#425).
+//!
+//! Each tick is `=` or `-` where the cursor is, wherever those keys adjust something, a locked
+//! selection included, and with Shift `+` or `_`. Up and down and sideways are one knob, as a
+//! trackpad's fingers drift from one to the other: the value follows the fingers, rising as they go
+//! up or right, as a level bar fills, whichever way macOS scrolls the screen. Where the cursor's
+//! setting has a finer step than `=`, its fine digits, the tempo's fine part or the sample page's
+//! frame, a tick takes a part of that, the same for every tick of a slow or steady turn, so twice
+//! the swipe is twice the change, and only a fast swipe takes more at a time, up to one of `=`'s
+//! steps. Where the pointer is doesn't matter, and clicks and drags do nothing.
 //!
 //! One gesture is one undo step, as a Roto knob's touch to let-go is (decision 160): it ends once
 //! the wheel pauses for [`GESTURE_PAUSE`], or at any key.

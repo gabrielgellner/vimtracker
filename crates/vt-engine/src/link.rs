@@ -694,13 +694,11 @@ mod tests {
     const COMB: Insert = Insert::Comb(vt_model::insert::Comb::DEFAULT);
     /// A frequency shifter, which takes the lines of its loop from the pool.
     const SHIFT: Insert = Insert::FreqShift(vt_model::insert::FreqShift::DEFAULT);
-    /// A spring reverb, knocked, which takes its springs' lines from the pool.
     /// A rotary speaker, fast, which takes its horn's line from the pool.
     const ROTARY: Insert = Insert::Rotary(vt_model::insert::Rotary {
         fast: 1,
         ..vt_model::insert::Rotary::DEFAULT
     });
-    /// A spring reverb, knocked, which takes its springs' lines from the pool.
     /// A stutter, switched on so it's stuttering as it comes, which takes its pieces from the pool.
     const STUTTER: Insert = Insert::Stutter(vt_model::insert::Stutter {
         trig: 1,

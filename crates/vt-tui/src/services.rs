@@ -1,8 +1,10 @@
-//! What every page shares (#320): the song and its history, which actions are applied to, the
-//! program's cursor in it and which groups are folded, the engine and what it last reported, the
-//! sample pool and its analyses, this machine's settings, the Roto and the status line. `App` holds them beside the pages, so a page running a key can
-//! borrow them mutably while it borrows itself, and an edit on a page applies an action as one in
-//! `App` does.
+//! What every page shares (#320).
+//!
+//! It's the song and its history, which actions are applied to, the program's cursor in it and
+//! which groups are folded, the engine and what it last reported, the sample pool and its analyses,
+//! this machine's settings, the Roto and the status line. `App` holds them beside the pages, so a
+//! page running a key can borrow them mutably while it borrows itself, and an edit on a page
+//! applies an action as one in `App` does.
 
 pub(crate) mod analysing;
 pub mod audio;
