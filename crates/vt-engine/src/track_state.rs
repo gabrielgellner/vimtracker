@@ -2063,7 +2063,7 @@ impl TrackState {
                 }) else {
                     continue;
                 };
-                let added = offsets[id.index()] * setting.span();
+                let added = offsets[id.index()] * found.span();
                 self.slot_moving[slot] |= added != 0.0;
                 let value = self.slot_values[slot][at] + added;
                 resolved = resolved.write(setting, value);

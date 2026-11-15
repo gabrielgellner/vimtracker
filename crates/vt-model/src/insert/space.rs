@@ -139,43 +139,18 @@ impl Delay {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::Time => self.time,
-            Setting::Feedback => self.feedback,
-            Setting::PingPong => self.ping_pong,
-            Setting::Width => self.width,
-            Setting::LowCut => self.low_cut,
-            Setting::HighCut => self.high_cut,
-            Setting::Drive => self.drive,
-            Setting::Retime => self.retime,
-            Setting::Wow => self.wow,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut delay = self;
-        match setting {
-            Setting::Time => delay.time = value,
-            Setting::Feedback => delay.feedback = value,
-            Setting::PingPong => delay.ping_pong = value,
-            Setting::Width => delay.width = value,
-            Setting::LowCut => delay.low_cut = value,
-            Setting::HighCut => delay.high_cut = value,
-            Setting::Drive => delay.drive = value,
-            Setting::Retime => delay.retime = value,
-            Setting::Wow => delay.wow = value,
-            Setting::Mix => delay.mix = value,
-            Setting::Gain => delay.gain = value,
-            _ => {}
-        }
-        delay
+    effect_settings! {
+        time => Time,
+        feedback => Feedback,
+        ping_pong => PingPong,
+        width => Width,
+        low_cut => LowCut,
+        high_cut => HighCut,
+        drive => Drive,
+        retime => Retime,
+        wow => Wow,
+        mix => Mix,
+        gain => Gain,
     }
 }
 
@@ -428,47 +403,20 @@ impl Echo {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::EchoMode => self.mode,
-            Setting::EchoRate => self.rate,
-            Setting::EchoSync => self.sync,
-            Setting::Inertia => self.inertia,
-            Setting::Feedback => self.intensity,
-            Setting::EchoInput => self.input,
-            Setting::Wow => self.wow,
-            Setting::EchoBass => self.bass,
-            Setting::EchoTreble => self.treble,
-            Setting::ReverbAmount => self.reverb,
-            Setting::EchoLevel => self.echo,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut echo = self;
-        match setting {
-            Setting::EchoMode => echo.mode = value,
-            Setting::EchoRate => echo.rate = value,
-            Setting::EchoSync => echo.sync = value,
-            Setting::Inertia => echo.inertia = value,
-            Setting::Feedback => echo.intensity = value,
-            Setting::EchoInput => echo.input = value,
-            Setting::Wow => echo.wow = value,
-            Setting::EchoBass => echo.bass = value,
-            Setting::EchoTreble => echo.treble = value,
-            Setting::ReverbAmount => echo.reverb = value,
-            Setting::EchoLevel => echo.echo = value,
-            Setting::Mix => echo.mix = value,
-            Setting::Gain => echo.gain = value,
-            _ => {}
-        }
-        echo
+    effect_settings! {
+        mode => EchoMode,
+        rate => EchoRate,
+        sync => EchoSync,
+        inertia => Inertia,
+        intensity => Feedback,
+        input => EchoInput,
+        wow => Wow,
+        bass => EchoBass,
+        treble => EchoTreble,
+        reverb => ReverbAmount,
+        echo => EchoLevel,
+        mix => Mix,
+        gain => Gain,
     }
 }
 
@@ -538,35 +486,14 @@ impl Reverb {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::Pre => self.pre,
-            Setting::Decay => self.decay,
-            Setting::Damp => self.damp,
-            Setting::LowCut => self.low_cut,
-            Setting::HighCut => self.high_cut,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut reverb = self;
-        match setting {
-            Setting::Pre => reverb.pre = value,
-            Setting::Decay => reverb.decay = value,
-            Setting::Damp => reverb.damp = value,
-            Setting::LowCut => reverb.low_cut = value,
-            Setting::HighCut => reverb.high_cut = value,
-            Setting::Mix => reverb.mix = value,
-            Setting::Gain => reverb.gain = value,
-            _ => {}
-        }
-        reverb
+    effect_settings! {
+        pre => Pre,
+        decay => Decay,
+        damp => Damp,
+        low_cut => LowCut,
+        high_cut => HighCut,
+        mix => Mix,
+        gain => Gain,
     }
 }
 
@@ -641,37 +568,15 @@ impl Plate {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::Pre => self.pre,
-            Setting::Decay => self.decay,
-            Setting::Damp => self.damp,
-            Setting::HighCut => self.high_cut,
-            Setting::Size => self.size,
-            Setting::Excursion => self.excursion,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut plate = self;
-        match setting {
-            Setting::Pre => plate.pre = value,
-            Setting::Decay => plate.decay = value,
-            Setting::Damp => plate.damp = value,
-            Setting::HighCut => plate.high_cut = value,
-            Setting::Size => plate.size = value,
-            Setting::Excursion => plate.excursion = value,
-            Setting::Mix => plate.mix = value,
-            Setting::Gain => plate.gain = value,
-            _ => {}
-        }
-        plate
+    effect_settings! {
+        pre => Pre,
+        decay => Decay,
+        damp => Damp,
+        high_cut => HighCut,
+        size => Size,
+        excursion => Excursion,
+        mix => Mix,
+        gain => Gain,
     }
 }
 
@@ -775,39 +680,16 @@ impl Spring {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::Decay => self.decay,
-            Setting::SpringSize => self.size,
-            Setting::Damp => self.damp,
-            Setting::Spin => self.spin,
-            Setting::Reflections => self.reflect,
-            Setting::Chaos => self.chaos,
-            Setting::Knock => self.knock,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut spring = self;
-        match setting {
-            Setting::Decay => spring.decay = value,
-            Setting::SpringSize => spring.size = value,
-            Setting::Damp => spring.damp = value,
-            Setting::Spin => spring.spin = value,
-            Setting::Reflections => spring.reflect = value,
-            Setting::Chaos => spring.chaos = value,
-            Setting::Knock => spring.knock = value,
-            Setting::Mix => spring.mix = value,
-            Setting::Gain => spring.gain = value,
-            _ => {}
-        }
-        spring
+    effect_settings! {
+        decay => Decay,
+        size => SpringSize,
+        damp => Damp,
+        spin => Spin,
+        reflect => Reflections,
+        chaos => Chaos,
+        knock => Knock,
+        mix => Mix,
+        gain => Gain,
     }
 }
 
@@ -876,33 +758,13 @@ impl Space {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::Decay => self.decay,
-            Setting::SpaceSize => self.size,
-            Setting::Damp => self.damp,
-            Setting::Excursion => self.excursion,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut space = self;
-        match setting {
-            Setting::Decay => space.decay = value,
-            Setting::SpaceSize => space.size = value,
-            Setting::Damp => space.damp = value,
-            Setting::Excursion => space.excursion = value,
-            Setting::Mix => space.mix = value,
-            Setting::Gain => space.gain = value,
-            _ => {}
-        }
-        space
+    effect_settings! {
+        decay => Decay,
+        size => SpaceSize,
+        damp => Damp,
+        excursion => Excursion,
+        mix => Mix,
+        gain => Gain,
     }
 }
 
@@ -1027,32 +889,12 @@ impl Stutter {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::Trig => self.trig,
-            Setting::RepeatLength => self.length,
-            Setting::Repeats => self.repeats,
-            Setting::RepeatDecay => self.decay,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut stutter = self;
-        match setting {
-            Setting::Trig => stutter.trig = value,
-            Setting::RepeatLength => stutter.length = value,
-            Setting::Repeats => stutter.repeats = value,
-            Setting::RepeatDecay => stutter.decay = value,
-            Setting::Mix => stutter.mix = value,
-            Setting::Gain => stutter.gain = value,
-            _ => {}
-        }
-        stutter
+    effect_settings! {
+        trig => Trig,
+        length => RepeatLength,
+        repeats => Repeats,
+        decay => RepeatDecay,
+        mix => Mix,
+        gain => Gain,
     }
 }
