@@ -141,9 +141,7 @@ impl GenDrawing {
 mod tests {
     use super::*;
     use vt_model::generator::Span;
-    use vt_model::shape::{
-        Acid, Bits, DEFAULT_RATE, FillKind, Follow, Pink, Shape, Values, Walk, Where,
-    };
+    use vt_model::shape::{FillKind, Shape, Where};
     use vt_model::song::Phrase;
 
     #[test]
@@ -160,28 +158,10 @@ mod tests {
         let shape = Shape {
             from: 60,
             to: 72,
-            curve: 0,
-            s: 0,
             kind: FillKind::Reverse,
-            wave: vt_model::lfo::Shape::Sine,
-            rate: DEFAULT_RATE,
-            phase: 0,
-            run: 1,
-            values: Values::default(),
             place: Where::Notes,
             seed: 1,
-            acid: Acid::default(),
-            follow: Follow::default(),
-            walk: Walk::default(),
-            pink: Pink::default(),
-            bits: Bits::default(),
-            grids: vt_model::shape::Grids::default(),
-            random: vt_model::shape::Random::default(),
-            vary: 0,
-            variation: vt_model::shape::Variation::default(),
-            divisions: vt_model::shape::Divisions::default(),
-            ring: vt_model::shape::Ring::default(),
-            tonnetz: vt_model::shape::Tonnetz::default(),
+            ..Shape::default()
         };
         let column = ShapeColumn::Note {
             scale: vt_model::scale::Scale::default(),

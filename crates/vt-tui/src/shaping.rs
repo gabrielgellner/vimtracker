@@ -7,15 +7,13 @@ use std::sync::Arc;
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, edit};
 use vt_model::generator::{Generator, Span, applied, reads, unfollowed};
-use vt_model::lfo::Shape as Wave;
 use vt_model::scale::Scale;
 use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
-    Acid, Bits, Channel, Context, DEFAULT_RATE, DrumPart, FillKind, Follow, GenParam, Grids, Pink,
-    Random, Shape, ShapeColumn, Source, Starts, TonnetzVoice, VARIATION_NOTES, Values, Walk, Where,
-    default_ends, default_step, divisions_seed, drum_parts, is_empty, on_track, open_rows,
-    track_seed, variation_notes,
+    Channel, Context, DrumPart, FillKind, GenParam, Grids, Shape, ShapeColumn, Source, Starts,
+    TonnetzVoice, VARIATION_NOTES, Values, Walk, Where, default_ends, default_step, divisions_seed,
+    drum_parts, is_empty, on_track, open_rows, track_seed, variation_notes,
 };
 use vt_model::song::{Machine, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
@@ -397,31 +395,12 @@ fn starting_shape(column: ShapeColumn, (from, to): (u8, u8), place: Where) -> Sh
     Shape {
         from,
         to,
-        curve: 0,
-        s: 0,
-        kind: FillKind::Ramp,
-        wave: Wave::Sine,
-        rate: DEFAULT_RATE,
-        phase: 0,
-        run: 1,
-        values: Values::default(),
         place,
-        seed: 0,
-        acid: Acid::default(),
-        follow: Follow::default(),
         walk: Walk {
             step: default_step(column),
             ..Walk::default()
         },
-        pink: Pink::default(),
-        bits: Bits::default(),
-        grids: Grids::default(),
-        random: Random::default(),
-        vary: 0,
-        variation: vt_model::shape::Variation::default(),
-        divisions: vt_model::shape::Divisions::default(),
-        ring: vt_model::shape::Ring::default(),
-        tonnetz: vt_model::shape::Tonnetz::default(),
+        ..Shape::default()
     }
 }
 

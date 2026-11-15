@@ -10,13 +10,9 @@ use vt_engine::render::{RenderOptions, render_loop};
 use vt_model::action::{Action, edit};
 use vt_model::bloom::Bloom;
 use vt_model::generator::Span;
-use vt_model::lfo::Shape as Wave;
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
-use vt_model::shape::{
-    Acid, Bits, Context, DEFAULT_RATE, FillKind, Follow, GenParam, Pink, Role, Shape, ShapeColumn,
-    Values, Walk, Where, World,
-};
+use vt_model::shape::{Context, FillKind, GenParam, Role, Shape, ShapeColumn, Where, World};
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, Step};
@@ -31,28 +27,10 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
     Shape {
         from,
         to,
-        curve: 0,
-        s: 0,
         kind,
-        wave: Wave::Sine,
-        rate: DEFAULT_RATE,
-        phase: 0,
-        run: 1,
-        values: Values::default(),
         place,
         seed: 7,
-        acid: Acid::default(),
-        follow: Follow::default(),
-        walk: Walk::default(),
-        pink: Pink::default(),
-        bits: Bits::default(),
-        grids: vt_model::shape::Grids::default(),
-        random: vt_model::shape::Random::default(),
-        vary: 0,
-        variation: vt_model::shape::Variation::default(),
-        divisions: vt_model::shape::Divisions::default(),
-        ring: vt_model::shape::Ring::default(),
-        tonnetz: vt_model::shape::Tonnetz::default(),
+        ..Shape::default()
     }
 }
 
