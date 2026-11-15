@@ -23,11 +23,12 @@
 
 use std::f32::consts::{PI, TAU};
 
-use super::virtual_analog::{BLOCK, Moving, Settings, next_blep, this_blep};
+use super::Settings;
+use super::virtual_analog::{BLOCK, Moving, next_blep, this_blep};
 use crate::dsp::blocks::oversampler::Decimator;
 use crate::dsp::blocks::plaits_parts::DcBlocker;
 use crate::dsp::blocks::sine_table::SINE;
-use crate::voice::SynthEngine;
+use crate::dsp::voices::SynthEngine;
 
 /// Braids renders at 96 kHz, and these at twice the program's rate, which at 48 kHz is the same.
 pub(super) const OVERSAMPLING: usize = 2;

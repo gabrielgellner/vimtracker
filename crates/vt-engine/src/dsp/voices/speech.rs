@@ -22,11 +22,12 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use super::virtual_analog::{BLOCK, Moving, Settings, next_blep, this_blep};
+use super::Settings;
+use super::virtual_analog::{BLOCK, Moving, next_blep, this_blep};
 use crate::dsp::blocks::plaits_parts::{DcBlocker, HysteresisQuantizer, Limiter, Svf, tan_dirty};
 use crate::dsp::blocks::sine_table::SINE;
+use crate::dsp::voices::SynthEngine;
 use crate::rng::Pcg32;
-use crate::voice::SynthEngine;
 
 /// How loud it is against the other machines, through Plaits' limiter as Plaits has it. Plaits
 /// takes it at 0.7; this is a little louder, as its formant models are quiet beside `VA`.

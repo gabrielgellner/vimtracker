@@ -12,9 +12,11 @@ use vt_model::grid::GRID_ROWS;
 use vt_model::settings::SettingId;
 use vt_model::song::{Machine, Track, TrackKind};
 
+use crate::controls::DEVICE_COLUMNS;
+use crate::controls::{Control, DeviceSpec, Page};
 use crate::graphics::PanelKey;
 use crate::pages::Ctx;
-use crate::pages::track::{Control, DEVICE_COLUMNS, DeviceSpec, Page, TrackPage};
+use crate::pages::track::TrackPage;
 use crate::services::automating::as_heard;
 use crate::widgets::device::{DEVICE_HEIGHT, Device};
 use crate::widgets::glyphs;

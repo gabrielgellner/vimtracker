@@ -19,11 +19,12 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use super::virtual_analog::{BLOCK, Moving, Settings, next_blep, this_blep};
+use super::Settings;
+use super::virtual_analog::{BLOCK, Moving, next_blep, this_blep};
 use crate::dsp::blocks::plaits_parts::{Limiter, interpolate};
 use crate::dsp::blocks::sine_table::SINE;
+use crate::dsp::voices::SynthEngine;
 use crate::rng::Pcg32;
-use crate::voice::SynthEngine;
 
 const VOICES: usize = 8;
 /// The highest frequency a saw runs at, as a fraction of the sample rate.

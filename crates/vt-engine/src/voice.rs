@@ -1,4 +1,4 @@
-//! Sample playback and its envelope.
+//! Sample playback and its envelope, and the synths a voice can play in place of a sample.
 
 use crate::dsp::voices::acid::Acid;
 use crate::dsp::voices::additive::Additive;
@@ -25,11 +25,12 @@ use crate::dsp::voices::speech::Speech;
 use crate::dsp::voices::string_model::StringModel;
 use crate::dsp::voices::supersaw::Supersaw;
 use crate::dsp::voices::swarm::Swarm;
-use crate::dsp::voices::virtual_analog::{Settings, VirtualAnalog};
+use crate::dsp::voices::virtual_analog::VirtualAnalog;
 use crate::dsp::voices::virtual_analog_vcf::VirtualAnalogVcf;
 use crate::dsp::voices::wave_terrain::WaveTerrain;
 use crate::dsp::voices::waveshaping::Waveshaping;
 use crate::dsp::voices::wavetable::Wavetable;
+use crate::dsp::voices::{Settings, SynthEngine};
 use vt_model::constants::DECLICK_FRAMES;
 use vt_model::envelope::Envelope;
 use vt_model::playable::Span;
@@ -73,54 +74,6 @@ struct Gliding {
     to: f64,
     /// How much of the rest of the way it goes each frame, in pitch.
     share: f64,
-}
-
-/// What a synth does to play a note on a voice. Each is plain data, held inline in a [`Synth`], so
-/// the audio thread never allocates for one and reaches it through a match, never `dyn`. What
-/// most synths don't do has a default.
-pub(crate) trait SynthEngine: Copy {
-    /// Whether it drifts as an analog synth does, which a seed for each note gives it.
-    const DRIFTS: bool = false;
-    /// Whether it draws noise, which a seed for each note chooses.
-    const NOISE: bool = false;
-
-    /// A new note, at a sample rate.
-    fn new(rate: u32) -> Self;
-
-    /// The next frame, at a frequency as a fraction of the sample rate.
-    fn next(&mut self, frequency: f32, settings: Settings) -> f32;
-
-    /// The next frame, on both sides: the same on each unless it spreads them, as `Supersaw` does.
-    #[inline]
-    fn next_sides(&mut self, frequency: f32, settings: Settings) -> [f32; 2] {
-        let sample = self.next(frequency, settings);
-        [sample, sample]
-    }
-
-    /// Start a note, for a synth with envelopes of its own that an accent changes.
-    fn trigger(&mut self, _accent: bool) {}
-
-    /// Let go of the note, for a synth with envelopes of its own.
-    fn release(&mut self) {}
-
-    /// Whether nothing it carries from note to note is left, so a voice let go can stop. `Acid`'s
-    /// accent sweep drains between notes, as a 303's does, and the next note carries on from it.
-    fn settled(&self) -> bool {
-        true
-    }
-
-    /// Roll a new note's drift, and its noise floor, from a seed, for a synth that drifts.
-    /// `Drift` as the note starts says whether its oscillators start anywhere in their cycles.
-    fn seed_drift(&mut self, _seed: u32, _settings: Settings) {}
-
-    /// What `Drift` multiplies the note's envelope times by. `Acid`'s own envelopes take it
-    /// themselves.
-    fn time(&self, _settings: Settings) -> f32 {
-        1.0
-    }
-
-    /// Choose the noise of a synth that draws any, so each hit differs but a render repeats.
-    fn seed_noise(&mut self, _seed: u32) {}
 }
 
 /// Writes [`Synth`] from one list of the `SynthVoice`s and the engines that play them: the enum,

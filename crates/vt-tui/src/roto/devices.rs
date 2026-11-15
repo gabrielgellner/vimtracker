@@ -36,13 +36,11 @@ use vt_roto::sysex::{CONTROLS, MAX_STEPS};
 use ratatui::style::Color;
 
 use super::layouts::{self, Setting, Turn};
-use crate::pages::track::draw::toggle_on;
-use crate::pages::track::tuning::{tuning, tuning_most};
-use crate::pages::track::{
-    AccumulatorField, ArpField, Control, DeviceSpec, Page, macros_device, view,
-};
+use crate::controls::param::{ParamView, Reads};
+use crate::controls::toggle_on;
+use crate::controls::tuning::{tuning, tuning_most};
+use crate::controls::{AccumulatorField, ArpField, Control, DeviceSpec, Page, macros_device, view};
 use crate::services::generators::{column_label, with_live};
-use crate::widgets::param::view::{ParamView, Reads};
 use crate::widgets::theme;
 
 /// What a setting is for, which gives its knob's colour, the same wherever the setting is.
@@ -290,7 +288,7 @@ fn is_macros(spec: &DeviceSpec) -> bool {
 /// macro by its own, cut to the Roto's 12 characters.
 pub fn name(control: Control, track: &Track) -> Label {
     if let Control::Macro(at) = control {
-        let name: String = crate::overlays::mapping::macro_name(&track.macros[at], at)
+        let name: String = crate::controls::macro_name(&track.macros[at], at)
             .chars()
             .take(vt_model::macros::MACRO_NAME_LENGTH)
             .collect();
@@ -780,7 +778,7 @@ fn enabled(control: Option<Control>, track: &Track) -> bool {
         Some(Control::Insert(slot)) => {
             track.inserts[slot] != Insert::Empty && !track.bypassed[slot]
         }
-        Some(control) => crate::pages::track::modulator_bypassed(control, track) != Some(true),
+        Some(control) => crate::controls::modulator_bypassed(control, track) != Some(true),
         None => true,
     }
 }
@@ -981,7 +979,7 @@ pub(crate) fn device_switch(track: &Track, device: usize) -> Option<Control> {
     let (_, _, spec) = track_devices(track, None).into_iter().nth(device)?;
     match spec.title[0]? {
         control @ Control::Insert(_) => Some(control),
-        control => crate::pages::track::modulator_bypassed(control, track).map(|_| control),
+        control => crate::controls::modulator_bypassed(control, track).map(|_| control),
     }
 }
 

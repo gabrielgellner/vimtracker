@@ -19,6 +19,7 @@ use vt_model::song::Role;
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark};
 
 use crate::app::{App, Entry};
+use crate::controls::{Control, set};
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
 use crate::overlays::picker::explorer::Purpose;
@@ -28,7 +29,6 @@ use crate::pages::chain::ChainView;
 use crate::pages::phrase::PhraseView;
 use crate::pages::song::COLUMNS_BEFORE_TRACKS;
 use crate::pages::track::tuning::set_tuning;
-use crate::pages::track::{Control, set};
 use crate::services::banking::Seed;
 
 impl App {

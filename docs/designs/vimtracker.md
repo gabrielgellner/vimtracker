@@ -777,7 +777,7 @@ module per file, each keeping its port's licence notice:
 A new voice, filter, effect or dynamics tool goes in its folder. A slot effect with a long buffer
 implements `SlotEffect` (and `Rung`, if the slot plays it through `ring`) and takes one line of
 `memories!`; the slot reaches it by `match`, never `dyn` (decision 340). A voice implements
-`SynthEngine` and takes one line of `synths!`. [Adding a device](adding-a-device.md) has the rest
+`SynthEngine` (`dsp/voices.rs`) and takes one line of `synths!`. [Adding a device](adding-a-device.md) has the rest
 of each family's checklist. A part that two folders
 would share, such as the antiderivative antialiasing, 4x oversampling and state variable filter of
 #260, goes in `blocks/`. New DSP uses `blocks/` for a one-pole, a delay line or its read, a
@@ -1064,12 +1064,17 @@ mixer shares, as it turns the same controls: `editing.rs` (`=`, `-`, the fine di
 `App`'s: `pickers.rs` (`K`), which opens the program's picker, typing's keys into `App::modes`'
 entry, and `generators.rs`, which works through the live generators' sources and the shape panel.
 
-*   **Each page's settings in its own file:** `sound.rs` has the Sound page's devices on a sound
-    track and the fixed tracks' Outputs, `modulation.rs` the Mod page's devices, and
-    `fx.rs` the slots; `controls.rs` has `Control`, what each setting is called and holds on a
-    track.
-*   **Each setting resolved once** (`view.rs`, the UI plan's U7, #739). `view(control, track,
-    song, scale)` gives a `ParamView` (`widgets/param/view.rs`): its value within its bounds, its fine byte, its default,
+*   **What's on each page is `controls/`'s**, a module beside `pages` and `roto` with no ratatui
+    in it, as the mixer, the status line, automation and the Roto read it too (#870), so the
+    track page and the Roto depend on it and not on each other. `controls/devices/` has each
+    page's devices in a file of its own: `sound.rs` the Sound page's on a sound track and the
+    fixed tracks' Outputs, `modulation.rs` the Mod page's, `fx.rs` the slots and `generators.rs`
+    the Gen page's; `controls/control.rs` has `Control`, what each setting is called and holds on
+    a track, `controls/keys.rs` the key the Roto's layouts name it by, and `controls/tuning.rs`
+    what `Tune` and `Cents` are of.
+*   **Each setting resolved once** (`controls/view.rs`, the UI plan's U7, #739). `view(control,
+    track, song, scale)` gives a `ParamView` (`controls/param.rs`): its value within its bounds,
+    its fine byte, its default,
     its `nudge` and `jump` up and down from where it is (an envelope's time steps by 1 ms below
     10 ms and 5 ms from it, so `-` from 10 ms is 9 ms), whether it wraps, its bar, whether it's a
     switch, its choices and whether `K` numbers them, its cell's text, the status line's text
@@ -2224,7 +2229,7 @@ Issues create the files they name. Files marked **copy** come from `gmuse`, are 
 *   `src/playhead.rs`: per-track position, swing and version-change rules.
 *   `src/fx.rs`: the FX interpreter.
 *   `src/track_state.rs`: fixed-size per-track state.
-*   `src/voice.rs`: sample playback and envelope, and `SynthEngine`, which each synth voice in `dsp/voices/` implements, with the `synths!` list that makes `Synth` of them. `src/preview.rs`: the preview voices.
+*   `src/voice.rs`: sample playback and envelope, with the `synths!` list that makes `Synth` of the synth voices in `dsp/voices/`. What each of them implements, `SynthEngine`, and the `Settings` they're given are in `dsp/voices.rs`, so a voice's file imports nothing from above `dsp/`. `src/preview.rs`: the preview voices.
 *   `src/dsp/`: the voices, filters, effects and dynamics in `voices/`, `filters/`, `effects/` and `dynamics/`, on the shared building blocks in `blocks/`, as "DSP layout" in the Technical Plan gives them.
 *   `src/mixer.rs`: track mix, sends and limiter.
 *   `src/rng.rs`: PCG32.

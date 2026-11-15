@@ -24,11 +24,11 @@ use vt_model::shape::params::Choice;
 use vt_model::step::{FxCommand, GateKind};
 use vt_model::tag::Tag;
 
+use crate::controls::Page;
 use crate::input::keys::Key;
 use crate::input::mode::View;
 use crate::overlays::command::parse::Line;
 use crate::overlays::guides::Guide;
-use crate::pages::track::Page;
 use crate::services::audio::AudioChoice;
 
 pub mod draw;
@@ -148,16 +148,16 @@ pub enum Pick {
     /// A value for the Sampler device's `Tune` or `Cents` on the cursor's track, or none for a
     /// slice's tune to play as its sample's.
     Tuning {
-        control: crate::pages::track::Control,
+        control: crate::controls::Control,
         value: Option<i8>,
     },
     /// Go to this track.
     Track(usize),
     /// One of the choices of a setting the track page describes, for a track, by its place in
-    /// the setting's list (`pages::track::view`).
+    /// the setting's list (`controls::view`).
     Param {
         track: usize,
-        control: crate::pages::track::Control,
+        control: crate::controls::Control,
         value: i32,
     },
     /// A value for one of a track's machine's settings, such as 6-op's patch.

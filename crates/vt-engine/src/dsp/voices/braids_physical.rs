@@ -22,8 +22,8 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use super::Settings;
 use super::braids_parts::{BRAIDS_BLOCK, INNER, Lcg, Macro, Model, Pitch, sine, whole};
-use super::virtual_analog::Settings;
 
 /// A bowed string: a bow's friction against a string between a bridge and a nut.
 pub(crate) type Bowed = Macro<BowedModel>;
@@ -622,8 +622,8 @@ const FLUTE_BODY_FILTER: [u16; 128] = [
 mod tests {
     use super::*;
     use crate::dsp::signals::{differs, rms};
+    use crate::dsp::voices::SynthEngine;
     use crate::dsp::voices::virtual_analog::VirtualAnalog;
-    use crate::voice::SynthEngine;
 
     const RATE: u32 = 48_000;
 

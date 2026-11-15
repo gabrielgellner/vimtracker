@@ -14,7 +14,7 @@ use vt_roto::sysex::AllTracks;
 
 use super::{devices, edits};
 use crate::app::TrackLive;
-use crate::pages::track::Control;
+use crate::controls::Control;
 use crate::services::automating::as_heard;
 use crate::services::meter::{Meter, height_of};
 use vt_engine::track_state::Faders;

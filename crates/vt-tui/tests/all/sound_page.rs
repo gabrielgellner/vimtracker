@@ -21,10 +21,11 @@ use vt_model::selection::Motion;
 use vt_model::settings::{FOUR_OP_SHARED, SettingId};
 use vt_model::song::{Machine, Song, SynthVoice, Track, TrackKind};
 use vt_tui::app::App;
+use vt_tui::controls::{Control, Page};
 use vt_tui::input::bindings::Cmd;
 use vt_tui::input::mode::Mode;
 use vt_tui::pages::Outcome;
-use vt_tui::pages::track::{Control, DeviceCursor, Page, TrackPage};
+use vt_tui::pages::track::{DeviceCursor, TrackPage};
 use vt_tui::screen::status::column_name;
 use vt_tui::widgets::theme;
 

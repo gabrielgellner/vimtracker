@@ -10,7 +10,7 @@ use vt_model::shape::{FillKind, GenParam, written};
 use vt_model::song::{Phrase, Song};
 use vt_model::step::{Note, Step};
 use vt_tui::app::App;
-use vt_tui::pages::track::{Control, Page};
+use vt_tui::controls::{Control, Page};
 
 use crate::common::*;
 

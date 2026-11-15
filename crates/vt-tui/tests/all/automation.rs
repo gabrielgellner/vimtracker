@@ -10,8 +10,8 @@ use vt_engine::published::Published;
 use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 use vt_tui::app::App;
+use vt_tui::controls::Control;
 use vt_tui::input::mode::View;
-use vt_tui::pages::track::Control;
 use vt_tui::widgets::glyphs;
 
 use crate::common::*;

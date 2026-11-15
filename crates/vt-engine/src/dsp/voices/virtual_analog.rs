@@ -19,9 +19,8 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use super::{Settings, SynthEngine};
 use crate::dsp::blocks::drift::Drift;
-use crate::voice::SynthEngine;
-use vt_model::settings::MAX_MACHINE_SETTINGS;
 
 /// How many frames are worked out at once, with settings moving in a line across them.
 pub(super) const BLOCK: usize = 16;
@@ -32,59 +31,6 @@ const NOTCH_DEPTH: f32 = 0.2;
 const INTERVALS: [f32; 5] = [0.0, 7.01, 12.01, 19.01, 24.01];
 /// `Drift`'s place among the settings, after the three it shares with Plaits.
 pub(super) const DRIFT: usize = 3;
-
-/// The settings, each on `0..=1`.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct Settings {
-    /// Detunes the saw from the square, with the middle in tune.
-    pub harmonics: f32,
-    /// The square, from nothing to a narrow pulse, to a full square, to hard sync.
-    pub timbre: f32,
-    /// The saw, from a triangle to a saw, to a saw with a widening notch.
-    pub morph: f32,
-    /// How hard a note is struck, for the voices that use it. Plaits' default is 0.8.
-    pub accent: f32,
-    /// The settings after the first four, for a voice with more.
-    pub further: [f32; MAX_MACHINE_SETTINGS - 4],
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            harmonics: 0.5,
-            timbre: 0.0,
-            morph: 0.5,
-            accent: 0.8,
-            further: [0.0; MAX_MACHINE_SETTINGS - 4],
-        }
-    }
-}
-
-impl Settings {
-    /// A setting by its place among the voice's.
-    #[inline]
-    pub(crate) fn at(&self, place: usize) -> f32 {
-        match place {
-            0 => self.harmonics,
-            1 => self.timbre,
-            2 => self.morph,
-            3 => self.accent,
-            _ => self.further.get(place - 4).copied().unwrap_or(0.0),
-        }
-    }
-
-    /// The settings in their places, as the track holds them.
-    pub(crate) fn from_places(places: [f32; MAX_MACHINE_SETTINGS]) -> Self {
-        let [harmonics, timbre, morph, accent, further @ ..] = places;
-        Self {
-            harmonics,
-            timbre,
-            morph,
-            accent,
-            further,
-        }
-    }
-}
 
 #[inline]
 pub(super) fn this_blep(t: f32) -> f32 {

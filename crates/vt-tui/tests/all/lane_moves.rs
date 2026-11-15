@@ -9,8 +9,8 @@ use vt_model::lane::{LANE_RATES, Lane};
 use vt_model::macros::MacroTarget;
 use vt_model::settings::SettingId;
 use vt_tui::app::App;
+use vt_tui::controls::{Control, LaneField, Page};
 use vt_tui::input::mode::Mode;
-use vt_tui::pages::track::{Control, LaneField, Page};
 
 use crate::common::*;
 

@@ -7,15 +7,16 @@
 pub mod draw;
 
 use ratatui::crossterm::event::KeyCode;
+
+use crate::controls::macro_name;
 use vt_model::action::Action;
-use vt_model::macros::{
-    GEN_ZERO, GenColumn, MACROS, Macro, MacroMap, MacroTarget, top_value, valid_name,
-};
+use vt_model::macros::{GEN_ZERO, GenColumn, MACROS, MacroMap, MacroTarget, top_value, valid_name};
 use vt_model::settings::{Kind, Owner};
 use vt_model::shape::params::{BEND_JUMP, BEND_NUDGE, Typing};
 use vt_model::song::Track;
 
 use crate::app::App;
+use crate::controls::{Control, Page};
 use crate::graphics::plot::{MappingDrawing, Shade};
 use crate::graphics::{PanelIds, PanelKey, PanelWant, Shape};
 use crate::input::bindings::Cmd;
@@ -24,7 +25,6 @@ use crate::input::mode::{Mode, View};
 use crate::input::typed::{Typed, TypedValue};
 use crate::overlays::mapping::draw::{RESPONSE_HEIGHT, RESPONSE_WIDTH};
 use crate::overlays::picker::{Item, Pick, Picker};
-use crate::pages::track::{Control, Page};
 
 /// The macro picker's title, which `M` opens and a digit chooses in at once.
 pub(crate) const MACRO_PICKER: &str = "Map to a macro";
@@ -145,13 +145,6 @@ fn end_shown(track: &Track, target: MacroTarget, value: u16) -> String {
         _ => None,
     }
     .unwrap_or_else(|| id.entry().kind.shown(value))
-}
-
-/// A macro's name as the band and the lists show it: its own or its first mapping's, or
-/// `Macro 3` while it holds nothing.
-pub(crate) fn macro_name(held: &Macro, at: usize) -> String {
-    held.shown_name()
-        .unwrap_or_else(|| format!("Macro {}", at + 1))
 }
 
 /// What a macro holds, for the picker and the status line: its settings by name on this track,
