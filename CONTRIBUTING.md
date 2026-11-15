@@ -6,8 +6,8 @@
 - [just](https://github.com/casey/just), which runs the recipes in the `justfile`. Run `just`
   to list them.
 - [mdBook](https://rust-lang.github.io/mdBook/), for the manual.
-- [cargo-nextest](https://nexte.st/), optional, which runs the tests about three times as fast
-  as `cargo test`: `cargo install cargo-nextest --locked`. `just test` and `just ci` use it when
+- [cargo-nextest](https://nexte.st/), optional, which runs the tests in about four fifths of the
+  time `cargo test` takes: `cargo install cargo-nextest --locked`. `just test` and `just ci` use it when
   it's installed and `cargo test` when it isn't.
 - For releases only:
   - [git-cliff](https://git-cliff.org/), which writes the changelog;
