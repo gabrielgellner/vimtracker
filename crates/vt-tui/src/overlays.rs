@@ -23,6 +23,7 @@ use crate::input::mode::Mode;
 use crate::pages::{Ctx, CtxMut, Outcome};
 use crate::services::Services;
 use command::CommandLine;
+use field_jump::FieldJump;
 use guides::GuideView;
 use help::Help;
 use mapping::MappingView;
@@ -183,4 +184,6 @@ pub struct Overlays {
     pub mapping: Option<MappingView>,
     /// A selection to shape once the command for its empty FX column is chosen, and its field.
     pub(crate) shape_command: Option<(Selection, Field)>,
+    /// The search for a setting under way, `/` on the track page or the mixer.
+    pub field_jump: Option<FieldJump>,
 }
