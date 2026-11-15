@@ -1,8 +1,8 @@
-//! Steps, one of a mod slot's types (#235): up to sixteen values played in turn, in time or one a
-//! note, as the M8's tables, Bitwig's `Steps` and the Metropolix's mod lanes step through theirs.
-//! Like an LFO, where it is is worked out from the song's position or a count, and from where it
-//! was at each change of its rate on, by the song's ticks rather than the blocks, so it can't
-//! drift and a render repeats (decision 301).
+//! Steps, one of a mod slot's types: up to sixteen values played in turn, in time or one a note, as
+//! the M8's tables, Bitwig's `Steps` and the Metropolix's mod lanes step through theirs. Like an
+//! LFO, where it is is worked out from the song's position or a count, and from where it was at
+//! each change of its rate on, by the song's ticks rather than the blocks, so it can't drift and a
+//! render repeats (decision 301).
 
 use std::fmt;
 use std::str::FromStr;
@@ -66,7 +66,7 @@ pub enum StepRate {
     /// A note division, in ticks.
     Note(u32),
     /// One step a pass of the track's chain, counted as `CND` counts passes, so it starts again
-    /// with the chain (#235's comment, after the Cirklon's accumulators).
+    /// with the chain (after the Cirklon's accumulators).
     Pass,
 }
 
@@ -103,9 +103,9 @@ impl StepRate {
     }
 
     /// Where it is on the registry's `00` to `FF` scale, with a coarse byte and a fine one, for
-    /// macros and modulation to move (decision 301): faster up the scale, as `=` is, stepping
-    /// evenly through the divisions from a bar at `00` to `1/64`, then `Tick` at `FF`. `Pass`
-    /// isn't a speed, so it has no place.
+    /// macros and modulation to move: faster up the scale, as `=` is, stepping evenly through the
+    /// divisions from a bar at `00` to `1/64`, then `Tick` at `FF`. `Pass` isn't a speed, so it has
+    /// no place.
     pub fn place(self) -> Option<u16> {
         let timed = RATES - 1;
         let at = Self::ALL[..timed].iter().position(|rate| *rate == self)?;
@@ -273,8 +273,7 @@ pub struct Steps {
     pub looping: Loop,
     /// The chance each step's value is drawn again as it comes round, in percent: `0` plays the
     /// values as written, `100` a new one each time, and between them a loop that drifts, as the
-    /// Turing Machine's knob does (#235's comment). Drawn from the project's seed, so a render
-    /// repeats.
+    /// Turing Machine's knob does. Drawn from the project's seed, so a render repeats.
     #[serde(skip_serializing_if = "is_default")]
     pub mutate: u8,
     /// How it goes from step to step, `-FF` to `+FF`, after Surge's step sequencer's deform: none
@@ -418,7 +417,7 @@ impl Steps {
     }
 
     /// The step a phase on the `00` to `FF` scale picks, as a step's lock of it does: the value
-    /// times the length over 256, so `PHS` picks where each note's run starts (#235).
+    /// times the length over 256, so `PHS` picks where each note's run starts.
     pub fn start_of(&self, value: f32) -> usize {
         let length = self.played_count();
         ((value / 256.0).rem_euclid(1.0) * length as f32).floor() as usize % length

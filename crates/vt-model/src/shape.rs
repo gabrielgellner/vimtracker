@@ -1183,7 +1183,7 @@ impl Default for Shape {
 
 impl Shape {
     /// A `Follow` of a phrase, with this seed and every other setting as the panel starts it, as
-    /// a Bloom branch is made (decision 307).
+    /// a Bloom branch is made.
     pub fn following(follow: Follow, seed: u64) -> Self {
         Self {
             kind: FillKind::Follow,
@@ -1335,7 +1335,7 @@ pub fn track_seed(seed: u64, nth: usize) -> u64 {
 /// [`track_seed`] gives it, and its rows [on that track](Where::on_track). `Complementary` tosses
 /// one coin for each pair of tracks, so the two of a pair share a seed. A `Tonnetz` walks one
 /// progression on every track, so they all share its seed, each playing a voice of its own unless
-/// it was given one (decision 332).
+/// it was given one.
 pub fn on_track(shape: &Shape, nth: usize) -> Shape {
     if shape.kind == FillKind::Tonnetz {
         return Shape {
@@ -1715,8 +1715,8 @@ mod tests {
     }
 
     /// A `CHA 00` written on the rows `Chance` picks, kept live, is the 4ms Shuffling Clock
-    /// Multiplier's Skip (decision 328): the rows it drops are the same each pass for a seed, and
-    /// turning the amount up only drops more of them.
+    /// Multiplier's Skip: the rows it drops are the same each pass for a seed, and turning the
+    /// amount up only drops more of them.
     #[test]
     fn a_skip_of_cha_00_by_chance_repeats_and_only_drops_more_as_it_rises() {
         let steps = notes(64);

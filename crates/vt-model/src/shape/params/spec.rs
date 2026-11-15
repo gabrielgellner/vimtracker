@@ -140,7 +140,7 @@ impl GenParam {
     /// Whether the engine can hold it as it plays, so a macro's lock or modulation reaches it
     /// (decision 300): not a list setting, whose choices are a `Vec` built as they're asked for,
     /// nor a `List`'s values or a `Random`'s weights, which have no number. A macro on `Wave` or
-    /// `Rate` writes its column by hand instead (decision 294).
+    /// `Rate` writes its column by hand instead.
     pub const fn held_in_engine(self) -> bool {
         self.spec().engine
     }

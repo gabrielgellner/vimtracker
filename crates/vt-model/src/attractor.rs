@@ -1,6 +1,6 @@
-//! Strange attractors for an LFO's `Lorenz` and `Rössler` shapes (#592): smooth motion that never
-//! quite repeats, as Ornament & Crime's Low-rents, Nonlinear Circuits' Sloth and Joranalogue's
-//! Orbit 3 give a patch, and as the easter egg in Mutable Instruments' Streams does
+//! Strange attractors for an LFO's `Lorenz` and `Rössler` shapes: smooth motion that never quite
+//! repeats, as Ornament & Crime's Low-rents, Nonlinear Circuits' Sloth and Joranalogue's Orbit 3
+//! give a patch, and as the easter egg in Mutable Instruments' Streams does
 //! (`streams/lorenz_generator.cc`, Emilie Gillet, MIT; read, not copied: it steps Lorenz's
 //! equations once a sample with Euler's method from `(0.1, 0, 0)` at ρ = 28, and swaps its two
 //! outputs' axes on its second channel for variety).

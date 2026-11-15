@@ -718,7 +718,7 @@ mod tests {
     }
 
     /// Its dice are drawn from its seed, so `Vary` rolls new ones each pass, the module's
-    /// `Realtime` (decision 293), the first pass being the one written.
+    /// `Realtime`, the first pass being the one written.
     #[test]
     fn vary_rolls_new_dice_each_pass() {
         let steps = vec![Step::default(); 32];

@@ -1,8 +1,8 @@
-//! Track, one of a mod slot's types (#428): the note as a source, its pitch, how hard it's played
-//! or a value rolled for it, mapped from `Low` to `High` onto the slot's depth, as the M8's
-//! tracking modulator maps its source from `LVAL` to `HVAL`. It takes its value as each note
-//! starts and holds it to the next, so it's key tracking with the note as the source, and
-//! velocity or a roll a note with the others.
+//! Track, one of a mod slot's types: the note as a source, its pitch, how hard it's played or a
+//! value rolled for it, mapped from `Low` to `High` onto the slot's depth, as the M8's tracking
+//! modulator maps its source from `LVAL` to `HVAL`. It takes its value as each note starts and
+//! holds it to the next, so it's key tracking with the note as the source, and velocity or a roll a
+//! note with the others.
 
 use serde::{Deserialize, Serialize};
 

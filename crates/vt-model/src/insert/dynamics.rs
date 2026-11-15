@@ -9,8 +9,8 @@ use super::{
     place_of, places_of, source_track,
 };
 
-/// A compressor's character, each modelled on its own reference and tuned against it (#338).
-/// `VCA`, `FET` and `Diode` come after these, in this order, so a song's types keep their places.
+/// A compressor's character, each modelled on its own reference and tuned against it. `VCA`, `FET`
+/// and `Diode` come after these, in this order, so a song's types keep their places.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CompressorType {
     /// Transparent and digital, with an exact ratio and knee, as Ableton's Compressor is.

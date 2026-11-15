@@ -1,8 +1,7 @@
 //! A generator's settings, declared once: what each is called and stored by, the values it takes,
 //! which shapes have it, and how it's shown, stepped, typed, chosen from a list and put back. The
 //! shape panel's rows are these, and so are the Gen page's cells, its `K` lists and the Roto's
-//! knobs; a macro will reach them by their keys (the design's `generators-page.md` §3.3, decision
-//! 278).
+//! knobs; a macro will reach them by their keys (the design's `generators-page.md` §3.3).
 //!
 //! They're the registry's idea, [`crate::settings`], in a form of their own: a generator's
 //! settings go past a byte (a `Run` of 256, `Hits` among thousands of rows), some are signed, and
@@ -11,10 +10,9 @@
 //! and, later, the engine work them out alike.
 //!
 //! What's fixed of each setting is a row of [`GEN_PARAMS`]: its key, name and units, how it's
-//! typed, its bounds and steps, and how it's read and set as a number (decision 342). What hangs
-//! on the shape besides, which shapes have it and how it's shown, put back, typed and chosen from
-//! a list, is [`GenParam`]'s own, as each fill's own settings' places are its
-//! [`FillSpec`](super::FillSpec)'s.
+//! typed, its bounds and steps, and how it's read and set as a number. What hangs on the shape
+//! besides, which shapes have it and how it's shown, put back, typed and chosen from a list, is
+//! [`GenParam`]'s own, as each fill's own settings' places are its [`FillSpec`](super::FillSpec)'s.
 
 use crate::grid::{GRID_COLUMNS, GRID_ROWS, Grid};
 use crate::lfo::{Shape as Wave, note_rates};
@@ -1483,9 +1481,8 @@ mod tests {
         assert_eq!(ramp.place, Where::Every(7));
     }
 
-    /// `Random`'s own settings after Marbles (decision 302): `Spread` and `Bias` on every column,
-    /// and `Steps` and `Weights` on notes, where there are degrees; as they start, they're left
-    /// out of the song.
+    /// `Random`'s own settings after Marbles: `Spread` and `Bias` on every column, and `Steps` and
+    /// `Weights` on notes, where there are degrees; as they start, they're left out of the song.
     #[test]
     fn a_random_fill_spreads_leans_and_weighs_its_degrees() {
         use GenParam::*;

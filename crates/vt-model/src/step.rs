@@ -172,7 +172,7 @@ impl FxCommand {
     }
 
     /// Whether its value has a fine part: a continuous position's does, and one on the level scale,
-    /// an event's or a list's doesn't (decision 175).
+    /// an event's or a list's doesn't.
     pub fn has_fine(self) -> bool {
         matches!(self, Self::Set(id) if id.entry().kind.has_fine())
     }
@@ -353,8 +353,7 @@ pub const MAX_PULSES: u8 = 8;
 /// The furthest a row's nudge moves it either way on a step this many ticks long, in 24ths of a
 /// sixteenth: just under half the step, as Elektron's micro-timing goes, so a row's note can't
 /// pass the next row's. It's `B` at a sixteenth, `2F` at a quarter and `5F` at a half, and no more
-/// than `7F`, the most a nudge's byte holds, which a whole note's step stops at a third of the way
-/// (decision 325).
+/// than `7F`, the most a nudge's byte holds, which a whole note's step stops at a third of the way.
 pub const fn most_nudge(step: u64) -> i8 {
     let most = (step / NUDGE_TICKS / 2).saturating_sub(1);
     if most > i8::MAX as u64 {

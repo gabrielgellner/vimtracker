@@ -6,7 +6,7 @@ use crate::machine::{DEFAULT_ACCENT, SynthVoice};
 use crate::patch_names::PATCH_NAMES;
 
 /// The most settings a machine has: `4-op`'s, four it shares and ten for each of its four
-/// operators (decision 234).
+/// operators.
 pub const MAX_MACHINE_SETTINGS: usize = 44;
 /// How many settings `4-op` has before its operators', and how many each operator has.
 pub const FOUR_OP_SHARED: usize = 4;
@@ -15,7 +15,7 @@ pub const FOUR_OP_EACH: usize = 10;
 const ACCENT: Entry = level("accent", "Accent", "ACC", DEFAULT_ACCENT);
 /// How far each note of an analog-style voice strays, from none at `00`: its oscillators' tuning,
 /// a slow wander in pitch, its cutoff, level and envelope times, and, but for `Acid`'s, which
-/// always runs free, where its oscillators start (decision 190).
+/// always runs free, where its oscillators start.
 const DRIFT: Entry = level("drift", "Drift", "DRFT", 0x00);
 
 pub(crate) const VA: [Entry; 4] = [

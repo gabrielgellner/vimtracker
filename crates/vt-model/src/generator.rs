@@ -51,8 +51,8 @@ pub struct Generator {
     seen: Vec<Step>,
     /// Its shape as its track's macros hold it by hand, which it renders from, if they hold any of
     /// its settings: `shape` with those put where the macros' turns put them, `shape` itself
-    /// keeping its own underneath (decision 294). It's worked out again from the track as each
-    /// edit is made, so it isn't saved.
+    /// keeping its own underneath. It's worked out again from the track as each edit is made, so it
+    /// isn't saved.
     held: Option<Shape>,
 }
 
@@ -144,7 +144,7 @@ fn copy(column: ShapeColumn, owns: Owns, from: &Step, to: &mut Step) {
 /// velocity and gate, and the row's FX, as much as the generator owns. The engine lays this first
 /// wherever it plays a render of its own, so a row the render leaves as [`GenCell::Under`] plays
 /// what's under the generator, as it would were the render written, not what the phrase has
-/// written there (#622).
+/// written there.
 pub fn lay_under(generator: &Generator, under: &Step, view: &mut RowView) {
     let owns = owns(&generator.shape);
     let whole = owns != Owns::Cell;
@@ -239,7 +239,7 @@ impl Generator {
 
     /// A row of its phrase as the engine played it with this cell of a render of its own: the
     /// step as written, with what's under the generator put back in its column and the cell laid
-    /// over, as [`lay_under`] and [`RowView::lay`] lay it (decision 300). None past the steps.
+    /// over, as [`lay_under`] and [`RowView::lay`] lay it. None past the steps.
     pub fn heard_row(&self, steps: &[Step], row: usize, cell: GenCell) -> Option<Step> {
         let mut step = steps.get(row)?.clone();
         self.lay_heard(row, cell, &mut step);

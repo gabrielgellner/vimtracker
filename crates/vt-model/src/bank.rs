@@ -127,7 +127,7 @@ pub struct PlayParams {
 }
 
 /// How an entry keeps to the song's tempo under `Play`'s `Tempo`, as Ableton's warp modes say how
-/// a clip does. The live stretcher (#285) and the offline one (#284) come as modes of their own.
+/// a clip does. The live stretcher and the offline one come as modes of their own.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Warp {
     /// Faster or slower, its pitch moving with its speed, as a record's does. Its note and tune
@@ -251,7 +251,7 @@ pub fn mark_index(letter: char) -> Option<usize> {
 }
 
 /// A slice's own name within its entry, which it keeps as slices before it come and go and its
-/// number changes, so a mark can name it (#271). It's never given to another slice of the entry.
+/// number changes, so a mark can name it. It's never given to another slice of the entry.
 pub type SliceId = u32;
 
 /// The most slices an entry can have: as many as `SLI`'s two hex digits number, `00` to `FF`.
@@ -563,11 +563,11 @@ pub struct Hints {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub steps: Option<u16>,
     /// The note it sounds at as recorded, as a MIDI note, `60` being `C-3`, as a WAV's `smpl` or
-    /// `inst` chunk says (#279).
+    /// `inst` chunk says.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root: Option<u8>,
     /// Its tempo, in thousandths of a BPM, as a song keeps its own, as an Octatrack `.ot` beside it
-    /// says (#279).
+    /// says.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub millibpm: Option<u32>,
 }

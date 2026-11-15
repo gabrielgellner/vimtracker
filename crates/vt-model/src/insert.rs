@@ -281,8 +281,7 @@ impl Param {
 }
 
 /// The most settings any effect shows at once, in the type or mode it's in: a grid's twelve and
-/// its type or mode in the title (decision 312), and Beads' quality beside its mode there
-/// (decision 320).
+/// its type or mode in the title, and Beads' quality beside its mode there.
 pub const MAX_PARAMS: usize = 14;
 /// The most settings any effect keeps across all of its types and modes, of which it shows at
 /// most [`MAX_PARAMS`]. A compressor keeps each type's own.

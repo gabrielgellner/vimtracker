@@ -1,9 +1,9 @@
-//! The patches that come with the program (decision 318): behaviour from the generators
-//! tutorial's songs, each a track's macros and what they move, built into the program rather
-//! than written into the presets folder, so `:patch` lists them from the start and they can't be
-//! changed or written over. The files are made from the tutorial's songs by `just
-//! tutorial-songs`, in `crates/vt-model/factory/patches`, and a test checks each is what its
-//! builder makes, so a change to the format can't leave them stale.
+//! The patches that come with the program: behaviour from the generators tutorial's songs, each a
+//! track's macros and what they move, built into the program rather than written into the presets
+//! folder, so `:patch` lists them from the start and they can't be changed or written over. The
+//! files are made from the tutorial's songs by `just tutorial-songs`, in
+//! `crates/vt-model/factory/patches`, and a test checks each is what its builder makes, so a change
+//! to the format can't leave them stale.
 
 use std::path::{Path, PathBuf};
 

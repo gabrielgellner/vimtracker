@@ -10,7 +10,7 @@ use super::{
 };
 
 /// What a distortion does to the sound. The waveshapers come first; the guitar pedals after them
-/// are each modelled on a pedal's circuit and tuned against a reference (#361).
+/// are each modelled on a pedal's circuit and tuned against a reference.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DistortType {
     #[default]

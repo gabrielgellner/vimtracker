@@ -1,7 +1,7 @@
 //! A sample that grows while it's played: frames written one after another into fixed chunks,
 //! readable from the first, as the Deluge's recordings are samples from their first frame. The
-//! recorder (#288) writes into one on the audio thread while a voice plays it there and the screen
-//! reads it here, and lazy loading (#287) can fill one from its decoder the same way.
+//! recorder writes into one on the audio thread while a voice plays it there and the screen reads
+//! it here, and lazy loading can fill one from its decoder the same way.
 //!
 //! - **Chunks.** The frames are in fixed chunks, each put in place ahead of the writer by a thread
 //!   that may allocate ([`Growing::make_room`]), so writing a frame never allocates. A writer that

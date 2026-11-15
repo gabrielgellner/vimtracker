@@ -255,8 +255,8 @@ impl SettingId {
         (0..MACROS).filter_map(Self::macro_at)
     }
 
-    /// What a macro can reach on this track (decision 282): everything a step or a mod slot
-    /// can, every slot's own settings and the accumulator's and arpeggio's, but never a macro.
+    /// What a macro can reach on this track: everything a step or a mod slot can, every slot's own
+    /// settings and the accumulator's and arpeggio's, but never a macro.
     pub fn for_macro(track: &Track) -> Vec<Self> {
         let mut settings = Self::on_track(track);
         settings.extend(mod_settings().filter(|id| id.exists_on(track)));

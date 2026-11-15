@@ -9,15 +9,15 @@ pub const MAX_LEVEL: u8 = 0xF8;
 /// How many dB one step of a level value is.
 pub const DB_PER_LEVEL: f32 = 0.25;
 /// The trim value that leaves what comes into a channel as it is, at 0 dB, in the middle of its
-/// range so it can cut and boost (decision 136).
+/// range so it can cut and boost.
 pub const UNITY_TRIM: u8 = 0x80;
 /// How many dB one step of a trim value is: a level value's, so `FF` is +31.75 dB, `01` is
 /// -31.75 dB, and `00` is off.
 pub const DB_PER_TRIM: f32 = DB_PER_LEVEL;
 /// Tracks that play sounds a song can have.
 pub const MAX_SOUND_TRACKS: usize = 64;
-/// The group tracks every song has after those, each summing the tracks put in it (decision 123).
-/// They're saved in the song's list of tracks, so raising this only means raising the number.
+/// The group tracks every song has after those, each summing the tracks put in it. They're saved in
+/// the song's list of tracks, so raising this only means raising the number.
 pub const MAX_GROUPS: usize = 4;
 /// The tracks every song has after those: the groups, two returns and the master.
 pub const FIXED_TRACKS: usize = MAX_GROUPS + 3;
@@ -32,7 +32,7 @@ pub const TICKS_PER_QUARTER: u64 = 960;
 /// One unit for `DEL`, `KIL`, `OFF` and `RET`, 6 per step. A groove's pushes are in ticks.
 pub const GROOVE_UNIT_TICKS: u64 = 40;
 /// One unit of a row's nudge, a 24th of a sixteenth on every track whatever its speed, 96 to a
-/// quarter as the MPC's sequencer counts (decision 299).
+/// quarter as the MPC's sequencer counts.
 pub const NUDGE_TICKS: u64 = TICKS_PER_STEP / 24;
 /// Steps in a new phrase.
 pub const DEFAULT_PHRASE_STEPS: usize = 16;

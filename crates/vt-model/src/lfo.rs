@@ -184,10 +184,10 @@ const SCALE_TOP: f64 = 255.0;
 
 impl Rate {
     /// Where it is on the registry's `00` to `FF` scale, with a coarse byte and a fine one, for
-    /// macros and modulation to move (decision 301): faster up the scale, as `=` is, in its own
-    /// kind. A note length steps through the lengths `+` and `-` go through, evenly, from 64 bars
-    /// at `00` to `1/64` at `FF`; steps go from 4096 at `00` to 1 at `FF`, and hertz from 0.01 at
-    /// `00` to 100 at `FF`, both evenly in ratio. A length between two is placed at the nearer.
+    /// macros and modulation to move: faster up the scale, as `=` is, in its own kind. A note
+    /// length steps through the lengths `+` and `-` go through, evenly, from 64 bars at `00` to
+    /// `1/64` at `FF`; steps go from 4096 at `00` to 1 at `FF`, and hertz from 0.01 at `00` to 100
+    /// at `FF`, both evenly in ratio. A length between two is placed at the nearer.
     pub fn place(self) -> u16 {
         let along = match self {
             Self::Note(ticks) => {
@@ -363,7 +363,7 @@ pub enum Shape {
     /// Random values with a smooth path between them.
     Smooth,
     /// Lorenz's strange attractor, a turn round a wing of its butterfly a cycle, never quite the
-    /// same twice (#592).
+    /// same twice.
     Lorenz,
     /// Rössler's, a turn round its loop a cycle.
     Rossler,
@@ -417,11 +417,10 @@ pub fn wave(shape: Shape, cycles: f64, key: u64) -> f32 {
     deformed_wave(shape, cycles, key, 0.0)
 }
 
-/// A wave bent by an LFO's `Deform`, from -1 to 1 (#468): Surge's `bend1`, one bend for every
-/// shape, which skews `Sine`, `Tri`, `Saw` and `Ramp` toward a log or an exp shape while keeping
-/// their peaks where they are, and is the width of `Square`'s high part. The random shapes have
-/// nothing to bend, and to an attractor it's the parameter that makes it chaotic. At 0 it's the
-/// wave exactly.
+/// A wave bent by an LFO's `Deform`, from -1 to 1: Surge's `bend1`, one bend for every shape, which
+/// skews `Sine`, `Tri`, `Saw` and `Ramp` toward a log or an exp shape while keeping their peaks
+/// where they are, and is the width of `Square`'s high part. The random shapes have nothing to
+/// bend, and to an attractor it's the parameter that makes it chaotic. At 0 it's the wave exactly.
 #[inline]
 pub fn deformed_wave(shape: Shape, cycles: f64, key: u64, deform: f32) -> f32 {
     let position = cycles.rem_euclid(1.0) as f32;
@@ -498,9 +497,9 @@ fn random(key: u64, cycle: i64) -> f32 {
 }
 
 /// How an LFO runs against the track's notes: the mode in its title, the Digitakt's five
-/// (`docs/designs/mod-slots.md` §2, #86). Every one is still worked out from the song's position
-/// and the time since the track's last note, and from where it was at each change of its rate on
-/// (decision 301), by the song's ticks rather than the blocks, so a render repeats.
+/// (`docs/designs/mod-slots.md` §2). Every one is still worked out from the song's position and the
+/// time since the track's last note, and from where it was at each change of its rate on (decision
+/// 301), by the song's ticks rather than the blocks, so a render repeats.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LfoMode {
     /// It runs from the song's position, and only playing from the top starts it again.
@@ -563,10 +562,10 @@ crate::listed::listed!(LfoMode: meaning);
 /// How many lengths a fade can take either way: the sweeps', from `1/64` to 16 bars.
 const FADES: usize = SWEEPS;
 
-/// How an LFO fades in or out after each of the track's notes (#86): Elektron's `FADE` as a
-/// musical length rather than a speed, none, or in or out over a note division or whole bars, in
-/// ticks of [`SWEEP_TICKS`]. It counts from the last note in every mode, so in `Free` only the fade
-/// starts again, not the wave.
+/// How an LFO fades in or out after each of the track's notes: Elektron's `FADE` as a musical
+/// length rather than a speed, none, or in or out over a note division or whole bars, in ticks of
+/// [`SWEEP_TICKS`]. It counts from the last note in every mode, so in `Free` only the fade starts
+/// again, not the wave.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Fade {
     #[default]
@@ -703,10 +702,10 @@ pub struct Lfo {
     pub phase: u16,
     pub mode: LfoMode,
     /// How far its wave is bent, from `-FF` to `+FF`: a skew toward a log or an exp shape, or a
-    /// square's width (#468).
+    /// square's width.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub deform: i16,
-    /// How it fades in or out after each note (#86).
+    /// How it fades in or out after each note.
     #[serde(default, skip_serializing_if = "is_off")]
     pub fade: Fade,
 }

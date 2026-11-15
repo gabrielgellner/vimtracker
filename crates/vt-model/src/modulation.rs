@@ -94,8 +94,8 @@ impl ModKind {
 
 crate::listed::listed!(ModKind: meaning);
 
-/// Which way a slot moves what it reaches, as Bitwig's and Vital's modulators have it (#434):
-/// one way from the setting, or both ways around it. A negative depth still flips the direction.
+/// Which way a slot moves what it reaches, as Bitwig's and Vital's modulators have it: one way from
+/// the setting, or both ways around it. A negative depth still flips the direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Polarity {
     /// One way: an LFO from 0 to 1, for a tremolo that only dips or a vibrato that only bends up,
@@ -185,8 +185,8 @@ pub struct ModSlot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub polarity: Option<Polarity>,
     /// Whether, going to `Pitch`, it moves the note along the song's scale, to the nearest of its
-    /// notes, so a random LFO or Steps play in key (#235's and #86's comments). It's one switch
-    /// for every type, and does nothing going anywhere else.
+    /// notes, so a random LFO or Steps play in key. It's one switch for every type, and does
+    /// nothing going anywhere else.
     #[serde(default, skip_serializing_if = "is_false")]
     pub in_scale: bool,
     #[serde(default, skip_serializing_if = "is_default")]
