@@ -573,6 +573,7 @@ impl Acid {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::signals::rms;
 
     const RATE: u32 = 48_000;
 
@@ -592,10 +593,6 @@ mod tests {
 
     fn hertz(hertz: f32) -> f32 {
         hertz / RATE as f32
-    }
-
-    fn rms(samples: &[f32]) -> f32 {
-        (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt()
     }
 
     /// How much each frame jumps against how loud it is, a rough measure of brightness.

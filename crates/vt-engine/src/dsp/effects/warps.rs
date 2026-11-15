@@ -693,6 +693,7 @@ impl SlotEffect for Warps {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::signals::{peak, sine};
     use vt_model::insert::MOST_SHIFT;
 
     const RATE: u32 = 48_000;
@@ -704,10 +705,6 @@ mod tests {
             timbre,
             ..Settings::DEFAULT
         }
-    }
-
-    fn sine(hertz: f32, level: f32, frame: usize, rate: u32) -> f32 {
-        (frame as f32 / rate as f32 * hertz * TAU).sin() * level
     }
 
     /// A second of a carrier and a modulator through it, after a tenth to settle.
@@ -742,10 +739,6 @@ mod tests {
         ((real * real + imaginary * imaginary).sqrt() * 2.0 / out.len() as f64) as f32
     }
 
-    fn peak(samples: &[f32]) -> f32 {
-        samples.iter().fold(0.0, |most: f32, s| most.max(s.abs()))
-    }
-
     #[test]
     fn ring_modulating_two_sines_makes_their_sum_and_difference() {
         let (carrier, modulator) = (300.0, 440.0);
@@ -753,8 +746,8 @@ mod tests {
             played(
                 settings(algorithm, 0x00),
                 RATE,
-                |frame| sine(carrier, 0.8, frame, RATE),
-                |frame| Some(sine(modulator, 0.8, frame, RATE)),
+                |frame| sine(frame, carrier, 0.8, RATE),
+                |frame| Some(sine(frame, modulator, 0.8, RATE)),
             )
         };
         // The multiplier at `60` gives the sum and difference, and neither tone on its own.
@@ -782,7 +775,7 @@ mod tests {
     #[test]
     fn with_a_silent_modulator_the_ring_mods_and_vocoder_are_silent_and_the_rest_pass_the_carrier()
     {
-        let carrier = |frame| sine(300.0, 0.5, frame, RATE);
+        let carrier = |frame| sine(frame, 300.0, 0.5, RATE);
         let silent = |_| Some(0.0);
         let level = |algorithm, timbre| {
             let out = played(settings(algorithm, timbre), RATE, carrier, silent);
@@ -817,9 +810,9 @@ mod tests {
     /// A carrier with two tones, and how much of each comes through the vocoder for a modulator
     /// at one of them.
     fn vocoded(modulator: f32) -> (f32, f32) {
-        let carrier = |frame| sine(300.0, 0.3, frame, RATE) + sine(2_000.0, 0.3, frame, RATE);
+        let carrier = |frame| sine(frame, 300.0, 0.3, RATE) + sine(frame, 2_000.0, 0.3, RATE);
         let out = played(settings(0xE0, 0x80), RATE, carrier, |frame| {
-            Some(sine(modulator, 0.5, frame, RATE))
+            Some(sine(frame, modulator, 0.5, RATE))
         });
         (strength(&out, 300.0, RATE), strength(&out, 2_000.0, RATE))
     }
@@ -850,8 +843,8 @@ mod tests {
                 level: 0x80 + flip * 0x30,
                 ..settings(algorithm, 0)
             });
-            let carrier = sine(50.0, 0.5, frame, RATE);
-            let modulator = sine(70.0, 0.5, frame, RATE);
+            let carrier = sine(frame, 50.0, 0.5, RATE);
+            let modulator = sine(frame, 70.0, 0.5, RATE);
             let out = warps.process([carrier; 2], Some([modulator; 2]), 60.0, smoothing);
             assert!(
                 (out - last).abs() < 0.05,

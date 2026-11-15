@@ -5,8 +5,8 @@ use vt_engine::render::{RenderOptions, Stem, render_loop, render_stems, write_wa
 use vt_model::groove::{Groove, GrooveId};
 use vt_model::song::Song;
 
-use crate::support::golden;
 use crate::support::tone::pool;
+use crate::support::{golden, peak};
 
 const RATE: u32 = 48_000;
 /// 16 steps at 120 BPM.
@@ -30,10 +30,6 @@ fn render(song: Song, options: RenderOptions) -> Vec<f32> {
         RATE,
         options,
     )
-}
-
-fn peak(samples: &[f32]) -> f32 {
-    samples.iter().fold(0.0_f32, |p, s| p.max(s.abs()))
 }
 
 const FX_LOOP: [&str; 4] = [
@@ -157,10 +153,10 @@ fn with_the_limiter_off_a_render_keeps_levels_over_full() {
         let phrase = Arc::make_mut(loud.tracks[id as usize].phrases.get_mut(&0).unwrap());
         *phrase.step_mut(0).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
     }
-    let limited = peak(&render(loud.clone(), RenderOptions::default()));
+    let limited = peak(render(loud.clone(), RenderOptions::default()));
     assert_eq!(limited, 1.0);
     loud.limiter = false;
-    let open = peak(&render(loud, RenderOptions::default()));
+    let open = peak(render(loud, RenderOptions::default()));
     assert!(open > 1.2, "{open}");
 }
 
@@ -170,7 +166,7 @@ fn a_render_repeats_and_respects_mute() {
     assert_eq!(first, render(song(&FX_LOOP), RenderOptions::default()));
     let mut muted = song(&FX_LOOP);
     muted.tracks[0].mute = true;
-    assert_eq!(peak(&render(muted, RenderOptions::default())), 0.0);
+    assert_eq!(peak(render(muted, RenderOptions::default())), 0.0);
 }
 
 #[test]

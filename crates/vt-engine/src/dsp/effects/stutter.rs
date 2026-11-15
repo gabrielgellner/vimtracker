@@ -381,6 +381,7 @@ impl Rung for Stutter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::signals::sine;
 
     const RATE: u32 = 48_000;
     /// 120 BPM, as `sample_of_tick` has it: 6000 frames a step.
@@ -391,10 +392,6 @@ mod tests {
         let mut stutter = Stutter::new(RATE);
         stutter.follow(settings, FRAMES_PER_TICK);
         stutter
-    }
-
-    fn sine(hertz: f32, frame: usize) -> f32 {
-        (frame as f32 / RATE as f32 * hertz * std::f32::consts::TAU).sin() * 0.5
     }
 
     /// A sound that's different everywhere: a sine sweeping up.
@@ -467,7 +464,7 @@ mod tests {
         });
         stutter.strike();
         let out: Vec<f32> = (0..SIXTEENTH * 5)
-            .map(|frame| stutter.process([sine(97.0, frame + 40); 2])[0])
+            .map(|frame| stutter.process([sine(frame + 40, 97.0, 0.5, RATE); 2])[0])
             .collect();
         // Up to the last repeat's end, where it fades back to the sound wherever that is, no
         // frame jumps further than the sine moves in a frame, give or take a little.
@@ -485,7 +482,7 @@ mod tests {
         });
         stutter.strike();
         let out: Vec<f32> = (0..SIXTEENTH * 4)
-            .map(|frame| stutter.process([sine(1000.0, frame); 2])[0])
+            .map(|frame| stutter.process([sine(frame, 1000.0, 0.5, RATE); 2])[0])
             .collect();
         let loudest = |at: usize| {
             out[at * SIXTEENTH + 500..(at + 1) * SIXTEENTH]

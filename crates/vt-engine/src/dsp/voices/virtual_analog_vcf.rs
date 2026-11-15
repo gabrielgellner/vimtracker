@@ -208,6 +208,7 @@ impl VirtualAnalogVcf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::signals::{differs, rms};
     use crate::dsp::voices::virtual_analog::VirtualAnalog;
 
     const RATE: f32 = 48_000.0;
@@ -230,10 +231,6 @@ mod tests {
         }
     }
 
-    fn rms(samples: &[f32]) -> f32 {
-        (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt()
-    }
-
     /// A rough measure of energy near the top of the spectrum: how much each frame jumps.
     fn roughness(samples: &[f32]) -> f32 {
         let total: f32 = samples
@@ -241,11 +238,6 @@ mod tests {
             .map(|pair| (pair[1] - pair[0]).powi(2))
             .sum();
         total / samples.len() as f32
-    }
-
-    fn differs(a: &[f32], b: &[f32]) -> f32 {
-        let total: f32 = a.iter().zip(b).map(|(a, b)| (a - b).powi(2)).sum();
-        (total / a.len() as f32).sqrt()
     }
 
     #[test]
@@ -268,7 +260,7 @@ mod tests {
                 ..plain()
             },
         ] {
-            let decibels = 20.0 * (rms(&run(220.0, settings, 48_000)) / rms(&va)).log10();
+            let decibels = 20.0 * (rms(run(220.0, settings, 48_000)) / rms(&va)).log10();
             assert!(decibels.abs() < 3.0, "{decibels} dB at {settings:?}");
         }
     }

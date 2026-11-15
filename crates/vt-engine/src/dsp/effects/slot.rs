@@ -996,6 +996,7 @@ impl InsertState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::signals::{peak, sines};
     use vt_model::insert::{Compressor, CompressorType, Delay, Equaliser};
 
     const RATE: u32 = 48_000;
@@ -1041,20 +1042,10 @@ mod tests {
         assert!(soft.passed_through([0.1, 0.2], false).is_none());
     }
 
-    fn sine(hertz: f32, level: f32, frames: usize) -> impl Iterator<Item = f32> {
-        (0..frames).map(move |frame| {
-            (frame as f32 / RATE as f32 * hertz * std::f32::consts::TAU).sin() * level
-        })
-    }
-
-    fn peak(samples: &[f32]) -> f32 {
-        samples.iter().fold(0.0, |most: f32, s| most.max(s.abs()))
-    }
-
     #[test]
     fn an_empty_slot_leaves_the_sound_alone() {
         let mut state = InsertState::default();
-        for sample in sine(220.0, 0.5, 1000) {
+        for sample in sines(1000, 220.0, 0.5, RATE) {
             assert_eq!(
                 state.process([sample, -sample], 0.01, RATE, &Keys::default()),
                 [sample, -sample]
@@ -1182,7 +1173,7 @@ mod tests {
             };
             state.hold(insert, &mut pool, song, 0);
             state.settle();
-            for sample in sine(220.0, 0.5, RATE as usize / 4) {
+            for sample in sines(RATE as usize / 4, 220.0, 0.5, RATE) {
                 state.process([sample, -sample * 0.5], smoothing, RATE, &keys);
             }
             state.process([f32::NAN, f32::INFINITY], smoothing, RATE, &keys);
@@ -1338,7 +1329,7 @@ mod tests {
         let keys = Keys::default();
         for insert in every_effect() {
             let mut state = holding(insert);
-            for sample in sine(220.0, 0.5, RATE as usize / 20) {
+            for sample in sines(RATE as usize / 20, 220.0, 0.5, RATE) {
                 state.process_sides([sample, sample * 0.8], false, smoothing, RATE, &keys);
             }
             let mut settled = 0;
@@ -1376,7 +1367,7 @@ mod tests {
         let keys = Keys::default();
         let mut state = holding(insert);
         let mut noise = 1_u32;
-        for sample in sine(220.0, 0.9, RATE as usize / 5) {
+        for sample in sines(RATE as usize / 5, 220.0, 0.9, RATE) {
             noise = noise.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
             let noise = (noise >> 9) as f32 / (1 << 23) as f32 - 0.5;
             let frame = [sample + noise, sample * 0.7 - noise];

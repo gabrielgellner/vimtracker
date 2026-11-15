@@ -265,6 +265,7 @@ mod tests {
     use std::f32::consts::TAU;
 
     use super::*;
+    use crate::dsp::signals::sine;
 
     const RATE: u32 = 48_000;
 
@@ -275,15 +276,11 @@ mod tests {
         exciter
     }
 
-    fn sine(hertz: f32, level: f32, frame: usize) -> f32 {
-        (frame as f32 / RATE as f32 * hertz * TAU).sin() * level
-    }
-
     /// The loudest of what it makes of a sine on both sides, once it's settled.
     fn made(settings: Settings, hertz: f32, level: f32) -> f32 {
         let mut exciter = exciter(settings);
         (0..RATE as usize / 2)
-            .map(|frame| exciter.process([sine(hertz, level, frame); 2], true, 1.0, RATE)[0])
+            .map(|frame| exciter.process([sine(frame, hertz, level, RATE); 2], true, 1.0, RATE)[0])
             .skip(RATE as usize / 4)
             .fold(0.0, |most, sample| most.max(sample.abs()))
     }
@@ -319,7 +316,7 @@ mod tests {
     fn what_it_makes_has_the_harmonics_and_grows_faster_than_the_sound() {
         let mut exciter = exciter(Settings::DEFAULT);
         let out: Vec<f32> = (0..RATE as usize)
-            .map(|frame| exciter.process([sine(3_000.0, 0.5, frame); 2], true, 1.0, RATE)[0])
+            .map(|frame| exciter.process([sine(frame, 3_000.0, 0.5, RATE); 2], true, 1.0, RATE)[0])
             .skip(RATE as usize / 2)
             .collect();
         // `tanh` makes odd harmonics, and the diode's lopsided level even ones.
@@ -339,8 +336,8 @@ mod tests {
         let mut exciter = exciter(Settings::DEFAULT);
         let mut right = 0.0_f32;
         for frame in 0..RATE as usize / 2 {
-            let quiet = sine(5_000.0, 0.01, frame);
-            let out = exciter.process([sine(5_000.0, 0.5, frame), quiet], false, 1.0, RATE);
+            let quiet = sine(frame, 5_000.0, 0.01, RATE);
+            let out = exciter.process([sine(frame, 5_000.0, 0.5, RATE), quiet], false, 1.0, RATE);
             right = right.max(out[1].abs());
         }
         assert!(

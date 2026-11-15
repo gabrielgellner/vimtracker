@@ -438,6 +438,7 @@ mod tests {
     use vt_model::constants::UNITY_LEVEL;
 
     use super::*;
+    use crate::dsp::signals::rms;
     use crate::rng::Pcg32;
 
     const RATE: u32 = 48_000;
@@ -509,11 +510,6 @@ mod tests {
                     * 0.55
             })
             .collect()
-    }
-
-    fn rms(samples: impl Iterator<Item = f32>) -> f32 {
-        let (sum, count) = samples.fold((0.0, 0), |(sum, count), s| (sum + s * s, count + 1));
-        (sum / count as f32).sqrt()
     }
 
     fn db(wet: f32, dry: f32) -> f32 {

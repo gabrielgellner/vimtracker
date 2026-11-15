@@ -11,6 +11,8 @@ use vt_model::samples::SamplePool;
 use vt_model::settings::{FOUR_OP_EACH, FOUR_OP_SHARED, SettingId};
 use vt_model::song::{FULL_GATE, Machine, Phrase, Song, SynthVoice};
 
+use crate::support;
+
 const RATE: u32 = 48_000;
 const STEP: usize = 6000;
 
@@ -43,20 +45,20 @@ fn play(song: Song, steps: usize) -> Vec<f32> {
 
 /// The loudest part of a step, on the left channel.
 fn peak(out: &[f32], step: usize) -> f32 {
-    out[step * STEP * 2..(step + 1) * STEP * 2]
-        .iter()
-        .step_by(2)
-        .fold(0.0, |peak: f32, sample| peak.max(sample.abs()))
+    support::peak(
+        out[step * STEP * 2..(step + 1) * STEP * 2]
+            .iter()
+            .step_by(2),
+    )
 }
 
 /// How loud a step is on average, on the left channel.
 fn rms(out: &[f32], step: usize) -> f32 {
-    let left: Vec<f32> = out[step * STEP * 2..(step + 1) * STEP * 2]
-        .iter()
-        .step_by(2)
-        .copied()
-        .collect();
-    (left.iter().map(|sample| sample * sample).sum::<f32>() / left.len() as f32).sqrt()
+    support::rms(
+        out[step * STEP * 2..(step + 1) * STEP * 2]
+            .iter()
+            .step_by(2),
+    )
 }
 
 const NOTE: &str = "C-1 7F --- --- ---";
@@ -170,9 +172,10 @@ fn notes_change_its_pitch() {
 #[test]
 fn renders_and_stems_are_the_same_each_time() {
     let whole = song(&[NOTE, REST, REST, REST]);
-    let render = || render_loop(version(whole.clone()), RATE, RenderOptions::default());
-    assert_eq!(render(), render());
-    assert!(render().iter().any(|sample| *sample != 0.0));
+    let heard = support::repeats("a synth", || {
+        render_loop(version(whole.clone()), RATE, RenderOptions::default())
+    });
+    assert!(heard.iter().any(|sample| *sample != 0.0));
     let stems = render_stems(&version(whole.clone()), RATE, RenderOptions::default());
     assert_eq!(stems.len(), 1);
     assert!(stems[0].samples.iter().any(|sample| *sample != 0.0));

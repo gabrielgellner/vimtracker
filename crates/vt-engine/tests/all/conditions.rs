@@ -12,7 +12,7 @@ use vt_model::samples::SamplePool;
 use vt_model::song::{Chain, ChainEntry, Lane, Phrase, Song};
 use vt_model::speed::Speed;
 
-use crate::support::version;
+use crate::support::{self, version};
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
@@ -402,6 +402,7 @@ fn renders_with_conditions_repeat() {
         "C-3 -- cnd:08",
     ];
     let song = song(&[&rows, &["C-3 -- cnd:05", "C-3 -- cnd:06"]]);
-    let render = || render_frames(version(&song, hits_pool()), RATE, 32 * STEP);
-    assert_eq!(render(), render());
+    support::repeats("conditions", || {
+        render_frames(version(&song, hits_pool()), RATE, 32 * STEP)
+    });
 }

@@ -129,9 +129,9 @@ keep can have a file of its own instead, as `supersaw.rs` and `four_op.rs` do, n
 7. **The guides**: `vt-tui/guides/editing.md`, the shape panel's fills, and `track-gen.md`, the Gen
    page.
 
-**Pins:** `fills.txt` and `gen_params.txt` gain lines. vt-model's `tests/render.rs` keeps what
+**Pins:** `fills.txt` and `gen_params.txt` gain lines. vt-model's `tests/all/render.rs` keeps what
 every fill writes on every column in `renders.txt`: write its lines with
-`VT_BLESS=1 cargo test -p vt-model --test render`, and every other line stays. One new Roto pin.
+`VT_BLESS=1 cargo test -p vt-model --test all render::`, and every other line stays. One new Roto pin.
 
 ## A mod type
 

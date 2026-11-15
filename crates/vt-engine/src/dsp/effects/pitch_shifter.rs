@@ -220,6 +220,7 @@ impl Rung for PitchShifter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::signals::sine;
     use std::f32::consts::TAU;
     use vt_model::insert::MOST_SHIFT;
 
@@ -239,15 +240,11 @@ mod tests {
         }
     }
 
-    fn sine(frame: usize, hertz: f32, rate: u32) -> f32 {
-        (frame as f32 / rate as f32 * hertz * TAU).sin() * 0.5
-    }
-
     /// A sine through it for two seconds, with the last second of what comes out.
     fn through(settings: Settings, hertz: f32) -> Vec<f32> {
         let mut shifter = shifter(settings, RATE);
         (0..RATE as usize * 2)
-            .map(|frame| shifter.process([sine(frame, hertz, RATE); 2])[0])
+            .map(|frame| shifter.process([sine(frame, hertz, 0.5, RATE); 2])[0])
             .skip(RATE as usize)
             .collect()
     }
@@ -345,7 +342,10 @@ mod tests {
         let mut shifter = shifter(Settings::DEFAULT, RATE);
         let late = grain_ms(f32::from(Settings::DEFAULT.size)) * RATE as f32 / 1000.0 * 0.5;
         for frame in 0..RATE as usize {
-            let out = shifter.process([sine(frame, 220.0, RATE), -sine(frame, 330.0, RATE)]);
+            let out = shifter.process([
+                sine(frame, 220.0, 0.5, RATE),
+                -sine(frame, 330.0, 0.5, RATE),
+            ]);
             if frame > late as usize + 4 {
                 let at = frame as f32 - late;
                 let left = (at / RATE as f32 * 220.0 * TAU).sin() * 0.5;
@@ -373,7 +373,7 @@ mod tests {
                 };
                 shifter.follow(now);
             }
-            let out = shifter.process([sine(frame, 220.0, RATE); 2]);
+            let out = shifter.process([sine(frame, 220.0, 0.5, RATE); 2]);
             if late {
                 most = most.max((out[0] - last[0]).abs().max((out[1] - last[1]).abs()));
             }
@@ -445,7 +445,7 @@ mod tests {
         let out: Vec<f32> = (0..RATE as usize * 4)
             .map(|frame| {
                 let tone = if frame < RATE as usize / 10 {
-                    sine(frame, 330.0, RATE)
+                    sine(frame, 330.0, 0.5, RATE)
                 } else {
                     0.0
                 };
@@ -540,7 +540,7 @@ mod tests {
             RATE,
         );
         for frame in 0..1000 {
-            shifter.process([sine(frame, 440.0, RATE); 2]);
+            shifter.process([sine(frame, 440.0, 0.5, RATE); 2]);
         }
         shifter.clear();
         for _ in 0..RATE {

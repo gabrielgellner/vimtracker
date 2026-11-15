@@ -5,8 +5,6 @@
 //! the render as it was before `render_into`. `VT_BLESS=1` writes it again after an intended
 //! change to a fill.
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -23,56 +21,7 @@ use vt_model::shape::{
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 
-// The engine's `rt_guard`, as this test is a binary of its own: it counts the allocations on a
-// thread while it's armed, rather than panicking inside the allocator.
-thread_local! {
-    static ARMED: Cell<bool> = const { Cell::new(false) };
-    static VIOLATIONS: Cell<usize> = const { Cell::new(0) };
-}
-
-struct Guarded;
-
-#[global_allocator]
-static GUARD: Guarded = Guarded;
-
-fn note() {
-    let _ = ARMED.try_with(|armed| {
-        if armed.get() {
-            let _ = VIOLATIONS.try_with(|count| count.set(count.get() + 1));
-        }
-    });
-}
-
-unsafe impl GlobalAlloc for Guarded {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        note();
-        unsafe { System.alloc(layout) }
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        note();
-        unsafe { System.dealloc(ptr, layout) }
-    }
-
-    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        note();
-        unsafe { System.realloc(ptr, layout, new_size) }
-    }
-
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        note();
-        unsafe { System.alloc_zeroed(layout) }
-    }
-}
-
-/// Run `f` with allocation forbidden on this thread, and say how many times it allocated anyway.
-fn forbidden<R>(f: impl FnOnce() -> R) -> (R, usize) {
-    let before = VIOLATIONS.with(Cell::get);
-    ARMED.with(|armed| armed.set(true));
-    let out = f();
-    ARMED.with(|armed| armed.set(false));
-    (out, VIOLATIONS.with(Cell::get) - before)
-}
+use crate::rt_guard::forbidden;
 
 /// SplitMix64, so the cases are the same on every run.
 struct Dice(u64);
@@ -717,14 +666,6 @@ fn every_fill_writes_what_it_wrote_before_on_every_column() {
 #[test]
 fn a_cell_is_at_most_32_bytes() {
     assert!(size_of::<GenCell>() <= 32, "{}", size_of::<GenCell>());
-}
-
-/// The guard sees an allocation, which is the only way to trust a zero from it.
-#[test]
-fn the_guard_notices_an_allocation() {
-    let (made, count) = forbidden(|| vec![0u8; 64]);
-    assert!(!made.is_empty());
-    assert!(count > 0, "the guard didn't see an obvious allocation");
 }
 
 #[test]
