@@ -11,8 +11,7 @@ use crate::input::keys::{Key, parse, parse_sequence};
 use crate::input::mode::{Mode, View};
 use crate::mixer_page::MixerPage;
 use crate::page::Page as _;
-use crate::placing::Edge;
-use crate::sample_page::SampleKey;
+use crate::sample_page::{SampleKey, SamplePage};
 use crate::track_page::{Page, TrackPage};
 
 /// An operator key.
@@ -587,246 +586,6 @@ const SONG: &[(&str, Cmd, &str)] = &[
     ),
 ];
 
-/// Keys for the sample page. A sample is a buffer and a cell column a character, and the slice is
-/// the line, but the cursor is a line placed to the pixel, so `h` and `l` move a pixel at the zoom
-/// shown, speeding up as they're held.
-const SAMPLE: &[(&str, Cmd, &str)] = &[
-    ("h", Cmd::Move(Motion::Left), "A pixel earlier, faster held"),
-    ("l", Cmd::Move(Motion::Right), "A pixel later, faster held"),
-    ("0", Cmd::Move(Motion::RowStart), "Start of the slice"),
-    ("$", Cmd::Move(Motion::RowEnd), "End of the slice"),
-    (
-        "^",
-        Cmd::Sample(SampleKey::FirstSound),
-        "First sound in the slice",
-    ),
-    (
-        "g _",
-        Cmd::Sample(SampleKey::LastSound),
-        "Last sound in the slice",
-    ),
-    ("j", Cmd::Move(Motion::Down), "Next slice"),
-    ("k", Cmd::Move(Motion::Up), "Previous slice"),
-    (
-        "g g",
-        Cmd::Move(Motion::First),
-        "Start of the sample, or slice n",
-    ),
-    (
-        "G",
-        Cmd::Move(Motion::Last),
-        "End of the sample, or slice n",
-    ),
-    (
-        "}",
-        Cmd::Move(Motion::NextBeat),
-        "Next beat, from the start, at the tempo",
-    ),
-    (
-        "{",
-        Cmd::Move(Motion::PreviousBeat),
-        "Previous beat, from the start, at the tempo",
-    ),
-    (
-        "w",
-        Cmd::Sample(SampleKey::NextSound),
-        "Next sound's start, as Sens finds them",
-    ),
-    (
-        "b",
-        Cmd::Sample(SampleKey::PreviousSound),
-        "Previous sound's start, as Sens finds them",
-    ),
-    (
-        "e",
-        Cmd::Sample(SampleKey::SoundEnd),
-        "Where the sound decays, or the next one",
-    ),
-    (
-        "] ]",
-        Cmd::Sample(SampleKey::NextPoint),
-        "Next point: a slice, the start, end or loop",
-    ),
-    (
-        "[ [",
-        Cmd::Sample(SampleKey::PreviousPoint),
-        "Previous point: a slice, the start, end or loop",
-    ),
-    (
-        "'",
-        Cmd::Sample(SampleKey::Mark),
-        "Then a letter: the slice it names, as a jump",
-    ),
-    (
-        "] '",
-        Cmd::Sample(SampleKey::NextMark),
-        "Next slice a letter names, as a jump",
-    ),
-    (
-        "[ '",
-        Cmd::Sample(SampleKey::PreviousMark),
-        "Previous slice a letter names, as a jump",
-    ),
-    ("H", Cmd::ViewTop, "Cursor to the left of the view"),
-    ("M", Cmd::ViewMiddle, "Cursor to the middle of the view"),
-    ("L", Cmd::ViewBottom, "Cursor to the right of the view"),
-    ("C-d", Cmd::HalfPageDown, "Half a screen later"),
-    ("C-u", Cmd::HalfPageUp, "Half a screen earlier"),
-    ("C-e", Cmd::ScrollDown, "Scroll the view a column later"),
-    ("C-y", Cmd::ScrollUp, "Scroll the view a column earlier"),
-    (
-        "z z",
-        Cmd::Sample(SampleKey::CursorMiddle),
-        "View with the cursor in its middle",
-    ),
-    (
-        "z s",
-        Cmd::Sample(SampleKey::CursorLeft),
-        "View with the cursor at its left",
-    ),
-    (
-        "z e",
-        Cmd::Sample(SampleKey::CursorRight),
-        "View with the cursor at its right",
-    ),
-    (
-        "z i",
-        Cmd::Sample(SampleKey::ZoomIn),
-        "Zoom in by 2, on the cursor",
-    ),
-    (
-        "z o",
-        Cmd::Sample(SampleKey::ZoomOut),
-        "Zoom out by 2, on the cursor",
-    ),
-    ("z O", Cmd::Sample(SampleKey::ZoomAll), "The whole sample"),
-    (
-        "z v",
-        Cmd::Sample(SampleKey::ZoomSlice),
-        "The slice, filling the view",
-    ),
-    ("M-1", Cmd::NarrowGrid, "Zoom in by 2, as z i"),
-    ("M-2", Cmd::WidenGrid, "Zoom out by 2, as z o"),
-    (
-        "z c",
-        Cmd::Sample(SampleKey::CursorStyle),
-        "The cursor as a line, or as its column",
-    ),
-    (
-        ";",
-        Cmd::Audition,
-        "Hear the slice, or the selection; held, until let go",
-    ),
-    (
-        "Enter",
-        Cmd::Sample(SampleKey::Split),
-        "Split the slice here, or at the playhead as it plays",
-    ),
-    (
-        "J",
-        Cmd::Sample(SampleKey::Join),
-        "Join the slice with the next",
-    ),
-    (
-        "x",
-        Cmd::ClearField,
-        "Take the point here away, or a setting back",
-    ),
-    (
-        "=",
-        Cmd::Increase,
-        "Nudge the point here a pixel later, or a setting up",
-    ),
-    (
-        "-",
-        Cmd::Decrease,
-        "Nudge the point here a pixel earlier, or a setting down",
-    ),
-    (
-        "+",
-        Cmd::IncreaseLarge,
-        "Nudge the point here a column later, or a setting up more",
-    ),
-    (
-        "_",
-        Cmd::DecreaseLarge,
-        "Nudge the point here a column earlier, or a setting down more",
-    ),
-    (
-        "D-l",
-        Cmd::Sample(SampleKey::NudgeFrame { later: true }),
-        "Nudge the point here a frame later",
-    ),
-    (
-        "D-h",
-        Cmd::Sample(SampleKey::NudgeFrame { later: false }),
-        "Nudge the point here a frame earlier",
-    ),
-    (
-        "g s",
-        Cmd::Sample(SampleKey::SetPoint(Edge::Start)),
-        "Start the sample here",
-    ),
-    (
-        "g e",
-        Cmd::Sample(SampleKey::SetPoint(Edge::End)),
-        "End the sample here",
-    ),
-    (
-        "g l",
-        Cmd::Sample(SampleKey::SetPoint(Edge::LoopStart)),
-        "Start the loop here",
-    ),
-    (
-        "g L",
-        Cmd::Sample(SampleKey::SetPoint(Edge::LoopEnd)),
-        "End the loop here",
-    ),
-    (
-        "m",
-        Cmd::Sample(SampleKey::NameSlice),
-        "Then a letter: name the slice here with it",
-    ),
-    ("v", Cmd::VisualField, "Select frames, or end the selection"),
-    ("g v", Cmd::Reselect, "Select the last selection again"),
-    (
-        "o",
-        Cmd::Sample(SampleKey::OtherEnd),
-        "To the selection's other end",
-    ),
-    (
-        ">",
-        Cmd::Sample(SampleKey::GainUp),
-        "The slice's gain up a dB",
-    ),
-    (
-        "<",
-        Cmd::Sample(SampleKey::GainDown),
-        "The slice's gain down a dB",
-    ),
-    ("~", Cmd::Sample(SampleKey::Reverse), "Reverse the slice"),
-    (
-        "R",
-        Cmd::ToggleSampling,
-        "Record into a new sample, as Space R, and show it once done",
-    ),
-    (
-        "K",
-        Cmd::PickValue,
-        "Choose a setting to change, or list its values",
-    ),
-];
-
-/// The sample page's text objects, while it selects: a sound is a word, and a slice a paragraph.
-const SAMPLE_OBJECTS: &[(&str, Cmd, &str)] = &[
-    (
-        "i s",
-        Cmd::Sample(SampleKey::ThisSound),
-        "This sound, from its start to where it decays",
-    ),
-    ("i p", Cmd::Sample(SampleKey::ThisSlice), "This slice"),
-];
-
 const AUDIO: &[(&str, Cmd, &str)] = &[
     ("H", Cmd::PreviousPage, "Previous page: Song, Audio"),
     ("L", Cmd::NextPage, "Next page: Song, Audio"),
@@ -1030,7 +789,7 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Audio, EVERY_VIEW);
     add(Mode::Project, PROJECT);
     add(Mode::Project, EVERY_VIEW);
-    add(Mode::Sample, SAMPLE);
+    add(Mode::Sample, SamplePage::KEYS);
     add(Mode::Sample, EVERY_VIEW);
     // While the sample page selects, `i` starts a text object rather than the pads.
     let every_view_but_pads: Vec<_> = EVERY_VIEW
@@ -1038,8 +797,8 @@ pub fn bindings() -> Vec<Binding> {
         .filter(|(keys, _, _)| *keys != "i")
         .copied()
         .collect();
-    add(Mode::SampleVisual, SAMPLE);
-    add(Mode::SampleVisual, SAMPLE_OBJECTS);
+    add(Mode::SampleVisual, SamplePage::KEYS);
+    add(Mode::SampleVisual, SamplePage::OBJECTS);
     add(Mode::SampleVisual, &every_view_but_pads);
     add(Mode::OperatorPending, MOTIONS);
     add(Mode::OperatorPending, TARGETS);

@@ -287,6 +287,81 @@ impl Drawing<'_> {
     }
 }
 
+/// The sample page's waveform, or its overview, as its panel's shape: what it's drawn from, which
+/// is all that's compared to tell if it has to be drawn again. That's the file, whether its frames
+/// are in, the points where they are, the view and its size, never the cursor alone.
+#[derive(Debug, Clone)]
+pub struct Wave {
+    pub analysis: Arc<Analysis>,
+    /// The file's frames at the program's rate, if they're in, to draw closer than the analysis
+    /// goes.
+    pub frames: Option<(Arc<SampleData>, Rates)>,
+    /// The entry's points as the waveform draws them, [`drawn_points`].
+    pub points: Points,
+    /// The frame at the left edge, and how many frames each character across covers.
+    pub first: u64,
+    pub zoom: u64,
+    /// How many characters it covers, across and down.
+    pub columns: usize,
+    pub rows: usize,
+    /// Whether both channels are drawn together in one lane, as the overview is.
+    pub merged: bool,
+}
+
+impl PartialEq for Wave {
+    fn eq(&self, other: &Self) -> bool {
+        self.analysis.hash == other.analysis.hash
+            && self.frames.is_some() == other.frames.is_some()
+            && (
+                &self.points,
+                self.first,
+                self.zoom,
+                self.columns,
+                self.rows,
+                self.merged,
+            ) == (
+                &other.points,
+                other.first,
+                other.zoom,
+                other.columns,
+                other.rows,
+                other.merged,
+            )
+    }
+}
+
+impl Wave {
+    /// Its picture, for characters of `cell` pixels.
+    pub fn picture(&self, cell: (usize, usize)) -> Picture {
+        Drawing {
+            analysis: &self.analysis,
+            frames: self
+                .frames
+                .as_ref()
+                .map(|(data, rates)| (data.as_ref(), *rates)),
+            points: &self.points,
+            first: self.first,
+            zoom: self.zoom,
+            columns: self.columns,
+            rows: self.rows,
+            cell,
+            merged: self.merged,
+        }
+        .picture()
+    }
+}
+
+/// An entry's points as the waveform draws them, where they are and nothing else, so changing a
+/// slice's own settings or a letter doesn't send the picture again.
+pub fn drawn_points(points: &Points) -> Points {
+    let mut drawn = points.clone();
+    drawn.marks.clear();
+    for slice in &mut drawn.slices {
+        slice.over = Default::default();
+    }
+    drawn
+}
+
 /// What a sampler's thumbnail on the Sound page shows: the whole of the slice its `Slice` is on,
 /// in the file's frames, with where its `Start` starts a note and where its `Length` ends one, in
 /// the order it plays, so a reversed slice's start is near its end. It's drawn by [`Drawing`],

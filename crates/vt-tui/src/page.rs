@@ -23,7 +23,7 @@ use std::time::Instant;
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use vt_engine::engine::Transport;
+use vt_engine::engine::{PLAYHEADS, Playhead, Transport};
 use vt_engine::link::JamState;
 use vt_engine::track_state::{Faders, LiveValues};
 use vt_model::generator::Generator;
@@ -38,6 +38,7 @@ use crate::input::mode::{Mode, View};
 use crate::jumping::FieldJump;
 use crate::kitty::{PanelIds, PanelWant};
 use crate::meter::Meter;
+use crate::sample_page::{Shown, is_sample_motion};
 use crate::services::Services;
 use crate::shaping::LiveGen;
 use crate::track_page::Control;
@@ -56,8 +57,8 @@ pub enum Outcome {
 }
 
 /// One of the program's pages as a component: its own state, its keys, its drawing and its
-/// pictures. The track page and the mixer are so far (#739); the other pages' keys and drawing
-/// are still `App`'s.
+/// pictures. The track page, the mixer and the sample page are so far (#739); the other pages'
+/// keys and drawing are still `App`'s.
 pub(crate) trait Page {
     /// Its rows of the binding table, as `(keys, Cmd, description)`, in the order which-key and
     /// `Space k` list them. The table is still assembled in one place, `input::bindings`, under
@@ -153,6 +154,40 @@ impl App {
                 self.modes.count = count;
                 false
             }
+        }
+    }
+
+    /// Run a command on the sample page: the page's own key, and then what it passes back, which
+    /// is `App`'s, as it plays, starts the pads, waits for a mark's letter or opens the picker. A
+    /// key that moves over the sample says why there's none to show, as there's nothing it can
+    /// do, while any other goes on to mean what it does on every page. The count is taken by
+    /// what takes it, and left for what passes it on.
+    pub(crate) fn run_sample_page(&mut self, cmd: Cmd) -> bool {
+        let shown = match self.sample_page_here() {
+            Ok(shown) => shown,
+            Err(why) if is_sample_motion(cmd) => {
+                self.services.status = why;
+                self.modes.count = None;
+                return true;
+            }
+            Err(_) => return false,
+        };
+        let times = self.modes.count.unwrap_or(1).max(1);
+        let mut ctx = CtxMut {
+            services: &mut self.services,
+            modes: &self.modes,
+        };
+        match self.sample_page.key(cmd, times, &mut ctx) {
+            Outcome::Done => {
+                self.modes.count = None;
+                true
+            }
+            Outcome::Refused(why) => {
+                self.modes.count = None;
+                self.services.status = why.to_owned();
+                true
+            }
+            Outcome::Passed => self.run_sample_passed(cmd, &shown),
         }
     }
 }
@@ -327,6 +362,17 @@ impl<'a> Ctx<'a> {
     /// The program's sample rate, which the pictures of filters and tails are worked out at.
     pub fn rate(&self) -> u32 {
         self.app.services.rate
+    }
+
+    /// What the sample page shows for the cursor's track, or why it can't show it.
+    pub fn sample_shown(&self) -> Result<Shown, String> {
+        self.app.sample_shown()
+    }
+
+    /// Where each voice playing a sample through the cursor's track is in it, as the engine last
+    /// said.
+    pub fn playheads(&self) -> &'a [Option<Playhead>; PLAYHEADS] {
+        &self.app.services.playheads
     }
 
     /// Whether something is drawn over the page, which a picture placed above the text would show

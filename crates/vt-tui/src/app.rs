@@ -250,9 +250,8 @@ pub struct App {
     pub section_anchor: Option<usize>,
     /// The track page: which of its pages shows, where its cursor is, and the images it shows.
     pub track_page: TrackPage,
-    /// Where the sample page is, and the ids of the images of its waveform and its overview.
+    /// The sample page: where it is, and the pictures of its waveform and its overview.
     pub sample_page: crate::sample_page::SamplePage,
-    pub sample_images: Option<(u32, u32)>,
     /// The project page's row and setting, whether the cursor is on the tempo's fine part, and
     /// the field `j` and `k` aim for, as on the track page.
     pub project_row: usize,
@@ -309,9 +308,6 @@ pub struct App {
     key_down: Option<KeyCode>,
     /// Whether the key that's down ignores its repeats, as a transport key and a held note do.
     pub(crate) repeats_ignored: bool,
-    /// Whether the key being acted on is the terminal repeating one that's held, for the sample
-    /// page's `h` and `l`, which speed up as they're held.
-    pub(crate) repeating: bool,
     /// The keys holding notes, on the keyboard or in Insert, in the order they went down, so
     /// they play a chord.
     held_notes: Vec<HeldNote>,
@@ -444,7 +440,6 @@ impl App {
             section_anchor: None,
             track_page: TrackPage::default(),
             sample_page: crate::sample_page::SamplePage::default(),
-            sample_images: None,
             project_row: 0,
             project_field: 0,
             project_fine: false,
@@ -483,7 +478,6 @@ impl App {
             fill: false,
             key_down: None,
             repeats_ignored: false,
-            repeating: false,
             held_notes: Vec::new(),
             held_flags: Vec::new(),
             last_written: None,

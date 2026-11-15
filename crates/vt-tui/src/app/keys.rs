@@ -73,9 +73,9 @@ impl App {
         {
             return;
         }
-        self.repeating = true;
+        self.services.repeating = true;
         self.press(key, now);
-        self.repeating = false;
+        self.services.repeating = false;
     }
 
     /// A key let go: its held note ends, leaving any others held, and so does what it started

@@ -778,8 +778,8 @@ apply an action at once, and the modes to read; `Ctx`, which a page is drawn wit
 reads through `App`, as drawing is given `&App` and some of what's drawn, such as a live
 generator's sources, is `App`'s to work out.
 
-**`Page`** (`page.rs`, #739) is a page as a component, which the track page and the mixer are so
-far: its rows of the binding table, `Page::KEYS`, kept beside it and assembled by
+**`Page`** (`page.rs`, #739) is a page as a component, which the track page, the mixer and the
+sample page are so far: its rows of the binding table, `Page::KEYS`, kept beside it and assembled by
 `input/bindings.rs` under its mode; `Page::key`, which runs one of its keys with a count through a
 `CtxMut` and says what it did as an `Outcome`, done, refused with why, or passed back; `Page::draw`,
 given a `Ctx`; and `Page::panels` and `Page::take_panels`, its pictures as data for `Graphics` and
@@ -1045,10 +1045,14 @@ edits are `TrackPage::edit`, the page's methods and functions over the `Services
 mixer's moves across tracks are its own keys. `App` still dispatches to them, in
 `run_track_page` and `run_mixer`, and keeps the track page's pickers, typing and Gen page, which
 open its picker, edit `Modes` and work through the shape panel. The track page says which pictures
-it wants as data and where its dots go, and `Graphics` reads no `App` (#728, below);
-`SamplePage` is half there too: it keeps its own cursor, zoom, scroll,
-selection and settings focus, while its keys are still `impl App` blocks, in `sample_page.rs`, and
-in `placing.rs` and `sample_settings.rs` for editing its points and settings.
+it wants as data and where its dots go, and `Graphics` reads no `App` (#728, below).
+`SamplePage` is a component too: it keeps its own cursor, zoom, scroll, selection, settings focus
+and pictures' ids, runs its moves and its edits of the entry's points and settings
+(`placing.rs`, `sample_settings.rs`) through the `Services`, builds its settings' pickers, and is
+drawn through a `Ctx`. What it passes back is `App`'s, in `App::run_sample_passed`: what plays
+through the track, the pads, `'` and `m`'s letters and `]'` `['`'s jumps, and opening the picker.
+Whether an entry is still recording is `App`'s too, so `App::sample_shown` says so before the
+page's own `SamplePage::shown`.
 
 **Decisions:** 49 to 53, 73 to 75, 100 to 104, 108, 122, 126, 128, 139, 140, 144, 145, 148, 149 and
 151 to 155, with #320 and #330.
@@ -1064,8 +1068,10 @@ terminal has. It's a service that reads no `App` (#728): a page lists the pictur
 `TrackPage::panels` and `MappingView::panels` work out from their state and what they're given;
 `Graphics::panels` sends whichever the terminal lacks and gives back their ids as `PanelIds`, which
 the page keeps for its drawing; and `Shape::png` draws any of them, one match over the shapes. The
-scope, the picker's preview and the sample page's waveforms are `Graphics` methods given what they
-draw, and what's placed directly comes as `Placements`. `App::send_pictures` and
+sample page's waveform and overview are `PanelWant`s too, from `SamplePage::panels`, which
+`Graphics::sample_panels` holds apart and sends again the moment what they show changes, never
+waiting as a picture that follows a modulated setting does. The scope and the picker's preview are
+`Graphics` methods given what they draw, and what's placed directly comes as `Placements`. `App::send_pictures` and
 `App::place_pictures`, in `run.rs`, hand each page its pictures each frame, and the screenshots make
 the same calls. Every command is sent with `q=2`, so the terminal's
 answers never arrive as keys. A picture reaches the screen in one of two ways.

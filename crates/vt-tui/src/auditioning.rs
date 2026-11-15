@@ -264,19 +264,6 @@ impl App {
     /// track's own notes of it, any of its notes on the preview voices, and what the page itself
     /// played.
     pub fn sample_playheads(&self, shown: &Shown) -> Vec<u64> {
-        let Some((_, rates)) = &shown.frames else {
-            return Vec::new();
-        };
-        let heard = self.sample_page.heard == Some((shown.number, shown.analysis.hash));
-        self.services
-            .playheads
-            .iter()
-            .flatten()
-            .filter(|head| match head.entry {
-                Some(number) => number == shown.number,
-                None => heard,
-            })
-            .map(|head| rates.file_frame(head.frame))
-            .collect()
+        self.sample_page.playheads(shown, &self.services.playheads)
     }
 }
