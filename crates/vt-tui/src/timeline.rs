@@ -10,8 +10,6 @@ use std::ops::Range;
 use vt_model::song::Phrase;
 use vt_model::step::Step;
 
-use crate::app::App;
-
 /// When each of these rows starts, in steps from the first, as each lasts its pulses. A row of no
 /// pulses starts with the row after it.
 pub fn starts(steps: &[Step]) -> Vec<usize> {
@@ -107,47 +105,6 @@ pub fn starting_in(
         .filter(|row| steps[*row].pulses() > 0);
     let first = found.next()?;
     Some((first, 1 + found.count()))
-}
-
-impl App {
-    /// Whether the phrase view is laid out in time rather than collapsed to a line a row.
-    pub fn timeline_on(&self) -> bool {
-        !self.rows_collapsed
-    }
-
-    /// Collapse the phrase view to a line a row, or open it out into its timeline again.
-    pub(crate) fn toggle_timeline(&mut self) {
-        self.modes.count = None;
-        self.rows_collapsed = !self.rows_collapsed;
-        self.services.status = if self.rows_collapsed {
-            "Rows: a line each, beside the other tracks' rows. z i lays them out in time"
-        } else {
-            "Timeline: a line for each pulse, beside the other tracks in time. z i collapses it"
-        }
-        .to_owned();
-    }
-
-    /// Show the row inspector, or hide it.
-    pub(crate) fn toggle_inspector(&mut self) {
-        self.modes.count = None;
-        self.inspector = !self.inspector;
-        self.services.status = if self.inspector {
-            "Row inspector: the cursor's row in words, while there's room. Space i hides it"
-        } else {
-            "Row inspector hidden. Space i shows it"
-        }
-        .to_owned();
-    }
-
-    /// How many lines each stored row of the cursor's phrase takes on screen.
-    pub(crate) fn row_line_counts(&self) -> Vec<usize> {
-        let timeline = self.timeline_on();
-        self.services.phrase_here().map_or_else(Vec::new, |phrase| {
-            (0..phrase.steps().len())
-                .map(|index| row_lines(phrase, index, timeline))
-                .collect()
-        })
-    }
 }
 
 /// The lines these rows take, a row past the counts taking one.

@@ -754,12 +754,11 @@ where they were written and are borrowed across folders; #260 may move shared sh
 
 **`App`** (`app.rs`) is the program's state and what each key does. It needs no terminal, so tests
 drive it directly. It holds the shared services, `App::services`, beside the pages (`track_page`,
-`mixer_page`, `project_page`, `audio_page`, `sample_page`, `song_view` and `chain_view`),
-`App::modes`, the picker, the command line, help, the jump list and the keys' own state: 89 fields,
-and 46 files
-besides `app.rs` add an `impl App` block each, such as `track_page.rs`, `banking.rs`, `slicing.rs`,
-`shaping.rs`, `picking.rs`, `recording.rs` (live recording, `Space r`), `project_page.rs`,
-`audio_page.rs` and `sample_page.rs`.
+`mixer_page`, `project_page`, `audio_page`, `sample_page`, `song_view`, `chain_view` and
+`phrase_view`), `App::modes`, the picker, the command line, help, the jump list and the keys' own
+state: 82 fields, and 45 files besides `app.rs` add an `impl App` block each, such as
+`track_page.rs`, `banking.rs`, `slicing.rs`, `shaping.rs`, `picking.rs`, `recording.rs` (live
+recording, `Space r`), `project_page.rs`, `audio_page.rs` and `sample_page.rs`.
 
 **`Services`** (`services.rs`, #320) is what every page shares: the history, with
 `Services::apply` running an action on it and `Services::publish` sending the result, the
@@ -780,8 +779,8 @@ reads through `App`, as drawing is given `&App` and some of what's drawn, such a
 generator's sources, is `App`'s to work out.
 
 **`Page`** (`page.rs`, #739) is a page as a component, which the track page, the mixer, the
-project page's Song and Audio sub-pages, the sample page, the song view and the chain view are so
-far: its rows of the binding table, `Page::KEYS`, kept beside it and assembled by
+project page's Song and Audio sub-pages, the sample page, the song view, the chain view and the
+phrase view are so far: its rows of the binding table, `Page::KEYS`, kept beside it and assembled by
 `input/bindings.rs` under its mode; `Page::key`, which runs one of its keys with a count through a
 `CtxMut` and says what it did as an `Outcome`, done, refused with why, or passed back; `Page::draw`,
 given a `Ctx`; and `Page::panels` and `Page::take_panels`, its pictures as data for `Graphics` and
@@ -795,7 +794,7 @@ so there's no `dyn`. A key goes, in this order, to the first that takes it:
 3.  `App`'s commands across pages, for what the page passed back: `i`'s mode, `/`, `M`, `gm`, the
     Keys mode, the pickers, and then the track page's edits, which the mixer shares;
 4.  the tree of chains and phrases (`App::run_tree`);
-5.  the grammar's motions, operators and Visual modes (`App::run_grammar`);
+5.  the grammar's operators, the motion after one, and the Visual modes (`App::run_grammar`);
 6.  the global `match` in `App::run`.
 
 **`TypedValue`** (`input/typed.rs`) is what's typed into a value: Insert's in `Modes`, the shape
@@ -1091,6 +1090,18 @@ through a `Ctx`. `App::run_chain_view` hands it a key and then runs what it pass
 and the phrase view's first row, `dd`, which keeps the cursor on a row, the phrase picker, Insert
 and `;`; what neither takes goes on to the tree, as before. The cursor's chain and its rows are
 `Services::chain_id` and `chain_entries`.
+
+`PhraseView` (`phrase_view.rs`) has where the view is scrolled to and how many lines fit, whether
+it's laid out in time and shows the row inspector, and the selection: where it started, how far
+it reaches across tracks, the columns it keeps and the one `gv` brings back. Its keys, through the
+`Services`, are the moves, the keys over the view (`H` `M` `L`, `C-d` `C-u`, `C-e` `C-y`),
+reaching another track from a selection, `zi` and `Space i`, and its binding rows sit beside it,
+the motions, targets and Visual's with its Normal ones. It's drawn through a `Ctx`
+(`views::phrase::draw_page`), a grid laid out once for the frame and drawn a line at a time. What
+it passes back stays `impl App`: the grammar's operators, the motion after one, the Visual modes
+that change the mode, the edits, registers and `.`, Insert's typing, the tree's keys, the loop's,
+recording and the pickers, which read the selection from it. The cursor it moves is the program's,
+in `Services`, which keeps it on what exists with `Services::clamp_cursor`.
 
 **Decisions:** 49 to 53, 73 to 75, 100 to 104, 108, 122, 126, 128, 139, 140, 144, 145, 148, 149 and
 151 to 155, with #320 and #330.

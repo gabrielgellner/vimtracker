@@ -355,6 +355,30 @@ impl Services {
         self.slot_start() + time
     }
 
+    /// Move the cursor along its phrase's steps, staying on one.
+    pub(crate) fn move_step(&mut self, by: isize) {
+        let Some(phrase) = self.phrase_here().cloned() else {
+            return;
+        };
+        let last = phrase.steps().len() as isize - 1;
+        self.cursor.step = (self.cursor.step as isize + by).clamp(0, last) as usize;
+    }
+
+    /// Keep the cursor on something that exists, as a view has it. Only the chain view has a row
+    /// past the end.
+    pub(crate) fn clamp_cursor(&mut self, view: View) {
+        let sections = self.song().sections.len();
+        self.cursor.section = self.cursor.section.min(sections.saturating_sub(1));
+        let rows = self.chain_entries().len();
+        let last = if view == View::Chain {
+            rows
+        } else {
+            rows.saturating_sub(1)
+        };
+        self.cursor.slot = self.cursor.slot.min(last);
+        self.move_step(0);
+    }
+
     /// Move to the track as many along as `by`, stepping over those folded away, a folded group
     /// one stop on a view that has them (decisions 128 and 305).
     pub(crate) fn move_track(&mut self, by: isize, view: View) {

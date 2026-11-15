@@ -33,7 +33,7 @@ impl App {
         }
         let by = self.services.extent().start as isize - old as isize;
         self.services.cursor.step = self.services.cursor.step.saturating_add_signed(by);
-        self.top = self.top.saturating_add_signed(by);
+        self.phrase_view.top = self.phrase_view.top.saturating_add_signed(by);
     }
 
     pub(super) fn slide_loop(&mut self, by: isize) {

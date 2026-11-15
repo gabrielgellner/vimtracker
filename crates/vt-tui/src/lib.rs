@@ -32,6 +32,7 @@ pub mod meter;
 pub mod mixer_page;
 pub mod page;
 pub mod patching;
+pub mod phrase_view;
 pub mod picking;
 pub mod places;
 pub mod placing;
