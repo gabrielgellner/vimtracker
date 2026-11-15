@@ -277,7 +277,7 @@ mod tests {
         // Reading through a mutable copy copies nothing.
         assert_eq!(copy[1].name, "b");
         assert_eq!(
-            copy.iter().map(|track| track.name.as_str()).last(),
+            copy.iter().map(|track| track.name.as_str()).next_back(),
             Some("c")
         );
         assert!((0..3).all(|at| copy.same(at, &tracks, at)));
