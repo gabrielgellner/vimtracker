@@ -296,35 +296,12 @@ fn a_live_generator_a_macro_holds_goes_onto_the_phrase_under_the_cursor() {
 /// A ramp from `A0` to `A0` over every row, as an FX generator's shape: a depth of `+40` when it
 /// locks a slot's.
 fn level() -> vt_model::shape::Shape {
-    use vt_model::shape::{
-        Acid, Bits, DEFAULT_RATE, FillKind, Follow, Grids, Pink, Random, Shape, Values, Variation,
-        Walk,
-    };
+    use vt_model::shape::Shape;
     Shape {
         from: 0xA0,
         to: 0xA0,
-        curve: 0,
-        s: 0,
-        kind: FillKind::Ramp,
-        wave: vt_model::lfo::Shape::Sine,
-        rate: DEFAULT_RATE,
-        phase: 0,
-        run: 1,
-        values: Values::default(),
-        place: Where::AllRows,
         seed: 1,
-        acid: Acid::default(),
-        follow: Follow::default(),
-        walk: Walk::default(),
-        pink: Pink::default(),
-        bits: Bits::default(),
-        grids: Grids::default(),
-        random: Random::default(),
-        vary: 0,
-        variation: Variation::default(),
-        divisions: vt_model::shape::Divisions::default(),
-        ring: vt_model::shape::Ring::default(),
-        tonnetz: vt_model::shape::Tonnetz::default(),
+        ..Shape::default()
     }
 }
 

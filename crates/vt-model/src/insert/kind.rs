@@ -6,81 +6,14 @@ use std::ops::Index;
 use super::{
     BEADS_GRID, BEADS_PARAMS, CHORUS_PARAMS, CLOUDS_GRID, CLOUDS_PARAMS, COMB_PARAMS,
     COMPRESSOR_PARAMS, COMPRESSOR_SHOWN, DELAY_GRID, DELAY_PARAMS, DISTORT_PARAMS, DISTORT_SHOWN,
-    ECHO_GRID, ECHO_PARAMS, EQ_GRID, EQ_PARAMS, EXCITER_GRID, EXCITER_PARAMS, FLANGER_PARAMS,
-    FREQ_SHIFT_PARAMS, GRAINS_PARAMS, Insert, LIMIT_PARAMS, LPG_PARAMS, MAX_KEPT_PARAMS,
+    ECHO_GRID, ECHO_PARAMS, EQ_GRID, EQ_PARAMS, EXCITER_GRID, EXCITER_PARAMS, EffectKind,
+    FLANGER_PARAMS, FREQ_SHIFT_PARAMS, GRAINS_PARAMS, LIMIT_PARAMS, LPG_PARAMS, MAX_KEPT_PARAMS,
     PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param, RESO_PARAMS, REVERB_PARAMS, ROTARY_GRID,
     ROTARY_PARAMS, SPACE_PARAMS, SPRING_GRID, SPRING_PARAMS, STUTTER_GRID, STUTTER_PARAMS,
     TAPE_PARAMS, VOWEL_PARAMS, WARPS_PARAMS,
 };
 
-/// An effect a slot can hold, apart from its settings: a dense index for tables.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[repr(u8)]
-pub enum EffectKind {
-    Distort,
-    Delay,
-    Reverb,
-    Chorus,
-    Eq,
-    Compressor,
-    Limit,
-    Phaser,
-    Flanger,
-    Tape,
-    Plate,
-    Pitch,
-    Grains,
-    Warps,
-    Lpg,
-    Reso,
-    Comb,
-    Vowel,
-    FreqShift,
-    Spring,
-    Space,
-    Rotary,
-    Exciter,
-    Stutter,
-    Clouds,
-    Beads,
-    Echo,
-}
-
 impl EffectKind {
-    /// In the order [`SettingId`](crate::settings::SettingId) numbers their settings, which is
-    /// [`Insert::ALL`]'s without `Empty`. Never reordered: a track's saved `settings` map is in
-    /// this order.
-    pub const ALL: [Self; 27] = [
-        Self::Distort,
-        Self::Delay,
-        Self::Reverb,
-        Self::Chorus,
-        Self::Eq,
-        Self::Compressor,
-        Self::Limit,
-        Self::Phaser,
-        Self::Flanger,
-        Self::Tape,
-        Self::Plate,
-        Self::Pitch,
-        Self::Grains,
-        Self::Warps,
-        Self::Lpg,
-        Self::Reso,
-        Self::Comb,
-        Self::Vowel,
-        Self::FreqShift,
-        Self::Spring,
-        Self::Space,
-        Self::Rotary,
-        Self::Exciter,
-        Self::Stutter,
-        Self::Clouds,
-        Self::Beads,
-        Self::Echo,
-    ];
-    pub const COUNT: usize = Self::ALL.len();
-
     /// Its description.
     #[inline]
     pub const fn spec(self) -> &'static EffectSpec {
@@ -523,40 +456,3 @@ pub const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         grid: Some(ECHO_GRID),
     },
 ];
-
-impl Insert {
-    /// The effect it holds, if any. The only match on every effect in the model besides serde's
-    /// and the settings' own.
-    pub const fn kind(self) -> Option<EffectKind> {
-        Some(match self {
-            Self::Empty => return None,
-            Self::Distort(_) => EffectKind::Distort,
-            Self::Delay(_) => EffectKind::Delay,
-            Self::Reverb(_) => EffectKind::Reverb,
-            Self::Chorus(_) => EffectKind::Chorus,
-            Self::Eq(_) => EffectKind::Eq,
-            Self::Compressor(_) => EffectKind::Compressor,
-            Self::Limit(_) => EffectKind::Limit,
-            Self::Phaser(_) => EffectKind::Phaser,
-            Self::Flanger(_) => EffectKind::Flanger,
-            Self::Tape(_) => EffectKind::Tape,
-            Self::Plate(_) => EffectKind::Plate,
-            Self::Pitch(_) => EffectKind::Pitch,
-            Self::Grains(_) => EffectKind::Grains,
-            Self::Warps(_) => EffectKind::Warps,
-            Self::Lpg(_) => EffectKind::Lpg,
-            Self::Reso(_) => EffectKind::Reso,
-            Self::Comb(_) => EffectKind::Comb,
-            Self::Vowel(_) => EffectKind::Vowel,
-            Self::FreqShift(_) => EffectKind::FreqShift,
-            Self::Spring(_) => EffectKind::Spring,
-            Self::Space(_) => EffectKind::Space,
-            Self::Rotary(_) => EffectKind::Rotary,
-            Self::Exciter(_) => EffectKind::Exciter,
-            Self::Stutter(_) => EffectKind::Stutter,
-            Self::Clouds(_) => EffectKind::Clouds,
-            Self::Beads(_) => EffectKind::Beads,
-            Self::Echo(_) => EffectKind::Echo,
-        })
-    }
-}

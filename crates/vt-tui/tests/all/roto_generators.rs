@@ -7,10 +7,7 @@ use std::sync::Arc;
 use vt_model::action::{Action, edit};
 use vt_model::generator::{Generator, Span};
 use vt_model::scale::Scale;
-use vt_model::shape::{
-    Acid, Bits, DEFAULT_RATE, FillKind, Follow, GenParam, Pink, Random, Role, Shape, ShapeColumn,
-    Values, Walk, Where, World,
-};
+use vt_model::shape::{FillKind, GenParam, Role, Shape, ShapeColumn, Values, Where, World};
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
 use vt_roto::live::{Feel, KNOB_TOP};
@@ -23,28 +20,11 @@ fn shape(kind: FillKind, place: Where) -> Shape {
     Shape {
         from: 0x30,
         to: 0x48,
-        curve: 0,
-        s: 0,
         kind,
-        wave: vt_model::lfo::Shape::Sine,
-        rate: DEFAULT_RATE,
-        phase: 0,
-        run: 1,
         values: Values::new(&[0x30, 0x40]),
         place,
         seed: 1,
-        acid: Acid::default(),
-        follow: Follow::default(),
-        walk: Walk::default(),
-        pink: Pink::default(),
-        bits: Bits::default(),
-        grids: vt_model::shape::Grids::default(),
-        random: Random::default(),
-        vary: 0,
-        variation: vt_model::shape::Variation::default(),
-        divisions: vt_model::shape::Divisions::default(),
-        ring: vt_model::shape::Ring::default(),
-        tonnetz: vt_model::shape::Tonnetz::default(),
+        ..Shape::default()
     }
 }
 
