@@ -184,36 +184,6 @@ impl App {
         }
     }
 
-    /// The name of what the cursor is on, as the page on screen tells the status line.
-    pub(crate) fn page_column(&self) -> String {
-        let ctx = self.ctx();
-        match self.modes.view {
-            View::Song => self.song_view.column(&ctx),
-            View::Chain => self.chain_view.column(&ctx),
-            View::Phrase => self.phrase_view.column(&ctx),
-            View::Track => self.track_page.column(&ctx),
-            View::Mixer => self.mixer_page.column(&ctx),
-            View::Project => self.project_page.column(&ctx),
-            View::Audio => self.audio_page.column(&ctx),
-            View::Sample => self.sample_page.column(&ctx),
-        }
-    }
-
-    /// What the page on screen has the status line say while nothing else is said there.
-    pub(crate) fn page_hint(&self) -> Option<String> {
-        let ctx = self.ctx();
-        match self.modes.view {
-            View::Song => self.song_view.hint(&ctx),
-            View::Chain => self.chain_view.hint(&ctx),
-            View::Phrase => self.phrase_view.hint(&ctx),
-            View::Track => self.track_page.hint(&ctx),
-            View::Mixer => self.mixer_page.hint(&ctx),
-            View::Project => self.project_page.hint(&ctx),
-            View::Audio => self.audio_page.hint(&ctx),
-            View::Sample => self.sample_page.hint(&ctx),
-        }
-    }
-
     /// Run a command on the page on screen, the second place a key goes in [`App::run`]'s order:
     /// through its [`Page::key`], and then what it passes back through `App`'s own for the page.
     /// Returns false if it's none of theirs.

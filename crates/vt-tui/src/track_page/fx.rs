@@ -59,6 +59,12 @@ impl App {
     pub fn fx_zoomed(&self) -> bool {
         self.modes.view == View::Track && self.track_page.page == Page::Fx && self.track_page.zoomed
     }
+
+    /// What the status line says under it while the FX page is zoomed in, as the track page
+    /// tells it.
+    pub fn fx_zoom_hint(&self) -> Option<String> {
+        self.track_page.zoom_hint(&self.ctx())
+    }
 }
 
 impl TrackPage {

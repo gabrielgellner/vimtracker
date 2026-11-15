@@ -24,6 +24,7 @@ use crate::glyphs;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::macroing::held_text;
+use crate::page::Page;
 use crate::services::Services;
 use crate::shaping::with_live;
 use crate::theme;
@@ -40,6 +41,36 @@ pub fn format_bpm(millibpm: u32) -> String {
         format!("{whole}.{fraction:03}")
             .trim_end_matches('0')
             .to_owned()
+    }
+}
+
+/// The name of what the cursor is on, for the status line, as the page on screen tells it.
+pub fn column_name(app: &App) -> String {
+    let ctx = app.ctx();
+    match app.modes.view {
+        View::Song => app.song_view.column(&ctx),
+        View::Chain => app.chain_view.column(&ctx),
+        View::Phrase => app.phrase_view.column(&ctx),
+        View::Track => app.track_page.column(&ctx),
+        View::Mixer => app.mixer_page.column(&ctx),
+        View::Project => app.project_page.column(&ctx),
+        View::Audio => app.audio_page.column(&ctx),
+        View::Sample => app.sample_page.column(&ctx),
+    }
+}
+
+/// What the page on screen has the status line say while nothing else is said there.
+fn page_hint(app: &App) -> Option<String> {
+    let ctx = app.ctx();
+    match app.modes.view {
+        View::Song => app.song_view.hint(&ctx),
+        View::Chain => app.chain_view.hint(&ctx),
+        View::Phrase => app.phrase_view.hint(&ctx),
+        View::Track => app.track_page.hint(&ctx),
+        View::Mixer => app.mixer_page.hint(&ctx),
+        View::Project => app.project_page.hint(&ctx),
+        View::Audio => app.audio_page.hint(&ctx),
+        View::Sample => app.sample_page.hint(&ctx),
     }
 }
 
@@ -459,8 +490,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         ),
         Span::styled(
             match value_shown(app) {
-                Some(value) => format!(" {}, {value} ", app.page_column()),
-                None => format!(" {} ", app.page_column()),
+                Some(value) => format!(" {}, {value} ", column_name(app)),
+                None => format!(" {} ", column_name(app)),
             },
             theme::selected(),
         ),
@@ -477,7 +508,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     } else if let Some(jump) = &app.modes.field_jump {
         format!("/{}", jump.query)
     } else if app.services.status.is_empty()
-        && let Some(hint) = app.page_hint()
+        && let Some(hint) = page_hint(app)
     {
         hint
     } else if app.services.status.is_empty()
