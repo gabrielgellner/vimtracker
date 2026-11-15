@@ -1034,17 +1034,42 @@ the notes until you give it a lane, so changing the phrase's loop changes it too
 | Keys | Does, on an FX column |
 |---|---|
 | `:lane 3` | Make it a lane of 3 steps, from the cursor's step |
+| `:lane 4/2` | A lane of 4 rows, each lasting 2 of the track's steps |
+| `:lane /3` | Each row of its lane lasts 3 steps, the lane kept as it is |
 | `:lane` | Follow the notes again |
 | `gs`, `ge`, `:len 3` | On a lane, set its start, end or length |
 
 On a column without a lane, and on the note and velocity columns, `gs`, `ge`
 and `:len` set the phrase's loop. On a lane, `gg` and `G` go to its first and
 last steps, and `5G` to its fifth. A lane shows its length in the title, like
-`FX1:3`, dims the steps outside it, and has its own `>` while playing. Sliding
-the loop with `]l` moves lanes with it. Editing works on rows as usual,
-whatever loop a column plays. Anything that starts a track's chain over starts
-its lanes over too, so playing from a step hears what playing to it would. A
-glide in a lane goes to the next value in that lane.
+`FX1:3`, and `FX1:4/2` where its rows last more than a step. It dims the steps
+outside it, and has its own `>` while playing. Sliding the loop with `]l`
+moves lanes with it. Editing works on rows as usual, whatever loop a column
+plays. Anything that starts a track's chain over starts its lanes over too, so
+playing from a step hears what playing to it would. A glide in a lane goes to
+the next value in that lane.
+
+**A slow row.** A lane's row can last from 1 to 16 of the track's steps, as
+Kria's divisions do: `:lane 4/2` takes 8 steps to come round. A slow row is
+read as a row of several pulses is: its FX run on its first step, so a `RET`
+or a `CHA` acts once, and a lock or a hold of it holds through the rest of the
+row, a note there or not. Its playhead stays on it for as long, and the phrase
+view adds no lines for it.
+
+**Turned from the track.** Each FX column has a `Length` and a `Rate` on the
+Gen page's `Lane` device (`Space 8`), which move every phrase's lane on that
+column from its own: at `+2` a lane of 4 plays 6 rows and one of 7 plays 9, and
+at `×2` each row lasts twice its own steps. A lane heard longer than its own
+plays its own rows again from the first, so `+2` on `a b c d` plays
+`a b c d a b`, and `+4` an exact double; shorter, it plays its first rows. Nothing
+is written, so `+0` gives the lane back as it was. While they move it, the title
+shows what's heard first and its own after, dim, as `FX1:6/4 (4/2)`, the
+playhead sits on the row being read, a copy's own, and rows past a shortened
+lane are dim. A turn takes effect at the lane's next row, which counts along
+from where it is rather than jumping; playing from a step works its place out
+again there. A column without a lane isn't touched. A step locks them with
+`LLEN1` and `LRAT1`, `2` and `3` for the other columns, and a mod slot, a
+macro and the Roto turn them too.
 
 `gg`, `G`, `{`, `}`, `ib`, `ic` and `ip` go by the loop. `5G` means row `04`.
 `j` and `k` carry on past its edges. `Space c` on a dim row plays from `00`, and

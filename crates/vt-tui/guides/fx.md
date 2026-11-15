@@ -63,6 +63,8 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `POL2` | An envelope's polarity. `POL3` too, but not the notes' shape |
 | `MAC1` | Macro 1, and every setting it turns, each along its range |
 | `MAC2` | Macro 2. `MAC3` `MAC4` `MAC5` `MAC6` `MAC7` `MAC8` the others |
+| `LLEN1` | How many rows every phrase's lane on FX 1 plays, up or down from its own: `80` is none, a row a step. `LLEN2` `LLEN3` for FX 2 and 3 |
+| `LRAT1` | What each row of FX 1's lanes lasts, times its own: `×1` is as written. `LRAT2` `LRAT3` for FX 2 and 3 |
 
 Each voice has its own settings, and the track keeps every voice's values, so
 changing voice and back loses nothing. A lock for a voice the track isn't

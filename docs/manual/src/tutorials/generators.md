@@ -487,8 +487,10 @@ sets its `Cut` `90` and `Res` `50`, sends it to the delay, sets the `Acid`'s `Cu
 **As a patch.** Track 1's pitch, octave and length loops are the shipped patch `Kria`; add it
 with `:patch`. `Pitch loop` and `Octave loop` are macros turning the two slots' `Length` from 1
 step to 16. The length loop comes as it is, a live `List` of the four `LEN`s on a lane of 4,
-and the patch gives the FX column it goes on a lane as long; a lane's length isn't a setting, so
-no macro turns it. Track 2 is the shipped patch `Acid loops`, its five loops on macros, `Trig
+and the patch gives the FX column it goes on a lane as long. `Length loop` turns that lane's
+length, `FX1 Length` on the Gen page's `Lane`, from 1 row to 16: past 4 the lane plays its four
+lengths again from the first, so at 6 it's `20 C0 08 E6 20 C0`, and the line drifts against
+itself as Kria's does. Track 2 is the shipped patch `Acid loops`, its five loops on macros, `Trig
 loop`, `Note loop`, `Oct loop`, `Acc loop` and `Sld loop`, each from 1 row to 16.
 
 **Try next.**
@@ -496,7 +498,9 @@ loop`, `Note loop`, `Oct loop`, `Acc loop` and `Sld loop`, each from 1 row to 16
 *   `Length` 7 on the pitch loop, or 4 on the octave loop: the line changes completely.
 *   `:len 13` on track 1, a trigger loop that drifts against the bar too.
 *   `Rate` `1/8` on the octave loop, so it turns over half as fast, as Kria's clock divisions do.
-*   The lane's length: `:len 5` with the cursor on FX 1.
+*   The lane's length: `:len 5` with the cursor on FX 1, or `Length loop` on the patch.
+*   `Rate` `×2` on the Gen page's `FX1 Lane`, so each length lasts two steps, or `:lane /3` on
+    FX 1 for three: Kria's clock division on one part.
 *   On track 2, `Acc loop` `16` against `Trig loop` `12`: the accents fall somewhere new each
     bar for three bars. Or every loop at `16`, and it's an ordinary 16-row `Acid` line again.
 *   `Space g a` on track 2's Gen page keeps the pass just heard as the one written, and the
