@@ -4,16 +4,18 @@
 //! `Space k` are generated from it and can't disagree with it. Counts and registers come before a
 //! sequence and aren't in the table; an operator enters `OperatorPending`, which has its own rows.
 
-use vt_model::constants::BEAT_STEPS;
 use vt_model::selection::{Motion, Target};
 
 use crate::audio_page::AudioPage;
+use crate::chain_view::ChainView;
 use crate::input::keys::{Key, parse, parse_sequence};
 use crate::input::mode::{Mode, View};
 use crate::mixer_page::MixerPage;
 use crate::page::Page as _;
+use crate::phrase_view::PhraseView;
 use crate::project_page::ProjectPage;
 use crate::sample_page::{SampleKey, SamplePage};
+use crate::song_view::SongView;
 use crate::track_page::{Page, TrackPage};
 
 /// An operator key.
@@ -202,48 +204,6 @@ pub struct Binding {
     pub description: &'static str,
 }
 
-/// Motions work in Normal mode, after an operator, and in Visual modes.
-const MOTIONS: &[(&str, Cmd, &str)] = &[
-    ("h", Cmd::Move(Motion::Left), "Previous field"),
-    ("l", Cmd::Move(Motion::Right), "Next field"),
-    ("j", Cmd::Move(Motion::Down), "Next step"),
-    ("k", Cmd::Move(Motion::Up), "Previous step"),
-    (
-        "w",
-        Cmd::Move(Motion::NextGroup),
-        "Next part: the note, then each FX",
-    ),
-    (
-        "b",
-        Cmd::Move(Motion::PreviousGroup),
-        "Previous part: an FX, or the note",
-    ),
-    ("0", Cmd::Move(Motion::RowStart), "Start of the row"),
-    ("$", Cmd::Move(Motion::RowEnd), "End of the row"),
-    ("}", Cmd::Move(Motion::NextBeat), "Next beat"),
-    ("{", Cmd::Move(Motion::PreviousBeat), "Previous beat"),
-    ("g g", Cmd::Move(Motion::First), "First step, or step n"),
-    ("G", Cmd::Move(Motion::Last), "Last step, or step n"),
-];
-
-/// Targets work after an operator and in Visual modes.
-const TARGETS: &[(&str, Cmd, &str)] = &[
-    ("i b", Cmd::On(Target::Beat), "This beat, whole steps"),
-    ("i c", Cmd::On(Target::Column), "This column, whole phrase"),
-    ("i p", Cmd::On(Target::Phrase), "This phrase, whole steps"),
-];
-
-/// Viewport keys work wherever the cursor can move on screen.
-const VIEWPORT: &[(&str, Cmd, &str)] = &[
-    ("H", Cmd::ViewTop, "Cursor to the top of the view"),
-    ("M", Cmd::ViewMiddle, "Cursor to the middle of the view"),
-    ("L", Cmd::ViewBottom, "Cursor to the bottom of the view"),
-    ("C-d", Cmd::HalfPageDown, "Half a screen down, centred"),
-    ("C-u", Cmd::HalfPageUp, "Half a screen up, centred"),
-    ("C-e", Cmd::ScrollDown, "Scroll the view down"),
-    ("C-y", Cmd::ScrollUp, "Scroll the view up"),
-];
-
 /// Keys that mean the same in every view.
 const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("u", Cmd::Undo, "Undo"),
@@ -368,9 +328,6 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ),
 ];
 
-/// One beat, as a slide.
-const BEAT: isize = BEAT_STEPS as isize;
-
 /// Cmd with the movement keys means the key that changes a value, like holding Edit on the M8,
 /// so the hand that moves can nudge without leaving the home row: left and right a small step, up
 /// and down a large one. This is the one place the rule is kept: every mode that binds `=`, `-`,
@@ -386,207 +343,6 @@ pub fn adjusting_key(key: Key) -> Option<Key> {
         .find(|(_, with_cmd)| parse(with_cmd).is_ok_and(|named| named == key))
         .and_then(|(plain, _)| parse(plain).ok())
 }
-
-/// Keys for Normal mode only.
-const NORMAL: &[(&str, Cmd, &str)] = &[
-    ("d", Cmd::Operator(Op::Clear), "Clear"),
-    ("y", Cmd::Operator(Op::Copy), "Copy"),
-    (">", Cmd::Operator(Op::ShiftUp), "Shift up"),
-    ("<", Cmd::Operator(Op::ShiftDown), "Shift down"),
-    ("x", Cmd::ClearField, "Clear this field"),
-    ("p", Cmd::Paste, "Paste over from the cursor"),
-    ("g p", Cmd::PasteAfter, "Paste over, and land just after it"),
-    (
-        "g m",
-        Cmd::PasteMerge,
-        "Paste, keeping what the copy leaves empty",
-    ),
-    (";", Cmd::Audition, "Audition this row on every track"),
-    ("r", Cmd::Replace, "Replace this field, and stay here"),
-    ("s", Cmd::Substitute, "Clear this field and start Insert"),
-    ("=", Cmd::Increase, "Increase the value"),
-    ("-", Cmd::Decrease, "Decrease the value"),
-    ("+", Cmd::IncreaseLarge, "Increase the value, a large step"),
-    ("_", Cmd::DecreaseLarge, "Decrease the value, a large step"),
-    (
-        "C-a",
-        Cmd::IncreaseChromatic,
-        "Increase the value, by a semitone in a scale",
-    ),
-    (
-        "C-x",
-        Cmd::DecreaseChromatic,
-        "Decrease the value, by a semitone in a scale",
-    ),
-    (
-        "~",
-        Cmd::CycleMark,
-        "Cycle a value's mark: lock, hold, glide",
-    ),
-    (".", Cmd::Repeat, "Repeat the last change"),
-    ("v", Cmd::VisualField, "Select fields"),
-    ("V", Cmd::VisualStep, "Select whole steps"),
-    ("g v", Cmd::Reselect, "Reselect the last selection"),
-    (
-        "M-1",
-        Cmd::NarrowGrid,
-        "Narrower grid for the arrows in Insert",
-    ),
-    ("M-2", Cmd::WidenGrid, "Wider grid for the arrows in Insert"),
-    ("M-s", Cmd::ToggleScale, "Scale on or off"),
-    (
-        "z i",
-        Cmd::ToggleTimeline,
-        "Collapse the timeline to a line a row, or open it again",
-    ),
-    (
-        "Space i",
-        Cmd::ToggleInspector,
-        "Inspect the cursor's row beside the overview, or stop",
-    ),
-    ("Space p d", Cmd::Double, "Double this phrase"),
-    (
-        "g l",
-        Cmd::ReopenGenerator,
-        "Open the shape panel again on the live column here",
-    ),
-    (
-        "Space g a",
-        Cmd::ApplyGenerator,
-        "Apply the live column here, leaving plain values",
-    ),
-    (
-        "Space g A",
-        Cmd::BakeMods,
-        "Write the pitch the mod slots played into the notes",
-    ),
-    (
-        "Space r",
-        Cmd::ToggleRecord,
-        "Record notes played in Insert, while playing",
-    ),
-    ("K", Cmd::PickValue, "Choose this field from a list"),
-    (
-        "g d",
-        Cmd::OpenItem,
-        "On an SLI's value, open the sample page on its slice",
-    ),
-    ("g r r", Cmd::ListUses, "List where this phrase plays"),
-    ("g c", Cmd::ClonePhrase, "Copy this phrase here"),
-    ("g C", Cmd::CloneChain, "Copy this chain and its phrases"),
-    ("] p", Cmd::NextSlot, "Next phrase in the chain"),
-    ("[ p", Cmd::PreviousSlot, "Previous phrase in the chain"),
-    ("] P", Cmd::LastSlot, "Last phrase in the chain"),
-    ("[ P", Cmd::FirstSlot, "First phrase in the chain"),
-    ("] l", Cmd::SlideLoop(1), "Slide the loop a step later"),
-    ("[ l", Cmd::SlideLoop(-1), "Slide the loop a step earlier"),
-    ("] L", Cmd::SlideLoop(BEAT), "Slide the loop a beat later"),
-    (
-        "[ L",
-        Cmd::SlideLoop(-BEAT),
-        "Slide the loop a beat earlier",
-    ),
-    ("] r", Cmd::RotateLoop(1), "Rotate the loop's steps later"),
-    (
-        "[ r",
-        Cmd::RotateLoop(-1),
-        "Rotate the loop's steps earlier",
-    ),
-    ("g s", Cmd::StartLoopHere, "Start the loop on this step"),
-    ("g e", Cmd::EndLoopHere, "End the loop on this step"),
-];
-
-/// Keys for the chain view.
-const CHAIN: &[(&str, Cmd, &str)] = &[
-    ("j", Cmd::Move(Motion::Down), "Next row"),
-    ("k", Cmd::Move(Motion::Up), "Previous row"),
-    ("g g", Cmd::Move(Motion::First), "First row"),
-    ("G", Cmd::Move(Motion::Last), "The empty row at the end"),
-    ("h", Cmd::Move(Motion::Left), "Phrase column"),
-    ("l", Cmd::Move(Motion::Right), "Transpose column"),
-    ("0", Cmd::Move(Motion::RowStart), "Phrase column"),
-    ("$", Cmd::Move(Motion::RowEnd), "Transpose column"),
-    ("=", Cmd::Increase, "Next phrase, or transpose up"),
-    ("-", Cmd::Decrease, "Previous phrase, or transpose down"),
-    (
-        "+",
-        Cmd::IncreaseLarge,
-        "Next phrase, or transpose up, a large step",
-    ),
-    (
-        "_",
-        Cmd::DecreaseLarge,
-        "Previous phrase, or transpose down, a large step",
-    ),
-    ("C-a", Cmd::Increase, "Next phrase, or transpose up"),
-    ("C-x", Cmd::Decrease, "Previous phrase, or transpose down"),
-    ("x", Cmd::ClearField, "Transpose back to 0"),
-    ("K", Cmd::PickValue, "Choose this row's phrase from a list"),
-    ("d d", Cmd::RemoveRow, "Remove this row"),
-    ("y y", Cmd::CopyRow, "Copy this row"),
-    ("p", Cmd::Paste, "Add the copied row below"),
-    (
-        ";",
-        Cmd::Audition,
-        "Audition the start of this row, every track",
-    ),
-    ("g d", Cmd::OpenItem, "Open this phrase, or add one"),
-    ("g r r", Cmd::ListUses, "List where this phrase plays"),
-    ("g c", Cmd::ClonePhrase, "Copy this phrase here"),
-    ("g C", Cmd::CloneChain, "Copy this chain and its phrases"),
-];
-
-const SONG: &[(&str, Cmd, &str)] = &[
-    ("j", Cmd::Move(Motion::Down), "Next section"),
-    ("k", Cmd::Move(Motion::Up), "Previous section"),
-    ("g g", Cmd::Move(Motion::First), "First section"),
-    ("G", Cmd::Move(Motion::Last), "Last section"),
-    ("h", Cmd::Move(Motion::Left), "Previous column"),
-    ("l", Cmd::Move(Motion::Right), "Next column"),
-    ("0", Cmd::Move(Motion::RowStart), "Length column"),
-    ("$", Cmd::Move(Motion::RowEnd), "Last track's column"),
-    ("=", Cmd::Increase, "Increase the value"),
-    ("-", Cmd::Decrease, "Decrease the value"),
-    ("+", Cmd::IncreaseLarge, "Increase the value, a large step"),
-    ("_", Cmd::DecreaseLarge, "Decrease the value, a large step"),
-    ("C-a", Cmd::Increase, "Increase the value"),
-    ("C-x", Cmd::Decrease, "Decrease the value"),
-    (
-        "x",
-        Cmd::ClearField,
-        "Follow the longest chain, new, or no chain",
-    ),
-    (
-        "K",
-        Cmd::PickValue,
-        "Switch new and reset, or choose this cell's chain",
-    ),
-    (
-        "g d",
-        Cmd::OpenItem,
-        "Open this chain's phrase, its rows, or add one",
-    ),
-    ("g C", Cmd::CloneChain, "Copy this chain and its phrases"),
-    ("a", Cmd::AddSection, "Add an empty section after this one"),
-    ("g c", Cmd::CloneSection, "Copy this section after itself"),
-    (
-        "Enter",
-        Cmd::Launch,
-        "Play this chain on its track next, or stop on --",
-    ),
-    (
-        "C",
-        Cmd::Capture,
-        "Add a section of what's playing, and stay on it",
-    ),
-    ("d d", Cmd::RemoveRow, "Remove this section"),
-    (";", Cmd::Audition, "Hear the start of this section"),
-    (
-        "V",
-        Cmd::VisualStep,
-        "Select sections, for :loop; V or Esc ends it",
-    ),
-];
 
 /// Keys to fold a group's tracks into it, after Vim's folds, in every view that shows tracks
 /// (decisions 128 and 305).
@@ -604,110 +360,6 @@ const FOLDS: &[(&str, Cmd, &str)] = &[
     ),
 ];
 
-/// Keys that act on a selection.
-const VISUAL: &[(&str, Cmd, &str)] = &[
-    ("W", Cmd::NextTrack, "Reach the next track"),
-    ("B", Cmd::PreviousTrack, "Reach the previous track"),
-    ("] b", Cmd::NextTrack, "Reach the next track"),
-    ("[ b", Cmd::PreviousTrack, "Reach the previous track"),
-    ("d", Cmd::Operator(Op::Clear), "Clear the selection"),
-    ("y", Cmd::Operator(Op::Copy), "Copy the selection"),
-    (">", Cmd::Operator(Op::ShiftUp), "Shift the selection up"),
-    (
-        "<",
-        Cmd::Operator(Op::ShiftDown),
-        "Shift the selection down",
-    ),
-    ("x", Cmd::Operator(Op::Clear), "Clear the selection"),
-    (
-        "r",
-        Cmd::Replace,
-        "Replace this column across the selection",
-    ),
-    (
-        "S",
-        Cmd::Shape,
-        "Fill this column with a ramp or random values",
-    ),
-    ("=", Cmd::Increase, "Increase the selection's values"),
-    ("-", Cmd::Decrease, "Decrease the selection's values"),
-    (
-        "+",
-        Cmd::IncreaseLarge,
-        "Increase the selection's values, a large step",
-    ),
-    (
-        "_",
-        Cmd::DecreaseLarge,
-        "Decrease the selection's values, a large step",
-    ),
-    (
-        "C-a",
-        Cmd::IncreaseChromatic,
-        "Increase the selection's values, by a semitone in a scale",
-    ),
-    (
-        "C-x",
-        Cmd::DecreaseChromatic,
-        "Decrease the selection's values, by a semitone in a scale",
-    ),
-    ("~", Cmd::CycleMark, "Cycle the selected values' marks"),
-    (
-        "Space g A",
-        Cmd::BakeMods,
-        "Write the pitch the mod slots played into the selected notes",
-    ),
-    (
-        "Space o",
-        Cmd::RotateSpeeds(false),
-        "Rotate the speeds round the tracks selected",
-    ),
-    (".", Cmd::Repeat, "Repeat the last change on the selection"),
-    (
-        "u",
-        Cmd::Undo,
-        "Undo the last change, keeping the selection",
-    ),
-    ("C-r", Cmd::Redo, "Redo, keeping the selection"),
-];
-
-/// Keys for Insert on the Note column, beside the note keys, which are its own and aren't listed
-/// here. As a 303 has its ACCENT and SLIDE keys past the top of its keyboard, these are past
-/// ours: `'` is a stress mark, and `/` a slide in guitar tab. `k` and `,` are its UP and DOWN,
-/// one above the other, and `o` above `l` widens the grid, as `Option-2` above `Option-1` does.
-const INSERT_NOTE: &[(&str, Cmd, &str)] = &[
-    (
-        "'",
-        Cmd::Accent,
-        "Note column: accent the note just written; held, the notes played",
-    ),
-    (
-        "/",
-        Cmd::Slide,
-        "Note column: slide from the note just written; held, the notes played",
-    ),
-    (
-        "k",
-        Cmd::OctaveUp,
-        "Note column: the note just written an octave up; held, the notes played",
-    ),
-    (
-        ",",
-        Cmd::OctaveDown,
-        "Note column: the note just written an octave down; held, the notes played",
-    ),
-    ("o", Cmd::WidenGrid, "Note column: wider grid, as M-2"),
-    ("l", Cmd::NarrowGrid, "Note column: narrower grid, as M-1"),
-];
-
-/// A doubled operator key acts on the current step.
-const WHOLE_STEP: &[(&str, Cmd, &str)] = &[
-    ("d", Cmd::WholeStep, "This step"),
-    ("y", Cmd::WholeStep, "This step"),
-    (">", Cmd::WholeStep, "This step"),
-    ("<", Cmd::WholeStep, "This step"),
-];
-
 /// Every default key, in the order help shows them. A page that's a component keeps its own rows
 /// beside it, as its `Page::KEYS`, and they're put in here under its mode.
 pub fn bindings() -> Vec<Binding> {
@@ -722,19 +374,19 @@ pub fn bindings() -> Vec<Binding> {
             });
         }
     };
-    add(Mode::Normal, MOTIONS);
-    add(Mode::Normal, VIEWPORT);
-    add(Mode::Normal, NORMAL);
+    add(Mode::Normal, PhraseView::MOTIONS);
+    add(Mode::Normal, PhraseView::VIEWPORT);
+    add(Mode::Normal, PhraseView::KEYS);
     add(Mode::Normal, FOLDS);
     add(Mode::Normal, EVERY_VIEW);
-    add(Mode::Insert, INSERT_NOTE);
-    add(Mode::Chain, CHAIN);
+    add(Mode::Insert, PhraseView::INSERT_NOTE);
+    add(Mode::Chain, ChainView::KEYS);
     add(Mode::Chain, FOLDS);
     add(Mode::Chain, EVERY_VIEW);
     add(Mode::Track, TrackPage::KEYS);
     add(Mode::Track, FOLDS);
     add(Mode::Track, EVERY_VIEW);
-    add(Mode::Song, SONG);
+    add(Mode::Song, SongView::KEYS);
     add(Mode::Song, FOLDS);
     add(Mode::Song, EVERY_VIEW);
     add(Mode::Mixer, MixerPage::KEYS);
@@ -755,14 +407,14 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::SampleVisual, SamplePage::KEYS);
     add(Mode::SampleVisual, SamplePage::OBJECTS);
     add(Mode::SampleVisual, &every_view_but_pads);
-    add(Mode::OperatorPending, MOTIONS);
-    add(Mode::OperatorPending, TARGETS);
-    add(Mode::OperatorPending, WHOLE_STEP);
+    add(Mode::OperatorPending, PhraseView::MOTIONS);
+    add(Mode::OperatorPending, PhraseView::TARGETS);
+    add(Mode::OperatorPending, PhraseView::WHOLE_STEP);
     for mode in [Mode::VisualField, Mode::VisualStep] {
-        add(mode, MOTIONS);
-        add(mode, VIEWPORT);
-        add(mode, TARGETS);
-        add(mode, VISUAL);
+        add(mode, PhraseView::MOTIONS);
+        add(mode, PhraseView::VIEWPORT);
+        add(mode, PhraseView::TARGETS);
+        add(mode, PhraseView::VISUAL);
     }
     with_cmd_adjusts(rows)
 }

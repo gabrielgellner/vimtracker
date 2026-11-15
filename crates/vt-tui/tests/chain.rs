@@ -207,12 +207,12 @@ fn k_chooses_a_chain_rows_phrase_and_large_steps_work_there() {
 
 #[test]
 fn zero_and_dollar_pick_the_chain_columns() {
-    use vt_tui::tree::ChainColumn;
+    use vt_tui::chain_view::ChainColumn;
     let (mut app, _realtime) = app();
     press(&mut app, " 2$");
-    assert_eq!(app.chain_column, ChainColumn::Transpose);
+    assert_eq!(app.chain_view.column, ChainColumn::Transpose);
     press(&mut app, "0");
-    assert_eq!(app.chain_column, ChainColumn::Phrase);
+    assert_eq!(app.chain_view.column, ChainColumn::Phrase);
 }
 
 #[test]

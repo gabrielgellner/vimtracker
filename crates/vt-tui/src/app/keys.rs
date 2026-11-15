@@ -353,7 +353,7 @@ impl App {
         self.audio.refresh |= view == View::Audio && self.modes.view != View::Audio;
         // Sections selected in the song view are left there.
         if view != View::Song {
-            self.section_anchor = None;
+            self.song_view.anchor = None;
         }
         self.modes.view = view;
         self.note_view(view);
@@ -486,18 +486,14 @@ impl App {
     ///    `gm`, the Keys mode and the pickers, and then the track page's edits
     ///    ([`App::run_across_pages`]);
     /// 4. the tree of chains and phrases, [`App::run_tree`];
-    /// 5. the grammar's motions, operators and Visual modes, [`App::run_grammar`];
+    /// 5. the grammar's operators, the motion after one, and the Visual modes,
+    ///    [`App::run_grammar`];
     /// 6. what a key means anywhere, the `match` here.
     pub(crate) fn run(&mut self, cmd: Cmd) {
         if self.run_page(cmd) || self.run_tree(cmd) || self.run_grammar(cmd) {
             return;
         }
         match cmd {
-            Cmd::ViewTop | Cmd::ViewMiddle | Cmd::ViewBottom => self.view_cursor(cmd),
-            Cmd::HalfPageDown => self.half_page(1),
-            Cmd::HalfPageUp => self.half_page(-1),
-            Cmd::ScrollDown => self.scroll(3),
-            Cmd::ScrollUp => self.scroll(-3),
             Cmd::Double => self.double(),
             Cmd::SlideLoop(by) => {
                 let times = self.modes.count.take().unwrap_or(1).min(MAX_PHRASE_STEPS);
@@ -581,8 +577,6 @@ impl App {
             }
             Cmd::Quit => self.quit(false),
             Cmd::ToggleScale => self.toggle_scale(),
-            Cmd::ToggleTimeline => self.toggle_timeline(),
-            Cmd::ToggleInspector => self.toggle_inspector(),
             Cmd::ToggleFold => self.toggle_fold(),
             Cmd::FoldAll(closed) => self.fold_all(closed),
             Cmd::NarrowGrid => self.change_grid(false),

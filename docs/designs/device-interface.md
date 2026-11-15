@@ -477,8 +477,11 @@ back to be freed in a different order. That isn't heard. The goldens and `cargo 
 **The slot (E5).** The rest of `InsertState`'s per-effect arms come from the trait and the
 description:
 - `MONO` replaces `mono()`'s 30 arms (`distort.rs:903-936`).
-- `same_effect` (`distort.rs:154-188`) becomes `before.kind() == after.kind()`, plus "its
-  `Place::Type` param is equal".
+- `same_effect` (`distort.rs:154-188`) becomes `before.kind() == after.kind()`, plus, for an
+  effect whose description shows each type's own settings (`Shown::ByType`: Distort and Comp),
+  "its type is equal". A type change on any other effect (Chorus, LPG, Comb…) keeps it running,
+  as before. That's the rule E5 (#771) built; a plain "its `Place::Type` param is equal" would
+  have restarted those effects on a type change.
 - `set`'s mix/gain extraction (`distort.rs:477-519`) reads the `Place::Output` params, with a
   `const MIXING: Mixing` on the trait (`Wet`, `Inside` for Clouds and Beads, `AllWet` for the
   EQ, `Parallel` for Comp).

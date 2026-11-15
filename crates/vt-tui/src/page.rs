@@ -24,22 +24,26 @@ use std::time::Instant;
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use vt_engine::engine::{PLAYHEADS, Playhead, Transport};
+use vt_engine::engine::{PLAYHEADS, Playhead, SectionLoop, Transport};
 use vt_engine::link::JamState;
 use vt_engine::track_state::{Faders, LiveValues};
+use vt_model::constants::FX_SLOTS;
 use vt_model::generator::Generator;
 use vt_model::order::Dealer;
 use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
-use vt_model::song::{Section, Song, Track};
+use vt_model::selection::{Extent, Field};
+use vt_model::song::{ChainEntry, Phrase, Section, Song, Track};
+use vt_model::step::Step;
 
-use crate::app::{App, AudioState, Cursor, Entry, Modes, TrackLive};
+use crate::app::{App, AudioState, Cursor, Entry, Modes, Selection, TrackLive};
 use crate::folding::Folds;
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
 use crate::jumping::FieldJump;
 use crate::kitty::{PanelIds, PanelWant};
 use crate::meter::Meter;
+use crate::phrase_view::PhraseView;
 use crate::roto::Roto;
 use crate::sample_page::{Shown, is_sample_motion};
 use crate::services::Services;
@@ -61,8 +65,9 @@ pub enum Outcome {
 }
 
 /// One of the program's pages as a component: its own state, its keys, its drawing and its
-/// pictures. The track page, the mixer, the project page's two sub-pages and the sample page are
-/// so far (#739); the other pages' keys and drawing are still `App`'s.
+/// pictures. The track page, the mixer, the project page's two sub-pages, the sample page, the
+/// song view, the chain view and the phrase view are so far (#739); the other pages' keys and
+/// drawing are still `App`'s.
 pub(crate) trait Page {
     /// Its rows of the binding table, as `(keys, Cmd, description)`, in the order which-key and
     /// `Space k` list them. The table is still assembled in one place, `input::bindings`, under
@@ -116,11 +121,11 @@ impl App {
     pub(crate) fn run_page(&mut self, cmd: Cmd) -> bool {
         match self.modes.view {
             View::Track | View::Mixer => self.run_track_pages(cmd),
-            View::Chain => self.run_chain(cmd),
+            View::Chain => self.run_chain_view(cmd),
             View::Audio | View::Project => self.run_project_pages(cmd),
             View::Sample => self.run_sample_page(cmd),
-            View::Song => self.run_song(cmd),
-            View::Phrase => false,
+            View::Song => self.run_song_view(cmd),
+            View::Phrase => self.run_phrase_view(cmd),
         }
     }
 
@@ -222,6 +227,78 @@ impl App {
             Outcome::Passed => self.run_sample_passed(cmd, &shown),
         }
     }
+
+    /// Run a command in the song view: the view's own key, and then what it passes back, a move
+    /// to another section and what ends on one, a picker, Insert, `gC` and `;`, which are `App`'s.
+    /// The count stays for what takes it.
+    fn run_song_view(&mut self, cmd: Cmd) -> bool {
+        let times = self.modes.count.unwrap_or(1).max(1);
+        let mut ctx = CtxMut {
+            services: &mut self.services,
+            modes: &self.modes,
+        };
+        match self.song_view.key(cmd, times, &mut ctx) {
+            Outcome::Done => {
+                self.modes.count = None;
+                true
+            }
+            Outcome::Refused(why) => {
+                self.modes.count = None;
+                self.services.status = why.to_owned();
+                true
+            }
+            Outcome::Passed => self.run_song_passed(cmd),
+        }
+    }
+
+    /// Run a command in the chain view: the view's own key, and then what it passes back, a move
+    /// to another row, `dd`, the phrase picker, Insert and `;`, which are `App`'s. What neither
+    /// takes goes on to the tree. The count stays for what takes it.
+    fn run_chain_view(&mut self, cmd: Cmd) -> bool {
+        let times = self.modes.count.unwrap_or(1).max(1);
+        let mut ctx = CtxMut {
+            services: &mut self.services,
+            modes: &self.modes,
+        };
+        match self.chain_view.key(cmd, times, &mut ctx) {
+            Outcome::Done => {
+                self.modes.count = None;
+                true
+            }
+            Outcome::Refused(why) => {
+                self.modes.count = None;
+                self.services.status = why.to_owned();
+                true
+            }
+            Outcome::Passed => self.run_chain_passed(cmd),
+        }
+    }
+
+    /// Run a command in the phrase view: the view's own key, a move or one over the view, or
+    /// pass it back for what's `App`'s, the tree's keys, the grammar's operators, edits and Visual
+    /// modes, Insert, the loop's keys, recording and the pickers. A move takes the count, and a
+    /// key it passes back leaves it for what takes it.
+    fn run_phrase_view(&mut self, cmd: Cmd) -> bool {
+        let times = self.modes.count.unwrap_or(1).max(1);
+        let mut ctx = CtxMut {
+            services: &mut self.services,
+            modes: &self.modes,
+        };
+        match self.phrase_view.key(cmd, times, &mut ctx) {
+            Outcome::Done => {
+                if PhraseView::takes_count(cmd) {
+                    self.modes.count = None;
+                }
+                true
+            }
+            Outcome::Refused(why) => {
+                self.modes.count = None;
+                self.services.status = why.to_owned();
+                true
+            }
+            Outcome::Passed => false,
+        }
+    }
 }
 
 impl CtxMut<'_> {
@@ -250,6 +327,31 @@ impl<'a> Ctx<'a> {
     /// The track under the cursor.
     pub fn track_here(&self) -> Option<&'a Track> {
         self.app.services.track_here()
+    }
+
+    /// A track's name, or its number if it has none.
+    pub fn track_name(&self, track: usize) -> String {
+        crate::views::phrase::track_name(self.app, track)
+    }
+
+    /// The chain on the cursor's track.
+    pub fn chain_id(&self) -> Option<u32> {
+        self.app.services.chain_id()
+    }
+
+    /// The rows in the cursor's chain.
+    pub fn chain_entries(&self) -> &'a [ChainEntry] {
+        self.app.services.chain_entries()
+    }
+
+    /// How many sections play the cursor's chain.
+    pub fn chain_uses(&self) -> usize {
+        self.app.chain_uses()
+    }
+
+    /// Which sections and slots play a phrase of the cursor's track.
+    pub fn phrase_uses(&self, phrase: u32) -> Vec<(usize, usize)> {
+        self.app.phrase_uses(phrase)
     }
 
     /// Which groups are folded, so their tracks are left out where tracks are drawn side by side.
@@ -312,6 +414,21 @@ impl<'a> Ctx<'a> {
     /// Whether the song plays, as the engine last said.
     pub fn transport(&self) -> Transport {
         self.app.services.transport
+    }
+
+    /// The section the engine is on.
+    pub fn playing_section(&self) -> usize {
+        self.app.services.playing_section
+    }
+
+    /// The sections being kept playing, set with `:loop`.
+    pub fn looping(&self) -> Option<SectionLoop> {
+        self.app.services.looping
+    }
+
+    /// Whether the `:loop` is waiting for the launch grid's next line, as the engine last said.
+    pub fn loop_waiting(&self) -> bool {
+        self.app.services.loop_waiting
     }
 
     /// What the cursor's track is playing with right now, as the engine last said.
@@ -483,5 +600,100 @@ impl<'a> Ctx<'a> {
     /// number.
     pub fn slice_choice(&self, track: &Track) -> String {
         self.app.slice_choice(track)
+    }
+
+    /// The phrase under the cursor.
+    pub fn phrase_id(&self) -> Option<u32> {
+        self.app.services.phrase_id()
+    }
+
+    /// The contents of the phrase under the cursor.
+    pub fn phrase_here(&self) -> Option<&'a Arc<Phrase>> {
+        self.app.services.phrase_here()
+    }
+
+    /// Where the cursor's phrase's loop sits.
+    pub fn extent(&self) -> Extent {
+        self.app.services.extent()
+    }
+
+    /// The cursor's position within the section, on the view on screen.
+    pub fn section_step(&self) -> usize {
+        self.app.services.section_step(self.view())
+    }
+
+    /// The step of its own that one track is at when another is at this one of its own.
+    pub fn step_on(&self, track: usize, from: usize, step: usize) -> usize {
+        self.app.services.step_on(track, from, step)
+    }
+
+    /// The selection a replace across it or the shape panel is filling, which shows while Visual
+    /// has ended.
+    pub fn held_selection(&self) -> Option<Selection> {
+        let app = self.app;
+        app.replacing_selection
+            .map(|(selection, _)| selection)
+            .or(app.shape.as_ref().map(|panel| panel.selection))
+    }
+
+    /// Which step of the cursor's phrase the playhead is on, and which of the step's pulses, if
+    /// it's on this phrase.
+    pub fn playhead_place(&self) -> Option<(usize, usize)> {
+        crate::views::phrase::playhead_place(self.app)
+    }
+
+    /// Where each FX column of the cursor's phrase with a lane of its own is reading, if it's the
+    /// one playing.
+    pub fn lane_playheads(&self, phrase: &Phrase) -> [Option<usize>; FX_SLOTS] {
+        crate::views::phrase::lane_playheads(self.app, phrase)
+    }
+
+    /// The note the cursor's track's row playing was heard at, where an accumulator or an `RND`
+    /// moved it.
+    pub fn heard_note(&self) -> Option<u8> {
+        crate::views::phrase::heard_note(self.app)
+    }
+
+    /// Whether the row the cursor's track is playing was skipped this time, by its `CHA` or `CND`.
+    pub fn row_skipped(&self) -> bool {
+        let services = &self.app.services;
+        services
+            .places
+            .get(services.cursor.track)
+            .is_some_and(|place| place.skipped)
+    }
+
+    /// A row with each live generator on it laid as last heard, if any was heard otherwise than
+    /// written.
+    pub fn heard_step(&self, track: usize, phrase: u32, row: usize) -> Option<Step> {
+        self.app.heard_step(track, phrase, row)
+    }
+
+    /// A row of a live generator as it was last heard, if that wasn't what's written: the step
+    /// as heard, and on which pass.
+    pub fn heard_cell(
+        &self,
+        track: usize,
+        phrase: u32,
+        generator: usize,
+        row: usize,
+    ) -> Option<(Step, i64)> {
+        self.app.heard_cell(track, phrase, generator, row)
+    }
+
+    /// Whether a live generator was heard otherwise than written on any of its rows.
+    pub fn generator_moving(&self, track: usize, phrase: u32, generator: usize) -> bool {
+        self.app.generator_moving(track, phrase, generator)
+    }
+
+    /// A field of the row under the cursor in its setting's units, where it has them, as the
+    /// status line and the row inspector say it.
+    pub fn phrase_value(&self, field: Field) -> Option<String> {
+        crate::views::status::phrase_value(self.app, field)
+    }
+
+    /// The furthest the cursor's track's nudges go at its speed.
+    pub fn most_nudge_here(&self) -> i8 {
+        self.app.most_nudge_here()
     }
 }

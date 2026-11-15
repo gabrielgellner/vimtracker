@@ -8,13 +8,14 @@ use std::time::{Duration, Instant};
 use crate::accent_slide::{HeldFlag, Moved, Written};
 use crate::audio::{AudioChoice, DeviceInfo, LoadReadout, SlowdownReadout};
 use crate::audio_page::AudioPage;
+use crate::chain_view::ChainView;
 use crate::exploring::Naming;
 use crate::glyphs;
 use crate::loading::Loader;
 use crate::places::RecentPlaces;
 use crate::views::picker::{PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH};
 use ratatui::crossterm::event::KeyCode;
-use vt_engine::engine::{PLAYHEADS, SectionLoop, TrackPlace, Transport};
+use vt_engine::engine::{PLAYHEADS, TrackPlace, Transport};
 use vt_engine::link::{Command, Handle, JamState};
 use vt_model::constants::{DEFAULT_NOTE_VELOCITY, MAX_TRACKS, TICKS_PER_STEP};
 use vt_model::kit::KitEntry;
@@ -22,8 +23,8 @@ use vt_model::names::Names;
 use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
 pub use vt_model::selection::Field;
-use vt_model::selection::{Block, Extent, Motion, Scope, StepRange};
-use vt_model::song::{ChainEntry, Song, Track};
+use vt_model::selection::{Block, Scope, StepRange};
+use vt_model::song::{Song, Track};
 use vt_model::step::{FxCommand, MAX_VELOCITY};
 
 use crate::grammar::{Adjustments, Change, SelectionPlace};
@@ -37,12 +38,14 @@ use crate::input::picker::Picker;
 use crate::input::typed::TypedValue;
 use crate::jumping::FieldJump;
 use crate::mixer_page::MixerPage;
+use crate::phrase_view::PhraseView;
 use crate::project_page::ProjectPage;
 use crate::recording::Recording;
 use crate::services::Services;
 use crate::shaping::ShapePanel;
+use crate::song_view::SongView;
 use crate::track_page::TrackPage;
-use crate::tree::{ChainColumn, Place};
+use crate::tree::Place;
 
 mod commands;
 mod cursor;
@@ -244,11 +247,10 @@ pub struct App {
     pub library: Option<PathBuf>,
     /// The mixer: the row its cursor is on.
     pub mixer_page: MixerPage,
-    pub song_column: usize,
-    /// The sections being kept playing, set with `:loop`.
-    pub looping: Option<SectionLoop>,
-    /// Where a selection of sections in the song view started, while `V` selects them.
-    pub section_anchor: Option<usize>,
+    /// The song view: the column its cursor is on, and where `V` started selecting sections.
+    pub song_view: SongView,
+    /// The phrase view: where it's scrolled to, how it's laid out, and the selection on it.
+    pub phrase_view: PhraseView,
     /// The track page: which of its pages shows, where its cursor is, and the images it shows.
     pub track_page: TrackPage,
     /// The sample page: where it is, and the pictures of its waveform and its overview.
@@ -258,8 +260,8 @@ pub struct App {
     /// Most recently used first, starting with the view on screen.
     pub recent_views: Vec<View>,
     pub picker: Option<Picker>,
-    pub chain_column: ChainColumn,
-    pub(crate) yanked_row: Option<ChainEntry>,
+    /// The chain view: the column its cursor is on, and the row last copied.
+    pub chain_view: ChainView,
     pub(crate) jumps: Vec<Place>,
     pub(crate) jump_index: usize,
     /// Where the latest jump left from, for `''` to go back to, as Vim's previous context mark.
@@ -317,14 +319,6 @@ pub struct App {
     momentary: Option<Held>,
     /// What the press being handled started, for [`App::press`] to tie to its key.
     pub(crate) started: Option<Momentary>,
-    /// The first step on screen, and how many lines fit.
-    pub top: usize,
-    pub view_height: usize,
-    /// The phrase view is collapsed to a line a row, rather than laid out in time (decision 122).
-    pub rows_collapsed: bool,
-    /// The phrase view shows the row inspector right of the overview, for this session
-    /// (decision 255).
-    pub inspector: bool,
     pub help_scroll: usize,
     /// The open guide, how far it has scrolled, and how many of its rows fit.
     pub guide: Option<Guide>,
@@ -342,9 +336,6 @@ pub struct App {
     /// name the slice under the cursor with.
     pub(crate) awaiting_mark: Option<crate::marking::MarkWait>,
     pub(crate) registers: HashMap<char, Block>,
-    pub(crate) anchor: Option<(usize, Scope)>,
-    /// How far a selection reaches across tracks from the cursor's.
-    pub(crate) anchor_track: Option<usize>,
     /// What the changes kept on the selection have moved its values by, for the status line.
     pub(crate) adjustments: Adjustments,
     /// The selection a replace across it comes back to, once its value is in or it's cancelled.
@@ -390,8 +381,6 @@ pub struct App {
     pub(crate) names: Names,
     /// The selection a replace will fill, and the undo depth from before it started.
     pub(crate) replacing_selection: Option<(Selection, usize)>,
-    pub(crate) selection_scope: Option<Scope>,
-    pub(crate) last_selection: Option<Selection>,
     pub(crate) last_change: Option<Change>,
 }
 
@@ -430,9 +419,8 @@ impl App {
             services: Services::new(song, folder, samples, handle, rate),
             modes: Modes::default(),
             mixer_page: MixerPage::default(),
-            song_column: 0,
-            looping: None,
-            section_anchor: None,
+            song_view: SongView::default(),
+            phrase_view: PhraseView::default(),
             track_page: TrackPage::default(),
             sample_page: crate::sample_page::SamplePage::default(),
             project_page: ProjectPage::default(),
@@ -443,8 +431,7 @@ impl App {
             wheel: crate::wheel::Wheel::default(),
             recent_views: View::ALL.to_vec(),
             picker: None,
-            chain_column: ChainColumn::Phrase,
-            yanked_row: None,
+            chain_view: ChainView::default(),
             jumps: Vec::new(),
             jump_index: 0,
             jumped_from: None,
@@ -475,10 +462,6 @@ impl App {
             octave_moved: None,
             momentary: None,
             started: None,
-            top: 0,
-            view_height: 16,
-            rows_collapsed: false,
-            inspector: false,
             help_scroll: 0,
             guide: None,
             guide_scroll: 0,
@@ -493,8 +476,6 @@ impl App {
             awaiting_register: false,
             awaiting_mark: None,
             registers: HashMap::new(),
-            anchor: None,
-            anchor_track: None,
             adjustments: Adjustments::default(),
             replace_returns_to: None,
             shape: None,
@@ -516,8 +497,6 @@ impl App {
             patch_over: false,
             names,
             replacing_selection: None,
-            selection_scope: None,
-            last_selection: None,
             last_change: None,
         };
         app.services.live_song = Some(Arc::clone(app.song()));
@@ -641,32 +620,11 @@ impl App {
         &self.pending
     }
 
-    /// What `gg` and `G` go by: the cursor's FX column's lane if it has one, and the phrase's loop
-    /// otherwise. Beats always go by the phrase's loop.
-    pub(crate) fn motion_extent(&self, motion: Motion) -> Extent {
-        let extent = self.services.extent();
-        let lane = match (motion, self.services.cursor.field) {
-            (
-                Motion::First | Motion::Last,
-                Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot),
-            ) => self
-                .services
-                .phrase_here()
-                .and_then(|phrase| phrase.lane(slot)),
-            _ => None,
-        };
-        lane.map_or(extent, |lane| Extent {
-            start: lane.start,
-            length: lane.length,
-            ..extent
-        })
-    }
-
     /// Put the cursor on the first step that plays, at the top of the screen.
     pub(crate) fn go_to_loop_start(&mut self) {
         let start = self.services.extent().start;
         self.services.cursor.step = start;
-        self.top = start;
+        self.phrase_view.top = start;
     }
 
     /// The cursor's track as the latest report's live values were worked out from, which is a

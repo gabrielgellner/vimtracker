@@ -682,8 +682,8 @@ pub fn draw_screen(
     app.track_page.lfo_cycles_at = Default::default();
     app.track_page.gen_panels_at = Vec::new();
     match app.modes.view {
-        View::Chain => views::chain::draw(frame, view, app),
-        View::Phrase => views::phrase::draw(frame, view, app),
+        View::Chain => app.chain_view.draw(frame, view, &app.ctx()),
+        View::Phrase => app.phrase_view.draw(frame, view, &app.ctx()),
         View::Track => {
             let drawn = app.track_page.draw(frame, view, &app.ctx());
             app.track_page.lfo_cycles_at = drawn.cycles;
@@ -698,7 +698,7 @@ pub fn draw_screen(
             let _ = app.sample_page_here();
             app.sample_page.on_screen = app.sample_page.draw(frame, view, &app.ctx());
         }
-        View::Song => views::song::draw(frame, view, app),
+        View::Song => app.song_view.draw(frame, view, &app.ctx()),
     }
     // Inside the box the track page has while the keyboard plays it.
     let free = if app.modes.mode == Mode::Keys && app.modes.view == View::Track {

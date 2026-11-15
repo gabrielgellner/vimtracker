@@ -276,7 +276,7 @@ mod tests {
     fn the_rows_inspector_is_as_tall_as_its_row_needs() {
         let (mut app, _realtime) = app();
         press(&mut app, " i");
-        assert!(app.inspector);
+        assert!(app.phrase_view.inspector);
         let shown = screen(&mut app, Instant::now());
         assert_eq!(window(&shown, "Row 00"), Rect::new(79, 1, 60, 11));
     }

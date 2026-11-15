@@ -156,10 +156,10 @@ fn z_a_folds_a_group_into_its_column_in_the_song_view_and_the_cursor_steps_over_
     );
     // On a track in a group, `z a` folds the group, and the cursor stands on it.
     press(&mut app, "llll");
-    assert_eq!(app.song_column, 3 + 1);
+    assert_eq!(app.song_view.column, 3 + 1);
     press(&mut app, "za");
     let g1 = app.song().fixed_track(TrackKind::Group(1)).unwrap();
-    assert_eq!(app.song_column, 3 + g1);
+    assert_eq!(app.song_view.column, 3 + g1);
     assert!(
         app.services.status.contains("G1 folded: 01-03"),
         "{}",
@@ -173,14 +173,14 @@ fn z_a_folds_a_group_into_its_column_in_the_song_view_and_the_cursor_steps_over_
     );
     // The cursor steps over the folded tracks and the empty groups.
     press(&mut app, "0lll");
-    assert_eq!(app.song_column, 3 + 3, "on 04");
+    assert_eq!(app.song_view.column, 3 + 3, "on 04");
     press(&mut app, "h");
-    assert_eq!(app.song_column, 2, "on Start");
+    assert_eq!(app.song_view.column, 2, "on Start");
     press(&mut app, "$");
-    assert_eq!(app.song_column, 3 + app.song().tracks.len() - 1);
+    assert_eq!(app.song_view.column, 3 + app.song().tracks.len() - 1);
     // `z a` on the group opens it again.
     press(&mut app, "hhhh");
-    assert_eq!(app.song_column, 3 + g1);
+    assert_eq!(app.song_view.column, 3 + g1);
     press(&mut app, "za");
     assert!(heading(&app).contains("02  03  04"), "{}", heading(&app));
     // `zR` opens every group, the empty ones too, and `zM` folds them all.
@@ -192,9 +192,13 @@ fn z_a_folds_a_group_into_its_column_in_the_song_view_and_the_cursor_steps_over_
     );
     press(&mut app, "lll");
     let g4 = g1 + 3;
-    assert_eq!(app.song_column, 3 + g4);
+    assert_eq!(app.song_view.column, 3 + g4);
     press(&mut app, "zM");
-    assert_eq!(app.song_column, 3 + g4 + 1, "off the empty group, onto A");
+    assert_eq!(
+        app.song_view.column,
+        3 + g4 + 1,
+        "off the empty group, onto A"
+    );
     let text = heading(&app);
     assert!(text.contains(&format!("08  G1{FOLDED}")), "{text}");
     assert!(!text.contains("G3") && !text.contains("05"), "{text}");
@@ -384,7 +388,7 @@ fn bracket_g_goes_to_the_next_or_previous_group_folded_or_open() {
     assert_eq!(app.services.cursor.track, g1);
     // The song view moves its column.
     press(&mut app, " 102]g");
-    assert_eq!(app.song_column, 3 + g2);
+    assert_eq!(app.song_view.column, 3 + g2);
 }
 
 #[test]

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use vt_engine::engine::{PLAYHEADS, Playhead, TrackPlace, Transport};
+use vt_engine::engine::{PLAYHEADS, Playhead, SectionLoop, TrackPlace, Transport};
 use vt_engine::gens::{GenPass, GenRow};
 use vt_engine::link::{Handle, JamState};
 use vt_engine::published::Published;
@@ -20,7 +20,7 @@ use vt_model::history::History;
 use vt_model::order::Dealer;
 use vt_model::samples::SamplePool;
 use vt_model::selection::Extent;
-use vt_model::song::{Phrase, Section, Song, Track};
+use vt_model::song::{ChainEntry, Phrase, Section, Song, Track};
 
 use crate::analysing::Analyst;
 use crate::app::{Cursor, Field, TrackLive};
@@ -82,6 +82,8 @@ pub struct Services {
     pub(crate) report_at: Instant,
     /// The section the engine is on.
     pub playing_section: usize,
+    /// The sections being kept playing, set with `:loop`, and by the song view's `Enter` and `C`.
+    pub looping: Option<SectionLoop>,
     /// Whether the `:loop` is waiting for the launch grid's next line, as the engine last said.
     pub loop_waiting: bool,
     /// Whether a realign is waiting for the launch grid, as the engine last said.
@@ -165,6 +167,7 @@ impl Services {
             places: [TrackPlace::default(); MAX_TRACKS],
             report_at: Instant::now(),
             playing_section: 0,
+            looping: None,
             loop_waiting: false,
             realigning: false,
             realigning_tracks: [false; MAX_TRACKS],
@@ -275,6 +278,19 @@ impl Services {
         self.song().tracks.get(self.cursor.track)
     }
 
+    /// The chain on the cursor's track.
+    pub fn chain_id(&self) -> Option<u32> {
+        let section = self.section_here()?;
+        section.chains.get(self.cursor.track).copied().flatten()
+    }
+
+    /// The rows in the cursor's chain.
+    pub fn chain_entries(&self) -> &[ChainEntry] {
+        self.chain_id()
+            .and_then(|id| self.track_here()?.chains.get(&id))
+            .map_or(&[], |chain| chain.entries.as_slice())
+    }
+
     /// The phrase under the cursor.
     pub fn phrase_id(&self) -> Option<u32> {
         let chain = (*self.section_here()?.chains.get(self.cursor.track)?)?;
@@ -337,6 +353,30 @@ impl Services {
         // step, worked out from the count as everything else is.
         let time = self.phrase_here().map_or(row, |phrase| phrase.time_to(row));
         self.slot_start() + time
+    }
+
+    /// Move the cursor along its phrase's steps, staying on one.
+    pub(crate) fn move_step(&mut self, by: isize) {
+        let Some(phrase) = self.phrase_here().cloned() else {
+            return;
+        };
+        let last = phrase.steps().len() as isize - 1;
+        self.cursor.step = (self.cursor.step as isize + by).clamp(0, last) as usize;
+    }
+
+    /// Keep the cursor on something that exists, as a view has it. Only the chain view has a row
+    /// past the end.
+    pub(crate) fn clamp_cursor(&mut self, view: View) {
+        let sections = self.song().sections.len();
+        self.cursor.section = self.cursor.section.min(sections.saturating_sub(1));
+        let rows = self.chain_entries().len();
+        let last = if view == View::Chain {
+            rows
+        } else {
+            rows.saturating_sub(1)
+        };
+        self.cursor.slot = self.cursor.slot.min(last);
+        self.move_step(0);
     }
 
     /// Move to the track as many along as `by`, stepping over those folded away, a folded group

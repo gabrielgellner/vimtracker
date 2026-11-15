@@ -669,7 +669,7 @@ fn a_lane_shows_its_length_and_where_it_is_playing() {
     app.services.transport = Transport::Playing;
     // Place 4 is the notes' row 4, and the lane's row 4 % 3 = 1.
     app.set_playhead(4);
-    app.top = 0;
+    app.phrase_view.top = 0;
     let buffer = screen(&app);
     let line = |y: u16| -> String { (0..80).map(|x| buffer[(x, y)].symbol()).collect() };
     assert!(line(0).contains("FX1:3"), "{}", line(0));

@@ -7,25 +7,30 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use crate::app::App;
+use crate::chain_view::{ChainColumn, ChainView};
 use crate::glyphs;
 use crate::input::mode::Mode;
+use crate::page::Ctx;
 use crate::theme;
-use crate::tree::ChainColumn;
-use crate::views::phrase::track_name;
 use crate::views::widgets::{group, role};
 
-/// Draw the view.
+/// Draw the app's chain view.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    let Some(chain) = app.chain_id() else {
+    draw_page(frame, area, &app.chain_view, &app.ctx());
+}
+
+/// Draw the view, as its `Page::draw`.
+pub(crate) fn draw_page(frame: &mut Frame, area: Rect, page: &ChainView, ctx: &Ctx) {
+    let Some(chain) = ctx.chain_id() else {
         frame.render_widget(Paragraph::new("This track has no chain."), area);
         return;
     };
-    let song = app.song();
+    let song = ctx.song();
     let bold = Style::new().add_modifier(Modifier::BOLD);
     // The track as the phrase view names it, with its machine or kind as a glyph before it, and a
     // track in a group carries its mark, in the group's colour, as on the mixer.
     let mut title = vec![];
-    if let Some(track) = app.services.track_here() {
+    if let Some(track) = ctx.track_here() {
         title.push(Span::styled(
             format!("{} ", glyphs::track(track)),
             theme::dim(),
@@ -34,44 +39,43 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     title.push(Span::styled("Track ", bold));
     title.extend(role::ruled(
         song,
-        app.services.cursor.track,
-        &track_name(app, app.services.cursor.track),
+        ctx.cursor().track,
+        &ctx.track_name(ctx.cursor().track),
         bold,
     ));
-    if let Some(mark) = group::mark(song, app.services.cursor.track) {
+    if let Some(mark) = group::mark(song, ctx.cursor().track) {
         title.extend([Span::raw(" "), mark.patch_style(bold)]);
     }
     title.push(Span::styled(format!("  Chain {chain:02X}"), bold));
     // A chain that plays in more than one place is linked, as a phrase is.
-    if app.chain_uses() > 1 {
+    if ctx.chain_uses() > 1 {
         title.push(Span::styled(format!(" {}", glyphs::LINK), theme::dim()));
     }
     let mut lines = vec![
         Line::from(title),
         Line::styled("Slot    Phrase  Trans  Steps", bold),
     ];
-    let playing = app
-        .services
-        .playing_place(app.services.cursor.track, chain)
+    let playing = ctx
+        .playing_place(ctx.cursor().track, chain)
         .and_then(|playhead| {
-            song.tracks[app.services.cursor.track].chain_position(
+            song.tracks[ctx.cursor().track].chain_position(
                 chain,
                 playhead,
-                app.services.dealer(app.services.cursor.track),
+                ctx.dealer(ctx.cursor().track),
             )
         })
         .map(|position| position.slot);
-    let entries = app.chain_entries();
+    let entries = ctx.chain_entries();
     let room = usize::from(area.height.saturating_sub(2)).max(1);
-    let first = (app.services.cursor.slot + 1).saturating_sub(room);
-    let typing = app.modes.mode == Mode::Insert;
-    let cursor = theme::cursor(app.modes.mode);
+    let first = (ctx.cursor().slot + 1).saturating_sub(room);
+    let typing = ctx.mode() == Mode::Insert;
+    let cursor = theme::cursor(ctx.mode());
     for slot in (first..=entries.len()).take(room) {
         let entry = entries.get(slot);
         let marker = if playing == Some(slot) { ">" } else { " " };
         // A phrase that plays in more than one place is linked, and the space after the glyph is
         // one it isn't drawn over.
-        let linked = entry.is_some_and(|entry| app.phrase_uses(entry.phrase).len() > 1);
+        let linked = entry.is_some_and(|entry| ctx.phrase_uses(entry.phrase).len() > 1);
         let phrase = entry.map_or_else(
             || "--".to_owned(),
             |entry| {
@@ -85,27 +89,23 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         );
         let after = if linked { glyphs::ICON_SPACE } else { ' ' };
         let transpose = entry.map_or_else(String::new, |entry| format!("{:+03}", entry.transpose));
-        let here = slot == app.services.cursor.slot;
+        let here = slot == ctx.cursor().slot;
         let shown = |column: ChainColumn, text: String| {
-            if here && typing && app.chain_column == column {
-                app.modes.entry.text.shown()
+            if here && typing && page.column == column {
+                ctx.entry().text.shown()
             } else {
                 text
             }
         };
         let style = |column: ChainColumn| {
-            if here && app.chain_column == column {
+            if here && page.column == column {
                 cursor
             } else {
                 Style::new()
             }
         };
         let steps = entry
-            .and_then(|entry| {
-                song.tracks[app.services.cursor.track]
-                    .phrases
-                    .get(&entry.phrase)
-            })
+            .and_then(|entry| song.tracks[ctx.cursor().track].phrases.get(&entry.phrase))
             .map_or_else(String::new, |phrase| phrase.len().to_string());
         lines.push(Line::from(vec![
             Span::styled(format!("{slot:02X}"), theme::dim()),
