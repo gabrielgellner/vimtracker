@@ -5,13 +5,15 @@
 //! opened (decision 128). Over each part, on the row under the title, is its name on a rule, as a
 //! device's title is on its frame, the cursor's brighter (decision 144).
 
+use std::borrow::Cow;
+
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Row};
 use vt_model::constants::MAX_GROUPS;
-use vt_model::song::{Song, level_gain};
+use vt_model::song::{Song, Track, level_gain};
 
 use vt_engine::engine::Transport;
 
@@ -87,19 +89,31 @@ fn fader_cell(row: usize, rows: usize, level: u8, heard: Option<u8>) -> Span<'st
 }
 
 /// The strips shown, and where the gaps between the parts go.
-struct Strips {
+struct Strips<'a> {
     /// The tracks drawn, in order, with those folded away left out (decision 128).
     shown: Vec<usize>,
+    /// Each as it's drawn, by its place: where its macros put what they hold, then its faders
+    /// where the steps have them, as the track page has it. Worked out once a frame, so a strip's
+    /// rows and its meter's share one.
+    tracks: Vec<Cow<'a, Track>>,
     /// Where the groups start, and the returns.
     groups: usize,
     returns: usize,
 }
 
-impl Strips {
-    fn new(song: &Song, shown: Vec<usize>) -> Self {
-        let groups = song.sound_tracks();
+impl<'a> Strips<'a> {
+    fn new(ctx: &Ctx<'a>, shown: Vec<usize>) -> Self {
+        let groups = ctx.song().sound_tracks();
+        let tracks = shown
+            .iter()
+            .map(|&index| {
+                ctx.track_shown(index)
+                    .unwrap_or_else(|| Cow::Borrowed(&ctx.song().tracks[index]))
+            })
+            .collect();
         Self {
             shown,
+            tracks,
             groups,
             returns: groups + MAX_GROUPS,
         }
@@ -142,11 +156,20 @@ impl Strips {
         cells: &mut Cells<'_>,
         mut cell: impl FnMut(usize) -> L,
     ) {
+        self.fill_shown(cells, |index, _| cell(index));
+    }
+
+    /// [`Strips::fill`], given each strip's track as it's drawn too.
+    fn fill_shown<L: Into<Line<'static>>>(
+        &self,
+        cells: &mut Cells<'_>,
+        mut cell: impl FnMut(usize, &Track) -> L,
+    ) {
         for (place, &index) in self.shown.iter().enumerate() {
             if self.gap_before(place) {
                 cells.skip(1);
             }
-            cells.cell(cell(index));
+            cells.cell(cell(index, &self.tracks[place]));
         }
     }
 }
@@ -264,14 +287,11 @@ fn meter_row(
         .cell(Line::styled(mark, theme::dim()).right_aligned())
         .skip(1);
     let playing = ctx.transport() == Transport::Playing;
-    strips.fill(&mut cells, |index| {
+    // The fader is where the track is drawn with it: where a macro or the steps have it.
+    strips.fill_shown(&mut cells, |index, track| {
         let meter = ctx.track_meter(index);
         let faders = ctx.faders(index);
-        let level = if faders.follows_steps(0) {
-            (faders.at[0] >> 8) as u8
-        } else {
-            ctx.song().tracks[index].level
-        };
+        let level = track.level;
         let channel = |side: usize| {
             let channel = meter.channels[side];
             level_cell(
@@ -309,7 +329,7 @@ pub(crate) fn draw_page(frame: &mut Frame, area: Rect, page: &MixerPage, ctx: &C
     let at = tracks.partition_point(|&track| track < ctx.cursor().track);
     let first = first_shown(at, tracks.len(), count);
     let strips = Strips::new(
-        song,
+        ctx,
         tracks[first..(first + count).min(tracks.len())].to_vec(),
     );
     let columns = strips.columns();
@@ -342,10 +362,9 @@ pub(crate) fn draw_page(frame: &mut Frame, area: Rect, page: &MixerPage, ctx: &C
         let mut cells = columns.row();
         let name = ctx.look_on(control, Focus::Off);
         cells.span(name_line(&name, control.label(), LABEL_WIDTH), 2);
-        strips.fill(&mut cells, |index| {
-            // A fader the steps drive shows where they have it.
-            let heard = ctx.track_as_heard(index);
-            let track = heard.as_deref().unwrap_or(&song.tracks[index]);
+        strips.fill_shown(&mut cells, |index, track| {
+            // A setting a macro holds shows where the macro puts it, and a fader the steps drive
+            // where they have it.
             let muted = group::muted(ctx, index);
             let automated = ctx.follows_steps(index, control);
             let taken = ctx.taken_over(index, control);

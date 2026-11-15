@@ -69,10 +69,22 @@ fn moved_by_hand(action: &Action, into: &mut Vec<(usize, usize)>) {
 /// A track with its faders where the steps have them, for those the steps drive and no hand has
 /// taken over, so what's drawn from it shows what's heard. One with none is the track itself.
 pub fn as_heard<'a>(track: &'a Track, faders: &Faders) -> Cow<'a, Track> {
+    steps_onto(Cow::Borrowed(track), faders)
+}
+
+/// A track as the track page and the mixer draw it: each setting a macro holds where the macro
+/// puts it, then its faders where the steps have them while they drive them. One with neither is
+/// the track itself, so only a track that needs one is copied, once.
+pub fn as_shown<'a>(track: &'a Track, faders: &Faders) -> Cow<'a, Track> {
+    steps_onto(track.with_macros(), faders)
+}
+
+/// A track with the faders the steps drive put where they have them.
+fn steps_onto<'a>(mut track: Cow<'a, Track>, faders: &Faders) -> Cow<'a, Track> {
     if !(0..FADER_COUNT).any(|fader| faders.follows_steps(fader)) {
-        return Cow::Borrowed(track);
+        return track;
     }
-    let mut heard = track.clone();
+    let heard = track.to_mut();
     for (fader, id) in FADERS.into_iter().enumerate() {
         if !faders.follows_steps(fader) {
             continue;
@@ -86,7 +98,7 @@ pub fn as_heard<'a>(track: &'a Track, faders: &Faders) -> Cow<'a, Track> {
         }
         heard.set_fine(id, fine);
     }
-    Cow::Owned(heard)
+    track
 }
 
 impl Services {
@@ -99,6 +111,13 @@ impl Services {
     pub fn track_as_heard(&self, track: usize) -> Option<Cow<'_, Track>> {
         let found = self.song().tracks.get(track)?;
         Some(as_heard(found, &self.faders(track)))
+    }
+
+    /// A track as the pages draw it: where its macros put what they hold, then its faders where
+    /// the steps have them while they drive them.
+    pub fn track_shown(&self, track: usize) -> Option<Cow<'_, Track>> {
+        let found = self.song().tracks.get(track)?;
+        Some(as_shown(found, &self.faders(track)))
     }
 
     /// Whether a control on a track is a fader the steps drive now, so it shows their value.
