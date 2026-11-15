@@ -23,6 +23,8 @@ use super::console::{self, Console};
 use super::glue::{self, Glue};
 use crate::dsp::blocks::sides::{SameBits, same_bits_by_eq, same_bits_by_fields};
 use crate::dsp::blocks::smoother::Smoothed;
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::{Mixing, Mono, SlotEffect};
 
 /// The knee's width in dB: the curve bends over this much either side of the threshold.
 const KNEE_DB: f32 = 6.0;
@@ -299,6 +301,30 @@ impl Clean {
         self.reduction = attack * self.reduction + (1.0 - attack) * self.released;
         let gain = 10_f32.powf(-self.reduction / 20.0);
         input.map(|sample| sample * gain)
+    }
+}
+
+impl SlotEffect for Compressor {
+    type Settings = Settings;
+
+    /// One detector for both sides, and one gain on each.
+    const MONO: Mono = Mono::Linked;
+    const MIXING: Mixing = Mixing::Parallel;
+
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    /// It takes its settings frame by frame instead.
+    fn follow(&mut self, _settings: Settings, _song: SongPlace, _frames: u64) {}
+
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// None: it's worked every frame, so the slot never waits on its tail.
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        0
     }
 }
 
