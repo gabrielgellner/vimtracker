@@ -10,6 +10,7 @@ use crate::app::App;
 
 use super::{Control, DEVICE_COLUMNS, DEVICE_ROWS, DeviceSpec, Page, TrackPage};
 use crate::input::mode::View;
+use crate::page::Ctx;
 use crate::services::Services;
 
 /// The FX page's devices: a slot each, top to bottom.
@@ -58,20 +59,20 @@ impl App {
     pub fn fx_zoomed(&self) -> bool {
         self.modes.view == View::Track && self.track_page.page == Page::Fx && self.track_page.zoomed
     }
-
-    /// What the keys do while the FX page is zoomed in, and how to leave it, for under the status
-    /// line while nothing else is said there, as the sample page's modes have.
-    pub fn fx_zoom_hint(&self) -> Option<String> {
-        self.fx_zoomed().then(|| {
-            format!(
-                "Slot {} zoomed in: {{ }} another slot, z o every slot",
-                self.track_page.fx_slot(self.services.track_here()) + 1
-            )
-        })
-    }
 }
 
 impl TrackPage {
+    /// What the keys do while the FX page is zoomed in, and how to leave it, for under the status
+    /// line while nothing else is said there, as the sample page's modes have.
+    pub(super) fn zoom_hint(&self, ctx: &Ctx) -> Option<String> {
+        (ctx.view() == View::Track && self.page == Page::Fx && self.zoomed).then(|| {
+            format!(
+                "Slot {} zoomed in: {{ }} another slot, z o every slot",
+                self.fx_slot(ctx.track_here()) + 1
+            )
+        })
+    }
+
     /// The slot the cursor is in, on the FX page.
     fn fx_slot(&self, track: Option<&Track>) -> usize {
         self.device_cursor(track).map_or(0, |cursor| cursor.device)

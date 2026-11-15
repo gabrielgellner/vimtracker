@@ -17,7 +17,6 @@ use crate::app::App;
 use crate::audio::{AudioChoice, DeviceInfo};
 use crate::glyphs;
 use crate::input::bindings::Cmd;
-use crate::input::mode::View;
 use crate::input::picker::{Item, Pick, Picker};
 use crate::page::{Ctx, CtxMut, Outcome, Page};
 
@@ -124,6 +123,17 @@ impl Page for AudioPage {
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
         crate::views::audio::draw(frame, area, self, ctx);
     }
+
+    fn column(&self, _ctx: &Ctx) -> String {
+        self.row_here().name().to_owned()
+    }
+
+    /// What the leaf before the CPU figure means, while it shows, as `󰌪 CPU slowed ×3.6 by power
+    /// saving, about 8% at full speed`.
+    fn hint(&self, ctx: &Ctx) -> Option<String> {
+        let meaning = ctx.slowed_meaning()?;
+        Some(format!("{} CPU {meaning}", glyphs::LEAF))
+    }
 }
 
 /// How long a buffer lasts, in milliseconds, at a rate.
@@ -132,17 +142,6 @@ pub fn buffer_ms(frames: u32, rate: u32) -> f64 {
 }
 
 impl App {
-    /// What the status line says on the audio page while nothing else is said there: what the
-    /// leaf before the CPU figure means, while it shows, as `󰌪 CPU slowed ×3.6 by power saving,
-    /// about 8% at full speed`.
-    pub fn audio_page_hint(&self) -> Option<String> {
-        if self.modes.view != View::Audio {
-            return None;
-        }
-        let meaning = self.slowdown.explanation(self.cpu.percent())?;
-        Some(format!("{} CPU {meaning}", glyphs::LEAF))
-    }
-
     /// The row the cursor is on.
     pub fn audio_row_here(&self) -> AudioRow {
         self.audio_page.row_here()

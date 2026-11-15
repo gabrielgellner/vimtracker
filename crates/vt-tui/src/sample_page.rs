@@ -1307,6 +1307,33 @@ impl Page for SamplePage {
         crate::views::sample::draw(frame, area, self, ctx)
     }
 
+    fn column(&self, _ctx: &Ctx) -> String {
+        match self.setting {
+            Some(setting) => format!("Sample: {}", setting.name()),
+            None => "Sample".to_owned(),
+        }
+    }
+
+    /// What the keys do in the page's mode, and how to leave it, so a mode is never on without a
+    /// word.
+    fn hint(&self, ctx: &Ctx) -> Option<String> {
+        if ctx.mode() == Mode::Keys {
+            let shown = ctx.sample_shown(self).ok()?;
+            return Some(self.pads_hint(&shown));
+        }
+        if self.anchor.is_some() {
+            return Some(
+                "; plays the selection, o goes to its other end; v or Esc ends it".to_owned(),
+            );
+        }
+        let setting = self.setting?;
+        Some(format!(
+            "{}: = - + _ change it, K lists its values, x puts it back, h l the setting before or \
+             after; Esc goes back to the waveform",
+            setting.name()
+        ))
+    }
+
     /// The waveform and the overview of the whole sample under it, as the view and the points
     /// have them, or none with no sample to show.
     fn panels(&self, ctx: &Ctx) -> Vec<PanelWant> {
@@ -1384,29 +1411,6 @@ impl App {
         } else {
             None
         }
-    }
-
-    /// What the keys do in the sample page's mode, and how to leave it, for under the status
-    /// line while nothing else is said there, so a mode is never on without a word.
-    pub fn sample_mode_hint(&self) -> Option<String> {
-        if self.modes.view != View::Sample {
-            return None;
-        }
-        if self.modes.mode == Mode::Keys {
-            let shown = self.sample_shown().ok()?;
-            return Some(self.pads_hint(&shown));
-        }
-        if self.sample_page.anchor.is_some() {
-            return Some(
-                "; plays the selection, o goes to its other end; v or Esc ends it".to_owned(),
-            );
-        }
-        let setting = self.sample_page.setting?;
-        Some(format!(
-            "{}: = - + _ change it, K lists its values, x puts it back, h l the setting before or \
-             after; Esc goes back to the waveform",
-            setting.name()
-        ))
     }
 
     /// Bring the page up to date with the sample the cursor's track plays, starting afresh if

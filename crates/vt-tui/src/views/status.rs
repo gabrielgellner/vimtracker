@@ -20,14 +20,12 @@ use vt_model::variation::{self, Varies};
 
 use crate::app::App;
 use crate::banking::sample_shown;
-use crate::chain_view::ChainColumn;
 use crate::glyphs;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::macroing::held_text;
 use crate::services::Services;
 use crate::shaping::with_live;
-use crate::song_view::{COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, START_COLUMN};
 use crate::theme;
 use crate::track_page::{Control, view};
 use crate::views::phrase::generator_cell_text;
@@ -42,91 +40,6 @@ pub fn format_bpm(millibpm: u32) -> String {
         format!("{whole}.{fraction:03}")
             .trim_end_matches('0')
             .to_owned()
-    }
-}
-
-/// An FX cell's name: what it locks, by its group and name, and whether it's on this track, or
-/// which part of an empty cell the cursor is on.
-fn fx_name(app: &App, slot: usize) -> String {
-    let command = app
-        .services
-        .current_slot(slot)
-        .and_then(|cell| cell.command);
-    match (command, app.services.track_here()) {
-        (Some(FxCommand::Set(id)), Some(track)) if id.exists_on(track) => {
-            format!("{}: {}", id.group(), id.name())
-        }
-        (Some(FxCommand::Set(id)), _) => {
-            format!("{}: {}, not on this track", id.group(), id.name())
-        }
-        (Some(event), _) => event.meaning(),
-        (None, _) if matches!(app.services.cursor.field, Field::FxValue(_)) => {
-            format!("FX{} value", slot + 1)
-        }
-        (None, _) => format!("FX{} command", slot + 1),
-    }
-}
-
-/// The name of what the cursor is on, for the status line.
-pub fn column_name(app: &App) -> String {
-    match app.modes.view {
-        View::Audio => app.audio_row_here().name().to_owned(),
-        View::Sample => match app.sample_page.setting {
-            Some(setting) => format!("Sample: {}", setting.name()),
-            None => "Sample".to_owned(),
-        },
-        View::Project => app.project_page.control(app.song()).label().to_owned(),
-        View::Phrase => match app.services.cursor.field {
-            Field::Note => "Note".to_owned(),
-            Field::Velocity => "Velocity".to_owned(),
-            Field::Nudge => "Nudge".to_owned(),
-            Field::Gate => "Gate".to_owned(),
-            Field::GateLength
-                if app
-                    .services
-                    .current_gate()
-                    .and_then(|gate| gate.length)
-                    .is_some() =>
-            {
-                "Gate length".to_owned()
-            }
-            Field::GateLength => "Gate length, the track's".to_owned(),
-            Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
-                fx_name(app, slot)
-            }
-        },
-        View::Chain => match app.chain_view.column {
-            ChainColumn::Phrase => "Phrase".to_owned(),
-            ChainColumn::Transpose => "Transpose".to_owned(),
-        },
-        View::Track | View::Mixer => {
-            let control = app.track_control();
-            app.song()
-                .tracks
-                .get(app.services.cursor.track)
-                .map_or_else(
-                    || control.label().to_owned(),
-                    |track| control.name_on(track).to_owned(),
-                )
-        }
-        View::Song => match app.song_view.column {
-            LENGTH_COLUMN => "Length".to_owned(),
-            REPEAT_COLUMN => "Rpt".to_owned(),
-            START_COLUMN => "Start".to_owned(),
-            column => {
-                let index = column - COLUMNS_BEFORE_TRACKS;
-                let name = match app.song().tracks.get(index) {
-                    Some(track) if !track.is_sound() => track.kind.title().to_owned(),
-                    _ => format!("Track {:02}", index + 1),
-                };
-                let label = app.song_label();
-                if label.is_empty() {
-                    format!("{name} chain")
-                } else {
-                    format!("{name} chain: {label}")
-                }
-            }
-        },
     }
 }
 
@@ -546,8 +459,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         ),
         Span::styled(
             match value_shown(app) {
-                Some(value) => format!(" {}, {value} ", column_name(app)),
-                None => format!(" {} ", column_name(app)),
+                Some(value) => format!(" {}, {value} ", app.page_column()),
+                None => format!(" {} ", app.page_column()),
             },
             theme::selected(),
         ),
@@ -564,10 +477,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     } else if let Some(jump) = &app.modes.field_jump {
         format!("/{}", jump.query)
     } else if app.services.status.is_empty()
-        && let Some(hint) = app
-            .sample_mode_hint()
-            .or_else(|| app.audio_page_hint())
-            .or_else(|| app.fx_zoom_hint())
+        && let Some(hint) = app.page_hint()
     {
         hint
     } else if app.services.status.is_empty()

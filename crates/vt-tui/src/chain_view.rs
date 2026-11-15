@@ -196,4 +196,11 @@ impl Page for ChainView {
     fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
         crate::views::chain::draw(frame, area, self, ctx);
     }
+
+    fn column(&self, _ctx: &Ctx) -> String {
+        match self.column {
+            ChainColumn::Phrase => "Phrase".to_owned(),
+            ChainColumn::Transpose => "Transpose".to_owned(),
+        }
+    }
 }
