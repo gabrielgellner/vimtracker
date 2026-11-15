@@ -28,8 +28,24 @@ pub use units::{
 };
 pub use voices::{
     FOUR_OP_ALGORITHMS, FOUR_OP_EACH, FOUR_OP_SHARED, MAX_MACHINE_SETTINGS, voice_entries,
-    voice_key,
+    voice_key, voice_place,
 };
+
+/// Whether two keys are the same, for the tables that find a setting by its key as they're made.
+pub(crate) const fn same_key(one: &str, other: &str) -> bool {
+    let (one, other) = (one.as_bytes(), other.as_bytes());
+    if one.len() != other.len() {
+        return false;
+    }
+    let mut at = 0;
+    while at < one.len() {
+        if one[at] != other[at] {
+            return false;
+        }
+        at += 1;
+    }
+    true
+}
 
 /// One setting, as its owner declares it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

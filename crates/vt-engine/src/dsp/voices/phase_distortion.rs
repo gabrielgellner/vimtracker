@@ -25,6 +25,8 @@ use super::variable_shape::VariableShape;
 use super::virtual_analog::BLOCK;
 use crate::dsp::blocks::sine_table::SINE;
 use crate::dsp::voices::SynthEngine;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// It runs at twice the rate, then drops every other frame, as Plaits does.
 const OVERSAMPLING: usize = 2;
@@ -57,6 +59,11 @@ impl Default for PhaseDistortion {
     }
 }
 
+/// Where its settings are among the voice's, by the keys they're stored under.
+const RATIO: usize = voice_place(SynthVoice::PhaseDistortion, "ratio");
+const AMOUNT: usize = voice_place(SynthVoice::PhaseDistortion, "amount");
+const SKEW: usize = voice_place(SynthVoice::PhaseDistortion, "skew");
+
 impl SynthEngine for PhaseDistortion {
     fn new(_rate: u32) -> Self {
         Self::default()
@@ -85,9 +92,9 @@ impl PhaseDistortion {
     }
 
     fn render(&mut self, frequency: f32, settings: Settings) {
-        let harmonics = settings.harmonics.clamp(0.0, 1.0);
-        let timbre = settings.timbre.clamp(0.0, 1.0);
-        let morph = settings.morph.clamp(0.0, 1.0);
+        let harmonics = settings.at(RATIO).clamp(0.0, 1.0);
+        let timbre = settings.at(AMOUNT).clamp(0.0, 1.0);
+        let morph = settings.at(SKEW).clamp(0.0, 1.0);
         let f0 = frequency / OVERSAMPLING as f32;
         let modulator_f = (f0 * (ratio(harmonics) / 12.0).exp2()).min(0.25);
         let pw = 0.5 + morph * 0.49;

@@ -23,6 +23,8 @@ use super::Settings;
 use super::virtual_analog::{BLOCK, Moving};
 use crate::dsp::blocks::sine_table::sine_pm;
 use crate::dsp::voices::SynthEngine;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 const OVERSAMPLING: usize = 4;
 #[allow(clippy::excessive_precision)]
@@ -76,6 +78,11 @@ pub(crate) struct Fm {
     fresh: bool,
 }
 
+/// Where its settings are among the voice's, by the keys they're stored under.
+const RATIO: usize = voice_place(SynthVoice::Fm, "ratio");
+const INDEX: usize = voice_place(SynthVoice::Fm, "index");
+const FEEDBACK: usize = voice_place(SynthVoice::Fm, "feedback");
+
 impl SynthEngine for Fm {
     fn new(rate: u32) -> Self {
         Self {
@@ -109,12 +116,9 @@ impl SynthEngine for Fm {
 
 impl Fm {
     fn render(&mut self, frequency: f32, settings: Settings) {
-        let Settings {
-            harmonics,
-            timbre,
-            morph,
-            ..
-        } = settings;
+        let harmonics = settings.at(RATIO);
+        let timbre = settings.at(INDEX);
+        let morph = settings.at(FEEDBACK);
         let semitones = ratio(harmonics);
         let carrier = frequency / OVERSAMPLING as f32;
         let modulator = (carrier * 2_f32.powf(semitones / 12.0)).clamp(0.0, 0.5);

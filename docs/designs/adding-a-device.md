@@ -93,11 +93,15 @@ its own named in `effect_golden`. The release tests.
 2. **`vt-model/src/settings/voices.rs`**: its list of `Entry`s, which its row names, at most
    `MAX_MACHINE_SETTINGS`. `machine.rs`'s tests check that its grid places each setting once.
 3. **Its DSP**, in `vt-engine/src/dsp/voices/<name>.rs`, with a `pub(crate) mod` line in
-   `dsp/voices.rs`. Implement that file's `SynthEngine`: `new` and `next`, and `DRIFTS`, `NOISE`, `trigger`,
-   `release` and the rest only where it has them. It reads its settings by place from `Settings`,
-   in its entries' order. As for an effect, its one-poles, lines, coefficients, soft clips and
-   noise come from `dsp/blocks/` and `Pcg32`, and a Plaits port's filters from
-   `blocks/plaits_parts.rs`.
+   `dsp/voices.rs`. Implement that file's `SynthEngine`: `new` and `next`, and `DRIFTS`, `NOISE`,
+   `trigger`, `release` and the rest only where it has them. It reads each setting with
+   `settings.at(PLACE)`, where `const PLACE: usize = voice_place(SynthVoice::Name, "key");` finds
+   the place from the key its entry is stored under, so a key that isn't among its entries doesn't
+   build, and never by a number or by `Settings`' four named fields, which nothing ties to its
+   entries' order. A voice that reads a run of settings in a loop, as `Acid` and `4-op` do, finds
+   the run's start by key and asserts the rest in a `const`. As for an effect, its one-poles, lines,
+   coefficients, soft clips and noise come from `dsp/blocks/` and `Pcg32`, and a Plaits port's
+   filters from `blocks/plaits_parts.rs`.
 4. **`vt-engine/src/voice.rs`**: one `synths!` line, `Voice(Engine)`, and its `use`. The compiler
    asks for it, as `Synth::new` matches every voice.
 5. **The Roto**: its layout and `BY_VOICE` row in `roto/layouts.rs`. The compiler asks for the row.

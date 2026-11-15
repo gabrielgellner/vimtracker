@@ -28,6 +28,8 @@ use crate::dsp::blocks::plaits_parts::{DcBlocker, HysteresisQuantizer, Limiter, 
 use crate::dsp::blocks::sine_table::SINE;
 use crate::dsp::voices::SynthEngine;
 use crate::rng::Pcg32;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// How loud it is against the other machines, through Plaits' limiter as Plaits has it. Plaits
 /// takes it at 0.7; this is a little louder, as its formant models are quiet beside `VA`.
@@ -850,6 +852,13 @@ pub(crate) struct Speech {
     at: usize,
 }
 
+/// Where its settings are among the voice's, by the keys they're stored under.
+const MODEL: usize = voice_place(SynthVoice::Speech, "model");
+const SPECIES: usize = voice_place(SynthVoice::Speech, "species");
+const WORD: usize = voice_place(SynthVoice::Speech, "word");
+const PROSODY: usize = voice_place(SynthVoice::Speech, "prosody");
+const SPEED: usize = voice_place(SynthVoice::Speech, "speed");
+
 impl SynthEngine for Speech {
     const NOISE: bool = true;
 
@@ -894,13 +903,13 @@ impl Speech {
         let trigger = !self.struck;
         self.struck = true;
         let (model, species, word) = (
-            settings.at(0).clamp(0.0, 1.0),
-            settings.at(1).clamp(0.0, 1.0),
-            settings.at(2).clamp(0.0, 1.0),
+            settings.at(MODEL).clamp(0.0, 1.0),
+            settings.at(SPECIES).clamp(0.0, 1.0),
+            settings.at(WORD).clamp(0.0, 1.0),
         );
         // Prosody and speed are either side of their middles, as Plaits' attenuverters are.
-        let prosody = settings.at(3).clamp(0.0, 1.0) * 2.0 - 1.0;
-        let speed = settings.at(4).clamp(0.0, 1.0) * 2.0 - 1.0;
+        let prosody = settings.at(PROSODY).clamp(0.0, 1.0) * 2.0 - 1.0;
+        let speed = settings.at(SPEED).clamp(0.0, 1.0) * 2.0 - 1.0;
         let group = model * 6.0;
         let mut out = [0.0; BLOCK];
         if group <= 2.0 {

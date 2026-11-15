@@ -23,6 +23,8 @@
 use super::Settings;
 use super::braids_parts::{INNER, Macro, Model, Pitch, mix, sine};
 use super::virtual_analog::Moving;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// A resonant filter's sound, faked as Casio's CZ did: a sine at the cutoff, restarted each cycle
 /// of the note and windowed by a saw or a triangle, blended with a square made the same way.
@@ -62,8 +64,11 @@ impl Model for DigitalFilterModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
-        let kind = ((settings.at(0) * 255.0).round() as usize).min(FILTER_RESETS.len() - 1);
-        let (cutoff, shape) = (settings.at(1), settings.at(2));
+        const TYPE: usize = voice_place(SynthVoice::ZFilter, "type");
+        const CUTOFF: usize = voice_place(SynthVoice::ZFilter, "cutoff");
+        const SHAPE: usize = voice_place(SynthVoice::ZFilter, "shape");
+        let kind = ((settings.at(TYPE) * 255.0).round() as usize).min(FILTER_RESETS.len() - 1);
+        let (cutoff, shape) = (settings.at(CUTOFF), settings.at(SHAPE));
         let increment = pitch.increment(0.0);
         // The cutoff, from a little under the note to ten octaves over it.
         let shifted = (cutoff * 128.0 - 8.0).min(128.0 - pitch.note);
@@ -171,7 +176,9 @@ impl Model for FeedbackFmModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
-        let (amount, ratio) = (settings.at(0), ratio_semitones(settings.at(1)));
+        const AMOUNT: usize = voice_place(SynthVoice::FeedbackFm, "amount");
+        const RATIO: usize = voice_place(SynthVoice::FeedbackFm, "ratio");
+        let (amount, ratio) = (settings.at(AMOUNT), ratio_semitones(settings.at(RATIO)));
         // Less feedback on high notes and high modulators, where it would turn to noise.
         let attenuation = (1.0 - (pitch.note - 72.0 + ratio) / 64.0).clamp(0.0, 1.0);
         let increment = pitch.increment(0.0);
@@ -208,7 +215,9 @@ impl Model for ChaoticFmModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
-        let (amount, ratio) = (settings.at(0), ratio_semitones(settings.at(1)));
+        const AMOUNT: usize = voice_place(SynthVoice::ChaoticFm, "amount");
+        const RATIO: usize = voice_place(SynthVoice::ChaoticFm, "ratio");
+        let (amount, ratio) = (settings.at(AMOUNT), ratio_semitones(settings.at(RATIO)));
         let increment = pitch.increment(0.0);
         let modulator_increment = pitch.increment(12.0 + ratio) * 0.5;
         let mut amounts = Moving::across(self.amount.unwrap_or(amount), amount, INNER);
