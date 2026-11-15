@@ -16,7 +16,7 @@ mod sampler;
 mod units;
 pub(crate) mod voices;
 
-pub use id::{FADER_COUNT, FADERS, Owner, SettingId};
+pub use id::{FADER_COUNT, FADERS, Owner, SettingId, SettingSet};
 pub use mods::{MOD_OWN_SETTINGS, PLAYED_SETTINGS};
 pub use sampler::{BANK_CHOICES, PLAY_CHOICES, PlayMode, SAMPLER_SETTINGS, SLICE_CHOICES};
 pub use units::{

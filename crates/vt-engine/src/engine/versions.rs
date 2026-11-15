@@ -9,7 +9,7 @@ use vt_model::constants::{
 };
 use vt_model::insert::Insert;
 use vt_model::samples::SampleId;
-use vt_model::settings::{PlayMode, SettingId};
+use vt_model::settings::PlayMode;
 use vt_model::song::{Song, Track};
 
 use crate::dsp::effects::memory::{Memory, MemoryCount};
@@ -341,7 +341,9 @@ impl Engine {
             } else {
                 &fresh
             };
-            for id in SettingId::all() {
+            // Only what may have moved is looked up, which on a track the edit didn't touch is
+            // nothing (#842).
+            for id in track.settings_moved_from(before).iter() {
                 let (was, now) = (base_of(id, before), base_of(id, track));
                 if was != now {
                     state.set_base(id, now);
@@ -400,5 +402,38 @@ fn follow_note(note: &mut NoteOn, bank: &Bank) {
     let slice = (note.slice, note.cut.mode == PlayMode::Thru);
     if let Some(span) = span_now(bank, note.entry, slice, note.sample) {
         note.span = Some(span);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use vt_model::samples::SamplePool;
+    use vt_model::settings::SettingId;
+
+    use super::*;
+    use crate::track_state::LOOKUPS;
+
+    /// How many settings the engine looks up to take a new version of a song.
+    fn lookups(engine: &mut Engine, song: &Song) -> usize {
+        let samples = Arc::clone(&engine.current().samples);
+        let next = Published::after(Arc::new(song.clone()), samples, Some(engine.current()));
+        LOOKUPS.with(|count| count.set(0));
+        engine.swap(Arc::new(next));
+        LOOKUPS.with(std::cell::Cell::get)
+    }
+
+    #[test]
+    fn a_track_an_edit_didnt_touch_looks_up_no_settings() {
+        let mut song = Song::new(16);
+        let first = Published::new(Arc::new(song.clone()), Arc::new(SamplePool::default()));
+        let mut engine = Engine::new(48_000, Arc::new(first));
+        engine.play_from(0);
+        engine.process(&mut [0.0; 128]);
+        assert_eq!(lookups(&mut engine, &song), 0, "the same song again");
+        // A turn of one track's cutoff looks up that track's own settings, on both versions.
+        song.tracks[3].cutoff = 0x40;
+        let own = (0..).map_while(SettingId::track).count();
+        assert_eq!(lookups(&mut engine, &song), 2 * own);
+        assert_eq!(engine.live(3).cutoff, 0x40, "and hears it");
     }
 }

@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use vt_engine::engine::Engine;
 use vt_engine::link::{Command, connect};
-use vt_engine::published::Published;
+use vt_engine::published::{Handover, Published};
 use vt_engine::slowdown::Look;
 
 use vt_engine::timing::{PartTimes, clock_cost};
@@ -178,6 +178,14 @@ fn on_this_thread(request: &BenchRequest) -> Result<(), RunError> {
         starting * 1e6,
         starting / budget * 100.0
     );
+    let (average, worst) = swap_while_playing(&mut engine, &song, &version, block);
+    println!(
+        "taking an edit's version while playing took {:.1} us on average, {:.1} us at worst, \
+         {:.1}% of a block",
+        average.as_secs_f64() * 1e6,
+        worst.as_secs_f64() * 1e6,
+        worst.as_secs_f64() / budget * 100.0
+    );
     if request.tracks {
         // Again from the start, timed, so the figures above aren't slowed by the timing.
         let mut engine = Engine::new(rate, version);
@@ -189,6 +197,43 @@ fn on_this_thread(request: &BenchRequest) -> Result<(), RunError> {
         print_parts(&song, &parts, blocks as f64 * budget, timed.average);
     }
     Ok(())
+}
+
+/// How long the engine takes to switch to a new version while playing, as the callback does after
+/// every edit, on average and at worst: each version has the first track's `Cut` a step away from
+/// the last's, and a block plays between them. Versions and their scratch are made, and old ones
+/// freed, untimed.
+fn swap_while_playing(
+    engine: &mut Engine,
+    song: &Song,
+    version: &Arc<Published>,
+    block: usize,
+) -> (Duration, Duration) {
+    const SWAPS: u32 = 400;
+    let mut out = vec![0.0_f32; block * 2];
+    let mut last = Arc::clone(version);
+    let (mut total, mut worst) = (Duration::ZERO, Duration::ZERO);
+    for swap in 0..SWAPS {
+        let mut edited = song.clone();
+        if let Some(track) = edited.tracks.first_mut() {
+            track.cutoff ^= 1 + (swap % 2) as u8;
+        }
+        let next = Arc::new(Published::after(
+            Arc::new(edited),
+            Arc::clone(&last.samples),
+            Some(&last),
+        ));
+        let handover = Handover::new(Arc::clone(&next));
+        let started = Instant::now();
+        let old = engine.hand_over(handover);
+        let took = started.elapsed();
+        drop(old);
+        total += took;
+        worst = worst.max(took);
+        last = next;
+        engine.process(&mut out);
+    }
+    (total / SWAPS, worst)
 }
 
 /// Play through the output device, silently, and time its callbacks.
