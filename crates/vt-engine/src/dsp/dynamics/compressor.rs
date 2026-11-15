@@ -21,6 +21,7 @@ use vt_model::insert::{
 
 use super::console::{self, Console};
 use super::glue::{self, Glue};
+use crate::dsp::blocks::coefficient::kept_over;
 use crate::dsp::blocks::sides::{SameBits, same_bits_by_eq, same_bits_by_fields};
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::effects::memory::SongPlace;
@@ -191,7 +192,7 @@ impl AutoGain {
                 if self.keeps.is_none() {
                     self.on.settle();
                 }
-                let kept = keeps(AUTO_MS, rate);
+                let kept = kept_over(AUTO_MS / 1000.0, rate);
                 self.keeps = Some((rate, kept));
                 kept
             }
@@ -222,11 +223,6 @@ pub(crate) struct Clean {
     /// The settings the times were worked out from, and how much of the last value each keeps:
     /// the attack and the release.
     times: Option<(Settings, [f32; 2])>,
-}
-
-/// How much of the last value a one-pole smoother keeps, for a time in ms at a rate.
-fn keeps(ms: f32, rate: u32) -> f32 {
-    (-1.0 / (ms / 1000.0 * rate as f32).max(1.0)).exp()
 }
 
 /// The level out, in dB, for a level in, with the soft knee.
@@ -271,8 +267,8 @@ impl Clean {
             self.slope.settle();
         }
         let times = [
-            keeps(attack_ms(f32::from(settings.attack)), rate),
-            keeps(release_ms(f32::from(settings.release)), rate),
+            kept_over(attack_ms(f32::from(settings.attack)) / 1000.0, rate),
+            kept_over(release_ms(f32::from(settings.release)) / 1000.0, rate),
         ];
         self.times = Some((settings, times));
         times

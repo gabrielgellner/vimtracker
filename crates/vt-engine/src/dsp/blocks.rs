@@ -2,6 +2,7 @@
 //! `dsp`, so a block can go wherever it's needed.
 
 pub(crate) mod clip;
+pub(crate) mod coefficient;
 pub(crate) mod drift;
 pub(crate) mod flush;
 pub(crate) mod line;

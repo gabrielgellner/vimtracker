@@ -31,6 +31,7 @@ use vt_model::insert::{
 };
 
 use crate::dsp::blocks::clip::within;
+use crate::dsp::blocks::coefficient::of_corner;
 use crate::dsp::blocks::line::StereoLine;
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::effects::memory::SongPlace;
@@ -185,7 +186,7 @@ impl FreqShifter {
             track: Smoothed::default(),
             delay: Smoothed::default(),
             feedback: Smoothed::default(),
-            shelf_coefficient: 1.0 - (-TAU * SHELF_HZ / rate as f32).exp(),
+            shelf_coefficient: of_corner(SHELF_HZ, rate as f32),
             dc_coefficient: 1.0 - TAU * DC_HZ / rate as f32,
             rate,
         };

@@ -33,6 +33,7 @@
 
 use vt_model::insert::{Plate as Settings, plate_size};
 
+use crate::dsp::blocks::coefficient::of_corner;
 use crate::dsp::blocks::line::SharedLines;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::{REVERB_QUIET_SECONDS, SongPlace};
@@ -291,7 +292,7 @@ impl Plate {
             1.0
         } else {
             let hertz = LOWEST_CUT_HZ * CUT_SPAN.powf(f32::from(settings.high_cut) / 255.0);
-            1.0 - (-std::f32::consts::TAU * hertz / self.rate as f32).exp()
+            of_corner(hertz, self.rate as f32)
         };
         self.size.target = plate_size(f32::from(settings.size));
         self.excursion.target = f32::from(settings.excursion) / 255.0 * MOST_EXCURSION * self.scale;

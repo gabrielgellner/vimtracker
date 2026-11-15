@@ -12,6 +12,7 @@
 
 use vt_model::insert::{Limiter as Settings, ceiling_db, input_db, limit_release_ms};
 
+use crate::dsp::blocks::coefficient::kept_over;
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::SlotEffect;
@@ -129,8 +130,10 @@ impl Limiter {
     pub(crate) fn follow(&mut self, settings: Settings) {
         self.drive.target = gain_of(input_db(f32::from(settings.input)));
         self.ceiling.target = gain_of(ceiling_db(f32::from(settings.ceiling)));
-        let frames = limit_release_ms(f32::from(settings.release)) / 1000.0 * self.rate as f32;
-        self.keep = (-1.0 / frames.max(1.0)).exp();
+        self.keep = kept_over(
+            limit_release_ms(f32::from(settings.release)) / 1000.0,
+            self.rate,
+        );
     }
 
     /// Jump to what's set, as it's only just started.

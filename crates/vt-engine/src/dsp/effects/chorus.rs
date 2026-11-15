@@ -37,6 +37,7 @@ use std::f32::consts::TAU;
 
 use vt_model::insert::{Chorus as Settings, ChorusType};
 
+use crate::dsp::blocks::coefficient::of_corner;
 use crate::dsp::blocks::line::StereoLine;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::SongPlace;
@@ -207,7 +208,7 @@ impl Chorus {
             juno_tone: [0.0; 2],
             juno_dc: [[0.0; 2]; 2],
             frames_per_ms: rate as f32 / 1000.0,
-            tone_coefficient: 1.0 - (-TAU * JUNO_TONE_HZ / rate as f32).exp(),
+            tone_coefficient: of_corner(JUNO_TONE_HZ, rate as f32),
             dc_coefficient: 1.0 - TAU * JUNO_DC_HZ / rate as f32,
             seconds_per_frame: 1.0 / rate as f32,
         }

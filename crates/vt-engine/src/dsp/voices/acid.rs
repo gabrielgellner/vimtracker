@@ -32,6 +32,7 @@
 
 use super::virtual_analog::Settings;
 use crate::dsp::blocks::clip::soft_clip;
+use crate::dsp::blocks::coefficient::of_corner;
 use crate::dsp::blocks::drift::Drift;
 use crate::dsp::blocks::oversampler::Oversampler;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient as smoothing_coefficient};
@@ -330,8 +331,8 @@ impl SynthEngine for Acid {
             softening: one_pole(SOFTENING_MS, rate),
             charge: one_pole(SWEEP_CHARGE_MS, rate),
             drain: one_pole(SWEEP_DRAIN_MS, rate),
-            declick: 1.0 - (-std::f32::consts::TAU * DECLICK_HZ / rate).exp(),
-            high_pass_coefficient: 1.0 - (-std::f32::consts::TAU * HIGH_PASS_HZ / rate).exp(),
+            declick: of_corner(DECLICK_HZ, rate),
+            high_pass_coefficient: of_corner(HIGH_PASS_HZ, rate),
         }
     }
 

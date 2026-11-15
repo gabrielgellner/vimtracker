@@ -27,6 +27,7 @@ use std::f32::consts::TAU;
 
 use vt_model::insert::DistortType;
 
+use crate::dsp::blocks::coefficient::of_corner;
 use crate::dsp::blocks::oversampler::QuadrupleOversampler;
 use crate::dsp::blocks::plaits_parts::Svf;
 use crate::dsp::blocks::sides::{SameBits, Sides, same_bits_by_fields};
@@ -100,12 +101,6 @@ const OUTPUT_COUPLING_HZ: f32 = 1.3;
 /// Below this, with nothing going in, the pedal has rung out and rests at an exact zero, so its
 /// filters never decay into denormals.
 const QUIET: f32 = 1e-9;
-
-/// How far a one-pole low-pass moves toward its input each sample.
-#[inline]
-fn one_pole(hertz: f32, rate: f32) -> f32 {
-    1.0 - (-TAU * hertz / rate).exp()
-}
 
 /// A log pot's share of its resistance at a place from `0` to `1`: a tenth at the middle.
 #[inline]
@@ -349,11 +344,11 @@ impl Pedal {
         worked.gain = feedback / OVERDRIVE_GAIN_RESISTOR;
         worked.diodes = 2.0 * DIODE_SATURATION_CURRENT * feedback;
         let branch_hz = 1.0 / (TAU * OVERDRIVE_GAIN_RESISTOR * OVERDRIVE_GAIN_CAPACITOR);
-        worked.gain_branch = one_pole(branch_hz, higher);
+        worked.gain_branch = of_corner(branch_hz, higher);
         let feedback_hz = 1.0 / (TAU * feedback * OVERDRIVE_FEEDBACK_CAPACITOR);
-        worked.feedback = one_pole(feedback_hz.min(higher * 0.45), higher);
-        worked.tone_low_pass = one_pole(OVERDRIVE_TONE_HZ, rate);
-        worked.top = one_pole(OVERDRIVE_TOP_HZ.min(rate * 0.45), rate);
+        worked.feedback = of_corner(feedback_hz.min(higher * 0.45), higher);
+        worked.tone_low_pass = of_corner(OVERDRIVE_TONE_HZ, rate);
+        worked.top = of_corner(OVERDRIVE_TOP_HZ.min(rate * 0.45), rate);
         // The tone stage: a first-order shelf whose zero and pole sit evenly either side of the
         // middle of the 593 Hz to 3.3 kHz they span fully up, as far apart as its gain, which goes
         // evenly in dB from the full cut at `00` to the full lift at `FF`, as Pedal's Treble does.
@@ -362,12 +357,12 @@ impl Pedal {
             1.0 / (TAU * OVERDRIVE_TONE_SHUNT_RESISTOR * OVERDRIVE_TONE_SHUNT_CAPACITOR);
         let middle_hz = lifted_hz / most.sqrt();
         worked.treble = most.powf(2.0 * tone - 1.0);
-        worked.shelf = one_pole((middle_hz * worked.treble.sqrt()).min(rate * 0.45), rate);
+        worked.shelf = of_corner((middle_hz * worked.treble.sqrt()).min(rate * 0.45), rate);
         // The op-amp distortion.
         worked.drive =
             10_f32.powf((DISTORTION_LEAST_GAIN_DB + amount * DISTORTION_GAIN_RANGE_DB) / 20.0);
-        worked.distortion_high_pass = one_pole(DISTORTION_HIGH_PASS_HZ, rate);
-        worked.coupling = one_pole(OUTPUT_COUPLING_HZ, rate);
+        worked.distortion_high_pass = of_corner(DISTORTION_HIGH_PASS_HZ, rate);
+        worked.coupling = of_corner(OUTPUT_COUPLING_HZ, rate);
         let tone_hz =
             DISTORTION_DARKEST_HZ * (DISTORTION_BRIGHTEST_HZ / DISTORTION_DARKEST_HZ).powf(tone);
         for channel in self.channels.both_mut() {
