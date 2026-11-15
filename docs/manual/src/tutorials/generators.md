@@ -149,8 +149,8 @@ all on track 1's Mod page, `Space 6`:
     `8C` for its `Max`. A depth's ends are typed on its own scale, where `80` is none and `8C`
     is `+18`, two octaves either way, as the status line says. `Esc`.
 
-Now `Mutate`, `Length` and `Depth` show where their macros put them, with how far each can go
-drawn faint behind its bar, and won't turn on their own: `=` on one says to turn its macro
+Now `Mutate`, `Length` and `Depth` show where their macros put them, each with a faint dot after
+its value to say a macro holds it, and won't turn on their own: `=` on one says to turn its macro
 instead, or `gm` for its range. The song's macros are what these keys make.
 
 **Play it.** `Space 8` for the Gen page. Its first band is the `Macros`, with `Change`,

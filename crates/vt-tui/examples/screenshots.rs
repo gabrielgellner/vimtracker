@@ -230,12 +230,12 @@ const SHOTS: &[Shot] = &[
         ..PLAIN
     },
     // An acid line made live on the empty phrase from the shape panel; `Cut` and `Res` on macro
-    // 1, named `Bite`, from the Sound page; then the Gen page, with the acid's `Density` on macro
-    // 2, `Dense`, and playing.
+    // 1, named `Bite`, from the Sound page; then the Gen page, with the acid's `Spread` on macro
+    // 2, `Dense`, with its `Vary` too, in its title, where a bar can't show the macro, and playing.
     Shot {
         name: "track-gen",
         rows: &[],
-        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8}kj$M2:macro Dense<Enter><Tab>",
+        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8}kj$M2:macro Dense<Enter>k$M2<Tab>",
         play: 6,
         voice: Some(SynthVoice::Acid),
         size: FULL,
