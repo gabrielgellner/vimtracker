@@ -14,18 +14,13 @@ use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 use ratatui::crossterm::event::KeyCode;
 use ratatui::style::Style;
-use vt_model::accumulator::Accumulation;
-use vt_model::arpeggio::Arpeggio;
 use vt_model::bank::PlayParams;
 use vt_model::groove::GrooveId;
-use vt_model::insert::Insert;
 use vt_model::modulation::ModSlot;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::Field;
 use vt_model::settings::SettingId;
 use vt_model::shape::params::Choice;
-use vt_model::song::{FilterMode, FilterType, Machine, Role};
-use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, GateKind};
 use vt_model::tag::Tag;
 
@@ -98,41 +93,11 @@ pub enum Pick {
         slot: usize,
         value: u8,
     },
-    /// Give a track these accumulator settings.
-    Accumulation {
-        track: usize,
-        accumulation: Accumulation,
-    },
-    /// Give a track these arpeggio settings.
-    Arpeggio {
-        track: usize,
-        arpeggio: Arpeggio,
-    },
     /// Replace one of a track's mod slots.
     Mod {
         track: usize,
         slot: usize,
         modulator: ModSlot,
-    },
-    /// Choose a track's filter.
-    FilterType {
-        track: usize,
-        filter: FilterType,
-    },
-    /// Choose how a track's filter responds.
-    FilterMode {
-        track: usize,
-        mode: FilterMode,
-    },
-    /// Choose how long a track's steps are.
-    Speed {
-        track: usize,
-        speed: Speed,
-    },
-    /// Say what a track is for, which its colour shows.
-    Role {
-        track: usize,
-        role: Role,
     },
     /// A sound from the current kit, for this track.
     KitSound(KitChoice),
@@ -181,10 +146,12 @@ pub enum Pick {
     },
     /// Go to this track.
     Track(usize),
-    /// What makes a track's sound.
-    Machine {
+    /// One of the choices of a setting the track page describes, for a track, by its place in
+    /// the setting's list (`track_page::view`).
+    Param {
         track: usize,
-        machine: Machine,
+        control: crate::track_page::Control,
+        value: i32,
     },
     /// A value for one of a track's machine's settings, such as 6-op's patch.
     Setting {
@@ -196,12 +163,6 @@ pub enum Pick {
     RowPhrase(u32),
     /// A chain, or none, for the song view cell under the cursor.
     SectionChain(Option<u32>),
-    /// What goes in one of a track's slots.
-    Insert {
-        track: usize,
-        slot: usize,
-        insert: Insert,
-    },
     /// The kind of scale.
     Scale(ScaleKind),
     /// A choice for the shape panel's setting: its fill, its wave and the wave's length, or

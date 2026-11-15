@@ -31,8 +31,8 @@ use crate::input::mode::{Mode, View};
 use crate::input::picker::{Item, KitChoice, Outcome, Pick, Picker, Preview, PreviewLine, Shown};
 use crate::kitty;
 use crate::song_view::COLUMNS_BEFORE_TRACKS;
-use crate::track_page::Page;
 use crate::track_page::tuning::set_tuning;
+use crate::track_page::{Control, Page, set};
 use crate::views::picker::{PREVIEW_WAVE_HEIGHT, PREVIEW_WAVE_WIDTH};
 use crate::views::widgets::{group, role};
 
@@ -683,6 +683,18 @@ impl App {
 
     /// Replace one of a track's mod slots with what was chosen. A new type keeps the slot's
     /// destination, depth and switch, and finds its own settings as the slot last had them.
+    /// Set one of a track's settings to one of its choices, as its view writes it.
+    fn pick_param(&mut self, track: usize, control: Control, value: i32) {
+        let song = Arc::clone(self.song());
+        let action = song
+            .tracks
+            .get(track)
+            .and_then(|found| set(control, track, found, &song, value, None));
+        if let Some(action) = action {
+            self.services.apply(&action);
+        }
+    }
+
     fn pick_mod(&mut self, track: usize, slot: usize, mut modulator: ModSlot) {
         let was = self
             .song()
@@ -890,28 +902,11 @@ impl App {
             Pick::Length(length) => self.set_length(length),
             Pick::Condition { slot, value } => self.pick_condition(slot, value),
             Pick::Amount { slot, value } => self.pick_amount(slot, value),
-            Pick::Accumulation {
-                track,
-                accumulation,
-            } => {
-                self.services.apply(&Action::SetAccumulation {
-                    track,
-                    accumulation,
-                });
-            }
-            Pick::Arpeggio { track, arpeggio } => {
-                self.services
-                    .apply(&Action::SetArpeggio { track, arpeggio });
-            }
             Pick::Mod {
                 track,
                 slot,
                 modulator,
             } => self.pick_mod(track, slot, modulator),
-            Pick::Machine { track, machine } => {
-                self.services
-                    .apply(&Action::SetTrackMachine { track, machine });
-            }
             Pick::Setting {
                 track,
                 setting,
@@ -923,30 +918,13 @@ impl App {
                     value,
                 });
             }
-            Pick::FilterType { track, filter } => {
-                self.services
-                    .apply(&Action::SetFilterType { track, filter });
-            }
-            Pick::FilterMode { track, mode } => {
-                self.services.apply(&Action::SetFilterMode { track, mode });
-            }
-            Pick::Role { track, role } => {
-                self.services.apply(&Action::SetTrackRole { track, role });
-            }
-            Pick::Speed { track, speed } => {
-                self.services.apply(&Action::SetTrackSpeed { track, speed });
-            }
+            Pick::Param {
+                track,
+                control,
+                value,
+            } => self.pick_param(track, control, value),
             Pick::RowPhrase(phrase) => self.pick_row_phrase(phrase),
             Pick::SectionChain(chain) => self.pick_section_chain(chain),
-            Pick::Insert {
-                track,
-                slot,
-                insert,
-            } => self.services.apply(&Action::SetInsert {
-                track,
-                slot,
-                insert,
-            }),
             Pick::Line(line) => self.line(line),
             Pick::ScaleTo(scale) => self.set_scale(scale),
             Pick::ShowGroove(groove) => self.project_page.groove_shown = Some(groove),

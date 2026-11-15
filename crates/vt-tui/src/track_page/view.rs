@@ -15,20 +15,25 @@ use std::borrow::Cow;
 use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Reset};
 use vt_model::action::{Action, TrackControl};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES, octaves_text, retrig_meaning};
-use vt_model::constants::{BAR_STEPS, MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::Hold;
+use vt_model::constants::{BAR_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET};
+use vt_model::envelope::{Hold, MAX_HOLD_MS, MAX_RATCHET};
 use vt_model::generator::Generator;
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
-use vt_model::listed::{Listed, choices_of};
-use vt_model::modulation::{ModKind, ModSlot, default_mod, depth_text, note_shape_slot};
-use vt_model::settings::{Kind, SettingId, Units, gate_percent, gate_value, glide_ms};
+use vt_model::lfo::Shape;
+use vt_model::listed::Listed;
+use vt_model::modulation::{
+    MOD_SLOTS, ModKind, ModSlot, Polarity, default_mod, depth_text, note_shape_slot,
+};
+use vt_model::settings::{
+    Kind, LONGEST_GLIDE_MS, SettingId, Units, gate_percent, gate_value, glide_ms,
+};
 use vt_model::shape::params::{Typing, Units as GenUnits};
 use vt_model::shape::{Context, GenParam, Where};
 use vt_model::song::{FilterType, Machine, Role, Song, SynthVoice, Track, reset_name, trim_text};
 use vt_model::speed::Speed;
-use vt_model::steps::StepsMode;
+use vt_model::steps::{Loop, MAX_MUTATE, STEPS, StepsMode};
 use vt_model::tracking::Source;
 
 use crate::banking::{sample_shown, sample_text};
@@ -75,6 +80,138 @@ impl Steps {
     pub const NONE: Self = Self::even(0);
 }
 
+/// How a count's steps follow one another, as `3=` takes three.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Pace {
+    /// Each the same, wherever it gets to: three steps go three times as far.
+    #[default]
+    Even,
+    /// One step whatever the count, as the track's own lists and an effect's go.
+    Once,
+    /// An envelope's time, whose steps grow as it gets longer.
+    Time,
+    /// An AHD's hold, which steps as a time and has `Note` below 0 ms.
+    Hold,
+    /// The track's `Reset`, whose large steps go from one whole bar to the next.
+    Bars,
+}
+
+impl Pace {
+    /// The small and the large step from a value, where they depend on it.
+    pub fn steps(self, value: i32) -> Option<(Steps, Steps)> {
+        let time = |value: i32| {
+            let nudge = Steps {
+                up: time_step(value),
+                down: time_step(value - 1),
+            };
+            let jump = Steps {
+                up: nudge.up * TIME_JUMP,
+                down: nudge.down * TIME_JUMP,
+            };
+            (nudge, jump)
+        };
+        Some(match self {
+            Self::Even | Self::Once => return None,
+            Self::Time => time(value),
+            // Up from `Note` is 0 ms, down from no time is `Note`, and a time steps down no
+            // further than 0 ms.
+            Self::Hold => match value {
+                ..0 => (Steps::even(1), Steps::even(1)),
+                0 => (
+                    Steps::even(1),
+                    Steps {
+                        up: TIME_JUMP,
+                        down: 1,
+                    },
+                ),
+                _ => {
+                    let (nudge, jump) = time(value);
+                    let down = |steps: Steps| Steps {
+                        down: steps.down.min(value),
+                        ..steps
+                    };
+                    (down(nudge), down(jump))
+                }
+            },
+            Self::Bars => {
+                let bar = BAR_STEPS as i32;
+                let jump = Steps {
+                    up: (value / bar + 1) * bar - value,
+                    down: value - ((value + bar - 1) / bar - 1).max(0) * bar,
+                };
+                (Steps::even(1), jump)
+            }
+        })
+    }
+}
+
+/// How `i`'s text reads as a value. Where it doesn't, or the value is outside its bounds, the
+/// status line says the view's `why_not`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Reads {
+    /// Not at all: `i` lists it or turns it over, or it's typed its own way.
+    #[default]
+    No,
+    /// Two hex digits, kept to its bounds, each worth `1 << shift` of it, as a macro's are its
+    /// coarse byte.
+    Hex { shift: u32 },
+    /// Hex refused outside its bounds, with a sign before it where `signed`.
+    HexWithin { signed: bool },
+    /// A whole number, with any of the letter `before` it and any of the text `after` it, `off`
+    /// for its lowest where `off` (a number then starting above it), counted from 1 where
+    /// `from_one`.
+    Number {
+        before: Option<char>,
+        after: &'static str,
+        off: bool,
+        from_one: bool,
+    },
+    /// A glide's time in ms, or `off`.
+    Glide,
+    /// A track's `Reset`: steps, bars like `2bar`, or `off`.
+    Reset,
+    /// An AHD's hold in ms, or `note`.
+    Hold,
+    /// A note by its name.
+    Note,
+}
+
+/// One of the choices `K` lists for a setting: its name, what it does and the heading it's
+/// listed under, either of them empty for none.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Choice {
+    pub name: Cow<'static, str>,
+    pub meaning: Cow<'static, str>,
+    pub group: Cow<'static, str>,
+}
+
+impl Choice {
+    /// A choice with only a name.
+    pub fn named(name: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            name: name.into(),
+            meaning: Cow::Borrowed(""),
+            group: Cow::Borrowed(""),
+        }
+    }
+
+    /// With what it does.
+    fn meaning(self, meaning: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            meaning: meaning.into(),
+            ..self
+        }
+    }
+
+    /// One of a [`Listed`] kind, as its list names it, says what it does and heads it.
+    fn of<X: Listed>(each: X) -> Self {
+        Self {
+            group: Cow::Borrowed(each.category()),
+            ..Self::named(each.name()).meaning(each.meaning())
+        }
+    }
+}
+
 /// One setting as a widget draws and edits it, resolved where it is: on this track, in its slot,
 /// under its mod slot's type, or on its generator's column. Every cell, title, the status line,
 /// the mixer and the Roto's value read only this.
@@ -98,6 +235,8 @@ pub struct ParamView {
     /// `=` and `-`, and `+` and `_`, from where it is now.
     pub nudge: Steps,
     pub jump: Steps,
+    /// How a count's steps follow one another.
+    pub pace: Pace,
     /// Goes round past either end: a phase, a list that wraps.
     pub wraps: bool,
     /// Its bar draws from the middle: pan, trim, a band's boost.
@@ -107,9 +246,11 @@ pub struct ParamView {
     /// Off or on: drawn as a switch.
     pub toggle: bool,
     /// What `K` lists for it, in order, or none for a setting that isn't a list.
-    pub choices: Vec<Cow<'static, str>>,
+    pub choices: Vec<Choice>,
     /// Whether `K` lists its choices by number, `03  Brass`, as a machine's own lists are.
     pub numbered: bool,
+    /// What `K`'s list is called.
+    pub title: &'static str,
     /// Its value in its cell: `80`, `1/16`, `120 ms`, `Overdrive`.
     pub cell: String,
     /// Its value as the status line says it after its name, in real units or what it does:
@@ -118,6 +259,10 @@ pub struct ParamView {
     pub text: String,
     /// How `i` takes it.
     pub typing: Typing,
+    /// How what `i` takes reads as a value.
+    pub reads: Reads,
+    /// What the status line says when it doesn't.
+    pub why_not: Cow<'static, str>,
     /// The registry's units, for one of its settings.
     pub units: Option<Units>,
     /// Not dim: away from its default, or doing something on this track.
@@ -128,9 +273,10 @@ impl ParamView {
     /// A setting with nothing yet but its names: a value of 0 that doesn't move, isn't a list,
     /// and reads as nothing.
     pub fn of(control: Control, track: &Track) -> Self {
+        let name = control.name_on(track);
         Self {
             key: key(control, track),
-            name: control.name_on(track),
+            name,
             label: label(control, track),
             value: 0,
             fine: None,
@@ -138,15 +284,19 @@ impl ParamView {
             default: 0,
             nudge: Steps::NONE,
             jump: Steps::NONE,
+            pace: Pace::Even,
             wraps: false,
             centred: false,
             bar: None,
             toggle: false,
             choices: Vec::new(),
             numbered: false,
+            title: name,
             cell: String::new(),
             text: String::new(),
             typing: Typing::Listed,
+            reads: Reads::No,
+            why_not: Cow::Borrowed(""),
             units: None,
             engaged: true,
         }
@@ -163,6 +313,7 @@ impl ParamView {
             bar: Some(value),
             cell: format!("{value:02X}"),
             typing: Typing::Hex,
+            reads: Reads::Hex { shift: 0 },
             ..self
         }
     }
@@ -171,15 +322,15 @@ impl ParamView {
     /// it `wraps`.
     fn listed(
         self,
-        names: impl IntoIterator<Item = impl Into<Cow<'static, str>>>,
+        choices: impl IntoIterator<Item = Choice>,
         at: usize,
         default: usize,
         wraps: bool,
     ) -> Self {
-        let choices: Vec<Cow<'static, str>> = names.into_iter().map(Into::into).collect();
+        let choices: Vec<Choice> = choices.into_iter().collect();
         let cell = choices
             .get(at)
-            .map_or_else(String::new, |name| name.clone().into_owned());
+            .map_or_else(String::new, |choice| choice.name.clone().into_owned());
         Self {
             value: at as i32,
             bounds: (0, choices.len().saturating_sub(1) as i32),
@@ -210,7 +361,7 @@ impl ParamView {
         }
     }
 
-    /// A whole number from `low` to `high`, reading as `cell`.
+    /// A whole number from `low` to `high`, reading as `cell`, typed in decimal.
     fn whole(self, value: i32, (low, high): (i32, i32), default: i32, cell: String) -> Self {
         Self {
             value,
@@ -220,6 +371,7 @@ impl ParamView {
             jump: Steps::even(1),
             cell,
             typing: Typing::Whole { signed: low < 0 },
+            reads: NUMBER,
             ..self
         }
     }
@@ -232,10 +384,108 @@ impl ParamView {
         }
     }
 
+    /// Its steps by a pace that depends on where it is, from where it is now.
+    fn paced(self, pace: Pace) -> Self {
+        let (nudge, jump) = pace.steps(self.value).unwrap_or((self.nudge, self.jump));
+        Self {
+            nudge,
+            jump,
+            pace,
+            ..self
+        }
+    }
+
+    /// One step whatever the count.
+    fn once(self) -> Self {
+        Self {
+            pace: Pace::Once,
+            ..self
+        }
+    }
+
     fn text(self, text: String) -> Self {
         Self { text, ..self }
     }
+
+    /// Typed as `reads` says, and refused with `why_not`.
+    fn reads(self, reads: Reads, why_not: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            reads,
+            why_not: why_not.into(),
+            ..self
+        }
+    }
+
+    fn titled(self, title: &'static str) -> Self {
+        Self { title, ..self }
+    }
 }
+
+/// A whole number as it's typed, nothing before it or after it.
+const NUMBER: Reads = Reads::Number {
+    before: None,
+    after: "",
+    off: false,
+    from_one: false,
+};
+
+/// The same followed by a percent sign, or not.
+const PERCENT: Reads = Reads::Number {
+    before: None,
+    after: "%",
+    off: false,
+    from_one: false,
+};
+
+/// A number from 1, or `off` for none.
+const OFF_OR: Reads = Reads::Number {
+    before: None,
+    after: "",
+    off: true,
+    from_one: false,
+};
+
+/// The titles of each mod slot's lists, as a list's title is fixed text.
+const MODE_TITLES: [&str; MOD_SLOTS] = [
+    "Mod 1 mode",
+    "Mod 2 mode",
+    "Mod 3 mode",
+    "Mod 4 mode",
+    "Mod 5 mode",
+    "Mod 6 mode",
+];
+const SOURCE_TITLES: [&str; MOD_SLOTS] = [
+    "Mod 1 source",
+    "Mod 2 source",
+    "Mod 3 source",
+    "Mod 4 source",
+    "Mod 5 source",
+    "Mod 6 source",
+];
+const CURVE_TITLES: [&str; MOD_SLOTS] = [
+    "Mod 1 curve",
+    "Mod 2 curve",
+    "Mod 3 curve",
+    "Mod 4 curve",
+    "Mod 5 curve",
+    "Mod 6 curve",
+];
+const POLARITY_TITLES: [&str; MOD_SLOTS] = [
+    "Mod 1 polarity",
+    "Mod 2 polarity",
+    "Mod 3 polarity",
+    "Mod 4 polarity",
+    "Mod 5 polarity",
+    "Mod 6 polarity",
+];
+const DESTINATION_TITLES: [&str; MOD_SLOTS] = [
+    "Mod 1 destination",
+    "Mod 2 destination",
+    "Mod 3 destination",
+    "Mod 4 destination",
+    "Mod 5 destination",
+    "Mod 6 destination",
+];
 
 /// A setting's names in its cell: an effect's setting by its full name, as its slot's grid has
 /// room, a macro by the name it's been given, and the rest by their labels.
@@ -267,7 +517,7 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
                 // by the choice it's on. A slice reads as its number, with its name after it.
                 Kind::Stepped { choices, .. } => ParamView {
                     bar: None,
-                    choices: choices.iter().copied().map(Cow::Borrowed).collect(),
+                    choices: choices.iter().copied().map(Choice::named).collect(),
                     numbered: id != SettingId::SLICE,
                     cell: match choices.get(usize::from(value)) {
                         Some(choice) if id != SettingId::SLICE => (*choice).to_owned(),
@@ -308,6 +558,7 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
                 bar: Some((value >> 8) as u8),
                 cell: format!("{value:04X}"),
                 typing: Typing::Hex,
+                reads: Reads::Hex { shift: 8 },
                 engaged: !track.macros[at].maps.is_empty(),
                 ..of
             }
@@ -319,12 +570,14 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
             if found.choices().is_empty() {
                 of.hex(value, 0xFF, found.default)
             } else {
-                let list = of.listed(
-                    found.choices().iter().copied(),
-                    usize::from(value),
-                    usize::from(found.default),
-                    found.wraps(),
-                );
+                let list = of
+                    .listed(
+                        found.choices().iter().copied().map(Choice::named),
+                        usize::from(value),
+                        usize::from(found.default),
+                        found.wraps(),
+                    )
+                    .once();
                 ParamView {
                     toggle: found.is_toggle(),
                     typing: if found.is_toggle() {
@@ -343,18 +596,24 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
                 .position(|each| each.name() == insert.name())
                 .unwrap_or(0);
             let empty = Insert::ALL.iter().position(|each| *each == Insert::Empty);
+            let effects = Insert::ALL.iter().map(|each| Choice::of(*each));
             ParamView {
                 engaged: insert != Insert::Empty,
-                ..of.listed(choices_of::<Insert>(), at, empty.unwrap_or(0), true)
+                ..of.listed(effects, at, empty.unwrap_or(0), true).once()
             }
         }
-        Control::Machine => listed_of(of, track.machine, fresh.machine, true),
-        Control::FilterType => listed_of(of, track.filter, fresh.filter, true),
+        Control::Machine => listed_of(of, track.machine, fresh.machine, true).once(),
+        Control::FilterType => listed_of(of, track.filter, fresh.filter, true)
+            .once()
+            .titled("Filter type"),
         Control::FilterMode => {
             let modes = track.filter.modes();
             let plays = track.filter.plays(track.filter_mode);
             let at = modes.iter().position(|mode| *mode == plays).unwrap_or(0);
-            let list = of.listed(modes.iter().map(|mode| mode.name()), at, 0, true);
+            let list = of
+                .listed(modes.iter().map(|mode| Choice::of(*mode)), at, 0, true)
+                .once()
+                .titled("Filter mode");
             // The MS-20's have none, so it doesn't apply.
             let cell = match track.filter.has_modes() {
                 true => plays.name().to_owned(),
@@ -364,38 +623,62 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
         }
         Control::Role => {
             let at = place_of(track.role);
+            // `Auto` says what the machine makes it.
+            let roles = Role::ALL.iter().map(|role| match role {
+                Role::Auto => Choice::of(*role).meaning(format!(
+                    "As its machine is for: {}",
+                    track.machine.role().name()
+                )),
+                _ => Choice::of(*role),
+            });
             // `Auto` shows what it goes by, which the page dims as its default.
             ParamView {
                 cell: track.role().name().to_owned(),
-                ..of.listed(choices_of::<Role>(), at, place_of(Role::Auto), true)
+                ..of.listed(roles, at, place_of(Role::Auto), true).once()
             }
         }
-        Control::Speed => listed_of(of, track.speed, Speed::Sixteenth, false),
+        Control::Speed => listed_of(of, track.speed, Speed::Sixteenth, false).once(),
         Control::Groove => {
             let plays = track.groove.unwrap_or(song.groove);
             of.listed(
-                GrooveId::all().map(GrooveId::name),
+                GrooveId::all().map(|groove| Choice::named(groove.name())),
                 plays.index(),
                 song.groove.index(),
                 false,
             )
+            .once()
         }
-        Control::Choke => of.whole(
-            i32::from(track.choke.unwrap_or(0)),
-            (0, i32::from(CHOKE_GROUPS)),
-            0,
-            track
-                .choke
-                .map_or_else(|| "Off".to_owned(), |group| group.to_string()),
-        ),
-        Control::Group => of.whole(
-            i32::from(track.group.unwrap_or(0)),
-            (0, MAX_GROUPS as i32),
-            0,
-            track
-                .group
-                .map_or_else(|| "Off".to_owned(), |group| format!("G{group}")),
-        ),
+        Control::Choke => of
+            .whole(
+                i32::from(track.choke.unwrap_or(0)),
+                (0, i32::from(CHOKE_GROUPS)),
+                0,
+                track
+                    .choke
+                    .map_or_else(|| "Off".to_owned(), |group| group.to_string()),
+            )
+            .reads(
+                OFF_OR,
+                format!("Choke is a group from 1 to {CHOKE_GROUPS}, or off"),
+            ),
+        Control::Group => of
+            .whole(
+                i32::from(track.group.unwrap_or(0)),
+                (0, MAX_GROUPS as i32),
+                0,
+                track
+                    .group
+                    .map_or_else(|| "Off".to_owned(), |group| format!("G{group}")),
+            )
+            .reads(
+                Reads::Number {
+                    before: Some('G'),
+                    after: "",
+                    off: true,
+                    from_one: false,
+                },
+                format!("Group is a group from 1 to {MAX_GROUPS}, or off"),
+            ),
         Control::GateLength => {
             let percent = i32::from(gate_percent(track.gate_length()));
             of.whole(
@@ -405,24 +688,24 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
                 format!("{percent}%"),
             )
             .steps(Steps::even(1), Steps::even(PERCENT_JUMP))
+            .reads(PERCENT, "Gate is a percent from 1 to 100")
         }
-        Control::Reset => {
-            let steps = i32::from(track.reset.unwrap_or(0));
-            let bar = BAR_STEPS as i32;
-            // A large step goes to the next whole bar either way.
-            let jump = Steps {
-                up: (steps / bar + 1) * bar - steps,
-                down: steps - ((steps + bar - 1) / bar - 1).max(0) * bar,
-            };
-            of.whole(
-                steps,
+        // A large step goes to the next whole bar either way.
+        Control::Reset => of
+            .whole(
+                i32::from(track.reset.unwrap_or(0)),
                 (0, i32::from(MAX_TRACK_RESET)),
                 0,
                 reset_name(track.reset),
             )
-            .steps(Steps::even(1), jump)
+            .paced(Pace::Bars)
             .text(reset_shown(track.reset))
-        }
+            .reads(
+                Reads::Reset,
+                format!(
+                    "Reset is a number of steps from 1 to {MAX_TRACK_RESET}, of bars like 2bar, or off"
+                ),
+            ),
         Control::Glide => {
             let shown = SettingId::GLIDE
                 .entry()
@@ -439,6 +722,10 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
                 ..of.hex(track.glide, 0xFF, fresh.glide)
             }
             .text(glide_shown(track))
+            .reads(
+                Reads::Glide,
+                format!("Glide is a time in ms up to {LONGEST_GLIDE_MS}, or off"),
+            )
         }
         Control::Limiter => of.switch(song.limiter, true).text(on_off(song.limiter)),
         Control::Safe => of.switch(track.safe, fresh.safe).text(safe_shown(track)),
@@ -521,7 +808,12 @@ fn units(id: SettingId) -> Option<Units> {
 
 /// One of a [`Listed`] kind, by its place in its list.
 fn listed_of<X: Listed>(of: ParamView, now: X, default: X, wraps: bool) -> ParamView {
-    of.listed(choices_of::<X>(), place_of(now), place_of(default), wraps)
+    of.listed(
+        X::ALL.iter().map(|each| Choice::of(*each)),
+        place_of(now),
+        place_of(default),
+        wraps,
+    )
 }
 
 /// Where one of a [`Listed`] kind is in its list.
@@ -584,7 +876,9 @@ fn mod_view(of: ParamView, track: &Track, slot: usize, field: ModField) -> Param
         kind: modulator.kind,
         ..default_mod(slot)
     };
-    fresh.track.source = modulator.track.source;
+    if matches!(field, ModField::Low | ModField::High) {
+        fresh.track.source = modulator.track.source;
+    }
     let value = modulator.field(field);
     let of = ParamView {
         value: value.unwrap_or(0),
@@ -601,72 +895,69 @@ fn mod_view(of: ParamView, track: &Track, slot: usize, field: ModField) -> Param
         typing: Typing::Listed,
         ..of
     };
-    let signed = |of: ParamView| ParamView {
-        typing: Typing::Whole { signed: true },
-        ..of
+    // A signed amount in hex, as a depth is.
+    let signed = |of: ParamView, why: &'static str| {
+        ParamView {
+            typing: Typing::Whole { signed: true },
+            ..of
+        }
+        .reads(Reads::HexWithin { signed: true }, why)
     };
+    let times = format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}");
     // An envelope's times step finer while they're short.
-    let time = |of: ParamView| {
-        let at = of.value;
-        let nudge = Steps {
-            up: time_step(at),
-            down: time_step(at - 1),
-        };
-        let jump = Steps {
-            up: nudge.up * TIME_JUMP,
-            down: nudge.down * TIME_JUMP,
-        };
-        ParamView { nudge, jump, ..of }
-    };
+    let time = |of: ParamView| of.paced(Pace::Time).reads(NUMBER, times.clone());
     let shape_slot = note_shape_slot(&track.mods) == Some(slot);
     match field {
         ModField::Type => ParamView {
             nudge: Steps::NONE,
             jump: Steps::NONE,
-            choices: choices_of::<ModKind>().map(Cow::Borrowed).collect(),
+            choices: ModKind::ALL.iter().map(|kind| Choice::of(*kind)).collect(),
             cell: modulator.kind.name().to_owned(),
             typing: Typing::Listed,
             ..of
         },
+        // An envelope's curve, how notes start an LFO or Steps, or what Track follows.
         ModField::Mode => list(ParamView {
             choices: modulator
                 .kind
                 .modes()
                 .into_iter()
-                .map(|(name, _)| Cow::Borrowed(name))
+                .map(|(name, meaning)| Choice::named(name).meaning(meaning))
                 .collect(),
             cell: modulator.mode_name().unwrap_or("--").to_owned(),
+            title: match modulator.kind {
+                ModKind::Lfo | ModKind::Steps => MODE_TITLES[slot],
+                ModKind::Track => SOURCE_TITLES[slot],
+                _ => CURVE_TITLES[slot],
+            },
             ..of
         }),
         // The note-shaping slot's level is the note's, one way only.
         ModField::Polarity => list(ParamView {
-            choices: choices_of::<vt_model::modulation::Polarity>()
-                .map(Cow::Borrowed)
-                .collect(),
+            choices: Polarity::ALL.iter().map(|each| Choice::of(*each)).collect(),
             cell: match shape_slot {
                 true => "--".to_owned(),
                 false => modulator.polarity().name().to_owned(),
             },
+            title: POLARITY_TITLES[slot],
             ..of
         }),
         ModField::Destination => {
-            // `Pitch` comes twice, as it is and in scale.
-            let mut places = vec![(None, false)];
-            for destination in SettingId::for_mod(track, slot) {
-                places.push((Some(destination), false));
-                if destination == SettingId::PITCH {
-                    places.push((Some(destination), true));
-                }
-            }
+            // `Pitch` comes twice, as it is and moving the note along the song's scale.
+            let places = destinations(track, slot);
             let here = (modulator.destination, modulator.goes_in_scale());
             let at = places.iter().position(|place| *place == here).unwrap_or(0);
-            let names = places
-                .iter()
-                .map(|(destination, in_scale)| match destination {
-                    _ if *in_scale => IN_SCALE_PITCH.to_owned(),
-                    Some(destination) => destination.name_on(track),
-                    None => "---".to_owned(),
-                });
+            let choices = places.iter().map(|place| match place {
+                (_, true) => Choice {
+                    group: Cow::Owned(SettingId::PITCH.group()),
+                    ..Choice::named(IN_SCALE_PITCH).meaning("Moves the note along the song's scale")
+                },
+                (Some(destination), false) => Choice {
+                    group: Cow::Owned(destination.group()),
+                    ..Choice::named(destination.name_on(track)).meaning(destination.meaning())
+                },
+                (None, false) => Choice::named("---").meaning("Off"),
+            });
             let default = places
                 .iter()
                 .position(|(destination, _)| *destination == default_mod(slot).destination)
@@ -677,17 +968,21 @@ fn mod_view(of: ParamView, track: &Track, slot: usize, field: ModField) -> Param
                     Some(destination) => destination.name_on(track),
                     None => "---".to_owned(),
                 },
-                ..of.listed(names, at, default, true)
+                ..of.listed(choices, at, default, true)
+                    .titled(DESTINATION_TITLES[slot])
             }
         }
         // The slot that shapes each note does so with its level, rather than moving a value.
-        ModField::Depth => signed(ParamView {
-            cell: match shape_slot {
-                true => "--".to_owned(),
-                false => depth_text(modulator.depth),
+        ModField::Depth => signed(
+            ParamView {
+                cell: match shape_slot {
+                    true => "--".to_owned(),
+                    false => depth_text(modulator.depth),
+                },
+                ..of
             },
-            ..of
-        }),
+            "Depth is hex from -FF to +FF",
+        ),
         ModField::Attack if ahd_kind => time(ParamView {
             cell: ms(ahd.attack_ms),
             ..of
@@ -704,7 +999,11 @@ fn mod_view(of: ParamView, track: &Track, slot: usize, field: ModField) -> Param
             cell: format!("{:02X}", lpg.colour),
             typing: Typing::Hex,
             ..of
-        },
+        }
+        .reads(
+            Reads::HexWithin { signed: false },
+            "Colour is hex from 00 to FF",
+        ),
         ModField::Attack => time(ParamView {
             cell: ms(adsr.attack_ms),
             ..of
@@ -725,42 +1024,40 @@ fn mod_view(of: ParamView, track: &Track, slot: usize, field: ModField) -> Param
             cell: format!("{}%", drum.body),
             jump: Steps::even(PERCENT_JUMP),
             ..of
-        },
+        }
+        .reads(PERCENT, "Body is a percent from 0 to 100"),
         ModField::Ratchet => ParamView {
             cell: drum.ratchet.to_string(),
             jump: Steps::even(1),
             ..of
-        },
+        }
+        .reads(
+            NUMBER,
+            format!("Ratchet is how many strikes, from 1 to {MAX_RATCHET}"),
+        ),
         ModField::Decay => time(ParamView {
             cell: ms(adsr.decay_ms),
             ..of
         }),
         // `Note` is below no time, so `-` from 0 ms holds for the note.
-        ModField::Hold => {
-            let held = time(ParamView {
-                cell: match ahd.hold {
-                    Hold::Note => "Note".to_owned(),
-                    Hold::Ms(hold) => ms(hold),
-                },
-                ..of
-            });
-            match held.value {
-                -1 | 0 => ParamView {
-                    nudge: Steps { up: 1, down: 1 },
-                    jump: Steps {
-                        up: if held.value < 0 { 1 } else { TIME_JUMP },
-                        down: 1,
-                    },
-                    ..held
-                },
-                _ => held,
-            }
+        ModField::Hold => ParamView {
+            cell: match ahd.hold {
+                Hold::Note => "Note".to_owned(),
+                Hold::Ms(hold) => ms(hold),
+            },
+            ..of
         }
+        .paced(Pace::Hold)
+        .reads(
+            Reads::Hold,
+            format!("Hold is milliseconds from 0 to {MAX_HOLD_MS}, or note"),
+        ),
         ModField::Sustain => ParamView {
             cell: format!("{}%", adsr.sustain),
             jump: Steps::even(PERCENT_JUMP),
             ..of
-        },
+        }
+        .reads(PERCENT, "Sustain is a percent from 0 to 100"),
         ModField::Release => time(ParamView {
             cell: ms(adsr.release_ms),
             ..of
@@ -774,11 +1071,20 @@ fn mod_view(of: ParamView, track: &Track, slot: usize, field: ModField) -> Param
             typing: Typing::Toggled,
             ..of
         }),
+        // The attractors say what they are, and Rössler's name is found without its umlaut.
         ModField::Shape => list(ParamView {
-            choices: choices_of::<vt_model::lfo::Shape>()
-                .map(Cow::Borrowed)
+            choices: Shape::ALL
+                .iter()
+                .map(|shape| match shape {
+                    Shape::Lorenz => {
+                        Choice::of(*shape).meaning("chaos round two wings, never quite repeating")
+                    }
+                    Shape::Rossler => Choice::of(*shape).meaning("Rossler's chaos round one loop"),
+                    _ => Choice::of(*shape),
+                })
                 .collect(),
             cell: lfo.shape.name().to_owned(),
+            title: "LFO shape",
             ..of
         }),
         // A rate steps through its own kinds, a division or hertz. One a note, Steps have no
@@ -798,35 +1104,60 @@ fn mod_view(of: ParamView, track: &Track, slot: usize, field: ModField) -> Param
             cell: steps.length.to_string(),
             jump: Steps::even(1),
             ..of
-        },
+        }
+        .reads(
+            NUMBER,
+            format!("Length is how many steps, from 1 to {STEPS}"),
+        ),
+        // Typed from 1, as the page shows it.
         ModField::Start => ParamView {
             cell: (steps.start + 1).to_string(),
             jump: Steps::even(1),
             ..of
-        },
+        }
+        .reads(
+            Reads::Number {
+                before: None,
+                after: "",
+                off: false,
+                from_one: true,
+            },
+            format!("Start is a step, from 1 to {STEPS}"),
+        ),
         ModField::Loop => list(ParamView {
-            choices: vt_model::steps::Loop::ALL
+            choices: Loop::ALL
                 .iter()
-                .map(|each| Cow::Owned(each.to_string()))
+                .map(|each| Choice::named(each.to_string()).meaning(each.meaning()))
                 .collect(),
             cell: steps.looping.to_string(),
+            title: "Steps loop",
             ..of
         }),
         ModField::Mutate => ParamView {
             cell: format!("{}%", steps.mutate),
             jump: Steps::even(PERCENT_JUMP),
             ..of
-        },
-        ModField::Smooth => signed(ParamView {
-            cell: depth_text(steps.smooth),
-            ..of
-        }),
+        }
+        .reads(
+            PERCENT,
+            format!("Mutate is a percent from 0 to {MAX_MUTATE}"),
+        ),
+        ModField::Smooth => signed(
+            ParamView {
+                cell: depth_text(steps.smooth),
+                ..of
+            },
+            "Smooth is hex from -FF to +FF",
+        ),
         // A large step is an octave, as a step's value on `Pitch` is semitones.
-        ModField::Step(at) => signed(ParamView {
-            cell: depth_text(steps.values[usize::from(at)]),
-            jump: Steps::even(OCTAVE),
-            ..of
-        }),
+        ModField::Step(at) => signed(
+            ParamView {
+                cell: depth_text(steps.values[usize::from(at)]),
+                jump: Steps::even(OCTAVE),
+                ..of
+            },
+            "A step is hex from -FF to +FF",
+        ),
         // An attractor's is the axis heard, named where it's one alone, and its large step goes
         // from one axis to the next.
         ModField::Phase => {
@@ -844,11 +1175,15 @@ fn mod_view(of: ParamView, track: &Track, slot: usize, field: ModField) -> Param
                 cell,
                 ..of
             }
+            .reads(NUMBER, "Phase is degrees from 0 to 359")
         }
-        ModField::Deform => signed(ParamView {
-            cell: depth_text(lfo.deform),
-            ..of
-        }),
+        ModField::Deform => signed(
+            ParamView {
+                cell: depth_text(lfo.deform),
+                ..of
+            },
+            "Deform is hex from -FF to +FF",
+        ),
         // A fade steps through its own kinds.
         ModField::Fade => ParamView {
             nudge: Steps::NONE,
@@ -865,7 +1200,21 @@ fn mod_view(of: ParamView, track: &Track, slot: usize, field: ModField) -> Param
             } else {
                 bounds.high
             };
-            let notes = tracking.source == Source::Note;
+            let source = tracking.source;
+            let notes = source == Source::Note;
+            let what = Control::Mod(slot, field).label();
+            let (lowest, highest) = source.span();
+            let (lowest, highest) = (source.text(lowest), source.text(highest));
+            let (reads, why) = match notes {
+                true => (
+                    Reads::Note,
+                    format!("{what} is a note from {lowest} to {highest}"),
+                ),
+                false => (
+                    Reads::HexWithin { signed: false },
+                    format!("{what} is hex from {lowest} to {highest}"),
+                ),
+            };
             ParamView {
                 jump: Steps::even(if notes { OCTAVE } else { HEX_JUMP }),
                 cell: tracking.source.text(end),
@@ -876,8 +1225,22 @@ fn mod_view(of: ParamView, track: &Track, slot: usize, field: ModField) -> Param
                 },
                 ..of
             }
+            .reads(reads, why)
         }
     }
+}
+
+/// Where a mod slot can go on this track, by its place in `K`'s list: nowhere, then each
+/// setting, with `Pitch` twice, as it is and in scale.
+fn destinations(track: &Track, slot: usize) -> Vec<(Option<SettingId>, bool)> {
+    let mut places = vec![(None, false)];
+    for destination in SettingId::for_mod(track, slot) {
+        places.push((Some(destination), false));
+        if destination == SettingId::PITCH {
+            places.push((Some(destination), true));
+        }
+    }
+    places
 }
 
 /// One of the track's accumulator settings.
@@ -896,6 +1259,10 @@ fn accumulator_view(
             value.to_string(),
         )
         .steps(Steps::even(1), Steps::even(LIMIT_JUMP))
+        .reads(
+            NUMBER,
+            format!("A limit is a number of degrees from 1 to {MOST_DEGREES}"),
+        )
     };
     let view = match field {
         AccumulatorField::Up => limit(of, accumulation.up, default.up),
@@ -907,7 +1274,9 @@ fn accumulator_view(
             let resets: Vec<Reset> = Reset::all().collect();
             let at = |reset| resets.iter().position(|each| *each == reset).unwrap_or(0);
             of.listed(
-                resets.iter().map(|reset| reset.name()),
+                resets
+                    .iter()
+                    .map(|reset| Choice::named(reset.name()).meaning(reset.meaning())),
                 at(accumulation.reset),
                 at(default.reset),
                 false,
@@ -924,15 +1293,23 @@ fn arpeggio_view(of: ParamView, arpeggio: Arpeggio, field: ArpField) -> ParamVie
         // The rates stop at either end, as they run from the shortest note to the longest.
         ArpField::Rate => listed_of(of, arpeggio.rate, default.rate, false),
         ArpField::Mode => listed_of(of, arpeggio.mode, default.mode, true),
-        ArpField::Octaves => of.whole(
-            i32::from(arpeggio.octaves),
-            (1, i32::from(MOST_OCTAVES)),
-            i32::from(default.octaves),
-            arpeggio.octaves.to_string(),
-        ),
+        ArpField::Octaves => of
+            .whole(
+                i32::from(arpeggio.octaves),
+                (1, i32::from(MOST_OCTAVES)),
+                i32::from(default.octaves),
+                arpeggio.octaves.to_string(),
+            )
+            .reads(
+                NUMBER,
+                format!("Octaves is a number from 1 to {MOST_OCTAVES}"),
+            ),
         // Either way turns it over.
         ArpField::Retrig => ParamView {
             wraps: true,
+            choices: [false, true]
+                .map(|retrig| Choice::named(on_off(retrig)).meaning(retrig_meaning(retrig)))
+                .to_vec(),
             ..of.switch(arpeggio.retrig, default.retrig)
         },
     };
@@ -1006,7 +1383,7 @@ fn gen_view(of: ParamView, generator: &Generator, context: &Context, param: GenP
         choices: choices
             .unwrap_or_default()
             .into_iter()
-            .map(|choice| Cow::Owned(choice.name()))
+            .map(|choice| Choice::named(choice.name()))
             .collect(),
         cell,
         text,
@@ -1152,17 +1529,11 @@ pub fn set(
             let mut modulator = track.mods[slot];
             match field {
                 ModField::Destination => {
-                    let mut places = vec![(None, false)];
-                    for destination in SettingId::for_mod(track, slot) {
-                        places.push((Some(destination), false));
-                        if destination == SettingId::PITCH {
-                            places.push((Some(destination), true));
-                        }
-                    }
-                    (modulator.destination, modulator.in_scale) = *places.get(index)?;
+                    (modulator.destination, modulator.in_scale) =
+                        *destinations(track, slot).get(index)?;
                 }
-                // A rate and a fade aren't one number.
-                ModField::Rate | ModField::Fade => return None,
+                // A rate isn't one number, and goes its own way.
+                ModField::Rate => return None,
                 _ => modulator.set_field(field, value),
             }
             Action::SetMod {
@@ -1303,7 +1674,6 @@ mod tests {
     use std::sync::Arc;
 
     use vt_model::action::edit;
-    use vt_model::lfo::Shape;
     use vt_model::song::TrackKind;
 
     use super::*;

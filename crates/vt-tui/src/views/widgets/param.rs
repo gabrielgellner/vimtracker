@@ -19,6 +19,8 @@ use crate::views::widgets::grid::{CellParts, CellWidths};
 use crate::views::widgets::setting::{self, CellLook, Focus, name_line, value_spans};
 use crate::views::widgets::toggle;
 
+pub mod edit;
+
 /// How wide a value's coarse digits are, before its fine ones, so what's typed in their place
 /// keeps the fine digits where they are.
 const COARSE_WIDTH: usize = 2;
