@@ -894,15 +894,22 @@ mod tests {
         assert!(acid.is_some_and(|heard| heard.renders > 0));
     }
 
+    /// The time in the middle of some, by length: what one of them takes when nothing else has the
+    /// machine, as a mean isn't once another test or a build takes the core for one of them.
+    fn middle(mut times: Vec<Duration>) -> Duration {
+        times.sort();
+        times[times.len() / 2]
+    }
+
     /// Play a song's first `rows` rows a step at a time, holding the `Acid`'s density at another
-    /// number before each if `moving`: how long the slowest step and all of them took, how many
+    /// number before each if `moving`: how long the slowest step and the middle one took, how many
     /// renders there were and how many allocations.
     fn steps_timed(song: &Song, rows: usize, moving: bool) -> (Duration, Duration, u32, usize) {
         let acid = acid_column(song);
         let mut engine = Engine::new(RATE, version(song));
         engine.play_from(0);
         let mut out = vec![0.0; step_frames(song) * 2];
-        let (mut worst, mut total, mut violations) = (Duration::ZERO, Duration::ZERO, 0);
+        let (mut times, mut violations) = (Vec::with_capacity(rows), 0);
         for row in 0..rows {
             // Never the written 50, so each row's is new.
             let density = if row % 2 == 0 { 10 } else { 90 } + (row % 7) as i32;
@@ -911,15 +918,15 @@ mod tests {
             }
             let started = Instant::now();
             let ((), count) = forbidden(|| engine.process(&mut out));
-            let took = started.elapsed();
-            (worst, total) = (worst.max(took), total + took);
+            times.push(started.elapsed());
             violations += count;
         }
         let renders = engine
             .generators_heard(0)
             .find(|heard| heard.column == acid)
             .map_or(0, |heard| heard.renders);
-        (worst, total, renders, violations)
+        let worst = times.iter().copied().max().unwrap_or_default();
+        (worst, middle(times), renders, violations)
     }
 
     fn step_frames(song: &Song) -> usize {
@@ -934,8 +941,8 @@ mod tests {
     fn a_4096_row_acid_rendered_every_row_keeps_up() {
         let song = song(MAX_PHRASE_STEPS);
         let rows = 64;
-        let (rest_worst, rest_total, rest_renders, _) = steps_timed(&song, rows, false);
-        let (worst, total, renders, violations) = steps_timed(&song, rows, true);
+        let (rest_worst, rest, rest_renders, _) = steps_timed(&song, rows, false);
+        let (worst, step, renders, violations) = steps_timed(&song, rows, true);
         // The render alone, as the engine runs it, over the same span.
         let phrase = &song.tracks[0].phrases[&0];
         let generator = &phrase.generators()[0];
@@ -943,38 +950,38 @@ mod tests {
         let span = generator.rows().unwrap();
         let mut cells = vec![GenCell::Under; span.len()];
         let mut shape = generator.shape;
-        let (mut render_worst, mut render_total) = (Duration::ZERO, Duration::ZERO);
+        let mut renders_timed = Vec::with_capacity(rows);
         for density in 0..rows as u8 {
             shape.acid.density = density;
             let started = Instant::now();
             render_into(&under, span, generator.column, &shape, None, &mut cells);
-            let took = started.elapsed();
-            (render_worst, render_total) = (render_worst.max(took), render_total + took);
+            renders_timed.push(started.elapsed());
         }
+        let render_worst = renders_timed.iter().copied().max().unwrap_or_default();
+        let render = middle(renders_timed);
         let frames = step_frames(&song);
         let real = Duration::from_secs_f64(frames as f64 / f64::from(RATE));
-        let mean = |total: Duration| total / rows as u32;
         println!(
-            "a {}-row Acid, {rows} rows, steps of {frames} frames ({real:?} of sound): at rest \
-             {:?} a step, {rest_worst:?} at worst; rendered every row ({renders} renders) {:?} a \
-             step, {worst:?} at worst; the render alone {:?}, {render_worst:?} at worst",
+            "a {}-row Acid, {rows} rows, steps of {frames} frames ({real:?} of sound), the middle \
+             time of each: at rest {rest:?} a step, {rest_worst:?} at worst; rendered every row \
+             ({renders} renders) {step:?} a step, {worst:?} at worst; the render alone \
+             {render:?}, {render_worst:?} at worst",
             span.len(),
-            mean(rest_total),
-            mean(total),
-            mean(render_total),
         );
         assert_eq!(violations, 0);
         assert_eq!(rest_renders, 0);
         assert!(renders as usize >= rows - 1, "{renders} renders");
-        // Held loosely, as other tests share the machine: in a release build the render is a
-        // sliver of a step, and a step that renders keeps well up with what it plays.
+        // In a release build the render is a sliver of a step, and a step that renders keeps well
+        // up with what it plays. It's the middle time of the 64 that's held to it, not their mean:
+        // other tests and builds share the machine, and one step left waiting for a core can cost
+        // more than the other 63 together, which a mean fails on and the middle doesn't notice,
+        // while a render or a step grown slow is slow in the middle too. A quiet machine has the
+        // render about 40 times inside its limit and the step about 10 times.
         if !cfg!(debug_assertions) {
-            let render = mean(render_total);
             assert!(
                 render < real / 20,
                 "{render:?} a render, for {real:?} of sound"
             );
-            let step = mean(total);
             assert!(step < real / 2, "{step:?} a step to make {real:?}");
         }
     }
@@ -1016,7 +1023,7 @@ mod tests {
         ];
         for (range, chosen) in cases {
             let ramp = shape(FillKind::Ramp, 36, 48, Where::Cells(chosen));
-            let times = 8;
+            let times = 9;
             let ((), count) = forbidden(|| {
                 render_into(
                     &steps,
@@ -1028,18 +1035,23 @@ mod tests {
                 );
             });
             assert_eq!(count, 0);
-            let started = Instant::now();
-            for _ in 0..times {
-                render_into(
-                    &steps,
-                    range,
-                    column,
-                    &ramp,
-                    None,
-                    &mut cells[..range.len()],
-                );
-            }
-            let render = started.elapsed() / times;
+            // Each timed on its own and the middle one held to the limit, as the `Acid`'s are, so
+            // one left waiting for a core on a busy machine doesn't count.
+            let timed = (0..times)
+                .map(|_| {
+                    let started = Instant::now();
+                    render_into(
+                        &steps,
+                        range,
+                        column,
+                        &ramp,
+                        None,
+                        &mut cells[..range.len()],
+                    );
+                    started.elapsed()
+                })
+                .collect();
+            let render = middle(timed);
             println!("{chosen:?} over {} rows: {render:?} a render", range.len());
             assert!(
                 cells[..range.len()]
