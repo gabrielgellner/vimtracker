@@ -64,14 +64,12 @@ What's left:
 - **The `GenParam` macro** (#809's item 6). `GenParam`'s 99 settings are still listed three times:
   the enum, `ALL` and `GEN_PARAMS`. One macro would write them from one list; it's deferred until a
   generator is next added.
-- **For the user to decide:**
-  - #809 item 2's step 5: one Hermite form instead of two (three, with the rotary's), and
-    `DcBlocker` in the flanger and chorus. It's inaudible but re-blesses `grains-*`, `rotary*`,
-    `chorus-*` and some delay, echo and Clouds goldens.
-  - The Roto's Source choices (#784): `with_live` passes no follow sources, so a Follow
-    generator's Source has no choices on the Roto. Unifying the two resolvers would change that.
-  - Whether `vt_model::convert`, the format 10 to 11 converter behind `convert-nudges`, can go
-    (#809 item 9).
+- **Decided by the user, 2026-11-15:**
+  - #809 item 2's step 5 (one Hermite form, a shared `DcBlocker`) is **declined**: share DSP only
+    where it's bit-identical, and keep the variants the sound needs.
+  - The Roto's Source choices stay off the Roto for now: `with_live` still passes no follow
+    sources, on purpose.
+  - `vt_model::convert` and `convert-nudges` are removed (#822).
 
 ## 0. The answer in brief
 
