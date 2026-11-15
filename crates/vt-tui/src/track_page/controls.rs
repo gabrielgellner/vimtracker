@@ -94,29 +94,6 @@ pub enum Control {
     Macro(usize),
 }
 
-/// Where a mod slot's field is among the registry's entries for its type's own settings, if it's
-/// one of them.
-fn own_place(field: ModField) -> Option<usize> {
-    Some(match field {
-        ModField::Attack => 0,
-        ModField::Decay => 1,
-        ModField::Sustain => 2,
-        ModField::Release => 3,
-        ModField::Body => 4,
-        ModField::Colour => 5,
-        ModField::Length => 6,
-        ModField::Mutate => 7,
-        ModField::Smooth => 8,
-        ModField::Rate => 9,
-        _ => return None,
-    })
-}
-
-/// The macros' names in the band before they're named.
-const MACRO_LABELS: [&str; MACROS] = [
-    "Macro 1", "Macro 2", "Macro 3", "Macro 4", "Macro 5", "Macro 6", "Macro 7", "Macro 8",
-];
-
 pub(super) const fn base(control: TrackControl) -> Control {
     Control::Base(control)
 }
@@ -158,36 +135,7 @@ impl Control {
             Self::Level => "Level",
             Self::Trim => "Trim",
             Self::Groove => "Groove",
-            Self::Mod(_, field) => match field {
-                ModField::Type => "Type",
-                ModField::Mode => "Mode",
-                ModField::Polarity => "Polarity",
-                ModField::Destination => "Dest",
-                ModField::Depth => "Depth",
-                ModField::Attack => "Attack",
-                ModField::Decay => "Decay",
-                ModField::Sustain => "Sustain",
-                ModField::Release => "Release",
-                ModField::Reset => "Reset",
-                ModField::Hold => "Hold",
-                ModField::Peak => "Peak",
-                ModField::Body => "Body",
-                ModField::Ratchet => "Ratchet",
-                ModField::Colour => "Colour",
-                ModField::Shape => "Shape",
-                ModField::Rate => "Rate",
-                ModField::Phase => "Phase",
-                ModField::Deform => "Deform",
-                ModField::Fade => "Fade",
-                ModField::Length => "Length",
-                ModField::Start => "Start",
-                ModField::Loop => "Loop",
-                ModField::Mutate => "Mutate",
-                ModField::Smooth => "Smooth",
-                ModField::Step(_) => "Step",
-                ModField::Low => "Low",
-                ModField::High => "High",
-            },
+            Self::Mod(_, field) => field.name(),
             Self::Accumulator(AccumulatorField::Up) => "Up",
             Self::Accumulator(AccumulatorField::Down) => "Down",
             Self::Accumulator(AccumulatorField::Moves) => "Moves",
@@ -200,7 +148,10 @@ impl Control {
             Self::Arpeggio(ArpField::Retrig) => "Retrig",
             Self::Insert(_) => "Effect",
             Self::InsertParam(..) => "Setting",
-            Self::Macro(at) => MACRO_LABELS[at.min(MACROS - 1)],
+            // As the registry names it until it's named.
+            Self::Macro(at) => {
+                SettingId::macro_at(at.min(MACROS - 1)).map_or("Macro", SettingId::name)
+            }
             Self::Gen { param, .. } => param.name(),
             Self::NewGenerator(_) => "Empty",
         }
@@ -245,33 +196,19 @@ impl Control {
             Self::Setting(_) => self
                 .setting_on(track)
                 .and_then(|id| base(id, track.setting(id))),
-            Self::Mod(slot, ModField::Depth) => Some((
-                SettingId::modulator(slot, 0)?,
-                depth_value(track.mods[slot].depth),
-            )),
-            Self::Mod(slot, ModField::Phase) => Some((
-                SettingId::modulator(slot, 1)?,
-                phase_value(track.mods[slot].lfo.phase),
-            )),
-            Self::Mod(slot, ModField::Deform) => Some((
-                SettingId::modulator(slot, 3)?,
-                depth_value(track.mods[slot].lfo.deform),
-            )),
-            Self::Mod(slot, ModField::Polarity) => Some((
-                SettingId::modulator(slot, 2)?,
-                u16::from(track.mods[slot].polarity().index()) << 8,
-            )),
-            Self::Level => base(SettingId::LEVEL, track.level),
-            Self::Base(TrackControl::Cutoff) => base(SettingId::CUT, track.cutoff),
-            Self::Base(TrackControl::Resonance) => base(SettingId::RES, track.resonance),
-            Self::Base(TrackControl::Pan) => base(SettingId::PAN, track.pan),
-            Self::Base(TrackControl::SendA) => base(SettingId::SEND_A, track.send_a),
-            Self::Base(TrackControl::SendB) => base(SettingId::SEND_B, track.send_b),
-            Self::Base(TrackControl::Pitch) => base(SettingId::PITCH, track.pitch),
-            Self::Base(TrackControl::VelocityDelta) => {
-                base(SettingId::VELOCITY_DELTA, track.velocity_delta)
+            // The slot's settings that steps can lock, whatever its type.
+            Self::Mod(slot, field) if field.locked().is_some() => {
+                let modulator = &track.mods[slot];
+                let value = match field {
+                    ModField::Depth => depth_value(modulator.depth),
+                    ModField::Phase => phase_value(modulator.lfo.phase),
+                    ModField::Deform => depth_value(modulator.lfo.deform),
+                    _ => u16::from(modulator.polarity().index()) << 8,
+                };
+                Some((field.setting(slot)?, value))
             }
-            Self::Base(TrackControl::Quantise) => base(SettingId::QUANTISE, track.quantise),
+            Self::Level => base(SettingId::LEVEL, track.level),
+            Self::Base(which) => base(which.setting()?, track.control(which)),
             Self::GateLength => Some((SettingId::GATE_LENGTH, u16::from(track.gate_length()) << 8)),
             Self::Speed => Some((SettingId::SPEED, u16::from(track.speed.index()) << 8)),
             Self::Glide => Some((SettingId::GLIDE, u16::from(track.glide) << 8)),
@@ -299,7 +236,7 @@ impl Control {
         }
         match self {
             Self::Mod(slot, field) => {
-                let id = SettingId::mod_own(slot, own_place(field)?)?;
+                let id = SettingId::mod_own(slot, field.own()?)?;
                 id.exists_on(track).then_some(id)
             }
             Self::Accumulator(field) => {

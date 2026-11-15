@@ -1,4 +1,4 @@
-//! The slot effects that aren't filters or dynamics, and what plays a slot: [`distort`] keeps a
+//! The slot effects that aren't filters or dynamics, and what plays a slot: [`slot`] keeps a
 //! slot's state and plays whichever effect it has, and [`memory`] keeps the long buffers some
 //! effects take. The table Warps reads is in `effects/tables/`.
 
@@ -20,6 +20,7 @@ pub mod plate;
 pub mod resonator;
 pub mod reverb;
 pub mod rotary;
+pub mod slot;
 pub mod space;
 pub mod spring;
 pub mod stutter;

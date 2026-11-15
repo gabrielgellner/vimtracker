@@ -31,7 +31,7 @@ impl TrackPage {
     /// page's slots or its zoomed one, or the Gen page's previews. Each shows what's playing, as a
     /// value's bar does, and is drawn from the settings it shows, so it's sent again only when
     /// they change.
-    pub(crate) fn panels(&self, ctx: &Ctx) -> Vec<PanelWant> {
+    pub(crate) fn pictures(&self, ctx: &Ctx) -> Vec<PanelWant> {
         let Some(track) = ctx.track_here() else {
             return Vec::new();
         };

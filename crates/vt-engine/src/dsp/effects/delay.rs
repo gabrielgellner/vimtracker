@@ -807,9 +807,9 @@ mod tests {
     }
 
     /// A slot holding a delay at 120 BPM, settled, as the engine has one.
-    fn slot(settings: Settings) -> crate::dsp::effects::distort::InsertState {
-        use crate::dsp::effects::distort::InsertState;
+    fn slot(settings: Settings) -> crate::dsp::effects::slot::InsertState {
         use crate::dsp::effects::memory::{MemoryPool, SongPlace};
+        use crate::dsp::effects::slot::InsertState;
         use vt_model::insert::Insert;
         let insert = Insert::Delay(settings);
         let mut song = vt_model::song::Song::new(1);
@@ -827,7 +827,7 @@ mod tests {
 
     /// What a slot gives for `input`, then silence, until this many frames.
     fn through_slot(settings: Settings, input: &[f32], frames: usize) -> Vec<[f32; 2]> {
-        let keys = crate::track_state::Keys::default();
+        let keys = crate::dsp::effects::slot::Keys::default();
         let mut state = slot(settings);
         (0..frames)
             .map(|at| {
