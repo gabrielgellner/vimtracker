@@ -222,6 +222,7 @@ impl App {
             None => (None, std::env::temp_dir().join("vimtracker-recordings")),
         };
         let name = self
+            .services
             .names
             .fresh(|name| files.join(format!("{name}.wav")).exists());
         let file = files.join(format!("{name}.wav"));

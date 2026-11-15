@@ -91,7 +91,7 @@ impl App {
         if self.modes.view == View::Project {
             let entry = &mut self.modes.entry;
             let page = &mut self.project_page;
-            if let Some(outcome) = page.insert(key, entry, &mut self.names, &mut self.services) {
+            if let Some(outcome) = page.insert(key, entry, &mut self.services) {
                 self.modes.mode = Mode::Normal;
                 self.settled(outcome, false);
             }

@@ -926,3 +926,13 @@ Guide	G	InGuide(Bottom)	The bottom
 Guide	?	InGuide(Guides)	The list of guides
 Guide	q	InGuide(Close)	Close
 Guide	Esc	InGuide(Close)	Close
+Command	Enter	InCommand(Run)	Run the line, or put in the highlighted match
+Command	Esc	InCommand(Close)	Close, or close the list of matches
+Command	Tab	InCommand(Complete)	Complete the word, or the next match
+Command	S-Tab	InCommand(CompleteBack)	Complete the word, or the match before
+Command	Up	InCommand(Older)	An older line starting with what's typed, or the match before
+Command	Down	InCommand(Newer)	A newer line, or the next match
+Command	C-n	InCommand(NextMatch)	In the list of matches: the next
+Command	C-p	InCommand(PreviousMatch)	In the list of matches: the one before
+Command	Backspace	InCommand(Erase)	Erase a character, or close once the line is empty
+Command	C-r	InCommand(RollName)	On a name line: another random name

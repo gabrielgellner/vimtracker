@@ -34,6 +34,7 @@ use vt_model::action::{Action, edit, rescale_generators};
 use vt_model::constants::{DEFAULT_NOTE_VELOCITY, FX_SLOTS, MAX_TRACKS, TICKS_PER_STEP};
 use vt_model::history::History;
 use vt_model::lane::Heard;
+use vt_model::names::Names;
 use vt_model::order::Dealer;
 use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
@@ -69,6 +70,8 @@ pub struct Services {
     pub settings: Settings,
     /// The Roto-Control: whether it's on, the link to it, and what it shows.
     pub roto: crate::roto::Roto,
+    /// Makes the random names that name lines start with and `C-r` rolls, seeded from the clock.
+    pub(crate) names: Names,
     pub handle: Handle,
     pub rate: u32,
     /// The version last sent to the audio thread, whose bank entries the next keeps where they're
@@ -210,13 +213,15 @@ impl Live {
 }
 
 impl Services {
-    /// Start with a song, its project folder if it has one, and a connection to the engine.
+    /// Start with a song, its project folder if it has one, a connection to the engine, and what
+    /// makes random names.
     pub(crate) fn new(
         song: Song,
         folder: Option<PathBuf>,
         samples: Arc<SamplePool>,
         handle: Handle,
         rate: u32,
+        names: Names,
     ) -> Self {
         let live = Live::from_song(&song);
         let folds = Folds::from_view(&song.view);
@@ -237,6 +242,7 @@ impl Services {
             analyst: Analyst::new(None),
             settings: Settings::none(),
             roto: crate::roto::Roto::default(),
+            names,
             handle,
             rate,
             published: None,
