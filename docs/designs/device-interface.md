@@ -60,6 +60,19 @@ Each of #809's steps is bit-identical: the goldens didn't change, in debug or re
 difference is a NaN's: the kick's and the six-op's soft clip took the drums' NaN-safe form, so a
 NaN gives a value at the end of the range instead of passing on.
 
+**Review 6's one descriptor (#873).** §0's one parameter type, which §2.3 sketched and decision
+339 stopped short of, is `vt_model::param::Descriptor`: the value-free part of `ParamView`, which
+each family produces itself, with one `Reading` for how a value shows. Steps, each one PR:
+
+| Step | Family | Built in |
+|---|---|---|
+| 1, the dump of every view (`vt-tui/tests/golden/views.txt`) | | #897 |
+| 2, `Descriptor`, `Reading`, and `Steps`, `Pace`, `Reads`, `Choice` and `Typing` in the model | the shared constructors | (this PR; numbered by the next) |
+| 3, `insert::Param` folded into `Entry`; `Entry::described` | track, voices, effects | |
+| 4, `ModSlot::described`; `ModUnits` goes | mod slots | |
+| 5, `GenParam::described`; the generators' `Units` goes | generators | |
+| 6, the `GenParam` tables from one list | | |
+
 What's left:
 - **The `GenParam` macro** (#809's item 6). `GenParam`'s 99 settings are still listed three times:
   the enum, `ALL` and `GEN_PARAMS`. One macro would write them from one list; it's deferred until a

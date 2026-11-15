@@ -1124,12 +1124,17 @@ entry, and `generators.rs`, which works through the live generators' sources and
     and the Roto's value text read the view. It's vt-tui's, not the model's, as it's resolved from
     `Control`, from a live generator, and by the scale lock the program keeps outside the song;
     what it holds is description only, with nothing of the cursor, the modes or the report.
-    `Ctx::param_view` resolves one with the program's scale.
+    `Ctx::param_view` resolves one with the program's scale. The value-free part of a view is
+    the model's `Descriptor` (`vt-model/src/param.rs`, #873): its names, bounds, default, steps
+    and `Pace`, whether it wraps or is centred, its `Choice`s, its `Typing` and `Reads`, and a
+    `Reading` that says how a value shows; `ParamView::described` fills a view from one at a
+    value, and the page's small builders (`hex`, `listed`, `switch`, `whole`) are its
+    constructors.
 *   **Each setting edited one way** (`widgets/param/edit.rs`, the UI plan's U8, #739). Pure
     functions over the `ParamView` say where a key takes a value: `stepped` for `=` `-` `+` `_`
     and a count, by the view's `pace` where a step depends on the value, so a count moves a list
     that many choices; `stepped_fine` on the fine digits; `typed` for `i`'s text, by the view's
-    `reads` and its `why_not`; `reset` for `x`; and `choices` for `K`'s list, which
+    `reads` and its `why_not` (`Reads::parse`, the model's); `reset` for `x`; and `choices` for `K`'s list, which
     `pickers::choice_picker` opens, each item a `Pick::Param` that `set` writes. A Roto knob's
     turn (`roto/edits.rs`) finds its value in the same view, `edit::shared` and `edit::at_place`,
     and writes it with `set`. `editing.rs`, `typing.rs` and `pickers.rs` keep their own arms only

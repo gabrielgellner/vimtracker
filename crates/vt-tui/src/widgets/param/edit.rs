@@ -3,9 +3,9 @@
 //! only the [`ParamView`], so they know no device and no track: the page writes what they give back
 //! with `controls::set`, the one way every described setting is written.
 
-use vt_model::step::Note;
+use vt_model::param::kept;
 
-use crate::controls::param::{Choice, ParamView, Reads, Steps};
+use crate::controls::param::{Choice, ParamView, Steps};
 
 /// How many small steps of a fine part a large one is.
 const FINE_JUMP: i64 = 0x10;
@@ -50,12 +50,7 @@ pub(crate) fn stepped(view: &ParamView, up: bool, large: bool, count: usize) -> 
 
 /// A value kept within a view's bounds, or taken round them where it goes `round`.
 fn within(view: &ParamView, value: i64, round: bool) -> i32 {
-    let (low, high) = (i64::from(view.bounds.0), i64::from(view.bounds.1));
-    let kept = match round && high > low {
-        true => low + (value - low).rem_euclid(high - low + 1),
-        false => value.clamp(low, high),
-    };
-    kept as i32
+    kept(value, view.bounds, round)
 }
 
 /// Where `=`, `-`, `+` and `_` take a value with a fine part, on its fine digits: the fine byte
@@ -72,82 +67,7 @@ pub(crate) fn stepped_fine(view: &ParamView, up: bool, large: bool, count: usize
 /// What `i`'s text sets a value to, as the view reads it, or why not, for the status line. A
 /// value that only hex digits are typed into, which can't be wrong, says nothing.
 pub(crate) fn typed(view: &ParamView, text: &str) -> Result<i32, String> {
-    let (low, high) = view.bounds;
-    let refused = || view.why_not.clone().into_owned();
-    let kept = |value: Option<i32>, lowest: i32| {
-        value
-            .filter(|value| (lowest..=high).contains(value))
-            .ok_or_else(refused)
-    };
-    match view.reads {
-        Reads::No => Err(String::new()),
-        Reads::Hex { shift } => u8::from_str_radix(text, 16)
-            .map(|byte| (i32::from(byte) << shift).clamp(low, high))
-            .map_err(|_| String::new()),
-        Reads::HexWithin { signed } => {
-            let (sign, digits) = match text.strip_prefix('-') {
-                Some(digits) if signed => (-1, digits),
-                _ if signed => (1, text.strip_prefix('+').unwrap_or(text)),
-                _ => (1, text.trim()),
-            };
-            let magnitude = u32::from_str_radix(digits, 16).ok();
-            let value = magnitude.and_then(|magnitude| i32::try_from(magnitude).ok());
-            kept(value.map(|value| sign * value), low)
-        }
-        Reads::Number {
-            before,
-            after,
-            off,
-            from_one,
-        } => {
-            let text = text.trim();
-            if off && text.eq_ignore_ascii_case("off") {
-                return Ok(low);
-            }
-            let digits = match before {
-                Some(letter) => text
-                    .trim_start_matches([letter.to_ascii_uppercase(), letter.to_ascii_lowercase()]),
-                None => text,
-            };
-            let digits = match after.is_empty() {
-                true => digits,
-                false => digits.trim_end_matches(after).trim(),
-            };
-            let number = digits.parse::<i32>().ok();
-            let number = number.map(|number| if from_one { number - 1 } else { number });
-            // A number starts above `off`.
-            kept(number, if off { low + 1 } else { low })
-        }
-        Reads::Glide => {
-            let text = text.trim();
-            if text.eq_ignore_ascii_case("off") {
-                return Ok(0);
-            }
-            let ms = text.trim_end_matches("ms").trim().parse::<f32>().ok();
-            ms.filter(|ms| (0.0..=vt_model::settings::LONGEST_GLIDE_MS).contains(ms))
-                .map(|ms| i32::from(vt_model::settings::glide_value(ms)))
-                .ok_or_else(refused)
-        }
-        Reads::Reset => vt_model::song::reset_named(text)
-            .map(|reset| reset.map_or(0, i32::from))
-            .ok_or_else(refused),
-        // `Note` is below no time.
-        Reads::Hold => {
-            let text = text.trim();
-            if text.eq_ignore_ascii_case("note") {
-                return Ok(-1);
-            }
-            let ms = text.trim_end_matches("ms").trim().parse::<i32>().ok();
-            kept(ms, 0)
-        }
-        Reads::Note => {
-            let midi = match text.trim().parse::<Note>() {
-                Ok(Note::On(midi)) => Some(i32::from(midi)),
-                _ => None,
-            };
-            kept(midi, low)
-        }
-    }
+    view.reads.parse(text, view.bounds, &view.why_not)
 }
 
 /// The value a knob on its `step`th place puts it at, counted from its lowest.
