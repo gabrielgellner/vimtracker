@@ -168,7 +168,7 @@ the section the cursor is on, and `Sec 2/4` on the status line says which.
 | `V` | Select sections, for `:loop`. `V` again or `Esc` ends it |
 
 `z a` folds a group's tracks into its column, `z M` folds every group and `z R`
-opens them: see **Folding a group** in **The track page, envelopes and LFOs**.
+opens them: see **Folding a group** in **The Sound page, output and groups**.
 
 Sections play in order, and the song goes round to the first at the end. A
 section lasts as long as its longest chain unless you set its length, which
