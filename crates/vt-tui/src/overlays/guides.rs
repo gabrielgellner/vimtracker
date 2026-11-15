@@ -8,9 +8,9 @@ pub(crate) mod draw;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
+use crate::controls::Page;
 use crate::input::mode::View;
 use crate::overlays::picker::{Item, Pick, Picker};
-use crate::pages::track::Page;
 use crate::widgets::theme;
 
 /// One guide. Its title is its first heading.

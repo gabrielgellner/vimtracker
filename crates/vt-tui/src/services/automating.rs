@@ -15,7 +15,7 @@ use vt_model::settings::{FADER_COUNT, FADERS, SettingId};
 use vt_model::song::Track;
 
 use crate::app::App;
-use crate::pages::track::Control;
+use crate::controls::Control;
 use crate::services::Services;
 
 /// How long a takeover or a giving back asked for is shown before the engine says so, after which

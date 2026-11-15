@@ -15,10 +15,11 @@ use vt_model::settings::SettingId;
 use vt_model::song::{Track, TrackKind};
 use vt_model::steps::{Loop, StepRate, Steps, StepsMode};
 use vt_tui::app::App;
+use vt_tui::controls::{AccumulatorField, ArpField, Control, Page};
 use vt_tui::graphics::{DEFAULT_CELL, Graphics, dot_pixels};
 use vt_tui::input::bindings::Cmd;
 use vt_tui::input::mode::Mode;
-use vt_tui::pages::track::{AccumulatorField, ArpField, Control, DeviceCursor, Page, TrackPage};
+use vt_tui::pages::track::{DeviceCursor, TrackPage};
 use vt_tui::screenshot::sent_placements;
 
 /// How many LFOs a new track's slots have, its last three.

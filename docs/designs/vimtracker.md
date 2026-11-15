@@ -1064,12 +1064,17 @@ mixer shares, as it turns the same controls: `editing.rs` (`=`, `-`, the fine di
 `App`'s: `pickers.rs` (`K`), which opens the program's picker, typing's keys into `App::modes`'
 entry, and `generators.rs`, which works through the live generators' sources and the shape panel.
 
-*   **Each page's settings in its own file:** `sound.rs` has the Sound page's devices on a sound
-    track and the fixed tracks' Outputs, `modulation.rs` the Mod page's devices, and
-    `fx.rs` the slots; `controls.rs` has `Control`, what each setting is called and holds on a
-    track.
-*   **Each setting resolved once** (`view.rs`, the UI plan's U7, #739). `view(control, track,
-    song, scale)` gives a `ParamView` (`widgets/param/view.rs`): its value within its bounds, its fine byte, its default,
+*   **What's on each page is `controls/`'s**, a module beside `pages` and `roto` with no ratatui
+    in it, as the mixer, the status line, automation and the Roto read it too (#870), so the
+    track page and the Roto depend on it and not on each other. `controls/devices/` has each
+    page's devices in a file of its own: `sound.rs` the Sound page's on a sound track and the
+    fixed tracks' Outputs, `modulation.rs` the Mod page's, `fx.rs` the slots and `generators.rs`
+    the Gen page's; `controls/control.rs` has `Control`, what each setting is called and holds on
+    a track, `controls/keys.rs` the key the Roto's layouts name it by, and `controls/tuning.rs`
+    what `Tune` and `Cents` are of.
+*   **Each setting resolved once** (`controls/view.rs`, the UI plan's U7, #739). `view(control,
+    track, song, scale)` gives a `ParamView` (`controls/param.rs`): its value within its bounds,
+    its fine byte, its default,
     its `nudge` and `jump` up and down from where it is (an envelope's time steps by 1 ms below
     10 ms and 5 ms from it, so `-` from 10 ms is 9 ms), whether it wraps, its bar, whether it's a
     switch, its choices and whether `K` numbers them, its cell's text, the status line's text

@@ -57,7 +57,7 @@ use vt_roto::store::{self, Serial, Synced, Versions};
 use vt_roto::sysex::{CONTROLS, ControlType, FromRoto, SwitchMode, ToRoto, TransportStatus};
 use vt_roto::transport::{LinkError, Ports, SerialLink, SystemPorts};
 
-use crate::pages::track::Control;
+use crate::controls::Control;
 
 use crate::app::{App, TrackLive};
 use crate::input::mode::View;

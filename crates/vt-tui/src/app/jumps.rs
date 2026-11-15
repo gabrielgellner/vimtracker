@@ -2,8 +2,8 @@
 //! `''`, back to where the latest jump left from.
 
 use crate::app::{App, Cursor};
+use crate::controls::Page;
 use crate::input::mode::View;
-use crate::pages::track::Page;
 
 /// How many places the jump list remembers.
 const JUMP_LIMIT: usize = 100;

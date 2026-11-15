@@ -185,7 +185,7 @@ fn the_mixers_mute_and_solo_reach_the_engine() {
 /// settings as they do from any other page.
 #[test]
 fn the_mixers_keys_work_while_the_track_page_is_left_on_gen() {
-    use vt_tui::pages::track::Page;
+    use vt_tui::controls::Page;
     let (mut app, _realtime) = app();
     press(&mut app, " 5LLL");
     assert_eq!(app.track_page.page, Page::Gen);
@@ -561,7 +561,7 @@ fn jump_back(app: &mut App) {
 #[test]
 fn gd_on_a_fader_a_macro_holds_goes_to_its_macro_and_c_o_comes_back() {
     use vt_model::settings::SettingId;
-    use vt_tui::pages::track::{Control, Page};
+    use vt_tui::controls::{Control, Page};
     use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = held_by(SettingId::PAN, &[2]);
     press(&mut app, " 4j");
@@ -582,7 +582,7 @@ fn gd_on_a_fader_a_macro_holds_goes_to_its_macro_and_c_o_comes_back() {
 #[test]
 fn gd_on_a_fader_two_macros_hold_lists_them_and_on_one_none_holds_says_so() {
     use vt_model::settings::SettingId;
-    use vt_tui::pages::track::Control;
+    use vt_tui::controls::Control;
     let (mut app, _realtime) = held_by(SettingId::LEVEL, &[0, 4]);
     press(&mut app, " 4gd");
     assert_eq!(app.modes.mode, Mode::Picker);

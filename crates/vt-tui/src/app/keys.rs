@@ -8,6 +8,7 @@ use vt_engine::link::Command;
 use vt_model::constants::MAX_PHRASE_STEPS;
 use vt_model::step::{HIGHEST_OCTAVE, LOWEST_OCTAVE, MAX_NOTE, MIN_NOTE, octave_start};
 
+use crate::controls::Page;
 use crate::input::bindings::{Binding, Cmd, Resolved, adjusting_key, degree_key, note_key};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
@@ -15,7 +16,6 @@ use crate::overlays::guides;
 use crate::overlays::picker::{Item, Pick, Picker};
 use crate::pages::sample::SampleKey;
 use crate::pages::sample::marking::MarkWait;
-use crate::pages::track::Page;
 
 use super::accent_slide::{HeldFlag, Moved, Written};
 use super::{App, Entry, HOLD_TIME, KEYS_NOTES, Momentary, which_key_due};

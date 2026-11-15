@@ -12,7 +12,7 @@ use vt_model::song::{Phrase, Song};
 use vt_model::speed::Speed;
 use vt_model::step::Step;
 use vt_tui::app::App;
-use vt_tui::pages::track::Page;
+use vt_tui::controls::Page;
 
 use crate::common::*;
 

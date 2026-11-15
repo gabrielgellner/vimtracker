@@ -3,10 +3,10 @@
 use std::time::Instant;
 
 use ratatui::crossterm::event::KeyCode;
+use vt_tui::controls::Page;
 use vt_tui::input::keys::parse_sequence;
 use vt_tui::input::mode::{Mode, View};
 use vt_tui::overlays::picker::Pick;
-use vt_tui::pages::track::Page;
 
 use crate::common::*;
 

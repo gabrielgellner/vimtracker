@@ -4,7 +4,7 @@
 use vt_model::action::TrackControl;
 use vt_model::constants::FX_SLOTS;
 use vt_model::lfo::phase_value;
-use vt_model::macros::MACROS;
+use vt_model::macros::{MACROS, Macro};
 use vt_model::modulation::ModField;
 use vt_model::modulation::depth_value;
 use vt_model::settings::SettingId;
@@ -124,7 +124,7 @@ pub enum Control {
     Lane(usize, LaneField),
 }
 
-pub(super) const fn base(control: TrackControl) -> Control {
+pub(crate) const fn base(control: TrackControl) -> Control {
     Control::Base(control)
 }
 
@@ -370,7 +370,7 @@ impl Control {
     }
 
     /// Whether this is two hex digits, entered as soon as the second is typed.
-    pub(super) fn is_hex(self) -> bool {
+    pub(crate) fn is_hex(self) -> bool {
         matches!(
             self,
             Self::Base(_)
@@ -383,7 +383,7 @@ impl Control {
     }
 
     /// Whether this is picked from a list rather than typed, on this track.
-    pub(super) fn is_choice(self, track: &Track) -> bool {
+    pub(crate) fn is_choice(self, track: &Track) -> bool {
         if let Self::InsertParam(slot, param) = self {
             return track.inserts[slot]
                 .params()
@@ -427,6 +427,13 @@ impl Control {
 }
 
 /// What the status line says for `Mode` on a type that has none.
-pub(super) fn no_modes(filter: FilterType) -> String {
+pub(crate) fn no_modes(filter: FilterType) -> String {
     format!("{} has no modes", filter.name())
+}
+
+/// A macro's name as the band and the lists show it: its own or its first mapping's, or
+/// `Macro 3` while it holds nothing.
+pub(crate) fn macro_name(held: &Macro, at: usize) -> String {
+    held.shown_name()
+        .unwrap_or_else(|| format!("Macro {}", at + 1))
 }

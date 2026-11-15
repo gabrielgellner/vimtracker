@@ -2,6 +2,8 @@
 //!
 //! - [`app`]: `App`, the program's state, and what spans its pages: key dispatch, the modes, held
 //!   keys, the jump list and the `:` runner.
+//! - [`controls`]: a track's settings as the program addresses and describes them, which the pages
+//!   and the Roto both read.
 //! - [`pages`]: each page as a component, with its keys, its edits and its drawing.
 //! - [`overlays`]: what's drawn over a page and takes its keys: the picker, the `:` line, the
 //!   guides and keys, the shape panel, a macro's mapping and `/`'s field jump.
@@ -17,6 +19,7 @@
 #![warn(clippy::float_cmp, clippy::match_same_arms, clippy::redundant_clone)]
 
 pub mod app;
+pub mod controls;
 pub mod graphics;
 pub mod input;
 pub mod offline;
