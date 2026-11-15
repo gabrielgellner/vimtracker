@@ -24,6 +24,7 @@ mod gate_length;
 mod gates;
 mod generators;
 mod glide;
+mod goldens;
 mod grid_mutes;
 mod groove;
 mod groups;

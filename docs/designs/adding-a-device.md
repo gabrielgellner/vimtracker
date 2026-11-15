@@ -24,7 +24,8 @@ is shaped this way is in [device-interface.md](device-interface.md); the
   as it is.
 - **The engine's goldens** (`vt-engine/tests/golden/*.hash`): a new device gets one of its own,
   written with `VT_BLESS=1` (see vt-engine's `tests/all/exciter.rs`). Those already there stay
-  unchanged.
+  unchanged. `tests/all/goldens.rs` renders every effect and voice that no other file pins, and its
+  `every_effect_and_every_voice_has_a_golden` fails while one has none.
 - **`just screenshots`** gives no diff unless a screenshot lists every device of the family.
 - **`cargo test --workspace --release`**, as for any engine change, runs the real-time guard over
   every effect (`link.rs`'s `every_effect_never_allocates_in_the_callback`).
@@ -74,7 +75,9 @@ is shaped this way is in [device-interface.md](device-interface.md); the
    `every_effect_its_types_and_its_settings_are_in_the_fx_page_guide` fails until they're there.
 
 **Pins:** `effects.txt` and `inserts.txt` gain a line, and `settings.txt` gains its settings in each
-slot. One new Roto pin. A golden render of its own. The release tests.
+slot. One new Roto pin. A golden render of its own: its settings moved from their defaults in
+`goldens.rs`'s `moved`, which renders it as `effect-<key>` and `effect-<key>-moved`, or a file of
+its own named in `effect_golden`. The release tests.
 
 ## A voice
 
@@ -97,8 +100,10 @@ slot. One new Roto pin. A golden render of its own. The release tests.
    `every_machine_and_its_settings_are_in_the_sounds_guide` fails until they're there.
 
 **Pins:** `machines.txt` gains a line, and `settings.txt` its settings, with every place after them
-moving. One new Roto pin. The engine's `synth.rs`, `tails.rs` and `glide.rs` play every voice; give
-it a golden render if it has a character to keep, as `supersaw.rs` and `four_op.rs` do.
+moving. One new Roto pin. The engine's `synth.rs`, `tails.rs` and `glide.rs` play every voice.
+`goldens.rs` renders a new one as `voice-<key>` with nothing more to write; one with a character to
+keep can have a file of its own instead, as `supersaw.rs` and `four_op.rs` do, named in
+`voice_golden`.
 
 ## A generator (a fill)
 
