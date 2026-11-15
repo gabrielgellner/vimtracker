@@ -25,6 +25,8 @@ use crate::dsp::blocks::clip::soft_clip;
 use crate::dsp::blocks::plaits_parts::Svf;
 use crate::dsp::voices::SynthEngine;
 use crate::rng::Pcg32;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 #[inline]
 fn semitones(interval: f32) -> f32 {
@@ -92,13 +94,14 @@ impl SynthEngine for Snare {
 
 impl Snare {
     fn render(&mut self, f0: f32, settings: Settings) {
-        let Settings {
-            harmonics: snappy,
-            timbre: tone,
-            morph: decay,
-            accent,
-            ..
-        } = settings;
+        const SNAPPY: usize = voice_place(SynthVoice::Snare, "snappy");
+        const TONE: usize = voice_place(SynthVoice::Snare, "tone");
+        const DECAY: usize = voice_place(SynthVoice::Snare, "decay");
+        const ACCENT: usize = voice_place(SynthVoice::Snare, "accent");
+        let snappy = settings.at(SNAPPY);
+        let tone = settings.at(TONE);
+        let decay = settings.at(DECAY);
+        let accent = settings.at(ACCENT);
         if !self.struck {
             self.pulse_height = 3.0 + 7.0 * accent;
             self.struck = true;
@@ -229,13 +232,14 @@ impl SynthEngine for Hat {
 
 impl Hat {
     fn render(&mut self, f0: f32, settings: Settings) {
-        let Settings {
-            harmonics: noisiness,
-            timbre: tone,
-            morph: decay,
-            accent,
-            ..
-        } = settings;
+        const NOISE: usize = voice_place(SynthVoice::Hat, "noise");
+        const TONE: usize = voice_place(SynthVoice::Hat, "tone");
+        const DECAY: usize = voice_place(SynthVoice::Hat, "decay");
+        const ACCENT: usize = voice_place(SynthVoice::Hat, "accent");
+        let noisiness = settings.at(NOISE);
+        let tone = settings.at(TONE);
+        let decay = settings.at(DECAY);
+        let accent = settings.at(ACCENT);
         let envelope_decay = 1.0 - 0.003 * semitones(-decay * 84.0);
         if self.fresh {
             self.envelope = (1.5 + 0.5 * (1.0 - decay)) * (0.3 + 0.7 * accent);

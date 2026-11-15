@@ -21,6 +21,8 @@
 
 use super::{Settings, SynthEngine};
 use crate::dsp::blocks::drift::Drift;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// How many frames are worked out at once, with settings moving in a line across them.
 pub(super) const BLOCK: usize = 16;
@@ -29,8 +31,6 @@ const MAX_FREQUENCY: f32 = 0.25;
 const NOTCH_DEPTH: f32 = 0.2;
 /// The intervals `Harm` moves between, in semitones.
 const INTERVALS: [f32; 5] = [0.0, 7.01, 12.01, 19.01, 24.01];
-/// `Drift`'s place among the settings, after the three it shares with Plaits.
-pub(super) const DRIFT: usize = 3;
 
 #[inline]
 pub(super) fn this_blep(t: f32) -> f32 {
@@ -362,6 +362,12 @@ pub(crate) struct VirtualAnalog {
     fresh: bool,
 }
 
+/// Where its settings are among the voice's, by the keys they're stored under.
+const DETUNE: usize = voice_place(SynthVoice::VirtualAnalog, "detune");
+const SQUARE: usize = voice_place(SynthVoice::VirtualAnalog, "square");
+const SAW: usize = voice_place(SynthVoice::VirtualAnalog, "saw");
+const DRIFT: usize = voice_place(SynthVoice::VirtualAnalog, "drift");
+
 impl SynthEngine for VirtualAnalog {
     const DRIFTS: bool = true;
 
@@ -413,12 +419,9 @@ impl VirtualAnalog {
     }
 
     fn render(&mut self, frequency: f32, settings: Settings) {
-        let Settings {
-            harmonics,
-            timbre,
-            morph,
-            ..
-        } = settings;
+        let harmonics = settings.at(DETUNE);
+        let timbre = settings.at(SQUARE);
+        let morph = settings.at(SAW);
         let drift = settings.at(DRIFT);
         self.drift.step();
         let saw_frequency = frequency * semitones(detuning(harmonics)) * self.drift.ratio(1, drift);

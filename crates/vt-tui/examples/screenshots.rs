@@ -5,6 +5,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use ratatui::Terminal;
@@ -684,11 +685,14 @@ fn kick_file(path: &Path, gain: f32) -> std::io::Result<()> {
 
 /// A folder of the system's temporary folder for one picture of the explorer, named from it as
 /// `~`, so the picture is the same wherever it's taken. It's this process's own, so two runs at
-/// once, as CI's on one machine, don't share it.
+/// once, as CI's on one machine, don't share it, and this call's own, so two tests of one process
+/// taking the same picture at once don't either.
 fn scratch_home(picture: &str) -> PathBuf {
+    static CALLS: AtomicUsize = AtomicUsize::new(0);
     let home = std::env::temp_dir().join(format!(
-        "vimtracker-screenshots-{picture}-{}",
-        std::process::id()
+        "vimtracker-screenshots-{picture}-{}-{}",
+        std::process::id(),
+        CALLS.fetch_add(1, Ordering::Relaxed)
     ));
     let _ = std::fs::remove_dir_all(&home);
     home
@@ -879,16 +883,26 @@ const EXPLORERS: [(&str, Take); 3] = [
     ("presets", take_presets),
 ];
 
+/// Make every picture in a folder, saying where each went. `just screenshots` and the test
+/// against the committed ones both make them here, so they write the same bytes.
+fn take_all(folder: &Path) -> std::io::Result<Vec<PathBuf>> {
+    std::fs::create_dir_all(folder)?;
+    let mut taken = Vec::new();
+    for shot in SHOTS {
+        taken.push(take(shot, folder)?);
+    }
+    for (_, take) in EXPLORERS {
+        taken.push(take(folder)?);
+    }
+    Ok(taken)
+}
+
 fn main() -> std::io::Result<()> {
     let folder = std::env::args()
         .nth(1)
         .map_or_else(|| PathBuf::from("docs/manual/src/images"), PathBuf::from);
-    std::fs::create_dir_all(&folder)?;
-    for shot in SHOTS {
-        println!("{}", take(shot, &folder)?.display());
-    }
-    for (_, take) in EXPLORERS {
-        println!("{}", take(&folder)?.display());
+    for path in take_all(&folder)? {
+        println!("{}", path.display());
     }
     Ok(())
 }
@@ -915,6 +929,48 @@ mod tests {
             assert!(a == b, "{name} differs between runs");
         }
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Each screenshot is the one committed in the manual, byte for byte, and the manual has no
+    /// picture that nothing makes, so a change to what's drawn fails here rather than waiting
+    /// for someone to run `just screenshots`. `VT_BLESS=1` writes them again, as that does,
+    /// after a change on purpose; the diff of the SVGs then shows what moved.
+    #[test]
+    fn screenshots_match_the_committed_ones() {
+        let committed = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/manual/src/images");
+        if std::env::var_os("VT_BLESS").is_some() {
+            take_all(&committed).unwrap();
+            return;
+        }
+        let fresh = std::env::temp_dir().join(format!("vt-committed-{}", std::process::id()));
+        let name = |path: &Path| path.file_name().unwrap().to_string_lossy().into_owned();
+        let taken: Vec<String> = take_all(&fresh)
+            .unwrap()
+            .iter()
+            .map(|path| name(path))
+            .collect();
+        let changed: Vec<&String> = taken
+            .iter()
+            .filter(|name| {
+                let now = std::fs::read(fresh.join(name)).unwrap();
+                std::fs::read(committed.join(name)).ok() != Some(now)
+            })
+            .collect();
+        let mut unmade: Vec<String> = std::fs::read_dir(&committed)
+            .unwrap()
+            .map(|entry| name(&entry.unwrap().path()))
+            .filter(|name| name.ends_with(".svg") && !taken.contains(name))
+            .collect();
+        unmade.sort();
+        assert!(
+            changed.is_empty() && unmade.is_empty(),
+            "the screenshots differ from those in {}: changed or new {changed:?}, made by no shot \
+             {unmade:?}. The new ones are in {}. If the change is meant, run with VT_BLESS=1 or \
+             `just screenshots`, and delete any no shot makes.",
+            committed.display(),
+            fresh.display(),
+        );
+        let _ = std::fs::remove_dir_all(&fresh);
     }
 
     /// The which-key popup shows once its delay has passed since `Space`, and the shot is drawn

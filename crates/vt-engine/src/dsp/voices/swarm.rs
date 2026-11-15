@@ -25,6 +25,8 @@ use crate::dsp::blocks::plaits_parts::{Limiter, interpolate};
 use crate::dsp::blocks::sine_table::SINE;
 use crate::dsp::voices::SynthEngine;
 use crate::rng::Pcg32;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 const VOICES: usize = 8;
 /// The highest frequency a saw runs at, as a fraction of the sample rate.
@@ -211,6 +213,11 @@ impl Default for Swarm {
     }
 }
 
+/// Where its settings are among the voice's, by the keys they're stored under.
+const SPREAD: usize = voice_place(SynthVoice::Swarm, "spread");
+const DENSITY: usize = voice_place(SynthVoice::Swarm, "density");
+const OVERLAP: usize = voice_place(SynthVoice::Swarm, "overlap");
+
 impl SynthEngine for Swarm {
     const NOISE: bool = true;
 
@@ -252,9 +259,9 @@ impl Swarm {
     }
 
     fn render(&mut self, f0: f32, settings: Settings) {
-        let harmonics = settings.harmonics.clamp(0.0, 1.0);
-        let timbre = settings.timbre.clamp(0.0, 1.0);
-        let morph = settings.morph.clamp(0.0, 1.0);
+        let harmonics = settings.at(SPREAD).clamp(0.0, 1.0);
+        let timbre = settings.at(DENSITY).clamp(0.0, 1.0);
+        let morph = settings.at(OVERLAP).clamp(0.0, 1.0);
         let density = note_frequency(timbre * 120.0) * 0.025 * BLOCK as f32;
         let spread = harmonics * harmonics * harmonics;
         let mut size_ratio = 0.25 * semitones((1.0 - morph) * 84.0);

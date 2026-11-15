@@ -90,8 +90,11 @@ pub(crate) trait SynthEngine: Copy {
 }
 
 /// A voice's settings, each on `0..=1`, in the order of its entries in `vt-model`'s
-/// `settings/voices.rs`. The first four have the names of Plaits' knobs, which its ports read
-/// them by; what each is depends on the voice.
+/// `settings/voices.rs`. A voice reads each with [`Settings::at`], at a constant
+/// `voice_place` works out from the key the setting is stored under, so a key its entries don't
+/// have doesn't build and their order can change without a voice reading the wrong one. The first
+/// four have the names of Plaits' knobs, which the voices' tests set them by; what each is
+/// depends on the voice.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Settings {
     /// The first: `VA`'s detuning of its saw from its square, say.

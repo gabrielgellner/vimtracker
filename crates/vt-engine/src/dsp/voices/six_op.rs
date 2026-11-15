@@ -32,6 +32,8 @@ use super::Settings;
 use crate::dsp::blocks::clip::soft_clip;
 use crate::dsp::blocks::sine_table::sine_pm;
 use crate::dsp::voices::SynthEngine;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// How many frames are worked out at once, as in Plaits, whose envelopes move once a block.
 const BLOCK: usize = 24;
@@ -741,6 +743,12 @@ pub(crate) struct SixOp {
     at: usize,
 }
 
+/// Where its settings are among the voice's, by the keys they're stored under.
+const PATCH: usize = voice_place(SynthVoice::SixOp, "patch");
+const BRIGHT: usize = voice_place(SynthVoice::SixOp, "bright");
+const TIME: usize = voice_place(SynthVoice::SixOp, "time");
+const ACCENT: usize = voice_place(SynthVoice::SixOp, "accent");
+
 impl SynthEngine for SixOp {
     fn new(rate: u32) -> Self {
         let rate = rate as f32;
@@ -812,13 +820,13 @@ impl SixOp {
 
     fn render(&mut self, frequency: f32, settings: Settings) {
         if self.patch.is_none() {
-            self.load(patch_index(settings.harmonics));
+            self.load(patch_index(settings.at(PATCH)));
         }
         let Some(patch) = self.patch else {
             return;
         };
-        let control = settings.morph.clamp(0.0, 1.0);
-        let brightness = settings.timbre.clamp(0.0, 1.0);
+        let control = settings.at(TIME).clamp(0.0, 1.0);
+        let brightness = settings.at(BRIGHT).clamp(0.0, 1.0);
         self.lfo.step(BLOCK as f32);
         let pitch_mod_lfo = self.lfo.pitch_mod();
         let amp_mod = self.lfo.amp_mod();
@@ -835,7 +843,7 @@ impl SixOp {
         let note_on = self.gate && !self.was_gated;
         self.was_gated = self.gate;
         if note_on {
-            self.velocity = normalize_velocity(settings.accent);
+            self.velocity = normalize_velocity(settings.at(ACCENT));
             self.note = 69.0 + 12.0 * (frequency * self.rate / 440.0).max(1e-6).log2();
             if patch.reset_phase {
                 for op in &mut self.operators {
