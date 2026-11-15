@@ -29,6 +29,7 @@
 #![allow(clippy::needless_range_loop)]
 
 use super::virtual_analog::Settings;
+use crate::dsp::blocks::clip::soft_clip;
 use crate::dsp::blocks::sine_table::sine_pm;
 use crate::voice::SynthEngine;
 
@@ -933,18 +934,6 @@ impl SixOp {
         if matches!(call.source, Source::Feedback(_)) {
             self.feedback = [previous_0, previous_1];
         }
-    }
-}
-
-/// Stmlib's soft clip, which holds a sample within -1 to 1.
-#[inline]
-fn soft_clip(x: f32) -> f32 {
-    if x < -3.0 {
-        -1.0
-    } else if x > 3.0 {
-        1.0
-    } else {
-        x * (27.0 + x * x) / (27.0 + 9.0 * x * x)
     }
 }
 

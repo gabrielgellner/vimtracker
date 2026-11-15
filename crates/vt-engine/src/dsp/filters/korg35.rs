@@ -20,6 +20,7 @@
 
 use super::filter::soft_clip;
 use crate::dsp::blocks::flush::tiny_by_fields;
+use crate::dsp::blocks::one_pole;
 
 /// The feedback at full resonance. It self-oscillates from 2, and this goes as far past that as
 /// Vital's Sallen-Key filter does, so it sings by itself near the top of `Res`, as the ladder does.
@@ -36,10 +37,7 @@ tiny_by_fields!(OnePole { state });
 impl OnePole {
     #[inline]
     fn low_pass(&mut self, input: f32, coefficient: f32) -> f32 {
-        let step = (input - self.state) * coefficient;
-        let output = step + self.state;
-        self.state = output + step;
-        output
+        one_pole::low_pass(&mut self.state, input, coefficient)
     }
 
     #[inline]
@@ -129,8 +127,7 @@ mod tests {
         // cutoff comes out as the model says at `along` of 1.
         let rate = 96_000.0_f32;
         let cutoff = 1_000.0_f32;
-        let g = (std::f32::consts::PI * cutoff / rate).tan();
-        let coefficient = g / (1.0 + g);
+        let coefficient = one_pole::gain((std::f32::consts::PI * cutoff / rate).tan());
         for high_pass in [false, true] {
             for feedback in [0.0, 1.0, 1.8] {
                 let mut filter = Korg35::default();

@@ -22,6 +22,7 @@
 use std::f32::consts::PI;
 
 use super::virtual_analog::{BLOCK, Moving, Settings};
+use crate::dsp::blocks::clip::soft_clip;
 use crate::voice::SynthEngine;
 
 #[inline]
@@ -31,17 +32,6 @@ fn diode(x: f32) -> f32 {
     } else {
         let x = x * 2.0;
         0.7 * x / (1.0 + x.abs())
-    }
-}
-
-#[inline]
-fn soft_clip(x: f32) -> f32 {
-    if x < -3.0 {
-        -1.0
-    } else if x > 3.0 {
-        1.0
-    } else {
-        x * (27.0 + x * x) / (27.0 + 9.0 * x * x)
     }
 }
 
