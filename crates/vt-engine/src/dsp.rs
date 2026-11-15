@@ -12,4 +12,6 @@ pub mod blocks;
 pub mod dynamics;
 pub mod effects;
 pub mod filters;
+#[cfg(test)]
+pub(crate) mod signals;
 pub mod voices;

@@ -380,6 +380,7 @@ impl Rung for Rotary {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::signals::sine;
 
     const RATE: u32 = 48_000;
 
@@ -390,14 +391,10 @@ mod tests {
         rotary
     }
 
-    fn sine(hertz: f32, frame: usize) -> f32 {
-        (frame as f32 / RATE as f32 * hertz * TAU).sin() * 0.5
-    }
-
     /// A sine through it for a second and a half, with the last second of both sides.
     fn played(rotary: &mut Rotary, hertz: f32) -> Vec<[f32; 2]> {
         (0..RATE as usize * 3 / 2)
-            .map(|frame| rotary.process([sine(hertz, frame); 2], 1.0))
+            .map(|frame| rotary.process([sine(frame, hertz, 0.5, RATE); 2], 1.0))
             .skip(RATE as usize / 2)
             .collect()
     }

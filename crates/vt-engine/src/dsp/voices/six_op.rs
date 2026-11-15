@@ -950,6 +950,7 @@ fn soft_clip(x: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::signals::peak;
 
     const RATE: u32 = 48_000;
 
@@ -966,10 +967,6 @@ mod tests {
         (0..frames)
             .map(|_| voice.next(hertz / RATE as f32, settings))
             .collect()
-    }
-
-    fn peak(samples: &[f32]) -> f32 {
-        samples.iter().fold(0.0_f32, |peak, s| peak.max(s.abs()))
     }
 
     fn index_of(name: &str) -> f32 {

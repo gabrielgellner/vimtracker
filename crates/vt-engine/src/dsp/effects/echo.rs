@@ -809,6 +809,7 @@ impl Rung for Echo {
 mod tests {
     use super::*;
     use crate::dsp::effects::spring;
+    use crate::dsp::signals::{rms, sines};
 
     const RATE: u32 = 48_000;
     /// 120 BPM at this rate.
@@ -839,12 +840,6 @@ mod tests {
             .collect()
     }
 
-    fn sine(frames: usize, hertz: f32, level: f32) -> Vec<f32> {
-        (0..frames)
-            .map(|at| (at as f32 / RATE as f32 * hertz * std::f32::consts::TAU).sin() * level)
-            .collect()
-    }
-
     /// How loud a sine at a frequency is in a stretch, by its Fourier sum.
     fn level_at(out: &[f32], hertz: f32) -> f32 {
         let (mut sine, mut cosine) = (0.0_f64, 0.0_f64);
@@ -867,10 +862,6 @@ mod tests {
                 }
             })
             .0
-    }
-
-    fn rms(part: &[f32]) -> f32 {
-        (part.iter().map(|s| s * s).sum::<f32>() / part.len() as f32).sqrt()
     }
 
     #[test]
@@ -904,7 +895,11 @@ mod tests {
             rate: 0x80,
             ..PLAIN
         });
-        let out = through(&mut echo, &sine(RATE as usize, 1000.0, 0.01), RATE as usize);
+        let out = through(
+            &mut echo,
+            &sines(RATE as usize, 1000.0, 0.01, RATE).collect::<Vec<_>>(),
+            RATE as usize,
+        );
         let db = 20.0 * (level_at(&out[RATE as usize / 2..], 1000.0) / 0.01).log10();
         assert!((db - ECHO_DB_AT_1K as f32).abs() < 0.1, "{db}");
     }
@@ -924,7 +919,7 @@ mod tests {
             let mut echo = echo(PLAIN);
             let out = through(
                 &mut echo,
-                &sine(RATE as usize, 1000.0, level),
+                &sines(RATE as usize, 1000.0, level, RATE).collect::<Vec<_>>(),
                 RATE as usize,
             );
             let tail = &out[RATE as usize / 2..];
@@ -1049,7 +1044,7 @@ mod tests {
         let bent = |inertia: u8| {
             let settings = Settings { inertia, ..PLAIN };
             let mut echo = echo(settings);
-            let tone = sine(RATE as usize * 6, 1000.0, 0.1);
+            let tone: Vec<f32> = sines(RATE as usize * 6, 1000.0, 0.1, RATE).collect();
             through(&mut echo, &tone[..RATE as usize], RATE as usize);
             // From 150 ms to 300 ms, as TAPE-201 was measured.
             let slower = (255.0 * (1000.0_f32 / 300.0).ln() / 100_f32.ln()).round() as u8;
@@ -1080,7 +1075,7 @@ mod tests {
             echo.seed(Pcg32::new(seed, 1));
             let found = pitches(
                 &mut echo,
-                &sine(RATE as usize * 6, 1000.0, 0.1),
+                &sines(RATE as usize * 6, 1000.0, 0.1, RATE).collect::<Vec<_>>(),
                 RATE as usize,
             );
             let cents: Vec<f32> = found.iter().map(|p| 1200.0 * (p / 1000.0).log2()).collect();
@@ -1118,7 +1113,7 @@ mod tests {
     #[test]
     fn changing_mode_glides_from_head_to_head_without_a_step() {
         let mut echo = echo(Settings { mode: 0, ..PLAIN });
-        let tone = sine(RATE as usize * 2, 200.0, 0.5);
+        let tone: Vec<f32> = sines(RATE as usize * 2, 200.0, 0.5, RATE).collect();
         let mut last = 0.0;
         for (at, sample) in tone.iter().enumerate() {
             if at == RATE as usize {
@@ -1163,7 +1158,7 @@ mod tests {
     #[test]
     fn moving_any_setting_glides_without_a_step() {
         let mut echo = echo(Settings::DEFAULT);
-        let tone = sine(RATE as usize * 2, 100.0, 0.3);
+        let tone: Vec<f32> = sines(RATE as usize * 2, 100.0, 0.3, RATE).collect();
         let mut last = [0.0; 2];
         for (at, sample) in tone.iter().enumerate() {
             // A jump every 64 frames, as a knob or an LFO steps it block by block.

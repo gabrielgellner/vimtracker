@@ -1606,6 +1606,7 @@ impl Rung for Clouds {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::signals::{rms, sine};
     use std::f32::consts::TAU;
     use vt_model::insert::MOST_SHIFT;
 
@@ -1616,10 +1617,6 @@ mod tests {
         clouds.follow(settings, 0);
         clouds.settle();
         clouds
-    }
-
-    fn sine(frame: usize, hertz: f32, rate: u32) -> f32 {
-        (frame as f32 / rate as f32 * hertz * TAU).sin() * 0.5
     }
 
     fn wet(mode: CloudsMode) -> Settings {
@@ -1658,13 +1655,9 @@ mod tests {
     fn through(settings: Settings, hertz: f32) -> Vec<f32> {
         let mut clouds = clouds(settings, RATE);
         (0..RATE as usize * 3)
-            .map(|frame| clouds.process([sine(frame, hertz, RATE); 2])[0])
+            .map(|frame| clouds.process([sine(frame, hertz, 0.5, RATE); 2])[0])
             .skip(RATE as usize * 2)
             .collect()
-    }
-
-    fn rms(sound: &[f32]) -> f32 {
-        (sound.iter().map(|s| s * s).sum::<f32>() / sound.len() as f32).sqrt()
     }
 
     #[test]
@@ -1733,7 +1726,7 @@ mod tests {
         };
         let mut clouds = clouds(settings, RATE);
         for frame in 0..RATE as usize {
-            let sample = sine(frame, 440.0, RATE) * 0.2;
+            let sample = sine(frame, 440.0, 0.5, RATE) * 0.2;
             let out = clouds.process([sample; 2]);
             // The module's soft clip bends a quiet sound by well under a percent.
             assert!((out[0] - sample).abs() < 0.002, "{frame}: {out:?} {sample}");
@@ -1825,7 +1818,7 @@ mod tests {
                     let tone = if frame < start {
                         0.0
                     } else {
-                        sine(frame, 330.0, RATE)
+                        sine(frame, 330.0, 0.5, RATE)
                     };
                     clouds.process([tone; 2])[0]
                 })
@@ -1856,11 +1849,11 @@ mod tests {
             let mut clouds = clouds(settings(from), RATE);
             let mut frame = 0;
             let mut largest_step = |clouds: &mut Clouds, frames: usize| {
-                let mut last = clouds.process([sine(frame, 110.0, RATE); 2])[0];
+                let mut last = clouds.process([sine(frame, 110.0, 0.5, RATE); 2])[0];
                 frame += 1;
                 let mut largest = 0.0_f32;
                 for _ in 1..frames {
-                    let out = clouds.process([sine(frame, 110.0, RATE); 2])[0];
+                    let out = clouds.process([sine(frame, 110.0, 0.5, RATE); 2])[0];
                     largest = largest.max((out - last).abs());
                     last = out;
                     frame += 1;
@@ -1883,7 +1876,7 @@ mod tests {
         for mode in CloudsMode::ALL {
             let mut free = clouds(wet(mode), RATE);
             for frame in 0..RATE as usize * 2 {
-                free.process([sine(frame, 330.0, RATE); 2]);
+                free.process([sine(frame, 330.0, 0.5, RATE); 2]);
             }
             let mut frozen = free.clone();
             frozen.follow(
@@ -1919,7 +1912,7 @@ mod tests {
             let mut clouds = clouds(Settings::DEFAULT, RATE);
             clouds.seed(Pcg32::new(seed, 3));
             (0..RATE as usize)
-                .map(|frame| clouds.process([sine(frame, 220.0, RATE); 2])[0])
+                .map(|frame| clouds.process([sine(frame, 220.0, 0.5, RATE); 2])[0])
                 .collect()
         };
         assert_eq!(play(1), play(1));
@@ -2023,7 +2016,7 @@ mod tests {
         for mode in CloudsMode::ALL {
             let mut clouds = clouds(wet(mode), RATE);
             for frame in 0..RATE as usize {
-                clouds.process([sine(frame, 440.0, RATE); 2]);
+                clouds.process([sine(frame, 440.0, 0.5, RATE); 2]);
             }
             clouds.clear();
             for _ in 0..RATE {

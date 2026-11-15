@@ -391,6 +391,7 @@ mod tests {
 
     use super::*;
     use crate::dsp::effects::slot::{InsertState, Keys};
+    use crate::dsp::signals::{peak, sines};
 
     const RATE: u32 = 48_000;
     /// Settings take effect at once, as the smoother has nothing to do.
@@ -411,21 +412,11 @@ mod tests {
         state
     }
 
-    fn sine(hertz: f32, level: f32, frames: usize) -> impl Iterator<Item = f32> {
-        (0..frames).map(move |frame| {
-            (frame as f32 / RATE as f32 * hertz * std::f32::consts::TAU).sin() * level
-        })
-    }
-
     fn played(kind: DistortType, amount: u8, mix: u8, level: f32) -> Vec<f32> {
         let mut state = state(kind, amount, mix);
-        sine(220.0, level, RATE as usize / 10)
+        sines(RATE as usize / 10, 220.0, level, RATE)
             .map(|sample| state.process([sample; 2], NO_SMOOTHING, RATE, &Keys::default())[0])
             .collect()
-    }
-
-    fn peak(samples: &[f32]) -> f32 {
-        samples.iter().fold(0.0, |most: f32, s| most.max(s.abs()))
     }
 
     /// How far apart two runs are, past the oversampler's short delay.
@@ -484,13 +475,12 @@ mod tests {
 
     /// The average level, past the oversampler's short delay.
     fn rms(samples: &[f32]) -> f32 {
-        let tail = &samples[64..];
-        (tail.iter().map(|s| s * s).sum::<f32>() / tail.len() as f32).sqrt()
+        crate::dsp::signals::rms(&samples[64..])
     }
 
     #[test]
     fn soft_is_about_clean_at_none_and_a_loud_sound_stays_about_as_loud() {
-        let plain: Vec<f32> = sine(220.0, 0.25, RATE as usize / 10).collect();
+        let plain: Vec<f32> = sines(RATE as usize / 10, 220.0, 0.25, RATE).collect();
         let clean = played(DistortType::Soft, 0x00, 0xFF, 0.25);
         let db = |a: f32, b: f32| 20.0 * (a / b).log10();
         let at_none = db(rms(&clean), rms(&plain));
@@ -536,8 +526,8 @@ mod tests {
     #[test]
     fn clips_stay_in_range_and_amount_makes_them_louder_up_to_it() {
         for kind in [DistortType::Soft, DistortType::Hard] {
-            let gentle = peak(&played(kind, 0x00, 0xFF, 0.1));
-            let hard = peak(&played(kind, 0xFF, 0xFF, 0.1));
+            let gentle = peak(played(kind, 0x00, 0xFF, 0.1));
+            let hard = peak(played(kind, 0xFF, 0xFF, 0.1));
             assert!(hard > gentle * 3.0, "{kind:?}: {gentle} to {hard}");
             // The oversampler's filters overshoot a corner very slightly.
             assert!(hard <= 1.02, "{kind:?}: {hard}");
@@ -612,12 +602,12 @@ mod tests {
                 mu_law,
                 ..Distort::default()
             }));
-            sine(220.0, 0.02, RATE as usize / 10)
+            sines(RATE as usize / 10, 220.0, 0.02, RATE)
                 .map(|x| state.process([x; 2], NO_SMOOTHING, RATE, &Keys::default())[0])
                 .collect::<Vec<f32>>()
         };
         // Linear steps of an eighth gate a sound this quiet; mu-law's are fine enough near nothing.
-        assert_eq!(peak(&quiet(0)), 0.0);
+        assert_eq!(peak(quiet(0)), 0.0);
         assert!(distinct(&quiet(1)) >= 3, "{}", distinct(&quiet(1)));
         // A loud one comes back about as loud, its steps coarser at the top.
         assert_eq!(crushed(1.0, crush_step(4.0), true), 1.0);
@@ -641,7 +631,7 @@ mod tests {
             state.settle();
             let frames = RATE as usize;
             let (mut real, mut imaginary) = (0.0_f64, 0.0_f64);
-            for (frame, sample) in sine(440.0, 0.5, frames).enumerate() {
+            for (frame, sample) in sines(frames, 440.0, 0.5, RATE).enumerate() {
                 let out = state.process([sample; 2], NO_SMOOTHING, RATE, &Keys::default())[0];
                 let phase =
                     frame as f64 / f64::from(RATE) * f64::from(probe) * std::f64::consts::TAU;
@@ -695,7 +685,7 @@ mod tests {
     fn mix_blends_from_dry_to_wet() {
         for kind in DistortType::ALL {
             let dry = played(kind, 0xFF, 0x00, 0.5);
-            let plain: Vec<f32> = sine(220.0, 0.5, RATE as usize / 10).collect();
+            let plain: Vec<f32> = sines(RATE as usize / 10, 220.0, 0.5, RATE).collect();
             assert_eq!(differs(&dry, &plain), 0.0, "{kind:?}");
             let wet = played(kind, 0xFF, 0xFF, 0.5);
             assert!(differs(&wet, &plain) > 0.01, "{kind:?}");
@@ -717,7 +707,7 @@ mod tests {
                 gain,
                 ..Distort::DEFAULT
             }));
-            sine(220.0, 0.5, RATE as usize / 10)
+            sines(RATE as usize / 10, 220.0, 0.5, RATE)
                 .map(|sample| state.process([sample; 2], NO_SMOOTHING, RATE, &Keys::default())[0])
                 .collect::<Vec<f32>>()
         };
@@ -728,7 +718,7 @@ mod tests {
         // It also takes the dry sound with it.
         let dry = db(rms(&run(0xD0, 0x00)), rms(&run(0xE0, 0x00)));
         assert!((dry + 4.0).abs() < 0.01, "{dry}");
-        assert_eq!(peak(&run(0x00, 0xFF)), 0.0);
+        assert_eq!(peak(run(0x00, 0xFF)), 0.0);
     }
 
     #[test]
@@ -757,7 +747,7 @@ mod tests {
         let mut state = state(kind, 0xFF, 0xFF);
         let frames = RATE as usize;
         let (mut real, mut imaginary) = (0.0_f64, 0.0_f64);
-        for (frame, sample) in sine(hertz, 0.5, frames).enumerate() {
+        for (frame, sample) in sines(frames, hertz, 0.5, RATE).enumerate() {
             let out = state.process([sample; 2], NO_SMOOTHING, RATE, &Keys::default())[0];
             if frame >= RATE as usize / 2 {
                 let phase = f64::from(frame as u32) / f64::from(RATE)

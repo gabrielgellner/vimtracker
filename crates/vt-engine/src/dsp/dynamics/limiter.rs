@@ -236,7 +236,7 @@ impl SlotEffect for Limiter {
 mod tests {
     use super::*;
     use crate::dsp::blocks::smoother::coefficient;
-    use std::f32::consts::TAU;
+    use crate::dsp::signals::sine;
 
     const RATE: u32 = 48_000;
 
@@ -250,10 +250,6 @@ mod tests {
         });
         limiter.settle();
         limiter
-    }
-
-    fn sine(frame: usize, hertz: f32, level: f32) -> f32 {
-        (frame as f32 / RATE as f32 * hertz * TAU).sin() * level
     }
 
     /// The most it lets out over some frames, from `level` going in.
@@ -281,8 +277,8 @@ mod tests {
             // Quiet, then a click 24 dB over full level out of nowhere, then a loud burst.
             let level = |frame: usize| match frame {
                 1000 => 16.0,
-                2000..3000 => sine(frame, 3_000.0, 8.0),
-                _ => sine(frame, 110.0, 0.05),
+                2000..3000 => sine(frame, 3_000.0, 8.0, RATE),
+                _ => sine(frame, 110.0, 0.05, RATE),
             };
             let got = loudest(&mut limiter, RATE as usize / 10, level);
             assert!(got <= most * 1.0001, "{ceiling:x}: {got} over {most}");
@@ -296,7 +292,7 @@ mod tests {
             let mut limiter = limiter(0xFF, Settings::DEFAULT.ceiling, release);
             let most = gain_of(ceiling_db(f32::from(Settings::DEFAULT.ceiling)));
             let got = loudest(&mut limiter, RATE as usize, |frame| {
-                sine(frame, 60.0, 0.9) + sine(frame, 5_000.0, 0.3)
+                sine(frame, 60.0, 0.9, RATE) + sine(frame, 5_000.0, 0.3, RATE)
             });
             assert!(got <= most * 1.0001, "{release:x}: {got} over {most}");
         }
@@ -306,7 +302,7 @@ mod tests {
     fn below_the_ceiling_it_only_delays_the_sound() {
         let mut limiter = limiter(0x00, 0xFF, 0xAA);
         let ahead = limiter.latency();
-        let level = |frame: usize| sine(frame, 440.0, 0.7);
+        let level = |frame: usize| sine(frame, 440.0, 0.7, RATE);
         for frame in 0..RATE as usize / 10 {
             let [wet, dry] = limiter.process([level(frame), -level(frame)], 1.0);
             let expected = frame.checked_sub(ahead).map_or(0.0, level);
@@ -320,7 +316,7 @@ mod tests {
     fn let_go(release: u8, after: usize) -> f32 {
         let mut limiter = limiter(0x00, 0xFF, release);
         for frame in 0..RATE as usize {
-            limiter.process([sine(frame, 200.0, 4.0); 2], 1.0);
+            limiter.process([sine(frame, 200.0, 4.0, RATE); 2], 1.0);
         }
         let mut gain = 0.0;
         for frame in 0..after {
@@ -413,7 +409,7 @@ mod tests {
         let mut limiter = limiter(0x00, 0xFF, 0xAA);
         for frame in 0..RATE as usize / 10 {
             // Only the left side is loud, and the right is turned down with it.
-            let [wet, dry] = limiter.process([sine(frame, 100.0, 4.0), 0.25], 1.0);
+            let [wet, dry] = limiter.process([sine(frame, 100.0, 4.0, RATE), 0.25], 1.0);
             if frame > RATE as usize / 20 {
                 assert!(wet[1] < dry[1] * 0.5, "{frame}: {wet:?}");
             }

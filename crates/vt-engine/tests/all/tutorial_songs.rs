@@ -2186,8 +2186,7 @@ fn every_tutorial_song_renders_as_it_did_before_the_engine_ran_generators() {
         let out = render_loop(version, RATE, RenderOptions::default());
         support::golden(&format!("tutorial-{name}"), &out);
         assert!(out.len() > RATE as usize, "{name} plays for over a second");
-        let peak = out.iter().fold(0.0_f32, |peak, s| peak.max(s.abs()));
-        let rms = (out.iter().map(|s| s * s).sum::<f32>() / out.len() as f32).sqrt();
+        let (peak, rms) = (support::peak(&out), support::rms(&out));
         assert!(rms > 0.02, "{name} is nearly silent: RMS {rms}");
         assert!(peak < 0.99, "{name} reaches full scale: peak {peak}");
     }

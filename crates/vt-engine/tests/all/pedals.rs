@@ -8,7 +8,7 @@ use std::f32::consts::TAU;
 use vt_engine::dsp::effects::slot::{InsertState, Keys};
 use vt_model::insert::{Distort, DistortType, Insert};
 
-use crate::support::golden;
+use crate::support::{self, golden};
 
 const RATE: u32 = 48_000;
 /// Settings take effect at once, as the smoother has nothing to do.
@@ -58,8 +58,7 @@ fn acid_line(seconds: f32) -> Vec<f32> {
 
 fn rms(samples: &[f32]) -> f32 {
     // Past the oversampling's and the filters' settling.
-    let tail = &samples[samples.len() / 4..];
-    (tail.iter().map(|s| s * s).sum::<f32>() / tail.len() as f32).sqrt()
+    support::rms(&samples[samples.len() / 4..])
 }
 
 fn db(value: f32) -> f32 {

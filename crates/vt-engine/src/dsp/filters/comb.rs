@@ -774,6 +774,7 @@ mod tests {
     use vt_model::insert::MOST_SHIFT;
 
     use super::*;
+    use crate::dsp::signals::{peak, rms, sines};
     use crate::rng::Pcg32;
 
     const RATE: u32 = 48_000;
@@ -799,13 +800,6 @@ mod tests {
         out
     }
 
-    /// A quiet sine, which the limiter leaves alone.
-    fn sine(frames: usize, hertz: f32, rate: u32) -> Vec<f32> {
-        (0..frames)
-            .map(|frame| (frame as f32 / rate as f32 * hertz * TAU).sin() * 0.01)
-            .collect()
-    }
-
     fn played(settings: Settings, note: f32, input: &[f32], rate: u32) -> Vec<[f32; 2]> {
         let mut comb = Comb::new(rate);
         comb.follow(settings);
@@ -817,15 +811,6 @@ mod tests {
 
     fn left(frames: &[[f32; 2]]) -> Vec<f32> {
         frames.iter().map(|frame| frame[0]).collect()
-    }
-
-    fn rms(samples: impl Iterator<Item = f32>) -> f32 {
-        let (sum, count) = samples.fold((0.0, 0), |(sum, count), s| (sum + s * s, count + 1));
-        (sum / count as f32).sqrt()
-    }
-
-    fn peak(samples: impl Iterator<Item = f32>) -> f32 {
-        samples.fold(0.0, |most: f32, s| most.max(s.abs()))
     }
 
     fn db(wet: f32, dry: f32) -> f32 {
@@ -1110,7 +1095,12 @@ mod tests {
                 tone: 0xFF,
                 ..Settings::DEFAULT
             };
-            let out = played(settings, 48.0, &sine(RATE as usize / 2, at, RATE), RATE);
+            let out = played(
+                settings,
+                48.0,
+                &sines(RATE as usize / 2, at, 0.01, RATE).collect::<Vec<_>>(),
+                RATE,
+            );
             rms(out[RATE as usize / 4..].iter().map(|frame| frame[0]))
         };
         let (on, between) = (

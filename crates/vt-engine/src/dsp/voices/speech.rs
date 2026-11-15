@@ -964,6 +964,7 @@ impl Speech {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::signals::{differs, rms};
     use crate::dsp::voices::virtual_analog::VirtualAnalog;
 
     const RATE: u32 = 48_000;
@@ -980,15 +981,6 @@ mod tests {
         (0..frames)
             .map(|_| voice.next(hertz / RATE as f32, settings(values)))
             .collect()
-    }
-
-    fn rms(samples: &[f32]) -> f32 {
-        (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt()
-    }
-
-    fn differs(a: &[f32], b: &[f32]) -> f32 {
-        let total: f32 = a.iter().zip(b).map(|(a, b)| (a - b).powi(2)).sum();
-        (total / a.len() as f32).sqrt()
     }
 
     /// Each of its models: the naive one, SAM, the LPC vowels, and each bank of words.

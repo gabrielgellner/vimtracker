@@ -2101,6 +2101,7 @@ impl Rung for Beads {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::signals::{rms, sine};
     use vt_model::insert::MOST_SHIFT;
 
     const RATE: u32 = 48_000;
@@ -2110,10 +2111,6 @@ mod tests {
         beads.follow(settings, SongPlace::STILL, 0);
         beads.settle();
         beads
-    }
-
-    fn sine(frame: usize, hertz: f32, rate: u32) -> f32 {
-        (frame as f32 / rate as f32 * hertz * TAU).sin() * 0.5
     }
 
     /// All wet and dry of reverb; in `Delay`, repeating every 37 ms or so.
@@ -2131,10 +2128,6 @@ mod tests {
             },
             ..Settings::DEFAULT
         }
-    }
-
-    fn rms(sound: &[f32]) -> f32 {
-        (sound.iter().map(|s| s * s).sum::<f32>() / sound.len() as f32).sqrt()
     }
 
     /// How strong a frequency is in a sound, as a sine's amplitude, by a single bin of a DFT over
@@ -2164,7 +2157,7 @@ mod tests {
     fn through(settings: Settings, hertz: f32) -> Vec<f32> {
         let mut beads = beads(settings, RATE);
         (0..RATE as usize * 3)
-            .map(|frame| beads.process([sine(frame, hertz, RATE); 2])[0])
+            .map(|frame| beads.process([sine(frame, hertz, 0.5, RATE); 2])[0])
             .skip(RATE as usize * 2)
             .collect()
     }
@@ -2231,7 +2224,7 @@ mod tests {
             RATE,
         );
         for frame in 0..RATE as usize {
-            let sample = sine(frame, 440.0, RATE) * 0.4;
+            let sample = sine(frame, 440.0, 0.5, RATE) * 0.4;
             let out = beads.process([sample; 2]);
             assert!((out[0] - sample).abs() < 1e-5, "{frame}: {out:?} {sample}");
         }
@@ -2289,7 +2282,7 @@ mod tests {
             };
             let mut free = beads(settings, RATE);
             for frame in 0..RATE as usize * 2 {
-                free.process([sine(frame, 330.0, RATE); 2]);
+                free.process([sine(frame, 330.0, 0.5, RATE); 2]);
             }
             let mut frozen = free.clone();
             frozen.follow(
@@ -2326,7 +2319,7 @@ mod tests {
             let mut beads = beads(Settings::DEFAULT, RATE);
             beads.seed(Pcg32::new(seed, 3));
             (0..RATE as usize)
-                .map(|frame| beads.process([sine(frame, 220.0, RATE); 2])[0])
+                .map(|frame| beads.process([sine(frame, 220.0, 0.5, RATE); 2])[0])
                 .collect()
         };
         assert_eq!(play(1), play(1));
@@ -2356,7 +2349,7 @@ mod tests {
             };
             let mut out = Vec::new();
             for frame in 0..RATE as usize {
-                let sample = sine(frame, 1000.0, RATE);
+                let sample = sine(frame, 1000.0, 0.5, RATE);
                 rates.down.push([sample; 2], |frame| {
                     rates.up.push(frame, |frame| out.push(frame[0]));
                 });
@@ -2507,7 +2500,7 @@ mod tests {
         for mode in BeadsMode::ALL {
             let mut beads = beads(wet(mode), RATE);
             for frame in 0..RATE as usize {
-                beads.process([sine(frame, 440.0, RATE); 2]);
+                beads.process([sine(frame, 440.0, 0.5, RATE); 2]);
             }
             beads.clear();
             beads.settle();

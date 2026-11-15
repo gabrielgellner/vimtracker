@@ -17,7 +17,7 @@ use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 
-use crate::support::golden;
+use crate::support::{golden, peak};
 
 const RATE: u32 = 48_000;
 /// The tone the measurements play, as the harness's specs do.
@@ -284,7 +284,6 @@ fn a_track_plays_the_type_its_slot_is_set_to() {
     assert_ne!(outs[0], outs[1]);
     assert_ne!(outs[0], outs[2]);
     assert_ne!(outs[1], outs[2]);
-    let peak = |out: &[f32]| out.iter().fold(0.0_f32, |most, s| most.max(s.abs()));
     assert!(outs.iter().all(|out| peak(out) > 0.1));
 }
 
@@ -618,7 +617,6 @@ fn glues_peak_clip_follows_glues_curve() {
     }
     // A sine at -1 dBFS peaks at -1.08 dBFS, as Glue's does, and everything under -2 dBFS comes
     // through as it went in.
-    let peak = |out: &[f32]| out.iter().fold(0.0_f32, |most, s| most.max(s.abs()));
     let tone: Vec<f32> = sine(-1.0, RATE as usize / 10, 0).collect();
     let out = slot_through(&mut slot, &tone);
     assert!((20.0 * peak(&out).log10() + 1.08).abs() < 0.005);
@@ -629,7 +627,6 @@ fn glues_peak_clip_follows_glues_curve() {
 #[test]
 fn glues_peak_clip_comes_after_its_makeup_and_its_mix_and_adds_only_odd_harmonics() {
     let ceiling = 10_f32.powf(-0.5 / 20.0);
-    let peak = |out: &[f32]| out.iter().fold(0.0_f32, |most, s| most.max(s.abs()));
     // Turned up 12 dB, a -6 dBFS tone is clipped: the clip comes after the makeup.
     let tone: Vec<f32> = sine(-6.0, RATE as usize / 10, 0).collect();
     let out = slot_through(&mut clipping_slot(1, 0xFF, 0x80), &tone);

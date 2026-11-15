@@ -45,20 +45,20 @@ fn play(song: Song, steps: usize) -> Vec<f32> {
 
 /// The loudest part of a step, on the left channel.
 fn peak(out: &[f32], step: usize) -> f32 {
-    out[step * STEP * 2..(step + 1) * STEP * 2]
-        .iter()
-        .step_by(2)
-        .fold(0.0, |peak: f32, sample| peak.max(sample.abs()))
+    support::peak(
+        out[step * STEP * 2..(step + 1) * STEP * 2]
+            .iter()
+            .step_by(2),
+    )
 }
 
 /// How loud a step is on average, on the left channel.
 fn rms(out: &[f32], step: usize) -> f32 {
-    let left: Vec<f32> = out[step * STEP * 2..(step + 1) * STEP * 2]
-        .iter()
-        .step_by(2)
-        .copied()
-        .collect();
-    (left.iter().map(|sample| sample * sample).sum::<f32>() / left.len() as f32).sqrt()
+    support::rms(
+        out[step * STEP * 2..(step + 1) * STEP * 2]
+            .iter()
+            .step_by(2),
+    )
 }
 
 const NOTE: &str = "C-1 7F --- --- ---";
