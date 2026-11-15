@@ -56,6 +56,7 @@ use crate::overlays::command::parse::Line;
 use crate::overlays::field_jump::FieldJump;
 use crate::overlays::help::POPUP_DELAY;
 use crate::overlays::picker::Picker;
+use crate::overlays::picker::exploring::Naming;
 use crate::overlays::shape::LiveGen;
 use crate::pages::phrase::PhraseView;
 use crate::pages::sample::{SamplePage, Shown, is_sample_motion};
@@ -71,8 +72,9 @@ use crate::widgets::setting::{CellLook, Focus};
 
 /// What a key did, as far as the page alone can tell, and what it asks for that only `App` can
 /// do: open the picker, show another view or run a `:` line, and start Insert or another mode,
-/// hold what lasts while the key is down, or start the phrase view afresh (#784). [`App::settled`] does what it asks once the page has given its borrows back, so
-/// a page needn't pass a key back to reach them.
+/// open the explorer to name a file, hold what lasts while the key is down, or start the phrase
+/// view afresh (#784). [`App::settled`] does what it asks once the page has given its borrows
+/// back, so a page needn't pass a key back to reach them.
 #[derive(Debug, Clone)]
 pub enum Outcome {
     /// The page did it.
@@ -94,6 +96,9 @@ pub enum Outcome {
     Insert(Entry),
     /// Done, and the keys go into this mode of the page's, such as the sample page's pads.
     Enter(Mode),
+    /// Done, and the file explorer opens to name a file, for the command it then runs, as `:w`
+    /// opens it for a song not yet saved.
+    Explore(Naming),
     /// Done, and what it started lasts while the key is down, to be ended or undone when it's
     /// let go.
     Hold(Momentary),
@@ -264,10 +269,10 @@ impl App {
         false
     }
 
-    /// Run a command on the project page's Song or Audio sub-page: the page's own key, a move,
-    /// and then what it passes back, an edit or `H` and `L`, which are `App`'s, as an edit runs
-    /// its row's command or opens another output. The count stays for what takes it, as `gg` and
-    /// `G` go to the row it names.
+    /// Run a command on the project page's Song or Audio sub-page: the page's own key and what it
+    /// asks for, and then, on the Audio sub-page, what it passes back, an edit or `H` and `L`,
+    /// which are `App`'s, as an edit opens another output. The count stays for what takes it, as
+    /// `gg` and `G` go to the row it names.
     fn run_project_pages(&mut self, cmd: Cmd) -> bool {
         let times = self.modes.count.unwrap_or(1).max(1);
         let mut ctx = CtxMut {
@@ -278,11 +283,7 @@ impl App {
             View::Audio => self.audio_page.key(cmd, times, &mut ctx),
             _ => self.project_page.key(cmd, times, &mut ctx),
         };
-        self.settled(outcome, true)
-            || match self.modes.view {
-                View::Audio => self.run_audio_page(cmd),
-                _ => self.run_project_page(cmd),
-            }
+        self.settled(outcome, true) || (self.modes.view == View::Audio && self.run_audio_page(cmd))
     }
 
     /// Run a command on the sample page: the page's own key, and what it asks for, once the page
@@ -371,6 +372,9 @@ impl App {
                 self.modes.mode = Mode::Insert;
             }
             Outcome::Enter(mode) => self.modes.mode = mode,
+            Outcome::Explore(naming) => {
+                self.open_naming_explorer(naming.purpose, naming.command, naming.after);
+            }
             Outcome::Hold(started) => self.started = Some(started),
             Outcome::Moved => self.phrase_view.top = self.services.cursor.step,
             Outcome::Done | Outcome::Refused(_) | Outcome::Passed => {}

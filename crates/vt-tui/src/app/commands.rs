@@ -139,17 +139,17 @@ impl App {
             Line::Double => self.double(),
             Line::GenApply => self.apply_generator_here(),
             Line::SetSkip(size) => self.services.apply(&Action::SetSkipSize(size)),
-            Line::SetScale(kind) => self.set_scale(Scale {
+            Line::SetScale(kind) => self.services.set_scale(Scale {
                 on: true,
                 kind,
                 ..self.services.scale
             }),
-            Line::SetRoot(root) => self.set_scale(Scale {
+            Line::SetRoot(root) => self.services.set_scale(Scale {
                 on: true,
                 root,
                 ..self.services.scale
             }),
-            Line::ScaleOn(on) => self.set_scale(Scale {
+            Line::ScaleOn(on) => self.services.set_scale(Scale {
                 on,
                 ..self.services.scale
             }),

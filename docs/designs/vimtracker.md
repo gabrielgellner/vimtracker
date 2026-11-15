@@ -828,11 +828,12 @@ count through a `CtxMut` and says what it did as an `Outcome`, done, refused wit
 back, or done and asking for what only `App` can do, a picker opened (`Outcome::Open`), a view
 shown (`Show`, or `Jump` as a jump `Ctrl-O` comes back from), a `:` line run (`Run`), Insert
 started with what's typed already (`Insert`), another mode of the page's, such as the sample
-page's pads (`Enter`), what the key started held while it's down (`Hold`), or the phrase view started afresh after a move onto another phrase (`Moved`), which
-`App::settled` does once the page has given its borrows back (#784); `Page::draw`, given a `Ctx`;
-and `Page::panels` and `Page::take_panels`, its pictures as data for `Graphics` and the ids
-they're given. `App` holds one of each page and dispatches by `View` with a plain `match`, so
-there's no `dyn`. A key goes, in this order, to the first that takes it:
+page's pads (`Enter`), the file explorer opened to name a file (`Explore`), what the key started
+held while it's down (`Hold`), or the phrase view started afresh after a move onto another phrase
+(`Moved`), which `App::settled` does once the page has given its borrows back (#784);
+`Page::draw`, given a `Ctx`; and `Page::panels` and `Page::take_panels`, its pictures as data
+for `Graphics` and the ids they're given. `App` holds one of each page and dispatches by `View`
+with a plain `match`, so there's no `dyn`. A key goes, in this order, to the first that takes it:
 
 1.  the overlay for the `Mode`: the picker, the shape panel, the mapping view, the command line,
     Insert, a jump, a guide or help (`App::handle_key`);
@@ -840,8 +841,7 @@ there's no `dyn`. A key goes, in this order, to the first that takes it:
 3.  what the page passed back, which is `App`'s: for the track page and the mixer,
     `App::run_across_pages`, the commands across pages (`i`'s mode, `/`, `M`, `gm`, the Keys mode,
     the Gen page's keys and the pickers) and then the track page's edits, which the mixer shares;
-    for the project page's two sub-pages, `App::run_project_page` and `run_audio_page`, while the
-    other pages' go on;
+    for the project page's Audio sub-page, `App::run_audio_page`, while the other pages' go on;
 4.  the tree of chains and phrases (`App::run_tree`);
 5.  the grammar's operators, the motion after one, and the Visual modes (`App::run_grammar`);
 6.  the global `match` in `App::run`.
@@ -1128,10 +1128,12 @@ it wants as data and where its dots go, and `Graphics` reads no `App` (#728, bel
 `ProjectPage` (`pages/project.rs`) and `AudioPage` (`pages/audio.rs`), the project page's Song and
 Audio sub-pages, have their state, their moves and their drawing, through a `Ctx`, the Song
 sub-page's settings and the audio page's rows as `ParamCell`s: the Song sub-page's cursor and the
-groove it shows, and the audio page's row. `App::run_project_pages` hands them a key and then
-runs what they pass back, their edits and `H` and `L`, which stay `impl App`, as the Song
-sub-page's run each row's `:` command and the audio page's change the output the main loop opens,
-the wheel and the Roto. The output as it plays, `App::audio`, stays `App`'s, as the main loop, the
+groove it shows, and the audio page's row. The Song sub-page's edits are its own too
+(`pages/project/editing.rs`): each row that has a `:` command asks for it to run (`Outcome::Run`),
+through the same parser, and the rest ask for a picker, the explorer to name a file
+(`Outcome::Explore`, as Save as does) or the Audio sub-page (#784). `App::run_project_pages` hands
+the Audio sub-page a key and then runs what it passes back, its edits and `H` and `L`, which stay
+`impl App`, as they change the output the main loop opens, the wheel and the Roto. The output as it plays, `App::audio`, stays `App`'s, as the main loop, the
 status line and the recorder read it too.
 `SamplePage` is a component too: it keeps its own cursor, zoom, scroll, selection, settings focus
 and pictures' ids, runs its moves and its edits of the entry's points and settings

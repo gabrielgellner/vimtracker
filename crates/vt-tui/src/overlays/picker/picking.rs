@@ -37,6 +37,7 @@ use crate::pages::chain::ChainView;
 use crate::pages::song::COLUMNS_BEFORE_TRACKS;
 use crate::pages::track::tuning::set_tuning;
 use crate::pages::track::{Control, Page, set};
+use crate::services::Services;
 use crate::services::banking::Seed;
 use crate::widgets::{group, role};
 
@@ -239,11 +240,17 @@ impl App {
     /// follow the project's, with the one playing highlighted.
     pub(crate) fn open_groove_picker(&mut self, track: bool) {
         self.modes.count = None;
+        let picker = self.services.groove_picker(track);
+        self.show_picker(picker);
+    }
+}
+
+impl Services {
+    /// The list of grooves for the project, or for the cursor's track, which can also follow the
+    /// project's, with the one playing highlighted.
+    pub(crate) fn groove_picker(&self, track: bool) -> Picker {
         let song = self.song();
-        let own = song
-            .tracks
-            .get(self.services.cursor.track)
-            .and_then(|t| t.groove);
+        let own = song.tracks.get(self.cursor.track).and_then(|t| t.groove);
         let mut items = Vec::new();
         if track {
             let follow = format!("Project's, {}", song.groove);
@@ -266,9 +273,11 @@ impl App {
         } else {
             ("The project's groove", song.groove.index())
         };
-        self.show_picker(Picker::new(title, items).opened_on(Some(at)));
+        Picker::new(title, items).opened_on(Some(at))
     }
+}
 
+impl App {
     /// Open the list of orders the cursor's phrase's rows can play in, on the one they play in.
     pub(crate) fn open_order_picker(&mut self) {
         self.modes.count = None;
@@ -936,9 +945,9 @@ impl App {
             Pick::RowPhrase(phrase) => ChainView::pick_phrase(phrase, &mut self.services),
             Pick::SectionChain(chain) => self.song_view.pick_chain(chain, &mut self.services),
             Pick::Line(line) => self.line(line),
-            Pick::ScaleTo(scale) => self.set_scale(scale),
+            Pick::ScaleTo(scale) => self.services.set_scale(scale),
             Pick::ShowGroove(groove) => self.project_page.groove_shown = Some(groove),
-            Pick::Scale(kind) => self.set_scale(Scale {
+            Pick::Scale(kind) => self.services.set_scale(Scale {
                 on: true,
                 kind,
                 ..self.services.scale
