@@ -68,7 +68,8 @@ and its settings in up to four columns of three.
 A machine's type is the setting that changes its character: the sample the sampler
 plays, `Acid`'s `Wave`, `Supersaw`'s `Stack`, 6-op's `Patch`, and the chord of `Chord`
 and `Chip`. Other synths have none. `K` lists whatever's under the cursor in a title, as
-on a setting, and `g d` on the sample opens the sample page. Each machine places its own
+on a setting, and `g d` on the sample opens the sample page, as `g d` on a setting a macro
+holds goes to the macro (see **Macros**). Each machine places its own
 settings: most go down the columns in order, the sampler has `Slice` and `Play` in
 one column, `Start` and `Length` in the next, and its sample's own `Tune` and `Cents`
 in the third, which tune the sample rather than the track (see **Tuning a sample** in
@@ -1957,6 +1958,7 @@ you name it.
 | `M` | On a setting, list the macros to map it to |
 | `M1` to `M8` | Map it to that macro at once |
 | `gm` | The mapping of this macro, or of this setting's |
+| `gd` | Go to this setting's macro, or this macro's mapping |
 | `:macro Name` | Name this macro, or this setting's, up to 12 letters |
 | `:macro` | Go back to its first setting's name |
 
@@ -1969,8 +1971,11 @@ range and all. Each is one undo step.
 
 **A setting a macro holds** shows where the macro puts it, with the range the macro can take it
 over drawn faint behind its bar, `▕██▎░░░░  ▏`, and the status line says which macro and how far,
-as `Cut, 1.05 kHz: on macro 1 Bite, 170 Hz to 9.56 kHz`. Turning it is refused, as Live greys a
-mapped control out: turn its macro, or open its range with `gm`.
+as `Cut, 1.05 kHz: on macro 1 Bite, 170 Hz to 9.56 kHz`. One with no bar, such as a choice, a Mod
+page value or a device's title, has a faint dot after its value instead, `1/16 •`, after the dot
+Live puts on a control it automates. Turning it is refused, as Live greys a mapped control out:
+turn its macro, or open its range with `gm`. `gd` on it goes to its macro in the Gen page's
+`Macros` band, with the mapping view open on its row, and `C-o` comes back to it.
 
 **The mapping view**, `gm`, lists each setting the macro holds with its `Min`, its `Max`, and
 the `Curve` and `S` of its response, with a drawing of the response of the one under the cursor

@@ -9,7 +9,6 @@ use vt_engine::engine::Transport;
 use vt_model::action::TrackControl;
 use vt_model::envelope::Hold;
 use vt_model::insert::Insert;
-use vt_model::macros::MacroTarget;
 use vt_model::modulation::{ModKind, depth_text, note_shape_slot};
 use vt_model::settings::{SettingId, gate_percent};
 use vt_model::song::{Song, SynthVoice, Track, TrackKind, reset_name};
@@ -355,8 +354,9 @@ pub(crate) fn heard_bypassed(ctx: &Ctx, track: &Track, slot: usize) -> bool {
 
 /// The range a macro holding a setting can take it over, in coarse values, for its bar.
 pub(crate) fn macro_range(control: Control, track: &Track) -> Option<(u8, u8)> {
-    let id = control.setting_for_macro(track)?;
-    let (_, map) = track.macro_holding(MacroTarget::Setting(id))?;
+    let (_, map) = crate::macroing::holding(control, track).next()?;
+    // A generator's setting's ends are numbers in its bounds, which its cells work out.
+    map.target.setting()?;
     Some(((map.min >> 8) as u8, (map.max >> 8) as u8))
 }
 

@@ -63,6 +63,8 @@ pub enum Pick {
     TrackPage(Page),
     /// Put the setting under the cursor on this macro, move it there, or take it off.
     Macro(usize),
+    /// Go to this macro, one of those holding the setting under the cursor, in the Gen page's band.
+    MacroHolding(usize),
     Sample(PathBuf),
     /// Make a kit's sounds the ones `:sample` lists first.
     Kit(PathBuf),
