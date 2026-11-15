@@ -982,10 +982,11 @@ fn gen_view(of: ParamView, generator: &Generator, context: &Context, param: GenP
         }
         _ => param.shown(&shape, context),
     };
-    // A `Where` that's its column's own, and a `Vary` of `Once`, are dim.
+    // A `Where` that's its column's own, and a `Vary` of `Once`, are dim, as they're set.
+    let set = &generator.shape;
     let engaged = match param {
-        GenParam::Where => shape.place != context.default_where(),
-        GenParam::Vary => shape.vary != 0,
+        GenParam::Where => set.place != context.default_where(),
+        GenParam::Vary => set.vary != 0,
         _ => true,
     };
     let value = param

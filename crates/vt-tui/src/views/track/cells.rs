@@ -157,11 +157,15 @@ impl<'a> TrackCells<'a> {
     }
 
     /// A title control's text, as the zoom's strip has it, with no cursor: an empty slot's
-    /// `Empty`, and otherwise its view's.
+    /// `Empty`, a generator's setting as it's set rather than as a macro holding it puts it, and
+    /// otherwise its view's.
     pub(super) fn title_text(&self, control: Control) -> String {
-        match control {
-            Control::Insert(slot) if self.track.inserts[slot] == Insert::Empty => {
+        match (control, &self.generator) {
+            (Control::Insert(slot), _) if self.track.inserts[slot] == Insert::Empty => {
                 EMPTY_SLOT.to_owned()
+            }
+            (Control::Gen { param, .. }, Some((live, context))) => {
+                param.shown(&live.generator.shape, context)
             }
             _ => self.view(control).cell,
         }
