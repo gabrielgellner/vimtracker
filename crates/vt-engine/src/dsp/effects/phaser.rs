@@ -18,6 +18,8 @@ use vt_model::insert::{MOST_PHASER_SEMITONES, Phaser as Settings};
 use vt_model::lfo::SWEEP_TICKS;
 
 use crate::dsp::blocks::flush::{flush, tiny_by_fields};
+// The trapezoidal one-pole an all-pass and the feedback's band are built from.
+use crate::dsp::blocks::one_pole::low_pass;
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::SlotEffect;
@@ -38,16 +40,6 @@ const SIDE_APART: f32 = 1.0 / 3.0;
 /// How many frames the all-passes' coefficient takes to move in a straight line to the next one
 /// worked out. Working one out costs more than the twelve all-passes, and the sweep is slow.
 const CONTROL_FRAMES: u32 = 16;
-
-/// A one-pole low-pass, in the trapezoidal form, which an all-pass and the feedback's band are
-/// built from.
-#[inline]
-fn low_pass(state: &mut f32, input: f32, coefficient: f32) -> f32 {
-    let delta = coefficient * (input - *state);
-    let out = *state + delta;
-    *state = out + delta;
-    out
-}
 
 /// A triangle from -1 to 1, at a place in its turn.
 #[inline]

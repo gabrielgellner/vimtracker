@@ -11,6 +11,7 @@ use vt_model::song::{FilterMode, FilterType, Track};
 
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::flush::{flush, tiny_by_fields};
+use crate::dsp::blocks::one_pole;
 use crate::dsp::blocks::oversampler::Oversampler;
 use crate::dsp::blocks::sides::SameBits;
 use crate::dsp::blocks::smoother;
@@ -396,7 +397,7 @@ impl Coefficients {
         let ladder_k = tapered(&LADDER_TAPER, resonance) * LADDER_FEEDBACK;
         let diode_corner = (frequency * DIODE_FEEDBACK_SHARE).min(diode_filter::FEEDBACK_HIGH_PASS);
         let dirty_resonance = tapered(&DIRTY_TAPER, resonance);
-        let dirty = dirty_filter::Tuning::new(double_g / (1.0 + double_g), dirty_resonance);
+        let dirty = dirty_filter::Tuning::new(one_pole::gain(double_g), dirty_resonance);
         let mut c = Self {
             g,
             k,
@@ -415,7 +416,7 @@ impl Coefficients {
             },
             diode_feedback: diode_filter::feedback_coefficient_at(diode_corner, 2.0 * rate as f32),
             diode_resonance: tapered(&DIODE_TAPER, resonance),
-            korg_coefficient: double_g / (1.0 + double_g),
+            korg_coefficient: one_pole::gain(double_g),
             korg_feedback: tapered(&KORG_TAPER, resonance) * korg35::MOST_FEEDBACK,
             korg_high_feedback: tapered(&KORG_HIGH_TAPER, resonance) * korg35::MOST_FEEDBACK,
             dirty,
