@@ -69,7 +69,7 @@ A machine's type is the setting that changes its character: the sample the sampl
 plays, `Acid`'s `Wave`, `Supersaw`'s `Stack`, 6-op's `Patch`, and the chord of `Chord`
 and `Chip`. Other synths have none. `K` lists whatever's under the cursor in a title, as
 on a setting, and `g d` on the sample opens the sample page, as `g d` on a setting a macro
-holds goes to the macro (see **Macros** in **The Gen page, macros, presets and patches**).
+holds goes to the macro (see **Macros** in **The Gen page, macros and presets**).
 Each machine places its own settings: most go down the columns in order, the sampler has `Slice` and `Play` in
 one column, `Start` and `Length` in the next, and its sample's own `Tune` and `Cents`
 in the third, which tune the sample rather than the track (see **Tuning a sample** in
@@ -470,8 +470,7 @@ stays where it is. Moving the value by hand takes it over from the steps, marked
 **Fader automation and relative modulation** in **FX commands**.
 
 A fader a macro holds shows where the macro puts it, as on the track page, and its fader
-beside the meters stands there too; see **Macros** in **The Gen page, macros, presets and
-patches**.
+beside the meters stands there too; see **Macros** in **The Gen page, macros and presets**.
 
 The tracks come first, then the groups, then `A`, `B` and `M`, with a gap between each
 part, and a rule over each part's strips names it, `Tracks`, `Groups` or `Returns`, the
