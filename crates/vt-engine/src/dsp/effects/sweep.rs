@@ -6,9 +6,8 @@ use std::f64::consts::TAU;
 use vt_model::insert::Insert;
 use vt_model::song::Song;
 
-use crate::dsp::effects::distort::InsertState;
 use crate::dsp::effects::memory::{MemoryPool, SongPlace};
-use crate::track_state::Keys;
+use crate::dsp::effects::slot::{InsertState, Keys};
 
 /// How loud the sines are: quiet enough that every clip and limiter on the way leaves them alone,
 /// even on a peak 40 dB up.

@@ -9,9 +9,11 @@ use vt_model::selection::{Motion, Target};
 
 use crate::input::keys::{Key, parse, parse_sequence};
 use crate::input::mode::{Mode, View};
+use crate::mixer_page::MixerPage;
+use crate::page::Page as _;
 use crate::placing::Edge;
 use crate::sample_page::SampleKey;
-use crate::track_page::Page;
+use crate::track_page::{Page, TrackPage};
 
 /// An operator key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -533,110 +535,6 @@ const CHAIN: &[(&str, Cmd, &str)] = &[
     ("g C", Cmd::CloneChain, "Copy this chain and its phrases"),
 ];
 
-const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
-    ("j", Cmd::Move(Motion::Down), "Next row"),
-    ("k", Cmd::Move(Motion::Up), "Previous row"),
-    (
-        "g g",
-        Cmd::Move(Motion::First),
-        "First row, of this column of devices",
-    ),
-    (
-        "G",
-        Cmd::Move(Motion::Last),
-        "Last row, of this column of devices",
-    ),
-    ("H", Cmd::PreviousPage, "Previous page: Sound, Mod, FX, Gen"),
-    ("L", Cmd::NextPage, "Next page: Sound, Mod, FX, Gen"),
-    (
-        "d d",
-        Cmd::RemoveRow,
-        "Take an effect out of its slot, or a generator away",
-    ),
-    ("p", Cmd::Paste, "Put the effect taken in this slot"),
-    (
-        "b",
-        Cmd::Bypass,
-        "Switch this effect or modulator out, or back in",
-    ),
-    (
-        "z i",
-        Cmd::ZoomSlot,
-        "On the FX page, zoom in on this slot, or back out",
-    ),
-    (
-        "z o",
-        Cmd::ZoomRack,
-        "On the FX page, back out to every slot",
-    ),
-    ("/", Cmd::FieldJump, "Jump to a setting by its name"),
-    (
-        "M",
-        Cmd::MapMacro,
-        "Map this setting to a macro, or move it, or take it off",
-    ),
-    (
-        "g m",
-        Cmd::MacroMapping,
-        "This macro's mapping, or the one this setting is on",
-    ),
-    (
-        "g d",
-        Cmd::OpenItem,
-        "On Sample, open the sample page on it",
-    ),
-    (
-        "Space g a",
-        Cmd::ApplyGenerator,
-        "On a Steps slot, keep what Mutate drew; on Gen, apply it",
-    ),
-    (
-        "r",
-        Cmd::RollGenerator,
-        "On the Gen page, roll the generator again",
-    ),
-    (
-        "Enter",
-        Cmd::ReopenGenerator,
-        "On the Gen page, open the shape panel on it",
-    ),
-    (
-        "}",
-        Cmd::Move(Motion::NextBeat),
-        "Next device down, in the same column",
-    ),
-    (
-        "{",
-        Cmd::Move(Motion::PreviousBeat),
-        "Previous device up, in the same column",
-    ),
-    (
-        "h",
-        Cmd::Move(Motion::Left),
-        "Previous setting, or the device on the left",
-    ),
-    (
-        "l",
-        Cmd::Move(Motion::Right),
-        "Next setting, or the device on the right",
-    ),
-    ("0", Cmd::Move(Motion::RowStart), "First setting"),
-    ("$", Cmd::Move(Motion::RowEnd), "Last setting"),
-    ("=", Cmd::Increase, "Increase the value"),
-    ("-", Cmd::Decrease, "Decrease the value"),
-    ("+", Cmd::IncreaseLarge, "Increase the value, a large step"),
-    ("_", Cmd::DecreaseLarge, "Decrease the value, a large step"),
-    ("C-a", Cmd::Increase, "Increase the value"),
-    ("C-x", Cmd::Decrease, "Decrease the value"),
-    ("x", Cmd::ClearField, "Back to its default"),
-    ("K", Cmd::PickValue, "Choose this setting from a list"),
-    (
-        ";",
-        Cmd::Audition,
-        "Play the sound on a w s e d f, until ; again",
-    ),
-];
-
 const SONG: &[(&str, Cmd, &str)] = &[
     ("j", Cmd::Move(Motion::Down), "Next section"),
     ("k", Cmd::Move(Motion::Up), "Previous section"),
@@ -976,26 +874,6 @@ const PROJECT: &[(&str, Cmd, &str)] = &[
     ("L", Cmd::NextPage, "Next page: Song, Audio"),
 ];
 
-const MIXER: &[(&str, Cmd, &str)] = &[
-    ("h", Cmd::Move(Motion::Left), "Previous track"),
-    ("l", Cmd::Move(Motion::Right), "Next track"),
-    ("0", Cmd::Move(Motion::RowStart), "First track"),
-    ("$", Cmd::Move(Motion::RowEnd), "Last track"),
-    ("j", Cmd::Move(Motion::Down), "Next setting"),
-    ("k", Cmd::Move(Motion::Up), "Previous setting"),
-    ("g g", Cmd::Move(Motion::First), "First setting"),
-    ("G", Cmd::Move(Motion::Last), "Last setting"),
-    ("=", Cmd::Increase, "Increase the value, or switch on"),
-    ("-", Cmd::Decrease, "Decrease the value, or switch off"),
-    ("+", Cmd::IncreaseLarge, "Increase the value, a large step"),
-    ("_", Cmd::DecreaseLarge, "Decrease the value, a large step"),
-    ("C-a", Cmd::Increase, "Increase the value"),
-    ("C-x", Cmd::Decrease, "Decrease the value"),
-    ("x", Cmd::ClearField, "Back to its default"),
-    ("K", Cmd::PickValue, "Switch mute or solo"),
-    ("/", Cmd::FieldJump, "Jump to a setting by its name"),
-];
-
 /// Keys to fold a group's tracks into it, after Vim's folds, in every view that shows tracks
 /// (decisions 128 and 305).
 const FOLDS: &[(&str, Cmd, &str)] = &[
@@ -1116,7 +994,8 @@ const WHOLE_STEP: &[(&str, Cmd, &str)] = &[
     ("<", Cmd::WholeStep, "This step"),
 ];
 
-/// Every default key, in the order help shows them.
+/// Every default key, in the order help shows them. A page that's a component keeps its own rows
+/// beside it, as its `Page::KEYS`, and they're put in here under its mode.
 pub fn bindings() -> Vec<Binding> {
     let mut rows = Vec::new();
     let mut add = |mode: Mode, group: &[(&'static str, Cmd, &'static str)]| {
@@ -1138,13 +1017,13 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Chain, CHAIN);
     add(Mode::Chain, FOLDS);
     add(Mode::Chain, EVERY_VIEW);
-    add(Mode::Track, TRACK_PAGE);
+    add(Mode::Track, TrackPage::KEYS);
     add(Mode::Track, FOLDS);
     add(Mode::Track, EVERY_VIEW);
     add(Mode::Song, SONG);
     add(Mode::Song, FOLDS);
     add(Mode::Song, EVERY_VIEW);
-    add(Mode::Mixer, MIXER);
+    add(Mode::Mixer, MixerPage::KEYS);
     add(Mode::Mixer, FOLDS);
     add(Mode::Mixer, EVERY_VIEW);
     add(Mode::Audio, AUDIO);
@@ -1352,6 +1231,34 @@ mod tests {
         let next = table.continuations(Mode::Normal, &space);
         assert!(next.iter().any(|(k, d)| k == "c" && d.contains("cursor")));
         assert!(next.iter().any(|(k, _)| k == "q q"));
+    }
+
+    /// Where the table is pinned, one row a line, as [`pinned_row`] writes it.
+    const PINNED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/input/bindings.tsv");
+
+    /// A row of the table as it's pinned: its mode, keys, command and description, by tabs.
+    fn pinned_row(binding: &Binding) -> String {
+        format!(
+            "{:?}\t{}\t{:?}\t{}",
+            binding.mode, binding.keys, binding.cmd, binding.description
+        )
+    }
+
+    /// The table as it's assembled, from the pages' own keys and the rest, is the one pinned in
+    /// `bindings.tsv`, row by row, so moving a page's rows loses or reorders none. A change to
+    /// the keys on purpose pins the table again with `VT_PIN_BINDINGS=1` and shows in the diff.
+    #[test]
+    fn the_binding_table_is_as_pinned() {
+        let rows: Vec<String> = bindings().iter().map(pinned_row).collect();
+        if std::env::var_os("VT_PIN_BINDINGS").is_some() {
+            std::fs::write(PINNED, rows.join("\n") + "\n").unwrap();
+        }
+        let pinned = std::fs::read_to_string(PINNED).unwrap();
+        let pinned: Vec<&str> = pinned.lines().collect();
+        for (at, (row, pin)) in rows.iter().zip(&pinned).enumerate() {
+            assert_eq!(row, pin, "row {} differs from bindings.tsv", at + 1);
+        }
+        assert_eq!(rows.len(), pinned.len(), "the table has a different length");
     }
 
     #[test]

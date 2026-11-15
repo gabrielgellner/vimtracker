@@ -93,15 +93,15 @@ fn every_mod_setting(sound: bool) -> Vec<Control> {
 /// The cursor's moves on the Mod page, with no `App`: given a track, from `Mod 1`'s type.
 fn mod_page() -> TrackPage {
     let mut page = TrackPage::default();
-    page.key(Cmd::NextPage, 1, Some(&Track::default()));
+    page.key_on(Cmd::NextPage, 1, Some(&Track::default()));
     assert_eq!(page.page, Page::Mod);
     page
 }
 
-/// Press each of some keys on the page, as `TrackPage::key` has them.
+/// Press each of some keys on the page, as `TrackPage::key_on` has them.
 fn keys(page: &mut TrackPage, track: &Track, keys: &[(Cmd, usize)]) {
     for (cmd, times) in keys {
-        page.key(*cmd, *times, Some(track));
+        page.key_on(*cmd, *times, Some(track));
     }
 }
 
@@ -145,29 +145,29 @@ fn every_modulator_setting_is_on_the_mod_page_once_and_the_keys_reach_it() {
         // Walk the page with nothing but the keys: down each column of devices with `j`, and
         // along every row with `l`, starting from each column's top.
         let mut page = mod_page();
-        page.key(Cmd::Move(Motion::First), 1, Some(&track));
+        page.key_on(Cmd::Move(Motion::First), 1, Some(&track));
         let mut reached = Vec::new();
         for column in 0..2 {
-            page.key(Cmd::Move(Motion::First), 1, Some(&track));
+            page.key_on(Cmd::Move(Motion::First), 1, Some(&track));
             if column == 1 {
                 // Off the end of `Mod 1`'s title into `Mod 4`'s.
-                page.key(Cmd::Move(Motion::RowEnd), 1, Some(&track));
-                page.key(RIGHT, 1, Some(&track));
+                page.key_on(Cmd::Move(Motion::RowEnd), 1, Some(&track));
+                page.key_on(RIGHT, 1, Some(&track));
             }
             loop {
                 let row = page.place(Some(&track)).0;
-                page.key(Cmd::Move(Motion::RowStart), 1, Some(&track));
+                page.key_on(Cmd::Move(Motion::RowStart), 1, Some(&track));
                 for _ in 0..4 {
                     reached.push(page.control(Some(&track)));
                     let before = page.device_cursor(Some(&track)).unwrap();
-                    page.key(RIGHT, 1, Some(&track));
+                    page.key_on(RIGHT, 1, Some(&track));
                     if page.device_cursor(Some(&track)).unwrap().device != before.device {
                         // Off the row's end into the device beside: back to where it was.
-                        page.key(LEFT, 1, Some(&track));
+                        page.key_on(LEFT, 1, Some(&track));
                         break;
                     }
                 }
-                page.key(DOWN, 1, Some(&track));
+                page.key_on(DOWN, 1, Some(&track));
                 if page.place(Some(&track)).0 == row {
                     break;
                 }
@@ -193,22 +193,22 @@ fn h_and_l_cross_between_the_columns_on_the_same_row() {
     // An ADSR's title is its type, its curve, its polarity and its destination, and `l` goes
     // along it, then into `Mod 4`'s title, whose type is first; `h` comes back to the last of
     // `Mod 1`'s.
-    page.key(RIGHT, 1, Some(&track));
+    page.key_on(RIGHT, 1, Some(&track));
     assert_eq!(page.control(Some(&track)), Control::Mod(0, ModField::Mode));
-    page.key(RIGHT, 1, Some(&track));
+    page.key_on(RIGHT, 1, Some(&track));
     assert_eq!(
         page.control(Some(&track)),
         Control::Mod(0, ModField::Polarity)
     );
-    page.key(RIGHT, 1, Some(&track));
+    page.key_on(RIGHT, 1, Some(&track));
     assert_eq!(
         page.control(Some(&track)),
         Control::Mod(0, ModField::Destination)
     );
-    page.key(RIGHT, 1, Some(&track));
+    page.key_on(RIGHT, 1, Some(&track));
     assert_eq!(cursor(&page), at(1, 0, 0));
     assert_eq!(page.control(Some(&track)), Control::Mod(3, ModField::Type));
-    page.key(LEFT, 1, Some(&track));
+    page.key_on(LEFT, 1, Some(&track));
     assert_eq!(cursor(&page), at(0, 0, 3));
     // On `Sustain`, the last of `Mod 1`'s first row, `l` goes to `Shape`, the first of `Mod 4`'s,
     // and `h` comes back to the last.
@@ -217,10 +217,10 @@ fn h_and_l_cross_between_the_columns_on_the_same_row() {
         page.control(Some(&track)),
         Control::Mod(0, ModField::Sustain)
     );
-    page.key(RIGHT, 1, Some(&track));
+    page.key_on(RIGHT, 1, Some(&track));
     assert_eq!(cursor(&page), at(1, 1, 0));
     assert_eq!(page.control(Some(&track)), Control::Mod(3, ModField::Shape));
-    page.key(LEFT, 1, Some(&track));
+    page.key_on(LEFT, 1, Some(&track));
     assert_eq!(
         page.control(Some(&track)),
         Control::Mod(0, ModField::Sustain)
@@ -229,9 +229,9 @@ fn h_and_l_cross_between_the_columns_on_the_same_row() {
     keys(&mut page, &track, &[(LEFT, 1), (RIGHT, 3)]);
     assert_eq!(page.control(Some(&track)), Control::Mod(3, ModField::Phase));
     // Nothing is right of the LFOs, so `l` stays, and `$` and `0` keep to the device.
-    page.key(RIGHT, 1, Some(&track));
+    page.key_on(RIGHT, 1, Some(&track));
     assert_eq!(page.control(Some(&track)), Control::Mod(3, ModField::Phase));
-    page.key(Cmd::Move(Motion::RowStart), 1, Some(&track));
+    page.key_on(Cmd::Move(Motion::RowStart), 1, Some(&track));
     assert_eq!(page.control(Some(&track)), Control::Mod(3, ModField::Shape));
     // An LFO's last row has `Depth` and `Deform`, so `l` from `Depth` goes to `Deform`, and
     // from `Mod 1`'s `Reset` it lands on `Depth`.
@@ -242,7 +242,7 @@ fn h_and_l_cross_between_the_columns_on_the_same_row() {
     );
     keys(&mut page, &track, &[(LEFT, 2)]);
     assert_eq!(page.control(Some(&track)), Control::Mod(0, ModField::Reset));
-    page.key(RIGHT, 1, Some(&track));
+    page.key_on(RIGHT, 1, Some(&track));
     assert_eq!(page.control(Some(&track)), Control::Mod(3, ModField::Depth));
     // From the accumulator's last row, the arpeggio has nothing level with it, so it's its last.
     keys(&mut page, &track, &[(LEFT, 2), (NEXT, 3)]);
@@ -265,19 +265,19 @@ fn a_slots_title_is_its_type_its_mode_its_polarity_then_its_destination_and_h_an
     // An LFO has a mode after its type, then its polarity and its destination.
     keys(&mut page, &track, &[(RIGHT, 4)]);
     assert_eq!(control(&page), Control::Mod(3, ModField::Type));
-    page.key(RIGHT, 1, Some(&track));
+    page.key_on(RIGHT, 1, Some(&track));
     assert_eq!(control(&page), Control::Mod(3, ModField::Mode));
-    page.key(RIGHT, 1, Some(&track));
+    page.key_on(RIGHT, 1, Some(&track));
     assert_eq!(control(&page), Control::Mod(3, ModField::Polarity));
-    page.key(RIGHT, 1, Some(&track));
+    page.key_on(RIGHT, 1, Some(&track));
     assert_eq!(control(&page), Control::Mod(3, ModField::Destination));
-    page.key(RIGHT, 1, Some(&track));
+    page.key_on(RIGHT, 1, Some(&track));
     assert_eq!(
         control(&page),
         Control::Mod(3, ModField::Destination),
         "the end"
     );
-    page.key(Cmd::Move(Motion::RowStart), 1, Some(&track));
+    page.key_on(Cmd::Move(Motion::RowStart), 1, Some(&track));
     assert_eq!(control(&page), Control::Mod(3, ModField::Type));
     // `k` from a grid's left column is its type, and from its right column the title's second,
     // its mode: an ADSR's curve, and an LFO's mode.
@@ -298,15 +298,15 @@ fn braces_j_and_k_go_down_and_up_each_column_of_devices() {
     // `}` goes down the left column, keeping the row and column, and stops at the bottom.
     keys(&mut page, &track, &[(DOWN, 2), (RIGHT, 1)]);
     assert_eq!(control(&page), Control::Mod(0, ModField::Depth));
-    page.key(NEXT, 1, Some(&track));
+    page.key_on(NEXT, 1, Some(&track));
     assert_eq!(control(&page), Control::Mod(1, ModField::Depth));
-    page.key(NEXT, 1, Some(&track));
+    page.key_on(NEXT, 1, Some(&track));
     assert_eq!(control(&page), Control::Mod(2, ModField::Depth));
-    page.key(NEXT, 1, Some(&track));
+    page.key_on(NEXT, 1, Some(&track));
     assert_eq!(control(&page), Control::Accumulator(AccumulatorField::Adds));
-    page.key(NEXT, 5, Some(&track));
+    page.key_on(NEXT, 5, Some(&track));
     assert_eq!(control(&page), Control::Accumulator(AccumulatorField::Adds));
-    page.key(PREVIOUS, 9, Some(&track));
+    page.key_on(PREVIOUS, 9, Some(&track));
     assert_eq!(control(&page), Control::Mod(0, ModField::Depth));
     // `3}` goes from `Mod 4` to the arpeggio, down the right column.
     keys(
@@ -315,29 +315,29 @@ fn braces_j_and_k_go_down_and_up_each_column_of_devices() {
         &[(Cmd::Move(Motion::First), 1), (RIGHT, 3)],
     );
     assert_eq!(control(&page), Control::Mod(3, ModField::Type));
-    page.key(NEXT, 3, Some(&track));
+    page.key_on(NEXT, 3, Some(&track));
     // The arpeggio's title has nothing in it, so the cursor is on its first row.
     assert_eq!(control(&page), Control::Arpeggio(ArpField::Rate));
     assert_eq!(page.device_cursor(Some(&track)), at(7, 1, 0));
     // `k` goes up into `Mod 6`'s last row, past the arpeggio's empty title, and `j` back down.
-    page.key(UP, 1, Some(&track));
+    page.key_on(UP, 1, Some(&track));
     assert_eq!(control(&page), Control::Mod(5, ModField::Depth));
-    page.key(DOWN, 1, Some(&track));
+    page.key_on(DOWN, 1, Some(&track));
     assert_eq!(control(&page), Control::Arpeggio(ArpField::Rate));
     // `j` stops at the bottom of its column, rather than going on into the other.
-    page.key(DOWN, 9, Some(&track));
+    page.key_on(DOWN, 9, Some(&track));
     assert_eq!(control(&page), Control::Arpeggio(ArpField::Mode));
     // `gg` and `G` are the top and the bottom of the cursor's column.
-    page.key(Cmd::Move(Motion::First), 1, Some(&track));
+    page.key_on(Cmd::Move(Motion::First), 1, Some(&track));
     assert_eq!(control(&page), Control::Mod(3, ModField::Type));
-    page.key(Cmd::Move(Motion::Last), 1, Some(&track));
+    page.key_on(Cmd::Move(Motion::Last), 1, Some(&track));
     assert_eq!(control(&page), Control::Arpeggio(ArpField::Mode));
     keys(
         &mut page,
         &track,
         &[(Cmd::Move(Motion::First), 1), (LEFT, 1)],
     );
-    page.key(Cmd::Move(Motion::Last), 1, Some(&track));
+    page.key_on(Cmd::Move(Motion::Last), 1, Some(&track));
     assert_eq!(
         control(&page),
         Control::Accumulator(AccumulatorField::Reset)
@@ -349,7 +349,7 @@ fn braces_j_and_k_go_down_and_up_each_column_of_devices() {
         &[(Cmd::Move(Motion::First), 1), (DOWN, 4)],
     );
     assert_eq!(control(&page), Control::Mod(1, ModField::Destination));
-    page.key(UP, 1, Some(&track));
+    page.key_on(UP, 1, Some(&track));
     assert_eq!(control(&page), Control::Mod(0, ModField::Reset));
 
     // A return has no accumulator or arpeggio, so its columns end with `Mod 3` and `Mod 6`.
@@ -358,9 +358,9 @@ fn braces_j_and_k_go_down_and_up_each_column_of_devices() {
         ..Track::default()
     };
     let mut page = mod_page();
-    page.key(NEXT, 9, Some(&fixed));
+    page.key_on(NEXT, 9, Some(&fixed));
     assert_eq!(page.control(Some(&fixed)), Control::Mod(2, ModField::Type));
-    page.key(DOWN, 9, Some(&fixed));
+    page.key_on(DOWN, 9, Some(&fixed));
     assert_eq!(
         page.control(Some(&fixed)),
         Control::Mod(2, ModField::Release)
