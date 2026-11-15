@@ -38,9 +38,40 @@ Where it differs from the plan:
   meant.
 - S2's "the Roto's `feel`, `pick` and `key` read it" came after too, in #788 (#784's item 3). A
   knob's name still comes from `label_on`.
-- The Gen page keeps keys of its own, and `GenParam::step` its own steps (#784's item 11).
+- The Gen page keeps keys of its own, and `GenParam::step` its own steps (#784's item 11). #806
+  gave it one generator choice picker; routing its keys through `param::edit` was judged not worth
+  it.
 
-What's left: #784's item 11, and the UI plan's U13 (#733).
+**Reviews 3 and 4.** The third architecture review (#784, vt-tui) and the fourth (#809, vt-engine,
+vt-model and vt-roto) finished what the plan touched:
+
+| Review item | Built in |
+|---|---|
+| #784 item 3, the Roto's knob feel from the view | #788 |
+| #784 item 6, `effects!` and `Shape` literals | #786 |
+| #784 item 8, this block and [adding-a-device.md](adding-a-device.md) | #789, #808 |
+| #784 item 11, the Gen page's choice picker | #806 |
+| #809 item 1, a golden for every effect and voice (`tests/all/goldens.rs`) | #810 |
+| #809 item 2, one copy of each DSP block in `dsp/blocks/` (`one_pole`, `clip`, `line`, `xorshift`, `coefficient`), steps 1 to 4 | #815, #817, #818, #819 |
+| #809 item 3, the engine's surface: `pictures`, `parts`, `pub(crate)` and `unreachable_pub` | #813 |
+| #809 item 7, the Roto's fake behind the `fake` feature | #816 |
+
+Each of #809's steps is bit-identical: the goldens didn't change, in debug or release. The one
+difference is a NaN's: the kick's and the six-op's soft clip took the drums' NaN-safe form, so a
+NaN gives a value at the end of the range instead of passing on.
+
+What's left:
+- **The `GenParam` macro** (#809's item 6). `GenParam`'s 99 settings are still listed three times:
+  the enum, `ALL` and `GEN_PARAMS`. One macro would write them from one list; it's deferred until a
+  generator is next added.
+- **For the user to decide:**
+  - #809 item 2's step 5: one Hermite form instead of two (three, with the rotary's), and
+    `DcBlocker` in the flanger and chorus. It's inaudible but re-blesses `grains-*`, `rotary*`,
+    `chorus-*` and some delay, echo and Clouds goldens.
+  - The Roto's Source choices (#784): `with_live` passes no follow sources, so a Follow
+    generator's Source has no choices on the Roto. Unifying the two resolvers would change that.
+  - Whether `vt_model::convert`, the format 10 to 11 converter behind `convert-nudges`, can go
+    (#809 item 9).
 
 ## 0. The answer in brief
 

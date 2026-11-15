@@ -75,15 +75,9 @@ effect run in full only in a release build, and `cargo test --workspace --releas
 the real-time guard against optimised code and the hashes made in release builds. Run it too
 after a change to the engine.
 
-`vt-engine`, `vt-model` and `vt-tui` each build their integration tests as one binary,
-`tests/all/main.rs`, so they link once rather than once a file (#719). A new file of tests goes in
-`tests/all/`, with a `mod` line in its `main.rs`, as a file without one isn't built; a test there
-fails on a file missing its line, or left in `tests/`. Helpers that more than one file uses go in
-`tests/all/support.rs` for the engine and `tests/all/common/` for the interface, and the DSP unit
-tests' signals in `vt-engine`'s `src/dsp/signals.rs`. `vt-model`'s binary has the engine's
-`rt_guard` as its allocator, built from the engine's file, so `render.rs` can count what a render
-allocates. One file's tests run with `cargo test -p vt-engine --test all groove::` or
-`cargo test -p vt-tui --test all grammar::`.
+CI runs on Apple silicon macOS. The render tests compare hashes of rendered audio, and the
+filter and reverb use library maths that can round differently on other platforms, so the
+hashes are only checked on one.
 
 A pull request that makes a choice the issue left open appends it to
 [docs/designs/decisions.md](docs/designs/decisions.md) as the next numbered decision. One that
@@ -92,20 +86,53 @@ how pages are built, how images are drawn, an offline path or where a kind of te
 updates the design's [Architecture](docs/designs/vimtracker.md#architecture) section in the same
 pull request.
 
-vt-tui's modules are in folders by what each is, as the Architecture's
-[Interface](docs/designs/vimtracker.md#interface) maps them: a page's keys, edits and drawing in
-its folder under `pages/`, what's drawn over a page in `overlays/`, what pages share in
-`services/`. In vt-tui and vt-engine, make new code `pub(crate)` unless another crate, a test, an
-example or `main.rs` uses it; the `unreachable_pub` lint says when a `pub` can't be reached from
-outside, and that keeps the dead-code lint working.
+### Tests
+
+`vt-engine`, `vt-model` and `vt-tui` each build their integration tests as one binary,
+`tests/all/main.rs`, so they link once rather than once a file (#719). A new file of tests goes in
+`tests/all/`, with a `mod` line in its `main.rs`, as a file without one isn't built; a test there
+fails on a file missing its line, or left in `tests/`. Helpers that more than one file uses go in
+`tests/all/support.rs` for the engine and `tests/all/common/` for the interface, and the DSP unit
+tests' signals in `vt-engine`'s `src/dsp/signals.rs`. One file's tests run with
+`cargo test -p vt-engine --test all groove::` or `cargo test -p vt-tui --test all grammar::`.
+
+- **The real-time guard.** `vt-engine`'s `src/rt_guard.rs` is the allocator of its own test
+  builds. `vt-model`'s `tests/all/main.rs` builds the same file through `#[path]`, as the model
+  can't depend on the engine, so `render.rs` there can count what a generator's render allocates.
+  It counts only while a test arms it.
+- **Goldens.** The engine's `tests/golden/*.hash` and the model's `tests/golden/*.txt` are
+  written again with `VT_BLESS=1`, only after a change on purpose. The engine's
+  `tests/all/goldens.rs` fails while an effect or a voice has no golden.
+- **The Roto.** `vt-roto`'s tests are the four files in its `tests/`, against the fake Roto in
+  memory. The fake is built only with the crate's `fake` feature, which its own tests and
+  `vt-tui`'s turn on as a dev-dependency, so a release build leaves it out.
+
+### Where code goes
+
+- **vt-tui** is in folders by what each module is, as the Architecture's
+  [Interface](docs/designs/vimtracker.md#interface) maps them: a page's keys, edits and drawing in
+  its folder under `pages/`, what's drawn over a page in `overlays/`, what pages share in
+  `services/`. An `impl App` block goes in the folder of the page, overlay or service it's for.
+- **vt-engine**'s DSP goes in `src/dsp/` by what it does (`voices/`, `filters/`, `effects/` and
+  `dynamics/`), as the [DSP layout](docs/designs/vimtracker.md#dsp-layout) says. A part two of
+  them share goes in `dsp/blocks/`. New DSP uses its one-pole, delay lines and Hermite reads,
+  coefficients and clips, and `Pcg32` for noise, rather than writing its own. What vt-tui draws of
+  the sound is re-exported in `src/pictures.rs`, and what the engine's tests play on their own in
+  `src/parts.rs`.
+- **Files.** The program writes its files through `vt-model`'s `ron_file.rs`
+  (`vt_model::ron_file`), from `vt-tui` too, and reads its songs, presets, kits and tags through
+  it, so an error names the file. A new file the program writes uses its `write` or `write_atomic`, which write a temporary file beside it and rename it
+  over, so a crash mid-write leaves the file before whole, rather than a bare `fs::write`.
+
+**Visibility.** In `vt-tui` and `vt-engine`, make new code `pub(crate)` unless another crate, a
+test, an example or `main.rs` uses it. Both crates' `lib.rs` warn on `unreachable_pub`, which says
+when a `pub` can't be reached from outside, and that keeps the dead-code lint working. In
+`vt-engine`, `dsp` is `pub(crate)`: reach it from outside only through `pictures` or `parts`.
+`vt-model` and `vt-roto` keep their modules `pub`, as the other crates use nearly all of them.
 
 A new effect, voice, generator or mod type has a checklist of its own,
 [docs/designs/adding-a-device.md](docs/designs/adding-a-device.md): every place it takes, what the
 compiler catches if one is missed, and which pinned names and goldens show the change.
-
-CI runs on Apple silicon macOS. The render tests compare hashes of rendered audio, and the
-filter and reverb use library maths that can round differently on other platforms, so the
-hashes are only checked on one.
 
 ## The manual
 
