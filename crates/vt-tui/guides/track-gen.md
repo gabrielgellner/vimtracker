@@ -279,7 +279,7 @@ finds `Euclid`, `Acid loops` and `Noise Ring`.
 | `Turing Machine` | `turing-machine` | `Change`, `Length`, `Range` |
 | `Deja vu` | `deja-vu` | `Deja vu`, `Spread` |
 | `Euclid` | `euclid`'s bass | `Hits`, `Rotate` |
-| `Kria` | `kria` | `Pitch loop`, `Octave loop` |
+| `Kria` | `kria` | `Pitch loop` to `Chance loop`, all five |
 | `Acid loops` | `kria`'s bass | `Trig loop` to `Sld loop`, all five |
 | `Accents` | `live-generators`' hats | `Hits`, `Rotate` |
 | `Acid line` | `acid-lines` | `Density`, `Notes`, `Octave`, `Accent`, `Slide` |
@@ -291,8 +291,9 @@ finds `Euclid`, `Acid loops` and `Noise Ring`.
 Each is the part of that song's track that plays it, with its macros turned to where the song
 has them; the generators tutorial has a section on each. `Deja vu` is the Turing Machine with
 the left half of Marbles' knob, up for more memory; the right half, the loop played out of
-order, is the phrase's `:order random`, which a patch doesn't hold. `Kria`'s length loop comes
-with its lane of 4 on FX 1.
+order, is the phrase's `:order random`, which a patch doesn't hold. `Kria`'s length, ratchet
+and probability loops come with their lanes, of 4, 3 and 7 on FX 1 to 3, a row a step, as a
+patch carries a lane's length but not its division.
 
 **What's saved** goes by the macros, as they're the patch's knobs: each macro that holds
 something, with its name, value, mappings and ranges; every mod slot a macro maps to, the slots

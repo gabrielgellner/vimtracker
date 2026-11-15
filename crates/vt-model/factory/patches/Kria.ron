@@ -58,6 +58,28 @@
                     ),
                 ],
             ),
+            (
+                name: Some("Ratchet loop"),
+                value: 8704,
+                maps: [
+                    (
+                        target: Setting("lane2.length"),
+                        min: 32256,
+                        max: 36096,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Chance loop"),
+                value: 26112,
+                maps: [
+                    (
+                        target: Setting("lane3.length"),
+                        min: 31232,
+                        max: 35072,
+                    ),
+                ],
+            ),
         ],
         generators: [
             (
@@ -83,6 +105,51 @@
                     seed: 1,
                 ),
                 lane: Some(4),
+            ),
+            (
+                column: Fx(1),
+                command: Some("ret"),
+                shape: (
+                    from: 0,
+                    to: 0,
+                    curve: 0,
+                    s: 0,
+                    kind: List,
+                    wave: Sine,
+                    rate: Time(Note(1920)),
+                    phase: 0,
+                    run: 1,
+                    values: [
+                        3,
+                        2,
+                    ],
+                    place: Every(2),
+                    seed: 1,
+                ),
+                lane: Some(3),
+            ),
+            (
+                column: Fx(2),
+                command: Some("cha"),
+                shape: (
+                    from: 0,
+                    to: 0,
+                    curve: 0,
+                    s: 0,
+                    kind: List,
+                    wave: Sine,
+                    rate: Time(Note(1920)),
+                    phase: 0,
+                    run: 1,
+                    values: [
+                        128,
+                        64,
+                        128,
+                    ],
+                    place: Every(3),
+                    seed: 1,
+                ),
+                lane: Some(7),
             ),
         ],
     ),

@@ -225,30 +225,37 @@ fn rows_past_a_shortened_lane_are_dim() {
 }
 
 #[test]
-fn the_kria_patchs_length_loop_turns_its_lane() {
+fn the_kria_patchs_loop_knobs_turn_its_lanes() {
     let (mut app, _realtime) = app_with(&[E; 16]);
     command(&mut app, "patch");
     press(&mut app, "/kria");
     special(&mut app, KeyCode::Enter);
-    let track = &app.song().tracks[0];
-    let at = track
-        .macros
-        .iter()
-        .position(|held| held.name.as_deref() == Some("Length loop"))
-        .unwrap();
-    let length = MacroTarget::Setting(SettingId::lane(0, 0).unwrap());
-    assert_eq!(track.macro_holding(length).map(|(on, _)| on), Some(at));
-    assert_eq!(track.phrases[&0].lane(0).map(|lane| lane.length), Some(4));
-    // At its bottom it's a lane of 1, at its top 16, and it starts at 4, as the patch was saved.
-    let heard = |app: &App, value: u16| {
-        let map = app.song().tracks[0].macros[at].maps[0];
-        let held = map.at(f32::from(value) / 256.0);
-        app.song().tracks[0].phrases[&0]
-            .lane(0)
-            .unwrap()
-            .heard_length(vt_model::lane::length_rows((held >> 8) as u8))
-    };
-    assert_eq!(heard(&app, 0), 1);
-    assert_eq!(heard(&app, 0xFF00), 16);
-    assert_eq!(heard(&app, app.song().tracks[0].macros[at].value), 4);
+    let knobs = [("Length loop", 4), ("Ratchet loop", 3), ("Chance loop", 7)];
+    for (slot, (name, rows)) in knobs.into_iter().enumerate() {
+        let track = &app.song().tracks[0];
+        let at = track
+            .macros
+            .iter()
+            .position(|held| held.name.as_deref() == Some(name))
+            .unwrap();
+        let length = MacroTarget::Setting(SettingId::lane(slot, 0).unwrap());
+        assert_eq!(track.macro_holding(length).map(|(on, _)| on), Some(at));
+        assert_eq!(
+            track.phrases[&0].lane(slot).map(|lane| lane.length),
+            Some(rows)
+        );
+        // At its bottom it's a lane of 1, at its top 16, and it starts where the patch was saved.
+        let heard = |app: &App, value: u16| {
+            let map = app.song().tracks[0].macros[at].maps[0];
+            let held = map.at(f32::from(value) / 256.0);
+            app.song().tracks[0].phrases[&0]
+                .lane(slot)
+                .unwrap()
+                .heard_length(vt_model::lane::length_rows((held >> 8) as u8))
+        };
+        assert_eq!(heard(&app, 0), 1, "{name}");
+        assert_eq!(heard(&app, 0xFF00), 16, "{name}");
+        let value = app.song().tracks[0].macros[at].value;
+        assert_eq!(heard(&app, value), rows, "{name}");
+    }
 }
