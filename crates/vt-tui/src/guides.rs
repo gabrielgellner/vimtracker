@@ -271,8 +271,10 @@ mod tests {
     #[test]
     fn paragraphs_wrap_to_the_window_and_lose_no_words() {
         let words = |text: &str| -> Vec<String> {
+            // A code span ending in a space, as `:preset save `, leaves a lone mark, no word.
             text.split_whitespace()
                 .map(|word| word.replace(['`', '*'], ""))
+                .filter(|word| !word.is_empty())
                 .collect()
         };
         for guide in GUIDES {
@@ -404,6 +406,10 @@ mod tests {
         assert_eq!(GUIDES[10].title(), "The FX page and its effects");
         let mut missing = Vec::new();
         for effect in vt_model::insert::Insert::ALL {
+            // An empty slot says `Empty` on the FX page, not its name `---`.
+            if effect == vt_model::insert::Insert::Empty {
+                continue;
+            }
             if !names(effects, effect.name()) {
                 missing.push(effect.name().to_owned());
             }
