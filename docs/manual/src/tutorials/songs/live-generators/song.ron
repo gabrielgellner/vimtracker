@@ -335,6 +335,7 @@
                     lanes: (Some((
                         start: 0,
                         length: 12,
+                        division: 4,
                     )), None, None),
                     generators: [
                         (
