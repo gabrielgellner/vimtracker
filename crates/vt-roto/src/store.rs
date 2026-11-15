@@ -142,12 +142,11 @@ fn knob(
     control: &LiveControl,
 ) -> PluginKnobConfig {
     let (haptic, step_names) = match &control.feel {
-        Feel::Smooth => (KnobHaptic::Smooth { indents: [None; 2] }, Vec::new()),
         Feel::CentreNotch => (KnobHaptic::CentreIndent, Vec::new()),
         Feel::Steps(names) if names.len() <= usize::from(MAX_STORED_STEPS) => {
             (KnobHaptic::Steps(names.len() as u8), names.clone())
         }
-        Feel::Steps(_) => (KnobHaptic::Smooth { indents: [None; 2] }, Vec::new()),
+        Feel::Smooth | Feel::Steps(_) => (KnobHaptic::Smooth { indents: [None; 2] }, Vec::new()),
         Feel::Switch => (KnobHaptic::Steps(2), control.feel.step_names()),
     };
     PluginKnobConfig {

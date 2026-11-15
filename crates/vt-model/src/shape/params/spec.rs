@@ -169,6 +169,10 @@ impl GenParam {
     /// weights while it draws them, with a loop's `Length` while it loops; and its `Voice` but
     /// while the panel shapes several tracks, each taking its own. Only a shape that draws from its
     /// seed has `Vary`, which a `Ring` hasn't, as it runs on from pass to pass by itself.
+    #[allow(
+        clippy::match_same_arms,
+        reason = "in the settings' order, a fill's together"
+    )]
     pub fn exists_for(self, shape: &Shape, column: ShapeColumn, generates: bool) -> bool {
         let kind = shape.kind;
         let grids = kind == FillKind::Grids;
@@ -446,6 +450,10 @@ impl GenParam {
 
     /// Its value as the panel shows it: a note's name, `+20` for a bend, `9 of 16` for hits.
     /// A random fill has no curve, so it shows `--` there.
+    #[allow(
+        clippy::match_same_arms,
+        reason = "in the settings' order, a fill's together"
+    )]
     pub fn shown(self, shape: &Shape, context: &Context) -> String {
         let column = context.column;
         let number = || self.number(shape, context);
@@ -743,6 +751,10 @@ impl GenParam {
     /// list to its next choice, going round, or sixteen on, stopping at its ends; a phase and a
     /// rotation round their cycle. A `List`'s
     /// values are only typed, so they say how.
+    #[allow(
+        clippy::match_same_arms,
+        reason = "in the settings' order, a fill's together"
+    )]
     pub fn step(
         self,
         shape: &mut Shape,
@@ -819,6 +831,10 @@ impl GenParam {
     }
     /// Put it back to what it starts as: `From`, `To` and `Source` to where they `start`, a
     /// `Where` to its column's, and an amount to its own.
+    #[allow(
+        clippy::match_same_arms,
+        reason = "in the settings' order, a fill's together"
+    )]
     pub fn reset(self, shape: &mut Shape, context: &Context, starts: Starts) {
         let (from, to) = starts.ends;
         match self {
@@ -980,6 +996,10 @@ impl GenParam {
 
     /// Give it a typed value, or say why the text isn't one. A list setting and `Pitches` aren't
     /// typed, so their text changes nothing.
+    #[allow(
+        clippy::match_same_arms,
+        reason = "in the settings' order, a fill's together"
+    )]
     pub fn typed(
         self,
         shape: &mut Shape,

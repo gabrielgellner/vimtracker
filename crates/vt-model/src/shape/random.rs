@@ -384,6 +384,7 @@ mod tests {
         let one = spread(0, 40);
         assert!((0..20).all(|at| (one.draw(even(at, 20)) - 0.7).abs() < 1e-12));
         let ends = spread(MAX_SPREAD, 40);
+        #[allow(clippy::float_cmp, reason = "the ends are drawn as exactly 0 and 1")]
         let high = (0..1000)
             .filter(|at| ends.draw(even(*at, 1000)) == 1.0)
             .count();

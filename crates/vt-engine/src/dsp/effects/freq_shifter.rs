@@ -245,6 +245,10 @@ impl FreqShifter {
     /// Turn a side's oscillator on a frame, at a shift in Hz. Its step is worked out again only
     /// when the shift moves, and it's kept on the circle by pulling it back each frame.
     #[inline]
+    #[allow(
+        clippy::float_cmp,
+        reason = "the step is worked out again only when the shift moves at all"
+    )]
     fn turn(&mut self, side: usize, hertz: f32) -> [f32; 2] {
         if hertz != self.stepped_hertz[side] {
             let angle = TAU * hertz / self.rate as f32;

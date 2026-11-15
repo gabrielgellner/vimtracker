@@ -272,7 +272,7 @@ fn a_track_page_change_of_speed_is_heard_from_the_next_step() {
     engine.play_from(0);
     let mut out = vec![0.0; (2 * STEP + 1) * 2];
     engine.process(&mut out);
-    let mut slower = played.clone();
+    let mut slower = played;
     slower.tracks[0].speed = Speed::Eighth;
     engine.swap(version(&slower, hits_pool()));
     let mut after = vec![0.0; 6 * STEP * 2];

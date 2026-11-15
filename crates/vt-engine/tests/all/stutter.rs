@@ -106,8 +106,7 @@ fn each_lock_starts_it_again_even_where_trig_is_on_already() {
         STEP * 4,
     );
     // The second step is the second note as it comes, and the sixteenth after it repeats it.
-    let frames = STEP + 1000..STEP * 2 - 1000;
-    assert!(frames.clone().all(|frame| out[frame] == dry[frame]));
+    assert!((STEP + 1000..STEP * 2 - 1000).all(|frame| out[frame] == dry[frame]));
     let frames = STEP * 2 + 1000..STEP * 3 - 1000;
     assert!(came_from(&out, &dry, frames, STEP).is_some());
 }

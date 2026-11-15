@@ -230,8 +230,7 @@ pub(crate) fn complete(line: &str, places: Places) -> Completions {
         },
         Takes::Render => render(start, argument, places),
         Takes::Kit => kit(start, argument, places),
-        Takes::Preset => preset(start, argument, command.name, places),
-        Takes::Patch => preset(start, argument, command.name, places),
+        Takes::Preset | Takes::Patch => preset(start, argument, command.name, places),
         takes => value_of(takes, start, argument, command.name, places),
     }
 }

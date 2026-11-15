@@ -179,6 +179,10 @@ impl Exciter {
     /// One frame in, and what it makes of it out, to be added to the sound. `same` says the frame's
     /// sides are the same, bit for bit (decision 147).
     #[inline]
+    #[allow(
+        clippy::float_cmp,
+        reason = "the tone is tuned again only when it moves at all"
+    )]
     pub(crate) fn process(
         &mut self,
         input: [f32; 2],

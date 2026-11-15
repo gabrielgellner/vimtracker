@@ -339,6 +339,10 @@ impl Envelope {
         }
     }
 
+    #[allow(
+        clippy::float_cmp,
+        reason = "the levels are eighths, compared as the DX7's envelope does"
+    )]
     fn set_operator(&mut self, rate: [u8; 4], level: [u8; 4], global_level: i32) {
         for i in 0..4 {
             let scaled = (operator_level(level[i]) & !1) + global_level - 133;
@@ -370,6 +374,10 @@ impl Envelope {
         }
     }
 
+    #[allow(
+        clippy::float_cmp,
+        reason = "the levels are compared as the DX7's envelope does"
+    )]
     fn set_pitch(&mut self, rate: [u8; 4], level: [u8; 4]) {
         for i in 0..4 {
             self.level[i] = pitch_envelope_level(level[i]);

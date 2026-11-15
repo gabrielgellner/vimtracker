@@ -161,7 +161,7 @@ pub fn read(bytes: &[u8]) -> Read {
                     read.frames = Some(chunk.body.len() as u64 / u64::from(align));
                 }
             }
-            b"cue " if chunk.short => read.problems.push(skipped("is cut short")),
+            b"cue " | b"smpl" if chunk.short => read.problems.push(skipped("is cut short")),
             b"cue " => match cue_points(chunk.body) {
                 Some(points) => cues = points,
                 None => read.problems.push(skipped("is malformed")),
@@ -173,7 +173,6 @@ pub fn read(bytes: &[u8]) -> Read {
                     labels = adtl_labels(&chunk.body[4..]);
                 }
             }
-            b"smpl" if chunk.short => read.problems.push(skipped("is cut short")),
             b"smpl" => match sampler(chunk.body) {
                 Some((root, loops)) => {
                     smpl_root = root;

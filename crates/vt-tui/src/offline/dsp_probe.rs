@@ -707,6 +707,10 @@ pub fn signal(input: &Input, rate: u32, folder: &Path) -> Result<Vec<[f32; 2]>, 
                     .collect(),
             )
         }
+        #[allow(
+            clippy::float_cmp,
+            reason = "a sweep needs two frequencies that differ at all"
+        )]
         Input::Sweep {
             from,
             to,

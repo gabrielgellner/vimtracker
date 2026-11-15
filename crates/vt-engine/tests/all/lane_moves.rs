@@ -106,7 +106,7 @@ fn a_track_at_rest_reads_its_lanes_as_the_count_did_over_a_long_chain_with_an_ed
     // with its column's offset, round its length; and an edit moves the offset so the column
     // reads the row it was going to.
     let mut offsets = [0_i64; 3];
-    let mut song = original.clone();
+    let mut song = original;
     let mut edited = false;
     for _ in 0..4096 {
         let (_, lanes) = step(&mut engine);

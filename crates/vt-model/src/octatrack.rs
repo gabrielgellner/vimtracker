@@ -305,7 +305,7 @@ mod tests {
         let mut wrong = bytes.clone();
         wrong[0x40] ^= 1;
         assert_eq!(OtFile::read(&wrong), Err(OtError::Checksum));
-        let mut header = bytes.clone();
+        let mut header = bytes;
         header[0] = b'R';
         assert_eq!(OtFile::read(&header), Err(OtError::Header));
     }

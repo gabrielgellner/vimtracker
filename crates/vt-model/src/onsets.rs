@@ -146,9 +146,9 @@ pub fn find_onsets(samples: &[f32], channels: usize, rate: u32) -> Vec<Onset> {
     let mut onsets: Vec<Onset> = Vec::new();
     let gap = (MIN_GAP_SECONDS * f64::from(rate)).round() as u64;
     for (hop, value) in flux.iter().enumerate() {
-        let near = hop.saturating_sub(reach)..(hop + reach + 1).min(flux.len());
+        let mut near = hop.saturating_sub(reach)..(hop + reach + 1).min(flux.len());
         // The first of equal values is the peak, so a flat top gives one.
-        let is_peak = near.clone().all(|other| match other.cmp(&hop) {
+        let is_peak = near.all(|other| match other.cmp(&hop) {
             std::cmp::Ordering::Less => flux[other] < *value,
             std::cmp::Ordering::Equal => true,
             std::cmp::Ordering::Greater => flux[other] <= *value,
