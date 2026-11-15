@@ -637,6 +637,9 @@ impl Took {
     }
 }
 
+/// A kind of edit to time: its name, and the action that's the edit of a number.
+type Kind = (&'static str, fn(u32) -> Action);
+
 /// What one edit of a large song takes: on the edit thread, the edit itself, committing it to the
 /// undo history, building its version and the room for its generators; then, while playing, the
 /// engine taking the version, as the callback does. A turn of the Roto or the wheel makes one of
@@ -657,7 +660,7 @@ fn edits(pool: &Arc<SamplePool>) {
         song.sound_tracks()
     );
     const LAST: usize = 31;
-    let kinds: [(&str, fn(u32) -> Action); 2] = [
+    let kinds: [Kind; 2] = [
         ("a turn of track 32's Cut", |edit| Action::SetTrackSetting {
             track: LAST,
             setting: SettingId::CUT,

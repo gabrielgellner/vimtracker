@@ -35,6 +35,10 @@ pub use crate::machine::{
 };
 pub use crate::phrase::{Lane, Phrase, Visit};
 
+mod tracks;
+
+pub use tracks::Tracks;
+
 /// The gain of a level value, on an even scale in dB like a fader's. `00` is silent, nothing goes
 /// past `MAX_LEVEL`, and the value can be between steps, as an LFO moves it.
 pub fn level_gain(level: f32) -> f32 {
@@ -978,7 +982,9 @@ pub struct Song {
     /// The project's samples, which a sampler track's `Sample` picks from by number.
     #[serde(default, skip_serializing_if = "Bank::is_empty")]
     pub bank: Bank,
-    pub tracks: Vec<Track>,
+    /// Its tracks, each shared with the versions before and after that an edit didn't change it
+    /// in.
+    pub tracks: Tracks,
     pub sections: Vec<Section>,
     /// How the views show the song: its folded groups. Not undone, and the app keeps it while
     /// the song is open and writes it in when saving.
@@ -1007,7 +1013,7 @@ impl Song {
             grooves: Vec::new(),
             launch: Launch::default(),
             bank: Bank::default(),
-            tracks: Vec::new(),
+            tracks: Tracks::new(),
             sections: vec![Section::default()],
             view: ViewState::default(),
             read_only: false,
@@ -1093,25 +1099,32 @@ impl Song {
         let is_slice = |slot: &FxSlot| {
             slot.command == Some(FxCommand::Set(SettingId::SLICE)) && slot.slice_mark().is_none()
         };
-        for track in &mut self.tracks {
+        for index in 0..self.tracks.len() {
+            let track = &self.tracks[index];
             if track.machine != Machine::Sampler || !track.is_sound() {
                 continue;
             }
             let own = track.sample();
-            for phrase in track.phrases.values_mut() {
-                let plays = |step: &Step| {
-                    let locked = step
-                        .fx
-                        .iter()
-                        .rev()
-                        .find(|slot| slot.command == Some(FxCommand::Set(SettingId::SAMPLE)));
-                    locked.map_or(own, |slot| slot.coarse()) == number
-                };
-                let touched = phrase
+            let plays = |step: &Step| {
+                let locked = step
+                    .fx
+                    .iter()
+                    .rev()
+                    .find(|slot| slot.command == Some(FxCommand::Set(SettingId::SAMPLE)));
+                locked.map_or(own, |slot| slot.coarse()) == number
+            };
+            let touched = |phrase: &Phrase| {
+                phrase
                     .steps()
                     .iter()
-                    .any(|step| plays(step) && step.fx.iter().any(is_slice));
-                if !touched {
+                    .any(|step| plays(step) && step.fx.iter().any(is_slice))
+            };
+            // Only a track with such a step is written to, as writing to one copies it.
+            if !track.phrases.values().any(|phrase| touched(phrase)) {
+                continue;
+            }
+            for phrase in self.tracks[index].phrases.values_mut() {
+                if !touched(phrase) {
                     continue;
                 }
                 let phrase = Arc::make_mut(phrase);
