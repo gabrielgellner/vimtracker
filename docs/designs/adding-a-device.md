@@ -1,6 +1,6 @@
 # Adding a device: an effect, a voice, a generator or a mod type
 
-A checklist for each family, written against the code as it is (#784). It lists every place a new
+A checklist for each family, written against the code as it is (#784, #809). It lists every place a new
 one takes, what the compiler says if you miss one, and which tests show the change. Why the code
 is shaped this way is in [device-interface.md](device-interface.md); the
 [Architecture](vimtracker.md#architecture) section describes it as built. Paths are under
@@ -48,9 +48,12 @@ is shaped this way is in [device-interface.md](device-interface.md); the
    too, and the import of its `*_PARAMS`. The compiler asks for the row, as `EFFECTS` has one for
    each `EffectKind`; `each_effect_kind_is_its_insert_and_its_row` checks they're in step.
 4. **Its DSP**, in `vt-engine/src/dsp/effects/<name>.rs`, or `filters/` or `dynamics/` by what it
-   does, with a `pub mod` line in the folder's `.rs`. Implement `SlotEffect`, with the model's
-   struct as its `Settings`, and `MONO` and `MIXING` if it isn't `Stereo` and `Wet`. Implement
-   `Rung` if the slot plays it through `ring`. Nothing may allocate but `new`.
+   does, with a `pub(crate) mod` line in the folder's `.rs`. Implement `SlotEffect`, with the
+   model's struct as its `Settings`, and `MONO` and `MIXING` if it isn't `Stereo` and `Wet`.
+   Implement `Rung` if the slot plays it through `ring`. Nothing may allocate but `new`. Build it
+   from `dsp/blocks/` (`one_pole`, `line`, `coefficient`, `clip`, `xorshift`) and `rng.rs`'s
+   `Pcg32::unit` and `bipolar` rather than writing its own one-pole, delay line or noise. Its unit
+   tests measure with `dsp/signals.rs`.
 5. **Where the slot keeps it:**
    - **With a long buffer:** one line of `memories!` in `dsp/effects/memory.rs`, under `rung:`, or
      under `played_by_slot:` with an arm of its own in `slot.rs`'s `effect` if it needs the note or
@@ -61,16 +64,18 @@ is shaped this way is in [device-interface.md](device-interface.md); the
      it hasn't, so its wet sound is silent, and its golden render is what shows it.
 
    `FACTS` won't build if the effect is in neither list or in both, or lacks the `Mix` or `Gain`
-   its `MIXING` needs. `slot.rs`'s test `by_hand` matches every effect, so the tests won't build
-   without its arm there, the levels and `Mono` the slot should find for it. vt-engine's
-   `tests/all/mono.rs` checks a `MONO` other than `Stereo`.
+   its `MIXING` needs. `slot.rs`'s `the_slot_reads_each_effects_levels_from_its_own_settings`
+   checks the levels its `MIXING` gives, read from its settings, with nothing to write for it.
+   vt-engine's `tests/all/mono.rs` checks a `MONO` other than `Stereo`.
 6. **The Roto**, in `vt-tui/src/roto/layouts.rs`: its `DeviceLayout`, kept to the module's rules
    (`Mix` and `Gain` are knobs 7 and 8), and its `BY_EFFECT` row, or one layout for each type of an
    effect whose settings change with its type. The compiler asks for the row.
    vt-tui's `tests/all/roto_layouts.rs` checks each setting is placed once.
 7. **Only if it draws**, in `vt-tui/src/`: its picture in `graphics/slots.rs`, its panes on the FX
    page in `pages/track/draw.rs`, and the zoom's in `pages/track/draw/zoom.rs`. These matches have a
-   catch-all, so nothing asks.
+   catch-all, so nothing asks. What vt-tui works out from the engine's code, such as a response or
+   a tail, is re-exported in `vt-engine/src/pictures.rs`, as `pictures::lpg` is, and the effect's
+   own module stays `pub(crate)`.
 8. **The guide**: `vt-tui/guides/track-fx.md`, with its name and every setting's. `guides.rs`'s
    `every_effect_its_types_and_its_settings_are_in_the_fx_page_guide` fails until they're there.
 
@@ -87,10 +92,12 @@ its own named in `effect_golden`. The release tests.
    in exactly one kind.
 2. **`vt-model/src/settings/voices.rs`**: its list of `Entry`s, which its row names, at most
    `MAX_MACHINE_SETTINGS`. `machine.rs`'s tests check that its grid places each setting once.
-3. **Its DSP**, in `vt-engine/src/dsp/voices/<name>.rs`, with a `pub mod` line in `dsp/voices.rs`.
-   Implement `SynthEngine`: `new` and `next`, and `DRIFTS`, `NOISE`, `trigger`, `release` and the
-   rest only where it has them. It reads its settings by place from `Settings`, in its entries'
-   order.
+3. **Its DSP**, in `vt-engine/src/dsp/voices/<name>.rs`, with a `pub(crate) mod` line in
+   `dsp/voices.rs`. Implement `SynthEngine`: `new` and `next`, and `DRIFTS`, `NOISE`, `trigger`,
+   `release` and the rest only where it has them. It reads its settings by place from `Settings`,
+   in its entries' order. As for an effect, its one-poles, lines, coefficients, soft clips and
+   noise come from `dsp/blocks/` and `Pcg32`, and a Plaits port's filters from
+   `blocks/plaits_parts.rs`.
 4. **`vt-engine/src/voice.rs`**: one `synths!` line, `Voice(Engine)`, and its `use`. The compiler
    asks for it, as `Synth::new` matches every voice.
 5. **The Roto**: its layout and `BY_VOICE` row in `roto/layouts.rs`. The compiler asks for the row.
@@ -112,11 +119,13 @@ keep can have a file of its own instead, as `supersaw.rs` and `four_op.rs` do, n
    own, `shape/<name>.rs`, as a `Shape` field, `#[serde(default, skip_serializing_if = ...)]`, with
    its default in `impl Default for Shape`. Add it to `Shape::draws` if it draws from the seed. The
    compiler asks for the row and the default.
-2. **`vt-model/src/shape/params.rs`**: a `GenParam` for each new setting, its place in `ALL`, which
-   is the panel's order, and its `GEN_PARAMS` row, in the enum's order, as `spec` finds a row by the
-   variant. Then its cases in `exists_for`, `shown` and `reset`, which the compiler asks for, and in
-   `grid`, `typed`, `choices` and `chosen` where it needs them, which it doesn't. A row in the wrong
-   place shows as keys moving in `gen_params.txt`.
+2. **`vt-model/src/shape/params.rs`**: a `GenParam` for each new setting; its place in `ALL`
+   (`params/spec.rs`), which is the panel's order; and its `GEN_PARAMS` row (`params/table.rs`), in
+   the enum's order, as `spec` finds a row by the variant. Then its cases in `params/spec.rs`'s
+   `exists_for`, `shown` and `reset`, which the compiler asks for, and in `grid`, `typed`, `choices`
+   and `chosen` where it needs them, which it doesn't. A row in the wrong place shows as keys
+   moving in `gen_params.txt`. One macro writing these from a single list is left for the next
+   time a generator is added (#809's item 6).
 3. **`vt-model/src/shape/render.rs`**: its arm in the match on each row, or a render of its own
    before it, as `tonnetz::render` is, with an `unreachable!` arm. The compiler asks for the arm.
 4. **The engine**: nothing, unless it carries something from one pass to the next, as `Ring` and

@@ -269,9 +269,9 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 
 | Crate | Owns | May depend on |
 |---|---|---|
-| `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, kits, presets, sample decoding and resampling, sample analysis, and reading WAV markers and `.ot` files | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `realfft`, `thiserror` and `xxhash-rust` |
-| `vt-engine` | `Published`, the queues to and from the callback (`link.rs`), transport and sequencing (`engine.rs` and `engine/`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues, `hound` to write WAVs, `wide` for `Supersaw`'s four lanes, `realfft` for `Clouds`' spectral mode and `thiserror` |
-| `vt-roto` | Melbourne Instruments' Roto-Control: its SysEx, CC and serial protocols, typed each way (`sysex.rs`, `cc.rs`, `serial.rs`), the handshake (`session.rs`), the link's thread with finding the ports and reconnecting (`link.rs`, `transport.rs`), devices in PLUGIN mode, live or stored, with their buttons' lights, the Roto's track list and what changed sent back (`live.rs`), MIX mode's banks, track focus, lights and meters (`mix.rs`), a device's pages of eight knobs and eight buttons as data (`layout.rs`), vimtracker's own stored setups, written only under its own hashes and only when they change (`store.rs`), a fake Roto in memory (`fake.rs`), and `roto-probe` | No other vimtracker crate: `midir` for MIDI, `serialport` (without `libudev`) for the serial port, `thiserror` and `xxhash-rust` |
+| `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, every RON file read and written one way, each write atomic (`ron_file.rs`), kits, presets, sample decoding and resampling, sample analysis, and reading WAV markers and `.ot` files | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `realfft`, `thiserror` and `xxhash-rust` |
+| `vt-engine` | `Published`, the queues to and from the callback (`link.rs`), transport and sequencing (`engine.rs` and `engine/`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), which is the crate's own, with what others draw of it in `pictures.rs` and the parts the tests play on their own in `parts.rs`, the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues, `hound` to write WAVs, `wide` for `Supersaw`'s four lanes, `realfft` for `Clouds`' spectral mode and `thiserror` |
+| `vt-roto` | Melbourne Instruments' Roto-Control: its SysEx, CC and serial protocols, typed each way (`sysex.rs`, `cc.rs`, `serial.rs`), the handshake (`session.rs`), the link's thread with finding the ports and reconnecting (`link.rs`, `transport.rs`), devices in PLUGIN mode, live or stored, with their buttons' lights, the Roto's track list and what changed sent back (`live.rs`), MIX mode's banks, track focus, lights and meters (`mix.rs`), a device's pages of eight knobs and eight buttons as data (`layout.rs`), vimtracker's own stored setups, written only under its own hashes and only when they change (`store.rs`), a fake Roto in memory (`fake.rs`, built only with the `fake` feature, which its own tests and vt-tui's turn on as a dev-dependency, so a release build leaves it out), and `roto-probe` | No other vimtracker crate: `midir` for MIDI, `serialport` (without `libudev`) for the serial port, `thiserror` and `xxhash-rust` |
 | `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, the mouse wheel as a knob (`input/wheel.rs`), the Roto's setting, every kind of device's layout on it (`roto/layouts.rs`), its devices as the Roto shows them, and its knobs' and buttons' moves as edits (`roto.rs`, `roto/devices.rs`, `roto/edits.rs`), the song as MIX mode's strips (`roto/mix.rs`), the faders as the steps automate them and a hand takes them over (`services/automating.rs`), and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
 
 *   **One direction.** `vt-tui` uses `vt-engine`, which uses `vt-model`, and never the other way. The
@@ -284,8 +284,9 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     button's press back into the `Action` a key would give ([`roto-control.md`](roto-control.md)).
 *   **What the interface borrows from the engine.** Besides `Published` and the queues, `vt-tui`
     calls the engine's DSP to draw what a sound does: the track filter's response, a compressor's
-    static curve and an EQ's response come from `dsp::filters::filter`, `dsp::dynamics::compressor`
-    and `dsp::dynamics::eq`, so a drawing is the sound's own maths.
+    static curve, an EQ's response, Distort's transfer, the delays' repeats and the reverbs' tails
+    come from `vt_engine::pictures`, which re-exports each from the module that plays it, so a
+    drawing is the sound's own maths. `dsp` itself is `pub(crate)` (#809).
 *   **A new setting needs no new interface.** Every setting a step can lock or a modulator can move
     is registered once, in `vt-model`'s `settings.rs`, with the key songs store it by, a name, a
     label for the grid, a kind and a default. The track page, `K`, the grid and the engine all read
@@ -298,7 +299,7 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     `settings/voices.rs`), and what its Machine device takes from it: the setting its title shows,
     any placing of its grid of its own, its role and its gate. A generator's settings, which go
     past a byte and hang on the column filled, have a table of their own: one `GenParamSpec` row
-    each in `shape/params.rs`'s `GEN_PARAMS`, by `GenParam`, with its key, name, units, typing,
+    each in `shape/params/table.rs`'s `GEN_PARAMS`, by `GenParam` (`shape/params.rs`, with what hangs on a shape in `params/spec.rs`), with its key, name, units, typing,
     bounds, steps and a `get` and `set` of it as a number, and one `FillSpec` row each in
     `shape.rs`'s `FILLS`, by `FillKind`, with its name, meaning and its own settings' places on
     the Gen page (decision 342). The effects' enums, both `ALL`s and their forwarding are written
@@ -568,17 +569,25 @@ Song                               song.ron, refused unless format_version is FO
     sample files by hand, by their content hash (`tags.ron`, `vt-model`'s `tag.rs`, decision 315).
     The cache folder, `$XDG_CACHE_HOME/vimtracker` or `~/Library/Caches/vimtracker` on macOS,
     holds the sample analyses and `full-speed.txt`. Autosave (`services/autosave.rs`) writes `song.autosave.ron` beside
-    `song.ron` every `AUTOSAVE_SECONDS`, and offers it back after a crash.
+    `song.ron` every `AUTOSAVE_SECONDS`, and offers it back after a crash. Each of these files is
+    written through `vt_model::ron_file` (#809), all but `settings.ron`, which the program only
+    writes once, as a template, when there's none: `write` and `write_atomic` write a temporary file
+    beside it and rename it over, so a crash mid-write leaves the file before whole. The song, the
+    autosave, presets, kits, the tags, the recent places and the command history are read through it
+    too: `read` and `parse` say which file wouldn't read, and `probe` reads a format's number on its
+    own first, each format keeping its own policy (a song refuses any other, a preset reads older
+    ones, and a kit has none). The analysis cache's files, a project's imported samples and the kits
+    imported from Ableton are written atomically the same way.
 *   **Presets.** `vt-model`'s `preset.rs` reads and writes a sound preset, a `Sound` (the machine
     to the slots' effects, and a sampler's bank entry by its full path) and a `Patch` (the mod
     slots, accumulator, arpeggio and macros), and an effect preset, one slot's `Insert` with its
     fine parts by key. Each is a RON file with its own `format`, read with serde's defaults for
     what's left out and refusing what it doesn't know. `Action::LoadSound` and
-    `Action::LoadEffect` load one as an edit; `presetting.rs` in `vt-tui` saves and loads them
+    `Action::LoadEffect` load one as an edit; `pages/track/presets.rs` in `vt-tui` saves and loads them
     for the cursor's track or slot, and banks a sound's sample (decision 310). A patch on its own,
     `preset/patch.rs`'s `PatchPreset`, holds only the macros and what they move, with the live
     generators they hold; `Patch::place` finds free slots and macros for it and
-    `Action::LoadPatch` adds it, and `patching.rs` saves and adds one with its generators on the
+    `Action::LoadPatch` adds it, and `pages/track/patches.rs` saves and adds one with its generators on the
     phrase under the cursor (decision 311).
 
 **Decisions:** 2, 5, 8, 10, 11, 15, 17, 29, 30, 37, 70, 78 to 82, 84 to 88, 91, 94, 95, 105, 111,
@@ -693,7 +702,7 @@ the same clock (decision 239).
     heard a frame late, far too little to hear.
 *   **One side for both** (decision 147). `through_slots` looks once whether a frame's sides are the
     same, and each slot passes that on. An effect says what it does with such a sound
-    (`effects::distort::Mono`): `OneSide` works the left side out and gives it to both, keeping the
+    (`effects::slot::Mono`): `OneSide` works the left side out and gives it to both, keeping the
     right's state in `Sides` to take over the moment they differ; `Linked`, such as a compressor's
     linked detector, passes "the same" on without looking; and `Stereo` works out both and the
     slot looks again.
@@ -727,7 +736,7 @@ module per file, each keeping its port's licence notice:
 | `filters/` | The track's filter and the character filters it switches between, and the slot effects that are filters | `filter`, `diode_filter`, `dirty_filter`, `korg35`, `obx` (the OB-X's two-pole filter, after OB-Xf's), `comb`, `lpg`, `vowel` |
 | `effects/` | The other slot effects, and what plays a slot | `beads` (Mutable Instruments' Beads, whose grains are `granular`'s and whose wow and flutter are `tape`'s), `chorus`, `clouds` (Mutable Instruments' Clouds, whose reverb and pitch shifter are `reverb`'s and `pitch_shifter`'s, with its phase vocoder in `clouds/spectral`, on `realfft`), `delay`, `distort` (also `Distortion`, what a slot keeps for it), `echo` (the Space Echo, a Roland RE-201's tape loop, whose reverb is `spring`'s), `exciter`, `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take, by `EffectKind`, and `memories!`, the one list of the effects that take one, which writes `Memory` and every `match` that hands a call on to them), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `rotary`, `slot` (`InsertState`, which plays whichever effect a slot has, `Keys`, what it hears from other tracks, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `space`, `spring`, `stutter`, `sweep` (sines swept through a slot, for the tests that hold its curve to what's heard), `tail` (how a reverb's tail dies away, for its drawing), `tape`, `warps`, and `tables/` with Warps' fold |
 | `dynamics/` | The mixing tools | `compressor` (the `Comp` slot, an enum of its types, the `Auto` and `Makeup` they share, and `Clean`), `console` (its `Console` type, fitted to Bus FORCE), `glue` (its `Glue` type, fitted to Live's Glue Compressor, and the `Peak Clip` the slot runs after its mix), `limiter`, `eq` |
-| `blocks/` | Small parts the others share, which use nothing else in `dsp` | `clip` (a clamp that's safe in a feedback loop, #461), `drift` (what makes each note of an analog voice a little different, decisions 190 and 191), `flush` (a filter's state let go once it's far below anything heard, #260), `oversampler` (also its `Decimator`, for a sound made at twice the rate), `response` (what a filter does to a steady sine, from its coefficients, for the FX page's curves, decision 333), `sides` (a state for each side, worked out once for both while a sound is the same on both, as every `OneSide` effect keeps its own), `smoother`, `sine_table`, `plaits_parts` |
+| `blocks/` | Small parts the others share, which use nothing else in `dsp` | `clip` (a clamp that's safe in a feedback loop, #461, and stmlib's soft clip and soft limit built on it), `coefficient` (a one-pole's coefficient from a time constant or a corner, `of_time`, `kept_over` and `of_corner`), `line` (delay lines: `Lines` and `StereoLine`, a power of two long; `Tape`, Delay's and Echo's frame line; `SharedLines`, Clouds' many short lines in one buffer; and the two forms of the Hermite read, `hermite` and `hermite_soras`), `one_pole` (the trapezoidal one-pole's `gain` and `low_pass`), `xorshift` (the xorshift32 the tape, Grains and Warps keep, as `Pcg32` would change what they play), `drift` (what makes each note of an analog voice a little different, decisions 190 and 191), `flush` (a filter's state let go once it's far below anything heard, #260), `oversampler` (also its `Decimator`, for a sound made at twice the rate), `response` (what a filter does to a steady sine, from its coefficients, for the FX page's curves, decision 333), `sides` (a state for each side, worked out once for both while a sound is the same on both, as every `OneSide` effect keeps its own), `smoother`, `sine_table`, `plaits_parts` |
 
 A new voice, filter, effect or dynamics tool goes in its folder. A slot effect with a long buffer
 implements `SlotEffect` (and `Rung`, if the slot plays it through `ring`) and takes one line of
@@ -735,16 +744,24 @@ implements `SlotEffect` (and `Rung`, if the slot plays it through `ring`) and ta
 `SynthEngine` and takes one line of `synths!`. [Adding a device](adding-a-device.md) has the rest
 of each family's checklist. A part that two folders
 would share, such as the antiderivative antialiasing, 4x oversampling and state variable filter of
-#260, goes in `blocks/`. A binary table sits in a `tables/` beside the modules that read it, so
+#260, goes in `blocks/`. New DSP uses `blocks/` for a one-pole, a delay line or its read, a
+coefficient or a soft clip, and `rng.rs`'s `Pcg32::unit` and `bipolar` for noise, rather than
+writing its own: each of those was once copied into every effect that needed it (#809, #815 to
+#819). A DSP test measures with `dsp/signals.rs` (`#[cfg(test)]`: `sine`, `sines`, `rms`, `peak`
+and `differs`). A binary table sits in a `tables/` beside the modules that read it, so
 their `include_bytes!` paths stay short. The rest of the engine names each module by its folder, as
 `dsp::filters::filter` and `dsp::dynamics::compressor`.
 
 `dsp` is `pub(crate)`, as are `voice`, `reader` and `rng` (#809). What `vt-tui` draws of the sound,
 its curves, responses, transfers, repeats and tails, it reads through `pictures`, which re-exports
 each from the module that plays it, a module per effect where names repeat, as `pictures::lpg`.
-The parts the tests play on their own, a slot, the compressor and the Space Echo, are re-exported
-in `parts`. `vt-engine`'s `lib.rs` warns on `unreachable_pub`, as `vt-tui`'s does, so the dead-code
-lint sees inside `dsp`.
+The parts the tests play on their own, a slot with its `Keys` and `Mono`, the compressor and the
+Space Echo with the `Pcg32` its wobble is seeded from, are re-exported in `parts`. `track_state`
+shows only its readouts (`Drawn`, `Faders`, `LfoNow`, `LiveValues` and `NotePitch`), and
+`TrackState` and the scheduler's parts are `pub(crate)`. `vt-engine`'s `lib.rs` warns on
+`unreachable_pub`, as `vt-tui`'s does, so the dead-code lint sees inside `dsp`. A new module is
+`pub(crate)` unless another crate or the engine's `tests/all` names it, and what vt-tui draws of a
+new effect is added to `pictures` rather than making its module `pub`.
 
 Where the unclear ones went: `comb`, `lpg` and `vowel` are slot effects, but filters by what they do,
 as Vital files its comb and formant filters. `resonator` is the `Reso` slot effect's code; the `Modal`
@@ -758,8 +775,11 @@ come, will each add a module and an arm. `compressor` applies the `Auto` and `Ma
 every type shares after the type's own module, so a new type has both with nothing of its own
 (decision 132). `plaits_parts` holds Plaits'
 and stmlib's shared filters and helpers, used by voices, `lpg`, `warps` and `resonator`, so it's a
-block. Two soft clips, `drums::soft_clip` and `filter::soft_clip`, stay
-where they were written and are borrowed across folders; #260 may move shared shapers into `blocks/`.
+block; its own `OnePole` and `DelayLine::read_hermite` are built on `one_pole` and `line`.
+stmlib's soft clip is `clip::soft_clip`, in the drums' NaN-safe form, which voices and effects
+in every folder share. `filter::soft_clip`, a different shape, stays in the track filter's
+module, and the Korg 35, the flanger, the phaser, the pitch shifter and Grains borrow it from
+there.
 
 ### Interface
 
@@ -776,10 +796,12 @@ crates/vt-tui/src/
                             audio/, sample/, song/, chain/ and phrase/
   overlays.rs  overlays/    what's drawn over a page and takes its keys: picker/ with the explorer,
                             command/ (the `:` line, its parser, completion and history), help.rs,
-                            guides/, shape/, mapping/ and field_jump.rs
+                            guides/, shape/ (the panel, its drawing and live.rs, a live
+                            generator made, reopened and applied), mapping/ and field_jump.rs
   services.rs  services/    what every page shares, and the helper threads: analysing, automating,
-                            autosave, banking, config, folding, heard, loading, meter, scope,
-                            sampling, and audio, the cpal device
+                            autosave, banking, config, folding, generators (the live generators as
+                            all but the panel read them), heard, loading, meter, scope, sampling,
+                            and audio, the cpal device
   screen.rs  screen/        what's always on screen: status.rs, system.rs and meter.rs
   widgets.rs  widgets/      what pages are drawn from, param/ (ParamView, ParamCell and edit),
                             theme.rs and glyphs.rs
@@ -793,7 +815,9 @@ crates/vt-tui/src/
 
 What only the crate uses is `pub(crate)`, and `lib.rs` warns on `unreachable_pub`, so the
 dead-code lint sees it; what the tests, the examples and `main.rs` use is `pub`, `App`'s fields
-among it, as the tests drive the program through them (#733).
+among it, as the tests drive the program through them (#733). A new module goes in the folder of
+what it is, beside the page, overlay or service it belongs to, and an `impl App` block that only a
+page needs goes in that page's folder.
 
 **`App`** (`app.rs`) is the program's state and what each key does. It needs no terminal, so tests
 drive it directly. It holds the shared services, `App::services`, beside the pages (`track_page`,
@@ -1126,8 +1150,9 @@ from code (decision 305).
 pages, the current view, the modes and popups that span pages (the picker, the command line and
 help) and the jump list. What a page passes back, where it opens the picker, changes `Modes` or
 reaches across pages, stays `impl App`, in the folder of the page, overlay or service it belongs
-to (U13, #733); what's passed back only to reach the picker, the views and `:` lines is the third
-architecture review's item 2 (#784).
+to (U13, #733). A page no longer passes a key back only to reach the picker, the views or a `:`
+line: it asks for them in its `Outcome`, and `App::settled` does what it asks (#784, #797 to
+#802).
 `TrackPage` and `MixerPage` have their state, their own keys, their edits and their drawing: the
 edits are `TrackPage::edit`, the page's methods and functions over the `Services`, and the
 mixer's moves across tracks are its own keys. `App` dispatches to them in `App::run_track_pages`
@@ -1346,7 +1371,7 @@ These need no terminal and no sound device, so they run anywhere.
 
 ### Testing
 
-About 3,500 tests. `just ci` runs `cargo fmt --check`, `cargo clippy` and the tests on Apple
+About 3,600 tests. `just ci` runs `cargo fmt --check`, `cargo clippy` and the tests on Apple
 silicon macOS, the one platform the golden hashes hold on: under cargo-nextest when it's installed,
 a test to a process, and under `cargo test` when it isn't. The `dev` profile builds `vt-engine` and
 `vt-model` at `opt-level = 2`, with debug assertions and overflow checks still on, as the DSP takes
@@ -1357,14 +1382,14 @@ every pair of values still met, and all of them under `cargo test --release`.
 
 | Kind | Where | What it checks |
 |---|---|---|
-| Model | `crates/vt-model/tests/all/`, one binary with the engine's `rt_guard` as its allocator, and unit tests in its modules | Actions on songs, undo, saving and loading, kits, decoding the sample files in `tests/samples/`, slices and marks, analysis, seeds from WAV markers and `.ot` files |
-| Engine | `crates/vt-engine/tests/all/`, one binary with a module for each feature, such as `groove.rs`, `returns.rs` and `slices.rs`, and what they share in `support.rs` | What plays when, from songs built in code and played offline |
-| Golden renders | `crates/vt-engine/tests/golden/`, through `support::golden` | An FNV-1a hash of a render's exact samples. `VT_BLESS=1` updates one after a change to the sound on purpose, and `VT_DUMP` writes the samples, to compare two builds |
+| Model | `crates/vt-model/tests/all/`, one binary, and unit tests in its modules. Its allocator is the engine's `rt_guard`, which `main.rs` builds from `crates/vt-engine/src/rt_guard.rs` through `#[path]`, as the model can't depend on the engine; it counts only while a test arms it. Names a song stores are pinned in `tests/golden/*.txt` by `stable_names.rs` | Actions on songs, undo, saving and loading, kits, decoding the sample files in `tests/samples/`, slices and marks, analysis, seeds from WAV markers and `.ot` files, and in `render.rs` what every fill writes on every column, kept in `tests/golden/renders.txt` |
+| Engine | `crates/vt-engine/tests/all/`, one binary with a module for each feature, such as `groove.rs`, `returns.rs` and `slices.rs`, and what they share in `support.rs` (`golden`, `peak`, `rms` and the rest) | What plays when, from songs built in code and played offline |
+| Golden renders | `crates/vt-engine/tests/golden/`, through `support::golden`; `tests/all/goldens.rs` renders every effect and voice no other file pins, and fails while one has none | An FNV-1a hash of a render's exact samples. `VT_BLESS=1` updates one after a change to the sound on purpose, and `VT_DUMP` writes the samples, to compare two builds |
 | Tutorial songs | `crates/vt-engine/tests/all/tutorial_songs.rs`, which builds the songs in `docs/manual/src/tutorials/songs/` | That each song on disk is what its builder makes, so a format change can't leave them stale, and that each loads, plays and stays below full scale. `just tutorial-songs` writes them again |
-| DSP | Unit tests beside each module in `dsp/` | Each voice, filter and effect on its own |
-| Real-time safety | The tests in `crates/vt-engine/src/link.rs`, `gens.rs`, `slowdown.rs` and `dsp/filters/filter.rs`, under `rt_guard` | That a block, a generator's render, the slowdown check and the track filter allocate and free nothing |
+| DSP | Unit tests beside each module in `dsp/`, measuring with `dsp/signals.rs` | Each voice, filter and effect on its own |
+| Real-time safety | The tests in `crates/vt-engine/src/link.rs`, `gens.rs`, `slowdown.rs` and `dsp/filters/filter.rs`, under `rt_guard`, and `crates/vt-model/tests/all/render.rs` | That a block, every effect in a slot, a generator's render, the slowdown check and the track filter allocate and free nothing |
 | Interface | `crates/vt-tui/tests/all/`, one binary with a module for each part of the program, such as the keys (`keys.rs`), the track page's settings and keys (`track_page.rs`), its Sound page's rack (`sound_page.rs`), its Mod page's rack (`mod_page.rs`), its FX page (`fx_page.rs`), the sample page (`sample_page.rs`), live recording (`recording.rs`) and `grammar.rs`, with the helpers they share in `common/` | Keys pressed into an `App` connected to a real engine, whose `Realtime` the test runs. A held key can't be pressed from a test, so held keys go through `App::key_released` and `App::key_repeated`, mostly in `keys.rs` and `recording.rs` |
-| Roto-Control | `crates/vt-roto/tests/`: `handshake.rs`, `live.rs`, `protocol.rs` and `store.rs`, against the fake Roto, and unit tests in its modules | Every message of both protocols written and read back, the handshake and the link's thread, live devices, and vimtracker's own stored setups, with no hardware and no MIDI ports |
+| Roto-Control | `crates/vt-roto/tests/`: `handshake.rs`, `live.rs`, `protocol.rs` and `store.rs`, against the fake Roto, which the crate's dev-dependency on itself turns on with the `fake` feature, and unit tests in its modules | Every message of both protocols written and read back, the handshake and the link's thread, live devices, and vimtracker's own stored setups, with no hardware and no MIDI ports |
 | Graphics | Unit tests in `graphics/`, and beside the drawing of the pages, overlays and widgets | The commands sent, and the PNGs, pinned by their size and CRC |
 | Other paths | `crates/vt-tui/tests/all/probe.rs`, `notes.rs`, `analysis.rs` and `ableton.rs` | `probe`'s specs, `notes`' timing of a song's track, the analysis thread and its cache, and importing kits from Ableton |
 | Comparison harness | `tools/compare/tests/`, with `uv run python -m unittest discover tests` | The Live bridge, against stand-ins for Live's objects. Not in CI, as nothing in `tools/compare` is |
