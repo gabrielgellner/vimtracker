@@ -378,8 +378,9 @@ fn a_voice_stays_under_twenty_kilobytes() {
     assert!(size <= 20 * 1024, "{size} bytes");
 }
 
-/// A track's state is in the engine once for each track there can be. It's 137,104 bytes,
-/// 34,720 of them its voice and its tail.
+/// A track's state is in the engine once for each track there can be. It's 131,408 bytes,
+/// 34,720 of them its voice and its tail, and 2,496 its four slots, each holding the one small
+/// effect it plays rather than room for all seven.
 #[test]
 fn a_tracks_state_stays_under_160_kilobytes() {
     let size = size_of::<TrackState>();
