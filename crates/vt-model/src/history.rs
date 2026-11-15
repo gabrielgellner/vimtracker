@@ -35,13 +35,21 @@ impl History {
         &self.current
     }
 
-    /// Make a new version current, dropping the oldest past the limit, and clearing redo.
-    pub fn commit(&mut self, song: Arc<Song>) {
+    /// Make a new version current, dropping the oldest past the limit, and clearing redo. One the
+    /// same as the current version isn't a new one, as an edit that changed nothing makes: it
+    /// leaves no undo step and redo as it was, and says so with false (decision 343).
+    pub fn commit(&mut self, song: Arc<Song>) -> bool {
+        // `Arc`'s `==` checks the pointer first, so the chains and phrases a version shares with
+        // the last aren't compared, only those the edit copied.
+        if song == self.current {
+            return false;
+        }
         self.past.push(std::mem::replace(&mut self.current, song));
         if self.past.len() > self.limit {
             self.past.remove(0);
         }
         self.future.clear();
+        true
     }
 
     /// Go back one version, if there is one.

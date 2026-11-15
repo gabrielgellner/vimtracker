@@ -244,45 +244,38 @@ pub(super) fn reset_control(services: &mut Services, control: Control) {
         // A new song's is on.
         Control::Limiter if !services.song().limiter => set_limiter(services, true),
         Control::Limiter => {}
-        Control::Sample if track.sample() != 0 => {
+        Control::Sample => {
             services.apply(&Action::SetTrackSample {
                 track: services.cursor.track,
                 sample: 0,
             });
         }
-        Control::Sample => {}
         Control::Tune | Control::Cents => set_tuning(services, control, None),
         // Back to following the project's.
         Control::Groove if track.groove.is_some() => set_track_groove(services, None),
         Control::Groove => {}
         // Back to the track's default, which isn't one of its percentages.
-        Control::GateLength if track.gate_length.is_some() => {
+        Control::GateLength => {
             services.apply(&Action::SetTrackGateLength {
                 track: services.cursor.track,
                 gate_length: None,
             });
         }
-        Control::GateLength => {}
         // The mode it keeps, which its type may not offer.
         Control::FilterMode => {
-            let fresh = Track::default();
-            if track.filter_mode != fresh.filter_mode {
-                services.apply(&Action::SetFilterMode {
-                    track: services.cursor.track,
-                    mode: fresh.filter_mode,
-                });
-            }
+            services.apply(&Action::SetFilterMode {
+                track: services.cursor.track,
+                mode: Track::default().filter_mode,
+            });
         }
         Control::Mod(
             slot,
             field @ (ModField::Type | ModField::Polarity | ModField::Rate | ModField::Fade),
-        ) => {
-            let modulator = track.mods[slot];
-            let reset = mod_at_default(modulator, slot, field);
-            if reset != modulator {
-                set_mod(services, slot, reset);
-            }
-        }
+        ) => set_mod(
+            services,
+            slot,
+            mod_at_default(track.mods[slot], slot, field),
+        ),
         _ => {
             if let Some(shown) = view_on(services, control, &track) {
                 let default = edit::reset(&shown);

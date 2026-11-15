@@ -506,9 +506,13 @@ impl Phrase {
     }
 
     /// Move the loop's steps later, wrapping round within it. Negative moves them earlier, and steps
-    /// outside the loop stay where they are.
+    /// outside the loop stay where they are. All the way round moves nothing, and changes nothing.
     pub fn rotate(&mut self, by: isize) {
         let (start, length) = (self.start, self.length);
+        let by = by.rem_euclid(length.max(1) as isize) as usize;
+        if by == 0 {
+            return;
+        }
         // A live generator on the rows it moves is applied, as its values move with them.
         let end = start + length;
         self.generators.retain(|generator| {
@@ -516,10 +520,7 @@ impl Phrase {
                 .rows()
                 .is_none_or(|rows| rows.last < start || rows.first >= end)
         });
-        if length > 0 {
-            let by = by.rem_euclid(length as isize) as usize;
-            self.steps[start..start + length].rotate_right(by);
-        }
+        self.steps[start..end].rotate_right(by);
     }
 
     /// Double the loop by repeating it. Steps after it move down rather than being overwritten.

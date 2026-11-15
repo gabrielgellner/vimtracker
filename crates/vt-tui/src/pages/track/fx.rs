@@ -173,13 +173,16 @@ impl TrackPage {
                 next = edited;
             }
         }
-        if taken.undo_depth == services.history.undo_depth() {
+        let changed = if taken.undo_depth == services.history.undo_depth() {
             services.history.replace_current(next);
+            true
         } else {
-            services.history.commit(next);
+            services.history.commit(next)
+        };
+        if changed {
+            services.dirty = true;
+            services.publish();
         }
-        services.dirty = true;
-        services.publish();
         services.status = format!("Put {} in slot {}", taken.insert.name(), slot + 1);
     }
 }
