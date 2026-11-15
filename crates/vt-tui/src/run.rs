@@ -690,8 +690,8 @@ pub fn draw_screen(
             app.track_page.gen_panels_at = drawn.previews;
         }
         View::Mixer => app.mixer_page.draw(frame, view, &app.ctx()),
-        View::Audio => views::audio::draw(frame, view, app),
-        View::Project => views::project::draw(frame, view, app),
+        View::Audio => app.audio_page.draw(frame, view, &app.ctx()),
+        View::Project => app.project_page.draw(frame, view, &app.ctx()),
         View::Sample => {
             // Laid out for the room first, so it settles on the columns it's drawn with.
             app.sample_page.lay_out(view);

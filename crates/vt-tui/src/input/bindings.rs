@@ -7,10 +7,12 @@
 use vt_model::constants::BEAT_STEPS;
 use vt_model::selection::{Motion, Target};
 
+use crate::audio_page::AudioPage;
 use crate::input::keys::{Key, parse, parse_sequence};
 use crate::input::mode::{Mode, View};
 use crate::mixer_page::MixerPage;
 use crate::page::Page as _;
+use crate::project_page::ProjectPage;
 use crate::sample_page::{SampleKey, SamplePage};
 use crate::track_page::{Page, TrackPage};
 
@@ -586,53 +588,6 @@ const SONG: &[(&str, Cmd, &str)] = &[
     ),
 ];
 
-const AUDIO: &[(&str, Cmd, &str)] = &[
-    ("H", Cmd::PreviousPage, "Previous page: Song, Audio"),
-    ("L", Cmd::NextPage, "Next page: Song, Audio"),
-    ("j", Cmd::Move(Motion::Down), "Next setting"),
-    ("k", Cmd::Move(Motion::Up), "Previous setting"),
-    ("g g", Cmd::Move(Motion::First), "First setting"),
-    ("G", Cmd::Move(Motion::Last), "Last setting"),
-    ("=", Cmd::Increase, "The next choice"),
-    ("-", Cmd::Decrease, "The previous choice"),
-    // There's no large step through a list of choices, so `+` and `_` aren't bound, but Cmd-k
-    // and Cmd-j stepped through it before the one rule for Cmd keys, and still do (decision 148).
-    ("D-k", Cmd::IncreaseLarge, "The next choice, as D-l"),
-    ("D-j", Cmd::DecreaseLarge, "The previous choice, as D-h"),
-    ("x", Cmd::ClearField, "Back to the system's own choice"),
-    ("K", Cmd::PickValue, "List the choices"),
-];
-
-const PROJECT: &[(&str, Cmd, &str)] = &[
-    ("j", Cmd::Move(Motion::Down), "Next row"),
-    ("k", Cmd::Move(Motion::Up), "Previous row"),
-    ("g g", Cmd::Move(Motion::First), "First row, or row n"),
-    ("G", Cmd::Move(Motion::Last), "Last row, or row n"),
-    ("h", Cmd::Move(Motion::Left), "Previous setting"),
-    (
-        "l",
-        Cmd::Move(Motion::Right),
-        "Next setting, or the tempo's fine part",
-    ),
-    ("0", Cmd::Move(Motion::RowStart), "First setting"),
-    ("$", Cmd::Move(Motion::RowEnd), "Last setting"),
-    ("=", Cmd::Increase, "Increase the value, or switch on"),
-    ("-", Cmd::Decrease, "Decrease the value, or switch off"),
-    ("+", Cmd::IncreaseLarge, "Increase the value, a large step"),
-    ("_", Cmd::DecreaseLarge, "Decrease the value, a large step"),
-    ("C-a", Cmd::Increase, "Increase the value"),
-    ("C-x", Cmd::Decrease, "Decrease the value"),
-    ("x", Cmd::ClearField, "Back to a new project's"),
-    ("K", Cmd::PickValue, "Choose from a list, switch, or do it"),
-    (
-        "Enter",
-        Cmd::PickValue,
-        "Do this action, or open the Audio page",
-    ),
-    ("H", Cmd::PreviousPage, "Previous page: Song, Audio"),
-    ("L", Cmd::NextPage, "Next page: Song, Audio"),
-];
-
 /// Keys to fold a group's tracks into it, after Vim's folds, in every view that shows tracks
 /// (decisions 128 and 305).
 const FOLDS: &[(&str, Cmd, &str)] = &[
@@ -785,9 +740,9 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Mixer, MixerPage::KEYS);
     add(Mode::Mixer, FOLDS);
     add(Mode::Mixer, EVERY_VIEW);
-    add(Mode::Audio, AUDIO);
+    add(Mode::Audio, AudioPage::KEYS);
     add(Mode::Audio, EVERY_VIEW);
-    add(Mode::Project, PROJECT);
+    add(Mode::Project, ProjectPage::KEYS);
     add(Mode::Project, EVERY_VIEW);
     add(Mode::Sample, SamplePage::KEYS);
     add(Mode::Sample, EVERY_VIEW);

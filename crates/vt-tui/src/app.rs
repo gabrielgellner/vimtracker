@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use crate::accent_slide::{HeldFlag, Moved, Written};
 use crate::audio::{AudioChoice, DeviceInfo, LoadReadout, SlowdownReadout};
+use crate::audio_page::AudioPage;
 use crate::exploring::Naming;
 use crate::glyphs;
 use crate::loading::Loader;
@@ -16,7 +17,6 @@ use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::{PLAYHEADS, SectionLoop, TrackPlace, Transport};
 use vt_engine::link::{Command, Handle, JamState};
 use vt_model::constants::{DEFAULT_NOTE_VELOCITY, MAX_TRACKS, TICKS_PER_STEP};
-use vt_model::groove::GrooveId;
 use vt_model::kit::KitEntry;
 use vt_model::names::Names;
 use vt_model::samples::SamplePool;
@@ -37,6 +37,7 @@ use crate::input::picker::Picker;
 use crate::input::typed::TypedValue;
 use crate::jumping::FieldJump;
 use crate::mixer_page::MixerPage;
+use crate::project_page::ProjectPage;
 use crate::recording::Recording;
 use crate::services::Services;
 use crate::shaping::ShapePanel;
@@ -234,8 +235,8 @@ pub struct App {
     pub audio: AudioState,
     /// A different output the audio page has chosen, for the main loop to open.
     pub audio_request: Option<AudioChoice>,
-    /// The audio page's row: device, rate or buffer.
-    pub audio_row: usize,
+    /// The audio page: the row its cursor is on.
+    pub audio_page: AudioPage,
     /// The mouse wheel as a knob on the cursor's setting, while its setting is on.
     pub wheel: crate::wheel::Wheel,
     /// The sample library the sample explorer lists, such as Ableton Live's, if this machine has
@@ -252,14 +253,8 @@ pub struct App {
     pub track_page: TrackPage,
     /// The sample page: where it is, and the pictures of its waveform and its overview.
     pub sample_page: crate::sample_page::SamplePage,
-    /// The project page's row and setting, whether the cursor is on the tempo's fine part, and
-    /// the field `j` and `k` aim for, as on the track page.
-    pub project_row: usize,
-    pub project_field: usize,
-    pub project_fine: bool,
-    pub(crate) project_wanted: Option<(usize, usize, usize)>,
-    /// The groove the project page draws and changes, or the project's if none was chosen.
-    pub groove_shown: Option<GrooveId>,
+    /// The project page's Song sub-page: where its cursor is, and the groove it draws.
+    pub project_page: ProjectPage,
     /// Most recently used first, starting with the view on screen.
     pub recent_views: Vec<View>,
     pub picker: Option<Picker>,
@@ -440,15 +435,11 @@ impl App {
             section_anchor: None,
             track_page: TrackPage::default(),
             sample_page: crate::sample_page::SamplePage::default(),
-            project_row: 0,
-            project_field: 0,
-            project_fine: false,
-            project_wanted: None,
-            groove_shown: None,
+            project_page: ProjectPage::default(),
             audio: AudioState::default(),
             audio_request: None,
             library: None,
-            audio_row: 0,
+            audio_page: AudioPage::default(),
             wheel: crate::wheel::Wheel::default(),
             recent_views: View::ALL.to_vec(),
             picker: None,

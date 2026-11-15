@@ -800,6 +800,7 @@ impl App {
             Pick::View(view) => self.jump_to_view(view),
             Pick::TrackPage(page) => self.show_track_page(page),
             Pick::Macro(at) => self.map_to_macro(at),
+            Pick::MacroHolding(at) => self.go_to_macro(at),
             Pick::Use {
                 section,
                 track,
@@ -948,7 +949,7 @@ impl App {
             }),
             Pick::Line(line) => self.line(line),
             Pick::ScaleTo(scale) => self.set_scale(scale),
-            Pick::ShowGroove(groove) => self.groove_shown = Some(groove),
+            Pick::ShowGroove(groove) => self.project_page.groove_shown = Some(groove),
             Pick::Scale(kind) => self.set_scale(Scale {
                 on: true,
                 kind,

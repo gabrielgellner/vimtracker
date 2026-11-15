@@ -513,7 +513,7 @@ impl App {
             }
             (Mode::Project, _) if self.project_control() == ProjectControl::Bpm => {
                 let most = (BPM_NUDGE / FINE_NUDGE) as u64;
-                if self.project_fine {
+                if self.project_page.fine {
                     step(Finer::Already, 1, most)
                 } else {
                     step(Finer::TempoFine, feel::TEMPO_LEAST, most)
@@ -548,7 +548,7 @@ impl App {
                     Field::FxValue(slot)
                 };
             }
-            Finer::TempoFine => self.project_fine = onto,
+            Finer::TempoFine => self.project_page.fine = onto,
             Finer::Already | Finer::SampleFrame => {}
         }
     }

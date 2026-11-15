@@ -629,7 +629,7 @@ impl crate::page::Page for TrackPage {
         (
             "g d",
             Cmd::OpenItem,
-            "On Sample, open the sample page on it",
+            "Open Sample's sample page, or a macro-held setting's macro",
         ),
         (
             "Space g a",

@@ -754,8 +754,8 @@ where they were written and are borrowed across folders; #260 may move shared sh
 
 **`App`** (`app.rs`) is the program's state and what each key does. It needs no terminal, so tests
 drive it directly. It holds the shared services, `App::services`, beside the pages (`track_page`,
-`mixer_page`, `sample_page` and the project page's fields), `App::modes`, the picker, the command
-line, help, the jump list and the keys' own state: 99 fields, and 48 files
+`mixer_page`, `project_page`, `audio_page` and `sample_page`), `App::modes`, the picker, the
+command line, help, the jump list and the keys' own state: 95 fields, and 48 files
 besides `app.rs` add an `impl App` block each, such as `track_page.rs`, `banking.rs`, `slicing.rs`,
 `shaping.rs`, `picking.rs`, `recording.rs` (live recording, `Space r`), `project_page.rs`,
 `audio_page.rs` and `sample_page.rs`.
@@ -778,8 +778,9 @@ apply an action at once, and the modes to read; `Ctx`, which a page is drawn wit
 reads through `App`, as drawing is given `&App` and some of what's drawn, such as a live
 generator's sources, is `App`'s to work out.
 
-**`Page`** (`page.rs`, #739) is a page as a component, which the track page, the mixer and the
-sample page are so far: its rows of the binding table, `Page::KEYS`, kept beside it and assembled by
+**`Page`** (`page.rs`, #739) is a page as a component, which the track page, the mixer, the
+project page's Song and Audio sub-pages and the sample page are so far: its rows of the binding
+table, `Page::KEYS`, kept beside it and assembled by
 `input/bindings.rs` under its mode; `Page::key`, which runs one of its keys with a count through a
 `CtxMut` and says what it did as an `Outcome`, done, refused with why, or passed back; `Page::draw`,
 given a `Ctx`; and `Page::panels` and `Page::take_panels`, its pictures as data for `Graphics` and
@@ -1046,6 +1047,14 @@ mixer's moves across tracks are its own keys. `App` still dispatches to them, in
 `run_track_page` and `run_mixer`, and keeps the track page's pickers, typing and Gen page, which
 open its picker, edit `Modes` and work through the shape panel. The track page says which pictures
 it wants as data and where its dots go, and `Graphics` reads no `App` (#728, below).
+`ProjectPage` (`project_page.rs`) and `AudioPage` (`audio_page.rs`), the project page's Song and
+Audio sub-pages, have their state, their moves and their drawing, through a `Ctx`, the Song
+sub-page's settings and the audio page's rows as `ParamCell`s: the Song sub-page's cursor and the
+groove it shows, and the audio page's row. `App::run_project_pages` hands them a key and then
+runs what they pass back, their edits and `H` and `L`, which stay `impl App`, as the Song
+sub-page's run each row's `:` command and the audio page's change the output the main loop opens,
+the wheel and the Roto. The output as it plays, `App::audio`, stays `App`'s, as the main loop, the
+status line and the recorder read it too.
 `SamplePage` is a component too: it keeps its own cursor, zoom, scroll, selection, settings focus
 and pictures' ids, runs its moves and its edits of the entry's points and settings
 (`placing.rs`, `sample_settings.rs`) through the `Services`, builds its settings' pickers, and is
