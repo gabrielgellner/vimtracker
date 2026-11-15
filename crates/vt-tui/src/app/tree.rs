@@ -120,13 +120,13 @@ impl App {
             self.services.status = "There is no phrase here to grow branches from".to_owned();
             return;
         };
-        self.shape_seed = self.shape_seed.wrapping_add(1);
+        self.services.shape_seed = self.services.shape_seed.wrapping_add(1);
         let first = Bloom::default();
         let bloom = Bloom {
             branches: branches.unwrap_or(first.branches),
             mutation: mutation.unwrap_or(first.mutation),
             path,
-            seed: self.song().seed.wrapping_add(self.shape_seed),
+            seed: self.song().seed.wrapping_add(self.services.shape_seed),
             ..first
         };
         let before = Arc::clone(self.song());

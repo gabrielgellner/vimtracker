@@ -335,8 +335,6 @@ pub struct App {
     pub mapping: Option<crate::overlays::mapping::MappingView>,
     /// A selection to shape once the command for its empty FX column is chosen, and its field.
     pub(crate) shape_command: Option<(Selection, Field)>,
-    /// Changes each time random values are wanted anew.
-    pub(crate) shape_seed: u64,
     /// The sounds of the kit in use, to choose from for a track.
     pub kit: Vec<KitEntry>,
     /// The file of the kit in use, which the kit picker opens on.
@@ -461,7 +459,6 @@ impl App {
             shape: None,
             mapping: None,
             shape_command: None,
-            shape_seed: 0,
             kit: Vec::new(),
             kit_file: None,
             loader: Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT)),

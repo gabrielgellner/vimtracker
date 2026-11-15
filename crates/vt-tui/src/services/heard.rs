@@ -59,7 +59,9 @@ impl App {
                 .retain(|(on, at, ..), _| (*on, *at) != (track, phrase)),
         }
     }
+}
 
+impl Services {
     /// A live generator's rows as last heard, if any was heard otherwise than written.
     pub(crate) fn heard_rows_of(
         &self,
@@ -71,16 +73,12 @@ impl App {
         let span = held.generators().get(generator)?.rows()?;
         let (mut rows, mut heard, mut pass) = (Vec::new(), 0, 0);
         for row in span.first..=span.last {
-            let Some(report) = self
-                .services
-                .heard_rows
-                .get(&(track, phrase, generator, row))
-            else {
+            let Some(report) = self.heard_rows.get(&(track, phrase, generator, row)) else {
                 continue;
             };
             heard += 1;
             pass = pass.max(report.pass);
-            if let Some((step, _)) = self.services.heard_cell(track, phrase, generator, row) {
+            if let Some((step, _)) = self.heard_cell(track, phrase, generator, row) {
                 rows.push((row, step));
             }
         }
@@ -126,29 +124,27 @@ impl App {
         name: &str,
     ) {
         let Some((action, heard)) = self.apply_as_heard(track, phrase, generator) else {
-            self.services.apply(&Action::ApplyGenerator {
+            self.apply(&Action::ApplyGenerator {
                 track,
                 phrase,
                 generator,
             });
-            self.services.status = format!("{name} is applied, as plain values");
+            self.status = format!("{name} is applied, as plain values");
             return;
         };
-        self.services.apply(&action);
+        self.apply(&action);
         let unheard = match heard.unheard {
             0 => String::new(),
             1 => ", and 1 not heard yet as written".to_owned(),
             count => format!(", and {count} not heard yet as written"),
         };
-        self.services.status = format!(
+        self.status = format!(
             "{name} is applied as heard: {} rows as last heard, the last on pass {}{unheard}",
             heard.heard,
             heard.pass + 1
         );
     }
-}
 
-impl Services {
     /// A row of a live generator as it was last heard, if that wasn't what's written: the step
     /// as heard, and on which pass.
     pub(crate) fn heard_cell(

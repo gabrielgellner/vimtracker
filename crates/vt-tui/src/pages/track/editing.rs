@@ -82,7 +82,7 @@ pub(super) fn adjust_control(
     // A fader the steps drive moves from where it's heard, as a hand takes it over there.
     let track = services.page_track_as_heard();
     match control {
-        // The Gen page's own keys reshape its generators (`generators::run_gen_page`).
+        // The Gen page's own keys reshape its generators (`TrackPage::gen_edit`).
         Control::Gen { .. } | Control::NewGenerator(_) => {}
         Control::Mute | Control::Solo => {
             let live = services

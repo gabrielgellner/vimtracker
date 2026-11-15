@@ -1,14 +1,14 @@
 //! The track page, `Space 5` to `Space 8`: a track's Sound, Mod, FX and Gen pages. `TrackPage` is
 //! the page as a component, which page shows, where its cursor is and the images it shows, with
-//! the moves that need only the cursor's track, its edits, [`TrackPage::edit`], given the
-//! [`Services`], and its drawing, in `draw`, given a [`Ctx`]. Each page's settings are in a
-//! file of its own (`sound`, `modulation`, `fx`), each gives its devices to `Page::devices` if it's
-//! a rack (`device`), and `editing`, `typing` and `tuning` change the setting under the cursor, as
-//! functions over the services that the mixer shares; `pictures` says which pictures the page
-//! wants the terminal to have and where their dots go, as data for `Graphics`; `pickers`, which
-//! open the program's picker, and the Gen page's `generators`, which reshape through the program's
-//! shape panel, are still `App`'s. `TrackPage` is a [`crate::pages::Page`], with its rows of the
-//! binding table, `Page::KEYS`, here beside it.
+//! the moves that need only the cursor's track, its edits, [`TrackPage::edit`] and the Gen page's
+//! [`TrackPage::gen_edit`], given the [`Services`], and its drawing, in `draw`, given a [`Ctx`].
+//! Each page's settings are in a file of its own (`sound`, `modulation`, `fx`, `generators`), each
+//! gives its devices to `Page::devices` if it's a rack (`device`), and `editing`, `typing` and
+//! `tuning` change the setting under the cursor, as functions over the services that the mixer
+//! shares; `pictures` says which pictures the page wants the terminal to have and where their dots
+//! go, as data for `Graphics`; `pickers`, which open the program's picker, and the Gen page's
+//! `Enter`, which opens the program's shape panel, are still `App`'s. `TrackPage` is a
+//! [`crate::pages::Page`], with its rows of the binding table, `Page::KEYS`, here beside it.
 
 mod controls;
 mod device;
@@ -766,13 +766,33 @@ impl App {
         self.show_view(View::Track);
     }
 
-    /// What a key the track page or the mixer passed back means, `times` being its count: `App`'s
-    /// commands across pages, `/`, `M`, `gm`, the Keys mode, the Gen page's generators, the
-    /// pickers and Insert, and then the track page's edits on the setting under the cursor, which
-    /// the mixer shares. Returns false if it means what it does elsewhere, such as going to
-    /// another track.
+    /// What a key the track page or the mixer passed back means, `times` being its count, in this
+    /// order:
+    /// 1. A turn of a setting a macro holds is refused, saying where to turn it
+    ///    ([`App::refuses_turn`]), before anything can turn it.
+    /// 2. The Gen page's edits, on the generator under the cursor ([`TrackPage::gen_edit`]). They
+    ///    go by the page the track page is on, so the mixer's keys reach them too while the track
+    ///    page is left on Gen, and there they find no generator.
+    /// 3. `App`'s commands across pages, `/`, `M`, `gm` and the Keys mode, none of which the Gen
+    ///    page takes, and `Enter` on the Gen page, which opens the shape panel.
+    /// 4. `r`, `Enter` and `Space g a` off the Gen page, which say where they work, but for
+    ///    `Space g a` on the Mod page, which keeps a Steps slot's drift; then the pickers and
+    ///    Insert.
+    /// 5. The track page's edits on the setting under the cursor, which the mixer shares.
+    ///
+    /// Returns false if it means what it does elsewhere, such as going to another track.
     pub(crate) fn run_across_pages(&mut self, cmd: Cmd, times: usize) -> bool {
         if self.refuses_turn(cmd) {
+            return true;
+        }
+        let control = self.track_control();
+        let mut ctx = CtxMut {
+            services: &mut self.services,
+            modes: &self.modes,
+        };
+        let outcome = self.track_page.gen_edit(cmd, times, control, &mut ctx);
+        // The count was taken before the page had the key.
+        if self.settled(outcome, false) {
             return true;
         }
         match cmd {
@@ -783,10 +803,7 @@ impl App {
                 self.modes.mode = Mode::Keys;
                 self.services.status = "a w s e d f play, < > change octave, ; stops".to_owned();
             }
-            // The macros' band, first on the Gen page, turns as the other pages' settings do.
-            _ if self.track_page.page == Page::Gen
-                && !matches!(self.track_control(), Control::Macro(_))
-                && self.run_gen_page(cmd, times) => {}
+            Cmd::ReopenGenerator if self.track_page.on_gen(control) => self.open_gen_panel(),
             Cmd::RollGenerator | Cmd::ReopenGenerator => {
                 self.services.status =
                     "r and Enter work on a generator, on the Gen page".to_owned();
@@ -799,7 +816,7 @@ impl App {
                         .to_owned();
             }
             Cmd::PickValue => self.open_control_picker(),
-            Cmd::EnterInsert if self.track_control().is_choice(&self.services.page_track()) => {
+            Cmd::EnterInsert if control.is_choice(&self.services.page_track()) => {
                 self.open_control_picker();
             }
             Cmd::EnterInsert => {
@@ -807,7 +824,6 @@ impl App {
                 self.modes.mode = Mode::Insert;
             }
             _ => {
-                let control = self.track_control();
                 let outcome = self
                     .track_page
                     .edit(cmd, times, control, &mut self.services);
