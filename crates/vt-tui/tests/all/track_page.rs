@@ -2068,7 +2068,7 @@ fn the_filter_curve_moves_with_what_plays() {
 
 fn jump_labels(app: &App) -> Vec<String> {
     let track = app.song().tracks[app.services.cursor.track].clone();
-    let jump = app.modes.field_jump.as_ref().unwrap();
+    let jump = app.overlays.field_jump.as_ref().unwrap();
     let mut labels: Vec<String> = app
         .track_page
         .rows(Some(&track))
@@ -2097,7 +2097,7 @@ fn a_jump_labels_matching_settings_nearest_first_and_lands_on_the_value() {
 
     press(&mut app, "j");
     assert_eq!(app.modes.mode, Mode::Normal);
-    assert!(app.modes.field_jump.is_none());
+    assert!(app.overlays.field_jump.is_none());
     assert_eq!(column_name(&app), "Low cut");
     press(&mut app, "=");
     assert_eq!(app.song().tracks[0].low_cut, 1, "ready to change");
@@ -2132,7 +2132,7 @@ fn a_jumps_label_is_never_the_next_letter_and_stays_as_you_type() {
         "it keeps its label"
     );
     press(&mut app, "t");
-    assert_eq!(app.modes.field_jump.as_ref().unwrap().query, "cut");
+    assert_eq!(app.overlays.field_jump.as_ref().unwrap().query, "cut");
     assert_eq!(jump_labels(&app).len(), 3);
     assert_eq!(label_of(&jump_labels(&app), " Cut"), cut);
 }
@@ -2152,10 +2152,10 @@ fn a_jump_finds_each_row_of_a_repeated_name_and_can_be_left() {
 
     // A slip keeps the search.
     press(&mut app, "Q");
-    assert_eq!(app.modes.field_jump.as_ref().unwrap().query, "dep");
+    assert_eq!(app.overlays.field_jump.as_ref().unwrap().query, "dep");
     special(&mut app, KeyCode::Backspace);
     special(&mut app, KeyCode::Backspace);
-    assert_eq!(app.modes.field_jump.as_ref().unwrap().query, "d");
+    assert_eq!(app.overlays.field_jump.as_ref().unwrap().query, "d");
     special(&mut app, KeyCode::Backspace);
     assert!(jump_labels(&app).is_empty());
     special(&mut app, KeyCode::Backspace);
@@ -2259,7 +2259,7 @@ fn a_jumps_labels_also_follow_the_names_being_searched() {
         "{labels:?}"
     );
     let label = app
-        .modes
+        .overlays
         .field_jump
         .as_ref()
         .unwrap()
@@ -2291,7 +2291,7 @@ fn a_jump_works_on_the_mixer_and_stays_on_the_cursors_track() {
     assert_eq!(app.services.cursor.track, 1);
     press(&mut app, "/s");
     assert_eq!(app.modes.mode, Mode::Jump);
-    let jump = app.modes.field_jump.as_ref().unwrap();
+    let jump = app.overlays.field_jump.as_ref().unwrap();
     let solo = jump.label(Control::Solo).unwrap();
     assert!(jump.label(Control::Level).is_none());
 
@@ -2332,7 +2332,21 @@ fn slash_only_jumps_on_the_parameter_pages() {
     let (mut app, _realtime) = app();
     press(&mut app, " 3/");
     assert_ne!(app.modes.mode, Mode::Jump);
-    assert!(app.modes.field_jump.is_none());
+    assert!(app.overlays.field_jump.is_none());
+}
+
+#[test]
+fn the_keys_of_a_field_jump_are_in_the_binding_table() {
+    let (app, _realtime) = app();
+    let help = app.help_rows();
+    let at = help.iter().position(|line| line == "Jump").unwrap();
+    let rows: Vec<&String> = help[at + 1..]
+        .iter()
+        .take_while(|line| !line.is_empty())
+        .collect();
+    for row in ["Land on the nearest match", "Play, or pause in place"] {
+        assert!(rows.iter().any(|line| line.contains(row)), "{row}");
+    }
 }
 
 #[test]

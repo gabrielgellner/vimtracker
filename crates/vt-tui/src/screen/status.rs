@@ -415,13 +415,14 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .add_modifier(Modifier::BOLD);
     // An overlay's own sequences, the picker's `gg` and `zz`, aren't said here, as they never
     // were.
-    let pending =
-        if app.pending().is_empty() || matches!(app.modes.mode, Mode::Picker | Mode::Command) {
-            String::new()
-        } else {
-            let keys: Vec<String> = app.pending().iter().map(Key::to_string).collect();
-            format!("  {}", keys.join(" "))
-        };
+    let pending = if app.pending().is_empty()
+        || matches!(app.modes.mode, Mode::Picker | Mode::Command | Mode::Jump)
+    {
+        String::new()
+    } else {
+        let keys: Vec<String> = app.pending().iter().map(Key::to_string).collect();
+        format!("  {}", keys.join(" "))
+    };
     let dirty = if app.services.dirty { " *" } else { "" };
     // After the changes' mark, as Vim's status line puts `[RO]` after `[+]`.
     let read_only = if app.services.live.read_only {
@@ -526,7 +527,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     )));
     let message = if app.modes.mode == Mode::Command {
         format!(":{}", app.overlays.command.line)
-    } else if let Some(jump) = &app.modes.field_jump {
+    } else if let Some(jump) = &app.overlays.field_jump {
         format!("/{}", jump.query)
     } else if app.services.status.is_empty()
         && let Some(hint) = page_hint(app)

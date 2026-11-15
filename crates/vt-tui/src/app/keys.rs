@@ -351,7 +351,23 @@ impl App {
             Mode::Picker => self.picker_key(key, now),
             Mode::Shape => self.shape_key(key),
             Mode::Mapping => self.mapping_key(key),
-            Mode::Jump => self.jump_key(key),
+            Mode::Jump => {
+                let page = self.jump_page();
+                let Some(jump) = self.overlays.field_jump.as_mut() else {
+                    return;
+                };
+                jump.lend(page);
+                let outcome = overlays::give(
+                    jump,
+                    &self.table,
+                    &mut self.grammar,
+                    &mut self.services,
+                    &self.modes,
+                    key,
+                    now,
+                );
+                self.settled(outcome, false);
+            }
             Mode::Restore => self.restore_key(key),
             Mode::Keys => self.keys_key(key, now),
         }
