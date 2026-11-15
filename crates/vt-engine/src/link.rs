@@ -22,7 +22,7 @@ use crate::dsp::effects::memory::{Memory, MemoryCount};
 use crate::engine::{Engine, PLAYHEADS, Playhead, SectionLoop, TrackPlace, Transport};
 use crate::gens::GenReport;
 use crate::mixer::Reading;
-use crate::published::{Published, Span};
+use crate::published::{Handover, Published, Span};
 use crate::recorder::{RecordQuantise, RecordSource, RecorderEvent};
 #[cfg(test)]
 use crate::track_state::Drawn;
@@ -182,8 +182,8 @@ pub struct Telemetry {
 
 /// The edit thread's end.
 pub struct Handle {
-    versions: Producer<Arc<Published>>,
-    returned: Consumer<Arc<Published>>,
+    versions: Producer<Handover>,
+    returned: Consumer<Handover>,
     commands: Producer<Command>,
     telemetry: Consumer<Telemetry>,
     /// The main output, mixed to one channel, for the scope.
@@ -193,7 +193,7 @@ pub struct Handle {
     note_pitches: Consumer<(usize, NotePitch)>,
     /// What was heard of each track's live generators: passes, rows and rests.
     gen_heard: Consumer<(usize, GenReport)>,
-    pending: Option<Arc<Published>>,
+    pending: Option<Handover>,
     memories: Producer<Memory>,
     freed: Consumer<Memory>,
     /// One-off files to hear, each with how much of it plays, and those the callback is done
@@ -213,8 +213,8 @@ pub struct Handle {
 /// The callback's end. Nothing here allocates, frees or locks.
 pub struct Realtime {
     engine: Engine,
-    versions: Consumer<Arc<Published>>,
-    returned: Producer<Arc<Published>>,
+    versions: Consumer<Handover>,
+    returned: Producer<Handover>,
     commands: Consumer<Command>,
     telemetry: Producer<Telemetry>,
     scope: Producer<f32>,
@@ -306,7 +306,7 @@ impl Handle {
     /// Send a new version. If an unsent one is waiting, this replaces it, and it is freed here.
     pub fn publish(&mut self, version: Arc<Published>) {
         self.meet_memory_needs(MemoryCount::of(&version.song));
-        self.pending = Some(version);
+        self.pending = Some(Handover::new(version));
         self.pump();
     }
 
@@ -493,7 +493,7 @@ impl Realtime {
         if !self.returned.is_full()
             && let Ok(version) = self.versions.pop()
         {
-            let old = self.engine.swap(version);
+            let old = self.engine.hand_over(version);
             let _ = self.returned.push(old);
         }
         while let Ok(command) = self.commands.pop() {
@@ -1505,7 +1505,7 @@ mod tests {
             if rt.returned.is_full() {
                 break;
             }
-            let _ = handle.versions.push(published(next, &pool));
+            let _ = handle.versions.push(Handover::new(published(next, &pool)));
         }
         let current = rt.engine().current().song.millibpm;
         assert_eq!(blocks(&mut rt, 2), 0);

@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use vt_engine::engine::Engine;
 use vt_engine::link::{Command, connect};
-use vt_engine::published::Published;
+use vt_engine::published::{Handover, Published};
 use vt_engine::slowdown::Look;
 
 use vt_engine::timing::{PartTimes, clock_cost};
@@ -201,7 +201,8 @@ fn on_this_thread(request: &BenchRequest) -> Result<(), RunError> {
 
 /// How long the engine takes to switch to a new version while playing, as the callback does after
 /// every edit, on average and at worst: each version has the first track's `Cut` a step away from
-/// the last's, and a block plays between them. Versions are made, and old ones freed, untimed.
+/// the last's, and a block plays between them. Versions and their scratch are made, and old ones
+/// freed, untimed.
 fn swap_while_playing(
     engine: &mut Engine,
     song: &Song,
@@ -222,8 +223,9 @@ fn swap_while_playing(
             Arc::clone(&last.samples),
             Some(&last),
         ));
+        let handover = Handover::new(Arc::clone(&next));
         let started = Instant::now();
-        let old = engine.swap(Arc::clone(&next));
+        let old = engine.hand_over(handover);
         let took = started.elapsed();
         drop(old);
         total += took;
