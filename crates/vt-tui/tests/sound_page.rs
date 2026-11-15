@@ -23,8 +23,9 @@ use vt_model::song::{Machine, Song, SynthVoice, Track, TrackKind};
 use vt_tui::app::App;
 use vt_tui::input::bindings::Cmd;
 use vt_tui::input::mode::Mode;
+use vt_tui::page::Outcome;
 use vt_tui::theme;
-use vt_tui::track_page::{Control, DeviceCursor, Outcome, Page, TrackPage};
+use vt_tui::track_page::{Control, DeviceCursor, Page, TrackPage};
 use vt_tui::views::status::column_name;
 
 mod common;
@@ -262,12 +263,15 @@ fn the_sound_rack_moves_on_its_own_without_an_app() {
     // Kick has no type, so its title has only the machine.
     assert_eq!(devices[0].title, [Some(Control::Machine), None, None, None]);
     assert_eq!(page.device_cursor(track), at(0, 0, 0));
-    assert_eq!(page.key(Cmd::Move(Motion::Right), 1, track), Outcome::Done);
+    assert_eq!(
+        page.key_on(Cmd::Move(Motion::Right), 1, track),
+        Outcome::Done
+    );
     assert_eq!(page.device_cursor(track), at(0, 0, 0), "nothing beside it");
-    page.key(Cmd::Move(Motion::Down), 1, track);
-    page.key(Cmd::Move(Motion::RowEnd), 1, track);
+    page.key_on(Cmd::Move(Motion::Down), 1, track);
+    page.key_on(Cmd::Move(Motion::RowEnd), 1, track);
     assert_eq!(page.control(track), Control::Setting(3), "Kick's Accent");
-    page.key(Cmd::Move(Motion::NextBeat), 2, track);
+    page.key_on(Cmd::Move(Motion::NextBeat), 2, track);
     assert_eq!(page.device_cursor(track), at(2, 1, 1));
     // A fixed track's Sound page is its Output alone, with holes where it lacks a setting.
     let master = Track {
