@@ -2,7 +2,8 @@
 //! to `Mod 3` on the left and `Mod 4` to `Mod 6` on the right, and the accumulator beside the
 //! arpeggio under them (the mod slots study, `docs/designs/mod-slots.md`, §7). A slot's title has
 //! its type, its type's mode if it has one, and its destination, and a switch, which `b` flips to
-//! hear the track without it. Each type states its grid here, by what its settings mean.
+//! hear the track without it. Each type's title and grid are its spec's, in the model
+//! (`vt_model::modulation::MOD_SPECS`), which say why each setting sits where it does.
 
 use std::sync::Arc;
 
@@ -20,92 +21,7 @@ use crate::services::Services;
 
 use super::editing::set_mod;
 
-use super::{AccumulatorField, ArpField, Control, DEVICE_COLUMNS, DeviceSpec, ModField};
-
-/// An ADSR's settings, as its grid places them: its times down the left, and its levels down the
-/// right.
-const ADSR_SETTINGS: [ModField; 6] = [
-    ModField::Attack,
-    ModField::Decay,
-    ModField::Release,
-    ModField::Sustain,
-    ModField::Depth,
-    ModField::Reset,
-];
-const ADSR_GRID: [[Option<usize>; 3]; 2] =
-    [[Some(0), Some(1), Some(2)], [Some(3), Some(4), Some(5)]];
-
-/// An AHD's settings: its times down the left, and how far it goes and its reset down the right,
-/// with a hole left for a `Delay` before the attack, Vital's DAHD, if one is missed.
-const AHD_SETTINGS: [ModField; 5] = [
-    ModField::Attack,
-    ModField::Hold,
-    ModField::Decay,
-    ModField::Depth,
-    ModField::Reset,
-];
-const AHD_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), Some(2)], [Some(3), Some(4), None]];
-
-/// A drum envelope's settings: its peak, body and decay down the left, and how far it goes and how
-/// many times its peak strikes down the right, with a hole. It has no reset, as it always strikes
-/// from full.
-const DRUM_SETTINGS: [ModField; 5] = [
-    ModField::Peak,
-    ModField::Body,
-    ModField::Decay,
-    ModField::Depth,
-    ModField::Ratchet,
-];
-const DRUM_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), Some(2)], [Some(3), Some(4), None]];
-
-/// A low-pass gate's settings: its rise and fall and how far it closes the filter down the left,
-/// and how far it goes and its reset down the right, with a hole. It has no mode, as its curve is
-/// the point of it.
-const LPG_SETTINGS: [ModField; 5] = [
-    ModField::Attack,
-    ModField::Decay,
-    ModField::Colour,
-    ModField::Depth,
-    ModField::Reset,
-];
-const LPG_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), Some(2)], [Some(3), Some(4), None]];
-
-/// An LFO's settings: what it plays down the left, and where it starts, how it fades after each
-/// note and how its wave bends down the right. How notes start it is its mode, in the title.
-const LFO_SETTINGS: [ModField; 6] = [
-    ModField::Shape,
-    ModField::Rate,
-    ModField::Depth,
-    ModField::Phase,
-    ModField::Fade,
-    ModField::Deform,
-];
-const LFO_GRID: [[Option<usize>; 3]; 2] =
-    [[Some(0), Some(1), Some(2)], [Some(3), Some(4), Some(5)]];
-
-/// Steps' settings: how fast, how many and how far down the left, and where each note starts it,
-/// how it drifts and how it goes from step to step down the right; then its values, a cursor stop
-/// of its own in the panel beside them, on every row, so `l` from any of the grid goes in. What it
-/// does at its end is in its title, with its mode.
-const STEPS_SETTINGS: [ModField; 7] = [
-    ModField::Rate,
-    ModField::Length,
-    ModField::Depth,
-    ModField::Start,
-    ModField::Mutate,
-    ModField::Smooth,
-    ModField::Step(0),
-];
-const STEPS_GRID: [[Option<usize>; 3]; 3] = [
-    [Some(0), Some(1), Some(2)],
-    [Some(3), Some(4), Some(5)],
-    [Some(6), Some(6), Some(6)],
-];
-
-/// Track's settings: where its map starts and ends, and how far it goes, down the left, with the
-/// right left empty. What it follows is its mode, in the title, and its map is drawn beside them.
-const TRACK_SETTINGS: [ModField; 3] = [ModField::Low, ModField::High, ModField::Depth];
-const TRACK_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), Some(2)], [None, None, None]];
+use super::{AccumulatorField, ArpField, Control, DEVICE_COLUMNS, DeviceSpec};
 
 /// The accumulator's settings: how far it goes down the left, and what it does there and when
 /// down the right.
@@ -130,41 +46,18 @@ const ARPEGGIO_SETTINGS: [ArpField; 4] = [
 ];
 const ARPEGGIO_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), None], [Some(2), Some(3), None]];
 
-/// A slot's grid of settings under its type.
-fn type_grid(kind: ModKind) -> (&'static [ModField], Grid) {
-    match kind {
-        ModKind::Adsr => (&ADSR_SETTINGS, Grid::from_columns(&ADSR_GRID)),
-        ModKind::Ahd => (&AHD_SETTINGS, Grid::from_columns(&AHD_GRID)),
-        ModKind::Drum => (&DRUM_SETTINGS, Grid::from_columns(&DRUM_GRID)),
-        ModKind::Lpg => (&LPG_SETTINGS, Grid::from_columns(&LPG_GRID)),
-        ModKind::Lfo => (&LFO_SETTINGS, Grid::from_columns(&LFO_GRID)),
-        ModKind::Steps => (&STEPS_SETTINGS, Grid::from_columns(&STEPS_GRID)),
-        ModKind::Track => (&TRACK_SETTINGS, Grid::from_columns(&TRACK_GRID)),
-    }
-}
-
-/// A mod slot as a half-width device, `Mod 1` to `Mod 6`, with its switch, then its type, its
-/// type's mode if it has one, Steps' loop, its polarity if it has one to choose and its destination
-/// in its title, in that order for `h` and `l`.
+/// A mod slot as a half-width device, `Mod 1` to `Mod 6`, with its switch, then its type's title
+/// and grid as its spec has them ([`ModKind::spec`]): its type, its type's mode if it has one,
+/// Steps' loop, its polarity if it has one to choose and its destination, in that order for `h`
+/// and `l`.
 fn mod_device(slot: usize, modulator: &ModSlot) -> DeviceSpec {
-    let kind = modulator.kind;
+    let spec = modulator.kind.spec();
     let mut title = [None; DEVICE_COLUMNS];
-    let fields = [
-        ModField::Type,
-        ModField::Mode,
-        ModField::Loop,
-        ModField::Polarity,
-        ModField::Destination,
-    ];
-    for (place, field) in title
-        .iter_mut()
-        .zip(fields.into_iter().filter(|field| field.on(kind)))
-    {
-        *place = Some(Control::Mod(slot, field));
+    for (place, field) in title.iter_mut().zip(spec.title) {
+        *place = Some(Control::Mod(slot, *field));
     }
-    let (settings, grid) = type_grid(kind);
-    let device = DeviceSpec::new(format!("Mod {}", slot + 1), title, grid, |at| {
-        Control::Mod(slot, settings[at])
+    let device = DeviceSpec::new(format!("Mod {}", slot + 1), title, spec.grid, |at| {
+        Control::Mod(slot, spec.fields[at])
     });
     DeviceSpec {
         switchable: true,
