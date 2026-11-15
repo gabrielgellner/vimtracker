@@ -5,6 +5,7 @@ use vt_model::settings::SettingId;
 use vt_model::song::{FilterMode, FilterType};
 
 use crate::dsp::blocks::sides::same_sides;
+use crate::dsp::blocks::smoother::{coefficient, fast_coefficient};
 use crate::dsp::effects::slot::Keys;
 use crate::dsp::filters::filter::{Coefficients, Ramp, safe_resonance};
 
@@ -35,11 +36,31 @@ pub(super) fn pan_position(value: f32) -> f32 {
     }
 }
 
-/// Which smoother a value follows: the fast one while modulation moves it, so it keeps up, and
-/// otherwise the usual one, so a change on its own doesn't jump.
-#[inline]
-fn smoother(moving: bool, smoothing: f32, fast: f32) -> f32 {
-    if moving { fast } else { smoothing }
+/// What every frame of a run is worked out with: the usual smoother, the fast one for what
+/// modulation moves, and the sample rate.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RunContext {
+    pub smoothing: f32,
+    pub fast: f32,
+    pub rate: u32,
+}
+
+impl RunContext {
+    /// The smoothers at a sample rate.
+    pub(crate) fn new(rate: u32) -> Self {
+        Self {
+            smoothing: coefficient(rate),
+            fast: fast_coefficient(rate),
+            rate,
+        }
+    }
+
+    /// Which smoother a value follows: the fast one while modulation moves it, so it keeps up, and
+    /// otherwise the usual one, so a change on its own doesn't jump.
+    #[inline]
+    fn smoother(self, moving: bool) -> f32 {
+        if moving { self.fast } else { self.smoothing }
+    }
 }
 
 /// What the master does every frame while it rests: what it takes in after its trim, what its
@@ -80,16 +101,16 @@ impl TrackState {
 
     /// Which smoother a setting's gain follows, by whether modulation moves it now.
     #[inline]
-    fn smoother_for(&self, target: SettingId, smoothing: f32, fast: f32) -> f32 {
-        smoother(self.offsets[target.index()] != 0.0, smoothing, fast)
+    fn smoother_for(&self, target: SettingId, run: RunContext) -> f32 {
+        run.smoother(self.offsets[target.index()] != 0.0)
     }
 
     /// The utility filter. It's out of the way when wide open, and coefficients are only worked out
     /// while it moves.
     #[inline]
-    fn trimmed(&mut self, input: [f32; 2], smoothing: f32, rate: u32) -> [f32; 2] {
-        let low_cut = self.low_cut.next(smoothing);
-        let high_cut = self.high_cut.next(smoothing);
+    fn trimmed(&mut self, input: [f32; 2], run: RunContext) -> [f32; 2] {
+        let low_cut = self.low_cut.next(run.smoothing);
+        let high_cut = self.high_cut.next(run.smoothing);
         let (low_on, high_on) = (low_cut > TRIM_OPEN, high_cut < 1.0 - TRIM_OPEN);
         if !low_on && !high_on {
             self.low_cut_coefficients = None;
@@ -101,7 +122,7 @@ impl TrackState {
             let update = |slot: &mut Option<(f32, Coefficients)>, value: f32| {
                 let current = slot.is_some_and(|(at, _)| (at - value).abs() < TRIM_OPEN);
                 if !current {
-                    *slot = Some((value, Coefficients::new(value, 0.0, rate)));
+                    *slot = Some((value, Coefficients::new(value, 0.0, run.rate)));
                 }
             };
             if low_on {
@@ -147,37 +168,31 @@ impl TrackState {
 
     /// Trim, filter, level and pan one frame of voice output, and work out what it sends.
     #[inline]
-    pub(crate) fn shape(
-        &mut self,
-        input: [f32; 2],
-        smoothing: f32,
-        fast: f32,
-        rate: u32,
-        keys: &Keys,
-    ) -> ShapedFrame {
+    pub(crate) fn shape(&mut self, input: [f32; 2], run: RunContext, keys: &Keys) -> ShapedFrame {
         // The trim comes first, as a console's input gain does, so it sets how hard the filter,
         // its drive and the slots are hit. At 0 dB it's exactly 1, which leaves the voice as it is.
-        let trim = self.input_trim.next(smoothing);
+        let trim = self.input_trim.next(run.smoothing);
         // A NaN or an infinity from a voice would stay in the filter, and the utility filter
         // after it, for good, so it's heard as a frame of silence instead, as the slots do (#461).
         // Level, pan and the sends only scale the frame and keep nothing of it.
         let input = [input[0] * trim, input[1] * trim]
             .map(|sample| if sample.is_finite() { sample } else { 0.0 });
         self.take_in_after_trim(input);
-        let cutoff = (self.cutoff.next(smoothing)
-            + self.cut_offset.next(fast)
-            + self.cut_envelope.next(fast))
+        let cutoff = (self.cutoff.next(run.smoothing)
+            + self.cut_offset.next(run.fast)
+            + self.cut_envelope.next(run.fast))
         .clamp(0.0, 1.0);
-        let resonance = (self.resonance.next(smoothing)
-            + self.res_offset.next(fast)
-            + self.res_envelope.next(fast))
+        let resonance = (self.resonance.next(run.smoothing)
+            + self.res_offset.next(run.fast)
+            + self.res_envelope.next(run.fast))
         .clamp(0.0, 1.0);
-        let position =
-            (self.pan.next(smoothing) + self.pan_offset.next(fast) + self.pan_envelope.next(fast))
-                .clamp(0.0, 1.0);
-        let drive = self.drive.next(smoothing);
-        let punch = self.punch.next(smoothing);
-        let safe = self.safe.next(smoothing);
+        let position = (self.pan.next(run.smoothing)
+            + self.pan_offset.next(run.fast)
+            + self.pan_envelope.next(run.fast))
+        .clamp(0.0, 1.0);
+        let drive = self.drive.next(run.smoothing);
+        let punch = self.punch.next(run.smoothing);
+        let safe = self.safe.next(run.smoothing);
         let open = self.filter_type == FilterType::LowPass
             && cutoff > 0.999
             && resonance < 0.001
@@ -195,10 +210,10 @@ impl TrackState {
                 } else {
                     resonance
                 };
-                let mut c = Coefficients::with_mode(cutoff, resonance, mode, rate);
+                let mut c = Coefficients::with_mode(cutoff, resonance, mode, run.rate);
                 // A punch this small is none, so the filter is as it was without it.
                 if punch >= 0.001 && self.filter_type.has_punch() {
-                    c = c.punched(punch, rate);
+                    c = c.punched(punch, run.rate);
                 }
                 match &mut self.coefficients {
                     Some(ramp) => ramp.toward(&c, FILTER_UPDATE_FRAMES),
@@ -222,17 +237,17 @@ impl TrackState {
                 None => input,
             }
         };
-        let filtered = self.trimmed(filtered, smoothing, rate);
-        let filtered = self.through_slots(filtered, smoothing, fast, rate, keys);
+        let filtered = self.trimmed(filtered, run);
+        let filtered = self.through_slots(filtered, run, keys);
         self.key = filtered;
         // What's moved by modulation keeps up, and a change on its own doesn't jump.
-        let keeping_up = |target| self.smoother_for(target, smoothing, fast);
+        let keeping_up = |target| self.smoother_for(target, run);
         let (vol, to_a, to_b) = (
             keeping_up(SettingId::VOL),
             keeping_up(SettingId::SEND_A),
             keeping_up(SettingId::SEND_B),
         );
-        let gain = self.gain.next(vol) * self.level.next(smoothing);
+        let gain = self.gain.next(vol) * self.level.next(run.smoothing);
         let (left, right) = self.pan_gains(position);
         let dry = [filtered[0] * gain * left, filtered[1] * gain * right];
         let send_a = self.send_a_gain.next(to_a);
@@ -257,14 +272,7 @@ impl TrackState {
     /// once, and each slot passes it on to the next, so a chain of effects that keep a mono sound
     /// mono works out one side all the way through (decision 147).
     #[inline]
-    fn through_slots(
-        &mut self,
-        mut frame: [f32; 2],
-        smoothing: f32,
-        fast: f32,
-        rate: u32,
-        keys: &Keys,
-    ) -> [f32; 2] {
+    fn through_slots(&mut self, mut frame: [f32; 2], run: RunContext, keys: &Keys) -> [f32; 2] {
         let mut same = same_sides(frame);
         for (slot, insert) in self.inserts.iter_mut().enumerate() {
             if let Some(passed) = insert.passed_through(frame, same) {
@@ -272,9 +280,9 @@ impl TrackState {
                 continue;
             }
             // A setting being modulated keeps up, and a change on its own doesn't jump.
-            let keeping_up = smoother(self.slot_moving[slot], smoothing, fast);
+            let keeping_up = run.smoother(self.slot_moving[slot]);
             (frame, same) = self.slot_times.time(slot, !insert.is_empty(), || {
-                insert.process_sides(frame, same, keeping_up, rate, keys)
+                insert.process_sides(frame, same, keeping_up, run.rate, keys)
             });
         }
         frame
@@ -282,21 +290,14 @@ impl TrackState {
 
     /// Run a frame through the trim, slots and level of a track with no voice of its own.
     #[inline]
-    fn slots_and_level(
-        &mut self,
-        input: [f32; 2],
-        smoothing: f32,
-        fast: f32,
-        rate: u32,
-        keys: &Keys,
-    ) -> [f32; 2] {
-        let trim = self.input_trim.next(smoothing);
+    fn slots_and_level(&mut self, input: [f32; 2], run: RunContext, keys: &Keys) -> [f32; 2] {
+        let trim = self.input_trim.next(run.smoothing);
         let frame = [input[0] * trim, input[1] * trim];
         self.take_in_after_trim(frame);
-        let frame = self.through_slots(frame, smoothing, fast, rate, keys);
+        let frame = self.through_slots(frame, run, keys);
         self.key = frame;
-        let vol = self.smoother_for(SettingId::VOL, smoothing, fast);
-        let gain = self.gain.next(vol) * self.level.next(smoothing);
+        let vol = self.smoother_for(SettingId::VOL, run);
+        let gain = self.gain.next(vol) * self.level.next(run.smoothing);
         [frame[0] * gain, frame[1] * gain]
     }
 
@@ -307,28 +308,27 @@ impl TrackState {
     pub(crate) fn process_return(
         &mut self,
         input: [f32; 2],
-        smoothing: f32,
-        fast: f32,
-        rate: u32,
+        run: RunContext,
         keys: &Keys,
     ) -> [f32; 2] {
-        if input == [0.0, 0.0] && !self.ringing(rate) {
+        if input == [0.0, 0.0] && !self.ringing(run.rate) {
             self.key = [0.0, 0.0];
             // With nothing to fade, a mute is heard at once when something comes in.
             self.heard.settle();
             return [0.0, 0.0];
         }
-        let frame = self.slots_and_level(input, smoothing, fast, rate, keys);
-        let position =
-            (self.pan.next(smoothing) + self.pan_offset.next(fast) + self.pan_envelope.next(fast))
-                .clamp(0.0, 1.0);
+        let frame = self.slots_and_level(input, run, keys);
+        let position = (self.pan.next(run.smoothing)
+            + self.pan_offset.next(run.fast)
+            + self.pan_envelope.next(run.fast))
+        .clamp(0.0, 1.0);
         // At the centre, what the effect gave comes through untouched, where `pan_gains` is only close.
         let (left, right) = if position == 0.5 {
             (1.0, 1.0)
         } else {
             self.pan_gains(position)
         };
-        let heard = self.heard.next(smoothing);
+        let heard = self.heard.next(run.smoothing);
         let out = [frame[0] * left * heard, frame[1] * right * heard];
         self.reading.add(out, out);
         out
@@ -340,13 +340,11 @@ impl TrackState {
     pub(crate) fn process_group(
         &mut self,
         input: [f32; 2],
-        smoothing: f32,
-        fast: f32,
-        rate: u32,
+        run: RunContext,
         keys: &Keys,
     ) -> ShapedFrame {
-        let dry = self.process_return(input, smoothing, fast, rate, keys);
-        let keeping_up = |target| self.smoother_for(target, smoothing, fast);
+        let dry = self.process_return(input, run, keys);
+        let keeping_up = |target| self.smoother_for(target, run);
         let (to_a, to_b) = (keeping_up(SettingId::SEND_A), keeping_up(SettingId::SEND_B));
         let send_a = self.send_a_gain.next(to_a);
         let send_b = self.send_b_gain.next(to_b);
@@ -360,9 +358,9 @@ impl TrackState {
     /// Whether a group with nothing coming in would give silence and change nothing, frame after
     /// frame, so it can be skipped until something comes in (#558): its slots aren't ringing, so it
     /// does no work, and what it sends isn't moving.
-    pub(crate) fn group_rests(&self, smoothing: f32, fast: f32, rate: u32) -> bool {
-        let keeping_up = |target| self.smoother_for(target, smoothing, fast);
-        !self.ringing(rate)
+    pub(crate) fn group_rests(&self, run: RunContext) -> bool {
+        let keeping_up = |target| self.smoother_for(target, run);
+        !self.ringing(run.rate)
             && self.send_a_gain.still(keeping_up(SettingId::SEND_A))
             && self.send_b_gain.still(keeping_up(SettingId::SEND_B))
     }
@@ -379,17 +377,11 @@ impl TrackState {
     /// settled (`InsertState::settled`) on what the one before gives, hearing only what other
     /// tracks give now. It's usually silence, but a filter can be left holding a value too small
     /// to hear for good, and then that's what it gives.
-    pub(crate) fn master_rests(
-        &self,
-        smoothing: f32,
-        fast: f32,
-        rate: u32,
-        keys: &Keys,
-    ) -> Option<MasterRest> {
-        let vol = self.smoother_for(SettingId::VOL, smoothing, fast);
-        if !self.input_trim.still(smoothing)
+    pub(crate) fn master_rests(&self, run: RunContext, keys: &Keys) -> Option<MasterRest> {
+        let vol = self.smoother_for(SettingId::VOL, run);
+        if !self.input_trim.still(run.smoothing)
             || !self.gain.still(vol)
-            || !self.level.still(smoothing)
+            || !self.level.still(run.smoothing)
         {
             return None;
         }
@@ -397,8 +389,8 @@ impl TrackState {
         let mut frame = trimmed;
         let mut same = same_sides(frame);
         for (slot, insert) in self.inserts.iter().enumerate() {
-            let keeping_up = smoother(self.slot_moving[slot], smoothing, fast);
-            (frame, same) = insert.settled(frame, same, keeping_up, rate, keys)?;
+            let keeping_up = run.smoother(self.slot_moving[slot]);
+            (frame, same) = insert.settled(frame, same, keeping_up, run.rate, keys)?;
         }
         let gain = self.gain.value * self.level.value;
         Some(MasterRest {
@@ -422,11 +414,9 @@ impl TrackState {
     pub(crate) fn process_master(
         &mut self,
         input: [f32; 2],
-        smoothing: f32,
-        fast: f32,
-        rate: u32,
+        run: RunContext,
         keys: &Keys,
     ) -> [f32; 2] {
-        self.slots_and_level(input, smoothing, fast, rate, keys)
+        self.slots_and_level(input, run, keys)
     }
 }

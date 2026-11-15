@@ -43,7 +43,7 @@ pub(crate) use pending::{
     Accumulating, Accumulators, Arpeggiating, Clock, Decided, DelayedNote, Epoch, PENDING_PARTS,
     Part, PendingStep, Retrigger, RowKey, Worked,
 };
-pub(crate) use shaping::{MasterRest, ShapedFrame};
+pub(crate) use shaping::{MasterRest, RunContext, ShapedFrame};
 #[cfg(test)]
 pub(crate) use values::LOOKUPS;
 pub(crate) use values::base_of;
