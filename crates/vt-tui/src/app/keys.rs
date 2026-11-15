@@ -728,6 +728,8 @@ impl App {
             Cmd::Undo => {
                 let before = self.loop_place();
                 if self.services.history.undo().is_some() {
+                    // The version brought back may have been left in another scale.
+                    self.services.follow_scale();
                     self.keep_row(before);
                     self.after_history();
                     if self.modes.mode.is_visual() {
@@ -740,6 +742,7 @@ impl App {
             Cmd::Redo => {
                 let before = self.loop_place();
                 if self.services.history.redo().is_some() {
+                    self.services.follow_scale();
                     self.keep_row(before);
                     self.after_history();
                     if self.modes.mode.is_visual() {

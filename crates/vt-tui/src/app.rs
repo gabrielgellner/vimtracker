@@ -324,6 +324,10 @@ impl App {
         };
         app.services.live_song = Some(Arc::clone(app.song()));
         app.send_live();
+        // A song whose generators were saved in another scale than its own takes its own.
+        if app.services.follow_scale() {
+            app.services.publish();
+        }
         app
     }
 

@@ -3,10 +3,10 @@
 use std::fs;
 use std::sync::Arc;
 
-use vt_model::action::{Action, FieldValue, edit};
+use vt_model::action::{Action, FieldValue, edit, rescale_generators};
 use vt_model::generator::{Span, applied};
 use vt_model::project::{load_song, save_song};
-use vt_model::scale::Scale;
+use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{Acid, Bits, Edge, FillKind, Pink, Shape, ShapeColumn, Values, Walk, Where};
 use vt_model::song::{Lane, Phrase, Song};
@@ -926,4 +926,104 @@ fn a_variation_of_too_few_notes_leaves_the_rows_alone() {
     };
     let live = generate(&start, notes, all(16), variation(3, 1, 100));
     assert_eq!(texts(&live), texts(&start));
+}
+
+/// The notes on each row, as text.
+fn notes(song: &Song) -> Vec<String> {
+    texts(song)
+        .iter()
+        .map(|text| text[..3].to_owned())
+        .collect()
+}
+
+fn in_scale(kind: ScaleKind) -> ShapeColumn {
+    ShapeColumn::Note {
+        scale: Scale {
+            on: true,
+            root: 0,
+            kind,
+        },
+        writes: Some(0x64),
+    }
+}
+
+/// A ramp up an octave from `C-3` over eight empty rows, live, in C major.
+fn major_ramp() -> Arc<Song> {
+    let song = song_with(&[EMPTY; 8]);
+    let column = in_scale(ScaleKind::Major);
+    generate(&song, column, all(8), ramp(60, 72, Where::AllRows))
+}
+
+#[test]
+fn a_live_generators_notes_follow_the_scale_given() {
+    let major = major_ramp();
+    assert_eq!(
+        notes(&major),
+        ["C-3", "D-3", "E-3", "F-3", "G-3", "A-3", "B-3", "C-4"]
+    );
+    let minor = Scale {
+        on: true,
+        root: 0,
+        kind: ScaleKind::Minor,
+    };
+    let next = rescale_generators(&major, minor).expect("its scale was another");
+    assert_eq!(
+        notes(&next),
+        ["C-3", "D-3", "D#3", "F-3", "G-3", "G#3", "A#3", "C-4"]
+    );
+    // It's still live, on the scale given, and what it wrote is what it would write there.
+    let generator = &phrase(&next).generators()[0];
+    assert_eq!(generator.scale(), Some(minor));
+    let fresh = generate(
+        &song_with(&[EMPTY; 8]),
+        in_scale(ScaleKind::Minor),
+        all(8),
+        ramp(60, 72, Where::AllRows),
+    );
+    assert_eq!(texts(&next), texts(&fresh));
+    // Given the scale it has, nothing is made.
+    assert!(rescale_generators(&next, minor).is_none());
+}
+
+#[test]
+fn a_rescale_leaves_alone_what_has_no_live_notes() {
+    // Applied, its notes are plain ones, which no scale change moves.
+    let live = major_ramp();
+    let applied = edit(
+        &live,
+        &Action::ApplyGenerator {
+            track: 0,
+            phrase: 0,
+            generator: 0,
+        },
+    )
+    .unwrap();
+    let minor = Scale {
+        on: true,
+        root: 0,
+        kind: ScaleKind::Minor,
+    };
+    assert!(rescale_generators(&applied, minor).is_none());
+    // A generator on another column has no scale.
+    let cut = generate(
+        &song_with(&[NOTE; 4]),
+        CUT,
+        all(4),
+        ramp(0, 0x80, Where::AllRows),
+    );
+    assert!(rescale_generators(&cut, minor).is_none());
+    // And a phrase with no generator on its notes stays shared with the song given.
+    let mut two = Song::clone(&live);
+    two.tracks[0]
+        .phrases
+        .insert(1, Arc::new(Phrase::from_steps(vec![Step::default(); 4])));
+    let next = rescale_generators(&two, minor).unwrap();
+    assert!(Arc::ptr_eq(
+        &two.tracks[0].phrases[&1],
+        &next.tracks[0].phrases[&1]
+    ));
+    assert!(!Arc::ptr_eq(
+        &two.tracks[0].phrases[&0],
+        &next.tracks[0].phrases[&0]
+    ));
 }
