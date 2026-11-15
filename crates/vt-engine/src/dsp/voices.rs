@@ -89,16 +89,19 @@ pub(crate) trait SynthEngine: Copy {
     fn seed_noise(&mut self, _seed: u32) {}
 }
 
-/// The settings, each on `0..=1`.
+/// A voice's settings, each on `0..=1`, in the order of its entries in `vt-model`'s
+/// `settings/voices.rs`. The first four have the names of Plaits' knobs, which its ports read
+/// them by; what each is depends on the voice.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Settings {
-    /// Detunes the saw from the square, with the middle in tune.
+    /// The first: `VA`'s detuning of its saw from its square, say.
     pub harmonics: f32,
-    /// The square, from nothing to a narrow pulse, to a full square, to hard sync.
+    /// The second.
     pub timbre: f32,
-    /// The saw, from a triangle to a saw, to a saw with a widening notch.
+    /// The third.
     pub morph: f32,
-    /// How hard a note is struck, for the voices that use it. Plaits' default is 0.8.
+    /// The fourth: how hard a note is struck, for the voices with an `Accent`, and `Drift` for
+    /// the analog ones. Plaits' default is 0.8.
     pub accent: f32,
     /// The settings after the first four, for a voice with more.
     pub further: [f32; MAX_MACHINE_SETTINGS - 4],
