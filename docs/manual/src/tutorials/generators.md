@@ -11,7 +11,7 @@ there are no samples to find.
 | `deja-vu` | Mutable Instruments' Marbles | `Mutate` for new notes, `:order random` to replay old ones |
 | `euclid` | Euclidean rhythms | `S`'s `Euclid`, kept live, with `Rotate` |
 | `fugue` | Fugue Machine | One theme and three tracks following it live with `Follow`, each at its own `Speed` |
-| `kria` | monome's Kria | Triggers, pitches, octaves and lengths on loops of different lengths, and an `Acid` fill's own loops |
+| `kria` | monome's Kria | Triggers, pitches, octaves, lengths, ratchets and chances on loops of different lengths and divisions, and an `Acid` fill's own loops |
 | `metropolix` | Intellijel's Metropolix | Pulses and gates per row, `ACU`, `ARP` and a pendulum order |
 | `eloquencer` | Winter Modular's Eloquencer | `RND`: a chance on each row of a note, a length, a velocity or a ratchet varying |
 | `live-generators` | Elektron's Euclidean mode | Columns kept live with `L`, and what hand edits do to them |
@@ -416,11 +416,14 @@ right, some delay and reverb, and the levels.
 [Kria](https://monome.org/docs/ansible/kria/), for monome's Ansible and Grid, splits a note into
 parts, its trigger, its pitch, its octave, its length and more, and gives each part a loop of
 its own length. A trigger loop of 16, a note loop of 5 and an octave loop of 3 never line up
-the same way twice in a bar, so a few steps make a line that keeps turning over.
+the same way twice in a bar, so a few steps make a line that keeps turning over. Each part can
+also move on at a clock division of its own, from 1 to 16. The trigger has a second page,
+ratcheting, where a step fires several evenly spaced triggers, with its own loop and division.
+And any part's step can be given a probability, 100% as it starts, or 50%, 25% or 0%, that it
+takes effect when it's reached.
 
 **How the song does it.** Track 1, a `VA`, has a trigger loop: a phrase of 16 rows, every note
-the scale's root, `E-3`, in E minor pentatonic. The other loops each run on sixteenths, apart
-from the notes:
+the scale's root, `E-3`, in E minor pentatonic. The other loops run apart from the notes:
 
 | Loop | Length | Where | Values |
 |---|---|---|---|
@@ -428,6 +431,17 @@ from the notes:
 | Pitch | 5 | `Mod 4`, `Steps` in `Free` on `Pitch in scale` | `00 03 07 05 0A` |
 | Octave | 3 | `Mod 5`, `Steps` in `Free` on `Pitch` | `00 00 0C` |
 | Length | 4 | FX 1, a lane of 4 holding `LEN` | `20 C0 08 E6` |
+| Ratchet | 3, a row every 3 steps | FX 2, a lane of 3 at `/3` holding `RET` | `03 -- 02` |
+| Probability | 7, a row every 2 steps | FX 3, a lane of 7 at `/2` holding `CHA` | `80 -- -- 40 -- -- 80` |
+
+The first four go a step each sixteenth. `RET 03` plays its note twice in the step and `RET 02`
+three times, a ratchet of two or of three. `CHA 80` plays its note half the time and `CHA 40` a
+quarter, Kria's 50% and 25%; an empty row always plays. A slow row acts once, on its first step,
+so the ratchet loop comes round every 9 steps and can ratchet two notes in that time, and the
+probability loop every 14 and can drop three. Against the 16 steps of the trigger loop, the
+ratchets fall on new notes each bar for nine bars and the chances for seven, so they thin and
+stutter the line somewhere new without crowding it. Kria keeps a part's probabilities on that
+part's own steps, so they go round with it; here they're a loop of their own.
 
 In `Free` a Steps slot runs from the song's position, a step each sixteenth, as Kria's loops
 do, so each note takes whatever pitch and octave loop are on when it lands. Track 2 is a second
@@ -463,7 +477,12 @@ over 26 bars, and the phrase plays the same pass again only after 105 passes.
 5.  The length loop: `Space 3`, `l` across to FX 1 on row `00`, and `K` `len` `Enter` `20`. On
     the next three rows the same with `C0`, `08` and `E6`. Back on row `00`, `:lane 4`: FX 1 now
     loops its first four steps on its own, and the title says `FX1:4`.
-6.  `Tab`. The notes are all `E-3` on the grid, but no two bars sound alike.
+6.  The ratchet loop: `l` to FX 2 on row `00`, `K` `ret` `Enter` `03`, and on row `02` the same
+    with `02`. Back on row `00`, `:lane 3/3`: a lane of 3 rows, each lasting three steps, and the
+    title says `FX2:3/3`.
+7.  The probability loop: `l` to FX 3 on row `00`, `K` `cha` `Enter` `80`, then `40` on row `03`
+    and `80` on row `06`. Back on row `00`, `:lane 7/2`, and the title says `FX3:7/2`.
+8.  `Tab`. The notes are all `E-3` on the grid, but no two bars sound alike.
 
 Track 2, all in one generator:
 
@@ -484,14 +503,19 @@ The finished song also makes the `VA` a pluck (`Mod 1`'s `Decay` `300 ms` and `S
 sets its `Cut` `90` and `Res` `50`, sends it to the delay, sets the `Acid`'s `Cutoff` `48` and
 `Resonance` `A0`, a shorter hat, and the levels.
 
-**As a patch.** Track 1's pitch, octave and length loops are the shipped patch `Kria`; add it
-with `:patch`. `Pitch loop` and `Octave loop` are macros turning the two slots' `Length` from 1
-step to 16. The length loop comes as it is, a live `List` of the four `LEN`s on a lane of 4,
-and the patch gives the FX column it goes on a lane as long. `Length loop` turns that lane's
-length, `FX1 Length` on the Gen page's `Lane`, from 1 row to 16: past 4 the lane plays its four
-lengths again from the first, so at 6 it's `20 C0 08 E6 20 C0`, and the line drifts against
-itself as Kria's does. Track 2 is the shipped patch `Acid loops`, its five loops on macros, `Trig
-loop`, `Note loop`, `Oct loop`, `Acc loop` and `Sld loop`, each from 1 row to 16.
+**As a patch.** Track 1's pitch, octave, length, ratchet and probability loops are the shipped
+patch `Kria`; add it with `:patch`. `Pitch loop` and `Octave loop` are macros turning the two
+slots' `Length` from 1 step to 16. The three loops on the FX columns each come as a live `List`
+of their values, the `RET`s on every second row of their lane and the `CHA`s on every third,
+and the patch gives each FX column it goes on a lane as long. `Length loop`, `Ratchet loop` and
+`Chance loop` turn those lanes' lengths, `FX1 Length` to `FX3 Length` on the Gen page's `Lane`
+devices, each from 1 row to 16, so every part has its loop on a knob, as Kria is played. Past
+its own length a lane plays its rows again from the first, so the length loop at 6 is
+`20 C0 08 E6 20 C0`, and the line drifts against itself as Kria's does. A patch carries a
+lane's length but not its division, so the ratchet and probability loops come a row a step:
+`:lane /3` on FX 2 and `:lane /2` on FX 3 slow them to the song's, or `Rate` `÷3` and `÷2` on
+their `Lane` devices. Track 2 is the shipped patch `Acid loops`, its five loops on macros,
+`Trig loop`, `Note loop`, `Oct loop`, `Acc loop` and `Sld loop`, each from 1 row to 16.
 
 **Try next.**
 
@@ -501,6 +525,12 @@ loop`, `Note loop`, `Oct loop`, `Acc loop` and `Sld loop`, each from 1 row to 16
 *   The lane's length: `:len 5` with the cursor on FX 1, or `Length loop` on the patch.
 *   `Rate` `÷2` on the Gen page's `FX1 Lane`, so each length lasts two steps, or `:lane /3` on
     FX 1 for three: Kria's clock division on one part.
+*   `Ratchet loop` down to 1 row: only `RET 03`, on every third step, so a ratchet wherever a
+    note lands there. Or `Rate` `×3` on `FX2 Lane`, three times as fast, its rows a step each,
+    and the line stutters on two steps in three.
+*   `Chance loop` down to 1: `CHA 80` alone, a coin tossed every other step, and the line thins
+    out. At 8 the lane plays its first row again after its last, two coins in a row. `:seed 9`
+    rolls other chances.
 *   On track 2, `Acc loop` `16` against `Trig loop` `12`: the accents fall somewhere new each
     bar for three bars. Or every loop at `16`, and it's an ordinary 16-row `Acid` line again.
 *   `Space g a` on track 2's Gen page keeps the pass just heard as the one written, and the
