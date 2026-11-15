@@ -195,7 +195,7 @@ impl SwarmVoice {
 
 /// One voice of the model. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct Swarm {
+pub(crate) struct Swarm {
     rng: Pcg32,
     voices: [SwarmVoice; VOICES],
     limiter: Limiter,
@@ -236,7 +236,7 @@ impl SynthEngine for Swarm {
 }
 
 impl Swarm {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         // Plaits works out the middle in whole numbers, so the ranks run from -1 to 4/3.
         let middle = ((VOICES - 1) / 2) as f32;
         let voices = std::array::from_fn(|i| SwarmVoice::new((i as f32 - middle) / middle));

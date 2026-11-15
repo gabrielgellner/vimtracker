@@ -834,7 +834,7 @@ const EXCITATION_PULSE: [i8; 640] = [
 
 /// One voice. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct Speech {
+pub(crate) struct Speech {
     naive: NaiveSpeech,
     sam: SamSpeech,
     lpc: LpcController,

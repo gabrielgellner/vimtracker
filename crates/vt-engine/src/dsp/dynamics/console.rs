@@ -94,7 +94,7 @@ fn charged(from: f32, attack: f32, over: f32, slope: f32, knee: f32) -> f32 {
 
 /// How far a steady level is turned down once it's settled, in dB, by the ratio and knee at a
 /// place on the switch.
-pub fn settled(level: f32, settings: Settings) -> f32 {
+pub(crate) fn settled(level: f32, settings: Settings) -> f32 {
     let at = usize::from(settings.console_ratio).min(CONSOLE_RATIOS.len() - 1);
     let over = level - threshold_db(f32::from(settings.threshold)) - OFFSETS_DB[at];
     charged(0.0, 0.0, over, CONSOLE_RATIOS[at] - 1.0, KNEES_DB[at])
@@ -115,7 +115,7 @@ struct Times {
 
 /// The control voltage and its capacitors, and where its curve sits, gliding to where it's set.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Console {
+pub(crate) struct Console {
     /// How far it's turning down now, in dB: the timing capacitor's voltage.
     reduction: f32,
     /// Auto's big capacitor's voltage, in dB.
@@ -152,7 +152,7 @@ same_bits_by_fields!(Console {
 
 impl Console {
     /// How far it's turning down now, in dB, for a meter.
-    pub fn reduction(&self) -> f32 {
+    pub(crate) fn reduction(&self) -> f32 {
         self.reduction
     }
 
@@ -196,7 +196,7 @@ impl Console {
     /// One frame turned down by what `key` asks for, all wet. `key` is the frame itself unless it
     /// hears another track.
     #[inline]
-    pub fn process(
+    pub(crate) fn process(
         &mut self,
         input: [f32; 2],
         key: [f32; 2],

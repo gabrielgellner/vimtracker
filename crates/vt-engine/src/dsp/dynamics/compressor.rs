@@ -211,7 +211,7 @@ impl AutoGain {
 
 /// The clean type's detector, and where its curve sits, moving smoothly to where it's set.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Clean {
+pub(crate) struct Clean {
     /// How far it's turning down now, in dB.
     reduction: f32,
     /// What the release lets go of, before the attack smooths it, in dB.
@@ -281,7 +281,7 @@ impl Clean {
     /// One frame turned down by what `key` asks for, all wet. `key` is the frame itself unless it
     /// hears another track.
     #[inline]
-    pub fn process(
+    pub(crate) fn process(
         &mut self,
         input: [f32; 2],
         key: [f32; 2],

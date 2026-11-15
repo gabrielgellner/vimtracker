@@ -471,7 +471,7 @@ fn wave_key(slot: usize) -> u64 {
 
 /// Where the song is, for working out LFOs.
 #[derive(Debug, Clone, Copy)]
-pub struct SongTime {
+pub(crate) struct SongTime {
     /// The song's scale, which slots in scale move the pitch along.
     pub scale: Scale,
     pub tick: f64,
@@ -486,7 +486,7 @@ pub struct SongTime {
 
 impl SongTime {
     /// Where the song is, for the slots' effects that keep time with it.
-    pub fn place(&self, stopped: bool) -> SongPlace {
+    pub(crate) fn place(&self, stopped: bool) -> SongPlace {
         SongPlace {
             tick: self.tick,
             playing: !stopped,
@@ -545,7 +545,7 @@ fn heard_slot(
 impl TrackState {
     /// A mod slot as it's heard: the song's, with its own settings as macros and modulation have
     /// them, for what reads a slot outside its working out, a note's start and end and its shape.
-    pub fn heard_mod(&self, track: &Track, at: usize) -> ModSlot {
+    pub(crate) fn heard_mod(&self, track: &Track, at: usize) -> ModSlot {
         let slot = &track.mods[at];
         heard_slot(slot, at, reshapes(track), &self.own_held[at], |index| {
             self.offsets[index]
@@ -555,7 +555,7 @@ impl TrackState {
 
     /// Count every slot's cycles from the top of the song, as playing starts there, keeping the
     /// clock they count real time from.
-    pub fn count_cycles_from_the_top(&mut self) {
+    pub(crate) fn count_cycles_from_the_top(&mut self) {
         self.wake();
         for run in &mut self.slots {
             run.restart(LfoStart {
@@ -570,7 +570,7 @@ impl TrackState {
 
     /// Work out what the mod slots add now. A stopped track sits at its held values, so an
     /// audition hears those rather than wherever an LFO stopped.
-    pub fn modulate(
+    pub(crate) fn modulate(
         &mut self,
         track: &Track,
         index: usize,
@@ -870,7 +870,7 @@ impl TrackState {
 
     /// Whether working its modulation out now would change nothing, as nothing it reads has
     /// changed since it was last worked out and that left nothing moving.
-    pub fn rests(&self, now: SongTime, stopped: bool) -> bool {
+    pub(crate) fn rests(&self, now: SongTime, stopped: bool) -> bool {
         self.rest
             == Some(Rest {
                 stopped,
@@ -879,19 +879,19 @@ impl TrackState {
     }
 
     /// Whether its modulation, as last worked out, left nothing moving.
-    pub fn at_rest(&self) -> bool {
+    pub(crate) fn at_rest(&self) -> bool {
         self.rest.is_some()
     }
 
     /// Something its modulation reads has changed, so it's worked out again next time.
     #[inline]
-    pub fn wake(&mut self) {
+    pub(crate) fn wake(&mut self) {
         self.rest = None;
     }
 
     /// What working its modulation out again would still do while it rests: the shares' clock
     /// moves on, and so do a reverb's or a plate's wobbles, which go by the frame.
-    pub fn keep_resting(&mut self, now: SongTime) {
+    pub(crate) fn keep_resting(&mut self, now: SongTime) {
         self.shared_at = now.rendered;
         let stopped = self.rest.is_none_or(|rest| rest.stopped);
         for insert in &mut self.inserts {
@@ -930,7 +930,7 @@ impl TrackState {
     /// Start a note's modulation: every slot's envelope, and the cycles of each that a note
     /// starts, whatever type each is now, so one that changes type picks the new one up as though
     /// it had always been it.
-    pub fn trigger_mods(&mut self, track: &Track, now: SongTime) {
+    pub(crate) fn trigger_mods(&mut self, track: &Track, now: SongTime) {
         self.wake();
         let reshaped = reshapes(track);
         let (own_held, offsets) = (&self.own_held, &self.offsets);
@@ -947,7 +947,7 @@ impl TrackState {
 
     /// Start the release of every slot's envelope, when a note ends, but a one-shot's, which plays
     /// through whatever the note's length.
-    pub fn release_mods(&mut self, track: &Track, now: SongTime) {
+    pub(crate) fn release_mods(&mut self, track: &Track, now: SongTime) {
         self.wake();
         let reshaped = reshapes(track);
         let (own_held, offsets) = (&self.own_held, &self.offsets);

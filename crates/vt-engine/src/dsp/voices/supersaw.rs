@@ -23,7 +23,7 @@ use crate::dsp::blocks::drift::Drift;
 use crate::voice::SynthEngine;
 
 /// The most saws it stacks, and how many go in each four lanes.
-pub const MAX_SAWS: usize = 8;
+pub(crate) const MAX_SAWS: usize = 8;
 const LANES: usize = 4;
 const STACKS: usize = MAX_SAWS / LANES;
 /// The highest frequency a saw runs at, as a fraction of the sample rate.
@@ -253,7 +253,7 @@ fn play_stacks<const N: usize>(
 
 /// One voice of it. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct Supersaw {
+pub(crate) struct Supersaw {
     stacks: [Stack; STACKS],
     drift: Drift,
     /// Each saw's own drift in tuning, on `-1..1`.

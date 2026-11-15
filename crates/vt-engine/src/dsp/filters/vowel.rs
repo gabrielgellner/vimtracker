@@ -179,7 +179,7 @@ impl Bank {
 /// What a `Vowel` slot keeps: its formants on each side and where they're going. It's small
 /// enough to keep in every slot.
 #[derive(Debug, Clone, Copy)]
-pub struct Formants {
+pub(crate) struct Formants {
     /// Each side's formants, worked out once for both while a sound is the same on both.
     filters: Sides<[Svf; FORMANTS]>,
     /// The formants now, how much they move each frame, and where they're going by the end of the
@@ -234,7 +234,7 @@ impl Default for Formants {
 
 impl Formants {
     /// Take what's set now.
-    pub fn follow(&mut self, settings: Settings) {
+    pub(crate) fn follow(&mut self, settings: Settings) {
         self.vowel.target = f32::from(settings.vowel);
         self.size.target = f32::from(settings.size);
         self.resonance.target = f32::from(settings.resonance);
@@ -242,7 +242,7 @@ impl Formants {
     }
 
     /// Jump to what's set and the note, rather than gliding, as it's only just started.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.fresh = true;
         self.left = 0;
     }
@@ -251,7 +251,7 @@ impl Formants {
     /// and the frame out, all wet and within full scale. `same` says its two sides are the same,
     /// bit for bit.
     #[inline]
-    pub fn process(
+    pub(crate) fn process(
         &mut self,
         input: [f32; 2],
         same: bool,

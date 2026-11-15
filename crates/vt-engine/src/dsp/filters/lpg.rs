@@ -339,7 +339,7 @@ impl Vactrol {
 
 /// A low-pass gate: Streams' follower and vactrol, and a filter for each side.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct LowPassGate {
+pub(crate) struct LowPassGate {
     follower: Follower,
     vactrol: Vactrol,
     /// Each side's filter, worked out once for both while a sound is the same on both.
@@ -358,7 +358,7 @@ pub struct LowPassGate {
 
 impl LowPassGate {
     /// Its level and cutoff now, each from `0` to `1`.
-    pub fn opening(&self) -> (f32, f32) {
+    pub(crate) fn opening(&self) -> (f32, f32) {
         (self.level, self.cutoff)
     }
 
@@ -401,7 +401,7 @@ impl LowPassGate {
     /// One frame through the gate, all wet, opened by `key`: the frame itself unless it hears
     /// another track. `same` says the frame's two sides are the same, bit for bit.
     #[inline]
-    pub fn process(
+    pub(crate) fn process(
         &mut self,
         input: [f32; 2],
         same: bool,
@@ -453,7 +453,7 @@ fn span(settings: Settings) -> (f32, f32, f32) {
     (base, span, RINGING_TAIL.min(span))
 }
 
-/// Where a low-pass gate rests once it's heard nothing for a while, as [`LowPassGate::opening`]
+/// Where a low-pass gate rests once it's heard nothing for a while, as `LowPassGate::opening`
 /// has it, its level and cutoff from `0` to `1`: as a gate, silent, its cutoff on the tail the
 /// vactrol keeps; as a filter, at `Base` and full level; as a VCA, at `Base`'s level.
 pub fn resting(settings: Settings) -> (f32, f32) {
@@ -477,7 +477,7 @@ pub fn opened(settings: Settings) -> (f32, f32) {
 
 /// How much a `LPG` slot leaves a quiet sine at each frequency, in Hz, in dB, open as far as
 /// `(level, cutoff)`,
-/// which [`LowPassGate::opening`] reports and [`resting`] and [`opened`] give the ends of: its
+/// which `LowPassGate::opening` reports and [`resting`] and [`opened`] give the ends of: its
 /// filter's low-pass, from the tuning it plays with, or none as a VCA, at its level, and mixed
 /// with the sound by `Mix`, before `Gain`. For drawing its curve on the FX page's zoom (decision
 /// 333).

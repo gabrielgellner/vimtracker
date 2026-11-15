@@ -43,7 +43,7 @@ use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::dsp::filters::filter::soft_clip;
 
 /// How many grains can play at once, as Beads'.
-pub const GRAINS: usize = 32;
+pub(crate) const GRAINS: usize = 32;
 /// The rate Beads runs at, which its times in frames are for.
 const BEADS_RATE: f32 = 48_000.0;
 /// How near either end of the line a grain fades out, in frames at Beads' rate.
@@ -453,7 +453,7 @@ fn log_one_minus(x: f32) -> f32 {
 
 /// A granular effect's line, grains and what moves them.
 #[derive(Debug, Clone)]
-pub struct Granular {
+pub(crate) struct Granular {
     /// The recording, a stereo frame at a time, the newest at `write`.
     line: Vec<[f32; 2]>,
     write: usize,
@@ -488,7 +488,7 @@ pub struct Granular {
 
 impl Granular {
     /// A line of Beads' four seconds at this rate.
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         let rate_f = rate as f32;
         let longest = (GRAIN_BUFFER_SECONDS * rate_f).round() as usize;
         let at_beads = rate_f / BEADS_RATE;
@@ -528,13 +528,14 @@ impl Granular {
     }
 
     /// How many frames its line holds.
-    pub fn frames(&self) -> usize {
+    #[cfg(test)]
+    pub(crate) fn frames(&self) -> usize {
         self.line.len()
     }
 
     /// How many quiet frames in a row mean nothing's left in it. Frozen, what it holds can always
     /// come back, so it never is.
-    pub fn quiet_frames(&self) -> u32 {
+    pub(crate) fn quiet_frames(&self) -> u32 {
         if self.frozen {
             u32::MAX
         } else {
@@ -542,7 +543,7 @@ impl Granular {
         }
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.line.fill([0.0; 2]);
         self.tail.fill([0.0; 2]);
         self.tail_written = 0;
@@ -554,7 +555,7 @@ impl Granular {
     }
 
     /// Take what's set now.
-    pub fn follow(&mut self, settings: Settings) {
+    pub(crate) fn follow(&mut self, settings: Settings) {
         self.time.target = f32::from(settings.time);
         self.size.target = f32::from(settings.size);
         self.semitones.target = shift_semitones(f32::from(settings.pitch));
@@ -566,7 +567,7 @@ impl Granular {
     }
 
     /// Jump to what's set, as it's only just started.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.time.settle();
         self.size.settle();
         self.semitones.settle();
@@ -722,7 +723,7 @@ impl Granular {
 
     /// Feed one frame in and get the grains out, all wet.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         for setting in [
             &mut self.time,
             &mut self.size,

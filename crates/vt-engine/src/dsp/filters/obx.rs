@@ -26,7 +26,7 @@ use crate::dsp::blocks::flush::tiny_by_fields;
 
 /// The resonance at full `Res`: 1 is where a quiet filter has no damping left, and the rest is
 /// OB-Xd's push past it, so it rings by itself.
-pub const MOST_RESONANCE: f32 = 1.035;
+pub(crate) const MOST_RESONANCE: f32 = 1.035;
 /// How the band state is scaled into the diode pair's fit, as OB-Xd has it.
 const DIODE_SCALE: f32 = 0.0876;
 /// The furthest the fit is read, where it's already 60 times its quiet value, which no sound
@@ -41,7 +41,7 @@ fn diode_pair(x: f32) -> f32 {
 
 /// The filter's state: its two integrators.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct ObX {
+pub(crate) struct ObX {
     band: f32,
     low: f32,
 }
@@ -53,7 +53,7 @@ impl ObX {
     /// as a fraction of the rate, with `resonance` from 0 to [`MOST_RESONANCE`]. A NaN or an
     /// infinity going in is taken as silence, as it would stay in the loop for good.
     #[inline]
-    pub fn next(&mut self, input: f32, g: f32, resonance: f32) -> [f32; 3] {
+    pub(crate) fn next(&mut self, input: f32, g: f32, resonance: f32) -> [f32; 3] {
         let input = if input.is_finite() { input } else { 0.0 };
         let level = within(self.band * DIODE_SCALE, -DIODE_RANGE, DIODE_RANGE);
         let damping = 2.0 * (diode_pair(level) - resonance);
@@ -71,7 +71,7 @@ impl ObX {
 /// no resonance it peaks at 1, and not at all past that, where it peaks as loud as the low-pass is
 /// at `Cut`.
 #[inline]
-pub fn band_makeup(resonance: f32) -> f32 {
+pub(crate) fn band_makeup(resonance: f32) -> f32 {
     (2.0 * (1.0 - resonance)).max(1.0)
 }
 
@@ -79,7 +79,7 @@ pub fn band_makeup(resonance: f32) -> f32 {
 /// filter with damping `2 (1 - r)`, its low-pass `1 / (s^2 + k s + 1)`, band-pass `s / (...)` and
 /// high-pass `s^2 / (...)` mixed by `weights`, the band-pass made up. `along` is the frequency over
 /// the cutoff, both warped as the trapezoidal integrators warp them.
-pub fn response(weights: [f32; 3], resonance: f32, along: f32) -> f32 {
+pub(crate) fn response(weights: [f32; 3], resonance: f32, along: f32) -> f32 {
     let squared = along * along;
     let damping = 2.0 * (1.0 - resonance);
     let real = weights[0] - weights[2] * squared;

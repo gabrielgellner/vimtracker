@@ -52,7 +52,7 @@ fn sine_no_wrap(phase: f32) -> f32 {
 
 /// One voice. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct Additive {
+pub(crate) struct Additive {
     phase: f32,
     frequency: f32,
     /// Each harmonic's share of the sound, smoothed and adding up to one.
@@ -95,7 +95,7 @@ impl SynthEngine for Additive {
 }
 
 impl Additive {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             phase: 0.0,
             frequency: 0.0,

@@ -140,7 +140,7 @@ fn limited(x: f32) -> f32 {
 
 /// A frequency shifter's lines, transforms and oscillators.
 #[derive(Debug, Clone)]
-pub struct FreqShifter {
+pub(crate) struct FreqShifter {
     lines: [Vec<f32>; 2],
     mask: usize,
     write: usize,
@@ -169,7 +169,7 @@ pub struct FreqShifter {
 
 impl FreqShifter {
     /// Lines long enough for its longest delay at this rate.
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         let longest = LONGEST_SHIFT_DELAY_MS / 1000.0 * rate as f32;
         let size = (longest.ceil() as usize + 2).next_power_of_two();
         let mut shifter = Self {
@@ -198,11 +198,11 @@ impl FreqShifter {
     }
 
     /// The longest anything stays in it, in frames.
-    pub fn frames(&self) -> usize {
+    pub(crate) fn frames(&self) -> usize {
         self.mask + 1
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         for line in &mut self.lines {
             line.fill(0.0);
         }
@@ -216,7 +216,7 @@ impl FreqShifter {
     }
 
     /// Take what's set now.
-    pub fn follow(&mut self, settings: Settings) {
+    pub(crate) fn follow(&mut self, settings: Settings) {
         self.shift.target = shift_hertz(f32::from(settings.shift));
         self.spread.target = spread_hertz(f32::from(settings.spread));
         self.track.target = f32::from(settings.track) / 255.0;
@@ -227,7 +227,7 @@ impl FreqShifter {
     }
 
     /// Jump to what's set, as it's only just started.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.shift.settle();
         self.spread.settle();
         self.track.settle();
@@ -267,7 +267,7 @@ impl FreqShifter {
     /// Feed one frame in and get it shifted out, all wet, with the shift following `note`, a MIDI
     /// note, as far as `Track` says.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2], note: f32, smoothing: f32) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2], note: f32, smoothing: f32) -> [f32; 2] {
         let shift = self.shift.next(smoothing);
         let spread = self.spread.next(smoothing);
         let track = self.track.next(smoothing);

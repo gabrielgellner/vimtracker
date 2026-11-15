@@ -50,7 +50,7 @@ const SNARE_RATIOS: [f32; SNARE_MODES] = [1.00, 2.00, 3.18, 4.16, 5.62];
 
 /// One snare hit. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct Snare {
+pub(crate) struct Snare {
     rate: f32,
     rng: Pcg32,
     pulse_remaining: i32,
@@ -190,7 +190,7 @@ const HAT_RATIOS: [f32; 6] = [1.0, 1.304, 1.466, 1.787, 1.932, 2.536];
 
 /// One hi-hat hit. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct Hat {
+pub(crate) struct Hat {
     rate: f32,
     rng: Pcg32,
     envelope: f32,

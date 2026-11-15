@@ -46,7 +46,7 @@ fn semitones(interval: f32) -> f32 {
 
 /// One string. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct StringModel {
+pub(crate) struct StringModel {
     rate: f32,
     rng: Pcg32,
     excitation: Svf,

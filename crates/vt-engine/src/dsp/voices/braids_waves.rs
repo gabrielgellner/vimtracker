@@ -25,11 +25,11 @@ use super::braids_parts::{INNER, Lcg, Macro, Model, Pitch, whole};
 use super::virtual_analog::Settings;
 
 /// A map of waves to wander over, one setting across it and the other down.
-pub type WaveMap = Macro<WaveMapModel>;
+pub(crate) type WaveMap = Macro<WaveMapModel>;
 /// A line of waves to scan, with rough or smooth steps between them.
-pub type WaveLine = Macro<WaveLineModel>;
+pub(crate) type WaveLine = Macro<WaveLineModel>;
 /// A chord of four voices on a line of waves.
-pub type Paraphonic = Macro<ParaphonicModel>;
+pub(crate) type Paraphonic = Macro<ParaphonicModel>;
 
 /// Braids' waves: 256 of them, each a cycle of 128 bytes and the first again.
 static WAVES: &[u8; 256 * WAVE_SIZE] = include_bytes!("tables/braids_waves.bin");
@@ -90,7 +90,7 @@ const MAP: [u8; 256] = [
 ];
 
 #[derive(Debug, Clone, Copy)]
-pub struct WaveMapModel {
+pub(crate) struct WaveMapModel {
     phase: u32,
 }
 
@@ -145,7 +145,7 @@ const ROUGH: u32 = 0xFE00_0000;
 const ROUGHER: u32 = 0xF800_0000;
 
 #[derive(Debug, Clone, Copy)]
-pub struct WaveLineModel {
+pub(crate) struct WaveLineModel {
     phase: u32,
     smoothed: Option<u32>,
     previous: u32,
@@ -241,7 +241,7 @@ const CHORDS: [[i32; 3]; 17] = [
 ];
 
 #[derive(Debug, Clone, Copy)]
-pub struct ParaphonicModel {
+pub(crate) struct ParaphonicModel {
     phases: [u32; 4],
     struck: bool,
     noise: Lcg,

@@ -26,7 +26,7 @@ use vt_model::constants::{BAR_STEPS, BEAT_STEPS};
 use vt_model::growing::Growing;
 
 /// How long the margins before a recording's start and after its end are, in seconds.
-pub const MARGIN_SECONDS: f64 = 0.25;
+pub(crate) const MARGIN_SECONDS: f64 = 0.25;
 
 /// How many frames the margins before a recording's start and after its end are at a rate.
 pub fn margin_frames(rate: u32) -> u64 {
@@ -35,7 +35,7 @@ pub fn margin_frames(rate: u32) -> u64 {
 
 /// The most input frames the recorder takes in a block, as the callback renders at most this many
 /// at once.
-pub const MAX_INPUT_FRAMES: usize = 4096;
+pub(crate) const MAX_INPUT_FRAMES: usize = 4096;
 
 /// How many of the recorder's events can wait to be taken: a recording's start and its end, and a
 /// cancelled one's end before them. They're taken after every command that makes one and after
@@ -158,7 +158,7 @@ enum Stop {
 
 /// The recorder. It's made with everything it needs, and nothing it does allocates.
 #[derive(Debug)]
-pub struct Recorder {
+pub(crate) struct Recorder {
     source: RecordSource,
     /// The last frames heard, for the margin before a start, and where the next goes.
     ring: Box<[[f32; 2]]>,
@@ -183,7 +183,7 @@ pub struct Recorder {
 
 impl Recorder {
     /// A recorder listening to the master, with margins of [`MARGIN_SECONDS`] at a rate.
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         let margin = margin_frames(rate) as usize;
         Self {
             source: RecordSource::Master,
@@ -203,13 +203,13 @@ impl Recorder {
     }
 
     /// What it hears.
-    pub fn source(&self) -> RecordSource {
+    pub(crate) fn source(&self) -> RecordSource {
         self.source
     }
 
     /// Listen to another source. What it heard of the last is forgotten, so a margin is only ever
     /// of the source it's recording. Changing it while recording doesn't change what's recorded.
-    pub fn listen_to(&mut self, source: RecordSource) {
+    pub(crate) fn listen_to(&mut self, source: RecordSource) {
         if source != self.source && self.take.is_none() {
             self.source = source;
             self.ring.fill([0.0; 2]);
@@ -217,18 +217,18 @@ impl Recorder {
     }
 
     /// How many frames the margin before a start is.
-    pub fn margin(&self) -> u64 {
+    pub(crate) fn margin(&self) -> u64 {
         self.ring.len() as u64
     }
 
     /// Whether it's recording, or waiting to.
-    pub fn is_busy(&self) -> bool {
+    pub(crate) fn is_busy(&self) -> bool {
         self.take.is_some()
     }
 
     /// Record into a sample from a source, at once or from the grid's next line, starting so many
     /// frames later still, for the input's latency. Anything it was recording is cancelled first.
-    pub fn record(
+    pub(crate) fn record(
         &mut self,
         take: Arc<Growing>,
         source: RecordSource,
@@ -249,7 +249,7 @@ impl Recorder {
 
     /// Stop recording, at once or at the grid's next line while the song plays, so many frames
     /// later still for the input's latency. One not started yet is cancelled.
-    pub fn stop(&mut self, quantise: RecordQuantise, latency: u64, playing: bool) {
+    pub(crate) fn stop(&mut self, quantise: RecordQuantise, latency: u64, playing: bool) {
         match self.state {
             State::Armed { .. } | State::Waiting { .. } => self.cancel(),
             State::Recording { .. } => {
@@ -264,7 +264,7 @@ impl Recorder {
     }
 
     /// Take a recording back, whatever it's doing, to be dropped.
-    pub fn cancel(&mut self) {
+    pub(crate) fn cancel(&mut self) {
         if self.take.is_some() {
             self.finish(Ending::Cancelled);
         }
@@ -272,7 +272,7 @@ impl Recorder {
 
     /// How many steps apart the lines of the grid it's waiting for are, to start or to stop on,
     /// if it's waiting for one.
-    pub fn waits_for(&self) -> Option<u64> {
+    pub(crate) fn waits_for(&self) -> Option<u64> {
         match self.state {
             State::Armed { steps, .. }
             | State::Recording {
@@ -284,7 +284,7 @@ impl Recorder {
 
     /// The line of the grid it's waiting for falls so many frames from now, on this step of the
     /// song's, counted from where it started playing: start or stop there.
-    pub fn line(&mut self, frames: u64, step: u64) {
+    pub(crate) fn line(&mut self, frames: u64, step: u64) {
         match self.state {
             State::Armed { latency, .. } => {
                 self.started_step = Some(step);
@@ -305,7 +305,7 @@ impl Recorder {
     }
 
     /// The song has stopped: a stop waiting for the grid happens now, as no line will come.
-    pub fn transport_stopped(&mut self) {
+    pub(crate) fn transport_stopped(&mut self) {
         if let State::Recording {
             stop: Stop::Armed { latency, .. },
         } = self.state
@@ -318,7 +318,7 @@ impl Recorder {
 
     /// Room for the input's frames for the next block, up to [`MAX_INPUT_FRAMES`], to fill
     /// before it's rendered. Frames not filled are silence.
-    pub fn input_room(&mut self, frames: usize) -> &mut [[f32; 2]] {
+    pub(crate) fn input_room(&mut self, frames: usize) -> &mut [[f32; 2]] {
         let frames = frames.min(MAX_INPUT_FRAMES);
         self.input_len = frames;
         self.input_read = 0;
@@ -328,14 +328,14 @@ impl Recorder {
     }
 
     /// The block is over: input not filled for the next is silence.
-    pub fn end_block(&mut self) {
+    pub(crate) fn end_block(&mut self) {
         self.input_len = 0;
         self.input_read = 0;
     }
 
     /// The input's next frame, once each frame, or silence past what's come in.
     #[inline]
-    pub fn next_input(&mut self) -> [f32; 2] {
+    pub(crate) fn next_input(&mut self) -> [f32; 2] {
         if self.input_read < self.input_len {
             self.input_read += 1;
             self.input[self.input_read - 1]
@@ -346,7 +346,7 @@ impl Recorder {
 
     /// Hear the source's next frame: keep it for the margin, and write it if recording.
     #[inline]
-    pub fn hear(&mut self, frame: [f32; 2]) {
+    pub(crate) fn hear(&mut self, frame: [f32; 2]) {
         if self.take.is_some() {
             self.write(frame);
         }
@@ -355,7 +355,7 @@ impl Recorder {
     }
 
     /// Hear the same frame so many times, as a resting master gives.
-    pub fn hear_steady(&mut self, frame: [f32; 2], frames: u32) {
+    pub(crate) fn hear_steady(&mut self, frame: [f32; 2], frames: u32) {
         for _ in 0..frames {
             self.hear(frame);
         }
@@ -459,7 +459,7 @@ impl Recorder {
     }
 
     /// The oldest event not taken yet.
-    pub fn take_event(&mut self) -> Option<RecorderEvent> {
+    pub(crate) fn take_event(&mut self) -> Option<RecorderEvent> {
         let event = self.events[0].take();
         self.events.rotate_left(1);
         event

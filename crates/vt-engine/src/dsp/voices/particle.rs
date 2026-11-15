@@ -206,7 +206,7 @@ impl Diffuser {
 
 /// One voice. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct ParticleNoise {
+pub(crate) struct ParticleNoise {
     rng: Pcg32,
     particles: [Particle; PARTICLES],
     post_filter: Svf,
@@ -249,7 +249,7 @@ impl SynthEngine for ParticleNoise {
 }
 
 impl ParticleNoise {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             rng: Pcg32::new(0, 0),
             particles: [Particle::default(); PARTICLES],

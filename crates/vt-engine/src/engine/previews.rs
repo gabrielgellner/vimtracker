@@ -256,7 +256,7 @@ impl Engine {
 
     /// Hear a row of a given section while not playing: a step of the song's, or one of a
     /// track's own, and on every other track the row that's playing then at its own speed.
-    pub fn audition_from(&mut self, section: usize, step: usize, track: Option<usize>) {
+    pub(crate) fn audition_from(&mut self, section: usize, step: usize, track: Option<usize>) {
         if self.transport == Transport::Playing {
             return;
         }

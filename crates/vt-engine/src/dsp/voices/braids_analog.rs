@@ -26,17 +26,17 @@ use super::braids_parts::{
 use super::virtual_analog::{Moving, Settings};
 
 /// The CS-80-like saw: each cycle starts on a step, held for `Notch`, at a level `Depth` sets.
-pub type CSaw = Macro<CSawModel>;
+pub(crate) type CSaw = Macro<CSawModel>;
 /// From a triangle through a saw and a square to a narrowing pulse, then a sine under it, through
 /// a low-pass that `Fuzz` closes and overdrives.
-pub type Morph = Macro<MorphModel>;
+pub(crate) type Morph = Macro<MorphModel>;
 /// A saw with a second saw behind it, blended into a square of the same width.
-pub type SawSquare = Macro<SawSquareModel>;
+pub(crate) type SawSquare = Macro<SawSquareModel>;
 /// A square or a saw, and a second one hard synced to it, blended.
-pub type HardSync = Macro<SyncModel>;
+pub(crate) type HardSync = Macro<SyncModel>;
 
 #[derive(Debug, Clone, Copy)]
-pub struct CSawModel {
+pub(crate) struct CSawModel {
     oscillator: AnalogOscillator,
 }
 
@@ -69,7 +69,7 @@ impl Model for CSawModel {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct MorphModel {
+pub(crate) struct MorphModel {
     oscillators: [AnalogOscillator; 2],
     low_pass: f32,
 }
@@ -119,7 +119,7 @@ impl Model for MorphModel {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct SawSquareModel {
+pub(crate) struct SawSquareModel {
     oscillators: [AnalogOscillator; 2],
     mix: Option<f32>,
 }
@@ -172,7 +172,7 @@ const SYNC_WAVES: [Shape; 2] = [Shape::Square, Shape::Saw];
 const SYNC_GAINS: [f32; 2] = [0.58, 1.0];
 
 #[derive(Debug, Clone, Copy)]
-pub struct SyncModel {
+pub(crate) struct SyncModel {
     oscillators: [AnalogOscillator; 2],
     mix: Option<f32>,
 }
@@ -217,7 +217,7 @@ impl Model for SyncModel {
 
 /// Three oscillators of one wave, the second and third detuned by intervals that catch on
 /// chords.
-pub type Triple = Macro<TripleModel>;
+pub(crate) type Triple = Macro<TripleModel>;
 
 /// The intervals `Triple`'s second and third oscillators catch on, in Braids' 128ths of a
 /// semitone: unisons a little apart, then every semitone over two octaves either way, with the
@@ -263,7 +263,7 @@ const TRIPLE_WAVES: [(Shape, f32); 4] = [
 ];
 
 #[derive(Debug, Clone, Copy)]
-pub struct TripleModel {
+pub(crate) struct TripleModel {
     oscillators: [AnalogOscillator; 3],
 }
 

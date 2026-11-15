@@ -225,7 +225,7 @@ impl Side {
 
 /// The stereo stutter.
 #[derive(Debug, Clone)]
-pub struct Stutter {
+pub(crate) struct Stutter {
     sides: [Side; 2],
     taken: Taken,
     /// What's set now, which a trigger takes.
@@ -241,7 +241,7 @@ pub struct Stutter {
 
 impl Stutter {
     /// A piece long enough for a beat at the slowest tempo, with room to wait and fade after it.
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         let frames = |seconds: f32| (seconds * rate as f32).ceil() as u32;
         let wait = frames(WAIT_SECONDS);
         let fade = frames(FADE_SECONDS).max(1);
@@ -272,12 +272,12 @@ impl Stutter {
     }
 
     /// The longest piece it can hold, in frames.
-    pub fn longest(&self) -> usize {
+    pub(crate) fn longest(&self) -> usize {
         self.sides[0].piece.len() - (self.wait + self.fade) as usize - 2
     }
 
     /// Forget where it is, and pass what comes in.
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         for side in &mut self.sides {
             side.clear();
         }
@@ -285,7 +285,7 @@ impl Stutter {
     }
 
     /// Take the settings, at a tempo. `Trig` going on triggers it.
-    pub fn follow(&mut self, settings: Settings, frames_per_tick: f64) {
+    pub(crate) fn follow(&mut self, settings: Settings, frames_per_tick: f64) {
         let at = usize::from(settings.length).min(REPEAT_LENGTHS - 1);
         let frames = (f64::from(DIVISION_TICKS[at]) * frames_per_tick).round() as usize;
         self.length = frames.clamp(self.shortest, self.longest());
@@ -299,7 +299,7 @@ impl Stutter {
     }
 
     /// Start again: take the next piece of what comes in, at what's set now.
-    pub fn strike(&mut self) {
+    pub(crate) fn strike(&mut self) {
         self.taken = Taken {
             since: 0,
             length: self.length,
@@ -314,13 +314,13 @@ impl Stutter {
 
     /// Whether it's been triggered and has a piece to take, or is still playing one, so it has
     /// to keep going with nothing coming in.
-    pub fn waking(&self) -> bool {
+    pub(crate) fn waking(&self) -> bool {
         self.sides.iter().any(Side::busy)
     }
 
     /// How long it can go with nothing coming in and still have something to play: none once
     /// it's passing what comes in, and its longest piece and a wait while it's stuttering.
-    pub fn quiet_frames(&self) -> u32 {
+    pub(crate) fn quiet_frames(&self) -> u32 {
         if self.waking() {
             self.sides[0].piece.len() as u32
         } else {
@@ -331,7 +331,7 @@ impl Stutter {
     /// Feed one frame in and get what's heard out: what comes in while it's not stuttering, and
     /// the piece while it is.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         let mut out = [0.0; 2];
         for (side, state) in self.sides.iter_mut().enumerate() {
             let sample = within(input[side], -HEADROOM, HEADROOM);

@@ -1526,7 +1526,7 @@ impl Cassette {
 
 /// Beads: its recording and what plays it, what it does after, and what moves them.
 #[derive(Debug, Clone)]
-pub struct Beads {
+pub(crate) struct Beads {
     recording: Recording,
     quality: u8,
     target_mode: BeadsMode,
@@ -1578,7 +1578,7 @@ pub struct Beads {
 
 impl Beads {
     /// A recording long enough for any quality at this rate, and everything after it.
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         let rate_f = rate as f32;
         let scale = rate_f / BEADS_RATE;
         let most = (MOST_FRAMES as f32 * scale).ceil() as usize;
@@ -1641,13 +1641,13 @@ impl Beads {
     }
 
     /// How many seconds its recording holds now.
-    pub fn seconds(&self) -> f32 {
+    pub(crate) fn seconds(&self) -> f32 {
         self.recording.size as f32 / self.core_rate
     }
 
     /// How many quiet frames in a row mean nothing's left in it: its recording and its reverb's
     /// tail. Frozen, what it holds can always come back, so it never is.
-    pub fn quiet_frames(&self) -> u32 {
+    pub(crate) fn quiet_frames(&self) -> u32 {
         if self.frozen {
             u32::MAX
         } else {
@@ -1657,11 +1657,11 @@ impl Beads {
 
     /// Draw its grains' places and pans, and its random intervals, from a generator of its own,
     /// so a song renders the same each time.
-    pub fn seed(&mut self, rng: Pcg32) {
+    pub(crate) fn seed(&mut self, rng: Pcg32) {
         self.rng = rng;
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.start_recording(self.quality);
         self.reverb.clear();
         self.cassette.clear();
@@ -1712,7 +1712,7 @@ impl Beads {
 
     /// Take what's set now, where the song is and how fast it goes, and move the reverb's wobbles
     /// to where they are this many frames in.
-    pub fn follow(&mut self, settings: Settings, song: SongPlace, frames: u64) {
+    pub(crate) fn follow(&mut self, settings: Settings, song: SongPlace, frames: u64) {
         self.keep_time(frames, song);
         if settings.quality.min(3) != self.quality {
             self.start_recording(settings.quality);
@@ -1747,7 +1747,7 @@ impl Beads {
 
     /// Move the reverb's wobbles to where they are this many frames in, and follow the song's
     /// steps from where it is.
-    pub fn keep_time(&mut self, frames: u64, song: SongPlace) {
+    pub(crate) fn keep_time(&mut self, frames: u64, song: SongPlace) {
         self.reverb.keep_time(frames);
         let per_frame = if song.frames_per_tick > 0.0 {
             f64::from(self.rate) / f64::from(self.core_rate) / song.frames_per_tick
@@ -1758,7 +1758,7 @@ impl Beads {
     }
 
     /// Jump to what's set, as it's only just started.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         for setting in [
             &mut self.time,
             &mut self.size,
@@ -2017,7 +2017,7 @@ impl Beads {
 
     /// Feed one frame in and get what comes out, the sound blended with what Beads makes of it.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         let toward = match self.target_mode {
             BeadsMode::Granular => -1.0,
             BeadsMode::Delay => 1.0,

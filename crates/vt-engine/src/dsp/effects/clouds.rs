@@ -649,7 +649,7 @@ struct Control {
 
 /// Clouds: its recording, its players, what comes after them, and what moves them.
 #[derive(Debug, Clone)]
-pub struct Clouds {
+pub(crate) struct Clouds {
     recording: Recording,
     mode: CloudsMode,
     /// The mode it's going to, once what's playing has faded out, and how far faded in it is.
@@ -733,7 +733,7 @@ pub struct Clouds {
 
 impl Clouds {
     /// A recording long enough for any quality at this rate, and everything after it.
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         let rate_f = rate as f32;
         let scale = rate_f / CLOUDS_RATE;
         let most = (MOST_RECORDED as f32 * scale).ceil() as usize + 2;
@@ -825,7 +825,7 @@ impl Clouds {
     }
 
     /// How many seconds its recording holds now.
-    pub fn seconds(&self) -> f32 {
+    pub(crate) fn seconds(&self) -> f32 {
         self.recording.size as f32 / self.core_rate()
     }
 
@@ -849,7 +849,7 @@ impl Clouds {
     /// How many quiet frames in a row mean nothing's left in it: its recording, its reverb's tail
     /// and its pitch shifter's window. Frozen, what it holds can always come back, so it never is;
     /// nor in `Spectral`, whose kept spectra can hold a bin for minutes with `Density` low.
-    pub fn quiet_frames(&self) -> u32 {
+    pub(crate) fn quiet_frames(&self) -> u32 {
         if self.frozen
             || self.mode == CloudsMode::Spectral
             || self.next_mode == CloudsMode::Spectral
@@ -863,7 +863,8 @@ impl Clouds {
     /// How many frames late what it makes comes out: in `Spectral`, a frame and a hop of its phase
     /// vocoder, 160 ms, or 320 at 8 bits, as the module's; nothing to speak of in the others. The
     /// blend's dry sound isn't delayed, and nothing else in the program waits for it.
-    pub fn latency(&self) -> u32 {
+    #[cfg(test)]
+    pub(crate) fn latency(&self) -> u32 {
         if self.mode == CloudsMode::Spectral {
             let core = self.spectral.latency() as u32;
             if self.low_fidelity() { core * 2 } else { core }
@@ -874,11 +875,11 @@ impl Clouds {
 
     /// Draw its grains' places and pans from a generator of its own, so a song renders the same
     /// each time.
-    pub fn seed(&mut self, rng: Pcg32) {
+    pub(crate) fn seed(&mut self, rng: Pcg32) {
         self.rng = rng;
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.start_recording(self.quality);
         self.switch_mode(self.next_mode);
         self.fade = 1.0;
@@ -942,7 +943,7 @@ impl Clouds {
     }
 
     /// Take what's set now, and move the reverb's wobbles to where they are this many frames in.
-    pub fn follow(&mut self, settings: Settings, frames: u64) {
+    pub(crate) fn follow(&mut self, settings: Settings, frames: u64) {
         self.reverb.keep_time(frames);
         if settings.quality.min(3) != self.quality {
             self.start_recording(settings.quality);
@@ -1002,12 +1003,12 @@ impl Clouds {
     }
 
     /// Move the reverb's wobbles to where they are this many frames in.
-    pub fn keep_time(&mut self, frames: u64) {
+    pub(crate) fn keep_time(&mut self, frames: u64) {
         self.reverb.keep_time(frames);
     }
 
     /// Jump to what's set, as it's only just started.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         for setting in [
             &mut self.position,
             &mut self.size,
@@ -1463,7 +1464,7 @@ impl Clouds {
 
     /// Feed one frame in and get what comes out, the sound blended with what Clouds makes of it.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         if self.until_control == 0 {
             self.next_block();
             self.until_control = self.block;

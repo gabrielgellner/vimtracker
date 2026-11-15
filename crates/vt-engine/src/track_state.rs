@@ -33,13 +33,15 @@ mod values;
 mod tests;
 
 pub use live::{Drawn, Faders, LfoNow, LiveValues};
-pub use mods::SongTime;
-pub use pending::{
-    ACCUMULATED_ROWS, Accumulating, Accumulators, Arpeggiating, Clock, Decided, DelayedNote, Epoch,
-    NotePitch, PENDING_PARTS, Part, PendingStep, Retrigger, RowKey, Worked,
+pub use pending::NotePitch;
+
+pub(crate) use mods::SongTime;
+pub(crate) use pending::{
+    Accumulating, Accumulators, Arpeggiating, Clock, Decided, DelayedNote, Epoch, PENDING_PARTS,
+    Part, PendingStep, Retrigger, RowKey, Worked,
 };
-pub use shaping::{MasterRest, ShapedFrame};
-pub use values::base_of;
+pub(crate) use shaping::{MasterRest, ShapedFrame};
+pub(crate) use values::base_of;
 
 use live::FaderRun;
 use mods::{EnvelopeRun, LfoStart, MOVED, Rest, SlotRun};
@@ -50,7 +52,7 @@ use values::{ValueLayers, played_id, scaled};
 
 /// One track's voices, held FX values and pending events.
 #[derive(Debug, Clone)]
-pub struct TrackState {
+pub(crate) struct TrackState {
     /// A chain launched in place of its section's, while jamming, or none inside if stopped.
     pub launched: Option<Option<u32>>,
     /// What to launch when the track's launch timing next allows. Inside is a chain, or none to
@@ -278,7 +280,7 @@ pub struct TrackState {
 
 impl TrackState {
     /// A silent track with default held values.
-    pub fn new(seed: u64, index: usize) -> Self {
+    pub(crate) fn new(seed: u64, index: usize) -> Self {
         Self {
             launched: None,
             cued: None,
@@ -420,13 +422,13 @@ impl TrackState {
     }
 
     /// Start its chain at its next step, which falls here, with its steps counted from here.
-    pub fn restart_at(&mut self, at: u64) {
+    pub(crate) fn restart_at(&mut self, at: u64) {
         self.clock.line_up(at);
         self.restart(self.clock.count);
     }
 
     /// Start counting the track's chain from this running count, with its lanes in line again.
-    pub fn restart(&mut self, started: i64) {
+    pub(crate) fn restart(&mut self, started: i64) {
         self.started = started;
         self.lane_offsets = [0; FX_SLOTS];
         self.tied = false;
@@ -435,20 +437,20 @@ impl TrackState {
 
     /// Forget what the last conditions decided, as playing starts, so `PRE` and `NEI` start from
     /// none having passed.
-    pub fn forget_conditions(&mut self) {
+    pub(crate) fn forget_conditions(&mut self) {
         self.row = Decided::PLAYS;
         self.passed = false;
     }
 
     /// Put its accumulators back to the notes as written, as playing starts.
-    pub fn forget_accumulators(&mut self) {
+    pub(crate) fn forget_accumulators(&mut self) {
         self.accumulators.forget();
         self.accumulated = None;
     }
 
     /// Carry the sounding note on as this one, with no new attack, gliding there for as long as
     /// `GLD` says as it's heard now.
-    pub fn tie(&mut self, note: NoteOn) {
+    pub(crate) fn tie(&mut self, note: NoteOn) {
         self.wake();
         self.last_note = Some(note);
         self.new_note = true;
@@ -457,7 +459,7 @@ impl TrackState {
     }
 
     /// What each slot moved the pitch of the last note started by, once, for the report.
-    pub fn take_note_pitch(&mut self) -> Option<NotePitch> {
+    pub(crate) fn take_note_pitch(&mut self) -> Option<NotePitch> {
         self.pitched.take()
     }
 
@@ -473,7 +475,7 @@ impl TrackState {
 
     /// Reset held values, the random generator and LFOs, when playback goes back to the top. Values
     /// glide back, so anything still sounding doesn't click.
-    pub fn reset_held(&mut self, seed: u64, index: usize, track: &Track, clock: u64) {
+    pub(crate) fn reset_held(&mut self, seed: u64, index: usize, track: &Track, clock: u64) {
         self.reset_all_but_settings(seed, index, clock);
         self.load(track);
         self.settle_shares(track);
@@ -495,7 +497,7 @@ impl TrackState {
     /// conditions, accumulators, arpeggio, last note and LFOs. Enough on its own for a state no
     /// track has had since its settings were last reset to an empty track's, as nothing else
     /// changes them, and going through every setting is most of a reset's time.
-    pub fn reset_all_but_settings(&mut self, seed: u64, index: usize, clock: u64) {
+    pub(crate) fn reset_all_but_settings(&mut self, seed: u64, index: usize, clock: u64) {
         self.wake();
         self.rng = Pcg32::new(seed, index as u64);
         self.forget_conditions();
@@ -523,13 +525,13 @@ impl TrackState {
     }
 
     /// Start a new note, cancelling anything pending for the old one.
-    pub fn start(&mut self, note: NoteOn, rate: u32) {
+    pub(crate) fn start(&mut self, note: NoteOn, rate: u32) {
         self.begin(note, rate, false);
     }
 
     /// Start an arpeggio's next note again, as `start` does, with any noise its synth draws taken
     /// from the arpeggio's own random stream, so `CHA` rolls as it would without it.
-    pub fn restrike(&mut self, note: NoteOn, rate: u32) {
+    pub(crate) fn restrike(&mut self, note: NoteOn, rate: u32) {
         self.begin(note, rate, true);
     }
 
@@ -576,7 +578,7 @@ impl TrackState {
     /// How much of its last pulse a note starting now lasts: its row's own length, or the held
     /// `Gate` if it has none, moved up or down by `LDLT` and by what modulation adds to `Gate`, as
     /// an LFO moves any setting around where a step put it. 1 holds it to the next note.
-    pub fn gate_share(&self, own: Option<u8>) -> f32 {
+    pub(crate) fn gate_share(&self, own: Option<u8>) -> f32 {
         let base = own.map_or(self.held_gate, f32::from);
         let moved =
             gate_delta(self.held_gate_delta) + self.offsets[SettingId::GATE_LENGTH.index()] * 255.0;
@@ -586,7 +588,7 @@ impl TrackState {
     /// A note's velocity as it starts, its own moved up or down by held `VDLT` and by what
     /// modulation adds to it, kept to the velocity's range. It's read once, so a sounding note
     /// keeps it.
-    pub fn velocity(&self, own: u8) -> u8 {
+    pub(crate) fn velocity(&self, own: u8) -> u8 {
         let moved =
             self.held_velocity_delta + self.offsets[SettingId::VELOCITY_DELTA.index()] * 255.0;
         moved_velocity(own, moved)
@@ -594,7 +596,7 @@ impl TrackState {
 
     /// A row's nudge as it plays, in ticks, from the nudge written and the `QNT` the row chose
     /// before it played, moved by what modulation adds.
-    pub fn quantised(&self, written: i64, chosen: u8) -> i64 {
+    pub(crate) fn quantised(&self, written: i64, chosen: u8) -> i64 {
         let value = f32::from(chosen) + self.offsets[SettingId::QUANTISE.index()] * 255.0;
         quantised_nudge(written, value)
     }
@@ -602,7 +604,7 @@ impl TrackState {
     /// What a step chooses of a setting read before it plays, as `GRV` and `RATE` are, on its
     /// scale: a lock over the held value, or the held value alone once a new note has ended the
     /// locks.
-    pub fn held_choice(&self, id: SettingId, locks_end: bool) -> u8 {
+    pub(crate) fn held_choice(&self, id: SettingId, locks_end: bool) -> u8 {
         let layers = &self.values[id.index()];
         let value = match layers.lock {
             Some(lock) if !locks_end => lock,
@@ -613,7 +615,7 @@ impl TrackState {
 
     /// The bank entry a sampler's note starting now plays, by number: the held `SMP`, or a lock
     /// over it, moved by what modulation adds, in whole entries.
-    pub fn sample_number(&self) -> u8 {
+    pub(crate) fn sample_number(&self) -> u8 {
         self.sampler_value(SettingId::SAMPLE).round() as u8
     }
 
@@ -622,7 +624,7 @@ impl TrackState {
     /// last. An `SLI` by a letter plays the slice the entry's mark names, or, with no such mark,
     /// the track's own: the held `SLI` under the lock, or `own`, the track's setting, if what's
     /// held is a letter too.
-    pub fn slice_number(&self, playable: &Playable, own: u8) -> u8 {
+    pub(crate) fn slice_number(&self, playable: &Playable, own: u8) -> u8 {
         let layers = &self.values[SettingId::SLICE.index()];
         let Some(named) = slice_letter(layers.lock.unwrap_or(layers.base)) else {
             return self.sampler_value(SettingId::SLICE).round() as u8;
@@ -640,7 +642,7 @@ impl TrackState {
     /// What the sampler's `STA`, `SLEN` and `PLY` make of the span a note starting now plays:
     /// where in it the note starts and how much of it plays, as shares, and how. Modulation moves
     /// the start and the length, and the play mode is chosen.
-    pub fn sample_cut(&self) -> Cut {
+    pub(crate) fn sample_cut(&self) -> Cut {
         let share = |id| f64::from(self.sampler_value(id)) / 255.0;
         Cut {
             start: share(SettingId::SAMPLE_START),
@@ -656,7 +658,7 @@ impl TrackState {
     }
 
     /// Fade the playing note.
-    pub fn cut_to_tail(&mut self) {
+    pub(crate) fn cut_to_tail(&mut self) {
         self.wake();
         if self.voice.active() {
             self.tail = self.voice;
@@ -666,7 +668,7 @@ impl TrackState {
     }
 
     /// Stop sounding and drop anything pending, when the transport halts.
-    pub fn stop(&mut self) {
+    pub(crate) fn stop(&mut self) {
         self.wake();
         self.cut_to_tail();
         self.delayed = None;
@@ -684,7 +686,7 @@ impl TrackState {
     }
 
     /// Give the long buffers its slots hold back to the pool, as the track's gone.
-    pub fn give_back_memory(&mut self, memory: &mut MemoryPool) {
+    pub(crate) fn give_back_memory(&mut self, memory: &mut MemoryPool) {
         self.wake();
         for insert in &mut self.inserts {
             insert.give_back(memory);
@@ -693,18 +695,18 @@ impl TrackState {
 
     /// Whether a slot still has something to play, with nothing going in.
     #[inline]
-    pub fn ringing(&self, rate: u32) -> bool {
+    pub(crate) fn ringing(&self, rate: u32) -> bool {
         self.inserts.iter().any(|insert| insert.ringing(rate))
     }
 
     /// Whether anything is sounding.
     #[inline]
-    pub fn sounding(&self) -> bool {
+    pub(crate) fn sounding(&self) -> bool {
         self.voice.active() || self.tail.active()
     }
 
     /// Settle held values, so a new sound doesn't ramp from an old setting while idle.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.gain.settle();
         self.level.settle();
         self.input_trim.settle();

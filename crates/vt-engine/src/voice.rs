@@ -37,7 +37,7 @@ use vt_model::samples::{Frames, SampleId};
 use vt_model::song::SynthVoice;
 
 use crate::dsp::blocks::smoother::fast_coefficient;
-pub use crate::reader::Cut;
+pub(crate) use crate::reader::Cut;
 use crate::reader::Reader;
 
 /// How a voice's level is changing.
@@ -257,7 +257,7 @@ synths! {
 /// One playing note. It keeps its sample ID until it ends, so replacing an instrument's sample
 /// only affects new notes.
 #[derive(Debug, Clone, Copy)]
-pub struct Voice {
+pub(crate) struct Voice {
     stage: Stage,
     sample: SampleId,
     /// The bank entry it plays, if it's a sampler's, which it follows as the entry changes, and
@@ -330,7 +330,7 @@ impl Default for Voice {
 
 /// What a voice needs to start.
 #[derive(Debug, Clone, Copy)]
-pub struct NoteOn {
+pub(crate) struct NoteOn {
     pub sample: SampleId,
     /// A synth to play it, which ignores the sample.
     pub synth: Option<SynthVoice>,
@@ -373,7 +373,7 @@ impl NoteOn {
 
 impl Voice {
     /// Start a note, from a level if the last note's should carry on.
-    pub fn start(note: NoteOn, rate: u32, from: f32, pitch: f64) -> Self {
+    pub(crate) fn start(note: NoteOn, rate: u32, from: f32, pitch: f64) -> Self {
         let mut synth = note.synth.map(|voice| Synth::new(voice, rate));
         if let Some(synth) = &mut synth {
             synth.trigger(note.accent);
@@ -406,7 +406,7 @@ impl Voice {
     }
 
     /// Choose the noise of a synth that draws any, so each hit differs but a render repeats.
-    pub fn seed_noise(&mut self, seed: u32) {
+    pub(crate) fn seed_noise(&mut self, seed: u32) {
         if let Some(synth) = &mut self.synth {
             synth.seed_noise(seed);
         }
@@ -415,7 +415,7 @@ impl Voice {
     /// Roll this note's drift from a seed, for a synth that drifts as an analog one does, once
     /// its settings are set, as `Drift` as it starts says how far its envelope's times move and
     /// whether its oscillators start anywhere in their cycles (decision 190).
-    pub fn seed_drift(&mut self, seed: u32) {
+    pub(crate) fn seed_drift(&mut self, seed: u32) {
         if let Some(synth) = &mut self.synth {
             synth.seed_drift(seed, self.settings);
             let time = synth.time(self.settings);
@@ -424,29 +424,29 @@ impl Voice {
     }
 
     /// Whether this note's synth drifts, and so wants [`Voice::seed_drift`].
-    pub fn drifts(&self) -> bool {
+    pub(crate) fn drifts(&self) -> bool {
         self.synth.as_ref().is_some_and(Synth::drifts)
     }
 
     /// Whether this note's synth draws noise, and so wants [`Voice::seed_noise`].
-    pub fn uses_noise(&self) -> bool {
+    pub(crate) fn uses_noise(&self) -> bool {
         self.synth.as_ref().is_some_and(Synth::uses_noise)
     }
 
     /// Start the release of a note that would otherwise hold until something ended it.
-    pub fn release_if_held(&mut self) {
+    pub(crate) fn release_if_held(&mut self) {
         if self.holds {
             self.release();
         }
     }
 
     /// Whether its note sounds until something ends it, as a synth's like `VA` does.
-    pub fn holds(&self) -> bool {
+    pub(crate) fn holds(&self) -> bool {
         self.holds
     }
 
     /// Start the release once the note has been held this many frames, or now if it has.
-    pub fn release_once_sounded(&mut self, frames: u32) {
+    pub(crate) fn release_once_sounded(&mut self, frames: u32) {
         if matches!(self.stage, Stage::Held { .. }) {
             match u64::from(frames).checked_sub(self.elapsed) {
                 Some(left) if left > 0 => self.release_after = Some(left as u32),
@@ -455,21 +455,21 @@ impl Voice {
         }
     }
 
-    pub fn set_synth(&mut self, settings: Settings) {
+    pub(crate) fn set_synth(&mut self, settings: Settings) {
         self.settings = settings;
     }
 
-    pub fn active(&self) -> bool {
+    pub(crate) fn active(&self) -> bool {
         self.stage != Stage::Idle
     }
 
     /// Whether it's sounding and hasn't been let go.
-    pub fn is_held(&self) -> bool {
+    pub(crate) fn is_held(&self) -> bool {
         matches!(self.stage, Stage::Held { .. })
     }
 
     /// The level its envelope is at now.
-    pub fn level(&self) -> f32 {
+    pub(crate) fn level(&self) -> f32 {
         self.level
     }
 
@@ -477,7 +477,7 @@ impl Voice {
     /// speed, and a synth changes pitch without starting its envelope again. With a glide time,
     /// it glides there in about that long, on the same lag `Acid` slides on, and without one it
     /// jumps. `Acid` always slides, for as long as its own `Slide` says unless it's given a time.
-    pub fn tie(&mut self, note: NoteOn, glide_ms: Option<f32>) {
+    pub(crate) fn tie(&mut self, note: NoteOn, glide_ms: Option<f32>) {
         let to = note.increment();
         self.gain = note.sample_gain();
         self.gain_target = self.gain;
@@ -501,14 +501,14 @@ impl Voice {
     }
 
     /// Whether it's sounding an `Acid` note, which a new one carries on from.
-    pub fn plays_acid(&self) -> bool {
+    pub(crate) fn plays_acid(&self) -> bool {
         self.active() && matches!(self.synth, Some(Synth::Acid(_)))
     }
 
     /// Start a new note on the synth already playing, from where it is, for a voice that plays
     /// one note at a time and carries its filter and accent from note to note, as `Acid` does.
     /// Its level starts from where it is too, as the synth's own envelope gives its attack.
-    pub fn retrigger(&mut self, note: NoteOn) {
+    pub(crate) fn retrigger(&mut self, note: NoteOn) {
         self.stage = Stage::Held { from: self.level };
         self.elapsed = 0;
         self.increment = note.increment();
@@ -523,18 +523,18 @@ impl Voice {
     }
 
     /// Where modulation wants its speed.
-    pub fn set_pitch(&mut self, pitch: f64) {
+    pub(crate) fn set_pitch(&mut self, pitch: f64) {
         self.pitch_target = pitch;
     }
 
     /// Go to the pitch it's been given at once, for a voice that hasn't played yet.
-    pub fn snap_pitch(&mut self) {
+    pub(crate) fn snap_pitch(&mut self) {
         self.pitch = self.pitch_target;
     }
 
     /// Start the envelope's release. A one-shot shape plays on through, though a synth's own
     /// gate still closes.
-    pub fn release(&mut self) {
+    pub(crate) fn release(&mut self) {
         if matches!(self.stage, Stage::Held { .. }) {
             if !self.shape.one_shot() {
                 self.stage = Stage::Released { from: self.level };
@@ -547,7 +547,7 @@ impl Voice {
     }
 
     /// Fade out quickly, to avoid a click.
-    pub fn fade(&mut self) {
+    pub(crate) fn fade(&mut self) {
         if self.active() {
             self.stage = Stage::Fading {
                 per_frame: 1.0 / DECLICK_FRAMES as f32,
@@ -556,19 +556,19 @@ impl Voice {
     }
 
     /// The sample this voice is playing.
-    pub fn sample(&self) -> SampleId {
+    pub(crate) fn sample(&self) -> SampleId {
         self.sample
     }
 
     /// The bank entry it's playing, if it's a sampler's.
-    pub fn entry(&self) -> Option<u8> {
+    pub(crate) fn entry(&self) -> Option<u8> {
         self.entry
     }
 
     /// Carry on with its entry's span changed, as moving a point or changing its gain or tune does,
     /// heard at once and without a click: it reads on from where it is, a new gain fades in, and a
     /// new tune moves its pitch.
-    pub fn respan(&mut self, span: Span) {
+    pub(crate) fn respan(&mut self, span: Span) {
         let Some(old) = self.reader.span() else {
             return;
         };
@@ -589,31 +589,31 @@ impl Voice {
 
     /// Whether it's playing a sample in time with the song's tempo, under `Play`'s `Tempo`, and so
     /// wants [`Voice::keep_time`] before each run.
-    pub fn keeps_time(&self) -> bool {
+    pub(crate) fn keeps_time(&self) -> bool {
         self.active() && self.synth.is_none() && self.reader.keeps_time()
     }
 
     /// Keep to the song's tempo for the next run, at this many frames a step. With `Beats`,
     /// `around` says where the sound its clock is in starts, and where the next does.
-    pub fn keep_time(&mut self, step: f64, around: impl FnOnce(&Span, f64) -> (f64, f64)) {
+    pub(crate) fn keep_time(&mut self, step: f64, around: impl FnOnce(&Span, f64) -> (f64, f64)) {
         self.reader.keep_time(step, self.rate, around);
     }
 
     /// The frame of its sample it's at, for a playhead, while it's sounding a sample: not a
     /// synth's note, and not one fading out after something cut it or took its place.
-    pub fn frame(&self) -> Option<u64> {
+    pub(crate) fn frame(&self) -> Option<u64> {
         let sounding = matches!(self.stage, Stage::Held { .. } | Stage::Released { .. });
         (sounding && self.synth.is_none()).then(|| self.reader.frame())
     }
 
     /// The slice of its entry it's playing, and whether on past its end.
-    pub fn slice(&self) -> (u8, bool) {
+    pub(crate) fn slice(&self) -> (u8, bool) {
         (self.slice, self.reader.thru())
     }
 
     /// The next stereo frame, with reads bounds-checked. A voice past its sample's end stops.
     #[inline]
-    pub fn next(&mut self, data: Option<Frames<'_>>) -> [f32; 2] {
+    pub(crate) fn next(&mut self, data: Option<Frames<'_>>) -> [f32; 2] {
         if self.stage == Stage::Idle {
             return [0.0, 0.0];
         }

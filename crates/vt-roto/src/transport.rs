@@ -86,7 +86,9 @@ pub fn serial_ports() -> Result<Vec<SerialPortName>, LinkError> {
                     let manufacturer = info.manufacturer.clone().unwrap_or_default();
                     let product = info.product.clone().unwrap_or_default();
                     let is_roto = manufacturer.contains(USB_MANUFACTURER)
-                        || product.to_ascii_lowercase().contains("roto");
+                        || product
+                            .to_ascii_lowercase()
+                            .contains(&USB_PRODUCT.to_ascii_lowercase());
                     (
                         Some(format!(
                             "{manufacturer} {product} ({:04x}:{:04x})",

@@ -171,7 +171,7 @@ impl Band {
 
 /// The three bands on both sides, with each setting moving smoothly to where it's set.
 #[derive(Debug, Clone, Copy)]
-pub struct ThreeBands {
+pub(crate) struct ThreeBands {
     /// Each side's bands, worked out once for both while a sound is the same on both.
     bands: Sides<[Band; 3]>,
     coefficients: [Coefficients; 3],
@@ -214,27 +214,28 @@ impl Default for ThreeBands {
 
 impl ThreeBands {
     /// Take what's set now.
-    pub fn follow(&mut self, settings: Settings) {
+    pub(crate) fn follow(&mut self, settings: Settings) {
         for (smoothed, value) in self.settings.iter_mut().zip(values(settings)) {
             smoothed.target = value;
         }
     }
 
     /// Jump to what's set, as it's only just started.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         for smoothed in &mut self.settings {
             smoothed.settle();
         }
     }
 
-    /// Forget what's ringing, for a fresh start.
-    pub fn clear(&mut self) {
-        self.bands = Sides::default();
-    }
-
     /// One frame through the bands. `same` says its two sides are the same, bit for bit.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2], same: bool, smoothing: f32, rate: u32) -> [f32; 2] {
+    pub(crate) fn process(
+        &mut self,
+        input: [f32; 2],
+        same: bool,
+        smoothing: f32,
+        rate: u32,
+    ) -> [f32; 2] {
         let now = self
             .settings
             .each_mut()

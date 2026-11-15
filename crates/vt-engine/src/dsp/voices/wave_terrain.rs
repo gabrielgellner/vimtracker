@@ -187,7 +187,7 @@ impl Path {
 
 /// One voice. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct WaveTerrain {
+pub(crate) struct WaveTerrain {
     path: Path,
     offset: f32,
     terrain: f32,
@@ -224,7 +224,7 @@ impl SynthEngine for WaveTerrain {
 }
 
 impl WaveTerrain {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             path: Path::new(),
             offset: 0.0,

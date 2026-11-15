@@ -16,10 +16,10 @@ use crate::voice::{NoteOn, Voice};
 
 /// The ids a one-off file plays under, which no sample in the pool has. There are two places, so a
 /// file fading out keeps its own sound while the next one starts.
-pub const FILE_SAMPLES: [SampleId; 2] = [SampleId::MAX, SampleId::MAX - 1];
+pub(crate) const FILE_SAMPLES: [SampleId; 2] = [SampleId::MAX, SampleId::MAX - 1];
 
 /// The one-off files the preview voices can play, in the places [`FILE_SAMPLES`] names.
-pub type Files = [Option<Arc<SampleData>>; 2];
+pub(crate) type Files = [Option<Arc<SampleData>>; 2];
 
 /// A sample's sound, from the pool or from the one-off files.
 #[inline]
@@ -105,7 +105,7 @@ impl Preview {
 
 /// How a key's note is let go.
 #[derive(Debug, Clone, Copy)]
-pub enum LetGo {
+pub(crate) enum LetGo {
     /// Now.
     Now,
     /// Once it has sounded this many frames, or now if it has.
@@ -113,7 +113,7 @@ pub enum LetGo {
 }
 
 /// The bank of preview voices.
-pub struct Previews {
+pub(crate) struct Previews {
     voices: Box<[Preview; PLACES]>,
     /// Notes started so far, for telling the oldest voice.
     started: u64,
@@ -130,7 +130,7 @@ impl Default for Previews {
 
 /// The places of the voices sounding at the start of a run of frames. A note only starts
 /// between runs, so no others can start in one.
-pub struct Sounding {
+pub(crate) struct Sounding {
     places: [usize; PLACES],
     count: usize,
 }
@@ -144,7 +144,7 @@ impl Sounding {
 impl Previews {
     /// Have each voice and each note held for one follow a change, as a voice playing a bank entry
     /// follows the entry's.
-    pub fn follow(&mut self, voice: impl Fn(&mut Voice), note: impl Fn(&mut NoteOn)) {
+    pub(crate) fn follow(&mut self, voice: impl Fn(&mut Voice), note: impl Fn(&mut NoteOn)) {
         for preview in self.voices.iter_mut() {
             voice(&mut preview.voice);
             preview.playing.iter_mut().for_each(&note);
@@ -159,7 +159,7 @@ impl Previews {
     /// every other synth take a voice for each key. A note already held on the track starts again
     /// on its own voice, and with every voice in use, the one let go longest ago is taken over,
     /// or failing that the oldest.
-    pub fn start(&mut self, track: usize, on: NoteOn, settings: Settings, rate: u32) {
+    pub(crate) fn start(&mut self, track: usize, on: NoteOn, settings: Settings, rate: u32) {
         self.started += 1;
         let started = self.started;
         if on.synth == Some(SynthVoice::Acid)
@@ -228,7 +228,7 @@ impl Previews {
 
     /// The key holding a note through a track was let go. A voice playing one note at a time
     /// that has another key down under it slides back there instead.
-    pub fn let_go(&mut self, track: usize, note: u8, how: LetGo) {
+    pub(crate) fn let_go(&mut self, track: usize, note: u8, how: LetGo) {
         for preview in self.voices[..PREVIEW_VOICES]
             .iter_mut()
             .filter(|preview| preview.track == track)
@@ -251,7 +251,7 @@ impl Previews {
     }
 
     /// Fade out every voice playing this sample, so it can be replaced.
-    pub fn fade_sample(&mut self, id: SampleId) {
+    pub(crate) fn fade_sample(&mut self, id: SampleId) {
         for preview in self.voices.iter_mut() {
             if preview.voice.active() && preview.voice.sample() == id {
                 preview.voice.fade();
@@ -261,7 +261,7 @@ impl Previews {
     }
 
     /// Let go of every voice playing this sample.
-    pub fn release_sample(&mut self, id: SampleId) {
+    pub(crate) fn release_sample(&mut self, id: SampleId) {
         for preview in self.voices.iter_mut() {
             if preview.voice.active() && preview.voice.sample() == id {
                 preview.voice.release();
@@ -271,7 +271,7 @@ impl Previews {
     }
 
     /// How many voices are sounding, a fading one included.
-    pub fn count(&self) -> usize {
+    pub(crate) fn count(&self) -> usize {
         self.voices
             .iter()
             .filter(|preview| preview.voice.active())
@@ -279,7 +279,7 @@ impl Previews {
     }
 
     /// The voices sounding now, for a run of frames.
-    pub fn sounding(&self) -> Sounding {
+    pub(crate) fn sounding(&self) -> Sounding {
         let mut sounding = Sounding {
             places: [0; PLACES],
             count: 0,
@@ -294,7 +294,7 @@ impl Previews {
     }
 
     /// The voices sounding through a track, for where each is in its sample.
-    pub fn on(&self, track: usize) -> impl Iterator<Item = &Voice> {
+    pub(crate) fn on(&self, track: usize) -> impl Iterator<Item = &Voice> {
         self.voices
             .iter()
             .filter(move |preview| preview.track == track && preview.voice.active())
@@ -302,7 +302,7 @@ impl Previews {
     }
 
     /// Whether any of these voices is sounding through a track.
-    pub fn on_track(&self, sounding: &Sounding, track: usize) -> bool {
+    pub(crate) fn on_track(&self, sounding: &Sounding, track: usize) -> bool {
         sounding.places().iter().any(|&place| {
             let preview = &self.voices[place];
             preview.track == track && preview.voice.active()
@@ -312,7 +312,7 @@ impl Previews {
     /// The next frame of these voices going through a track, or nothing if none of them is
     /// sounding through it.
     #[inline]
-    pub fn next(
+    pub(crate) fn next(
         &mut self,
         sounding: &Sounding,
         track: usize,

@@ -27,14 +27,14 @@ use super::braids_parts::{
 use super::virtual_analog::Settings;
 
 /// A sine ring modulated by two more, each up to 32 semitones either way of the note.
-pub type Ring = Macro<RingModel>;
+pub(crate) type Ring = Macro<RingModel>;
 /// A saw through a comb filter tuned up to five octaves either way of the note.
-pub type SawComb = Macro<SawCombModel>;
+pub(crate) type SawComb = Macro<SawCombModel>;
 /// A tone worked out at a low rate in few bits, with its bits bent.
-pub type Toy = Macro<ToyModel>;
+pub(crate) type Toy = Macro<ToyModel>;
 
 #[derive(Debug, Clone, Copy)]
-pub struct RingModel {
+pub(crate) struct RingModel {
     phases: [f32; 3],
 }
 
@@ -68,7 +68,7 @@ impl Model for RingModel {
 const COMB_LENGTH: usize = 8192;
 
 #[derive(Debug, Clone, Copy)]
-pub struct SawCombModel {
+pub(crate) struct SawCombModel {
     saw: AnalogOscillator,
     /// The comb's line, in Braids' 16 bits to keep the voice small.
     line: [i16; COMB_LENGTH],
@@ -125,7 +125,7 @@ const TOY_FIR: [u32; 4] = [10_530, 14_751, 16_384, 14_751];
 const TOY_OFFSET: i32 = 28_208;
 
 #[derive(Debug, Clone, Copy)]
-pub struct ToyModel {
+pub(crate) struct ToyModel {
     phase: u32,
     held: u8,
     counter: u16,

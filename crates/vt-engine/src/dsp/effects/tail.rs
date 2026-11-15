@@ -13,7 +13,7 @@
 
 /// The frequencies a reverb's tail is measured at: below its damping, and up where damping takes
 /// the most.
-pub const TAIL_HZ: [f32; 2] = [250.0, 4_000.0];
+pub(crate) const TAIL_HZ: [f32; 2] = [250.0, 4_000.0];
 
 /// How a reverb's tail dies away, for a drawing: nothing for its pre-delay, `pre`, in seconds,
 /// then falling in a straight line in dB, `seconds[i]` to fall 60 dB at `TAIL_HZ[i]`.

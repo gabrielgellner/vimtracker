@@ -91,7 +91,7 @@ fn one_pole(state: &mut f32, value: f32, coefficient: f32) {
 
 /// One voice. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct Wavetable {
+pub(crate) struct Wavetable {
     phase: f32,
     /// The settings as grid positions, smoothed once a block and then once a frame.
     pre: [f32; 3],
@@ -131,7 +131,7 @@ impl SynthEngine for Wavetable {
 }
 
 impl Wavetable {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             phase: 0.0,
             pre: [0.0; 3],

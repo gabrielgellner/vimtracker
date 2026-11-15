@@ -25,9 +25,9 @@ use super::braids_parts::{INNER, Macro, Model, Pitch, sine};
 use super::virtual_analog::{Settings, next_blep, this_blep};
 
 /// Two sines at fixed pitches, in a bell-shaped window that restarts each cycle of the note.
-pub type Vosim = Macro<VosimModel>;
+pub(crate) type Vosim = Macro<VosimModel>;
 /// A saw through five formant filters, from vowel to vowel and voice to voice.
-pub type Fof = Macro<FofModel>;
+pub(crate) type Fof = Macro<FofModel>;
 
 /// Braids' `lut_bell`: a window that rises over its first sixteenth and falls over the rest.
 #[rustfmt::skip]
@@ -64,7 +64,7 @@ fn bell(phase: f32) -> f32 {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct VosimModel {
+pub(crate) struct VosimModel {
     phase: f32,
     formants: [f32; 2],
 }
@@ -161,7 +161,7 @@ fn formant_pitch(voice: f32, vowel: f32, formant: usize) -> f32 {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct FofModel {
+pub(crate) struct FofModel {
     phase: f32,
     next_saw: f32,
     previous: f32,

@@ -113,7 +113,7 @@ impl Side {
 
 /// A phaser's all-passes and sweep. It's small enough to keep in every slot.
 #[derive(Debug, Clone, Copy)]
-pub struct Phaser {
+pub(crate) struct Phaser {
     sides: [Side; 2],
     /// Where the sweep is, in turns, and how far it goes each frame.
     phase: f32,
@@ -154,7 +154,7 @@ impl Default for Phaser {
 
 impl Phaser {
     /// Take what's set now, at a tempo.
-    pub fn follow(&mut self, settings: Settings, frames_per_tick: f64) {
+    pub(crate) fn follow(&mut self, settings: Settings, frames_per_tick: f64) {
         let ticks = SWEEP_TICKS[usize::from(settings.rate).min(SWEEP_TICKS.len() - 1)];
         let frames = f64::from(ticks) * frames_per_tick;
         self.step = if frames >= 1.0 {
@@ -174,7 +174,7 @@ impl Phaser {
     }
 
     /// Jump to what's set, as it's only just started.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.depth.settle();
         self.centre.settle();
         self.feedback.settle();
@@ -195,7 +195,7 @@ impl Phaser {
 
     /// One frame in and out of the all-passes, all wet.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2], smoothing: f32, rate: u32) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2], smoothing: f32, rate: u32) -> [f32; 2] {
         let depth = self.depth.next(smoothing);
         let centre = self.centre.next(smoothing);
         let feedback = self.feedback.next(smoothing);

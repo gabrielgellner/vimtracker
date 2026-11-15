@@ -309,7 +309,7 @@ struct Plan {
 
 /// One voice. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct FourOp {
+pub(crate) struct FourOp {
     rate: f32,
     phase: f32x4,
     /// Each operator's last two outputs, its level in them, and its wave alone, for ring

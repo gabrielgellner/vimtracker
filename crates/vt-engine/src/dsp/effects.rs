@@ -2,30 +2,30 @@
 //! slot's state and plays whichever effect it has, and [`memory`] keeps the long buffers some
 //! effects take. The table Warps reads is in `effects/tables/`.
 
-pub mod beads;
-pub mod chorus;
-pub mod clouds;
-pub mod delay;
-pub mod distort;
-pub mod echo;
-pub mod exciter;
-pub mod flanger;
-pub mod freq_shifter;
-pub mod granular;
-pub mod memory;
-pub mod pedal;
-pub mod phaser;
-pub mod pitch_shifter;
-pub mod plate;
-pub mod resonator;
-pub mod reverb;
-pub mod rotary;
-pub mod slot;
-pub mod space;
-pub mod spring;
-pub mod stutter;
+pub(crate) mod beads;
+pub(crate) mod chorus;
+pub(crate) mod clouds;
+pub(crate) mod delay;
+pub(crate) mod distort;
+pub(crate) mod echo;
+pub(crate) mod exciter;
+pub(crate) mod flanger;
+pub(crate) mod freq_shifter;
+pub(crate) mod granular;
+pub(crate) mod memory;
+pub(crate) mod pedal;
+pub(crate) mod phaser;
+pub(crate) mod pitch_shifter;
+pub(crate) mod plate;
+pub(crate) mod resonator;
+pub(crate) mod reverb;
+pub(crate) mod rotary;
+pub(crate) mod slot;
+pub(crate) mod space;
+pub(crate) mod spring;
+pub(crate) mod stutter;
 #[cfg(test)]
 pub(crate) mod sweep;
-pub mod tail;
-pub mod tape;
-pub mod warps;
+pub(crate) mod tail;
+pub(crate) mod tape;
+pub(crate) mod warps;

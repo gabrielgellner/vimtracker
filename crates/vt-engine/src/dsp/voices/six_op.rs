@@ -37,7 +37,7 @@ const BLOCK: usize = 24;
 const OPERATORS: usize = 6;
 const PATCH_SIZE: usize = 128;
 /// Every patch, in bank order.
-pub const PATCHES: usize = vt_model::song::SIX_OP_PATCHES as usize;
+pub(crate) const PATCHES: usize = vt_model::song::SIX_OP_PATCHES as usize;
 /// How loud it is against the other machines.
 const LEVEL: f32 = 0.83;
 
@@ -45,12 +45,13 @@ static BANKS: &[u8; PATCHES * PATCH_SIZE] = include_bytes!("tables/plaits_fm_pat
 
 /// The patch a `Harm` on `0..=1` chooses. Its value is the patch's number, so a step's `HAR20`
 /// plays patch `20`, and anything past the last patch plays that.
-pub fn patch_index(harmonics: f32) -> usize {
+pub(crate) fn patch_index(harmonics: f32) -> usize {
     ((harmonics.max(0.0) * 255.0).round() as usize).min(PATCHES - 1)
 }
 
 /// A patch's name, as the DX7 stores it, without its trailing spaces.
-pub fn patch_name(index: usize) -> String {
+#[cfg(test)]
+pub(crate) fn patch_name(index: usize) -> String {
     let at = index.min(PATCHES - 1) * PATCH_SIZE + 118;
     BANKS[at..at + 10]
         .iter()
@@ -707,7 +708,7 @@ struct Operator {
 
 /// One voice. It's plain data, so a track's state can hold one ahead of time.
 #[derive(Debug, Clone, Copy)]
-pub struct SixOp {
+pub(crate) struct SixOp {
     one_hz: f32,
     rate: f32,
     patch: Option<Patch>,

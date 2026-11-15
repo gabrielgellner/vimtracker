@@ -287,7 +287,7 @@ pub fn response(settings: Settings, note: f32, rate: u32) -> impl Fn(f32) -> f32
 /// What a `Reso` slot keeps, from the effect pool, as its modes and their gains come to more than
 /// a kilobyte.
 #[derive(Debug, Clone)]
-pub struct Resonator {
+pub(crate) struct Resonator {
     modes: Modes,
     /// The MIDI note it's tuned to, gliding to the track's with `Tune` added.
     note: Smoothed,
@@ -318,7 +318,7 @@ pub struct Resonator {
 }
 
 impl Resonator {
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         Self {
             modes: Modes::default(),
             note: Smoothed::at(60.0),
@@ -342,7 +342,7 @@ impl Resonator {
     }
 
     /// Forget everything it was playing, for a fresh start.
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         let settings = self.settings;
         *self = Self::new(self.rate);
         if let Some(settings) = settings {
@@ -351,12 +351,12 @@ impl Resonator {
     }
 
     /// How many quiet frames in a row mean it's done.
-    pub fn quiet_frames(&self) -> u32 {
+    pub(crate) fn quiet_frames(&self) -> u32 {
         (QUIET_SECONDS * self.rate as f32) as u32
     }
 
     /// Take what's set now, jumping to it the first time.
-    pub fn follow(&mut self, settings: Settings) {
+    pub(crate) fn follow(&mut self, settings: Settings) {
         if self.settings == Some(settings) {
             return;
         }
@@ -374,7 +374,7 @@ impl Resonator {
     }
 
     /// Jump to what's set and the next note, rather than gliding, as when it's been resting.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.fresh = true;
         self.left = 0;
     }
@@ -382,7 +382,7 @@ impl Resonator {
     /// One frame of the slot's sound striking the bank, tuned to `note` and its `Tune` above it,
     /// and the frame out, all wet and within full scale.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2], note: f32, smoothing: f32) -> [f32; 2] {
+    pub(crate) fn process(&mut self, input: [f32; 2], note: f32, smoothing: f32) -> [f32; 2] {
         if self.left == 0 {
             self.work_out(note, smoothing);
             self.left = BLOCK;

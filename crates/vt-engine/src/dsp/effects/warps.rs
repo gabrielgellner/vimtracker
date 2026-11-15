@@ -534,7 +534,7 @@ impl Vocoder {
 
 /// What Warps keeps, from the effect pool, as its filter bank is a couple of kilobytes.
 #[derive(Debug, Clone)]
-pub struct Warps {
+pub(crate) struct Warps {
     algorithm: Smoothed,
     timbre: Smoothed,
     level: Smoothed,
@@ -552,7 +552,7 @@ pub struct Warps {
 }
 
 impl Warps {
-    pub fn new(rate: u32) -> Self {
+    pub(crate) fn new(rate: u32) -> Self {
         Self {
             algorithm: Smoothed::default(),
             timbre: Smoothed::default(),
@@ -570,7 +570,7 @@ impl Warps {
     }
 
     /// Forget everything it was playing, for a fresh start.
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         let settings = self.settings;
         *self = Self::new(self.rate);
         if let Some(settings) = settings {
@@ -580,12 +580,12 @@ impl Warps {
     }
 
     /// How many quiet frames in a row it keeps going for, fading out.
-    pub fn quiet_frames(&self) -> u32 {
+    pub(crate) fn quiet_frames(&self) -> u32 {
         (TAIL_SECONDS * self.rate as f32) as u32
     }
 
     /// Take what's set now, jumping to it the first time.
-    pub fn follow(&mut self, settings: Settings) {
+    pub(crate) fn follow(&mut self, settings: Settings) {
         if self.settings == Some(settings) {
             return;
         }
@@ -601,7 +601,7 @@ impl Warps {
     }
 
     /// Jump to what's set.
-    pub fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         self.algorithm.settle();
         self.timbre.settle();
         self.level.settle();
@@ -611,7 +611,7 @@ impl Warps {
     /// oscillator, which plays `note` and its `Pitch` above it. What comes out is all wet, mono,
     /// and held to full scale, as Warps' converter holds it.
     #[inline]
-    pub fn process(
+    pub(crate) fn process(
         &mut self,
         input: [f32; 2],
         modulator: Option<[f32; 2]>,
