@@ -21,6 +21,7 @@ pub mod kit;
 pub mod label;
 pub mod lfo;
 pub mod listed;
+pub mod machine;
 pub mod macros;
 pub mod modulation;
 pub mod names;

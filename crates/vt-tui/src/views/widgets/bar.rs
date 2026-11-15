@@ -167,15 +167,6 @@ pub fn centre_bar(value: u8, cells: usize) -> String {
     )
 }
 
-/// What a value is playing with, as a report says, moved by as much as its setting has moved
-/// since the version the report was of: what the setting was then, and is now. A report is a
-/// frame or so behind a setting being changed, so the fill would trail the hand and a mark for
-/// the setting would flicker at its edge; this way it follows the hand at once, and what
-/// modulation adds keeps moving it (#421).
-pub fn moved_since(live: u8, then: u8, now: u8) -> u8 {
-    (i16::from(live) + i16::from(now) - i16::from(then)).clamp(0, 255) as u8
-}
-
 /// The cell of a bar a value's mark goes in.
 fn bar_cell(value: u8, cells: usize) -> usize {
     usize::from(value) * cells / 256
@@ -281,13 +272,6 @@ mod tests {
         assert_eq!(level_bar(0xFF, 4), "████");
         assert_eq!(centre_bar(0, 4), "│   ");
         assert_eq!(centre_bar(0xFF, 4), "   │");
-    }
-
-    #[test]
-    fn whats_playing_moves_with_the_setting_since_the_report() {
-        assert_eq!(moved_since(0x50, 0x40, 0x48), 0x58);
-        assert_eq!(moved_since(0x10, 0x40, 0x00), 0x00, "held at the bottom");
-        assert_eq!(moved_since(0xF0, 0x40, 0x80), 0xFF, "and the top");
     }
 
     #[test]

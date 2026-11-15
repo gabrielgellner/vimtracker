@@ -18,16 +18,24 @@ pub const ROW_STEP: u16 = 2;
 /// How many lines a grid of three rows takes.
 pub const GRID_HEIGHT: u16 = 2 * ROW_STEP + 1;
 
-/// What each cell of a grid shows, for the setting it holds.
+/// What each cell of a grid shows, for the setting it holds. It's one method, so a cell's parts
+/// are worked out together, once.
 pub trait CellSource {
     /// What names a setting.
     type Id: Copy;
-    /// Its name, dim, with any labels a jump has put on it, in this much room.
-    fn name(&self, id: Self::Id, room: u16) -> Line<'static>;
+    /// Its name, value and bar, in cells of these widths.
+    fn cell(&self, id: Self::Id, widths: CellWidths) -> CellParts;
+}
+
+/// The parts of a setting's cell.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CellParts {
+    /// Its name, dim, with any labels a jump has put on it, in the name's room.
+    pub name: Line<'static>,
     /// Its value, in the cursor's colour under the cursor, or what's being typed in its place.
-    fn value(&self, id: Self::Id) -> Line<'static>;
+    pub value: Line<'static>,
     /// Its bar, or nothing for a word or a choice, whose value then takes the bar's room too.
-    fn bar(&self, id: Self::Id) -> Option<ValueBar>;
+    pub bar: Option<ValueBar>,
 }
 
 /// The room each part of a cell has, so the columns line up down a page.
@@ -141,9 +149,9 @@ impl<S: CellSource> Widget for SettingsGrid<'_, S> {
                         fade(line).render(Rect::new(left, y, width, 1), buf);
                     }
                 };
-                put(self.source.name(id, widths.name), 0, widths.name);
-                let value = self.source.value(id);
-                match self.source.bar(id) {
+                let CellParts { name, value, bar } = self.source.cell(id, widths);
+                put(name, 0, widths.name);
+                match bar {
                     Some(bar) => {
                         put(value, widths.name, widths.value);
                         put(Line::from(bar), widths.name + widths.value, widths.bar());
@@ -193,11 +201,17 @@ mod tests {
     impl CellSource for Made {
         type Id = u8;
 
-        fn name(&self, id: u8, _room: u16) -> Line<'static> {
-            Line::styled(format!("Name {id}"), theme::dim())
+        fn cell(&self, id: u8, _widths: CellWidths) -> CellParts {
+            CellParts {
+                name: Line::styled(format!("Name {id}"), theme::dim()),
+                value: Self::value(id),
+                bar: Self::bar(id),
+            }
         }
+    }
 
-        fn value(&self, id: u8) -> Line<'static> {
+    impl Made {
+        fn value(id: u8) -> Line<'static> {
             match id {
                 0 => Line::from(Span::styled("A0", theme::cursor(Mode::Normal))),
                 1 => Line::from(Span::styled("00", theme::dim())),
@@ -210,7 +224,7 @@ mod tests {
             }
         }
 
-        fn bar(&self, id: u8) -> Option<ValueBar> {
+        fn bar(id: u8) -> Option<ValueBar> {
             match id {
                 0 => Some(ValueBar::new(0xA0, 9)),
                 1 => Some(ValueBar::new(0, 9)),

@@ -30,17 +30,17 @@ use crate::track_page::{
 };
 use crate::views::phrase::level_glyph;
 use crate::views::widgets;
-use crate::views::widgets::bar::{ValueBar, moved_since};
 use crate::views::widgets::device::{DEVICE_HEIGHT, Device};
-use crate::views::widgets::grid::{CellSource, CellWidths, ROW_STEP, SettingsGrid, faded};
+use crate::views::widgets::grid::{CellWidths, ROW_STEP, SettingsGrid, faded};
 use crate::views::widgets::image;
 use crate::views::widgets::meter::{hanging_cell, hanging_eighths};
 use crate::views::widgets::panel::GraphicPanel;
-use crate::views::widgets::setting::{self, Focus, name_line, value_spans};
 use crate::views::widgets::table::take_top;
-use crate::views::widgets::toggle;
 use crate::views::widgets::{group, role};
 
+use cells::TrackCells;
+
+mod cells;
 mod generators;
 mod modulation;
 mod sound;
@@ -308,37 +308,6 @@ pub(crate) fn toggle_on(control: Control, track: &Track, song: &Song) -> Option<
     }
 }
 
-/// A setting's value as a page shows it, with a jump's label over it: what's being typed in its
-/// place, a toggle in its own colour if it's off or on, or its value in the cursor's colour under
-/// the cursor and dim at its default.
-fn value_line(
-    ctx: &Ctx,
-    track: &Track,
-    control: Control,
-    here: bool,
-    default: bool,
-) -> Line<'static> {
-    let look = ctx.look_on(control, Focus::at(here, false));
-    let (text, style) = match toggle_on(control, track, ctx.song()) {
-        Some(on) if look.typed.is_none() => {
-            // One that does nothing on this track, as `Safe` on a clean filter, is dim.
-            let style = if here {
-                theme::cursor(look.mode)
-            } else if default {
-                setting::resting(true)
-            } else {
-                toggle::style(on)
-            };
-            (toggle::text(on), style)
-        }
-        _ => (
-            setting::text(&look, || value(control, track, ctx.song())),
-            setting::style(&look, default),
-        ),
-    };
-    Line::from(value_spans(&look, text, style))
-}
-
 /// Whether the cursor is in a sound track's Machine device, on the machine, its type, its
 /// sample or one of its settings, so its thumbnail is the focused one.
 pub(crate) fn machine_being_edited(page: &TrackPage, ctx: &Ctx) -> bool {
@@ -384,90 +353,11 @@ pub(crate) fn heard_bypassed(ctx: &Ctx, track: &Track, slot: usize) -> bool {
     }
 }
 
-/// What the FX page's cells show for a slot's settings, read from what's in the slot, with bars
-/// this many cells long.
-struct SlotCells<'a> {
-    page: &'a TrackPage,
-    ctx: &'a Ctx<'a>,
-    track: &'a Track,
-    bar_cells: usize,
-}
-
-impl CellSource for SlotCells<'_> {
-    type Id = Control;
-
-    fn name(&self, control: Control, room: u16) -> Line<'static> {
-        let look = self.ctx.look_on(control, Focus::Off);
-        name_line(&look, control.name_on(self.track), room)
-    }
-
-    fn value(&self, control: Control) -> Line<'static> {
-        let here = control == self.page.control_here(self.ctx);
-        value_line(self.ctx, self.track, control, here, false)
-    }
-
-    fn bar(&self, control: Control) -> Option<ValueBar> {
-        let Control::InsertParam(slot, param) = control else {
-            return None;
-        };
-        let insert = self.track.inserts[slot];
-        if !insert.params().get(param)?.choices().is_empty() {
-            return None;
-        }
-        let set = insert.value(param);
-        // Only from a report of the same effect, as another's settings mean something else.
-        let then = self
-            .ctx
-            .reported_track()
-            .map(|track| track.with_macros().inserts[slot])
-            .filter(|then| std::mem::discriminant(then) == std::mem::discriminant(&insert));
-        let live = match (self.ctx.live(), then) {
-            (Some(live), Some(then)) => {
-                moved_since(live.inserts[slot][param], then.value(param), set)
-            }
-            _ => set,
-        };
-        Some(
-            ValueBar::new(set, self.bar_cells)
-                .playing(live)
-                .range(macro_range(control, self.track)),
-        )
-    }
-}
-
 /// The range a macro holding a setting can take it over, in coarse values, for its bar.
 pub(crate) fn macro_range(control: Control, track: &Track) -> Option<(u8, u8)> {
     let id = control.setting_for_macro(track)?;
     let (_, map) = track.macro_holding(MacroTarget::Setting(id))?;
     Some(((map.min >> 8) as u8, (map.max >> 8) as u8))
-}
-
-/// A device's title controls, each in its own style: on a slot, its effect, `Empty` when there's
-/// none, and its type if it has one.
-fn title_controls(
-    page: &TrackPage,
-    ctx: &Ctx,
-    track: &Track,
-    device: &DeviceSpec,
-) -> Vec<Line<'static>> {
-    let current = page.control_here(ctx);
-    device
-        .title
-        .iter()
-        .flatten()
-        .map(|control| {
-            let here = *control == current;
-            let empty =
-                matches!(*control, Control::Insert(slot) if track.inserts[slot] == Insert::Empty);
-            let look = ctx.look_on(*control, Focus::at(here, false));
-            let text = setting::text(&look, || match empty {
-                true => EMPTY_SLOT.to_owned(),
-                false => value(*control, track, ctx.song()),
-            });
-            let style = setting::style(&look, empty);
-            Line::from(value_spans(&look, text, style))
-        })
-        .collect()
 }
 
 /// A slot as a device: its frame and its title, with its bypass's toggle, then its settings in its
@@ -516,7 +406,7 @@ fn slot_frame(
     };
     let cursor = theme::cursor(ctx.mode());
     let fade = heard_bypassed(ctx, track, slot).then_some(cursor);
-    let mut controls = title_controls(page, ctx, track, device);
+    let mut controls = TrackCells::new(page, ctx, track).titles(device);
     if let Some(keep) = fade {
         controls = controls.into_iter().map(|line| faded(line, keep)).collect();
     }
@@ -557,12 +447,7 @@ fn slot_grid(
     }
     let fade = heard_bypassed(ctx, track, slot).then_some(theme::cursor(ctx.mode()));
     let rows = device.grid.iter().copied().map(Vec::from).collect();
-    let source = SlotCells {
-        page,
-        ctx,
-        track,
-        bar_cells: widths.bar_cells,
-    };
+    let source = TrackCells::new(page, ctx, track);
     let grid = SettingsGrid::new(&source, rows, widths).faded(fade);
     frame.render_widget(grid, settings);
 }
