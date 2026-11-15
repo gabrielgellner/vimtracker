@@ -33,10 +33,10 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
 use vt_model::shape::{
-    Acid, Bar, Bits, CellStart, Cells, DEFAULT_RATE, Divisions, DrumPart, Edge, FillKind, Follow,
-    GenParam, Grids, Loops, MoveList, Mutations, Pink, Random, Ring, Role, Shape, ShapeColumn,
-    Source, Tonnetz, TonnetzMove, TonnetzVoice, Values, Walk, WaveRate, Where, World,
-    divisions_seed, on_track, track_seed,
+    Acid, Bar, CellStart, Cells, Divisions, DrumPart, Edge, FillKind, Follow, GenParam, Grids,
+    Loops, MoveList, Mutations, Random, Ring, Role, Shape, ShapeColumn, Source, Tonnetz,
+    TonnetzMove, TonnetzVoice, Values, Walk, WaveRate, Where, World, divisions_seed, on_track,
+    track_seed,
 };
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
@@ -198,28 +198,10 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
     Shape {
         from,
         to,
-        curve: 0,
-        s: 0,
         kind,
-        wave: Wave::Sine,
-        rate: DEFAULT_RATE,
-        phase: 0,
-        run: 1,
-        values: Values::default(),
         place,
         seed: 1,
-        acid: Acid::default(),
-        follow: Follow::default(),
-        walk: Walk::default(),
-        pink: Pink::default(),
-        bits: Bits::default(),
-        grids: Grids::default(),
-        random: Random::default(),
-        vary: 0,
-        variation: vt_model::shape::Variation::default(),
-        divisions: vt_model::shape::Divisions::default(),
-        ring: vt_model::shape::Ring::default(),
-        tonnetz: vt_model::shape::Tonnetz::default(),
+        ..Shape::default()
     }
 }
 

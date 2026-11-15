@@ -9,14 +9,10 @@ use vt_engine::link::{Command, Realtime, connect};
 use vt_engine::published::Published;
 use vt_model::action::{Action, edit};
 use vt_model::generator::Span;
-use vt_model::lfo::Shape as Wave;
 use vt_model::macros::{GenColumn, MacroMap, MacroTarget};
 use vt_model::samples::SamplePool;
 use vt_model::selection::StepRange;
-use vt_model::shape::{
-    Acid, Bits, DEFAULT_RATE, FillKind, Follow, GenParam, Pink, Shape, ShapeColumn, Values, Walk,
-    Where,
-};
+use vt_model::shape::{FillKind, GenParam, Shape, ShapeColumn, Where};
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
 use vt_tui::app::App;
@@ -31,28 +27,10 @@ fn tresillo() -> Shape {
     Shape {
         from: 0x7F,
         to: 0x7F,
-        curve: 0,
-        s: 0,
         kind: FillKind::Alternate,
-        wave: Wave::Sine,
-        rate: DEFAULT_RATE,
-        phase: 0,
-        run: 1,
-        values: Values::default(),
         place: Where::Euclid { hits: 3, rotate: 0 },
         seed: 7,
-        acid: Acid::default(),
-        follow: Follow::default(),
-        walk: Walk::default(),
-        pink: Pink::default(),
-        bits: Bits::default(),
-        grids: vt_model::shape::Grids::default(),
-        random: vt_model::shape::Random::default(),
-        vary: 0,
-        variation: vt_model::shape::Variation::default(),
-        divisions: vt_model::shape::Divisions::default(),
-        ring: vt_model::shape::Ring::default(),
-        tonnetz: vt_model::shape::Tonnetz::default(),
+        ..Shape::default()
     }
 }
 
