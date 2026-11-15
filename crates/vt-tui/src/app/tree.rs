@@ -37,7 +37,12 @@ impl App {
                         "g d opens the sample page from an SLI's value".to_owned();
                 }
             }
-            View::Mixer | View::Audio | View::Project | View::Sample => {}
+            View::Mixer => {
+                if !self.open_macro_here() {
+                    self.services.status = "g d goes to the macro holding a fader".to_owned();
+                }
+            }
+            View::Audio | View::Project | View::Sample => {}
         }
     }
 

@@ -379,6 +379,7 @@ Mixer	C-x	Decrease	Decrease the value
 Mixer	x	ClearField	Back to its default
 Mixer	K	PickValue	Switch mute or solo
 Mixer	/	FieldJump	Jump to a setting by its name
+Mixer	g d	OpenItem	Go to the macro holding this fader
 Mixer	z a	ToggleFold	Fold this group, or the one this track is in, or open it
 Mixer	z M	FoldAll(true)	Fold every group
 Mixer	z R	FoldAll(false)	Open every group, the empty ones too
