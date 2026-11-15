@@ -187,7 +187,7 @@ Own code: `dsp/voices/supersaw.rs` (+434) and two helpers in `blocks/drift.rs`.
 
 Voices are already half description-driven. Their settings are `Entry` tables, held in a
 `BTreeMap<SettingId, u8>` on the track (`song.rs:417-420`), and they reach the engine as one
-normalised `Settings` array (`dsp/voices/virtual_analog.rs:37-49`). What's still repeated is the
+normalised `Settings` array (`dsp/voices.rs`). What's still repeated is the
 voice's own facts: 6 matches of 49 arms in `song.rs`, plus 2 in `settings.rs`. Engine dispatch
 is a further 3 matches of 49 arms.
 
@@ -727,7 +727,7 @@ needs nothing of its own:
 - the 14-voice noise list written twice (`voice.rs:474-532`) becomes `NOISE`;
 - the stray doc line (`voice.rs:473`) goes with it.
 
-`Settings` stays the normalised array it is (`virtual_analog.rs:37-49`), which is Plaits'
+`Settings` stays the normalised array it is (`dsp/voices.rs`), which is Plaits'
 `EngineParameters` idea with room for more.
 
 **The Roto.** `machine_layout`'s 49 arms (`layouts.rs:2137-2192`) become an array indexed by

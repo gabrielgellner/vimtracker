@@ -18,9 +18,10 @@
 
 use wide::f32x4;
 
-use super::virtual_analog::{BLOCK, Settings};
+use super::Settings;
+use super::virtual_analog::BLOCK;
 use crate::dsp::blocks::drift::Drift;
-use crate::voice::SynthEngine;
+use crate::dsp::voices::SynthEngine;
 
 /// The most saws it stacks, and how many go in each four lanes.
 pub(crate) const MAX_SAWS: usize = 8;

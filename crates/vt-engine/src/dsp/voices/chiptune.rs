@@ -20,11 +20,12 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use super::Settings;
 use super::chord_bank::{ChordBank, VOICES};
-use super::virtual_analog::{BLOCK, DRIFT, Moving, Settings, SyncedSquare};
+use super::virtual_analog::{BLOCK, DRIFT, Moving, SyncedSquare};
 use crate::dsp::blocks::drift::{Drift, OSCILLATORS};
 use crate::dsp::blocks::plaits_parts::DcBlocker;
-use crate::voice::SynthEngine;
+use crate::dsp::voices::SynthEngine;
 
 const _: () = assert!(
     VOICES <= OSCILLATORS,

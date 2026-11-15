@@ -93,7 +93,7 @@ its own named in `effect_golden`. The release tests.
 2. **`vt-model/src/settings/voices.rs`**: its list of `Entry`s, which its row names, at most
    `MAX_MACHINE_SETTINGS`. `machine.rs`'s tests check that its grid places each setting once.
 3. **Its DSP**, in `vt-engine/src/dsp/voices/<name>.rs`, with a `pub(crate) mod` line in
-   `dsp/voices.rs`. Implement `SynthEngine`: `new` and `next`, and `DRIFTS`, `NOISE`, `trigger`,
+   `dsp/voices.rs`. Implement that file's `SynthEngine`: `new` and `next`, and `DRIFTS`, `NOISE`, `trigger`,
    `release` and the rest only where it has them. It reads its settings by place from `Settings`,
    in its entries' order. As for an effect, its one-poles, lines, coefficients, soft clips and
    noise come from `dsp/blocks/` and `Pcg32`, and a Plaits port's filters from

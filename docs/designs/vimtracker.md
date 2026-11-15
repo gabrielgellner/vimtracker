@@ -777,7 +777,7 @@ module per file, each keeping its port's licence notice:
 A new voice, filter, effect or dynamics tool goes in its folder. A slot effect with a long buffer
 implements `SlotEffect` (and `Rung`, if the slot plays it through `ring`) and takes one line of
 `memories!`; the slot reaches it by `match`, never `dyn` (decision 340). A voice implements
-`SynthEngine` and takes one line of `synths!`. [Adding a device](adding-a-device.md) has the rest
+`SynthEngine` (`dsp/voices.rs`) and takes one line of `synths!`. [Adding a device](adding-a-device.md) has the rest
 of each family's checklist. A part that two folders
 would share, such as the antiderivative antialiasing, 4x oversampling and state variable filter of
 #260, goes in `blocks/`. New DSP uses `blocks/` for a one-pole, a delay line or its read, a
@@ -2224,7 +2224,7 @@ Issues create the files they name. Files marked **copy** come from `gmuse`, are 
 *   `src/playhead.rs`: per-track position, swing and version-change rules.
 *   `src/fx.rs`: the FX interpreter.
 *   `src/track_state.rs`: fixed-size per-track state.
-*   `src/voice.rs`: sample playback and envelope, and `SynthEngine`, which each synth voice in `dsp/voices/` implements, with the `synths!` list that makes `Synth` of them. `src/preview.rs`: the preview voices.
+*   `src/voice.rs`: sample playback and envelope, with the `synths!` list that makes `Synth` of the synth voices in `dsp/voices/`. What each of them implements, `SynthEngine`, and the `Settings` they're given are in `dsp/voices.rs`, so a voice's file imports nothing from above `dsp/`. `src/preview.rs`: the preview voices.
 *   `src/dsp/`: the voices, filters, effects and dynamics in `voices/`, `filters/`, `effects/` and `dynamics/`, on the shared building blocks in `blocks/`, as "DSP layout" in the Technical Plan gives them.
 *   `src/mixer.rs`: track mix, sends and limiter.
 *   `src/rng.rs`: PCG32.

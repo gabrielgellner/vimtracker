@@ -21,8 +21,8 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use super::Settings;
 use super::braids_parts::{INNER, Lcg, Macro, Model, Pitch, whole};
-use super::virtual_analog::Settings;
 
 /// A map of waves to wander over, one setting across it and the other down.
 pub(crate) type WaveMap = Macro<WaveMapModel>;
@@ -306,8 +306,8 @@ impl Model for ParaphonicModel {
 mod tests {
     use super::*;
     use crate::dsp::signals::{differs, rms};
+    use crate::dsp::voices::SynthEngine;
     use crate::dsp::voices::virtual_analog::VirtualAnalog;
-    use crate::voice::SynthEngine;
 
     const RATE: u32 = 48_000;
 
