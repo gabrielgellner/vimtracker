@@ -1492,8 +1492,8 @@ fn large_steps_on_the_track_page_suit_each_setting() {
     press(&mut app, "}l+");
     assert_eq!(
         track(&app).groove,
-        GrooveId::from_index(1),
-        "a groove moves one at a time"
+        GrooveId::from_index(0x10),
+        "a groove moves sixteen, as every list does"
     );
     press(&mut app, &format!("L{}jj", to_lfo(0)));
     press(&mut app, "+");
@@ -2940,7 +2940,7 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     );
 
     // The longest mode has room, and the column after it stays in line.
-    press(&mut app, "h+");
+    press(&mut app, "h=");
     assert_eq!(arpeggio(&app).mode, ArpMode::UpDownInc);
     let [_, second] = rows(&mut app);
     let retrig = format!(
@@ -3705,12 +3705,12 @@ fn a_count_steps_a_list_that_many_choices_round_or_to_its_end() {
     );
     press(&mut app, "=");
     assert_eq!(track(&app).filter, FilterType::ALL[9], "the count was used");
-    press(&mut app, "2+");
-    assert_eq!(
-        track(&app).filter,
-        FilterType::ALL[1],
-        "a large step is one too"
-    );
+    // A large step is sixteen, stopping at either end rather than going round.
+    press(&mut app, "_");
+    assert_eq!(track(&app).filter, FilterType::ALL[0], "stops at the first");
+    press(&mut app, "+");
+    let last = FilterType::ALL.len() - 1;
+    assert_eq!(track(&app).filter, FilterType::ALL[last], "and at the last");
     // The speeds stop at their ends.
     let (mut app, _realtime) = on_track_page();
     press(&mut app, "2}ll");

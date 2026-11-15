@@ -3,6 +3,9 @@
 
 use super::*;
 
+/// How many choices a large step moves a list, as a machine's lists and the track's go.
+const LIST_JUMP: usize = 0x10;
+
 impl GenParam {
     /// Every setting, in the order the shape panel lists them.
     pub const ALL: [Self; 99] = [
@@ -737,7 +740,8 @@ impl GenParam {
 
     /// Move it a small step, or a `large` one, up for a positive `sign` and down otherwise: a note
     /// by a semitone or an octave, or by a degree or an octave of them while the scale is on; a
-    /// list to its next choice, going round; a phase and a rotation round their cycle. A `List`'s
+    /// list to its next choice, going round, or sixteen on, stopping at its ends; a phase and a
+    /// rotation round their cycle. A `List`'s
     /// values are only typed, so they say how.
     pub fn step(
         self,
@@ -776,8 +780,14 @@ impl GenParam {
                 let choices = self.choices(context).unwrap_or_default();
                 if !choices.is_empty() {
                     let at = self.chosen(shape, context).unwrap_or(0);
-                    let next = if sign > 0 { 1 } else { choices.len() - 1 };
-                    choices[(at + next) % choices.len()].apply(shape);
+                    let (size, last) = (choices.len(), choices.len() - 1);
+                    let next = match (large, sign > 0) {
+                        (false, true) => (at + 1) % size,
+                        (false, false) => (at + last) % size,
+                        (true, true) => (at + LIST_JUMP).min(last),
+                        (true, false) => at.saturating_sub(LIST_JUMP),
+                    };
+                    choices[next].apply(shape);
                 }
             }
             _ => {

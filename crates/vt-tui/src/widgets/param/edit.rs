@@ -22,20 +22,23 @@ pub(crate) struct ChoiceList {
 
 /// Where `=`, `-`, `+` and `_` take a value: its small or large step that way, `count` times,
 /// kept within its bounds, or round them where it wraps, so `3=` on a list moves three choices.
-/// A step that depends on where the value is is worked out again after each, by its pace.
+/// A large step on a list is sixteen choices and stops at its ends, as a machine's lists do,
+/// rather than going round to wherever sixteen past the last lands. A step that depends on where
+/// the value is is worked out again after each, by its pace.
 pub(crate) fn stepped(view: &ParamView, up: bool, large: bool, count: usize) -> i32 {
     let by = |nudge: Steps, jump: Steps| {
         let steps = if large { jump } else { nudge };
         i64::from(if up { steps.up } else { -steps.down })
     };
     let count = count.max(1);
+    let round = view.wraps && !(large && !view.choices.is_empty() && !view.toggle);
     if view.pace.steps(view.value).is_none() {
         let moved = i64::from(view.value) + by(view.nudge, view.jump) * count as i64;
-        return within(view, moved);
+        return within(view, moved, round);
     }
     let (mut value, mut nudge, mut jump) = (view.value, view.nudge, view.jump);
     for _ in 0..count {
-        let next = within(view, i64::from(value) + by(nudge, jump));
+        let next = within(view, i64::from(value) + by(nudge, jump), round);
         if next == value {
             break;
         }
@@ -45,10 +48,10 @@ pub(crate) fn stepped(view: &ParamView, up: bool, large: bool, count: usize) -> 
     value
 }
 
-/// A value kept within a view's bounds, or taken round them where it wraps.
-fn within(view: &ParamView, value: i64) -> i32 {
+/// A value kept within a view's bounds, or taken round them where it goes `round`.
+fn within(view: &ParamView, value: i64, round: bool) -> i32 {
     let (low, high) = (i64::from(view.bounds.0), i64::from(view.bounds.1));
-    let kept = match view.wraps && high > low {
+    let kept = match round && high > low {
         true => low + (value - low).rem_euclid(high - low + 1),
         false => value.clamp(low, high),
     };
@@ -246,6 +249,12 @@ mod tests {
             last + 1 + machine.value - 2,
             "the machines go round"
         );
+        assert_eq!(
+            stepped(&machine, true, true, 1),
+            (machine.value + 0x10).min(last),
+            "sixteen, stopping at the last"
+        );
+        assert_eq!(stepped(&machine, false, true, 1), 0, "or the first");
         let speed = shown(Control::Speed, &track);
         assert_eq!(
             stepped(&speed, true, true, 99),

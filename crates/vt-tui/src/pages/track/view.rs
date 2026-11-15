@@ -54,8 +54,8 @@ pub(crate) const IN_SCALE_PITCH: &str = "Pitch in scale";
 const PHASE_NUDGE: i32 = 15;
 const PHASE_JUMP: i32 = 90;
 const AXIS_JUMP: i32 = 120;
-/// How many small steps a large one is: a hex value's, a percentage's, an octave's and an
-/// accumulator limit's, which is an octave of a seven-note scale.
+/// How many small steps a large one is: a hex value's and a list's, a percentage's, an octave's
+/// and an accumulator limit's, which is an octave of a seven-note scale.
 const HEX_JUMP: i32 = 0x10;
 const PERCENT_JUMP: i32 = 10;
 const OCTAVE: i32 = 12;
@@ -128,7 +128,7 @@ impl ParamView {
             bounds: (0, choices.len().saturating_sub(1) as i32),
             default: default as i32,
             nudge: Steps::even(1),
-            jump: Steps::even(1),
+            jump: Steps::even(HEX_JUMP),
             wraps,
             choices,
             cell,
@@ -661,7 +661,7 @@ fn mod_view(of: ParamView, track: &Track, slot: usize, field: ModField) -> Param
         ..of
     };
     let list = |of: ParamView| ParamView {
-        jump: Steps::even(1),
+        jump: Steps::even(HEX_JUMP),
         wraps: true,
         typing: Typing::Listed,
         ..of
@@ -1112,8 +1112,8 @@ fn gen_view(of: ParamView, generator: &Generator, context: &Context, param: GenP
         }
     };
     let listed = choices.is_some();
-    let step = |large| match listed {
-        true => Steps::even(1),
+    let step = |large: bool| match listed {
+        true => Steps::even(if large { HEX_JUMP } else { 1 }),
         false => Steps {
             up: moved(1, large),
             down: moved(-1, large),
@@ -1528,17 +1528,22 @@ mod tests {
                         let here = &before.tracks[track];
                         let shown = view(control, here, &before, false).unwrap();
                         let (nudge, jump) = (shown.nudge, shown.jump);
-                        for (key, by) in [
-                            ("=", nudge.up),
-                            ("-", -nudge.down),
-                            ("+", jump.up),
-                            ("_", -jump.down),
+                        for (key, by, large) in [
+                            ("=", nudge.up, false),
+                            ("-", -nudge.down, false),
+                            ("+", jump.up, true),
+                            ("_", -jump.down, true),
                         ] {
                             press(&mut app, key);
-                            let expected =
-                                set(control, track, here, &before, shown.value + by, None)
-                                    .and_then(|action| edit(&before, &action).ok())
-                                    .unwrap_or_else(|| Arc::clone(&before));
+                            // A large step on a list stops at its ends.
+                            let list = !shown.choices.is_empty() && !shown.toggle;
+                            let to = match large && list {
+                                true => (shown.value + by).clamp(shown.bounds.0, shown.bounds.1),
+                                false => shown.value + by,
+                            };
+                            let expected = set(control, track, here, &before, to, None)
+                                .and_then(|action| edit(&before, &action).ok())
+                                .unwrap_or_else(|| Arc::clone(&before));
                             let (got, wanted) = (
                                 format!("{:?}", app.services.song().tracks[track]),
                                 format!("{:?}", expected.tracks[track]),
