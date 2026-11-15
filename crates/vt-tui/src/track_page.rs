@@ -7,7 +7,8 @@
 //! functions over the services that the mixer shares; `pictures` says which pictures the page
 //! wants the terminal to have and where their dots go, as data for `Graphics`; `pickers`, which
 //! open the program's picker, and the Gen page's `generators`, which reshape through the program's
-//! shape panel, are still `App`'s.
+//! shape panel, are still `App`'s. `TrackPage` is a [`crate::page::Page`], with its rows of the
+//! binding table, `Page::KEYS`, here beside it.
 
 mod controls;
 mod device;
@@ -31,6 +32,8 @@ pub(crate) use modulation::modulator_bypassed;
 
 use std::sync::Arc;
 
+use ratatui::Frame;
+use ratatui::layout::Rect;
 use vt_model::insert::INSERTS;
 use vt_model::selection::Motion;
 use vt_model::song::Track;
@@ -39,12 +42,12 @@ use vt_model::steps::STEPS;
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
-use crate::kitty::PanelIds;
 use crate::kitty::slots::SlotDrawing;
+use crate::kitty::{PanelIds, PanelWant};
 use crate::meter::{FLOOR_DB, Held, ReductionHistory};
-use crate::page::{Ctx, CtxMut};
+use crate::page::{Ctx, CtxMut, Outcome};
 use crate::services::Services;
-use crate::views::track::CyclesAt;
+use crate::views::track::{CyclesAt, Drawn};
 use device::{device_beside, rack_column};
 use editing::{adjust_control, adjust_fine, reset_control, set_fine_here};
 use modulation::toggle_modulator;
@@ -133,18 +136,6 @@ fn place_in(rows: &[Vec<Option<Control>>], rack: bool, row: usize, field: usize)
         .min_by_key(|at| (at.abs_diff(field), *at > field))
         .unwrap_or(0);
     (row, field)
-}
-
-/// What a key did on the track page, as far as the page alone can tell.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Outcome {
-    /// The page did it.
-    Done,
-    /// It can't be done here, and the status line says why.
-    Refused(&'static str),
-    /// It isn't one of the page's own keys: an edit, which needs the song, or what it means
-    /// anywhere.
-    Passed,
 }
 
 /// The track page as a component: which of its pages shows, and where its cursor is, kept while
@@ -342,9 +333,9 @@ impl TrackPage {
         self.fine = false;
     }
 
-    /// Run one of the page's own keys: the moves, `{` and `}` across a rack's devices, and the
-    /// keys to the pages either side. `times` is its count, at least 1.
-    pub fn key(&mut self, cmd: Cmd, times: usize, track: Option<&Track>) -> Outcome {
+    /// Run one of the page's own keys on a track: the moves, `{` and `}` across a rack's devices,
+    /// and the keys to the pages either side. `times` is its count, at least 1.
+    pub fn key_on(&mut self, cmd: Cmd, times: usize, track: Option<&Track>) -> Outcome {
         match cmd {
             Cmd::Move(Motion::Down) => (0..times).for_each(|_| self.step_row(1, track)),
             Cmd::Move(Motion::Up) => (0..times).for_each(|_| self.step_row(-1, track)),
@@ -377,19 +368,6 @@ impl TrackPage {
             _ => return Outcome::Passed,
         }
         Outcome::Done
-    }
-
-    /// Run a key as the program gives it to the page, on the cursor's track: the cursor first
-    /// goes where it's seen, but for `{` and `}`, which go on from where it was kept so they come
-    /// back to it, and on the mixer, whose cursor this isn't. Then it's one of the page's own
-    /// keys, [`TrackPage::key`], or passed back.
-    pub fn run(&mut self, cmd: Cmd, times: usize, ctx: &mut CtxMut) -> Outcome {
-        let track = ctx.track_here();
-        let braces = matches!(cmd, Cmd::Move(Motion::NextBeat | Motion::PreviousBeat));
-        if !braces && ctx.modes.view != View::Mixer {
-            self.settle(track);
-        }
-        self.key(cmd, times, track)
     }
 
     /// Run one of the page's edits on the setting under the cursor, `control`, which on the mixer
@@ -600,6 +578,142 @@ impl TrackPage {
     }
 }
 
+impl crate::page::Page for TrackPage {
+    const KEYS: &'static [(&'static str, Cmd, &'static str)] = &[
+        ("j", Cmd::Move(Motion::Down), "Next row"),
+        ("k", Cmd::Move(Motion::Up), "Previous row"),
+        (
+            "g g",
+            Cmd::Move(Motion::First),
+            "First row, of this column of devices",
+        ),
+        (
+            "G",
+            Cmd::Move(Motion::Last),
+            "Last row, of this column of devices",
+        ),
+        ("H", Cmd::PreviousPage, "Previous page: Sound, Mod, FX, Gen"),
+        ("L", Cmd::NextPage, "Next page: Sound, Mod, FX, Gen"),
+        (
+            "d d",
+            Cmd::RemoveRow,
+            "Take an effect out of its slot, or a generator away",
+        ),
+        ("p", Cmd::Paste, "Put the effect taken in this slot"),
+        (
+            "b",
+            Cmd::Bypass,
+            "Switch this effect or modulator out, or back in",
+        ),
+        (
+            "z i",
+            Cmd::ZoomSlot,
+            "On the FX page, zoom in on this slot, or back out",
+        ),
+        (
+            "z o",
+            Cmd::ZoomRack,
+            "On the FX page, back out to every slot",
+        ),
+        ("/", Cmd::FieldJump, "Jump to a setting by its name"),
+        (
+            "M",
+            Cmd::MapMacro,
+            "Map this setting to a macro, or move it, or take it off",
+        ),
+        (
+            "g m",
+            Cmd::MacroMapping,
+            "This macro's mapping, or the one this setting is on",
+        ),
+        (
+            "g d",
+            Cmd::OpenItem,
+            "On Sample, open the sample page on it",
+        ),
+        (
+            "Space g a",
+            Cmd::ApplyGenerator,
+            "On a Steps slot, keep what Mutate drew; on Gen, apply it",
+        ),
+        (
+            "r",
+            Cmd::RollGenerator,
+            "On the Gen page, roll the generator again",
+        ),
+        (
+            "Enter",
+            Cmd::ReopenGenerator,
+            "On the Gen page, open the shape panel on it",
+        ),
+        (
+            "}",
+            Cmd::Move(Motion::NextBeat),
+            "Next device down, in the same column",
+        ),
+        (
+            "{",
+            Cmd::Move(Motion::PreviousBeat),
+            "Previous device up, in the same column",
+        ),
+        (
+            "h",
+            Cmd::Move(Motion::Left),
+            "Previous setting, or the device on the left",
+        ),
+        (
+            "l",
+            Cmd::Move(Motion::Right),
+            "Next setting, or the device on the right",
+        ),
+        ("0", Cmd::Move(Motion::RowStart), "First setting"),
+        ("$", Cmd::Move(Motion::RowEnd), "Last setting"),
+        ("=", Cmd::Increase, "Increase the value"),
+        ("-", Cmd::Decrease, "Decrease the value"),
+        ("+", Cmd::IncreaseLarge, "Increase the value, a large step"),
+        ("_", Cmd::DecreaseLarge, "Decrease the value, a large step"),
+        ("C-a", Cmd::Increase, "Increase the value"),
+        ("C-x", Cmd::Decrease, "Decrease the value"),
+        ("x", Cmd::ClearField, "Back to its default"),
+        ("K", Cmd::PickValue, "Choose this setting from a list"),
+        (
+            ";",
+            Cmd::Audition,
+            "Play the sound on a w s e d f, until ; again",
+        ),
+    ];
+
+    type Drawn = Drawn;
+
+    /// Run a key as the program gives it to the page, on the cursor's track: the cursor first
+    /// goes where it's seen, but for `{` and `}`, which go on from where it was kept so they come
+    /// back to it, and on the mixer, whose cursor this isn't. Then it's one of the page's own
+    /// keys, [`TrackPage::key_on`], or passed back, for an edit or what it means across pages.
+    fn key(&mut self, cmd: Cmd, count: usize, ctx: &mut CtxMut) -> Outcome {
+        let track = ctx.track_here();
+        let braces = matches!(cmd, Cmd::Move(Motion::NextBeat | Motion::PreviousBeat));
+        if !braces && ctx.modes.view != View::Mixer {
+            self.settle(track);
+        }
+        self.key_on(cmd, count, track)
+    }
+
+    /// Draw the page, giving back where the Mod page's LFO cycles and the Gen page's previews
+    /// are, for their dots. The drawing is `views::track`'s, the inherent `TrackPage::draw` this
+    /// names, as an inherent function comes before a trait's.
+    fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) -> Drawn {
+        TrackPage::draw(self, frame, area, ctx)
+    }
+
+    fn panels(&self, ctx: &Ctx) -> Vec<PanelWant> {
+        self.pictures(ctx)
+    }
+
+    fn take_panels(&mut self, ids: PanelIds, wants: &[PanelWant], rate: u32) {
+        self.take_images(ids, wants, rate);
+    }
+}
+
 /// How many values a track's Steps slot plays, 1 to 16, or all 16 with no track.
 fn steps_played(track: Option<&Track>, slot: usize) -> u8 {
     track.map_or(STEPS as u8, |track| {
@@ -623,7 +737,6 @@ impl App {
             .move_to(song.tracks.get(self.services.cursor.track), row, field);
     }
 
-    /// Run a command on the track page. Returns false if it means the same as anywhere.
     /// `Space 5` to `Space 8`: the track page on one of its pages, where its cursor was left, as a
     /// jump `C-o` comes back from.
     pub(crate) fn show_track_page(&mut self, page: Page) {
@@ -638,25 +751,12 @@ impl App {
         self.show_view(View::Track);
     }
 
-    pub(crate) fn run_track_page(&mut self, cmd: Cmd) -> bool {
-        self.track_page.phrase = self.services.phrase_id();
-        // What a key that means what it does elsewhere leaves the page as.
-        let kept = self.track_page.clone();
-        let count = self.modes.count.take();
-        let times = count.unwrap_or(1).max(1);
-        let mut ctx = CtxMut {
-            services: &mut self.services,
-            modes: &self.modes,
-        };
-        let outcome = self.track_page.run(cmd, times, &mut ctx);
-        match outcome {
-            Outcome::Done => return true,
-            Outcome::Refused(why) => {
-                self.services.status = why.to_owned();
-                return true;
-            }
-            Outcome::Passed => {}
-        }
+    /// What a key the track page or the mixer passed back means, `times` being its count: `App`'s
+    /// commands across pages, `/`, `M`, `gm`, the Keys mode, the Gen page's generators, the
+    /// pickers and Insert, and then the track page's edits on the setting under the cursor, which
+    /// the mixer shares. Returns false if it means what it does elsewhere, such as going to
+    /// another track.
+    pub(crate) fn run_across_pages(&mut self, cmd: Cmd, times: usize) -> bool {
         if self.refuses_turn(cmd) {
             return true;
         }
@@ -699,13 +799,7 @@ impl App {
                 {
                     Outcome::Done => {}
                     Outcome::Refused(why) => self.services.status = why.to_owned(),
-                    Outcome::Passed => {
-                        // What it means elsewhere, such as going to another track, keeps the
-                        // cursor where it was kept.
-                        self.track_page = kept;
-                        self.modes.count = count;
-                        return false;
-                    }
+                    Outcome::Passed => return false,
                 }
             }
         }

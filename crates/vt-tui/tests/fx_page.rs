@@ -1424,7 +1424,8 @@ fn the_track_pages_cursor_goes_through_a_rack_on_its_own() {
     use vt_model::selection::Motion;
     use vt_model::song::Track;
     use vt_tui::input::bindings::Cmd;
-    use vt_tui::track_page::{Control, DeviceCursor, Outcome, Page, TrackPage};
+    use vt_tui::page::Outcome;
+    use vt_tui::track_page::{Control, DeviceCursor, Page, TrackPage};
     let effect = |name| {
         *Insert::ALL
             .iter()
@@ -1447,39 +1448,42 @@ fn the_track_pages_cursor_goes_through_a_rack_on_its_own() {
     let mut page = TrackPage::default();
     assert_eq!(page.page, Page::Sound);
     assert_eq!(page.devices(track).len(), 4);
-    page.key(Cmd::NextPage, 1, track);
-    page.key(Cmd::NextPage, 1, track);
+    page.key_on(Cmd::NextPage, 1, track);
+    page.key_on(Cmd::NextPage, 1, track);
     assert_eq!(page.page, Page::Fx);
     assert_eq!(page.devices(track).len(), 4);
     assert_eq!(page.control(track), Control::Insert(0));
-    assert_eq!(page.key(Cmd::Move(Motion::Down), 1, track), Outcome::Done);
+    assert_eq!(
+        page.key_on(Cmd::Move(Motion::Down), 1, track),
+        Outcome::Done
+    );
     assert_eq!(page.device_cursor(track), at(0, 1, 0));
     // `}` keeps the row and column: an empty slot shows the cursor on its title, and the next
     // device has them again.
-    page.key(Cmd::Move(Motion::NextBeat), 1, track);
+    page.key_on(Cmd::Move(Motion::NextBeat), 1, track);
     assert_eq!(page.device_cursor(track), at(1, 0, 0));
-    page.key(Cmd::Move(Motion::NextBeat), 1, track);
+    page.key_on(Cmd::Move(Motion::NextBeat), 1, track);
     assert_eq!(page.device_cursor(track), at(2, 1, 0));
     // `j` and `k` pass an empty slot's grid by, from its title.
-    page.key(Cmd::Move(Motion::Up), 2, track);
+    page.key_on(Cmd::Move(Motion::Up), 2, track);
     assert_eq!(page.device_cursor(track), at(1, 0, 0));
     // The EQ's last row has a hole in the first column, so the cursor lands beside it.
-    page.key(Cmd::Move(Motion::Up), 1, track);
+    page.key_on(Cmd::Move(Motion::Up), 1, track);
     assert_eq!(page.device_cursor(track), at(0, 3, 1));
     // An edit isn't the page's own, and a return's Sound page is a rack of one, its Output, so
     // `}` has nowhere to go.
-    assert_eq!(page.key(Cmd::Increase, 1, track), Outcome::Passed);
+    assert_eq!(page.key_on(Cmd::Increase, 1, track), Outcome::Passed);
     let fixed = Track {
         kind: vt_model::song::TrackKind::ReturnA,
         ..Track::default()
     };
     let fixed = Some(&fixed);
-    page.key(Cmd::PreviousPage, 1, fixed);
-    page.key(Cmd::PreviousPage, 1, fixed);
+    page.key_on(Cmd::PreviousPage, 1, fixed);
+    page.key_on(Cmd::PreviousPage, 1, fixed);
     assert_eq!(page.page, Page::Sound);
     assert_eq!(page.device_cursor(fixed), at(0, 1, 0));
     assert_eq!(
-        page.key(Cmd::Move(Motion::NextBeat), 1, fixed),
+        page.key_on(Cmd::Move(Motion::NextBeat), 1, fixed),
         Outcome::Done
     );
     assert_eq!(page.device_cursor(fixed), at(0, 1, 0));

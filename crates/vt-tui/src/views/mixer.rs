@@ -315,18 +315,11 @@ fn meter_row(
 
 /// Draw the view: the program's mixer, given the rest of the program.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    app.mixer_page.draw(frame, area, &app.ctx());
+    draw_page(frame, area, &app.mixer_page, &app.ctx());
 }
 
-impl MixerPage {
-    /// Draw the mixer.
-    pub fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
-        draw_page(frame, area, self, ctx);
-    }
-}
-
-/// Draw the mixer, as [`MixerPage::draw`].
-fn draw_page(frame: &mut Frame, area: Rect, page: &MixerPage, ctx: &Ctx) {
+/// Draw the mixer, as its `Page::draw`.
+pub(crate) fn draw_page(frame: &mut Frame, area: Rect, page: &MixerPage, ctx: &Ctx) {
     let bold = Style::new().add_modifier(Modifier::BOLD);
     let song = ctx.song();
     // Room is kept for both gaps, whether or not they're in view.

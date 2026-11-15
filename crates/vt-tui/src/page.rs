@@ -10,6 +10,10 @@
 //!   reported, the tracks' meters among it. It only reads, and reads through `App`, as drawing is
 //!   given `&App` and some of what's drawn, a live generator's sources, is worked out by `App`.
 //!
+//! - **[`Page`]**, what a page is as a component: its keys in the binding table, how it runs one,
+//!   and its drawing and pictures. `App` holds one of each page and dispatches by `View` with a
+//!   plain `match`, in [`App::run_page`], so there's no `dyn` and no downcast.
+//!
 //! They're the seam between a page and `App`: what a page may reach of the program is what's
 //! here, and nothing else of `App`'s.
 
@@ -17,6 +21,8 @@ use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::Instant;
 
+use ratatui::Frame;
+use ratatui::layout::Rect;
 use vt_engine::engine::Transport;
 use vt_engine::link::JamState;
 use vt_engine::track_state::{Faders, LiveValues};
@@ -27,13 +33,57 @@ use vt_model::song::{Song, Track};
 
 use crate::app::{App, Cursor, Entry, Modes, TrackLive};
 use crate::folding::Folds;
+use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
 use crate::jumping::FieldJump;
+use crate::kitty::{PanelIds, PanelWant};
 use crate::meter::Meter;
 use crate::services::Services;
 use crate::shaping::LiveGen;
 use crate::track_page::Control;
 use crate::views::widgets::setting::{CellLook, Focus};
+
+/// What a key did, as far as the page alone can tell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Outcome {
+    /// The page did it.
+    Done,
+    /// It can't be done here, and the status line says why.
+    Refused(&'static str),
+    /// It isn't one of the page's own keys: the next in the order [`App::run`] gives keys in gets
+    /// it.
+    Passed,
+}
+
+/// One of the program's pages as a component: its own state, its keys, its drawing and its
+/// pictures. The track page and the mixer are so far (#739); the other pages' keys and drawing
+/// are still `App`'s.
+pub(crate) trait Page {
+    /// Its rows of the binding table, as `(keys, Cmd, description)`, in the order which-key and
+    /// `Space k` list them. The table is still assembled in one place, `input::bindings`, under
+    /// the page's mode.
+    const KEYS: &'static [(&'static str, Cmd, &'static str)];
+
+    /// What its drawing notes for after the frame, such as where it drew what the terminal places
+    /// a dot on, or nothing.
+    type Drawn;
+
+    /// Run one of its keys `count` times, at least 1, changing its own state directly and the
+    /// song through the services' actions, or pass it back.
+    fn key(&mut self, cmd: Cmd, count: usize, ctx: &mut CtxMut) -> Outcome;
+
+    /// Draw it.
+    fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) -> Self::Drawn;
+
+    /// What pictures it shows this frame, as data, for `Graphics` to send before ratatui draws.
+    /// Most pages have none.
+    fn panels(&self, _ctx: &Ctx) -> Vec<PanelWant> {
+        Vec::new()
+    }
+
+    /// Keep the ids `Graphics` gave the pictures it wanted, for `draw` to put placeholders for.
+    fn take_panels(&mut self, _ids: PanelIds, _wants: &[PanelWant], _rate: u32) {}
+}
 
 /// What a page reads of the program, borrowed from it while the page is drawn.
 #[derive(Clone, Copy)]
@@ -52,6 +102,58 @@ impl App {
     /// What a page reads, to be drawn with.
     pub fn ctx(&self) -> Ctx<'_> {
         Ctx { app: self }
+    }
+
+    /// Run a command on the page on screen, the second place a key goes in [`App::run`]'s order:
+    /// through [`Page::key`] on a page that's a component, and then `App`'s commands across
+    /// pages for what it passed back, or the page's own `run_*` on the pages that aren't yet.
+    /// Returns false if it's none of theirs.
+    pub(crate) fn run_page(&mut self, cmd: Cmd) -> bool {
+        match self.modes.view {
+            View::Track | View::Mixer => self.run_track_pages(cmd),
+            View::Chain => self.run_chain(cmd),
+            View::Audio => self.run_audio_page(cmd),
+            View::Project => self.run_project_page(cmd),
+            View::Sample => self.run_sample_page(cmd),
+            View::Song => self.run_song(cmd),
+            View::Phrase => false,
+        }
+    }
+
+    /// Run a command on the track page or the mixer: the page's own key, and what a key it passes
+    /// back means across pages, [`App::run_across_pages`]. The mixer turns the track page's
+    /// controls, so a key it passes back goes on to the track page's own keys first. A key that
+    /// means what it does elsewhere, such as going to another track, leaves the track page's
+    /// cursor where it was kept, and the count for what takes it.
+    fn run_track_pages(&mut self, cmd: Cmd) -> bool {
+        self.track_page.phrase = self.services.phrase_id();
+        let kept = self.track_page.clone();
+        let count = self.modes.count.take();
+        let times = count.unwrap_or(1).max(1);
+        let mut ctx = CtxMut {
+            services: &mut self.services,
+            modes: &self.modes,
+        };
+        let outcome = match self.modes.view {
+            View::Mixer => match self.mixer_page.key(cmd, times, &mut ctx) {
+                Outcome::Passed => self.track_page.key(cmd, times, &mut ctx),
+                outcome => outcome,
+            },
+            _ => self.track_page.key(cmd, times, &mut ctx),
+        };
+        match outcome {
+            Outcome::Done => true,
+            Outcome::Refused(why) => {
+                self.services.status = why.to_owned();
+                true
+            }
+            Outcome::Passed if self.run_across_pages(cmd, times) => true,
+            Outcome::Passed => {
+                self.track_page = kept;
+                self.modes.count = count;
+                false
+            }
+        }
     }
 }
 
