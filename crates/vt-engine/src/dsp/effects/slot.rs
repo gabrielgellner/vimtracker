@@ -117,8 +117,10 @@ impl Default for Keys {
 }
 
 impl Keys {
-    /// A track's latest frame, or silence for one that isn't there.
+    /// A track's latest frame, or silence for one that isn't there. A setting's range keeps a
+    /// key on a track, so one past them is a mistake the tests should hear of.
     pub(crate) fn of(&self, track: usize) -> [f32; 2] {
+        debug_assert!(track < self.frames.len(), "no track {track} to key from");
         self.frames.get(track).copied().unwrap_or_default()
     }
 }

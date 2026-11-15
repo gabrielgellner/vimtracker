@@ -379,14 +379,20 @@ impl Engine {
 }
 
 /// The span a voice's slice of its entry plays now, if the entry still plays the voice's sample.
-/// A slice gone since it started plays the last, as `SLI` past the last does.
+/// A slice gone since it started plays the last, as `SLI` past the last does. A voice with no
+/// entry, or one emptied since, has none; the bank always has all 256 places.
 fn span_now(
     bank: &Bank,
     entry: Option<u8>,
     (slice, thru): (u8, bool),
     sample: SampleId,
 ) -> Option<Span> {
-    let playable = bank.get(usize::from(entry?))?.as_deref()?;
+    let entry = usize::from(entry?);
+    let Some(place) = bank.get(entry) else {
+        debug_assert!(false, "the bank has no place {entry}");
+        return None;
+    };
+    let playable = place.as_deref()?;
     (playable.sample == sample).then(|| playable.span(slice, thru))
 }
 
