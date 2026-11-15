@@ -1238,88 +1238,66 @@ mod tests {
         inserts
     }
 
-    /// The slot's facts as each effect's own arm said them before they came from its DSP and its
-    /// description: its amount, mix and gain, and what it does with a sound the same on both sides.
-    fn by_hand(insert: Insert) -> ((u8, u8, u8), Mono) {
-        use vt_model::insert::*;
-        let levels = match insert {
-            Insert::Empty => (0, 0, UNITY_LEVEL),
-            Insert::Distort(Distort {
-                kind: DistortType::Down,
-                rate,
-                mix,
-                gain,
-                ..
-            }) => (rate, mix, gain),
-            Insert::Distort(Distort {
-                amount, mix, gain, ..
-            }) => (amount, mix, gain),
-            Insert::Delay(Delay { mix, gain, .. })
-            | Insert::Reverb(Reverb { mix, gain, .. })
-            | Insert::Chorus(Chorus { mix, gain, .. })
-            | Insert::Limit(Limiter { mix, gain, .. })
-            | Insert::Phaser(Phaser { mix, gain, .. })
-            | Insert::Flanger(Flanger { mix, gain, .. })
-            | Insert::Tape(Tape { mix, gain, .. })
-            | Insert::Plate(Plate { mix, gain, .. })
-            | Insert::Spring(Spring { mix, gain, .. })
-            | Insert::Echo(Echo { mix, gain, .. })
-            | Insert::Stutter(Stutter { mix, gain, .. })
-            | Insert::Exciter(Exciter { mix, gain, .. })
-            | Insert::Rotary(Rotary { mix, gain, .. })
-            | Insert::Space(Space { mix, gain, .. })
-            | Insert::Pitch(Pitch { mix, gain, .. })
-            | Insert::Grains(Grains { mix, gain, .. })
-            | Insert::Warps(Warps { mix, gain, .. })
-            | Insert::Lpg(LowPassGate { mix, gain, .. })
-            | Insert::Reso(Resonator { mix, gain, .. })
-            | Insert::Comb(Comb { mix, gain, .. })
-            | Insert::Vowel(Vowel { mix, gain, .. })
-            | Insert::FreqShift(FreqShift { mix, gain, .. }) => (0, mix, gain),
-            Insert::Compressor(Compressor { mix, .. }) => (0, mix, UNITY_LEVEL),
-            Insert::Clouds(Clouds { gain, .. }) | Insert::Beads(Beads { gain, .. }) => {
-                (0, 0xFF, gain)
-            }
-            Insert::Eq(Equaliser { gain, .. }) => (0, 0xFF, gain),
-        };
-        let mono = match insert {
-            Insert::Distort(_)
-            | Insert::Eq(_)
-            | Insert::Lpg(_)
-            | Insert::Vowel(_)
-            | Insert::Exciter(_) => Mono::OneSide,
-            Insert::Empty | Insert::Compressor(_) => Mono::Linked,
-            _ => Mono::Stereo,
-        };
-        (levels, mono)
+    /// The setting stored as `key` of an effect, found by its key alone.
+    fn by_key(insert: Insert, key: &str) -> Option<u8> {
+        let kind = insert.kind()?;
+        let at = kind.params().iter().position(|param| param.key == key)?;
+        insert.read(at)
     }
 
-    /// Whether it's the same effect, as it was said by hand.
-    fn same_by_hand(before: Insert, after: Insert) -> bool {
-        match (before, after) {
-            (Insert::Distort(before), Insert::Distort(after)) => before.kind == after.kind,
-            (Insert::Compressor(before), Insert::Compressor(after)) => before.kind == after.kind,
-            _ => before.kind() == after.kind(),
+    /// What the slot eases and blends for each effect is read from the effect's own settings, by
+    /// the rule its mixing gives: `Mix` unless it gives its own blend or is all wet, and `Gain`
+    /// unless it's blended in parallel. Distort's drive is the one amount, `Rate` for `Down`.
+    #[test]
+    fn the_slot_reads_each_effects_levels_from_its_own_settings() {
+        for insert in every_type_of_every_effect() {
+            let Some(kind) = insert.kind() else {
+                assert_eq!(levels(insert), (0, 0, UNITY_LEVEL));
+                continue;
+            };
+            let mix = || by_key(insert, "mix").expect("a Mix");
+            let gain = || by_key(insert, "gain").expect("a Gain");
+            let (mix, gain) = match FACTS[kind as usize].mixing {
+                Mixing::Wet | Mixing::Added => (mix(), gain()),
+                Mixing::Parallel => (mix(), UNITY_LEVEL),
+                Mixing::Inside | Mixing::AllWet => (0xFF, gain()),
+            };
+            let amount = match insert {
+                Insert::Distort(Distort {
+                    kind: DistortType::Down,
+                    ..
+                }) => by_key(insert, "rate").expect("a Rate"),
+                Insert::Distort(_) => by_key(insert, "amount").expect("an Amount"),
+                _ => 0,
+            };
+            assert_eq!(levels(insert), (amount, mix, gain), "{insert:?}");
         }
     }
 
+    /// An effect carries on through a change of its settings, but one whose types don't all show
+    /// the same settings is another effect in each type, and starts afresh.
     #[test]
-    fn what_the_slot_knows_of_each_effect_is_what_its_arms_said() {
+    fn an_effect_whose_types_show_their_own_settings_starts_afresh_in_another() {
         let inserts = every_type_of_every_effect();
+        let type_of = |insert: Insert| {
+            let kind = insert.kind()?;
+            let at = kind
+                .params()
+                .iter()
+                .position(|param| param.place == Place::Type)?;
+            insert.read(at)
+        };
+        let by_type = |insert: Insert| {
+            inserts
+                .iter()
+                .filter(|other| other.kind() == insert.kind())
+                .any(|other| other.params() != insert.params())
+        };
         for &insert in &inserts {
-            let mut state = InsertState::default();
-            state.set(insert);
-            assert_eq!(
-                (levels(insert), state.mono()),
-                by_hand(insert),
-                "{insert:?}"
-            );
             for &other in &inserts {
-                assert_eq!(
-                    same_effect(insert, other),
-                    same_by_hand(insert, other),
-                    "{insert:?} {other:?}"
-                );
+                let same = insert.kind() == other.kind()
+                    && (!by_type(insert) || type_of(insert) == type_of(other));
+                assert_eq!(same_effect(insert, other), same, "{insert:?} {other:?}");
             }
         }
     }
