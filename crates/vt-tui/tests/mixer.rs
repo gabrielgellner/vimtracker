@@ -462,3 +462,43 @@ fn the_mixer_has_a_trim_above_each_fader_and_opens_on_the_fader() {
     assert_eq!(app.services.cursor.track, 4 + MAX_GROUPS, "the master");
     assert_eq!(column_name(&app), "Trim");
 }
+
+#[test]
+fn a_fader_a_macro_holds_shows_where_the_macro_puts_it_as_the_track_page_does() {
+    use vt_model::action::Action;
+    use vt_model::macros::{MacroMap, MacroTarget};
+    use vt_model::settings::SettingId;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4");
+    let fader = |line: &String, strip: usize| line.chars().nth(7 + strip * 7 + 3).unwrap();
+    let filled = |text: &[String], strip: usize| {
+        text[4..10]
+            .iter()
+            .filter(|line| fader(line, strip) != ' ')
+            .count()
+    };
+    let before = filled(&mixer_text(&app), 0);
+    // The first track's level on macro 1, from 00 to 40, turned all the way up.
+    app.services.apply(&Action::Batch(vec![
+        Action::MapMacro {
+            track: 0,
+            at: 0,
+            map: MacroMap {
+                max: 0x4000,
+                ..MacroMap::whole(MacroTarget::Setting(SettingId::LEVEL))
+            },
+        },
+        Action::SetMacro {
+            track: 0,
+            at: 0,
+            value: 0xFF00,
+        },
+    ]));
+    assert_eq!(app.song().tracks[0].level, 0xE0, "its own level is kept");
+    let level = mixer_line(&app, "Level");
+    assert!(level.contains("40"), "{level}");
+    assert!(level.contains("E0"), "the next track's is its own: {level}");
+    let text = mixer_text(&app);
+    assert!(filled(&text, 0) < before, "{text:?}");
+    assert_eq!(filled(&text, 1), before, "{text:?}");
+}

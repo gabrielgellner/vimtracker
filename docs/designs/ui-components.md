@@ -221,7 +221,9 @@ is a separate question:
 - The mixer draws `track_as_heard` without `with_macros` (`views/mixer.rs:354`,
   `automating.rs:98`), while the track page draws `Track::with_macros` (`views/track.rs:744`). A
   macro-held fader could read differently on the two pages. I didn't check whether a macro can
-  hold a mixer row.
+  hold a mixer row. *Since fixed, at the user's word:* a macro can hold `Level`, `Pan` and the
+  sends, and the mixer now draws each strip from `automating::as_shown`, its macros and then its
+  steps, as the track page does.
 - A macro-held setting with no bar (a choice, a Mod-page value, a title control) shows no sign that
   a macro holds it. *Since added, at the user's word:* a faint dot after its value (decision 341).
 
