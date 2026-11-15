@@ -682,7 +682,7 @@ pub fn draw_screen(
     app.track_page.lfo_cycles_at = Default::default();
     app.track_page.gen_panels_at = Vec::new();
     match app.modes.view {
-        View::Chain => views::chain::draw(frame, view, app),
+        View::Chain => app.chain_view.draw(frame, view, &app.ctx()),
         View::Phrase => views::phrase::draw(frame, view, app),
         View::Track => {
             let drawn = app.track_page.draw(frame, view, &app.ctx());

@@ -754,8 +754,9 @@ where they were written and are borrowed across folders; #260 may move shared sh
 
 **`App`** (`app.rs`) is the program's state and what each key does. It needs no terminal, so tests
 drive it directly. It holds the shared services, `App::services`, beside the pages (`track_page`,
-`mixer_page`, `project_page`, `audio_page`, `sample_page` and `song_view`), `App::modes`, the picker, the
-command line, help, the jump list and the keys' own state: 90 fields, and 46 files
+`mixer_page`, `project_page`, `audio_page`, `sample_page`, `song_view` and `chain_view`),
+`App::modes`, the picker, the command line, help, the jump list and the keys' own state: 89 fields,
+and 46 files
 besides `app.rs` add an `impl App` block each, such as `track_page.rs`, `banking.rs`, `slicing.rs`,
 `shaping.rs`, `picking.rs`, `recording.rs` (live recording, `Space r`), `project_page.rs`,
 `audio_page.rs` and `sample_page.rs`.
@@ -779,8 +780,8 @@ reads through `App`, as drawing is given `&App` and some of what's drawn, such a
 generator's sources, is `App`'s to work out.
 
 **`Page`** (`page.rs`, #739) is a page as a component, which the track page, the mixer, the
-project page's Song and Audio sub-pages, the sample page and the song view are so far: its rows of
-the binding table, `Page::KEYS`, kept beside it and assembled by
+project page's Song and Audio sub-pages, the sample page, the song view and the chain view are so
+far: its rows of the binding table, `Page::KEYS`, kept beside it and assembled by
 `input/bindings.rs` under its mode; `Page::key`, which runs one of its keys with a count through a
 `CtxMut` and says what it did as an `Outcome`, done, refused with why, or passed back; `Page::draw`,
 given a `Ctx`; and `Page::panels` and `Page::take_panels`, its pictures as data for `Graphics` and
@@ -1082,6 +1083,14 @@ through a `Ctx`. `App::run_song_view` hands it a key and then runs what it passe
 going to a section moves the cursor every page shares and the phrase view's first row, the chain
 picker, Insert, `gC` and `;`. The sections `:loop` keeps playing are `Services::looping`, as
 `:loop` works from every view and the status line shows them.
+
+`ChainView` (`chain_view.rs`) has the column its cursor is on and the row `yy` and `dd` last
+copied, its moves between the columns, the edits of a row, `x`, `yy` and `p`, and its drawing,
+through a `Ctx`. `App::run_chain_view` hands it a key and then runs what it passes back, in
+`tree.rs`, which stays `impl App`: a move to another row, as it moves the cursor every page shares
+and the phrase view's first row, `dd`, which keeps the cursor on a row, the phrase picker, Insert
+and `;`; what neither takes goes on to the tree, as before. The cursor's chain and its rows are
+`Services::chain_id` and `chain_entries`.
 
 **Decisions:** 49 to 53, 73 to 75, 100 to 104, 108, 122, 126, 128, 139, 140, 144, 145, 148, 149 and
 151 to 155, with #320 and #330.
