@@ -439,8 +439,7 @@ impl Voice {
         let sounding = match self.stage {
             Stage::Held { .. } | Stage::Released { .. } => true,
             Stage::Fading { .. } => self.carried.is_some(),
-            Stage::Cut { .. } => false,
-            Stage::Idle => false,
+            Stage::Cut { .. } | Stage::Idle => false,
         };
         sounding
             && self.holds
