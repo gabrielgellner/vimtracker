@@ -64,8 +64,13 @@ pub(crate) const HISTORY_LIMIT: usize = 1000;
 pub const SMOOTHING_MS: u32 = 10;
 /// Tuning: smoothing on what envelopes move, short enough to keep a fast snap.
 pub const FAST_SMOOTHING_MS: u32 = 1;
-/// Tuning: fade length when a voice is cut.
+/// Tuning: the shortest fade, at a sample's or a loop's edge, and a note carried on a sounding
+/// voice dipping to nothing with `Reset`.
 pub const DECLICK_FRAMES: u32 = 64;
+/// Tuning: how long a voice that's cut off fades, 4 ms at 48 kHz: by a new note that starts a
+/// voice of its own, as a sampler's does, a choke, `KIL` or the transport stopping. The shortest
+/// that keeps a 16th-note change on a sample within about 1 dB of a tie (decision 368).
+pub const CUT_FADE_FRAMES: u32 = 192;
 /// The velocity new notes are written with until changed, leaving room above it for accents.
 pub const DEFAULT_NOTE_VELOCITY: u8 = 0x64;
 /// Tuning: how long an entered note previews.

@@ -31,7 +31,7 @@ use crate::dsp::voices::wave_terrain::WaveTerrain;
 use crate::dsp::voices::waveshaping::Waveshaping;
 use crate::dsp::voices::wavetable::Wavetable;
 use crate::dsp::voices::{Settings, SynthEngine};
-use vt_model::constants::DECLICK_FRAMES;
+use vt_model::constants::{CUT_FADE_FRAMES, DECLICK_FRAMES};
 use vt_model::envelope::Envelope;
 use vt_model::playable::Span;
 use vt_model::samples::{Frames, SampleId};
@@ -54,9 +54,15 @@ enum Stage {
     Released {
         from: f32,
     },
-    /// A short fade, to avoid a click.
+    /// A short fade, to avoid a click: a carried note's dip to nothing.
     Fading {
         per_frame: f32,
+    },
+    /// Cut off, by a new note on a voice of its own, a choke, `KIL` or the transport stopping:
+    /// a fade from the level it had over [`CUT_FADE_FRAMES`], so many frames into it.
+    Cut {
+        from: f32,
+        at: u32,
     },
 }
 
@@ -433,6 +439,7 @@ impl Voice {
         let sounding = match self.stage {
             Stage::Held { .. } | Stage::Released { .. } => true,
             Stage::Fading { .. } => self.carried.is_some(),
+            Stage::Cut { .. } => false,
             Stage::Idle => false,
         };
         sounding
@@ -644,9 +651,9 @@ impl Voice {
         self.carried = None;
         if self.active() {
             // The fade is a ramp of its own, from what's heard, which the amp follows at once.
-            self.level = self.amp[1];
-            self.stage = Stage::Fading {
-                per_frame: 1.0 / DECLICK_FRAMES as f32,
+            self.stage = Stage::Cut {
+                from: self.amp[1],
+                at: 0,
             };
         }
     }
@@ -732,6 +739,13 @@ impl Voice {
             Stage::Held { from } => self.shape.held(self.elapsed, from, self.envelope_rate),
             Stage::Released { from } => self.shape.released(self.elapsed, from, self.envelope_rate),
             Stage::Fading { per_frame } => self.level - per_frame,
+            Stage::Cut { from, at } => {
+                self.stage = Stage::Cut { from, at: at + 1 };
+                // A quarter of a cosine, the fall that keeps the power of it and of a new note's
+                // rise together near constant (decision 368).
+                let into = at as f32 / CUT_FADE_FRAMES as f32;
+                from * (std::f32::consts::FRAC_PI_2 * into.min(1.0)).cos()
+            }
             Stage::Idle => 0.0,
         }
         .max(0.0);
@@ -742,7 +756,7 @@ impl Voice {
         let c = self.amp_coefficient;
         self.amp[0] += (self.level - self.amp[0]) * c;
         self.amp[1] += (self.amp[0] - self.amp[1]) * c;
-        let fading = matches!(self.stage, Stage::Fading { .. });
+        let fading = matches!(self.stage, Stage::Fading { .. } | Stage::Cut { .. });
         if fading
             || self.level >= self.amp[1]
             || self
@@ -801,7 +815,7 @@ impl Voice {
                     && self.amp[1] == 0.0
                     && self.synth.as_ref().is_none_or(Synth::settled)
             }
-            Stage::Fading { .. } => self.level <= 0.0 && self.amp[1] == 0.0,
+            Stage::Fading { .. } | Stage::Cut { .. } => self.level <= 0.0 && self.amp[1] == 0.0,
             Stage::Idle => false,
         } || !more;
         self.elapsed += 1;
