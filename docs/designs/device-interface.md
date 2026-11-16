@@ -71,7 +71,7 @@ each family produces itself, with one `Reading` for how a value shows. Steps, ea
 | 3, `insert::Param` folded into `Entry` (decision 357); `Entry::described` | machine settings, effects | #904 |
 | 4, `ModSlot::reading` and `described`; `ModUnits` goes | mod slots | #906 |
 | 5, `GenParam::described`; the generators' `Units` goes, a step still measured | generators | #908 |
-| 6, `gen_params!`: the enum, `ALL` and `GEN_PARAMS` from one list (#809's item 6) | generators | the PR that closes #873 |
+| 6, `gen_params!`: the enum, `ALL` and `GEN_PARAMS` from one list (#809's item 6) | generators | #911 |
 
 Where it differs from the design note: `Control::Base` isn't described from the registry, as four
 of its controls have no entry; a Gen setting's step is still measured on the shape, as the row's
