@@ -330,7 +330,7 @@ fn pitch_in_scale_follows_a_scale_changed_by_command() {
     let off = Scale { on: false, ..major };
     let song_in = |scale| {
         let mut song = song(&["C-3 64 --- --- ---"], Steps::default());
-        song.scale = scale;
+        song.saved_scale = scale;
         song.tracks[0].mods[3] = ModSlot {
             in_scale: true,
             ..ModSlot::steps(Some(SettingId::PITCH), up_three)

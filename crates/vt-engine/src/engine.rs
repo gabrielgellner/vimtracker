@@ -209,7 +209,7 @@ impl Engine {
     pub fn new(rate: u32, current: Arc<Published>) -> Self {
         let millibpm = current.song.millibpm.clamp(MIN_MILLIBPM, MAX_MILLIBPM);
         let seed = current.song.seed;
-        let scale = current.song.scale;
+        let scale = current.song.saved_scale;
         let memory = MemoryPool::for_song(&current.song, rate);
         let gens = GenScratch::for_song(&current.song);
         let mut engine = Self {

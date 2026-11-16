@@ -2387,7 +2387,7 @@ fn melody(steps: Steps, depth: i16, in_scale: bool) -> (App, Realtime) {
     for (row, text) in [(0, "C-3"), (4, "E-3"), (8, "G-3")] {
         *phrase.step_mut(row).unwrap() = format!("{text} -- --- --- ---").parse().unwrap();
     }
-    song.scale = vt_model::scale::Scale {
+    song.saved_scale = vt_model::scale::Scale {
         on: in_scale,
         root: 0,
         kind: vt_model::scale::ScaleKind::Major,
@@ -2540,7 +2540,7 @@ fn varied_melody() -> (App, Realtime) {
     use vt_engine::published::Published;
     let mut song = vt_model::song::Song::new(1);
     song.sample_on(0, "sine");
-    song.scale = vt_model::scale::Scale {
+    song.saved_scale = vt_model::scale::Scale {
         on: true,
         root: 0,
         kind: vt_model::scale::ScaleKind::Major,

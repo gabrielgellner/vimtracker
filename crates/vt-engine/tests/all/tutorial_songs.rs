@@ -82,7 +82,7 @@ fn songs() -> Vec<(&'static str, Song)> {
         .into_iter()
         .map(|(name, song)| {
             let song = Song {
-                read_only: true,
+                saved_read_only: true,
                 ..song
             };
             (name, song)
@@ -97,7 +97,7 @@ fn song(name: &str, bpm: u32, root: u8, kind: ScaleKind, tracks: usize) -> Song 
     let mut song = Song::new(tracks);
     song.name = name.to_owned();
     song.millibpm = bpm * 1000;
-    song.scale = Scale {
+    song.saved_scale = Scale {
         on: true,
         root,
         kind,
@@ -222,7 +222,7 @@ fn generate(song: Song, track: usize, column: ShapeColumn, rows: usize, shape: S
 /// The Note column of a track with no notes, writing at the velocity notes are typed with.
 fn empty_notes(song: &Song) -> ShapeColumn {
     ShapeColumn::Note {
-        scale: song.scale,
+        scale: song.saved_scale,
         writes: Some(0x64),
     }
 }
@@ -1014,7 +1014,7 @@ fn grids() -> Song {
         ..Grids::default()
     };
     let column = ShapeColumn::Note {
-        scale: song.scale,
+        scale: song.saved_scale,
         writes: None,
     };
     let parts = [DrumPart::Kick, DrumPart::Snare, DrumPart::Hats];
@@ -1102,7 +1102,7 @@ fn random_rhythm() -> Song {
         ticks: None,
     };
     let column = ShapeColumn::Note {
-        scale: song.scale,
+        scale: song.saved_scale,
         writes: None,
     };
     for track in 0..3 {
@@ -1396,7 +1396,7 @@ fn variations() -> Song {
     variation.seed = 3;
     variation.vary = 4;
     let column = ShapeColumn::Note {
-        scale: song.scale,
+        scale: song.saved_scale,
         writes: None,
     };
     let mut song = generate(song, 0, column, 16, variation);
@@ -1512,7 +1512,7 @@ fn bloom() -> Song {
     let mut song = song("bloom", 116, 2, ScaleKind::Dorian, 4);
     song.seed = 0xB1;
     voice(&mut song, 0, "BL", SynthVoice::VirtualAnalog, &BLOOM_TRUNK);
-    let scale = song.scale;
+    let scale = song.saved_scale;
     let mut song = apply(
         song,
         &Action::Bloom {
@@ -2259,7 +2259,10 @@ fn every_tutorial_song_is_read_only_and_loads() {
     assert_eq!(names.len(), songs().len(), "a folder for each song");
     for name in names {
         let song = load_song(&songs_folder().join(&name)).unwrap();
-        assert!(song.read_only, "{name} is read-only, so :w can't change it");
+        assert!(
+            song.saved_read_only,
+            "{name} is read-only, so :w can't change it"
+        );
         assert!(
             song.bank.is_empty(),
             "{name} plays synths only, so it needs no samples"
@@ -2440,7 +2443,7 @@ fn tonnetz_plays_one_walk_three_ways_one_note_moving_at_a_time() {
         Note::On(note) => note,
         _ => panic!("a note on every chord's row"),
     };
-    let scale = song.scale;
+    let scale = song.saved_scale;
     let chords = tonnetz_walk().chords(note("C-3"), 0x59, scale, 9);
     let names: Vec<String> = chords.iter().map(|chord| chord.name()).collect();
     assert_eq!(names, ["C", "Em", "G", "Bm", "D", "Bm", "G", "Em", "C"]);

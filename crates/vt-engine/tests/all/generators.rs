@@ -89,7 +89,7 @@ pub fn moving_song() -> Song {
     hits.set_lane(1, Some(Lane::new(0, 5)));
     song.tracks[1].phrases.insert(0, Arc::new(hits));
     let acid = ShapeColumn::Note {
-        scale: song.scale,
+        scale: song.saved_scale,
         writes: Some(0x64),
     };
     let song = generate(
@@ -267,7 +267,7 @@ fn written(song: &Song, track: usize, column: ShapeColumn) -> Shape {
 fn a_setting_held_at_its_own_number_leaves_the_generator_at_rest() {
     let song = moving_song();
     let acid = ShapeColumn::Note {
-        scale: song.scale,
+        scale: song.saved_scale,
         writes: Some(0x64),
     };
     let (density, _) = another(&written(&song, 0, acid), acid, GenParam::Density);
@@ -290,7 +290,7 @@ fn a_setting_held_at_its_own_number_leaves_the_generator_at_rest() {
 fn a_held_setting_plays_what_writing_it_would_on_every_column() {
     let song = moving_song();
     let acid = ShapeColumn::Note {
-        scale: song.scale,
+        scale: song.saved_scale,
         writes: Some(0x64),
     };
     let cases = [

@@ -51,7 +51,7 @@ fn pool() -> Arc<SamplePool> {
 fn song(rows: &[&str], arpeggio: Arpeggio) -> Song {
     let mut song = Song::new(1);
     song.limiter = false;
-    song.scale.on = false;
+    song.saved_scale.on = false;
     song.sample_on(0, "ramp");
     let track = &mut song.tracks[0];
     track.mods[0].adsr.attack_ms = 0;
@@ -212,14 +212,14 @@ fn at_another_speed_each_note_is_as_long_against_the_tracks_step() {
 #[test]
 fn with_the_scale_on_x_and_y_are_degrees() {
     let mut major = song(&["C-3 -- arp:24"], Arpeggio::default());
-    major.scale = Scale {
+    major.saved_scale = Scale {
         on: true,
         root: 0,
         kind: ScaleKind::Major,
     };
     assert_eq!(notes(&major, TICK, 3), named("C E G"));
     let mut minor = major;
-    minor.scale.kind = ScaleKind::Minor;
+    minor.saved_scale.kind = ScaleKind::Minor;
     assert_eq!(notes(&minor, TICK, 3), named("C D# G"));
     // Off, the same value is semitones.
     let chromatic = song(&["C-3 -- arp:24"], Arpeggio::default());

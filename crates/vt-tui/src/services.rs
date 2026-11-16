@@ -252,9 +252,9 @@ impl Live {
     pub(crate) fn from_song(song: &Song) -> Self {
         Self {
             levels: live_from(song),
-            scale: song.scale,
-            auto_jump: song.auto_jump,
-            read_only: song.read_only,
+            scale: song.saved_scale,
+            auto_jump: song.saved_auto_jump,
+            read_only: song.saved_read_only,
             fill: false,
             octave: 3,
             note_velocity: DEFAULT_NOTE_VELOCITY,
@@ -274,7 +274,7 @@ impl Services {
         names: Names,
     ) -> Self {
         let live = Live::from_song(&song);
-        let folds = Folds::from_view(&song.view);
+        let folds = Folds::from_view(&song.saved_view);
         Self {
             history: History::new(Arc::new(song)),
             cursor: Cursor {
@@ -712,8 +712,8 @@ pub(crate) fn live_from(song: &Song) -> Vec<TrackLive> {
     song.tracks
         .iter()
         .map(|t| TrackLive {
-            mute: t.mute,
-            solo: t.solo,
+            mute: t.saved_mute,
+            solo: t.saved_solo,
         })
         .collect()
 }

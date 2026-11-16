@@ -165,7 +165,7 @@ fn a_render_repeats_and_respects_mute() {
     let first = render(song(&FX_LOOP), RenderOptions::default());
     assert_eq!(first, render(song(&FX_LOOP), RenderOptions::default()));
     let mut muted = song(&FX_LOOP);
-    muted.tracks[0].mute = true;
+    muted.tracks[0].saved_mute = true;
     assert_eq!(peak(render(muted, RenderOptions::default())), 0.0);
 }
 
@@ -248,7 +248,7 @@ fn stems_ignore_the_limiter_and_repeat() {
 #[test]
 fn only_tracks_that_would_be_heard_get_a_stem() {
     let mut mix = three_tracks();
-    mix.tracks[1].mute = true;
+    mix.tracks[1].saved_mute = true;
     let tracks = |mix: Song| -> Vec<usize> {
         stems_of(mix, RenderOptions::default())
             .iter()
@@ -256,7 +256,7 @@ fn only_tracks_that_would_be_heard_get_a_stem() {
             .collect()
     };
     assert_eq!(tracks(mix.clone()), [0, 2]);
-    mix.tracks[2].solo = true;
+    mix.tracks[2].saved_solo = true;
     assert_eq!(tracks(mix), [2]);
 }
 

@@ -28,7 +28,7 @@ fn song(rows: &[&str], scale_on: bool) -> Song {
     let mut song = Song::new(1);
     song.limiter = false;
     song.seed = 0x600;
-    song.scale = Scale {
+    song.saved_scale = Scale {
         on: scale_on,
         root: 0,
         kind: ScaleKind::Major,
