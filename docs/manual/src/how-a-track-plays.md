@@ -682,6 +682,9 @@ each note go halfway, so in `Legato` it slides only where a note is held into th
 next, as on a 303. `Glide mode` is dimmed on `Acid` and does nothing: a 303 slides
 only where it's told to.
 
+The tutorial [Glides and slides](tutorials/glides.md) builds each of these as a short
+song, and shows how they make a tracker's `3xx` and `300`.
+
 ## A phrase's order
 
 A phrase's rows play top to bottom unless `:order` gives it another order, after

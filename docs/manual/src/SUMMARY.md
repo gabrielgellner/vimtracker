@@ -15,6 +15,7 @@
 # Tutorials
 
 - [Generative sequencers, recreated](tutorials/generators.md)
+- [Glides and slides: tracker `3xx` sounds](tutorials/glides.md)
 
 # Reference
 
