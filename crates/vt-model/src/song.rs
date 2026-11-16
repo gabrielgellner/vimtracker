@@ -31,8 +31,8 @@ use crate::view::ViewState;
 
 pub use crate::filter::{FILTER_MODE_NAMES, FilterMode, FilterType};
 pub use crate::machine::{
-    ACID_GATE, DEFAULT_ACCENT, FULL_GATE, Machine, PHASE_NAMES, Phase, Role, SIX_OP_PATCHES,
-    SynthVoice, VOICE_MODE_NAMES, VoiceMode,
+    ACID_GATE, DEFAULT_ACCENT, FULL_GATE, GLIDE_MODE_NAMES, GlideMode, Machine, PHASE_NAMES, Phase,
+    Role, SIX_OP_PATCHES, SynthVoice, VOICE_MODE_NAMES, VoiceMode,
 };
 pub use crate::phrase::{Lane, Phrase, Visit};
 
@@ -256,6 +256,9 @@ pub struct Track {
     /// slides by its own `Slide`.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub glide: u8,
+    /// Which notes `glide` slides into: only ties, or every note from the one sounding.
+    #[serde(default, skip_serializing_if = "GlideMode::is_ties")]
+    pub glide_mode: GlideMode,
     /// Whether a synth's oscillators run on from note to note or start again on each.
     #[serde(default, skip_serializing_if = "Phase::is_free")]
     pub phase: Phase,
@@ -695,6 +698,7 @@ impl Default for Track {
             speed: Speed::Sixteenth,
             reset: None,
             glide: 0,
+            glide_mode: GlideMode::Ties,
             phase: Phase::Free,
             voice_mode: VoiceMode::Mono,
             accumulation: Accumulation::default(),
@@ -1480,6 +1484,29 @@ mod tests {
         assert_eq!(
             track.value_of(SettingId::VOICE_MODE) >> 8,
             u16::from(VoiceMode::Legato.index())
+        );
+    }
+
+    #[test]
+    fn a_tracks_glide_mode_saves_only_at_always_and_a_sound_preset_keeps_it() {
+        let track: Track = ron::from_str("(mute: false, solo: false)").unwrap();
+        assert_eq!(track.glide_mode, GlideMode::Ties);
+        assert!(!ron::to_string(&track).unwrap().contains("glide_mode"));
+        let track = Track {
+            glide_mode: GlideMode::Always,
+            ..Track::default()
+        };
+        let text = ron::to_string(&track).unwrap();
+        assert!(text.contains("glide_mode:Always"), "{text}");
+        assert_eq!(
+            ron::from_str::<Track>(&text).unwrap().glide_mode,
+            GlideMode::Always
+        );
+        let preset = crate::preset::SoundPreset::of(&track, None);
+        assert_eq!(preset.sound.glide_mode, GlideMode::Always);
+        assert_eq!(
+            track.value_of(SettingId::GLIDE_MODE) >> 8,
+            u16::from(GlideMode::Always.index())
         );
     }
 

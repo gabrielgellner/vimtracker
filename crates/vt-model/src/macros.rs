@@ -16,7 +16,7 @@ use crate::lfo::phase_value;
 use crate::modulation::{MOD_SLOTS, ModKind, Polarity, depth_of, depth_value};
 use crate::settings::{Kind, Owner, SettingId, SettingSet};
 use crate::shape::{GenParam, MAX_BEND, Shape, ShapeColumn, curved};
-use crate::song::{FilterMode, Phase, Track, VoiceMode};
+use crate::song::{FilterMode, GlideMode, Phase, Track, VoiceMode};
 use crate::speed::Speed;
 use crate::step::Step;
 
@@ -471,6 +471,7 @@ impl Track {
             SettingId::GLIDE => self.glide,
             SettingId::PHASE => self.phase.index(),
             SettingId::VOICE_MODE => self.voice_mode.index(),
+            SettingId::GLIDE_MODE => self.glide_mode.index(),
             _ => id.entry().default,
         }
     }
@@ -584,6 +585,7 @@ impl Track {
                     SettingId::GLIDE => self.glide = coarse,
                     SettingId::PHASE => self.phase = Phase::from_index(coarse),
                     SettingId::VOICE_MODE => self.voice_mode = VoiceMode::from_index(coarse),
+                    SettingId::GLIDE_MODE => self.glide_mode = GlideMode::from_index(coarse),
                     _ => return,
                 }
                 self.set_fine(id, fine);

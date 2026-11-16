@@ -657,6 +657,58 @@ impl VoiceMode {
 
 crate::listed::listed!(VoiceMode: meaning);
 
+/// Which notes `Glide` slides into, its `Glide mode` (decision 382). Only the pitch: a note that
+/// strikes still strikes as `Mode` and the notes' shape's `Reset` say.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
+)]
+pub enum GlideMode {
+    /// Only a tie glides: a `HLD`, a `Legato` tie, an arpeggio's note without `Retrig`.
+    #[default]
+    Ties,
+    /// Every note glides from the pitch of the note still sounding on the same synth or sample,
+    /// struck notes too, as a tracker's `3xx` and a mono synth's portamento do.
+    Always,
+}
+
+/// What each glide mode is called, in order.
+pub const GLIDE_MODE_NAMES: [&str; 2] = ["Ties", "Always"];
+
+impl GlideMode {
+    /// Both, in order.
+    pub const ALL: [Self; 2] = [Self::Ties, Self::Always];
+
+    /// Its place in [`GlideMode::ALL`].
+    pub const fn index(self) -> u8 {
+        self as u8
+    }
+
+    /// The one at a place in [`GlideMode::ALL`], the last for one past it.
+    pub fn from_index(index: u8) -> Self {
+        Self::ALL[usize::from(index).min(Self::ALL.len() - 1)]
+    }
+
+    /// The name on screen.
+    pub const fn name(self) -> &'static str {
+        GLIDE_MODE_NAMES[self as usize]
+    }
+
+    /// What it does, for a list to choose from.
+    pub(crate) const fn meaning(self) -> &'static str {
+        match self {
+            Self::Ties => "only a tie glides",
+            Self::Always => "every note glides from the one sounding",
+        }
+    }
+
+    /// Whether it's `Ties`, as a track starts, which a song doesn't save.
+    pub(crate) fn is_ties(&self) -> bool {
+        *self == Self::Ties
+    }
+}
+
+crate::listed::listed!(GlideMode: meaning);
+
 /// One synth voice, described once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct VoiceSpec {
