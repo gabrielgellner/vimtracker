@@ -25,8 +25,7 @@ use crate::input::keys::Key;
 use crate::input::mode::Mode;
 use crate::overlays;
 use crate::overlays::picker::explorer::Purpose;
-use crate::overlays::picker::exploring::kit_preview;
-use crate::overlays::picker::{KitChoice, Pick, Picker, Preview, Shown};
+use crate::overlays::picker::{KitChoice, Pick, Picker};
 use crate::pages::chain::ChainView;
 use crate::pages::phrase::PhraseView;
 use crate::pages::song::COLUMNS_BEFORE_TRACKS;
@@ -39,47 +38,13 @@ impl App {
     pub(crate) fn show_picker(&mut self, picker: Picker) {
         self.overlays.picker = Some(picker);
         self.modes.mode = Mode::Picker;
-        self.refresh_preview();
+        self.overlays.refresh_preview(self.services.rate);
     }
 
     /// Show a picker a key or a command line opened, which takes the count.
     pub(crate) fn open_picker(&mut self, picker: Picker) {
         self.modes.count = None;
         self.show_picker(picker);
-    }
-
-    /// Load the preview of the item under the picker's cursor, if it has one and it isn't already
-    /// shown. A sample's is read in the background, and shows it's loading until it's in.
-    pub(crate) fn refresh_preview(&mut self) {
-        let rate = self.services.rate;
-        let Some(picker) = self.overlays.picker.as_mut() else {
-            return;
-        };
-        let wanted = picker
-            .current_index()
-            .filter(|item| picker.has_previews() && picker.item(*item).preview.is_some());
-        if picker.preview.as_ref().map(|shown| shown.item) == wanted {
-            return;
-        }
-        picker.preview_images.clear();
-        picker.preview_wave = None;
-        let Some(item) = wanted else {
-            picker.preview = None;
-            return;
-        };
-        let Some(preview) = picker.item(item).preview.clone() else {
-            return;
-        };
-        let shown = match &preview {
-            Preview::Kit(path) => Some(kit_preview(item, path, rate, &mut picker.waves)),
-            _ => self.explorer_preview(item, &preview),
-        };
-        if let Some(picker) = self.overlays.picker.as_mut() {
-            picker.preview = shown.map(|shown| {
-                let tags = picker.item(item).tags.clone();
-                Arc::new(Shown { tags, ..shown })
-            });
-        }
     }
 
     /// Go to a track chosen from the list, which `C-o` comes back from.
@@ -247,7 +212,7 @@ impl App {
         // A key with Alt or Cmd means nothing to it, and leaves a `g` or a `z` waiting, and
         // Shift on an arrow is the arrow.
         if key.alt || key.command {
-            self.refresh_preview();
+            self.overlays.refresh_preview(self.services.rate);
             self.follow_file();
             return;
         }
@@ -270,7 +235,7 @@ impl App {
         }
         match outcome {
             Outcome::Done | Outcome::Passed => {
-                self.refresh_preview();
+                self.overlays.refresh_preview(self.services.rate);
                 self.follow_file();
             }
             outcome => {

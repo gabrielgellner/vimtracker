@@ -424,14 +424,14 @@ impl App {
                     // A shape waiting for its command is given up.
                     self.overlays.shape_command = None;
                     self.modes.mode = self.mode_after_picker();
-                    self.leave_explorer();
+                    self.overlays.explorer.leave(&mut self.services);
                 }
             },
             Outcome::Choose(pick) => {
                 let naming = self.overlays.explorer.naming.take();
                 self.overlays.picker = None;
                 self.modes.mode = self.mode_after_picker();
-                self.leave_explorer();
+                self.overlays.explorer.leave(&mut self.services);
                 self.overlays.explorer.naming = naming;
                 self.choose(pick);
             }
@@ -447,8 +447,12 @@ impl App {
             }
             Outcome::Do(cmd) => self.run(cmd),
             Outcome::Tag { item, tags } => {
-                self.tag_item(item, tags);
-                self.refresh_preview();
+                if let Some(picker) = self.overlays.picker.as_mut()
+                    && let Some(said) = self.overlays.explorer.tag_item(picker, item, &tags)
+                {
+                    self.services.status = said;
+                }
+                self.overlays.refresh_preview(self.services.rate);
             }
             Outcome::Keys(mode) => {
                 self.overlays.help = Help::at(self.help_rows(), mode, self.modes.mode);
