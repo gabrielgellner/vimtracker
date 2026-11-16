@@ -223,7 +223,13 @@ impl App {
                     {
                         placement.fx.insert(saved, slot);
                     }
-                    let action = self.patch_generator(field, command, generator.shape, live)?;
+                    let action = self.services.patch_generator(
+                        field,
+                        command,
+                        generator.shape,
+                        live,
+                        self.modes.view,
+                    )?;
                     Ok(match (generator.lane, live) {
                         (Some(length), None) => self.onto_lane(action, length),
                         _ => vec![action],

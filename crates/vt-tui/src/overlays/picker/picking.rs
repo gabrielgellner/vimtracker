@@ -420,7 +420,7 @@ impl App {
                 self.note_place_of(Purpose::Kit, &kit);
                 self.load_kit_tracks(&kit, &sounds);
             }
-            Pick::KitBeat(tracks) => self.write_kit_beat(&tracks),
+            Pick::KitBeat(tracks) => self.services.write_kit_beat(&tracks),
         }
     }
 

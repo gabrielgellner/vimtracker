@@ -16,6 +16,7 @@ use crate::overlays;
 use crate::overlays::guides;
 use crate::overlays::help::Help;
 use crate::overlays::picker::{Item, Pick, Picker};
+use crate::overlays::shape::ShapePanel;
 use crate::pages::CtxMut;
 use crate::pages::phrase::PhraseView;
 use crate::pages::project;
@@ -684,8 +685,11 @@ impl App {
                 let times = self.modes.count.take().unwrap_or(1).max(1);
                 self.jump_to_next_mark(key == SampleKey::NextMark, times);
             }
-            Cmd::ReopenGenerator => self.reopen_generator(),
-            Cmd::ApplyGenerator => self.apply_generator_here(),
+            Cmd::ReopenGenerator => {
+                let outcome = ShapePanel::reopen(&mut self.services, self.modes.view);
+                self.settled(outcome, false);
+            }
+            Cmd::ApplyGenerator => self.services.apply_generator_here(),
             Cmd::BakeMods => self.bake_pitch_mods(),
             Cmd::MapMacro | Cmd::MacroMapping => {
                 self.services.status =

@@ -623,21 +623,6 @@ impl App {
         }
     }
 
-    /// Where these rows of the focused phrase fall on a track. Rows count from each phrase's own
-    /// loop start, as they do on screen, and any a phrase doesn't have are left out.
-    pub(crate) fn place_on(&self, track: usize, range: StepRange) -> Option<(u32, StepRange)> {
-        let (phrase, start) = self.services.phrase_beside(track, self.modes.view)?;
-        let focus = self.services.extent().start as isize;
-        let stored = self.song().tracks[track]
-            .phrases
-            .get(&phrase)?
-            .steps()
-            .len() as isize;
-        let first = (range.first as isize - focus + start as isize).max(0);
-        let last = (range.last as isize - focus + start as isize).min(stored - 1);
-        (first <= last).then(|| (phrase, StepRange::between(first as usize, last as usize)))
-    }
-
     /// Make the same edit on the phrase each of these tracks is on, as one change.
     fn edit_across(
         &mut self,
@@ -647,7 +632,7 @@ impl App {
     ) {
         let mut actions = Vec::new();
         for track in tracks.first..=tracks.last {
-            if let Some((phrase, range)) = self.place_on(track, range) {
+            if let Some((phrase, range)) = self.services.place_on(track, range, self.modes.view) {
                 actions.push(edit(track, phrase, range));
             }
         }
@@ -698,7 +683,8 @@ impl App {
     fn copy_block(&mut self, range: StepRange, scope: Scope, tracks: TrackSpan, copying: bool) {
         let mut copied: Vec<Vec<Step>> = (tracks.first..=tracks.last)
             .map(|track| {
-                self.place_on(track, range)
+                self.services
+                    .place_on(track, range, self.modes.view)
                     .map_or_else(Vec::new, |(phrase, range)| {
                         self.song().tracks[track].phrases[&phrase].steps()[range.first..=range.last]
                             .to_vec()
@@ -745,7 +731,7 @@ impl App {
     /// Move every value covered to the mark after the first one's, so a mix ends up the same.
     fn cycle_mark(&mut self, range: StepRange, scope: Scope, tracks: TrackSpan) {
         let first = (tracks.first..=tracks.last).find_map(|track| {
-            let (phrase, range) = self.place_on(track, range)?;
+            let (phrase, range) = self.services.place_on(track, range, self.modes.view)?;
             let steps = self.song().tracks[track].phrases.get(&phrase)?.steps();
             steps[range.first..=range.last]
                 .iter()
@@ -1062,11 +1048,12 @@ impl App {
                     scope: Scope::WHOLE,
                     tracks: *tracks,
                 });
-                self.shape_again(
+                self.services.shape_again(
                     StepRange::between(self.services.cursor.step, end),
                     tracks,
                     *column,
                     **shape,
+                    self.modes.view,
                 );
             }
             Change::Replace {
@@ -1251,7 +1238,13 @@ impl App {
                     self.fill(selection.range, selection.tracks, field, &value);
                 }
                 Change::Shape { column, shape, .. } => {
-                    self.shape_again(selection.range, selection.tracks, column, *shape);
+                    self.services.shape_again(
+                        selection.range,
+                        selection.tracks,
+                        column,
+                        *shape,
+                        self.modes.view,
+                    );
                 }
                 Change::Paste { .. } => {}
             }
@@ -1334,6 +1327,26 @@ impl App {
 }
 
 impl Services {
+    /// Where these rows of the focused phrase fall on a track, level with the cursor on a view. Rows count from each phrase's own
+    /// loop start, as they do on screen, and any a phrase doesn't have are left out.
+    pub(crate) fn place_on(
+        &self,
+        track: usize,
+        range: StepRange,
+        view: View,
+    ) -> Option<(u32, StepRange)> {
+        let (phrase, start) = self.phrase_beside(track, view)?;
+        let focus = self.extent().start as isize;
+        let stored = self.song().tracks[track]
+            .phrases
+            .get(&phrase)?
+            .steps()
+            .len() as isize;
+        let first = (range.first as isize - focus + start as isize).max(0);
+        let last = (range.last as isize - focus + start as isize).min(stored - 1);
+        (first <= last).then(|| (phrase, StepRange::between(first as usize, last as usize)))
+    }
+
     /// The phrase a track is on, level with the cursor on a view, and where its loop starts.
     pub(crate) fn phrase_beside(&self, track: usize, view: View) -> Option<(u32, usize)> {
         let song = self.song();

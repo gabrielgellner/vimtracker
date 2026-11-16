@@ -57,6 +57,7 @@ use crate::overlays::field_jump::FieldJump;
 use crate::overlays::help::{Help, POPUP_DELAY};
 use crate::overlays::picker::exploring::Naming;
 use crate::overlays::picker::{Pick, Picker};
+use crate::overlays::shape::ShapePanel;
 use crate::pages::audio::AudioState;
 use crate::pages::sample::{SamplePage, Shown, is_sample_motion};
 use crate::roto::Roto;
@@ -120,6 +121,9 @@ pub enum Outcome {
     /// Done, and this command of the table's runs as `App::run` runs it, the mode staying as it
     /// is, as `Tab` plays from a field jump.
     Do(Cmd),
+    /// Done, and the shape panel opens with this, heard as it opens, as `gl` opens it again on a
+    /// live generator.
+    Shape(Box<ShapePanel>),
 }
 
 /// One of the program's pages as a component: its own state, its keys, its drawing and its
@@ -451,6 +455,11 @@ impl App {
                 }
             }
             Outcome::Do(cmd) => self.run(cmd),
+            Outcome::Shape(panel) => {
+                panel.preview(&mut self.services);
+                self.overlays.shape = Some(*panel);
+                self.modes.mode = Mode::Shape;
+            }
             Outcome::Tag { item, tags } => {
                 if let Some(picker) = self.overlays.picker.as_mut()
                     && let Some(said) = self.overlays.explorer.tag_item(picker, item, &tags)
