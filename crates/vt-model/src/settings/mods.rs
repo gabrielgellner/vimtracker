@@ -1,7 +1,7 @@
 //! The settings only modulation and macros move, and the mod slots' own: each mod slot's, each
 //! macro's, the accumulator's and the arpeggio's.
 
-use super::{Entry, Kind, Units};
+use super::{Entry, Kind, Place, Units};
 use crate::accumulator::MOST_DEGREES;
 use crate::arpeggio::{ArpRate, MOST_OCTAVES};
 use crate::macros::MACROS;
@@ -21,6 +21,7 @@ pub(super) const MOD: [Entry; 4] = [
             units: Units::Depth,
         },
         default: 0x80,
+        place: Place::Own,
     },
     Entry {
         key: "phase",
@@ -32,6 +33,7 @@ pub(super) const MOD: [Entry; 4] = [
             units: Units::Degrees,
         },
         default: 0x00,
+        place: Place::Own,
     },
     Entry {
         key: "polarity",
@@ -43,6 +45,7 @@ pub(super) const MOD: [Entry; 4] = [
         },
         // Each type has its own, which the track's value gives; this is an LFO's.
         default: 0x01,
+        place: Place::Own,
     },
     Entry {
         key: "deform",
@@ -54,6 +57,7 @@ pub(super) const MOD: [Entry; 4] = [
             units: Units::Depth,
         },
         default: 0x80,
+        place: Place::Own,
     },
 ];
 
@@ -77,6 +81,7 @@ pub(super) const MACRO: Entry = Entry {
         units: Units::Percent,
     },
     default: 0,
+    place: Place::Own,
 };
 
 /// What each macro is called in lists before it's named.
@@ -102,6 +107,7 @@ const fn time(key: &'static str, name: &'static str) -> Entry {
             units: Units::EnvelopeTime,
         },
         default: 0,
+        place: Place::Own,
     }
 }
 
@@ -117,6 +123,7 @@ const fn percentage(key: &'static str, name: &'static str) -> Entry {
             units: Units::Percent,
         },
         default: 0,
+        place: Place::Own,
     }
 }
 
@@ -140,6 +147,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
             units: Units::Percent,
         },
         default: 0,
+        place: Place::Own,
     },
     Entry {
         key: "length",
@@ -150,6 +158,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
             wraps: false,
         },
         default: 0,
+        place: Place::Own,
     },
     Entry {
         key: "mutate",
@@ -161,6 +170,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
             units: Units::Percent,
         },
         default: 0,
+        place: Place::Own,
     },
     Entry {
         key: "smooth",
@@ -172,6 +182,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
             units: Units::Depth,
         },
         default: 0x80,
+        place: Place::Own,
     },
     // An LFO's and Steps' `Rate`, faster up the scale, through its own kind of rate; the default is
     // a new LFO's `1/4`.
@@ -185,6 +196,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
             units: Units::Percent,
         },
         default: 0x7A,
+        place: Place::Own,
     },
 ];
 
@@ -199,6 +211,7 @@ pub(super) const ACCUMULATION: [Entry; 2] = [
             wraps: false,
         },
         default: 0,
+        place: Place::Own,
     },
     Entry {
         key: "down",
@@ -209,6 +222,7 @@ pub(super) const ACCUMULATION: [Entry; 2] = [
             wraps: false,
         },
         default: 0,
+        place: Place::Own,
     },
 ];
 
@@ -234,6 +248,7 @@ pub(super) const ARPEGGIO: [Entry; 2] = [
             wraps: false,
         },
         default: 0,
+        place: Place::Own,
     },
     Entry {
         key: "octaves",
@@ -244,5 +259,6 @@ pub(super) const ARPEGGIO: [Entry; 2] = [
             wraps: false,
         },
         default: 0,
+        place: Place::Own,
     },
 ];

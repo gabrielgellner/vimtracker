@@ -6,6 +6,7 @@
 use crate::constants::{MAX_LEVEL, UNITY_LEVEL};
 use crate::groove::GROOVE_CHOICES;
 use crate::lane::{LANE_RATES, LENGTH_AS_WRITTEN, RATE_AS_WRITTEN};
+use crate::param::{Choice, Descriptor, Reading, Typing};
 use crate::song::{FILTER_MODE_NAMES, FULL_GATE};
 use crate::speed::{SPEED_NAMES, Speed};
 use crate::step::FxCommand;
@@ -47,7 +48,9 @@ pub(crate) const fn same_key(one: &str, other: &str) -> bool {
     true
 }
 
-/// One setting, as its owner declares it.
+/// One setting, as its owner declares it: the track, a machine, an effect, a mod slot. The pages,
+/// stepping, `x`, `K`, typing and the status line read these, through [`Entry::described`], so a
+/// new effect or voice needs no new page code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Entry {
     /// The name songs store it by, which never changes.
@@ -56,8 +59,115 @@ pub struct Entry {
     pub name: &'static str,
     /// The grid's label, 3 or 4 letters. Without one, modulation can move it but steps can't.
     pub label: Option<&'static str>,
+    /// Its range and the units it reads in, or its choices. A choice that's a scale stops at its
+    /// ends, and one that's a list goes round.
     pub kind: Kind,
     pub default: u8,
+    /// What it is to its owner: an effect's own, its type, beside its type or what comes out.
+    /// Everything that isn't an effect's is its owner's own.
+    pub place: Place,
+}
+
+/// Where a setting sits in its owner. Only an effect's are anything but [`Place::Own`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Place {
+    /// One of its owner's own, in its grid.
+    Own,
+    /// What the effect is: its type or mode, in the slot's title rather than its grid.
+    Type,
+    /// In the title too, after its type, but a played setting: Beads' quality.
+    Title,
+    /// What comes out, `Mix` and `Gain`: most effects' last column.
+    Output,
+}
+
+/// The choices of a setting that's off or on, such as a delay's `Ping-pong`.
+pub const OFF_ON: [&str; 2] = ["Off", "On"];
+
+impl Entry {
+    /// What it chooses between, in order, or nothing for a value in hex.
+    pub const fn choices(&self) -> &'static [&'static str] {
+        match self.kind {
+            Kind::Stepped { choices, .. } => choices,
+            Kind::Continuous { .. } => &[],
+        }
+    }
+
+    /// Whether stepping past its last choice goes round to the first, or stops.
+    pub const fn wraps(&self) -> bool {
+        matches!(self.kind, Kind::Stepped { wraps: true, .. })
+    }
+
+    /// Whether it's off or on and nothing else, which the pages show as a toggle.
+    pub fn is_toggle(&self) -> bool {
+        self.choices() == OFF_ON
+    }
+
+    /// What full modulation moves it by, on the scale a step gives: the whole of a list, and `FF`
+    /// for a value, as a depth is in hex steps of what it moves. `Gain` too, though it stops at
+    /// the level scale's top, as the faders do.
+    pub fn span(&self) -> f32 {
+        match self.kind {
+            Kind::Stepped { .. } => f32::from(self.kind.top()),
+            Kind::Continuous { .. } => 255.0,
+        }
+    }
+
+    /// The same, reading in `units`.
+    pub(crate) const fn units(self, units: Units) -> Self {
+        let Kind::Continuous { top, middle, .. } = self.kind else {
+            return self;
+        };
+        Self {
+            kind: Kind::Continuous { top, middle, units },
+            ..self
+        }
+    }
+
+    /// The same, with its middle at `80`, either way of which it reads.
+    pub(crate) const fn centred(self) -> Self {
+        let Kind::Continuous { top, units, .. } = self.kind else {
+            return self;
+        };
+        Self {
+            kind: Kind::Continuous {
+                top,
+                middle: true,
+                units,
+            },
+            ..self
+        }
+    }
+
+    /// It described for whatever shows or edits it: a value in hex from `00` to its top, centred
+    /// where it has a middle, reading in its units; or one of its choices, going round where they
+    /// do, turned over by `i` where it's off or on.
+    pub fn described(&self) -> Descriptor {
+        let described = match self.kind {
+            Kind::Continuous { top, middle, units } => Descriptor {
+                reading: Reading::Byte { units, top, middle },
+                centred: middle,
+                ..Descriptor::hex(self.key, self.name, top, self.default)
+            },
+            Kind::Stepped { choices, wraps } => Descriptor {
+                typing: match self.is_toggle() {
+                    true => Typing::Toggled,
+                    false => Typing::Listed,
+                },
+                ..Descriptor::listed(
+                    self.key,
+                    self.name,
+                    choices.iter().copied().map(Choice::named),
+                    usize::from(self.default),
+                    wraps,
+                )
+            },
+        };
+        Descriptor {
+            label: self.label,
+            ..described
+        }
+    }
 }
 
 const fn level(key: &'static str, name: &'static str, label: &'static str, default: u8) -> Entry {
@@ -71,6 +181,7 @@ const fn level(key: &'static str, name: &'static str, label: &'static str, defau
             units: Units::Percent,
         },
         default,
+        place: Place::Own,
     }
 }
 
@@ -81,6 +192,7 @@ const fn centred(key: &'static str, name: &'static str, label: &'static str) -> 
         label: Some(label),
         kind: CENTRED,
         default: 0x80,
+        place: Place::Own,
     }
 }
 
@@ -139,6 +251,7 @@ const TRACK: [Entry; 16] = [
             units: Units::Semitones,
         },
         default: 0x80,
+        place: Place::Own,
     },
     Entry {
         key: "mode",
@@ -149,6 +262,7 @@ const TRACK: [Entry; 16] = [
             wraps: false,
         },
         default: 0,
+        place: Place::Own,
     },
     Entry {
         key: "gate",
@@ -160,6 +274,7 @@ const TRACK: [Entry; 16] = [
             units: Units::GateLength,
         },
         default: FULL_GATE,
+        place: Place::Own,
     },
     // Its value is never heard alone: it's added to each note's length as it starts, so a lane
     // of it moves notes' lengths against their own.
@@ -173,6 +288,7 @@ const TRACK: [Entry; 16] = [
             units: Units::GateDelta,
         },
         default: 0x80,
+        place: Place::Own,
     },
     // A step's own groove, read before the step is played, as it says when the step lands. `00`
     // is the project's, and a track with its own holds that.
@@ -185,6 +301,7 @@ const TRACK: [Entry; 16] = [
             wraps: false,
         },
         default: 0,
+        place: Place::Own,
     },
     // How long a step is, read before the step is played, as it says when the next one comes.
     Entry {
@@ -196,6 +313,7 @@ const TRACK: [Entry; 16] = [
             wraps: false,
         },
         default: Speed::Sixteenth.index(),
+        place: Place::Own,
     },
     // How long a tie glides into the next note, read as the tie comes, so a lock on either row
     // sets it.
@@ -209,6 +327,7 @@ const TRACK: [Entry; 16] = [
             units: Units::Glide,
         },
         default: 0,
+        place: Place::Own,
     },
     // As `LDLT` is to a note's length: added to each note's velocity as it starts, so a lane of it
     // is an accent pattern and a glide of it a crescendo, and the note keeps its own.
@@ -222,6 +341,7 @@ const TRACK: [Entry; 16] = [
             units: Units::VelocityDelta,
         },
         default: 0x80,
+        place: Place::Own,
     },
     // The fader, which a step can set as it sets `PAN`, with `VOL` a stage on top of it (decision
     // 174). Its base is the track's `level`, and modulation can't reach it, as `VOL` is where
@@ -248,6 +368,7 @@ const SLOT_OWN: [Entry; 1] = [Entry {
         wraps: false,
     },
     default: 0,
+    place: Place::Own,
 }];
 
 /// Each FX column's lane's, which move every phrase's lane on that column from its own: how many
@@ -264,6 +385,7 @@ const LANE: [Entry; 2] = [
             units: Units::Rows,
         },
         default: LENGTH_AS_WRITTEN,
+        place: Place::Own,
     },
     Entry {
         key: "rate",
@@ -274,6 +396,7 @@ const LANE: [Entry; 2] = [
             wraps: false,
         },
         default: RATE_AS_WRITTEN,
+        place: Place::Own,
     },
 ];
 

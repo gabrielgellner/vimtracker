@@ -380,7 +380,7 @@ impl SettingId {
         match self.owner() {
             (Owner::Track, at) => TRACK[at],
             (Owner::Voice(voice), at) => voice_entries(voice)[at],
-            (Owner::Slot { effect, .. }, at) => effect.params()[at].entry(),
+            (Owner::Slot { effect, .. }, at) => effect.params()[at],
             (Owner::Mod(_), at) => MOD[at],
             (Owner::Bypass(_), at) => SLOT_OWN[at],
             (Owner::Sampler, at) => SAMPLER[at],

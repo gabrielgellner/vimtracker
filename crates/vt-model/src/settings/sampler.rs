@@ -1,6 +1,6 @@
 //! The sampler's settings, and what its stepped ones can be.
 
-use super::{Entry, Kind, Units};
+use super::{Entry, Kind, Place, Units};
 
 /// Each choice's two hex digits, for [`BANK_CHOICES`] to point into.
 static BANK_DIGITS: [[u8; 2]; 256] = {
@@ -95,6 +95,7 @@ const fn share(key: &'static str, name: &'static str, label: &'static str, defau
             units: Units::Percent,
         },
         default,
+        place: Place::Own,
     }
 }
 
@@ -112,6 +113,7 @@ pub(super) const SAMPLER: [Entry; 5] = [
             wraps: false,
         },
         default: 0,
+        place: Place::Own,
     },
     Entry {
         key: "slice",
@@ -122,6 +124,7 @@ pub(super) const SAMPLER: [Entry; 5] = [
             wraps: false,
         },
         default: 0,
+        place: Place::Own,
     },
     share("start", "Start", "STA", 0),
     share("length", "Length", "SLEN", 0xFF),
@@ -134,5 +137,6 @@ pub(super) const SAMPLER: [Entry; 5] = [
             wraps: false,
         },
         default: 0,
+        place: Place::Own,
     },
 ];

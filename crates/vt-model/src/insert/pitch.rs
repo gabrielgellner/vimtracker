@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::constants::UNITY_LEVEL;
 
 use super::{
-    Columns, GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Param, Place, Units, WET_MIX_PARAM, from_middle,
+    Columns, Entry, GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Place, Units, WET_MIX_PARAM, from_middle,
     hex_param,
 };
 
@@ -46,8 +46,8 @@ pub fn grain_ms(value: f32) -> f32 {
 }
 
 /// A pitch shifter's, in the order the page shows them.
-pub(crate) const PITCH_PARAMS: [Param; 6] = [
-    Param {
+pub(crate) const PITCH_PARAMS: [Entry; 6] = [
+    Entry {
         name: "Pitch",
         key: "pitch",
         label: Some("PTCH"),
@@ -63,7 +63,7 @@ pub(crate) const PITCH_PARAMS: [Param; 6] = [
         .centred(),
     hex_param("Size", "size", "SIZE", Pitch::DEFAULT.size).units(Units::Grain),
     hex_param("Feedback", "feedback", "FDBK", Pitch::DEFAULT.feedback),
-    Param {
+    Entry {
         default: 0xFF,
         ..MIX_PARAM
     },
@@ -118,12 +118,12 @@ impl Pitch {
 /// A granular effect's, in the order the page shows them, as columns of two: where and how long,
 /// how often and how wide, freezing and straying, then pitch and envelope, whose short names fit
 /// the narrow fourth column.
-pub(crate) const GRAINS_PARAMS: [Param; 10] = [
+pub(crate) const GRAINS_PARAMS: [Entry; 10] = [
     hex_param("Time", "time", "TIME", Grains::DEFAULT.time).units(Units::GrainTime),
     hex_param("Size", "size", "SIZE", Grains::DEFAULT.size).units(Units::GrainLength),
     hex_param("Density", "density", "DENS", Grains::DEFAULT.density).units(Units::Density),
     hex_param("Spread", "spread", "SPRD", Grains::DEFAULT.spread),
-    Param {
+    Entry {
         name: "Freeze",
         key: "freeze",
         label: Some("FRZ"),
@@ -135,7 +135,7 @@ pub(crate) const GRAINS_PARAMS: [Param; 10] = [
         place: Place::Own,
     },
     hex_param("Random", "random", "RAND", Grains::DEFAULT.random),
-    Param {
+    Entry {
         default: Grains::DEFAULT.pitch,
         ..PITCH_PARAMS[0]
     },
@@ -290,8 +290,8 @@ pub const QUALITY_NAMES: [&str; 4] = ["Stereo 16", "Mono 16", "Stereo 8", "Mono 
 /// Clouds', in the order the slot keeps them: its mode, which the title shows, the module's six
 /// knobs, `Blend`'s other three jobs as settings of their own, `Freeze` and `Quality`, then the
 /// gain every slot has.
-pub(crate) const CLOUDS_PARAMS: [Param; 13] = [
-    Param {
+pub(crate) const CLOUDS_PARAMS: [Entry; 13] = [
+    Entry {
         name: "Mode",
         key: "mode",
         // Choosing a mode chooses a sound, so steps don't lock it.
@@ -305,13 +305,13 @@ pub(crate) const CLOUDS_PARAMS: [Param; 13] = [
     },
     hex_param("Position", "position", "POS", Clouds::DEFAULT.position),
     hex_param("Size", "size", "SIZE", Clouds::DEFAULT.size),
-    Param {
+    Entry {
         default: Clouds::DEFAULT.pitch,
         ..PITCH_PARAMS[0]
     },
     hex_param("Density", "density", "DENS", Clouds::DEFAULT.density),
     hex_param("Texture", "texture", "TEXT", Clouds::DEFAULT.texture),
-    Param {
+    Entry {
         name: "Blend",
         key: "blend",
         label: Some("BLND"),
@@ -321,7 +321,7 @@ pub(crate) const CLOUDS_PARAMS: [Param; 13] = [
     hex_param("Spread", "spread", "SPRD", Clouds::DEFAULT.spread),
     hex_param("Feedback", "feedback", "FDBK", Clouds::DEFAULT.feedback),
     hex_param("Reverb", "reverb", "VERB", Clouds::DEFAULT.reverb),
-    Param {
+    Entry {
         name: "Freeze",
         key: "freeze",
         label: Some("FRZ"),
@@ -332,7 +332,7 @@ pub(crate) const CLOUDS_PARAMS: [Param; 13] = [
         default: Clouds::DEFAULT.freeze,
         place: Place::Own,
     },
-    Param {
+    Entry {
         name: "Quality",
         key: "quality",
         // A new quality starts a new recording, so steps don't lock it.
@@ -472,8 +472,8 @@ pub const BEADS_QUALITY_NAMES: [&str; 4] =
 /// big knobs, its density, whether that follows the steps, the randomness its attenuverters
 /// give, its freeze button, its feedback, dry/wet and reverb knobs, its quality, which the title
 /// shows too, then the gain every slot has.
-pub(crate) const BEADS_PARAMS: [Param; 14] = [
-    Param {
+pub(crate) const BEADS_PARAMS: [Entry; 14] = [
+    Entry {
         name: "Mode",
         key: "mode",
         // Choosing a mode chooses a sound, so steps don't lock it.
@@ -488,12 +488,12 @@ pub(crate) const BEADS_PARAMS: [Param; 14] = [
     hex_param("Time", "time", "TIME", Beads::DEFAULT.time),
     hex_param("Size", "size", "SIZE", Beads::DEFAULT.size).units(Units::GrainLength),
     hex_param("Shape", "shape", "SHAP", Beads::DEFAULT.shape),
-    Param {
+    Entry {
         default: Beads::DEFAULT.pitch,
         ..PITCH_PARAMS[0]
     },
     hex_param("Density", "density", "DENS", Beads::DEFAULT.density),
-    Param {
+    Entry {
         name: "Clock",
         key: "clock",
         label: Some("CLK"),
@@ -505,7 +505,7 @@ pub(crate) const BEADS_PARAMS: [Param; 14] = [
         place: Place::Own,
     },
     hex_param("Random", "random", "RAND", Beads::DEFAULT.random),
-    Param {
+    Entry {
         name: "Freeze",
         key: "freeze",
         label: Some("FRZ"),
@@ -517,7 +517,7 @@ pub(crate) const BEADS_PARAMS: [Param; 14] = [
         place: Place::Own,
     },
     hex_param("Feedback", "feedback", "FDBK", Beads::DEFAULT.feedback),
-    Param {
+    Entry {
         name: "Blend",
         key: "blend",
         label: Some("BLND"),
@@ -525,7 +525,7 @@ pub(crate) const BEADS_PARAMS: [Param; 14] = [
         ..MIX_PARAM
     },
     hex_param("Reverb", "reverb", "VERB", Beads::DEFAULT.reverb),
-    Param {
+    Entry {
         name: "Quality",
         key: "quality",
         // A new quality starts a new recording, so steps don't lock it.
@@ -663,7 +663,7 @@ pub fn shift_delay_ms(value: f32) -> f32 {
 /// A frequency shifter's, in the order the page shows them, as columns: the shift, how far its
 /// sides are apart and how far it follows the note; then the loop's delay and feedback; then the
 /// mix and gain.
-pub(crate) const FREQ_SHIFT_PARAMS: [Param; 7] = [
+pub(crate) const FREQ_SHIFT_PARAMS: [Entry; 7] = [
     hex_param("Shift", "shift", "SHFT", FreqShift::DEFAULT.shift)
         .units(Units::ShiftHertz)
         .centred(),
@@ -671,7 +671,7 @@ pub(crate) const FREQ_SHIFT_PARAMS: [Param; 7] = [
     hex_param("Track", "track", "TRK", FreqShift::DEFAULT.track),
     hex_param("Time", "time", "TIME", FreqShift::DEFAULT.time).units(Units::LoopTime),
     hex_param("Feedback", "feedback", "FDBK", FreqShift::DEFAULT.feedback),
-    Param {
+    Entry {
         default: 0xFF,
         ..MIX_PARAM
     },

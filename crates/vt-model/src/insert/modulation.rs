@@ -7,7 +7,7 @@ use crate::lfo::SWEEP_NAMES;
 
 use super::pitch::{MOST_SHIFT, PITCH_PARAMS};
 use super::{
-    Columns, GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Param, Place, SOURCE_NAMES, Units, WET_MIX_PARAM,
+    Columns, Entry, GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Place, SOURCE_NAMES, Units, WET_MIX_PARAM,
     from_middle, hex_param, source_track,
 };
 
@@ -46,8 +46,8 @@ impl ChorusType {
 const CHORUS_TYPE_NAMES: [&str; 5] = ["Chorus", "Ensemble", "Juno I", "Juno II", "Juno I+II"];
 
 /// A chorus's, in the order the page shows them.
-pub(crate) const CHORUS_PARAMS: [Param; 5] = [
-    Param {
+pub(crate) const CHORUS_PARAMS: [Entry; 5] = [
+    Entry {
         name: "Type",
         key: "type",
         // Choosing a mode chooses a sound, so steps don't lock it.
@@ -126,8 +126,8 @@ pub fn flanger_feedback(value: f32) -> f32 {
 pub const STAGE_NAMES: [&str; 3] = ["4", "8", "12"];
 
 /// The `Rate` of a phaser or flanger: how long its sweep takes, in note lengths.
-const fn sweep_param(default: u8) -> Param {
-    Param {
+const fn sweep_param(default: u8) -> Entry {
+    Entry {
         name: "Rate",
         key: "rate",
         label: Some("RATE"),
@@ -141,12 +141,12 @@ const fn sweep_param(default: u8) -> Param {
 }
 
 /// A phaser's, in the order the page shows them.
-pub(crate) const PHASER_PARAMS: [Param; 7] = [
+pub(crate) const PHASER_PARAMS: [Entry; 7] = [
     sweep_param(Phaser::DEFAULT.rate),
     hex_param("Depth", "depth", "DPTH", Phaser::DEFAULT.depth),
     hex_param("Centre", "centre", "CNTR", Phaser::DEFAULT.centre).units(Units::Hertz),
     hex_param("Feedback", "feedback", "FDBK", Phaser::DEFAULT.feedback),
-    Param {
+    Entry {
         name: "Stages",
         key: "stages",
         label: Some("STGS"),
@@ -211,7 +211,7 @@ impl Phaser {
 }
 
 /// A flanger's, in the order the page shows them.
-pub(crate) const FLANGER_PARAMS: [Param; 6] = [
+pub(crate) const FLANGER_PARAMS: [Entry; 6] = [
     sweep_param(Flanger::DEFAULT.rate),
     hex_param("Depth", "depth", "DPTH", Flanger::DEFAULT.depth),
     hex_param("Delay", "delay", "DLAY", Flanger::DEFAULT.delay).units(Units::FlangerDelay),
@@ -272,8 +272,8 @@ pub const FAST_SPEED: u8 = 1;
 /// A rotary speaker's, in the order the page shows them, as columns: its speed switch and how
 /// long its rotors take to change; then the horn's Doppler and swell; then the amplifier's drive
 /// and the width; then the mix and gain.
-pub(crate) const ROTARY_PARAMS: [Param; 8] = [
-    Param {
+pub(crate) const ROTARY_PARAMS: [Entry; 8] = [
+    Entry {
         name: "Fast",
         key: "fast",
         label: Some("FAST"),
@@ -289,7 +289,7 @@ pub(crate) const ROTARY_PARAMS: [Param; 8] = [
     hex_param("Tremolo", "tremolo", "TREM", Rotary::DEFAULT.tremolo),
     hex_param("Drive", "drive", "DRIV", Rotary::DEFAULT.drive),
     hex_param("Width", "width", "WDTH", Rotary::DEFAULT.width),
-    Param {
+    Entry {
         default: 0xFF,
         ..MIX_PARAM
     },
@@ -414,10 +414,10 @@ pub fn algorithm_blend(value: f32) -> (usize, usize, f32) {
 
 /// Warps', in the order the page shows them, as columns of two: the algorithm and its setting,
 /// the modulator and how hard it's driven, then the oscillator's pitch and waveform.
-pub(crate) const WARPS_PARAMS: [Param; 8] = [
+pub(crate) const WARPS_PARAMS: [Entry; 8] = [
     hex_param("Algo", "algo", "ALGO", Warps::DEFAULT.algorithm).units(Units::Algorithm),
     hex_param("Timbre", "timbre", "TMBR", Warps::DEFAULT.timbre),
-    Param {
+    Entry {
         name: "Source",
         key: "source",
         // What it hears is part of how it's set up, so steps don't change it.
@@ -430,11 +430,11 @@ pub(crate) const WARPS_PARAMS: [Param; 8] = [
         place: Place::Own,
     },
     hex_param("Level", "level", "LEVL", Warps::DEFAULT.level),
-    Param {
+    Entry {
         default: Warps::DEFAULT.pitch,
         ..PITCH_PARAMS[0]
     },
-    Param {
+    Entry {
         name: "Shape",
         key: "shape",
         label: Some("SHAP"),
@@ -445,7 +445,7 @@ pub(crate) const WARPS_PARAMS: [Param; 8] = [
         default: Warps::DEFAULT.shape,
         place: Place::Own,
     },
-    Param {
+    Entry {
         default: 0xFF,
         ..MIX_PARAM
     },
