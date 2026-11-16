@@ -19,10 +19,11 @@ use vt_model::insert::{INSERTS, Insert};
 use vt_model::lane::LaneMove;
 use vt_model::macros::{MacroMap, MacroTarget};
 use vt_model::modulation::{MOD_SLOTS, ModField, ModKind};
+use vt_model::param::Typing;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
-use vt_model::shape::{FillKind, GenParam, Shape, ShapeColumn, Source, is_empty};
+use vt_model::shape::{Context, FillKind, GenParam, Shape, ShapeColumn, Source, is_empty};
 use vt_model::song::{FilterType, Machine, Phrase, Song};
 use vt_model::step::{FxCommand, Step};
 use vt_tui::controls::{Control, LaneField, Page, ParamView, set, view};
@@ -287,38 +288,30 @@ fn generators(dump: &mut Dump) {
                 phrase: 0,
             };
             let tag = format!("gen {name} {fill:?}");
-            let made = edit(
-                &base,
-                &Action::Generate {
-                    track: 0,
-                    phrase: 0,
-                    column,
-                    span: Span::rows(StepRange { first: 0, last: 15 }),
-                    shape,
-                },
-            );
-            let live = match made {
-                Ok(live) => live,
-                Err(error) => {
-                    dump.lines.push(format!("{tag} refused ({error})"));
-                    continue;
-                }
-            };
-            let phrase = &live.tracks[0].phrases[&0];
-            let Some(generator) = phrase.generators().first() else {
-                dump.lines.push(format!("{tag} left none live"));
+            let Some((shape, generates)) = generated(dump, &tag, &base, column, shape, &[]) else {
                 continue;
             };
-            let generates = generator
-                .rows()
-                .is_some_and(|rows| is_empty(&generator.under(phrase.steps()), rows, column));
-            for param in GenParam::of(&generator.shape, column, generates) {
-                let control = Control::Gen {
-                    phrase: 0,
-                    generator: 0,
-                    param,
-                };
-                dump.control(&tag, &live, control);
+            // A setting that only some choice of a list brings, as a Euclidean `Where` brings
+            // its hits and rotation, is seen under each choice that brings it.
+            let shown = GenParam::of(&shape, column, generates);
+            let context = Context {
+                column,
+                open: 16,
+                generates,
+                sources: &[],
+                source: None,
+            };
+            for param in &shown {
+                if *param == GenParam::Fill || param.spec().typing != Typing::Listed {
+                    continue;
+                }
+                let count = param.choices(&context).map_or(0, |choices| choices.len());
+                for at in 0..count {
+                    let mut chosen = shape;
+                    param.set_number(&mut chosen, &context, at as i32);
+                    let tag = format!("{tag} {param:?}={at}");
+                    generated(dump, &tag, &base, column, chosen, &shown);
+                }
             }
         }
     }
@@ -329,6 +322,57 @@ fn generators(dump: &mut Dump) {
             .any(|(_, column, _)| column.fills().contains(&fill))
     };
     assert!(FillKind::ALL.into_iter().all(seen));
+}
+
+/// A generator of `shape` made live on `base`'s first phrase, on its first sixteen rows, with
+/// each of its settings seen that isn't among those `seen` already: its shape as it's live and
+/// whether it generates on an empty column, or none, said why, where it isn't made.
+fn generated(
+    dump: &mut Dump,
+    tag: &str,
+    base: &Arc<Song>,
+    column: ShapeColumn,
+    shape: Shape,
+    seen: &[GenParam],
+) -> Option<(Shape, bool)> {
+    let made = edit(
+        base,
+        &Action::Generate {
+            track: 0,
+            phrase: 0,
+            column,
+            span: Span::rows(StepRange { first: 0, last: 15 }),
+            shape,
+        },
+    );
+    let live = match made {
+        Ok(live) => live,
+        Err(error) => {
+            dump.lines.push(format!("{tag} refused ({error})"));
+            return None;
+        }
+    };
+    let phrase = &live.tracks[0].phrases[&0];
+    let Some(generator) = phrase.generators().first() else {
+        dump.lines.push(format!("{tag} left none live"));
+        return None;
+    };
+    let generates = generator
+        .rows()
+        .is_some_and(|rows| is_empty(&generator.under(phrase.steps()), rows, column));
+    let shape = generator.shape;
+    for param in GenParam::of(&shape, column, generates) {
+        if seen.contains(&param) {
+            continue;
+        }
+        let control = Control::Gen {
+            phrase: 0,
+            generator: 0,
+            param,
+        };
+        dump.control(tag, &live, control);
+    }
+    Some((shape, generates))
 }
 
 #[test]
