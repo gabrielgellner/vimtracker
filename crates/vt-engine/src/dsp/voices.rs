@@ -79,6 +79,13 @@ pub(crate) trait SynthEngine: Copy {
         true
     }
 
+    /// Whether, let go, its own envelopes have run out and its sound is gone, for a note with no
+    /// shape of its own, which ends there (decision 371). One with no envelope of its own has
+    /// nothing to run out, so it ends as it's let go.
+    fn rung_out(&self) -> bool {
+        self.settled()
+    }
+
     /// Roll a new note's drift, and its noise floor, from a seed, for a synth that drifts.
     /// `Drift` as the note starts says whether its oscillators start anywhere in their cycles.
     fn seed_drift(&mut self, _seed: u32, _settings: Settings) {}
@@ -88,9 +95,12 @@ pub(crate) trait SynthEngine: Copy {
     /// are, running on from the last note.
     fn reseed_drift(&mut self, _seed: u32, _settings: Settings) {}
 
-    /// Put its oscillators back where a new note starts them, for a note carried on at the point
-    /// its level is nothing. A synth where a phase means nothing leaves it.
-    fn restart_phase(&mut self) {}
+    /// Start again from where a new note starts it, oscillators and all, for a note carried on
+    /// with `Phase` at `Reset` at the point its level is nothing, so every such note starts the
+    /// same (decision 370). A voice whose sound has no phase isn't asked.
+    fn restart_phase(&mut self, rate: u32) {
+        *self = Self::new(rate);
+    }
 
     /// What `Drift` multiplies the note's envelope times by. `Acid`'s own envelopes take it
     /// themselves.

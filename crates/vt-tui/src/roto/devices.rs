@@ -24,7 +24,7 @@ use vt_model::modulation::{ModField, ModKind, Polarity};
 use vt_model::param::Reading;
 use vt_model::settings::{Kind, SettingId, Units};
 use vt_model::shape::GenParam;
-use vt_model::song::{FilterType, Machine, Song, Track, TrackKind};
+use vt_model::song::{FilterType, Machine, Song, SynthVoice, Track, TrackKind};
 use vt_model::steps::StepRate;
 use vt_roto::Label;
 use vt_roto::bytes::Rgb;
@@ -916,6 +916,11 @@ pub fn every_kind_of_device() -> Vec<(Song, usize, Page, usize)> {
     for slot in 1..Page::Sound.devices(&base.tracks[0]).len() {
         found.push((base.clone(), 0, Page::Sound, slot));
     }
+    // A synth's Play device, which has its `Phase`, after its Filter and Output.
+    let mut synth = base.clone();
+    synth.tracks[0].machine = Machine::Plaits(SynthVoice::VirtualAnalog);
+    let play = Page::Sound.devices(&synth.tracks[0]).len() - 1;
+    found.push((synth, 0, Page::Sound, play));
     for slot in 0..Page::Mod.devices(&base.tracks[0]).len() {
         found.push((base.clone(), 0, Page::Mod, slot));
     }

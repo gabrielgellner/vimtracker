@@ -7,7 +7,7 @@ use crate::constants::{MAX_LEVEL, UNITY_LEVEL};
 use crate::groove::GROOVE_CHOICES;
 use crate::lane::{LANE_RATES, LENGTH_AS_WRITTEN, RATE_AS_WRITTEN};
 use crate::param::{Choice, Descriptor, Reading, Typing};
-use crate::song::{FILTER_MODE_NAMES, FULL_GATE};
+use crate::song::{FILTER_MODE_NAMES, FULL_GATE, PHASE_NAMES};
 use crate::speed::{SPEED_NAMES, Speed};
 
 mod id;
@@ -357,6 +357,28 @@ const TRACK_GROUPS: [&str; 16] = [
     "Machine", "Machine", "Machine", "Machine", "Machine", "Output", "Machine",
 ];
 
+/// The track's own settings added since places were fixed, at the end of the table so none moves
+/// (#718): the track's own after [`TRACK`]'s, in the order they came.
+const LATER_TRACK: [Entry; 1] = [
+    // Whether a synth's oscillators run on from note to note or start again on each, read as a
+    // note starts, so a lock on its row sets it for that note (decision 370).
+    Entry {
+        key: "phase",
+        name: "Phase",
+        label: Some("OSC"),
+        kind: Kind::Stepped {
+            choices: &PHASE_NAMES,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
+];
+/// What each of [`LATER_TRACK`] is listed with.
+const LATER_TRACK_GROUPS: [&str; 1] = ["Machine"];
+/// How many of the track's own there are, [`TRACK`]'s and [`LATER_TRACK`]'s.
+const TRACK_SETTINGS: usize = TRACK.len() + LATER_TRACK.len();
+
 /// A slot's own, whatever effect is in it.
 const SLOT_OWN: [Entry; 1] = [Entry {
     key: "bypass",
@@ -556,7 +578,7 @@ mod tests {
     #[test]
     fn no_two_labels_on_a_track_match() {
         let track_and_events = || {
-            labels((0..TRACK.len()).filter_map(SettingId::track))
+            labels((0..TRACK_SETTINGS).filter_map(SettingId::track))
                 .into_iter()
                 .chain(labels((0..MOD_SLOTS).flat_map(|slot| {
                     (0..MOD.len()).filter_map(move |at| SettingId::modulator(slot, at))

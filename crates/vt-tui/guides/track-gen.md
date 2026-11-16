@@ -221,7 +221,7 @@ file in the presets folder, `~/Music/vimtracker/presets` unless `settings.ron` s
 in `effects`, and folders below those for sorting, such as `sounds/bass`.
 
 **A sound preset** is the whole device: the machine and its settings, the filter, `Pitch`,
-`Glide`, `Gate` and `Velocity`, the four slots' effects, the six mod slots, the accumulator, the
+`Glide`, `Gate`, `Velocity` and `Phase`, the four slots' effects, the six mod slots, the accumulator, the
 arpeggio, and the eight macros with their names, mappings and ranges. It leaves out the track's
 place in the song: its `Level`, `Trim`, `Pan`, sends, group, choke group, groove, `Speed`,
 `Reset`, `Quantise`, mute, solo, name, and its phrases and chains. A sampler's sound keeps its

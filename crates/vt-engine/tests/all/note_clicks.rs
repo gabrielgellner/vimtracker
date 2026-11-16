@@ -15,7 +15,7 @@ use vt_engine::render::render_frames;
 use vt_model::envelope::Adsr;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Machine, Phrase, Song, SynthVoice};
+use vt_model::song::{Machine, Phase, Phrase, Song, SynthVoice};
 
 const RATE: u32 = 48_000;
 /// The windows the level is measured over, half a millisecond.
@@ -49,6 +49,8 @@ struct Case {
     /// `VA`'s `Drift` at its least, so each note starts anywhere in its cycle and what the
     /// waveform does as it starts averages out over the notes, leaving what the change does.
     drift: bool,
+    /// The track's `Phase`.
+    phase: Phase,
 }
 
 impl Case {
@@ -60,6 +62,7 @@ impl Case {
             bypassed: false,
             gate: None,
             drift: false,
+            phase: Phase::Free,
         }
     }
 
@@ -98,6 +101,7 @@ fn song(case: &Case, rows: &[String]) -> Song {
     }
     track.mods[0].bypassed = case.bypassed;
     track.gate_length = case.gate.or(track.gate_length);
+    track.phase = case.phase;
     if case.drift {
         track.set_machine_value(3, 0x01);
     }
@@ -316,7 +320,42 @@ fn random_16ths_carried_without_reset_change_as_cleanly_as_a_tie() {
             clicks.push(name);
         }
     }
+    // With the notes' shape switched out there's none to start again: the machine's own, or
+    // none, shapes the notes, which run into one another as tied (decision 371).
+    let name = "CSaw, note shape switched out";
+    let switched = Case {
+        bypassed: true,
+        ..Case::plain(Source::Synth(SynthVoice::CSaw))
+    };
+    if !clean(&measure(name, switched, &notes), false) {
+        clicks.push(name);
+    }
     assert!(clicks.is_empty(), "these click at each note: {clicks:?}");
+}
+
+#[test]
+fn random_16ths_with_phase_reset_dip_to_silence_without_a_click() {
+    // `Phase` at `Reset` starts the oscillators again at the bottom of a dip to nothing, which it
+    // takes whatever the note shape's `Reset` says: with it off, the change dips as with it on,
+    // and no more of the top of the spectrum than a tie (decision 370).
+    let notes = random_notes();
+    let mut clicks = Vec::new();
+    for (name, voice) in [
+        ("CSaw, Phase Reset, no reset", SynthVoice::CSaw),
+        ("VA, Phase Reset, no reset", SynthVoice::VirtualAnalog),
+        ("Saw Sq, Phase Reset, no reset", SynthVoice::SawSquare),
+    ] {
+        let case = Case {
+            adsr: no_reset(),
+            phase: Phase::Reset,
+            ..Case::plain(Source::Synth(voice))
+        };
+        let change = measure(name, case, &notes);
+        if change.dip_db > -15.0 || change.back_db < -3.0 || change.top_db > 3.0 {
+            clicks.push(name);
+        }
+    }
+    assert!(clicks.is_empty(), "these click or don't dip: {clicks:?}");
 }
 
 #[test]
@@ -334,13 +373,6 @@ fn random_16ths_carried_with_reset_dip_to_silence_without_a_click() {
             "CSaw at 140 BPM",
             Case {
                 bpm: 140,
-                ..Case::plain(csaw)
-            },
-        ),
-        (
-            "CSaw, note shape switched out",
-            Case {
-                bypassed: true,
                 ..Case::plain(csaw)
             },
         ),
@@ -587,8 +619,9 @@ fn a_gate_closing_with_no_release_fades_rather_than_drops() {
     assert!(clicks.is_empty(), "these click as they close: {clicks:?}");
 }
 
-/// One note held for a second, alone: its level in 20 ms windows, and its offset from zero over
-/// whole cycles, which a voice's own DC blocker takes out over its first tens of ms.
+/// One note held for a second, after silence, as the first note after a rest is: its level in
+/// 20 ms windows, and its offset from zero over whole cycles, which a DC blocker starting from
+/// rest would take out over the first tens of ms, a thump.
 fn held(voice: SynthVoice, note: u8) -> (f64, Vec<f64>) {
     let case = Case::plain(Source::Synth(voice));
     let mut rows = vec![format!("{} 7F --- --- ---", name(note))];
@@ -605,7 +638,7 @@ fn held(voice: SynthVoice, note: u8) -> (f64, Vec<f64>) {
     };
     let level = rms(&out[RATE as usize / 2..RATE as usize]);
     let offsets = out[..RATE as usize / 10]
-        .chunks(window)
+        .chunks_exact(window)
         .map(|part| mean(part) / level)
         .collect();
     let windows: Vec<f64> = out[RATE as usize / 10..RATE as usize]
@@ -618,19 +651,30 @@ fn held(voice: SynthVoice, note: u8) -> (f64, Vec<f64>) {
 }
 
 #[test]
-#[ignore = "diagnosis: what a held note does on its own"]
-fn a_held_note_keeps_its_level_and_starts_with_no_offset() {
+fn the_first_note_after_a_rest_starts_with_no_offset() {
+    // Braids' DC blocker runs on from note to note; a new voice's is settled before its first
+    // frame, so a note after a rest starts centred rather than thumping as the blocker catches up.
     let mut offsets = Vec::new();
     for voice in [
         SynthVoice::CSaw,
         SynthVoice::SawSquare,
         SynthVoice::Morph,
+        SynthVoice::HardSync,
+        SynthVoice::FeedbackFm,
+        SynthVoice::Vosim,
+        SynthVoice::Fof,
+        SynthVoice::WaveMap,
+        SynthVoice::WaveLine,
         SynthVoice::VirtualAnalog,
     ] {
-        for note in [48, 60, 72, 84] {
+        for note in [36, 48, 60, 72, 84] {
             let (swing, offset) = held(voice, note);
-            // The first window has the attack in it, so the one after is what's left over.
-            let first = offset.get(1).copied().unwrap_or(0.0);
+            // The first window has the attack in it, so the ones after are what's left over.
+            let first = offset
+                .iter()
+                .skip(1)
+                .take(6)
+                .fold(0.0_f64, |most, o| most.max(o.abs()));
             println!(
                 "{:<8} {}: level swings {swing:.2} dB over a second | offset in the first ms, as \
                  a share of its level, each ~2 ms: {}",
@@ -643,7 +687,7 @@ fn a_held_note_keeps_its_level_and_starts_with_no_offset() {
                     .collect::<Vec<_>>()
                     .join(" ")
             );
-            if first.abs() > 0.05 {
+            if first > 0.05 {
                 offsets.push((voice, note));
             }
         }
@@ -652,7 +696,6 @@ fn a_held_note_keeps_its_level_and_starts_with_no_offset() {
 }
 
 #[test]
-#[ignore = "diagnosis: whether a held note has edges on the engine's or a voice's blocks"]
 fn a_held_note_has_no_edges_at_block_boundaries() {
     let mut edged = Vec::new();
     for voice in [SynthVoice::CSaw, SynthVoice::VirtualAnalog] {

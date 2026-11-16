@@ -166,6 +166,16 @@ impl DcBlocker {
         }
     }
 
+    /// Start, from rest, as if it had long been hearing a periodic input, given what it put out in
+    /// total over one period of it from rest: so that period comes out with no offset. From rest,
+    /// its output is the settled one less what's left of the difference, which falls by its pole
+    /// each sample.
+    pub(in crate::dsp) fn settle(&mut self, heard: f32, frames: usize) {
+        let falls = (1.0 - self.pole.powi(frames as i32)) / (1.0 - self.pole);
+        self.x = 0.0;
+        self.y = -heard / falls / self.pole;
+    }
+
     #[inline]
     pub(in crate::dsp) fn process(&mut self, input: f32) -> f32 {
         let previous = self.x;

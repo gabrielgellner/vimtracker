@@ -525,6 +525,15 @@ Env 2:      ╱╲___________   ╱╲____    ╲__          starts with each no
 LFO 1:      ∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿         runs on, whatever the notes do
 ```
 
+A synth that holds its notes, such as `VA` or `CSaw`, plays each note on the voice
+already sounding, as a mono synth does: the oscillators keep running, the pitch moves
+and the envelopes start again. With the notes' shape's `Reset` on, the level dips to
+nothing for a moment first, so each note is struck; with it off, the attack starts from
+where the level is and the notes flow into each other. The track's `Phase`, on the Play
+device, says what the oscillators do through the change: at `Free` they run on, so a
+note starts wherever they are, and at `Reset` they start again at the bottom of the dip,
+so the same note starts the same every time.
+
 `b` on the Mod page switches an envelope or an LFO out, and what it moves glides back
 over 5 ms. It keeps running underneath, so switched back in, an LFO is in phase with
 one that was never out, and an envelope is where the held note has it.
