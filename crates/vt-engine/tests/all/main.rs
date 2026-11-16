@@ -75,6 +75,7 @@ mod trim;
 mod tutorial_songs;
 mod variations;
 mod velocity_delta;
+mod voice_mode;
 
 /// Every file here has its `mod` line, as one without isn't built, and none sits beside this
 /// folder, where it would link a binary of its own.

@@ -797,6 +797,26 @@ mod tests {
         assert_eq!(violations, 0);
     }
 
+    /// Tracks in `Legato`, tying and striking, on synths and samples alike (decision 380).
+    #[test]
+    fn legato_never_allocates_in_the_callback() {
+        let pool = samples();
+        let mut legato = song(8, 16);
+        for (index, track) in legato.tracks.iter_mut().take(8).enumerate() {
+            track.voice_mode = vt_model::song::VoiceMode::Legato;
+            // Half let each note go before the next, which then strikes.
+            track.gate_length = (index % 4 < 2).then_some(0x80);
+            if index % 2 == 0 {
+                track.machine =
+                    vt_model::song::Machine::Plaits(vt_model::song::SynthVoice::VirtualAnalog);
+            }
+        }
+        let engine = Engine::new(48_000, published(legato, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        assert_eq!(blocks(&mut rt, 200), 0);
+    }
+
     #[test]
     fn a_length_changing_while_playing_never_allocates_in_the_callback() {
         let pool = samples();

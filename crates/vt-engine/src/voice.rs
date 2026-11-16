@@ -356,6 +356,9 @@ pub(crate) struct Voice {
     rested: bool,
     /// Frames into its rise over the fade of the note it cut, while it's rising.
     rising: Option<u32>,
+    /// Whether its note has been let go, by its gate closing, an `OFF` or its own length, which a
+    /// one-shot shape's stage doesn't show.
+    let_go: bool,
 }
 
 impl Default for Voice {
@@ -389,6 +392,7 @@ impl Default for Voice {
             carried: None,
             rested: false,
             rising: None,
+            let_go: false,
         }
     }
 }
@@ -480,6 +484,7 @@ impl Voice {
             carried: None,
             rested: false,
             rising: None,
+            let_go: false,
         }
     }
 
@@ -567,6 +572,7 @@ impl Voice {
     fn strike(&mut self, carry: Carry) {
         let note = carry.note;
         self.stage = Stage::Held { from: self.level };
+        self.let_go = false;
         self.elapsed = 0;
         self.increment = note.increment();
         self.gliding = None;
@@ -663,6 +669,23 @@ impl Voice {
         matches!(self.stage, Stage::Held { .. })
     }
 
+    /// Whether its note's gate is still open, nothing having let it go, and it plays what a note
+    /// would: the same synth, or the same sample, entry and slice. A one-shot shape plays on
+    /// through its release, but its gate has closed all the same.
+    pub(crate) fn gate_open_on(&self, note: &NoteOn) -> bool {
+        self.is_held()
+            && !self.let_go
+            && match (&self.synth, note.synth) {
+                (Some(playing), Some(voice)) => playing.voice() == voice,
+                (None, None) => {
+                    self.sample == note.sample
+                        && self.entry == note.entry
+                        && self.slice == note.slice
+                }
+                _ => false,
+            }
+    }
+
     /// Carry on as another note, with no new attack: a sample keeps playing at the new note's
     /// speed, and a synth changes pitch without starting its envelope again. With a glide time,
     /// it glides there in about that long, on the same lag `Acid` slides on, and without one it
@@ -700,6 +723,7 @@ impl Voice {
     /// Its level starts from where it is too, as the synth's own envelope gives its attack.
     pub(crate) fn retrigger(&mut self, note: NoteOn) {
         self.stage = Stage::Held { from: self.level };
+        self.let_go = false;
         self.elapsed = 0;
         self.increment = note.increment();
         self.gliding = None;
@@ -727,6 +751,7 @@ impl Voice {
     pub(crate) fn release(&mut self) {
         // A note let go before its dip has reached nothing never starts.
         self.carried = None;
+        self.let_go = true;
         if matches!(self.stage, Stage::Held { .. }) {
             if !self.shape.one_shot() {
                 self.stage = Stage::Released { from: self.level };
