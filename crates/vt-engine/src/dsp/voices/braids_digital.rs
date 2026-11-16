@@ -139,6 +139,7 @@ pub(crate) struct ToyModel {
 
 impl Model for ToyModel {
     const LEVEL: f32 = 0.5;
+    const OFFSET: bool = true;
 
     fn new() -> Self {
         Self {

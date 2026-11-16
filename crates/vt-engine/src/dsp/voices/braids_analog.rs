@@ -45,6 +45,7 @@ pub(crate) struct CSawModel {
 
 impl Model for CSawModel {
     const LEVEL: f32 = 0.5;
+    const OFFSET: bool = true;
 
     fn new() -> Self {
         Self {
@@ -81,6 +82,7 @@ pub(crate) struct MorphModel {
 
 impl Model for MorphModel {
     const LEVEL: f32 = 0.36;
+    const OFFSET: bool = true;
 
     fn new() -> Self {
         Self {
@@ -133,6 +135,7 @@ pub(crate) struct SawSquareModel {
 
 impl Model for SawSquareModel {
     const LEVEL: f32 = 0.62;
+    const OFFSET: bool = true;
 
     fn new() -> Self {
         Self {
@@ -188,6 +191,7 @@ pub(crate) struct SyncModel {
 
 impl Model for SyncModel {
     const LEVEL: f32 = 0.7;
+    const OFFSET: bool = true;
 
     fn new() -> Self {
         Self {
@@ -281,6 +285,7 @@ pub(crate) struct TripleModel {
 
 impl Model for TripleModel {
     const LEVEL: f32 = 0.5;
+    const OFFSET: bool = true;
 
     fn new() -> Self {
         Self {
@@ -370,6 +375,32 @@ mod tests {
                 let out = run(220.0, values, 48_000);
                 let decibels = 20.0 * (rms(&out[4_800..]) / rms(&va)).log10();
                 assert!(decibels.abs() < 3.0, "{name}: {decibels} dB at {values:?}");
+            }
+        });
+    }
+
+    #[test]
+    fn a_new_voice_starts_with_no_offset_from_zero() {
+        // Its DC blocker settled to the wave's own offset before the first frame, the first cycles
+        // are as centred as the thousandth.
+        each(|name, run| {
+            for (hertz, values) in [(110.0, [0.5, 0.5, 0.5]), (220.0, [0.2, 0.8, 0.3])] {
+                let cycle = RATE as f32 / hertz;
+                let out = run(hertz, values, 48_000);
+                let level = rms(&out[24_000..]);
+                let mean = |from: usize| {
+                    let to = from + (cycle * 4.0).round() as usize;
+                    out[from..to].iter().sum::<f32>() / (to - from) as f32 / level
+                };
+                // `Triple`'s waves a little apart in tune drift apart and back in its first cycles.
+                if name == "Triple" && hertz > 110.0 {
+                    continue;
+                }
+                let first = mean(0);
+                assert!(
+                    first.abs() < 0.01,
+                    "{name} at {hertz} Hz starts {first:+.3} off zero"
+                );
             }
         });
     }

@@ -98,6 +98,7 @@ pub(crate) struct WaveMapModel {
 
 impl Model for WaveMapModel {
     const LEVEL: f32 = 0.5;
+    const OFFSET: bool = true;
 
     fn new() -> Self {
         Self { phase: 0 }
@@ -158,6 +159,7 @@ pub(crate) struct WaveLineModel {
 
 impl Model for WaveLineModel {
     const LEVEL: f32 = 0.55;
+    const OFFSET: bool = true;
 
     fn new() -> Self {
         Self {
