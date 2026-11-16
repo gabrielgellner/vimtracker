@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::constants::UNITY_LEVEL;
 
 use super::{
-    AMOUNT_PARAM, Columns, GAIN_PARAM, Kind, MIX_PARAM, Mode, OFF_ON, Param, Place, Shown, Units,
+    AMOUNT_PARAM, Columns, Entry, GAIN_PARAM, Kind, MIX_PARAM, Mode, OFF_ON, Place, Shown, Units,
     WET_MIX_PARAM, from_middle, hex_param, is_zero, place_of, places_of, unity_gain,
 };
 
@@ -64,7 +64,7 @@ const DISTORT_TYPE_NAMES: [&str; 8] = [
     "Overdrive",
     "Distortion",
 ];
-pub(super) const TYPE_PARAM: Param = Param {
+pub(super) const TYPE_PARAM: Entry = Entry {
     name: "Type",
     key: "type",
     // Choosing a mode chooses a sound, so steps don't lock it.
@@ -78,7 +78,7 @@ pub(super) const TYPE_PARAM: Param = Param {
 };
 
 /// `Crush`'s bit depth, as a place among the depths it chooses between.
-const BITS_PARAM: Param = Param {
+const BITS_PARAM: Entry = Entry {
     name: "Bits",
     key: "bits",
     label: Some("BITS"),
@@ -90,7 +90,7 @@ const BITS_PARAM: Param = Param {
     default: 7,
     place: Place::Own,
 };
-const RATE_PARAM: Param = Param {
+const RATE_PARAM: Entry = Entry {
     name: "Rate",
     key: "rate",
     label: Some("RATE"),
@@ -104,7 +104,7 @@ const RATE_PARAM: Param = Param {
 };
 /// Whether `Crush` squeezes the sound by its log before it rounds and opens it out after, so
 /// quiet sounds keep finer steps, as an 8-bit sampler's mu-law does.
-const MU_LAW_PARAM: Param = Param {
+const MU_LAW_PARAM: Entry = Entry {
     name: "Mu-law",
     key: "mulaw",
     label: Some("MULW"),
@@ -117,7 +117,7 @@ const MU_LAW_PARAM: Param = Param {
 };
 /// Whether `Down` holds at a whole number of times the note's frequency, so what it folds back
 /// lands on the note's harmonics.
-const FOLLOW_PARAM: Param = Param {
+const FOLLOW_PARAM: Entry = Entry {
     name: "Track",
     key: "track",
     label: Some("TRCK"),
@@ -129,7 +129,7 @@ const FOLLOW_PARAM: Param = Param {
     place: Place::Own,
 };
 /// A pedal's tone control: from dark at `00` to bright at `FF`.
-const PEDAL_TONE_PARAM: Param = Param {
+const PEDAL_TONE_PARAM: Entry = Entry {
     name: "Tone",
     key: "tone",
     label: Some("TONE"),
@@ -143,7 +143,7 @@ const PEDAL_TONE_PARAM: Param = Param {
 };
 /// Every setting a distortion has in any of its modes, in the order songs number them. Each mode
 /// shows only its own.
-pub(crate) const DISTORT_PARAMS: [Param; 9] = [
+pub(crate) const DISTORT_PARAMS: [Entry; 9] = [
     TYPE_PARAM,
     AMOUNT_PARAM,
     BITS_PARAM,
@@ -283,7 +283,7 @@ pub fn tape_drive_db(value: f32) -> f32 {
 }
 
 /// A tape's, in the order the page shows them.
-pub(crate) const TAPE_PARAMS: [Param; 8] = [
+pub(crate) const TAPE_PARAMS: [Entry; 8] = [
     hex_param("Drive", "drive", "DRIV", Tape::DEFAULT.drive)
         .units(Units::TapeDrive)
         .centred(),
@@ -292,7 +292,7 @@ pub(crate) const TAPE_PARAMS: [Param; 8] = [
     hex_param("Bump", "bump", "BUMP", Tape::DEFAULT.bump),
     hex_param("Wow", "wow", "WOW", Tape::DEFAULT.wow),
     hex_param("Flutter", "flutter", "FLUT", Tape::DEFAULT.flutter),
-    Param {
+    Entry {
         default: 0xFF,
         ..MIX_PARAM
     },
@@ -383,7 +383,7 @@ pub fn exciter_release_ms(value: f32) -> f32 {
 /// An exciter's, in the order the page shows them, as columns: how hard it drives and where the
 /// highs it drives start; then how its detector rises and falls; then how much is added, and the
 /// gain.
-pub(crate) const EXCITER_PARAMS: [Param; 6] = [
+pub(crate) const EXCITER_PARAMS: [Entry; 6] = [
     hex_param("Drive", "drive", "DRIV", Exciter::DEFAULT.drive),
     hex_param("Tone", "tone", "TONE", Exciter::DEFAULT.tone).units(Units::ExciterTone),
     hex_param("Attack", "attack", "ATK", Exciter::DEFAULT.attack).units(Units::ExciterAttack),

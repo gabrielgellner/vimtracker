@@ -11,7 +11,7 @@ use std::borrow::Cow;
 
 use crate::constants::BAR_STEPS;
 use crate::listed::Listed;
-use crate::settings::{LONGEST_GLIDE_MS, glide_value};
+use crate::settings::{Kind, LONGEST_GLIDE_MS, Units, glide_value};
 use crate::song::reset_named;
 use crate::step::Note;
 
@@ -307,6 +307,9 @@ impl Choice {
 pub enum Reading {
     /// Two hex digits, on a bar.
     Hex,
+    /// A registry setting's byte: two hex digits on a bar, and in real units on the status line
+    /// with its fine part, as [`Kind::shown`] says them.
+    Byte { units: Units, top: u8, middle: bool },
     /// One of its choices, by its place among them: the choice's name.
     Listed,
     /// Off or on, as `on` and `off`.
@@ -444,9 +447,17 @@ impl Descriptor {
     }
 
     /// How a value shows, with its fine byte where it has one.
-    pub fn shown(&self, value: i32, _fine: Option<u8>) -> Shown {
+    pub fn shown(&self, value: i32, fine: Option<u8>) -> Shown {
+        let text = match self.reading {
+            Reading::Byte { units, top, middle } => {
+                let byte = u16::from(value.clamp(0, 0xFF) as u8);
+                Kind::Continuous { top, middle, units }
+                    .shown(byte << 8 | u16::from(fine.unwrap_or(0)))
+            }
+            _ => String::new(),
+        };
         let cell = match self.reading {
-            Reading::Hex => format!("{value:02X}"),
+            Reading::Hex | Reading::Byte { .. } => format!("{value:02X}"),
             Reading::Listed => usize::try_from(value)
                 .ok()
                 .and_then(|at| self.choices.get(at))
@@ -454,16 +465,13 @@ impl Descriptor {
             Reading::Switch => if value != 0 { "on" } else { "off" }.to_owned(),
             Reading::Number => value.to_string(),
         };
-        Shown {
-            cell,
-            text: String::new(),
-        }
+        Shown { cell, text }
     }
 
     /// Where a value sits on its bar, 0 to 255, or none for a setting with no bar.
     pub fn bar(&self, value: i32) -> Option<u8> {
         match self.reading {
-            Reading::Hex => Some(value.clamp(0, 0xFF) as u8),
+            Reading::Hex | Reading::Byte { .. } => Some(value.clamp(0, 0xFF) as u8),
             Reading::Listed | Reading::Switch | Reading::Number => None,
         }
     }

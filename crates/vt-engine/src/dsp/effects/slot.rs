@@ -7,7 +7,8 @@
 //! here.
 
 use vt_model::constants::{MAX_TRACKS, UNITY_LEVEL};
-use vt_model::insert::{Distort, DistortType, EffectKind, Insert, Param, Place, Shown, Warps};
+use vt_model::insert::{Distort, DistortType, EffectKind, Insert, Place, Shown, Warps};
+use vt_model::settings::Entry;
 use vt_model::song::level_gain;
 
 use crate::dsp::blocks::sides::{SameBits, same_sides};
@@ -370,7 +371,7 @@ static FACTS: [Facts; EffectKind::COUNT] = {
 };
 
 /// The place among `params` of the one stored as `key` among what comes out, if there's one.
-const fn output(params: &[Param], key: &str) -> Option<usize> {
+const fn output(params: &[Entry], key: &str) -> Option<usize> {
     let mut at = 0;
     while at < params.len() {
         let param = &params[at];

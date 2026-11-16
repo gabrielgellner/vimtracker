@@ -6,9 +6,9 @@ use std::ops::Index;
 use super::{
     BEADS_GRID, BEADS_PARAMS, CHORUS_PARAMS, CLOUDS_GRID, CLOUDS_PARAMS, COMB_PARAMS,
     COMPRESSOR_PARAMS, COMPRESSOR_SHOWN, DELAY_GRID, DELAY_PARAMS, DISTORT_PARAMS, DISTORT_SHOWN,
-    ECHO_GRID, ECHO_PARAMS, EQ_GRID, EQ_PARAMS, EXCITER_GRID, EXCITER_PARAMS, EffectKind,
+    ECHO_GRID, ECHO_PARAMS, EQ_GRID, EQ_PARAMS, EXCITER_GRID, EXCITER_PARAMS, EffectKind, Entry,
     FLANGER_PARAMS, FREQ_SHIFT_PARAMS, GRAINS_PARAMS, LIMIT_PARAMS, LPG_PARAMS, MAX_KEPT_PARAMS,
-    PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param, RESO_PARAMS, REVERB_PARAMS, ROTARY_GRID,
+    PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, RESO_PARAMS, REVERB_PARAMS, ROTARY_GRID,
     ROTARY_PARAMS, SPACE_PARAMS, SPRING_GRID, SPRING_PARAMS, STUTTER_GRID, STUTTER_PARAMS,
     TAPE_PARAMS, VOWEL_PARAMS, WARPS_PARAMS,
 };
@@ -23,7 +23,7 @@ impl EffectKind {
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes and
     /// Comp's types each show only their own.
-    pub const fn params(self) -> &'static [Param] {
+    pub const fn params(self) -> &'static [Entry] {
         self.spec().params
     }
 
@@ -49,7 +49,7 @@ pub struct EffectSpec {
     /// What it does, for a list to choose from.
     pub meaning: &'static str,
     /// Every setting it keeps, in any mode, in the order its slot keeps them.
-    pub params: &'static [Param],
+    pub params: &'static [Entry],
     /// Which of them it shows: all of them, or those of the mode its type is in.
     pub shown: Shown,
     /// Where they sit on the FX page when it shows them all, or nothing for the grid most effects
@@ -83,7 +83,7 @@ pub struct Mode {
 
 /// The place of the setting stored as `key` among `params`. It's for the tables, so one that isn't
 /// there doesn't build.
-pub(super) const fn place_of(params: &[Param], key: &str) -> u8 {
+pub(super) const fn place_of(params: &[Entry], key: &str) -> u8 {
     let mut at = 0;
     while at < params.len() {
         if same_key(params[at].key, key) {
@@ -95,7 +95,7 @@ pub(super) const fn place_of(params: &[Param], key: &str) -> u8 {
 }
 
 /// The places of the settings stored as `keys` among `params`, in order.
-pub(super) const fn places_of<const N: usize>(params: &[Param], keys: [&str; N]) -> [u8; N] {
+pub(super) const fn places_of<const N: usize>(params: &[Entry], keys: [&str; N]) -> [u8; N] {
     let mut places = [0; N];
     let mut at = 0;
     while at < N {
@@ -120,7 +120,7 @@ const EVERY: [u8; MAX_KEPT_PARAMS] = {
 /// keeps. It reads as a list of them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Params {
-    kept: &'static [Param],
+    kept: &'static [Entry],
     shown: &'static [u8],
 }
 
@@ -132,7 +132,7 @@ impl Params {
     };
 
     /// All of `kept`.
-    pub(super) const fn all(kept: &'static [Param]) -> Self {
+    pub(super) const fn all(kept: &'static [Entry]) -> Self {
         Self {
             kept,
             shown: EVERY.split_at(kept.len()).0,
@@ -140,7 +140,7 @@ impl Params {
     }
 
     /// Those `mode` shows of `kept`.
-    pub(super) const fn of(kept: &'static [Param], mode: &Mode) -> Self {
+    pub(super) const fn of(kept: &'static [Entry], mode: &Mode) -> Self {
         Self {
             kept,
             shown: mode.shown,
@@ -156,7 +156,7 @@ impl Params {
     }
 
     /// The one at `at` among those shown.
-    pub fn get(self, at: usize) -> Option<&'static Param> {
+    pub fn get(self, at: usize) -> Option<&'static Entry> {
         self.kept.get(self.kept_at(at)?)
     }
 
@@ -179,15 +179,15 @@ impl Params {
 }
 
 impl Index<usize> for Params {
-    type Output = Param;
+    type Output = Entry;
 
-    fn index(&self, at: usize) -> &Param {
+    fn index(&self, at: usize) -> &Entry {
         &self.kept[usize::from(self.shown[at])]
     }
 }
 
 impl IntoIterator for Params {
-    type Item = &'static Param;
+    type Item = &'static Entry;
     type IntoIter = ParamsIter;
 
     fn into_iter(self) -> ParamsIter {
@@ -198,14 +198,14 @@ impl IntoIterator for Params {
 /// The settings an effect shows, one by one.
 #[derive(Debug, Clone)]
 pub struct ParamsIter {
-    kept: &'static [Param],
+    kept: &'static [Entry],
     shown: std::slice::Iter<'static, u8>,
 }
 
 impl Iterator for ParamsIter {
-    type Item = &'static Param;
+    type Item = &'static Entry;
 
-    fn next(&mut self) -> Option<&'static Param> {
+    fn next(&mut self) -> Option<&'static Entry> {
         let kept = self.kept;
         self.shown.next().map(|&at| &kept[usize::from(at)])
     }
@@ -216,7 +216,7 @@ impl Iterator for ParamsIter {
 }
 
 impl DoubleEndedIterator for ParamsIter {
-    fn next_back(&mut self) -> Option<&'static Param> {
+    fn next_back(&mut self) -> Option<&'static Entry> {
         let kept = self.kept;
         self.shown.next_back().map(|&at| &kept[usize::from(at)])
     }

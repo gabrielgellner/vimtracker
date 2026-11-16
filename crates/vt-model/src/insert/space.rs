@@ -6,13 +6,13 @@ use crate::constants::UNITY_LEVEL;
 use crate::lfo::DIVISION_NAMES;
 
 use super::{
-    Columns, GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Param, Place, RETIMES, Units, WET_MIX_PARAM,
+    Columns, Entry, GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Place, RETIMES, Units, WET_MIX_PARAM,
     from_middle, hex_param, is_zero,
 };
 
 /// A delay's, in the order the page shows them.
-pub(crate) const DELAY_PARAMS: [Param; 11] = [
-    Param {
+pub(crate) const DELAY_PARAMS: [Entry; 11] = [
+    Entry {
         name: "Time",
         key: "time",
         label: Some("TIME"),
@@ -24,7 +24,7 @@ pub(crate) const DELAY_PARAMS: [Param; 11] = [
         place: Place::Own,
     },
     hex_param("Feedback", "feedback", "FDBK", Delay::DEFAULT.feedback),
-    Param {
+    Entry {
         name: "Ping-pong",
         key: "pingpong",
         label: Some("PING"),
@@ -39,7 +39,7 @@ pub(crate) const DELAY_PARAMS: [Param; 11] = [
     hex_param("Low cut", "lowcut", "LCUT", Delay::DEFAULT.low_cut),
     hex_param("High cut", "highcut", "HCUT", Delay::DEFAULT.high_cut),
     hex_param("Drive", "drive", "DRIV", Delay::DEFAULT.drive),
-    Param {
+    Entry {
         name: "Retime",
         key: "retime",
         label: Some("RTIM"),
@@ -225,8 +225,8 @@ pub fn echo_shelf_db(value: f32, (_, most_db, power): (f32, f32, f32)) -> f32 {
 /// speed, whether it follows the song's tempo, and how slowly its motor gets there; the loop's
 /// feedback, how hard it's driven and how much the tape wobbles; the tone, the reverb, and the
 /// echo's level, the mix and the gain.
-pub(crate) const ECHO_PARAMS: [Param; 13] = [
-    Param {
+pub(crate) const ECHO_PARAMS: [Entry; 13] = [
+    Entry {
         name: "Mode",
         key: "mode",
         label: Some("MODE"),
@@ -238,7 +238,7 @@ pub(crate) const ECHO_PARAMS: [Param; 13] = [
         place: Place::Type,
     },
     hex_param("Rate", "rate", "RATE", Echo::DEFAULT.rate).units(Units::EchoRate),
-    Param {
+    Entry {
         name: "Sync",
         key: "sync",
         label: Some("SYNC"),
@@ -354,7 +354,7 @@ impl Echo {
 }
 
 /// A reverb's, in the order the page shows them.
-pub(crate) const REVERB_PARAMS: [Param; 7] = [
+pub(crate) const REVERB_PARAMS: [Entry; 7] = [
     hex_param("Pre", "pre", "PRE", Reverb::DEFAULT.pre),
     hex_param("Decay", "decay", "DCAY", Reverb::DEFAULT.decay),
     hex_param("Damp", "damp", "DAMP", Reverb::DEFAULT.damp),
@@ -413,7 +413,7 @@ impl Reverb {
 }
 
 /// A plate's, in the order the page shows them. Those it shares with the reverb are named as its.
-pub(crate) const PLATE_PARAMS: [Param; 8] = [
+pub(crate) const PLATE_PARAMS: [Entry; 8] = [
     hex_param("Pre", "pre", "PRE", Plate::DEFAULT.pre),
     hex_param("Decay", "decay", "DCAY", Plate::DEFAULT.decay),
     hex_param("Damp", "damp", "DAMP", Plate::DEFAULT.damp),
@@ -486,14 +486,14 @@ pub fn plate_size(value: f32) -> f32 {
 /// A spring reverb's, in the order the page shows them, as columns: how long it rings, how big
 /// its springs are and how dark; then its chirp and its reflections; then its wander and its
 /// knock; then the mix and gain. Those it shares with the reverb are named as its.
-pub(crate) const SPRING_PARAMS: [Param; 9] = [
+pub(crate) const SPRING_PARAMS: [Entry; 9] = [
     hex_param("Decay", "decay", "DCAY", Spring::DEFAULT.decay),
     hex_param("Size", "size", "SIZE", Spring::DEFAULT.size),
     hex_param("Damp", "damp", "DAMP", Spring::DEFAULT.damp),
     hex_param("Spin", "spin", "SPIN", Spring::DEFAULT.spin),
     hex_param("Reflect", "reflect", "REFL", Spring::DEFAULT.reflect),
     hex_param("Chaos", "chaos", "CHAO", Spring::DEFAULT.chaos),
-    Param {
+    Entry {
         name: "Knock",
         key: "knock",
         label: Some("KNCK"),
@@ -575,7 +575,7 @@ impl Spring {
 
 /// A space's, in the order the page shows them: how long it rings, how big and how dark it is,
 /// then its wobble, then the mix and gain. Those it shares with the reverbs are named as theirs.
-pub(crate) const SPACE_PARAMS: [Param; 6] = [
+pub(crate) const SPACE_PARAMS: [Entry; 6] = [
     hex_param("Decay", "decay", "DCAY", Space::DEFAULT.decay),
     hex_param("Size", "size", "SIZE", Space::DEFAULT.size),
     hex_param("Damp", "damp", "DAMP", Space::DEFAULT.damp),
@@ -661,8 +661,8 @@ pub fn repeat_decay_db(value: f32) -> f32 {
 
 /// A stutter's, in the order the page shows them, as columns: its trigger; then how long a piece
 /// it repeats, how many times and how it fades; then the mix and gain.
-pub(crate) const STUTTER_PARAMS: [Param; 6] = [
-    Param {
+pub(crate) const STUTTER_PARAMS: [Entry; 6] = [
+    Entry {
         name: "Trig",
         key: "trig",
         label: Some("TRIG"),
@@ -673,7 +673,7 @@ pub(crate) const STUTTER_PARAMS: [Param; 6] = [
         default: Stutter::DEFAULT.trig,
         place: Place::Own,
     },
-    Param {
+    Entry {
         name: "Length",
         key: "length",
         label: Some("LEN"),
@@ -684,7 +684,7 @@ pub(crate) const STUTTER_PARAMS: [Param; 6] = [
         default: Stutter::DEFAULT.length,
         place: Place::Own,
     },
-    Param {
+    Entry {
         name: "Repeats",
         key: "repeats",
         label: Some("RPTS"),
@@ -696,7 +696,7 @@ pub(crate) const STUTTER_PARAMS: [Param; 6] = [
         place: Place::Own,
     },
     hex_param("Decay", "decay", "DCAY", Stutter::DEFAULT.decay).units(Units::RepeatDecay),
-    Param {
+    Entry {
         default: 0xFF,
         ..MIX_PARAM
     },

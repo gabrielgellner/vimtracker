@@ -313,9 +313,10 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     label for the grid, a kind and a default. The track page, `K`, the grid and the engine all read
     that table. An effect's settings come into it from the effect's own description: one
     `EffectSpec` row each in `insert/kind.rs`'s `EFFECTS`, by `EffectKind`, with its key, name,
-    meaning and `Param`s, and each `Param` states its kind, with the units it reads in, and its
+    meaning and `Entry`s, and each `Entry` states its kind, with the units it reads in, and its
     place in the effect, so the table, the slot's title and its usual grid take them as they are
-    (decision 339). A synth voice's come in the same way, from its `VoiceSpec` row in
+    (decisions 339 and 357), and the pages read each through `Entry::described`. A synth
+    voice's come in the same way, from its `VoiceSpec` row in
     `machine.rs`'s `VOICES`, by `SynthVoice`, with its key, name, meaning and entries (in
     `settings/voices.rs`), and what its Machine device takes from it: the setting its title shows,
     any placing of its grid of its own, its role and its gate. A generator's settings, which go
