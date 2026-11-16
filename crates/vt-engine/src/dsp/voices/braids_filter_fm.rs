@@ -51,7 +51,6 @@ pub(crate) struct DigitalFilterModel {
 
 impl Model for DigitalFilterModel {
     const LEVEL: f32 = 0.5;
-    const OFFSET: bool = true;
 
     fn new() -> Self {
         Self {

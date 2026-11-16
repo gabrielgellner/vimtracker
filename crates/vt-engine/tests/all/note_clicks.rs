@@ -627,8 +627,7 @@ fn held(voice: SynthVoice, note: u8) -> (f64, Vec<f64>) {
 fn the_first_note_after_a_rest_starts_with_no_offset() {
     // Braids' DC blocker runs on from note to note; a new voice's is settled before its first
     // frame, so a note after a rest starts centred rather than thumping as the blocker catches up.
-    // `Toy` and `Z Filter`, whose filters take a while to settle, start nearer centred too, but
-    // not this near.
+    // `Toy`, whose filter takes a while to settle, starts nearer centred too, but not this near.
     let mut offsets = Vec::new();
     for voice in [
         SynthVoice::CSaw,
