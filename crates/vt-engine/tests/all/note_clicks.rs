@@ -423,10 +423,16 @@ fn a_blip_with_no_decay_falls_to_silence_rather_than_drops() {
             );
         }
         // Heard for its attack and its fall, about 2 ms, and no longer.
-        assert!((80..=110).contains(&heard), "step {index} is heard for {heard} frames");
+        assert!(
+            (80..=110).contains(&heard),
+            "step {index} is heard for {heard} frames"
+        );
         worst = worst.max(drop);
     }
-    assert!(worst < 0.02, "a blip drops to silence from {worst:.3} of its peak");
+    assert!(
+        worst < 0.02,
+        "a blip drops to silence from {worst:.3} of its peak"
+    );
 }
 
 #[test]

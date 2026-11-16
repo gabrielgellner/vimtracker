@@ -850,7 +850,10 @@ mod tests {
         assert!(lpg.held(SHORTEST / 4, 0.0, RATE) > 0.0);
         assert!(lpg.finished_holding(SHORTEST, RATE));
         // A longer one is as it was.
-        close(adsr(0, 10, 0, 0).held(240, 0.0, RATE), 1.0 - Curve::Exp.fall(0.5));
+        close(
+            adsr(0, 10, 0, 0).held(240, 0.0, RATE),
+            1.0 - Curve::Exp.fall(0.5),
+        );
     }
 
     #[test]
