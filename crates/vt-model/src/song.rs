@@ -31,7 +31,8 @@ use crate::view::ViewState;
 
 pub use crate::filter::{FILTER_MODE_NAMES, FilterMode, FilterType};
 pub use crate::machine::{
-    ACID_GATE, DEFAULT_ACCENT, FULL_GATE, Machine, Role, SIX_OP_PATCHES, SynthVoice,
+    ACID_GATE, DEFAULT_ACCENT, FULL_GATE, Machine, PHASE_NAMES, Phase, Role, SIX_OP_PATCHES,
+    SynthVoice,
 };
 pub use crate::phrase::{Lane, Phrase, Visit};
 
@@ -255,6 +256,9 @@ pub struct Track {
     /// slides by its own `Slide`.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub glide: u8,
+    /// Whether a synth's oscillators run on from note to note or start again on each.
+    #[serde(default, skip_serializing_if = "Phase::is_free")]
+    pub phase: Phase,
     /// How its `ACU`s move its notes: how far, what happens at the limits, and when they start
     /// again.
     #[serde(default, skip_serializing_if = "is_default_accumulation")]
@@ -688,6 +692,7 @@ impl Default for Track {
             speed: Speed::Sixteenth,
             reset: None,
             glide: 0,
+            phase: Phase::Free,
             accumulation: Accumulation::default(),
             arpeggio: Arpeggio::default(),
             lanes: [LaneMove::default(); FX_SLOTS],
@@ -1428,6 +1433,27 @@ mod tests {
         let text = ron::to_string(&track).unwrap();
         assert!(text.contains("quantise:128"), "{text}");
         assert_eq!(ron::from_str::<Track>(&text).unwrap().quantise, 0x80);
+    }
+
+    #[test]
+    fn a_tracks_phase_saves_only_at_reset_and_a_sound_preset_keeps_it() {
+        let track: Track = ron::from_str("(mute: false, solo: false)").unwrap();
+        assert_eq!(track.phase, Phase::Free);
+        assert!(!ron::to_string(&track).unwrap().contains("phase"));
+        let track = Track {
+            machine: Machine::Plaits(SynthVoice::VirtualAnalog),
+            phase: Phase::Reset,
+            ..Track::default()
+        };
+        let text = ron::to_string(&track).unwrap();
+        assert!(text.contains("phase:Reset"), "{text}");
+        assert_eq!(ron::from_str::<Track>(&text).unwrap().phase, Phase::Reset);
+        let preset = crate::preset::SoundPreset::of(&track, None);
+        assert_eq!(preset.sound.phase, Phase::Reset);
+        assert_eq!(
+            track.value_of(SettingId::PHASE) >> 8,
+            u16::from(Phase::Reset.index())
+        );
     }
 
     #[test]

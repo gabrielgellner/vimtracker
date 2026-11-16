@@ -28,8 +28,8 @@ use crate::selection::{Block, Scope, Shift, StepRange};
 use crate::settings::SettingId;
 use crate::shape::{Shape, ShapeColumn, Source};
 use crate::song::{
-    ChainEntry, FilterMode, FilterType, Lane, Launch, Machine, Phrase, Repeat, Role, Section,
-    SectionStart, Song, Track,
+    ChainEntry, FilterMode, FilterType, Lane, Launch, Machine, Phase, Phrase, Repeat, Role,
+    Section, SectionStart, Song, Track,
 };
 use crate::speed::Speed;
 use crate::step::{FxSlot, Gate, Mark, Note, Step};
@@ -379,6 +379,11 @@ pub enum Action {
     SetTrackSpeed {
         track: usize,
         speed: Speed,
+    },
+    /// Set whether a synth track's oscillators run on from note to note or start again on each.
+    SetTrackPhase {
+        track: usize,
+        phase: Phase,
     },
     /// Set how many of the song's steps a track's chain plays before starting again, from 1 to
     /// `MAX_TRACK_RESET`, or `None` to play on.
@@ -789,6 +794,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
         | Action::SetTrackGroup { .. }
         | Action::SetTrackGateLength { .. }
         | Action::SetTrackSpeed { .. }
+        | Action::SetTrackPhase { .. }
         | Action::SetTrackReset { .. }
         | Action::SetTrackGlide { .. }
         | Action::SetTrackSafe { .. }

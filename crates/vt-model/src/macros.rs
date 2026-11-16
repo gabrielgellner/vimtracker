@@ -16,7 +16,7 @@ use crate::lfo::phase_value;
 use crate::modulation::{MOD_SLOTS, ModKind, Polarity, depth_of, depth_value};
 use crate::settings::{Kind, Owner, SettingId, SettingSet};
 use crate::shape::{GenParam, MAX_BEND, Shape, ShapeColumn, curved};
-use crate::song::{FilterMode, Track};
+use crate::song::{FilterMode, Phase, Track};
 use crate::speed::Speed;
 use crate::step::Step;
 
@@ -469,6 +469,7 @@ impl Track {
                 .map_or(0, |groove| (groove.index() + 1).min(0xFF) as u8),
             SettingId::SPEED => self.speed.index(),
             SettingId::GLIDE => self.glide,
+            SettingId::PHASE => self.phase.index(),
             _ => id.entry().default,
         }
     }
@@ -580,6 +581,7 @@ impl Track {
                         self.speed = Speed::ALL[usize::from(coarse).min(Speed::ALL.len() - 1)];
                     }
                     SettingId::GLIDE => self.glide = coarse,
+                    SettingId::PHASE => self.phase = Phase::from_index(coarse),
                     _ => return,
                 }
                 self.set_fine(id, fine);

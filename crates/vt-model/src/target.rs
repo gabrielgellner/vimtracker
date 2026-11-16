@@ -31,7 +31,7 @@ const TRACK_MEANINGS: [&str; 16] = [
 
 /// The track's own settings in the order lists show them: the filter, then output, then pitch,
 /// velocity, gate, time and glide.
-const TRACK_ORDER: [SettingId; 16] = [
+const TRACK_ORDER: [SettingId; 17] = [
     SettingId::CUT,
     SettingId::RES,
     SettingId::FILTER_MODE,
@@ -48,6 +48,7 @@ const TRACK_ORDER: [SettingId; 16] = [
     SettingId::SPEED,
     SettingId::QUANTISE,
     SettingId::GLIDE,
+    SettingId::PHASE,
 ];
 
 impl SettingId {
@@ -69,6 +70,8 @@ impl SettingId {
             (Owner::Track, _) if self == Self::FILTER_MODE => {
                 track.is_sound() && track.filter.has_modes()
             }
+            // A sampler starts its sample again on each note anyway.
+            (Owner::Track, _) if self == Self::PHASE => track.voice().is_some(),
             (Owner::Track, _) => track.is_sound(),
             (Owner::Voice(voice), _) => track.voice() == Some(voice),
             (Owner::Slot { slot, effect }, at) => track
@@ -293,6 +296,7 @@ impl SettingId {
                 Self::GROOVE,
                 Self::SPEED,
                 Self::GLIDE,
+                Self::PHASE,
                 Self::PLAY,
             ]
             .contains(id)

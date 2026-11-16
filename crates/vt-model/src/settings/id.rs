@@ -2,7 +2,10 @@
 
 use super::mods::{ACCUMULATION, ARPEGGIO, MACRO, MACRO_NAMES, MOD, MOD_OWN};
 use super::sampler::SAMPLER;
-use super::{Entry, LANE, SLOT_OWN, TRACK, TRACK_GROUPS, voice_entries, voice_key};
+use super::{
+    Entry, LANE, LATER_TRACK, LATER_TRACK_GROUPS, SLOT_OWN, TRACK, TRACK_GROUPS, TRACK_SETTINGS,
+    voice_entries, voice_key,
+};
 use crate::constants::FX_SLOTS;
 use crate::insert::{EFFECTS, EffectKind, INSERTS};
 use crate::machine::SynthVoice;
@@ -90,6 +93,7 @@ const MOD_OWN_START: usize = MACROS_START + MACROS;
 const ACCUMULATION_START: usize = MOD_OWN_START + MOD_SLOTS * MOD_OWN.len();
 const ARPEGGIO_START: usize = ACCUMULATION_START + ACCUMULATION.len();
 const LANES_START: usize = ARPEGGIO_START + ARPEGGIO.len();
+const LATER_TRACK_START: usize = LANES_START + FX_SLOTS * LANE.len();
 
 /// What a setting belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -165,6 +169,9 @@ impl SettingId {
     /// How far a row's nudge is brought toward the grid as it plays, as [`quantised_nudge`](super::quantised_nudge) gives
     /// it.
     pub const QUANTISE: Self = Self(15);
+    /// Whether a synth's oscillators start again on each note: a place in
+    /// [`Phase::ALL`](crate::song::Phase::ALL).
+    pub const PHASE: Self = Self(LATER_TRACK_START as u16);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.
@@ -177,7 +184,7 @@ impl SettingId {
     pub const PLAY: Self = Self(SAMPLER_START as u16 + 4);
 
     /// How many settings there are.
-    pub const COUNT: usize = LANES_START + FX_SLOTS * LANE.len();
+    pub const COUNT: usize = LATER_TRACK_START + LATER_TRACK.len();
 
     /// Every setting, in the table's order.
     pub fn all() -> impl Iterator<Item = Self> {
@@ -206,6 +213,8 @@ impl SettingId {
     pub const fn track(setting: usize) -> Option<Self> {
         if setting < TRACK.len() {
             Some(Self(setting as u16))
+        } else if setting < TRACK_SETTINGS {
+            Some(Self((LATER_TRACK_START + setting - TRACK.len()) as u16))
         } else {
             None
         }
@@ -323,6 +332,9 @@ impl SettingId {
     /// What it belongs to, and its place among that owner's settings.
     pub fn owner(self) -> (Owner, usize) {
         let at = self.index();
+        if at >= LATER_TRACK_START {
+            return (Owner::Track, TRACK.len() + at - LATER_TRACK_START);
+        }
         if at >= LANES_START {
             let within = at - LANES_START;
             return (Owner::Lane(within / LANE.len()), within % LANE.len());
@@ -378,7 +390,8 @@ impl SettingId {
     /// What its owner declares.
     pub fn entry(self) -> Entry {
         match self.owner() {
-            (Owner::Track, at) => TRACK[at],
+            (Owner::Track, at) if at < TRACK.len() => TRACK[at],
+            (Owner::Track, at) => LATER_TRACK[at - TRACK.len()],
             (Owner::Voice(voice), at) => voice_entries(voice)[at],
             (Owner::Slot { effect, .. }, at) => effect.params()[at],
             (Owner::Mod(_), at) => MOD[at],
@@ -439,7 +452,8 @@ impl SettingId {
     /// What it's listed with.
     pub fn group(self) -> String {
         match self.owner() {
-            (Owner::Track, at) => TRACK_GROUPS[at].to_owned(),
+            (Owner::Track, at) if at < TRACK.len() => TRACK_GROUPS[at].to_owned(),
+            (Owner::Track, at) => LATER_TRACK_GROUPS[at - TRACK.len()].to_owned(),
             (Owner::Voice(voice), _) => voice.name().to_owned(),
             (Owner::Slot { slot, effect }, _) => format!("FX {} {}", slot + 1, effect.name()),
             (Owner::Mod(slot) | Owner::ModOwn(slot), _) => format!("Mod {}", slot + 1),

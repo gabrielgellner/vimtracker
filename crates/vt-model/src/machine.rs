@@ -524,6 +524,85 @@ impl SynthVoice {
 
 crate::listed::listed!(SynthVoice: meaning);
 
+impl SynthVoice {
+    /// Whether its sound has a phase that a track's `Phase` can start again on each note: not a
+    /// noise's, nor a struck or blown model's, whose strike starts it afresh anyway, nor `Acid`'s,
+    /// which carries on as a 303 does (decision 370).
+    pub const fn has_phase(self) -> bool {
+        !matches!(
+            self,
+            Self::Acid
+                | Self::String
+                | Self::Modal
+                | Self::Dust
+                | Self::Noise
+                | Self::Kick
+                | Self::Snare
+                | Self::Hat
+                | Self::Bowed
+                | Self::Blown
+                | Self::Fluted
+                | Self::Bell
+                | Self::Drum
+                | Self::TwinPeaks
+                | Self::Clocked
+                | Self::GrainCloud
+        )
+    }
+}
+
+/// Whether a synth track's oscillators run on from note to note or start again on each, its
+/// `Phase` (decision 370).
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
+)]
+pub enum Phase {
+    /// They run on, as an analog synth's do.
+    #[default]
+    Free,
+    /// They start again from where a new note starts them, at the bottom of a short dip to
+    /// nothing, so every note starts the same.
+    Reset,
+}
+
+/// What each phase is called, in order.
+pub const PHASE_NAMES: [&str; 2] = ["Free", "Reset"];
+
+impl Phase {
+    /// Both, in order.
+    pub const ALL: [Self; 2] = [Self::Free, Self::Reset];
+
+    /// Its place in [`Phase::ALL`].
+    pub const fn index(self) -> u8 {
+        self as u8
+    }
+
+    /// The one at a place in [`Phase::ALL`], the last for one past it.
+    pub fn from_index(index: u8) -> Self {
+        Self::ALL[usize::from(index).min(Self::ALL.len() - 1)]
+    }
+
+    /// The name on screen.
+    pub const fn name(self) -> &'static str {
+        PHASE_NAMES[self as usize]
+    }
+
+    /// What it does, for a list to choose from.
+    pub(crate) const fn meaning(self) -> &'static str {
+        match self {
+            Self::Free => "oscillators run on from note to note",
+            Self::Reset => "oscillators start again on each note",
+        }
+    }
+
+    /// Whether it's `Free`, as a track starts, which a song doesn't save.
+    pub(crate) fn is_free(&self) -> bool {
+        *self == Self::Free
+    }
+}
+
+crate::listed::listed!(Phase: meaning);
+
 /// One synth voice, described once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct VoiceSpec {
