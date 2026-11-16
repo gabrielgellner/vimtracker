@@ -74,6 +74,7 @@ pub(crate) struct VosimModel {
 
 impl Model for VosimModel {
     const LEVEL: f32 = 0.6;
+    const OFFSET: bool = true;
 
     fn new() -> Self {
         Self {
@@ -176,6 +177,7 @@ pub(crate) struct FofModel {
 
 impl Model for FofModel {
     const LEVEL: f32 = 1.7;
+    const OFFSET: bool = true;
 
     fn new() -> Self {
         Self {

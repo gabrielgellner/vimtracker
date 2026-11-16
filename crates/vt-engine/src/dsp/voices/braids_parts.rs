@@ -151,6 +151,9 @@ pub(crate) trait Model: Copy {
     const NOISE: bool = false;
     /// Whether a note carries on from a voice playing it, as [`SynthEngine::CARRIES`] says.
     const CARRIES: bool = true;
+    /// Whether its wave has an offset from zero of its own, which a new voice's DC blocker is
+    /// settled to before its first frame, from a cycle played ahead on a copy.
+    const OFFSET: bool = false;
     fn new() -> Self;
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]);
     /// Choose the noise it draws, for a model that draws any, so each note differs but a render
@@ -172,7 +175,17 @@ pub(crate) struct Macro<M> {
     dc_blocker: DcBlocker,
     output: [f32; BLOCK],
     at: usize,
+    /// Whether its DC blocker has been settled, as it is before a new voice's first block.
+    settled: bool,
 }
+
+/// How long a new voice plays ahead to settle its DC blocker, in seconds: whole cycles of its note
+/// at least this long, as a high note's first cycle or two aren't yet its settled ones...
+const SHORTEST_AHEAD: f32 = 0.004;
+/// ...and no longer than this, a cycle of a note down to `C-2`, about 65 Hz. Under it, part of a
+/// cycle settles it nearly as well, and sixteen tracks starting together stay well within a
+/// block's time (decision 369).
+const LONGEST_AHEAD: f32 = 0.016;
 
 impl<M: Model> SynthEngine for Macro<M> {
     const NOISE: bool = M::NOISE;
@@ -199,6 +212,7 @@ impl<M: Model> SynthEngine for Macro<M> {
             dc_blocker: DcBlocker::new(1.0 - TAU * DC_HZ / rate * OVERSAMPLING as f32),
             output: [0.0; BLOCK],
             at: BLOCK,
+            settled: !M::OFFSET,
         }
     }
 
@@ -227,6 +241,10 @@ impl<M: Model> Macro<M> {
             note: 69.0 + 12.0 * (hertz / 440.0).log2(),
             rate: self.rate,
         };
+        if !self.settled {
+            self.settled = true;
+            self.settle(pitch, frequency, &settings);
+        }
         let mut inner = [0.0; INNER];
         self.model.render(pitch, &settings, &mut inner);
         let (pairs, _) = inner.as_chunks::<OVERSAMPLING>();
@@ -234,6 +252,30 @@ impl<M: Model> Macro<M> {
             let down = self.down.process(pair[0], pair[1]);
             *out = self.dc_blocker.process(down) * M::LEVEL;
         }
+    }
+
+    /// Settle the DC blocker of a new voice as if it had long been playing the note, as Braids'
+    /// runs on from note to note, so its first note doesn't start off zero and thump as the
+    /// blocker catches up. A copy of the model, its decimator and its blocker play the first cycles
+    /// ahead, and the blocker starts from where they come out centred.
+    fn settle(&mut self, pitch: Pitch, frequency: f32, settings: &Settings) {
+        let cycle = 1.0 / frequency.max(1e-6);
+        let longest = LONGEST_AHEAD * self.rate / OVERSAMPLING as f32;
+        let shortest = SHORTEST_AHEAD * self.rate / OVERSAMPLING as f32;
+        let cycles = (shortest / cycle).ceil().max(1.0);
+        let frames = ((cycles * cycle).min(longest).round() as usize).max(1);
+        let (mut model, mut down, mut blocker) = (self.model, self.down, self.dc_blocker);
+        let mut inner = [0.0; INNER];
+        let (mut heard, mut played) = (0.0, 0);
+        while played < frames {
+            model.render(pitch, settings, &mut inner);
+            let (pairs, _) = inner.as_chunks::<OVERSAMPLING>();
+            for pair in pairs.iter().take(frames - played) {
+                heard += blocker.process(down.process(pair[0], pair[1]));
+                played += 1;
+            }
+        }
+        self.dc_blocker.settle(heard, frames);
     }
 }
 
