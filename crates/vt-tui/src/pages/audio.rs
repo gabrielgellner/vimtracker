@@ -17,7 +17,9 @@ use vt_model::selection::Motion;
 
 use crate::app::App;
 use crate::input::bindings::Cmd;
+use crate::input::mode::View;
 use crate::overlays::picker::{Item, Pick, Picker};
+use crate::pages::project::editing::page_beside;
 use crate::pages::{Ctx, CtxMut, Outcome, Page};
 use crate::services::audio::{AudioChoice, DeviceInfo};
 use crate::widgets::glyphs;
@@ -115,10 +117,15 @@ impl Page for AudioPage {
 
     type Drawn = ();
 
-    /// Run a key as the program gives it to the page: one of its moves, [`AudioPage::key_on`], or
-    /// passed back, for a change, or `H` and `L`, which show the sub-page beside it.
+    /// Run a key as the program gives it to the page: one of its moves, [`AudioPage::key_on`],
+    /// `H` and `L`, which show the sub-page beside it, or passed back, for a change.
     fn key(&mut self, cmd: Cmd, times: usize, _ctx: &mut CtxMut) -> Outcome {
-        self.key_on(cmd, times)
+        match cmd {
+            Cmd::PreviousPage | Cmd::NextPage => {
+                Outcome::Show(page_beside(View::Audio, cmd == Cmd::NextPage))
+            }
+            _ => self.key_on(cmd, times),
+        }
     }
 
     /// Draw the Audio sub-page.
@@ -336,15 +343,11 @@ impl App {
         }
     }
 
-    /// Run a command the audio page passed back: a change to the setting under the cursor, or `H`
-    /// and `L`. Returns false if it means the same as anywhere.
+    /// Run a command the audio page passed back: a change to the setting under the cursor.
+    /// Returns false if it means the same as anywhere.
     pub(crate) fn run_audio_page(&mut self, cmd: Cmd) -> bool {
         let count = self.modes.count.take();
         let times = count.unwrap_or(1).max(1);
-        if matches!(cmd, Cmd::PreviousPage | Cmd::NextPage) {
-            self.show_project_page_beside(cmd == Cmd::NextPage);
-            return true;
-        }
         if self.audio_row_here() == AudioRow::Roto && self.run_roto_row(cmd) {
             return true;
         }
