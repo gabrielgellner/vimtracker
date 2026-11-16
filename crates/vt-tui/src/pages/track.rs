@@ -729,6 +729,7 @@ impl App {
         let mut ctx = CtxMut {
             services: &mut self.services,
             modes: &self.modes,
+            wheel: &mut self.wheel,
         };
         let outcome = self.track_page.gen_edit(cmd, times, control, &mut ctx);
         // The count was taken before the page had the key.

@@ -224,6 +224,7 @@ impl App {
         let mut ctx = CtxMut {
             services: &mut self.services,
             modes: &self.modes,
+            wheel: &mut self.wheel,
         };
         let pending = &mut self.grammar.pending;
         let outcome = overlays::press(picker, &self.table, pending, key, &mut ctx);
@@ -355,7 +356,7 @@ impl App {
             }
             Pick::Tuning { control, value } => set_tuning(&mut self.services, control, value),
             Pick::Track(track) => self.go_to_track(track),
-            Pick::Audio(choice) => self.pick_audio(choice),
+            Pick::Audio(choice) => self.audio_page.choose(choice),
             // The list above the command line takes its own choices, so none comes here.
             Pick::Completion(_) => {}
             Pick::FxCommand { slot, command } => self.pick_fx_command(slot, command),

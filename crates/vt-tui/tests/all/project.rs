@@ -1174,7 +1174,7 @@ fn the_project_pages_actions_open_the_explorer_and_its_audio_row_the_audio_page(
     project_cursor_on(&mut app, ProjectControl::Audio);
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.view, View::Audio);
-    assert!(app.audio.refresh, "it lists the devices afresh");
+    assert!(app.audio_page.audio.refresh, "it lists the devices afresh");
 }
 
 #[test]

@@ -365,7 +365,7 @@ pub(crate) fn right_spans(app: &App) -> Vec<Span<'static>> {
     if let Some((work, turn)) = app.background_work() {
         spans.push(Span::styled(format!("{turn} {work}  "), theme::dim()));
     }
-    let dropouts = app.audio.late + app.audio.xruns;
+    let dropouts = app.audio_page.audio.late + app.audio_page.audio.xruns;
     if dropouts > 0 {
         spans.push(Span::styled(
             format!("{} {dropouts}  ", glyphs::WARNING),

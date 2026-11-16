@@ -688,7 +688,7 @@ pub fn rule_under(buffer: &ratatui::buffer::Buffer, y: u16) -> Option<ratatui::s
 pub fn on_the_audio_page() -> (App, Realtime) {
     use vt_tui::services::audio::DeviceInfo;
     let (mut app, realtime) = app();
-    app.audio.devices = vec![
+    app.audio_page.audio.devices = vec![
         DeviceInfo {
             id: "coreaudio:speakers".to_owned(),
             name: "Speakers".to_owned(),
@@ -704,12 +704,12 @@ pub fn on_the_audio_page() -> (App, Realtime) {
             default: false,
         },
     ];
-    app.audio.device = "Speakers".to_owned();
-    app.audio.buffer = Some(512);
-    app.audio.running = true;
+    app.audio_page.audio.device = "Speakers".to_owned();
+    app.audio_page.audio.buffer = Some(512);
+    app.audio_page.audio.running = true;
     press(&mut app, " 9L");
     assert_eq!(app.modes.view, View::Audio);
-    assert!(app.audio.refresh, "it lists the devices afresh");
+    assert!(app.audio_page.audio.refresh, "it lists the devices afresh");
     (app, realtime)
 }
 

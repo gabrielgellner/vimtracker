@@ -16,6 +16,7 @@ use crate::overlays;
 use crate::overlays::guides;
 use crate::overlays::help::Help;
 use crate::overlays::picker::{Item, Pick, Picker};
+use crate::pages::CtxMut;
 use crate::pages::phrase::PhraseView;
 use crate::pages::project;
 use crate::pages::sample::SampleKey;
@@ -332,8 +333,11 @@ impl App {
                     &mut self.overlays.help,
                     &self.table,
                     &mut self.grammar,
-                    &mut self.services,
-                    &self.modes,
+                    CtxMut {
+                        services: &mut self.services,
+                        modes: &self.modes,
+                        wheel: &mut self.wheel,
+                    },
                     key,
                     now,
                 );
@@ -344,8 +348,11 @@ impl App {
                     &mut self.overlays.guide,
                     &self.table,
                     &mut self.grammar,
-                    &mut self.services,
-                    &self.modes,
+                    CtxMut {
+                        services: &mut self.services,
+                        modes: &self.modes,
+                        wheel: &mut self.wheel,
+                    },
                     key,
                     now,
                 );
@@ -364,8 +371,11 @@ impl App {
                     jump,
                     &self.table,
                     &mut self.grammar,
-                    &mut self.services,
-                    &self.modes,
+                    CtxMut {
+                        services: &mut self.services,
+                        modes: &self.modes,
+                        wheel: &mut self.wheel,
+                    },
                     key,
                     now,
                 );
@@ -457,7 +467,7 @@ impl App {
     pub(crate) fn show_view(&mut self, view: View) {
         self.modes.count = None;
         // The audio page lists the devices afresh each time it opens.
-        self.audio.refresh |= view == View::Audio && self.modes.view != View::Audio;
+        self.audio_page.audio.refresh |= view == View::Audio && self.modes.view != View::Audio;
         // Sections selected in the song view are left there.
         if view != View::Song {
             self.song_view.anchor = None;
