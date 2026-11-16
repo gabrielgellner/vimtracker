@@ -142,6 +142,30 @@ macro_rules! synths {
                 }
             }
 
+            fn reseed_drift(&mut self, seed: u32, settings: Settings) {
+                match self {
+                    $(Self::$voice(synth) => SynthEngine::reseed_drift(synth, seed, settings),)+
+                }
+            }
+
+            fn restart_phase(&mut self) {
+                match self {
+                    $(Self::$voice(synth) => SynthEngine::restart_phase(synth),)+
+                }
+            }
+
+            fn carries(&self) -> bool {
+                match self {
+                    $(Self::$voice(_) => <$engine as SynthEngine>::CARRIES,)+
+                }
+            }
+
+            fn voice(&self) -> SynthVoice {
+                match self {
+                    $(Self::$voice(_) => SynthVoice::$voice,)+
+                }
+            }
+
             fn time(&self, settings: Settings) -> f32 {
                 match self {
                     $(Self::$voice(synth) => SynthEngine::time(synth, settings),)+
@@ -216,6 +240,24 @@ synths! {
     Modem(DigitalModulation),
 }
 
+/// A note carried on by a voice already sounding, with what it draws of its track's random
+/// streams, drawn as it's played so each stream goes on as it would for a new voice. With `dip`,
+/// it waits for the voice's level to fall to nothing first.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Carry {
+    pub note: NoteOn,
+    /// A seed for the synth's noise, if it draws any.
+    pub noise: Option<u32>,
+    /// A seed for its drift, if it drifts.
+    pub drift: Option<u32>,
+    /// Whether its level falls to nothing over the short fade before its attack, as the note's
+    /// shape's `Reset` asks, rather than its attack starting from where the level is.
+    pub dip: bool,
+    /// Whether the synth's oscillators start again from where a new note starts them, at the
+    /// point the dip reaches nothing. Only with `dip`.
+    pub restart: bool,
+}
+
 /// One playing note. It keeps its sample ID until it ends, so replacing an instrument's sample
 /// only affects new notes.
 #[derive(Debug, Clone, Copy)]
@@ -264,6 +306,8 @@ pub(crate) struct Voice {
     settings: Settings,
     /// Whether it sounds until something ends it.
     holds: bool,
+    /// A note carried on, waiting for the fade to reach nothing.
+    carried: Option<Carry>,
 }
 
 impl Default for Voice {
@@ -294,6 +338,7 @@ impl Default for Voice {
             synth: None,
             settings: Settings::default(),
             holds: false,
+            carried: None,
         }
     }
 }
@@ -375,6 +420,79 @@ impl Voice {
             synth,
             holds: note.synth.is_some_and(SynthVoice::holds),
             settings: Settings::default(),
+            carried: None,
+        }
+    }
+
+    /// Whether a note on this synth carries on from this voice rather than starting a voice of
+    /// its own: the voice is sounding the same synth, and the synth holds its notes, so its
+    /// oscillators run on into the next note, as an analog mono synth's do (decision 367). A
+    /// synth that doesn't hold, a drum or a struck model, starts each note afresh, as its strike
+    /// is the sound.
+    pub(crate) fn carries(&self, synth: Option<SynthVoice>) -> bool {
+        let sounding = match self.stage {
+            Stage::Held { .. } | Stage::Released { .. } => true,
+            Stage::Fading { .. } => self.carried.is_some(),
+            Stage::Idle => false,
+        };
+        sounding
+            && self.holds
+            && self.synth.as_ref().is_some_and(|playing| {
+                playing.carries() && synth.is_some_and(|voice| playing.voice() == voice)
+            })
+    }
+
+    /// Carry on as a new note, on the synth already playing, with no new voice: its oscillators
+    /// keep running, its envelope starts again, and the synth is struck as a new note strikes
+    /// it. With `dip`, the level falls to nothing over the short fade first, and the note starts
+    /// there, at its own pitch, with an attack from nothing. Without, its attack starts from where
+    /// the level is, at once, and a new velocity glides in rather than stepping.
+    pub(crate) fn carry(&mut self, carry: Carry) {
+        // What was timed for the note before is the old note's.
+        self.release_after = None;
+        if carry.dip {
+            self.carried = Some(carry);
+            // The dip is a cut's fade, from what's heard.
+            self.level = self.amp[1];
+            self.stage = Stage::Fading {
+                per_frame: 1.0 / DECLICK_FRAMES as f32,
+            };
+            return;
+        }
+        self.carried = None;
+        let gain = self.gain;
+        self.strike(carry);
+        self.gain = gain;
+    }
+
+    /// Start a carried note, from where the level is: at nothing after a dip.
+    fn strike(&mut self, carry: Carry) {
+        let note = carry.note;
+        self.stage = Stage::Held { from: self.level };
+        self.elapsed = 0;
+        self.increment = note.increment();
+        self.gliding = None;
+        self.gain = note.sample_gain();
+        self.gain_target = self.gain;
+        self.shape = note.shape;
+        self.release_after = note.release_after;
+        let Some(synth) = &mut self.synth else {
+            return;
+        };
+        if carry.restart {
+            synth.restart_phase();
+        }
+        synth.trigger(note.accent);
+        if let Some(seed) = carry.noise {
+            synth.seed_noise(seed);
+        }
+        if let Some(seed) = carry.drift {
+            if carry.restart {
+                synth.seed_drift(seed, self.settings);
+            } else {
+                synth.reseed_drift(seed, self.settings);
+            }
+            self.envelope_rate = (self.rate as f32 * synth.time(self.settings)).round() as u32;
         }
     }
 
@@ -508,6 +626,8 @@ impl Voice {
     /// Start the envelope's release. A one-shot shape plays on through, though a synth's own
     /// gate still closes.
     pub(crate) fn release(&mut self) {
+        // A note let go before its dip has reached nothing never starts.
+        self.carried = None;
         if matches!(self.stage, Stage::Held { .. }) {
             if !self.shape.one_shot() {
                 self.stage = Stage::Released { from: self.level };
@@ -521,6 +641,7 @@ impl Voice {
 
     /// Fade out quickly, to avoid a click.
     pub(crate) fn fade(&mut self) {
+        self.carried = None;
         if self.active() {
             // The fade is a ramp of its own, from what's heard, which the amp follows at once.
             self.level = self.amp[1];
@@ -683,10 +804,16 @@ impl Voice {
             Stage::Fading { .. } => self.level <= 0.0 && self.amp[1] == 0.0,
             Stage::Idle => false,
         } || !more;
+        self.elapsed += 1;
         if finished {
             self.stage = Stage::Idle;
+            // A dip reaching nothing starts the note carried on, at its own pitch at once.
+            if let Some(carry) = self.carried.take() {
+                self.level = 0.0;
+                self.pitch = self.pitch_target;
+                self.strike(carry);
+            }
         }
-        self.elapsed += 1;
         frame
     }
 }
