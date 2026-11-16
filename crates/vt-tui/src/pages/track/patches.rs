@@ -19,11 +19,11 @@ use vt_model::shape::ShapeColumn;
 use vt_model::song::Lane;
 use vt_model::step::FxCommand;
 
-use crate::app::App;
-use crate::overlays::command::parse::PatchLine;
-use crate::overlays::picker::explorer::{Icon, Purpose, preset_tags};
+use crate::input::mode::View;
+use crate::overlays::picker::explorer::{Icon, preset_tags};
 use crate::overlays::picker::{Item, Pick, Root};
-use crate::pages::track::presets::{kind_place, named_file};
+use crate::pages::track::presets::{Saved, kind_place, named_file};
+use crate::services::Services;
 
 /// What's said where a patch is wanted on a track that doesn't play sounds.
 const NOT_SOUND: &str = "Only a track that plays sounds takes a patch";
@@ -79,7 +79,7 @@ fn short_of(name: &str, track: usize, short: Short) -> String {
 
 /// The shipped patches, as the browser lists them after the presets folder: under `Factory`,
 /// each by its name with what it needs beside it and its tags, as a patch in the folder is.
-fn factory_root() -> Root {
+pub(crate) fn factory_root() -> Root {
     let items = FACTORY_PATCHES
         .iter()
         .map(|(name, _)| {
@@ -101,49 +101,25 @@ fn factory_root() -> Root {
     }
 }
 
-impl App {
-    /// `:patch`, `:patch save` and `:patch load`, and their `!`.
-    pub(crate) fn patch_line(&mut self, line: PatchLine) {
-        match line {
-            PatchLine::Browse { over } => self.open_patch_explorer(over),
-            PatchLine::Save { name, force } => self.save_patch(&name, force),
-            PatchLine::Load { name, over } => self.add_patch_named(&name, over),
-        }
-    }
-
+impl Services {
     /// The cursor's track, if it plays sounds, saying so if it doesn't.
-    fn patch_track(&mut self) -> Option<usize> {
-        let track = self.services.cursor.track;
+    pub(crate) fn patch_track(&mut self) -> Option<usize> {
+        let track = self.cursor.track;
         self.plays_sounds(track, NOT_SOUND).then_some(track)
-    }
-
-    /// List the patches in the presets folder, once there is one, and the shipped ones under
-    /// `Factory`, to add one to the cursor's track; `over` puts it over the last mod slots and
-    /// macros where too few are free.
-    pub(crate) fn open_patch_explorer(&mut self, over: bool) {
-        if self.patch_track().is_none() {
-            return;
-        }
-        self.overlays.explorer.patch_over = over;
-        let purpose = Purpose::Preset(PresetKind::Patch);
-        let mut roots = self.places(purpose);
-        roots.push(factory_root());
-        self.open_explorer(purpose, roots, None);
     }
 
     /// Save the cursor's track's macros, the parts they move and the live generators they hold on
     /// the phrase under the cursor, as a patch of this name. A name that's taken is refused unless
-    /// forced, and a track whose macros hold nothing has no patch.
-    pub(crate) fn save_patch(&mut self, name: &str, force: bool) {
-        let Some(track) = self.patch_track() else {
-            return;
-        };
+    /// forced, and a track whose macros hold nothing has no patch. Returns what was saved where,
+    /// as [`Services::save_named`] does.
+    pub(crate) fn save_patch(&mut self, name: &str, force: bool) -> Option<Saved> {
+        let track = self.patch_track()?;
         self.save_named(
             name,
             force,
-            |app| {
-                let phrase = app.services.phrase_here().map(|phrase| &**phrase);
-                PatchPreset::of(&app.song().tracks[track], phrase).ok_or_else(|| {
+            |services| {
+                let phrase = services.phrase_here().map(|phrase| &**phrase);
+                PatchPreset::of(&services.song().tracks[track], phrase).ok_or_else(|| {
                     format!(
                         "No macro of track {:02} holds anything, so there's no patch to save: M on a setting maps one",
                         track + 1
@@ -157,43 +133,43 @@ impl App {
                     preset.summary()
                 )
             },
-        );
+        )
     }
 
     /// `:patch load name`: the patch of that name in the presets folder, or else the shipped one,
     /// added to the cursor's track.
-    fn add_patch_named(&mut self, name: &str, over: bool) {
-        let folder = self.services.settings.preset_folder();
+    pub(crate) fn add_patch_named(&mut self, name: &str, over: bool, view: View) {
+        let folder = self.settings.preset_folder();
         match named_file(folder.as_deref(), PresetKind::Patch, name) {
-            Ok(Some(path)) => self.add_patch(&path, over),
-            Ok(None) if factory_patch(name).is_some() => self.add_factory_patch(name, over),
+            Ok(Some(path)) => self.add_patch(&path, over, view),
+            Ok(None) if factory_patch(name).is_some() => self.add_factory_patch(name, over, view),
             Ok(None) => {
                 let place = folder.map_or_else(String::new, |folder| {
                     format!(" in {}", kind_place(&folder, PresetKind::Patch))
                 });
-                self.services.status = format!(
+                self.status = format!(
                     "There's no patch called {name}{place}, nor one that comes with vimtracker"
                 );
             }
-            Err(error) => self.services.status = error.to_string(),
+            Err(error) => self.status = error.to_string(),
         }
     }
 
-    /// Add the patch in this file to the cursor's track, as [`App::add_loaded_patch`] does.
-    pub(crate) fn add_patch(&mut self, path: &Path, over: bool) {
+    /// Add the patch in this file to the cursor's track, as [`Services::add_loaded_patch`] does.
+    pub(crate) fn add_patch(&mut self, path: &Path, over: bool, view: View) {
         match load::<PatchPreset>(path) {
-            Ok(preset) => self.add_loaded_patch(&preset_name(path), &preset.patch, over),
-            Err(error) => self.services.status = error.to_string(),
+            Ok(preset) => self.add_loaded_patch(&preset_name(path), &preset.patch, over, view),
+            Err(error) => self.status = error.to_string(),
         }
     }
 
-    /// Add the shipped patch of this name to the cursor's track, as [`App::add_loaded_patch`]
-    /// does.
-    pub(crate) fn add_factory_patch(&mut self, name: &str, over: bool) {
+    /// Add the shipped patch of this name to the cursor's track, as
+    /// [`Services::add_loaded_patch`] does.
+    pub(crate) fn add_factory_patch(&mut self, name: &str, over: bool, view: View) {
         match factory_patch(name) {
-            Some(Ok(preset)) => self.add_loaded_patch(name, &preset.patch, over),
-            Some(Err(error)) => self.services.status = error.to_string(),
-            None => self.services.status = format!("No patch called {name} comes with vimtracker"),
+            Some(Ok(preset)) => self.add_loaded_patch(name, &preset.patch, over, view),
+            Some(Err(error)) => self.status = error.to_string(),
+            None => self.status = format!("No patch called {name} comes with vimtracker"),
         }
     }
 
@@ -201,14 +177,14 @@ impl App {
     /// ones, or with `over` the last ones where too few are free, and its generators onto the
     /// phrase under the cursor, one on a lane with a lane as long. The track's sound is left
     /// alone. If any part can't go on, none does, and the status line says why.
-    fn add_loaded_patch(&mut self, name: &str, patch: &Patch, over: bool) {
+    fn add_loaded_patch(&mut self, name: &str, patch: &Patch, over: bool, view: View) {
         let Some(track) = self.patch_track() else {
             return;
         };
         let mut placement = match patch.place(&self.song().tracks[track], over) {
             Ok(placement) => placement,
             Err(short) => {
-                self.services.status = short_of(name, track, short);
+                self.status = short_of(name, track, short);
                 return;
             }
         };
@@ -223,13 +199,8 @@ impl App {
                     {
                         placement.fx.insert(saved, slot);
                     }
-                    let action = self.services.patch_generator(
-                        field,
-                        command,
-                        generator.shape,
-                        live,
-                        self.modes.view,
-                    )?;
+                    let action =
+                        self.patch_generator(field, command, generator.shape, live, view)?;
                     Ok(match (generator.lane, live) {
                         (Some(length), None) => self.onto_lane(action, length),
                         _ => vec![action],
@@ -238,7 +209,7 @@ impl App {
             match made {
                 Ok(actions) => generators.extend(actions),
                 Err(why) => {
-                    self.services.status = format!("{name} isn't added: {why}");
+                    self.status = format!("{name} isn't added: {why}");
                     return;
                 }
             }
@@ -250,10 +221,10 @@ impl App {
             placement,
         }];
         actions.extend(generators);
-        self.services.status.clear();
-        self.services.apply(&Action::Batch(actions));
-        if self.services.status.is_empty() {
-            self.services.status = said;
+        self.status.clear();
+        self.apply(&Action::Batch(actions));
+        if self.status.is_empty() {
+            self.status = said;
         }
     }
 
@@ -269,7 +240,6 @@ impl App {
         taken: &mut Vec<usize>,
     ) -> Result<(Field, Option<FxCommand>, Option<usize>), String> {
         let phrase = self
-            .services
             .phrase_here()
             .ok_or("this track has no phrase here for its generators")?;
         let live = phrase.generators();
@@ -339,7 +309,7 @@ impl App {
         else {
             return vec![action];
         };
-        let lane = Lane::new(self.services.extent().start, length);
+        let lane = Lane::new(self.extent().start, length);
         vec![
             Action::SetLane {
                 track,
@@ -384,7 +354,6 @@ impl App {
                 })
                 .collect();
             let phrase = self
-                .services
                 .phrase_id()
                 .map_or_else(String::new, |phrase| format!(" on phrase {phrase:02X}"));
             went.push(format!("live {}{phrase}", columns.join(" ")));

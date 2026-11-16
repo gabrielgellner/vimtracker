@@ -11,17 +11,19 @@ use vt_engine::render::{RenderOptions, render_loop, write_wav};
 use vt_model::action::Action;
 use vt_model::constants::DEFAULT_TRACKS;
 use vt_model::history::History;
-use vt_model::project::{self, ProjectError};
+use vt_model::project;
 use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
 use vt_model::song::{Lane, Song};
 
-use crate::overlays::command::parse::Line;
+use crate::overlays::command::parse::{Line, PatchLine, PresetLine};
 
 use super::{App, Cursor, READ_ONLY, folder_name, name_song};
 use crate::pages::phrase::PhraseView;
 use crate::pages::track::editing::{set_limiter, set_track_groove};
+use crate::pages::track::patches::factory_root;
 use crate::services::live_from;
+use vt_model::preset::PresetKind;
 
 impl App {
     /// Run a command line.
@@ -454,20 +456,66 @@ impl App {
         self.services.publish();
     }
 
-    /// How a song refers to a sample: where it is, or relative to the project if it's inside,
-    /// so a bundled project can be moved. `:w` to a new folder is what copies samples.
-    pub(crate) fn store_sample(&self, source: &Path) -> Result<String, ProjectError> {
-        let full = source.canonicalize().map_err(|error| ProjectError::Io {
-            path: source.display().to_string(),
-            source: error,
-        })?;
-        let project = self
-            .services
-            .folder
-            .as_deref()
-            .and_then(|f| f.canonicalize().ok());
-        let inside = project.as_deref().and_then(|f| full.strip_prefix(f).ok());
-        Ok(inside.unwrap_or(&full).display().to_string())
+    /// `:preset`, `:preset save` and `:preset load`, on what's under the cursor on the track
+    /// page. It's `App`'s, as listing the presets opens the explorer, and a save keeps its folder
+    /// among the explorer's recent places.
+    fn preset_line(&mut self, line: PresetLine) {
+        let view = self.modes.view;
+        let saved = match line {
+            PresetLine::Browse => {
+                let kind = self.track_page.presets_to_browse(view, &mut self.services);
+                if let Some(kind) = kind {
+                    let purpose = Purpose::Preset(kind);
+                    let roots = self.places(purpose);
+                    self.open_explorer(purpose, roots, None);
+                }
+                None
+            }
+            PresetLine::Save { name, force } => {
+                self.track_page
+                    .save_preset(&name, force, view, &mut self.services)
+            }
+            PresetLine::Load(name) => {
+                self.track_page
+                    .load_preset_named(&name, view, &mut self.services);
+                None
+            }
+        };
+        if let Some(saved) = saved {
+            saved.keep(
+                &mut self.overlays.explorer.recent_places,
+                &mut self.services,
+            );
+        }
+    }
+
+    /// `:patch`, `:patch save` and `:patch load`, and their `!`, on the cursor's track. It's
+    /// `App`'s for the same reasons as `:preset`: the list of patches is the explorer, which
+    /// keeps whether one chosen goes over the last mod slots and macros.
+    fn patch_line(&mut self, line: PatchLine) {
+        match line {
+            PatchLine::Browse { over } => {
+                if self.services.patch_track().is_none() {
+                    return;
+                }
+                self.overlays.explorer.patch_over = over;
+                let purpose = Purpose::Preset(PresetKind::Patch);
+                let mut roots = self.places(purpose);
+                roots.push(factory_root());
+                self.open_explorer(purpose, roots, None);
+            }
+            PatchLine::Save { name, force } => {
+                if let Some(saved) = self.services.save_patch(&name, force) {
+                    saved.keep(
+                        &mut self.overlays.explorer.recent_places,
+                        &mut self.services,
+                    );
+                }
+            }
+            PatchLine::Load { name, over } => {
+                self.services.add_patch_named(&name, over, self.modes.view);
+            }
+        }
     }
 
     /// Put a file in the bank and have the current track play it.
