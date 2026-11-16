@@ -23,7 +23,7 @@ use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
 use crate::input::mode::View;
 use crate::overlays::picker::{Item, Pick, Picker};
-use crate::overlays::shape::choice_picker;
+use crate::overlays::shape::{ShapePanel, choice_picker};
 use crate::pages::{CtxMut, Outcome};
 use crate::services::Services;
 use crate::services::generators::{LiveGen, generator_label};
@@ -454,13 +454,17 @@ impl App {
         self.show_view(View::Phrase);
         self.services.cursor.field = field_of(column);
         self.services.cursor.step = rows.first;
-        self.reopen_generator();
+        let outcome = ShapePanel::reopen(&mut self.services, self.modes.view);
+        self.settled(outcome, false);
     }
 
     /// A column chosen on `Empty`, made live with the command chosen for an empty FX column,
     /// and its device the cursor's.
     pub(crate) fn pick_gen_column(&mut self, field: Field, command: Option<FxCommand>) {
-        if !self.make_live(field, command) {
+        if let Err(picker) = self.services.make_live(field, command, self.modes.view) {
+            if let Some(picker) = picker {
+                self.show_picker(*picker);
+            }
             return;
         }
         let Some(phrase) = self.services.phrase_here() else {

@@ -31,7 +31,7 @@ use vt_model::step::{FxCommand, Note, Step};
 use crate::app::{App, Selection, TrackSpan};
 use crate::input::bindings::{Cmd, adjusting_key};
 use crate::input::keys::Key;
-use crate::input::mode::Mode;
+use crate::input::mode::{Mode, View};
 use crate::input::typed::{Typed, TypedValue};
 use crate::overlays::Overlay;
 use crate::overlays::picker::{Item, Pick, Picker};
@@ -345,7 +345,7 @@ enum Refusal {
     Command(usize),
 }
 
-impl App {
+impl Services {
     /// The column a track's rows can fill, and whether it's empty so it's generated, or why they
     /// can't. An empty FX column takes the command chosen for it, if one is.
     fn shape_column(
@@ -373,8 +373,8 @@ impl App {
             // An empty Note column takes notes of its own, at the velocity notes are typed with.
             Field::Note => (
                 ShapeColumn::Note {
-                    scale: self.services.live.scale,
-                    writes: (!notes).then_some(self.services.live.note_velocity),
+                    scale: self.live.scale,
+                    writes: (!notes).then_some(self.live.note_velocity),
                 },
                 !notes,
             ),
@@ -418,6 +418,7 @@ impl App {
         selection: Selection,
         field: Field,
         command: Option<FxCommand>,
+        view: View,
     ) -> Result<Vec<Part>, Refusal> {
         if selection.range.len() < 2 {
             return Err(Refusal::Reason("Select at least 2 rows to shape"));
@@ -437,7 +438,7 @@ impl App {
             .take(selection.tracks.last + 1)
             .skip(selection.tracks.first);
         for (track, sound) in covered {
-            let Some((phrase, range)) = self.place_on(track, selection.range) else {
+            let Some((phrase, range)) = self.place_on(track, selection.range, view) else {
                 continue;
             };
             let steps = sound.phrases.get(&phrase).map_or(&[][..], |p| p.steps());
@@ -470,29 +471,27 @@ impl App {
 
     /// The part each of these tracks plays, in order: its sound's, or the first the others leave.
     fn drums_of(&self, tracks: &[usize]) -> Vec<DrumPart> {
-        let known: Vec<Option<DrumPart>> = tracks
-            .iter()
-            .map(|track| self.services.drum_of(*track))
-            .collect();
+        let known: Vec<Option<DrumPart>> =
+            tracks.iter().map(|track| self.drum_of(*track)).collect();
         drum_parts(&known)
     }
 
-    /// After a kit's sounds are loaded as tracks, offer a beat from Grids' map on the first kick,
-    /// snare and hat among them, each playing its own part as `S` across them would, in a list
-    /// whose `Enter` writes it and whose `Esc` leaves the tracks empty.
-    pub(crate) fn offer_kit_beat(&mut self, tracks: &[usize]) {
+    /// What's offered after a kit's sounds are loaded as tracks: a beat from Grids' map on the
+    /// first kick, snare and hat among them, each playing its own part as `S` across them would,
+    /// in a list whose `Enter` writes it and whose `Esc` leaves the tracks empty. None if there's
+    /// no drum among them.
+    pub(crate) fn kit_beat_picker(&self, tracks: &[usize]) -> Option<Picker> {
         let mut found = [false; DrumPart::ALL.len()];
         let drums: Vec<usize> = tracks
             .iter()
             .copied()
             .filter(|&track| {
-                self.services
-                    .drum_of(track)
+                self.drum_of(track)
                     .is_some_and(|part| !std::mem::replace(&mut found[part.index()], true))
             })
             .collect();
         if drums.is_empty() {
-            return;
+            return None;
         }
         let names: Vec<&str> = drums
             .iter()
@@ -503,7 +502,7 @@ impl App {
                 .meaning(format!("A beat on {} from Grids' map", names.join(" "))),
             Item::new("None", Pick::KitBeat(Vec::new())).meaning("Leave the tracks empty"),
         ];
-        self.show_picker(Picker::new(KIT_BEAT_PICKER, items));
+        Some(Picker::new(KIT_BEAT_PICKER, items))
     }
 
     /// Write a beat from Grids' map on these tracks' first phrases, each its own part, from the
@@ -511,12 +510,12 @@ impl App {
     pub(crate) fn write_kit_beat(&mut self, tracks: &[usize]) {
         let song = Arc::clone(self.song());
         let column = ShapeColumn::Note {
-            scale: self.services.live.scale,
-            writes: Some(self.services.live.note_velocity),
+            scale: self.live.scale,
+            writes: Some(self.live.note_velocity),
         };
-        let ends = self.services.generated_ends(column);
-        self.services.shape_seed = self.services.shape_seed.wrapping_add(1);
-        let seed = song.seed.wrapping_add(self.services.shape_seed);
+        let ends = self.generated_ends(column);
+        self.shape_seed = self.shape_seed.wrapping_add(1);
+        let seed = song.seed.wrapping_add(self.shape_seed);
         let drums = self.drums_of(tracks);
         let actions: Vec<Action> = tracks
             .iter()
@@ -553,130 +552,9 @@ impl App {
         if actions.is_empty() {
             return;
         }
-        self.services.apply(&Action::Batch(actions));
-        self.services.status =
+        self.apply(&Action::Batch(actions));
+        self.status =
             "A beat from Grids' map: S on its notes changes it, u takes it off".to_owned();
-    }
-
-    /// Open the panel on the selection, and show its first result. An empty FX column lists the
-    /// commands first, to choose the one it writes.
-    pub(crate) fn open_shape(&mut self) {
-        let selection = self.current_selection();
-        let field = self.services.cursor.field;
-        self.open_shape_on(selection, field, None);
-    }
-
-    /// Open the panel on the selection, now its empty FX column has its command.
-    pub(crate) fn pick_shape_command(&mut self, command: FxCommand) {
-        if let Some((selection, field)) = self.overlays.shape_command.take() {
-            self.open_shape_on(selection, field, Some(command));
-        }
-    }
-
-    fn open_shape_on(&mut self, selection: Selection, field: Field, command: Option<FxCommand>) {
-        let panel = match self.new_panel(selection, field, command) {
-            Ok(panel) => panel,
-            Err(Refusal::Reason(reason)) => {
-                self.services.status = reason.to_owned();
-                return;
-            }
-            Err(Refusal::Command(track)) => {
-                self.leave_selection(selection);
-                self.services.cursor.field = field;
-                self.overlays.shape_command = Some((selection, field));
-                let (_, items) = self.services.fx_command_items(track, Pick::ShapeCommand);
-                self.show_picker(Picker::new("FX commands", items).searching(""));
-                self.services.status =
-                    "Choose the command to write on the empty FX column".to_owned();
-                return;
-            }
-        };
-        self.leave_selection(selection);
-        self.services.cursor.field = field;
-        panel.preview(&mut self.services);
-        self.overlays.shape = Some(panel);
-        self.modes.mode = Mode::Shape;
-    }
-
-    /// The panel a selection opens, on its first result, or why it opens none.
-    fn new_panel(
-        &mut self,
-        selection: Selection,
-        field: Field,
-        command: Option<FxCommand>,
-    ) -> Result<ShapePanel, Refusal> {
-        let parts = self.shape_parts(selection, field, command)?;
-        let base = Arc::clone(self.song());
-        let first = parts[0];
-        let steps = base.tracks[first.track]
-            .phrases
-            .get(&first.phrase)
-            .map_or(&[][..], |p| p.steps());
-        let generates = parts.iter().all(|part| part.generate);
-        let alone = parts.len() == 1;
-        // Across tracks, a Note column with notes on some offers what re-pitching them does.
-        let column = match first.column {
-            ShapeColumn::Note { scale, .. } if !generates => ShapeColumn::Note {
-                scale,
-                writes: None,
-            },
-            column => column,
-        };
-        let (from, to) = if first.generate {
-            self.services.generated_ends(first.column)
-        } else {
-            default_ends(steps, first.range, first.column)
-        };
-        self.services.shape_seed = self.services.shape_seed.wrapping_add(1);
-        let place = if generates {
-            Where::AllRows
-        } else {
-            column.default_where()
-        };
-        let (sources, default_source) = match column {
-            ShapeColumn::Note { .. } => {
-                self.services.follow_sources(&base, &parts, self.modes.view)
-            }
-            _ => (Vec::new(), None),
-        };
-        let mut shape = starting_shape(column, (from, to), place);
-        shape.seed = base.seed.wrapping_add(self.services.shape_seed);
-        // Across tracks, each takes its own part, and its own channel; a track at `1/32` reads
-        // its rows as 32nds, and `Divisions` plays its rows as long as the track's step.
-        shape.grids.part = alone.then_some(first.drum);
-        shape.divisions.channel = alone.then_some(Channel::A);
-        shape.divisions = shape
-            .divisions
-            .for_step(base.tracks[first.track].speed.ticks());
-        // A `Tonnetz` on the `Chord` voice writes its chords for it, and on any other its roots;
-        // across tracks, each takes a voice of the triad.
-        shape.tonnetz.voice = alone.then(|| match base.tracks[first.track].machine {
-            Machine::Plaits(SynthVoice::Chord) => TonnetzVoice::Chord,
-            _ => TonnetzVoice::Root,
-        });
-        Ok(ShapePanel {
-            selection,
-            parts,
-            column,
-            shape,
-            row: GenParam::Fill,
-            typing: None,
-            live: None,
-            base,
-            under: None,
-            sources,
-            default_source,
-            kept: false,
-        })
-    }
-
-    /// The mode a picker goes back to.
-    pub(crate) fn mode_after_picker(&self) -> Mode {
-        if self.overlays.shape.is_some() {
-            Mode::Shape
-        } else {
-            Mode::Normal
-        }
     }
 
     /// Apply a shape to a range, on each of these tracks. A ramp's, random fill's, walk's or 1/f
@@ -690,6 +568,7 @@ impl App {
         tracks: TrackSpan,
         column: ShapeColumn,
         shape: Shape,
+        view: View,
     ) {
         let song = Arc::clone(self.song());
         let steps_on = |track: usize, phrase: u32| -> &[Step] {
@@ -700,13 +579,13 @@ impl App {
         };
         let places: Vec<(usize, u32, StepRange, ShapeColumn, bool)> = (tracks.first..=tracks.last)
             .filter_map(|track| {
-                let (phrase, range) = self.place_on(track, range)?;
+                let (phrase, range) = self.place_on(track, range, view)?;
                 let generate = is_empty(steps_on(track, phrase), range, column);
                 // Notes go through the scale as it is now.
                 let column = match column {
                     ShapeColumn::Note { .. } => ShapeColumn::Note {
-                        scale: self.services.live.scale,
-                        writes: generate.then_some(self.services.live.note_velocity),
+                        scale: self.live.scale,
+                        writes: generate.then_some(self.live.note_velocity),
                     },
                     column => column,
                 };
@@ -723,12 +602,12 @@ impl App {
         let (from, to) = if !fresh {
             (shape.from, shape.to)
         } else if generate {
-            self.services.generated_ends(column)
+            self.generated_ends(column)
         } else {
             default_ends(steps_on(track, phrase), first, column)
         };
-        self.services.shape_seed = self.services.shape_seed.wrapping_add(1);
-        let seed = song.seed.wrapping_add(self.services.shape_seed);
+        self.shape_seed = self.shape_seed.wrapping_add(1);
+        let seed = song.seed.wrapping_add(self.shape_seed);
         // Grids across tracks gives each its own part, as `S` does, and `Divisions` each its own
         // channel.
         let tracks: Vec<usize> = places.iter().map(|place| place.0).collect();
@@ -795,7 +674,137 @@ impl App {
         } else {
             Action::Batch(actions)
         };
-        self.services.apply(&action);
+        self.apply(&action);
+    }
+}
+
+impl ShapePanel {
+    /// The panel a selection opens, on its first result, or why it opens none.
+    fn new(
+        selection: Selection,
+        field: Field,
+        command: Option<FxCommand>,
+        services: &mut Services,
+        view: View,
+    ) -> Result<Self, Refusal> {
+        let parts = services.shape_parts(selection, field, command, view)?;
+        let base = Arc::clone(services.song());
+        let first = parts[0];
+        let steps = base.tracks[first.track]
+            .phrases
+            .get(&first.phrase)
+            .map_or(&[][..], |p| p.steps());
+        let generates = parts.iter().all(|part| part.generate);
+        let alone = parts.len() == 1;
+        // Across tracks, a Note column with notes on some offers what re-pitching them does.
+        let column = match first.column {
+            ShapeColumn::Note { scale, .. } if !generates => ShapeColumn::Note {
+                scale,
+                writes: None,
+            },
+            column => column,
+        };
+        let (from, to) = if first.generate {
+            services.generated_ends(first.column)
+        } else {
+            default_ends(steps, first.range, first.column)
+        };
+        services.shape_seed = services.shape_seed.wrapping_add(1);
+        let place = if generates {
+            Where::AllRows
+        } else {
+            column.default_where()
+        };
+        let (sources, default_source) = match column {
+            ShapeColumn::Note { .. } => services.follow_sources(&base, &parts, view),
+            _ => (Vec::new(), None),
+        };
+        let mut shape = starting_shape(column, (from, to), place);
+        shape.seed = base.seed.wrapping_add(services.shape_seed);
+        // Across tracks, each takes its own part, and its own channel; a track at `1/32` reads
+        // its rows as 32nds, and `Divisions` plays its rows as long as the track's step.
+        shape.grids.part = alone.then_some(first.drum);
+        shape.divisions.channel = alone.then_some(Channel::A);
+        shape.divisions = shape
+            .divisions
+            .for_step(base.tracks[first.track].speed.ticks());
+        // A `Tonnetz` on the `Chord` voice writes its chords for it, and on any other its roots;
+        // across tracks, each takes a voice of the triad.
+        shape.tonnetz.voice = alone.then(|| match base.tracks[first.track].machine {
+            Machine::Plaits(SynthVoice::Chord) => TonnetzVoice::Chord,
+            _ => TonnetzVoice::Root,
+        });
+        Ok(Self {
+            selection,
+            parts,
+            column,
+            shape,
+            row: GenParam::Fill,
+            typing: None,
+            live: None,
+            base,
+            under: None,
+            sources,
+            default_source,
+            kept: false,
+        })
+    }
+}
+
+impl App {
+    /// Open the panel on the selection, and show its first result. An empty FX column lists the
+    /// commands first, to choose the one it writes.
+    pub(crate) fn open_shape(&mut self) {
+        let selection = self.current_selection();
+        let field = self.services.cursor.field;
+        self.open_shape_on(selection, field, None);
+    }
+
+    /// Open the panel on the selection, now its empty FX column has its command.
+    pub(crate) fn pick_shape_command(&mut self, command: FxCommand) {
+        if let Some((selection, field)) = self.overlays.shape_command.take() {
+            self.open_shape_on(selection, field, Some(command));
+        }
+    }
+
+    fn open_shape_on(&mut self, selection: Selection, field: Field, command: Option<FxCommand>) {
+        let panel = match ShapePanel::new(
+            selection,
+            field,
+            command,
+            &mut self.services,
+            self.modes.view,
+        ) {
+            Ok(panel) => panel,
+            Err(Refusal::Reason(reason)) => {
+                self.services.status = reason.to_owned();
+                return;
+            }
+            Err(Refusal::Command(track)) => {
+                self.leave_selection(selection);
+                self.services.cursor.field = field;
+                self.overlays.shape_command = Some((selection, field));
+                let (_, items) = self.services.fx_command_items(track, Pick::ShapeCommand);
+                self.show_picker(Picker::new("FX commands", items).searching(""));
+                self.services.status =
+                    "Choose the command to write on the empty FX column".to_owned();
+                return;
+            }
+        };
+        self.leave_selection(selection);
+        self.services.cursor.field = field;
+        panel.preview(&mut self.services);
+        self.overlays.shape = Some(panel);
+        self.modes.mode = Mode::Shape;
+    }
+
+    /// The mode a picker goes back to.
+    pub(crate) fn mode_after_picker(&self) -> Mode {
+        if self.overlays.shape.is_some() {
+            Mode::Shape
+        } else {
+            Mode::Normal
+        }
     }
 }
 
