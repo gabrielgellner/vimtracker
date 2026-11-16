@@ -81,7 +81,8 @@ and its settings in up to four columns of three.
 | | | `Low cut` `High cut` |
 | Output | | `Trim` `Level` `Pan`; `Send A` `Send B` `Group`; `Role` |
 | Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; |
-| | | `Choke` `Velocity` `Quantise`; a synth's `Phase`, `Mode` |
+| | | `Choke` `Velocity` `Quantise`; |
+| | | a synth's `Phase`, then `Mode` `Glides` |
 
 A machine's type is the setting that changes its character: the sample the sampler
 plays, `Acid`'s `Wave`, `Supersaw`'s `Stack`, 6-op's `Patch`, and the chord of `Chord`
@@ -349,15 +350,25 @@ the same sample and slice, ties into it as a `HLD` does. Its pitch moves, glidin
 `Glide` if that's set, it takes the new velocity, and nothing is struck again: no
 envelope or mod slot starts over, and a struck voice rings on at the new pitch. A
 note that comes after the gate has closed, by the row's `LEN`, the track's `Gate` or
-an `OFF`, is a `Mono` note. At the full `Gate` most machines start with, every note
-holds into the next, so each one ties; a shorter `Gate` or a `LEN` on a row lets
-the next note strike, as on a 303. `Acid`'s own `Gate` lets each note go, so it plays
-as in `Mono` until a note is held into the next, which then slides. A `RET`'s
+an `OFF`, is a `Mono` note.
+
+Mind the gate. At the full `Gate`, `100%`, that every machine but `Acid` starts
+with, each note is held until the next one comes, so in `Legato` every note ties
+into the next: a whole phrase plays as one note sliding from pitch to pitch, with
+one attack at its start. To strike notes, let the gate close before the next one:
+lower the track's `Gate`, `80` or `50%` for a 303's half step, to strike them all;
+give a row a length, such as `SGL1 80`, to strike only the note after it; or put an
+`OFF` between two notes. A row left at the full length still ties into the next, so
+mixing the two gives slides and strikes in one line, as a 303 does. `Acid`'s own
+`Gate` lets each note go, so it plays as in `Mono` until a note is held into the
+next, which then slides. A `RET`'s
 ratchets always strike, as they're there to be heard, and so do a `MLT`'s later
 pulses, and an arpeggio with `Retrig` on. `=` and `-` move through the list, `K`
 and `i` choose from it, and `x` goes back to `Mono`, which is dimmed. A step's
 `VMOD` sets it for its note, and on the Roto it's on the Play device's second page,
-after `Quantise` and a synth's `Phase`.
+after `Quantise` and a synth's `Phase`. How the gate, `Mode`, `HLD`, `Glide` and
+`Reset` fit together, with examples, is **How a note plays** in the manual's
+chapter **How a track plays**.
 
 `Speed` is how long each of the track's steps is, from `1/32` to `1/4` with the
 triplets between, so one track can play eighths or triplets against the others'
@@ -371,6 +382,23 @@ every voice: a synth by its pitch, a sample by its speed. `Off`, dimmed, jumps, 
 on `Acid`, shown as `Slide`, slides by the voice's own `Slide`. `=` and `-` move it
 a step, `+` and `_` sixteen, `i` takes a time in ms or `off`, and `x` turns it off.
 `GLD` on a step sets it for that tie. See **Note entry**.
+
+`Glide mode`, `Glides` on the Play device under `Mode`, says which notes `Glide`
+slides into. At `Ties`, as a track starts, only a tie glides: a `HLD`, a `Legato`
+tie, and an arpeggio's notes with `Retrig` off. At `Always`, every note glides from
+the pitch of the note still
+sounding, as a tracker's `3xx` and a mono synth's portamento do: a struck note
+still strikes, its envelopes starting again as `Mode` and `Reset` say, and only
+its pitch slides, over `Glide`'s time. A note after silence, the first note, and
+a note on another sample or slice have nothing to glide from, so they start at
+their own pitch, and with `Glide` off nothing glides. A `RET`'s ratchets, a `MLT`'s
+pulses and an arpeggio with `Retrig` on glide too, as each is a struck note; a
+ratchet on the same pitch just carries on a glide still under way. `Acid` slides
+by its own rules alone, so it's dimmed there and does nothing. `=` and `-` move
+through the list, `K` and `i` choose from it, and `x` goes back to `Ties`, which
+is dimmed. A step's `GMOD` sets it for its note, and on the Roto it's on the Play
+device's second page, after `Mode`. How it fits with the rest is **How a note
+plays** in the manual's chapter **How a track plays**.
 
 `Reset` is how many of the song's steps the track's chain plays before it starts
 again from its top, counted from where it last started, so a short part can keep to a

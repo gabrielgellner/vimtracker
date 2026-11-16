@@ -170,7 +170,13 @@ All of this is the track's `Mode` at `Mono`, as a track starts. At `Legato`, on 
 same device, a note that arrives while the last one's gate is still open isn't
 struck at all: it ties into the note sounding as a `HLD` does, so no envelope starts
 again and `Reset` has nothing to act on. Only a note after the gate has closed is
-struck, by the rules above. A `RET`'s ratchets are always struck.
+struck, by the rules above. A `RET`'s ratchets are always struck. At the full
+`Gate` a new track has, every note's gate is still open when the next comes, so a
+`Legato` track ties them all; a lower `Gate`, a row's length or an `OFF` lets the
+next note strike. The pitch of a struck note jumps to its own unless the track's
+`Glide mode` is `Always`, which glides it there from the note before. The whole
+model, with examples, is **How a note plays** in the manual's chapter **How a
+track plays**.
 
 **A pluck,** `Sustain` at `0%` with a short `Decay`, has died away before the next
 note, so each note starts from silence. A 1 ms attack with a short decay on a bright

@@ -30,7 +30,8 @@ use vt_model::settings::{
 use vt_model::shape::params::Typing;
 use vt_model::shape::{Context, GenParam, Where};
 use vt_model::song::{
-    FilterType, Machine, Phase, Role, Song, SynthVoice, Track, VoiceMode, reset_name, trim_text,
+    FilterType, GlideMode, Machine, Phase, Role, Song, SynthVoice, Track, VoiceMode, reset_name,
+    trim_text,
 };
 use vt_model::speed::Speed;
 
@@ -369,6 +370,7 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
         Control::Speed => listed_of(of, track.speed, Speed::Sixteenth, false),
         Control::Phase => listed_of(of, track.phase, Phase::Free, false),
         Control::VoiceMode => listed_of(of, track.voice_mode, VoiceMode::Mono, false),
+        Control::GlideMode => listed_of(of, track.glide_mode, GlideMode::Ties, false),
         Control::Groove => {
             let plays = track.groove.unwrap_or(song.groove);
             of.listed(
@@ -586,6 +588,9 @@ fn at_default(control: Control, track: &Track) -> bool {
         || control == Control::Phase
             && (track.phase == Phase::Free || !track.voice().is_some_and(SynthVoice::has_phase))
         || control == Control::VoiceMode && track.voice_mode == VoiceMode::Mono
+        // `Ties`, and on `Acid`, which slides by its own `Slide` and a row's `HLD` alone.
+        || control == Control::GlideMode
+            && (track.glide_mode == GlideMode::Ties || track.voice() == Some(SynthVoice::Acid))
         || control == Control::FilterMode && !track.filter.has_modes()
         || control == Control::Base(TrackControl::Punch) && !track.filter.has_punch()
         || control == Control::Safe && !track.filter.has_safe()
@@ -987,6 +992,10 @@ pub fn set(
         Control::VoiceMode => Action::SetTrackVoiceMode {
             track: at,
             mode: VoiceMode::from_index(index as u8),
+        },
+        Control::GlideMode => Action::SetTrackGlideMode {
+            track: at,
+            mode: GlideMode::from_index(index as u8),
         },
         Control::Groove => Action::SetTrackGroove {
             track: at,

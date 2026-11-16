@@ -98,6 +98,8 @@ pub enum Control {
     Phase,
     /// How its notes join: each struck, or tied into one whose gate is still open.
     VoiceMode,
+    /// Which notes `Glide` slides into: only ties, or every note from the one sounding.
+    GlideMode,
     /// The song's limiter, on or off, after the master's `Level`: the master's alone.
     Limiter,
     FilterType,
@@ -163,6 +165,7 @@ impl Control {
             Self::Glide => "Glide",
             Self::Phase => "Phase",
             Self::VoiceMode => "Mode",
+            Self::GlideMode => "Glides",
             Self::Limiter => "Limiter",
             Self::Machine => "Machine",
             Self::Setting(_) => "Setting",
@@ -228,6 +231,8 @@ impl Control {
             // The sample's, which the status line says, as the track's `Pitch` is another.
             Self::Tune => "Sample tune",
             Self::Cents => "Sample cents",
+            // In full, as the Play device's column has room only for `Glides`.
+            Self::GlideMode => "Glide mode",
             _ => self.label_on(track),
         }
     }
@@ -264,6 +269,10 @@ impl Control {
                 u16::from(track.voice_mode.index()) << 8,
             )),
             Self::KeyTrack => Some((SettingId::KEY_TRACK, u16::from(track.key_track) << 8)),
+            Self::GlideMode => Some((
+                SettingId::GLIDE_MODE,
+                u16::from(track.glide_mode.index()) << 8,
+            )),
             // What it plays, which is its type's first where its type doesn't offer the track's.
             Self::FilterMode if track.filter.has_modes() => Some((
                 SettingId::FILTER_MODE,
@@ -359,6 +368,7 @@ impl Control {
             | Self::Glide
             | Self::VoiceMode
             | Self::KeyTrack
+            | Self::GlideMode
             | Self::Accumulator(_)
             | Self::Arpeggio(_)
             | Self::Lane(..) => track.is_sound(),

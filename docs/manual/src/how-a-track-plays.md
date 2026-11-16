@@ -142,7 +142,8 @@ sounds the same at any tempo and `Speed`, as a slide does on a synth; a glide th
 has to land on a row is `PTCH`'s glide mark, which goes by rows. `GLD` on a step
 sets it for that tie, on the row tied from or the row tied into, as the tie is
 still the same note. An `ARP`'s notes with `Retrig` off are ties too, so they glide
-as well. A note that isn't tied never glides.
+as well. A note that isn't tied glides only with the track's `Glide mode` at
+`Always`: see [How a note plays](#how-a-note-plays-gate-mode-slides-glide-and-retrigger).
 
 ## An FX column has two modes
 
@@ -543,7 +544,7 @@ the Play device, a note that comes while the last one's gate is still open ties 
 it as a `HLD` does, gliding by `Glide`, with no envelope started again; only a note
 after the gate has closed, by `LEN`, `Gate` or an `OFF`, is struck. At the full
 `Gate` most machines start with, every note ties into the next. A `RET`'s ratchets
-always strike.
+always strike. [How a note plays](#how-a-note-plays-gate-mode-slides-glide-and-retrigger) puts it all together.
 
 ```text
 Gate FF:    C-3 ──────── E-3 ──────── G-3 ────      one note, gliding
@@ -553,6 +554,133 @@ Gate 80:    C-3 ────     E-3 ────     G-3 ────      each
 `b` on the Mod page switches an envelope or an LFO out, and what it moves glides back
 over 5 ms. It keeps running underneath, so switched back in, an LFO is in phase with
 one that was never out, and an envelope is where the held note has it.
+
+## How a note plays: gate, mode, slides, glide and retrigger
+
+A track plays one note at a time, as a mono synth does, and a handful of settings
+decide what happens where one note meets the next: whether the second is struck or
+slides out of the first, whether its pitch jumps or glides, and how its envelope
+starts again. Each has one job.
+
+| Synth idea | vimtracker | Set by |
+|---|---|---|
+| How long the key is held | Gate | the track's `Gate`, a row's length, `OFF` |
+| Mono | `Mode: Mono` | the track's setting, the default |
+| Single-trigger legato | `Mode: Legato` | a note arriving while the last one's gate is open slides |
+| Slide on one note, a 303's slide | `HLD` | a row's gate, in either mode |
+| Glide time | `Glide`, `GLD` | how long a slide, or a glide, takes |
+| Which notes glide | `Glide mode`, `GMOD` | `Ties`, only slides, or `Always`, struck notes too |
+| How the envelope starts again | `Reset` | the notes' shape on the Mod page, when a note is struck |
+
+Read it as a keyboard player would. The gate is your finger: it goes down at the
+note and comes up when the gate closes, at the row's length, the track's `Gate`, or
+an `OFF`. If the finger is still down when the next note comes, a `Legato` track
+slides into it, one note changing pitch with no new attack; a `Mono` track strikes
+it anyway. A `HLD` on a row forces a slide into the next row's note, in either mode,
+as a 303's slide flag does. Everything else is struck, and `Reset` decides how its
+envelope starts again: from nothing after a short dip, or from where the level is.
+A slide's pitch moves over `Glide`'s time, or at once with `Glide` off. `Glide mode`
+decides whether a struck note's pitch glides too: at `Ties` it starts at its own
+pitch, and at `Always` it glides there from the note before, as a tracker's `3xx`
+does, while its envelope still strikes.
+
+**The gate decides.** At the full `Gate`, `100%`, that every machine but `Acid`
+starts with, each note is held until the next comes, so on a `Legato` track every
+note slides. To strike notes, let the gate close first: a lower `Gate` strikes them
+all, a row's length strikes the note after that row, and an `OFF` ends the note
+before the next.
+
+In the examples, each row is the phrase grid's note, velocity, gate and the gate's
+length; `····` is one pulse of `SGL` and `··` the track's `Gate`.
+
+**Mono, `Reset` on**, as a new track is. Each note is struck: on a synth that holds
+its notes, the level dips to nothing over two thirds of a millisecond and the attack
+starts from there, so every note has its full attack.
+
+```text
+00 C-3 64     ···· ··
+01 E-3 64     ···· ··        struck, from nothing
+02 G-3 64     ···· ··        struck, from nothing
+```
+
+**Mono, `Reset` off, `Sustain` below 100%.** Each note is struck from where the
+level is, as an analog envelope retriggers: no dip, the attack rises from the
+sustain back to the top and decays again, so every note is accented with no gap
+between them. At full sustain the level is already at the top, so only the new pitch
+is heard.
+
+```text
+00 C-3 64     ···· ··
+01 E-3 64     ···· ··        rises from the sustain, then decays
+02 G-3 64     ···· ··        rises from the sustain, then decays
+```
+
+**Legato at the default `Gate`.** Every gate is still open when the next note comes,
+so the whole run is one note, struck once at `00`, its pitch moving at each row, by
+`Glide` if set.
+
+```text
+00 C-3 64     ···· ··        struck
+01 E-3 64     ···· ··        slides
+02 G-3 64     ···· ··        slides
+```
+
+**Legato with a shorter gate.** Row `00` lasts half its step, so its gate closes
+before `01`, which strikes; `01` and `02` are held to the next, so `02` and `03`
+slide. A lower track `Gate`, with `FF` on the rows held into the next, does the same.
+
+```text
+00 C-3 64     ···· 80        struck, let go halfway
+01 E-3 64     ···· ··        struck
+02 G-3 64     ···· ··        slides
+03 C-4 64     ···· ··        slides
+```
+
+**`HLD` on a `Mono` track.** Only the row with `HLD` slides into the next; the rest
+strike, whatever the gate.
+
+```text
+00 C-3 64     ···· ··
+01 E-3 64     HLD1 ··        struck, then slides into 02
+02 G-3 64     ···· ··        slides
+03 C-4 64     ···· ··        struck
+```
+
+**`Glide mode` at `Always`**, with `Glide` at `60 ms`. Every note is struck, its
+envelopes starting again by `Reset`, and its pitch glides from the last note's, as
+a portamento does. After the `OFF` the note has died away, so `03` has nothing to
+glide from and starts at its own pitch.
+
+```text
+00 C-3 64     ···· ··        struck at its pitch, as the first note
+01 E-3 64     ···· ··        struck, gliding up from C-3
+02 OFF ··     ···· ··
+03 G-3 64     ···· ··        struck at its pitch, after silence
+```
+
+**`Phase`, `Reset` and the voice.** When a note is struck, a synth that holds its
+notes, as `VA` and `CSaw` do, carries the voice already sounding into it: its
+oscillators and filters run on, and the envelopes start again. `Reset` on the notes'
+shape decides whether the level dips to nothing first; `Phase` decides whether the
+oscillators start again at the bottom of that dip, `Reset`, so the same note starts
+the same every time, or run on, `Free`, and at `Reset` the dip is always taken. A
+sample, a drum, a struck model, and `Bowed`, `Blown` and `Fluted` don't carry: each
+note starts a voice of its own under the last one's short fade, always from nothing,
+so `Reset` and `Phase` do nothing there. A slide carries nothing over and strikes
+nothing, so none of them acts on it. `Glide mode` at `Always` acts on both kinds of
+strike: a carried voice glides its pitch through the dip, and a voice of its own
+starts at the pitch of the one it cuts and glides from there.
+
+**`Acid`'s own `Slide`.** `Acid` is a TB-303, and its slide is part of that sound: a
+row's `HLD`, on the note that slides away, holds the gate into the next note and
+lags the pitch there over the voice's own `Slide` time, with neither envelope
+starting again. That lag lives in the voice, as the
+303's slide circuit does, so it stays its own rather than being made the same as
+`Glide`, which would change the sound. The track's `Glide`, when set, gives the
+slide its time instead, as it does every other voice's. `Acid`'s own `Gate` lets
+each note go halfway, so in `Legato` it slides only where a note is held into the
+next, as on a 303. `Glide mode` is dimmed on `Acid` and does nothing: a 303 slides
+only where it's told to.
 
 ## A phrase's order
 

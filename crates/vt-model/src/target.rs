@@ -31,7 +31,7 @@ const TRACK_MEANINGS: [&str; 16] = [
 
 /// The track's own settings in the order lists show them: the filter, then output, then pitch,
 /// velocity, gate, time and glide.
-const TRACK_ORDER: [SettingId; 19] = [
+const TRACK_ORDER: [SettingId; 20] = [
     SettingId::CUT,
     SettingId::RES,
     SettingId::FILTER_MODE,
@@ -49,6 +49,7 @@ const TRACK_ORDER: [SettingId; 19] = [
     SettingId::SPEED,
     SettingId::QUANTISE,
     SettingId::GLIDE,
+    SettingId::GLIDE_MODE,
     SettingId::PHASE,
     SettingId::VOICE_MODE,
 ];
@@ -301,6 +302,7 @@ impl SettingId {
                 Self::PHASE,
                 Self::VOICE_MODE,
                 Self::KEY_TRACK,
+                Self::GLIDE_MODE,
                 Self::PLAY,
             ]
             .contains(id)

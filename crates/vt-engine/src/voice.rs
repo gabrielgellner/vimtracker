@@ -305,6 +305,9 @@ pub(crate) struct Carry {
     /// Whether the synth's oscillators start again from where a new note starts them, at the
     /// point the dip reaches nothing. Only with `dip`.
     pub restart: bool,
+    /// With `Glide mode` at `Always`, how long in ms its pitch glides from where the voice's is
+    /// as it strikes, rather than starting at its own (decision 382).
+    pub glide: Option<f32>,
 }
 
 /// One playing note. It keeps its sample ID until it ends, so replacing an instrument's sample
@@ -583,15 +586,19 @@ impl Voice {
         self.gain = gain;
     }
 
-    /// Start a carried note, from where the level is: at nothing after a dip.
+    /// Start a carried note, from where the level is: at nothing after a dip. Its pitch starts at
+    /// its own, or glides there from where it is with `Glide mode` at `Always`.
     fn strike(&mut self, carry: Carry) {
         let note = carry.note;
         self.stage = Stage::Held { from: self.level };
         self.let_go = false;
         self.elapsed = 0;
-        self.increment = note.increment();
         self.tune = note.tune();
         self.gliding = None;
+        match carry.glide {
+            Some(ms) => self.glide_to(note.increment(), ms),
+            None => self.increment = note.increment(),
+        }
         self.gain = note.sample_gain();
         self.gain_target = self.gain;
         self.shape = note.shape;
@@ -689,17 +696,48 @@ impl Voice {
     /// would: the same synth, or the same sample, entry and slice. A one-shot shape plays on
     /// through its release, but its gate has closed all the same.
     pub(crate) fn gate_open_on(&self, note: &NoteOn) -> bool {
-        self.is_held()
-            && !self.let_go
-            && match (&self.synth, note.synth) {
-                (Some(playing), Some(voice)) => playing.voice() == voice,
-                (None, None) => {
-                    self.sample == note.sample
-                        && self.entry == note.entry
-                        && self.slice == note.slice
-                }
-                _ => false,
+        self.is_held() && !self.let_go && self.plays_same(note)
+    }
+
+    /// Whether it plays what a note would: the same synth, or the same sample, entry and slice.
+    fn plays_same(&self, note: &NoteOn) -> bool {
+        match (&self.synth, note.synth) {
+            (Some(playing), Some(voice)) => playing.voice() == voice,
+            (None, None) => {
+                self.sample == note.sample && self.entry == note.entry && self.slice == note.slice
             }
+            _ => false,
+        }
+    }
+
+    /// Where its pitch is, as a speed, if it's sounding what a note would play, held or
+    /// released, for `Glide mode` at `Always` to glide the note from (decision 382). Nothing once
+    /// it's silent or cut, as a note after silence has nothing to glide from.
+    pub(crate) fn sounding_speed(&self, note: &NoteOn) -> Option<f64> {
+        let sounding = match self.stage {
+            Stage::Held { .. } | Stage::Released { .. } => true,
+            Stage::Dip { .. } => self.carried.is_some(),
+            Stage::Cut { .. } | Stage::Idle => false,
+        };
+        (sounding && self.plays_same(note)).then_some(self.increment)
+    }
+
+    /// Glide a note just started on a voice of its own from a speed, the pitch of the note it
+    /// cut, to its own, in about this many ms (decision 382).
+    pub(crate) fn glide_from(&mut self, from: f64, ms: f32) {
+        let to = self.increment;
+        self.increment = from;
+        self.glide_to(to, ms);
+    }
+
+    /// Glide from where the speed is to another in about this many ms, on the lag `Acid` slides
+    /// on.
+    fn glide_to(&mut self, to: f64, ms: f32) {
+        let frames = f64::from(ms) / 1000.0 * f64::from(self.rate) * GLIDE_SHARE;
+        self.gliding = Some(Gliding {
+            to,
+            share: 1.0 - (-1.0 / frames.max(1.0)).exp(),
+        });
     }
 
     /// Carry on as another note, with no new attack: a sample keeps playing at the new note's
@@ -718,15 +756,12 @@ impl Voice {
             synth.slide(note.accent, glide_ms);
             return;
         }
-        self.gliding = glide_ms.map(|ms| {
-            let frames = f64::from(ms) / 1000.0 * f64::from(self.rate) * GLIDE_SHARE;
-            Gliding {
-                to,
-                share: 1.0 - (-1.0 / frames.max(1.0)).exp(),
+        match glide_ms {
+            Some(ms) => self.glide_to(to, ms),
+            None => {
+                self.gliding = None;
+                self.increment = to;
             }
-        });
-        if self.gliding.is_none() {
-            self.increment = to;
         }
     }
 

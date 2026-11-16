@@ -468,6 +468,10 @@ impl TrackState {
                     self.held_key_track = value;
                     return;
                 }
+                SettingId::GLIDE_MODE => {
+                    self.held_glide_mode = value;
+                    return;
+                }
                 _ => return,
             },
             // Read as a note starts, which keeps what it chose until it ends.

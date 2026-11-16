@@ -778,14 +778,23 @@ const MASTER_OUTPUT: DeviceLayout = stored(
 /// A note's pitch and how it joins and ends, what cuts it off, then the steps' timing, and last
 /// how much louder or softer than written its notes play, a live dynamics knob. How near the grid
 /// its rows' nudges play, `Quantise`, past eight knobs, is on a second page, a live timing knob,
-/// with how its notes join, `Mode`.
+/// with how its notes join, `Mode`, and which of them glide, `Glide mode`.
 const PLAY: DeviceLayout = live(
     "play",
     &[
         PLAY_PAGE,
         knobs(
             "Timing",
-            [s("quantise"), s("voicemode"), __, __, __, __, __, __],
+            [
+                s("quantise"),
+                s("voicemode"),
+                s("glidemode"),
+                __,
+                __,
+                __,
+                __,
+                __,
+            ],
         ),
     ],
 );
@@ -806,7 +815,7 @@ const PLAY_PAGE: Page<Setting> = knobs(
 );
 
 /// A synth's: the sampler's, with whether its oscillators start again on each note between
-/// `Quantise` and `Mode`.
+/// `Quantise` and `Mode`, and `Glide mode` after.
 const SYNTH_PLAY: DeviceLayout = live(
     "synthplay",
     &[
@@ -817,7 +826,7 @@ const SYNTH_PLAY: DeviceLayout = live(
                 s("quantise"),
                 s("phase"),
                 s("voicemode"),
-                __,
+                s("glidemode"),
                 __,
                 __,
                 __,

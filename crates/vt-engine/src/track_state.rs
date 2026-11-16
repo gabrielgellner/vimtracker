@@ -272,6 +272,8 @@ pub(crate) struct TrackState {
     held_phase: f32,
     /// What `Mode` holds, as a place in `VoiceMode::ALL`.
     held_voice_mode: f32,
+    /// What `Glide mode` holds, as a place in `GlideMode::ALL`.
+    held_glide_mode: f32,
     /// Held `SMP`, `STA`, `SLEN` and `PLY`, the sampler's settings, which its next note reads as it
     /// starts, on the `00` to `FF` scale: the bank entry it plays by number, and how it cuts it.
     held_sampler: [f32; SAMPLER_SETTINGS],
@@ -431,6 +433,7 @@ impl TrackState {
             held_glide: f32::from(SettingId::GLIDE.entry().default),
             held_phase: f32::from(SettingId::PHASE.entry().default),
             held_voice_mode: f32::from(SettingId::VOICE_MODE.entry().default),
+            held_glide_mode: f32::from(SettingId::GLIDE_MODE.entry().default),
             held_sampler: std::array::from_fn(|at| {
                 SettingId::sampler(at).map_or(0.0, |id| f32::from(id.entry().default))
             }),
@@ -604,6 +607,13 @@ impl TrackState {
         let carries = !acid && (resumes || self.voice.carries(note.synth));
         // A note on a voice of its own cuts the one sounding, and starts under its fade.
         let cuts = !acid && !carries && self.voice.active();
+        // With `Glide mode` at `Always`, a struck note's pitch glides from the note still sounding
+        // on the same synth or sample, as a tie's does, though it strikes. `Acid` slides by its
+        // own `Slide` and a 303's slide flag alone (decision 382).
+        let glide = (self.held_glide_mode >= 0.5 && note.synth != Some(SynthVoice::Acid))
+            .then(|| glide_ms(self.held_glide))
+            .flatten()
+            .and_then(|ms| Some((self.voice.sounding_speed(&note)?, ms)));
         if !acid && !carries {
             self.cut_to_tail();
         }
@@ -622,6 +632,9 @@ impl TrackState {
         } else if !carries {
             self.voice = Voice::start(note, rate, self.pitch);
             self.fresh_voice = true;
+        }
+        if let Some((from, ms)) = glide.filter(|_| !acid && !carries) {
+            self.voice.glide_from(from, ms);
         }
         self.voice.set_synth(self.synth_settings());
         // Each note draws its seeds as it's played, whether it has a voice of its own or not, so
@@ -648,6 +661,7 @@ impl TrackState {
                 drift,
                 dip: note.shape.reset() || restart,
                 restart,
+                glide: glide.map(|(_, ms)| ms),
             });
             return;
         }
