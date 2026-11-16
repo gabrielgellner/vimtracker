@@ -23,6 +23,7 @@ use crate::pages::project;
 use crate::pages::sample::SampleKey;
 use crate::pages::sample::auditioning::{PADS, pad_key};
 use crate::pages::sample::marking::MarkWait;
+use std::sync::Arc;
 
 use super::accent_slide::{HeldFlag, Moved, Written};
 use super::{App, Entry, HOLD_TIME, KEYS_NOTES, Momentary, which_key_due};
@@ -486,6 +487,20 @@ impl App {
         }
     }
 
+    /// `Space 5` to `Space 8`: the track page on one of its pages, where its cursor was left, as a
+    /// jump `C-o` comes back from. It's `App`'s, as it records the jump and shows the view.
+    pub(crate) fn show_track_page(&mut self, page: Page) {
+        if self.modes.view != View::Track || self.track_page.page != page {
+            self.record_jump();
+        }
+        self.track_page.show(page);
+        self.track_page.phrase = self.services.phrase_id();
+        let song = Arc::clone(self.song());
+        self.track_page
+            .settle(song.tracks.get(self.services.cursor.track));
+        self.show_view(View::Track);
+    }
+
     /// Show a view, as a jump that `Ctrl-O` can undo.
     pub(crate) fn jump_to_view(&mut self, view: View) {
         if view != self.modes.view {
@@ -626,9 +641,9 @@ impl App {
     ///    line, Insert, a jump, a guide or help, which [`App::handle_key`] gives its keys to
     ///    before they reach the table;
     /// 2. the page on screen, [`App::run_page`], through `Page::key` on a page that's a component;
-    /// 3. `App`'s commands across pages, for what that page passed back, such as `i`, `/`, `M`,
-    ///    `gm`, the Keys mode and the pickers, and then the track page's edits
-    ///    ([`App::run_across_pages`]);
+    /// 3. on the track page and the mixer, what a key they passed back means across them, such as
+    ///    `i`, `/`, `M`, `gm`, the Keys mode and the pickers, and then the track page's edits
+    ///    ([`TrackPage::across`](crate::pages::track::TrackPage::across));
     /// 4. the tree of chains and phrases, [`App::run_tree`];
     /// 5. the grammar's operators, the motion after one, and the Visual modes,
     ///    [`App::run_grammar`];
@@ -690,7 +705,14 @@ impl App {
                 self.settled(outcome, false);
             }
             Cmd::ApplyGenerator => self.services.apply_generator_here(),
-            Cmd::BakeMods => self.bake_pitch_mods(),
+            Cmd::BakeMods => {
+                let selected = self.modes.mode.is_visual().then(|| {
+                    let selection = self.current_selection();
+                    self.leave_selection(selection);
+                    selection.range
+                });
+                self.services.bake_pitch_mods(selected);
+            }
             Cmd::MapMacro | Cmd::MacroMapping => {
                 self.services.status =
                     "M and gm map settings to macros, on the track page".to_owned();

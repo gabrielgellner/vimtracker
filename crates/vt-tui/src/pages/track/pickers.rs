@@ -13,14 +13,16 @@ use vt_model::settings::SettingId;
 use vt_model::song::{Machine, Role, Track};
 use vt_model::steps::{StepRate, Steps};
 
-use crate::app::App;
 use crate::overlays::command::parse::{Line, PatchLine, PresetLine};
 use crate::overlays::picker::{Item, Pick, Picker};
+use crate::pages::Outcome;
+use crate::services::Services;
 use crate::widgets::glyphs;
 use crate::widgets::param::edit::{self, ChoiceList};
 use crate::widgets::theme;
 
 use super::editing::toggle_control;
+use super::tuning::tuning_picker;
 use crate::controls::{AccumulatorField, ArpField, Control, no_modes, view};
 
 /// The titles of each slot's lists of types, as a list's title is fixed text.
@@ -150,111 +152,117 @@ fn no_list(control: Control, track: &Track) -> String {
     }
 }
 
-impl App {
-    pub(super) fn open_control_picker(&mut self) {
-        let control = self.track_control();
-        let page = self.services.page_track();
-        match control {
-            // Something that's only on or off switches, as there's nothing to choose between.
-            Control::Mute | Control::Solo | Control::Limiter | Control::Safe => {
-                toggle_control(&mut self.services, control);
-            }
-            Control::Sample => self.open_bank_picker(),
-            Control::Tune | Control::Cents => self.open_tuning_picker(control),
-            _ if control.setting_on(&page) == Some(SettingId::SLICE) => {
-                self.open_picker(self.services.slice_picker());
-            }
-            // A track can follow the project's, which isn't one of the grooves.
-            Control::Groove => self.open_picker(self.services.groove_picker(true)),
-            // A macro is the patch's knob, so its list is adding a patch and saving one.
-            Control::Macro(_) => {
-                self.show_picker(Picker::new("Patches", with_patches(Vec::new())));
-            }
-            Control::Mod(
-                slot,
-                field @ (ModField::Type | ModField::Rate | ModField::Fade | ModField::Reset),
-            ) => self.open_mod_picker(slot, field),
-            // The Gen page's lists are its own (`generators`).
-            Control::Gen { .. } | Control::NewGenerator(_) => {
-                self.services.status = no_list(control, &page);
-            }
-            _ => {
-                let shown = view(control, &page, self.services.song(), false);
-                match shown.as_ref().and_then(edit::choices) {
-                    Some(list) => {
-                        let picker = choice_picker(self.services.cursor.track, control, list);
-                        self.show_picker(picker);
-                    }
-                    None => self.services.status = no_list(control, &page),
+/// `K` on the track page or the mixer, on the setting `control`: the list of what it can be, with
+/// what it is highlighted, or nothing, the status line saying why. Something only on or off
+/// switches.
+pub(super) fn control_picker(control: Control, services: &mut Services) -> Outcome {
+    let page = services.page_track();
+    match control {
+        // Something that's only on or off switches, as there's nothing to choose between.
+        Control::Mute | Control::Solo | Control::Limiter | Control::Safe => {
+            toggle_control(services, control);
+            Outcome::Done
+        }
+        // The bank's list, as `:bank` opens it.
+        Control::Sample => Outcome::Run(Line::Bank),
+        Control::Tune | Control::Cents => tuning_picker(control, services),
+        _ if control.setting_on(&page) == Some(SettingId::SLICE) => {
+            Outcome::Open(Box::new(services.slice_picker()))
+        }
+        // A track can follow the project's, which isn't one of the grooves.
+        Control::Groove => Outcome::Open(Box::new(services.groove_picker(true))),
+        // A macro is the patch's knob, so its list is adding a patch and saving one.
+        Control::Macro(_) => {
+            Outcome::Open(Box::new(Picker::new("Patches", with_patches(Vec::new()))))
+        }
+        Control::Mod(
+            slot,
+            field @ (ModField::Type | ModField::Rate | ModField::Fade | ModField::Reset),
+        ) => Outcome::Open(Box::new(mod_picker(slot, field, services))),
+        // The Gen page's lists are its own (`generators`).
+        Control::Gen { .. } | Control::NewGenerator(_) => {
+            services.status = no_list(control, &page);
+            Outcome::Done
+        }
+        _ => {
+            let shown = view(control, &page, services.song(), false);
+            match shown.as_ref().and_then(edit::choices) {
+                Some(list) => Outcome::Open(Box::new(choice_picker(
+                    services.cursor.track,
+                    control,
+                    list,
+                ))),
+                None => {
+                    services.status = no_list(control, &page);
+                    Outcome::Done
                 }
             }
         }
     }
+}
 
-    /// List what a mod slot's setting can be that isn't one of its view's choices, with the
-    /// current one highlighted: its type, which changes what the device is, a rate or a fade,
-    /// which aren't one number, and an envelope's reset, on first.
-    fn open_mod_picker(&mut self, slot: usize, field: ModField) {
-        let track = self.services.cursor.track;
-        let modulator = self.services.page_track().mods[slot];
-        let pick = |modulator| Pick::Mod {
-            track,
-            slot,
-            modulator,
-        };
-        let (lfo, steps) = (modulator.lfo, modulator.steps);
-        let (title, items): (&'static str, Vec<Item>) = match field {
-            ModField::Type => {
-                let kinds = ModKind::ALL.map(|kind| {
-                    Item::new(kind.name(), pick(ModSlot { kind, ..modulator }))
-                        .meaning(kind.meaning())
-                });
-                (TYPE_TITLES[slot], with_patches(kinds.to_vec()))
-            }
-            ModField::Rate if modulator.kind == ModKind::Steps => {
-                let rates = StepRate::ALL.map(|rate| {
-                    let steps = Steps { rate, ..steps };
-                    Item::new(rate.to_string(), pick(ModSlot { steps, ..modulator }))
-                });
-                ("Steps rate", rates.to_vec())
-            }
-            ModField::Reset => {
-                let choices = [true, false].map(|reset| {
-                    let (name, meaning) = if reset {
-                        ("on", "Each note starts it from zero")
-                    } else {
-                        ("off", "Each note goes on from where it is")
-                    };
-                    let mut chosen = modulator;
-                    chosen.set_field(field, i32::from(reset));
-                    Item::new(name, pick(chosen)).meaning(meaning)
-                });
-                ("Envelope reset", choices.to_vec())
-            }
-            ModField::Rate => {
-                let rates = note_rates()
-                    .into_iter()
-                    .map(|rate| {
-                        let lfo = Lfo { rate, ..lfo };
-                        Item::new(rate.to_string(), pick(ModSlot { lfo, ..modulator }))
-                    })
-                    .collect();
-                ("LFO rate. i types any other", rates)
-            }
-            _ => {
-                let fades = Fade::ALL.map(|fade| {
-                    let lfo = Lfo { fade, ..lfo };
-                    let meaning = match fade {
-                        Fade::Off => "the whole wave from each note",
-                        Fade::In(_) => "in from nothing after each note",
-                        Fade::Out(_) => "out to nothing after each note",
-                    };
-                    Item::new(fade.to_string(), pick(ModSlot { lfo, ..modulator })).meaning(meaning)
-                });
-                ("LFO fade", fades.to_vec())
-            }
-        };
-        let position = items.iter().position(|item| item.pick == pick(modulator));
-        self.show_picker(Picker::new(title, items).opened_on(position));
-    }
+/// List what a mod slot's setting can be that isn't one of its view's choices, with the
+/// current one highlighted: its type, which changes what the device is, a rate or a fade,
+/// which aren't one number, and an envelope's reset, on first.
+fn mod_picker(slot: usize, field: ModField, services: &Services) -> Picker {
+    let track = services.cursor.track;
+    let modulator = services.page_track().mods[slot];
+    let pick = |modulator| Pick::Mod {
+        track,
+        slot,
+        modulator,
+    };
+    let (lfo, steps) = (modulator.lfo, modulator.steps);
+    let (title, items): (&'static str, Vec<Item>) = match field {
+        ModField::Type => {
+            let kinds = ModKind::ALL.map(|kind| {
+                Item::new(kind.name(), pick(ModSlot { kind, ..modulator })).meaning(kind.meaning())
+            });
+            (TYPE_TITLES[slot], with_patches(kinds.to_vec()))
+        }
+        ModField::Rate if modulator.kind == ModKind::Steps => {
+            let rates = StepRate::ALL.map(|rate| {
+                let steps = Steps { rate, ..steps };
+                Item::new(rate.to_string(), pick(ModSlot { steps, ..modulator }))
+            });
+            ("Steps rate", rates.to_vec())
+        }
+        ModField::Reset => {
+            let choices = [true, false].map(|reset| {
+                let (name, meaning) = if reset {
+                    ("on", "Each note starts it from zero")
+                } else {
+                    ("off", "Each note goes on from where it is")
+                };
+                let mut chosen = modulator;
+                chosen.set_field(field, i32::from(reset));
+                Item::new(name, pick(chosen)).meaning(meaning)
+            });
+            ("Envelope reset", choices.to_vec())
+        }
+        ModField::Rate => {
+            let rates = note_rates()
+                .into_iter()
+                .map(|rate| {
+                    let lfo = Lfo { rate, ..lfo };
+                    Item::new(rate.to_string(), pick(ModSlot { lfo, ..modulator }))
+                })
+                .collect();
+            ("LFO rate. i types any other", rates)
+        }
+        _ => {
+            let fades = Fade::ALL.map(|fade| {
+                let lfo = Lfo { fade, ..lfo };
+                let meaning = match fade {
+                    Fade::Off => "the whole wave from each note",
+                    Fade::In(_) => "in from nothing after each note",
+                    Fade::Out(_) => "out to nothing after each note",
+                };
+                Item::new(fade.to_string(), pick(ModSlot { lfo, ..modulator })).meaning(meaning)
+            });
+            ("LFO fade", fades.to_vec())
+        }
+    };
+    let position = items.iter().position(|item| item.pick == pick(modulator));
+    Picker::new(title, items).opened_on(position)
 }

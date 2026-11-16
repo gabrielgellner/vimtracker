@@ -268,11 +268,4 @@ impl App {
             }
         }
     }
-
-    /// Start a search.
-    pub(crate) fn open_field_jump(&mut self) {
-        self.modes.count = None;
-        self.overlays.field_jump = Some(FieldJump::default());
-        self.modes.mode = Mode::Jump;
-    }
 }

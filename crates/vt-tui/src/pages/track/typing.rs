@@ -7,12 +7,13 @@ use vt_model::modulation::{ModField, ModKind, ModSlot};
 use vt_model::shape::params::Typing;
 use vt_model::steps::{StepRate, Steps};
 
-use crate::app::{App, Entry};
-use crate::input::mode::{Mode, View};
+use crate::app::Entry;
+use crate::input::mode::View;
 use crate::input::typed::{HEX, Rule, Typed};
 use crate::services::Services;
 use crate::widgets::param::edit;
 
+use super::TrackPage;
 use super::editing::{set_fine_here, set_mod, view_on, write};
 use super::generators::{gen_typing, type_gen};
 use super::tuning::type_tuning;
@@ -21,35 +22,39 @@ use crate::controls::Control;
 /// The longest a generator's value can be typed: a list of eight notes and the spaces between.
 const GEN_TEXT: usize = 40;
 
-impl App {
-    /// Type a value: two hex digits for levels, and anything else then `Enter`.
-    pub(crate) fn insert_track_page(&mut self, key: KeyCode) {
-        let control = self.track_control();
+impl TrackPage {
+    /// Type a value into `entry` on the setting `control`: two hex digits for levels, and anything
+    /// else then `Enter`. Returns false once Insert is done with, written or let go.
+    pub(crate) fn insert(
+        &self,
+        key: KeyCode,
+        control: Control,
+        view: View,
+        entry: &mut Entry,
+        services: &mut Services,
+    ) -> bool {
         // A generator's ends on a column of hex values enter themselves, as levels do, and a
         // list of notes takes more room.
         let (hex, longest) = match control {
-            Control::Gen { .. } => (
-                gen_typing(&self.services, control) == Some(Typing::Hex),
-                GEN_TEXT,
-            ),
+            Control::Gen { .. } => (gen_typing(services, control) == Some(Typing::Hex), GEN_TEXT),
             _ => (control.is_hex(), 12),
         };
         let rule = if hex { HEX } else { Rule::Text { longest } };
-        match self.modes.entry.text.key(key, rule) {
-            Typed::Editing => {}
+        match entry.text.key(key, rule) {
+            Typed::Editing => true,
             Typed::Cancel => {
-                self.modes.entry = Entry::default();
-                self.modes.mode = Mode::Normal;
+                *entry = Entry::default();
+                false
             }
             Typed::Commit(text) => {
-                self.modes.mode = Mode::Normal;
-                if hex && self.track_page.fine {
+                if hex && self.fine {
                     if let Ok(fine) = u8::from_str_radix(&text, 16) {
-                        set_fine_here(&mut self.services, control, fine);
+                        set_fine_here(services, control, fine);
                     }
                 } else if !text.is_empty() {
-                    commit_typed(&mut self.services, self.modes.view, control, &text);
+                    commit_typed(services, view, control, &text);
                 }
+                false
             }
         }
     }

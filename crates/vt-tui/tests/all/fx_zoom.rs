@@ -33,7 +33,7 @@ fn z_i_zooms_in_on_the_cursors_slot_under_a_strip_of_them_all_and_z_o_goes_back(
     app.track_page.images.insert(PanelKey::Zoom, 0x01_02_03);
     press(&mut app, "zi");
     assert!(app.track_page.zoomed);
-    assert!(app.fx_zoomed());
+    assert!(app.track_page.fx_zoomed(app.modes.view));
     let screen = zoomed_screen(&mut app, false);
     // The strip: a tile for each slot, 36 wide with 2 between, filling the page's 150 columns,
     // each with its switch, its effect and its type, and the first row of its settings by their
@@ -109,7 +109,7 @@ fn z_i_zooms_in_on_the_cursors_slot_under_a_strip_of_them_all_and_z_o_goes_back(
         format!("│  │{}│    │", "▒".repeat(140))
     );
     assert_eq!(
-        app.fx_zoom_hint().unwrap(),
+        app.track_page.zoom_hint(&app.ctx()).unwrap(),
         "Slot 2 zoomed in: { } another slot, z o every slot"
     );
     // A pedal has nothing to draw: its settings alone, as tall as a device in the rack.
@@ -138,7 +138,7 @@ fn z_i_zooms_in_on_the_cursors_slot_under_a_strip_of_them_all_and_z_o_goes_back(
     press(&mut app, "zi");
     press(&mut app, "H");
     assert_eq!(app.track_page.page, Page::Mod);
-    assert!(!app.fx_zoomed());
+    assert!(!app.track_page.fx_zoomed(app.modes.view));
     assert!(!status_line(&app).starts_with(" ZOOM "));
     press(&mut app, "zi");
     assert_eq!(
@@ -146,7 +146,7 @@ fn z_i_zooms_in_on_the_cursors_slot_under_a_strip_of_them_all_and_z_o_goes_back(
         "z i zooms in on an effect, on the FX page"
     );
     press(&mut app, "L");
-    assert!(app.fx_zoomed());
+    assert!(app.track_page.fx_zoomed(app.modes.view));
 }
 
 #[test]

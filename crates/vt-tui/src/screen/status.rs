@@ -385,7 +385,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .sample_page
         .badge(app.modes.view, app.modes.mode)
         .or_else(|| app.song_view.anchor.map(|_| Mode::VisualField.label()))
-        .or_else(|| (app.fx_zoomed() && app.modes.mode != Mode::Keys).then_some("ZOOM"));
+        .or_else(|| {
+            (app.track_page.fx_zoomed(app.modes.view) && app.modes.mode != Mode::Keys)
+                .then_some("ZOOM")
+        });
     let badge = match special {
         Some("SETTINGS") => Some(theme::ROSEWATER),
         Some(mode) if mode == Mode::VisualField.label() => Some(theme::MAUVE),

@@ -8,8 +8,10 @@
 //! `generators` what each page's keys do, and
 //! `editing`, `typing` and `tuning` change the setting under the cursor, as functions over the
 //! services that the mixer shares; `pictures` says which pictures the page wants the terminal to
-//! have and where their dots go, as data for `Graphics`; `pickers`, which open the program's
-//! picker, and the Gen page's `Enter`, which opens the program's shape panel, are still `App`'s.
+//! have and where their dots go, as data for `Graphics`; `pickers` builds the lists `K` opens.
+//! What a key the page passes back means across it and the mixer is [`TrackPage::across`], which
+//! asks `App` for the picker, the shape panel, the mapping view or the field jump with an
+//! [`Outcome`]. Presets and patches are `presets` and `patches`.
 //! `TrackPage` is a [`crate::pages::Page`], with its rows of the binding table, `Page::KEYS`, here
 //! beside it.
 
@@ -30,8 +32,6 @@ pub use device::DeviceCursor;
 pub(crate) use device::rack_places;
 pub(crate) use fx::TakenInsert;
 
-use std::sync::Arc;
-
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use vt_model::insert::INSERTS;
@@ -40,7 +40,7 @@ use vt_model::selection::Motion;
 use vt_model::song::Track;
 use vt_model::steps::STEPS;
 
-use crate::app::{App, Entry};
+use crate::app::Entry;
 use crate::controls::{Control, DEVICE_ROWS, DeviceSpec, Page};
 use crate::graphics::slots::SlotDrawing;
 use crate::graphics::{PanelIds, PanelWant};
@@ -53,6 +53,7 @@ use crate::services::meter::{FLOOR_DB, Held, ReductionHistory};
 use device::{device_beside, rack_column};
 use editing::{adjust_control, adjust_fine, reset_control, set_fine_here};
 use modulation::toggle_modulator;
+use pickers::control_picker;
 
 /// The place nearest a row and field that holds a setting: in a row with none, the nearest row
 /// above with some, and on a hole, the nearest setting along the row, the left one of two as near.
@@ -676,106 +677,70 @@ fn steps_played(track: Option<&Track>, slot: usize) -> u8 {
     })
 }
 
-impl App {
-    /// What the cursor is on, on the track page or the mixer.
-    pub fn track_control(&self) -> Control {
-        if self.modes.view == View::Mixer {
-            return self.mixer_page.control_here(&self.ctx());
-        }
-        self.track_page.control(self.services.track_here())
-    }
-
-    /// Put the track page's cursor at the place nearest a row and field that holds a setting.
-    pub(crate) fn move_control(&mut self, row: usize, field: usize) {
-        let song = Arc::clone(self.song());
-        self.track_page
-            .move_to(song.tracks.get(self.services.cursor.track), row, field);
-    }
-
-    /// `Space 5` to `Space 8`: the track page on one of its pages, where its cursor was left, as a
-    /// jump `C-o` comes back from.
-    pub(crate) fn show_track_page(&mut self, page: Page) {
-        if self.modes.view != View::Track || self.track_page.page != page {
-            self.record_jump();
-        }
-        self.track_page.show(page);
-        self.track_page.phrase = self.services.phrase_id();
-        let song = Arc::clone(self.song());
-        self.track_page
-            .settle(song.tracks.get(self.services.cursor.track));
-        self.show_view(View::Track);
-    }
-
-    /// What a key the track page or the mixer passed back means, `times` being its count, in this
-    /// order:
+impl TrackPage {
+    /// What a key the track page or the mixer passed back means, `times` being its count, on the
+    /// setting under the cursor, `control`, in this order:
     /// 1. A turn of a setting a macro holds is refused, saying where to turn it
-    ///    ([`App::refuses_turn`]), before anything can turn it.
+    ///    ([`Services::refuses_turn`]), before anything can turn it.
     /// 2. The Gen page's edits, on the generator under the cursor ([`TrackPage::gen_edit`]), only
     ///    while the track page is on screen: the mixer keeps its keys though the track page is
     ///    left on Gen.
-    /// 3. `App`'s commands across pages, `/`, `M`, `gm` and the Keys mode, none of which the Gen
-    ///    page takes, and `Enter` on the Gen page, which opens the shape panel.
+    /// 3. What only `App` opens for the page, `/`, `M` and `gm`, and the Keys mode, none of which
+    ///    the Gen page takes, and `Enter` on the Gen page, which opens the shape panel.
     /// 4. `r`, `Enter` and `Space g a` off the Gen page, which say where they work, but for
     ///    `Space g a` on the Mod page, which keeps a Steps slot's drift; then the pickers and
     ///    Insert.
     /// 5. The track page's edits on the setting under the cursor, which the mixer shares.
     ///
-    /// Returns false if it means what it does elsewhere, such as going to another track.
-    pub(crate) fn run_across_pages(&mut self, cmd: Cmd, times: usize) -> bool {
-        if self.refuses_turn(cmd) {
-            return true;
+    /// Passes it back if it means what it does elsewhere, such as going to another track.
+    pub(crate) fn across(
+        &mut self,
+        cmd: Cmd,
+        times: usize,
+        control: Control,
+        ctx: &mut CtxMut,
+    ) -> Outcome {
+        if ctx.services.refuses_turn(cmd, control) {
+            return Outcome::Done;
         }
-        let control = self.track_control();
-        let mut ctx = CtxMut {
-            services: &mut self.services,
-            modes: &self.modes,
-            wheel: &mut self.wheel,
-        };
-        let outcome = self.track_page.gen_edit(cmd, times, control, &mut ctx);
-        // The count was taken before the page had the key.
-        if self.settled(outcome, false) {
-            return true;
+        match self.gen_edit(cmd, times, control, ctx) {
+            Outcome::Passed => {}
+            outcome => return outcome,
         }
+        let view = ctx.modes.view;
+        let services = &mut *ctx.services;
         match cmd {
-            Cmd::FieldJump => self.open_field_jump(),
-            Cmd::MapMacro => self.open_macro_picker(),
-            Cmd::MacroMapping => self.open_mapping(),
+            Cmd::FieldJump => Outcome::FieldJump,
+            Cmd::MapMacro => services.macro_picker(control),
+            Cmd::MacroMapping => services.mapping_of(control),
             Cmd::Audition => {
-                self.modes.mode = Mode::Keys;
-                self.services.status = "a w s e d f play, < > change octave, ; stops".to_owned();
+                services.status = "a w s e d f play, < > change octave, ; stops".to_owned();
+                Outcome::Enter(Mode::Keys)
             }
-            Cmd::ReopenGenerator if self.track_page.on_gen(self.modes.view, control) => {
-                self.open_gen_panel()
+            Cmd::ReopenGenerator if self.on_gen(view, control) => {
+                Self::gen_panel(control, services)
             }
             Cmd::RollGenerator | Cmd::ReopenGenerator => {
-                self.services.status =
-                    "r and Enter work on a generator, on the Gen page".to_owned();
+                services.status = "r and Enter work on a generator, on the Gen page".to_owned();
+                Outcome::Done
             }
-            Cmd::ApplyGenerator if self.track_page.page == Page::Mod => self.keep_drift(),
+            Cmd::ApplyGenerator if self.page == Page::Mod => {
+                services.keep_drift(control);
+                Outcome::Done
+            }
             Cmd::ApplyGenerator => {
-                self.services.status =
+                services.status =
                     "Space g a keeps a Steps slot's drift on the Mod page, or applies a generator \
                      on the Gen page"
                         .to_owned();
+                Outcome::Done
             }
-            Cmd::PickValue => self.open_control_picker(),
-            Cmd::EnterInsert if control.is_choice(&self.services.page_track()) => {
-                self.open_control_picker();
+            Cmd::PickValue => control_picker(control, services),
+            Cmd::EnterInsert if control.is_choice(&services.page_track()) => {
+                control_picker(control, services)
             }
-            Cmd::EnterInsert => {
-                self.modes.entry = Entry::default();
-                self.modes.mode = Mode::Insert;
-            }
-            _ => {
-                let outcome = self
-                    .track_page
-                    .edit(cmd, times, control, &mut self.services);
-                // The count was taken before the page had the key.
-                if !self.settled(outcome, false) {
-                    return false;
-                }
-            }
+            Cmd::EnterInsert => Outcome::Insert(Entry::default()),
+            _ => self.edit(cmd, times, control, services),
         }
-        true
     }
 }

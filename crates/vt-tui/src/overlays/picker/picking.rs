@@ -207,7 +207,9 @@ impl App {
             self.grammar.pending.clear();
             self.grammar.pending_since = None;
             self.modes.mode = self.mode_after_picker();
-            self.map_to_macro(usize::from(digit as u8 - b'1'));
+            let control = self.track_control();
+            self.services
+                .map_to_macro(usize::from(digit as u8 - b'1'), control, self.modes.view);
             return;
         }
         // A key with Alt or Cmd means nothing to it, and leaves a `g` or a `z` waiting, and
@@ -251,7 +253,10 @@ impl App {
         match pick {
             Pick::View(view) => self.jump_to_view(view),
             Pick::TrackPage(page) => self.show_track_page(page),
-            Pick::Macro(at) => self.map_to_macro(at),
+            Pick::Macro(at) => {
+                let control = self.track_control();
+                self.services.map_to_macro(at, control, self.modes.view);
+            }
             Pick::MacroHolding(at) => self.go_to_macro(at),
             Pick::Use {
                 section,
@@ -414,9 +419,27 @@ impl App {
                 phrase,
                 generator,
                 choice,
-            } => self.pick_gen_choice(phrase, generator, choice),
-            Pick::GenColumn(field) => self.pick_gen_column(field, None),
-            Pick::GenCommand { field, command } => self.pick_gen_column(field, Some(command)),
+            } => self
+                .services
+                .pick_gen_choice(phrase, generator, choice, self.modes.view),
+            Pick::GenColumn(field) => {
+                let outcome = self.track_page.pick_gen_column(
+                    field,
+                    None,
+                    self.modes.view,
+                    &mut self.services,
+                );
+                self.settled(outcome, false);
+            }
+            Pick::GenCommand { field, command } => {
+                let outcome = self.track_page.pick_gen_column(
+                    field,
+                    Some(command),
+                    self.modes.view,
+                    &mut self.services,
+                );
+                self.settled(outcome, false);
+            }
             Pick::ShapeCommand(command) => self.pick_shape_command(command),
             Pick::Guide(guide) => {
                 self.overlays.guide.show(guide);

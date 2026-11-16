@@ -5,67 +5,65 @@
 use vt_model::action::Action;
 use vt_model::bank::BankEntry;
 
-use crate::app::App;
 use crate::controls::tuning::{TuneOf, Tuning, steps, tuning, tuning_most, tuning_text};
 use crate::overlays::picker::{Item, Pick, Picker};
+use crate::pages::Outcome;
 use crate::services::Services;
 
 use crate::controls::Control;
 
-impl App {
-    /// `K` on `Tune` or `Cents`: its values, and for a slice's own tune, the sample's first.
-    pub(super) fn open_tuning_picker(&mut self, control: Control) {
-        let Some((number, entry, of)) = tuning_here(&mut self.services) else {
-            return;
-        };
-        let tuning = Tuning {
-            number,
-            entry: &entry,
-            of,
-        };
-        let current = tuning.value(control);
-        let mut items = Vec::new();
-        if control == Control::Tune
-            && let TuneOf::Slice(_) = of
-        {
-            let sample = tuning_text(control, entry.edit.play.tune);
-            items.push(
-                Item::new(
-                    format!("As the sample, {sample}"),
-                    Pick::Tuning {
-                        control,
-                        value: None,
-                    },
-                )
-                .meaning("Play as the sample does"),
-            );
-        }
-        let first = items.len();
-        let choices: Vec<i8> = if control == Control::Cents {
-            (-9..=9).map(|at| at * 10).collect()
-        } else {
-            (-24..=24).collect()
-        };
-        items.extend(choices.iter().map(|value| {
+/// `K` on `Tune` or `Cents`: its values, and for a slice's own tune, the sample's first.
+pub(super) fn tuning_picker(control: Control, services: &mut Services) -> Outcome {
+    let Some((number, entry, of)) = tuning_here(services) else {
+        return Outcome::Done;
+    };
+    let tuning = Tuning {
+        number,
+        entry: &entry,
+        of,
+    };
+    let current = tuning.value(control);
+    let mut items = Vec::new();
+    if control == Control::Tune
+        && let TuneOf::Slice(_) = of
+    {
+        let sample = tuning_text(control, entry.edit.play.tune);
+        items.push(
             Item::new(
-                tuning_text(control, *value),
+                format!("As the sample, {sample}"),
                 Pick::Tuning {
                     control,
-                    value: Some(*value),
+                    value: None,
                 },
             )
-        }));
-        let at = choices
-            .iter()
-            .position(|value| *value == current)
-            .map(|at| first + at);
-        let title = if control == Control::Cents {
-            "Sample cents"
-        } else {
-            "Sample tune"
-        };
-        self.show_picker(Picker::new(title, items).opened_on(at));
+            .meaning("Play as the sample does"),
+        );
     }
+    let first = items.len();
+    let choices: Vec<i8> = if control == Control::Cents {
+        (-9..=9).map(|at| at * 10).collect()
+    } else {
+        (-24..=24).collect()
+    };
+    items.extend(choices.iter().map(|value| {
+        Item::new(
+            tuning_text(control, *value),
+            Pick::Tuning {
+                control,
+                value: Some(*value),
+            },
+        )
+    }));
+    let at = choices
+        .iter()
+        .position(|value| *value == current)
+        .map(|at| first + at);
+    let title = if control == Control::Cents {
+        "Sample cents"
+    } else {
+        "Sample tune"
+    };
+    Outcome::Open(Box::new(Picker::new(title, items).opened_on(at)))
 }
 
 /// The tuning of the cursor's track, or none, saying why.

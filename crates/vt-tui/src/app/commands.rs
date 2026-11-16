@@ -213,7 +213,12 @@ impl App {
                 self.song_view
                     .label_chain(self.modes.view, label, &mut self.services);
             }
-            Line::MacroName(name) => self.name_macro(&name),
+            Line::MacroName(name) => {
+                let control = self.track_control();
+                let open = self.overlays.mapping.as_ref().map(|view| view.at);
+                self.services
+                    .name_macro(&name, open, control, self.modes.view);
+            }
             Line::Preset(line) => self.preset_line(line),
             Line::Patch(line) => self.patch_line(line),
             Line::TrackLevel(level) => self.services.apply(&Action::SetTrackLevel {

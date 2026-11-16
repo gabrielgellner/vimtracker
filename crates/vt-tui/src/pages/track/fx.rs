@@ -6,8 +6,6 @@ use vt_model::action::{Action, edit};
 use vt_model::insert::Insert;
 use vt_model::song::Track;
 
-use crate::app::App;
-
 use super::TrackPage;
 use crate::controls::{DEVICE_ROWS, Page};
 use crate::input::mode::View;
@@ -24,23 +22,17 @@ pub(crate) struct TakenInsert {
     pub undo_depth: usize,
 }
 
-impl App {
-    /// Whether the FX page shows, zoomed in on the cursor's slot.
-    pub fn fx_zoomed(&self) -> bool {
-        self.modes.view == View::Track && self.track_page.page == Page::Fx && self.track_page.zoomed
-    }
-
-    /// What the status line says under it while the FX page is zoomed in, as the track page
-    /// tells it.
-    pub fn fx_zoom_hint(&self) -> Option<String> {
-        self.track_page.zoom_hint(&self.ctx())
+impl TrackPage {
+    /// Whether the FX page shows, zoomed in on the cursor's slot, the view on screen being `view`.
+    pub fn fx_zoomed(&self, view: View) -> bool {
+        view == View::Track && self.page == Page::Fx && self.zoomed
     }
 }
 
 impl TrackPage {
     /// What the keys do while the FX page is zoomed in, and how to leave it, for under the status
     /// line while nothing else is said there, as the sample page's modes have.
-    pub(super) fn zoom_hint(&self, ctx: &Ctx) -> Option<String> {
+    pub fn zoom_hint(&self, ctx: &Ctx) -> Option<String> {
         (ctx.view() == View::Track && self.page == Page::Fx && self.zoomed).then(|| {
             format!(
                 "Slot {} zoomed in: {{ }} another slot, z o every slot",
