@@ -15,7 +15,7 @@ use vt_engine::render::render_frames;
 use vt_model::envelope::Adsr;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Machine, Phrase, Song, SynthVoice};
+use vt_model::song::{Machine, Phase, Phrase, Song, SynthVoice};
 
 const RATE: u32 = 48_000;
 /// The windows the level is measured over, half a millisecond.
@@ -49,6 +49,8 @@ struct Case {
     /// `VA`'s `Drift` at its least, so each note starts anywhere in its cycle and what the
     /// waveform does as it starts averages out over the notes, leaving what the change does.
     drift: bool,
+    /// The track's `Phase`.
+    phase: Phase,
 }
 
 impl Case {
@@ -60,6 +62,7 @@ impl Case {
             bypassed: false,
             gate: None,
             drift: false,
+            phase: Phase::Free,
         }
     }
 
@@ -98,6 +101,7 @@ fn song(case: &Case, rows: &[String]) -> Song {
     }
     track.mods[0].bypassed = case.bypassed;
     track.gate_length = case.gate.or(track.gate_length);
+    track.phase = case.phase;
     if case.drift {
         track.set_machine_value(3, 0x01);
     }
@@ -327,6 +331,31 @@ fn random_16ths_carried_without_reset_change_as_cleanly_as_a_tie() {
         clicks.push(name);
     }
     assert!(clicks.is_empty(), "these click at each note: {clicks:?}");
+}
+
+#[test]
+fn random_16ths_with_phase_reset_dip_to_silence_without_a_click() {
+    // `Phase` at `Reset` starts the oscillators again at the bottom of a dip to nothing, which it
+    // takes whatever the note shape's `Reset` says: with it off, the change dips as with it on,
+    // and no more of the top of the spectrum than a tie (decision 370).
+    let notes = random_notes();
+    let mut clicks = Vec::new();
+    for (name, voice) in [
+        ("CSaw, Phase Reset, no reset", SynthVoice::CSaw),
+        ("VA, Phase Reset, no reset", SynthVoice::VirtualAnalog),
+        ("Saw Sq, Phase Reset, no reset", SynthVoice::SawSquare),
+    ] {
+        let case = Case {
+            adsr: no_reset(),
+            phase: Phase::Reset,
+            ..Case::plain(Source::Synth(voice))
+        };
+        let change = measure(name, case, &notes);
+        if change.dip_db > -15.0 || change.back_db < -3.0 || change.top_db > 3.0 {
+            clicks.push(name);
+        }
+    }
+    assert!(clicks.is_empty(), "these click or don't dip: {clicks:?}");
 }
 
 #[test]

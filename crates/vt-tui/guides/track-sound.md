@@ -71,7 +71,7 @@ and its settings in up to four columns of three.
 | Filter | Type, mode | `Cut` `Res` `Drive`; `Punch` `Safe`; `Low cut` `High cut` |
 | Output | | `Trim` `Level` `Pan`; `Send A` `Send B` `Group`; `Role` |
 | Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; |
-| | | `Choke` `Velocity` `Quantise` |
+| | | `Choke` `Velocity` `Quantise`; a synth's `Phase` |
 
 A machine's type is the setting that changes its character: the sample the sampler
 plays, `Acid`'s `Wave`, `Supersaw`'s `Stack`, 6-op's `Patch`, and the chord of `Chord`
@@ -296,6 +296,21 @@ recorded take can be tightened live and loosened again. It's where held `QNT`
 starts, so a step's `QNT` or a lane's replaces it and an LFO on `QNT` moves around
 it, and on the Roto it's the first knob of the Play device's second page. See
 **Nudging a note off the grid** in **Note entry**.
+
+`Phase`, in a fourth column of a synth's Play device, is whether its oscillators run
+on from note to note or start again on each. A synth that holds its notes plays the
+next one on the voice already sounding (see **Envelopes** in **The Mod page**). At
+`Free`, as a track starts, they run on, as an analog synth's do, so each note starts
+wherever they've got to. At `Reset` they start again from where a new note starts
+them, as Elektron's oscillator reset, Operator's retrigger and Serum's retrig do, so
+every note at the same pitch starts the same. That can only happen at silence, so
+each note with `Reset` takes the short dip to nothing before its attack, whatever the
+notes' shape's own `Reset` says. `Drift` on `VA`, and the `Supersaw`'s `Phase`, still
+start each note's oscillators anywhere in their cycles. A step's `OSC` sets it for its
+note, and on the Roto it's the second knob of the Play device's second page. A
+noise, a struck or blown model and `Acid` have no phase to start again, so it's
+dimmed there and does nothing, and a sampler, which starts its sample again on each
+note anyway, hasn't one.
 
 `Speed` is how long each of the track's steps is, from `1/32` to `1/4` with the
 triplets between, so one track can play eighths or triplets against the others'

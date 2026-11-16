@@ -39,7 +39,14 @@ pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
             &FILTER,
         ),
         device("Output", [], output),
-        device("Play", [], &PLAY),
+        // A synth's whether its oscillators start again on each note, as a sampler's sample does
+        // anyway.
+        match track.machine {
+            Machine::Sampler => device("Play", [], &PLAY),
+            Machine::Plaits(_) => {
+                device("Play", [], &[PLAY[0], PLAY[1], PLAY[2], &[Control::Phase]])
+            }
+        },
     ]);
     devices
 }
@@ -85,7 +92,7 @@ const MASTER_OUTPUT: [&[Control]; 2] = [&[Control::Trim, Control::Level], &[Cont
 
 /// How it plays its notes: their pitch and how they join and end, then the steps' timing, then
 /// what cuts them off, and how much louder or softer and how much nearer the grid than written
-/// they play.
+/// they play. A synth's has its `Phase` after them.
 const PLAY: [&[Control]; 3] = [
     &[
         base(TrackControl::Pitch),

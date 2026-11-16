@@ -95,9 +95,12 @@ pub(crate) trait SynthEngine: Copy {
     /// are, running on from the last note.
     fn reseed_drift(&mut self, _seed: u32, _settings: Settings) {}
 
-    /// Put its oscillators back where a new note starts them, for a note carried on at the point
-    /// its level is nothing. A synth where a phase means nothing leaves it.
-    fn restart_phase(&mut self) {}
+    /// Start again from where a new note starts it, oscillators and all, for a note carried on
+    /// with `Phase` at `Reset` at the point its level is nothing, so every such note starts the
+    /// same (decision 370). A voice whose sound has no phase isn't asked.
+    fn restart_phase(&mut self, rate: u32) {
+        *self = Self::new(rate);
+    }
 
     /// What `Drift` multiplies the note's envelope times by. `Acid`'s own envelopes take it
     /// themselves.

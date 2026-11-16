@@ -44,6 +44,7 @@ mod normalize;
 mod note_clicks;
 mod nudge;
 mod pedals;
+mod phase;
 mod play_order;
 mod play_start;
 mod quantise;

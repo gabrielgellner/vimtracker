@@ -195,6 +195,14 @@ impl<M: Model> SynthEngine for Macro<M> {
         self.model.strike();
     }
 
+    /// Start its model again, and its decimator, at a block's start, but keep its DC blocker as
+    /// it is, settled to the wave the model starts again on.
+    fn restart_phase(&mut self, _rate: u32) {
+        self.model = M::new();
+        self.down = Decimator::default();
+        self.at = BLOCK;
+    }
+
     fn new(rate: u32) -> Self {
         let rate = rate as f32 * OVERSAMPLING as f32;
         Self {

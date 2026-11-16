@@ -137,7 +137,10 @@ note is struck without a click. With it off, the attack starts at once from wher
 the level is, and a run of notes flows into one another. A sample, the struck
 voices, `Kick`, `Snare`, `Hat`, `String`, `Modal`, `Bell` and `Drum`, and `Bowed`,
 `Blown` and `Fluted`, whose strike starts their string or bore again from still,
-start each note afresh, the last one fading under it. `Acid` carries on as a 303 does, whatever `Reset` says.
+start each note afresh, the last one fading under it. `Acid` carries on as a 303
+does, whatever `Reset` says. The track's `Phase`, on the Sound page's Play device,
+says whether the oscillators run on through the change or start again at the bottom
+of the dip.
 
 ## AHD envelopes
 
