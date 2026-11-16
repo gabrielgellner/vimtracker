@@ -56,6 +56,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `GLD` | How long a tie glides into the next note: `00` off, `80` about 60 ms |
 | `OSC` | A synth's `Phase` for the row's note: `00` Free, `01` Reset |
 | `VMOD` | The track's `Mode` for the row's note: `00` Mono, `01` Legato |
+| `GMOD` | The track's `Glide mode` for the row's note: `00` Ties, `01` Always |
 | `1BYP` | Switch slot 1 out, `01`, or back in, `00`. `2BYP` to `4BYP` the others |
 | `DEP4` | Mod 4's depth: `80` is none, as on the Mod page. `DEP5` `DEP6` too |
 | `DEP2` | An envelope's depth. `DEP1` `DEP3` too, but not the notes' shape |
