@@ -52,7 +52,7 @@ impl Default for Variation {
 }
 
 impl Variation {
-    pub fn is_default(&self) -> bool {
+    pub(crate) fn is_default(&self) -> bool {
         *self == Self::default()
     }
 }

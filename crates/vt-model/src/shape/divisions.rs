@@ -54,7 +54,7 @@ impl Division {
     ];
 
     /// The name on screen.
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Quarter => "1/4",
             Self::Eighth => "1/8",
@@ -66,12 +66,12 @@ impl Division {
     }
 
     /// Its place among the divisions, which its chance is kept at.
-    pub fn index(self) -> usize {
+    pub(crate) fn index(self) -> usize {
         self as usize
     }
 
     /// How far apart its strikes are, in ticks.
-    pub const fn ticks(self) -> u64 {
+    pub(crate) const fn ticks(self) -> u64 {
         match self {
             Self::Quarter => TICKS_PER_QUARTER,
             Self::Eighth => TICKS_PER_QUARTER / 2,
@@ -99,7 +99,7 @@ impl Channel {
     pub const ALL: [Self; 3] = [Self::A, Self::B, Self::Both];
 
     /// The name on screen.
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::A => "A",
             Self::B => "B",
@@ -108,7 +108,7 @@ impl Channel {
     }
 
     /// What it plays, for a list to choose from.
-    pub fn description(self) -> &'static str {
+    pub(crate) fn description(self) -> &'static str {
         match self {
             Self::A => "Channel A's dice",
             Self::B => "Channel B's dice",
@@ -117,12 +117,12 @@ impl Channel {
     }
 
     /// Its place among the channels.
-    pub fn index(self) -> usize {
+    pub(crate) fn index(self) -> usize {
         self as usize
     }
 
     /// The channel the panel gives the `nth` of several tracks: `A`, `B`, then `A+B`, going round.
-    pub fn of_track(nth: usize) -> Self {
+    pub(crate) fn of_track(nth: usize) -> Self {
         Self::ALL[nth % Self::ALL.len()]
     }
 }
@@ -145,7 +145,7 @@ impl Bar {
     pub const ALL: [Self; 4] = [Self::Four, Self::Three, Self::FourFine, Self::ThreeFine];
 
     /// The name on screen.
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Four => "4/4 16ths",
             Self::Three => "3/4 16ths",
@@ -155,7 +155,7 @@ impl Bar {
     }
 
     /// What it is, for a list to choose from.
-    pub fn description(self) -> &'static str {
+    pub(crate) fn description(self) -> &'static str {
         match self {
             Self::Four => "16 rows a bar, for a track at 1/16",
             Self::Three => "12 rows a bar, for a track at 1/16",
@@ -165,17 +165,17 @@ impl Bar {
     }
 
     /// Its place among the bars.
-    pub fn index(self) -> usize {
+    pub(crate) fn index(self) -> usize {
         self as usize
     }
 
     /// Whether a row is a 32nd.
-    pub fn fine(self) -> bool {
+    pub(crate) fn fine(self) -> bool {
         matches!(self, Self::FourFine | Self::ThreeFine)
     }
 
     /// How long a row is, in ticks.
-    pub fn row_ticks(self) -> u64 {
+    pub(crate) fn row_ticks(self) -> u64 {
         if self.fine() {
             TICKS_PER_STEP / 2
         } else {
@@ -193,12 +193,12 @@ impl Bar {
     }
 
     /// How many rows the bar takes.
-    pub fn rows(self) -> usize {
+    pub(crate) fn rows(self) -> usize {
         (self.ticks() / self.row_ticks()) as usize
     }
 
     /// The bar for a track at this many ticks a step: 32nds at `1/32`, and sixteenths otherwise.
-    pub fn for_step(ticks: u64) -> Self {
+    pub(crate) fn for_step(ticks: u64) -> Self {
         if ticks < TICKS_PER_STEP {
             Self::FourFine
         } else {
@@ -248,7 +248,7 @@ pub struct Strike {
 }
 
 impl Divisions {
-    pub fn is_default(&self) -> bool {
+    pub(crate) fn is_default(&self) -> bool {
         *self == Self::default()
     }
 
@@ -263,7 +263,7 @@ impl Divisions {
     }
 
     /// The same, with another bar, its rows still playing as long as the track's.
-    pub fn with_bar(self, bar: Bar) -> Self {
+    pub(crate) fn with_bar(self, bar: Bar) -> Self {
         let played = self.played();
         Self { bar, ..self }.played_at(played)
     }
@@ -274,7 +274,7 @@ impl Divisions {
     }
 
     /// How long one of its rows plays, in ticks: the track's step.
-    pub fn played(&self) -> u64 {
+    pub(crate) fn played(&self) -> u64 {
         self.ticks.map_or(self.bar.row_ticks(), u64::from)
     }
 
@@ -294,7 +294,7 @@ impl Divisions {
     }
 
     /// The channel it plays, `A` if it's yet to be given one.
-    pub fn channel(&self) -> Channel {
+    pub(crate) fn channel(&self) -> Channel {
         self.channel.unwrap_or_default()
     }
 
@@ -336,7 +336,7 @@ impl Divisions {
 
     /// Whether a row strikes, by its offset in the span, and its nudge if it does. Its place in
     /// the bar is its offset's, so the bar starts on the span's first row.
-    pub fn strike(&self, seed: u64, offset: usize) -> Option<i8> {
+    pub(crate) fn strike(&self, seed: u64, offset: usize) -> Option<i8> {
         let row = self.bar.row_ticks();
         let at = (offset % self.bar.rows()) as u64 * row;
         let channels: &[(usize, Channel)] = match self.channel() {
@@ -369,7 +369,8 @@ impl Divisions {
     }
 
     /// Every strike over a span of `rows`, in order.
-    pub fn strikes(&self, seed: u64, rows: usize) -> impl Iterator<Item = Strike> + '_ {
+    #[cfg(test)]
+    pub(crate) fn strikes(&self, seed: u64, rows: usize) -> impl Iterator<Item = Strike> + '_ {
         (0..rows).filter_map(move |offset| {
             self.strike(seed, offset)
                 .map(|nudge| Strike { offset, nudge })

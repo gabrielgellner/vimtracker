@@ -48,7 +48,7 @@ impl Role {
     pub const ALL: [Self; 3] = [Self::Bell, Self::Low, Self::High];
 
     /// The name on screen.
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Bell => "Bell",
             Self::Low => "Low drum",
@@ -57,7 +57,7 @@ impl Role {
     }
 
     /// What it plays, for a list to choose from.
-    pub fn description(self) -> &'static str {
+    pub(crate) fn description(self) -> &'static str {
         match self {
             Self::Bell => "The timeline, its bell or clave",
             Self::Low => "The low drum, or a kit's kick",
@@ -66,12 +66,12 @@ impl Role {
     }
 
     /// Its place among the parts.
-    pub fn index(self) -> usize {
+    pub(crate) fn index(self) -> usize {
         self as usize
     }
 
     /// The part `nth` along from this one, going round.
-    pub fn after(self, nth: usize) -> Self {
+    pub(crate) fn after(self, nth: usize) -> Self {
         Self::ALL[(self.index() + nth) % Self::ALL.len()]
     }
 }
@@ -148,7 +148,7 @@ impl World {
     ];
 
     /// The name on screen.
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::SonClave => "Son clave",
             Self::RumbaClave => "Rumba clave",
@@ -169,7 +169,7 @@ impl World {
         clippy::match_same_arms,
         reason = "a line for each rhythm, as the list has them"
     )]
-    pub fn description(self) -> &'static str {
+    pub(crate) fn description(self) -> &'static str {
         match self {
             Self::SonClave => "Cuba, 3-2, with the son's bass and conga, 16 rows",
             Self::RumbaClave => "Cuba, 3-2, 16 rows",
@@ -186,7 +186,7 @@ impl World {
     }
 
     /// Its place among the rhythms.
-    pub fn index(self) -> usize {
+    pub(crate) fn index(self) -> usize {
         Self::ALL
             .iter()
             .position(|world| *world == self)
@@ -230,12 +230,12 @@ impl World {
     }
 
     /// How many pulses, a row each, it goes round in.
-    pub fn pulses(self) -> usize {
+    pub(crate) fn pulses(self) -> usize {
         self.pattern().pulses
     }
 
     /// The pulses a part strikes on, in order.
-    pub fn onsets(self, part: Role) -> &'static [u8] {
+    pub(crate) fn onsets(self, part: Role) -> &'static [u8] {
         let pattern = self.pattern();
         match part {
             Role::Bell => pattern.bell,
@@ -245,7 +245,7 @@ impl World {
     }
 
     /// Whether a part strikes on the row `offset` rows from the first, going round.
-    pub fn strikes(self, part: Role, offset: usize) -> bool {
+    pub(crate) fn strikes(self, part: Role, offset: usize) -> bool {
         let pulse = offset % self.pulses();
         self.onsets(part)
             .iter()

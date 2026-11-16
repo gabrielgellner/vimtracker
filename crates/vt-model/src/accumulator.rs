@@ -13,10 +13,10 @@ use crate::step::{MAX_NOTE, MIN_NOTE};
 pub const MOST_DEGREES: u8 = 28;
 
 /// How far an accumulator goes either way unless changed: an octave of a seven-note scale.
-pub const DEFAULT_LIMIT: u8 = 7;
+pub(crate) const DEFAULT_LIMIT: u8 = 7;
 
 /// The most times round its chain a track can count before its accumulators start again.
-pub const MOST_LOOPS: u8 = 16;
+pub(crate) const MOST_LOOPS: u8 = 16;
 
 /// Whose note an `ACU` moves.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -126,7 +126,7 @@ impl Accumulation {
     }
 
     /// Whether its settings can be played: both limits from 1 to 28, and from 1 to 16 loops.
-    pub fn in_range(self) -> bool {
+    pub(crate) fn in_range(self) -> bool {
         let limit = 1..=MOST_DEGREES;
         let loops = match self.reset {
             Reset::Loops(loops) => (1..=MOST_LOOPS).contains(&loops),
@@ -267,7 +267,7 @@ pub fn moved_note(note: u8, offset: i16, scale: Scale) -> u8 {
 impl Moves {
     pub const ALL: [Self; 2] = [Self::Row, Self::Track];
 
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Row => "Row",
             Self::Track => "Track",
@@ -326,7 +326,7 @@ crate::listed::listed!(AtLimit: meaning);
 impl Adds {
     pub const ALL: [Self; 3] = [Self::Row, Self::Pulse, Self::Retrig];
 
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Row => "Row",
             Self::Pulse => "Pulse",

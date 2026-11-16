@@ -564,12 +564,14 @@ impl Descriptor {
     }
 
     /// What `i`'s text sets it to, or why not.
-    pub fn parse(&self, text: &str) -> Result<i32, String> {
+    #[cfg(test)]
+    pub(crate) fn parse(&self, text: &str) -> Result<i32, String> {
         self.reads.parse(text, self.bounds, &self.why_not)
     }
 
     /// A value kept within its bounds, or taken round them where it wraps.
-    pub fn kept(&self, value: i32) -> i32 {
+    #[cfg(test)]
+    pub(crate) fn kept(&self, value: i32) -> i32 {
         kept(i64::from(value), self.bounds, self.wraps)
     }
 }

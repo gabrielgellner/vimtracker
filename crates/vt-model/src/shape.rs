@@ -73,7 +73,7 @@ use crate::selection::StepRange;
 use crate::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIDDLE_C, MIN_NOTE, Note, Step, nudge_text};
 
 /// The furthest `curve` and `s` go either way.
-pub const MAX_BEND: i8 = 100;
+pub(crate) const MAX_BEND: i8 = 100;
 /// The waves a column can follow, in the order `+` goes through them.
 pub const WAVES: [Wave; 6] = [
     Wave::Sine,
@@ -84,9 +84,9 @@ pub const WAVES: [Wave; 6] = [
     Wave::Smooth,
 ];
 /// How long a wave's cycle is unless told otherwise: a half note.
-pub const DEFAULT_RATE: WaveRate = WaveRate::Time(Rate::Note(TICKS_PER_QUARTER as u32 * 2));
+pub(crate) const DEFAULT_RATE: WaveRate = WaveRate::Time(Rate::Note(TICKS_PER_QUARTER as u32 * 2));
 /// The most cycles a wave can make across a selection.
-pub const MAX_CYCLES: u16 = 64;
+pub(crate) const MAX_CYCLES: u16 = 64;
 
 /// How long a wave's cycle is: a length in time, as an LFO's, or a whole number of cycles across
 /// the selection, so they fit it whatever its length.
@@ -98,7 +98,7 @@ pub enum WaveRate {
 
 impl WaveRate {
     /// Faster or slower by a small step: a time as an LFO's moves, or one cycle more or fewer.
-    pub fn nudged(self, faster: bool) -> Self {
+    pub(crate) fn nudged(self, faster: bool) -> Self {
         match self {
             Self::Time(rate) => Self::Time(rate.nudged(faster)),
             Self::Cycles(cycles) => Self::Cycles(Self::moved(cycles, faster, 1)),
@@ -106,7 +106,7 @@ impl WaveRate {
     }
 
     /// Faster or slower by a large step: a time as an LFO's jumps, or four cycles more or fewer.
-    pub fn jumped(self, faster: bool) -> Self {
+    pub(crate) fn jumped(self, faster: bool) -> Self {
         match self {
             Self::Time(rate) => Self::Time(rate.jumped(faster)),
             Self::Cycles(cycles) => Self::Cycles(Self::moved(cycles, faster, 4)),
@@ -156,7 +156,7 @@ impl std::str::FromStr for WaveRate {
     }
 }
 /// How many hits a Euclidean `Where` starts with: in eight rows, the tresillo.
-pub const EUCLID_HITS: u16 = 3;
+pub(crate) const EUCLID_HITS: u16 = 3;
 const EUCLID: Where = Where::Euclid {
     hits: EUCLID_HITS,
     rotate: 0,
@@ -172,10 +172,10 @@ const CELLS: Where = Where::Cells(Cells {
 /// eight-row loop that changes now and then, as at noon on one track it's sparse; for three
 /// states a quarter, as at noon three rows in four rest; and half the rows each for the two
 /// tracks of `Complementary`.
-pub const CLUSTERS: u8 = 50;
-pub const MARKOV: u8 = 80;
-pub const STATES: u8 = 25;
-pub const SHARE: u8 = 50;
+pub(crate) const CLUSTERS: u8 = 50;
+pub(crate) const MARKOV: u8 = 80;
+pub(crate) const STATES: u8 = 25;
+pub(crate) const SHARE: u8 = 50;
 /// Marbles' rhythms, as each starts, after Euclid in a list of `Where`s.
 const MARBLES: [Where; 4] = [
     Where::Clusters(CLUSTERS),
@@ -187,7 +187,7 @@ const MARBLES: [Where; 4] = [
     },
 ];
 /// A named rhythm's `Child` as it starts: every hit of its part, the pattern as written.
-pub const CHILD: u8 = 100;
+pub(crate) const CHILD: u8 = 100;
 /// A named rhythm as it starts, after Marbles' in a list of `Where`s.
 const RHYTHM: Where = Where::Rhythm {
     rhythm: World::SonClave,
@@ -284,7 +284,7 @@ impl FillKind {
 
     /// Its description, which the rest of these read.
     #[inline]
-    pub const fn spec(self) -> &'static FillSpec {
+    pub(crate) const fn spec(self) -> &'static FillSpec {
         &FILLS[self as usize]
     }
 
@@ -294,7 +294,7 @@ impl FillKind {
     }
 
     /// What it does, for a list to choose from.
-    pub const fn description(self) -> &'static str {
+    pub(crate) const fn description(self) -> &'static str {
         self.spec().meaning
     }
 
@@ -305,7 +305,7 @@ impl FillKind {
     }
 
     /// Whether it works on each value's bits.
-    pub const fn on_bits(self) -> bool {
+    pub(crate) const fn on_bits(self) -> bool {
         self.spec().on_bits
     }
 
@@ -321,7 +321,7 @@ crate::listed::listed!(FillKind);
 
 /// One fill, described once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FillSpec {
+pub(crate) struct FillSpec {
     /// On screen and in lists.
     pub name: &'static str,
     /// What it does, for a list to choose from.
@@ -346,7 +346,7 @@ const ENDS_RUN: [Option<GenParam>; GRID_ROWS] = [
 ];
 
 /// Every fill's description, by [`FillKind`].
-pub const FILLS: [FillSpec; FillKind::ALL.len()] = {
+pub(crate) const FILLS: [FillSpec; FillKind::ALL.len()] = {
     use GenParam::*;
     [
         FillSpec {
@@ -607,7 +607,7 @@ pub enum Where {
 
 impl Where {
     /// The name on screen, without an amount.
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Notes => "Notes",
             Self::NoNotes => "No notes",
@@ -628,7 +628,7 @@ impl Where {
     /// Whether the rows are drawn from the seed, so another seed would choose others: a
     /// `Cells`' only where it starts from the seed on one column, as across tracks the row they
     /// start from is kept.
-    pub fn draws(self) -> bool {
+    pub(crate) fn draws(self) -> bool {
         match self {
             Self::Cells(cells) => cells.start == CellStart::Seed && cells.across.is_none(),
             _ => matches!(
@@ -647,7 +647,7 @@ impl Where {
     /// same, but `Complementary` gives each pair of tracks its two sides, the first of the pair
     /// the side chosen and the second the other, and a named rhythm gives each track the next
     /// part, going round from the one chosen.
-    pub fn on_track(self, nth: usize) -> Self {
+    pub(crate) fn on_track(self, nth: usize) -> Self {
         match self {
             Self::Complementary { share, second } => Self::Complementary {
                 share,
@@ -773,7 +773,7 @@ impl ShapeColumn {
     }
 
     /// The nudge a value held on the Nudge column is, kept to the column's range, or 0 elsewhere.
-    pub fn nudge_of(self, value: u8) -> i8 {
+    pub(crate) fn nudge_of(self, value: u8) -> i8 {
         match self {
             Self::Nudge { most } => {
                 (i16::from(value).min(2 * i16::from(most)) - i16::from(most)) as i8
@@ -796,14 +796,14 @@ impl ShapeColumn {
     }
 
     /// A list of values as the panel shows it, with a space between each.
-    pub fn show_list(self, values: &Values) -> String {
+    pub(crate) fn show_list(self, values: &Values) -> String {
         let shown: Vec<String> = values.as_slice().iter().map(|v| self.show(*v)).collect();
         shown.join(" ")
     }
 
     /// A value typed for this column, kept in its range: a note's name, a nudge as a sign and one
     /// or two hex digits, or anything else in hex.
-    pub fn parse(self, text: &str) -> Option<u8> {
+    pub(crate) fn parse(self, text: &str) -> Option<u8> {
         let text = text.trim();
         match self {
             Self::Note { .. } => parse_note(text),
@@ -909,13 +909,15 @@ impl ShapeColumn {
     }
 
     /// Write a value to a step, with no fine part.
-    pub fn write(self, step: &mut Step, value: u8) {
+    #[cfg(test)]
+    pub(crate) fn write(self, step: &mut Step, value: u8) {
         self.write_exact(step, u16::from(value) << 8);
     }
 
     /// Write a value with a fine part to a step, as its [`cell`](Self::cell). A velocity takes the
     /// whole value.
-    pub fn write_exact(self, step: &mut Step, value: u16) {
+    #[cfg(test)]
+    pub(crate) fn write_exact(self, step: &mut Step, value: u16) {
         self.cell(step, value).apply(self, step);
     }
 }
@@ -1144,7 +1146,7 @@ fn is_zero(value: &u8) -> bool {
 
 /// The choices of `Vary`, as passes each variation lasts: none, then a new one each pass, every
 /// two, four or eight.
-pub const VARIES: [u8; 5] = [0, 1, 2, 4, 8];
+pub(crate) const VARIES: [u8; 5] = [0, 1, 2, 4, 8];
 
 /// Mixed into a pass's seed, so it isn't any track's (`track_seed`).
 const PASS_KEY: u64 = 0x7A55_0000;
@@ -1185,7 +1187,7 @@ impl Default for Shape {
 impl Shape {
     /// A `Follow` of a phrase, with this seed and every other setting as the panel starts it, as
     /// a Bloom branch is made.
-    pub fn following(follow: Follow, seed: u64) -> Self {
+    pub(crate) fn following(follow: Follow, seed: u64) -> Self {
         Self {
             kind: FillKind::Follow,
             seed,
@@ -1226,7 +1228,7 @@ impl Shape {
     }
 
     /// Whether it has `Vary`: it draws from its seed, or it evolves.
-    pub fn can_vary(&self) -> bool {
+    pub(crate) fn can_vary(&self) -> bool {
         self.draws() || self.evolves()
     }
 
@@ -1304,7 +1306,7 @@ fn gain(t: f64, g: f64) -> f64 {
 }
 
 /// Where a ramp is at `t` from 0 to 1. It always starts at 0 and ends at 1, and 0 and 0 is a line.
-pub fn curved(t: f64, curve: i8, s: i8) -> f64 {
+pub(crate) fn curved(t: f64, curve: i8, s: i8) -> f64 {
     // Just short of the limits, where these curves stop moving at all.
     let amount = |bend: i8| (f64::from(bend) / 200.0).clamp(-0.495, 0.495);
     gain(bias(t, 0.5 + amount(curve)), 0.5 - amount(s))

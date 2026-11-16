@@ -89,12 +89,12 @@ impl Default for Random {
 }
 
 impl Random {
-    pub fn is_default(&self) -> bool {
+    pub(crate) fn is_default(&self) -> bool {
         *self == Self::default()
     }
 
     /// Whether its draw is other than even, so it isn't drawn as `Random` always was.
-    pub fn shaped(&self) -> bool {
+    pub(crate) fn shaped(&self) -> bool {
         self.spread != EVEN_SPREAD || self.bias != 0
     }
 
@@ -118,7 +118,7 @@ impl Random {
 
     /// Where an even draw `u`, from 0 to just below 1, lands, from 0 to 1: a bell moved to the
     /// bias point up to noon, and past it the draw moved before it's made a bowl.
-    pub fn draw(&self, u: f64) -> f64 {
+    pub(crate) fn draw(&self, u: f64) -> f64 {
         let centre = self.centre();
         match self.spread {
             0 => centre,
@@ -131,7 +131,7 @@ impl Random {
 
     /// The chance a draw lands below `t`, from 0 to 1: `draw` undone, as bias and gain undo
     /// themselves with their parameters turned round.
-    pub fn below(&self, t: f64) -> f64 {
+    pub(crate) fn below(&self, t: f64) -> f64 {
         let centre = self.centre();
         let t = t.clamp(0.0, 1.0);
         match self.spread {
@@ -145,12 +145,12 @@ impl Random {
     }
 
     /// Which of `span` whole values an even draw lands on, from the lowest.
-    pub fn pick(&self, u: f64, span: usize) -> usize {
+    pub(crate) fn pick(&self, u: f64, span: usize) -> usize {
         ((self.draw(u) * span as f64) as usize).min(span.saturating_sub(1))
     }
 
     /// How many of a scale's degrees `Steps` lets through.
-    pub fn kept(&self, scale: Scale) -> usize {
+    pub(crate) fn kept(&self, scale: Scale) -> usize {
         let degrees = degree_count(scale);
         match usize::from(self.steps) {
             0 => degrees,
@@ -159,7 +159,7 @@ impl Random {
     }
 
     /// Whether it weighs the notes: `Steps` leaves a degree out, or the degrees' weights differ.
-    pub fn weighs(&self, scale: Scale) -> bool {
+    pub(crate) fn weighs(&self, scale: Scale) -> bool {
         let weights = &self.weights[..degree_count(scale)];
         self.kept(scale) < weights.len() || weights.iter().any(|weight| *weight != weights[0])
     }
@@ -177,7 +177,7 @@ impl Random {
     }
 
     /// The weights as typed, a hex digit for each of a scale's degrees from the root.
-    pub fn weights_text(&self, scale: Scale) -> String {
+    pub(crate) fn weights_text(&self, scale: Scale) -> String {
         self.weights[..degree_count(scale)]
             .iter()
             .map(|weight| format!("{:X}", weight.min(&MAX_WEIGHT)))
@@ -232,7 +232,7 @@ pub struct Degrees {
 }
 
 impl Degrees {
-    pub fn of(scale: Scale) -> Self {
+    pub(crate) fn of(scale: Scale) -> Self {
         if !scale.on {
             return Self {
                 order: CONSONANCE,
@@ -254,7 +254,7 @@ impl Degrees {
     }
 
     /// The degrees, the most important first.
-    pub fn order(&self) -> &[u8] {
+    pub(crate) fn order(&self) -> &[u8] {
         &self.order[..self.len]
     }
 

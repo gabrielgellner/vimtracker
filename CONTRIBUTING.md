@@ -148,13 +148,16 @@ tests' signals in `vt-engine`'s `src/dsp/signals.rs`. One file's tests run with
   it, so an error names the file. A new file the program writes uses its `write` or `write_atomic`, which write a temporary file beside it and rename it
   over, so a crash mid-write leaves the file before whole, rather than a bare `fs::write`.
 
-**Visibility.** In `vt-tui`, `vt-engine` and `vt-roto`, make new code `pub(crate)` unless another
-crate, a test, an example or `main.rs` uses it. Their `lib.rs` warn on `unreachable_pub`, which says
-when a `pub` can't be reached from outside, and that keeps the dead-code lint working. In
-`vt-engine`, `dsp` is `pub(crate)`: reach it from outside only through `pictures` or `parts`.
-`vt-roto` keeps its modules `pub`, so the lint can't see an item in one that no other crate names:
-make it `pub(crate)` yourself. `vt-model` keeps its modules `pub`, as the other crates use nearly
-all of them.
+**Visibility.** In every crate, make an item `pub(crate)` unless another crate names it: a crate
+that depends on it, a test in its `tests/`, an example or `main.rs`. Then the dead-code lint says
+when nothing uses it. Every `lib.rs` warns on `unreachable_pub`, which says when a `pub` can't be
+reached from outside. `vt-model` and `vt-roto` keep their modules `pub`, as the other crates use
+nearly all of them, and an item in a `pub` module can always be reached, so there the lint can't
+tell you: narrow the item yourself. In `vt-engine`, `dsp` is `pub(crate)`: reach it from outside
+only through `pictures` or `parts`. A method only the crate's own unit tests call is
+`#[cfg(test)]`. An inherent `name`, `meaning`, `category`, `key` or `ALL` on a `Listed` type stays
+`pub` while another crate calls it: made `pub(crate)`, the call would still compile and reach the
+trait's instead, whose `meaning` and `key` are empty by default (decision 362).
 
 A new effect, voice, generator or mod type has a checklist of its own,
 [docs/designs/adding-a-device.md](docs/designs/adding-a-device.md): every place it takes, what the
@@ -193,7 +196,8 @@ why, with the before and after the bless prints.
 The lints every crate warns on are in `Cargo.toml`'s `[workspace.lints]`, and each crate takes
 them with `[lints] workspace = true`, so they reach its tests, examples and binaries as well as
 its library. Add a lint for all four crates there, not as an attribute in a `lib.rs`. A crate's
-own extra stays in its `lib.rs`: `unreachable_pub` in `vt-engine`, `vt-tui` and `vt-roto`. Where a lint is
+own extra stays in its `lib.rs`, and so does `unreachable_pub`, though all four have it: in
+`Cargo.toml` it would reach the tests' own modules too. Where a lint is
 wrong for one function, as `float_cmp` is for a test that two renders match bit for bit, allow it
 there with a reason: `#[allow(clippy::float_cmp, reason = "silence is exact zeros")]`.
 

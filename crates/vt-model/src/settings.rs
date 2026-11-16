@@ -9,7 +9,6 @@ use crate::lane::{LANE_RATES, LENGTH_AS_WRITTEN, RATE_AS_WRITTEN};
 use crate::param::{Choice, Descriptor, Reading, Typing};
 use crate::song::{FILTER_MODE_NAMES, FULL_GATE};
 use crate::speed::{SPEED_NAMES, Speed};
-use crate::step::FxCommand;
 
 mod id;
 mod mods;
@@ -94,7 +93,8 @@ impl Entry {
     }
 
     /// Whether stepping past its last choice goes round to the first, or stops.
-    pub const fn wraps(&self) -> bool {
+    #[cfg(test)]
+    pub(crate) const fn wraps(&self) -> bool {
         matches!(self.kind, Kind::Stepped { wraps: true, .. })
     }
 
@@ -404,21 +404,7 @@ const LANE: [Entry; 2] = [
 pub const LANE_SETTINGS: usize = LANE.len();
 
 /// What a slot's bypass can be: heard, at `00`, or switched out, at `01`.
-pub const BYPASS_CHOICES: [&str; 2] = ["In", "Bypassed"];
-
-/// The events, which act on a note and aren't settings. Their labels share the grid with
-/// settings', so none may match one.
-pub const EVENTS: [FxCommand; 9] = [
-    FxCommand::Del,
-    FxCommand::Kil,
-    FxCommand::Off,
-    FxCommand::Ret,
-    FxCommand::Cha,
-    FxCommand::Cnd,
-    FxCommand::Acu,
-    FxCommand::Arp,
-    FxCommand::Rnd,
-];
+pub(crate) const BYPASS_CHOICES: [&str; 2] = ["In", "Bypassed"];
 
 #[cfg(test)]
 mod tests {
@@ -431,6 +417,7 @@ mod tests {
     use crate::modulation::MOD_SLOTS;
     use crate::patch_names::PATCH_NAMES;
     use crate::song::{DEFAULT_ACCENT, SynthVoice};
+    use crate::step::FxCommand;
 
     fn labels(ids: impl Iterator<Item = SettingId>) -> Vec<String> {
         ids.filter_map(SettingId::label).collect()
@@ -553,7 +540,7 @@ mod tests {
                 "{label}"
             );
         }
-        for event in EVENTS {
+        for event in FxCommand::EVENTS {
             assert_eq!(event.name().len(), 3);
         }
     }
@@ -576,7 +563,7 @@ mod tests {
                 })))
                 .chain(labels(SettingId::macros()))
                 .chain(labels(SettingId::lanes()))
-                .chain(EVENTS.map(|event| event.name()))
+                .chain(FxCommand::EVENTS.map(|event| event.name()))
         };
         for voice in SynthVoice::ALL {
             let mut seen = HashSet::new();

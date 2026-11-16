@@ -13,12 +13,12 @@ pub const JUMP_START: u8 = 3;
 
 /// How many places a jump of so many rows takes to come back to the first: the rows over what
 /// they and the jump have in common.
-pub fn jump_places(rows: usize, by: u8) -> usize {
+pub(crate) fn jump_places(rows: usize, by: u8) -> usize {
     rows / gcd(rows, usize::from(by) % rows)
 }
 
 /// The row a jump plays at a place: so many rows on from the last, going round.
-pub fn jump_row(rows: usize, by: u8, place: usize) -> usize {
+pub(crate) fn jump_row(rows: usize, by: u8, place: usize) -> usize {
     place * usize::from(by) % rows
 }
 
@@ -45,7 +45,7 @@ impl Arp {
 
     /// The one the numbers after `:order arp` give: none, or how many rows a run takes, 2 to 16,
     /// and how far on each starts, 1 to 16.
-    pub fn named(words: &[&str]) -> Option<Self> {
+    pub(crate) fn named(words: &[&str]) -> Option<Self> {
         let numbers: Option<Vec<u8>> = words.iter().map(|word| word.parse().ok()).collect();
         match numbers?[..] {
             [] => Some(Self::START),
@@ -60,12 +60,12 @@ impl Arp {
 
     /// How many places its round has: a run from each start it comes to before it's back at the
     /// first row.
-    pub fn places(self, rows: usize) -> usize {
+    pub(crate) fn places(self, rows: usize) -> usize {
         usize::from(self.notes) * jump_places(rows, self.step)
     }
 
     /// The row it plays at a place.
-    pub fn row(self, rows: usize, place: usize) -> usize {
+    pub(crate) fn row(self, rows: usize, place: usize) -> usize {
         let notes = usize::from(self.notes);
         let start = jump_row(rows, self.step, place / notes);
         (start + place % notes) % rows
@@ -74,13 +74,13 @@ impl Arp {
 
 /// How many places a `Growing` or `Shrinking` round has: runs of every length from one row to all
 /// of them.
-pub fn runs_places(rows: usize) -> usize {
+pub(crate) fn runs_places(rows: usize) -> usize {
     rows * (rows + 1) / 2
 }
 
 /// The row `Growing` plays at a place: runs from the first row, one row longer each time, `1 12
 /// 123`.
-pub fn growing_row(place: usize) -> usize {
+pub(crate) fn growing_row(place: usize) -> usize {
     let mut run = 1;
     let mut at = place;
     while at >= run {
@@ -92,7 +92,7 @@ pub fn growing_row(place: usize) -> usize {
 
 /// The row `Shrinking` plays at a place: runs from the first row, every row first and one fewer
 /// each time, `1234 123 12 1`.
-pub fn shrinking_row(rows: usize, place: usize) -> usize {
+pub(crate) fn shrinking_row(rows: usize, place: usize) -> usize {
     let mut run = rows;
     let mut at = place;
     while run > 0 && at >= run {
@@ -103,7 +103,7 @@ pub fn shrinking_row(rows: usize, place: usize) -> usize {
 }
 
 /// The row `Hopscotch` plays at a place: each row, then the one two on from it, `1 3 2 4 3 5`.
-pub fn hopscotch_row(rows: usize, place: usize) -> usize {
+pub(crate) fn hopscotch_row(rows: usize, place: usize) -> usize {
     let row = place / 2;
     if place.is_multiple_of(2) {
         row

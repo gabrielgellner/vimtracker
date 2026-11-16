@@ -29,9 +29,9 @@ pub enum Field {
 }
 
 /// The column group of the velocity and the nudge.
-pub const VELOCITY_GROUP: usize = 1;
+pub(crate) const VELOCITY_GROUP: usize = 1;
 /// The column group of the gate cell.
-pub const GATE_GROUP: usize = 2;
+pub(crate) const GATE_GROUP: usize = 2;
 /// The column group of the first FX slot. Each slot after it is one more.
 pub const FX_GROUP: usize = 3;
 /// Where the first FX slot's command is in `h l` order, after the note, velocity, nudge and the
@@ -314,7 +314,7 @@ impl Target {
 }
 
 /// Clear the covered fields of a step. Clearing either part of an FX slot clears the slot.
-pub fn clear_step(step: &mut Step, scope: Scope) {
+pub(crate) fn clear_step(step: &mut Step, scope: Scope) {
     if scope.covers(0) {
         step.note = Note::Empty;
     }
@@ -341,7 +341,7 @@ pub fn first_value(step: &Step, scope: Scope) -> Option<FxSlot> {
 }
 
 /// Set the mark on every value a scope covers on a step.
-pub fn mark_step(step: &mut Step, scope: Scope, mark: Mark) {
+pub(crate) fn mark_step(step: &mut Step, scope: Scope, mark: Mark) {
     for (index, slot) in step.fx.iter_mut().enumerate() {
         if scope.covers(FX_GROUP + index) && slot.is_value() {
             slot.mark = mark;
@@ -553,7 +553,7 @@ pub struct Block {
 
 /// Why a paste was refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ColumnMismatch;
+pub(crate) struct ColumnMismatch;
 
 fn kind(group: usize) -> usize {
     group.min(FX_GROUP)
@@ -561,7 +561,7 @@ fn kind(group: usize) -> usize {
 
 /// Overwrite one step from a copied step, starting at a column group. Whole-step blocks replace
 /// the whole step.
-pub fn paste_step(
+pub(crate) fn paste_step(
     target: &mut Step,
     source: &Step,
     scope: Scope,
@@ -591,7 +591,7 @@ pub fn paste_step(
 }
 
 /// Like [`paste_step`], but what is empty in the copy leaves what is on the step alone.
-pub fn merge_step(
+pub(crate) fn merge_step(
     target: &mut Step,
     source: &Step,
     scope: Scope,

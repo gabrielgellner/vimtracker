@@ -21,7 +21,7 @@ impl<T: Copy> Default for Grid<T> {
 
 impl<T: Copy> Grid<T> {
     /// A grid from all four of its columns, for a table that states one as a constant.
-    pub const fn new(columns: [[Option<T>; GRID_ROWS]; GRID_COLUMNS]) -> Self {
+    pub(crate) const fn new(columns: [[Option<T>; GRID_ROWS]; GRID_COLUMNS]) -> Self {
         Self(columns)
     }
 
@@ -48,7 +48,8 @@ impl<T: Copy> Grid<T> {
     }
 
     /// A column's places, top to bottom.
-    pub fn column(self, column: usize) -> [Option<T>; GRID_ROWS] {
+    #[cfg(test)]
+    pub(crate) fn column(self, column: usize) -> [Option<T>; GRID_ROWS] {
         std::array::from_fn(|row| self.at(row, column))
     }
 
@@ -61,7 +62,8 @@ impl<T: Copy> Grid<T> {
 impl Grid {
     /// Whether it places each of a device's settings exactly once, apart from those shown
     /// elsewhere, such as an effect's type in its title, and nothing that isn't one of them.
-    pub fn places_each_once(
+    #[cfg(test)]
+    pub(crate) fn places_each_once(
         self,
         count: usize,
         elsewhere: impl IntoIterator<Item = usize>,

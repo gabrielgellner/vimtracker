@@ -16,7 +16,7 @@ use thiserror::Error;
 const CHUNK: usize = 1024;
 
 /// The file extensions a sample can have, in lower case.
-pub const SAMPLE_EXTENSIONS: [&str; 4] = ["wav", "aif", "aiff", "flac"];
+pub(crate) const SAMPLE_EXTENSIONS: [&str; 4] = ["wav", "aif", "aiff", "flac"];
 
 /// Why a sample could not be loaded.
 #[derive(Debug, Error)]

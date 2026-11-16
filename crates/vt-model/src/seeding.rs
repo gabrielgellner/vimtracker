@@ -91,7 +91,7 @@ fn and_list(words: &[String]) -> String {
 }
 
 /// The Octatrack's `.ot` beside a file, with the same name, if there is one.
-pub fn ot_beside(file: &Path) -> Option<PathBuf> {
+pub(crate) fn ot_beside(file: &Path) -> Option<PathBuf> {
     ["ot", "OT"]
         .into_iter()
         .map(|extension| file.with_extension(extension))
@@ -143,7 +143,7 @@ pub fn seed(file: &Path, bytes: &[u8], frames: u64) -> FileSeed {
 /// The points a WAV's markers give, in a file this many frames long: each cue point starts a
 /// slice, and the first `smpl` loop is the loop. A loop at least as long as what follows it is
 /// taken as a trim as well, as the Deluge takes it, so the entry ends where it does.
-pub fn wav_points(markers: &Markers, frames: u64, problems: &mut Vec<String>) -> Points {
+pub(crate) fn wav_points(markers: &Markers, frames: u64, problems: &mut Vec<String>) -> Points {
     let mut points = Points::default();
     if let Some(first) = markers.loops.first() {
         let end = first.end.min(frames);
@@ -186,7 +186,7 @@ fn mark_letter(label: &str) -> Option<char> {
 /// end, its loop runs from its loop start to the trim's end, and its slices start where its
 /// slices do. Its slices' own ends and loops are left, as an entry's slice ends where the next
 /// starts.
-pub fn ot_points(ot: &OtFile, frames: u64) -> Points {
+pub(crate) fn ot_points(ot: &OtFile, frames: u64) -> Points {
     let mut points = Points::default();
     let (start, end) = (u64::from(ot.trim_start), u64::from(ot.trim_end).min(frames));
     if start < end {

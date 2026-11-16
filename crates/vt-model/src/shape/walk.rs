@@ -28,18 +28,10 @@ pub enum Edge {
 
 impl Edge {
     /// The name on screen.
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Reflect => "Reflect",
             Self::Wrap => "Wrap",
-        }
-    }
-
-    /// The other one.
-    pub fn other(self) -> Self {
-        match self {
-            Self::Reflect => Self::Wrap,
-            Self::Wrap => Self::Reflect,
         }
     }
 }
@@ -65,7 +57,7 @@ impl Default for Walk {
 }
 
 impl Walk {
-    pub fn is_default(&self) -> bool {
+    pub(crate) fn is_default(&self) -> bool {
         *self == Self::default()
     }
 }
@@ -86,7 +78,7 @@ impl Default for Pink {
 }
 
 impl Pink {
-    pub fn is_default(&self) -> bool {
+    pub(crate) fn is_default(&self) -> bool {
         *self == Self::default()
     }
 }

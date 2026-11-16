@@ -55,12 +55,12 @@ impl Default for Mutations {
 }
 
 impl Mutations {
-    pub fn is_default(&self) -> bool {
+    pub(crate) fn is_default(&self) -> bool {
         *self == Self::default()
     }
 
     /// Whether it allows any kind at all.
-    pub fn any(&self) -> bool {
+    pub(crate) fn any(&self) -> bool {
         self.repitch || self.shift || self.retro || self.ratchet || self.drop
     }
 

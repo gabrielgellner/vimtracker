@@ -10,7 +10,7 @@ pub const MAX_HOLD_MS: u16 = 2000;
 /// An envelope's time in ms for a value on the registry's `00` to `FF` scale, as a macro or
 /// modulation moves one: none at `00`, then from 1 ms at `01` to [`MAX_ENVELOPE_MS`] at `FF`,
 /// evenly in ratio, so each step is about 3.6 % longer than the last.
-pub fn time_at(value: f32) -> u16 {
+pub(crate) fn time_at(value: f32) -> u16 {
     if value < 1.0 {
         return 0;
     }
@@ -20,7 +20,7 @@ pub fn time_at(value: f32) -> u16 {
 
 /// Where a time in ms is on the registry's scale, with a coarse byte and a fine one, nearest to
 /// what [`time_at`] gives back.
-pub fn time_value(ms: u16) -> u16 {
+pub(crate) fn time_value(ms: u16) -> u16 {
     if ms == 0 {
         return 0;
     }
@@ -79,7 +79,7 @@ impl Curve {
     }
 
     /// What it does, for a list to choose from.
-    pub fn meaning(self) -> &'static str {
+    pub(crate) fn meaning(self) -> &'static str {
         match self {
             Self::Exp => "rises slowly, falls fast then slow",
             Self::Lin => "straight lines",
@@ -102,7 +102,7 @@ impl Curve {
     /// How far through an attack it reaches `level`, from 0 to 1: [`Curve::rise`] turned round,
     /// so an attack started from a level can start where its curve has it.
     #[inline]
-    pub fn rise_time(self, level: f32) -> f32 {
+    pub(crate) fn rise_time(self, level: f32) -> f32 {
         let level = level.clamp(0.0, 1.0);
         match self {
             Self::Lin => level,
@@ -212,7 +212,7 @@ impl Adsr {
     }
 
     /// Whether these are settings that can be set.
-    pub fn in_range(&self) -> bool {
+    pub(crate) fn in_range(&self) -> bool {
         [self.attack_ms, self.decay_ms, self.release_ms]
             .iter()
             .all(|ms| *ms <= MAX_ENVELOPE_MS)
@@ -255,14 +255,14 @@ impl Adsr {
 
     /// Whether a held note has gone silent for good, with nothing to release.
     #[inline]
-    pub fn finished_holding(&self, frames: u64, rate: u32) -> bool {
+    pub(crate) fn finished_holding(&self, frames: u64, rate: u32) -> bool {
         self.sustain == 0
             && frames >= frames_of(self.attack_ms, rate) + frames_of(self.decay_ms, rate)
     }
 
     /// Whether a release has reached silence.
     #[inline]
-    pub fn finished_releasing(&self, frames: u64, rate: u32) -> bool {
+    pub(crate) fn finished_releasing(&self, frames: u64, rate: u32) -> bool {
         frames >= frames_of(self.release_ms, rate)
     }
 }
@@ -306,7 +306,7 @@ impl Default for Ahd {
 
 impl Ahd {
     /// Whether these are settings that can be set.
-    pub fn in_range(&self) -> bool {
+    pub(crate) fn in_range(&self) -> bool {
         self.attack_ms <= MAX_ENVELOPE_MS
             && self.decay_ms <= MAX_ENVELOPE_MS
             && match self.hold {
@@ -317,7 +317,7 @@ impl Ahd {
 
     /// Whether it plays through whatever the note's length, its hold being a time.
     #[inline]
-    pub fn one_shot(&self) -> bool {
+    pub(crate) fn one_shot(&self) -> bool {
         matches!(self.hold, Hold::Ms(_))
     }
 
@@ -358,7 +358,7 @@ impl Ahd {
 
     /// Whether a held note has gone silent for good: a one-shot once its decay is done.
     #[inline]
-    pub fn finished_holding(&self, frames: u64, rate: u32) -> bool {
+    pub(crate) fn finished_holding(&self, frames: u64, rate: u32) -> bool {
         match self.hold {
             Hold::Note => false,
             Hold::Ms(hold) => {
@@ -372,7 +372,7 @@ impl Ahd {
 
     /// Whether the decay from a note's end has reached silence.
     #[inline]
-    pub fn finished_releasing(&self, frames: u64, rate: u32) -> bool {
+    pub(crate) fn finished_releasing(&self, frames: u64, rate: u32) -> bool {
         frames >= frames_of(self.decay_ms, rate)
     }
 }
@@ -412,7 +412,7 @@ impl Default for Drum {
 
 impl Drum {
     /// Whether these are settings that can be set.
-    pub fn in_range(&self) -> bool {
+    pub(crate) fn in_range(&self) -> bool {
         self.peak_ms <= MAX_ENVELOPE_MS
             && self.decay_ms <= MAX_ENVELOPE_MS
             && self.body <= 100
@@ -460,7 +460,7 @@ impl Drum {
     /// The level some frames after a release, which a one-shot never has: a decay from where it
     /// was, as an AHD's.
     #[inline]
-    pub fn released(&self, frames: u64, from: f32, rate: u32) -> f32 {
+    pub(crate) fn released(&self, frames: u64, from: f32, rate: u32) -> f32 {
         let decay = frames_of(self.decay_ms, rate);
         if frames < decay {
             from * (1.0 - self.curve.fall(frames as f32 / decay as f32))
@@ -471,13 +471,13 @@ impl Drum {
 
     /// Whether a note has gone silent for good: once its body has decayed.
     #[inline]
-    pub fn finished_holding(&self, frames: u64, rate: u32) -> bool {
+    pub(crate) fn finished_holding(&self, frames: u64, rate: u32) -> bool {
         frames >= self.strikes(rate).1 + frames_of(self.decay_ms, rate)
     }
 
     /// Whether a release has reached silence.
     #[inline]
-    pub fn finished_releasing(&self, frames: u64, rate: u32) -> bool {
+    pub(crate) fn finished_releasing(&self, frames: u64, rate: u32) -> bool {
         frames >= frames_of(self.decay_ms, rate)
     }
 }
@@ -522,7 +522,7 @@ impl Default for Lpg {
 
 impl Lpg {
     /// Whether these are settings that can be set.
-    pub fn in_range(&self) -> bool {
+    pub(crate) fn in_range(&self) -> bool {
         self.attack_ms <= MAX_ENVELOPE_MS && self.decay_ms <= MAX_ENVELOPE_MS
     }
 
@@ -568,19 +568,19 @@ impl Lpg {
     /// The level some frames after a release, which a one-shot never has: its fall from where it
     /// was.
     #[inline]
-    pub fn released(&self, frames: u64, from: f32, rate: u32) -> f32 {
+    pub(crate) fn released(&self, frames: u64, from: f32, rate: u32) -> f32 {
         from * self.fall(frames as f32 / rate as f32)
     }
 
     /// Whether a note has gone silent for good: once its fall has landed.
     #[inline]
-    pub fn finished_holding(&self, frames: u64, rate: u32) -> bool {
+    pub(crate) fn finished_holding(&self, frames: u64, rate: u32) -> bool {
         frames >= frames_of(self.attack_ms, rate) + frames_of(self.decay_ms, rate)
     }
 
     /// Whether a release has reached silence.
     #[inline]
-    pub fn finished_releasing(&self, frames: u64, rate: u32) -> bool {
+    pub(crate) fn finished_releasing(&self, frames: u64, rate: u32) -> bool {
         frames >= frames_of(self.decay_ms, rate)
     }
 }

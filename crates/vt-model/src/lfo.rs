@@ -42,7 +42,7 @@ const DIVISIONS: [(&str, u32); 18] = [
 ];
 
 /// The divisions' names, shortest first, for a setting to choose between.
-pub const DIVISION_NAMES: [&str; DIVISIONS.len()] = {
+pub(crate) const DIVISION_NAMES: [&str; DIVISIONS.len()] = {
     let mut names = [""; DIVISIONS.len()];
     let mut at = 0;
     while at < DIVISIONS.len() {
@@ -74,7 +74,7 @@ const SWEEPS: usize = DIVISIONS.len() + SWEEP_BARS.len();
 
 /// The lengths an effect's sweep chooses between, as a phaser's or flanger's `Rate`: the note
 /// divisions, then whole bars up to 16, as a slow sweep wants.
-pub const SWEEP_NAMES: [&str; SWEEPS] = {
+pub(crate) const SWEEP_NAMES: [&str; SWEEPS] = {
     let mut names = [""; SWEEPS];
     let mut at = 0;
     while at < SWEEPS {
@@ -121,7 +121,7 @@ pub struct RateError;
 
 impl Rate {
     /// Whether this is a rate that can be set.
-    pub fn in_range(self) -> bool {
+    pub(crate) fn in_range(self) -> bool {
         match self {
             Self::Note(ticks) => (1..=MAX_RATE_BARS * BAR_TICKS).contains(&ticks),
             Self::Steps(steps) => (1..=MAX_RATE_STEPS).contains(&steps),
@@ -219,7 +219,7 @@ impl Rate {
     /// fraction, the inverse of [`Rate::place`]: the nearest length, whole number of steps or
     /// hundredth of a hertz there.
     #[must_use]
-    pub fn placed(self, value: f32) -> Self {
+    pub(crate) fn placed(self, value: f32) -> Self {
         let along = (f64::from(value) / SCALE_TOP).clamp(0.0, 1.0);
         match self {
             Self::Note(_) => {
@@ -528,7 +528,7 @@ impl LfoMode {
     }
 
     /// What it does, for a list to choose from.
-    pub fn meaning(self) -> &'static str {
+    pub(crate) fn meaning(self) -> &'static str {
         match self {
             Self::Free => "runs from the song's position",
             Self::Trig => "each note starts it at its phase",
@@ -592,7 +592,7 @@ impl Fade {
     };
 
     /// Whether this is a fade that can be set: none, or one of the sweeps' lengths.
-    pub fn in_range(self) -> bool {
+    pub(crate) fn in_range(self) -> bool {
         match self {
             Self::Off => true,
             Self::In(ticks) | Self::Out(ticks) => SWEEP_TICKS.contains(&ticks),
@@ -729,7 +729,7 @@ impl Default for Lfo {
 
 impl Lfo {
     /// Whether these are settings that can be set.
-    pub fn in_range(&self) -> bool {
+    pub(crate) fn in_range(&self) -> bool {
         self.rate.in_range()
             && self.phase < 360
             && self.deform.abs() <= MAX_DEFORM

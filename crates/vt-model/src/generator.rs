@@ -228,7 +228,7 @@ impl Generator {
 
     /// Whether it fills the same cells as a column would: an FX column is its slot, whatever
     /// its command.
-    pub fn shares(&self, column: ShapeColumn) -> bool {
+    pub(crate) fn shares(&self, column: ShapeColumn) -> bool {
         match (self.column, column) {
             (ShapeColumn::Fx { slot, .. }, ShapeColumn::Fx { slot: other, .. }) => slot == other,
             (ShapeColumn::Note { .. }, ShapeColumn::Note { .. })

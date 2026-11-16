@@ -24,11 +24,11 @@ pub enum Condition {
 }
 
 /// The most passes a cycle can count, as on Elektron's machines.
-pub const MOST_PASSES: u8 = 8;
+pub(crate) const MOST_PASSES: u8 = 8;
 
 /// The latest pass a build can start or end on. `9n` and `An` count from 2 to 15 by their second
 /// digit, and `Bn` and `Cn` carry on from 16 to 31.
-pub const LATEST_BUILD: u8 = 31;
+pub(crate) const LATEST_BUILD: u8 = 31;
 
 /// The named conditions, in Elektron's order, whose values are `01` to `08`.
 const NAMED: [Condition; 8] = [
@@ -178,7 +178,7 @@ impl Condition {
     /// The condition this many places on in the list, stopping at either end. A large step moves
     /// a pass to a longer or shorter cycle, keeping its place where it can, so `1:2` goes to `1:3`,
     /// and a build's pass by four, so `>5` goes to `>9`.
-    pub fn moved(self, by: i32, large: bool) -> Self {
+    pub(crate) fn moved(self, by: i32, large: bool) -> Self {
         let build = |pass: u8| (i32::from(pass) + by * 4).clamp(2, i32::from(LATEST_BUILD)) as u8;
         match self {
             Self::Passes { pass, of } if large => {

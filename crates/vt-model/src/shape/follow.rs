@@ -66,7 +66,7 @@ fn is_zero(value: &u8) -> bool {
 }
 
 impl Follow {
-    pub fn is_default(&self) -> bool {
+    pub(crate) fn is_default(&self) -> bool {
         *self == Self::default()
     }
 
@@ -76,7 +76,7 @@ impl Follow {
     }
 
     /// Whether it ratchets some rows, so it owns their FX even where it doesn't copy them.
-    pub fn ratchets(&self) -> bool {
+    pub(crate) fn ratchets(&self) -> bool {
         self.mutates() && self.mutate.ratchet
     }
 }

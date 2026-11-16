@@ -20,12 +20,12 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 /// Frames in each chunk: about two thirds of a second at 48 kHz.
-pub const CHUNK_FRAMES: usize = 1 << 15;
+pub(crate) const CHUNK_FRAMES: usize = 1 << 15;
 
 /// How many of the next chunk's first frames are copied onto the end of each, so a read of a frame
 /// and those after it stays in one chunk: one is all linear interpolation needs, and four leave
 /// room for a four-point one.
-pub const OVERLAP_FRAMES: usize = 4;
+pub(crate) const OVERLAP_FRAMES: usize = 4;
 
 /// One chunk: its frames, then the next chunk's first [`OVERLAP_FRAMES`].
 type Chunk = Box<[AtomicU64]>;
@@ -83,11 +83,6 @@ impl Growing {
         }
     }
 
-    /// Frames in each chunk.
-    pub fn chunk_frames(&self) -> usize {
-        self.chunk
-    }
-
     /// The most frames it can ever hold.
     pub fn capacity(&self) -> u64 {
         (self.chunks.len() * self.chunk) as u64
@@ -100,7 +95,8 @@ impl Growing {
     }
 
     /// How many frames the chunks in place hold, written or not.
-    pub fn room(&self) -> u64 {
+    #[cfg(test)]
+    pub(crate) fn room(&self) -> u64 {
         (self.ready.load(Ordering::Acquire) * self.chunk) as u64
     }
 
@@ -148,7 +144,8 @@ impl Growing {
 
     /// A frame, if it's written.
     #[inline]
-    pub fn get(&self, index: usize) -> Option<[f32; 2]> {
+    #[cfg(test)]
+    pub(crate) fn get(&self, index: usize) -> Option<[f32; 2]> {
         self.pair(index).map(|(frame, _)| frame)
     }
 
@@ -156,7 +153,7 @@ impl Growing {
     /// first again for the second if that isn't yet, as at the end of a sample. Both come from one
     /// chunk, however near its end the first is.
     #[inline]
-    pub fn pair(&self, index: usize) -> Option<([f32; 2], [f32; 2])> {
+    pub(crate) fn pair(&self, index: usize) -> Option<([f32; 2], [f32; 2])> {
         let written = self.written() as usize;
         if index >= written {
             return None;

@@ -413,7 +413,7 @@ impl Comb {
 }
 
 /// The vowels a vowel filter moves through, in order along its `Vowel`.
-pub const VOWEL_NAMES: [&str; 5] = ["A", "E", "I", "O", "U"];
+pub(crate) const VOWEL_NAMES: [&str; 5] = ["A", "E", "I", "O", "U"];
 
 /// Where a vowel filter's `Vowel` or `Size` is among its five vowels or voices, for a value on the
 /// `00` to `FF` scale: the one it's coming from, the next, and how far it is from one to the other.

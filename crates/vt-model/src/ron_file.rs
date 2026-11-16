@@ -59,12 +59,12 @@ fn parse_at(path: &Path) -> impl Fn(ron::error::SpannedError) -> Error + '_ {
 }
 
 /// A file's text.
-pub fn read_text(path: &Path) -> Result<String, Error> {
+pub(crate) fn read_text(path: &Path) -> Result<String, Error> {
     fs::read_to_string(path).map_err(io_at(path))
 }
 
 /// A value from a file's text, `path` naming it if it won't read.
-pub fn parse<T: DeserializeOwned>(text: &str, path: &Path) -> Result<T, Error> {
+pub(crate) fn parse<T: DeserializeOwned>(text: &str, path: &Path) -> Result<T, Error> {
     ron::from_str(text).map_err(parse_at(path))
 }
 
@@ -75,7 +75,7 @@ pub fn read<T: DeserializeOwned>(path: &Path) -> Result<T, Error> {
 
 /// The format number in a file's text, from its `field`, such as `format_version`, reading
 /// nothing else of it, so it's read before the rest.
-pub fn probe(text: &str, path: &Path, field: &'static str) -> Result<u32, Error> {
+pub(crate) fn probe(text: &str, path: &Path, field: &'static str) -> Result<u32, Error> {
     ron::Options::default()
         .from_str_seed(text, FormatField(field))
         .map_err(parse_at(path))
