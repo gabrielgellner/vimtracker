@@ -749,6 +749,11 @@ impl SlotEffect for Echo {
         self.settle();
     }
 
+    /// Nothing: with `Echo` down, what's on the tape goes round with none of it coming out, so
+    /// the quiet its slot hears doesn't show the tape is empty, and a jump of its speed or a
+    /// level could step what's still on it. It jumps only as it's taken from the pool.
+    fn settle_quiet(&mut self) {}
+
     fn clear(&mut self) {
         self.clear();
     }

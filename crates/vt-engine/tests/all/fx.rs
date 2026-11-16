@@ -105,6 +105,49 @@ fn a_lock_while_a_tail_rings_glides_rather_than_steps() {
 }
 
 #[test]
+fn a_pooled_effect_starts_on_a_lock_its_quiet_track_comes_back_with() {
+    use vt_model::insert::Tape;
+    // A short tone, a rest long after its tape slot has fallen quiet, and the tone again with a
+    // lock of the tape's drive. The tape, an effect in the pool, starts on the lock, as one that
+    // played the first tone with it does, rather than gliding there from where it was (#929).
+    // Its wow and flutter are off: where they've got to is the tape's own, and the louder first
+    // tone keeps them going a little longer.
+    let tone = (0..STEP / 2)
+        .map(|frame| [(frame as f32 / RATE as f32 * 220.0 * std::f32::consts::TAU).sin() * 0.5; 2])
+        .collect();
+    let samples = pool(tone);
+    let back = STEP * 8;
+    let played = |first: &str| {
+        let mut rows = vec!["--- -- --- --- ---"; 9];
+        rows[0] = first;
+        rows[8] = "C-3 -- 1.tape.drive:FF --- ---";
+        let mut song = song(&rows);
+        song.tracks[0].inserts[0] = Insert::Tape(Tape {
+            mix: 0xFF,
+            wow: 0,
+            flutter: 0,
+            ..Tape::DEFAULT
+        });
+        render(song, Arc::clone(&samples), back + RATE as usize / 50)
+    };
+    let (set, moved) = (
+        played("C-3 -- 1.tape.drive:FF --- ---"),
+        played("C-3 -- --- --- ---"),
+    );
+    let quiet = peak(moved[back - STEP..back].iter().flatten());
+    assert!(
+        quiet == 0.0,
+        "the track is quiet before it comes back: {quiet}"
+    );
+    let apart = moved[back..]
+        .iter()
+        .zip(&set[back..])
+        .flat_map(|(moved, set)| [moved[0] - set[0], moved[1] - set[1]])
+        .fold(0.0_f32, |most, apart| most.max(apart.abs()));
+    assert!(apart < 1e-4, "it came back {apart} from where the lock is");
+}
+
+#[test]
 fn pan_moves_between_channels() {
     let out = render(song(&["C-3 -- pan:00 --- ---"]), flat(0.5), STEP);
     let last = out[STEP - 1];

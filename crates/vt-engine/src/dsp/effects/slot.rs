@@ -58,8 +58,16 @@ pub(crate) trait SlotEffect: Sized {
     /// Jump its settings to what's set, rather than gliding there: as it's only just started,
     /// and, kept in a slot, on every row read and preview while the track is quiet
     /// ([`InsertState::settle`]). Only settings jump: what the sound left in it, a filter's or
-    /// a detector's state, a buffer or a phase, is its own and stays.
+    /// a detector's state, a buffer or a phase, is its own and stays. One in the pool may jump
+    /// more as it starts, its buffer empty: a delay's time, a tape's speed or a mode's crossfade.
     fn settle(&mut self) {}
+    /// Jump as `settle` does, in the pool, on a row read or preview while the track is quiet
+    /// ([`InsertState::settle`]): once its slot has heard it give nothing for `quiet_frames`
+    /// with nothing coming in, so it holds nothing it would play. One whose quiet can't show
+    /// that jumps only what can't step what it may still hold, or nothing.
+    fn settle_quiet(&mut self) {
+        self.settle();
+    }
     /// Empty what it keeps, before the pool hands it out again.
     fn clear(&mut self);
     /// How many quiet frames in a row mean nothing's left in it.
@@ -892,18 +900,21 @@ impl InsertState {
         self.on.target = if bypassed { 0.0 } else { 1.0 };
     }
 
-    /// Jump to the settings rather than gliding there: its switch, amount, mix and gain, and
-    /// every setting of an effect kept in the slot. The track calls it on every row read, and
-    /// every preview started, while nothing's sounding through it and no slot's tail is ringing,
-    /// so a jump has nothing to step. An effect in the pool isn't settled here: it jumps as it's
-    /// taken from the pool, with its buffer empty, and a resonator, comb or frequency shifter as
-    /// it wakes.
+    /// Jump to the settings rather than gliding there: its switch, amount, mix and gain, every
+    /// setting of an effect kept in the slot, and an effect in the pool by its `settle_quiet`.
+    /// The track calls it on every row read, and every preview started, while nothing's sounding
+    /// through it and no slot's tail is [`ringing`](Self::ringing), so a jump has nothing to
+    /// step. An effect in the pool jumps all of its `settle` too as it's taken from the pool,
+    /// with its buffer empty, and a resonator, comb or frequency shifter as it wakes.
     pub fn settle(&mut self) {
         self.on.settle();
         self.amount.settle();
         self.mix.settle();
         self.gain.settle();
         self.kept.settle();
+        if let Some(memory) = &mut self.memory {
+            memory.settle_quiet();
+        }
     }
 
     /// How hard its distortion goes, eased, for Distort's tests.
@@ -1336,6 +1347,171 @@ mod tests {
             glided.is_empty(),
             "these glided rather than starting on what's set: {glided:#?}"
         );
+    }
+
+    /// `insert` with the setting stored as `key` at `value`, if it has one.
+    fn with_key(insert: Insert, key: &str, value: u8) -> Insert {
+        let params = insert.kind().unwrap().params();
+        match params.iter().position(|param| param.key == key) {
+            Some(at) => insert.write(at, f32::from(value)),
+            None => insert,
+        }
+    }
+
+    /// Whether the slot plays an effect in the pool through its `ring`, rather than playing it
+    /// itself with its note or another track.
+    fn rung(insert: Insert) -> bool {
+        !matches!(
+            insert,
+            Insert::Limit(_)
+                | Insert::Warps(_)
+                | Insert::Reso(_)
+                | Insert::Comb(_)
+                | Insert::FreqShift(_)
+        )
+    }
+
+    /// A slot holding `insert` after two seconds of a tone, different on each side,
+    /// and holding `then` from then on.
+    fn after_a_tone(insert: Insert, then: Insert) -> InsertState {
+        let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
+        let sidechains = SidechainFrames::default();
+        let (mut state, mut pool) = pooled(insert);
+        state.strike();
+        for sample in sines(RATE as usize * 2, 220.0, 0.5, RATE) {
+            state.process([sample, -sample * 0.7], smoothing, RATE, &sidechains);
+        }
+        state.hold(then, &mut pool, AT_120, 0);
+        state
+    }
+
+    /// What `memory` plays on with nothing coming in for `seconds`, as its loudest.
+    fn plays_on(memory: &Memory, seconds: f32) -> f32 {
+        let mut memory = memory.clone();
+        let frames = (seconds * RATE as f32) as usize;
+        peak((0..frames).flat_map(|_| memory.process([0.0; 2])))
+    }
+
+    #[test]
+    fn a_slot_rings_while_its_effect_in_the_pool_holds_anything_it_would_play() {
+        // A track settles an effect in the pool only once none of its slots is `ringing()`
+        // (#929), which is once each has given nothing for its `quiet_frames` with nothing coming
+        // in. Then what it holds must play nothing more, or a jump could step it. Each effect, in
+        // each type and at its longest tail, is given 40 seconds to stop. A frozen recording,
+        // which Grains, Clouds and Beads loop, and a delay at full feedback have to keep it
+        // ringing. The limiter, Warps, the resonator, the comb and the frequency shifter aren't
+        // rung: their slot settles each itself as it wakes, by the same test.
+        let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
+        let sidechains = SidechainFrames::default();
+        let mut tried = Vec::new();
+        for insert in every_pooled_effect()
+            .into_iter()
+            .filter(|&insert| rung(insert))
+        {
+            tried.push((insert, insert, false));
+            // Its longest tail.
+            let long = ["feedback", "decay", "intensity", "repeats"]
+                .into_iter()
+                .fold(insert, |insert, key| with_key(insert, key, 0xFF));
+            tried.push((long, long, false));
+            // Recording, then frozen.
+            if by_key(insert, "freeze").is_some() {
+                tried.push((insert, with_key(insert, "freeze", 1), true));
+            }
+        }
+        let full = Insert::Delay(Delay {
+            feedback: 0xFF,
+            ..Delay::DEFAULT
+        });
+        tried.push((full, full, true));
+        for (insert, then, holds) in tried {
+            let mut state = after_a_tone(insert, then);
+            let mut stopped = false;
+            for _ in 0..RATE * 40 {
+                state.process([0.0; 2], smoothing, RATE, &sidechains);
+                if !state.ringing(RATE) {
+                    stopped = true;
+                    break;
+                }
+            }
+            let memory = state.memory.as_ref().unwrap();
+            let left = plays_on(memory, 2.0);
+            if stopped {
+                assert!(left < SILENT, "{then:?} stopped ringing holding {left}");
+            }
+            if holds {
+                assert!(!stopped, "{then:?} stopped ringing");
+                assert!(left > 0.01, "{then:?} holds only {left}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_echo_clouds_and_beads_can_hold_a_sound_their_slot_hears_as_quiet() {
+        // So none of them is settled on a quiet row (#929): with `Echo` down or `Blend` all dry,
+        // what goes round in them goes on with none of it coming out, and stays once the slot
+        // stops ringing, to be heard once the level's up.
+        let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
+        let sidechains = SidechainFrames::default();
+        let echo = vt_model::insert::Echo::DEFAULT;
+        let clouds = vt_model::insert::Clouds::DEFAULT;
+        let beads = vt_model::insert::Beads {
+            mode: vt_model::insert::BeadsMode::Delay,
+            ..vt_model::insert::Beads::DEFAULT
+        };
+        for (hiding, heard) in [
+            (
+                Insert::Echo(vt_model::insert::Echo {
+                    echo: 0,
+                    intensity: 0xFF,
+                    ..echo
+                }),
+                Insert::Echo(vt_model::insert::Echo {
+                    intensity: 0xFF,
+                    ..echo
+                }),
+            ),
+            (
+                Insert::Clouds(vt_model::insert::Clouds {
+                    blend: 0,
+                    feedback: 0xFF,
+                    ..clouds
+                }),
+                Insert::Clouds(vt_model::insert::Clouds {
+                    blend: 0xFF,
+                    feedback: 0xFF,
+                    ..clouds
+                }),
+            ),
+            (
+                Insert::Beads(vt_model::insert::Beads {
+                    blend: 0,
+                    feedback: 0xFF,
+                    ..beads
+                }),
+                Insert::Beads(vt_model::insert::Beads {
+                    blend: 0xFF,
+                    feedback: 0xFF,
+                    ..beads
+                }),
+            ),
+        ] {
+            // Heard while the tone plays, then hidden.
+            let mut state = after_a_tone(heard, hiding);
+            let mut stopped = false;
+            for _ in 0..RATE * 30 {
+                state.process([0.0; 2], smoothing, RATE, &sidechains);
+                if !state.ringing(RATE) {
+                    stopped = true;
+                    break;
+                }
+            }
+            assert!(stopped, "{hiding:?} kept ringing");
+            let mut memory = state.memory.clone().unwrap();
+            memory.follow(heard, AT_120, 0, false);
+            let left = plays_on(&memory, 1.0);
+            assert!(left > 0.01, "{hiding:?} held only {left}");
+        }
     }
 
     #[test]
