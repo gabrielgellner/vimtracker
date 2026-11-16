@@ -18,7 +18,7 @@ with the cursor has the brighter frame. An empty slot keeps its frame, says `Emp
 | `K` on the type | Choose the effect's type, such as a Comp's `Glue` |
 | `x` on the effect | Empty the slot |
 | `x` on a setting | Back to its default |
-| `dd` on a setting | To nothing: its lowest, off, its middle or its first choice |
+| `dd` on a setting | To nothing: lowest, off, middle or first choice |
 | `h` `j` `k` `l` | Through the settings, and up to the title |
 | `0` `$` | The first or last setting on the row |
 | `{` `}` | Previous or next slot, staying on the same setting |
