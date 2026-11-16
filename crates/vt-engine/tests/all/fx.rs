@@ -7,7 +7,7 @@ use vt_model::insert::{Distort, DistortType, INSERTS, Insert};
 use vt_model::samples::SamplePool;
 use vt_model::song::{Song, level_gain};
 
-use crate::support::{pool, song};
+use crate::support::{peak, pool, song};
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM, and 1000 per groove unit.
@@ -60,6 +60,48 @@ fn vol_changes_are_smoothed() {
         "should ramp, not jump: {next} vs {before}"
     );
     assert!(level_at(&out, STEP + 4000) < 0.001);
+}
+
+#[test]
+fn a_lock_while_a_tail_rings_glides_rather_than_steps() {
+    use vt_model::insert::Delay;
+    // A short tone into a delay that rings on, and a lock of the level on the row its second
+    // repeat comes in on, with only the delay's tail left (#923). Each row that found the voice
+    // silent settled the whole track, its level too, though the tail was passing through, so the
+    // lock landed as a step.
+    let tone = (0..STEP / 2)
+        .map(|frame| [(frame as f32 / RATE as f32 * 220.0 * std::f32::consts::TAU).sin() * 0.5; 2])
+        .collect();
+    let samples = pool(tone);
+    let played = |locked: bool| {
+        let mut song = song(&["C-3 -- --- --- ---"]);
+        song.tracks[0].inserts[0] = Insert::Delay(Delay {
+            feedback: 0xC0,
+            ..Delay::DEFAULT
+        });
+        if locked {
+            let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
+            *phrase.step_mut(6).unwrap() = "--- -- level:40 --- ---".parse().unwrap();
+        }
+        render(song, Arc::clone(&samples), STEP * 7)
+    };
+    let (locked, free) = (played(true), played(false));
+    let row = STEP * 6;
+    assert_eq!(locked[..row], free[..row], "the same until the lock");
+    let tail = peak(free[row..].iter().flatten());
+    assert!(tail > 0.01, "the tail rings through the lock's row: {tail}");
+    // How far the level has gone toward the lock's, each frame of its first millisecond: a glide
+    // has hardly started, and a step is there at once.
+    let target =
+        level_gain(f32::from(0x40_u8)) / level_gain(f32::from(vt_model::constants::UNITY_LEVEL));
+    let moved: Vec<f32> = (row..row + RATE as usize / 1000)
+        .flat_map(|frame| (0..2).map(move |side| (frame, side)))
+        .filter(|&(frame, side)| free[frame][side].abs() > 1e-4)
+        .map(|(frame, side)| (1.0 - locked[frame][side] / free[frame][side]) / (1.0 - target))
+        .collect();
+    assert!(moved.len() > 20, "the repeat is heard as the lock comes");
+    let moved = moved.into_iter().fold(0.0_f32, f32::max);
+    assert!(moved < 0.5, "the lock stepped {moved} of the way at once");
 }
 
 #[test]
