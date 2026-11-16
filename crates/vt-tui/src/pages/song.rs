@@ -23,12 +23,13 @@ use vt_model::constants::BAR_STEPS;
 use vt_model::selection::Motion;
 use vt_model::song::{Repeat, SectionStart, lowest_unused};
 
-use crate::app::{Entry, Momentary};
+use crate::app::Entry;
 use crate::input::bindings::Cmd;
 use crate::input::mode::View;
 use crate::input::typed::{HEX, Typed};
 use crate::overlays::picker::{Item, Pick, Picker};
 use crate::pages::{Ctx, CtxMut, Outcome, Page};
+use crate::services::Momentary;
 use crate::services::Services;
 
 /// The columns before the tracks': Length, Rpt and Start.

@@ -12,10 +12,11 @@ use vt_model::label::is_name;
 use vt_model::song::{Machine, TrackKind};
 use vt_model::speed::Speed;
 
-use super::{App, TrackLive};
+use super::App;
 use crate::overlays::command::parse::LineError;
 use crate::overlays::picker::{Item, Pick, Picker};
 use crate::services::Services;
+use crate::services::TrackLive;
 use crate::widgets::{group, role};
 
 impl Services {

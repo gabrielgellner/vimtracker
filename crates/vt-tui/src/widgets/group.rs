@@ -5,7 +5,7 @@ use ratatui::style::Style;
 use ratatui::text::Span;
 use vt_model::song::{Song, Track, TrackKind};
 
-use crate::app::TrackLive;
+use crate::services::TrackLive;
 use crate::widgets::theme;
 
 /// The number of the group a track is, or plays through.

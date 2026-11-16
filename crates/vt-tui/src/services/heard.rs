@@ -10,7 +10,6 @@ use vt_model::macros::{GenColumn, MacroTarget};
 use vt_model::song::Track;
 use vt_model::step::Step;
 
-use crate::app::App;
 use crate::services::Services;
 
 /// Whether anything could move a live generator as it plays: a macro holding one of its column's
@@ -39,24 +38,21 @@ pub(crate) struct HeardRows {
     pub pass: i64,
 }
 
-impl App {
+impl Services {
     /// Take in what the engine heard of a track's generators.
     pub(crate) fn hear_generator(&mut self, track: usize, report: GenReport) {
         match report {
             GenReport::Pass(pass) => {
-                self.services
-                    .reported
+                self.reported
                     .heard_passes
                     .insert((track, pass.phrase, pass.generator), pass);
             }
             GenReport::Row(row) => {
-                self.services
-                    .reported
+                self.reported
                     .heard_rows
                     .insert((track, row.phrase, row.generator, row.row), row);
             }
             GenReport::Rest { phrase } => self
-                .services
                 .reported
                 .heard_rows
                 .retain(|(on, at, ..), _| (*on, *at) != (track, phrase)),

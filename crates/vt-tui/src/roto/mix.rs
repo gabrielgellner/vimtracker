@@ -13,8 +13,8 @@ use vt_roto::mix::{Fader, Place, Strip};
 use vt_roto::sysex::AllTracks;
 
 use super::{devices, edits};
-use crate::app::TrackLive;
 use crate::controls::Control;
+use crate::services::TrackLive;
 use crate::services::automating::as_heard;
 use crate::services::meter::{Meter, height_of};
 use vt_engine::track_state::Faders;

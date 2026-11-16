@@ -17,7 +17,6 @@ use vt_model::bank::{BankEntry, ContentHash, Points};
 use vt_model::project;
 use vt_model::samples::SamplePool;
 
-use crate::app::App;
 use crate::services::Services;
 
 /// The longest the bank's analyses are waited for, by a render or `:trim`.
@@ -203,17 +202,17 @@ impl Services {
     }
 }
 
-impl App {
+impl Services {
     /// Keep the bank's analyses in a cache folder from now on, as the program does and tests
     /// needn't, and ask for those not in yet.
     pub fn use_analysis_cache(&mut self, folder: Option<PathBuf>) {
-        self.services.analyst = Analyst::new(folder);
-        self.services.analyse_bank();
+        self.analyst = Analyst::new(folder);
+        self.analyse_bank();
     }
 
     /// The bank entry the current track plays, and its number, or why there's none.
     fn track_entry(&self) -> Result<(u8, BankEntry), String> {
-        let track = self.services.cursor.track;
+        let track = self.cursor.track;
         let number = self
             .song()
             .tracks
@@ -232,13 +231,13 @@ impl App {
         let (number, mut entry) = match self.track_entry() {
             Ok(found) => found,
             Err(error) => {
-                self.services.status = error;
+                self.status = error;
                 return;
             }
         };
         let level = level.map(|level| f32::from(level) / 100.0);
         if entry.edit.play.normalize == level {
-            self.services.status = match level {
+            self.status = match level {
                 Some(level) => format!("Sample {number:02X} is normalised to {level} dBFS already"),
                 None => format!("Sample {number:02X} isn't normalised"),
             };
@@ -246,16 +245,15 @@ impl App {
         }
         entry.edit.play.normalize = level;
         let peak = self
-            .services
             .entry_analysis(&entry)
             .map(|analysis| analysis.peak)
             .filter(|peak| *peak > 0.0);
         let gain = 20.0 * entry.edit.play.normalize_gain(peak).log10();
-        self.services.apply(&Action::SetBankEntry {
+        self.apply(&Action::SetBankEntry {
             number,
             entry: Some(entry),
         });
-        self.services.status = match (level, peak) {
+        self.status = match (level, peak) {
             (None, _) => format!("Sample {number:02X} is no longer normalised: u to undo"),
             (Some(level), Some(peak)) => format!(
                 "Sample {number:02X} normalised to {level} dBFS, {gain:+.1} dB from its peak of {:.1} dBFS: u to undo",
@@ -274,19 +272,18 @@ impl App {
         let (number, mut entry) = match self.track_entry() {
             Ok(found) => found,
             Err(error) => {
-                self.services.status = error;
+                self.status = error;
                 return;
             }
         };
-        let Some(analysis) = self.services.entry_analysis(&entry) else {
-            self.services.status = format!(
+        let Some(analysis) = self.entry_analysis(&entry) else {
+            self.status = format!(
                 "Sample {number:02X} can't be analysed: its file is missing or has changed"
             );
             return;
         };
         let Some(sound) = analysis.sound.clone() else {
-            self.services.status =
-                format!("Sample {number:02X} is all silence, so there's nothing to keep");
+            self.status = format!("Sample {number:02X} is all silence, so there's nothing to keep");
             return;
         };
         // Its loop stays where it was, as only where it starts and ends is found here.
@@ -303,15 +300,15 @@ impl App {
             seconds(analysis.frames())
         );
         if entry.edit.points == points {
-            self.services.status = format!("Sample {number:02X} is trimmed already, to {kept}");
+            self.status = format!("Sample {number:02X} is trimmed already, to {kept}");
             return;
         }
         entry.edit.points = points;
-        self.services.apply(&Action::SetBankEntry {
+        self.apply(&Action::SetBankEntry {
             number,
             entry: Some(entry),
         });
-        self.services.status = format!("Sample {number:02X} trimmed to {kept}: u to undo");
+        self.status = format!("Sample {number:02X} trimmed to {kept}: u to undo");
     }
 }
 

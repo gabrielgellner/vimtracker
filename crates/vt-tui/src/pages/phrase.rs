@@ -24,10 +24,11 @@ use vt_model::selection::{
 };
 use vt_model::step::FxCommand;
 
-use crate::app::{Cursor, Selection, TrackSpan};
+use crate::app::{Selection, TrackSpan};
 use crate::input::bindings::{Cmd, Op};
 use crate::input::mode::{Mode, View};
 use crate::pages::{Ctx, CtxMut, Outcome, Page};
+use crate::services::Cursor;
 use crate::services::Services;
 
 /// One beat, as a slide.

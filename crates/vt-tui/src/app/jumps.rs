@@ -4,12 +4,13 @@
 use ratatui::crossterm::event::KeyCode;
 use vt_model::bank::is_mark;
 
-use crate::app::{App, Cursor};
+use crate::app::App;
 use crate::controls::{Control, Page};
 use crate::input::keys::Key;
 use crate::input::mode::View;
 use crate::overlays::mapping::MappingView;
 use crate::pages::sample::marking::MarkWait;
+use crate::services::Cursor;
 use crate::services::banking::sample_text;
 
 /// How many places the jump list remembers.

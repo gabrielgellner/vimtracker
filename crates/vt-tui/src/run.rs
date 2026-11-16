@@ -208,7 +208,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
         input: heard.stream,
     });
     let mut app = App::new(song, path, samples, handle, rate);
-    app.use_analysis_cache(analysis::cache_folder());
+    app.services.use_analysis_cache(analysis::cache_folder());
     app.audio_page.audio = crate::pages::audio::AudioState {
         device,
         buffer,

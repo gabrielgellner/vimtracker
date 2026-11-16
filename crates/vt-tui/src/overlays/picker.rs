@@ -32,6 +32,7 @@ use crate::overlays::Overlay;
 use crate::overlays::command::parse::Line;
 use crate::overlays::guides::Guide;
 use crate::pages::{Ctx, CtxMut, Outcome};
+use crate::services::Services;
 use crate::services::audio::AudioChoice;
 
 pub mod draw;
@@ -1207,3 +1208,38 @@ pub(crate) fn rank_with_positions(texts: &[(&str, &str)], needle: &str) -> Vec<(
 
 #[cfg(test)]
 mod tests;
+
+impl Services {
+    /// The bank as a list: `Off`, then each entry with its file beside it and its waveform shown,
+    /// for choosing what the current track plays or what a step's `SMP` locks. The track's list
+    /// ends with a way to add a file.
+    pub(crate) fn bank_items(&self, pick: impl Fn(u8) -> Pick) -> Vec<Item> {
+        let song = self.song();
+        let off = Item::new("00  Off", pick(0)).meaning("No sample");
+        let entries = song.bank.iter().map(|(number, entry)| {
+            let source = entry.source();
+            let file = source.map_or("", |source| {
+                source.path.rsplit('/').next().unwrap_or(&source.path)
+            });
+            let item =
+                Item::new(format!("{number:02X}  {}", entry.title()), pick(number)).meaning(file);
+            match source {
+                Some(source) => item.preview(Preview::Sample(vt_model::project::resolve_sample(
+                    self.folder.as_deref(),
+                    &source.path,
+                ))),
+                None => item,
+            }
+        });
+        std::iter::once(off).chain(entries).collect()
+    }
+
+    /// Where a number is in the bank's list, which has `Off` first.
+    pub(crate) fn bank_place(&self, number: u8) -> usize {
+        self.song()
+            .bank
+            .iter()
+            .position(|(at, _)| at == number)
+            .map_or(0, |at| at + 1)
+    }
+}

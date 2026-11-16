@@ -59,9 +59,10 @@ use vt_roto::transport::{LinkError, Ports, SerialLink, SystemPorts};
 
 use crate::controls::Control;
 
-use crate::app::{App, TrackLive};
+use crate::app::App;
 use crate::input::mode::View;
 use crate::services::Services;
+use crate::services::TrackLive;
 use crate::services::automating::as_heard;
 
 /// The setting's file, in the config folder beside `audio.ron`.

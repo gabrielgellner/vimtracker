@@ -16,8 +16,8 @@
 use vt_engine::link::Command;
 use vt_model::playable::{Playable, Span};
 
-use crate::app::Momentary;
 use crate::pages::sample::{SamplePage, Shown};
+use crate::services::Momentary;
 use crate::services::Services;
 
 /// The keys that play slices in the keys mode, by row: the home row from `a`, then the row above

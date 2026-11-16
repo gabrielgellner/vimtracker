@@ -45,7 +45,7 @@ use vt_model::selection::{Extent, Field};
 use vt_model::song::{ChainEntry, Phrase, Section, Song, Track};
 use vt_model::step::{FxSlot, Gate, Step};
 
-use crate::app::{App, Cursor, Entry, Modes, Momentary, Selection, TrackLive, which_key_due};
+use crate::app::{App, Entry, Modes, Selection, which_key_due};
 use crate::controls::Control;
 use crate::controls::param::ParamView;
 use crate::graphics::{PanelIds, PanelWant};
@@ -67,6 +67,7 @@ use crate::services::audio::SlowdownReadout;
 use crate::services::folding::Folds;
 use crate::services::generators::LiveGen;
 use crate::services::meter::Meter;
+use crate::services::{Cursor, Momentary, TrackLive};
 use crate::widgets::setting::{CellLook, Focus};
 
 /// What a key did, as far as the page or the overlay it went to alone can tell, and what it asks
