@@ -77,6 +77,20 @@ about vt-engine, vt-model and vt-roto, with a short list for vt-tui:
 `App` has 27 fields, down from 141 on 11-13, and its `impl App` blocks are 49 files and 471
 methods.
 
+**Review 6** (#872, decision 358). §1's tables are the code before the plan, so they still name
+`run_audio_page`, `App.audio` and `audio_request`; since #872 the audio page's state is
+`AudioPage::audio` and `AudioPage::request`, and every page runs its keys through `Page::key`.
+
+| Step of #872 | Built in |
+|---|---|
+| 1, the overlays behind the pages' seam (`Overlay`, one `Outcome`) | #884, #886, #894, #899, #901, #902, #905 |
+| 2, the `impl App` blocks in `pages/**` onto their pages | #907, #909, #910, #912, #914, #916, #917, #919 |
+| 3, `services/` a layer below `App` | #921 |
+| 4, the rule in `CONTRIBUTING.md` | #922 |
+
+`App`'s methods are 305, in 25 files: `app.rs` and `app/`, `pages.rs`, the overlays that still
+need it, `input/wheel.rs`, `roto.rs` and `run.rs`.
+
 Decided by the user, 2026-11-15:
 - An edit that changes nothing makes no undo step, isn't dirty and isn't published (#826,
   decision 343).

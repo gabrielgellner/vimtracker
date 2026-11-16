@@ -843,7 +843,9 @@ crates/vt-tui/src/
   main.rs lib.rs run.rs     the subcommands; the terminal, the audio device and the main loop
   app.rs  app/              App: key dispatch, the modes, held keys, the jump list (jumps.rs),
                             the `:` runner (commands.rs), the grammar (grammar.rs), gd and cloning
-                            (tree.rs), Insert's accents and slides, and live recording
+                            (tree.rs), Insert's accents and slides, live recording, and the
+                            features that open lists or the explorer: banking, sampling, folding
+                            and autosave
   pages.rs  pages/          Page, Outcome, Ctx and CtxMut, and a folder for each page with its
                             state, keys, edits and drawing (draw.rs): track/, mixer/, project/,
                             audio/, sample/, song/, chain/ and phrase/
@@ -852,9 +854,9 @@ crates/vt-tui/src/
                             guides/, shape/ (the panel, its drawing and live.rs, a live
                             generator made, reopened and applied), mapping/ and field_jump.rs
   services.rs  services/    what every page shares, and the helper threads: analysing, automating,
-                            autosave, banking, config, folding, generators (the live generators as
-                            all but the panel read them), heard, loading, meter, scope, sampling,
-                            and audio, the cpal device
+                            banking, config, folding, generators (the live generators as all but
+                            the panel read them), heard, loading, meter, scope, sampling, and
+                            audio, the cpal device; it names nothing of app, pages or overlays
   screen.rs  screen/        what's always on screen: status.rs, system.rs and meter.rs
   widgets.rs  widgets/      what pages are drawn from, param/ (ParamView, ParamCell and edit),
                             theme.rs and glyphs.rs
@@ -869,19 +871,21 @@ crates/vt-tui/src/
 What only the crate uses is `pub(crate)`, and `lib.rs` warns on `unreachable_pub`, so the
 dead-code lint sees it; what the tests, the examples and `main.rs` use is `pub`, `App`'s fields
 among it, as the tests drive the program through them (#733). A new module goes in the folder of
-what it is, beside the page, overlay or service it belongs to, and an `impl App` block that only a
-page needs goes in that page's folder.
+what it is, beside the page, overlay or service it belongs to. Behaviour goes on the page or
+overlay it's for and asks for what only `App` can do with an `Outcome`; a new `impl App` block
+needs a reason (#872, decision 358).
 
 **`App`** (`app.rs`) is the program's state and what each key does. It needs no terminal, so tests
 drive it directly. It holds the shared services, `App::services`, beside the pages (`track_page`,
 `mixer_page`, `project_page`, `audio_page`, `sample_page`, `song_view`, `chain_view` and
 `phrase_view`), `App::modes`, and seven groups of its own (#804): `overlays` (the picker, the
 command line, help, the guides, the shape panel and the mapping view), `grammar`, `held` (held
-keys and notes), `explorer`, `jumps`, `readouts` and `autosave`. That's 27 fields, and 48 files
-besides `app.rs` add an `impl App` block, such as
-`pages/track.rs`, `services/banking.rs`, `pages/sample/slicing.rs`, `overlays/shape.rs`,
-`overlays/picker/picking.rs`, `app/recording.rs` (live recording, `Space r`), `pages/project.rs`,
-`pages/audio.rs` and `pages/sample.rs`.
+keys and notes), `explorer`, `jumps`, `readouts` and `autosave`. That's 27 fields. Its 305
+methods (from 473 before #872) are in `app.rs` and `app/`, but for `pages.rs` (dispatching to
+the pages and settling what they ask for), the overlays that still need `App` to open them or
+after a key (the explorer, `choose`, the shape panel's `S`, and a wrapper each for the `:` line,
+the mapping view and the field jump), `input/wheel.rs`, `roto.rs` and `run.rs`. No page's folder
+and nothing in `services/` has one.
 
 **`Services`** (`services.rs`, #320) is what every page shares: the history, with
 `Services::apply` running an action on it and `Services::publish` sending the result, the
@@ -917,8 +921,10 @@ back, or done and asking for what only `App` can do, a picker opened (`Outcome::
 shown (`Show`, or `Jump` as a jump `Ctrl-O` comes back from), a `:` line run (`Run`), Insert
 started with what's typed already (`Insert`), another mode of the page's, such as the sample
 page's pads (`Enter`), the file explorer opened to name a file (`Explore`), what the key started
-held while it's down (`Hold`), or the phrase view started afresh after a move onto another phrase
-(`Moved`), which `App::settled` does once the page has given its borrows back (#784);
+held while it's down (`Hold`), the phrase view started afresh after a move onto another phrase
+(`Moved`), or an overlay opened: the shape panel (`Shape`, or `Reopen` in the phrase view on a
+live generator), the mapping view (`Mapping`) or the field jump (`FieldJump`), which
+`App::settled` does once the page has given its borrows back (#784, #872);
 `Page::draw`, given a `Ctx`; and `Page::panels` and `Page::take_panels`, its pictures as data
 for `Graphics` and the ids they're given. `App` holds one of each page and dispatches by `View`
 with a plain `match`, so there's no `dyn`.
