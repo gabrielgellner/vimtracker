@@ -1288,14 +1288,21 @@ mod tests {
         pooled
     }
 
+    /// The effects in the pool that jump nothing on a quiet row: their own level can keep what
+    /// they hold from the quiet their slot hears, so a jump could step a sound still in them
+    /// (`an_echo_clouds_and_beads_can_hold_a_sound_their_slot_hears_as_quiet`).
+    const HELD_BACK: [EffectKind; 3] = [EffectKind::Echo, EffectKind::Clouds, EffectKind::Beads];
+
+    /// Whether `insert` is one of [`HELD_BACK`].
+    fn held_back(insert: Insert) -> bool {
+        insert.kind().is_some_and(|kind| HELD_BACK.contains(&kind))
+    }
+
     #[test]
     fn every_pooled_effect_settles_on_what_moved_while_it_was_quiet() {
         // As a kept effect does, an effect in the pool starts on what moved while its track was
         // quiet, rather than gliding there from where it was (#929). It had jumped only as it
-        // was taken from the pool. But for an Echo, Clouds and Beads, whose own level can keep
-        // what they hold from the quiet the slot hears, so a jump could step a sound still in
-        // them.
-        let held_back = [EffectKind::Echo, EffectKind::Clouds, EffectKind::Beads];
+        // was taken from the pool. But for those held back.
         let sidechains = SidechainFrames::default();
         let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
         // A second of a tone and two of what's left, long enough for a delay's and an echo's
@@ -1305,7 +1312,7 @@ mod tests {
             .collect();
         let mut glided = Vec::new();
         for was in every_pooled_effect() {
-            if was.kind().is_some_and(|kind| held_back.contains(&kind)) {
+            if held_back(was) {
                 continue;
             }
             // Every setting moved but a spring's knock and a stutter's trigger, which set it
@@ -1453,14 +1460,14 @@ mod tests {
         // After a sound, once its slot stops ringing, its settings move one way or the other
         // while the track is quiet, and a quiet row settles it, as `TrackState::settle` does if no
         // slot rings then (#929). What it plays at once must be nothing: a jump of a delay's
-        // time, a pre-delay or a size into what it played before would step. Echo, Clouds and
-        // Beads, held back, jump nothing.
+        // time, a pre-delay or a size into what it played before would step. Those held back
+        // jump nothing.
         let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
         let sidechains = SidechainFrames::default();
-        let held_back = [EffectKind::Echo, EffectKind::Clouds, EffectKind::Beads];
-        for was in every_pooled_effect().into_iter().filter(|&insert| {
-            rung(insert) && insert.kind().is_some_and(|kind| !held_back.contains(&kind))
-        }) {
+        for was in every_pooled_effect()
+            .into_iter()
+            .filter(|&insert| rung(insert) && !held_back(insert))
+        {
             let keep = |key: &str| matches!(key, "knock" | "trig" | "freeze");
             let moved = settings_moved(was, keep);
             for (from, to) in [(was, moved), (moved, settings_moved(moved, keep))] {
