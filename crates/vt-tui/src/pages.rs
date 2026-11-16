@@ -55,6 +55,7 @@ use crate::input::wheel::{Wheel, WheelSetting};
 use crate::overlays::command::parse::Line;
 use crate::overlays::field_jump::FieldJump;
 use crate::overlays::help::{Help, POPUP_DELAY};
+use crate::overlays::mapping::MappingView;
 use crate::overlays::picker::exploring::Naming;
 use crate::overlays::picker::{Pick, Picker};
 use crate::overlays::shape::ShapePanel;
@@ -124,6 +125,14 @@ pub enum Outcome {
     /// Done, and the shape panel opens with this, heard as it opens, as `gl` opens it again on a
     /// live generator.
     Shape(Box<ShapePanel>),
+    /// Done, and the phrase view shows with the cursor on this field and step, and the shape
+    /// panel opens again on the live generator there, as `Enter` on the Gen page opens it.
+    Reopen { field: Field, step: usize },
+    /// Done, and this macro's mapping view opens, as `gm` opens it.
+    Mapping(MappingView),
+    /// Done, and the search for a setting by its name starts, as `/` on the track page starts
+    /// it.
+    FieldJump,
 }
 
 /// One of the program's pages as a component: its own state, its keys, its drawing and its
@@ -264,8 +273,16 @@ impl App {
         }
     }
 
+    /// What the cursor is on, on the track page or the mixer.
+    pub fn track_control(&self) -> Control {
+        if self.modes.view == View::Mixer {
+            return self.mixer_page.control_here(&self.ctx());
+        }
+        self.track_page.control(self.services.track_here())
+    }
+
     /// Run a command on the track page or the mixer: the page's own key, and what a key it passes
-    /// back means across pages, [`App::run_across_pages`]. The mixer turns the track page's
+    /// back means across pages, [`TrackPage::across`]. The mixer turns the track page's
     /// controls, so a key it passes back goes on to the track page's own keys first. A key that
     /// means what it does elsewhere, such as going to another track, leaves the track page's
     /// cursor where it was kept, and the count for what takes it.
@@ -286,7 +303,18 @@ impl App {
             },
             _ => self.track_page.key(cmd, times, &mut ctx),
         };
-        if self.settled(outcome, true) || self.run_across_pages(cmd, times) {
+        if self.settled(outcome, true) {
+            return true;
+        }
+        let control = self.track_control();
+        let mut ctx = CtxMut {
+            services: &mut self.services,
+            modes: &self.modes,
+            wheel: &mut self.wheel,
+        };
+        let outcome = self.track_page.across(cmd, times, control, &mut ctx);
+        // The count was taken before the page had the key.
+        if self.settled(outcome, false) {
             return true;
         }
         self.track_page = kept;
@@ -451,7 +479,8 @@ impl App {
                 if self.modes.view == View::Mixer {
                     self.mixer_page.row = field;
                 } else {
-                    self.move_control(row, field);
+                    self.track_page
+                        .move_to(self.services.track_here(), row, field);
                 }
             }
             Outcome::Do(cmd) => self.run(cmd),
@@ -459,6 +488,22 @@ impl App {
                 panel.preview(&mut self.services);
                 self.overlays.shape = Some(*panel);
                 self.modes.mode = Mode::Shape;
+            }
+            Outcome::Reopen { field, step } => {
+                self.show_view(View::Phrase);
+                self.services.cursor.field = field;
+                self.services.cursor.step = step;
+                let outcome = ShapePanel::reopen(&mut self.services, self.modes.view);
+                self.settled(outcome, false);
+            }
+            Outcome::Mapping(view) => {
+                self.overlays.mapping = Some(view);
+                self.modes.mode = Mode::Mapping;
+            }
+            Outcome::FieldJump => {
+                self.modes.count = None;
+                self.overlays.field_jump = Some(FieldJump::default());
+                self.modes.mode = Mode::Jump;
             }
             Outcome::Tag { item, tags } => {
                 if let Some(picker) = self.overlays.picker.as_mut()

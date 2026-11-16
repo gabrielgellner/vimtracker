@@ -112,7 +112,18 @@ impl App {
                             self.modes.mode = Mode::Normal;
                         }
                     }
-                    _ => self.insert_track_page(key.code),
+                    _ => {
+                        let control = self.track_control();
+                        let view = self.modes.view;
+                        let entry = &mut self.modes.entry;
+                        let services = &mut self.services;
+                        if !self
+                            .track_page
+                            .insert(key.code, control, view, entry, services)
+                        {
+                            self.modes.mode = Mode::Normal;
+                        }
+                    }
                 }
             }
             return;

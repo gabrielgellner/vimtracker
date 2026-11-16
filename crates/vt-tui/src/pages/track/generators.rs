@@ -19,11 +19,11 @@ use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{Context, GenParam, Shape, ShapeColumn};
 use vt_model::step::FxCommand;
 
-use crate::app::{App, Entry};
+use crate::app::Entry;
 use crate::input::bindings::Cmd;
 use crate::input::mode::View;
 use crate::overlays::picker::{Item, Pick, Picker};
-use crate::overlays::shape::{ShapePanel, choice_picker};
+use crate::overlays::shape::choice_picker;
 use crate::pages::{CtxMut, Outcome};
 use crate::services::Services;
 use crate::services::generators::{LiveGen, generator_label};
@@ -423,64 +423,71 @@ impl GenEdit<'_> {
     }
 }
 
-impl App {
+impl Services {
     /// A choice from `K`'s list, for a generator.
-    pub(crate) fn pick_gen_choice(&mut self, phrase: u32, generator: usize, choice: Choice) {
-        reshape_live(
-            &mut self.services,
-            self.modes.view,
-            (phrase, generator),
-            |_, shape, _| choice.apply(shape),
-        );
+    pub(crate) fn pick_gen_choice(
+        &mut self,
+        phrase: u32,
+        generator: usize,
+        choice: Choice,
+        view: View,
+    ) {
+        reshape_live(self, view, (phrase, generator), |_, shape, _| {
+            choice.apply(shape);
+        });
     }
+}
 
-    /// `Enter` on the Gen page: open the shape panel on the generator, in the phrase view, as
-    /// `gl` does there. It stays `App`'s, as it reopens the panel, which is drawn over the phrase
-    /// view.
-    pub(super) fn open_gen_panel(&mut self) {
-        let Some((phrase, generator, _)) = gen_of(self.track_control()) else {
-            self.services.status =
+impl TrackPage {
+    /// `Enter` on the Gen page, on the setting `control`: the shape panel on the generator, in
+    /// the phrase view, as `gl` opens it there.
+    pub(super) fn gen_panel(control: Control, services: &mut Services) -> Outcome {
+        let Some((phrase, generator, _)) = gen_of(control) else {
+            services.status =
                 "Enter opens the shape panel on a generator: go to one first".to_owned();
-            return;
+            return Outcome::Done;
         };
-        let found = self.song().tracks[self.services.cursor.track]
+        let found = services.song().tracks[services.cursor.track]
             .phrases
             .get(&phrase)
             .and_then(|found| found.generators().get(generator))
             .map(|found| (found.column, found.rows()));
         let Some((column, Some(rows))) = found else {
-            return;
+            return Outcome::Done;
         };
-        self.show_view(View::Phrase);
-        self.services.cursor.field = field_of(column);
-        self.services.cursor.step = rows.first;
-        let outcome = ShapePanel::reopen(&mut self.services, self.modes.view);
-        self.settled(outcome, false);
+        Outcome::Reopen {
+            field: field_of(column),
+            step: rows.first,
+        }
     }
 
     /// A column chosen on `Empty`, made live with the command chosen for an empty FX column,
-    /// and its device the cursor's.
-    pub(crate) fn pick_gen_column(&mut self, field: Field, command: Option<FxCommand>) {
-        if let Err(picker) = self.services.make_live(field, command, self.modes.view) {
-            if let Some(picker) = picker {
-                self.show_picker(*picker);
-            }
-            return;
+    /// and its device the cursor's. An empty FX column with none chosen lists the commands.
+    pub(crate) fn pick_gen_column(
+        &mut self,
+        field: Field,
+        command: Option<FxCommand>,
+        view: View,
+        services: &mut Services,
+    ) -> Outcome {
+        if let Err(picker) = services.make_live(field, command, view) {
+            return picker.map_or(Outcome::Done, Outcome::Open);
         }
-        let Some(phrase) = self.services.phrase_here() else {
-            return;
+        let Some(phrase) = services.phrase_here() else {
+            return Outcome::Done;
         };
         let generators = phrase.generators();
         let Some(made) = generators.iter().position(|found| on_field(found, field)) else {
-            return;
+            return Outcome::Done;
         };
-        let track = &self.song().tracks[self.services.cursor.track];
-        let devices = Page::Gen.devices_on(track, self.services.phrase_id());
+        let track = &services.song().tracks[services.cursor.track];
+        let devices = Page::Gen.devices_on(track, services.phrase_id());
         let device = devices.iter().position(|device| {
             matches!(device.title[0], Some(Control::Gen { generator, .. }) if generator == made)
         });
         if let Some(device) = device {
-            self.move_control(device * DEVICE_ROWS, 0);
+            self.move_to(services.track_here(), device * DEVICE_ROWS, 0);
         }
+        Outcome::Done
     }
 }

@@ -20,7 +20,7 @@ use vt_model::shape::params::{BEND_JUMP, BEND_NUDGE, Typing};
 use vt_model::song::Track;
 
 use crate::app::App;
-use crate::controls::{Control, Page};
+use crate::controls::Control;
 use crate::graphics::plot::{MappingDrawing, Shade};
 use crate::graphics::{PanelIds, PanelKey, PanelWant, Shape};
 use crate::input::bindings::{Cmd, adjusting_key};
@@ -208,31 +208,26 @@ pub(crate) fn holding(control: Control, track: &Track) -> impl Iterator<Item = (
         .flat_map(move |target| track.macros_holding(target))
 }
 
-impl App {
-    /// The setting under the cursor on the track page, if it's one a macro can hold: one of the
-    /// registry's, or a live generator's on the Gen page, by its column.
-    fn setting_here(&self) -> Option<MacroTarget> {
-        let track = self.song().tracks.get(self.services.cursor.track)?;
-        let target = target_of(self.track_control(), track)?;
+impl Services {
+    /// The setting under the cursor on the track page, `control`, if it's one a macro can hold: one
+    /// of the registry's, or a live generator's on the Gen page, by its column.
+    pub(crate) fn macro_target(&self, control: Control) -> Option<MacroTarget> {
+        let track = self.song().tracks.get(self.cursor.track)?;
+        let target = target_of(control, track)?;
         target.mappable().then_some(target)
     }
 
     /// A generator setting's bounds and where it is now, on the generator under the cursor.
-    fn gen_numbers(&self) -> Option<((i32, i32), i32)> {
+    fn gen_numbers(&self, control: Control, view: View) -> Option<((i32, i32), i32)> {
         let Control::Gen {
             phrase,
             generator,
             param,
-        } = self.track_control()
+        } = control
         else {
             return None;
         };
-        let live = self.services.live_generator(
-            self.services.cursor.track,
-            phrase,
-            generator,
-            self.modes.view,
-        )?;
+        let live = self.live_generator(self.cursor.track, phrase, generator, view)?;
         let context = live.context();
         let bounds = param.bounds(&context)?;
         let now = param.number(&live.generator.heard(), &context)?;
@@ -240,16 +235,16 @@ impl App {
     }
 
     /// The macro holding the setting under the cursor, and its mapping there, if one does.
-    pub(crate) fn macro_here(&self) -> Option<(MacroTarget, usize, MacroMap)> {
-        let target = self.setting_here()?;
-        let track = self.song().tracks.get(self.services.cursor.track)?;
+    pub(crate) fn macro_here(&self, control: Control) -> Option<(MacroTarget, usize, MacroMap)> {
+        let target = self.macro_target(control)?;
+        let track = self.song().tracks.get(self.cursor.track)?;
         let (at, map) = track.macro_holding(target)?;
         Some((target, at, *map))
     }
 
     /// Whether a command would turn a setting a macro holds, which is refused, saying where to
     /// turn it instead.
-    pub(crate) fn refuses_turn(&mut self, cmd: Cmd) -> bool {
+    pub(crate) fn refuses_turn(&mut self, cmd: Cmd, control: Control) -> bool {
         let turns = matches!(
             cmd,
             Cmd::Increase
@@ -260,11 +255,11 @@ impl App {
                 | Cmd::PickValue
                 | Cmd::EnterInsert
         );
-        let Some((target, at, _)) = self.macro_here().filter(|_| turns) else {
+        let Some((target, at, _)) = self.macro_here(control).filter(|_| turns) else {
             return false;
         };
-        let name = target.name_on(&self.services.page_track());
-        self.services.status = format!(
+        let name = target.name_on(&self.page_track());
+        self.status = format!(
             "{name} is on macro {}: turn it there, or gm for its range",
             at + 1
         );
@@ -272,18 +267,18 @@ impl App {
     }
 
     /// `M`: list the eight macros, each with what it holds, to put the setting under the cursor
-    /// on one, opened on the one it's on already.
-    pub(crate) fn open_macro_picker(&mut self) {
-        let Some(target) = self.setting_here() else {
-            self.services.status = match self.track_control() {
+    /// on one, opened on the one it's on already, or nothing, the status line saying why.
+    pub(crate) fn macro_picker(&mut self, control: Control) -> Outcome {
+        let Some(target) = self.macro_target(control) else {
+            self.status = match control {
                 Control::Macro(_) => {
                     "A macro can't hold a macro: M maps the settings around it".to_owned()
                 }
                 _ => "M maps a setting to a macro, and this isn't one a macro reaches".to_owned(),
             };
-            return;
+            return Outcome::Done;
         };
-        let track = self.services.page_track();
+        let track = self.page_track();
         let on = track.macro_holding(target).map(|(at, _)| at);
         let items = (0..MACROS)
             .map(|at| {
@@ -295,52 +290,51 @@ impl App {
                 Item::new(label, Pick::Macro(at)).meaning(meaning)
             })
             .collect();
-        self.show_picker(Picker::new(MACRO_PICKER, items).opened_on(on));
-        self.services.status = format!(
+        self.status = format!(
             "Enter maps {} to the macro chosen, from bottom to top to start with; a digit chooses at once",
             target.name_on(&track)
         );
+        Outcome::Open(Box::new(Picker::new(MACRO_PICKER, items).opened_on(on)))
     }
 
     /// Put the setting under the cursor on a macro, from its bottom to its top, or take it off
     /// the macro it's on, or move it to this one with its range, as one undo step. The first
     /// mapping of a macro holding nothing turns the macro to where the setting is, so nothing
-    /// jumps.
-    pub(crate) fn map_to_macro(&mut self, at: usize) {
-        let Some(target) = self.setting_here() else {
+    /// jumps. `control` is the setting under the cursor, and `view` the view on screen.
+    pub(crate) fn map_to_macro(&mut self, at: usize, control: Control, view: View) {
+        let Some(target) = self.macro_target(control) else {
             return;
         };
-        let track = self.services.page_track();
+        let track = self.page_track();
         let name = target.name_on(&track);
-        let index = self.services.cursor.track;
+        let index = self.cursor.track;
         let held = &track.macros[at];
         match track.macro_holding(target) {
             Some((on, _)) if on == at => {
-                self.services.apply(&Action::UnmapMacro {
+                self.apply(&Action::UnmapMacro {
                     track: index,
                     target,
                 });
-                self.services.status =
-                    format!("{name} is off macro {}, and back to its own", at + 1);
+                self.status = format!("{name} is off macro {}, and back to its own", at + 1);
             }
             Some((on, map)) => {
-                self.services.apply(&Action::MapMacro {
+                self.apply(&Action::MapMacro {
                     track: index,
                     at,
                     map: *map,
                 });
-                self.services.status = format!(
+                self.status = format!(
                     "{name} moved from macro {} to macro {}, {}",
                     on + 1,
                     at + 1,
-                    macro_name(&self.services.page_track().macros[at], at)
+                    macro_name(&self.page_track().macros[at], at)
                 );
             }
             None => {
                 let (map, now) = match target.setting() {
                     Some(id) => (MacroMap::whole(target), track.value_of(id)),
                     None => {
-                        let Some((bounds, now)) = self.gen_numbers() else {
+                        let Some((bounds, now)) = self.gen_numbers(control, view) else {
                             return;
                         };
                         let now = (now + GEN_ZERO).clamp(0, i32::from(u16::MAX)) as u16;
@@ -360,9 +354,9 @@ impl App {
                     });
                 }
                 let first = held.maps.is_empty();
-                self.services.apply(&Action::Batch(actions));
-                let now = self.services.page_track();
-                self.services.status = if first {
+                self.apply(&Action::Batch(actions));
+                let now = self.page_track();
+                self.status = if first {
                     format!(
                         "{name} is on macro {}, {}, from its bottom to its top: gm for its range",
                         at + 1,
@@ -380,132 +374,100 @@ impl App {
     }
 
     /// `gm`: open the mapping of the macro under the cursor, or of the one the setting under the
-    /// cursor is on, on its row.
-    pub(crate) fn open_mapping(&mut self) {
-        let track = self.services.page_track();
-        let (at, row) = match self.track_control() {
+    /// cursor, `control`, is on, on its row; or nothing, the status line saying why.
+    pub(crate) fn mapping_of(&mut self, control: Control) -> Outcome {
+        let track = self.page_track();
+        let (at, row) = match control {
             Control::Macro(at) => (at, 0),
-            _ => match self.macro_here() {
+            _ => match self.macro_here(control) {
                 Some((target, at, _)) => (at, track.macros[at].map_of(target).unwrap_or(0)),
                 None => {
-                    self.services.status =
+                    self.status =
                         "This isn't on a macro: M maps it to one, and gm on a macro opens it"
                             .to_owned();
-                    return;
+                    return Outcome::Done;
                 }
             },
         };
-        self.open_mapping_on(at, row);
+        MappingView::open(at, row, self)
     }
 
-    /// Open a macro's mapping view on one of its rows, or say it holds nothing.
-    fn open_mapping_on(&mut self, at: usize, row: usize) {
-        if self.services.page_track().macros[at].maps.is_empty() {
-            self.services.status =
-                format!("Macro {} holds nothing yet: M on a setting maps it", at + 1);
+    /// `:macro Name`: name the macro under the cursor, the mapping view's or the one the setting
+    /// under the cursor is on; `:macro` alone gives it back its first mapping's name. `open` is
+    /// the macro whose mapping view is open, `control` the setting under the cursor and `view`
+    /// the view on screen.
+    pub(crate) fn name_macro(
+        &mut self,
+        name: &str,
+        open: Option<usize>,
+        control: Control,
+        view: View,
+    ) {
+        let at = match (open, control) {
+            (Some(at), _) | (None, Control::Macro(at)) => Some(at),
+            (None, _) => self.macro_here(control).map(|(_, at, _)| at),
+        };
+        let Some(at) = at.filter(|_| view == View::Track || open.is_some()) else {
+            self.status = ":macro names the macro under the cursor, on the track page".to_owned();
             return;
+        };
+        let name = name.trim();
+        if !name.is_empty() && !valid_name(name) {
+            self.status = "A macro's name is up to 12 plain characters".to_owned();
+            return;
+        }
+        self.apply(&Action::NameMacro {
+            track: self.cursor.track,
+            at,
+            name: (!name.is_empty()).then(|| name.to_owned()),
+        });
+        let held = &self.page_track().macros[at];
+        self.status = format!("Macro {} is {}", at + 1, macro_name(held, at));
+    }
+}
+
+impl Services {
+    /// The macros holding the setting `control` on the cursor's track, each with its mapping.
+    pub(crate) fn macros_holding(&self, control: Control) -> Vec<(usize, MacroMap)> {
+        holding(control, &self.page_track())
+            .map(|(at, map)| (at, *map))
+            .collect()
+    }
+
+    /// The list `gd` opens on a setting more than one macro holds, `held`, to go to one, each
+    /// with its range.
+    pub(crate) fn holding_picker(&self, held: &[(usize, MacroMap)]) -> Picker {
+        let track = self.page_track();
+        let items = held
+            .iter()
+            .map(|(at, map)| {
+                let label = format!("{} {}", at + 1, macro_name(&track.macros[*at], *at));
+                let range = format!(
+                    "{} to {}",
+                    end_shown(&track, map.target, map.min),
+                    end_shown(&track, map.target, map.max)
+                );
+                Item::new(label, Pick::MacroHolding(*at)).meaning(range)
+            })
+            .collect();
+        Picker::new(HOLDING_PICKER, items)
+    }
+}
+
+impl MappingView {
+    /// A macro's mapping view open on one of its rows, or nothing, saying it holds nothing.
+    pub(crate) fn open(at: usize, row: usize, services: &mut Services) -> Outcome {
+        if services.page_track().macros[at].maps.is_empty() {
+            services.status = format!("Macro {} holds nothing yet: M on a setting maps it", at + 1);
+            return Outcome::Done;
         }
         let view = MappingView {
             at,
             row,
             ..MappingView::default()
         };
-        view.say(&mut self.services);
-        self.overlays.mapping = Some(view);
-        self.modes.mode = Mode::Mapping;
-    }
-
-    /// `gd` on the track page or the mixer: on a macro, its mapping view; on a setting or a
-    /// fader a macro holds, that macro in the Gen page's band with its mapping view open on the
-    /// setting's row, as a jump `C-o` comes back from; and on one more than one macro holds, a
-    /// list of them to go to. Whether the cursor was on a macro or a setting one holds.
-    pub(crate) fn open_macro_here(&mut self) -> bool {
-        let control = self.track_control();
-        if let Control::Macro(at) = control {
-            self.open_mapping_on(at, 0);
-            return true;
-        }
-        let track = self.services.page_track();
-        let held: Vec<(usize, MacroMap)> = holding(control, &track)
-            .map(|(at, map)| (at, *map))
-            .collect();
-        match held.as_slice() {
-            [] => false,
-            [(at, _)] => {
-                self.go_to_macro(*at);
-                true
-            }
-            _ => {
-                let items = held
-                    .iter()
-                    .map(|(at, map)| {
-                        let label = format!("{} {}", at + 1, macro_name(&track.macros[*at], *at));
-                        let range = format!(
-                            "{} to {}",
-                            end_shown(&track, map.target, map.min),
-                            end_shown(&track, map.target, map.max)
-                        );
-                        Item::new(label, Pick::MacroHolding(*at)).meaning(range)
-                    })
-                    .collect();
-                self.show_picker(Picker::new(HOLDING_PICKER, items));
-                true
-            }
-        }
-    }
-
-    /// Go to a macro in the Gen page's band, as a jump, and open its mapping view on the row of
-    /// the setting the cursor was on, on the track page or the mixer.
-    pub(crate) fn go_to_macro(&mut self, at: usize) {
-        let track = self.services.page_track();
-        let row = self
-            .setting_here()
-            .and_then(|target| track.macros[at].map_of(target))
-            .unwrap_or(0);
-        self.record_jump();
-        self.track_page.show(Page::Gen);
-        self.track_page.phrase = self.services.phrase_id();
-        let rows = self.track_page.rows(Some(&track));
-        let place = rows.iter().enumerate().find_map(|(row, places)| {
-            let field = places
-                .iter()
-                .position(|place| *place == Some(Control::Macro(at)))?;
-            Some((row, field))
-        });
-        if let Some((row, field)) = place {
-            self.move_control(row, field);
-        }
-        self.show_view(View::Track);
-        self.open_mapping_on(at, row);
-    }
-
-    /// `:macro Name`: name the macro under the cursor, the mapping view's or the one the setting
-    /// under the cursor is on; `:macro` alone gives it back its first mapping's name.
-    pub(crate) fn name_macro(&mut self, name: &str) {
-        let at = match (&self.overlays.mapping, self.track_control()) {
-            (Some(view), _) => Some(view.at),
-            (None, Control::Macro(at)) => Some(at),
-            (None, _) => self.macro_here().map(|(_, at, _)| at),
-        };
-        let Some(at) = at.filter(|_| {
-            self.modes.view == crate::input::mode::View::Track || self.overlays.mapping.is_some()
-        }) else {
-            self.services.status =
-                ":macro names the macro under the cursor, on the track page".to_owned();
-            return;
-        };
-        let name = name.trim();
-        if !name.is_empty() && !valid_name(name) {
-            self.services.status = "A macro's name is up to 12 plain characters".to_owned();
-            return;
-        }
-        self.services.apply(&Action::NameMacro {
-            track: self.services.cursor.track,
-            at,
-            name: (!name.is_empty()).then(|| name.to_owned()),
-        });
-        let held = &self.services.page_track().macros[at];
-        self.services.status = format!("Macro {} is {}", at + 1, macro_name(held, at));
+        view.say(services);
+        Outcome::Mapping(view)
     }
 }
 

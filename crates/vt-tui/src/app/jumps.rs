@@ -5,9 +5,10 @@ use ratatui::crossterm::event::KeyCode;
 use vt_model::bank::is_mark;
 
 use crate::app::{App, Cursor};
-use crate::controls::Page;
+use crate::controls::{Control, Page};
 use crate::input::keys::Key;
 use crate::input::mode::View;
+use crate::overlays::mapping::MappingView;
 use crate::pages::sample::marking::MarkWait;
 use crate::services::banking::sample_text;
 
@@ -72,7 +73,11 @@ impl App {
         self.services.clamp_cursor(self.modes.view);
         if place.view == View::Track {
             self.track_page.show(place.track_page);
-            self.move_control(place.track_row, place.track_field);
+            self.track_page.move_to(
+                self.services.track_here(),
+                place.track_row,
+                place.track_field,
+            );
         }
         if place.view == View::Mixer {
             self.mixer_page.row = place.mixer_row;
@@ -246,5 +251,61 @@ impl App {
             }
             Err(why) => self.services.status = why,
         }
+    }
+
+    /// `gd` on the track page or the mixer: on a macro, its mapping view; on a setting or a
+    /// fader a macro holds, that macro in the Gen page's band with its mapping view open on the
+    /// setting's row, as a jump `C-o` comes back from; and on one more than one macro holds, a
+    /// list of them to go to. Whether the cursor was on a macro or a setting one holds. It's
+    /// `App`'s, as going to a macro is a jump.
+    pub(crate) fn open_macro_here(&mut self) -> bool {
+        let control = self.track_control();
+        if let Control::Macro(at) = control {
+            let outcome = MappingView::open(at, 0, &mut self.services);
+            self.settled(outcome, false);
+            return true;
+        }
+        let held = self.services.macros_holding(control);
+        match held.as_slice() {
+            [] => false,
+            [(at, _)] => {
+                self.go_to_macro(*at);
+                true
+            }
+            _ => {
+                let picker = self.services.holding_picker(&held);
+                self.show_picker(picker);
+                true
+            }
+        }
+    }
+
+    /// Go to a macro in the Gen page's band, as a jump, and open its mapping view on the row of
+    /// the setting the cursor was on, on the track page or the mixer.
+    pub(crate) fn go_to_macro(&mut self, at: usize) {
+        let track = self.services.page_track();
+        let control = self.track_control();
+        let row = self
+            .services
+            .macro_target(control)
+            .and_then(|target| track.macros[at].map_of(target))
+            .unwrap_or(0);
+        self.record_jump();
+        self.track_page.show(Page::Gen);
+        self.track_page.phrase = self.services.phrase_id();
+        let rows = self.track_page.rows(Some(&track));
+        let place = rows.iter().enumerate().find_map(|(row, places)| {
+            let field = places
+                .iter()
+                .position(|place| *place == Some(Control::Macro(at)))?;
+            Some((row, field))
+        });
+        if let Some((row, field)) = place {
+            self.track_page
+                .move_to(self.services.track_here(), row, field);
+        }
+        self.show_view(View::Track);
+        let outcome = MappingView::open(at, row, &mut self.services);
+        self.settled(outcome, false);
     }
 }
