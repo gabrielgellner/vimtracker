@@ -37,7 +37,7 @@ impl<S> Slot<S> {
     }
 
     /// Whether nothing is here, a gap or the end of a row.
-    pub fn is_free(&self) -> bool {
+    pub(crate) fn is_free(&self) -> bool {
         !matches!(self, Self::Setting(_))
     }
 }

@@ -237,7 +237,7 @@ impl<'a> Guarded<'a> {
     }
 
     /// Every setup the Roto stores, in its order.
-    pub fn list(&mut self) -> Result<Vec<StoredPlugin>, StoreError> {
+    pub(crate) fn list(&mut self) -> Result<Vec<StoredPlugin>, StoreError> {
         let mut stored = Vec::new();
         let mut request = Request::GetFirstPlugin;
         while stored.len() <= MAX_PLUGIN_SETUPS {

@@ -25,35 +25,39 @@ use crate::bytes::{DecodeError, Label, ParamHash, PluginHash, Reader, push_wide}
 use crate::sysex::{ControlType, Daw, FirmwareVersion};
 
 /// The port's speed. The rest is 8 data bits, no parity and one stop bit.
-pub const BAUD: u32 = 115_200;
+pub(crate) const BAUD: u32 = 115_200;
 
 /// The first byte of a request or a notice, and of a reply.
-pub const REQUEST: u8 = 0x5A;
-pub const REPLY: u8 = 0xA5;
+pub(crate) const REQUEST: u8 = 0x5A;
+pub(crate) const REPLY: u8 = 0xA5;
 
 /// The groups of commands.
-pub const GENERAL: u8 = 0x01;
-pub const MIDI: u8 = 0x02;
-pub const PLUGIN: u8 = 0x03;
+pub(crate) const GENERAL: u8 = 0x01;
+pub(crate) const MIDI: u8 = 0x02;
+pub(crate) const PLUGIN: u8 = 0x03;
 
 /// How many PLUGIN setups the Roto stores, shared by every program that drives it.
 pub const MAX_PLUGIN_SETUPS: usize = 64;
 
 /// How many MIDI setups it has.
-pub const MIDI_SETUPS: u8 = 64;
+pub(crate) const MIDI_SETUPS: u8 = 64;
 
 /// How many knobs, and as many switches, a PLUGIN setup has: eight pages of eight.
-pub const PLUGIN_CONTROLS: u8 = 64;
+pub(crate) const PLUGIN_CONTROLS: u8 = 64;
 
 /// How many knobs, and as many switches, a MIDI setup has: four pages of eight. vimtracker writes
 /// no MIDI setups, so nothing uses it; it's kept beside [`PLUGIN_CONTROLS`] as the protocol has it.
-pub const MIDI_CONTROLS: u8 = 32;
+#[expect(
+    dead_code,
+    reason = "kept beside `PLUGIN_CONTROLS` as the protocol has it"
+)]
+pub(crate) const MIDI_CONTROLS: u8 = 32;
 
 /// How many step names a reply carries, used or not, and the most a stored control has.
-pub const STEP_NAMES: usize = 16;
+pub(crate) const STEP_NAMES: usize = 16;
 
 /// The most steps a stored control has.
-pub const MAX_STORED_STEPS: u8 = 16;
+pub(crate) const MAX_STORED_STEPS: u8 = 16;
 
 /// How a reply went.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -846,7 +850,7 @@ impl Request {
 
     /// Whether it only asks, changing nothing the Roto stores or shows. `GET NEXT PLUGIN` moves
     /// the Roto's place in its list, which nothing else reads.
-    pub fn is_read_only(&self) -> bool {
+    pub(crate) fn is_read_only(&self) -> bool {
         matches!(
             self,
             Self::GetFirmwareVersion
@@ -879,7 +883,7 @@ impl Request {
     }
 
     /// Whether the Roto only takes it inside a config update.
-    pub fn needs_config_update(&self) -> bool {
+    pub(crate) fn needs_config_update(&self) -> bool {
         matches!(
             self,
             Self::SetSetupName { .. }
