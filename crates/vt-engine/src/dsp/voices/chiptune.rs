@@ -89,6 +89,17 @@ impl SynthEngine for Chiptune {
         }
     }
 
+    /// Roll a carried note's drift, drawing its start phases as a new note does and leaving the
+    /// oscillators where they are.
+    fn reseed_drift(&mut self, seed: u32, settings: Settings) {
+        self.drift.reseed(seed);
+        if settings.at(DRIFT) > 0.0 {
+            for _ in &self.squares {
+                self.drift.phase();
+            }
+        }
+    }
+
     /// What its note's envelope times are multiplied by.
     fn time(&self, settings: Settings) -> f32 {
         self.drift.time(settings.at(DRIFT))

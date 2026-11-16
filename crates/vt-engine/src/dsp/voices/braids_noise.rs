@@ -371,6 +371,11 @@ pub(crate) struct DigitalModulationModel {
 impl Model for DigitalModulationModel {
     const LEVEL: f32 = 0.35;
 
+    /// A note sends its preamble again, as Braids' strike starts the symbols over.
+    fn strike(&mut self) {
+        self.count = 0;
+    }
+
     fn new() -> Self {
         Self {
             phase: 0.0,

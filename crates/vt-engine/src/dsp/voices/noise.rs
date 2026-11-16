@@ -108,6 +108,8 @@ pub(crate) struct Noise {
     output: [f32; BLOCK],
     at: usize,
     fresh: bool,
+    /// Whether a note has been struck since the last block, which syncs its clock.
+    struck: bool,
 }
 
 impl Default for Noise {
@@ -118,6 +120,12 @@ impl Default for Noise {
 
 impl SynthEngine for Noise {
     const NOISE: bool = true;
+
+    /// Strike a note: at the next block its clock starts a new step at once, as a new voice's
+    /// first block does, as Plaits' clocked noise syncs on each trigger.
+    fn trigger(&mut self, _accent: bool) {
+        self.struck = true;
+    }
 
     fn new(_rate: u32) -> Self {
         Self::default()
@@ -154,6 +162,7 @@ impl Noise {
             output: [0.0; BLOCK],
             at: BLOCK,
             fresh: true,
+            struck: false,
         }
     }
 
@@ -167,7 +176,7 @@ impl Noise {
         // The clock runs from two octaves below the lowest note to the top of the range.
         let clock_f = note_frequency(timbre * 152.0 - 24.0);
         let q = 0.5 * semitones(morph * 120.0);
-        let sync = self.fresh;
+        let sync = std::mem::take(&mut self.struck) || self.fresh;
         if self.fresh {
             (self.previous_f0, self.previous_q, self.previous_mode) = (f0, q, mode);
             self.fresh = false;

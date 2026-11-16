@@ -149,11 +149,16 @@ pub(crate) trait Model: Copy {
     const LEVEL: f32;
     /// Whether it draws noise, which [`Model::seed`] chooses.
     const NOISE: bool = false;
+    /// Whether a note carries on from a voice playing it, as [`SynthEngine::CARRIES`] says.
+    const CARRIES: bool = true;
     fn new() -> Self;
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]);
     /// Choose the noise it draws, for a model that draws any, so each note differs but a render
     /// repeats.
     fn seed(&mut self, _seed: u32) {}
+    /// Strike a note on a model already playing, as Braids' `Strike` does, for one whose strike
+    /// starts something again. A new one is struck already.
+    fn strike(&mut self) {}
 }
 
 /// A voice playing one of Braids' models, at twice the rate and brought back down. It's plain
@@ -171,6 +176,11 @@ pub(crate) struct Macro<M> {
 
 impl<M: Model> SynthEngine for Macro<M> {
     const NOISE: bool = M::NOISE;
+    const CARRIES: bool = M::CARRIES;
+
+    fn trigger(&mut self, _accent: bool) {
+        self.model.strike();
+    }
 
     fn new(rate: u32) -> Self {
         let rate = rate as f32 * OVERSAMPLING as f32;

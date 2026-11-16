@@ -394,6 +394,12 @@ impl SynthEngine for FourOp {
         }
     }
 
+    /// Strike a note: every operator's envelope attacks again, from where it is, as a note carried
+    /// on by a sounding voice needs. A new voice's are already attacking.
+    fn trigger(&mut self, _accent: bool) {
+        self.stage = [Stage::Attack; OPERATORS];
+    }
+
     /// Let go of the note: every operator's envelope goes to its release.
     fn release(&mut self) {
         self.stage = [Stage::Release; OPERATORS];

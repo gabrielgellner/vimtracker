@@ -221,6 +221,12 @@ const OVERLAP: usize = voice_place(SynthVoice::Swarm, "overlap");
 impl SynthEngine for Swarm {
     const NOISE: bool = true;
 
+    /// Strike a note: at the next block its grains burst again, as a new voice's first block does, as Plaits
+    /// does on each trigger.
+    fn trigger(&mut self, _accent: bool) {
+        self.fresh = true;
+    }
+
     fn new(_rate: u32) -> Self {
         Self::default()
     }
