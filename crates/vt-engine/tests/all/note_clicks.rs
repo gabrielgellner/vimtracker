@@ -592,8 +592,9 @@ fn a_gate_closing_with_no_release_fades_rather_than_drops() {
     assert!(clicks.is_empty(), "these click as they close: {clicks:?}");
 }
 
-/// One note held for a second, alone: its level in 20 ms windows, and its offset from zero over
-/// whole cycles, which a voice's own DC blocker takes out over its first tens of ms.
+/// One note held for a second, after silence, as the first note after a rest is: its level in
+/// 20 ms windows, and its offset from zero over whole cycles, which a DC blocker starting from
+/// rest would take out over the first tens of ms, a thump.
 fn held(voice: SynthVoice, note: u8) -> (f64, Vec<f64>) {
     let case = Case::plain(Source::Synth(voice));
     let mut rows = vec![format!("{} 7F --- --- ---", name(note))];
@@ -623,19 +624,32 @@ fn held(voice: SynthVoice, note: u8) -> (f64, Vec<f64>) {
 }
 
 #[test]
-#[ignore = "diagnosis: what a held note does on its own"]
-fn a_held_note_keeps_its_level_and_starts_with_no_offset() {
+fn the_first_note_after_a_rest_starts_with_no_offset() {
+    // Braids' DC blocker runs on from note to note; a new voice's is settled before its first
+    // frame, so a note after a rest starts centred rather than thumping as the blocker catches up.
+    // `Toy` and `Z Filter`, whose filters take a while to settle, start nearer centred too, but
+    // not this near.
     let mut offsets = Vec::new();
     for voice in [
         SynthVoice::CSaw,
         SynthVoice::SawSquare,
         SynthVoice::Morph,
+        SynthVoice::HardSync,
+        SynthVoice::FeedbackFm,
+        SynthVoice::Vosim,
+        SynthVoice::Fof,
+        SynthVoice::WaveMap,
+        SynthVoice::WaveLine,
         SynthVoice::VirtualAnalog,
     ] {
         for note in [48, 60, 72, 84] {
             let (swing, offset) = held(voice, note);
-            // The first window has the attack in it, so the one after is what's left over.
-            let first = offset.get(1).copied().unwrap_or(0.0);
+            // The first window has the attack in it, so the ones after are what's left over.
+            let first = offset
+                .iter()
+                .skip(1)
+                .take(6)
+                .fold(0.0_f64, |most, o| most.max(o.abs()));
             println!(
                 "{:<8} {}: level swings {swing:.2} dB over a second | offset in the first ms, as \
                  a share of its level, each ~2 ms: {}",
@@ -648,7 +662,7 @@ fn a_held_note_keeps_its_level_and_starts_with_no_offset() {
                     .collect::<Vec<_>>()
                     .join(" ")
             );
-            if first.abs() > 0.05 {
+            if first > 0.05 {
                 offsets.push((voice, note));
             }
         }
@@ -657,7 +671,6 @@ fn a_held_note_keeps_its_level_and_starts_with_no_offset() {
 }
 
 #[test]
-#[ignore = "diagnosis: whether a held note has edges on the engine's or a voice's blocks"]
 fn a_held_note_has_no_edges_at_block_boundaries() {
     let mut edged = Vec::new();
     for voice in [SynthVoice::CSaw, SynthVoice::VirtualAnalog] {
