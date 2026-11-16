@@ -214,7 +214,8 @@ fn a_groove_shapes_each_steps_velocity() {
     let groove = Groove::pattern(&[0, 0]).with_velocity(1, 50);
     let played = with_own(song(&[&["C-3 60", "C-3 60"]]), groove);
     let out = render(&played, flat_pool(), 2, 0);
-    let (first, second) = (out[100].abs(), out[STEP + 100].abs());
+    // Once the first note has faded under the second.
+    let (first, second) = (out[300].abs(), out[STEP + 300].abs());
     assert!(
         (second / first - 0.5).abs() < 1e-3,
         "{second} against {first}"
@@ -225,7 +226,7 @@ fn a_groove_shapes_each_steps_velocity() {
         Groove::pattern(&[0, 0]).with_velocity(1, 150),
     );
     let out = render(&louder, flat_pool(), 2, 0);
-    assert!((out[STEP + 100] / out[100] - 1.5).abs() < 1e-2);
+    assert!((out[STEP + 300] / out[300] - 1.5).abs() < 1e-2);
 }
 
 #[test]

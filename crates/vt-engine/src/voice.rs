@@ -31,7 +31,7 @@ use crate::dsp::voices::wave_terrain::WaveTerrain;
 use crate::dsp::voices::waveshaping::Waveshaping;
 use crate::dsp::voices::wavetable::Wavetable;
 use crate::dsp::voices::{Settings, SynthEngine};
-use vt_model::constants::DECLICK_FRAMES;
+use vt_model::constants::{CUT_FADE_FRAMES, DECLICK_FRAMES};
 use vt_model::envelope::Envelope;
 use vt_model::playable::Span;
 use vt_model::samples::{Frames, SampleId};
@@ -54,10 +54,33 @@ enum Stage {
     Released {
         from: f32,
     },
-    /// A short fade, to avoid a click.
+    /// A short fade, to avoid a click: a carried note's dip to nothing.
     Fading {
         per_frame: f32,
     },
+    /// Cut off, by a new note on a voice of its own, a choke, `KIL` or the transport stopping:
+    /// a fade from the level it had over [`CUT_FADE_FRAMES`], so many frames into it.
+    Cut {
+        from: f32,
+        at: u32,
+    },
+}
+
+/// How much of a cut voice's level is left, `at` frames into its fade: a quarter of a cosine,
+/// which starts flat (decision 368).
+#[inline]
+fn cut_fall(at: u32) -> f32 {
+    let into = (at as f32 / CUT_FADE_FRAMES as f32).min(1.0);
+    (std::f32::consts::FRAC_PI_2 * into).cos()
+}
+
+/// How far a new note rises over the fade of the one it cut, `at` frames into it: the fall's
+/// power complement, `√(1 − fall²)`, which is a quarter of a sine, so the two together keep their
+/// power where the notes differ (decision 368).
+#[inline]
+fn cut_rise(at: u32) -> f32 {
+    let into = (at as f32 / CUT_FADE_FRAMES as f32).min(1.0);
+    (std::f32::consts::FRAC_PI_2 * into).sin()
 }
 
 /// The time constant of each of the two one-poles a voice's amp follows its envelope through,
@@ -314,6 +337,8 @@ pub(crate) struct Voice {
     holds: bool,
     /// A note carried on, waiting for the fade to reach nothing.
     carried: Option<Carry>,
+    /// Frames into its rise over the fade of the note it cut, while it's rising.
+    rising: Option<u32>,
 }
 
 impl Default for Voice {
@@ -345,6 +370,7 @@ impl Default for Voice {
             settings: Settings::default(),
             holds: false,
             carried: None,
+            rising: None,
         }
     }
 }
@@ -427,6 +453,21 @@ impl Voice {
             holds: note.synth.is_some_and(SynthVoice::holds),
             settings: Settings::default(),
             carried: None,
+            rising: None,
+        }
+    }
+
+    /// Start a note under the fade of the one it cut. An attack as long as the fade or longer
+    /// plays as it's set, under the old note's fall. A shorter one sits inside the fade, so the
+    /// note starts at full instead, its decay as much sooner as from full without `Reset`, and
+    /// rises over the fade as the old note falls, at equal power (decision 368).
+    pub(crate) fn start_under_cut(note: NoteOn, rate: u32, from: f32, pitch: f64) -> Self {
+        if note.shape.attack_frames(rate) >= u64::from(CUT_FADE_FRAMES) {
+            return Self::start(note, rate, from, pitch);
+        }
+        Self {
+            rising: Some(0),
+            ..Self::start(note, rate, 1.0, pitch)
         }
     }
 
@@ -439,7 +480,7 @@ impl Voice {
         let sounding = match self.stage {
             Stage::Held { .. } | Stage::Released { .. } => true,
             Stage::Fading { .. } => self.carried.is_some(),
-            Stage::Idle => false,
+            Stage::Cut { .. } | Stage::Idle => false,
         };
         sounding
             && self.holds
@@ -649,10 +690,12 @@ impl Voice {
     pub(crate) fn fade(&mut self) {
         self.carried = None;
         if self.active() {
-            // The fade is a ramp of its own, from what's heard, which the amp follows at once.
-            self.level = self.amp[1];
-            self.stage = Stage::Fading {
-                per_frame: 1.0 / DECLICK_FRAMES as f32,
+            // The fade is a ramp of its own, from what's heard, a rise over a cut before it too,
+            // which the amp follows at once.
+            let rise = self.rising.take().map_or(1.0, cut_rise);
+            self.stage = Stage::Cut {
+                from: self.amp[1] * rise,
+                at: 0,
             };
         }
     }
@@ -738,6 +781,10 @@ impl Voice {
             Stage::Held { from } => self.shape.held(self.elapsed, from, self.envelope_rate),
             Stage::Released { from } => self.shape.released(self.elapsed, from, self.envelope_rate),
             Stage::Fading { per_frame } => self.level - per_frame,
+            Stage::Cut { from, at } => {
+                self.stage = Stage::Cut { from, at: at + 1 };
+                from * cut_fall(at)
+            }
             Stage::Idle => 0.0,
         }
         .max(0.0);
@@ -748,7 +795,7 @@ impl Voice {
         let c = self.amp_coefficient;
         self.amp[0] += (self.level - self.amp[0]) * c;
         self.amp[1] += (self.amp[0] - self.amp[1]) * c;
-        let fading = matches!(self.stage, Stage::Fading { .. });
+        let fading = matches!(self.stage, Stage::Fading { .. } | Stage::Cut { .. });
         if fading
             || self.level >= self.amp[1]
             || self
@@ -772,7 +819,11 @@ impl Voice {
                 }
             }
         }
-        let level = self.amp[1] * self.gain;
+        let mut level = self.amp[1] * self.gain;
+        if let Some(at) = self.rising {
+            level *= cut_rise(at);
+            self.rising = (at + 1 < CUT_FADE_FRAMES).then_some(at + 1);
+        }
         let frame = [
             source[0] * level * self.pan[0],
             source[1] * level * self.pan[1],
@@ -812,7 +863,7 @@ impl Voice {
                     && self.amp[1] == 0.0
                     && self.synth.as_ref().is_none_or(Synth::settled)
             }
-            Stage::Fading { .. } => self.level <= 0.0 && self.amp[1] == 0.0,
+            Stage::Fading { .. } | Stage::Cut { .. } => self.level <= 0.0 && self.amp[1] == 0.0,
             Stage::Idle => false,
         } || !more;
         self.elapsed += 1;

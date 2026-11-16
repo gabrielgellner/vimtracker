@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use vt_engine::engine::Engine;
 use vt_model::accumulator::{Accumulation, Reset};
+use vt_model::constants::CUT_FADE_FRAMES;
 use vt_model::groove::GrooveId;
 use vt_model::order::Order;
 use vt_model::song::{Launch, Song};
@@ -33,7 +34,8 @@ fn levels(song: &Song, cue_in: usize, steps: usize) -> Vec<f32> {
     engine.process(&mut after);
     before.extend(after);
     (0..steps)
-        .map(|step| before[(step * STEP + 100) * 2])
+        // Once the step before's note has faded under this one's.
+        .map(|step| before[(step * STEP + CUT_FADE_FRAMES as usize + 100) * 2])
         .collect()
 }
 

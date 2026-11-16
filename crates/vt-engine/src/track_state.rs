@@ -565,6 +565,8 @@ impl TrackState {
         // Any other synth that holds its notes carries on too, its oscillators running on into
         // the next note rather than a new voice starting under the old one's fade.
         let carries = !acid && self.voice.carries(note.synth);
+        // A note on a voice of its own cuts the one sounding, and starts under its fade.
+        let cuts = !acid && !carries && self.voice.active();
         if !acid && !carries {
             self.cut_to_tail();
         }
@@ -577,6 +579,9 @@ impl TrackState {
         self.tell_slots_the_note();
         if acid {
             self.voice.retrigger(note);
+        } else if cuts {
+            self.voice = Voice::start_under_cut(note, rate, from, self.pitch);
+            self.fresh_voice = true;
         } else if !carries {
             self.voice = Voice::start(note, rate, from, self.pitch);
             self.fresh_voice = true;

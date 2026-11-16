@@ -7,6 +7,7 @@ use std::sync::Arc;
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio};
+use vt_model::constants::CUT_FADE_FRAMES;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
@@ -149,9 +150,10 @@ fn sine_note(out: &[f32], from: usize, to: usize) -> i32 {
     C3 + (12.0 * (SINE_PERIOD / period).log2()).round() as i32
 }
 
-/// Whether a note starts near a frame: the ramp starting again from nothing.
+/// Whether a note starts near a frame: the ramp starting again from nothing, once the note
+/// before has faded under it.
 fn starts_near(out: &[f32], frame: usize) -> bool {
-    out[frame + 100] < 0.002
+    out[frame + CUT_FADE_FRAMES as usize + 50] < 0.002
 }
 
 #[test]

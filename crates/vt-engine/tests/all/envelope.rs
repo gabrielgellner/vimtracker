@@ -346,9 +346,10 @@ fn what_an_envelope_moves_stays_fast() {
         let (left, right) = (out[frame * 2], out[frame * 2 + 1]);
         right / (left + right)
     };
-    // 10 ms of smoothing would have moved only a quarter of the way by now.
-    let (first, second) = (right_share(3 * MS), right_share(STEP + 3 * MS));
-    assert!(first > 0.8, "{first}");
+    // Read once the first note has faded under the second; 10 ms of smoothing would have moved
+    // only two fifths of the way by now.
+    let (first, second) = (right_share(5 * MS), right_share(STEP + 5 * MS));
+    assert!(first > 0.7, "{first}");
     assert!((first - second).abs() < 0.05, "{first} and {second}");
 }
 
