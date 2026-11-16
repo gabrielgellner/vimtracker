@@ -66,6 +66,23 @@ enum Stage {
     },
 }
 
+/// How much of a cut voice's level is left, `at` frames into its fade: a quarter of a cosine,
+/// which starts flat (decision 368).
+#[inline]
+fn cut_fall(at: u32) -> f32 {
+    let into = (at as f32 / CUT_FADE_FRAMES as f32).min(1.0);
+    (std::f32::consts::FRAC_PI_2 * into).cos()
+}
+
+/// How far a new note rises over the fade of the one it cut, `at` frames into it: the fall's
+/// power complement, `√(1 − fall²)`, which is a quarter of a sine, so the two together keep their
+/// power where the notes differ (decision 368).
+#[inline]
+fn cut_rise(at: u32) -> f32 {
+    let into = (at as f32 / CUT_FADE_FRAMES as f32).min(1.0);
+    (std::f32::consts::FRAC_PI_2 * into).sin()
+}
+
 /// The time constant of each of the two one-poles a voice's amp follows its envelope through,
 /// about half a millisecond for the pair: the shortest that takes the click out of an envelope's
 /// step to nothing on a sine, measured against a cut's 64-frame fade (decision 366).
@@ -320,6 +337,8 @@ pub(crate) struct Voice {
     holds: bool,
     /// A note carried on, waiting for the fade to reach nothing.
     carried: Option<Carry>,
+    /// Frames into its rise over the fade of the note it cut, while it's rising.
+    rising: Option<u32>,
 }
 
 impl Default for Voice {
@@ -351,6 +370,7 @@ impl Default for Voice {
             settings: Settings::default(),
             holds: false,
             carried: None,
+            rising: None,
         }
     }
 }
@@ -433,6 +453,21 @@ impl Voice {
             holds: note.synth.is_some_and(SynthVoice::holds),
             settings: Settings::default(),
             carried: None,
+            rising: None,
+        }
+    }
+
+    /// Start a note under the fade of the one it cut. An attack as long as the fade or longer
+    /// plays as it's set, under the old note's fall. A shorter one sits inside the fade, so the
+    /// note starts at full instead, its decay as much sooner as from full without `Reset`, and
+    /// rises over the fade as the old note falls, at equal power (decision 368).
+    pub(crate) fn start_under_cut(note: NoteOn, rate: u32, from: f32, pitch: f64) -> Self {
+        if note.shape.attack_frames(rate) >= u64::from(CUT_FADE_FRAMES) {
+            return Self::start(note, rate, from, pitch);
+        }
+        Self {
+            rising: Some(0),
+            ..Self::start(note, rate, 1.0, pitch)
         }
     }
 
@@ -655,9 +690,11 @@ impl Voice {
     pub(crate) fn fade(&mut self) {
         self.carried = None;
         if self.active() {
-            // The fade is a ramp of its own, from what's heard, which the amp follows at once.
+            // The fade is a ramp of its own, from what's heard, a rise over a cut before it too,
+            // which the amp follows at once.
+            let rise = self.rising.take().map_or(1.0, cut_rise);
             self.stage = Stage::Cut {
-                from: self.amp[1],
+                from: self.amp[1] * rise,
                 at: 0,
             };
         }
@@ -746,10 +783,7 @@ impl Voice {
             Stage::Fading { per_frame } => self.level - per_frame,
             Stage::Cut { from, at } => {
                 self.stage = Stage::Cut { from, at: at + 1 };
-                // A quarter of a cosine, the fall that keeps the power of it and of a new note's
-                // rise together near constant (decision 368).
-                let into = at as f32 / CUT_FADE_FRAMES as f32;
-                from * (std::f32::consts::FRAC_PI_2 * into.min(1.0)).cos()
+                from * cut_fall(at)
             }
             Stage::Idle => 0.0,
         }
@@ -785,7 +819,11 @@ impl Voice {
                 }
             }
         }
-        let level = self.amp[1] * self.gain;
+        let mut level = self.amp[1] * self.gain;
+        if let Some(at) = self.rising {
+            level *= cut_rise(at);
+            self.rising = (at + 1 < CUT_FADE_FRAMES).then_some(at + 1);
+        }
         let frame = [
             source[0] * level * self.pan[0],
             source[1] * level * self.pan[1],

@@ -627,6 +627,18 @@ impl Envelope {
         }
     }
 
+    /// How long its attack is set to take from nothing, in frames: none for a drum's, which
+    /// strikes from full, or for no shape at all.
+    #[inline]
+    pub fn attack_frames(&self, rate: u32) -> u64 {
+        match self {
+            Self::Adsr(Adsr { attack_ms, .. })
+            | Self::Ahd(Ahd { attack_ms, .. })
+            | Self::Lpg(Lpg { attack_ms, .. }) => frames_of(*attack_ms, rate),
+            Self::Drum(_) | Self::Open => 0,
+        }
+    }
+
     /// The level some frames after a note, starting from where it was.
     #[inline]
     pub fn held(&self, frames: u64, from: f32, rate: u32) -> f32 {
