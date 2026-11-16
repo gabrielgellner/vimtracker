@@ -260,7 +260,7 @@ impl Engine {
         engine.reset_tracks();
         engine.find_listened();
         for track in engine.tracks.iter_mut() {
-            track.settle();
+            track.settle(rate);
         }
         engine
     }

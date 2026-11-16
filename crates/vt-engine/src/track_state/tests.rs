@@ -244,7 +244,7 @@ fn playing(track: &Track, rate: u32) -> TrackState {
         scale: Default::default(),
     };
     state.modulate(track, 0, now, true, &mut memory);
-    state.settle();
+    state.settle(rate);
     state
 }
 

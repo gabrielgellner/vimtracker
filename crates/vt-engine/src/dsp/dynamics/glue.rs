@@ -265,6 +265,11 @@ impl Glue {
         self.reduction
     }
 
+    /// Jump to what's set at the next frame, as the first frame does.
+    pub(crate) fn settle(&mut self) {
+        self.times = None;
+    }
+
     /// Take what's set now, jumping to it the first time.
     fn follow(&mut self, settings: Settings, rate: u32) -> Times {
         if let Some((was, times)) = self.times

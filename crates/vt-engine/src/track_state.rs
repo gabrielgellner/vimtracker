@@ -720,25 +720,23 @@ impl TrackState {
         self.voice.active() || self.tail.active()
     }
 
-    /// Settle held values, so a new sound doesn't ramp from an old setting while idle.
-    pub(crate) fn settle(&mut self) {
-        self.gain.settle();
-        self.level.settle();
+    /// Jump held values to what's set, so a new sound doesn't ramp from an old setting. It's
+    /// called on every row read, and every preview started, while nothing's [`sounding`]: a
+    /// jump is safe only with nothing passing through. What's before the slots hears only the
+    /// voice, so it jumps then. The slots, and the level, pan and sends after them, jump only
+    /// once no slot's tail is [`ringing`] either, as a tail passes through them and a jump there
+    /// is a step (#923).
+    ///
+    /// [`sounding`]: Self::sounding
+    /// [`ringing`]: Self::ringing
+    pub(crate) fn settle(&mut self, rate: u32) {
         self.input_trim.settle();
-        self.pan.settle();
         self.cutoff.settle();
         self.resonance.settle();
-        self.send_a_gain.settle();
-        self.send_b_gain.settle();
-        self.heard.settle();
-        self.feeds.settle();
         self.cut_offset.settle();
         self.res_offset.settle();
-        self.pan_offset.settle();
         self.cut_envelope.settle();
         self.res_envelope.settle();
-        self.pan_envelope.settle();
-        self.inserts.iter_mut().for_each(InsertState::settle);
         self.drive.settle();
         self.punch.settle();
         self.safe.settle();
@@ -747,5 +745,18 @@ impl TrackState {
         self.filter.iter_mut().for_each(Channel::settle);
         self.coefficients = None;
         self.filter_countdown = 0;
+        if self.ringing(rate) {
+            return;
+        }
+        self.inserts.iter_mut().for_each(InsertState::settle);
+        self.gain.settle();
+        self.level.settle();
+        self.pan.settle();
+        self.pan_offset.settle();
+        self.pan_envelope.settle();
+        self.send_a_gain.settle();
+        self.send_b_gain.settle();
+        self.heard.settle();
+        self.feeds.settle();
     }
 }

@@ -362,6 +362,13 @@ impl LowPassGate {
         (self.level, self.cutoff)
     }
 
+    /// Jump to what's set at the next frame rather than gliding there, as the first frame does:
+    /// it takes its settings frame by frame, so it forgets what it took. The follower and the
+    /// vactrol are what the sound left, and carry on.
+    pub(crate) fn settle(&mut self) {
+        self.tuned = None;
+    }
+
     /// Take what's set now, jumping to it the first time.
     fn follow(&mut self, settings: Settings, rate: u32) {
         if self.tuned == Some((settings, rate)) {
@@ -511,6 +518,10 @@ impl SlotEffect for LowPassGate {
 
     /// It takes its settings frame by frame instead.
     fn follow(&mut self, _settings: Settings, _song: SongPlace, _frames: u64) {}
+
+    fn settle(&mut self) {
+        self.settle();
+    }
 
     fn clear(&mut self) {
         *self = Self::default();
