@@ -39,14 +39,17 @@ pub(crate) const PLUGIN: u8 = 0x03;
 /// How many PLUGIN setups the Roto stores, shared by every program that drives it.
 pub const MAX_PLUGIN_SETUPS: usize = 64;
 
-/// How many MIDI setups it has.
+/// How many MIDI setups it has. Only the fake Roto needs it.
+#[cfg(feature = "fake")]
 pub(crate) const MIDI_SETUPS: u8 = 64;
 
-/// How many knobs, and as many switches, a PLUGIN setup has: eight pages of eight.
+/// How many knobs, and as many switches, a PLUGIN setup has: eight pages of eight. Only the fake
+/// Roto needs it.
+#[cfg(feature = "fake")]
 pub(crate) const PLUGIN_CONTROLS: u8 = 64;
 
 /// How many knobs, and as many switches, a MIDI setup has: four pages of eight. vimtracker writes
-/// no MIDI setups, so nothing uses it; it's kept beside [`PLUGIN_CONTROLS`] as the protocol has it.
+/// no MIDI setups, so nothing uses it; it's kept beside `PLUGIN_CONTROLS` as the protocol has it.
 #[expect(
     dead_code,
     reason = "kept beside `PLUGIN_CONTROLS` as the protocol has it"
@@ -882,7 +885,8 @@ impl Request {
         }
     }
 
-    /// Whether the Roto only takes it inside a config update.
+    /// Whether the Roto only takes it inside a config update. Only the fake Roto asks.
+    #[cfg(feature = "fake")]
     pub(crate) fn needs_config_update(&self) -> bool {
         matches!(
             self,
