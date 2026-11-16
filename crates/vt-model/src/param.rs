@@ -347,6 +347,23 @@ pub enum Reading {
     Fade,
     /// What a Track mod slot's map follows: a note, or hex, as its source reads.
     Mapped(Source),
+    /// A generator's: the column's own values, a note's name, a nudge with its sign, or hex.
+    Column,
+    /// A bend either way, with its sign, from `-100` to `100`.
+    Bend,
+    /// Semitones, or the scale's degrees while it's on, with a sign.
+    Interval,
+    /// So many rows, as an `Every` skips.
+    Rows,
+    /// So many of the rows the column could change, as Euclid's hits are: `9 of 16`.
+    OfRows,
+    /// A walk's largest move: on notes in semitones, or the scale's degrees while it's on, and
+    /// elsewhere in the column's own values, without a sign.
+    Walk,
+    /// A byte's bits, in hex, as a mask of them.
+    Bits,
+    /// A hex digit for each of the scale's degrees, from the root, how often it comes.
+    Weights,
 }
 
 /// How a value shows: in its cell, and on the status line after its name, where that says more
@@ -516,6 +533,15 @@ impl Descriptor {
                 .and_then(|at| Fade::ALL.get(at))
                 .map_or_else(String::new, ToString::to_string),
             Reading::Mapped(source) => source.text(value as u8),
+            // A generator's setting shows itself, by its shape.
+            Reading::Column
+            | Reading::Bend
+            | Reading::Interval
+            | Reading::Rows
+            | Reading::OfRows
+            | Reading::Walk
+            | Reading::Bits
+            | Reading::Weights => String::new(),
         };
         Shown { cell, text }
     }
@@ -525,7 +551,7 @@ impl Descriptor {
         match self.reading {
             _ if !self.barred => None,
             Reading::Hex | Reading::Byte { .. } => Some(value.clamp(0, 0xFF) as u8),
-            _ => None,
+            _ => Some(share(value, self.bounds)),
         }
     }
 
@@ -545,6 +571,12 @@ impl Descriptor {
     pub fn kept(&self, value: i32) -> i32 {
         kept(i64::from(value), self.bounds, self.wraps)
     }
+}
+
+/// Where a number is in its bounds, on a bar's 0 to 255.
+pub fn share(number: i32, (low, high): (i32, i32)) -> u8 {
+    let share = f64::from(number - low) / f64::from((high - low).max(1));
+    (share * 255.0).round().clamp(0.0, 255.0) as u8
 }
 
 /// A value kept within `bounds`, or taken round them where it goes `round`.

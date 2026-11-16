@@ -69,8 +69,8 @@ each family produces itself, with one `Reading` for how a value shows. Steps, ea
 | 1, the dump of every view (`vt-tui/tests/golden/views.txt`) | | #897 |
 | 2, `Descriptor`, `Reading`, and `Steps`, `Pace`, `Reads`, `Choice` and `Typing` in the model | the shared constructors | #900 |
 | 3, `insert::Param` folded into `Entry` (decision 357); `Entry::described` | machine settings, effects | #904 |
-| 4, `ModSlot::reading` and `described`; `ModUnits` goes | mod slots | |
-| 5, `GenParam::described`; the generators' `Units` goes | generators | |
+| 4, `ModSlot::reading` and `described`; `ModUnits` goes | mod slots | #906 |
+| 5, `GenParam::described`; the generators' `Units` goes, a step still measured | generators | |
 | 6, the `GenParam` tables from one list | | |
 
 What's left:

@@ -133,7 +133,7 @@ impl GenParam {
     }
 
     /// How its values read.
-    pub const fn units(self) -> Units {
+    pub const fn reading(self) -> Reading {
         self.spec().units
     }
 
@@ -660,20 +660,20 @@ impl GenParam {
     /// it's that.
     pub fn brief(self, shape: &Shape, context: &Context) -> String {
         let number = || self.number(shape, context);
-        match self.units() {
+        match self.reading() {
             _ if self.is_loop() => match number() {
                 Some(0) | None => "Off".to_owned(),
                 Some(rows) => rows.to_string(),
             },
-            Units::Count | Units::Rows | Units::OfRows => {
+            Reading::Number | Reading::Rows | Reading::OfRows => {
                 number().map_or_else(String::new, |number| number.to_string())
             }
-            Units::Interval => number().map_or_else(String::new, |number| format!("{number:+}")),
+            Reading::Interval => number().map_or_else(String::new, |number| format!("{number:+}")),
             // A walk's step of notes in semitones or degrees, as its bar is of two octaves.
-            Units::Step if matches!(context.column, ShapeColumn::Note { .. }) => {
+            Reading::Walk if matches!(context.column, ShapeColumn::Note { .. }) => {
                 number().map_or_else(String::new, |number| number.to_string())
             }
-            Units::Column if self == Self::Axis => {
+            Reading::Column if self == Self::Axis => {
                 number().map_or_else(|| "--".to_owned(), |note| context.column.show(note as u8))
             }
             _ => self.shown(shape, context),
@@ -713,6 +713,53 @@ impl GenParam {
             Self::Vary => VARIES.into_iter().map(Choice::Vary).collect(),
             _ => return None,
         })
+    }
+
+    /// Its value as a page counts it: a list setting's by the place of its choice, anything else
+    /// as its number, and 0 where it has neither.
+    pub fn value(self, shape: &Shape, context: &Context) -> i32 {
+        self.chosen(shape, context)
+            .map(|at| at as i32)
+            .or_else(|| self.number(shape, context))
+            .unwrap_or(0)
+    }
+
+    /// It described on a shape, for whatever shows or edits it: its range on the column, its steps
+    /// from its row's [`Stepping`], a list's choices, which go round, and how it's typed. A value
+    /// with bounds has a bar, unless it's a list; a bend and an interval draw it from the middle.
+    /// Nothing puts a generator's setting back to a default of its own, so its default is where
+    /// it is. Its text is the setting's to say, by the shape ([`GenParam::shown`]).
+    pub fn described(self, shape: &Shape, context: &Context) -> Descriptor {
+        let spec = self.spec();
+        let value = self.value(shape, context);
+        let bounds = self.bounds(context);
+        let choices = self.choices(context);
+        let listed = choices.is_some();
+        let (nudge, jump) = match (listed, spec.stepping) {
+            (true, _) => (1, HEX_JUMP),
+            (false, Some(stepping)) => (stepping.nudge, stepping.jump.on(context.column)),
+            (false, None) => (0, 0),
+        };
+        Descriptor {
+            reading: spec.units,
+            bounds: bounds.unwrap_or((value, value)),
+            default: value,
+            nudge,
+            jump,
+            wraps: listed,
+            centred: matches!(spec.units, Reading::Bend | Reading::Interval),
+            choices: choices
+                .unwrap_or_default()
+                .into_iter()
+                .map(|choice| ParamChoice::named(choice.name()))
+                .collect(),
+            typing: self.typing(context.column),
+            reads: Reads::No,
+            barred: spec.units != Reading::Listed
+                && bounds.is_some()
+                && self.number(shape, context).is_some(),
+            ..Descriptor::whole(spec.key, spec.name, (0, 0), 0)
+        }
     }
 
     /// Where the shape is among a list setting's choices: a `Where` by its kind, whatever its

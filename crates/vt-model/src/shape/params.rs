@@ -33,6 +33,7 @@ mod spec;
 mod table;
 
 pub use crate::param::Typing;
+use crate::param::{Choice as ParamChoice, Descriptor, Reading, Reads};
 pub use table::GEN_PARAMS;
 
 /// How far a small and a large step move a curve, here and in a macro mapping's `Curve` and `S`.
@@ -226,38 +227,6 @@ impl Choice {
     }
 }
 
-/// How a setting's values read.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Units {
-    /// The column's own values: a note's name, a nudge with its sign, or hex.
-    Column,
-    /// A bend either way, with its sign, from `-100` to `100`.
-    Bend,
-    /// Semitones, or the scale's degrees while it's on, with a sign.
-    Interval,
-    /// Round a cycle, in degrees.
-    Degrees,
-    /// A whole number of rows or notes.
-    Count,
-    /// So many rows, as an `Every` skips.
-    Rows,
-    /// So many of the rows the column could change, as Euclid's hits are: `9 of 16`.
-    OfRows,
-    /// A walk's largest move: on notes in semitones, or the scale's degrees while it's on, and
-    /// elsewhere in the column's own values, without a sign.
-    Step,
-    /// A chance or share, in percent.
-    Percent,
-    /// A byte in hex, `00` to `FF`, as a knob of Grids reads.
-    Byte,
-    /// One of a list, by name.
-    Named,
-    /// A byte's bits, in hex, as a mask of them.
-    Bits,
-    /// A hex digit for each of the scale's degrees, from the root, how often it comes.
-    Weights,
-}
-
 /// A generator's setting. [`GenParam::ALL`] is every one, in the order the shape panel lists
 /// them; [`GenParam::exists_for`] says which a shape has, and [`GEN_PARAMS`] describes each, in
 /// the order they're declared here.
@@ -418,7 +387,7 @@ pub struct GenParamSpec {
     /// Its name on screen.
     pub name: &'static str,
     /// How its values read.
-    pub units: Units,
+    pub units: Reading,
     /// How its value is typed, on a column whose values aren't in hex.
     pub typing: Typing,
     /// The lowest and highest it takes as a number.
@@ -1015,7 +984,7 @@ mod tests {
         );
         // `A+B` has B's chances, and its twelve fill the page.
         let mut both = GenParam::of(&divisions, note(), false);
-        both.retain(|param| param.units() == Units::Percent);
+        both.retain(|param| param.reading() == Reading::Percent);
         assert_eq!(both, [own, theirs].concat());
         assert_eq!(
             GenParam::title(&divisions),
@@ -1206,7 +1175,7 @@ mod tests {
                 base.run = MAX_RUN;
                 for param in GenParam::of(&base, note(), true) {
                     // Lists show in full, as they have no bar beside them.
-                    if matches!(param.units(), Units::Named | Units::Weights)
+                    if matches!(param.reading(), Reading::Listed | Reading::Weights)
                         || param == GenParam::Values
                     {
                         continue;
@@ -1228,7 +1197,7 @@ mod tests {
         assert_eq!(GenParam::From.shown(&ramp, &notes), "C-3");
         assert_eq!(GenParam::Curve.shown(&ramp, &notes), "+20");
         assert_eq!(GenParam::Hits.shown(&ramp, &notes), "9 of 16");
-        assert_eq!(GenParam::Hits.units(), Units::OfRows);
+        assert_eq!(GenParam::Hits.reading(), Reading::OfRows);
         ramp.kind = FillKind::Random;
         assert_eq!(GenParam::Curve.shown(&ramp, &notes), "--");
         let velocity = context(ShapeColumn::Velocity);
