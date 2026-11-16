@@ -17,8 +17,9 @@ const STEP: usize = 6000;
 const HALF: usize = STEP * 0x80 / 0xFF;
 /// How far either side of a moment a test looks, which is well within a step.
 const NEAR: usize = 100;
-/// Below this, nothing's sounding.
-const SILENT: f32 = 1e-4;
+/// Below this, nothing's sounding: 34 dB under the flat sample, which a note's amp falls past
+/// within a millisecond and a half of its end (decision 366).
+const SILENT: f32 = 1e-2;
 
 /// The same with its `Gate` set.
 fn gated(rows: &[&str], gate: u8) -> Song {
@@ -343,15 +344,15 @@ fn a_moved_length_stays_between_1_and_100_percent() {
         ]),
         5,
     );
-    // The shortest, 1%, still sounds.
+    // The shortest, 1%, still sounds, and its amp falls after it.
     let shortest = (STEP as f32 * SHORTEST_GATE) as usize;
     assert!(
-        heard_for(&out, 0).abs_diff(shortest) < NEAR / 2,
+        heard_for(&out, 0).abs_diff(shortest) < NEAR,
         "{}",
         heard_for(&out, 0)
     );
     assert!(
-        heard_for(&out, 3).abs_diff(shortest) < NEAR / 2,
+        heard_for(&out, 3).abs_diff(shortest) < NEAR,
         "{}",
         heard_for(&out, 3)
     );

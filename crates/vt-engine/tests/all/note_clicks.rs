@@ -32,6 +32,9 @@ enum Source {
     Synth(SynthVoice),
     /// A sampler playing a plain saw, long enough to tie through every note.
     SampledSaw,
+    /// A sampler playing a sine as long, whose own top of the spectrum is next to nothing, so a
+    /// step in its level stands out.
+    SampledSine,
 }
 
 /// How a track's notes are shaped and timed.
@@ -66,10 +69,10 @@ impl Case {
     }
 }
 
-fn saw_pool() -> Arc<SamplePool> {
+fn sample_pool(wave: fn(f32) -> f32) -> Arc<SamplePool> {
     let frames = (0..RATE as usize * 40)
         .map(|at| {
-            let s = 0.5 * (2.0 * (at % PERIOD) as f32 / PERIOD as f32 - 1.0);
+            let s = 0.5 * wave((at % PERIOD) as f32 / PERIOD as f32);
             [s, s]
         })
         .collect();
@@ -85,7 +88,7 @@ fn song(case: &Case, rows: &[String]) -> Song {
     song.millibpm = case.bpm * 1000;
     match case.source {
         Source::Synth(voice) => song.tracks[0].machine = Machine::Plaits(voice),
-        Source::SampledSaw => {
+        Source::SampledSaw | Source::SampledSine => {
             song.sample_on(0, "s");
         }
     }
@@ -107,7 +110,9 @@ fn song(case: &Case, rows: &[String]) -> Song {
 fn render(case: &Case, rows: &[String], steps: usize) -> Vec<f32> {
     let song = song(case, rows);
     let pool = match case.source {
-        Source::SampledSaw => saw_pool(),
+        Source::SampledSaw => sample_pool(|at| 2.0 * at - 1.0),
+        // Half a frame in, so no frame is exactly nothing, which a drop to silence would be taken for.
+        Source::SampledSine => sample_pool(|at| (std::f32::consts::TAU * (at + 0.0025)).sin()),
         Source::Synth(_) => Arc::new(SamplePool::default()),
     };
     let version = Arc::new(Published::new(Arc::new(song), pool));
@@ -397,48 +402,108 @@ fn drop_to_silence(part: &[f32]) -> f32 {
     drop / peak.max(1e-9)
 }
 
-#[test]
-fn a_blip_with_no_decay_falls_to_silence_rather_than_drops() {
-    // A 1 ms attack with a decay of 0 to a sustain of 0: a blip, as it's set, but one whose decay
-    // takes the shortest fall, a millisecond, rather than stepping to nothing in a frame.
-    let case = Case {
-        adsr: Some(adsr(1, 0, 0, 0)),
-        ..Case::plain(Source::Synth(SynthVoice::CSaw))
-    };
-    let out = render(&case, &rows(&random_notes(), false), 16);
-    let step = case.step() as usize;
-    let mut worst = 0.0_f32;
-    for (index, note) in out.chunks(step).enumerate() {
-        let peak = note.iter().fold(0.0_f32, |most, s| most.max(s.abs()));
-        let heard = note
-            .iter()
-            .rposition(|s| s.abs() > peak * 0.01)
-            .unwrap_or(0);
-        let drop = drop_to_silence(note);
-        if index < 4 {
-            println!(
-                "step {index}: peak {peak:.3}, heard for {:.2} ms, then a drop of {drop:.3} of \
-                 its peak to silence in one frame",
-                heard as f32 * 1000.0 / RATE as f32,
-            );
+/// The top of the spectrum in the millisecond around a frame, from a quarter of it before, as
+/// the sum of the second difference squared: a step's click is large there, a band-limited
+/// wave's small.
+fn top_around(out: &[f32], at: usize) -> f64 {
+    (at - 12..at + 36)
+        .map(|i| {
+            let d2 = f64::from(out[i]) - 2.0 * f64::from(out[i - 1]) + f64::from(out[i - 2]);
+            d2 * d2
+        })
+        .sum()
+}
+
+/// How much a level's steps at these frames add to the top of the spectrum around them, against
+/// the same frames of the same notes held at full, in dB, summed over every step.
+fn added_top(out: &[f32], held: &[f32], steps: &[usize]) -> f64 {
+    let (stepped, full) = steps.iter().fold((0.0, 0.0), |(s, f), at| {
+        (s + top_around(out, *at), f + top_around(held, *at))
+    });
+    10.0 * (stepped / f64::max(full, 1e-30)).log10()
+}
+
+/// The fade a cut note has always had, 64 frames straight down (1.3 ms): what a step through the
+/// amp is held to, as it doesn't click.
+const CUT_FADE: usize = 64;
+
+/// The same notes held at full, faded out at each of these frames as a cut fades them.
+fn cut_at(held: &[f32], steps: &[usize]) -> Vec<f32> {
+    let mut out = held.to_vec();
+    for at in steps {
+        for (i, sample) in out[*at..*at + 48].iter_mut().enumerate() {
+            *sample *= (1.0 - i as f32 / CUT_FADE as f32).max(0.0);
         }
-        // Heard for its attack and its fall, about 2 ms, and no longer.
-        assert!(
-            (80..=110).contains(&heard),
-            "step {index} is heard for {heard} frames"
+    }
+    out
+}
+
+/// What a step adds to the top at each of these frames, and what the cut's fade would.
+fn step_against_cut(out: &[f32], held: &[f32], steps: &[usize]) -> (f64, f64) {
+    (
+        added_top(out, held, steps),
+        added_top(&cut_at(held, steps), held, steps),
+    )
+}
+
+#[test]
+fn a_blip_with_no_decay_ends_without_a_click() {
+    // A 1 ms attack with a decay of 0 to a sustain of 0: a blip, as it's set, whose end is a step
+    // from full to nothing in its envelope. The amp's smoothing of a fall takes the click out
+    // of it.
+    let notes = random_notes();
+    let mut clicks = Vec::new();
+    for (name, source) in [
+        ("CSaw", Source::Synth(SynthVoice::CSaw)),
+        ("Sampled sine", Source::SampledSine),
+    ] {
+        let case = Case {
+            adsr: Some(adsr(1, 0, 0, 0)),
+            ..Case::plain(source)
+        };
+        let out = render(&case, &rows(&notes, false), 16);
+        let full = Case {
+            adsr: Some(adsr(1, 0, 100, 0)),
+            ..case
+        };
+        let held = render(&full, &rows(&notes, false), 16);
+        let step = case.step();
+        // Where each blip's attack ends and its envelope steps to nothing.
+        let ends: Vec<usize> = (1..16)
+            .map(|row| (row as f64 * step) as usize + RATE as usize / 1000)
+            .collect();
+        let (added, cut) = step_against_cut(&out, &held, &ends);
+        let mut worst = 0.0_f32;
+        let mut longest = 0;
+        for note in out.chunks(step as usize) {
+            let peak = note.iter().fold(0.0_f32, |most, s| most.max(s.abs()));
+            let heard = note
+                .iter()
+                .rposition(|s| s.abs() > peak * 0.01)
+                .unwrap_or(0);
+            longest = longest.max(heard);
+            worst = worst.max(drop_to_silence(note));
+        }
+        println!(
+            "{name:<13} a blip's end adds {added:+.1} dB to the top, a cut {cut:+.1}; it's heard \
+             for {:.2} ms, and drops to silence from {worst:.3} of its peak in one frame",
+            longest as f32 * 1000.0 / RATE as f32,
         );
-        worst = worst.max(drop);
+        // Heard for its attack and the amp's short fall after it, and no longer.
+        if added > cut || worst > 0.02 || longest > RATE as usize * 4 / 1000 {
+            clicks.push(name);
+        }
     }
     assert!(
-        worst < 0.02,
-        "a blip drops to silence from {worst:.3} of its peak"
+        clicks.is_empty(),
+        "these blips click as they end: {clicks:?}"
     );
 }
 
 #[test]
 fn a_gate_closing_with_no_release_fades_rather_than_drops() {
     let notes = random_notes();
-    let mut drops = Vec::new();
+    let mut clicks = Vec::new();
     for (name, case) in [
         (
             "CSaw, gate 50%",
@@ -463,18 +528,36 @@ fn a_gate_closing_with_no_release_fades_rather_than_drops() {
                 ..Case::plain(Source::Synth(SynthVoice::VirtualAnalog))
             },
         ),
+        (
+            "Sampled sine, gate 50%",
+            Case {
+                gate: Some(0x80),
+                ..Case::plain(Source::SampledSine)
+            },
+        ),
+        (
+            "Sampled sine, gate 50%, R 0",
+            Case {
+                gate: Some(0x80),
+                adsr: Some(adsr(1, 0, 100, 0)),
+                ..Case::plain(Source::SampledSine)
+            },
+        ),
     ] {
         let out = render(&case, &rows(&notes, false), ROWS);
+        let held = render(&Case { gate: None, ..case }, &rows(&notes, false), ROWS);
         let step = case.step();
-        // Each frame's fall from the last, against the note's level, at each gate's close.
+        let closes: Vec<usize> = (1..ROWS)
+            .map(|row| (row as f64 * step) as usize + (step * f64::from(0x80_u8) / 255.0) as usize)
+            .collect();
+        let (added, cut) = step_against_cut(&out, &held, &closes);
+        // Each frame's fall to an exact silence, against the note's level, at each gate's close.
         let mut worst = 0.0_f32;
-        for row in 1..ROWS {
+        for (row, close) in (1..ROWS).zip(&closes) {
             let start = (row as f64 * step) as usize;
-            let close = start + (step * f64::from(0x80_u8) / 255.0) as usize;
             let level = out[start + 480..close - 48]
                 .iter()
                 .fold(0.0_f32, |most, s| most.max(s.abs()));
-            // A release of 0 takes the shortest fall, a millisecond, so it's over within 2.
             let jump = out[close - 48..close + 96]
                 .windows(2)
                 .filter(|pair| pair[1] == 0.0)
@@ -482,15 +565,15 @@ fn a_gate_closing_with_no_release_fades_rather_than_drops() {
                 .fold(0.0_f32, f32::max);
             worst = worst.max(jump / level.max(1e-9));
         }
-        println!("{name:<24} drops to silence from {worst:.2} of its peak in one frame");
-        if worst > 0.05 {
-            drops.push(name);
+        println!(
+            "{name:<28} adds {added:+.1} dB to the top as it closes, a cut {cut:+.1}, and drops to \
+             silence from {worst:.2} of its peak in one frame"
+        );
+        if worst > 0.05 || added > cut.max(0.0) {
+            clicks.push(name);
         }
     }
-    assert!(
-        drops.is_empty(),
-        "these drop to silence in a frame: {drops:?}"
-    );
+    assert!(clicks.is_empty(), "these click as they close: {clicks:?}");
 }
 
 /// One note held for a second, alone: its level in 20 ms windows, and its offset from zero over

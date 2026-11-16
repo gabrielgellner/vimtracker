@@ -91,6 +91,18 @@ fn left(out: &[f32], frame: usize) -> f32 {
     out[frame * 2]
 }
 
+/// How far a voice's amp lags its envelope's fall, on a straight one, in whole frames: two
+/// one-poles of a quarter of a millisecond, each about 11.5 frames behind (decision 366). A rise
+/// it follows at once.
+const LAG: usize = 23;
+/// How long after its envelope lands on nothing the amp is exactly nothing too.
+const SETTLE: usize = 5 * MS;
+
+/// What's heard of an envelope's fall at a frame: the left channel, as far on as the amp lags.
+fn falling(out: &[f32], frame: usize) -> f32 {
+    left(out, frame + LAG)
+}
+
 fn close(actual: f32, expected: f32) {
     assert!((actual - expected).abs() < 0.01, "{actual} and {expected}");
 }
@@ -122,7 +134,7 @@ fn a_curve_bends_a_notes_attack_decay_and_release() {
     // fast, and `Snap` falls faster still.
     let lin = curved(Curve::Lin, 0, 0);
     close(left(&lin, 5 * MS), 0.5);
-    close(left(&lin, 30 * MS), 0.5);
+    close(falling(&lin, 30 * MS), 0.5);
     let exp = curved(Curve::Exp, 0, 0);
     let snap = curved(Curve::Snap, 0, 0);
     assert!(left(&exp, 5 * MS) < 0.2);
@@ -143,21 +155,21 @@ fn a_curve_bends_a_notes_attack_decay_and_release() {
     );
     // Each lands on time all the same.
     for out in [&lin, &exp, &snap, &analog] {
-        close(left(out, 50 * MS), 0.0);
+        close(falling(out, 50 * MS), 0.0);
     }
     // A release bends too.
     let lin = curved(Curve::Lin, 100, 40);
-    close(left(&lin, STEP + 20 * MS), 0.5);
+    close(falling(&lin, STEP + 20 * MS), 0.5);
     let snap = curved(Curve::Snap, 100, 40);
     assert!(left(&snap, STEP + 20 * MS) < 0.05);
-    assert_eq!(left(&snap, STEP + 41 * MS), 0.0);
+    assert_eq!(left(&snap, STEP + 41 * MS + SETTLE), 0.0);
 }
 
 #[test]
 fn a_decay_to_nothing_ends_the_voice() {
     let out = render(song(&[NOTE], adsr(0, 50, 0, 0)), flat(), STEP);
     close(left(&out, 0), 1.0);
-    assert_eq!(left(&out, 50 * MS + 2), 0.0);
+    assert_eq!(left(&out, 50 * MS + 2 + SETTLE), 0.0);
     assert_eq!(left(&out, STEP - 1), 0.0);
 }
 
@@ -168,7 +180,7 @@ fn a_note_off_runs_the_release_from_where_it_is() {
     close(left(&out, STEP - 1), 0.5);
     let during = left(&out, STEP + 20 * MS);
     assert!(during > 0.0 && during < 0.2, "{during}");
-    assert_eq!(left(&out, STEP + 41 * MS), 0.0);
+    assert_eq!(left(&out, STEP + 41 * MS + SETTLE), 0.0);
 
     // Mid-attack, it falls from wherever it got to.
     let out = render(song(&texts, adsr(1000, 0, 100, 40)), flat(), STEP * 2);
@@ -212,10 +224,10 @@ fn a_low_pass_gate_on_vol_pings_falls_as_a_vactrol_and_ends_the_note() {
     // Its fall is the model's, fast and then slow, whatever the gate.
     for ms in [5, 20, 50, 90] {
         let expected = gate.held((ms * MS) as u64, 0.0, RATE);
-        close(left(&out, ms * MS), expected);
+        close(falling(&out, ms * MS), expected);
     }
     assert!(left(&out, 22 * MS) < 0.5, "fast at first");
-    assert_eq!(left(&out, 102 * MS + 2), 0.0);
+    assert_eq!(left(&out, 102 * MS + 2 + SETTLE), 0.0);
     assert_eq!(left(&out, STEP - 1), 0.0);
 }
 
@@ -236,8 +248,8 @@ fn a_drum_on_vol_strikes_its_ratchet_then_its_body_decays_and_ends_the_note() {
         assert!(left(&out, strike * 10 * MS + 9 * MS) < 0.25);
     }
     // The body falls straight from the end of the third, and the note ends with it.
-    close(left(&out, 30 * MS + 25 * MS), 0.1);
-    assert_eq!(left(&out, 80 * MS + 2), 0.0);
+    close(falling(&out, 30 * MS + 25 * MS), 0.1);
+    assert_eq!(left(&out, 80 * MS + 2 + SETTLE), 0.0);
     assert_eq!(left(&out, STEP - 1), 0.0);
 }
 
@@ -571,10 +583,10 @@ fn an_ahd_with_a_timed_hold_plays_through_whatever_the_note() {
     close(left(&out, 149 * MS), 1.0);
     let during = left(&out, 175 * MS);
     assert!(during > 0.0 && during < 0.5, "{during}");
-    assert_eq!(left(&out, 201 * MS), 0.0);
+    assert_eq!(left(&out, 201 * MS + SETTLE), 0.0);
     // Held on long past it, it ends all the same.
     let out = render(song(&[NOTE], shape), flat(), STEP * 2);
-    assert_eq!(left(&out, 201 * MS), 0.0);
+    assert_eq!(left(&out, 201 * MS + SETTLE), 0.0);
     assert_eq!(left(&out, STEP * 2 - 1), 0.0);
 }
 
@@ -587,11 +599,11 @@ fn an_ahd_holding_for_the_note_decays_from_its_end() {
     close(left(&out, STEP * 2 - 1), 1.0);
     let during = left(&out, STEP * 2 + 20 * MS);
     assert!(during > 0.0 && during < 0.2, "{during}");
-    assert_eq!(left(&out, STEP * 2 + 41 * MS), 0.0);
+    assert_eq!(left(&out, STEP * 2 + 41 * MS + SETTLE), 0.0);
     // Its curve bends it too: straight, it's half way down half way through.
     let mut lin = shape;
     lin.ahd.curve = Curve::Lin;
     let out = render(song(&[NOTE, EMPTY, OFF], lin), flat(), STEP * 3);
     close(left(&out, 5 * MS), 0.5);
-    close(left(&out, STEP * 2 + 20 * MS), 0.5);
+    close(falling(&out, STEP * 2 + 20 * MS), 0.5);
 }
