@@ -75,10 +75,18 @@ in its row and its Roto layout in `layouts.rs`, and neither is worked out from t
      `settling:` if a frame of silence can leave it as it was, bit for bit, which takes `SameBits`
      and `Default` of its DSP, or under `moving:` if it goes on by itself, as a phaser's sweep
      does. The macro writes its `Kept` variant, its `KEPT_IN_SLOT` row, its fresh state, and the
-     forwarding of `follow` and of the comparison a settled slot is found by. Then its arm in
-     `InsertState::effect`, which plays it, and in `InsertState::settle`, which says whether
-     playing from the top jumps it to its settings. The compiler asks for both, as neither `match`
-     has a catch-all.
+     forwarding of `follow`, of `settle` and of the comparison a settled slot is found by. Then
+     its arm in `InsertState::effect`, which plays it; the compiler asks for it, as the `match`
+     has no catch-all.
+
+   **Its `settle`** jumps its settings' smoothers to their targets and nothing else: a filter's or
+   detector's state, a buffer, an envelope or a phase is what the sound left, and keeps its own
+   rule (decision 363). A kept effect's runs as it's put in a slot, and again on every row read
+   and every preview started while its track is quiet, with no voice sounding and no slot's tail
+   ringing, so a track that comes back after its settings moved starts on them. One that takes its
+   settings frame by frame, as the LPG and the compressor do, forgets what it took, so its next
+   frame jumps as its first did. A pooled effect's runs only as it's taken from the pool, with its
+   buffer empty, where jumping a delay's time or a rotor's speed can't be heard.
 
    `FACTS` won't build if the effect is in neither list or in both, or lacks the `Mix` or `Gain`
    its `MIXING` needs. `slot.rs`'s `the_slot_reads_each_effects_levels_from_its_own_settings`
