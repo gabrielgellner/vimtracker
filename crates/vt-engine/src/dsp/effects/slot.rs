@@ -1136,6 +1136,7 @@ fn blended(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::effects::memory::BUFFERED;
     use crate::dsp::signals::{peak, sines};
     use vt_model::insert::{Compressor, CompressorType, Delay, Equaliser};
     use vt_model::random::NumericalRecipesLcg;
@@ -1177,28 +1178,10 @@ mod tests {
         let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
         let tone: Vec<f32> = sines(RATE as usize / 50, 220.0, 0.5, RATE).collect();
         for was in effects {
-            // Every setting moved but its type, its mix and its gain, which the slot eases; what
-            // it hears, which stays its own input; and a phaser's rate, which would have moved
-            // its sweep on while it was quiet.
-            let params = was.kind().unwrap().params();
+            // Every setting moved but a phaser's rate, which would have moved its sweep on while
+            // it was quiet.
             let phaser = matches!(was, Insert::Phaser(_));
-            let moved = (0..params.len())
-                .filter(|&at| {
-                    !matches!(params[at].place, Place::Type | Place::Output)
-                        && params[at].key != "source"
-                        && !(phaser && params[at].key == "rate")
-                })
-                .fold(was, |insert, at| {
-                    let value = insert.read(at).unwrap();
-                    let top = params[at].kind.top();
-                    let to = if value > top / 2 {
-                        top / 4
-                    } else {
-                        top - top / 4
-                    };
-                    insert.write(at, f32::from(to))
-                });
-            assert_ne!(moved, was, "{was:?} has settings to move");
+            let moved = settings_moved(was, |key| phaser && key == "rate");
             // Quiet for a while, one set so all along and the other moved at the end, then each
             // settled, as a row read while the track's quiet settles it.
             let quiet = |insert| {
@@ -1231,6 +1214,128 @@ mod tests {
                 "{moved:?} glided rather than starting on what's set"
             );
         }
+    }
+
+    /// `was` with every setting moved, each in the top half of its range to a quarter of the way
+    /// up and the rest to three quarters, but its type, its mix and its gain, which the slot
+    /// eases; what it hears, which stays its own input; and those whose key `kept` names.
+    fn settings_moved(was: Insert, kept: impl Fn(&str) -> bool) -> Insert {
+        let params = was.kind().unwrap().params();
+        let moved = (0..params.len())
+            .filter(|&at| {
+                !matches!(params[at].place, Place::Type | Place::Output)
+                    && params[at].key != "source"
+                    && !kept(params[at].key)
+            })
+            .fold(was, |insert, at| {
+                let value = insert.read(at).unwrap();
+                let top = params[at].kind.top();
+                let to = if value > top / 2 {
+                    top / 4
+                } else {
+                    top - top / 4
+                };
+                insert.write(at, f32::from(to))
+            });
+        assert_ne!(moved, was, "{was:?} has settings to move");
+        moved
+    }
+
+    /// Where the song is for the pooled effects' tests: still, at 120 BPM.
+    const AT_120: SongPlace = SongPlace {
+        frames_per_tick: 25.0,
+        ..SongPlace::STILL
+    };
+
+    /// A slot holding `insert`, with a long buffer of its own from a pool made for it, which
+    /// it keeps, to hold another setting of the same effect.
+    fn pooled(insert: Insert) -> (InsertState, MemoryPool) {
+        let mut song = vt_model::song::Song::new(1);
+        song.tracks[0].inserts[0] = insert;
+        let mut pool = MemoryPool::for_song(&song, RATE);
+        let mut state = InsertState::default();
+        state.hold(insert, &mut pool, AT_120, 0);
+        assert!(state.memory.is_some(), "{insert:?} has a long buffer");
+        (state, pool)
+    }
+
+    /// Each effect with a long buffer, in each of its types and modes.
+    fn every_pooled_effect() -> Vec<Insert> {
+        let pooled: Vec<Insert> = every_type_of_every_effect()
+            .into_iter()
+            .filter(|&insert| Memory::kept_by(insert))
+            .collect();
+        for kind in EffectKind::ALL {
+            assert_eq!(
+                pooled.iter().any(|insert| insert.kind() == Some(kind)),
+                BUFFERED[kind as usize],
+                "{kind:?}"
+            );
+        }
+        pooled
+    }
+
+    #[test]
+    fn every_pooled_effect_settles_on_what_moved_while_it_was_quiet() {
+        // As a kept effect does, an effect in the pool starts on what moved while its track was
+        // quiet, rather than gliding there from where it was (#929). It had jumped only as it
+        // was taken from the pool. But for an Echo, Clouds and Beads, whose own level can keep
+        // what they hold from the quiet the slot hears, so a jump could step a sound still in
+        // them.
+        let held_back = [EffectKind::Echo, EffectKind::Clouds, EffectKind::Beads];
+        let sidechains = SidechainFrames::default();
+        let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
+        // A second of a tone and two of what's left, long enough for a delay's and an echo's
+        // repeats and grains from a second back.
+        let tone: Vec<f32> = sines(RATE as usize, 220.0, 0.5, RATE)
+            .chain(std::iter::repeat_n(0.0, RATE as usize * 2))
+            .collect();
+        let mut glided = Vec::new();
+        for was in every_pooled_effect() {
+            if was.kind().is_some_and(|kind| held_back.contains(&kind)) {
+                continue;
+            }
+            // Every setting moved but a spring's knock and a stutter's trigger, which set it
+            // going rather than setting how it goes, and a freeze, which would hold the empty
+            // recording and so hear nothing.
+            let moved = settings_moved(was, |key| matches!(key, "knock" | "trig" | "freeze"));
+            // Quiet for a while, one set so all along and the other moved at the end, then each
+            // settled, as a row read while the track's quiet settles it.
+            let quiet = |insert| {
+                let (mut state, pool) = pooled(insert);
+                for _ in 0..RATE / 10 {
+                    state.process([0.0; 2], smoothing, RATE, &sidechains);
+                }
+                (state, pool)
+            };
+            let (mut set, _) = quiet(moved);
+            let (mut moving, mut pool) = quiet(was);
+            moving.hold(moved, &mut pool, AT_120, 0);
+            for state in [&mut set, &mut moving] {
+                state.settle();
+            }
+            // A stutter is struck with the note, as it passes the sound until then.
+            let heard = |state: &mut InsertState| -> Vec<[u32; 2]> {
+                state.strike();
+                tone.iter()
+                    .map(|&sample| {
+                        state
+                            .process([sample, sample * 0.5], smoothing, RATE, &sidechains)
+                            .map(f32::to_bits)
+                    })
+                    .collect()
+            };
+            let (mut unmoved, _) = quiet(was);
+            let set = heard(&mut set);
+            assert_ne!(heard(&mut unmoved), set, "{was:?}: the move isn't heard");
+            if heard(&mut moving) != set {
+                glided.push(moved);
+            }
+        }
+        assert!(
+            glided.is_empty(),
+            "these glided rather than starting on what's set: {glided:#?}"
+        );
     }
 
     #[test]
