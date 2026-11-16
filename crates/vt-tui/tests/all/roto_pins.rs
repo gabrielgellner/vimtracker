@@ -135,6 +135,7 @@ const PINS: &[(&str, &str, Option<u64>)] = &[
     ("output/master", "14077a623b5d3e47", Some(0xc6747ad58c0eaa2f)),
     ("output/return", "490e4451674a0c1a", None),
     ("play", "77663f6163017b2e", None),
+    ("synthplay", "7a28735f7b2a4e31", None),
     ("steps", "3d0652311d450b51", None),
     ("track", "2d11422176703174", Some(0x6b981ef3a71ebc0c)),
 ];
