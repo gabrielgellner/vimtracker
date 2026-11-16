@@ -23,7 +23,7 @@ use vt_model::constants::BAR_STEPS;
 use vt_model::selection::Motion;
 use vt_model::song::{Repeat, SectionStart, lowest_unused};
 
-use crate::app::{App, Entry, Momentary};
+use crate::app::{Entry, Momentary};
 use crate::input::bindings::Cmd;
 use crate::input::mode::View;
 use crate::input::typed::{HEX, Typed};
@@ -541,81 +541,48 @@ fn capture(services: &mut Services) -> Outcome {
     moved
 }
 
-impl App {
+impl SongView {
     /// `:label`: name the chain under the cursor, in the song and chain views.
-    pub(crate) fn label_chain(&mut self, label: Option<String>) {
-        let track = match self.modes.view {
-            View::Song => self.song_view.track(),
-            View::Chain => Some(self.services.cursor.track),
+    pub(crate) fn label_chain(&self, view: View, label: Option<String>, services: &mut Services) {
+        let track = match view {
+            View::Song => self.track(),
+            View::Chain => Some(services.cursor.track),
             _ => {
-                self.services.status = ":label works in the song and chain views".to_owned();
+                services.status = ":label works in the song and chain views".to_owned();
                 return;
             }
         };
         let Some(track) = track else {
-            self.services.status = ":label names a chain from a track's column".to_owned();
+            services.status = ":label names a chain from a track's column".to_owned();
             return;
         };
-        let Some(chain) = SongView::cell_chain(track, &self.services) else {
-            self.services.status = "This track has no chain".to_owned();
+        let Some(chain) = Self::cell_chain(track, services) else {
+            services.status = "This track has no chain".to_owned();
             return;
         };
-        self.services.apply(&Action::SetChainLabel {
+        services.apply(&Action::SetChainLabel {
             track,
             chain,
             label: label.unwrap_or_default(),
         });
     }
 
-    /// `gd`: open the phrase of a chain with just one, or the rows of one with several. A cell with
-    /// no chain gets a new one, and a chain with no phrase gets a new one.
-    pub(crate) fn open_section_chain(&mut self) {
-        let Some(track) = self.song_view.track() else {
-            self.services.status = "gd opens a chain from a track's column".to_owned();
-            return;
-        };
-        let section = self.services.cursor.section;
-        let chain = self
-            .services
-            .section_here()
-            .and_then(|here| here.chains.get(track).copied().flatten());
-        self.record_jump();
-        if chain.is_none() {
-            let chain = lowest_unused(&self.song().tracks[track].chains);
-            self.services.apply(&Action::SetSectionChain {
-                section,
-                track,
-                chain: Some(chain),
-            });
-        }
-        self.services.cursor.track = track;
-        self.services.cursor.slot = 0;
-        if self.services.chain_entries().len() > 1 {
-            self.modes.view = View::Chain;
-            self.note_view(View::Chain);
-        } else if let Some(chain) = self.services.chain_id() {
-            self.enter_row(chain, 0);
-        }
-    }
-
     /// `:loop`: keep playing the sections selected with `V`, or the section being edited, or go
     /// back to playing the song if that one is already looping. While playing, a loop starts on
     /// the next line of the launch grid, with its first section if the one playing isn't in it.
-    pub(crate) fn toggle_loop(&mut self) {
-        let section = self.services.cursor.section;
-        let selected = self
-            .song_view
-            .selected(self.modes.view, self.services.cursor.section);
-        self.services.reported.looping = match (selected, self.services.reported.looping) {
+    pub(crate) fn toggle_loop(&self, view: View, services: &mut Services) {
+        let section = services.cursor.section;
+        let selected = self.selected(view, services.cursor.section);
+        services.reported.looping = match (selected, services.reported.looping) {
             (Some(selected), _) => Some(selected),
             (None, Some(looping)) if looping.holds(section) => None,
             (None, _) => Some(SectionLoop::one(section)),
         };
-        self.services
+        services
             .handle
-            .send(Command::Loop(self.services.reported.looping));
-        let Some(looping) = self.services.reported.looping else {
-            self.services.status = "Playing the song".to_owned();
+            .send(Command::Loop(services.reported.looping));
+        let Some(looping) = services.reported.looping else {
+            services.status = "Playing the song".to_owned();
             return;
         };
         let sections = if looping.first == looping.last {
@@ -623,8 +590,8 @@ impl App {
         } else {
             format!("sections {:02}-{:02}", looping.first + 1, looping.last + 1)
         };
-        self.services.status = if self.services.reported.transport == Transport::Playing {
-            let when = self.grid_when();
+        services.status = if services.reported.transport == Transport::Playing {
+            let when = services.grid_when();
             format!("Looping {sections} {when}")
         } else {
             format!("Looping {sections}")
