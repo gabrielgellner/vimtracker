@@ -3,13 +3,13 @@
 
 /// The longest SysEx message kept. The Roto's longest is under 300 bytes; anything past this is
 /// dropped, so a stuck message can't grow without end.
-pub const MAX_SYSEX: usize = 4096;
+pub(crate) const MAX_SYSEX: usize = 4096;
 
 /// Splits a stream of MIDI bytes into whole messages: SysEx from `F0` to `F7`, and channel
 /// messages with their data, running status included. Real-time bytes, such as clock, are dropped,
 /// as the Roto's link has no use for them.
 #[derive(Debug, Default)]
-pub struct Splitter {
+pub(crate) struct Splitter {
     sysex: Option<Vec<u8>>,
     running: Option<u8>,
     message: Vec<u8>,
@@ -29,12 +29,12 @@ fn data_bytes(status: u8) -> usize {
 }
 
 impl Splitter {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
     /// The whole messages these bytes complete, in order.
-    pub fn feed(&mut self, bytes: &[u8]) -> Vec<Vec<u8>> {
+    pub(crate) fn feed(&mut self, bytes: &[u8]) -> Vec<Vec<u8>> {
         let mut done = Vec::new();
         for &byte in bytes {
             if byte >= 0xF8 {

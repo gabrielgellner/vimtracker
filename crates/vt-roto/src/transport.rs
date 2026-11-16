@@ -12,11 +12,11 @@ use crate::serial::{self, Code, Notice, Reply, Request};
 
 /// What the Roto's MIDI ports are called: `Roto-Control` on macOS, and `Roto-Control MIDI 1` among
 /// ALSA's names on Linux, as Bitwig's extension finds them.
-pub const MIDI_NAME: &str = "Roto-Control";
+pub(crate) const MIDI_NAME: &str = "Roto-Control";
 
 /// Who made the Roto, as its USB serial port says, and what it calls itself there.
-pub const USB_MANUFACTURER: &str = "Melbourne Instruments";
-pub const USB_PRODUCT: &str = "Roto";
+pub(crate) const USB_MANUFACTURER: &str = "Melbourne Instruments";
+pub(crate) const USB_PRODUCT: &str = "Roto";
 
 /// Why the link couldn't do something.
 #[derive(Debug, Error)]
@@ -42,13 +42,13 @@ impl From<std::io::Error> for LinkError {
 }
 
 /// Whether a MIDI port's name is the Roto's.
-pub fn is_roto_port(name: &str) -> bool {
+pub(crate) fn is_roto_port(name: &str) -> bool {
     name.to_ascii_lowercase()
         .contains(&MIDI_NAME.to_ascii_lowercase())
 }
 
 /// The MIDI ports this computer has, inputs then outputs, by name.
-pub fn midi_port_names() -> Result<(Vec<String>, Vec<String>), LinkError> {
+pub(crate) fn midi_port_names() -> Result<(Vec<String>, Vec<String>), LinkError> {
     let input =
         midir::MidiInput::new("vimtracker ports").map_err(|e| LinkError::Midi(e.to_string()))?;
     let output =
@@ -68,7 +68,7 @@ pub fn midi_port_names() -> Result<(Vec<String>, Vec<String>), LinkError> {
 
 /// One serial port, and whether it's the Roto's.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SerialPortName {
+pub(crate) struct SerialPortName {
     pub path: String,
     /// The USB device's maker and name, if it's on USB.
     pub usb: Option<String>,
@@ -76,7 +76,7 @@ pub struct SerialPortName {
 }
 
 /// Every serial port, the Roto's marked.
-pub fn serial_ports() -> Result<Vec<SerialPortName>, LinkError> {
+pub(crate) fn serial_ports() -> Result<Vec<SerialPortName>, LinkError> {
     let ports = serialport::available_ports().map_err(|e| LinkError::Serial(e.to_string()))?;
     Ok(ports
         .into_iter()
@@ -218,7 +218,7 @@ impl Ports for SystemPorts {
 }
 
 /// How long to wait for a serial reply.
-pub const SERIAL_TIMEOUT: Duration = Duration::from_millis(1000);
+pub(crate) const SERIAL_TIMEOUT: Duration = Duration::from_millis(1000);
 
 /// The Roto's serial port, open, for one request at a time. It's opened only while it's needed,
 /// so the vendor's Roto-Setup app can open it the rest of the time.
@@ -230,7 +230,7 @@ pub struct SerialLink {
 
 impl SerialLink {
     /// Opens a port at 115200 baud, 8 data bits, no parity and one stop bit.
-    pub fn open(path: &str) -> Result<Self, LinkError> {
+    pub(crate) fn open(path: &str) -> Result<Self, LinkError> {
         let port = serialport::new(path, serial::BAUD)
             .data_bits(serialport::DataBits::Eight)
             .parity(serialport::Parity::None)
@@ -265,7 +265,7 @@ impl SerialLink {
 
     /// Sends a request that only asks, and reads its reply. Anything that would change the Roto
     /// is refused here; changes go through [`SerialLink::change`].
-    pub fn ask(&mut self, request: &Request) -> Result<Result<Reply, Code>, LinkError> {
+    pub(crate) fn ask(&mut self, request: &Request) -> Result<Result<Reply, Code>, LinkError> {
         if !request.is_read_only() {
             return Err(LinkError::NotReadOnly(format!("{request:?}")));
         }
@@ -273,7 +273,7 @@ impl SerialLink {
     }
 
     /// Sends a request that changes what the Roto stores or shows, and reads its reply.
-    pub fn change(&mut self, request: &Request) -> Result<Result<Reply, Code>, LinkError> {
+    pub(crate) fn change(&mut self, request: &Request) -> Result<Result<Reply, Code>, LinkError> {
         self.exchange(request)
     }
 
@@ -306,7 +306,7 @@ impl SerialLink {
 
     /// A read-only request's reply as the bytes that came, `A5` first, for checking what the
     /// PDF leaves unsaid against the real Roto.
-    pub fn ask_raw(&mut self, request: &Request) -> Result<Vec<u8>, LinkError> {
+    pub(crate) fn ask_raw(&mut self, request: &Request) -> Result<Vec<u8>, LinkError> {
         if !request.is_read_only() {
             return Err(LinkError::NotReadOnly(format!("{request:?}")));
         }

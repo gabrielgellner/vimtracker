@@ -26,7 +26,7 @@ use crate::cc::{self, Side};
 use crate::sysex::{AllTracks, CONTROLS, FromRoto, KnobMode, SwitchMode, ToRoto, TrackDetails};
 
 /// How many sends the Roto names, `A` to `L`.
-pub const MAX_SENDS: usize = 12;
+pub(crate) const MAX_SENDS: usize = 12;
 
 /// How many sends track focus has on its first page, after Level and Pan.
 const FIRST_PAGE_SENDS: usize = CONTROLS - 2;
@@ -63,7 +63,7 @@ pub struct Strip {
 
 impl Strip {
     /// Where one of its faders is, if it has it.
-    pub fn position(&self, fader: Fader) -> Option<u16> {
+    pub(crate) fn position(&self, fader: Fader) -> Option<u16> {
         match fader {
             Fader::Level => self.level,
             Fader::Pan => self.pan,
@@ -88,7 +88,7 @@ impl Strip {
 
 /// What MIX mode's knobs and buttons are doing, as the Roto last said.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Layout {
+pub(crate) enum Layout {
     /// A bank of eight tracks: each knob the same fader of its track, each button its track's
     /// mute, solo or arm. `send` is which send the knobs move when they're on sends.
     AllTracks {
@@ -194,22 +194,9 @@ impl MixView {
         }
     }
 
-    pub fn layout(&self) -> Layout {
-        self.layout
-    }
-
-    /// Which list all tracks shows: the tracks, or the returns and the master.
-    pub fn channels(&self) -> AllTracks {
-        self.channels
-    }
-
     /// The first track of the bank shown.
-    pub fn first(&self) -> u16 {
+    pub(crate) fn first(&self) -> u16 {
         self.first[list_index(self.channels)]
-    }
-
-    pub fn selected(&self) -> Place {
-        self.selected
     }
 
     fn list(&self, list: AllTracks) -> &[Strip] {
@@ -465,7 +452,7 @@ impl MixView {
     }
 
     /// Everything the view shows, sent afresh, as when the Roto changes what it shows.
-    pub fn push(&mut self) -> Refresh {
+    pub(crate) fn push(&mut self) -> Refresh {
         let wanted = self.wanted();
         let mut refresh = Refresh {
             messages: vec![ToRoto::NumSendTracks(wanted.sends)],
@@ -575,7 +562,7 @@ struct Wanted {
 
 /// The fader on a knob of track focus's page: Level and Pan, then six sends on the first page,
 /// and eight sends on each page after it, as Ableton's script lays them out.
-pub fn focus_fader(page: u8, knob: u8) -> Option<Fader> {
+pub(crate) fn focus_fader(page: u8, knob: u8) -> Option<Fader> {
     let knob = usize::from(knob);
     if knob >= CONTROLS {
         return None;
@@ -684,7 +671,7 @@ mod tests {
         let mut tracks = lists(2);
         tracks[0][0].sends = vec![Some(5); 10];
         let (refresh, _) = view.receive(&FromRoto::SetMixTrackMode(8), tracks, names);
-        assert_eq!(view.layout(), Layout::Focus { page: 1 });
+        assert_eq!(view.layout, Layout::Focus { page: 1 });
         assert_eq!(view.knob(0).map(|(_, fader)| fader), Some(Fader::Send(6)));
         assert!(refresh.messages.iter().any(|message| matches!(
             message,

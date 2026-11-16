@@ -49,7 +49,7 @@ pub enum Feel {
 
 impl Feel {
     /// How many steps it clicks through, or 0 for a smooth knob.
-    pub fn steps(&self) -> u8 {
+    pub(crate) fn steps(&self) -> u8 {
         match self {
             Self::Smooth | Self::CentreNotch => 0,
             Self::Steps(names) => names.len().clamp(2, usize::from(MAX_STEPS)) as u8,
@@ -83,7 +83,7 @@ impl LiveControl {
     /// Its `LEARN PARAM`, as the answer to the Roto's `CONTROL MAPPED` for the knob numbered
     /// `index` with `hash`: a macro device's, or with the macro flag off a stored device's, which
     /// Ableton's script answers so, and whose knob turns nothing until it's answered.
-    pub fn learn(&self, index: u16, hash: ParamHash, macro_param: bool) -> LearnParam {
+    pub(crate) fn learn(&self, index: u16, hash: ParamHash, macro_param: bool) -> LearnParam {
         LearnParam {
             index,
             hash,
@@ -97,7 +97,7 @@ impl LiveControl {
     }
 
     /// Its name and colour, for the knob numbered `index`.
-    pub fn details(&self, index: u16) -> ToRoto {
+    pub(crate) fn details(&self, index: u16) -> ToRoto {
         ToRoto::SetPluginControlDetails {
             control: ControlType::Knob,
             index: index.min(0x7F) as u8,
@@ -173,12 +173,12 @@ impl LiveDevice {
     }
 
     /// The button the Roto numbers `index`, from 1 across the pages, if it holds a setting.
-    pub fn switch(&self, index: u16) -> Option<&LiveControl> {
+    pub(crate) fn switch(&self, index: u16) -> Option<&LiveControl> {
         let at = usize::from(index.checked_sub(1)?);
         self.switches.get(at)?.as_ref()
     }
 
-    pub fn hash(&self) -> PluginHash {
+    pub(crate) fn hash(&self) -> PluginHash {
         PluginHash::of(&self.key)
     }
 
@@ -246,12 +246,8 @@ impl PluginView {
         Self::default()
     }
 
-    pub fn devices(&self) -> &[LiveDevice] {
-        &self.devices
-    }
-
     /// The device chosen, if there's one.
-    pub fn selected(&self) -> Option<&LiveDevice> {
+    pub(crate) fn selected(&self) -> Option<&LiveDevice> {
         self.devices.get(usize::from(self.selected))
     }
 
@@ -620,10 +616,6 @@ impl TrackList {
         Self::default()
     }
 
-    pub fn tracks(&self) -> &[LiveTrack] {
-        &self.tracks
-    }
-
     pub fn selected(&self) -> u16 {
         self.selected
     }
@@ -661,7 +653,7 @@ impl TrackList {
 
     /// Everything the Roto needs to show the list: how many tracks, the bank, each track in it,
     /// and the one chosen, as Ableton's script sends them.
-    pub fn push(&self) -> Vec<ToRoto> {
+    pub(crate) fn push(&self) -> Vec<ToRoto> {
         let count = self.tracks.len() as u16;
         let mut messages = vec![ToRoto::NumTracks(count), ToRoto::FirstTrack(self.first)];
         let bank = self.first..(self.first + CONTROLS as u16).min(count);
