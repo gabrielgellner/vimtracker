@@ -1447,6 +1447,46 @@ mod tests {
     }
 
     #[test]
+    fn an_effect_in_the_pool_settled_on_a_quiet_row_steps_into_nothing_it_held() {
+        // After a sound, once its slot stops ringing, its settings move one way or the other
+        // while the track is quiet, and a quiet row settles it, as `TrackState::settle` does if no
+        // slot rings then (#929). What it plays at once must be nothing: a jump of a delay's
+        // time, a pre-delay or a size into what it played before would step. Echo, Clouds and
+        // Beads, held back, jump nothing.
+        let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
+        let sidechains = SidechainFrames::default();
+        let held_back = [EffectKind::Echo, EffectKind::Clouds, EffectKind::Beads];
+        for was in every_pooled_effect().into_iter().filter(|&insert| {
+            rung(insert) && insert.kind().is_some_and(|kind| !held_back.contains(&kind))
+        }) {
+            let keep = |key: &str| matches!(key, "knock" | "trig" | "freeze");
+            let moved = settings_moved(was, keep);
+            for (from, to) in [(was, moved), (moved, settings_moved(moved, keep))] {
+                let mut state = after_a_tone(from, from);
+                for _ in 0..RATE * 40 {
+                    if !state.ringing(RATE) {
+                        break;
+                    }
+                    state.process([0.0; 2], smoothing, RATE, &sidechains);
+                }
+                assert!(!state.ringing(RATE), "{from:?} rings on");
+                let mut pool = MemoryPool::for_song(&vt_model::song::Song::new(1), RATE);
+                state.hold(to, &mut pool, AT_120, 0);
+                if state.ringing(RATE) {
+                    // The track doesn't settle it.
+                    continue;
+                }
+                state.settle();
+                let first = plays_on(state.memory.as_ref().unwrap(), 0.005);
+                assert!(
+                    first < SILENT,
+                    "{to:?}, from {from:?}, reads {first} at once"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn a_delay_on_a_quiet_row_jumps_only_as_far_back_as_its_quiet_has_shown_empty() {
         // Its slot stops ringing once it's given nothing for its reach, which shows that much of
         // its buffer is empty, but not what's further back: what it played before. A time moved
@@ -1481,7 +1521,7 @@ mod tests {
                 unreachable!("a delay keeps a long buffer");
             };
             let set = f64::from(vt_model::lfo::DIVISION_TICKS[usize::from(to)]) * 25.0;
-            assert_eq!(delay.frames() == set, jumps, "to {to}");
+            assert_eq!((delay.frames() - set).abs() < 0.5, jumps, "to {to}");
             let first = plays_on(state.memory.as_ref().unwrap(), 0.005);
             assert!(first < SILENT, "to {to}, it reads {first} at once");
         }
