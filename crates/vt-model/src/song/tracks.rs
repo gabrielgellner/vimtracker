@@ -1,8 +1,7 @@
 //! A song's tracks, each shared with the versions an edit didn't change it in.
 
 use std::ops::{
-    Index, IndexMut, Range, RangeBounds, RangeFrom, RangeFull, RangeInclusive, RangeTo,
-    RangeToInclusive,
+    Index, IndexMut, Range, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive,
 };
 use std::sync::Arc;
 
@@ -100,7 +99,7 @@ impl ExactSizeIterator for IterMut<'_> {}
 impl std::iter::FusedIterator for IterMut<'_> {}
 
 impl Tracks {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
@@ -125,18 +124,14 @@ impl Tracks {
         self.0.first().map(read)
     }
 
-    pub fn last(&self) -> Option<&Track> {
+    #[cfg(test)]
+    pub(crate) fn last(&self) -> Option<&Track> {
         self.0.last().map(read)
     }
 
     /// The first track to change, made this song's own first.
     pub fn first_mut(&mut self) -> Option<&mut Track> {
         self.0.first_mut().map(Arc::make_mut)
-    }
-
-    /// The last track to change, made this song's own first.
-    pub fn last_mut(&mut self) -> Option<&mut Track> {
-        self.0.last_mut().map(Arc::make_mut)
     }
 
     #[inline]
@@ -150,7 +145,8 @@ impl Tracks {
     }
 
     /// The tracks as they're shared, to compare or keep one by pointer.
-    pub fn shared(&self) -> &[Arc<Track>] {
+    #[cfg(test)]
+    pub(crate) fn shared(&self) -> &[Arc<Track>] {
         &self.0
     }
 
@@ -163,16 +159,12 @@ impl Tracks {
         }
     }
 
-    pub fn push(&mut self, track: Track) {
-        self.0.push(Arc::new(track));
-    }
-
-    pub fn insert(&mut self, index: usize, track: Track) {
+    pub(crate) fn insert(&mut self, index: usize, track: Track) {
         self.0.insert(index, Arc::new(track));
     }
 
     /// Take a track out, as its own if no other version shares it and as a copy if one does.
-    pub fn remove(&mut self, index: usize) -> Track {
+    pub(crate) fn remove(&mut self, index: usize) -> Track {
         Arc::unwrap_or_clone(self.0.remove(index))
     }
 
@@ -181,7 +173,8 @@ impl Tracks {
     }
 
     /// Take a range of tracks out.
-    pub fn drain(&mut self, range: impl RangeBounds<usize>) {
+    #[cfg(test)]
+    pub(crate) fn drain(&mut self, range: impl std::ops::RangeBounds<usize>) {
         self.0.drain(range);
     }
 

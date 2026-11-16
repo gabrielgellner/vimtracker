@@ -77,7 +77,8 @@ pub struct Markers {
 
 impl Markers {
     /// Whether they say nothing.
-    pub fn is_empty(&self) -> bool {
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
         *self == Self::default()
     }
 }
@@ -85,7 +86,7 @@ impl Markers {
 /// What reading a WAV's markers found: the markers, how many frames its audio is, if its `fmt `
 /// and `data` say, and each chunk skipped as malformed, said in words.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Read {
+pub(crate) struct Read {
     pub markers: Markers,
     pub frames: Option<u64>,
     pub problems: Vec<String>,
@@ -140,7 +141,7 @@ fn name(id: &[u8; 4]) -> String {
 
 /// Read the markers of a WAV file from its bytes. A file that isn't a WAV has none, and a chunk
 /// that's malformed or cut short is skipped and said, so the audio still loads.
-pub fn read(bytes: &[u8]) -> Read {
+pub(crate) fn read(bytes: &[u8]) -> Read {
     let mut read = Read::default();
     let Some(chunks) = chunks(bytes) else {
         return read;

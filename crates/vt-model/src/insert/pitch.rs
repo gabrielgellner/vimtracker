@@ -23,7 +23,7 @@ pub(super) const SHIFT_NAMES: [&str; (MOST_SHIFT * 2 + 1) as usize] = [
     "+24 st",
 ];
 /// How far a pitch shifter's `Fine` goes either way, in cents.
-pub const MOST_FINE_CENTS: f32 = 50.0;
+pub(crate) const MOST_FINE_CENTS: f32 = 50.0;
 /// A pitch shifter's shortest and longest grain, in ms.
 pub const SHORTEST_GRAIN_MS: f32 = 10.0;
 pub const LONGEST_GRAIN_MS: f32 = 100.0;
@@ -148,11 +148,11 @@ pub(crate) const GRAINS_PARAMS: [Entry; 10] = [
 pub const GRAIN_BUFFER_SECONDS: f32 = 4.0;
 /// How often a granular effect's grains can start at most, in Hz, as Beads': the C an octave below
 /// middle C. At random they start half as often at most, on average.
-pub const MOST_GRAIN_HERTZ: f32 = 130.812_78;
+pub(crate) const MOST_GRAIN_HERTZ: f32 = 130.812_78;
 
 /// How far back a granular effect's grains read, in seconds, for a value on the `00` to `FF` scale:
 /// from just behind what's being recorded to the whole recording, evenly.
-pub fn grain_time_seconds(value: f32) -> f32 {
+pub(crate) fn grain_time_seconds(value: f32) -> f32 {
     value / 255.0 * GRAIN_BUFFER_SECONDS
 }
 
@@ -460,7 +460,7 @@ const BEADS_MODE_NAMES: [&str; 2] = ["Granular", "Delay"];
 
 /// Whether Beads' grains or delay go by themselves or follow the song's steps, as the module does
 /// with a clock in its `SEED` input.
-pub const CLOCK_NAMES: [&str; 2] = ["Free", "Steps"];
+pub(crate) const CLOCK_NAMES: [&str; 2] = ["Free", "Steps"];
 
 /// Beads' four qualities, the module's, from the cleanest to the dirtiest, each holding a longer
 /// recording than the one before: 16 bits at 48 kHz, 12 bits at 32 kHz, 12 bits at 24 kHz, and
@@ -637,7 +637,7 @@ impl Beads {
 
 /// How far a frequency shifter's `Shift` goes either way, and its `Spread` at most, in Hz, as far
 /// as sst's and Surge's shifters go.
-pub const MOST_SHIFT_HERTZ: f32 = 1000.0;
+pub(crate) const MOST_SHIFT_HERTZ: f32 = 1000.0;
 /// The longest delay a frequency shifter has in its loop, in ms.
 pub const LONGEST_SHIFT_DELAY_MS: f32 = 1000.0;
 

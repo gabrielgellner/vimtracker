@@ -32,7 +32,7 @@ pub enum Speed {
 }
 
 /// What each speed is called, in order, as `RATE` lists them.
-pub const SPEED_NAMES: [&str; 12] = [
+pub(crate) const SPEED_NAMES: [&str; 12] = [
     "1/32", "1/16T", "1/16", "1/8T", "1/16D", "1/8", "1/4T", "1/8D", "1/4", "1/4D", "1/2", "1/1",
 ];
 
@@ -91,7 +91,8 @@ impl Speed {
     }
 
     /// The speed a name such as `1/8T` gives, ignoring case.
-    pub fn named(name: &str) -> Option<Self> {
+    #[cfg(test)]
+    pub(crate) fn named(name: &str) -> Option<Self> {
         let name = name.trim();
         Self::ALL
             .into_iter()
@@ -104,7 +105,7 @@ impl Speed {
     }
 
     /// What it plays at, against the song's sixteenths.
-    pub const fn meaning(self) -> &'static str {
+    pub(crate) const fn meaning(self) -> &'static str {
         match self {
             Self::ThirtySecond => "Twice as fast as the song's sixteenths",
             Self::SixteenthTriplet => "Three steps in two sixteenths",
@@ -123,7 +124,7 @@ impl Speed {
 
     /// How many of the song's steps a run of this many of a track's steps lasts, rounded up, as a
     /// triplet's don't always end on one.
-    pub const fn song_steps(self, steps: usize) -> usize {
+    pub(crate) const fn song_steps(self, steps: usize) -> usize {
         (steps as u64 * self.ticks()).div_ceil(TICKS_PER_STEP) as usize
     }
 }

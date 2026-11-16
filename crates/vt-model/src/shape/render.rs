@@ -221,7 +221,7 @@ impl ShapeColumn {
     /// The cell a value with a fine part leaves on a step, as [`write_exact`](Self::write_exact)
     /// writes it: notes of its own take the column's velocity, and a step without the FX slot
     /// takes nothing.
-    pub fn cell(self, step: &Step, value: u16) -> GenCell {
+    pub(crate) fn cell(self, step: &Step, value: u16) -> GenCell {
         let whole = (value >> 8) as u8;
         let note = whole.clamp(MIN_NOTE, MAX_NOTE);
         match self {

@@ -198,7 +198,7 @@ impl SettingId {
 
     /// What's on a track to choose from, in order: its own, its machine's, its slots' effects',
     /// in the modes they're in, each slot's with its bypass after them, and its FX columns' lanes'.
-    pub fn on_track(track: &Track) -> Vec<Self> {
+    pub(crate) fn on_track(track: &Track) -> Vec<Self> {
         let mut settings: Vec<Self> = TRACK_ORDER
             .into_iter()
             .filter(|id| id.exists_on(track))

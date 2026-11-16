@@ -111,7 +111,7 @@ impl Polarity {
     pub const ALL: [Self; 2] = [Self::Uni, Self::Bi];
 
     /// The name on screen.
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Uni => "Uni",
             Self::Bi => "Bi",
@@ -119,7 +119,7 @@ impl Polarity {
     }
 
     /// What it does, for a list to choose from.
-    pub fn meaning(self) -> &'static str {
+    pub(crate) fn meaning(self) -> &'static str {
         match self {
             Self::Uni => "one way from the setting",
             Self::Bi => "both ways around the setting",
@@ -131,15 +131,6 @@ impl Polarity {
         match self {
             Self::Uni => 0,
             Self::Bi => 1,
-        }
-    }
-
-    /// The other one.
-    #[must_use]
-    pub fn other(self) -> Self {
-        match self {
-            Self::Uni => Self::Bi,
-            Self::Bi => Self::Uni,
         }
     }
 
@@ -297,7 +288,7 @@ impl ModSlot {
     }
 
     /// Whether these are settings that can be set.
-    pub fn in_range(&self) -> bool {
+    pub(crate) fn in_range(&self) -> bool {
         self.depth.abs() <= MAX_DEPTH
             && self.adsr.in_range()
             && self.ahd.in_range()
@@ -323,7 +314,8 @@ impl ModSlot {
     }
 
     /// The name of its mode, for a type that has one.
-    pub fn mode_name(&self) -> Option<&'static str> {
+    #[cfg(test)]
+    pub(crate) fn mode_name(&self) -> Option<&'static str> {
         match self.kind {
             ModKind::Adsr => Some(self.adsr.curve.name()),
             ModKind::Ahd => Some(self.ahd.curve.name()),
@@ -410,7 +402,7 @@ impl ModSlot {
 
 /// What a new track's slots start as, today's three envelopes and three LFOs: the first envelope
 /// shapes each note and the second waits on the filter, and the rest start with nowhere to go.
-pub fn default_mods() -> [ModSlot; MOD_SLOTS] {
+pub(crate) fn default_mods() -> [ModSlot; MOD_SLOTS] {
     std::array::from_fn(default_mod)
 }
 
@@ -448,7 +440,7 @@ pub fn depth_of(value: f32) -> f32 {
 }
 
 /// A depth as text, with its sign, in hex like the values it moves.
-pub fn depth_text(depth: i16) -> String {
+pub(crate) fn depth_text(depth: i16) -> String {
     match depth {
         0 => "00".to_owned(),
         depth if depth < 0 => format!("-{:02X}", depth.unsigned_abs()),

@@ -14,7 +14,7 @@ use crate::step::{MAX_NOTE, MIN_NOTE};
 pub const MOST_OCTAVES: u8 = 4;
 
 /// The most notes an arpeggio goes round: three to an octave.
-pub const MOST_ARP_NOTES: usize = 3 * MOST_OCTAVES as usize;
+pub(crate) const MOST_ARP_NOTES: usize = 3 * MOST_OCTAVES as usize;
 
 /// How long each note of an arpeggio is, as a share of the track's step: a tick, a sixth of a step
 /// as `DEL` counts, or a note division as it would be on a track at `1/16`. On a track at another
@@ -197,7 +197,7 @@ impl Arpeggio {
     }
 
     /// Whether its settings can be played: from 1 to 4 octaves.
-    pub fn in_range(self) -> bool {
+    pub(crate) fn in_range(self) -> bool {
         (1..=MOST_OCTAVES).contains(&self.octaves)
     }
 }

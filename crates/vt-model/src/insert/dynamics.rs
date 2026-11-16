@@ -55,7 +55,7 @@ const GLUE_RELEASE_NAMES: [&str; 7] =
 /// Where `Auto` is among Glue's releases: after the set ones.
 pub const GLUE_AUTO_RELEASE: u8 = GLUE_RELEASE_NAMES.len() as u8 - 1;
 /// The most Glue's `Range` lets it turn down, in dB, where it starts, as Live's does.
-pub const MOST_RANGE_DB: f32 = 70.0;
+pub(crate) const MOST_RANGE_DB: f32 = 70.0;
 
 /// Glue's `Range` in dB, for a value on the `00` to `FF` scale: from 0 dB, where it doesn't turn
 /// down at all, to [`MOST_RANGE_DB`].
@@ -436,9 +436,9 @@ impl Compressor {
 }
 
 /// How much a limiter's `Input` turns up what goes in at most, in dB.
-pub const MOST_INPUT_DB: f32 = 24.0;
+pub(crate) const MOST_INPUT_DB: f32 = 24.0;
 /// How far below 0 dB a limiter's `Ceiling` goes.
-pub const LOWEST_CEILING_DB: f32 = -24.0;
+pub(crate) const LOWEST_CEILING_DB: f32 = -24.0;
 
 /// A limiter's drive in dB, for a value on the `00` to `FF` scale: from 0 dB to +24 dB.
 pub fn input_db(value: f32) -> f32 {

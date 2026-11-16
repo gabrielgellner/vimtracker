@@ -48,10 +48,10 @@ const CHANCE_JUMP: i32 = 10;
 const PHASE_NUDGE: i32 = 15;
 const PHASE_JUMP: i32 = 90;
 /// The longest `Run`, and how far a large step moves it.
-pub const MAX_RUN: u16 = 256;
+pub(crate) const MAX_RUN: u16 = 256;
 const RUN_JUMP: i32 = 4;
 /// The most rows an `Every` can skip.
-pub const MAX_EVERY: u16 = 256;
+pub(crate) const MAX_EVERY: u16 = 256;
 /// How far a large step moves a Euclidean `Where`'s hits or rotation, or an `Acid`'s notes.
 const EUCLID_JUMP: i32 = 4;
 /// The counts of cycles across the rows that `Rate`'s list offers after the times.
@@ -130,7 +130,7 @@ impl Context<'_> {
 }
 
 /// The wave rates a list offers: the note lengths, then whole numbers of cycles.
-pub fn listed_rates() -> Vec<WaveRate> {
+pub(crate) fn listed_rates() -> Vec<WaveRate> {
     note_rates()
         .into_iter()
         .map(WaveRate::Time)

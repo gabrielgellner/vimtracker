@@ -29,12 +29,12 @@ use crate::lfo::Shape;
 use crate::random::splitmix64;
 
 /// How many steps the point takes in a cycle of the LFO's rate.
-pub const STEPS_PER_CYCLE: f64 = 128.0;
+pub(crate) const STEPS_PER_CYCLE: f64 = 128.0;
 
 /// The most steps a working out takes the point on by. Further than this behind, as a slot that
 /// sat still for many cycles or `Hold` between notes far apart, it's seeded again where it should
 /// be, so the audio thread's work stays bounded: eight cycles.
-pub const MAX_CATCH_UP: i64 = 1024;
+pub(crate) const MAX_CATCH_UP: i64 = 1024;
 
 /// How many cycles a seed runs before it's heard, so it's on the attractor: one, and up to three
 /// more by the key, so tracks and slots start in different places.
@@ -109,7 +109,7 @@ impl System {
 
     /// Its chaotic parameter at a deform from -1 to 1: Lorenz's ρ, or Rössler's c. It goes evenly
     /// in ratio either side of the textbook value at none.
-    pub fn parameter(self, deform: f64) -> f64 {
+    pub(crate) fn parameter(self, deform: f64) -> f64 {
         let deform = deform.clamp(-1.0, 1.0);
         let (low, middle, high) = match self {
             Self::Lorenz => (24.8, 28.0, 220.0),

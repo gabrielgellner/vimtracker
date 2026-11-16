@@ -9,7 +9,7 @@ use crate::shape::{Follow, Mutations, Shape, Source, track_seed};
 /// The most branches a bloom grows, as Bloom's `Branches` knob goes to 7.
 pub const MAX_BRANCHES: u8 = 7;
 /// The highest phrase ID, as the grid shows two hex digits.
-pub const LAST_PHRASE: u32 = 0xFF;
+pub(crate) const LAST_PHRASE: u32 = 0xFF;
 
 /// Each path's word, in the order [`Path::ALL`] has them, for completing `:bloom`.
 pub const PATH_WORDS: [&str; 5] = ["forward", "trunk", "pendulum", "ping-pong", "shuffle"];
@@ -122,7 +122,7 @@ impl Bloom {
     /// The live shape of the `nth` branch, counted from 1, following `source`: a copy of it, FX
     /// and all, as both are on one track, with this bloom's mutations drawn from a seed of the
     /// branch's own.
-    pub fn branch(&self, source: Source, nth: usize) -> Shape {
+    pub(crate) fn branch(&self, source: Source, nth: usize) -> Shape {
         Shape::following(
             Follow {
                 source,

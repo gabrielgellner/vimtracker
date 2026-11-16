@@ -297,7 +297,7 @@ impl SettingId {
     }
 
     /// Every FX column's lane's settings, in order.
-    pub fn lanes() -> impl Iterator<Item = Self> {
+    pub(crate) fn lanes() -> impl Iterator<Item = Self> {
         (0..FX_SLOTS).flat_map(|slot| (0..LANE.len()).filter_map(move |at| Self::lane(slot, at)))
     }
 
@@ -468,20 +468,22 @@ impl Default for SettingSet {
 }
 
 impl SettingSet {
-    pub fn insert(&mut self, id: SettingId) {
+    pub(crate) fn insert(&mut self, id: SettingId) {
         self.0[id.index() / 64] |= 1 << (id.index() % 64);
     }
 
-    pub fn contains(&self, id: SettingId) -> bool {
+    #[cfg(test)]
+    pub(crate) fn contains(&self, id: SettingId) -> bool {
         self.0[id.index() / 64] & 1 << (id.index() % 64) != 0
     }
 
-    pub fn is_empty(&self) -> bool {
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
         self.0.iter().all(|word| *word == 0)
     }
 
     /// Put in each of some settings.
-    pub fn extend(&mut self, ids: impl IntoIterator<Item = SettingId>) {
+    pub(crate) fn extend(&mut self, ids: impl IntoIterator<Item = SettingId>) {
         for id in ids {
             self.insert(id);
         }

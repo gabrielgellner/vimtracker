@@ -48,7 +48,7 @@ impl DrumPart {
     pub const ALL: [Self; 3] = [Self::Kick, Self::Snare, Self::Hats];
 
     /// The name on screen, as the Rytm names its drums.
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Kick => "BD",
             Self::Snare => "SD",
@@ -57,7 +57,7 @@ impl DrumPart {
     }
 
     /// What it plays, for a list to choose from.
-    pub fn description(self) -> &'static str {
+    pub(crate) fn description(self) -> &'static str {
         match self {
             Self::Kick => "The kick's part",
             Self::Snare => "The snare's part",
@@ -155,7 +155,7 @@ impl Default for Grids {
 }
 
 impl Grids {
-    pub fn is_default(&self) -> bool {
+    pub(crate) fn is_default(&self) -> bool {
         *self == Self::default()
     }
 
@@ -166,7 +166,7 @@ impl Grids {
 
     /// A step's level on the map, for a part, before chaos: the four patterns around the place
     /// blended, as Grids' `ReadDrumMap` blends them.
-    pub fn level(&self, part: DrumPart, step: usize) -> u8 {
+    pub(crate) fn level(&self, part: DrumPart, step: usize) -> u8 {
         let (i, j) = (usize::from(self.x >> 6), usize::from(self.y >> 6));
         // The place within its square of the map, from 0 to 252.
         let (across, down) = (self.x << 2, self.y << 2);
@@ -202,7 +202,7 @@ impl Grids {
     }
 
     /// Whether a row plays, and whether it's accented.
-    pub fn hit(&self, part: DrumPart, seed: u64, offset: usize) -> Option<bool> {
+    pub(crate) fn hit(&self, part: DrumPart, seed: u64, offset: usize) -> Option<bool> {
         let level = self.heard(part, seed, offset);
         let threshold = !self.density[part.index()];
         (level > threshold).then_some(level > ACCENT_LEVEL)

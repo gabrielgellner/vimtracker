@@ -18,9 +18,9 @@ pub const STEPS: usize = 16;
 /// The furthest either way a value goes, in its destination's units at a depth of `+FF`.
 pub const MAX_STEP: i16 = 0xFF;
 /// The most `Mutate` goes, in percent.
-pub const MAX_MUTATE: u8 = 100;
+pub(crate) const MAX_MUTATE: u8 = 100;
 /// How many of a track's steps a `Tick` is a sixth of, as `DEL` counts.
-pub const TICKS_PER_STEP_SHARE: u64 = 6;
+pub(crate) const TICKS_PER_STEP_SHARE: u64 = 6;
 
 /// How a Steps slot moves through its values against the track's notes: its mode, in its title.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -48,7 +48,7 @@ impl StepsMode {
     }
 
     /// What it does, for a list to choose from.
-    pub fn meaning(self) -> &'static str {
+    pub(crate) fn meaning(self) -> &'static str {
         match self {
             Self::Trig => "each note starts it at its start",
             Self::Free => "runs from the song's position",
@@ -99,7 +99,7 @@ impl StepRate {
     };
 
     /// Whether this is a rate that can be set.
-    pub fn in_range(self) -> bool {
+    pub(crate) fn in_range(self) -> bool {
         Self::ALL.contains(&self)
     }
 
@@ -117,7 +117,7 @@ impl StepRate {
     /// The rate at a place on the registry's scale, with any fine part as the fraction, the
     /// inverse of [`StepRate::place`]: the nearest there. `Pass` stays as it is.
     #[must_use]
-    pub fn placed(self, value: f32) -> Self {
+    pub(crate) fn placed(self, value: f32) -> Self {
         if self == Self::Pass {
             return self;
         }
@@ -215,7 +215,7 @@ impl Default for Loop {
 
 impl Loop {
     /// Every way, in the order `+` goes through them.
-    pub const ALL: [Self; STEPS + 3] = {
+    pub(crate) const ALL: [Self; STEPS + 3] = {
         let mut all = [Self::Once; STEPS + 3];
         let mut at = 0;
         while at < STEPS {
@@ -228,7 +228,7 @@ impl Loop {
     };
 
     /// What it does, for a list to choose from.
-    pub fn meaning(self) -> &'static str {
+    pub(crate) fn meaning(self) -> &'static str {
         match self {
             Self::Once => "plays to the end and holds the last",
             Self::From(_) => "plays once, then loops from a step",
@@ -309,7 +309,7 @@ impl Default for Steps {
 
 impl Steps {
     /// Whether these are settings that can be set.
-    pub fn in_range(&self) -> bool {
+    pub(crate) fn in_range(&self) -> bool {
         self.values.iter().all(|value| value.abs() <= MAX_STEP)
             && (1..=STEPS as u8).contains(&self.length)
             && usize::from(self.start) < STEPS
@@ -403,7 +403,7 @@ impl Steps {
     /// Its start as the phase setting's value, with a coarse byte and a fine one, where a step's
     /// share of `FF00` picks it: the middle of its share of the length, so the value comes back
     /// as the same step.
-    pub fn start_value(&self) -> u16 {
+    pub(crate) fn start_value(&self) -> u16 {
         let length = self.played_count() as f64;
         let start = f64::from(self.start).min(length - 1.0);
         ((start + 0.5) / length * f64::from(0xFF00_u16)).round() as u16

@@ -59,7 +59,7 @@ pub struct EffectSpec {
 
 /// The FX page's columns, left to right, each from the top, by the keys of the settings in them.
 /// A key the effect doesn't show in its mode leaves its place empty.
-pub type Columns = &'static [&'static [&'static str]];
+pub(crate) type Columns = &'static [&'static [&'static str]];
 
 /// Which of its settings an effect shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,7 +126,7 @@ pub struct Params {
 
 impl Params {
     /// An empty slot's.
-    pub const NONE: Self = Self {
+    pub(crate) const NONE: Self = Self {
         kept: &[],
         shown: &[],
     };
@@ -166,7 +166,7 @@ impl Params {
     }
 
     /// Whether the one at `kept` among those the effect keeps is shown.
-    pub fn shows(self, kept: usize) -> bool {
+    pub(crate) fn shows(self, kept: usize) -> bool {
         self.shown.iter().any(|&at| usize::from(at) == kept)
     }
 
@@ -225,7 +225,7 @@ impl DoubleEndedIterator for ParamsIter {
 impl ExactSizeIterator for ParamsIter {}
 
 /// Every effect's description, by [`EffectKind`].
-pub const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
+pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
     EffectSpec {
         key: "distort",
         name: "Distort",

@@ -89,7 +89,7 @@ pub enum TrackKind {
 
 impl TrackKind {
     /// The fixed tracks, in order: the groups, the returns and the master.
-    pub const FIXED: [Self; FIXED_TRACKS] = {
+    pub(crate) const FIXED: [Self; FIXED_TRACKS] = {
         let mut kinds = [Self::Master; FIXED_TRACKS];
         let mut group = 0;
         while group < MAX_GROUPS {
@@ -124,7 +124,7 @@ impl TrackKind {
     }
 
     /// Where it is among the fixed tracks, counted from the first after the sound tracks.
-    pub fn fixed_place(self) -> Option<usize> {
+    pub(crate) fn fixed_place(self) -> Option<usize> {
         Self::FIXED.iter().position(|kind| *kind == self)
     }
 }
@@ -821,7 +821,7 @@ pub fn reset_name(reset: Option<u16>) -> String {
 /// A track's own `Reset` from what's typed: `off`, a number of steps, in hex after `0x`, or of
 /// bars, such as `2bar`, from 1 step to [`MAX_TRACK_RESET`]. The outer `None` is for text that
 /// isn't one.
-pub fn reset_named(text: &str) -> Option<Option<u16>> {
+pub(crate) fn reset_named(text: &str) -> Option<Option<u16>> {
     let text = text.trim().to_ascii_lowercase();
     if text == "off" {
         return Some(None);
@@ -1046,7 +1046,7 @@ impl Song {
     /// Give a song any fixed tracks it lacks, each in its place after the sound tracks: all of them
     /// for a song built without, or the groups past those it was saved with once `MAX_GROUPS` is
     /// raised.
-    pub fn ensure_fixed_tracks(&mut self) {
+    pub(crate) fn ensure_fixed_tracks(&mut self) {
         let first = self
             .tracks
             .iter()
@@ -1105,7 +1105,7 @@ impl Song {
     /// again. A step plays the entry its own `SMP` locks, or else its track's `Sample`. A number
     /// past the last slice played the last, so it follows the last. An LFO's depth on `SLI` is a
     /// distance rather than a slice, so it's left as it is.
-    pub fn renumber_slices(&mut self, number: u8, renumbered: &[u8]) {
+    pub(crate) fn renumber_slices(&mut self, number: u8, renumbered: &[u8]) {
         let Some(last) = renumbered.len().checked_sub(1) else {
             return;
         };
@@ -1302,7 +1302,7 @@ impl Song {
     }
 
     /// Add a section after this position, with no chains.
-    pub fn insert_section(&mut self, at: usize) {
+    pub(crate) fn insert_section(&mut self, at: usize) {
         let section = Section {
             chains: vec![None; self.tracks.len()],
             ..Section::default()

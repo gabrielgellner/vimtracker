@@ -14,10 +14,10 @@ use crate::settings::{Kind, SettingId, Units};
 use crate::step::{FxCommand, FxSlot};
 
 /// The highest chance, `F`: always.
-pub const ALWAYS: u8 = 0x0F;
+pub(crate) const ALWAYS: u8 = 0x0F;
 
 /// How far one step of an `RND`'s range moves a lock on the `00` to `FF` scale.
-pub const LOCK_STEP: u16 = 0x10;
+pub(crate) const LOCK_STEP: u16 = 0x10;
 
 /// An `RND`'s value: the chance `x` in `F` that it varies, and how far `y` either way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,7 +36,7 @@ impl Variation {
     }
 
     /// Its chance as a percentage, to the nearest whole one.
-    pub fn percent(self) -> u32 {
+    pub(crate) fn percent(self) -> u32 {
         (u32::from(self.chance) * 100 + u32::from(ALWAYS) / 2) / u32::from(ALWAYS)
     }
 }
@@ -111,14 +111,14 @@ impl Roll {
     }
 
     /// Somewhere from `most` below to `most` above, each as likely, nothing among them.
-    pub fn within(self, most: u16) -> i16 {
+    pub(crate) fn within(self, most: u16) -> i16 {
         below(splitmix64(self.0), 2 * u64::from(most) + 1) as i16 - most as i16
     }
 }
 
 /// How far one step of an `RND`'s range moves a lock of this setting: a choice on a list, a
 /// semitone on a setting in semitones, and `10` on the rest.
-pub fn lock_step(id: SettingId) -> u16 {
+pub(crate) fn lock_step(id: SettingId) -> u16 {
     match id.entry().kind {
         Kind::Stepped { .. }
         | Kind::Continuous {

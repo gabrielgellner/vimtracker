@@ -20,7 +20,7 @@ use crate::analysis::{Pyramid, SILENCE_DB};
 
 /// How many frames apart the onset function's values are: one for each of the pyramid's finest
 /// buckets, about 6 ms at 44.1 kHz.
-pub const ONSET_HOP: usize = 256;
+pub(crate) const ONSET_HOP: usize = 256;
 
 /// How many frames each spectrum is of, centred on its value's frame: about 23 ms at 44.1 kHz.
 const WINDOW: usize = 1024;
@@ -52,7 +52,7 @@ pub const DEFAULT_SENS: u8 = 50;
 
 /// A sound has decayed where its level has fallen this far, in dB, below its peak, or into
 /// silence.
-pub const DECAY_DB: f32 = 30.0;
+pub(crate) const DECAY_DB: f32 = 30.0;
 
 /// Placing an onset to the frame: the attack is looked for in blocks of this many frames, each
 /// against the loudest of the frames before it.
@@ -72,7 +72,7 @@ pub struct Onset {
 
 /// The least strength an onset needs to count at a `Sens`: 1, the strongest alone, at 0, falling
 /// by a thousand times to [`MOST_SENS`], so each step of 10 is the same ratio.
-pub fn sens_threshold(sens: u8) -> f32 {
+pub(crate) fn sens_threshold(sens: u8) -> f32 {
     let sens = f32::from(sens.min(MOST_SENS)) / f32::from(MOST_SENS);
     10_f32.powf(-3.0 * sens)
 }
@@ -88,7 +88,7 @@ fn mono(samples: &[f32], channels: usize) -> Vec<f32> {
 
 /// The onset function of interleaved samples: one value every [`ONSET_HOP`] frames, from the
 /// first frame, each how much the spectrum centred there grew from the one before.
-pub fn onset_function(samples: &[f32], channels: usize) -> Vec<f32> {
+pub(crate) fn onset_function(samples: &[f32], channels: usize) -> Vec<f32> {
     let channels = channels.max(1);
     let mono = mono(samples, channels);
     let hops = mono.len().div_ceil(ONSET_HOP);
@@ -132,7 +132,7 @@ pub fn onset_function(samples: &[f32], channels: usize) -> Vec<f32> {
 }
 
 /// Where the sounds in interleaved samples start, at a rate, each with its strength, in order.
-pub fn find_onsets(samples: &[f32], channels: usize, rate: u32) -> Vec<Onset> {
+pub(crate) fn find_onsets(samples: &[f32], channels: usize, rate: u32) -> Vec<Onset> {
     let channels = channels.max(1);
     let flux = onset_function(samples, channels);
     let highest = flux.iter().copied().fold(0.0_f32, f32::max);
@@ -233,7 +233,7 @@ fn attack(samples: &[f32], channels: usize, hop: usize) -> u64 {
 }
 
 /// The onsets at least as strong as a `Sens` keeps, as frames.
-pub fn kept(onsets: &[Onset], sens: u8) -> impl Iterator<Item = u64> + '_ {
+pub(crate) fn kept(onsets: &[Onset], sens: u8) -> impl Iterator<Item = u64> + '_ {
     let threshold = sens_threshold(sens);
     onsets
         .iter()
@@ -268,7 +268,7 @@ pub fn decay(pyramid: &Pyramid, start: u64, until: u64) -> u64 {
 
 /// How far under a file's peak counts as the silence between sounds, for `:slice silence`, unless
 /// that's under [`SILENCE_DB`], so a hiss under the hits is silence too.
-pub const QUIET_UNDER_PEAK_DB: f32 = 48.0;
+pub(crate) const QUIET_UNDER_PEAK_DB: f32 = 48.0;
 
 /// The shortest silence that parts two sounds, so a dip inside one doesn't.
 pub const MIN_SILENCE_SECONDS: f64 = 0.05;

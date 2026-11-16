@@ -13,7 +13,7 @@ pub const MIN_NOTE: u8 = 12;
 /// Highest note the format can write, `G-8`.
 pub const MAX_NOTE: u8 = 127;
 /// Middle C, MIDI note 60 at 261.63 Hz, which is `C-3`.
-pub const MIDDLE_C: u8 = 60;
+pub(crate) const MIDDLE_C: u8 = 60;
 /// The octave MIDI note 0 is in. Octaves are numbered as Ableton Live, Logic and Cubase number
 /// them, from -2 at MIDI 0, so middle C is `C-3` and a note reads the same here as in Live.
 const OCTAVE_OF_NOTE_ZERO: i16 = -2;
@@ -34,7 +34,7 @@ pub(crate) const NOTE_NAMES_BELOW_ZERO: [&str; 12] = [
 ];
 
 /// The octave a MIDI note is in, as its name shows it: 3 for middle C.
-pub fn octave_of(midi: u8) -> i8 {
+pub(crate) fn octave_of(midi: u8) -> i8 {
     (i16::from(midi) / 12 + OCTAVE_OF_NOTE_ZERO) as i8
 }
 
@@ -86,11 +86,9 @@ pub enum FxCommand {
 
 impl FxCommand {
     pub const VOL: Self = Self::Set(SettingId::VOL);
-    pub const PAN: Self = Self::Set(SettingId::PAN);
     pub const CUT: Self = Self::Set(SettingId::CUT);
-    pub const RES: Self = Self::Set(SettingId::RES);
-    pub const SEND_A: Self = Self::Set(SettingId::SEND_A);
-    pub const SEND_B: Self = Self::Set(SettingId::SEND_B);
+    #[cfg(test)]
+    pub(crate) const RES: Self = Self::Set(SettingId::RES);
 
     /// Every event, in the order a list shows them.
     pub const EVENTS: [Self; 9] = [
@@ -148,7 +146,7 @@ impl FxCommand {
     }
 
     /// The name songs store it by: an event's own, or a setting's key.
-    pub fn key(self) -> String {
+    pub(crate) fn key(self) -> String {
         match self {
             Self::Set(id) => id.key(),
             event => event.name().to_lowercase(),
@@ -156,7 +154,7 @@ impl FxCommand {
     }
 
     /// The command a stored key names.
-    pub fn from_key(key: &str) -> Option<Self> {
+    pub(crate) fn from_key(key: &str) -> Option<Self> {
         Self::EVENTS
             .into_iter()
             .find(|event| event.key() == key)
@@ -178,13 +176,13 @@ impl FxCommand {
     }
 
     /// The highest value this takes with its fine part, which is `00` at the top.
-    pub fn highest_value(self) -> u16 {
+    pub(crate) fn highest_value(self) -> u16 {
         u16::from(self.highest()) << 8
     }
 
     /// Whether its value can glide to the next: a continuous setting's can, the level scale's
     /// with no fine part too, and a list's jumps.
-    pub fn glides(self) -> bool {
+    pub(crate) fn glides(self) -> bool {
         matches!(
             self,
             Self::Set(id) if matches!(id.entry().kind, Kind::Continuous { .. })
@@ -192,7 +190,7 @@ impl FxCommand {
     }
 
     /// Whether the value stays in force after this step: a setting's does, an event's doesn't.
-    pub fn holds(self) -> bool {
+    pub(crate) fn holds(self) -> bool {
         matches!(self, Self::Set(_))
     }
 }

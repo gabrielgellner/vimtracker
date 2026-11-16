@@ -139,7 +139,7 @@ impl Phrase {
     }
 
     /// The rows of its loop one round of its order visits, in turn, with this deal if it's dealt.
-    pub fn round(&self, deal: Deal) -> Round<'_> {
+    pub(crate) fn round(&self, deal: Deal) -> Round<'_> {
         Round::new(self.loop_steps(), self.order, deal)
     }
 
@@ -181,7 +181,7 @@ impl Phrase {
 
     /// The rows a generator would cover now: its own, as many as are stored, or its FX column's
     /// lane, or none if that column has no lane.
-    pub fn span_rows(&self, generator: &Generator) -> Option<StepRange> {
+    pub(crate) fn span_rows(&self, generator: &Generator) -> Option<StepRange> {
         let stored = self.steps.len();
         match generator.span {
             Span::Rows { first, last } => {
@@ -216,7 +216,7 @@ impl Phrase {
 
     /// Give a live generator a new shape, and write it, a `Follow` from `source`. Returns false if
     /// there's no such one.
-    pub fn reshape_generator(
+    pub(crate) fn reshape_generator(
         &mut self,
         index: usize,
         shape: Shape,
@@ -231,7 +231,7 @@ impl Phrase {
 
     /// Have a live generator held by its track's macros as this shape, or let go with none,
     /// writing its column again if that changes what's heard, a `Follow` from `source`.
-    pub fn hold_generator(
+    pub(crate) fn hold_generator(
         &mut self,
         index: usize,
         held: Option<Shape>,
@@ -245,7 +245,7 @@ impl Phrase {
 
     /// Have a live generator on the Note column go through this scale, writing its notes again,
     /// a `Follow` from `source`: false if it isn't on that column or has the scale already.
-    pub fn rescale_generator(
+    pub(crate) fn rescale_generator(
         &mut self,
         index: usize,
         scale: Scale,
@@ -259,7 +259,7 @@ impl Phrase {
 
     /// Write a live `Follow` again from its source's loop, which an edit changed: true if that
     /// changed its rows.
-    pub fn refollow(&mut self, index: usize, source: &[Step]) -> bool {
+    pub(crate) fn refollow(&mut self, index: usize, source: &[Step]) -> bool {
         let steps = &mut self.steps;
         self.generators
             .get_mut(index)
@@ -267,12 +267,12 @@ impl Phrase {
     }
 
     /// Apply a live generator: its values stay, as plain ones.
-    pub fn apply_generator(&mut self, index: usize) -> Option<Generator> {
+    pub(crate) fn apply_generator(&mut self, index: usize) -> Option<Generator> {
         (index < self.generators.len()).then(|| self.generators.remove(index))
     }
 
     /// Take a live generator away, and put back what was under its cells.
-    pub fn remove_generator(&mut self, index: usize) -> Option<Generator> {
+    pub(crate) fn remove_generator(&mut self, index: usize) -> Option<Generator> {
         let generator = self.apply_generator(index)?;
         generator.restore(&mut self.steps);
         Some(generator)
@@ -281,7 +281,7 @@ impl Phrase {
     /// Follow an edit to the phrase: a live generator whose cells the edit changed by hand is
     /// applied, and the rest rerender where the edit changed what they read or moved their lane.
     /// A `Follow` rerenders from the loop `sources` gives for what it follows.
-    pub fn follow_generators<'a>(&mut self, sources: impl Fn(Source) -> Option<&'a [Step]>) {
+    pub(crate) fn follow_generators<'a>(&mut self, sources: impl Fn(Source) -> Option<&'a [Step]>) {
         let ranges: Vec<Option<StepRange>> = self
             .generators
             .iter()
@@ -343,7 +343,7 @@ impl Phrase {
     /// How many steps a round of its order lasts before its walk repeats: a pass for an order that
     /// visits each row once, and for a dealt one, whose round is a pass, and longer for one that
     /// visits some rows twice.
-    pub fn round_time(&self) -> usize {
+    pub(crate) fn round_time(&self) -> usize {
         if self.order.is_dealt() {
             return self.time();
         }
@@ -363,7 +363,7 @@ impl Phrase {
     /// pulses, and which visit of the round it is. The walk carries on from one pass to the next,
     /// so a row whose pulses run past the end of a pass plays the rest of them at the start of the
     /// next. Skipped rows are passed over, and a loop that takes no time has none.
-    pub fn walk_at(&self, pass: usize, time: usize, deal: Deal) -> Option<Visit> {
+    pub(crate) fn walk_at(&self, pass: usize, time: usize, deal: Deal) -> Option<Visit> {
         let round = self.round_time();
         if time >= self.time() || round == 0 {
             return None;
@@ -387,7 +387,7 @@ impl Phrase {
     /// Where in a pass, this many since its chain started, the walk plays a row at one of its
     /// pulses, or its last if it has fewer: the place nearest to `near`, if the pass plays the row
     /// at all.
-    pub fn place_in_pass(
+    pub(crate) fn place_in_pass(
         &self,
         row: usize,
         pulse: usize,
@@ -456,7 +456,7 @@ impl Phrase {
     }
 
     /// Store at least this many steps, up to the most a phrase keeps. The loop stays where it is.
-    pub fn grow_to(&mut self, stored: usize) {
+    pub(crate) fn grow_to(&mut self, stored: usize) {
         self.store_up_to(stored.min(MAX_PHRASE_STEPS));
     }
 
@@ -505,7 +505,7 @@ impl Phrase {
 
     /// Move the loop's steps later, wrapping round within it. Negative moves them earlier, and steps
     /// outside the loop stay where they are. All the way round moves nothing, and changes nothing.
-    pub fn rotate(&mut self, by: isize) {
+    pub(crate) fn rotate(&mut self, by: isize) {
         let (start, length) = (self.start, self.length);
         let by = by.rem_euclid(length.max(1) as isize) as usize;
         if by == 0 {
@@ -522,7 +522,7 @@ impl Phrase {
     }
 
     /// Double the loop by repeating it. Steps after it move down rather than being overwritten.
-    pub fn double(&mut self) {
+    pub(crate) fn double(&mut self) {
         // Its live generators are applied, as the rows after the loop move.
         self.generators.clear();
         let copy = self.loop_steps().to_vec();

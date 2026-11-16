@@ -38,10 +38,10 @@ use crate::song::{FilterMode, FilterType, Machine, Track};
 /// The format presets are written in. A preset from a later format isn't read; one from this
 /// format missing a setting takes the setting's default, so presets outlive the builds that made
 /// them, and one naming a setting this build doesn't know isn't read, and says which.
-pub const PRESET_FORMAT: u32 = 1;
+pub(crate) const PRESET_FORMAT: u32 = 1;
 
 /// The most characters a preset's name has, with the folders before it.
-pub const MAX_PRESET_NAME: usize = 64;
+pub(crate) const MAX_PRESET_NAME: usize = 64;
 
 /// What a preset is, which decides its folder.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -400,7 +400,7 @@ impl SoundPreset {
     /// Make a track's sound and patch this one's, its sampler playing the bank entry `sample`,
     /// leaving its place in the song and its phrases alone. The settings of the other voices it
     /// remembers are kept, as switching voice keeps them. The slots all start in.
-    pub fn apply(&self, track: &mut Track, sample: u8) {
+    pub(crate) fn apply(&self, track: &mut Track, sample: u8) {
         let sound = &self.sound;
         let machine = sound.machine;
         sound.copy_to(track);

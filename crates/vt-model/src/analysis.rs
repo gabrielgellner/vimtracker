@@ -22,7 +22,7 @@ pub const ANALYSIS_VERSION: u32 = 2;
 
 /// The finest buckets of the pyramid are `2^FINEST` frames, 256, as Audacity's finest summary is.
 /// A view closer than that reads the frames themselves.
-pub const FINEST: u32 = 8;
+pub(crate) const FINEST: u32 = 8;
 
 /// The level, in dBFS, below which a frame is silence, for `:trim`.
 pub const SILENCE_DB: f32 = -60.0;
@@ -66,7 +66,7 @@ impl MinMax {
     }
 
     /// The furthest from silence either way, or 0 for nothing.
-    pub fn peak(self) -> f32 {
+    pub(crate) fn peak(self) -> f32 {
         if self.is_empty() {
             0.0
         } else {
@@ -126,12 +126,12 @@ impl Pyramid {
         }
     }
 
-    pub fn channels(&self) -> usize {
+    pub(crate) fn channels(&self) -> usize {
         self.channels
     }
 
     /// The file's length in frames.
-    pub fn frames(&self) -> u64 {
+    pub(crate) fn frames(&self) -> u64 {
         self.frames
     }
 
@@ -146,12 +146,12 @@ impl Pyramid {
     }
 
     /// How many buckets a level has.
-    pub fn buckets(&self, level: usize) -> usize {
+    pub(crate) fn buckets(&self, level: usize) -> usize {
         self.levels.get(level).map_or(0, |buckets| buckets.len()) / self.channels
     }
 
     /// One bucket of one channel.
-    pub fn bucket(&self, level: usize, bucket: usize, channel: usize) -> MinMax {
+    pub(crate) fn bucket(&self, level: usize, bucket: usize, channel: usize) -> MinMax {
         self.levels[level][bucket * self.channels + channel]
     }
 

@@ -52,7 +52,7 @@ impl Source {
     }
 
     /// One of its values as text: a note's name, or hex as a velocity and a roll are written.
-    pub fn text(self, value: u8) -> String {
+    pub(crate) fn text(self, value: u8) -> String {
         match self {
             Self::Note => Note::On(value).to_string(),
             Self::Velocity | Self::Random => format!("{value:02X}"),
@@ -146,14 +146,14 @@ impl Default for Tracking {
 
 impl Tracking {
     /// Whether these are settings that can be set.
-    pub fn in_range(&self) -> bool {
+    pub(crate) fn in_range(&self) -> bool {
         Source::ALL
             .iter()
             .all(|source| self.bounds_of(*source).within(source.span()))
     }
 
     /// The map of a source.
-    pub fn bounds_of(&self, source: Source) -> Bounds {
+    pub(crate) fn bounds_of(&self, source: Source) -> Bounds {
         match source {
             Source::Note => self.note,
             Source::Velocity => self.velocity,
@@ -188,7 +188,8 @@ impl Tracking {
 
     /// How much of the depth a note gives, from 0 to 1.
     #[inline]
-    pub fn level(&self, note: u8, velocity: u8, roll: u8) -> f32 {
+    #[cfg(test)]
+    pub(crate) fn level(&self, note: u8, velocity: u8, roll: u8) -> f32 {
         self.bounds()
             .level(f32::from(self.value(note, velocity, roll)))
     }

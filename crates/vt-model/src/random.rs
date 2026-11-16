@@ -11,14 +11,14 @@
 //! for a stateless value from a key and an index, `splitmix64_nth`.
 
 /// SplitMix64's increment, 2^64 over the golden ratio, odd.
-pub const GOLDEN_GAMMA: u64 = 0x9E37_79B9_7F4A_7C15;
+pub(crate) const GOLDEN_GAMMA: u64 = 0x9E37_79B9_7F4A_7C15;
 
 /// The value SplitMix64 gives next from `state`: the state stepped by `GOLDEN_GAMMA`, then mixed
 /// by its finaliser, which spreads every bit of what goes in over what comes out. As a stateless
 /// mix, the same value always gives the same result. From Sebastiano Vigna's `splitmix64.c`
 /// (<https://prng.di.unimi.it/splitmix64.c>), after Steele, Lea and Flood's `SplittableRandom`.
 #[inline]
-pub const fn splitmix64(state: u64) -> u64 {
+pub(crate) const fn splitmix64(state: u64) -> u64 {
     let mut z = state.wrapping_add(GOLDEN_GAMMA);
     z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
     z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
@@ -29,7 +29,7 @@ pub const fn splitmix64(state: u64) -> u64 {
 /// stepping through the ones before: a stateless number for a row or a cycle, so one row's value
 /// doesn't depend on any other's.
 #[inline]
-pub const fn splitmix64_nth(seed: u64, n: u64) -> u64 {
+pub(crate) const fn splitmix64_nth(seed: u64, n: u64) -> u64 {
     splitmix64(seed.wrapping_add(n.wrapping_mul(GOLDEN_GAMMA)))
 }
 
@@ -110,7 +110,7 @@ impl<const MULTIPLIER: u64, const INCREMENT: u64> Lcg64<MULTIPLIER, INCREMENT> {
 
 /// Knuth's multiplier for MMIX, which PCG's state steps by too (*The Art of Computer
 /// Programming*, vol. 2, 3rd ed., §3.3.4, table 1).
-pub const MMIX_MULTIPLIER: u64 = 6_364_136_223_846_793_005;
+pub(crate) const MMIX_MULTIPLIER: u64 = 6_364_136_223_846_793_005;
 
 /// Knuth's MMIX generator, his multiplier with his increment 1442695040888963407 (*The Art of
 /// Computer Programming*, vol. 2, 3rd ed., §3.3.4, table 1).
@@ -123,7 +123,7 @@ pub type MuslLcg = Lcg64<MMIX_MULTIPLIER, 1>;
 /// The multiplier the engine's PCG32 has always used. It matches PCG's, `MMIX_MULTIPLIER`, only
 /// in its first seven digits, but it's still 1 modulo 4, so its state still runs through all 2^64
 /// values, and every saved seed's effects and chances play by it, so it stays.
-pub const ENGINE_PCG_MULTIPLIER: u64 = 6_364_136_299_858_216_321;
+pub(crate) const ENGINE_PCG_MULTIPLIER: u64 = 6_364_136_299_858_216_321;
 
 /// PCG's XSH RR generator, 64 bits of state giving 32 at a time, with the multiplier its state
 /// steps by. Its seeding and output are Melissa O'Neill's `pcg32_srandom_r` and `pcg32_random_r`
@@ -201,7 +201,7 @@ impl Xorshift32 {
 
     /// The next value.
     #[inline]
-    pub const fn next_u32(&mut self) -> u32 {
+    pub(crate) const fn next_u32(&mut self) -> u32 {
         self.state ^= self.state << 13;
         self.state ^= self.state >> 17;
         self.state ^= self.state << 5;

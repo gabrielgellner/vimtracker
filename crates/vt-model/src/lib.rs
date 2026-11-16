@@ -1,5 +1,7 @@
 //! Song data, actions and project files for vimtracker.
 
+#![warn(unreachable_pub)]
+
 pub mod accumulator;
 pub mod action;
 pub mod analysis;
