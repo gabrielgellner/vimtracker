@@ -70,7 +70,9 @@ pub(crate) trait SlotEffect: Sized {
     }
     /// Empty what it keeps, before the pool hands it out again.
     fn clear(&mut self);
-    /// How many quiet frames in a row mean nothing's left in it.
+    /// How many quiet frames in a row mean nothing's left in it, which is when it stops working
+    /// and a quiet row may jump it by `settle_quiet`: `u32::MAX` while what it holds can always
+    /// come back, frozen or looping.
     fn quiet_frames(&self, rate: u32) -> u32;
     /// Move what goes by the frame rather than by what it's done to where it is this many frames
     /// in, as taking its settings does.
