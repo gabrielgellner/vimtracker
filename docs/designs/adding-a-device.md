@@ -142,15 +142,14 @@ keep can have a file of its own instead, as `supersaw.rs` and `four_op.rs` do, n
    own, `shape/<name>.rs`, as a `Shape` field, `#[serde(default, skip_serializing_if = ...)]`, with
    its default in `impl Default for Shape`. Add it to `Shape::draws` if it draws from the seed. The
    compiler asks for the row and the default.
-2. **`vt-model/src/shape/params.rs`**: a `GenParam` for each new setting; its place in `ALL`
-   (`params/spec.rs`), which is the panel's order; and its `GEN_PARAMS` row (`params/table.rs`), in
-   the enum's order, as `spec` finds a row by the variant; the row's `units` is a `Reading`, the
-   one vocabulary every family's settings read in. The Gen page and the Roto read the setting
-   through `GenParam::described`, which needs nothing new. Then its cases in `params/spec.rs`'s
-   `exists_for`, `shown` and `reset`, which the compiler asks for, and in `grid`, `typed`, `choices`
-   and `chosen` where it needs them, which it doesn't. A row in the wrong place shows as keys
-   moving in `gen_params.txt`. One macro writing these from a single list is left for the next
-   time a generator is added (#809's item 6).
+2. **`vt-model/src/shape/params/table.rs`**: one entry in `gen_params!` for each new setting, its
+   variant with what it is and its `GenParamSpec` row, at its place on the shape panel. The macro
+   writes the `GenParam` variant, its place in `ALL` and its row in `GEN_PARAMS` from that one
+   entry (#873). The row's `units` is a `Reading`, the one vocabulary every family's settings
+   read in, and the Gen page and the Roto read the setting through `GenParam::described`, which
+   needs nothing new. Then its cases in `params/spec.rs`'s `exists_for`, `shown` and `reset`,
+   which the compiler asks for, and in `grid`, `typed`, `choices` and `chosen` where it needs
+   them, which it doesn't. An entry in the wrong place shows as keys moving in `gen_params.txt`.
 3. **`vt-model/src/shape/render.rs`**: its arm in the match on each row, or a render of its own
    before it, as `tonnetz::render` is, with an `unreachable!` arm. The compiler asks for the arm.
 4. **The engine**: nothing, unless it carries something from one pass to the next, as `Ring` and

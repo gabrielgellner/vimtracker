@@ -325,7 +325,8 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     bounds, steps and a `get` and `set` of it as a number, and one `FillSpec` row each in
     `shape.rs`'s `FILLS`, by `FillKind`, with its name, meaning and its own settings' places on
     the Gen page (decision 342). The effects' enums, both `ALL`s and their forwarding are written
-    from one list by `insert.rs`'s `effects!` (#784). [Adding a device](adding-a-device.md) lists
+    from one list by `insert.rs`'s `effects!` (#784), and `GenParam`, its `ALL` and `GEN_PARAMS`
+    from one by `params/table.rs`'s `gen_params!` (#873). [Adding a device](adding-a-device.md) lists
     every place a new effect, voice, generator or mod type takes, what the compiler catches and
     which pins show it.
 
