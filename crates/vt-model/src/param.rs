@@ -527,14 +527,15 @@ impl Descriptor {
                 240 if axes => "z".to_owned(),
                 _ => format!("{value}°"),
             },
-            Reading::Rate => String::new(),
             Reading::Fade => usize::try_from(value)
                 .ok()
                 .and_then(|at| Fade::ALL.get(at))
                 .map_or_else(String::new, ToString::to_string),
             Reading::Mapped(source) => source.text(value as u8),
-            // A generator's setting shows itself, by its shape.
-            Reading::Column
+            // A rate reads as its holder says, and a generator's setting shows itself, by its
+            // shape.
+            Reading::Rate
+            | Reading::Column
             | Reading::Bend
             | Reading::Interval
             | Reading::Rows
