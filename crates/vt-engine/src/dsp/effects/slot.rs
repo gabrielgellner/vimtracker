@@ -1447,6 +1447,47 @@ mod tests {
     }
 
     #[test]
+    fn a_delay_on_a_quiet_row_jumps_only_as_far_back_as_its_quiet_has_shown_empty() {
+        // Its slot stops ringing once it's given nothing for its reach, which shows that much of
+        // its buffer is empty, but not what's further back: what it played before. A time moved
+        // longer while the track was quiet, jumped to on a quiet row, would read straight into
+        // that, a step (#929). It glides there instead, as it did before, and a time moved
+        // shorter jumps.
+        let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
+        let sidechains = SidechainFrames::default();
+        let at = |time: u8| {
+            Insert::Delay(Delay {
+                time,
+                feedback: 0,
+                mix: 0xFF,
+                ..Delay::DEFAULT
+            })
+        };
+        // From an eighth to a bar, and to a sixteenth.
+        let (eighth, bar, sixteenth) = (9, 17, 6);
+        for (to, jumps) in [(bar, false), (sixteenth, true)] {
+            let mut state = after_a_tone(at(eighth), at(eighth));
+            for _ in 0..RATE * 10 {
+                if !state.ringing(RATE) {
+                    break;
+                }
+                state.process([0.0; 2], smoothing, RATE, &sidechains);
+            }
+            let mut pool = MemoryPool::for_song(&vt_model::song::Song::new(1), RATE);
+            state.hold(at(to), &mut pool, AT_120, 0);
+            assert!(!state.ringing(RATE), "the track settles it");
+            state.settle();
+            let Some(Memory::Delay(delay)) = &state.memory else {
+                unreachable!("a delay keeps a long buffer");
+            };
+            let set = f64::from(vt_model::lfo::DIVISION_TICKS[usize::from(to)]) * 25.0;
+            assert_eq!(delay.frames() == set, jumps, "to {to}");
+            let first = plays_on(state.memory.as_ref().unwrap(), 0.005);
+            assert!(first < SILENT, "to {to}, it reads {first} at once");
+        }
+    }
+
+    #[test]
     fn an_echo_clouds_and_beads_can_hold_a_sound_their_slot_hears_as_quiet() {
         // So none of them is settled on a quiet row (#929): with `Echo` down or `Blend` all dry,
         // what goes round in them goes on with none of it coming out, and stays once the slot
