@@ -75,10 +75,18 @@ and `Reset` down the right.
 | Reset | On, it starts from zero each note; off, it goes on |
 
 **The notes' own shape** is the first envelope on `Vol`, whichever slot that is,
-so it has no depth and shows `--`. A new track's is `Mod 1`. Switched out, notes
-have the plain shape a new track's have, from the next one; it doesn't hand the
-job on to a later envelope. Make `Mod 1` an LFO and the next envelope on `Vol`
-shapes the notes instead, or none does.
+so it has no depth and shows `--`. A new track's is `Mod 1`. Make `Mod 1` an LFO
+and the next envelope on `Vol` shapes the notes instead, or with none, they have
+the plain shape a new track's have.
+
+**Switched out**, from the next note, the notes have no shape at all: the sound
+passes through at full from its first frame and through its release, and a note
+ends as its machine settles. It doesn't hand the job on to a later envelope. That's
+for a machine with an envelope of its own, `4-op`, `6-op` or `Acid`, which then
+shapes its notes alone and rings out its own release, where the notes' shape would
+cut it off with its own. A machine with none, such as `CSaw` or `VA`, starts at
+full and stops dead as its gate closes, as an oscillator with no amp would. A new
+note, a choke, `KIL` and stopping still fade a sounding note out.
 
 `Mod 2` starts on `Cut` with no depth, so raise its depth to open the filter on
 each note. `Mod 3` starts on `---`, with `Mod 2`'s decay, ready to be given
