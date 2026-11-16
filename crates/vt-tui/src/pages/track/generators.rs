@@ -463,7 +463,7 @@ impl App {
     pub(crate) fn pick_gen_column(&mut self, field: Field, command: Option<FxCommand>) {
         if let Err(picker) = self.services.make_live(field, command, self.modes.view) {
             if let Some(picker) = picker {
-                self.show_picker(picker);
+                self.show_picker(*picker);
             }
             return;
         }

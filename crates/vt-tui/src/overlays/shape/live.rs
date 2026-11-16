@@ -48,7 +48,7 @@ impl Services {
         field: Field,
         command: Option<FxCommand>,
         view: View,
-    ) -> Result<(), Option<Picker>> {
+    ) -> Result<(), Option<Box<Picker>>> {
         let selection = self.loop_selection(field);
         let panel = match ShapePanel::new(selection, field, command, self, view) {
             Ok(panel) => panel,
@@ -60,7 +60,9 @@ impl Services {
                 let (_, items) =
                     self.fx_command_items(track, |command| Pick::GenCommand { field, command });
                 self.status = "Choose the command to write on the empty FX column".to_owned();
-                return Err(Some(Picker::new("FX commands", items).searching("")));
+                return Err(Some(Box::new(
+                    Picker::new("FX commands", items).searching(""),
+                )));
             }
         };
         self.apply(&panel.live_action());
