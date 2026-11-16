@@ -130,7 +130,7 @@ impl App {
     pub(crate) fn open_marks_picker(&mut self) {
         self.modes.count = None;
         let number = self.marked_entry();
-        let items = self.mark_items(number, Pick::Mark);
+        let items = self.services.mark_items(number, Pick::Mark);
         if items.is_empty() {
             self.services.status = match self.song().bank.get(number) {
                 Some(_) => format!(

@@ -21,6 +21,7 @@ use vt_model::step::{FxCommand, FxSlot, Mark};
 use crate::app::App;
 use crate::overlays::command::parse::Line;
 use crate::overlays::picker::{Item, KitChoice, Pick, Picker, Preview};
+use crate::services::Services;
 
 /// What a kit says about one of its sounds, for the entry it becomes.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -587,39 +588,6 @@ impl App {
         self.services.status = format!("Removed {count} {noun} nothing plays: u to undo");
     }
 
-    /// The bank as a list: `Off`, then each entry with its file beside it and its waveform shown,
-    /// for choosing what the current track plays or what a step's `SMP` locks. The track's list
-    /// ends with a way to add a file.
-    fn bank_items(&self, pick: impl Fn(u8) -> Pick) -> Vec<Item> {
-        let song = self.song();
-        let off = Item::new("00  Off", pick(0)).meaning("No sample");
-        let entries = song.bank.iter().map(|(number, entry)| {
-            let source = entry.source();
-            let file = source.map_or("", |source| {
-                source.path.rsplit('/').next().unwrap_or(&source.path)
-            });
-            let item =
-                Item::new(format!("{number:02X}  {}", entry.title()), pick(number)).meaning(file);
-            match source {
-                Some(source) => item.preview(Preview::Sample(project::resolve_sample(
-                    self.services.folder.as_deref(),
-                    &source.path,
-                ))),
-                None => item,
-            }
-        });
-        std::iter::once(off).chain(entries).collect()
-    }
-
-    /// Where a number is in the bank's list, which has `Off` first.
-    fn bank_place(&self, number: u8) -> usize {
-        self.song()
-            .bank
-            .iter()
-            .position(|(at, _)| at == number)
-            .map_or(0, |at| at + 1)
-    }
-
     /// Choose what the current track's sampler plays, from the bank. With nothing in the bank yet,
     /// the explorer opens to add a file.
     pub(crate) fn open_bank_picker(&mut self) {
@@ -634,26 +602,15 @@ impl App {
             .tracks
             .get(track)
             .map_or(0, |track| track.sample());
-        let mut items = self.bank_items(|number| Pick::BankSample { track, number });
+        let mut items = self
+            .services
+            .bank_items(|number| Pick::BankSample { track, number });
         items.push(
             Item::new("Add a file", Pick::Line(Line::Sample(None)))
                 .meaning(":sample, from the kit and your folders"),
         );
-        let at = self.bank_place(current);
+        let at = self.services.bank_place(current);
         self.show_picker(Picker::new("Bank", items).opened_on(Some(at)));
-    }
-
-    /// Choose the sample a step's `SMP` locks, from the bank.
-    pub(crate) fn open_sample_lock_picker(&mut self, slot: usize) {
-        self.modes.count = None;
-        let current = self
-            .services
-            .current_slot(slot)
-            .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SAMPLE)))
-            .map_or(0, |cell| cell.coarse());
-        let items = self.bank_items(|number| Pick::SampleLock { slot, number });
-        let at = self.bank_place(current);
-        self.show_picker(Picker::new("Sample lock", items).opened_on(Some(at)));
     }
 
     /// Put a chosen bank entry in a slot as an `SMP`, keeping its mark.
@@ -672,5 +629,40 @@ impl App {
                 mark,
             },
         ));
+    }
+}
+
+impl Services {
+    /// The bank as a list: `Off`, then each entry with its file beside it and its waveform shown,
+    /// for choosing what the current track plays or what a step's `SMP` locks. The track's list
+    /// ends with a way to add a file.
+    pub(crate) fn bank_items(&self, pick: impl Fn(u8) -> Pick) -> Vec<Item> {
+        let song = self.song();
+        let off = Item::new("00  Off", pick(0)).meaning("No sample");
+        let entries = song.bank.iter().map(|(number, entry)| {
+            let source = entry.source();
+            let file = source.map_or("", |source| {
+                source.path.rsplit('/').next().unwrap_or(&source.path)
+            });
+            let item =
+                Item::new(format!("{number:02X}  {}", entry.title()), pick(number)).meaning(file);
+            match source {
+                Some(source) => item.preview(Preview::Sample(project::resolve_sample(
+                    self.folder.as_deref(),
+                    &source.path,
+                ))),
+                None => item,
+            }
+        });
+        std::iter::once(off).chain(entries).collect()
+    }
+
+    /// Where a number is in the bank's list, which has `Off` first.
+    pub(crate) fn bank_place(&self, number: u8) -> usize {
+        self.song()
+            .bank
+            .iter()
+            .position(|(at, _)| at == number)
+            .map_or(0, |at| at + 1)
     }
 }

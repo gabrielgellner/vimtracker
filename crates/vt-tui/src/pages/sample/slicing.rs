@@ -424,43 +424,6 @@ impl App {
             .collect()
     }
 
-    /// An entry's slices as a list, each with its number, the letters naming it and where it
-    /// starts, as `03  a  0.214 s`, or the entry as one, `00`, if it has none.
-    fn slice_items(&self, number: u8, pick: impl Fn(u8) -> Pick) -> Vec<Item> {
-        let Some(entry) = self.song().bank.get(number) else {
-            return vec![Item::new("00", pick(0)).meaning("No sample to slice")];
-        };
-        let points = &entry.edit.points;
-        let file = self.services.file_of(entry);
-        let length = file.map_or(u64::MAX, |(_, length)| length);
-        // The letters line up in a column as wide as the most any slice has, if any has one.
-        let letters = |at: usize| points.marks_of(at).into_iter().collect::<String>();
-        let widest = (0..points.slices.len())
-            .map(|at| letters(at).len())
-            .max()
-            .unwrap_or(0);
-        (0..points.slice_count())
-            .map(|at| {
-                let frames = points.slice_frames(at, length);
-                let named = match widest {
-                    0 => String::new(),
-                    widest => format!("  {:<widest$}", letters(at)),
-                };
-                let label = match file {
-                    Some((rate, _)) => format!("{at:02X}{named}  {}", time(frames.start, rate)),
-                    None => format!("{at:02X}{named}"),
-                };
-                let item = Item::new(label, pick(at as u8));
-                match file {
-                    Some((rate, _)) => {
-                        item.meaning(format!("{} long", time(frames.end - frames.start, rate)))
-                    }
-                    None => item,
-                }
-            })
-            .collect()
-    }
-
     /// Choose the slice the current track's sampler plays, from its sample's slices.
     pub(crate) fn open_slice_picker(&mut self) {
         self.modes.count = None;
@@ -471,58 +434,13 @@ impl App {
             .tracks
             .get(track)
             .map_or(0, |track| track.setting(SettingId::SLICE));
-        let items = self.slice_items(number, |value| Pick::Setting {
+        let items = self.services.slice_items(number, |value| Pick::Setting {
             track,
             setting: SettingId::SLICE,
             value,
         });
         let at = usize::from(current).min(items.len() - 1);
         self.show_picker(Picker::new("Slice", items).opened_on(Some(at)));
-    }
-
-    /// Choose the slice a step's `SLI` locks, from the slices of the sample the step plays: first
-    /// by each letter naming one, as `'a  03  0.214 s`, which keeps to its slice as slices before
-    /// it come and go, and then by number.
-    pub(crate) fn open_slice_lock_picker(&mut self, slot: usize) {
-        self.modes.count = None;
-        let current = self
-            .services
-            .current_slot(slot)
-            .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SLICE)));
-        let number = self.services.step_entry();
-        let mut items = self.mark_items(number, |letter| Pick::SliceMarkLock { slot, letter });
-        let named = items.len();
-        items.extend(self.slice_items(number, |number| Pick::SliceLock { slot, number }));
-        let at = match current.map(|cell| (cell.slice_mark(), cell.coarse())) {
-            Some((Some(letter), _)) => items[..named]
-                .iter()
-                .position(|item| item.pick == Pick::SliceMarkLock { slot, letter }),
-            Some((None, number)) => Some(named + usize::from(number).min(items.len() - named - 1)),
-            None => Some(named),
-        };
-        self.show_picker(Picker::new("Slice lock", items).opened_on(at));
-    }
-
-    /// Each letter naming a slice of an entry, in the order of their slices, as `'a  03  0.214 s`.
-    pub(crate) fn mark_items(&self, number: u8, pick: impl Fn(char) -> Pick) -> Vec<Item> {
-        let Some(entry) = self.song().bank.get(number) else {
-            return Vec::new();
-        };
-        let points = &entry.edit.points;
-        let file = self.services.file_of(entry);
-        let length = file.map_or(u64::MAX, |(_, length)| length);
-        points
-            .marks_in_order()
-            .into_iter()
-            .map(|(letter, at)| {
-                let frames = points.slice_frames(at, length);
-                let label = match file {
-                    Some((rate, _)) => format!("'{letter}  {at:02X}  {}", time(frames.start, rate)),
-                    None => format!("'{letter}  {at:02X}"),
-                };
-                Item::new(label, pick(letter)).meaning(format!("The slice named {letter}"))
-            })
-            .collect()
     }
 
     /// The mark an `SLI` in a slot has, if it has one, to keep as its value changes.
@@ -596,6 +514,65 @@ impl App {
 }
 
 impl Services {
+    /// An entry's slices as a list, each with its number, the letters naming it and where it
+    /// starts, as `03  a  0.214 s`, or the entry as one, `00`, if it has none.
+    pub(crate) fn slice_items(&self, number: u8, pick: impl Fn(u8) -> Pick) -> Vec<Item> {
+        let Some(entry) = self.song().bank.get(number) else {
+            return vec![Item::new("00", pick(0)).meaning("No sample to slice")];
+        };
+        let points = &entry.edit.points;
+        let file = self.file_of(entry);
+        let length = file.map_or(u64::MAX, |(_, length)| length);
+        // The letters line up in a column as wide as the most any slice has, if any has one.
+        let letters = |at: usize| points.marks_of(at).into_iter().collect::<String>();
+        let widest = (0..points.slices.len())
+            .map(|at| letters(at).len())
+            .max()
+            .unwrap_or(0);
+        (0..points.slice_count())
+            .map(|at| {
+                let frames = points.slice_frames(at, length);
+                let named = match widest {
+                    0 => String::new(),
+                    widest => format!("  {:<widest$}", letters(at)),
+                };
+                let label = match file {
+                    Some((rate, _)) => format!("{at:02X}{named}  {}", time(frames.start, rate)),
+                    None => format!("{at:02X}{named}"),
+                };
+                let item = Item::new(label, pick(at as u8));
+                match file {
+                    Some((rate, _)) => {
+                        item.meaning(format!("{} long", time(frames.end - frames.start, rate)))
+                    }
+                    None => item,
+                }
+            })
+            .collect()
+    }
+
+    /// Each letter naming a slice of an entry, in the order of their slices, as `'a  03  0.214 s`.
+    pub(crate) fn mark_items(&self, number: u8, pick: impl Fn(char) -> Pick) -> Vec<Item> {
+        let Some(entry) = self.song().bank.get(number) else {
+            return Vec::new();
+        };
+        let points = &entry.edit.points;
+        let file = self.file_of(entry);
+        let length = file.map_or(u64::MAX, |(_, length)| length);
+        points
+            .marks_in_order()
+            .into_iter()
+            .map(|(letter, at)| {
+                let frames = points.slice_frames(at, length);
+                let label = match file {
+                    Some((rate, _)) => format!("'{letter}  {at:02X}  {}", time(frames.start, rate)),
+                    None => format!("'{letter}  {at:02X}"),
+                };
+                Item::new(label, pick(letter)).meaning(format!("The slice named {letter}"))
+            })
+            .collect()
+    }
+
     /// The bank entry the current track's sampler plays, before any step chooses another.
     pub(crate) fn track_sample_number(&self) -> u8 {
         self.song()
@@ -606,7 +583,7 @@ impl Services {
     }
 
     /// The bank entry the step under the cursor plays.
-    fn step_entry(&self) -> u8 {
+    pub(crate) fn step_entry(&self) -> u8 {
         let step = self
             .phrase_here()
             .and_then(|phrase| phrase.steps().get(self.cursor.step));
