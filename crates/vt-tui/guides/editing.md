@@ -909,7 +909,8 @@ wheel round.
 
 After a quick swipe, macOS goes on scrolling for about a second once the fingers
 lift. A tick the other way in that time is taken as its bounce and let go,
-unless three come in a row or the wheel was still for a moment first.
+unless three come in a row or the wheel was still for a moment first. On a list
+or a toggle that's so after any turn.
 
 One turn is one undo: `u` takes back everything from the first tick until the
 wheel stops for a moment, its momentum included, or a key is pressed. `.` still
