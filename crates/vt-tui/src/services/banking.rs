@@ -10,7 +10,7 @@ use vt_model::bank::{Bank, BankEntry, ContentHash, PlayParams, Source};
 use vt_model::constants::{MAX_GROUPS, MAX_SOUND_TRACKS};
 use vt_model::kit::load_kit;
 use vt_model::label::GROUP_NAME_CHARS;
-use vt_model::project;
+use vt_model::project::{self, ProjectError};
 use vt_model::samples::SamplePool;
 use vt_model::seeding;
 use vt_model::selection::Field;
@@ -142,7 +142,10 @@ impl App {
         bank: &mut Bank,
         pool: &mut SamplePool,
     ) -> Result<Banked, String> {
-        let stored = self.store_sample(file).map_err(|error| error.to_string())?;
+        let stored = self
+            .services
+            .store_sample(file)
+            .map_err(|error| error.to_string())?;
         let resolved = project::resolve_sample(self.services.folder.as_deref(), &stored);
         let bytes =
             fs::read(&resolved).map_err(|error| format!("{}: {error}", resolved.display()))?;
@@ -263,39 +266,6 @@ impl App {
             said = format!("{said}. {}", capitalised(&problem));
         }
         self.services.status = said;
-    }
-
-    /// Find a sound preset's bank entry in the bank, or load its file to add it: the number it's at,
-    /// and the edit that adds it if it's new. Its file is kept as a sample added from where it is
-    /// would be, inside the project by its place there, and an entry the same in every way is the
-    /// same entry, so loading a preset twice adds it once.
-    pub(crate) fn bank_preset_sample(
-        &mut self,
-        entry: &BankEntry,
-    ) -> Result<(u8, Option<Action>), String> {
-        let mut entry = entry.clone();
-        for source in entry.sources_mut() {
-            let file = Path::new(&source.path);
-            let bytes = fs::read(file).map_err(|error| format!("{}: {error}", file.display()))?;
-            source.hash = ContentHash::of(&bytes);
-            source.path = self.store_sample(file).map_err(|error| error.to_string())?;
-        }
-        if let Some((number, _)) = self.song().bank.iter().find(|(_, own)| **own == entry) {
-            return Ok((number, None));
-        }
-        let number = self.song().bank.free().ok_or_else(|| FULL.to_owned())?;
-        let mut pool = SamplePool::clone(&self.services.samples);
-        for source in entry.sources() {
-            let resolved = project::resolve_sample(self.services.folder.as_deref(), &source.path);
-            pool.load(&source.path, &resolved, self.services.rate)
-                .map_err(|error| error.to_string())?;
-        }
-        self.services.samples = Arc::new(pool);
-        let add = Action::SetBankEntry {
-            number,
-            entry: Some(entry),
-        };
-        Ok((number, Some(add)))
     }
 
     /// Put a kit's sounds, each as its file and what the kit says of it, in a copy of the bank,
@@ -635,6 +605,51 @@ impl App {
 }
 
 impl Services {
+    /// How a song refers to a sample: where it is, or relative to the project if it's inside,
+    /// so a bundled project can be moved. `:w` to a new folder is what copies samples.
+    pub(crate) fn store_sample(&self, source: &Path) -> Result<String, ProjectError> {
+        let full = source.canonicalize().map_err(|error| ProjectError::Io {
+            path: source.display().to_string(),
+            source: error,
+        })?;
+        let project = self.folder.as_deref().and_then(|f| f.canonicalize().ok());
+        let inside = project.as_deref().and_then(|f| full.strip_prefix(f).ok());
+        Ok(inside.unwrap_or(&full).display().to_string())
+    }
+
+    /// Find a sound preset's bank entry in the bank, or load its file to add it: the number it's at,
+    /// and the edit that adds it if it's new. Its file is kept as a sample added from where it is
+    /// would be, inside the project by its place there, and an entry the same in every way is the
+    /// same entry, so loading a preset twice adds it once.
+    pub(crate) fn bank_preset_sample(
+        &mut self,
+        entry: &BankEntry,
+    ) -> Result<(u8, Option<Action>), String> {
+        let mut entry = entry.clone();
+        for source in entry.sources_mut() {
+            let file = Path::new(&source.path);
+            let bytes = fs::read(file).map_err(|error| format!("{}: {error}", file.display()))?;
+            source.hash = ContentHash::of(&bytes);
+            source.path = self.store_sample(file).map_err(|error| error.to_string())?;
+        }
+        if let Some((number, _)) = self.song().bank.iter().find(|(_, own)| **own == entry) {
+            return Ok((number, None));
+        }
+        let number = self.song().bank.free().ok_or_else(|| FULL.to_owned())?;
+        let mut pool = SamplePool::clone(&self.samples);
+        for source in entry.sources() {
+            let resolved = project::resolve_sample(self.folder.as_deref(), &source.path);
+            pool.load(&source.path, &resolved, self.rate)
+                .map_err(|error| error.to_string())?;
+        }
+        self.samples = Arc::new(pool);
+        let add = Action::SetBankEntry {
+            number,
+            entry: Some(entry),
+        };
+        Ok((number, Some(add)))
+    }
+
     /// The bank as a list: `Off`, then each entry with its file beside it and its waveform shown,
     /// for choosing what the current track plays or what a step's `SMP` locks. The track's list
     /// ends with a way to add a file.

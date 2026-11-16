@@ -358,7 +358,9 @@ impl App {
     /// done with, as Vim's `:'<,'>` ends Visual, and a line the history couldn't keep says so if
     /// what it ran said nothing.
     pub(crate) fn command_line_key(&mut self, key: Key, now: Instant) {
-        self.overlays.command.presets = self.presets_here();
+        self.overlays.command.presets = self
+            .track_page
+            .presets_here(self.modes.view, &self.services);
         let outcome = crate::overlays::give(
             &mut self.overlays.command,
             &self.table,
