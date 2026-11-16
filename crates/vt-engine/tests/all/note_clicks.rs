@@ -35,6 +35,9 @@ enum Source {
     /// A sampler playing a sine as long, whose own top of the spectrum is next to nothing, so a
     /// step in its level stands out.
     SampledSine,
+    /// A sampler playing white noise, which no two notes share a phase of, as different sounds
+    /// don't.
+    SampledNoise,
 }
 
 /// How a track's notes are shaped and timed.
@@ -84,6 +87,23 @@ fn sample_pool(wave: fn(f32) -> f32) -> Arc<SamplePool> {
     Arc::new(pool)
 }
 
+/// White noise as long, the same each run.
+fn noise_pool() -> Arc<SamplePool> {
+    let mut seed = 0x9E37_79B9_u32;
+    let frames = (0..RATE as usize * 40)
+        .map(|_| {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            let s = 0.5 * (seed as f32 / u32::MAX as f32 * 2.0 - 1.0);
+            [s, s]
+        })
+        .collect();
+    let mut pool = SamplePool::default();
+    pool.insert("s", SampleData { frames });
+    Arc::new(pool)
+}
+
 /// A one-track song of these rows, looped.
 fn song(case: &Case, rows: &[String]) -> Song {
     let mut song = Song::new(1);
@@ -91,7 +111,7 @@ fn song(case: &Case, rows: &[String]) -> Song {
     song.millibpm = case.bpm * 1000;
     match case.source {
         Source::Synth(voice) => song.tracks[0].machine = Machine::Plaits(voice),
-        Source::SampledSaw | Source::SampledSine => {
+        Source::SampledSaw | Source::SampledSine | Source::SampledNoise => {
             song.sample_on(0, "s");
         }
     }
@@ -117,6 +137,7 @@ fn render(case: &Case, rows: &[String], steps: usize) -> Vec<f32> {
         Source::SampledSaw => sample_pool(|at| 2.0 * at - 1.0),
         // Half a frame in, so no frame is exactly nothing, which a drop to silence would be taken for.
         Source::SampledSine => sample_pool(|at| (std::f32::consts::TAU * (at + 0.0025)).sin()),
+        Source::SampledNoise => noise_pool(),
         Source::Synth(_) => Arc::new(SamplePool::default()),
     };
     let version = Arc::new(Published::new(Arc::new(song), pool));
@@ -214,6 +235,10 @@ struct Change {
     offset: f64,
     /// The level against the tied one in the last 0.5 ms of the 3, where a note is back.
     back_db: f64,
+    /// The lowest and the highest level against the tied one, of each 0.5 ms of the first 6 ms,
+    /// where two voices overlap: a dip, and a bump where they add up.
+    low_db: f64,
+    high_db: f64,
     /// The level against the tied one, each 0.5 ms of the first 3 ms, for the eye.
     levels: String,
     /// The offset against the tied one, every 4 ms of the first 40, in hundredths of the level.
@@ -229,6 +254,9 @@ fn change(new: &Folded, tied: &Folded) -> Change {
     let top = (0..near)
         .map(|w| decibels(new.top[w] / tied.top[w]))
         .fold(f64::MIN, f64::max);
+    let overlap: Vec<f64> = (0..ms(6.0))
+        .map(|w| decibels(new.level[w] / tied.level[w]))
+        .collect();
     let middle = median(&tied.level);
     let moved: Vec<f64> = (0..ms(40.0))
         .map(|w| (new.offset[w] - tied.offset[w]) / middle)
@@ -239,6 +267,8 @@ fn change(new: &Folded, tied: &Folded) -> Change {
             / f64::from(RATE),
         top_db: top,
         back_db: level.last().copied().unwrap_or(0.0),
+        low_db: overlap.iter().copied().fold(f64::MAX, f64::min),
+        high_db: overlap.iter().copied().fold(f64::MIN, f64::max),
         offset: moved.iter().fold(0.0_f64, |most, o| most.max(o.abs())),
         levels: level
             .iter()
@@ -264,9 +294,16 @@ fn measure(name: &str, case: Case, notes: &[String]) -> Change {
     let tied = fold(&render(&case, &rows(notes, true), steps), case.step());
     let change = change(&new, &tied);
     println!(
-        "{name:<30} dip {:>6.1} dB, {:>3.1} ms 3 dB down, top {:>+5.1} dB, offset {:.2} | \
-         level, 0.5 ms each: {} | offset %, 4 ms each: {}",
-        change.dip_db, change.dip_ms, change.top_db, change.offset, change.levels, change.offsets
+        "{name:<30} dip {:>6.1} dB, {:>3.1} ms 3 dB down, top {:>+5.1} dB, offset {:.2}, \
+         {:+.1} to {:+.1} dB in 6 ms | level, 0.5 ms each: {} | offset %, 4 ms each: {}",
+        change.dip_db,
+        change.dip_ms,
+        change.top_db,
+        change.offset,
+        change.low_db,
+        change.high_db,
+        change.levels,
+        change.offsets
     );
     change
 }
@@ -403,34 +440,48 @@ fn random_16ths_carried_with_reset_dip_to_silence_without_a_click() {
 }
 
 #[test]
-fn random_16ths_on_a_new_voice_dip_no_more_than_a_db() {
-    // A sampler starts each note again, a voice of its own, under the old one's fade: a quarter
-    // of a cosine over 4 ms, so the two together hold their level. Each new note starts its saw
-    // at the bottom, where the tie is anywhere in its cycle, which is most of what's left of the
-    // dip and of the offset, so they're held to the level only. The same note again lines up with
-    // the tie frame for frame, so there the fade is all there is.
+fn a_new_voice_crossfades_at_equal_power() {
+    // A sampler starts each note again, a voice of its own, rising on a quarter sine as the old
+    // one falls on a quarter cosine, over 2.7 ms: their powers add to one, so two sounds that
+    // share no phase, such as noise and different notes, hold their level (decision 368).
     let notes = random_notes();
-    let random = measure(
-        "Sampled saw, nothing tweaked",
-        Case::plain(Source::SampledSaw),
+    let same = vec!["C-3".to_string(); 16];
+    let noise = measure(
+        "(a) sampled noise, random notes",
+        Case::plain(Source::SampledNoise),
         &notes,
     );
-    let same = vec!["C-3".to_string(); 16];
+    // The same steady tone struck again in phase is where two voices add most: up to 3 dB, for
+    // as long as the overlap, the cost of holding the level of different sounds.
     let again = measure(
-        "Sampled saw, the same note",
+        "(b) sampled saw, the same note",
         Case::plain(Source::SampledSaw),
         &same,
     );
-    assert!(
-        random.dip_db > -1.1 && random.top_db < 3.0,
-        "random notes dip {:.1} dB, top {:+.1} dB",
-        random.dip_db,
-        random.top_db
+    // Each new note starts its saw at the bottom, where the tie is anywhere in its cycle, which
+    // is most of what's left of its dip.
+    let saw = measure(
+        "Sampled saw, random notes",
+        Case::plain(Source::SampledSaw),
+        &notes,
     );
     assert!(
-        again.dip_db > -0.5,
-        "the same note dips {:.1} dB",
-        again.dip_db
+        noise.low_db > -1.25 && noise.high_db < 1.25,
+        "different sounds go from {:+.1} to {:+.1} dB",
+        noise.low_db,
+        noise.high_db
+    );
+    assert!(
+        again.high_db < 3.5 && again.low_db > -1.0,
+        "the same tone goes from {:+.1} to {:+.1} dB",
+        again.low_db,
+        again.high_db
+    );
+    assert!(
+        saw.low_db > -2.5 && saw.top_db < 3.0,
+        "random notes dip {:.1} dB, top {:+.1} dB",
+        saw.low_db,
+        saw.top_db
     );
 }
 
@@ -505,8 +556,11 @@ fn a_blip_with_no_decay_ends_without_a_click() {
             ..Case::plain(source)
         };
         let out = render(&case, &rows(&notes, false), 16);
+        // A sampler's notes held would each rise over the last one's fade, so they're held for
+        // half a step, and each starts after silence with its attack as set, as a blip does.
         let full = Case {
             adsr: Some(adsr(1, 0, 100, 0)),
+            gate: matches!(source, Source::SampledSine).then_some(0x80),
             ..case
         };
         let held = render(&full, &rows(&notes, false), 16);

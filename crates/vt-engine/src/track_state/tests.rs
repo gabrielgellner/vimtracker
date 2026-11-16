@@ -1,3 +1,4 @@
+use vt_model::constants::CUT_FADE_FRAMES;
 use vt_model::modulation::ModKind;
 use vt_model::song::{Machine, level_gain};
 use vt_model::step::Mark;
@@ -385,4 +386,88 @@ fn a_voice_stays_under_twenty_kilobytes() {
 fn a_tracks_state_stays_under_160_kilobytes() {
     let size = size_of::<TrackState>();
     assert!(size <= 160 * 1024, "{size} bytes");
+}
+
+/// A sampler's note at full, shaped by an ADSR with this attack.
+fn note_with_attack(attack_ms: u16) -> NoteOn {
+    use vt_model::envelope::{Adsr, Envelope};
+    NoteOn {
+        sample: 0,
+        synth: None,
+        note: 60,
+        velocity: 0x7F,
+        gain: 1.0,
+        entry: None,
+        slice: 0,
+        span: None,
+        cut: Cut::default(),
+        accent: false,
+        shape: Envelope::Adsr(Adsr {
+            attack_ms,
+            ..Adsr::note_shape()
+        }),
+        release_after: None,
+    }
+}
+
+/// A note with this attack on a sample held at half, after a note that's sounded for 1,000
+/// frames or after silence: its track's voice and the tail it cut, frame by frame.
+fn cutting(attack_ms: u16, after_a_note: bool) -> Vec<(f32, f32)> {
+    use vt_model::sample::SampleData;
+    use vt_model::samples::Frames;
+    let rate = 48_000;
+    let data = SampleData {
+        frames: vec![[0.5, 0.5]; rate as usize],
+    };
+    let mut state = from_the_top(&Track::default());
+    if after_a_note {
+        state.start(note_with_attack(1), rate);
+        for _ in 0..1_000 {
+            state.voice.next(Some(Frames::from(&data)));
+        }
+    }
+    state.start(note_with_attack(attack_ms), rate);
+    assert_eq!(state.tail.active(), after_a_note);
+    (0..2_000)
+        .map(|_| {
+            let voice = state.voice.next(Some(Frames::from(&data)))[0];
+            (voice, state.tail.next(Some(Frames::from(&data)))[0])
+        })
+        .collect()
+}
+
+#[test]
+fn a_note_cutting_another_keeps_an_attack_longer_than_the_fade_as_set() {
+    // 3 ms is longer than the 2.7 ms fade: the note plays its attack as set, to the bit, while
+    // the note it cut falls under it (decision 368).
+    let cut = cutting(3, true);
+    let alone = cutting(3, false);
+    for (at, ((voice, tail), (after_silence, _))) in cut.iter().zip(&alone).enumerate() {
+        assert_eq!(voice.to_bits(), after_silence.to_bits(), "at {at}");
+        if at >= CUT_FADE_FRAMES as usize {
+            assert_eq!(*tail, 0.0, "the tail is gone by {at}");
+        }
+    }
+    assert!(
+        cut[CUT_FADE_FRAMES as usize / 2].1 > 0.3,
+        "the tail falls under it"
+    );
+}
+
+#[test]
+fn a_note_cutting_another_rises_at_equal_power_over_a_shorter_attack() {
+    // A 1 ms attack sits inside the fade: the note rises over the whole fade instead, as the one
+    // it cut falls, their powers adding to the note's own (decision 368).
+    let cut = cutting(1, true);
+    let alone = cutting(1, false);
+    for (at, (voice, tail)) in cut.iter().enumerate() {
+        let power = voice * voice + tail * tail;
+        assert!((power - 0.25).abs() < 1e-4, "{power} at {at}");
+        if at >= CUT_FADE_FRAMES as usize {
+            assert_eq!(*voice, 0.5, "at full from {at}");
+        }
+    }
+    // Slower than the attack as set, which is at full by 48 frames.
+    assert!(cut[48].0 < 0.45, "{}", cut[48].0);
+    assert_eq!(alone[48].0, 0.5);
 }
