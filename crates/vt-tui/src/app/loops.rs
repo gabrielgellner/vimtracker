@@ -9,7 +9,8 @@ use vt_model::song::Lane;
 use crate::overlays::command::parse::LaneLine;
 use vt_model::step::{MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note};
 
-use super::{App, Momentary};
+use super::App;
+use crate::services::Momentary;
 
 impl App {
     pub(super) fn double(&mut self) {

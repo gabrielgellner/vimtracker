@@ -611,7 +611,7 @@ Song                               song.ron, refused unless format_version is FO
     history (`history.ron`), the explorer's last folders (`places.ron`) and the tags given to
     sample files by hand, by their content hash (`tags.ron`, `vt-model`'s `tag.rs`, decision 315).
     The cache folder, `$XDG_CACHE_HOME/vimtracker` or `~/Library/Caches/vimtracker` on macOS,
-    holds the sample analyses and `full-speed.txt`. Autosave (`services/autosave.rs`) writes `song.autosave.ron` beside
+    holds the sample analyses and `full-speed.txt`. Autosave (`app/autosave.rs`) writes `song.autosave.ron` beside
     `song.ron` every `AUTOSAVE_SECONDS`, and offers it back after a crash. Each of these files is
     written through `vt_model::ron_file` (#809), all but `settings.ron`, which the program only
     writes once, as a template, when there's none: `write` and `write_atomic` write a temporary file
@@ -1233,7 +1233,7 @@ line's start, and the other tracks' columns from the ticks each line covers
 scrolling counts lines: the row-to-line helpers there are what `App::follow_cursor`, `H`, `M`, `L`,
 `Ctrl-d`, `Ctrl-u` and the view's furthest scroll go by.
 
-**Folding groups** (`services/folding.rs`). `Services::folds` says which groups are folded, `z a`, `zM` and `zR`
+**Folding groups** (`services/folding.rs`, and the keys in `app/folding.rs`). `Services::folds` says which groups are folded, `z a`, `zM` and `zR`
 setting each, and a group none has set is folded while it's empty. `Folds::hides` is what the song
 view, the mixer and the phrase view's overview leave out: a folded group's tracks, and a folded
 group with none. Those views draw `Folds::shown` rather than every track, and the moves between
@@ -2097,7 +2097,7 @@ These applied to every issue of M1 to M3, as first written. Some rows have been 
 | `TELEMETRY_QUEUE` | 64 | Playhead and load messages; newest dropped when full |
 | `NOTE_PITCH_QUEUE` | 256 | What the mod slots moved each note's pitch by; newest dropped when full |
 
-**Tuning values** can change by ear with no document update: in `vt-model`'s `constants.rs`, `SMOOTHING_MS` (10), `DECLICK_FRAMES` (64) and `PREVIEW_MS` (250); and the program's own, in `vt-tui`, `FRAME_MS` (33) in `run.rs` and `AUTOSAVE_SECONDS` (60) in `services/autosave.rs`.
+**Tuning values** can change by ear with no document update: in `vt-model`'s `constants.rs`, `SMOOTHING_MS` (10), `DECLICK_FRAMES` (64) and `PREVIEW_MS` (250); and the program's own, in `vt-tui`, `FRAME_MS` (33) in `run.rs` and `AUTOSAVE_SECONDS` (60) in `app/autosave.rs`.
 
 **Step text format.** Fields are separated by one space, and an FX slot is a command and value with no space. A hold or glide adds one letter, as in `CUT40h`.
 

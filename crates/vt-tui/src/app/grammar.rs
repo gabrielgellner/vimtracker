@@ -13,13 +13,14 @@ use vt_model::shape::{Shape, ShapeColumn};
 use vt_model::song::Song;
 use vt_model::step::{FxCommand, Note, Step};
 
-use crate::app::{App, Cursor, Entry, Selection, TrackSpan};
+use crate::app::{App, Entry, Selection, TrackSpan};
 use crate::input::bindings::{Cmd, Op, Resolved};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::overlays::shape::ShapePanel;
 use crate::pages::phrase::PhraseView;
 use crate::pages::sample::marking::MarkWait;
+use crate::services::Cursor;
 use crate::services::Services;
 
 /// The register that holds the last copy. A cut doesn't touch it.

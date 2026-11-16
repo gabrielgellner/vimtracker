@@ -14,7 +14,6 @@ use vt_model::action::Action;
 use vt_model::settings::{FADER_COUNT, FADERS, SettingId};
 use vt_model::song::Track;
 
-use crate::app::App;
 use crate::controls::Control;
 use crate::services::Services;
 
@@ -181,7 +180,7 @@ impl Services {
     }
 }
 
-impl App {
+impl Services {
     /// `Space e` and `Space E`: give the cursor's track's faders, or every track's, back to the
     /// steps, as Live's Re-Enable Automation does.
     pub(crate) fn give_back_faders(&mut self, every: bool) {
@@ -189,31 +188,31 @@ impl App {
         let which: Vec<usize> = if every {
             (0..tracks).collect()
         } else {
-            vec![self.services.cursor.track]
+            vec![self.cursor.track]
         };
         let taken: Vec<(usize, usize)> = which
             .iter()
             .flat_map(|track| (0..FADER_COUNT).map(move |fader| (*track, fader)))
-            .filter(|(track, fader)| self.services.faders(*track).taken[*fader])
+            .filter(|(track, fader)| self.faders(*track).taken[*fader])
             .collect();
         let name = if every {
             "Every track".to_owned()
         } else {
-            let track = self.services.cursor.track;
+            let track = self.cursor.track;
             self.song().tracks[track].title(track)
         };
         if taken.is_empty() {
-            self.services.status = format!("{name} has no fader taken over from the steps");
+            self.status = format!("{name} has no fader taken over from the steps");
             return;
         }
-        let track = (!every).then_some(self.services.cursor.track);
-        if !self.services.handle.send(Command::GiveBack { track }) {
+        let track = (!every).then_some(self.cursor.track);
+        if !self.handle.send(Command::GiveBack { track }) {
             return;
         }
         for (track, fader) in taken {
-            self.services.wish(track, fader, false);
+            self.wish(track, fader, false);
         }
-        self.services.status = if every {
+        self.status = if every {
             "Every fader follows the steps again".to_owned()
         } else {
             format!("{name}'s faders follow the steps again")
@@ -223,17 +222,17 @@ impl App {
     /// Opening a song gives every fader back to its steps, as a takeover belongs to playing the
     /// song it was made in.
     pub(crate) fn give_back_on_opening(&mut self) {
-        self.services.handle.send(Command::GiveBack { track: None });
-        self.services.fader_wishes.clear();
-        self.services.reported.faders = [Faders::default(); vt_model::constants::MAX_TRACKS];
+        self.handle.send(Command::GiveBack { track: None });
+        self.fader_wishes.clear();
+        self.reported.faders = [Faders::default(); vt_model::constants::MAX_TRACKS];
     }
 
     /// The status line's word on a fader's value, after it in real units: from the steps, or
     /// taken over from them, with how to give it back.
     pub(crate) fn fader_note(&self, track: usize, control: Control) -> Option<&'static str> {
-        if self.services.taken_over(track, control) {
+        if self.taken_over(track, control) {
             Some(", taken over from the steps: Space e gives it back")
-        } else if self.services.follows_steps(track, control) {
+        } else if self.follows_steps(track, control) {
             Some(", from the steps")
         } else {
             None

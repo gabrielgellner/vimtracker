@@ -121,6 +121,7 @@ pub fn value_shown(app: &App) -> Option<String> {
         }
     };
     let note = app
+        .services
         .fader_note(app.services.cursor.track, control)
         .unwrap_or("");
     let held = match control {

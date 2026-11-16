@@ -5,11 +5,15 @@
 //! this machine's settings, the Roto and the status line. `App` holds them beside the pages, so a
 //! page running a key can borrow them mutably while it borrows itself, and an edit on a page
 //! applies an action as one in `App` does.
+//!
+//! It's a layer below the pages, the overlays and `App`, and names none of them. A feature filed
+//! here by what it works on, the bank, recording a sample, folding, keeps its state and what only
+//! changes the services here; its keys and commands that open lists, the explorer or another view
+//! are `App`'s, in `crate::app`'s `banking`, `sampling`, `folding` and `autosave`.
 
 pub(crate) mod analysing;
 pub mod audio;
 pub(crate) mod automating;
-pub(crate) mod autosave;
 pub mod banking;
 pub mod config;
 pub(crate) mod folding;
@@ -41,12 +45,58 @@ use vt_model::scale::Scale;
 use vt_model::selection::{Extent, Field};
 use vt_model::song::{ChainEntry, Launch, Phrase, Section, Song, Track};
 
-use crate::app::{Cursor, Momentary, TrackLive};
 use crate::input::mode::View;
 use crate::services::analysing::Analyst;
 use crate::services::config::Settings;
 use crate::services::folding::{Folds, Order};
 use crate::services::meter::Meter;
+
+/// Where the cursor is: a step in a chain slot on a track.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Cursor {
+    /// The section being edited, which needn't be the one playing.
+    pub section: usize,
+    pub track: usize,
+    pub slot: usize,
+    pub step: usize,
+    pub field: Field,
+}
+
+/// A track's live controls.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TrackLive {
+    pub mute: bool,
+    pub solo: bool,
+}
+
+/// What a key started that lasts while it's down, and is undone or ended when it's let go.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Momentary {
+    /// A track's mute or solo was switched from this.
+    Mute {
+        track: usize,
+        was: bool,
+    },
+    Solo {
+        track: usize,
+        was: bool,
+    },
+    /// Fill was switched from this.
+    Fill {
+        was: bool,
+    },
+    /// A row is sounding on every track.
+    Audition,
+    /// A row outside the loop is sounding this note through a track on a preview voice.
+    AuditionNote {
+        track: usize,
+        note: u8,
+    },
+    /// The sample page is playing a slice or from its cursor, its count of what it's played then.
+    SampleAudition {
+        hearing: u64,
+    },
+}
 
 /// How many versions sent are kept for a report to be of. The callback takes each within a block,
 /// so only a few are ever waiting; these are for when it has stopped.

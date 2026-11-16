@@ -18,10 +18,11 @@ use vt_model::song::{Lane, Song};
 
 use crate::overlays::command::parse::{Line, PatchLine, PresetLine};
 
-use super::{App, Cursor, READ_ONLY, folder_name, name_song};
+use super::{App, READ_ONLY, folder_name, name_song};
 use crate::pages::phrase::PhraseView;
 use crate::pages::track::editing::{set_limiter, set_track_groove};
 use crate::pages::track::patches::factory_root;
+use crate::services::Cursor;
 use crate::services::live_from;
 use vt_model::preset::PresetKind;
 
@@ -88,8 +89,8 @@ impl App {
             Line::Kit(Some(name)) => self.use_kit(&self.services.kit_path(&name)),
             Line::Bank => self.open_bank_picker(),
             Line::BankClean => self.clean_bank(),
-            Line::Normalize(level) => self.normalize_sample(level),
-            Line::Trim => self.trim_sample(),
+            Line::Normalize(level) => self.services.normalize_sample(level),
+            Line::Trim => self.services.trim_sample(),
             Line::Record { what, quantise } => self.record_command(what, quantise),
             Line::RecordStop => self.stop_sampling(),
             Line::RecordCancel => self.cancel_sampling(),
@@ -377,7 +378,7 @@ impl App {
             Ok(song) => {
                 self.discard_changes();
                 self.services.handle.send(Command::Return);
-                self.give_back_on_opening();
+                self.services.give_back_on_opening();
                 self.services.samples = Arc::new(SamplePool::default());
                 self.replace_song(song, Some(path.to_path_buf()));
                 self.services.dirty = false;
@@ -404,7 +405,7 @@ impl App {
             Ok(()) => {
                 self.discard_changes();
                 self.services.handle.send(Command::Return);
-                self.give_back_on_opening();
+                self.services.give_back_on_opening();
                 self.services.samples = Arc::new(SamplePool::default());
                 self.replace_song(song, Some(path.to_path_buf()));
                 self.services.dirty = false;

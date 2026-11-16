@@ -25,7 +25,8 @@ use crate::pages::sample::marking::MarkWait;
 use std::sync::Arc;
 
 use super::accent_slide::{HeldFlag, Moved, Written};
-use super::{App, Entry, HOLD_TIME, KEYS_NOTES, Momentary, which_key_due};
+use super::{App, Entry, HOLD_TIME, KEYS_NOTES, which_key_due};
+use crate::services::Momentary;
 
 /// The keys that are down, and what they hold while they are: notes, Insert's accent, slide and
 /// octave keys, and a momentary change.
@@ -808,8 +809,8 @@ impl App {
                 self.rotate_speeds(every);
                 self.held.repeats_ignored = true;
             }
-            Cmd::GiveBack => self.give_back_faders(false),
-            Cmd::GiveBackAll => self.give_back_faders(true),
+            Cmd::GiveBack => self.services.give_back_faders(false),
+            Cmd::GiveBackAll => self.services.give_back_faders(true),
             Cmd::ClearMutes => {
                 // A held mute or solo stays cleared when it's let go.
                 if self.held.momentary.is_some_and(|held| {

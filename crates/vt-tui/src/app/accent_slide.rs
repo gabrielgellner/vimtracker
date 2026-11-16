@@ -12,10 +12,11 @@ use vt_model::step::{
     ACCENT_VELOCITY, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note, Step, slid,
 };
 
-use crate::app::{App, Cursor};
+use crate::app::App;
 use crate::input::bindings::{Cmd, Resolved};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
+use crate::services::Cursor;
 
 /// The velocity an accent writes: full, as a 303's accent is all or nothing.
 pub(crate) const ACCENTED: u8 = MAX_VELOCITY;

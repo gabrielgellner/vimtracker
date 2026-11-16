@@ -16,10 +16,11 @@ use vt_engine::link::{Command, Handle, JamState};
 use vt_model::constants::{DEFAULT_NOTE_VELOCITY, MAX_TRACKS, TICKS_PER_STEP};
 use vt_model::names::Names;
 use vt_model::samples::SamplePool;
-use vt_model::selection::{Field, Scope, StepRange};
+use vt_model::selection::{Scope, StepRange};
 use vt_model::song::Song;
 use vt_model::step::{FxCommand, MAX_VELOCITY};
 
+use crate::app::autosave::Autosave;
 use crate::app::grammar::Grammar;
 use crate::app::jumps::Jumps;
 use crate::app::keys::HeldKeys;
@@ -34,18 +35,21 @@ use crate::pages::phrase::PhraseView;
 use crate::pages::project::ProjectPage;
 use crate::pages::song::SongView;
 use crate::pages::track::TrackPage;
-use crate::services::Services;
-use crate::services::autosave::Autosave;
+use crate::services::{Momentary, Services};
 
 pub(crate) mod accent_slide;
+pub(crate) mod autosave;
+mod banking;
 mod commands;
 mod cursor;
 mod entry;
+mod folding;
 pub(crate) mod grammar;
 mod jumps;
 mod keys;
 mod loops;
 pub mod recording;
+mod sampling;
 pub(crate) mod tracks;
 pub(crate) mod tree;
 
@@ -117,24 +121,6 @@ impl Default for Modes {
     }
 }
 
-/// Where the cursor is: a step in a chain slot on a track.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Cursor {
-    /// The section being edited, which needn't be the one playing.
-    pub section: usize,
-    pub track: usize,
-    pub slot: usize,
-    pub step: usize,
-    pub field: Field,
-}
-
-/// A track's live controls.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct TrackLive {
-    pub mute: bool,
-    pub solo: bool,
-}
-
 /// How long a key has to be down to count as held rather than tapped, for the keys that act
 /// differently held: a held mute or solo goes back when it's let go, and a held audition stops.
 /// Polyend's Tracker takes a button as held after 333 ms.
@@ -146,35 +132,6 @@ const PLAYHEADS_KEPT: Duration = Duration::from_millis(250);
 
 /// What `:w` says to a read-only song in its own folder.
 const READ_ONLY: &str = "This song is read-only: :w path saves a copy, :w! writes over it";
-
-/// What a key started that lasts while it's down, and is undone or ended when it's let go.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Momentary {
-    /// A track's mute or solo was switched from this.
-    Mute {
-        track: usize,
-        was: bool,
-    },
-    Solo {
-        track: usize,
-        was: bool,
-    },
-    /// Fill was switched from this.
-    Fill {
-        was: bool,
-    },
-    /// A row is sounding on every track.
-    Audition,
-    /// A row outside the loop is sounding this note through a track on a preview voice.
-    AuditionNote {
-        track: usize,
-        note: u8,
-    },
-    /// The sample page is playing a slice or from its cursor, its count of what it's played then.
-    SampleAudition {
-        hearing: u64,
-    },
-}
 
 /// The whole program's state.
 pub struct App {
@@ -496,7 +453,7 @@ impl App {
             self.services.reported.heard_pitches.insert(row, pitch);
         }
         while let Some((track, report)) = self.services.handle.gen_heard() {
-            self.hear_generator(track, report);
+            self.services.hear_generator(track, report);
         }
         while let Some((track, state)) = self.services.handle.jam_change() {
             // A mute or solo waiting for the grid has landed, so the live controls follow it.

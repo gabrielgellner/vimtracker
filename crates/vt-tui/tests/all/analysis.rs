@@ -166,7 +166,7 @@ fn a_project_opened_again_finds_its_analyses_in_the_cache() {
     hit(&file);
     let project = folder.join("song");
     let (mut app, _realtime) = new_app();
-    app.use_analysis_cache(Some(cache.clone()));
+    app.services.use_analysis_cache(Some(cache.clone()));
     command(&mut app, &format!("sample {}", file.display()));
     command(&mut app, &format!("w {}", project.display()));
     app.services.finish_analysis();
@@ -185,7 +185,7 @@ fn a_project_opened_again_finds_its_analyses_in_the_cache() {
     );
 
     let (mut again, _realtime) = new_app();
-    again.use_analysis_cache(Some(cache));
+    again.services.use_analysis_cache(Some(cache));
     command(&mut again, &format!("e {}", project.display()));
     again.services.finish_analysis();
     assert_eq!(
