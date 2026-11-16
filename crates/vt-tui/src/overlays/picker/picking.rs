@@ -94,11 +94,11 @@ impl App {
         }
         let has_value = current.is_some_and(|s| s.command.is_some());
         if command == FxCommand::Set(SettingId::SAMPLE) && !has_value {
-            self.open_sample_lock_picker(slot);
+            self.open_picker(PhraseView::sample_lock_picker(&self.services, slot));
             return;
         }
         if command == FxCommand::Set(SettingId::SLICE) && !has_value {
-            self.open_slice_lock_picker(slot);
+            self.open_picker(PhraseView::slice_lock_picker(&self.services, slot));
             return;
         }
         if let Some(value) = current.filter(|s| s.command.is_some()).map(|s| s.value) {

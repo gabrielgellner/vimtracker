@@ -563,11 +563,12 @@ impl Page for PhraseView {
     type Drawn = ();
 
     /// Run a key as the program gives it to the view: a move, a key over the view, reaching
-    /// another track from a selection, or `zi` and `Space i`, or pass it back. A move after an
-    /// operator is what the operator covers, so it's the grammar's. The count is read as the
-    /// motion takes it, as `5G` goes to step 5 where `5j` moves 5. Every key the view does takes
-    /// the count, as Vim's do: `3C-e` scrolls 3 rows, `5H` goes to the 5th row on screen, `3W`
-    /// reaches 3 tracks on, and `M`, `zi` and `Space i`, which have no use for it, drop it.
+    /// another track from a selection, `zi` and `Space i`, or `K`'s list for the cell, or pass it
+    /// back. A move after an operator is what the operator covers, so it's the grammar's. The
+    /// count is read as the motion takes it, as `5G` goes to step 5 where `5j` moves 5. Every key
+    /// the view does takes the count, as Vim's do: `3C-e` scrolls 3 rows, `5H` goes to the 5th
+    /// row on screen, `3W` reaches 3 tracks on, and `M`, `zi`, `Space i` and `K`, which have no
+    /// use for it, drop it.
     fn key(&mut self, cmd: Cmd, times: usize, ctx: &mut CtxMut) -> Outcome {
         let mode = ctx.modes.mode;
         let view = ctx.modes.view;
@@ -588,6 +589,7 @@ impl Page for PhraseView {
             }
             Cmd::ToggleTimeline => self.toggle_timeline(services),
             Cmd::ToggleInspector => self.toggle_inspector(services),
+            Cmd::PickValue => return Self::field_picker(services),
             _ => return Outcome::Passed,
         }
         Outcome::Done
