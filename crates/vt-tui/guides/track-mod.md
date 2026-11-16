@@ -97,7 +97,8 @@ octave. An envelope's depth can be locked on a step too: `DEP2` for `Mod 2`.
 envelope's, on `Vol` or anywhere else, so a pitch or a filter can snap. What a
 note's level does is smoothed on its way to the sound, where it falls, over about
 half a millisecond, as a VCA's gain is, so a step down to nothing doesn't click. A
-rise isn't: an attack of 0 is as sudden as it's set.
+rise isn't: an attack of 0 is as sudden as it's set, but for a note that starts
+under the last one's fade, below.
 
 A note lasts until the next note on its track, an `OFF`, or its gate closing,
 and the next note doesn't run the last one's release: it takes over the synth
@@ -105,8 +106,9 @@ sounding, below, or starts a voice of its own as the last one fades out over
 2.7 ms, as a choke, a `KIL` and stopping fade it. An attack shorter than that fade
 is a rise over it instead, so the two notes keep their level between them; a
 longer attack plays as it's set, under the last note's fade. So a drum is often a
-Decay with Sustain at `0%`, and at `Gate` 100% Release only runs on an `OFF`. To make notes shorter, lower `Gate` in the Play device, give a row a length
-of its own, or put `OFF` on a step.
+Decay with Sustain at `0%`, and at `Gate` 100% Release only runs on an `OFF`. To
+make notes shorter, lower `Gate` in the Play device, give a row a length of its
+own, or put `OFF` on a step.
 
 **The curve** is the envelope's mode, after its type in the title, and bends
 every stage at once:
