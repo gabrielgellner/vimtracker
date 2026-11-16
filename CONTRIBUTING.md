@@ -131,7 +131,12 @@ tests' signals in `vt-engine`'s `src/dsp/signals.rs`. One file's tests run with
 - **vt-tui** is in folders by what each module is, as the Architecture's
   [Interface](docs/designs/vimtracker.md#interface) maps them: a page's keys, edits and drawing in
   its folder under `pages/`, what's drawn over a page in `overlays/`, what pages share in
-  `services/`. An `impl App` block goes in the folder of the page, overlay or service it's for.
+  `services/`. Behaviour goes on the page or overlay it's for, taking `CtxMut`, and returns an
+  `Outcome` for what only `App` can do, such as opening the picker or another overlay, showing a
+  view or recording a jump; what only reads and changes the services is a method of `Services`,
+  beside the page's code. A new `impl App` block needs a reason, said in its doc comment: it
+  records a jump, reads two pages, or opens the explorer, say. `services/` names nothing of
+  `app`, the pages or the overlays (decision 358).
 - **vt-engine**'s DSP goes in `src/dsp/` by what it does (`voices/`, `filters/`, `effects/` and
   `dynamics/`), as the [DSP layout](docs/designs/vimtracker.md#dsp-layout) says. A part two of
   them share goes in `dsp/blocks/`. New DSP uses its one-pole, delay lines and Hermite reads,
