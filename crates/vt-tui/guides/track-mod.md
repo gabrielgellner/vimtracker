@@ -136,16 +136,27 @@ or a legato line keeps its punch rather than crawling up from halfway each time.
 **From note to note,** a synth that holds its notes, as `VA` and `CSaw` do, plays
 the next note on the voice already sounding, as a mono synth does: its oscillators
 run on, the pitch moves to the new note and the envelope starts again. With the
-notes' shape's `Reset` on, as a new track has it, the level falls to nothing over a
-short fade first, about a millisecond, and the attack starts from there, so each
-note is struck without a click. With it off, the attack starts at once from where
-the level is, and a run of notes flows into one another. A sample, the struck
-voices, `Kick`, `Snare`, `Hat`, `String`, `Modal`, `Bell` and `Drum`, and `Bowed`,
-`Blown` and `Fluted`, whose strike starts their string or bore again from still,
-start each note afresh, the last one fading under it. `Acid` carries on as a 303
-does, whatever `Reset` says. The track's `Phase`, on the Sound page's Play device,
-says whether the oscillators run on through the change or start again at the bottom
-of the dip.
+notes' shape's `Reset` off, as a new track has it, the attack starts at once from
+where the level is, as an analog envelope retriggers, so a run of notes flows into
+one another with no gap. At full sustain the level is already at the top, so the
+same note again sounds as one held note, as it does on an analog mono synth, and
+only a new pitch or velocity is heard. With `Reset` on, the level falls to nothing
+over a short fade first, about a millisecond, and the attack starts from there, so
+each note is struck, with a small gap before it, without a click.
+
+`Reset` only ever acts on a note carried on like that. A sample, the struck voices,
+`Kick`, `Snare`, `Hat`, `String`, `Modal`, `Bell` and `Drum`, and `Bowed`, `Blown`
+and `Fluted`, whose strike starts their string or bore again from still, start each
+note afresh, the last one fading under it, and a fresh note always attacks from
+nothing, whatever `Reset` says. So does a synth's note after the last one has died
+away. `Acid` carries on as a 303 does, whatever `Reset` says. The track's `Phase`,
+on the Sound page's Play device, says whether the oscillators run on through the
+change or start again at the bottom of the dip.
+
+**A pluck,** `Sustain` at `0%` with a short `Decay`, has died away before the next
+note, so each note starts from silence. A 1 ms attack with a short decay on a bright
+wave such as a saw is a click by its nature: the wave arrives at nearly full at once.
+An `Attack` of 2 or 3 ms, a `Decay` of 40 ms or more, or the `Analog` curve softens it.
 
 ## AHD envelopes
 

@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
-use vt_model::envelope::Adsr;
+use vt_model::envelope::{Adsr, Curve};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Machine, Phase, Phrase, Song, SynthVoice};
@@ -325,12 +325,11 @@ fn clean(change: &Change, drifting: bool) -> bool {
     change.dip_db > -1.5 && change.top_db < 3.0 && (drifting || change.offset < 0.05)
 }
 
-/// No reset on the note shape: the attack starts from where the level is.
+/// No reset on the note shape: the attack starts from where the level is. It's the plain note
+/// shape's, a new track's (decision 373).
 fn no_reset() -> Option<Adsr> {
-    Some(Adsr {
-        reset: false,
-        ..Adsr::note_shape()
-    })
+    assert!(!Adsr::note_shape().reset);
+    None
 }
 
 #[test]
@@ -400,32 +399,42 @@ fn random_16ths_carried_with_reset_dip_to_silence_without_a_click() {
     // With `Reset`, as a note's shape starts, a carried note's level falls to nothing over the
     // short fade on the same voice, and then attacks: a gap at each change, on purpose, so each
     // note is struck, but no click, as the oscillator runs on through it.
-    let csaw = Source::Synth(SynthVoice::CSaw);
-    let va = Case::plain(Source::Synth(SynthVoice::VirtualAnalog));
+    let reset = Some(Adsr {
+        reset: true,
+        ..Adsr::note_shape()
+    });
+    let csaw = Case {
+        adsr: reset,
+        ..Case::plain(Source::Synth(SynthVoice::CSaw))
+    };
+    let va = Case {
+        adsr: reset,
+        ..Case::plain(Source::Synth(SynthVoice::VirtualAnalog))
+    };
     let notes = random_notes();
     let mut clicks = Vec::new();
     for (name, case) in [
-        ("CSaw, nothing tweaked", Case::plain(csaw)),
-        (
-            "CSaw at 140 BPM",
-            Case {
-                bpm: 140,
-                ..Case::plain(csaw)
-            },
-        ),
+        ("CSaw, Reset on", csaw),
+        ("CSaw at 140 BPM", Case { bpm: 140, ..csaw }),
         (
             "CSaw, A 1 D 0 S 100 R 0",
             Case {
-                adsr: Some(adsr(1, 0, 100, 0)),
-                ..Case::plain(csaw)
+                adsr: Some(Adsr {
+                    reset: true,
+                    ..adsr(1, 0, 100, 0)
+                }),
+                ..csaw
             },
         ),
         (
-            "Saw Sq, nothing tweaked",
-            Case::plain(Source::Synth(SynthVoice::SawSquare)),
+            "Saw Sq, Reset on",
+            Case {
+                adsr: reset,
+                ..Case::plain(Source::Synth(SynthVoice::SawSquare))
+            },
         ),
-        ("VA, nothing tweaked", va),
-        ("VA drifting, nothing tweaked", Case { drift: true, ..va }),
+        ("VA, Reset on", va),
+        ("VA drifting, Reset on", Case { drift: true, ..va }),
     ] {
         let change = measure(name, case, &notes);
         // Down to silence in the dip, back within 3 ms, and nothing at the top of the spectrum
@@ -777,4 +786,379 @@ fn a_held_note_has_no_edges_at_block_boundaries() {
         }
     }
     assert!(edged.is_empty(), "{edged:?}");
+}
+
+// #942: the dip `Reset` makes on a carried note, and plucks with a sustain of 0. These print what
+// they measure, for the issue, and assert nothing. With `VT_DIP=frames` and `VT_DIP_CURVE=cos` on
+// the branch `measure/942-retrig-dip`, the dip is another candidate's.
+
+/// What a change's notch is against the same change tied, over its first 10 ms.
+struct Notch {
+    depth_db: f64,
+    /// For how long it's 3, 6 and 20 dB down, in ms.
+    down_ms: [f64; 3],
+    /// What it takes out, as so many ms of silence: the power lost against the tie.
+    lost_ms: f64,
+    /// When it's back within 1 dB of the tie after its deepest, in ms from the step.
+    back_ms: f64,
+    top_db: f64,
+}
+
+fn notch(new: &Folded, tied: &Folded) -> Notch {
+    let window_ms = WINDOW as f64 * 1000.0 / f64::from(RATE);
+    let windows = (10.0 / window_ms) as usize;
+    let level: Vec<f64> = (0..windows)
+        .map(|w| decibels(new.level[w] / tied.level[w]))
+        .collect();
+    let deepest = (0..windows)
+        .min_by(|a, b| level[*a].total_cmp(&level[*b]))
+        .unwrap_or(0);
+    let down = |db: f64| level.iter().filter(|l| **l < -db).count() as f64 * window_ms;
+    let lost = (0..windows)
+        .map(|w| 1.0 - (new.level[w] / tied.level[w]).powi(2))
+        .sum::<f64>()
+        * window_ms;
+    let back = (deepest..windows)
+        .find(|w| level[*w] > -1.0)
+        .map_or(10.0, |w| w as f64 * window_ms);
+    Notch {
+        depth_db: level[deepest],
+        down_ms: [down(3.0), down(6.0), down(20.0)],
+        lost_ms: lost,
+        back_ms: back,
+        top_db: (0..windows)
+            .map(|w| decibels(new.top[w] / tied.top[w]))
+            .fold(f64::MIN, f64::max),
+    }
+}
+
+#[test]
+#[ignore = "measures #942's dip, printing it"]
+fn retrig_notch_table() {
+    let notes = random_notes();
+    let dip = std::env::var("VT_DIP").unwrap_or_else(|_| "64".into());
+    let curve = std::env::var("VT_DIP_CURVE").unwrap_or_else(|_| "lin".into());
+    println!("the dip: {dip} frames, {curve}");
+    let reset = Some(Adsr {
+        reset: true,
+        ..Adsr::note_shape()
+    });
+    for (name, source) in [
+        ("CSaw", Source::Synth(SynthVoice::CSaw)),
+        ("VA", Source::Synth(SynthVoice::VirtualAnalog)),
+        ("Saw Sq", Source::Synth(SynthVoice::SawSquare)),
+        ("FM", Source::Synth(SynthVoice::Fm)),
+        ("Sampled saw", Source::SampledSaw),
+    ] {
+        for (shape, adsr) in [
+            ("Reset on", reset),
+            (
+                "Reset on, A 0",
+                Some(Adsr {
+                    reset: true,
+                    ..adsr(0, 0, 100, 50)
+                }),
+            ),
+            (
+                "Reset on, Lin",
+                Some(Adsr {
+                    curve: Curve::Lin,
+                    reset: true,
+                    ..Adsr::note_shape()
+                }),
+            ),
+            (
+                "Reset on, Analog",
+                Some(Adsr {
+                    curve: Curve::Analog,
+                    reset: true,
+                    ..Adsr::note_shape()
+                }),
+            ),
+            ("Reset off", no_reset()),
+        ] {
+            let case = Case {
+                adsr,
+                ..Case::plain(source)
+            };
+            let steps = notes.len() * LOOPS;
+            let new = fold(&render(&case, &rows(&notes, false), steps), case.step());
+            let tied = fold(&render(&case, &rows(&notes, true), steps), case.step());
+            let n = notch(&new, &tied);
+            println!(
+                "{name:<12} {shape:<16} | depth {:>6.1} dB | 3/6/20 dB down {:.1}/{:.1}/{:.1} ms \
+                 | lost {:.2} ms | back {:.1} ms | top {:+.1} dB",
+                n.depth_db,
+                n.down_ms[0],
+                n.down_ms[1],
+                n.down_ms[2],
+                n.lost_ms,
+                n.back_ms,
+                n.top_db
+            );
+        }
+    }
+}
+
+/// The top of the spectrum's energy over these frames: the second difference squared.
+fn top_over(out: &[f32], from: usize, to: usize) -> f64 {
+    (from.max(2)..to)
+        .map(|i| {
+            let d2 = f64::from(out[i]) - 2.0 * f64::from(out[i - 1]) + f64::from(out[i - 2]);
+            d2 * d2
+        })
+        .sum()
+}
+
+/// What a pluck with a sustain of 0 does at its start and its end, against the same notes on an
+/// oscillator running at full and shaped by the envelope as it's set: the onset's top of the
+/// spectrum, in its first ms and the two after, against the running wave's own at full, and the
+/// same of the model; the top around where the decay lands; and what's left of the note's
+/// offset from zero.
+struct Pluck {
+    onset_db: f64,
+    model_db: f64,
+    after_db: f64,
+    after_model_db: f64,
+    end_db: f64,
+    end_model_db: f64,
+    drop: f32,
+    /// How many frames into its step a note is first heard, on average.
+    starts: f64,
+    /// Each note's offset from zero over what's heard of it, as a share of its level, the root
+    /// mean square over the notes, and the model's.
+    offset: f64,
+    model_offset: f64,
+}
+
+fn pluck(case: Case, adsr: Adsr, notes: &[String]) -> Pluck {
+    let steps = notes.len() * LOOPS;
+    let out = render(&case, &rows(notes, false), steps);
+    let running = Case {
+        adsr: Some(self::adsr(0, 0, 100, 0)),
+        ..case
+    };
+    let tied = render(&running, &rows(notes, true), steps);
+    let step = case.step() as usize;
+    let attack = u64::from(adsr.attack_ms) * u64::from(RATE) / 1000;
+    let decay = u64::from(adsr.decay_ms) * u64::from(RATE) / 1000;
+    let length = (attack + decay) as usize;
+    let mut model = vec![0.0_f32; out.len()];
+    for k in 0..steps {
+        let s = k * step;
+        for i in 0..step.min(out.len() - s) {
+            let level = if (i as u64) < attack + decay {
+                adsr.held(i as u64, 0.0, RATE)
+            } else {
+                0.0
+            };
+            model[s + i] = tied[s + i] * level;
+        }
+    }
+    // The running wave's top at full, a frame.
+    let full = top_over(&tied, step, out.len()) / (out.len() - step) as f64;
+    let ms = RATE as usize / 1000;
+    let (mut onset, mut onset_model, mut after, mut after_model) = (0.0, 0.0, 0.0, 0.0);
+    let (mut end, mut end_model, mut drop, mut starts) = (0.0, 0.0, 0.0_f32, 0.0);
+    let (mut offset, mut model_offset) = (0.0, 0.0);
+    let heard = steps - 1;
+    for k in 1..steps {
+        let s = k * step;
+        onset += top_over(&out, s, s + ms);
+        onset_model += top_over(&model, s, s + ms);
+        after += top_over(&out, s + ms, s + 3 * ms);
+        after_model += top_over(&model, s + ms, s + 3 * ms);
+        let e = s + length;
+        if e + ms < (k + 1) * step {
+            end += top_over(&out, e - ms / 2, e + ms);
+            end_model += top_over(&model, e - ms / 2, e + ms);
+        }
+        let note = &out[s..(s + step).min(out.len())];
+        drop = drop.max(drop_to_silence(note));
+        starts += note.iter().position(|v| *v != 0.0).unwrap_or(0) as f64;
+        let share = |part: &[f32]| {
+            let part = &part[..length.min(part.len()).max(1)];
+            let mean = part.iter().map(|v| f64::from(*v)).sum::<f64>() / part.len() as f64;
+            let rms = (part.iter().map(|v| f64::from(*v).powi(2)).sum::<f64>() / part.len() as f64)
+                .sqrt();
+            (mean / rms.max(1e-12)).powi(2)
+        };
+        offset += share(note);
+        model_offset += share(&model[s..(s + step).min(out.len())]);
+    }
+    let per = |energy: f64, frames: usize| {
+        10.0 * (energy / (heard * frames) as f64 / full).max(1e-30).log10()
+    };
+    if std::env::var_os("VT_PROFILE").is_some() {
+        // Each 0.25 ms of the first 4: the level and the top against the model's, in dB.
+        let power = |out: &[f32], from: usize, to: usize| {
+            (from..to).map(|i| f64::from(out[i]).powi(2)).sum::<f64>()
+        };
+        let mut line = String::new();
+        for w in 0..16 {
+            let (mut p, mut pm, mut t, mut tm) = (0.0, 0.0, 0.0, 0.0);
+            for k in 1..steps {
+                let at = k * step + w * 12;
+                p += power(&out, at, at + 12);
+                pm += power(&model, at, at + 12);
+                t += top_over(&out, at, at + 12);
+                tm += top_over(&model, at, at + 12);
+            }
+            line += &format!(
+                " {:+.1}/{:+.1}",
+                10.0 * (p / pm).log10(),
+                10.0 * (t / tm).log10()
+            );
+        }
+        println!("  level/top against the model, each 0.25 ms:{line}");
+    }
+    Pluck {
+        onset_db: per(onset, ms),
+        model_db: per(onset_model, ms),
+        after_db: per(after, 2 * ms),
+        after_model_db: per(after_model, 2 * ms),
+        end_db: per(end, ms * 3 / 2),
+        end_model_db: per(end_model, ms * 3 / 2),
+        drop,
+        starts: starts / heard as f64,
+        offset: (offset / heard as f64).sqrt(),
+        model_offset: (model_offset / heard as f64).sqrt(),
+    }
+}
+
+#[test]
+#[ignore = "measures #942's plucks' onsets, printing them"]
+fn pluck_onset_table() {
+    // How much brighter a note is than its wave running at full, for its top of the spectrum
+    // against its level: what its envelope's own corners add. On a sine, whose own top is next
+    // to nothing, it's the envelope's alone.
+    let notes = random_notes();
+    let steps = notes.len() * LOOPS;
+    for (name, source) in [
+        ("CSaw", Source::Synth(SynthVoice::CSaw)),
+        ("VA", Source::Synth(SynthVoice::VirtualAnalog)),
+        ("Sampled sine", Source::SampledSine),
+    ] {
+        let running = Case {
+            adsr: Some(adsr(0, 0, 100, 0)),
+            ..Case::plain(source)
+        };
+        let tied = render(&running, &rows(&notes, true), steps);
+        let step = running.step() as usize;
+        let power = |out: &[f32], from: usize, to: usize| {
+            (from..to).map(|i| f64::from(out[i]).powi(2)).sum::<f64>()
+        };
+        let own = top_over(&tied, step, tied.len()) / power(&tied, step, tied.len());
+        let mut shapes: Vec<(String, Adsr)> = Vec::new();
+        for (attack, curve) in [
+            (1, Curve::Exp),
+            (1, Curve::Lin),
+            (1, Curve::Analog),
+            (2, Curve::Exp),
+            (3, Curve::Exp),
+            (5, Curve::Exp),
+        ] {
+            for (decay, sustain) in [(5, 0), (20, 0), (80, 0), (0, 100)] {
+                shapes.push((
+                    format!("A {attack} {} D {decay} S {sustain}", curve.name()),
+                    Adsr {
+                        curve,
+                        ..adsr(attack, decay, sustain, 50)
+                    },
+                ));
+            }
+        }
+        for (shape, adsr) in shapes {
+            let case = Case {
+                adsr: Some(adsr),
+                ..Case::plain(source)
+            };
+            let out = render(&case, &rows(&notes, false), steps);
+            let ms = RATE as usize / 1000;
+            let bright = |from: usize, to: usize| {
+                let (mut top, mut level) = (0.0, 0.0);
+                for k in 1..steps {
+                    let s = k * step;
+                    top += top_over(&out, s + from, s + to);
+                    level += power(&out, s + from, s + to);
+                }
+                10.0 * (top / level / own).log10()
+            };
+            println!(
+                "{name:<13} {shape:<22} | brighter than its wave: first 3 ms {:+5.1} dB, first 10 \
+                 ms {:+5.1} dB",
+                bright(0, 3 * ms),
+                bright(0, 10 * ms),
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "measures #942's plucks, printing them"]
+fn sustain_zero_pluck_table() {
+    let notes = random_notes();
+    println!(
+        "onset: the top of the spectrum in a note's first ms, and in the 2 ms after, against the \
+         running wave's own at full, as it is and as modelled (the same wave, running, times the \
+         envelope as set). end: around where the decay lands. A voice whose envelope has ended \
+         goes idle, and the next note starts a fresh one."
+    );
+    for (name, source) in [
+        ("CSaw", Source::Synth(SynthVoice::CSaw)),
+        ("VA", Source::Synth(SynthVoice::VirtualAnalog)),
+        ("Sampled saw", Source::SampledSaw),
+    ] {
+        let mut shapes: Vec<(String, Adsr)> = Vec::new();
+        for decay in [5, 20, 80, 120, 130] {
+            for reset in [true, false] {
+                shapes.push((
+                    format!(
+                        "A 1 D {decay} S 0, reset {}",
+                        if reset { "on" } else { "off" }
+                    ),
+                    Adsr {
+                        reset,
+                        ..adsr(1, decay, 0, 50)
+                    },
+                ));
+            }
+        }
+        for attack in [0, 2, 5] {
+            shapes.push((
+                format!("A {attack} D 20 S 0, reset on"),
+                Adsr {
+                    reset: true,
+                    ..adsr(attack, 20, 0, 50)
+                },
+            ));
+        }
+        for (shape, adsr) in shapes {
+            let case = Case {
+                adsr: Some(adsr),
+                ..Case::plain(source)
+            };
+            let p = pluck(case, adsr, &notes);
+            let fresh = if adsr.attack_ms + adsr.decay_ms < 125 {
+                "fresh"
+            } else {
+                "carried"
+            };
+            println!(
+                "{name:<12} {shape:<26} {fresh:<7} | onset {:+6.1} dB (model {:+6.1}) | 1-3 ms \
+                 {:+6.1} (model {:+6.1}) | end {:+6.1} (model {:+6.1}) | drop {:.3} | starts \
+                 {:.1} frames in | offset {:.3} (model {:.3})",
+                p.onset_db,
+                p.model_db,
+                p.after_db,
+                p.after_model_db,
+                p.end_db,
+                p.end_model_db,
+                p.drop,
+                p.starts,
+                p.offset,
+                p.model_offset
+            );
+        }
+    }
 }

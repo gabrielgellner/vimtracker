@@ -174,7 +174,9 @@ pub struct Adsr {
     /// Percent of full, while a note holds.
     pub sustain: u8,
     pub release_ms: u16,
-    /// Whether each note starts it from zero. Otherwise it goes on from where it is.
+    /// Whether each note starts it from zero. Otherwise it goes on from where it is. Shaping the
+    /// notes, it acts only on a note carried on by the voice already sounding: a note on a voice
+    /// of its own always attacks from nothing (decision 373).
     pub reset: bool,
     /// How its stages bend, its mode.
     #[serde(default)]
@@ -189,24 +191,28 @@ impl Default for Adsr {
 }
 
 impl Adsr {
-    /// The shape a note has with nothing else set: a click-free start, and a short release.
+    /// The shape a note has with nothing else set: a click-free start, and a short release. A
+    /// note carried on by the voice already sounding attacks from where the level is, as an
+    /// analog envelope retriggers, with no dip to nothing first (decision 373).
     pub const fn note_shape() -> Self {
         Self {
             attack_ms: 1,
             decay_ms: 0,
             sustain: 100,
             release_ms: 50,
-            reset: true,
+            reset: false,
             curve: Curve::Exp,
         }
     }
 
     /// A modulating envelope's starting point: the note shape's attack and release, with a decay
-    /// to nothing, as a filter's envelope has.
+    /// to nothing, as a filter's envelope has, starting from nothing on each note. It's the
+    /// default songs leave unsaved, so its `Reset` stays on whatever the note shape's is.
     pub const fn decay() -> Self {
         Self {
             decay_ms: 200,
             sustain: 0,
+            reset: true,
             ..Self::note_shape()
         }
     }
@@ -1169,7 +1175,9 @@ mod tests {
             );
         }
         assert!(ahd.one_shot() && !adsr.one_shot());
-        assert!(ahd.reset() && adsr.reset());
+        // The note's shape retriggers from where it is, and a modulating envelope from nothing
+        // (decision 373).
+        assert!(ahd.reset() && !adsr.reset() && Envelope::Adsr(Adsr::decay()).reset());
         assert_eq!(Envelope::note_shape(), Envelope::Adsr(Adsr::note_shape()));
     }
 }

@@ -555,11 +555,6 @@ impl TrackState {
 
     fn begin(&mut self, note: NoteOn, rate: u32, arpeggio: bool) {
         self.wake();
-        let from = if note.shape.reset() {
-            0.0
-        } else {
-            self.voice.level()
-        };
         // `Acid` plays one note at a time, and the next carries on from its filter and accent.
         let acid = note.synth == Some(SynthVoice::Acid) && self.voice.plays_acid();
         // Any other synth that holds its notes carries on too, its oscillators running on into
@@ -580,10 +575,10 @@ impl TrackState {
         if acid {
             self.voice.retrigger(note);
         } else if cuts {
-            self.voice = Voice::start_under_cut(note, rate, from, self.pitch);
+            self.voice = Voice::start_under_cut(note, rate, self.pitch);
             self.fresh_voice = true;
         } else if !carries {
-            self.voice = Voice::start(note, rate, from, self.pitch);
+            self.voice = Voice::start(note, rate, self.pitch);
             self.fresh_voice = true;
         }
         self.voice.set_synth(self.synth_settings());

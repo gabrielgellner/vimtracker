@@ -436,6 +436,63 @@ fn cutting(attack_ms: u16, after_a_note: bool) -> Vec<(f32, f32)> {
         .collect()
 }
 
+/// Its voice's envelope level after this many more frames of a synth's note.
+fn level_after(state: &mut TrackState, frames: usize) -> f32 {
+    for _ in 0..frames {
+        state.voice.next(None);
+    }
+    state.voice.level()
+}
+
+#[test]
+fn reset_off_takes_only_what_is_left_of_the_attack_in_its_shape() {
+    use vt_model::envelope::{Adsr, Curve, Envelope};
+    const MS: usize = 48;
+    // A 200 ms attack is five eighths of the way along when the next note comes 125 ms later.
+    // Carried on by the `CSaw` sounding, it goes on from there, with 75 ms left at the same slope,
+    // not 200 ms more (decision 373).
+    for curve in [Curve::Lin, Curve::Analog] {
+        let shape = Adsr {
+            attack_ms: 200,
+            decay_ms: 0,
+            sustain: 100,
+            release_ms: 0,
+            reset: false,
+            curve,
+        };
+        let note = NoteOn {
+            synth: Some(SynthVoice::CSaw),
+            shape: Envelope::Adsr(shape),
+            ..note_with_attack(0)
+        };
+        let mut state = from_the_top(&Track::default());
+        state.start(note, 48_000);
+        let before = level_after(&mut state, 125 * MS);
+        assert!(
+            (before - curve.rise(0.625)).abs() < 1e-3,
+            "{curve:?}: {before}"
+        );
+        state.start(note, 48_000);
+        assert!(!state.tail.active(), "carried on, with no voice of its own");
+        let five = level_after(&mut state, 5 * MS);
+        assert!((five - curve.rise(0.65)).abs() < 1e-3, "{curve:?}: {five}");
+        assert_eq!(level_after(&mut state, 71 * MS), 1.0, "{curve:?}");
+        // With `Reset`, it dips to nothing first.
+        let mut state = from_the_top(&Track::default());
+        let reset = NoteOn {
+            shape: Envelope::Adsr(Adsr {
+                reset: true,
+                ..shape
+            }),
+            ..note
+        };
+        state.start(reset, 48_000);
+        level_after(&mut state, 125 * MS);
+        state.start(reset, 48_000);
+        assert!(level_after(&mut state, 2 * MS) < 0.02, "{curve:?}");
+    }
+}
+
 #[test]
 fn a_note_cutting_another_keeps_an_attack_longer_than_the_fade_as_set() {
     // 3 ms is longer than the 2.7 ms fade: the note plays its attack as set, to the bit, while

@@ -198,15 +198,18 @@ fn without_an_off_a_note_holds_until_the_next_and_release_never_runs() {
 }
 
 #[test]
-fn reset_off_carries_on_from_the_level_it_had() {
+fn reset_off_still_starts_a_samplers_notes_from_nothing() {
+    // A sampler's note has a voice of its own, so it attacks from nothing whatever `Reset` says:
+    // a level carried over to a sound starting from its first frame would be a step (decision
+    // 373). Only a note carried on by a synth sounding goes on from its level (`track_state`).
     let mut carry = adsr(50, 0, 100, 0);
     let texts = [NOTE, NOTE];
-    let reset = render(song(&texts, carry), flat(), STEP + 20 * MS);
+    carry.adsr.reset = true;
+    let reset = render(song(&texts, carry), flat(), STEP + 60 * MS);
     carry.adsr.reset = false;
-    let kept = render(song(&texts, carry), flat(), STEP + 20 * MS);
-    // A step is 125 ms, so the first note has finished its attack.
-    close(left(&kept, STEP + 10), 1.0);
-    assert!(left(&reset, STEP + 10 * MS) < 0.3);
+    let kept = render(song(&texts, carry), flat(), STEP + 60 * MS);
+    assert_eq!(reset, kept);
+    assert!(left(&kept, STEP + 10 * MS) < 0.5);
 }
 
 #[test]
@@ -251,25 +254,6 @@ fn a_drum_on_vol_strikes_its_ratchet_then_its_body_decays_and_ends_the_note() {
     close(falling(&out, 30 * MS + 25 * MS), 0.1);
     assert_eq!(left(&out, 80 * MS + 2 + SETTLE), 0.0);
     assert_eq!(left(&out, STEP - 1), 0.0);
-}
-
-#[test]
-fn reset_off_takes_only_what_is_left_of_the_attack_in_its_shape() {
-    // A straight 200 ms attack is five eighths of the way up when the next note comes a step, 125
-    // ms, later. Carrying on from there, it has 75 ms left, at the same slope, not 200 ms more.
-    let mut carry = adsr(200, 0, 100, 0);
-    carry.adsr.curve = Curve::Lin;
-    carry.adsr.reset = false;
-    let out = render(song(&[NOTE, NOTE], carry), flat(), STEP + 100 * MS);
-    // Once the last note's quick fade has gone, 5 ms in, it's 5 ms on from five eighths.
-    close(left(&out, STEP + 5 * MS), 0.65);
-    close(left(&out, STEP + 75 * MS / 2), 0.8125);
-    close(left(&out, STEP + 76 * MS), 1.0);
-    // An `Analog` attack's curve is turned round the same way.
-    carry.adsr.curve = Curve::Analog;
-    let out = render(song(&[NOTE, NOTE], carry), flat(), STEP + 100 * MS);
-    close(left(&out, STEP + 5 * MS), Curve::Analog.rise(0.65));
-    close(left(&out, STEP + 76 * MS), 1.0);
 }
 
 #[test]

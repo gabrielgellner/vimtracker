@@ -190,7 +190,7 @@ impl Previews {
             self.voices[FADING].playing = None;
             self.voices[FADING].voice.fade();
         }
-        let mut voice = Voice::start(on, rate, 0.0, 1.0);
+        let mut voice = Voice::start(on, rate, 1.0);
         voice.set_synth(settings);
         // Each key drifts as a note in the song would, from a seed of its own.
         if voice.drifts() {

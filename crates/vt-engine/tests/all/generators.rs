@@ -846,6 +846,8 @@ fn varying_divisions() -> Song {
     song.tracks[0]
         .phrases
         .insert(0, Arc::new(Phrase::from_steps(vec![hit; 16])));
+    // Each hit struck, as without `Reset` the same note again at full sustain is one held note.
+    song.tracks[0].mods[0].adsr.reset = true;
     let mut rhythm = shape(FillKind::Divisions, 0, 0, Where::AllRows);
     rhythm.divisions.chances[0] = [60, 40, 0, 0, 50, 0];
     rhythm.vary = 1;

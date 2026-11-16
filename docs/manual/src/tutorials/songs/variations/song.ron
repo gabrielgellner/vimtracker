@@ -48,7 +48,7 @@
                     decay_ms: 0,
                     sustain: 100,
                     release_ms: 50,
-                    reset: true,
+                    reset: false,
                     curve: Exp,
                 ),
             ), (
@@ -189,7 +189,7 @@
                     decay_ms: 0,
                     sustain: 100,
                     release_ms: 50,
-                    reset: true,
+                    reset: false,
                     curve: Exp,
                 ),
             ), (
@@ -281,7 +281,7 @@
                     decay_ms: 0,
                     sustain: 100,
                     release_ms: 50,
-                    reset: true,
+                    reset: false,
                     curve: Exp,
                 ),
             ), (
@@ -370,7 +370,7 @@
                     decay_ms: 0,
                     sustain: 100,
                     release_ms: 50,
-                    reset: true,
+                    reset: false,
                     curve: Exp,
                 ),
             ), (
@@ -459,7 +459,7 @@
                     decay_ms: 0,
                     sustain: 100,
                     release_ms: 50,
-                    reset: true,
+                    reset: false,
                     curve: Exp,
                 ),
             ), (
@@ -514,7 +514,7 @@
                     decay_ms: 0,
                     sustain: 100,
                     release_ms: 50,
-                    reset: true,
+                    reset: false,
                     curve: Exp,
                 ),
             ), (
@@ -569,7 +569,7 @@
                     decay_ms: 0,
                     sustain: 100,
                     release_ms: 50,
-                    reset: true,
+                    reset: false,
                     curve: Exp,
                 ),
             ), (
@@ -624,7 +624,7 @@
                     decay_ms: 0,
                     sustain: 100,
                     release_ms: 50,
-                    reset: true,
+                    reset: false,
                     curve: Exp,
                 ),
             ), (
@@ -689,7 +689,7 @@
                     decay_ms: 0,
                     sustain: 100,
                     release_ms: 50,
-                    reset: true,
+                    reset: false,
                     curve: Exp,
                 ),
             ), (
@@ -752,7 +752,7 @@
                     decay_ms: 0,
                     sustain: 100,
                     release_ms: 50,
-                    reset: true,
+                    reset: false,
                     curve: Exp,
                 ),
             ), (
@@ -807,7 +807,7 @@
                     decay_ms: 0,
                     sustain: 100,
                     release_ms: 50,
-                    reset: true,
+                    reset: false,
                     curve: Exp,
                 ),
             ), (
