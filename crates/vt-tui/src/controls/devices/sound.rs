@@ -40,12 +40,17 @@ pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
         ),
         device("Output", [], output),
         // A synth's whether its oscillators start again on each note, as a sampler's sample does
-        // anyway, then how the notes join.
+        // anyway, then how the notes join and which of them glide.
         match track.machine {
             Machine::Sampler => device(
                 "Play",
                 [],
-                &[PLAY[0], PLAY[1], PLAY[2], &[Control::VoiceMode]],
+                &[
+                    PLAY[0],
+                    PLAY[1],
+                    PLAY[2],
+                    &[Control::VoiceMode, Control::GlideMode],
+                ],
             ),
             Machine::Plaits(_) => device(
                 "Play",
@@ -54,7 +59,7 @@ pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
                     PLAY[0],
                     PLAY[1],
                     PLAY[2],
-                    &[Control::Phase, Control::VoiceMode],
+                    &[Control::Phase, Control::VoiceMode, Control::GlideMode],
                 ],
             ),
         },
@@ -103,7 +108,8 @@ const MASTER_OUTPUT: [&[Control]; 2] = [&[Control::Trim, Control::Level], &[Cont
 
 /// How it plays its notes: their pitch and how they join and end, then the steps' timing, then
 /// what cuts them off, and how much louder or softer and how much nearer the grid than written
-/// they play. A synth's has its `Phase` after them, and every sound's its `Mode`.
+/// they play. A synth's has its `Phase` after them, and every sound's its `Mode` and its
+/// `Glide mode`, in the fourth column as `Glide`'s is full.
 const PLAY: [&[Control]; 3] = [
     &[
         base(TrackControl::Pitch),

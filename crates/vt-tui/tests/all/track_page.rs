@@ -1077,7 +1077,7 @@ fn the_track_page_moves_every_notes_velocity_from_under_choke() {
     let line = from_name(&app, "Velocity");
     assert!(line.starts_with("Velocity  8000 ▕    │    ▏"), "{line}");
 
-    press(&mut app, "2}j$");
+    press(&mut app, "2}j$h");
     assert_eq!(app.track_control().label(), "Velocity");
     assert_eq!(value_shown(&app).as_deref(), Some("+00 vel"));
     press(&mut app, "i90");
@@ -1130,8 +1130,8 @@ fn the_track_page_quantises_the_nudges_from_under_velocity_and_leaves_them_writt
 }
 
 #[test]
-fn a_synths_play_device_has_its_phase_and_mode_and_a_samplers_its_mode() {
-    use vt_model::song::{Phase, VoiceMode};
+fn a_synths_play_device_has_its_phase_and_modes_and_a_samplers_its_modes() {
+    use vt_model::song::{GlideMode, Phase, VoiceMode};
     use vt_tui::screen::status::value_shown;
     let mut song = Song::new(1);
     song.tracks[0].machine = Machine::Plaits(SynthVoice::VirtualAnalog);
@@ -1155,6 +1155,14 @@ fn a_synths_play_device_has_its_phase_and_mode_and_a_samplers_its_mode() {
     assert_eq!(value_shown(&app).as_deref(), Some("Legato"));
     press(&mut app, "x");
     assert_eq!(app.song().tracks[0].voice_mode, VoiceMode::Mono);
+    press(&mut app, "j");
+    assert_eq!(app.track_control().label(), "Glides");
+    assert_eq!(value_shown(&app).as_deref(), Some("Ties"));
+    press(&mut app, "=");
+    assert_eq!(app.song().tracks[0].glide_mode, GlideMode::Always);
+    assert_eq!(value_shown(&app).as_deref(), Some("Always"));
+    press(&mut app, "x");
+    assert_eq!(app.song().tracks[0].glide_mode, GlideMode::Ties);
 
     let (mut app, _realtime) = on_track_page();
     assert_eq!(app.song().tracks[0].machine, Machine::Sampler);
@@ -1162,10 +1170,12 @@ fn a_synths_play_device_has_its_phase_and_mode_and_a_samplers_its_mode() {
     assert_eq!(
         app.track_control().label(),
         "Mode",
-        "a sampler's fourth column has only its Mode"
+        "a sampler's fourth column has its Mode first"
     );
     press(&mut app, "=");
     assert_eq!(app.song().tracks[0].voice_mode, VoiceMode::Legato);
+    press(&mut app, "j=");
+    assert_eq!(app.song().tracks[0].glide_mode, GlideMode::Always);
 }
 
 #[test]
@@ -1634,7 +1644,7 @@ fn a_track_following_the_project_shows_its_groove_dimmed_and_x_returns_to_that()
     assert_eq!(groove_cell(&app), ("Swing 60".to_owned(), dim));
 
     // It's the track's own once set, and a nudge starts from what it was playing.
-    press(&mut app, "2}j$h=");
+    press(&mut app, "2}j$hh=");
     assert_eq!(app.song().tracks[0].groove, GrooveId::swing(62));
     press(&mut app, "k");
     assert_eq!(groove_cell(&app), ("Swing 62".to_owned(), Color::Reset));
@@ -1789,7 +1799,7 @@ fn a_tracks_groove_on_the_page_is_chosen_from_a_list() {
     use vt_tui::controls::Control;
     let (mut app, _realtime) = on_track_page();
     let groove = |name: &str| GrooveId::named(name);
-    press(&mut app, "2}j$h");
+    press(&mut app, "2}j$hh");
     assert_eq!(app.track_control(), Control::Groove);
     press(&mut app, "K");
     assert_eq!(app.modes.mode, Mode::Picker);
@@ -3781,7 +3791,7 @@ fn a_count_steps_a_list_that_many_choices_round_or_to_its_end() {
     assert_eq!(at(&app), Some(0), "and at the first");
     // So does the groove, from the project's.
     let (mut app, _realtime) = on_track_page();
-    press(&mut app, "2}j$h");
+    press(&mut app, "2}j$hh");
     assert_eq!(app.track_control(), Control::Groove);
     let from = app.song().groove.index();
     press(&mut app, "3=");
