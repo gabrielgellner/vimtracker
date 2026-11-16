@@ -419,8 +419,15 @@ impl NoteOn {
 }
 
 impl Voice {
-    /// Start a note, from a level if the last note's should carry on.
-    pub(crate) fn start(note: NoteOn, rate: u32, from: f32, pitch: f64) -> Self {
+    /// Start a note on a voice of its own, from nothing whatever its shape's `Reset` says: a new
+    /// voice's sound starts from nothing too, so a level carried over to it would be a step
+    /// (decision 373). Only a note carried on by the voice sounding starts from where it is.
+    pub(crate) fn start(note: NoteOn, rate: u32, pitch: f64) -> Self {
+        Self::start_from(note, rate, 0.0, pitch)
+    }
+
+    /// Start a note from a level.
+    fn start_from(note: NoteOn, rate: u32, from: f32, pitch: f64) -> Self {
         let mut synth = note.synth.map(|voice| Synth::new(voice, rate));
         if let Some(synth) = &mut synth {
             synth.trigger(note.accent);
@@ -461,13 +468,13 @@ impl Voice {
     /// plays as it's set, under the old note's fall. A shorter one sits inside the fade, so the
     /// note starts at full instead, its decay as much sooner as from full without `Reset`, and
     /// rises over the fade as the old note falls, at equal power (decision 368).
-    pub(crate) fn start_under_cut(note: NoteOn, rate: u32, from: f32, pitch: f64) -> Self {
+    pub(crate) fn start_under_cut(note: NoteOn, rate: u32, pitch: f64) -> Self {
         if note.shape.attack_frames(rate) >= u64::from(CUT_FADE_FRAMES) {
-            return Self::start(note, rate, from, pitch);
+            return Self::start(note, rate, pitch);
         }
         Self {
             rising: Some(0),
-            ..Self::start(note, rate, 1.0, pitch)
+            ..Self::start_from(note, rate, 1.0, pitch)
         }
     }
 
@@ -601,14 +608,15 @@ impl Voice {
         self.stage != Stage::Idle
     }
 
+    /// The level its envelope is at now.
+    #[cfg(test)]
+    pub(crate) fn level(&self) -> f32 {
+        self.level
+    }
+
     /// Whether it's sounding and hasn't been let go.
     pub(crate) fn is_held(&self) -> bool {
         matches!(self.stage, Stage::Held { .. })
-    }
-
-    /// The level its envelope is at now.
-    pub(crate) fn level(&self) -> f32 {
-        self.level
     }
 
     /// Carry on as another note, with no new attack: a sample keeps playing at the new note's

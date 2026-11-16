@@ -1699,10 +1699,11 @@ fn the_track_page_shows_its_settings_in_columns() {
     // An envelope's times down its left and its levels down its right.
     let (top, left) = device_at(&lines, "Mod 1");
     let row = |at: usize| from_column(&lines[top + at], left);
-    let on = vt_tui::widgets::glyphs::SWITCH_ON.to_string();
+    // A new track's notes retrigger from where they are, so the first envelope's Reset is off.
+    let off = vt_tui::widgets::glyphs::SWITCH_OFF.to_string();
     assert!(row(2).starts_with("│  Attack    1 ms       Sustain   100%"));
     assert!(row(4).starts_with("│  Decay     0 ms       Depth     --"));
-    assert!(row(6).starts_with(&format!("│  Release   50 ms      Reset     {on}")));
+    assert!(row(6).starts_with(&format!("│  Release   50 ms      Reset     {off}")));
     // An LFO's shape, rate and depth down its left, and its phase, fade and deform down its right,
     // as its mode is in its title.
     let (top, left) = device_at(&lines, "Mod 4");
@@ -3079,7 +3080,9 @@ fn two_state_settings_are_toggles_on_the_fx_and_mod_pages_and_nothing_moves() {
     let top = |band: u16| 2 + 9 * band;
     for band in 0..3 {
         let reset = (34, top(band) + 6);
-        assert_eq!(glyph_at(&buffer, reset).0, SWITCH_ON, "Mod {}", band + 1);
+        // The note's shape has it off, and the other envelopes on.
+        let set = if band == 0 { SWITCH_OFF } else { SWITCH_ON };
+        assert_eq!(glyph_at(&buffer, reset).0, set, "Mod {}", band + 1);
         let under_phase = (76 + 34, top(band) + 4);
         assert_eq!(glyph_at(&buffer, under_phase).0, 'O', "Mod {}", band + 4);
     }
@@ -3090,10 +3093,10 @@ fn two_state_settings_are_toggles_on_the_fx_and_mod_pages_and_nothing_moves() {
     press(&mut app, "gg0jjjl");
     assert_eq!(app.track_control().label(), "Reset");
     press(&mut app, "=");
-    assert!(!app.song().tracks[0].mods[0].adsr.reset);
+    assert!(app.song().tracks[0].mods[0].adsr.reset);
     press(&mut app, "k");
     let buffer = track_page_buffer(&app);
-    assert_eq!(glyph_at(&buffer, (34, top(0) + 6)).0, SWITCH_OFF);
+    assert_eq!(glyph_at(&buffer, (34, top(0) + 6)).0, SWITCH_ON);
     assert_eq!(buffer[(24, top(0) + 6)].symbol(), "R");
 }
 
