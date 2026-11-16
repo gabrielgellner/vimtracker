@@ -46,6 +46,37 @@ impl App {
         }
     }
 
+    /// `gd`: open the phrase of a chain with just one, or the rows of one with several. A cell with
+    /// no chain gets a new one, and a chain with no phrase gets a new one.
+    pub(crate) fn open_section_chain(&mut self) {
+        let Some(track) = self.song_view.track() else {
+            self.services.status = "gd opens a chain from a track's column".to_owned();
+            return;
+        };
+        let section = self.services.cursor.section;
+        let chain = self
+            .services
+            .section_here()
+            .and_then(|here| here.chains.get(track).copied().flatten());
+        self.record_jump();
+        if chain.is_none() {
+            let chain = lowest_unused(&self.song().tracks[track].chains);
+            self.services.apply(&Action::SetSectionChain {
+                section,
+                track,
+                chain: Some(chain),
+            });
+        }
+        self.services.cursor.track = track;
+        self.services.cursor.slot = 0;
+        if self.services.chain_entries().len() > 1 {
+            self.modes.view = View::Chain;
+            self.note_view(View::Chain);
+        } else if let Some(chain) = self.services.chain_id() {
+            self.enter_row(chain, 0);
+        }
+    }
+
     fn open_row(&mut self) {
         let Some(chain) = self.services.chain_id() else {
             self.services.status = "This track has no chain".to_owned();
