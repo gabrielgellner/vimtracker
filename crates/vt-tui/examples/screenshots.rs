@@ -394,6 +394,8 @@ fn sends_to_b(song: &mut Song) {
 fn sidechained(song: &mut Song) {
     use vt_model::insert::{Compressor, CompressorType, Distort, DistortType, Equaliser, Limiter};
     song.tracks[0].name = "Pad".to_owned();
+    // A little under 0 dB, so the pad and the kick together don't reach the master's limiter.
+    song.tracks[0].level = 0xD8;
     song.tracks[1].name = "Kick".to_owned();
     song.tracks[1].machine = Machine::Plaits(SynthVoice::Kick);
     let beats: Vec<&str> = (0..16)
