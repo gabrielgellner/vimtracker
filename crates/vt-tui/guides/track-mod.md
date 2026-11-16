@@ -166,6 +166,12 @@ away, though at `Phase` `Free` its oscillators go on from where they stopped. `A
 on the Sound page's Play device, says whether the oscillators run on through the
 change or start again at the bottom of the dip.
 
+All of this is the track's `Mode` at `Mono`, as a track starts. At `Legato`, on the
+same device, a note that arrives while the last one's gate is still open isn't
+struck at all: it ties into the note sounding as a `HLD` does, so no envelope starts
+again and `Reset` has nothing to act on. Only a note after the gate has closed is
+struck, by the rules above. A `RET`'s ratchets are always struck.
+
 **A pluck,** `Sustain` at `0%` with a short `Decay`, has died away before the next
 note, so each note starts from silence. A 1 ms attack with a short decay on a bright
 wave such as a saw is a click by its nature: the wave arrives at nearly full at once.
