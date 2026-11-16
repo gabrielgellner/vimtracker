@@ -895,8 +895,8 @@ sample page a 16th of a pixel, as Cmd-l and Cmd-h nudge a point. A slow or
 steady turn moves the same for every tick, so twice the swipe is twice the
 change. A faster swipe takes more each tick, rising evenly with its speed up to
 `=`'s whole step. Where `=` is already the finest step, a semitone on a note,
-a sideways tick is one `=` and an up tick two, however fast. On a selection it
-moves every value, as `=` does, and keeps it selected.
+a tick either way is one `=`, however fast. On a selection it moves every
+value, as `=` does, and keeps it selected.
 
 A list or a toggle goes a choice at a time, and stops at either end where `=`
 goes round. Up or right puts a toggle on, and down or left off. The first tick

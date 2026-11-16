@@ -282,12 +282,12 @@ fn up_or_right_raises_down_or_left_lowers_up_counts_as_far_and_shift_is_nothing(
         at += Duration::from_millis(400);
         at
     };
-    // A row is two columns, so an up tick is the fingers' way of two sideways: two of `=`.
+    // A note has no finer step, so a slow tick is a semitone, up or sideways alike.
     scroll(&mut app, true, next());
-    assert_eq!(steps(&app), ["D-3 40 cut:20 --- ---"]);
+    assert_eq!(steps(&app), ["C#3 40 cut:20 --- ---"]);
     scroll(&mut app, false, next());
     scroll(&mut app, false, next());
-    assert_eq!(steps(&app), ["A#2 40 cut:20 --- ---"]);
+    assert_eq!(steps(&app), ["B-2 40 cut:20 --- ---"]);
     report_at(&mut app, UP, true, next());
     assert_eq!(steps(&app), ["C-3 40 cut:20 --- ---"], "Shift is still =");
     report_at(&mut app, RIGHT, false, next());
@@ -301,6 +301,16 @@ fn up_or_right_raises_down_or_left_lowers_up_counts_as_far_and_shift_is_nothing(
     assert_eq!(app.wheel.upright(), 2.0);
     app.wheel.cell = Some((20, 20));
     assert_eq!(app.wheel.upright(), 1.0);
+}
+
+#[test]
+fn a_slow_up_tick_and_a_slow_sideways_tick_on_a_note_each_move_a_semitone() {
+    let (mut app, _realtime) = app_with(&[NOTE]);
+    let start = Instant::now();
+    scroll(&mut app, true, start);
+    assert_eq!(steps(&app), ["C#3 40 cut:20 --- ---"], "up");
+    report_at(&mut app, RIGHT, false, start + Duration::from_secs(2));
+    assert_eq!(steps(&app), ["D-3 40 cut:20 --- ---"], "sideways");
 }
 
 #[test]
@@ -386,11 +396,7 @@ fn a_gesture_is_one_undo_step_ended_by_a_pause_or_a_key() {
     let depth = app.services.history.undo_depth();
     let start = Instant::now();
     let end = slow_ticks(&mut app, true, 5, start);
-    assert_eq!(
-        steps(&app),
-        ["A#3 40 cut:20 --- ---"],
-        "two semitones an up tick"
-    );
+    assert_eq!(steps(&app), ["F-3 40 cut:20 --- ---"]);
     // Still turning: a frame within the pause leaves it open.
     app.tick_at(end);
     app.tick_at(end + Duration::from_millis(400));
@@ -403,9 +409,9 @@ fn a_gesture_is_one_undo_step_ended_by_a_pause_or_a_key() {
     slow_ticks(&mut app, true, 2, end + Duration::from_secs(1));
     app.tick_at(end + Duration::from_secs(3));
     assert_eq!(app.services.history.undo_depth(), depth + 2);
-    assert_eq!(steps(&app), ["D-4 40 cut:20 --- ---"]);
+    assert_eq!(steps(&app), ["G-3 40 cut:20 --- ---"]);
     press(&mut app, "u");
-    assert_eq!(steps(&app), ["A#3 40 cut:20 --- ---"]);
+    assert_eq!(steps(&app), ["F-3 40 cut:20 --- ---"]);
     press(&mut app, "u");
     assert_eq!(steps(&app), [NOTE], "the first turn, all at once");
     // A key ends a turn at once, with no pause.
@@ -655,26 +661,26 @@ fn a_bounce_is_let_go_and_a_turn_after_a_pause_or_three_ticks_is_taken() {
     for ms in [0, 100, 200] {
         scroll(&mut app, true, at(ms));
     }
-    assert_eq!(steps(&app), ["F#3 40 cut:20 --- ---"]);
+    assert_eq!(steps(&app), ["D#3 40 cut:20 --- ---"]);
     // A tick back sooner than the turn's pause is a bounce.
     scroll(&mut app, false, at(250));
-    assert_eq!(steps(&app), ["F#3 40 cut:20 --- ---"], "a bounce is let go");
+    assert_eq!(steps(&app), ["D#3 40 cut:20 --- ---"], "a bounce is let go");
     scroll(&mut app, true, at(300));
-    assert_eq!(steps(&app), ["G#3 40 cut:20 --- ---"], "the turn goes on");
+    assert_eq!(steps(&app), ["E-3 40 cut:20 --- ---"], "the turn goes on");
     // After a pause, a tick the other way turns it at once.
     let paused = 300 + feel::TURN_PAUSE.as_millis() as u64;
     scroll(&mut app, false, at(paused));
-    assert_eq!(steps(&app), ["F#3 40 cut:20 --- ---"]);
+    assert_eq!(steps(&app), ["D#3 40 cut:20 --- ---"]);
     // With no pause, three in a row are a deliberate turn: the third is taken.
     scroll(&mut app, true, at(paused + 10));
     scroll(&mut app, true, at(paused + 20));
     assert_eq!(
         steps(&app),
-        ["F#3 40 cut:20 --- ---"],
+        ["D#3 40 cut:20 --- ---"],
         "two back are a bounce"
     );
     scroll(&mut app, true, at(paused + 30));
-    assert_eq!(steps(&app), ["G#3 40 cut:20 --- ---"], "the third, a turn");
+    assert_eq!(steps(&app), ["E-3 40 cut:20 --- ---"], "the third, a turn");
     // After a fling, a tick back is its bounce until the wheel has been still for its momentum.
     let (mut app, _realtime) = app_with(&["--- -- cut:00 --- ---"]);
     press(&mut app, "llllll");
@@ -778,18 +784,18 @@ fn a_tick_moves_a_locked_selection_and_a_gesture_is_one_undo_with_its_total() {
     press(&mut app, "Vjj");
     let depth = app.services.history.undo_depth();
     let end = slow_ticks(&mut app, true, 3, Instant::now());
-    let up = "F#3 40 cut:20 --- ---";
+    let up = "D#3 40 cut:20 --- ---";
     assert_eq!(steps(&app), [up, up, up, NOTE]);
     assert_eq!(app.modes.mode, Mode::VisualStep, "it stays selected");
-    assert_eq!(app.adjusted_total().as_deref(), Some("+6 semitones"));
+    assert_eq!(app.adjusted_total().as_deref(), Some("+3 semitones"));
     app.tick_at(end + Duration::from_secs(1));
     assert_eq!(app.services.history.undo_depth(), depth + 1);
     // A second turn, then undo takes back each turn whole, the total with it.
     slow_ticks(&mut app, false, 1, end + Duration::from_secs(2));
     app.tick_at(end + Duration::from_secs(3));
-    assert_eq!(app.adjusted_total().as_deref(), Some("+4 semitones"));
+    assert_eq!(app.adjusted_total().as_deref(), Some("+2 semitones"));
     press(&mut app, "u");
-    assert_eq!(app.adjusted_total().as_deref(), Some("+6 semitones"));
+    assert_eq!(app.adjusted_total().as_deref(), Some("+3 semitones"));
     press(&mut app, "u");
     assert_eq!(steps(&app), [NOTE, NOTE, NOTE, NOTE]);
     assert_eq!(app.modes.mode, Mode::VisualStep);
@@ -803,7 +809,7 @@ fn a_tick_moves_a_locked_selection_and_a_gesture_is_one_undo_with_its_total() {
         [up, up, up, NOTE],
         "redo brings the turn back whole"
     );
-    assert_eq!(app.adjusted_total().as_deref(), Some("+6 semitones"));
+    assert_eq!(app.adjusted_total().as_deref(), Some("+3 semitones"));
 }
 
 #[test]
@@ -826,7 +832,7 @@ fn dot_repeats_the_last_keys_change_not_the_wheels() {
     let (mut app, _realtime) = app_with(&[NOTE]);
     press(&mut app, "=");
     slow_ticks(&mut app, true, 2, Instant::now());
-    assert_eq!(steps(&app), ["F-3 40 cut:20 --- ---"]);
+    assert_eq!(steps(&app), ["D#3 40 cut:20 --- ---"]);
     press(&mut app, ".");
-    assert_eq!(steps(&app), ["F#3 40 cut:20 --- ---"]);
+    assert_eq!(steps(&app), ["E-3 40 cut:20 --- ---"]);
 }

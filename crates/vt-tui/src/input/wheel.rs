@@ -82,8 +82,9 @@ pub mod feel {
     /// What an up or down tick counts for, in sideways ones, where the terminal's cell isn't
     /// known: kitty sends a tick for each column or row the scroll crosses, and a row is about
     /// twice as high as a column is wide, so the same swipe sends half the ticks up as sideways.
-    /// An up tick counts for two in its size, the speed and a list's detent, so both axes feel as
-    /// sideways did when every tick counted whole. Once the screen's drawn, its own cell's height
+    /// An up tick counts for two in the speed, a list's detent and, where the setting has a finer
+    /// step, its size, so both axes feel as sideways did when every tick counted whole; with no
+    /// finer step, a tick either way is one `=`. Once the screen's drawn, its own cell's height
     /// over its width is used.
     pub(crate) const UPRIGHT: f64 = 2.0;
 
@@ -587,7 +588,9 @@ impl App {
                 tick_size(gesture.speed, step.least, step.most) * weight,
                 step.least,
             ),
-            None => (tick_size(gesture.speed, 1, feel::MOST) * weight, 1),
+            // With no finer step, a tick is a place whichever way it comes, so a slow one is
+            // never two; its weight still counts in the speed that sizes it.
+            None => (tick_size(gesture.speed, 1, feel::MOST), 1),
         };
         let finer = finer.map(|step| step.finer);
         match &mut gesture.owed {
