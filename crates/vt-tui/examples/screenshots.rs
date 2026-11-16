@@ -505,7 +505,7 @@ fn band(song: &mut Song) {
 
 /// Two outputs for the audio page to list, the laptop's own playing, at a buffer of 256.
 fn two_outputs(app: &mut App) {
-    app.audio.devices = vec![
+    app.audio_page.audio.devices = vec![
         DeviceInfo {
             id: "coreaudio:speakers".to_owned(),
             name: "MacBook Pro Speakers".to_owned(),
@@ -521,8 +521,8 @@ fn two_outputs(app: &mut App) {
             default: false,
         },
     ];
-    app.audio.buffer = Some(256);
-    app.audio.latency_us = 9_800;
+    app.audio_page.audio.buffer = Some(256);
+    app.audio_page.audio.latency_us = 9_800;
 }
 
 /// Press keys as they're written, with `<Name>` for a key that isn't a character, all at this
@@ -571,8 +571,8 @@ fn app_on(song: Song, pool: SamplePool) -> (App, Realtime) {
     let (handle, realtime) = connect(Engine::new(RATE, version));
     let mut app = App::new(song, None, samples, handle, RATE);
     // The output as a laptop plays it, for the project page's audio row.
-    app.audio.device = "MacBook Pro Speakers".to_owned();
-    app.audio.running = true;
+    app.audio_page.audio.device = "MacBook Pro Speakers".to_owned();
+    app.audio_page.audio.running = true;
     (app, realtime)
 }
 

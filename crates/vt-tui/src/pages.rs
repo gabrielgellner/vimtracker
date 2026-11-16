@@ -45,20 +45,19 @@ use vt_model::selection::{Extent, Field};
 use vt_model::song::{ChainEntry, Phrase, Section, Song, Track};
 use vt_model::step::{FxSlot, Gate, Step};
 
-use crate::app::{
-    App, AudioState, Cursor, Entry, Modes, Momentary, Selection, TrackLive, which_key_due,
-};
+use crate::app::{App, Cursor, Entry, Modes, Momentary, Selection, TrackLive, which_key_due};
 use crate::controls::Control;
 use crate::controls::param::ParamView;
 use crate::graphics::{PanelIds, PanelWant};
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
-use crate::input::wheel::WheelSetting;
+use crate::input::wheel::{Wheel, WheelSetting};
 use crate::overlays::command::parse::Line;
 use crate::overlays::field_jump::FieldJump;
 use crate::overlays::help::{Help, POPUP_DELAY};
 use crate::overlays::picker::exploring::Naming;
 use crate::overlays::picker::{Pick, Picker};
+use crate::pages::audio::AudioState;
 use crate::pages::sample::{SamplePage, Shown, is_sample_motion};
 use crate::roto::Roto;
 use crate::services::Services;
@@ -196,11 +195,14 @@ pub(crate) struct PageState<'a> {
     field_jump: Option<&'a FieldJump>,
 }
 
-/// What a page is given to run a key: the shared services, to read and change, and the modes that
-/// span the pages, to read, borrowed apart from the page.
+/// What a page is given to run a key: the shared services, to read and change, the modes that
+/// span the pages, to read, and the mouse wheel, borrowed apart from the page.
 pub(crate) struct CtxMut<'a> {
     pub services: &'a mut Services,
     pub modes: &'a Modes,
+    /// The mouse wheel, whose setting the audio page's rows turn on and off. Its ticks are
+    /// `App`'s, as they press keys.
+    pub wheel: &'a mut Wheel,
 }
 
 impl App {
@@ -237,7 +239,7 @@ impl App {
                 .map(|(selection, _)| selection)
                 .or(self.overlays.shape.as_ref().map(|panel| panel.selection)),
             recording: self.sampling_shown(),
-            audio: &self.audio,
+            audio: &self.audio_page.audio,
             wheel: self.wheel.setting,
             cpu_percent: self.readouts.cpu.percent(),
             slowdown: &self.readouts.slowdown,
@@ -272,6 +274,7 @@ impl App {
         let mut ctx = CtxMut {
             services: &mut self.services,
             modes: &self.modes,
+            wheel: &mut self.wheel,
         };
         let outcome = match self.modes.view {
             View::Mixer => match self.mixer_page.key(cmd, times, &mut ctx) {
@@ -289,20 +292,19 @@ impl App {
     }
 
     /// Run a command on the project page's Song or Audio sub-page: the page's own key and what it
-    /// asks for, and then, on the Audio sub-page, what it passes back, an edit or `H` and `L`,
-    /// which are `App`'s, as an edit opens another output. The count stays for what takes it, as
-    /// `gg` and `G` go to the row it names.
+    /// asks for. The count stays for what takes it, as `gg` and `G` go to the row it names.
     fn run_project_pages(&mut self, cmd: Cmd) -> bool {
         let times = self.modes.count.unwrap_or(1).max(1);
         let mut ctx = CtxMut {
             services: &mut self.services,
             modes: &self.modes,
+            wheel: &mut self.wheel,
         };
         let outcome = match self.modes.view {
             View::Audio => self.audio_page.key(cmd, times, &mut ctx),
             _ => self.project_page.key(cmd, times, &mut ctx),
         };
-        self.settled(outcome, true) || (self.modes.view == View::Audio && self.run_audio_page(cmd))
+        self.settled(outcome, true)
     }
 
     /// Run a command on the sample page: the page's own key, and what it asks for, once the page
@@ -323,6 +325,7 @@ impl App {
         let mut ctx = CtxMut {
             services: &mut self.services,
             modes: &self.modes,
+            wheel: &mut self.wheel,
         };
         let outcome = self.sample_page.key(cmd, times, &mut ctx);
         self.settled(outcome, true)
@@ -335,6 +338,7 @@ impl App {
         let mut ctx = CtxMut {
             services: &mut self.services,
             modes: &self.modes,
+            wheel: &mut self.wheel,
         };
         let outcome = self.song_view.key(cmd, times, &mut ctx);
         self.settled(outcome, true)
@@ -347,6 +351,7 @@ impl App {
         let mut ctx = CtxMut {
             services: &mut self.services,
             modes: &self.modes,
+            wheel: &mut self.wheel,
         };
         let outcome = self.chain_view.key(cmd, times, &mut ctx);
         self.settled(outcome, true)
@@ -361,6 +366,7 @@ impl App {
         let mut ctx = CtxMut {
             services: &mut self.services,
             modes: &self.modes,
+            wheel: &mut self.wheel,
         };
         let outcome = self.phrase_view.key(cmd, times, &mut ctx);
         self.settled(outcome, true)

@@ -363,8 +363,11 @@ impl App {
             &mut self.overlays.command,
             &self.table,
             &mut self.grammar,
-            &mut self.services,
-            &self.modes,
+            CtxMut {
+                services: &mut self.services,
+                modes: &self.modes,
+                wheel: &mut self.wheel,
+            },
             key,
             now,
         );

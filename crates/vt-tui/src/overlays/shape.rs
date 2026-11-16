@@ -1196,8 +1196,11 @@ impl App {
             panel,
             &self.table,
             &mut self.grammar,
-            &mut self.services,
-            &self.modes,
+            CtxMut {
+                services: &mut self.services,
+                modes: &self.modes,
+                wheel: &mut self.wheel,
+            },
             key,
             now,
         );

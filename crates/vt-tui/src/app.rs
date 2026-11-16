@@ -9,7 +9,6 @@ use crate::overlays::picker::draw::{PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH}
 use crate::pages::audio::AudioPage;
 use crate::pages::chain::ChainView;
 use crate::screen::Readouts;
-use crate::services::audio::{AudioChoice, DeviceInfo};
 use crate::services::loading::Loader;
 use crate::widgets::glyphs;
 use vt_engine::engine::{PLAYHEADS, TrackPlace, Transport};
@@ -177,45 +176,14 @@ pub enum Momentary {
     },
 }
 
-/// The audio output as it plays, and what the audio page offers.
-#[derive(Debug, Clone, Default)]
-pub struct AudioState {
-    pub device: String,
-    /// The buffer it plays with, in frames, if the device says.
-    pub buffer: Option<u32>,
-    /// How long from the callback to the sound leaving the device, in microseconds.
-    pub latency_us: u64,
-    /// Buffers filled too late, and dropouts the device reported, since it started.
-    pub late: u64,
-    pub xruns: u64,
-    /// Whether the main loop should list the devices again, as the page has just opened.
-    pub refresh: bool,
-    /// Whether it's playing. It stops when the device changes or goes away.
-    pub running: bool,
-    /// What's chosen, which the system's own choices fill in.
-    pub choice: AudioChoice,
-    pub devices: Vec<DeviceInfo>,
-    /// The inputs the recorder can hear, the one open by name, if one is, and how long from the
-    /// sound reaching it to its callback, in microseconds.
-    pub(crate) inputs: Vec<DeviceInfo>,
-    pub input: Option<String>,
-    pub(crate) input_latency_us: u64,
-    /// The slowdown check's time at full speed, measured as the program starts, for each stream
-    /// it opens.
-    pub(crate) full_speed: Duration,
-}
-
 /// The whole program's state.
 pub struct App {
     /// What every page shares: the song and the cursor, the engine, the samples, the status line.
     pub services: Services,
     /// The view and the mode the keys are in, and what spans the pages as they're typed.
     pub modes: Modes,
-    /// The audio output as it plays, and what the audio page chooses from.
-    pub audio: AudioState,
-    /// A different output the audio page has chosen, for the main loop to open.
-    pub audio_request: Option<AudioChoice>,
-    /// The audio page: the row its cursor is on.
+    /// The audio page: the row its cursor is on, the output as it plays, and what the page
+    /// chooses from.
     pub audio_page: AudioPage,
     /// The mouse wheel as a knob on the cursor's setting, while its setting is on.
     pub wheel: crate::input::wheel::Wheel,
@@ -296,8 +264,6 @@ impl App {
             track_page: TrackPage::default(),
             sample_page: crate::pages::sample::SamplePage::default(),
             project_page: ProjectPage::default(),
-            audio: AudioState::default(),
-            audio_request: None,
             audio_page: AudioPage::default(),
             wheel: crate::input::wheel::Wheel::default(),
             recent_views: View::ALL.to_vec(),
