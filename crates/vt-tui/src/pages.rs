@@ -339,12 +339,16 @@ impl App {
     }
 
     /// Run a command on the sample page: the page's own key, and what it asks for, once the page
-    /// is up to date with what it shows. A key that moves over the sample says why there's none
-    /// to show, as there's nothing it can do, while any other goes on to mean what it does on
-    /// every page. The count is taken by what takes it, and left for what passes it on.
+    /// is up to date with what it shows. With no sample to show, `K` lists the bank to choose one
+    /// for the track, as `:bank` does, and a key that moves over the sample says why there's none,
+    /// as there's nothing it can do, while any other goes on to mean what it does on every page.
+    /// The count is taken by what takes it, and left for what passes it on.
     fn run_sample_page(&mut self, cmd: Cmd) -> bool {
         match self.sample_page_here() {
             Ok(_) => {}
+            Err(_) if cmd == Cmd::PickValue => {
+                return self.settled(Outcome::Run(Line::Bank), true);
+            }
             Err(why) if is_sample_motion(cmd) => {
                 self.services.status = why;
                 self.modes.count = None;
