@@ -101,9 +101,11 @@ rise isn't: an attack of 0 is as sudden as it's set.
 
 A note lasts until the next note on its track, an `OFF`, or its gate closing,
 and the next note doesn't run the last one's release: it takes over the synth
-sounding, below, or fades a sample out over 4 ms under its own start. So a drum is
-often a Decay with Sustain at `0%`, and at `Gate` 100% Release only runs on an
-`OFF`. To make notes shorter, lower `Gate` in the Play device, give a row a length
+sounding, below, or starts a voice of its own as the last one fades out over
+2.7 ms, as a choke, a `KIL` and stopping fade it. An attack shorter than that fade
+is a rise over it instead, so the two notes keep their level between them; a
+longer attack plays as it's set, under the last note's fade. So a drum is often a
+Decay with Sustain at `0%`, and at `Gate` 100% Release only runs on an `OFF`. To make notes shorter, lower `Gate` in the Play device, give a row a length
 of its own, or put `OFF` on a step.
 
 **The curve** is the envelope's mode, after its type in the title, and bends
