@@ -801,6 +801,16 @@ impl SynthEngine for SixOp {
         self.gate = false;
     }
 
+    /// Whether, let go, every operator's envelope has run its release to its end, where the
+    /// DX7's levels stop: each operator at its floor, 2^-14, -84 dB.
+    fn rung_out(&self) -> bool {
+        !self.gate
+            && self
+                .envelopes
+                .iter()
+                .all(|envelope| envelope.stage == 3 && envelope.phase >= 1.0)
+    }
+
     /// The next frame, at a frequency as a fraction of the sample rate.
     #[inline]
     fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
