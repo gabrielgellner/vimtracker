@@ -1007,7 +1007,7 @@ only name Normal's keys on those pages, for the binding table.
     setting, `wheel.ron` in the config folder, is on; the main loop asks the terminal for mouse
     reports only then. `App::mouse_event` reads both axes as one knob, flipped to follow the
     fingers under macOS's natural scrolling (`wheel::natural_scrolling`, read at start) and by
-    the setting's `reversed`, a sideways tick weighed by the cell's width over its height
+    the setting's `reversed`, an up or down tick weighed by the cell's height over its width
     (`Wheel::cell`, from the main loop's window size) and Shift ignored. A gesture drops a tick
     the other way that comes too soon, as a bounce, waiting out a fling's momentum, and keeps a
     decaying speed that sizes each tick by `wheel::tick_size`, the constants all in
@@ -1021,7 +1021,7 @@ only name Normal's keys on those pages, for the binding table.
     than `=`, the cursor is put on its fine part for the press and back after. A gesture's
     presses are squashed into one undo step (`History::squash_to`, as the Roto's touch to
     let-go), and in a selection `Adjustments::join_from` keeps its running total in step
-    (decisions 162, 163 and 372).
+    (decisions 162, 163, 372 and 375).
 *   **`bindings.rs`:** the binding table, one list of mode, key sequence, `Cmd` and description,
     assembled from its own rows, each component page's `Page::KEYS` and each overlay's
     `Overlay::KEYS`, and pinned row by row in

@@ -1,6 +1,7 @@
 //! The mouse wheel and the trackpad as a knob on the cursor's setting (#425, #943), through the
 //! terminal's mouse reports as crossterm reads them: a tick is `=` or `-` where the cursor is, in
-//! the setting's finest step sized by speed alone, up and sideways alike, with the fingers
+//! the setting's finest step sized by speed alone, an up tick worth the two sideways ones the same
+//! swipe sends, with the fingers
 //! whichever way the system scrolls; a list or a toggle goes by its places, with a detent, and
 //! stops at its ends; a gesture is one undo step; and nothing is captured or done until it's
 //! turned on. Recorded streams of ticks, as a MacBook's trackpad sends them in kitty, stand in for
@@ -273,7 +274,7 @@ fn the_wheel_is_off_until_turned_on_on_the_audio_page_and_kept_for_the_machine()
 }
 
 #[test]
-fn up_or_right_raises_down_or_left_lowers_sideways_counts_as_far_and_shift_is_nothing() {
+fn up_or_right_raises_down_or_left_lowers_up_counts_as_far_and_shift_is_nothing() {
     let (mut app, _realtime) = app_with(&[NOTE]);
     // Each a moment after the last, as a turn the other way waits for the last to pause.
     let mut at = Instant::now();
@@ -281,6 +282,7 @@ fn up_or_right_raises_down_or_left_lowers_sideways_counts_as_far_and_shift_is_no
         at += Duration::from_millis(400);
         at
     };
+    // A note has no finer step, so a slow tick is a semitone, up or sideways alike.
     scroll(&mut app, true, next());
     assert_eq!(steps(&app), ["C#3 40 cut:20 --- ---"]);
     scroll(&mut app, false, next());
@@ -288,26 +290,27 @@ fn up_or_right_raises_down_or_left_lowers_sideways_counts_as_far_and_shift_is_no
     assert_eq!(steps(&app), ["B-2 40 cut:20 --- ---"]);
     report_at(&mut app, UP, true, next());
     assert_eq!(steps(&app), ["C-3 40 cut:20 --- ---"], "Shift is still =");
-    // A column is half a row, so a sideways tick is half the fingers' way of one up: two make
-    // a step, in one turn.
     report_at(&mut app, RIGHT, false, next());
-    assert_eq!(steps(&app), ["C-3 40 cut:20 --- ---"], "half a semitone");
-    let more = at + Duration::from_millis(150);
-    report_at(&mut app, RIGHT, false, more);
     assert_eq!(steps(&app), ["C#3 40 cut:20 --- ---"], "right is =");
-    let mut at = more;
-    let mut next = || {
-        at += Duration::from_millis(400);
-        at
-    };
     report_at(&mut app, LEFT, true, next());
-    report_at(&mut app, LEFT, false, at + Duration::from_millis(150));
     assert_eq!(steps(&app), ["C-3 40 cut:20 --- ---"], "left is -");
-    // The screen's own cell says what a column is, once it's drawn.
+    // The screen's own cell says what a row is, once it's drawn.
     app.wheel.cell = Some((10, 40));
-    assert_eq!(app.wheel.sideways(), 0.25);
+    assert_eq!(app.wheel.upright(), 4.0);
     app.wheel.cell = Some((12, 24));
-    assert_eq!(app.wheel.sideways(), 0.5);
+    assert_eq!(app.wheel.upright(), 2.0);
+    app.wheel.cell = Some((20, 20));
+    assert_eq!(app.wheel.upright(), 1.0);
+}
+
+#[test]
+fn a_slow_up_tick_and_a_slow_sideways_tick_on_a_note_each_move_a_semitone() {
+    let (mut app, _realtime) = app_with(&[NOTE]);
+    let start = Instant::now();
+    scroll(&mut app, true, start);
+    assert_eq!(steps(&app), ["C#3 40 cut:20 --- ---"], "up");
+    report_at(&mut app, RIGHT, false, start + Duration::from_secs(2));
+    assert_eq!(steps(&app), ["D-3 40 cut:20 --- ---"], "sideways");
 }
 
 #[test]
@@ -315,7 +318,7 @@ fn the_value_follows_the_fingers_under_natural_scrolling_unless_reversed() {
     let (mut app, _realtime) = app_with(&[NOTE]);
     // Natural scrolling sends the fingers going up as the terminal's down, and right as left.
     app.wheel.natural = true;
-    // A square cell, so a sideways tick is a whole step.
+    // A square cell, so an up tick is a sideways one, a single step.
     app.wheel.cell = Some((20, 20));
     let mut at = Instant::now();
     let mut next = || {
@@ -438,8 +441,9 @@ fn a_tick_on_an_fx_value_moves_its_fine_digits_and_quick_ticks_more_of_them() {
     let end = slow_ticks(&mut app, true, 2, start);
     assert_eq!(
         steps(&app),
-        ["--- -- cut:4020 --- ---"],
-        "a slow tick is a 16th of a step, a fine digit that's seen to move"
+        ["--- -- cut:4040 --- ---"],
+        "a slow sideways tick is a 16th of a step, a fine digit that's seen to move, and an up \
+         tick two"
     );
     assert_eq!(
         app.services.cursor.field,
@@ -447,12 +451,12 @@ fn a_tick_on_an_fx_value_moves_its_fine_digits_and_quick_ticks_more_of_them() {
         "the cursor stays"
     );
     slow_ticks(&mut app, false, 3, end + Duration::from_secs(1));
-    assert_eq!(steps(&app), ["--- -- cut:3FF0 --- ---"], "it carries");
+    assert_eq!(steps(&app), ["--- -- cut:3FE0 --- ---"], "it carries");
     // On the fine digits themselves, a slow tick is their own `=`.
     press(&mut app, "l");
     assert_eq!(app.services.cursor.field, Field::FxFine(0));
     slow_ticks(&mut app, true, 2, end + Duration::from_secs(3));
-    assert_eq!(steps(&app), ["--- -- cut:3FF2 --- ---"]);
+    assert_eq!(steps(&app), ["--- -- cut:3FE4 --- ---"]);
     // A burst grows with its speed, and comes in whole 16ths at the frame after it.
     let (mut app, _realtime) = app_with(&["--- -- cut:40 --- ---"]);
     press(&mut app, "llllll");
@@ -466,10 +470,10 @@ fn a_tick_on_an_fx_value_moves_its_fine_digits_and_quick_ticks_more_of_them() {
         "nothing before the frame"
     );
     app.tick_at(burst);
-    // Each tick at once, its speed the ticks so far, less half the last, as a count read as it
-    // comes is over by that.
+    // Each tick at once, two sideways ones, its speed the sideways ticks so far, less the half
+    // of the last that's over a sideways one, as a count read as it comes is over by half.
     let moved: f64 = (1..=6)
-        .map(|ticks| tick_size(f64::from(ticks) - 0.5, 16, 0x100))
+        .map(|ticks| 2.0 * tick_size(f64::from(2 * ticks) - 0.5, 16, 0x100))
         .sum();
     let moved = (moved / 16.0).floor() as u16 * 16;
     assert_eq!(cut(&app), 0x4000 + moved);
@@ -477,66 +481,50 @@ fn a_tick_on_an_fx_value_moves_its_fine_digits_and_quick_ticks_more_of_them() {
 }
 
 #[test]
-fn a_ticks_size_grows_by_the_same_share_for_each_bit_of_speed() {
+fn a_ticks_size_rises_in_a_straight_line_with_speed() {
     // A value's fine digits, a 256th of `=`'s step, and a 16th of it the least.
     assert_eq!(tick_size(0.0, 16, 256), 16.0, "still, the least");
     assert_eq!(tick_size(feel::SLOW, 16, 256), 16.0, "slow, the least");
-    assert_eq!(
-        tick_size(feel::FAST, 16, 256),
-        4096.0,
-        "a sweep, 16 of `=`'s"
-    );
-    assert_eq!(tick_size(feel::FAST * 4.0, 16, 256), 4096.0, "and no more");
-    let middle = (feel::SLOW + feel::FAST) / 2.0;
-    assert!(
-        (tick_size(middle, 16, 256) - 256.0).abs() < 1e-9,
-        "halfway, one"
-    );
-    // Each tenth of the way multiplies it by the same, with no jumps.
+    assert_eq!(tick_size(feel::FAST, 16, 256), 256.0, "a sweep, `=`'s");
+    assert_eq!(tick_size(feel::FAST * 4.0, 16, 256), 256.0, "and no more");
+    // Each tenth of the way adds the same, with no jumps.
     let sizes: Vec<f64> = (0..=10)
         .map(|part| {
             let speed = feel::SLOW + (feel::FAST - feel::SLOW) * f64::from(part) / 10.0;
             tick_size(speed, 16, 256)
         })
         .collect();
-    let growths: Vec<f64> = sizes.windows(2).map(|pair| pair[1] / pair[0]).collect();
-    let tenth = 256_f64.powf(0.1);
+    let rises: Vec<f64> = sizes.windows(2).map(|pair| pair[1] - pair[0]).collect();
     assert!(
-        growths.iter().all(|growth| (growth - tenth).abs() < 1e-9),
-        "{growths:?}"
+        rises.iter().all(|rise| (rise - 24.0).abs() < 1e-9),
+        "{rises:?}"
     );
-    // A setting with no finer step takes its `=` until the curve passes it, half way, and then
-    // the same as one with.
-    assert_eq!(tick_size(feel::SLOW, 1, 1), 1.0);
-    assert_eq!(tick_size(middle, 1, 1), 1.0);
-    let three_quarters = (feel::SLOW + 3.0 * feel::FAST) / 4.0;
-    assert!((tick_size(three_quarters, 1, 1) - 4.0).abs() < 1e-9);
-    assert_eq!(tick_size(feel::FAST, 1, 1), 16.0);
-    // On a fine part itself, its own `=` slowly, and a step of the value at most.
-    assert_eq!(tick_size(feel::SLOW, 1, 16), 1.0);
-    assert_eq!(tick_size(feel::FAST, 1, 16), 256.0);
+    // A setting with no finer step takes its `=`, and so does a sweep, as `=` is the most.
+    assert_eq!(feel::MOST, 1);
+    assert_eq!(tick_size(feel::SLOW, 1, feel::MOST), 1.0);
+    assert_eq!(tick_size(feel::FAST, 1, feel::MOST), 1.0);
 }
 
 #[test]
-fn a_slow_turn_takes_the_finest_step_and_a_fling_crosses_the_range() {
+fn a_slow_turn_takes_the_finest_step_and_a_fling_up_to_eq_a_tick() {
     let (mut app, _realtime) = app_with(&["--- -- cut:00 --- ---"]);
     press(&mut app, "llllll");
-    // A careful turn at 4 and at 10 a second: every tick a 16th of a step.
+    // A careful turn at 4 and at 10 a second: every up tick two 16ths of a step, as it's two
+    // sideways ones' worth.
     let start = Instant::now();
     let (seen, end) = play_watching(&mut app, start, &careful(UP, 4.0, 8), cut);
     let moves: Vec<u16> = seen.windows(2).map(|pair| pair[1] - pair[0]).collect();
-    assert!(moves.iter().all(|moved| *moved == 0x10), "{moves:X?}");
-    let (seen, end) = play_watching(&mut app, end, &careful(UP, 10.0, 8), cut);
+    assert!(moves.iter().all(|moved| *moved == 0x20), "{moves:X?}");
+    let (seen, _) = play_watching(&mut app, end, &careful(UP, 10.0, 8), cut);
     let moves: Vec<u16> = seen.windows(2).map(|pair| pair[1] - pair[0]).collect();
-    assert!(moves.iter().all(|moved| *moved == 0x10), "{moves:X?}");
-    assert_eq!(cut(&app), 0x0100, "16 ticks, one step");
-    // A long fling, its momentum with it, crosses the range, which `=` alone took 255 of.
-    play(&mut app, end, &fling(UP, 400.0));
-    assert_eq!(cut(&app), 0xFF00);
-    // A shorter one, or a swipe with no momentum, a good part of it.
-    for stream in [fling(UP, 200.0), swipe(UP, 300.0)] {
+    assert!(moves.iter().all(|moved| *moved == 0x20), "{moves:X?}");
+    assert_eq!(cut(&app), 0x0200, "16 up ticks, two steps");
+    // A fling's ticks grow to `=`'s, two an up tick: more than the least, and no more than that.
+    for stream in [fling(UP, 400.0), fling(UP, 200.0), swipe(UP, 300.0)] {
+        let ticks = stream.len() as u16;
         let swept = swept(&stream);
-        assert!((0x4000..=0xC000).contains(&swept), "{swept:X}");
+        assert!(swept > ticks * 0x100, "{swept:X} from {ticks} ticks");
+        assert!(swept <= ticks * 0x200, "{swept:X} from {ticks} ticks");
     }
 }
 
@@ -549,8 +537,18 @@ fn swept(stream: &Stream) -> u16 {
 }
 
 #[test]
-fn sideways_turns_a_value_as_far_as_up_and_down_for_the_same_swipe() {
-    for stream in [careful(UP, 6.0, 12), swipe(UP, 300.0), fling(UP, 200.0)] {
+fn an_up_stream_and_a_sideways_one_of_twice_the_ticks_turn_a_value_alike() {
+    // The same swipe of the fingers, up and sideways, whose columns send twice the ticks.
+    for stream in [
+        careful(UP, 4.0, 12),
+        careful(UP, 10.0, 16),
+        careful(UP, 20.0, 16),
+        swipe(UP, 150.0),
+        swipe(UP, 300.0),
+        fling(UP, 100.0),
+        fling(UP, 200.0),
+        fling(UP, 400.0),
+    ] {
         let (up, across) = (swept(&stream), swept(&sideways(&stream)));
         let (low, high) = (f64::from(up) * 0.85, f64::from(up) * 1.15);
         assert!(
@@ -706,7 +704,7 @@ fn a_bounce_is_let_go_and_a_turn_after_a_pause_or_three_ticks_is_taken() {
         false,
         last + Duration::from_millis(500) + feel::MOMENTUM,
     );
-    assert_eq!(cut(&app), flung - 0x10, "still for its momentum, a turn");
+    assert_eq!(cut(&app), flung - 0x20, "still for its momentum, a turn");
 }
 
 #[test]
@@ -750,13 +748,13 @@ fn a_tick_on_a_sound_page_setting_moves_its_fine_digits() {
     };
     assert_eq!(cut(&app), (0xFF, 0));
     let end = slow_ticks(&mut app, false, 2, Instant::now());
-    assert_eq!(cut(&app), (0xFE, 0xE0));
+    assert_eq!(cut(&app), (0xFE, 0xC0));
     assert!(!app.track_page.fine, "the cursor stays on the value");
     // On the fine digits themselves, a slow tick is their own `=`.
     press(&mut app, "l");
     assert!(app.track_page.fine);
     slow_ticks(&mut app, true, 2, end + Duration::from_secs(1));
-    assert_eq!(cut(&app), (0xFE, 0xE2));
+    assert_eq!(cut(&app), (0xFE, 0xC4));
     assert!(app.track_page.fine);
 }
 
@@ -769,7 +767,11 @@ fn a_tick_on_the_tempo_moves_its_fine_part() {
         vt_tui::pages::project::ProjectControl::Bpm
     );
     let end = slow_ticks(&mut app, true, 3, Instant::now());
-    assert_eq!(app.song().millibpm, 120_300, "a tenth of a BPM a slow tick");
+    assert_eq!(
+        app.song().millibpm,
+        120_600,
+        "a tenth of a BPM a slow sideways tick, two an up one"
+    );
     assert!(!app.project_page.fine);
     // A fling sweeps it.
     play(&mut app, end, &fling(UP, 200.0));
