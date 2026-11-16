@@ -27,7 +27,7 @@ use vt_model::param::{Descriptor, HEX_JUMP, NUMBER, PERCENT, Reading, kept};
 use vt_model::settings::{
     Kind, LONGEST_GLIDE_MS, SettingId, Units, gate_percent, gate_value, glide_ms, rows_text,
 };
-use vt_model::shape::params::{Typing, Units as GenUnits};
+use vt_model::shape::params::Typing;
 use vt_model::shape::{Context, GenParam, Where};
 use vt_model::song::{FilterType, Machine, Role, Song, SynthVoice, Track, reset_name, trim_text};
 use vt_model::speed::Speed;
@@ -253,6 +253,7 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
                 Kind::Stepped { .. } => {
                     let hex = Descriptor {
                         reading: Reading::Listed,
+                        barred: false,
                         choices: described.choices,
                         ..Descriptor::hex(entry.key, entry.name, entry.kind.top(), entry.default)
                     };
@@ -815,20 +816,17 @@ fn lane_shown(slot: usize, field: LaneField, moved: LaneMove) -> String {
     }
 }
 
-/// One of a live generator's settings, as it's heard, with what any macro holding its settings
-/// gives them: a brief beside its bar, and in full without one.
+/// One of a live generator's settings, as the model describes it on the shape heard, with what
+/// any macro holding its settings gives them: a brief beside its bar, and in full without one.
+/// How far a step moves it is measured, by stepping it as the page's keys do, as a step can stop
+/// short at an end or go by a rule of the setting's own.
 fn gen_view(of: ParamView, generator: &Generator, context: &Context, param: GenParam) -> ParamView {
     let shape = generator.heard();
-    let choices = param.choices(context);
-    let units = param.units();
-    let bounds = param.bounds(context);
-    let number = param.number(&shape, context);
-    let bar = match (units, bounds, number) {
-        (GenUnits::Named, ..) => None,
-        (_, Some(bounds), Some(number)) => Some(share(number, bounds)),
-        _ => None,
-    };
+    let described = param.described(&shape, context);
+    let listed = described.wraps;
+    let view = of.described(described, param.value(&shape, context));
     // How far a step moves it from here, each way, as the page's keys move it.
+    let number = param.number(&shape, context);
     let moved = |sign: i16, large: bool| {
         let mut moved = shape;
         if param.step(&mut moved, context, sign, large).is_err() {
@@ -839,15 +837,15 @@ fn gen_view(of: ParamView, generator: &Generator, context: &Context, param: GenP
             _ => 0,
         }
     };
-    let listed = choices.is_some();
-    let step = |large: bool| match listed {
-        true => Steps::even(if large { HEX_JUMP } else { 1 }),
-        false => Steps {
-            up: moved(1, large),
-            down: moved(-1, large),
-        },
+    let step = |large: bool| Steps {
+        up: moved(1, large),
+        down: moved(-1, large),
     };
-    let cell = match bar {
+    let (nudge, jump) = match listed {
+        true => (view.nudge, view.jump),
+        false => (step(false), step(true)),
+    };
+    let cell = match view.bar {
         Some(_) => param.brief(&shape, context),
         None => param.shown(&shape, context),
     };
@@ -865,38 +863,18 @@ fn gen_view(of: ParamView, generator: &Generator, context: &Context, param: GenP
         GenParam::Vary => set.vary != 0,
         _ => true,
     };
-    let value = param
-        .chosen(&shape, context)
-        .map(|at| at as i32)
-        .or(number)
-        .unwrap_or(0);
     ParamView {
-        value,
-        bounds: bounds.unwrap_or((value, value)),
-        default: value,
-        nudge: step(false),
-        jump: step(true),
-        wraps: listed,
-        centred: matches!(units, GenUnits::Bend | GenUnits::Interval),
-        bar,
-        choices: choices
-            .unwrap_or_default()
-            .into_iter()
-            .map(|choice| Choice::named(choice.name()))
-            .collect(),
+        nudge,
+        jump,
         cell,
         text,
-        typing: param.typing(context.column),
         engaged,
-        ..of
+        ..view
     }
 }
 
 /// Where a number is in its bounds, on a bar's 0 to 255.
-pub(crate) fn share(number: i32, (low, high): (i32, i32)) -> u8 {
-    let share = f64::from(number - low) / f64::from((high - low).max(1));
-    (share * 255.0).round().clamp(0.0, 255.0) as u8
-}
+pub(crate) use vt_model::param::share;
 
 /// The action that puts one of the page's settings on the `at`th track at a value, as its view
 /// counts them, kept within its bounds, with a fine part where it has one. Nothing for those
