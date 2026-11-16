@@ -454,7 +454,7 @@ fn main_loop(
             // The sample page's waveform is drawn at one pixel for each of the screen's.
             if let Ok(size) = terminal::window_size() {
                 graphics.use_window(size);
-                // So a sideways tick of the wheel counts for as much of the fingers' way as one up.
+                // So an up tick of the wheel counts for as much of the fingers' way as sideways ones.
                 app.wheel.cell = Some(graphics.cell());
             }
             let mut out = Noted {

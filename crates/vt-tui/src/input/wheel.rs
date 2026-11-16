@@ -3,16 +3,15 @@
 //! Each tick is `=` or `-` where the cursor is, wherever those keys adjust something, a locked
 //! selection included. Up and down and sideways are one knob, as a trackpad's fingers drift from
 //! one to the other, and alike: the value follows the fingers, rising as they go up or right, as a
-//! level bar fills, whichever way macOS scrolls the screen, and a sideways tick counts for as much
-//! of the fingers' way as an up one, though the terminal's columns, narrower than its rows, send
-//! more of them. Speed alone sizes a tick, with no Shift: where the cursor's setting has a finer
-//! step than `=`, its fine digits, the tempo's fine part or the sample page's frame, a slow or
-//! steady turn's tick is a part of that, the same each tick, so twice the swipe is twice the
-//! change, and a faster swipe's more, up to [`feel::MOST`] of `=`'s steps, so a sweep crosses a
-//! value's range. A list or a toggle goes by its places instead, one at a time with a detent
-//! between them, and stops at either end, so up or right puts a toggle on and a fling's momentum
-//! only pushes on the same way. Where the pointer is doesn't matter, and clicks and drags do
-//! nothing.
+//! level bar fills, whichever way macOS scrolls the screen, and an up tick counts for as much of
+//! the fingers' way as the sideways ones the same swipe sends, about two, as the terminal's rows
+//! are taller than its columns are wide. Speed alone sizes a tick, with no Shift: where the
+//! cursor's setting has a finer step than `=`, its fine digits, the tempo's fine part or the
+//! sample page's frame, a slow or steady turn's tick is a [`feel::PARTS`]th of `=`'s step, and a
+//! faster one's more, in a straight line up to [`feel::MOST`] of `=`'s steps. A list or a toggle
+//! goes by its places instead, one at a time with a detent between them, and stops at either end,
+//! so up or right puts a toggle on and a fling's momentum only pushes on the same way. Where the
+//! pointer is doesn't matter, and clicks and drags do nothing.
 //!
 //! One gesture is one undo step, as a Roto knob's touch to let-go is: it ends once the wheel pauses
 //! for [`GESTURE_PAUSE`], or for [`feel::MOMENTUM`] after a fling, or at any key.
@@ -53,40 +52,40 @@ pub(crate) const CAPTURE_OFF: &str = "\x1b[?1006l\x1b[?1000l";
 pub mod feel {
     use std::time::Duration;
 
-    /// How quickly the wheel's speed forgets a tick: its speed is how many ticks come in this
-    /// long, from the ticks of about the last this long, each counting less as it ages.
+    /// How quickly the wheel's speed forgets a tick: its speed is how many sideways ticks, or
+    /// their worth, came in about the last this long, each counting less as it ages.
     pub(crate) const SPEED_TIME: Duration = Duration::from_millis(100);
 
-    /// A speed at or below this, 25 ticks a second, is a slow or steady turn, every tick the
-    /// least step, a [`PARTS`]th of `=`'s, so the change is in proportion to the swipe. On a
-    /// MacBook's trackpad in kitty a careful turn comes at 4 to 10 ticks a second.
-    pub const SLOW: f64 = 2.5;
+    /// A speed at or below this, about 25 sideways ticks a second held, or 12 up, is a slow or
+    /// steady turn, every tick the least step, so the change is in proportion to the swipe. On a
+    /// MacBook's trackpad in kitty a careful turn comes at 4 to 10 up ticks a second.
+    pub const SLOW: f64 = 3.0;
 
-    /// A speed at or above this, 65 ticks a second, is a sweep, a tick each the most step,
-    /// [`MOST`] of `=`'s; kitty sends a fast swipe's ticks at the screen's 60 a second, with now
-    /// and then two at once. Between the two, a tick's size grows by the same share for each bit
-    /// of speed, so it's gentle at first and quick to grow near the top.
-    pub const FAST: f64 = 6.5;
+    /// A speed at or above this, about 75 sideways ticks a second, or 37 up, is a sweep, a tick
+    /// each the most step; kitty sends a fast swipe's ticks at the screen's 60 a second, with now
+    /// and then two at once. Between the two, a tick's size rises in a straight line, so a turn
+    /// speeds up evenly as it quickens.
+    pub const FAST: f64 = 8.0;
 
-    /// The share of `=`'s step a slow tick takes, where the setting has a finer one: a 16th, a
-    /// step of a value's first fine digit, and a 16th of a pixel on the sample page, so even a
-    /// slow tick is seen to move. A setting with no finer step takes its `=` at least, until a
-    /// tick's size passes it at half way from [`SLOW`] to [`FAST`].
+    /// The least step, at [`SLOW`] and below, as a share of `=`'s, where the setting has a finer
+    /// step: a 16th, a step of a value's first fine digit, and a 16th of a pixel on the sample
+    /// page, so even a slow tick is seen to move. A setting with no finer step takes its `=`.
     pub const PARTS: u64 = 16;
 
-    /// The most a tick takes, at [`FAST`] and above, in `=`'s steps: 16, `+`'s on a hex value, so
-    /// a fast swipe and its momentum cross most of a value's range with no Shift. 1 would stop a
-    /// tick at `=`'s step.
-    pub const MOST: u64 = 16;
+    /// The most step, at [`FAST`] and above, in `=`'s steps: one, so a sweep is `=` a tick. On a
+    /// fine part itself, a step of its value.
+    pub const MOST: u64 = 1;
 
     /// The least step on the tempo, in hundredths of a BPM: a tenth.
     pub(crate) const TEMPO_LEAST: u64 = 10;
 
-    /// What a sideways tick counts for, as a share of an up or down one, where the terminal's
-    /// cell isn't known: kitty sends a tick for each column or row the scroll crosses, and a
-    /// column is about half as wide as a row is high, so the same swipe sends twice the ticks
-    /// sideways. Once the screen's drawn, its own cell's width over its height is used.
-    pub(crate) const SIDEWAYS: f64 = 0.5;
+    /// What an up or down tick counts for, in sideways ones, where the terminal's cell isn't
+    /// known: kitty sends a tick for each column or row the scroll crosses, and a row is about
+    /// twice as high as a column is wide, so the same swipe sends half the ticks up as sideways.
+    /// An up tick counts for two in its size, the speed and a list's detent, so both axes feel as
+    /// sideways did when every tick counted whole. Once the screen's drawn, its own cell's height
+    /// over its width is used.
+    pub(crate) const UPRIGHT: f64 = 2.0;
 
     /// How long a turn's ticks must stop before a tick the other way is taken at once. Sooner
     /// than that, it's a trackpad's bounce.
@@ -96,22 +95,22 @@ pub mod feel {
     /// deliberate change of direction.
     pub(crate) const TURN_TICKS: u32 = 3;
 
-    /// A speed at or above this, 25 ticks a second, past a careful turn, is a fling: macOS
-    /// goes on sending ticks after the fingers lift, slowing over about a second, and may bounce
-    /// back a tick or two at the end. A list or a toggle moves a place more as a turn reaches it,
-    /// if it's turned [`DETENT_TICKS`] since its last, and none in its momentum, so a flick
-    /// moves it one or two places; a new fling, its speed rising by this much again from the
-    /// slowest the momentum had come to, moves it a place on.
-    pub const FLING: f64 = 2.5;
+    /// A speed at or above this, about 50 sideways ticks a second, or 25 up, past a careful
+    /// turn, is a fling: macOS goes on sending ticks after the fingers lift, slowing over about a
+    /// second, and may bounce back a tick or two at the end. A list or a toggle moves a place
+    /// more as a turn reaches it, if it's turned [`DETENT_TICKS`] since its last, and none in its
+    /// momentum, so a flick moves it one or two places; a new fling, its speed rising by this
+    /// much again from the slowest the momentum had come to, moves it a place on.
+    pub const FLING: f64 = 5.5;
 
     /// How long the wheel must be still after a fling, or on a list or a toggle, before a tick
     /// the other way is taken at once, rather than as a bounce, and before its gesture ends:
     /// longer than the gaps of momentum's slowest ticks.
     pub const MOMENTUM: Duration = Duration::from_millis(600);
 
-    /// How many ticks a list or a toggle takes to move a place after the last, in a slow turn.
-    /// The first tick of a turn moves it at once.
-    pub const DETENT_TICKS: f64 = 3.0;
+    /// How many sideways ticks, or their worth, a list or a toggle takes to move a place after
+    /// the last, in a slow turn: six, or three up. The first tick of a turn moves it at once.
+    pub const DETENT_TICKS: f64 = 6.0;
 
     /// The least time between two places of a list or a toggle, in a turn quicker than
     /// [`DETENT_TICKS`] in this long.
@@ -185,8 +184,8 @@ pub struct Wheel {
     /// Whether macOS scrolls naturally, the screen following the fingers, which turns the
     /// terminal's up into the fingers going down. Asked for as the program starts.
     pub natural: bool,
-    /// The terminal's cell in pixels, across and down, once the screen's been drawn, for what a
-    /// sideways tick counts for.
+    /// The terminal's cell in pixels, across and down, once the screen's been drawn, for what an
+    /// up or down tick counts for.
     pub cell: Option<(usize, usize)>,
     gesture: Option<Gesture>,
 }
@@ -205,14 +204,14 @@ impl Default for Wheel {
 }
 
 impl Wheel {
-    /// What a sideways tick counts for, as a share of an up or down one: the cell's width over
-    /// its height, as the terminal sends a tick for each column or row the fingers cross.
-    pub fn sideways(&self) -> f64 {
+    /// What an up or down tick counts for, in sideways ones: the cell's height over its width, as
+    /// the terminal sends a tick for each column or row the fingers cross.
+    pub fn upright(&self) -> f64 {
         match self.cell {
             Some((across, down)) if across > 0 && down > 0 => {
-                (across as f64 / down as f64).clamp(0.25, 1.0)
+                (down as f64 / across as f64).clamp(1.0, 4.0)
             }
-            _ => feel::SIDEWAYS,
+            _ => feel::UPRIGHT,
         }
     }
 
@@ -269,11 +268,12 @@ struct Gesture {
     taken: Instant,
     /// How many ticks in a row have come another way and not been taken.
     turning: u32,
-    /// How many ticks came in about the last [`feel::SPEED_TIME`], each counting less as it ages,
-    /// so it rises and falls smoothly rather than in whole ticks, and a sideways one for less, as
-    /// [`Wheel::sideways`] says; and its speed from that, ticks to a [`feel::SPEED_TIME`], less
-    /// the half of its last that a count read as it comes is over, so many ticks a part apart
-    /// are as quick as fewer whole ones at the same pace.
+    /// How many sideways ticks came in about the last [`feel::SPEED_TIME`], each counting less as
+    /// it ages, so it rises and falls smoothly rather than in whole ticks, and an up one for
+    /// more, as [`Wheel::upright`] says; and its speed from that, less the half of its last tick
+    /// that's over a sideways one's worth, as a count read as a tick comes is over by half the
+    /// tick, so an up tick is as quick as the sideways ones the same swipe sends, and sideways
+    /// ones count as they did when every tick counted whole.
     ticks: f64,
     speed: f64,
     /// Whether this way's ticks have reached [`feel::FLING`], so momentum follows them, and the
@@ -328,7 +328,7 @@ impl Gesture {
         }
     }
 
-    /// Takes a tick this way, worth `weight` of an up or down one, or lets it go. One the way the
+    /// Takes a tick this way, worth `weight` sideways ones, or lets it go. One the way the
     /// turn is going is taken, and adds to its speed. One the other way is a trackpad's bounce,
     /// and is let go, unless the turn had paused for [`feel::TURN_PAUSE`], or for
     /// [`feel::MOMENTUM`] after a fling or on a list or a toggle, or it's the
@@ -354,7 +354,7 @@ impl Gesture {
         self.turning = 0;
         let age = now.saturating_duration_since(self.taken).as_secs_f64();
         self.ticks = self.ticks * (-age / feel::SPEED_TIME.as_secs_f64()).exp() + weight;
-        self.speed = self.ticks - weight / 2.0;
+        self.speed = self.ticks - (weight - 1.0) / 2.0;
         self.taken = now;
         self.trough = self.trough.min(self.speed);
         if self.flung && self.speed >= feel::FLING.max(self.trough + feel::FLING) {
@@ -391,7 +391,8 @@ impl Gesture {
         let due = match self.placed {
             None => true,
             Some(placed) => {
-                // A hair under, so sideways ticks that add up to it aren't a rounding error short.
+                // A hair under, so up ticks of a cell's worth that add up to it aren't a rounding
+                // error short.
                 self.notches >= feel::DETENT_TICKS - 1e-9
                     && (flinging || now.saturating_duration_since(placed) >= feel::DETENT_TIME)
             }
@@ -445,25 +446,22 @@ enum Finer {
     SampleFrame,
 }
 
-/// A setting's finer step: how to take it, the least a tick takes of it, and how many of it make
-/// one of `=`'s steps, or on a fine part itself, a [`feel::PARTS`]th of one of the value's, so a
-/// tick there takes its own `=` slowly and a step of the value at most.
+/// A setting's finer step: how to take it, and the least and the most a tick takes of it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct FinerStep {
     finer: Finer,
     least: u64,
-    step: u64,
+    most: u64,
 }
 
-/// How many of a setting's finest step a tick at this speed is worth, where `step` of them make
-/// `=`'s: a [`feel::PARTS`]th of `=`'s at or below [`feel::SLOW`], [`feel::MOST`] of them at or
-/// above [`feel::FAST`], and between them growing by the same share for each bit of speed, so a
-/// steady turn speeds up gently and a sweep quickly; and never less than its `least`.
-pub fn tick_size(speed: f64, least: u64, step: u64) -> f64 {
+/// How many of a setting's finest step a sideways tick at this speed is worth: the least at or
+/// below [`feel::SLOW`], the most at or above [`feel::FAST`], and in a straight line between, so
+/// a turn speeds up evenly as it quickens.
+pub fn tick_size(speed: f64, least: u64, most: u64) -> f64 {
+    let least = least.max(1) as f64;
+    let most = (most as f64).max(least);
     let rise = ((speed - feel::SLOW) / (feel::FAST - feel::SLOW)).clamp(0.0, 1.0);
-    let parts = feel::PARTS as f64;
-    let share = (feel::MOST as f64 * parts).powf(rise) / parts;
-    (step as f64 * share).max(least.max(1) as f64)
+    least + (most - least) * rise
 }
 
 /// A setting that's one of a few places, a list's choices or off and on, which the wheel moves a
@@ -520,8 +518,8 @@ impl Places {
 impl App {
     /// A mouse report from the terminal. Only the wheel acts: the fingers going up or right raise
     /// the setting under the cursor, and down or left lower it, or the other way if the setting
-    /// says so, sideways counting for as much of the fingers' way as up and down. Shift changes
-    /// nothing, as speed sizes a tick. Nothing happens while the setting is off, which it is
+    /// says so, an up or down tick counting for as much of the fingers' way as the sideways ones
+    /// the same swipe sends. Shift changes nothing, as speed sizes a tick. Nothing happens while the setting is off, which it is
     /// unless turned on, as the terminal then sends nothing anyway.
     pub fn mouse_event(&mut self, event: MouseEvent, now: Instant) {
         if !self.wheel.setting.on {
@@ -536,11 +534,11 @@ impl App {
         };
         // Natural scrolling sends the fingers' up as the terminal's down.
         let up = raised != (self.wheel.natural != self.wheel.setting.reversed);
-        let weight = if sideways { self.wheel.sideways() } else { 1.0 };
+        let weight = if sideways { 1.0 } else { self.wheel.upright() };
         self.turn_wheel(up, weight, now);
     }
 
-    /// One tick of the wheel, worth `weight` of an up or down one, owed to the cursor's setting
+    /// One tick of the wheel, worth `weight` sideways ones, owed to the cursor's setting
     /// as the key that adjusts it by its finest step and made at the next frame: a part of that
     /// step sized by the turn's speed, or a list's or a toggle's next place, if its detent says.
     fn turn_wheel(&mut self, up: bool, weight: f64, now: Instant) {
@@ -586,10 +584,10 @@ impl App {
                 (1.0, 1)
             }
             Some(step) => (
-                tick_size(gesture.speed, step.least, step.step) * weight,
+                tick_size(gesture.speed, step.least, step.most) * weight,
                 step.least,
             ),
-            None => (tick_size(gesture.speed, 1, 1) * weight, 1),
+            None => (tick_size(gesture.speed, 1, feel::MOST) * weight, 1),
         };
         let finer = finer.map(|step| step.finer);
         match &mut gesture.owed {
@@ -717,27 +715,28 @@ impl App {
         }
     }
 
-    /// Where the cursor's setting has a step finer than `=`'s, how to take it, the least a tick
-    /// takes of it, and how many of it make `=`'s step. The least is one a slow tick is seen to
-    /// move: a 16th of `=`'s step on a value's fine digits, a tenth of a BPM on the tempo, and a
-    /// 16th of a pixel on the sample page; with the cursor on the fine part itself, its own `=`.
-    /// A selection moves by `=`'s step and more, as its values are whole.
+    /// Where the cursor's setting has a step finer than `=`'s, how to take it, and the least and
+    /// the most a tick takes of it. The least is one a slow tick is seen to move: a 16th of `=`'s
+    /// step on a value's fine digits, a tenth of a BPM on the tempo, and a 16th of a pixel on the
+    /// sample page; with the cursor on the fine part itself, its own `=`. The most is
+    /// [`feel::MOST`] of `=`'s steps, or on a fine part itself, of its value's. A selection moves
+    /// by `=`'s step, as its values are whole.
     fn finer_here(&self) -> Option<FinerStep> {
         if self.modes.mode.is_visual() || self.modes.mode == Mode::Shape {
             return None;
         }
         // A fine part is a 256th of its setting's step. On the fine part itself a slow tick is
-        // its own `=`, and a tick tops out at a step of the value.
+        // its own `=`, and a tick tops out at the value's.
         const FINE_STEPS: u64 = 256;
         const FINE_LEAST: u64 = FINE_STEPS / feel::PARTS;
-        const ON_FINE: u64 = FINE_STEPS / feel::PARTS;
-        let step = |finer, least, step| Some(FinerStep { finer, least, step });
+        const FINE_MOST: u64 = FINE_STEPS * feel::MOST;
+        let step = |finer, least, most| Some(FinerStep { finer, least, most });
         match (self.key_scope(), self.modes.view) {
             (Mode::Track, View::Track) => {
                 let has_fine = self.track_page.has_fine_here(self.services.track_here());
                 match (has_fine, self.track_page.fine) {
-                    (true, true) => step(Finer::Already, 1, ON_FINE),
-                    (true, false) => step(Finer::TrackFine, FINE_LEAST, FINE_STEPS),
+                    (true, true) => step(Finer::Already, 1, FINE_MOST),
+                    (true, false) => step(Finer::TrackFine, FINE_LEAST, FINE_MOST),
                     _ => None,
                 }
             }
@@ -752,19 +751,19 @@ impl App {
                     .and_then(|fx| fx.command)
                     .is_some_and(|command| command.has_fine());
                 match self.services.cursor.field {
-                    Field::FxFine(_) if sweeps => step(Finer::Already, 1, ON_FINE),
+                    Field::FxFine(_) if sweeps => step(Finer::Already, 1, FINE_MOST),
                     Field::FxValue(_) if sweeps => {
-                        step(Finer::PhraseFine(slot), FINE_LEAST, FINE_STEPS)
+                        step(Finer::PhraseFine(slot), FINE_LEAST, FINE_MOST)
                     }
                     _ => None,
                 }
             }
             (Mode::Project, _) if self.project_page.control(self.song()) == ProjectControl::Bpm => {
-                let bpm = (BPM_NUDGE / FINE_NUDGE) as u64;
+                let most = (BPM_NUDGE / FINE_NUDGE) as u64 * feel::MOST;
                 if self.project_page.fine {
-                    step(Finer::Already, 1, bpm / feel::PARTS)
+                    step(Finer::Already, 1, most)
                 } else {
-                    step(Finer::TempoFine, feel::TEMPO_LEAST, bpm)
+                    step(Finer::TempoFine, feel::TEMPO_LEAST, most)
                 }
             }
             (Mode::Sample | Mode::SampleVisual, _) if self.sample_page.setting.is_none() => {
@@ -775,7 +774,11 @@ impl App {
                     _ => zoom,
                 }
                 .max(1);
-                step(Finer::SampleFrame, (pixel / feel::PARTS).max(1), pixel)
+                step(
+                    Finer::SampleFrame,
+                    (pixel / feel::PARTS).max(1),
+                    pixel * feel::MOST,
+                )
             }
             _ => None,
         }

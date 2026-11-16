@@ -883,20 +883,20 @@ Up and down and sideways are the same knob, and work the same, as a trackpad's
 fingers drift from one to the other. The value follows the fingers, as a level
 bar fills, whether or not macOS scrolls naturally; the audio page's `Direction`
 row turns it the other way. The terminal sends about twice as many ticks for a
-swipe sideways, as its columns are narrower than its rows, so a sideways tick
-counts for less, and the same swipe goes as far either way.
+swipe sideways, as its columns are narrower than its rows, so an up or down tick
+counts for two sideways ones, and the same swipe goes as far either way.
 
 Speed sizes each tick, and Shift does nothing. On a value with fine digits a
-slow tick is a 16th of `=`'s step, a step of the first fine digit, as if the
-cursor were on them; with the cursor on the fine digits themselves, a tick is
-their own `=`. On the tempo a slow tick is a tenth of a BPM, or a hundredth on
-its fine part, and on the sample page a 16th of a pixel, as Cmd-l and Cmd-h
-nudge a point. A slow or steady turn moves the same for every tick, so twice
-the swipe is twice the change. A faster swipe takes more each tick, up to 16
-of `=`'s steps, so a quick fling and its momentum cross a value's whole range.
-Where `=` is already the finest step, a semitone on a note, a slow tick is one
-`=`, and only a fast swipe takes more. On a selection it moves every value, as
-`=` does, and keeps it selected.
+slow sideways tick is a 16th of `=`'s step, a step of the first fine digit, as
+if the cursor were on them, and an up tick two; with the cursor on the fine
+digits themselves, a sideways tick is their own `=`. On the tempo a slow
+sideways tick is a tenth of a BPM, or a hundredth on its fine part, and on the
+sample page a 16th of a pixel, as Cmd-l and Cmd-h nudge a point. A slow or
+steady turn moves the same for every tick, so twice the swipe is twice the
+change. A faster swipe takes more each tick, rising evenly with its speed up to
+`=`'s whole step. Where `=` is already the finest step, a semitone on a note,
+a sideways tick is one `=` and an up tick two, however fast. On a selection it
+moves every value, as `=` does, and keeps it selected.
 
 A list or a toggle goes a choice at a time, and stops at either end where `=`
 goes round. Up or right puts a toggle on, and down or left off. The first tick
