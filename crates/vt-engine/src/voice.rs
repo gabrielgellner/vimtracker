@@ -37,6 +37,7 @@ use vt_model::playable::Span;
 use vt_model::samples::{Frames, SampleId};
 use vt_model::song::SynthVoice;
 
+use crate::dsp::blocks::coefficient::of_time;
 use crate::dsp::blocks::smoother::fast_coefficient;
 pub(crate) use crate::reader::Cut;
 use crate::reader::Reader;
@@ -58,6 +59,14 @@ enum Stage {
         per_frame: f32,
     },
 }
+
+/// The time constant of each of the two one-poles a voice's amp follows its envelope through,
+/// about half a millisecond for the pair: the shortest that takes the click out of an envelope's
+/// step to nothing on a sine, measured against a cut's 64-frame fade (decision 366).
+const AMP_POLE_SECONDS: f32 = 0.000_25;
+
+/// How far the amp is from its envelope's level when it's taken as there: under -120 dB.
+const AMP_SETTLED: f32 = 1e-6;
 
 /// The frequency of `C-3`, in hertz, for a synth.
 const MIDDLE_C: f64 = 261.625_565_3;
@@ -234,7 +243,13 @@ pub(crate) struct Voice {
     /// the slice's pan changes.
     pan: [f32; 2],
     pan_target: [f32; 2],
+    /// Where its envelope is.
     level: f32,
+    /// The envelope's level through two short one-poles, as a VCA's gain is smoothed, so an
+    /// envelope's step doesn't click: the first's, and the second's, which the sound is
+    /// multiplied by. Then how much of the way each goes a frame.
+    amp: [f32; 2],
+    amp_coefficient: f32,
     shape: Envelope,
     rate: u32,
     /// The rate its envelope is worked out at, which `Drift` moves from `rate` to make its times
@@ -269,6 +284,8 @@ impl Default for Voice {
             pan: [1.0, 1.0],
             pan_target: [1.0, 1.0],
             level: 0.0,
+            amp: [0.0; 2],
+            amp_coefficient: 1.0,
             shape: Envelope::note_shape(),
             rate: 48_000,
             envelope_rate: 48_000,
@@ -347,6 +364,9 @@ impl Voice {
             pan: note.pan(),
             pan_target: note.pan(),
             level: from,
+            // From where its envelope starts, so an attack of 0 starts at full on its first frame.
+            amp: [note.shape.held(0, from, rate); 2],
+            amp_coefficient: of_time(AMP_POLE_SECONDS, rate),
             shape: note.shape,
             rate,
             envelope_rate: rate,
@@ -502,6 +522,8 @@ impl Voice {
     /// Fade out quickly, to avoid a click.
     pub(crate) fn fade(&mut self) {
         if self.active() {
+            // The fade is a ramp of its own, from what's heard, which the amp follows at once.
+            self.level = self.amp[1];
             self.stage = Stage::Fading {
                 per_frame: 1.0 / DECLICK_FRAMES as f32,
             };
@@ -592,6 +614,23 @@ impl Voice {
             Stage::Idle => 0.0,
         }
         .max(0.0);
+        // A fall goes through two one-poles in a row rather than Braids' one, so the amp's slope
+        // starts from flat as well as its level: as smooth on a sine as a cut's fade, in half the
+        // time. A rise is an attack, which it follows at once, as it's set, and so is a cut's
+        // fade, a ramp of its own.
+        let c = self.amp_coefficient;
+        self.amp[0] += (self.level - self.amp[0]) * c;
+        self.amp[1] += (self.amp[0] - self.amp[1]) * c;
+        let fading = matches!(self.stage, Stage::Fading { .. });
+        if fading
+            || self.level >= self.amp[1]
+            || self
+                .amp
+                .iter()
+                .all(|amp| (amp - self.level).abs() < AMP_SETTLED)
+        {
+            self.amp = [self.level; 2];
+        }
         if self.gain != self.gain_target {
             self.gain += (self.gain_target - self.gain) * self.pitch_slew as f32;
             if (self.gain - self.gain_target).abs() < 1e-6 {
@@ -606,7 +645,7 @@ impl Voice {
                 }
             }
         }
-        let level = self.level * self.gain;
+        let level = self.amp[1] * self.gain;
         let frame = [
             source[0] * level * self.pan[0],
             source[1] * level * self.pan[1],
@@ -628,16 +667,20 @@ impl Voice {
                 *frames -= 1;
             }
         }
+        // Its envelope done, it sounds on until its amp has followed to nothing.
         let finished = match self.stage {
-            Stage::Held { .. } => self
-                .shape
-                .finished_holding(self.elapsed, self.envelope_rate),
+            Stage::Held { .. } => {
+                self.shape
+                    .finished_holding(self.elapsed, self.envelope_rate)
+                    && self.amp[1] == 0.0
+            }
             Stage::Released { .. } => {
                 self.shape
                     .finished_releasing(self.elapsed, self.envelope_rate)
+                    && self.amp[1] == 0.0
                     && self.synth.as_ref().is_none_or(Synth::settled)
             }
-            Stage::Fading { .. } => self.level <= 0.0,
+            Stage::Fading { .. } => self.level <= 0.0 && self.amp[1] == 0.0,
             Stage::Idle => false,
         } || !more;
         if finished {

@@ -19,8 +19,9 @@ const STEP: usize = 6000;
 const TICK: usize = 25;
 /// A nudge's unit, a 24th of a sixteenth, in frames.
 const NUDGE: usize = 10 * TICK;
-/// Below this, nothing's sounding.
-const SILENT: f32 = 1e-4;
+/// Below this, nothing's sounding: 34 dB under the flat sample, which a note's amp falls past
+/// within a millisecond and a half of its end (decision 366).
+const SILENT: f32 = 1e-2;
 /// How near a note's end is to where it's due, with its fade out.
 const NEAR: usize = 100;
 

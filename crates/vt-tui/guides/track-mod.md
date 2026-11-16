@@ -85,9 +85,11 @@ each note. `Mod 3` starts on `---`, with `Mod 2`'s decay, ready to be given
 somewhere to go. On `Pitch`, depth is in semitones and in hex, so `+0C` is an
 octave. An envelope's depth can be locked on a step too: `DEP2` for `Mod 2`.
 
-**A decay or release of 0** still falls, over a millisecond, rather than stopping
-the sound in one sample, which clicks. So does any envelope's: an AHD's, a drum's
-and a low-pass gate's `Decay`. An attack of 0 is as sudden as it's set.
+**A time of 0** is no time: a decay or release of 0 is a step, and so is any
+envelope's, on `Vol` or anywhere else, so a pitch or a filter can snap. What a
+note's level does is smoothed on its way to the sound, where it falls, over about
+half a millisecond, as a VCA's gain is, so a step down to nothing doesn't click. A
+rise isn't: an attack of 0 is as sudden as it's set.
 
 A note lasts until the next note on its track, an `OFF`, or its gate closing,
 and the next note fades the last one quickly rather than running its release. So
