@@ -1,9 +1,15 @@
 //! The jump list, after Vim's: the places `Ctrl-O` goes back to and `Ctrl-I` forward again, and
 //! `''`, back to where the latest jump left from.
 
+use ratatui::crossterm::event::KeyCode;
+use vt_model::bank::is_mark;
+
 use crate::app::{App, Cursor};
 use crate::controls::Page;
+use crate::input::keys::Key;
 use crate::input::mode::View;
+use crate::pages::sample::marking::MarkWait;
+use crate::services::banking::sample_text;
 
 /// How many places the jump list remembers.
 const JUMP_LIMIT: usize = 100;
@@ -110,5 +116,135 @@ impl App {
         }
         self.jumps.index += 1;
         self.restore(self.jumps.places[self.jumps.index]);
+    }
+
+    /// The key after `'` or `m` on the sample page.
+    pub(crate) fn mark_key(&mut self, wait: MarkWait, key: Key) {
+        let KeyCode::Char(c) = key.code else {
+            self.services.status = "Marks are a to z: :marks lists them".to_owned();
+            return;
+        };
+        if key.ctrl || key.alt {
+            self.services.status = "Marks are a to z: :marks lists them".to_owned();
+            return;
+        }
+        match (wait, c) {
+            (MarkWait::Name, c) if is_mark(c) => {
+                self.sample_page
+                    .set_mark(c, None, self.modes.view, &mut self.services);
+            }
+            (MarkWait::Name, _) => {
+                self.services.status =
+                    "m takes a letter, a to z, to name the slice with".to_owned();
+            }
+            (MarkWait::Jump, c) if is_mark(c) => self.jump_to_mark(c),
+            (MarkWait::Jump, '\'') => {
+                if !self.jump_to_previous_context() {
+                    self.services.status = "No jump to go back from yet".to_owned();
+                }
+            }
+            (MarkWait::Jump, '<' | '>') => self.jump_to_selection_end(c == '>'),
+            (MarkWait::Jump, _) => {
+                self.services.status =
+                    "Marks are a to z, '< '> the last selection and '' the last jump".to_owned();
+            }
+        }
+    }
+
+    /// `'<` and `'>`: the first or last frame of the last selection, as a jump. As in Vim, they're
+    /// the selection made last, not one being made.
+    pub(crate) fn jump_to_selection_end(&mut self, last: bool) {
+        let Some((first, end)) = self.sample_page.last_selection else {
+            self.services.status = "No selection yet: v starts one".to_owned();
+            return;
+        };
+        let Ok(shown) = self.sample_page_here() else {
+            return;
+        };
+        self.record_jump();
+        let frame = if last { end } else { first };
+        self.sample_page.go(frame, shown.length());
+    }
+
+    /// `'a`: the sample page on the slice a letter names, as a jump `C-o` comes back from.
+    pub(crate) fn jump_to_mark(&mut self, letter: char) {
+        let number = self
+            .sample_page
+            .marked_entry(self.modes.view, &self.services);
+        let marked = self
+            .song()
+            .bank
+            .get(number)
+            .and_then(|entry| entry.edit.points.marked(letter));
+        let Some(slice) = marked else {
+            self.services.status = format!(
+                "No slice of {} is named {letter}: :marks lists them",
+                sample_text(self.song(), number)
+            );
+            return;
+        };
+        self.go_to_slice(number, slice);
+        self.services.status = format!("'{letter}: slice {slice:02X}");
+    }
+
+    /// `]'` and `['`: the sample page on the next or previous slice with a letter naming it, from
+    /// the one the cursor is in, `times` over, as a jump.
+    pub(crate) fn jump_to_next_mark(&mut self, later: bool, times: usize) {
+        let number = self
+            .sample_page
+            .marked_entry(self.modes.view, &self.services);
+        let Some(entry) = self.song().bank.get(number) else {
+            return;
+        };
+        let points = &entry.edit.points;
+        let mut named: Vec<usize> = points
+            .marks_in_order()
+            .into_iter()
+            .map(|(_, slice)| slice)
+            .collect();
+        named.dedup();
+        let here = points.slice_at(self.sample_page.cursor);
+        let found = if later {
+            named.iter().filter(|slice| **slice > here).nth(times - 1)
+        } else {
+            named
+                .iter()
+                .rev()
+                .filter(|slice| **slice < here)
+                .nth(times - 1)
+        };
+        match found {
+            Some(slice) => {
+                let slice = *slice;
+                let letters: Vec<String> = points
+                    .marks_of(slice)
+                    .into_iter()
+                    .map(|letter| format!("'{letter}"))
+                    .collect();
+                self.go_to_slice(number, slice);
+                self.services.status = format!("{}: slice {slice:02X}", letters.join(" "));
+            }
+            None if named.is_empty() => {
+                self.services.status =
+                    "No slice has a name: :mark a names the slice here".to_owned();
+            }
+            None => self.services.status = "No named slice further that way".to_owned(),
+        }
+    }
+
+    /// Put the sample page's cursor on a slice's start, as a jump.
+    fn go_to_slice(&mut self, number: u8, slice: usize) {
+        let track = self.services.cursor.track;
+        self.record_jump();
+        self.show_view(View::Sample);
+        self.sample_page.pinned =
+            (number != self.services.track_sample_number()).then_some((track, number));
+        match self.sample_page_here() {
+            Ok(shown) => {
+                let start = shown.slice(slice).start;
+                self.sample_page.show_frame(start, shown.length());
+            }
+            Err(why) => self.services.status = why,
+        }
     }
 }

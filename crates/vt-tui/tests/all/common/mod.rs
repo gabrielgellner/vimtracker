@@ -240,7 +240,7 @@ pub fn with_a_sound(app: &mut App) {
     command(app, &format!("sample {}", path.display()));
     // Its analysis sends a version of its own when it's done, which could otherwise come in
     // between a test's edit and the audio that hears it, on whichever frame the thread finishes.
-    app.finish_analysis();
+    app.services.finish_analysis();
 }
 
 /// A selected 4-step track beside a 2-step track and an 8-step track, whose steps are numbered by

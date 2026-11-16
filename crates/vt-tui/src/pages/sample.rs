@@ -41,7 +41,6 @@ use vt_model::samples::{Rates, SamplePool};
 use vt_model::selection::Motion;
 use vt_model::song::Song;
 
-use crate::app::App;
 use crate::graphics::plot::Shade;
 use crate::graphics::{PanelIds, PanelKey, PanelWant, Shape};
 use crate::input::bindings::Cmd;
@@ -52,6 +51,7 @@ use crate::pages::sample::settings::SampleSetting;
 use crate::pages::sample::wave::{Wave, drawn_points};
 use crate::pages::{Ctx, CtxMut, Outcome, Page};
 use crate::services::Services;
+use crate::services::sampling::still_recording;
 
 /// How many columns the waveform has until the page is first drawn: the author's screen, 163
 /// characters across, less a column either side.
@@ -645,6 +645,39 @@ impl SamplePage {
         Shown::of(&services.samples, number, entry)
     }
 
+    /// What the page shows for the cursor's track, or why it can't show it, with the recording
+    /// as `App` lends it: the entry the page is on, which a jump may have chosen, unless it's
+    /// still recording.
+    pub(crate) fn shown_while(
+        &self,
+        services: &Services,
+        recording: Option<(u8, Option<f64>)>,
+    ) -> Result<Shown, String> {
+        let (number, entry) = self.entry_here(services.song(), services.cursor.track)?;
+        if let Some(why) = still_recording(recording, number) {
+            return Err(why);
+        }
+        Shown::of(&services.samples, number, entry)
+    }
+
+    /// The page's own modes, as the status line's badge names them: `PADS` for the keys mode,
+    /// `VISUAL` while selecting, and `SETTINGS` with the focus on the settings rows, where `h` and
+    /// `l` go along the rows rather than the waveform. None on the waveform, or off the page.
+    pub(crate) fn badge(&self, view: View, mode: Mode) -> Option<&'static str> {
+        if view != View::Sample {
+            return None;
+        }
+        if mode == Mode::Keys {
+            Some("PADS")
+        } else if self.anchor.is_some() {
+            Some(Mode::VisualField.label())
+        } else if self.setting.is_some() {
+            Some("SETTINGS")
+        } else {
+            None
+        }
+    }
+
     /// Bring the page up to date with what it shows, starting afresh if it's another sample.
     pub(crate) fn settle_on(&mut self, shown: &Shown) {
         if self.shown != Some((shown.number, shown.analysis.hash)) {
@@ -652,6 +685,14 @@ impl SamplePage {
         }
         self.settle(shown.length());
         self.settled = Some(shown.length());
+    }
+
+    /// Bring the page up to date with what it shows, or with there being nothing to show.
+    pub(crate) fn settle_here(&mut self, shown: &Result<Shown, String>) {
+        match shown {
+            Ok(shown) => self.settle_on(shown),
+            Err(_) => self.settled = None,
+        }
     }
 
     /// Lay the page out for this much room, so the waveform has as many columns as it's drawn
@@ -1398,72 +1439,6 @@ impl Page for SamplePage {
 
     fn take_panels(&mut self, ids: PanelIds, _wants: &[PanelWant], _rate: u32) {
         self.images = ids;
-    }
-}
-
-impl App {
-    /// The bank entry the cursor's track plays, or one a jump chose for it, with its analysis, or
-    /// why the page can't show it.
-    pub fn sample_shown(&self) -> Result<Shown, String> {
-        let (number, entry) = self
-            .sample_page
-            .entry_here(self.song(), self.services.cursor.track)?;
-        self.shown_of(number, entry)
-    }
-
-    /// A bank entry by its number, with its analysis, as the page would show it, or why it can't:
-    /// it's still recording, or as [`Shown::of`] says.
-    pub(crate) fn shown_of(&self, number: u8, entry: &BankEntry) -> Result<Shown, String> {
-        if let Some(why) = self.still_recording(number) {
-            return Err(why);
-        }
-        Shown::of(&self.services.samples, number, entry)
-    }
-
-    /// The sample page's own modes, as the status line's badge names them: `PADS` for the keys
-    /// mode, `VISUAL` while selecting, and `SETTINGS` with the focus on the settings rows, where
-    /// `h` and `l` go along the rows rather than the waveform. None on the waveform.
-    pub(crate) fn sample_mode(&self) -> Option<&'static str> {
-        if self.modes.view != View::Sample {
-            return None;
-        }
-        if self.modes.mode == Mode::Keys {
-            Some("PADS")
-        } else if self.sample_page.anchor.is_some() {
-            Some(Mode::VisualField.label())
-        } else if self.sample_page.setting.is_some() {
-            Some("SETTINGS")
-        } else {
-            None
-        }
-    }
-
-    /// Bring the page up to date with the sample the cursor's track plays, starting afresh if
-    /// it's another, and say what it shows.
-    pub fn sample_page_here(&mut self) -> Result<Shown, String> {
-        let shown = self.sample_shown();
-        match &shown {
-            Ok(shown) => self.sample_page.settle_on(shown),
-            Err(_) => self.sample_page.settled = None,
-        }
-        shown
-    }
-
-    /// Bring the sample page up to date with what it shows, while it's the view, after a key or
-    /// a frame's work may have changed that: another track, another sample or a recording that
-    /// has ended. So drawing it and sending its pictures change nothing.
-    pub(crate) fn settle_sample_page(&mut self) {
-        if self.modes.view == View::Sample {
-            let _ = self.sample_page_here();
-        }
-    }
-
-    /// A value chosen from `K` on the rows.
-    pub(crate) fn pick_sample_value(&mut self, setting: SampleSetting, value: Option<i32>) {
-        if let Ok(shown) = self.sample_page_here() {
-            self.sample_page
-                .put_setting(&shown, setting, value, &mut self.services);
-        }
     }
 }
 

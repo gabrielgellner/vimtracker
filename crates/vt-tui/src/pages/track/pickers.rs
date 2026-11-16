@@ -161,7 +161,9 @@ impl App {
             }
             Control::Sample => self.open_bank_picker(),
             Control::Tune | Control::Cents => self.open_tuning_picker(control),
-            _ if control.setting_on(&page) == Some(SettingId::SLICE) => self.open_slice_picker(),
+            _ if control.setting_on(&page) == Some(SettingId::SLICE) => {
+                self.open_picker(self.services.slice_picker());
+            }
             // A track can follow the project's, which isn't one of the grooves.
             Control::Groove => self.open_picker(self.services.groove_picker(true)),
             // A macro is the patch's knob, so its list is adding a patch and saving one.

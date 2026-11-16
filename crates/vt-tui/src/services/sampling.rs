@@ -37,6 +37,7 @@ use vt_model::song::Song;
 
 use crate::app::App;
 use crate::input::mode::View;
+use crate::pages::sample::Shown;
 
 /// The longest a recording can be, in seconds: ten minutes.
 pub(crate) const MOST_SECONDS: u64 = 600;
@@ -492,6 +493,30 @@ impl App {
     /// Why the sample page can't show an entry that's still recording, if it is one.
     pub fn still_recording(&self, number: u8) -> Option<String> {
         still_recording(self.sampling_shown(), number)
+    }
+
+    /// The bank entry the cursor's track plays, or one a jump chose for it, with its analysis, or
+    /// why the sample page can't show it, as the recording here allows.
+    pub fn sample_shown(&self) -> Result<Shown, String> {
+        self.sample_page
+            .shown_while(&self.services, self.sampling_shown())
+    }
+
+    /// Bring the sample page up to date with the sample the cursor's track plays, starting afresh
+    /// if it's another, and say what it shows. It's `App`'s, as the recording is.
+    pub fn sample_page_here(&mut self) -> Result<Shown, String> {
+        let shown = self.sample_shown();
+        self.sample_page.settle_here(&shown);
+        shown
+    }
+
+    /// Bring the sample page up to date with what it shows, while it's the view, after a key or
+    /// a frame's work may have changed that: another track, another sample or a recording that
+    /// has ended. So drawing it and sending its pictures change nothing.
+    pub(crate) fn settle_sample_page(&mut self) {
+        if self.modes.view == View::Sample {
+            let _ = self.sample_page_here();
+        }
     }
 }
 

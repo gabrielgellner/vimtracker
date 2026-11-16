@@ -16,9 +16,7 @@
 use vt_engine::link::Command;
 use vt_model::playable::{Playable, Span};
 
-use crate::app::{App, Momentary};
-use crate::input::keys::Key;
-use crate::input::mode::Mode;
+use crate::app::Momentary;
 use crate::pages::sample::{SamplePage, Shown};
 use crate::services::Services;
 
@@ -155,7 +153,7 @@ impl SamplePage {
 
     /// A pad: its slice plays, held while its key is down, and the cursor goes to it, as
     /// tracker-ce's Beat Slice pads select the slice they play.
-    fn play_pad(
+    pub(crate) fn play_pad(
         &mut self,
         shown: &Shown,
         number: usize,
@@ -243,58 +241,5 @@ fn why_silent(services: &Services, track: usize) -> Option<String> {
             track + 1
         )),
         _ => None,
-    }
-}
-
-impl App {
-    /// A key in the sample page's keys mode. The pads play their slices, `<` and `>` go a page of
-    /// them back or on, as they change octave on the track page's keyboard, `Esc` leaves, and
-    /// every other key works on the page as it does, so `;` plays the slice the cursor is on.
-    pub(crate) fn sample_keys_key(&mut self, key: Key, now: std::time::Instant) {
-        use ratatui::crossterm::event::KeyCode;
-        let plain = self.grammar.pending.is_empty() && !key.ctrl && !key.alt;
-        let shown = self.sample_page_here();
-        match (key.code, shown) {
-            (KeyCode::Esc, _) if self.grammar.pending.is_empty() => {
-                self.modes.mode = Mode::Normal;
-                self.services.status.clear();
-            }
-            (KeyCode::Char(c @ ('<' | '>')), Ok(shown)) if plain => {
-                self.services.status.clear();
-                let from = self.sample_page.pads_from;
-                let last = shown.slice_count().saturating_sub(1) / PADS * PADS;
-                self.sample_page.pads_from = if c == '>' {
-                    (from + PADS).min(last)
-                } else {
-                    from.saturating_sub(PADS)
-                };
-            }
-            (KeyCode::Char(c), Ok(shown)) if plain && pad_key(c).is_some() => {
-                self.modes.count = None;
-                let number = self.sample_page.pads_from + pad_key(c).unwrap_or(0);
-                if let Some(started) = self
-                    .sample_page
-                    .play_pad(&shown, number, &mut self.services)
-                {
-                    self.held.started = Some(started);
-                }
-            }
-            _ => {
-                let view = self.modes.view;
-                self.command_key_normal(key, now);
-                // The keys only play on the page they started on.
-                if self.modes.mode == Mode::Keys && self.modes.view != view {
-                    self.modes.mode = Mode::Normal;
-                }
-            }
-        }
-    }
-
-    /// Where the voices playing the entry shown are, in its file's frames, for the playheads: the
-    /// track's own notes of it, any of its notes on the preview voices, and what the page itself
-    /// played.
-    pub fn sample_playheads(&self, shown: &Shown) -> Vec<u64> {
-        self.sample_page
-            .playheads(shown, &self.services.reported.playheads)
     }
 }

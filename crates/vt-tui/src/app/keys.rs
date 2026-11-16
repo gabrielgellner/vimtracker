@@ -19,6 +19,7 @@ use crate::overlays::picker::{Item, Pick, Picker};
 use crate::pages::phrase::PhraseView;
 use crate::pages::project;
 use crate::pages::sample::SampleKey;
+use crate::pages::sample::auditioning::{PADS, pad_key};
 use crate::pages::sample::marking::MarkWait;
 
 use super::accent_slide::{HeldFlag, Moved, Written};
@@ -556,6 +557,49 @@ impl App {
     pub(crate) fn audition(&mut self, section_step: usize) {
         if let Some(started) = self.services.audition(section_step) {
             self.held.started = Some(started);
+        }
+    }
+
+    /// A key in the sample page's keys mode. The pads play their slices, `<` and `>` go a page of
+    /// them back or on, as they change octave on the track page's keyboard, `Esc` leaves, and
+    /// every other key works on the page as it does, so `;` plays the slice the cursor is on.
+    pub(crate) fn sample_keys_key(&mut self, key: Key, now: std::time::Instant) {
+        use ratatui::crossterm::event::KeyCode;
+        let plain = self.grammar.pending.is_empty() && !key.ctrl && !key.alt;
+        let shown = self.sample_page_here();
+        match (key.code, shown) {
+            (KeyCode::Esc, _) if self.grammar.pending.is_empty() => {
+                self.modes.mode = Mode::Normal;
+                self.services.status.clear();
+            }
+            (KeyCode::Char(c @ ('<' | '>')), Ok(shown)) if plain => {
+                self.services.status.clear();
+                let from = self.sample_page.pads_from;
+                let last = shown.slice_count().saturating_sub(1) / PADS * PADS;
+                self.sample_page.pads_from = if c == '>' {
+                    (from + PADS).min(last)
+                } else {
+                    from.saturating_sub(PADS)
+                };
+            }
+            (KeyCode::Char(c), Ok(shown)) if plain && pad_key(c).is_some() => {
+                self.modes.count = None;
+                let number = self.sample_page.pads_from + pad_key(c).unwrap_or(0);
+                if let Some(started) = self
+                    .sample_page
+                    .play_pad(&shown, number, &mut self.services)
+                {
+                    self.held.started = Some(started);
+                }
+            }
+            _ => {
+                let view = self.modes.view;
+                self.command_key_normal(key, now);
+                // The keys only play on the page they started on.
+                if self.modes.mode == Mode::Keys && self.modes.view != view {
+                    self.modes.mode = Mode::Normal;
+                }
+            }
         }
     }
 

@@ -544,7 +544,7 @@ impl App {
             self.services.reported.jam[track] = state;
         }
         self.take_loaded();
-        self.take_analyses();
+        self.services.take_analyses();
         self.tick_roto();
         self.wheel_frame(now);
         self.follow_recording();

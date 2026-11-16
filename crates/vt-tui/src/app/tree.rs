@@ -5,7 +5,10 @@ use std::sync::Arc;
 
 use vt_model::action::Action;
 use vt_model::bloom::{Bloom, Path};
+use vt_model::selection::Field;
+use vt_model::settings::SettingId;
 use vt_model::song::{ChainEntry, lowest_unused};
+use vt_model::step::FxCommand;
 
 use crate::app::App;
 use crate::controls::Control;
@@ -14,6 +17,7 @@ use crate::input::mode::View;
 use crate::overlays::command::parse::Line;
 use crate::overlays::picker::{Item, Pick, Picker};
 use crate::services::Services;
+use crate::services::banking::sample_text;
 
 impl App {
     /// `gd`: open the item under the cursor, creating it on an empty reference.
@@ -75,6 +79,46 @@ impl App {
         } else if let Some(chain) = self.services.chain_id() {
             self.enter_row(chain, 0);
         }
+    }
+
+    /// `g d` on a step's `SLI` value: the sample page on the slice it locks, of the sample the step
+    /// plays, as a jump `C-o` comes back from. Whether the cursor was on one.
+    pub(crate) fn open_slice_of_step(&mut self) -> bool {
+        let Field::FxValue(slot) = self.services.cursor.field else {
+            return false;
+        };
+        let Some(cell) = self
+            .services
+            .current_slot(slot)
+            .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SLICE)))
+        else {
+            return false;
+        };
+        let number = self.services.step_entry();
+        let track = self.services.cursor.track;
+        self.jump_to_view(View::Sample);
+        self.sample_page.pinned =
+            (number != self.services.track_sample_number()).then_some((track, number));
+        let slice = self.services.slice_of_lock(cell).unwrap_or_else(|own| own);
+        match self.sample_page_here() {
+            Ok(shown) => {
+                let slice = usize::from(slice);
+                let points = &shown.entry.edit.points;
+                let frames = points.slice_frames(slice, shown.length());
+                self.sample_page.show_frame(frames.start, shown.length());
+                let count = points.slice_count();
+                self.services.status = if slice >= count {
+                    format!(
+                        "Slice {slice:02X} is past the last, {:02X}, so it plays that",
+                        count - 1
+                    )
+                } else {
+                    format!("{}: slice {slice:02X}", sample_text(self.song(), number))
+                };
+            }
+            Err(why) => self.services.status = why,
+        }
+        true
     }
 
     fn open_row(&mut self) {

@@ -6,9 +6,9 @@ use vt_model::action::Action;
 use vt_model::bank::{Loop, MOST_STEPS};
 use vt_model::constants::{BAR_STEPS, MAX_MILLIBPM, MIN_MILLIBPM};
 
-use crate::app::App;
 use crate::overlays::command::parse::SampleChange;
 use crate::screen::status::format_bpm;
+use crate::services::Services;
 use crate::services::banking::sample_text;
 
 /// A time in microseconds as frames at a rate, to the nearest.
@@ -72,24 +72,24 @@ fn seconds(frames: u64, rate: u32) -> String {
     format!("{:.3} s", frames as f64 / f64::from(rate.max(1)))
 }
 
-impl App {
+impl Services {
     /// Change the sample the current track plays, as one undo step, and say what it is now.
     pub(crate) fn change_sample(&mut self, change: SampleChange) {
         let number = self
             .song()
             .tracks
-            .get(self.services.cursor.track)
+            .get(self.cursor.track)
             .filter(|track| track.machine == vt_model::song::Machine::Sampler)
             .map_or(0, |track| track.sample());
         let Some(mut entry) = self.song().bank.get(number).cloned() else {
-            self.services.status = format!(
+            self.status = format!(
                 "Track {:02} plays no sample to change: K on Sample chooses one",
-                self.services.cursor.track + 1
+                self.cursor.track + 1
             );
             return;
         };
-        let Some((rate, length)) = self.services.file_of(&entry) else {
-            self.services.status = "Its file isn't loaded, so its length isn't known".to_owned();
+        let Some((rate, length)) = self.file_of(&entry) else {
+            self.status = "Its file isn't loaded, so its length isn't known".to_owned();
             return;
         };
         let at = |micros: u64| frames(micros, rate).min(length);
@@ -99,7 +99,7 @@ impl App {
             SampleChange::Start(micros) => {
                 points.start = at(micros);
                 if points.end.is_some_and(|end| end <= points.start) {
-                    self.services.status = "The start would be at or after the end".to_owned();
+                    self.status = "The start would be at or after the end".to_owned();
                     return;
                 }
                 format!("starts at {}", seconds(points.start, rate))
@@ -108,7 +108,7 @@ impl App {
                 points.end = micros.map(at).filter(|end| *end < length);
                 let end = points.end.unwrap_or(length);
                 if end <= points.start {
-                    self.services.status = "The end would be at or before the start".to_owned();
+                    self.status = "The end would be at or before the start".to_owned();
                     return;
                 }
                 format!("ends at {}", seconds(end, rate))
@@ -120,7 +120,7 @@ impl App {
             SampleChange::Loop(Some((from, to, crossfade))) => {
                 let (start, end) = (at(from), at(to));
                 if end <= start {
-                    self.services.status = "A loop ends after it starts".to_owned();
+                    self.status = "A loop ends after it starts".to_owned();
                     return;
                 }
                 let crossfade = frames(crossfade, rate).min(u64::from(u32::MAX)) as u32;
@@ -170,11 +170,11 @@ impl App {
                 length_said(steps)
             }
         };
-        self.services.apply(&Action::SetBankEntry {
+        self.apply(&Action::SetBankEntry {
             number,
             entry: Some(entry),
         });
-        self.services.status = format!("{} {said}", sample_text(self.song(), number));
+        self.status = format!("{} {said}", sample_text(self.song(), number));
     }
 
     /// `:bpm sample`, grab tempo: set the song's tempo so the current track's sample, from its
@@ -185,18 +185,18 @@ impl App {
         let number = self
             .song()
             .tracks
-            .get(self.services.cursor.track)
+            .get(self.cursor.track)
             .filter(|track| track.machine == vt_model::song::Machine::Sampler)
             .map_or(0, |track| track.sample());
         let Some(mut entry) = self.song().bank.get(number).cloned() else {
-            self.services.status = format!(
+            self.status = format!(
                 "Track {:02} plays no sample to take a tempo from: K on Sample chooses one",
-                self.services.cursor.track + 1
+                self.cursor.track + 1
             );
             return;
         };
-        let Some((rate, length)) = self.services.file_of(&entry) else {
-            self.services.status = "Its file isn't loaded, so its length isn't known".to_owned();
+        let Some((rate, length)) = self.file_of(&entry) else {
+            self.status = "Its file isn't loaded, so its length isn't known".to_owned();
             return;
         };
         let points = &entry.edit.points;
@@ -209,8 +209,8 @@ impl App {
             && let Some(own) = entry.edit.hints.millibpm
         {
             let own = own.clamp(MIN_MILLIBPM, MAX_MILLIBPM);
-            self.services.apply(&Action::SetMilliBpm(own));
-            self.services.status = format!(
+            self.apply(&Action::SetMilliBpm(own));
+            self.status = format!(
                 "Tempo {} BPM: {}'s own, at which it plays at its own speed: u to undo",
                 format_bpm(own),
                 sample_text(self.song(), number)
@@ -219,7 +219,7 @@ impl App {
         }
         let now = self.song().millibpm;
         let Some((steps, millibpm)) = grabbed_tempo(seconds, said, now) else {
-            self.services.status = format!(
+            self.status = format!(
                 "{} can't set a tempo between {} and {} BPM",
                 sample_text(self.song(), number),
                 MIN_MILLIBPM / 1000,
@@ -235,12 +235,12 @@ impl App {
                 entry: Some(entry),
             });
         }
-        self.services.apply(&Action::Batch(actions));
+        self.apply(&Action::Batch(actions));
         let taken = match said {
             Some(_) => String::new(),
             None => ", taking it as the nearest power of two to the tempo before".to_owned(),
         };
-        self.services.status = format!(
+        self.status = format!(
             "Tempo {} BPM: {} lasts {} at its own speed{taken}: u to undo",
             format_bpm(millibpm),
             sample_text(self.song(), number),

@@ -169,7 +169,7 @@ fn a_project_opened_again_finds_its_analyses_in_the_cache() {
     app.use_analysis_cache(Some(cache.clone()));
     command(&mut app, &format!("sample {}", file.display()));
     command(&mut app, &format!("w {}", project.display()));
-    app.finish_analysis();
+    app.services.finish_analysis();
     assert_eq!(
         (app.services.analyst.built, app.services.analyst.cached),
         (1, 0)
@@ -187,7 +187,7 @@ fn a_project_opened_again_finds_its_analyses_in_the_cache() {
     let (mut again, _realtime) = new_app();
     again.use_analysis_cache(Some(cache));
     command(&mut again, &format!("e {}", project.display()));
-    again.finish_analysis();
+    again.services.finish_analysis();
     assert_eq!(
         (again.services.analyst.built, again.services.analyst.cached),
         (0, 1)
