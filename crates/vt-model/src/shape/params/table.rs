@@ -8,7 +8,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "fill",
         name: "Fill",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Listed,
         bounds: Bounds::Listed,
         stepping: None,
@@ -20,7 +20,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "from",
         name: "From",
-        units: Units::Column,
+        units: Reading::Column,
         typing: Typing::Named { list: false },
         bounds: Bounds::Column,
         stepping: None,
@@ -32,7 +32,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "to",
         name: "To",
-        units: Units::Column,
+        units: Reading::Column,
         typing: Typing::Named { list: false },
         bounds: Bounds::Column,
         stepping: None,
@@ -44,7 +44,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "notes",
         name: "Notes",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(1, MAX_ACID_NOTES as i32),
         stepping: COUNT,
@@ -56,7 +56,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "octave",
         name: "Octave",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -68,7 +68,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "density",
         name: "Density",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -80,7 +80,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "accent",
         name: "Accent",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -92,7 +92,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "slide",
         name: "Slide",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -105,7 +105,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "pitches",
         name: "Pitches",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Toggled,
         bounds: Bounds::Fixed(0, 1),
         stepping: SWITCH,
@@ -117,7 +117,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "trigloop",
         name: "Trig loop",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, MAX_LOOP as i32),
         stepping: COUNT,
@@ -129,7 +129,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "noteloop",
         name: "Note loop",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, MAX_LOOP as i32),
         stepping: COUNT,
@@ -141,7 +141,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "octloop",
         name: "Oct loop",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, MAX_LOOP as i32),
         stepping: COUNT,
@@ -153,7 +153,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "accloop",
         name: "Acc loop",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, MAX_LOOP as i32),
         stepping: COUNT,
@@ -165,7 +165,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "slideloop",
         name: "Sld loop",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, MAX_LOOP as i32),
         stepping: COUNT,
@@ -177,7 +177,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "source",
         name: "Source",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Listed,
         bounds: Bounds::Listed,
         stepping: None,
@@ -189,7 +189,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "transpose",
         name: "Transpose",
-        units: Units::Interval,
+        units: Reading::Interval,
         typing: SIGNED,
         bounds: Bounds::Fixed(-(MAX_TRANSPOSE as i32), MAX_TRANSPOSE as i32),
         stepping: Some(Stepping {
@@ -205,7 +205,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "invert",
         name: "Invert",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Toggled,
         bounds: Bounds::Fixed(0, 1),
         stepping: SWITCH,
@@ -218,7 +218,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "axis",
         name: "About",
-        units: Units::Column,
+        units: Reading::Column,
         typing: Typing::Named { list: false },
         bounds: Bounds::Column,
         stepping: None,
@@ -233,7 +233,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "reverse",
         name: "Reverse",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Toggled,
         bounds: Bounds::Fixed(0, 1),
         stepping: SWITCH,
@@ -246,7 +246,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "late",
         name: "Rotate",
-        units: Units::Rows,
+        units: Reading::Rows,
         typing: WHOLE,
         bounds: Bounds::Contextual(|context| Some((0, context.source_rows() as i32 - 1))),
         stepping: round(1, EUCLID_JUMP),
@@ -258,7 +258,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "fx",
         name: "FX",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Toggled,
         bounds: Bounds::Fixed(0, 1),
         stepping: SWITCH,
@@ -270,7 +270,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "mutation",
         name: "Mutation",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, MAX_MUTATION as i32),
         stepping: stops(1, 4),
@@ -282,7 +282,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "repitch",
         name: "Repitch",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Toggled,
         bounds: Bounds::Fixed(0, 1),
         stepping: SWITCH,
@@ -294,7 +294,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "shift",
         name: "Shift",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Toggled,
         bounds: Bounds::Fixed(0, 1),
         stepping: SWITCH,
@@ -306,7 +306,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "retro",
         name: "Retro",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Toggled,
         bounds: Bounds::Fixed(0, 1),
         stepping: SWITCH,
@@ -318,7 +318,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "ratchet",
         name: "Ratchet",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Toggled,
         bounds: Bounds::Fixed(0, 1),
         stepping: SWITCH,
@@ -330,7 +330,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "drop",
         name: "Drop/add",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Toggled,
         bounds: Bounds::Fixed(0, 1),
         stepping: SWITCH,
@@ -343,7 +343,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "step",
         name: "Step",
-        units: Units::Step,
+        units: Reading::Walk,
         typing: WHOLE,
         bounds: Bounds::Contextual(|context| Some((1, i32::from(longest_step(context.column))))),
         stepping: Some(Stepping {
@@ -360,7 +360,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "edge",
         name: "Edge",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Toggled,
         bounds: Bounds::Fixed(0, 1),
         stepping: SWITCH,
@@ -378,7 +378,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "depth",
         name: "Depth",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(MIN_DEPTH as i32, MAX_DEPTH as i32),
         stepping: stops(1, 2),
@@ -390,7 +390,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "spread",
         name: "Spread",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, MAX_SPREAD as i32),
         stepping: PERCENT,
@@ -402,7 +402,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "bias",
         name: "Bias",
-        units: Units::Bend,
+        units: Reading::Bend,
         typing: SIGNED,
         bounds: Bounds::Fixed(-(MAX_BIAS as i32), MAX_BIAS as i32),
         stepping: BEND,
@@ -415,7 +415,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "steps",
         name: "Steps",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Contextual(|context| match context.column {
             ShapeColumn::Note { scale, .. } => Some((1, degree_count(scale) as i32)),
@@ -437,7 +437,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "weights",
         name: "Weights",
-        units: Units::Weights,
+        units: Reading::Weights,
         typing: Typing::Weights,
         bounds: Bounds::Typed,
         stepping: None,
@@ -449,7 +449,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "factor",
         name: "Factor",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(1, MAX_FACTOR as i32),
         stepping: stops(1, FACTOR_JUMP),
@@ -461,7 +461,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "masks",
         name: "Masks",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Toggled,
         bounds: Bounds::Fixed(0, 1),
         stepping: SWITCH,
@@ -474,7 +474,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "part",
         name: "Part",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Listed,
         bounds: Bounds::Fixed(0, DrumPart::ALL.len() as i32 - 1),
         stepping: None,
@@ -487,7 +487,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "note",
         name: "Note",
-        units: Units::Column,
+        units: Reading::Column,
         typing: Typing::Named { list: false },
         bounds: Bounds::Column,
         stepping: None,
@@ -499,7 +499,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "x",
         name: "X",
-        units: Units::Byte,
+        units: Reading::Hex,
         typing: Typing::Hex,
         bounds: Bounds::Fixed(0, 0xFF),
         stepping: HEX,
@@ -511,7 +511,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "y",
         name: "Y",
-        units: Units::Byte,
+        units: Reading::Hex,
         typing: Typing::Hex,
         bounds: Bounds::Fixed(0, 0xFF),
         stepping: HEX,
@@ -523,7 +523,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "bd",
         name: "BD fill",
-        units: Units::Byte,
+        units: Reading::Hex,
         typing: Typing::Hex,
         bounds: Bounds::Fixed(0, 0xFF),
         stepping: HEX,
@@ -535,7 +535,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "sd",
         name: "SD fill",
-        units: Units::Byte,
+        units: Reading::Hex,
         typing: Typing::Hex,
         bounds: Bounds::Fixed(0, 0xFF),
         stepping: HEX,
@@ -547,7 +547,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "hh",
         name: "HH fill",
-        units: Units::Byte,
+        units: Reading::Hex,
         typing: Typing::Hex,
         bounds: Bounds::Fixed(0, 0xFF),
         stepping: HEX,
@@ -559,7 +559,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "chaos",
         name: "Chaos",
-        units: Units::Byte,
+        units: Reading::Hex,
         typing: Typing::Hex,
         bounds: Bounds::Fixed(0, 0xFF),
         stepping: HEX,
@@ -572,7 +572,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "rows",
         name: "Rows",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Toggled,
         bounds: Bounds::Fixed(0, 1),
         stepping: SWITCH,
@@ -585,7 +585,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "channel",
         name: "Channel",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Listed,
         bounds: Bounds::Fixed(0, Channel::ALL.len() as i32 - 1),
         stepping: None,
@@ -597,7 +597,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "bar",
         name: "Bar",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Listed,
         bounds: Bounds::Fixed(0, Bar::ALL.len() as i32 - 1),
         stepping: None,
@@ -609,7 +609,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "d4",
         name: "1/4",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -621,7 +621,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "d8",
         name: "1/8",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -633,7 +633,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "d16",
         name: "1/16",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -645,7 +645,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "d4t",
         name: "1/4T",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -657,7 +657,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "d8t",
         name: "1/8T",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -669,7 +669,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "d16t",
         name: "1/16T",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -681,7 +681,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "b4",
         name: "B 1/4",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -693,7 +693,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "b8",
         name: "B 1/8",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -705,7 +705,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "b16",
         name: "B 1/16",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -717,7 +717,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "b4t",
         name: "B 1/4T",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -729,7 +729,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "b8t",
         name: "B 1/8T",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -741,7 +741,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "b16t",
         name: "B 1/16T",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -753,7 +753,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "change",
         name: "Change",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -765,7 +765,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "ones",
         name: "Chance",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -777,7 +777,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "length",
         name: "Length",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(1, MAX_RING as i32),
         stepping: COUNT,
@@ -790,7 +790,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "triad",
         name: "Triad",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Toggled,
         bounds: Bounds::Fixed(0, 1),
         stepping: SWITCH,
@@ -808,7 +808,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "voice",
         name: "Voice",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Listed,
         bounds: Bounds::Fixed(0, TonnetzVoice::ALL.len() as i32 - 1),
         stepping: None,
@@ -820,7 +820,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "moves",
         name: "Moves",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Listed,
         bounds: Bounds::Fixed(0, Moves::ALL.len() as i32 - 1),
         stepping: None,
@@ -832,7 +832,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "list",
         name: "List",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Moves,
         bounds: Bounds::Typed,
         stepping: None,
@@ -844,7 +844,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "p",
         name: "P",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, MAX_MOVE_WEIGHT as i32),
         stepping: stops(1, WEIGHT_JUMP),
@@ -856,7 +856,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "l",
         name: "L",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, MAX_MOVE_WEIGHT as i32),
         stepping: stops(1, WEIGHT_JUMP),
@@ -868,7 +868,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "r",
         name: "R",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, MAX_MOVE_WEIGHT as i32),
         stepping: stops(1, WEIGHT_JUMP),
@@ -880,7 +880,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "loop",
         name: "Length",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(1, MAX_MOVE_LOOP as i32),
         stepping: stops(1, LOOP_JUMP),
@@ -892,7 +892,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "inscale",
         name: "Scale",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Toggled,
         bounds: Bounds::Fixed(0, 1),
         stepping: SWITCH,
@@ -904,7 +904,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "order",
         name: "Order",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(1, MAX_ORDER as i32),
         stepping: stops(1, 1),
@@ -916,7 +916,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "temperature",
         name: "Temp",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -928,7 +928,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "flip",
         name: "Flip",
-        units: Units::Bits,
+        units: Reading::Bits,
         typing: Typing::Hex,
         bounds: Bounds::Fixed(0, u8::MAX as i32),
         stepping: HEX,
@@ -940,7 +940,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "keep",
         name: "Keep",
-        units: Units::Bits,
+        units: Reading::Bits,
         typing: Typing::Hex,
         bounds: Bounds::Fixed(0, u8::MAX as i32),
         stepping: HEX,
@@ -952,7 +952,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "turn",
         name: "Turn",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, MAX_TURN as i32),
         stepping: round(1, 4),
@@ -964,7 +964,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "curve",
         name: "Curve",
-        units: Units::Bend,
+        units: Reading::Bend,
         typing: SIGNED,
         bounds: Bounds::Fixed(-(MAX_BEND as i32), MAX_BEND as i32),
         stepping: BEND,
@@ -976,7 +976,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "s",
         name: "S",
-        units: Units::Bend,
+        units: Reading::Bend,
         typing: SIGNED,
         bounds: Bounds::Fixed(-(MAX_BEND as i32), MAX_BEND as i32),
         stepping: BEND,
@@ -988,7 +988,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "wave",
         name: "Shape",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Listed,
         bounds: Bounds::Listed,
         stepping: None,
@@ -1000,7 +1000,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "rate",
         name: "Rate",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Rate,
         bounds: Bounds::Listed,
         stepping: None,
@@ -1012,7 +1012,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "phase",
         name: "Phase",
-        units: Units::Degrees,
+        units: Reading::Degrees { axes: false },
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 359),
         stepping: round(PHASE_NUDGE, PHASE_JUMP),
@@ -1024,7 +1024,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "values",
         name: "Values",
-        units: Units::Column,
+        units: Reading::Column,
         typing: Typing::Named { list: true },
         bounds: Bounds::Typed,
         stepping: None,
@@ -1036,7 +1036,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "run",
         name: "Run",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(1, MAX_RUN as i32),
         stepping: stops(1, RUN_JUMP),
@@ -1048,7 +1048,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "where",
         name: "Where",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Listed,
         bounds: Bounds::Listed,
         stepping: None,
@@ -1061,7 +1061,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "every",
         name: "Amount",
-        units: Units::Rows,
+        units: Reading::Rows,
         typing: WHOLE,
         bounds: Bounds::Fixed(1, MAX_EVERY as i32),
         stepping: stops(1, EVERY_JUMP),
@@ -1080,7 +1080,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "chance",
         name: "Amount",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -1100,7 +1100,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "hits",
         name: "Hits",
-        units: Units::OfRows,
+        units: Reading::OfRows,
         typing: WHOLE,
         bounds: Bounds::Contextual(|context| Some((0, context.open as i32))),
         stepping: COUNT,
@@ -1119,7 +1119,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "rotate",
         name: "Rotate",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Contextual(|context| Some((0, (context.open as i32 - 1).max(0)))),
         stepping: round(1, EUCLID_JUMP),
@@ -1138,7 +1138,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "clusters",
         name: "Amount",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -1157,7 +1157,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "markov",
         name: "Amount",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -1176,7 +1176,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "states",
         name: "Amount",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -1195,7 +1195,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "share",
         name: "Amount",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -1215,7 +1215,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "side",
         name: "Side",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Toggled,
         bounds: Bounds::Fixed(0, 1),
         stepping: SWITCH,
@@ -1234,7 +1234,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "rhythm",
         name: "Rhythm",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Listed,
         bounds: Bounds::Fixed(0, World::ALL.len() as i32 - 1),
         stepping: None,
@@ -1249,7 +1249,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "role",
         name: "Part",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Listed,
         bounds: Bounds::Fixed(0, Role::ALL.len() as i32 - 1),
         stepping: None,
@@ -1264,7 +1264,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "child",
         name: "Child",
-        units: Units::Percent,
+        units: Reading::Percent,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 100),
         stepping: PERCENT,
@@ -1283,7 +1283,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "rule",
         name: "Rule",
-        units: Units::Count,
+        units: Reading::Number,
         typing: WHOLE,
         bounds: Bounds::Fixed(0, 0xFF),
         stepping: stops(1, RULE_JUMP),
@@ -1302,7 +1302,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "start",
         name: "Start",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Listed,
         bounds: Bounds::Fixed(0, CellStart::ALL.len() as i32 - 1),
         stepping: None,
@@ -1322,7 +1322,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
     GenParamSpec {
         key: "vary",
         name: "Vary",
-        units: Units::Named,
+        units: Reading::Listed,
         typing: Typing::Listed,
         bounds: Bounds::Fixed(0, VARIES.len() as i32 - 1),
         stepping: None,

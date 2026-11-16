@@ -21,9 +21,9 @@ use vt_model::envelope::{Hold, MAX_HOLD_MS};
 use vt_model::insert::Insert;
 use vt_model::lfo::{Fade, Rate};
 use vt_model::modulation::{ModField, ModKind, Polarity};
+use vt_model::param::Reading;
 use vt_model::settings::{Kind, SettingId, Units};
 use vt_model::shape::GenParam;
-use vt_model::shape::params::Units as GenUnits;
 use vt_model::song::{FilterType, Machine, Song, Track, TrackKind};
 use vt_model::steps::StepRate;
 use vt_roto::Label;
@@ -209,9 +209,9 @@ fn registry_setting(control: Control, track: &Track) -> Option<SettingId> {
 /// modulator's are; its ends, steps, rows and counts are pitches and times; and its lists and
 /// switches are choices.
 fn gen_family(param: GenParam) -> Family {
-    match param.units() {
-        GenUnits::Percent | GenUnits::Bend | GenUnits::Degrees => Family::Modulation,
-        GenUnits::Named => Family::Choice,
+    match param.reading() {
+        Reading::Percent | Reading::Bend | Reading::Degrees { .. } => Family::Modulation,
+        Reading::Listed => Family::Choice,
         _ => Family::Time,
     }
 }
@@ -378,7 +378,7 @@ pub(crate) fn places(
             generator,
             param,
         } => {
-            if param.units() != GenUnits::Named {
+            if param.reading() != Reading::Listed {
                 return None;
             }
             with_live(song, track, phrase, generator, |found, context| {

@@ -736,7 +736,7 @@ impl ModSlot {
                 }
             }
             // No setting of a slot reads as these.
-            Reading::Byte { .. } | Reading::Number => of,
+            _ => of,
         }
     }
 

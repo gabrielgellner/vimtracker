@@ -144,7 +144,9 @@ keep can have a file of its own instead, as `supersaw.rs` and `four_op.rs` do, n
    compiler asks for the row and the default.
 2. **`vt-model/src/shape/params.rs`**: a `GenParam` for each new setting; its place in `ALL`
    (`params/spec.rs`), which is the panel's order; and its `GEN_PARAMS` row (`params/table.rs`), in
-   the enum's order, as `spec` finds a row by the variant. Then its cases in `params/spec.rs`'s
+   the enum's order, as `spec` finds a row by the variant; the row's `units` is a `Reading`, the
+   one vocabulary every family's settings read in. The Gen page and the Roto read the setting
+   through `GenParam::described`, which needs nothing new. Then its cases in `params/spec.rs`'s
    `exists_for`, `shown` and `reset`, which the compiler asks for, and in `grid`, `typed`, `choices`
    and `chosen` where it needs them, which it doesn't. A row in the wrong place shows as keys
    moving in `gen_params.txt`. One macro writing these from a single list is left for the next
