@@ -31,10 +31,11 @@ const TRACK_MEANINGS: [&str; 16] = [
 
 /// The track's own settings in the order lists show them: the filter, then output, then pitch,
 /// velocity, gate, time and glide.
-const TRACK_ORDER: [SettingId; 19] = [
+const TRACK_ORDER: [SettingId; 20] = [
     SettingId::CUT,
     SettingId::RES,
     SettingId::FILTER_MODE,
+    SettingId::KEY_TRACK,
     SettingId::PAN,
     SettingId::LEVEL,
     SettingId::VOL,
@@ -287,8 +288,8 @@ impl SettingId {
     /// moves the volume, on top of the fader. `LDLT` is too, as moving it would only move
     /// `Gate`, which modulation already moves up or down from each note's own length, and so are
     /// `GRV`, `RATE`, `PLY` and a slot's bypass, as a groove, a speed, a way of playing and whether
-    /// a slot's in are chosen rather than moved through, and `GLD`, which is read only as a tie
-    /// comes.
+    /// a slot's in are chosen rather than moved through, as is whether `KTRK` is on, and `GLD`,
+    /// which is read only as a tie comes.
     fn to_modulate(track: &Track) -> Vec<Self> {
         let mut settings = Self::on_track(track);
         settings.retain(|id| {
@@ -300,6 +301,7 @@ impl SettingId {
                 Self::GLIDE,
                 Self::PHASE,
                 Self::VOICE_MODE,
+                Self::KEY_TRACK,
                 Self::GLIDE_MODE,
                 Self::PLAY,
             ]

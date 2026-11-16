@@ -464,6 +464,10 @@ impl TrackState {
                     self.held_voice_mode = value;
                     return;
                 }
+                SettingId::KEY_TRACK => {
+                    self.held_key_track = value;
+                    return;
+                }
                 SettingId::GLIDE_MODE => {
                     self.held_glide_mode = value;
                     return;

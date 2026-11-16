@@ -817,6 +817,41 @@ mod tests {
         assert_eq!(blocks(&mut rt, 200), 0);
     }
 
+    /// Tracks whose filter follows the key, through gliding ties and struck notes, on synths and
+    /// samples alike (decision 381).
+    #[test]
+    fn key_tracking_never_allocates_in_the_callback() {
+        let pool = samples();
+        let mut following = song(8, 16);
+        for (index, track) in following.tracks.iter_mut().take(8).enumerate() {
+            track.key_track = true;
+            track.cutoff = 0x60;
+            track.resonance = 0xC0;
+            track.glide = if index % 4 < 2 { 0x40 } else { 0 };
+            if index % 2 == 0 {
+                track.machine =
+                    vt_model::song::Machine::Plaits(vt_model::song::SynthVoice::VirtualAnalog);
+            }
+            // Notes up and down two octaves, every other one tied into the next, so it glides.
+            let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+            for step in 0..16 {
+                let row = phrase.step_mut(step).unwrap();
+                row.note = Note::On(36 + (step as u8 * 7) % 48);
+                if step % 2 == 0 {
+                    row.gate = Some(vt_model::step::Gate {
+                        kind: vt_model::step::GateKind::Hold,
+                        pulses: 1,
+                        length: None,
+                    });
+                }
+            }
+        }
+        let engine = Engine::new(48_000, published(following, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        assert_eq!(blocks(&mut rt, 200), 0);
+    }
+
     /// Tracks gliding every note at `Always`, struck, carried and tied (decision 382).
     #[test]
     fn glide_mode_always_never_allocates_in_the_callback() {

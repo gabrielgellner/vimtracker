@@ -183,6 +183,15 @@ pub(crate) struct TrackState {
     punch: Smoothed,
     /// Held `Safe`, 1 for on, which glides so switching it doesn't jump `Res`.
     safe: Smoothed,
+    /// Held `Key track`, a place in `Off` and `On`.
+    held_key_track: f32,
+    /// What `Key track` adds to the cutoff, on its `0..=1` scale: the voice's note in octaves
+    /// from `C-3`, smoothed as the cutoff is, so a new note's moves it as a change of `CUT` does
+    /// and a glide's moves it as the glide goes. Nothing while it's off (decision 381).
+    key_track: Smoothed,
+    /// Whether `key_track` jumps to the next note heard rather than moving there, as the filter
+    /// has settled while nothing sounded.
+    key_settles: bool,
     trim: [Trim; 2],
     low_cut: Smoothed,
     /// What each of its effects keeps.
@@ -370,6 +379,9 @@ impl TrackState {
             drive: Smoothed::at(0.0),
             punch: Smoothed::at(0.0),
             safe: Smoothed::at(0.0),
+            held_key_track: f32::from(SettingId::KEY_TRACK.entry().default),
+            key_track: Smoothed::at(0.0),
+            key_settles: false,
             trim: [Trim::default(); 2],
             low_cut: Smoothed::at(0.0),
             inserts: std::array::from_fn(|slot| {
@@ -807,6 +819,8 @@ impl TrackState {
         self.cut_offset.settle();
         self.res_offset.settle();
         self.cut_envelope.settle();
+        self.key_track.settle();
+        self.key_settles = true;
         self.res_envelope.settle();
         self.drive.settle();
         self.punch.settle();

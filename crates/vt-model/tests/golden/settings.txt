@@ -1220,4 +1220,5 @@
 1219 lane3.rate
 1220 phase
 1221 voicemode
-1222 glidemode
+1222 keytrack
+1223 glidemode

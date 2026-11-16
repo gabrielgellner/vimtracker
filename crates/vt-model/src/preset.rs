@@ -230,6 +230,8 @@ pub struct Sound {
     pub punch: u8,
     #[serde(default, skip_serializing_if = "is_off")]
     pub safe: bool,
+    #[serde(default, skip_serializing_if = "is_off")]
+    pub key_track: bool,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub low_cut: u8,
     #[serde(default = "open", skip_serializing_if = "is_open")]
@@ -294,6 +296,7 @@ copied!(
     drive,
     punch,
     safe,
+    key_track,
     low_cut,
     high_cut,
     pitch,

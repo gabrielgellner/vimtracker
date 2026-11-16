@@ -148,6 +148,8 @@
 <text x="117" y="337" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00   </text>
 <text x="162" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="252" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
+<text x="288" y="337" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Key track </text>
+<use href="#sf204" transform="matrix(0.0087890625 0 0 -0.0087890625 378 337.89648)" fill="#737994"/>
 <text x="864" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="337" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>

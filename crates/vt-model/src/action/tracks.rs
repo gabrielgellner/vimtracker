@@ -103,6 +103,7 @@ pub(super) fn edit(next: &mut Song, action: &Action) -> Result<(), EditError> {
                 .glide = *glide;
         }
         Action::SetTrackSafe { track, on } => track_mut(next, *track)?.safe = *on,
+        Action::SetTrackKeyTrack { track, on } => track_mut(next, *track)?.key_track = *on,
         Action::SetAccumulation {
             track,
             accumulation,

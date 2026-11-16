@@ -198,6 +198,10 @@ pub struct Track {
     /// Drop's `SAFE`: on, its whole turn reaches only as far as its loudest peak that dies away.
     #[serde(default, skip_serializing_if = "is_off")]
     pub safe: bool,
+    /// Whether its cutoff follows the note's pitch, an octave for an octave, where `C-3` leaves
+    /// it as set (decision 381).
+    #[serde(default, skip_serializing_if = "is_off")]
+    pub key_track: bool,
     /// The utility filter after it: a high-pass, which `00` turns off.
     #[serde(default)]
     pub low_cut: u8,
@@ -682,6 +686,7 @@ impl Default for Track {
             drive: 0,
             punch: 0,
             safe: false,
+            key_track: false,
             low_cut: 0,
             high_cut: open_cutoff(),
             inserts: Default::default(),
@@ -1485,6 +1490,27 @@ mod tests {
             track.value_of(SettingId::VOICE_MODE) >> 8,
             u16::from(VoiceMode::Legato.index())
         );
+    }
+
+    #[test]
+    fn a_tracks_key_track_saves_only_on_and_a_sound_preset_keeps_it() {
+        let track: Track = ron::from_str("(mute: false, solo: false)").unwrap();
+        assert!(!track.key_track);
+        assert!(!ron::to_string(&track).unwrap().contains("key_track"));
+        let track = Track {
+            key_track: true,
+            ..Track::default()
+        };
+        let text = ron::to_string(&track).unwrap();
+        assert!(text.contains("key_track:true"), "{text}");
+        assert!(ron::from_str::<Track>(&text).unwrap().key_track);
+        let preset = crate::preset::SoundPreset::of(&track, None);
+        assert!(preset.sound.key_track);
+        let mut loaded = Track::default();
+        preset.apply(&mut loaded, 0);
+        assert!(loaded.key_track);
+        assert_eq!(track.value_of(SettingId::KEY_TRACK) >> 8, 1);
+        assert_eq!(Track::default().value_of(SettingId::KEY_TRACK), 0);
     }
 
     #[test]

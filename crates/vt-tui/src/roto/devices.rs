@@ -252,7 +252,8 @@ pub fn family(control: Control, track: &Track) -> Family {
         Control::Base(TrackControl::LowCut | TrackControl::HighCut)
         | Control::FilterType
         | Control::FilterMode
-        | Control::Safe => Family::Tone,
+        | Control::Safe
+        | Control::KeyTrack => Family::Tone,
         Control::Base(TrackControl::Drive | TrackControl::Punch) => Family::Character,
         Control::GateLength
         | Control::Tune

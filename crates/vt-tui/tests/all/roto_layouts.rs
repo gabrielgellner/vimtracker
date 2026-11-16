@@ -1009,6 +1009,7 @@ fn the_filters_safe_is_on_the_button_under_res() {
     assert!(filter.stored);
     assert_eq!(first_knobs(filter)[..2], ["cutoff", "resonance"]);
     assert_eq!(button_key(filter, 0, 1), Some("safe"), "under Res");
+    assert_eq!(button_key(filter, 0, 0), Some("keytrack"), "under Cutoff");
     let song = std::sync::Arc::new(Song::new(1));
     let track = &song.tracks[0];
     let spec = &Page::Sound.devices(track)[1];
@@ -1020,4 +1021,15 @@ fn the_filters_safe_is_on_the_button_under_res() {
     assert!(next.tracks[0].safe);
     let next = edit(&next, &turned(Control::Safe, 0, &next, 0).unwrap()).unwrap();
     assert!(!next.tracks[0].safe);
+    // And `Key track` likewise, under `Cutoff`.
+    assert_eq!(
+        device.switches[0].as_ref().unwrap().name.as_str(),
+        "Key track"
+    );
+    let next = edit(
+        &next,
+        &turned(Control::KeyTrack, 0, &next, KNOB_TOP).unwrap(),
+    )
+    .unwrap();
+    assert!(next.tracks[0].key_track);
 }

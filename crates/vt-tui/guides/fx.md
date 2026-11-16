@@ -39,6 +39,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `CUT` | Filter cutoff, from 20 Hz to 20 kHz |
 | `RES` | Filter resonance |
 | `MODE` | The filter's mode, by its place: see the Sound page's guide |
+| `KTRK` | The filter's `Key track` for the row: `00` off, `01` on |
 | `SNA` | Send to return `A` |
 | `SNB` | Send to return `B` |
 | `PNCH` | A voice's setting, by its own label, like Punch on `Kick` |

@@ -218,12 +218,13 @@ fn label(control: Control, track: &Track) -> Cow<'static, str> {
 
 /// Whether a setting that's off or on, and nothing else, is on, or nothing for any other: an
 /// effect's `Off`/`On` list, an envelope's `Reset`, the arpeggio's `Retrig`, the filter's
-/// `Safe`, and the master's `Limiter`, which is the song's. They show as a toggle, and the status
+/// `Safe` and `Key track`, and the master's `Limiter`, which is the song's. They show as a toggle, and the status
 /// line still says the word.
 pub(crate) fn toggle_on(control: Control, track: &Track, song: &Song) -> Option<bool> {
     match control {
         Control::Limiter => Some(song.limiter),
         Control::Safe => Some(track.safe),
+        Control::KeyTrack => Some(track.key_track),
         Control::InsertParam(slot, param) => {
             let insert = track.inserts[slot];
             let found = insert.params().get(param)?;
@@ -460,6 +461,9 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
         }
         Control::Limiter => of.switch(song.limiter, true).text(on_off(song.limiter)),
         Control::Safe => of.switch(track.safe, fresh.safe).text(safe_shown(track)),
+        Control::KeyTrack => of
+            .switch(track.key_track, fresh.key_track)
+            .text(key_track_shown(track.key_track)),
         Control::Sample => ParamView {
             value: i32::from(track.sample()),
             bounds: (0, 0xFF),
@@ -1023,6 +1027,10 @@ pub fn set(
             track: at,
             on: value != 0,
         },
+        Control::KeyTrack => Action::SetTrackKeyTrack {
+            track: at,
+            on: value != 0,
+        },
         Control::Mod(slot, field) => {
             let mut modulator = track.mods[slot];
             match field {
@@ -1123,6 +1131,15 @@ fn safe_shown(track: &Track) -> String {
         "on: Res stops short of ringing by itself".to_owned()
     } else {
         "off: Res rings by itself from about D9".to_owned()
+    }
+}
+
+/// What the filter's `Key track` does, as it's set.
+fn key_track_shown(on: bool) -> String {
+    if on {
+        "on: the cutoff follows the note, an octave for an octave from C-3".to_owned()
+    } else {
+        "off: the cutoff stays where it's set on every note".to_owned()
     }
 }
 

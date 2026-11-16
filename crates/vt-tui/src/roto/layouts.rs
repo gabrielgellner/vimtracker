@@ -703,7 +703,8 @@ const TOY: DeviceLayout = live(
 // The track's own devices.
 
 /// The filter itself and its punch, its type and mode, then the utility filter's cuts, with
-/// `Safe` on the button under `Res`, as it tames it.
+/// `Key track` on the button under `Cutoff`, as it moves it, and `Safe` under `Res`, as it tames
+/// it.
 const FILTER: DeviceLayout = stored(
     "filter",
     &[page(
@@ -718,7 +719,7 @@ const FILTER: DeviceLayout = stored(
             s("lowcut"),
             s("highcut"),
         ],
-        button(1, "safe"),
+        [s("keytrack"), s("safe"), __, __, __, __, __, __],
     )],
 );
 

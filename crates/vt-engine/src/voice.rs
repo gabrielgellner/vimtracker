@@ -226,6 +226,12 @@ macro_rules! synths {
                     $(Self::$voice(synth) => SynthEngine::seed_noise(synth, seed),)+
                 }
             }
+
+            fn slid(&self) -> f32 {
+                match self {
+                    $(Self::$voice(synth) => SynthEngine::slid(synth),)+
+                }
+            }
         }
     };
 }
@@ -317,6 +323,8 @@ pub(crate) struct Voice {
     /// Where it is in its sample, and how it reads on.
     reader: Reader,
     increment: f64,
+    /// What of `increment` is its sample's own tune rather than its note, `1` for a synth.
+    tune: f64,
     /// A tie gliding the speed to the next note's, if one is.
     gliding: Option<Gliding>,
     /// What modulation multiplies the speed by, and where that's heading.
@@ -373,6 +381,7 @@ impl Default for Voice {
             slice: 0,
             reader: Reader::default(),
             increment: 1.0,
+            tune: 1.0,
             gliding: None,
             pitch: 1.0,
             pitch_target: 1.0,
@@ -429,7 +438,12 @@ pub(crate) struct NoteOn {
 impl NoteOn {
     /// How fast it plays: its note, where `C-3` is as recorded, at its entry's tune.
     fn increment(&self) -> f64 {
-        2_f64.powf((f64::from(self.note) - 60.0) / 12.0) * self.span.map_or(1.0, |span| span.speed)
+        2_f64.powf((f64::from(self.note) - 60.0) / 12.0) * self.tune()
+    }
+
+    /// Its entry's tune, as a speed.
+    fn tune(&self) -> f64 {
+        self.span.map_or(1.0, |span| span.speed)
     }
 
     /// What it multiplies the sound by: its own gain and its entry's.
@@ -464,6 +478,7 @@ impl Voice {
             slice: note.slice,
             reader: Reader::new(note.span, note.cut),
             increment: note.increment(),
+            tune: note.tune(),
             gliding: None,
             pitch,
             pitch_target: pitch,
@@ -578,6 +593,7 @@ impl Voice {
         self.stage = Stage::Held { from: self.level };
         self.let_go = false;
         self.elapsed = 0;
+        self.tune = note.tune();
         self.gliding = None;
         match carry.glide {
             Some(ms) => self.glide_to(note.increment(), ms),
@@ -730,6 +746,7 @@ impl Voice {
     /// jumps. `Acid` always slides, for as long as its own `Slide` says unless it's given a time.
     pub(crate) fn tie(&mut self, note: NoteOn, glide_ms: Option<f32>) {
         let to = note.increment();
+        self.tune = note.tune();
         self.gain = note.sample_gain();
         self.gain_target = self.gain;
         if let Some(Synth::Acid(synth)) = &mut self.synth {
@@ -761,6 +778,7 @@ impl Voice {
         self.let_go = false;
         self.elapsed = 0;
         self.increment = note.increment();
+        self.tune = note.tune();
         self.gliding = None;
         self.gain = note.sample_gain();
         self.gain_target = self.gain;
@@ -769,6 +787,16 @@ impl Voice {
         if let Some(synth) = &mut self.synth {
             synth.trigger(note.accent);
         }
+    }
+
+    /// How far the note it plays now sounds from `C-3`, in octaves, for the track filter's `Key
+    /// track` to follow: its note after transpose, with a glide or `Acid`'s slide as far as it's
+    /// gone, the track's `Pitch` and what modulation adds to it, but not its sample's own tune,
+    /// which tunes the recording to its note (decision 381). It stays at the last note's once
+    /// it's ended, and is `C-3`'s before the first.
+    pub(crate) fn key_octaves(&self) -> f32 {
+        let slid = self.synth.as_ref().map_or(1.0, Synth::slid);
+        ((self.increment / self.tune * self.pitch) as f32 * slid).log2()
     }
 
     /// Where modulation wants its speed.
@@ -840,6 +868,7 @@ impl Voice {
         }
         let ratio = span.speed / old.speed;
         self.increment *= ratio;
+        self.tune *= ratio;
         if let Some(gliding) = &mut self.gliding {
             gliding.to *= ratio;
         }
