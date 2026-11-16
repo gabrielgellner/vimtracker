@@ -92,9 +92,9 @@ half a millisecond, as a VCA's gain is, so a step down to nothing doesn't click.
 rise isn't: an attack of 0 is as sudden as it's set.
 
 A note lasts until the next note on its track, an `OFF`, or its gate closing,
-and the next note fades the last one quickly rather than running its release. So
-a drum is often a Decay with Sustain at `0%`, and at `Gate` 100% Release only runs
-on an `OFF`. To make notes shorter, lower `Gate` in the Play device, give a row a
+and the next note doesn't run the last one's release: it takes over the synth
+sounding, below, or fades a sample quickly under its own start. So a drum is often
+a Decay with Sustain at `0%`, and at `Gate` 100% Release only runs on an `OFF`. To make notes shorter, lower `Gate` in the Play device, give a row a
 length of its own, or put `OFF` on a step.
 
 **The curve** is the envelope's mode, after its type in the title, and bends
@@ -119,6 +119,17 @@ plays. `=` and `-` on it go through the four, `K` lists them, and `x` puts back
 point its curve reaches that level, so the attack keeps its shape and takes only
 what's left of its time, and the decay comes that much sooner. A fast run of notes
 or a legato line keeps its punch rather than crawling up from halfway each time.
+
+**From note to note,** a synth that holds its notes, as `VA` and `CSaw` do, plays
+the next note on the voice already sounding, as a mono synth does: its oscillators
+run on, the pitch moves to the new note and the envelope starts again. With the
+notes' shape's `Reset` on, as a new track has it, the level falls to nothing over a
+short fade first, about a millisecond, and the attack starts from there, so each
+note is struck without a click. With it off, the attack starts at once from where
+the level is, and a run of notes flows into one another. A sample, the struck
+voices, `Kick`, `Snare`, `Hat`, `String`, `Modal`, `Bell` and `Drum`, and `Bowed`,
+`Blown` and `Fluted`, whose strike starts their string or bore again from still,
+start each note afresh, the last one fading under it. `Acid` carries on as a 303 does, whatever `Reset` says.
 
 ## AHD envelopes
 

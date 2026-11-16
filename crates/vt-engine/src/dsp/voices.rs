@@ -49,6 +49,10 @@ pub(crate) trait SynthEngine: Copy {
     const DRIFTS: bool = false;
     /// Whether it draws noise, which a seed for each note chooses.
     const NOISE: bool = false;
+    /// Whether a note on a track playing it carries on from the voice sounding, its oscillators
+    /// running on, rather than starting a voice of its own (decision 367). Only for a voice that
+    /// holds its notes, and not for one whose strike starts it again from still.
+    const CARRIES: bool = true;
 
     /// A new note, at a sample rate.
     fn new(rate: u32) -> Self;
@@ -78,6 +82,15 @@ pub(crate) trait SynthEngine: Copy {
     /// Roll a new note's drift, and its noise floor, from a seed, for a synth that drifts.
     /// `Drift` as the note starts says whether its oscillators start anywhere in their cycles.
     fn seed_drift(&mut self, _seed: u32, _settings: Settings) {}
+
+    /// Roll a carried note's drift from a seed, drawing as [`SynthEngine::seed_drift`] does, so
+    /// each note's rolls are the same as a new voice's, but with its oscillators left where they
+    /// are, running on from the last note.
+    fn reseed_drift(&mut self, _seed: u32, _settings: Settings) {}
+
+    /// Put its oscillators back where a new note starts them, for a note carried on at the point
+    /// its level is nothing. A synth where a phase means nothing leaves it.
+    fn restart_phase(&mut self) {}
 
     /// What `Drift` multiplies the note's envelope times by. `Acid`'s own envelopes take it
     /// themselves.

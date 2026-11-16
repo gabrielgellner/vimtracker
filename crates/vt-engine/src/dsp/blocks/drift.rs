@@ -75,6 +75,13 @@ impl Drift {
         self.roll();
     }
 
+    /// Start a note carried on by a voice already sounding from its seed: the same offsets as
+    /// [`Drift::seed`] gives a new voice, but the wander left where it is, as it drifts on.
+    pub(crate) fn reseed(&mut self, seed: u32) {
+        self.rng = Pcg32::new(u64::from(seed), STREAM);
+        self.roll();
+    }
+
     /// New offsets for a note that carries on from the last, as `Acid`'s does, leaving the wander
     /// where it is.
     pub(crate) fn roll(&mut self) {

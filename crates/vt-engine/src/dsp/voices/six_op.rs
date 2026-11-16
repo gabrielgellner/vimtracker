@@ -398,6 +398,13 @@ impl Envelope {
         }
     }
 
+    /// Start its attack again from where it is, as a gate rising from its release does.
+    fn restart(&mut self) {
+        self.start = self.value();
+        self.stage = 0;
+        self.phase = 0.0;
+    }
+
     fn render(&mut self, gate: bool, rate: f32, ad_scale: f32, release_scale: f32) -> f32 {
         if gate {
             if self.stage == 3 {
@@ -734,6 +741,8 @@ pub(crate) struct SixOp {
     /// Whether the note is held, and whether it was a block ago.
     gate: bool,
     was_gated: bool,
+    /// Whether a note has been struck since the last block, so its envelopes attack again.
+    struck: bool,
     note: f32,
     velocity: f32,
     buffers: [[f32; BLOCK]; 3],
@@ -768,12 +777,23 @@ impl SynthEngine for SixOp {
             lfo: Lfo::new(),
             gate: true,
             was_gated: false,
+            struck: false,
             note: 48.0,
             velocity: 10.0,
             buffers: [[0.0; BLOCK]; 3],
             output: [0.0; BLOCK],
             at: BLOCK,
         }
+    }
+
+    /// Strike a note: its patch is loaded again from `Patch`, and at the next block its envelopes
+    /// attack again from where they are, and it takes the note's velocity and pitch, as a note
+    /// carried on by a sounding voice needs. A new voice does all that on its first block anyway.
+    fn trigger(&mut self, _accent: bool) {
+        self.patch = None;
+        self.gate = true;
+        self.was_gated = false;
+        self.struck = true;
     }
 
     /// Let go of the note, so its envelopes start their release.
@@ -819,6 +839,12 @@ impl SixOp {
     fn render(&mut self, frequency: f32, settings: Settings) {
         if self.patch.is_none() {
             self.load(patch_index(settings.at(PATCH)));
+        }
+        if std::mem::take(&mut self.struck) {
+            for envelope in &mut self.envelopes {
+                envelope.restart();
+            }
+            self.pitch_envelope.restart();
         }
         let Some(patch) = self.patch else {
             return;

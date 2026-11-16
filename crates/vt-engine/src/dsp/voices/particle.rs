@@ -233,6 +233,12 @@ const FILTER: usize = voice_place(SynthVoice::Dust, "filter");
 impl SynthEngine for ParticleNoise {
     const NOISE: bool = true;
 
+    /// Strike a note: at the next block its particles all fire at once again, as a new voice's first block does, as Plaits
+    /// does on each trigger.
+    fn trigger(&mut self, _accent: bool) {
+        self.fresh = true;
+    }
+
     fn new(_rate: u32) -> Self {
         Self::default()
     }

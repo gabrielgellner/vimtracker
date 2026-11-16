@@ -320,6 +320,20 @@ impl SynthEngine for Supersaw {
         }
     }
 
+    /// Roll a carried note's drift and tunings, drawing its saws' start phases as a new note does
+    /// and leaving the saws where they are.
+    fn reseed_drift(&mut self, seed: u32, _settings: Settings) {
+        self.drift.reseed(seed);
+        for tuning in &mut self.tuning {
+            *tuning = self.drift.tuning();
+        }
+        for _ in &self.stacks {
+            for _ in 0..4 {
+                self.drift.phase();
+            }
+        }
+    }
+
     /// What its note's envelope times are multiplied by.
     fn time(&self, settings: Settings) -> f32 {
         self.drift.time(settings.at(DRIFT))

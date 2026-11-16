@@ -78,6 +78,9 @@ pub(crate) struct BowedModel {
 
 impl Model for BowedModel {
     const LEVEL: f32 = 1.4;
+    // Braids' strike empties its delay lines, so each note starts from a still string, reed or
+    // bore: emptied under a sounding note it would stop dead, so each note has a voice of its own.
+    const CARRIES: bool = false;
 
     fn new() -> Self {
         Self {
@@ -178,6 +181,9 @@ pub(crate) struct BlownModel {
 
 impl Model for BlownModel {
     const LEVEL: f32 = 1.0;
+    // Braids' strike empties its delay lines, so each note starts from a still string, reed or
+    // bore: emptied under a sounding note it would stop dead, so each note has a voice of its own.
+    const CARRIES: bool = false;
     const NOISE: bool = true;
 
     fn new() -> Self {
@@ -247,6 +253,9 @@ pub(crate) struct FlutedModel {
 
 impl Model for FlutedModel {
     const LEVEL: f32 = 0.55;
+    // Braids' strike empties its delay lines, so each note starts from a still string, reed or
+    // bore: emptied under a sounding note it would stop dead, so each note has a voice of its own.
+    const CARRIES: bool = false;
     const NOISE: bool = true;
 
     fn new() -> Self {

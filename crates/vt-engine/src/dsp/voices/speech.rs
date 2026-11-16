@@ -879,6 +879,12 @@ impl SynthEngine for Speech {
         }
     }
 
+    /// Strike a note, which starts its word again at the next block, as Plaits' trigger does: a
+    /// new voice's first block already does.
+    fn trigger(&mut self, _accent: bool) {
+        self.struck = false;
+    }
+
     /// Seed the noise of its unvoiced sounds, so each note differs but a render repeats.
     fn seed_noise(&mut self, seed: u32) {
         self.rng = Pcg32::new(u64::from(seed), 5);

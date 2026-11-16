@@ -21,7 +21,7 @@ use crate::gens::GenHolds;
 use crate::mixer::Reading;
 use crate::rng::Pcg32;
 use crate::timing::SlotTimes;
-use crate::voice::{Cut, NoteOn, Voice};
+use crate::voice::{Carry, Cut, NoteOn, Voice};
 
 mod lanes;
 mod live;
@@ -558,8 +558,11 @@ impl TrackState {
             self.voice.level()
         };
         // `Acid` plays one note at a time, and the next carries on from its filter and accent.
-        let carries_on = note.synth == Some(SynthVoice::Acid) && self.voice.plays_acid();
-        if !carries_on {
+        let acid = note.synth == Some(SynthVoice::Acid) && self.voice.plays_acid();
+        // Any other synth that holds its notes carries on too, its oscillators running on into
+        // the next note rather than a new voice starting under the old one's fade.
+        let carries = !acid && self.voice.carries(note.synth);
+        if !acid && !carries {
             self.cut_to_tail();
         }
         self.delayed = None;
@@ -569,24 +572,41 @@ impl TrackState {
         self.last_note = Some(note);
         self.new_note = true;
         self.tell_slots_the_note();
-        if carries_on {
+        if acid {
             self.voice.retrigger(note);
-        } else {
+        } else if !carries {
             self.voice = Voice::start(note, rate, from, self.pitch);
             self.fresh_voice = true;
         }
         self.voice.set_synth(self.synth_settings());
-        if self.voice.uses_noise() {
+        // Each note draws its seeds as it's played, whether it has a voice of its own or not, so
+        // the streams go on as they would and each note rolls what it would on a new voice.
+        let noise = self.voice.uses_noise().then(|| {
             let rng = if arpeggio {
                 &mut self.arp_rng
             } else {
                 &mut self.rng
             };
-            self.voice.seed_noise(rng.next_u32());
+            rng.next_u32()
+        });
+        // `Acid` carrying on keeps the drift it has, and rolls its own offsets as it starts.
+        let drift = (!acid && self.voice.drifts()).then(|| self.drift_rng.next_u32());
+        if carries {
+            self.voice.carry(Carry {
+                note,
+                noise,
+                drift,
+                dip: note.shape.reset(),
+                // Its oscillators run on: a track can't ask for them to start again yet (#932).
+                restart: false,
+            });
+            return;
         }
-        // A note carrying on keeps the drift it has, and rolls its own offsets as it starts.
-        if !carries_on && self.voice.drifts() {
-            self.voice.seed_drift(self.drift_rng.next_u32());
+        if let Some(seed) = noise {
+            self.voice.seed_noise(seed);
+        }
+        if let Some(seed) = drift {
+            self.voice.seed_drift(seed);
         }
     }
 
