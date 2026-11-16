@@ -93,9 +93,10 @@ rise isn't: an attack of 0 is as sudden as it's set.
 
 A note lasts until the next note on its track, an `OFF`, or its gate closing,
 and the next note doesn't run the last one's release: it takes over the synth
-sounding, below, or fades a sample quickly under its own start. So a drum is often
-a Decay with Sustain at `0%`, and at `Gate` 100% Release only runs on an `OFF`. To make notes shorter, lower `Gate` in the Play device, give a row a
-length of its own, or put `OFF` on a step.
+sounding, below, or fades a sample out over 4 ms under its own start. So a drum is
+often a Decay with Sustain at `0%`, and at `Gate` 100% Release only runs on an
+`OFF`. To make notes shorter, lower `Gate` in the Play device, give a row a length
+of its own, or put `OFF` on a step.
 
 **The curve** is the envelope's mode, after its type in the title, and bends
 every stage at once:
@@ -129,7 +130,8 @@ note is struck without a click. With it off, the attack starts at once from wher
 the level is, and a run of notes flows into one another. A sample, the struck
 voices, `Kick`, `Snare`, `Hat`, `String`, `Modal`, `Bell` and `Drum`, and `Bowed`,
 `Blown` and `Fluted`, whose strike starts their string or bore again from still,
-start each note afresh, the last one fading under it. `Acid` carries on as a 303 does, whatever `Reset` says.
+start each note afresh, the last one fading out over 4 ms under it, as a choke, a
+`KIL` and stopping fade it. `Acid` carries on as a 303 does, whatever `Reset` says.
 
 ## AHD envelopes
 
