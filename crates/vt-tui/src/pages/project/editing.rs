@@ -27,6 +27,7 @@ use crate::app::{Entry, GRID_SIZES};
 use crate::input::bindings::Cmd;
 use crate::input::keys::Key;
 use crate::input::mode::View;
+use crate::input::wheel::Places;
 use crate::overlays::command::parse::{Line, parse};
 use crate::overlays::picker::explorer::Purpose;
 use crate::overlays::picker::exploring::Naming;
@@ -78,6 +79,41 @@ impl ProjectPage {
                 Outcome::Show(page_beside(view, cmd == Cmd::NextPage))
             }
             _ => Outcome::Passed,
+        }
+    }
+
+    /// The places of the setting under the cursor for the mouse wheel, where it's a list or off
+    /// and on.
+    pub(crate) fn wheel_places(&self, services: &Services) -> Option<Places> {
+        let song = services.song();
+        let live = &services.live;
+        let place = |at: Option<usize>, count: usize| Some(Places::of(at, count));
+        match self.control(song) {
+            ProjectControl::Groove => place(Some(song.groove.index()), GrooveId::all().count()),
+            ProjectControl::GrooveShown => place(
+                Some(self.shown_groove(song).0.index()),
+                GrooveId::all().count(),
+            ),
+            ProjectControl::Launch => {
+                let named = launches();
+                place(
+                    named.iter().position(|launch| *launch == song.launch),
+                    named.len(),
+                )
+            }
+            ProjectControl::Grid => Some(Places {
+                up: GRID_SIZES.iter().any(|size| *size > song.skip),
+                down: GRID_SIZES.iter().any(|size| *size < song.skip),
+            }),
+            ProjectControl::Scale => {
+                let scales = scales(live.scale);
+                let here = scale_here(live.scale);
+                place(scales.iter().position(|scale| *scale == here), scales.len())
+            }
+            ProjectControl::Root => place(Some(usize::from(live.scale.root)), ROOTS.len()),
+            ProjectControl::AutoJump => Some(Places::switch(live.auto_jump)),
+            ProjectControl::ReadOnly => Some(Places::switch(live.read_only)),
+            _ => None,
         }
     }
 
