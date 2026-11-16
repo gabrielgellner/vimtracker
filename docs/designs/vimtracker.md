@@ -710,7 +710,9 @@ release, gate, retrigger or arpeggio event, or the mod slots' update every `LFO_
 (32). So a step lands on its frame, and nothing inside a run asks whether one
 is due. `Engine::render` then plays the run's frames, first telling each sampler note on `Play`'s
 `Tempo` how long a step is at the tempo, so it moves through its loop in time with the steps from
-the same clock (decision 239).
+the same clock (decision 239). It plays them a frame at a time across every track, then the groups,
+the returns and the master, rather than a track at a time over the run: that was tried, bit for
+bit the same, and gained under ten percent (decision 354).
 
 *   **Who plays.** A note or a preview only starts between runs, so a track that's silent as a run
     starts, with no voice, preview or slot still ringing, is skipped for the whole run, and the
