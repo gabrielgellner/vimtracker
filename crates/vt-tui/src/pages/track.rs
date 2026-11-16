@@ -51,7 +51,7 @@ use crate::pages::{Ctx, CtxMut, Outcome};
 use crate::services::Services;
 use crate::services::meter::{FLOOR_DB, Held, ReductionHistory};
 use device::{device_beside, rack_column};
-use editing::{adjust_control, adjust_fine, reset_control, set_fine_here};
+use editing::{adjust_control, adjust_fine, reset_control, set_fine_here, to_nothing};
 use modulation::toggle_modulator;
 use pickers::control_picker;
 
@@ -317,8 +317,9 @@ impl TrackPage {
     }
 
     /// Run one of the page's edits on the setting under the cursor, `control`, which on the mixer
-    /// is the mixer's: `b`, `dd` and `p`, `=` and `-` and their large steps, on the fine digits if
-    /// the cursor is on them, and `x`. `times` is its count, at least 1.
+    /// is the mixer's: `b`, `p`, `=` and `-` and their large steps, on the fine digits if the
+    /// cursor is on them, `x`, and `dd`, which sets it to nothing, or on an effect's name takes the
+    /// effect out. `times` is its count, at least 1.
     pub fn edit(
         &mut self,
         cmd: Cmd,
@@ -328,8 +329,8 @@ impl TrackPage {
     ) -> Outcome {
         let fine = self.fine;
         match cmd {
-            Cmd::RemoveRow | Cmd::Paste if self.page != Page::Fx => {
-                return Outcome::Refused("dd and p move effects, on the FX page");
+            Cmd::Paste if self.page != Page::Fx => {
+                return Outcome::Refused("p puts an effect taken with dd, on the FX page");
             }
             Cmd::Bypass => match self.page {
                 Page::Fx => self.toggle_bypass(services),
@@ -340,7 +341,11 @@ impl TrackPage {
                     );
                 }
             },
-            Cmd::RemoveRow => self.take_insert(services),
+            // On an effect's name, `dd` takes the effect out, as `p` puts it back.
+            Cmd::ToNothing if matches!(control, Control::Insert(_)) => {
+                self.take_insert(services);
+            }
+            Cmd::ToNothing => to_nothing(services, control),
             Cmd::Paste => self.put_insert(services),
             Cmd::Increase if fine => adjust_fine(services, control, true, times, false),
             Cmd::Decrease if fine => adjust_fine(services, control, false, times, false),
@@ -540,11 +545,6 @@ impl crate::pages::Page for TrackPage {
         ),
         ("H", Cmd::PreviousPage, "Previous page: Sound, Mod, FX, Gen"),
         ("L", Cmd::NextPage, "Next page: Sound, Mod, FX, Gen"),
-        (
-            "d d",
-            Cmd::RemoveRow,
-            "Take an effect out of its slot, or a generator away",
-        ),
         ("p", Cmd::Paste, "Put the effect taken in this slot"),
         (
             "b",
@@ -621,6 +621,11 @@ impl crate::pages::Page for TrackPage {
         ("C-a", Cmd::Increase, "Increase the value"),
         ("C-x", Cmd::Decrease, "Decrease the value"),
         ("x", Cmd::ClearField, "Back to its default"),
+        (
+            "d d",
+            Cmd::ToNothing,
+            "To nothing; on an effect's name or a generator's Fill, take it out",
+        ),
         ("K", Cmd::PickValue, "Choose this setting from a list"),
         (
             ";",

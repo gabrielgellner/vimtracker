@@ -34,6 +34,7 @@ each machine.
 | `i` | Type a value. Hex levels enter themselves, others take `Enter` |
 | `K` | On a setting with choices, like Machine or Dest, list them |
 | `x` | Back to its default: centre pan, 0 dB and so on |
+| `dd` | To nothing: its lowest, off, its centre or its first choice |
 | `b` | Switch an FX slot or a mod slot out, or back in |
 | `;` | `a` `w` `s` `e` `d` `f` play C to F, `<` `>` the octave, until `;` |
 
@@ -44,6 +45,14 @@ a slot's effect and an effect's lists, a machine's own, such as the 6-op's patch
 and the Gen page's all go so. Machine, Type, Mode, Role, a slot's effect and a mod slot's lists go
 round past either end with `=` and `-`; `+` and `_` stop at the first or last, as every key does
 on Speed, Groove and a machine's own lists.
+
+`dd` sets a setting to nothing, where `x` puts it back to its default: a level, a time or an
+amount, such as a `Sustain`, to its lowest, `00` or 0 ms; a switch off; a setting either side of
+a middle, such as `Pan`, `Trim`, a `Depth`, a tune or cents, to its middle, not its end; and a
+list, such as the filter's `Type`, to its first choice. It's one undo step, it records like any
+other change, and the status line says what it set, as `Sustain to 00`. The machine and a mod
+slot's type say what a device is, so `dd` leaves them, and a mod slot's `Rate`, which isn't one
+number, too; the status line says so. `d` alone waits for the second `d`, and `Esc` drops it.
 
 A note holds for as long as its key is down, and several keys down play a
 chord, up to eight notes; a ninth takes over the oldest. Letting go of one key
@@ -483,7 +492,8 @@ with `L` and `R` bars, a fader beside them showing its `Level`, then its `Trim`,
 with `0` marked, and show the track after its level and pan. `h` and `l` move between
 tracks, `0` and `$` to the first or last, `j` and `k` up and down the strip, and `gg` and
 `G` to its top or bottom. Values edit as they do on the track page, with `=` `-` `+` `_`,
-`C-a` `C-x`, or Cmd with `l` `h` `k` `j`, and `x` puts one back to its default. On mute
+`C-a` `C-x`, or Cmd with `l` `h` `k` `j`, `x` puts one back to its default and `dd` to
+nothing: a fader down, a pan to the middle, mute and solo off. On mute
 and solo, `=` switches on, `-` switches off, and `K` or `i` changes it. `/` jumps to a setting by its name, as
 it does on the track page, staying on the cursor's track. `gd` on a fader a macro holds goes
 to that macro on the Gen page, and `C-o` comes back; with more than one holding it, a list

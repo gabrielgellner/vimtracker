@@ -145,6 +145,11 @@ impl Page for MixerPage {
         ("C-a", Cmd::Increase, "Increase the value"),
         ("C-x", Cmd::Decrease, "Decrease the value"),
         ("x", Cmd::ClearField, "Back to its default"),
+        (
+            "d d",
+            Cmd::ToNothing,
+            "To nothing: its lowest, off or its centre",
+        ),
         ("K", Cmd::PickValue, "Switch mute or solo"),
         ("/", Cmd::FieldJump, "Jump to a setting by its name"),
         ("g d", Cmd::OpenItem, "Go to the macro holding this fader"),

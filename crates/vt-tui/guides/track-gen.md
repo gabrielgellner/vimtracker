@@ -64,7 +64,7 @@ phrase as it is, so it changes as you turn a setting or edit a row.
 | `x` | Back to where it starts |
 | `r` | Roll the generator again, from anywhere in it, as in the panel |
 | `Space g a` | Apply it, as plain values; with `Vary` on, keep the pass heard |
-| `dd` | Take it away, putting back what was under it |
+| `dd` | To nothing, as on the Sound page; on `Fill`, take the generator away, putting back what was under it |
 | `Enter` | Open the shape panel on it, in the phrase view, as `gl` does |
 
 **A new variation each pass.** A fill that draws from its seed, `Random`, `Walk`,

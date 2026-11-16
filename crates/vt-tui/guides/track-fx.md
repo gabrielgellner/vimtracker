@@ -18,10 +18,11 @@ with the cursor has the brighter frame. An empty slot keeps its frame, says `Emp
 | `K` on the type | Choose the effect's type, such as a Comp's `Glue` |
 | `x` on the effect | Empty the slot |
 | `x` on a setting | Back to its default |
+| `dd` on a setting | To nothing: its lowest, off, its middle or its first choice |
 | `h` `j` `k` `l` | Through the settings, and up to the title |
 | `0` `$` | The first or last setting on the row |
 | `{` `}` | Previous or next slot, staying on the same setting |
-| `dd` | Take the effect out of this slot |
+| `dd` on the effect | Take the effect out of this slot |
 | `p` | Put it in this slot, swapping with what's there |
 | `b` | Bypass this slot, to hear without it, or bring it back |
 | `z i` `z o` | Zoom in on this slot, or back out to every slot |
@@ -33,8 +34,8 @@ step over. `j` and `k` keep to the column you were in, landing on the nearest se
 row has nothing there, and go on into the next slot's title. The effect is over the first column
 and its type over the second: the `Type` of a `Distort`, `Chorus` or `Comp`, and the `Mode` of
 an `LPG` or `Comb`, are in the title rather than among the settings. `{` and `}` keep the row
-and column, so they come back after an empty slot, and `2j` goes two rows down. `b`, `dd` and
-`p` work from any row of a slot.
+and column, so they come back after an empty slot, and `2j` goes two rows down. `b` and `p` work
+from any row of a slot, and `dd` takes the effect out from its name, in the title.
 
 `dd` then `p` is one undo step, and an effect can move to another track's slot too. Modulation and
 step commands stay with the slot, so they reach whatever's there now.

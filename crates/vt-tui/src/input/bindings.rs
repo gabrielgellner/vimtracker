@@ -52,6 +52,8 @@ pub enum Cmd {
     WholeStep,
     On(Target),
     ClearField,
+    /// `dd` on a setting: set it to nothing, its lowest, off, its centre or its first choice.
+    ToNothing,
     CycleMark,
     Paste,
     PasteAfter,
