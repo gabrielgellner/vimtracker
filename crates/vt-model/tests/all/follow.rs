@@ -37,7 +37,7 @@ fn steps(texts: &[&str]) -> Vec<Step> {
 /// `rows` rows on each other.
 fn canon(tracks: usize, rows: usize) -> Arc<Song> {
     let mut song = Song::new(tracks);
-    song.scale = C_MINOR;
+    song.saved_scale = C_MINOR;
     song.tracks[0]
         .phrases
         .insert(0, Arc::new(Phrase::from_steps(steps(&THEME))));

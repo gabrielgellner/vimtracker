@@ -244,7 +244,7 @@ fn a_group_renders_as_one_stem_and_its_tracks_on_request() {
     assert_eq!(tracks, [2, group], "the track in no group, then the group");
     let mut alone = song.clone();
     alone.limiter = false;
-    alone.tracks[2].mute = true;
+    alone.tracks[2].saved_mute = true;
     let expected = render_loop(published(alone), RATE, RenderOptions::default());
     assert_eq!(
         stems[1].samples, expected,
@@ -265,7 +265,7 @@ fn a_muted_group_has_no_stem_and_a_muted_track_is_left_out_of_its_groups() {
     let mut song = song(&[0, 2, 4]);
     song.tracks[0].group = Some(1);
     song.tracks[1].group = Some(1);
-    song.tracks[1].mute = true;
+    song.tracks[1].saved_mute = true;
     let group = place(&song, TrackKind::Group(1));
     let version = Published::new(Arc::new(song.clone()), pool());
     let stems = render_stems(&version, RATE, RenderOptions::default());
@@ -277,7 +277,7 @@ fn a_muted_group_has_no_stem_and_a_muted_track_is_left_out_of_its_groups() {
     );
     assert_eq!(loudest(&out, THIRD), 0.0, "and not the muted one");
 
-    song.tracks[group].mute = true;
+    song.tracks[group].saved_mute = true;
     let version = Published::new(Arc::new(song), pool());
     let stems = render_stems(&version, RATE, RenderOptions::default());
     let tracks: Vec<usize> = stems.iter().map(|stem| stem.track).collect();

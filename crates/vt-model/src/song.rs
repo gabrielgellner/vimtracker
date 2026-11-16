@@ -152,8 +152,16 @@ pub struct Track {
     /// `40` with `80` here is half a step above `40`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub fine: BTreeMap<SettingId, u8>,
-    pub mute: bool,
-    pub solo: bool,
+    /// Whether the track is muted, as saved with the song. While the song is open the app's live
+    /// copy, `Services.live.levels`, is the truth; it's read from here when the song opens and
+    /// written back when it's saved. A render of the file hears this one.
+    #[serde(rename = "mute")]
+    pub saved_mute: bool,
+    /// Whether the track is soloed, as saved with the song. While the song is open the app's live
+    /// copy, `Services.live.levels`, is the truth; it's read from here when the song opens and
+    /// written back when it's saved. A render of the file hears this one.
+    #[serde(rename = "solo")]
+    pub saved_solo: bool,
     /// This track's own groove, instead of the project's.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub groove: Option<GrooveId>,
@@ -652,8 +660,8 @@ impl Default for Track {
             role: Role::Auto,
             settings: BTreeMap::new(),
             fine: BTreeMap::new(),
-            mute: false,
-            solo: false,
+            saved_mute: false,
+            saved_solo: false,
             groove: None,
             level: unity_level(),
             trim: unity_trim(),
@@ -956,17 +964,20 @@ pub struct Song {
     /// Tempo, in thousandths of a BPM.
     pub millibpm: u32,
     pub seed: u64,
-    /// Whether entering something in Insert moves on by the grid, `skip`. Kept with the song and
-    /// not used to play it.
-    #[serde(default)]
-    pub auto_jump: bool,
+    /// Whether entering something in Insert moves on by the grid, `skip`, as saved with the song.
+    /// Not used to play it. While the song is open the app's live copy, `Services.live.auto_jump`,
+    /// is the truth; it's read from here when the song opens and written back when it's saved.
+    #[serde(default, rename = "auto_jump")]
+    pub saved_auto_jump: bool,
     /// The grid: how far the left and right arrows move in Insert, and auto-jump with them.
     #[serde(default = "default_skip")]
     pub skip: u32,
-    /// The scale for entering and moving notes, kept with the song. Playing reads it only for what an
-    /// `ACU` moves notes through, which the app sends the engine as it changes.
-    #[serde(default)]
-    pub scale: Scale,
+    /// The scale for entering and moving notes, as saved with the song. Playing reads it only for
+    /// what an `ACU` moves notes through. While the song is open the app's live copy,
+    /// `Services.live.scale`, is the truth, which it sends the engine as it changes; it's read from
+    /// here when the song opens and written back when it's saved.
+    #[serde(default, rename = "scale")]
+    pub saved_scale: Scale,
     /// Whether the main output clips at full level. Off, a render keeps levels above it.
     #[serde(default = "default_limiter")]
     pub limiter: bool,
@@ -986,15 +997,22 @@ pub struct Song {
     /// in.
     pub tracks: Tracks,
     pub sections: Vec<Section>,
-    /// How the views show the song: its folded groups. Not undone, and the app keeps it while
-    /// the song is open and writes it in when saving.
-    #[serde(default, skip_serializing_if = "ViewState::is_empty")]
-    pub view: ViewState,
-    /// Whether the song is parked, as Vim's `readonly`: `:w` to its own folder refuses, and `:w!`
-    /// or a copy saved elsewhere are the ways to keep a change. Left out when off. Not undone, and
-    /// the app keeps it while the song is open and writes it in when saving.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub read_only: bool,
+    /// How the views show the song, its folded groups, as saved with the song. Not undone. While
+    /// the song is open the app's live copy, `Services.folds`, is the truth; it's read from here
+    /// when the song opens and written back when it's saved.
+    #[serde(default, rename = "view", skip_serializing_if = "ViewState::is_empty")]
+    pub saved_view: ViewState,
+    /// Whether the song is parked, as Vim's `readonly`, as saved with the song: `:w` to its own
+    /// folder refuses, and `:w!` or a copy saved elsewhere are the ways to keep a change. Left out
+    /// when off. Not undone. While the song is open the app's live copy,
+    /// `Services.live.read_only`, is the truth; it's read from here when the song opens and
+    /// written back when it's saved.
+    #[serde(
+        default,
+        rename = "read_only",
+        skip_serializing_if = "std::ops::Not::not"
+    )]
+    pub saved_read_only: bool,
 }
 
 impl Song {
@@ -1005,9 +1023,9 @@ impl Song {
             name: String::new(),
             millibpm: DEFAULT_MILLIBPM,
             seed: 0,
-            auto_jump: false,
+            saved_auto_jump: false,
             skip: default_skip(),
-            scale: Scale::default(),
+            saved_scale: Scale::default(),
             limiter: default_limiter(),
             groove: GrooveId::STRAIGHT,
             grooves: Vec::new(),
@@ -1015,8 +1033,8 @@ impl Song {
             bank: Bank::default(),
             tracks: Tracks::new(),
             sections: vec![Section::default()],
-            view: ViewState::default(),
-            read_only: false,
+            saved_view: ViewState::default(),
+            saved_read_only: false,
         };
         song.ensure_fixed_tracks();
         for _ in 0..tracks.max(1) {
@@ -1191,13 +1209,16 @@ impl Song {
     /// Whether a track is heard, by the mutes and solos saved with the song: a sound track by its
     /// own and its group's, and a group while any of its tracks is. Soloing a track keeps its
     /// group heard, and soloing a group plays all its tracks. The returns and the master are
-    /// always counted heard.
-    pub fn heard(&self, track: usize) -> bool {
-        self.heard_by(track, |at| (self.tracks[at].mute, self.tracks[at].solo))
+    /// always counted heard. While the song is open the app's mutes are the truth, and
+    /// [`Song::heard_by`] takes them.
+    pub fn heard_as_saved(&self, track: usize) -> bool {
+        self.heard_by(track, |at| {
+            (self.tracks[at].saved_mute, self.tracks[at].saved_solo)
+        })
     }
 
-    /// Whether a track is heard as [`Song::heard`] has it, by mutes and solos given for each
-    /// track as `(mute, solo)`, such as the ones the keys set while playing.
+    /// Whether a track is heard as [`Song::heard_as_saved`] has it, by mutes and solos given for
+    /// each track as `(mute, solo)`, such as the ones the keys set while playing.
     pub fn heard_by(&self, track: usize, silenced: impl Fn(usize) -> (bool, bool) + Copy) -> bool {
         let Some(this) = self.tracks.get(track) else {
             return false;
@@ -1378,7 +1399,7 @@ mod tests {
     fn a_track_saved_without_a_level_loads_at_0_db() {
         let track: Track = ron::from_str("(mute: false, solo: true)").unwrap();
         assert_eq!(track.level, UNITY_LEVEL);
-        assert!(track.solo);
+        assert!(track.saved_solo);
     }
 
     #[test]
@@ -1583,31 +1604,34 @@ mod tests {
         song.tracks[0].group = Some(1);
         song.tracks[1].group = Some(1);
         let group = song.group_track_of(0).unwrap();
-        let heard = |song: &Song| (0..3).map(|t| song.heard(t)).collect::<Vec<_>>();
+        let heard = |song: &Song| (0..3).map(|t| song.heard_as_saved(t)).collect::<Vec<_>>();
         assert_eq!(heard(&song), [true, true, true]);
-        assert!(song.heard(group));
+        assert!(song.heard_as_saved(group));
 
-        song.tracks[group].mute = true;
+        song.tracks[group].saved_mute = true;
         assert_eq!(
             heard(&song),
             [false, false, true],
             "a muted group mutes its tracks"
         );
-        assert!(!song.heard(group));
-        song.tracks[group].mute = false;
+        assert!(!song.heard_as_saved(group));
+        song.tracks[group].saved_mute = false;
 
-        song.tracks[0].solo = true;
+        song.tracks[0].saved_solo = true;
         assert_eq!(heard(&song), [true, false, false]);
-        assert!(song.heard(group), "a soloed track keeps its group heard");
-        song.tracks[0].solo = false;
+        assert!(
+            song.heard_as_saved(group),
+            "a soloed track keeps its group heard"
+        );
+        song.tracks[0].saved_solo = false;
 
-        song.tracks[group].solo = true;
+        song.tracks[group].saved_solo = true;
         assert_eq!(
             heard(&song),
             [true, true, false],
             "a soloed group plays its tracks"
         );
-        song.tracks[1].mute = true;
+        song.tracks[1].saved_mute = true;
         assert_eq!(
             heard(&song),
             [true, false, false],

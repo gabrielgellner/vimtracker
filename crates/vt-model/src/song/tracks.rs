@@ -303,7 +303,7 @@ mod tests {
         assert!(!copy.same(1, &tracks, 1));
         // One that's its song's own already stays where it is.
         let own = Arc::as_ptr(&copy.shared()[0]);
-        copy[0].mute = true;
+        copy[0].saved_mute = true;
         assert_eq!(Arc::as_ptr(&copy.shared()[0]), own);
     }
 

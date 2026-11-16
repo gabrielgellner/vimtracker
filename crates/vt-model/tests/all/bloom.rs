@@ -60,7 +60,7 @@ fn steps(texts: &[&str]) -> Vec<Step> {
 /// One track whose chain `00` plays the trunk, phrase `00`, transposed by 2.
 fn song() -> Arc<Song> {
     let mut song = Song::new(1);
-    song.scale = C_MINOR;
+    song.saved_scale = C_MINOR;
     song.tracks[0]
         .phrases
         .insert(0, Arc::new(Phrase::from_steps(steps(&TRUNK))));

@@ -15,6 +15,7 @@ use vt_model::project::{
 use vt_model::ron_file;
 use vt_model::sample::{SampleError, load_sample};
 use vt_model::samples::SamplePool;
+use vt_model::scale::{Scale, ScaleKind};
 use vt_model::settings::SettingId;
 use vt_model::song::{Launch, Machine, Repeat, Song, SynthVoice, TrackKind};
 
@@ -521,7 +522,7 @@ fn groups_and_what_is_in_them_round_trip() {
     song.tracks[group].level = 0xC0;
     song.tracks[group].pan = 0x60;
     song.tracks[group].send_b = 0x50;
-    song.tracks[group].mute = true;
+    song.tracks[group].saved_mute = true;
     song.tracks[group].inserts[0] = Insert::Compressor(Compressor {
         kind: CompressorType::Console,
         ..Compressor::DEFAULT
@@ -536,4 +537,55 @@ fn groups_and_what_is_in_them_round_trip() {
     assert_eq!(loaded, song);
     assert_eq!(loaded.group_track_of(0), Some(group));
     assert_eq!(loaded.group_track_of(2), None);
+}
+
+/// Songs saved before the session state's fields were named `saved_` (#876): the fixture, written
+/// by the code before the rename with all six set, and the tutorial's songs.
+fn songs_saved_before_the_rename() -> Vec<PathBuf> {
+    let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let tutorials = crate_dir.join("../../docs/manual/src/tutorials/songs");
+    let mut folders = vec![crate_dir.join("tests/songs/session-state")];
+    for entry in fs::read_dir(&tutorials).unwrap() {
+        let path = entry.unwrap().path();
+        if path.join("song.ron").is_file() {
+            folders.push(path);
+        }
+    }
+    folders.sort();
+    folders
+}
+
+#[test]
+fn a_song_saved_before_the_saved_names_loads_and_saves_byte_for_byte() {
+    let folders = songs_saved_before_the_rename();
+    assert!(folders.len() > 1, "the tutorial's songs are found");
+    for from in folders {
+        let before = fs::read_to_string(from.join("song.ron")).unwrap();
+        let song = load_song(&from).unwrap();
+        let dir = folder();
+        save_song(&dir, &song).unwrap();
+        let after = fs::read_to_string(dir.join("song.ron")).unwrap();
+        let _ = fs::remove_dir_all(&dir);
+        assert!(before == after, "{} saves as it was", from.display());
+    }
+}
+
+#[test]
+fn the_session_state_saved_with_a_song_is_read_into_the_saved_fields() {
+    let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let song = load_song(&crate_dir.join("tests/songs/session-state")).unwrap();
+    assert!(song.tracks[0].saved_mute && !song.tracks[0].saved_solo);
+    assert!(!song.tracks[1].saved_mute && song.tracks[1].saved_solo);
+    assert_eq!(
+        song.saved_scale,
+        Scale {
+            on: true,
+            root: 2,
+            kind: ScaleKind::Dorian
+        }
+    );
+    assert!(song.saved_auto_jump);
+    assert!(song.saved_read_only);
+    assert_eq!(song.saved_view.folded, [1]);
+    assert_eq!(song.saved_view.opened, [2]);
 }

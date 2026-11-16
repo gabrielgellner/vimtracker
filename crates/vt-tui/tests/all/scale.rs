@@ -257,7 +257,7 @@ const MINOR_NOTES: [u8; 8] = [60, 62, 63, 65, 67, 68, 70, 72];
 /// live on their notes.
 fn live_ramp() -> Song {
     let mut song = Song::new(1);
-    song.scale = C_MAJOR;
+    song.saved_scale = C_MAJOR;
     song.tracks[0]
         .phrases
         .insert(0, Arc::new(Phrase::from_steps(vec![Step::default(); 8])));
@@ -308,7 +308,7 @@ fn a_live_generators_notes_follow_a_scale_changed_by_command() {
     command(&mut app, &format!("w {}", project.display()));
     let saved = vt_model::project::load_song(&project).unwrap();
     let _ = std::fs::remove_dir_all(&project);
-    assert_eq!(saved.scale, app.services.live.scale);
+    assert_eq!(saved.saved_scale, app.services.live.scale);
     assert_eq!(notes_of(&saved), MINOR_NOTES.map(Note::On));
 }
 
@@ -358,7 +358,7 @@ fn a_generator_applied_keeps_its_notes_through_a_scale_change() {
 #[test]
 fn a_song_whose_generators_were_left_in_another_scale_takes_its_own_as_it_opens() {
     let mut song = live_ramp();
-    song.scale = Scale {
+    song.saved_scale = Scale {
         kind: ScaleKind::Minor,
         ..C_MAJOR
     };

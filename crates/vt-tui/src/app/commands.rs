@@ -332,7 +332,7 @@ impl App {
             let target = path.expect("a different path is present");
             let mut song = Song::clone(&self.song_to_save());
             song.name = folder_name(&target);
-            song.read_only = false;
+            song.saved_read_only = false;
             project::save_as(self.services.folder.as_deref(), &target, &song)
                 .map(|saved| (target, Some(saved)))
         };
@@ -431,10 +431,10 @@ impl App {
         let errors = project::load_samples(folder.as_deref(), &song, self.services.rate, &mut pool);
         self.services.samples = Arc::new(pool);
         self.services.live.levels = live_from(&song);
-        self.services.live.scale = song.scale;
-        self.services.live.auto_jump = song.auto_jump;
-        self.services.live.read_only = song.read_only;
-        self.services.folds = Folds::from_view(&song.view);
+        self.services.live.scale = song.saved_scale;
+        self.services.live.auto_jump = song.saved_auto_jump;
+        self.services.live.read_only = song.saved_read_only;
+        self.services.folds = Folds::from_view(&song.saved_view);
         self.send_live();
         self.services.history = History::new(Arc::new(song));
         // A song whose generators were saved in another scale than its own takes its own.

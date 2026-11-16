@@ -36,7 +36,7 @@ const LINE: [&str; 16] = [
 /// A song of one track whose phrase is these rows, with the scale off.
 fn app_with(rows: &[&str]) -> (App, Realtime) {
     let mut song = Song::new(1);
-    song.scale.on = false;
+    song.saved_scale.on = false;
     let steps: Vec<Step> = rows.iter().map(|row| row.parse().unwrap()).collect();
     song.tracks[0]
         .phrases

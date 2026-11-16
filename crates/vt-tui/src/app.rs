@@ -297,18 +297,19 @@ impl App {
     /// The song as saved: with live mute, solo, the scale and the folds written into it.
     pub(crate) fn song_to_save(&self) -> Arc<Song> {
         let mut song = Song::clone(self.song());
-        song.scale = self.services.live.scale;
-        song.auto_jump = self.services.live.auto_jump;
-        song.read_only = self.services.live.read_only;
-        song.view = self.services.folds.view();
+        song.saved_scale = self.services.live.scale;
+        song.saved_auto_jump = self.services.live.auto_jump;
+        song.saved_read_only = self.services.live.read_only;
+        song.saved_view = self.services.folds.view();
         // Only a track whose mute or solo differs is written to, as writing to one copies it.
         for (index, live) in self.services.live.levels.iter().enumerate() {
-            let differs =
-                |track: &vt_model::song::Track| (track.mute, track.solo) != (live.mute, live.solo);
+            let differs = |track: &vt_model::song::Track| {
+                (track.saved_mute, track.saved_solo) != (live.mute, live.solo)
+            };
             if song.tracks.get(index).is_some_and(differs) {
                 let track = &mut song.tracks[index];
-                track.mute = live.mute;
-                track.solo = live.solo;
+                track.saved_mute = live.mute;
+                track.saved_solo = live.solo;
             }
         }
         // While a mute or solo key is down it may yet be a hold, which goes back when it's let go,
@@ -317,12 +318,12 @@ impl App {
             match held.what {
                 Momentary::Mute { track, was } => {
                     if let Some(track) = song.tracks.get_mut(track) {
-                        track.mute = was;
+                        track.saved_mute = was;
                     }
                 }
                 Momentary::Solo { track, was } => {
                     if let Some(track) = song.tracks.get_mut(track) {
-                        track.solo = was;
+                        track.saved_solo = was;
                     }
                 }
                 Momentary::Fill { .. }
