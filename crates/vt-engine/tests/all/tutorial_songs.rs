@@ -1,6 +1,6 @@
-//! The generators tutorial's songs, in `docs/manual/src/tutorials/songs`: each is built here
-//! through the model, as the chapter builds it by keys, and kept on disk as a project folder the
-//! manual links to and the program opens. A test checks each file is what its builder makes, so a
+//! The tutorials' songs, the generators chapter's and the glides and slides chapter's, in
+//! `docs/manual/src/tutorials/songs`: each is built here through the model, as its chapter builds
+//! it by keys, and kept on disk as a project folder the manual links to and the program opens. A test checks each file is what its builder makes, so a
 //! change to the song format can't leave them stale, and another plays every one. Each is
 //! read-only, so a `:w` in the program can't change the repository's copy by accident (decision
 //! 313): `:w` and a folder saves a copy to carry on in.
@@ -31,14 +31,14 @@ use vt_model::project::{load_song, save_song};
 use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
-use vt_model::settings::SettingId;
+use vt_model::settings::{SettingId, glide_value};
 use vt_model::shape::{
     Acid, Bar, CellStart, Cells, Divisions, DrumPart, Edge, FillKind, Follow, GenParam, Grids,
     Loops, MoveList, Mutations, Random, Ring, Role, Shape, ShapeColumn, Source, Tonnetz,
     TonnetzMove, TonnetzVoice, Values, Walk, WaveRate, Where, World, divisions_seed, on_track,
     track_seed,
 };
-use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice, Track};
+use vt_model::song::{GlideMode, Lane, Machine, Phrase, Song, SynthVoice, Track, VoiceMode};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, Note, Step};
 use vt_model::steps::StepsMode;
@@ -77,6 +77,13 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("clock-multiplier", clock_multiplier()),
         ("cells", cells()),
         ("tonnetz", tonnetz()),
+        ("glide-speeds", glide_speeds()),
+        ("slide-into", slide_into()),
+        ("slide-run", slide_run()),
+        ("legato-slides", legato_slides()),
+        ("glide-always", glide_always()),
+        ("glide-one-row", glide_one_row()),
+        ("acid-slide", acid_slide()),
     ];
     songs
         .into_iter()
@@ -1839,6 +1846,187 @@ fn tonnetz() -> Song {
     song
 }
 
+// The glides and slides chapter's songs: a few rows each on one `VA`, or an `Acid`, no drums.
+
+/// A song of one synth track, `LD`, in C minor at 120 BPM, playing these rows. A `VA`'s notes are
+/// plucked, falling to `Sustain` 40%, so a struck note is heard climbing back up and a slid one
+/// isn't.
+fn glide_song(name: &str, synth: SynthVoice, rows: &[&str]) -> Song {
+    let mut song = song(name, 120, 0, ScaleKind::Minor, 1);
+    voice(&mut song, 0, "LD", synth, rows);
+    if synth != SynthVoice::Acid {
+        pluck(&mut song, 0, 250, 40, 50);
+    }
+    song
+}
+
+/// One melody three times over in `Legato`, every note sliding from the last, at a slow, a medium
+/// and a fast glide, each held from its first row with `GLD`'s hold mark.
+fn glide_speeds() -> Song {
+    let mut rows = Vec::new();
+    for speed in GLIDE_SPEEDS {
+        for (at, note) in GLIDE_MELODY.iter().enumerate() {
+            let glide = match at {
+                0 => format!(" glide:{speed}h"),
+                _ => String::new(),
+            };
+            rows.push(format!("{note} 64 SGL2{glide}"));
+        }
+    }
+    let mut song = glide_song("glide-speeds", SynthVoice::VirtualAnalog, &texts(&rows));
+    song.tracks[0].voice_mode = VoiceMode::Legato;
+    song
+}
+
+/// `glide-speeds`' melody, a note every two steps, and its three glides: about 360, 63 and 11 ms.
+const GLIDE_MELODY: [&str; 8] = ["C-3", "G-3", "D#3", "F-3", "G-3", "A#3", "C-4", "G-3"];
+const GLIDE_SPEEDS: [&str; 3] = ["C0", "80", "40"];
+
+/// A struck bass line on a `Mono` track, with two notes slid into rather than struck: a `HLD` on
+/// the row before each, and `GLD` on its own row for how long the slide takes.
+fn slide_into() -> Song {
+    glide_song(
+        "slide-into",
+        SynthVoice::VirtualAnalog,
+        &[
+            "C-2 64",
+            "C-2 64",
+            "C-3 64",
+            "C-2 64 HLD1",
+            "G-2 64 glide:90",
+            "C-2 64",
+            "A#2 64",
+            "C-2 64",
+            "C-2 64",
+            "C-2 64",
+            "C-3 64 HLD1",
+            "D#3 64 glide:60",
+            "C-2 64",
+            "G-2 64",
+            "A#2 64",
+            "G-2 64",
+        ],
+    )
+}
+
+/// One run slid through six notes with one attack, a `HLD` on each but the last, twice: first each
+/// step in the same time, the track's `Glide` of 60 ms, then by its interval, `GLD` on each row
+/// for 20 ms a semitone, as a tracker's `3xx` and `300` slide at one speed.
+fn slide_run() -> Song {
+    let run = |glides: [&str; 6]| -> Vec<String> {
+        SLIDE_RUN
+            .iter()
+            .zip(glides)
+            .enumerate()
+            .map(|(at, (note, glide))| {
+                let gate = if at == SLIDE_RUN.len() - 1 {
+                    "SGL6"
+                } else {
+                    "HLD2"
+                };
+                let glide = match glide {
+                    "" => String::new(),
+                    glide => format!(" glide:{glide}"),
+                };
+                format!("{note} 64 {gate}{glide}")
+            })
+            .collect()
+    };
+    let mut rows = run([""; 6]);
+    rows.extend(run(["", "7E", "6F", "6F", "91", "B1"]));
+    let mut song = glide_song("slide-run", SynthVoice::VirtualAnalog, &texts(&rows));
+    song.tracks[0].glide = glide_value(60.0);
+    song
+}
+
+/// `slide-run`'s notes, two steps each but the last, which lasts six.
+const SLIDE_RUN: [&str; 6] = ["C-3", "D#3", "F-3", "G-3", "C-4", "C-3"];
+
+/// A line in `Legato`, some of its rows let go halfway by `LEN`: the note after one of those is
+/// struck, and the note after a row held to the next slides, as on a 303.
+fn legato_slides() -> Song {
+    let rows: Vec<String> = LEGATO_LINE
+        .iter()
+        .map(|(note, short)| match short {
+            true => format!("{note} 64 gate:80"),
+            false => format!("{note} 64"),
+        })
+        .collect();
+    let mut song = glide_song("legato-slides", SynthVoice::VirtualAnalog, &texts(&rows));
+    song.tracks[0].voice_mode = VoiceMode::Legato;
+    song.tracks[0].glide = 0x80;
+    song
+}
+
+/// `legato-slides`' line: each note, and whether it's let go halfway.
+const LEGATO_LINE: [(&str, bool); 16] = [
+    ("C-2", true),
+    ("C-2", true),
+    ("C-3", false),
+    ("D#3", true),
+    ("C-2", false),
+    ("G-2", true),
+    ("C-2", true),
+    ("A#2", false),
+    ("C-3", false),
+    ("G-2", true),
+    ("C-2", true),
+    ("C-2", false),
+    ("D#2", true),
+    ("F-2", true),
+    ("G-2", false),
+    ("A#2", true),
+];
+
+/// `glide-always`' line, and `glide-one-row`'s without its locks.
+const ALWAYS_LINE: [&str; 16] = [
+    "C-3 64", "G-3 64", "D#3 64", "C-4 64", "G-3 64", "OFF --", REST, "C-3 64", "C-3 64", "G-3 64",
+    "D#3 64", "A#3 64", "G-3 64", "F-3 64", "D#3 64", "OFF --",
+];
+
+/// A line at `Glide mode` `Always`: every note struck, its pitch gliding from the last one's, but
+/// not after an `OFF` has let the sound die away.
+fn glide_always() -> Song {
+    let mut song = glide_song("glide-always", SynthVoice::VirtualAnalog, &ALWAYS_LINE);
+    song.tracks[0].glide_mode = GlideMode::Always;
+    song.tracks[0].glide = 0x90;
+    song
+}
+
+/// `glide-always`' line at `Ties`, where no struck note glides, but for one locked to `Always` by
+/// `GMOD`, struck and gliding, and one locked to `Legato` by `VMOD`, slid into from the last.
+fn glide_one_row() -> Song {
+    let mut rows = ALWAYS_LINE.map(str::to_owned);
+    rows[3] += " glidemode:01";
+    rows[0xB] += " voicemode:01";
+    let mut song = glide_song("glide-one-row", SynthVoice::VirtualAnalog, &texts(&rows));
+    song.tracks[0].glide = 0x90;
+    song
+}
+
+/// `legato-slides`' line written for a 303: an `Acid`, its own `Gate` letting each note go halfway,
+/// with a `HLD` on each row held to the next, so `Acid`'s own `Slide` takes it there, and an accent
+/// on each beat.
+fn acid_slide() -> Song {
+    let rows: Vec<String> = LEGATO_LINE
+        .iter()
+        .enumerate()
+        .map(|(at, (note, short))| {
+            let velocity = if at % 4 == 0 { "7F" } else { "64" };
+            match short {
+                true => format!("{note} {velocity}"),
+                false => format!("{note} {velocity} HLD1"),
+            }
+        })
+        .collect();
+    let mut song = glide_song("acid-slide", SynthVoice::Acid, &texts(&rows));
+    set(&mut song, 0, "acid.cutoff", 0x50);
+    set(&mut song, 0, "acid.resonance", 0xC0);
+    set(&mut song, 0, "acid.envmod", 0xA0);
+    set(&mut song, 0, "acid.decay", 0x58);
+    song
+}
+
 // The shipped patches.
 
 /// Where the shipped patches are kept, a file each, which the program includes as it's built.
@@ -2683,4 +2871,164 @@ fn the_blooms_branches_stray_further_and_an_edit_to_the_trunk_reaches_them() {
     for branch in 1..=4 {
         assert_eq!(&rows(&edited, branch)[8][..3], "F-3", "branch {branch}");
     }
+}
+
+// Listening to the glides and slides chapter's songs.
+
+/// Frames in a step of theirs, at 120 BPM, and in a ms.
+const GLIDE_STEP: usize = 6000;
+const MS: usize = RATE as usize / 1000;
+
+/// A glide song's left channel from the top, for its steps and a little after.
+fn lead(song: Song) -> Vec<f32> {
+    let frames = song.song_steps() * GLIDE_STEP + 20 * MS;
+    let version = Arc::new(Published::new(
+        Arc::new(song),
+        Arc::new(SamplePool::default()),
+    ));
+    vt_engine::render::render_frames(version, RATE, frames)
+        .chunks(2)
+        .map(|frame| frame[0])
+        .collect()
+}
+
+/// How many semitones above `C-3` the lead plays from `ms` after the start of a step for 10 ms,
+/// or 25 ms in the bass, by how far apart it rises through zero.
+fn semitones(out: &[f32], step: usize, ms: usize) -> f64 {
+    let at = step * GLIDE_STEP + ms * MS;
+    let window = |ms| {
+        (at..at + ms * MS)
+            .filter(|at| out[*at] < 0.0 && out[at + 1] >= 0.0)
+            .map(|at| at as f64 + f64::from(-out[at] / (out[at + 1] - out[at])))
+            .collect::<Vec<f64>>()
+    };
+    let mut crossings = window(10);
+    if crossings.len() < 3 {
+        crossings = window(25);
+    }
+    assert!(crossings.len() > 1, "too few crossings to hear a pitch");
+    let (first, last) = (crossings[0], crossings[crossings.len() - 1]);
+    let hertz = f64::from(RATE) * (crossings.len() - 1) as f64 / (last - first);
+    12.0 * (hertz / 261.63).log2()
+}
+
+/// How much louder the lead is just after `at` than just before: well over 1 where a note is
+/// struck and climbs back from `Sustain`, about 1 or under where one is slid into and falls on.
+fn rise(out: &[f32], step: usize) -> f32 {
+    let at = step * GLIDE_STEP;
+    let rms = |from: usize| {
+        let window = &out[from..from + 20 * MS];
+        (window.iter().map(|x| x * x).sum::<f32>() / window.len() as f32).sqrt()
+    };
+    rms(at + 5 * MS) / rms(at - 25 * MS)
+}
+
+#[test]
+fn glide_speeds_slides_every_note_slowly_then_at_medium_then_fast() {
+    let out = lead(glide_speeds());
+    for step in 1..48 {
+        assert!(
+            rise(&out, step) < 1.1,
+            "step {step} is slid into, not struck"
+        );
+    }
+    // `C-3` up to `G-3`, the second note of each pass: 40 ms in, the slow glide is a third of the
+    // way, the medium one nearly there and the fast one there; and the slow one is still short as
+    // the next note comes.
+    let up = |pass: usize, ms| semitones(&out, pass * 16 + 2, ms);
+    assert!(up(0, 40) < 3.5, "slow: {}", up(0, 40));
+    assert!(up(0, 230) < 6.5, "slow, at the next note: {}", up(0, 230));
+    assert!((5.5..6.9).contains(&up(1, 40)), "medium: {}", up(1, 40));
+    assert!(
+        (up(1, 120) - 7.0).abs() < 0.1,
+        "medium, landed: {}",
+        up(1, 120)
+    );
+    assert!((up(2, 20) - 7.0).abs() < 0.1, "fast: {}", up(2, 20));
+}
+
+#[test]
+fn slide_into_slides_two_notes_and_strikes_the_rest() {
+    let out = lead(slide_into());
+    for step in 1..16 {
+        let slid = step == 4 || step == 0xB;
+        let rise = rise(&out, step);
+        assert_eq!(rise < 1.0, slid, "step {step}: {rise}");
+        assert_eq!(rise > 1.5, !slid, "step {step}: {rise}");
+    }
+    // `C-2` up to `G-2` at `GLD 90`, about 98 ms, and `C-3` up to `D#3` at `GLD 60`, about 27.
+    let slow = semitones(&out, 4, 10);
+    assert!(slow > -11.0 && slow < -6.0, "{slow}");
+    assert!((semitones(&out, 0xB, 0) - 1.0).abs() < 0.5);
+    assert!((semitones(&out, 0xB, 40) - 3.0).abs() < 0.1);
+}
+
+#[test]
+fn slide_run_strikes_once_and_its_second_pass_slides_at_one_speed() {
+    let out = lead(slide_run());
+    for step in 1..32 {
+        assert_eq!(rise(&out, step) > 1.5, step == 0x10, "step {step}");
+    }
+    // Each move is two steps. In the same time, 60 ms, each is the same share of the way 20 ms
+    // in, small or big; at 20 ms a semitone, the small ones land as quickly and the octave down
+    // takes four times as long.
+    let moves = [(0.0, 3.0), (3.0, 5.0), (5.0, 7.0), (7.0, 12.0), (12.0, 0.0)];
+    for (at, (from, to)) in moves.into_iter().enumerate() {
+        let share = (semitones(&out, 2 + 2 * at, 20) - from) / (to - from);
+        assert!((0.6..0.8).contains(&share), "move {at}: {share}");
+    }
+    let octave = |pass: usize| semitones(&out, pass * 16 + 0xA, 90);
+    assert!(octave(0) < 0.5, "same time: {}", octave(0));
+    assert!(octave(1) > 2.0, "by the interval: {}", octave(1));
+    assert!((semitones(&out, 0x14, 40) - 5.0).abs() < 0.15);
+}
+
+#[test]
+fn legato_slides_strikes_after_a_short_note_and_slides_after_a_held_one() {
+    let out = lead(legato_slides());
+    for step in 1..16 {
+        let slid = !LEGATO_LINE[step - 1].1;
+        let rise = rise(&out, step);
+        assert_eq!(rise < 1.1, slid, "step {step}: {rise}");
+    }
+}
+
+#[test]
+fn glide_always_strikes_every_note_and_glides_all_but_the_one_after_silence() {
+    let out = lead(glide_always());
+    for step in [1, 2, 3, 4, 7, 8, 9, 0xA, 0xB, 0xC, 0xD, 0xE] {
+        assert!(rise(&out, step) > 1.5, "step {step} is struck");
+    }
+    // `C-3` to `G-3`, then down to `D#3`, each partway at 10 ms.
+    assert!((1.0..5.0).contains(&semitones(&out, 1, 10)));
+    assert!((3.5..6.5).contains(&semitones(&out, 2, 10)));
+    // After the `OFF` and a rest, `C-3` starts at its own pitch.
+    assert!(semitones(&out, 7, 10).abs() < 0.1);
+}
+
+#[test]
+fn glide_one_row_glides_one_struck_note_and_slides_into_another() {
+    let out = lead(glide_one_row());
+    // At `Ties` a struck note starts at its pitch, but `GMOD 01`'s glides there.
+    assert!((semitones(&out, 1, 10) - 7.0).abs() < 0.1);
+    assert!((semitones(&out, 2, 10) - 3.0).abs() < 0.1);
+    assert!((4.0..9.0).contains(&semitones(&out, 3, 10)));
+    assert!(rise(&out, 3) > 1.5, "struck");
+    // `VMOD 01`'s note slides from the last, its gate still open.
+    assert!(rise(&out, 0xB) < 1.0, "slid into");
+    assert!((4.0..8.0).contains(&semitones(&out, 0xB, 10)));
+}
+
+#[test]
+fn acid_slide_slides_after_each_hld_by_its_own_slide() {
+    let out = lead(acid_slide());
+    for step in 1..16 {
+        let slid = !LEGATO_LINE[step - 1].1;
+        let rise = rise(&out, step);
+        assert_eq!(rise < 1.5, slid, "step {step}: {rise}");
+    }
+    // `Slide` at `00` is a 303's 60 ms: `C-3` up to `D#3` is most of the way at 20 ms.
+    let early = semitones(&out, 3, 20);
+    assert!((1.8..2.8).contains(&early), "{early}");
+    assert!((semitones(&out, 3, 90) - 3.0).abs() < 0.1);
 }
