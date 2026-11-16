@@ -624,7 +624,7 @@ fn the_shape_panel_draws_its_settings_beside_the_grid() {
     let backend = ratatui::backend::TestBackend::new(80, 16);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::overlays::shape::draw::draw(frame, frame.area(), &app, &panel))
+        .draw(|frame| vt_tui::overlays::shape::draw::draw(frame, frame.area(), &app.ctx(), &panel))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let text: Vec<String> = (0..16)
@@ -660,7 +660,7 @@ fn a_list_fill_draws_its_values_in_place_of_the_ends() {
     let backend = ratatui::backend::TestBackend::new(80, 16);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::overlays::shape::draw::draw(frame, frame.area(), &app, &panel))
+        .draw(|frame| vt_tui::overlays::shape::draw::draw(frame, frame.area(), &app.ctx(), &panel))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let all: String = (0..16)
@@ -1056,4 +1056,18 @@ fn a_track_at_an_eighth_has_its_own_playhead() {
         Some(0),
         "its fifth eighth is its first row again"
     );
+}
+
+#[test]
+fn the_keys_of_the_shape_panel_are_in_the_binding_table() {
+    let (app, _realtime) = app();
+    let help = app.help_rows();
+    let at = help.iter().position(|line| line == "Shape").unwrap();
+    let rows: Vec<&String> = help[at + 1..]
+        .iter()
+        .take_while(|line| !line.is_empty())
+        .collect();
+    for row in ["Keep it live", "Roll it again", "D-l"] {
+        assert!(rows.iter().any(|line| line.contains(row)), "{row}");
+    }
 }

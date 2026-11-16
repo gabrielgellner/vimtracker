@@ -349,8 +349,8 @@ impl App {
                 self.settled(outcome, false);
             }
             Mode::Picker => self.picker_key(key, now),
-            Mode::Shape => self.shape_key(key),
-            Mode::Mapping => self.mapping_key(key),
+            Mode::Shape => self.shape_key(key, now),
+            Mode::Mapping => self.mapping_key(key, now),
             Mode::Jump => {
                 let page = self.jump_page();
                 let Some(jump) = self.overlays.field_jump.as_mut() else {

@@ -6,7 +6,11 @@
 
 pub mod draw;
 
+use std::time::Instant;
+
+use ratatui::Frame;
 use ratatui::crossterm::event::KeyCode;
+use ratatui::layout::Rect;
 
 use crate::controls::macro_name;
 use vt_model::action::Action;
@@ -19,12 +23,15 @@ use crate::app::App;
 use crate::controls::{Control, Page};
 use crate::graphics::plot::{MappingDrawing, Shade};
 use crate::graphics::{PanelIds, PanelKey, PanelWant, Shape};
-use crate::input::bindings::Cmd;
+use crate::input::bindings::{Cmd, adjusting_key};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::typed::{Typed, TypedValue};
+use crate::overlays::Overlay;
 use crate::overlays::mapping::draw::{RESPONSE_HEIGHT, RESPONSE_WIDTH};
 use crate::overlays::picker::{Item, Pick, Picker};
+use crate::pages::{Ctx, CtxMut, Outcome};
+use crate::services::Services;
 
 /// The macro picker's title, which `M` opens and a digit chooses in at once.
 pub(crate) const MACRO_PICKER: &str = "Map to a macro";
@@ -398,13 +405,14 @@ impl App {
                 format!("Macro {} holds nothing yet: M on a setting maps it", at + 1);
             return;
         }
-        self.overlays.mapping = Some(MappingView {
+        let view = MappingView {
             at,
             row,
             ..MappingView::default()
-        });
+        };
+        view.say(&mut self.services);
+        self.overlays.mapping = Some(view);
         self.modes.mode = Mode::Mapping;
-        self.say_mapping();
     }
 
     /// `gd` on the track page or the mixer: on a macro, its mapping view; on a setting or a
@@ -471,323 +479,6 @@ impl App {
         self.open_mapping_on(at, row);
     }
 
-    /// The mapping under the mapping view's cursor, with its place, if the view is open on one.
-    fn mapping_row(&self) -> Option<(usize, MacroMap)> {
-        let view = self.overlays.mapping.as_ref()?;
-        let maps = &self.services.page_track().macros[view.at].maps;
-        let row = view.row.min(maps.len().checked_sub(1)?);
-        Some((row, maps[row]))
-    }
-
-    /// Say on the status line what the mapping under the cursor does.
-    fn say_mapping(&mut self) {
-        let Some(view) = self.overlays.mapping.clone() else {
-            return;
-        };
-        let Some((_, map)) = self.mapping_row() else {
-            return;
-        };
-        let track = self.services.page_track();
-        let target = map.target;
-        let held = &track.macros[view.at];
-        let now = map.at(f32::from(held.value) / 256.0);
-        let by_hand = if target.by_hand() {
-            ", by hand: a turn writes it in, but locks and modulation don't reach a list setting"
-        } else {
-            ""
-        };
-        if view.field.bends() {
-            self.services.status = format!(
-                "Curve {} bends {} from Min to Max, early above 0 and late below; S {} shapes both ends, an S above 0 and the reverse below",
-                bend_text(map.curve),
-                target.name(),
-                bend_text(map.s)
-            );
-            return;
-        }
-        let along = if map.is_straight() {
-            String::new()
-        } else {
-            format!(
-                ", along Curve {} S {}",
-                bend_text(map.curve),
-                bend_text(map.s)
-            )
-        };
-        self.services.status = format!(
-            "At 00 the macro sets {} to {}, at FF to {}{along}; it's at {:02X}, so {} is {}{by_hand}",
-            target.name_on(&track),
-            end_shown(&track, target, map.min),
-            end_shown(&track, target, map.max),
-            held.value >> 8,
-            target.name(),
-            end_shown(&track, target, now)
-        );
-    }
-
-    /// Put the mapping under the cursor's range at these ends.
-    fn set_range(&mut self, map: MacroMap) {
-        let Some(view) = self.overlays.mapping.clone() else {
-            return;
-        };
-        self.services.apply(&Action::MapMacro {
-            track: self.services.cursor.track,
-            at: view.at,
-            map,
-        });
-        self.say_mapping();
-    }
-
-    /// `=` `-` `+` or `_`: move what's under the cursor up or down a small step or a large one,
-    /// an end by a coarse step or `10` of them, and a bend by 5 or 25, as the shape panel's are.
-    fn nudge_mapping(&mut self, up: bool, large: bool) {
-        let Some(view) = self.overlays.mapping.as_ref() else {
-            return;
-        };
-        let sign = if up { 1 } else { -1 };
-        if view.field.bends() {
-            self.move_bend(sign * if large { BEND_JUMP } else { BEND_NUDGE });
-        } else {
-            self.move_end(sign * if large { RANGE_JUMP } else { 1 });
-        }
-    }
-
-    /// Put the bend under the cursor, `Curve` or `S`, at a value, kept to -100 to 100.
-    fn set_bend(&mut self, to: i32) {
-        let (Some(view), Some((_, map))) = (self.overlays.mapping.clone(), self.mapping_row())
-        else {
-            return;
-        };
-        let (curve, s) = (i32::from(map.curve), i32::from(map.s));
-        self.set_range(match view.field {
-            MapField::Curve => map.bent(to, s),
-            _ => map.bent(curve, to),
-        });
-    }
-
-    /// Move the bend under the cursor by so much.
-    fn move_bend(&mut self, by: i32) {
-        let (Some(view), Some((_, map))) = (self.overlays.mapping.clone(), self.mapping_row())
-        else {
-            return;
-        };
-        let now = if view.field == MapField::Curve {
-            map.curve
-        } else {
-            map.s
-        };
-        self.set_bend(i32::from(now) + by);
-    }
-
-    /// Move the end of the range under the cursor by so many coarse steps.
-    fn move_end(&mut self, by: i32) {
-        let (Some(view), Some((_, map))) = (self.overlays.mapping.clone(), self.mapping_row())
-        else {
-            return;
-        };
-        let max = view.field == MapField::Max;
-        let end = if max { map.max } else { map.min };
-        // A setting's coarse step, or a generator's whole number.
-        let moved = match map.target.setting() {
-            Some(id) => {
-                let top = i32::from(top_value(id.entry().kind));
-                (i32::from(end >> 8 << 8) + by * 0x100).clamp(0, top) as u16
-            }
-            None => (i32::from(end) + by).clamp(0, i32::from(u16::MAX)) as u16,
-        };
-        let map = if max {
-            MacroMap { max: moved, ..map }
-        } else {
-            MacroMap { min: moved, ..map }
-        };
-        self.set_range(map);
-    }
-
-    /// A key in the mapping view: `j` and `k` go between its settings, `h` and `l` across their
-    /// `Min`, `Max`, `Curve` and `S`, `=` `-` `+` and `_` move the one under the cursor, `i` types
-    /// it, an end in hex and a bend as a signed number, `x` puts a bend back to straight, `~`
-    /// swaps the ends, `dd` unmaps, `u` takes the last change back, and `Esc` closes it.
-    pub(crate) fn mapping_key(&mut self, key: Key) {
-        let key = match (key.command, crate::input::bindings::adjusting_key(key)) {
-            (true, Some(plain)) => plain,
-            _ => key,
-        };
-        let Some(view) = self.overlays.mapping.clone() else {
-            self.modes.mode = Mode::Normal;
-            return;
-        };
-        if view.typing.is_some() {
-            self.mapping_typing(key.code);
-            return;
-        }
-        let count = self.services.page_track().macros[view.at].maps.len();
-        let deleting = view.deleting;
-        if let Some(view) = self.overlays.mapping.as_mut() {
-            view.deleting = false;
-        }
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => {
-                self.overlays.mapping = None;
-                self.modes.mode = Mode::Normal;
-                self.services.status.clear();
-            }
-            KeyCode::Char('j') | KeyCode::Down => self.mapping_move(|row| (row + 1).min(count - 1)),
-            KeyCode::Char('k') | KeyCode::Up => self.mapping_move(|row| row.saturating_sub(1)),
-            KeyCode::Char('h') | KeyCode::Left => self.mapping_across(-1),
-            KeyCode::Char('l') | KeyCode::Right => self.mapping_across(1),
-            KeyCode::Char('=') => self.nudge_mapping(true, false),
-            KeyCode::Char('-') => self.nudge_mapping(false, false),
-            KeyCode::Char('+') => self.nudge_mapping(true, true),
-            KeyCode::Char('_') => self.nudge_mapping(false, true),
-            KeyCode::Char('x') if view.field.bends() => self.set_bend(0),
-            KeyCode::Char('~') => {
-                if let Some((_, map)) = self.mapping_row() {
-                    self.set_range(MacroMap {
-                        min: map.max,
-                        max: map.min,
-                        ..map
-                    });
-                }
-            }
-            KeyCode::Char('i') => {
-                if let Some(view) = self.overlays.mapping.as_mut() {
-                    view.typing = Some(TypedValue::default());
-                }
-                self.services.status = if view.field.bends() {
-                    "From -100 to 100, then Enter".to_owned()
-                } else {
-                    "Two hex digits for this end".to_owned()
-                };
-            }
-            KeyCode::Char('d') if deleting => self.unmap_row(),
-            KeyCode::Char('d') => {
-                if let Some(view) = self.overlays.mapping.as_mut() {
-                    view.deleting = true;
-                }
-            }
-            KeyCode::Char('u') => {
-                self.run(Cmd::Undo);
-                self.keep_mapping_open();
-            }
-            _ => {}
-        }
-    }
-
-    /// What's typed after `i`: hex digits for an end, set at the second, or a bend's signed number
-    /// ended with `Enter`, as the shape panel's is; `Esc` gives up.
-    fn mapping_typing(&mut self, code: KeyCode) {
-        let Some(view) = self.overlays.mapping.as_mut() else {
-            return;
-        };
-        let bends = view.field.bends();
-        let Some(typed) = view.typing.as_mut() else {
-            return;
-        };
-        // An end's digits are neither taken back nor ended early.
-        if !bends && matches!(code, KeyCode::Backspace | KeyCode::Enter) {
-            return;
-        }
-        let rule = if bends {
-            Typing::Whole { signed: true }
-        } else {
-            Typing::Hex
-        };
-        let before = typed.clone();
-        match typed.key(code, rule.into()) {
-            Typed::Editing => {
-                if code == KeyCode::Backspace || *typed != before {
-                    self.services.status = typed.shown();
-                }
-            }
-            Typed::Cancel => {
-                view.typing = None;
-                self.say_mapping();
-            }
-            Typed::Commit(typed) if bends => {
-                view.typing = None;
-                match typed.parse::<i32>() {
-                    Ok(value) => self.set_bend(value),
-                    Err(_) => self.services.status = "Curve and S run from -100 to 100".to_owned(),
-                }
-            }
-            Typed::Commit(typed) => {
-                view.typing = None;
-                let (Some(view), Some((_, map))) =
-                    (self.overlays.mapping.clone(), self.mapping_row())
-                else {
-                    return;
-                };
-                let typed = u8::from_str_radix(&typed, 16).unwrap_or(0);
-                let value = match map.target.setting() {
-                    Some(id) => (u16::from(typed) << 8).min(top_value(id.entry().kind)),
-                    // A generator's setting typed as a number, in hex as every value is.
-                    None => (i32::from(typed) + GEN_ZERO) as u16,
-                };
-                self.set_range(if view.field == MapField::Max {
-                    MacroMap { max: value, ..map }
-                } else {
-                    MacroMap { min: value, ..map }
-                });
-            }
-        }
-    }
-
-    fn mapping_move(&mut self, to: impl Fn(usize) -> usize) {
-        if let Some(view) = self.overlays.mapping.as_mut() {
-            view.row = to(view.row);
-        }
-        self.say_mapping();
-    }
-
-    fn mapping_across(&mut self, by: isize) {
-        if let Some(view) = self.overlays.mapping.as_mut() {
-            view.field = view.field.beside(by);
-        }
-        self.say_mapping();
-    }
-
-    /// `dd`: take the setting under the cursor off the macro, closing the view once it holds
-    /// nothing.
-    fn unmap_row(&mut self) {
-        let Some((_, map)) = self.mapping_row() else {
-            return;
-        };
-        let track = self.services.page_track();
-        let name = map.target.name_on(&track);
-        self.services.apply(&Action::UnmapMacro {
-            track: self.services.cursor.track,
-            target: map.target,
-        });
-        self.keep_mapping_open();
-        if self.overlays.mapping.is_some() {
-            self.services.status = format!("{name} is off the macro: u brings it back");
-        } else {
-            self.services.status =
-                format!("{name} is off the macro, which holds nothing now: u brings it back");
-        }
-    }
-
-    /// Keep the view's cursor on a mapping after a change, closing it if the macro holds none.
-    fn keep_mapping_open(&mut self) {
-        let Some(view) = self.overlays.mapping.as_mut() else {
-            return;
-        };
-        let count = self
-            .services
-            .history
-            .current()
-            .tracks
-            .get(self.services.cursor.track)
-            .map_or(0, |track| track.macros[view.at].maps.len());
-        if count == 0 {
-            self.overlays.mapping = None;
-            self.modes.mode = Mode::Normal;
-        } else {
-            view.row = view.row.min(count - 1);
-            self.modes.mode = Mode::Mapping;
-        }
-    }
-
     /// `:macro Name`: name the macro under the cursor, the mapping view's or the one the setting
     /// under the cursor is on; `:macro` alone gives it back its first mapping's name.
     pub(crate) fn name_macro(&mut self, name: &str) {
@@ -815,5 +506,439 @@ impl App {
         });
         let held = &self.services.page_track().macros[at];
         self.services.status = format!("Macro {} is {}", at + 1, macro_name(held, at));
+    }
+}
+
+/// A key of a macro's mapping view.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MappingKey {
+    Close,
+    Down,
+    Up,
+    Left,
+    Right,
+    Increase,
+    Decrease,
+    IncreaseLarge,
+    DecreaseLarge,
+    /// `x`: a bend back to straight.
+    Straighten,
+    /// `~`: swap the ends of the range.
+    Swap,
+    /// `i`: type what's under the cursor.
+    Type,
+    /// `d`, twice: take the setting off the macro.
+    Delete,
+    Undo,
+}
+
+impl Overlay for MappingView {
+    const MODE: Mode = Mode::Mapping;
+
+    const KEYS: &'static [(&'static str, Cmd, &'static str)] = &[
+        ("Esc", Cmd::InMapping(MappingKey::Close), "Close"),
+        ("q", Cmd::InMapping(MappingKey::Close), "Close"),
+        ("j", Cmd::InMapping(MappingKey::Down), "The next setting"),
+        ("Down", Cmd::InMapping(MappingKey::Down), "The next setting"),
+        ("k", Cmd::InMapping(MappingKey::Up), "The setting before"),
+        ("Up", Cmd::InMapping(MappingKey::Up), "The setting before"),
+        (
+            "h",
+            Cmd::InMapping(MappingKey::Left),
+            "Left, across Min, Max, Curve and S",
+        ),
+        (
+            "Left",
+            Cmd::InMapping(MappingKey::Left),
+            "Left, across Min, Max, Curve and S",
+        ),
+        (
+            "l",
+            Cmd::InMapping(MappingKey::Right),
+            "Right, across Min, Max, Curve and S",
+        ),
+        (
+            "Right",
+            Cmd::InMapping(MappingKey::Right),
+            "Right, across Min, Max, Curve and S",
+        ),
+        (
+            "=",
+            Cmd::InMapping(MappingKey::Increase),
+            "Up a step, an end's coarse step or a bend's 5",
+        ),
+        (
+            "-",
+            Cmd::InMapping(MappingKey::Decrease),
+            "Down a step, an end's coarse step or a bend's 5",
+        ),
+        (
+            "+",
+            Cmd::InMapping(MappingKey::IncreaseLarge),
+            "Up a large step, 10 coarse steps or a bend's 25",
+        ),
+        (
+            "_",
+            Cmd::InMapping(MappingKey::DecreaseLarge),
+            "Down a large step, 10 coarse steps or a bend's 25",
+        ),
+        (
+            "x",
+            Cmd::InMapping(MappingKey::Straighten),
+            "On Curve or S: back to straight",
+        ),
+        (
+            "~",
+            Cmd::InMapping(MappingKey::Swap),
+            "Swap the range's ends",
+        ),
+        (
+            "i",
+            Cmd::InMapping(MappingKey::Type),
+            "Type it, an end in hex and a bend from -100 to 100",
+        ),
+        (
+            "d",
+            Cmd::InMapping(MappingKey::Delete),
+            "Twice: take the setting off the macro",
+        ),
+        ("u", Cmd::InMapping(MappingKey::Undo), "Undo"),
+    ];
+
+    fn key(&mut self, cmd: Cmd, ctx: &mut CtxMut) -> Outcome {
+        let Cmd::InMapping(key) = cmd else {
+            return Outcome::Passed;
+        };
+        let services = &mut *ctx.services;
+        let count = services.page_track().macros[self.at].maps.len();
+        let deleting = std::mem::take(&mut self.deleting);
+        match key {
+            MappingKey::Close => {
+                services.status.clear();
+                return Outcome::Close;
+            }
+            MappingKey::Down => self.move_row(|row| (row + 1).min(count - 1), services),
+            MappingKey::Up => self.move_row(|row| row.saturating_sub(1), services),
+            MappingKey::Left => self.across(-1, services),
+            MappingKey::Right => self.across(1, services),
+            MappingKey::Increase => self.nudge(true, false, services),
+            MappingKey::Decrease => self.nudge(false, false, services),
+            MappingKey::IncreaseLarge => self.nudge(true, true, services),
+            MappingKey::DecreaseLarge => self.nudge(false, true, services),
+            MappingKey::Straighten if self.field.bends() => self.set_bend(0, services),
+            MappingKey::Straighten => {}
+            MappingKey::Swap => {
+                if let Some((_, map)) = self.row_here(services) {
+                    self.set_range(
+                        MacroMap {
+                            min: map.max,
+                            max: map.min,
+                            ..map
+                        },
+                        services,
+                    );
+                }
+            }
+            MappingKey::Type => {
+                self.typing = Some(TypedValue::default());
+                services.status = if self.field.bends() {
+                    "From -100 to 100, then Enter".to_owned()
+                } else {
+                    "Two hex digits for this end".to_owned()
+                };
+            }
+            MappingKey::Delete if deleting => return self.unmap_row(services),
+            MappingKey::Delete => self.deleting = true,
+            // `App` undoes, and then keeps the view open on a mapping, if one is left.
+            MappingKey::Undo => return Outcome::Do(Cmd::Undo),
+        }
+        Outcome::Done
+    }
+
+    /// Cmd with `=`'s and its neighbours' Cmd keys is that key, and nothing else held is read.
+    fn reads(&self, key: Key) -> Key {
+        let key = if key.command {
+            adjusting_key(key).unwrap_or(key)
+        } else {
+            key
+        };
+        Key::new(key.code)
+    }
+
+    fn takes_text(&self) -> bool {
+        self.typing.is_some()
+    }
+
+    /// What's typed after `i`; any other key does nothing, but let a `d` go.
+    fn text(&mut self, key: Key, ctx: &mut CtxMut) -> Outcome {
+        if self.typing.is_some() {
+            self.typed(key.code, ctx.services);
+        } else {
+            self.deleting = false;
+        }
+        Outcome::Done
+    }
+
+    fn draw(&mut self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
+        draw::draw(frame, area, ctx, self);
+    }
+}
+
+impl MappingView {
+    /// The mapping under the cursor, with its place, if the macro holds one.
+    fn row_here(&self, services: &Services) -> Option<(usize, MacroMap)> {
+        let maps = &services.page_track().macros[self.at].maps;
+        let row = self.row.min(maps.len().checked_sub(1)?);
+        Some((row, maps[row]))
+    }
+
+    /// Say on the status line what the mapping under the cursor does.
+    pub(crate) fn say(&self, services: &mut Services) {
+        let Some((_, map)) = self.row_here(services) else {
+            return;
+        };
+        let track = services.page_track();
+        let target = map.target;
+        let held = &track.macros[self.at];
+        let now = map.at(f32::from(held.value) / 256.0);
+        let by_hand = if target.by_hand() {
+            ", by hand: a turn writes it in, but locks and modulation don't reach a list setting"
+        } else {
+            ""
+        };
+        if self.field.bends() {
+            services.status = format!(
+                "Curve {} bends {} from Min to Max, early above 0 and late below; S {} shapes both ends, an S above 0 and the reverse below",
+                bend_text(map.curve),
+                target.name(),
+                bend_text(map.s)
+            );
+            return;
+        }
+        let along = if map.is_straight() {
+            String::new()
+        } else {
+            format!(
+                ", along Curve {} S {}",
+                bend_text(map.curve),
+                bend_text(map.s)
+            )
+        };
+        services.status = format!(
+            "At 00 the macro sets {} to {}, at FF to {}{along}; it's at {:02X}, so {} is {}{by_hand}",
+            target.name_on(&track),
+            end_shown(&track, target, map.min),
+            end_shown(&track, target, map.max),
+            held.value >> 8,
+            target.name(),
+            end_shown(&track, target, now)
+        );
+    }
+
+    /// Put the mapping under the cursor's range at these ends.
+    fn set_range(&self, map: MacroMap, services: &mut Services) {
+        services.apply(&Action::MapMacro {
+            track: services.cursor.track,
+            at: self.at,
+            map,
+        });
+        self.say(services);
+    }
+
+    /// `=` `-` `+` or `_`: move what's under the cursor up or down a small step or a large one,
+    /// an end by a coarse step or `10` of them, and a bend by 5 or 25, as the shape panel's are.
+    fn nudge(&self, up: bool, large: bool, services: &mut Services) {
+        let sign = if up { 1 } else { -1 };
+        if self.field.bends() {
+            self.move_bend(sign * if large { BEND_JUMP } else { BEND_NUDGE }, services);
+        } else {
+            self.move_end(sign * if large { RANGE_JUMP } else { 1 }, services);
+        }
+    }
+
+    /// Put the bend under the cursor, `Curve` or `S`, at a value, kept to -100 to 100.
+    fn set_bend(&self, to: i32, services: &mut Services) {
+        let Some((_, map)) = self.row_here(services) else {
+            return;
+        };
+        let (curve, s) = (i32::from(map.curve), i32::from(map.s));
+        self.set_range(
+            match self.field {
+                MapField::Curve => map.bent(to, s),
+                _ => map.bent(curve, to),
+            },
+            services,
+        );
+    }
+
+    /// Move the bend under the cursor by so much.
+    fn move_bend(&self, by: i32, services: &mut Services) {
+        let Some((_, map)) = self.row_here(services) else {
+            return;
+        };
+        let now = if self.field == MapField::Curve {
+            map.curve
+        } else {
+            map.s
+        };
+        self.set_bend(i32::from(now) + by, services);
+    }
+
+    /// Move the end of the range under the cursor by so many coarse steps.
+    fn move_end(&self, by: i32, services: &mut Services) {
+        let Some((_, map)) = self.row_here(services) else {
+            return;
+        };
+        let max = self.field == MapField::Max;
+        let end = if max { map.max } else { map.min };
+        // A setting's coarse step, or a generator's whole number.
+        let moved = match map.target.setting() {
+            Some(id) => {
+                let top = i32::from(top_value(id.entry().kind));
+                (i32::from(end >> 8 << 8) + by * 0x100).clamp(0, top) as u16
+            }
+            None => (i32::from(end) + by).clamp(0, i32::from(u16::MAX)) as u16,
+        };
+        let map = if max {
+            MacroMap { max: moved, ..map }
+        } else {
+            MacroMap { min: moved, ..map }
+        };
+        self.set_range(map, services);
+    }
+
+    /// What's typed after `i`: hex digits for an end, set at the second, or a bend's signed number
+    /// ended with `Enter`, as the shape panel's is; `Esc` gives up.
+    fn typed(&mut self, code: KeyCode, services: &mut Services) {
+        let bends = self.field.bends();
+        let Some(typed) = self.typing.as_mut() else {
+            return;
+        };
+        // An end's digits are neither taken back nor ended early.
+        if !bends && matches!(code, KeyCode::Backspace | KeyCode::Enter) {
+            return;
+        }
+        let rule = if bends {
+            Typing::Whole { signed: true }
+        } else {
+            Typing::Hex
+        };
+        let before = typed.clone();
+        match typed.key(code, rule.into()) {
+            Typed::Editing => {
+                if code == KeyCode::Backspace || *typed != before {
+                    services.status = typed.shown();
+                }
+            }
+            Typed::Cancel => {
+                self.typing = None;
+                self.say(services);
+            }
+            Typed::Commit(typed) if bends => {
+                self.typing = None;
+                match typed.parse::<i32>() {
+                    Ok(value) => self.set_bend(value, services),
+                    Err(_) => services.status = "Curve and S run from -100 to 100".to_owned(),
+                }
+            }
+            Typed::Commit(typed) => {
+                self.typing = None;
+                let Some((_, map)) = self.row_here(services) else {
+                    return;
+                };
+                let typed = u8::from_str_radix(&typed, 16).unwrap_or(0);
+                let value = match map.target.setting() {
+                    Some(id) => (u16::from(typed) << 8).min(top_value(id.entry().kind)),
+                    // A generator's setting typed as a number, in hex as every value is.
+                    None => (i32::from(typed) + GEN_ZERO) as u16,
+                };
+                self.set_range(
+                    if self.field == MapField::Max {
+                        MacroMap { max: value, ..map }
+                    } else {
+                        MacroMap { min: value, ..map }
+                    },
+                    services,
+                );
+            }
+        }
+    }
+
+    fn move_row(&mut self, to: impl Fn(usize) -> usize, services: &mut Services) {
+        self.row = to(self.row);
+        self.say(services);
+    }
+
+    fn across(&mut self, by: isize, services: &mut Services) {
+        self.field = self.field.beside(by);
+        self.say(services);
+    }
+
+    /// `dd`: take the setting under the cursor off the macro, closing the view once it holds
+    /// nothing.
+    fn unmap_row(&mut self, services: &mut Services) -> Outcome {
+        let Some((_, map)) = self.row_here(services) else {
+            return Outcome::Done;
+        };
+        let track = services.page_track();
+        let name = map.target.name_on(&track);
+        services.apply(&Action::UnmapMacro {
+            track: services.cursor.track,
+            target: map.target,
+        });
+        if self.keep_open(services) {
+            services.status = format!("{name} is off the macro: u brings it back");
+            Outcome::Done
+        } else {
+            services.status =
+                format!("{name} is off the macro, which holds nothing now: u brings it back");
+            Outcome::Close
+        }
+    }
+
+    /// Keep the cursor on a mapping after a change, saying whether the macro holds any, for the
+    /// view to stay open.
+    pub(crate) fn keep_open(&mut self, services: &Services) -> bool {
+        let count = services
+            .history
+            .current()
+            .tracks
+            .get(services.cursor.track)
+            .map_or(0, |track| track.macros[self.at].maps.len());
+        if count == 0 {
+            return false;
+        }
+        self.row = self.row.min(count - 1);
+        true
+    }
+}
+
+impl App {
+    /// Give the mapping view a key. After an undo, which `App` does for it, the view stays open
+    /// on a mapping, or closes once the macro holds none.
+    pub(crate) fn mapping_key(&mut self, key: Key, now: Instant) {
+        let Some(view) = self.overlays.mapping.as_mut() else {
+            self.modes.mode = Mode::Normal;
+            return;
+        };
+        let outcome = crate::overlays::give(
+            view,
+            &self.table,
+            &mut self.grammar,
+            &mut self.services,
+            &self.modes,
+            key,
+            now,
+        );
+        let undid = matches!(outcome, Outcome::Do(_));
+        self.settled(outcome, false);
+        if undid && let Some(view) = self.overlays.mapping.as_mut() {
+            if view.keep_open(&self.services) {
+                self.modes.mode = Mode::Mapping;
+            } else {
+                self.overlays.mapping = None;
+                self.modes.mode = Mode::Normal;
+            }
+        }
     }
 }

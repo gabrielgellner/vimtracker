@@ -10,8 +10,11 @@ pub mod draw;
 mod live;
 
 use std::sync::Arc;
+use std::time::Instant;
 
+use ratatui::Frame;
 use ratatui::crossterm::event::KeyCode;
+use ratatui::layout::Rect;
 use vt_model::action::{Action, edit};
 use vt_model::generator::Span;
 use vt_model::selection::{Field, StepRange};
@@ -30,7 +33,10 @@ use crate::input::bindings::{Cmd, adjusting_key};
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
 use crate::input::typed::{Typed, TypedValue};
+use crate::overlays::Overlay;
 use crate::overlays::picker::{Item, Pick, Picker};
+use crate::pages::{Ctx, CtxMut, Outcome};
+use crate::services::Services;
 use crate::services::generators::{Part, column_label, settle, too_few};
 
 /// The title of the list offering a beat after a kit's sounds are loaded as tracks.
@@ -89,6 +95,8 @@ pub struct ShapePanel {
     /// The one it starts on: the phrase beside it on the nearest track with one, before it first,
     /// or what that one follows.
     default_source: Option<Source>,
+    /// Whether `Enter` or `L` kept it, as it closes.
+    pub(crate) kept: bool,
 }
 
 impl ShapePanel {
@@ -585,9 +593,9 @@ impl App {
         };
         self.leave_selection(selection);
         self.services.cursor.field = field;
+        panel.preview(&mut self.services);
         self.overlays.shape = Some(panel);
         self.modes.mode = Mode::Shape;
-        self.preview_shape();
     }
 
     /// The panel a selection opens, on its first result, or why it opens none.
@@ -658,102 +666,8 @@ impl App {
             under: None,
             sources,
             default_source,
+            kept: false,
         })
-    }
-
-    /// Show the panel's result, without adding an undo step.
-    fn preview_shape(&mut self) {
-        let Some(panel) = &self.overlays.shape else {
-            return;
-        };
-        if let Ok(next) = edit(&panel.base, &panel.action()) {
-            self.services.history.replace_current(next);
-            self.services.publish();
-        }
-    }
-
-    /// Keep what's showing, as one undo step: as plain values, or live. A live generator reopened
-    /// and kept as plain values is applied.
-    fn keep_shape(&mut self, live: bool) {
-        if let Some(why) = self
-            .overlays
-            .shape
-            .as_ref()
-            .and_then(ShapePanel::too_few_notes)
-        {
-            self.services.status = why;
-            return;
-        }
-        let Some(panel) = self.overlays.shape.take() else {
-            return;
-        };
-        self.modes.mode = Mode::Normal;
-        let part = panel.parts[0];
-        let action = match (panel.live, live) {
-            (None, false) | (Some(_), true) => None,
-            (None, true) => Some(panel.live_action()),
-            (Some(generator), false) => Some(Action::Batch(vec![
-                panel.action(),
-                Action::ApplyGenerator {
-                    track: part.track,
-                    phrase: part.phrase,
-                    generator,
-                },
-            ])),
-        };
-        let shown = Arc::clone(self.song());
-        let result = match action.map(|action| edit(&panel.base, &action)) {
-            None => shown,
-            Some(Ok(result)) => result,
-            Some(Err(error)) => {
-                self.services.status = error.to_string();
-                shown
-            }
-        };
-        self.services
-            .history
-            .replace_current(Arc::clone(&panel.base));
-        if panel.live.is_none() {
-            self.services.say_applied(&result);
-        }
-        if self.services.history.commit(result) {
-            self.services.dirty = true;
-        }
-        self.services.publish();
-        self.remember_shape(&panel);
-        let mut name = column_label(part.column);
-        if panel.shape.kind == FillKind::Follow {
-            name = format!("{name}←{}", panel.shape.follow.source);
-        }
-        match (panel.live, live) {
-            (None, true) => {
-                let lane = panel.on_lane(&part);
-                self.services.status = match panel.parts.len() {
-                    1 if lane => format!(
-                        "{name} is live on its lane: gl opens it again, Space g a applies it"
-                    ),
-                    1 => format!("{name} is live: gl opens it again, Space g a applies it"),
-                    tracks => format!(
-                        "{name} is live on {tracks} tracks, each on its own: gl opens one again"
-                    ),
-                };
-            }
-            (Some(_), true) => self.services.status = format!("{name} stays live"),
-            (Some(_), false) => {
-                self.services.status = format!("{name} is applied, as plain values");
-            }
-            (None, false) => {}
-        }
-    }
-
-    /// Put back what was there before the panel opened.
-    fn cancel_shape(&mut self) {
-        let Some(panel) = self.overlays.shape.take() else {
-            return;
-        };
-        self.modes.mode = Mode::Normal;
-        self.services.history.replace_current(panel.base);
-        self.services.publish();
     }
 
     /// The mode a picker goes back to.
@@ -883,185 +797,362 @@ impl App {
         };
         self.services.apply(&action);
     }
+}
 
-    /// Handle a key while the panel is open.
-    pub(crate) fn shape_key(&mut self, key: Key) {
-        match key.code {
-            KeyCode::Tab => return self.run(Cmd::PauseOrResume),
-            KeyCode::BackTab => return self.run(Cmd::PlayFromStart),
-            _ => {}
-        }
-        let typing = self
-            .overlays
-            .shape
-            .as_ref()
-            .is_some_and(|p| p.typing.is_some());
-        // Cmd with a movement key is the `=` `-` `+` or `_` it stands for, as everywhere, but
-        // types nothing.
-        let key = match (key.command, adjusting_key(key)) {
-            (false, _) => key,
-            (true, Some(plain)) if !typing => plain,
-            (true, _) => return,
+/// A key of the shape panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShapeKey {
+    /// `Esc`: put back what was there.
+    Cancel,
+    /// `Enter`: keep it as plain values.
+    Keep,
+    /// `L`: keep it live.
+    KeepLive,
+    Down,
+    Up,
+    Increase,
+    Decrease,
+    IncreaseLarge,
+    DecreaseLarge,
+    /// `x`: the row back to what it started as.
+    Reset,
+    /// `~`: swap the ends, or reverse a list.
+    Swap,
+    /// `r`: roll a new seed.
+    Roll,
+    /// `K`: choose from a list.
+    Choose,
+    /// `i`: type the row's value.
+    Type,
+    /// `Tab` and `Shift-Tab` play as they do in Normal.
+    Play,
+    PlayFromStart,
+}
+
+impl Overlay for ShapePanel {
+    const MODE: Mode = Mode::Shape;
+
+    const KEYS: &'static [(&'static str, Cmd, &'static str)] = &[
+        (
+            "Esc",
+            Cmd::InShape(ShapeKey::Cancel),
+            "Close, putting back what was there",
+        ),
+        (
+            "Enter",
+            Cmd::InShape(ShapeKey::Keep),
+            "Keep it, as plain values",
+        ),
+        (
+            "L",
+            Cmd::InShape(ShapeKey::KeepLive),
+            "Keep it live, as a generator",
+        ),
+        ("j", Cmd::InShape(ShapeKey::Down), "The next setting"),
+        ("Down", Cmd::InShape(ShapeKey::Down), "The next setting"),
+        ("k", Cmd::InShape(ShapeKey::Up), "The setting before"),
+        ("Up", Cmd::InShape(ShapeKey::Up), "The setting before"),
+        (
+            "=",
+            Cmd::InShape(ShapeKey::Increase),
+            "Increase the setting",
+        ),
+        (
+            "-",
+            Cmd::InShape(ShapeKey::Decrease),
+            "Decrease the setting",
+        ),
+        (
+            "+",
+            Cmd::InShape(ShapeKey::IncreaseLarge),
+            "Increase the setting a large step",
+        ),
+        (
+            "_",
+            Cmd::InShape(ShapeKey::DecreaseLarge),
+            "Decrease the setting a large step",
+        ),
+        (
+            "x",
+            Cmd::InShape(ShapeKey::Reset),
+            "The setting back to what it started as",
+        ),
+        (
+            "~",
+            Cmd::InShape(ShapeKey::Swap),
+            "Swap the ends, or reverse a list",
+        ),
+        ("r", Cmd::InShape(ShapeKey::Roll), "Roll it again"),
+        ("K", Cmd::InShape(ShapeKey::Choose), "Choose from a list"),
+        ("i", Cmd::InShape(ShapeKey::Type), "Type the setting"),
+        (
+            "Tab",
+            Cmd::InShape(ShapeKey::Play),
+            "Play, or pause in place",
+        ),
+        (
+            "S-Tab",
+            Cmd::InShape(ShapeKey::PlayFromStart),
+            "Play from the start",
+        ),
+    ];
+
+    fn key(&mut self, cmd: Cmd, ctx: &mut CtxMut) -> Outcome {
+        let Cmd::InShape(key) = cmd else {
+            return Outcome::Passed;
         };
-        if typing {
-            self.shape_typing_key(key.code);
-            return;
-        }
-        match key.code {
-            KeyCode::Esc => self.cancel_shape(),
-            KeyCode::Enter => self.keep_shape(false),
-            KeyCode::Char('L') => self.keep_shape(true),
-            KeyCode::Char('j') | KeyCode::Down => self.move_shape_row(1),
-            KeyCode::Char('k') | KeyCode::Up => self.move_shape_row(-1),
-            KeyCode::Char('=') => self.adjust_shape(1, false),
-            KeyCode::Char('-') => self.adjust_shape(-1, false),
-            KeyCode::Char('+') => self.adjust_shape(1, true),
-            KeyCode::Char('_') => self.adjust_shape(-1, true),
-            KeyCode::Char('x') => self.reset_shape_row(),
-            KeyCode::Char('~') => self.change_shape(|panel| {
-                let shape = &mut panel.shape;
-                if shape.kind == FillKind::List {
-                    shape.values = shape.values.reversed();
-                } else {
-                    std::mem::swap(&mut shape.from, &mut shape.to);
-                }
-            }),
-            KeyCode::Char('r') => {
-                let Some(mut shape) = self.overlays.shape.as_ref().map(|panel| panel.shape) else {
-                    return;
-                };
-                self.services.roll(&mut shape);
-                self.change_shape(|panel| panel.shape = shape);
+        let services = &mut *ctx.services;
+        match key {
+            ShapeKey::Play => return Outcome::Do(Cmd::PauseOrResume),
+            ShapeKey::PlayFromStart => return Outcome::Do(Cmd::PlayFromStart),
+            ShapeKey::Cancel => {
+                services.history.replace_current(Arc::clone(&self.base));
+                services.publish();
+                return Outcome::Close;
             }
-            KeyCode::Char('K') => self.open_shape_picker(),
-            KeyCode::Char('i') => self.start_shape_typing(),
+            ShapeKey::Keep => return self.keep(false, services),
+            ShapeKey::KeepLive => return self.keep(true, services),
+            ShapeKey::Down => self.move_row(1),
+            ShapeKey::Up => self.move_row(-1),
+            ShapeKey::Increase => self.adjust(1, false, services),
+            ShapeKey::Decrease => self.adjust(-1, false, services),
+            ShapeKey::IncreaseLarge => self.adjust(1, true, services),
+            ShapeKey::DecreaseLarge => self.adjust(-1, true, services),
+            ShapeKey::Reset => self.reset_row(services),
+            ShapeKey::Swap => self.change(
+                |panel| {
+                    let shape = &mut panel.shape;
+                    if shape.kind == FillKind::List {
+                        shape.values = shape.values.reversed();
+                    } else {
+                        std::mem::swap(&mut shape.from, &mut shape.to);
+                    }
+                },
+                services,
+            ),
+            ShapeKey::Roll => {
+                let mut shape = self.shape;
+                services.roll(&mut shape);
+                self.change(|panel| panel.shape = shape, services);
+            }
+            ShapeKey::Choose => return self.choices(services),
+            ShapeKey::Type => return self.start_typing(services),
+        }
+        Outcome::Done
+    }
+
+    /// `Tab` and `Shift-Tab` play whatever's held with them. Cmd with `=`'s and its neighbours'
+    /// Cmd keys is that key, but types nothing; Cmd with any other key does nothing; and nothing
+    /// else held is read.
+    fn reads(&self, key: Key) -> Key {
+        match key.code {
+            KeyCode::Tab | KeyCode::BackTab => Key::new(key.code),
+            _ if key.command && self.typing.is_none() => adjusting_key(key).unwrap_or(key),
+            _ if key.command => key,
+            code => Key::new(code),
+        }
+    }
+
+    fn takes_text(&self) -> bool {
+        self.typing.is_some()
+    }
+
+    /// What's typed into a row; `Tab` and `Shift-Tab` play while it is, and any other key does
+    /// nothing.
+    fn text(&mut self, key: Key, ctx: &mut CtxMut) -> Outcome {
+        match key.code {
+            KeyCode::Tab => return Outcome::Do(Cmd::PauseOrResume),
+            KeyCode::BackTab => return Outcome::Do(Cmd::PlayFromStart),
+            _ if key.command => {}
+            code if self.typing.is_some() => self.typed(code, ctx.services),
             _ => {}
         }
+        Outcome::Done
     }
 
-    fn change_shape(&mut self, change: impl FnOnce(&mut ShapePanel)) {
-        if let Some(panel) = &mut self.overlays.shape {
-            change(panel);
-            settle(&mut panel.shape, &panel.sources, panel.default_source);
-        }
-        self.preview_shape();
+    fn draw(&mut self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
+        draw::draw(frame, area, ctx, self);
     }
+}
 
-    fn move_shape_row(&mut self, by: isize) {
-        if let Some(panel) = &mut self.overlays.shape {
-            let rows = panel.rows();
-            let at = rows.iter().position(|row| *row == panel.row).unwrap_or(0);
-            let to = at.saturating_add_signed(by).min(rows.len() - 1);
-            panel.row = rows[to];
+impl ShapePanel {
+    /// Show the panel's result, without adding an undo step.
+    pub(crate) fn preview(&self, services: &mut Services) {
+        if let Ok(next) = edit(&self.base, &self.action()) {
+            services.history.replace_current(next);
+            services.publish();
         }
     }
 
-    fn adjust_shape(&mut self, sign: i16, large: bool) {
-        let Some(panel) = &self.overlays.shape else {
-            return;
+    /// Keep what's showing, as one undo step: as plain values, or live. A live generator reopened
+    /// and kept as plain values is applied. It closes once it's kept, which `App` remembers for
+    /// `.`.
+    fn keep(&mut self, live: bool, services: &mut Services) -> Outcome {
+        if let Some(why) = self.too_few_notes() {
+            services.status = why;
+            return Outcome::Done;
+        }
+        let part = self.parts[0];
+        let action = match (self.live, live) {
+            (None, false) | (Some(_), true) => None,
+            (None, true) => Some(self.live_action()),
+            (Some(generator), false) => Some(Action::Batch(vec![
+                self.action(),
+                Action::ApplyGenerator {
+                    track: part.track,
+                    phrase: part.phrase,
+                    generator,
+                },
+            ])),
         };
-        let mut shape = panel.shape;
-        if let Err(reason) = panel.row.step(&mut shape, &panel.context(), sign, large) {
-            self.services.status = reason.to_owned();
+        let shown = Arc::clone(services.song());
+        let result = match action.map(|action| edit(&self.base, &action)) {
+            None => shown,
+            Some(Ok(result)) => result,
+            Some(Err(error)) => {
+                services.status = error.to_string();
+                shown
+            }
+        };
+        services.history.replace_current(Arc::clone(&self.base));
+        if self.live.is_none() {
+            services.say_applied(&result);
+        }
+        if services.history.commit(result) {
+            services.dirty = true;
+        }
+        services.publish();
+        self.kept = true;
+        let mut name = column_label(part.column);
+        if self.shape.kind == FillKind::Follow {
+            name = format!("{name}←{}", self.shape.follow.source);
+        }
+        match (self.live, live) {
+            (None, true) => {
+                let lane = self.on_lane(&part);
+                services.status = match self.parts.len() {
+                    1 if lane => format!(
+                        "{name} is live on its lane: gl opens it again, Space g a applies it"
+                    ),
+                    1 => format!("{name} is live: gl opens it again, Space g a applies it"),
+                    tracks => format!(
+                        "{name} is live on {tracks} tracks, each on its own: gl opens one again"
+                    ),
+                };
+            }
+            (Some(_), true) => services.status = format!("{name} stays live"),
+            (Some(_), false) => {
+                services.status = format!("{name} is applied, as plain values");
+            }
+            (None, false) => {}
+        }
+        Outcome::Close
+    }
+
+    /// Change the shape, settle what follows from it, and show the result.
+    pub(crate) fn change(&mut self, change: impl FnOnce(&mut Self), services: &mut Services) {
+        change(self);
+        settle(&mut self.shape, &self.sources, self.default_source);
+        self.preview(services);
+    }
+
+    fn move_row(&mut self, by: isize) {
+        let rows = self.rows();
+        let at = rows.iter().position(|row| *row == self.row).unwrap_or(0);
+        let to = at.saturating_add_signed(by).min(rows.len() - 1);
+        self.row = rows[to];
+    }
+
+    fn adjust(&mut self, sign: i16, large: bool, services: &mut Services) {
+        let mut shape = self.shape;
+        if let Err(reason) = self.row.step(&mut shape, &self.context(), sign, large) {
+            services.status = reason.to_owned();
             return;
         }
-        self.change_shape(|panel| panel.shape = shape);
+        self.change(|panel| panel.shape = shape, services);
     }
 
     /// Where `From` and `To` go back to: the ends of what was there on the first track, or on a
     /// column generated on, the ends it starts with.
-    fn shape_ends(&self, panel: &ShapePanel) -> (u8, u8) {
-        let first = panel.parts[0];
+    fn ends(&self, services: &Services) -> (u8, u8) {
+        let first = self.parts[0];
         if first.generate {
-            self.services.generated_ends(first.column)
+            services.generated_ends(first.column)
         } else {
-            default_ends(panel.base_steps(&first), first.range, first.column)
+            default_ends(self.base_steps(&first), first.range, first.column)
         }
     }
 
     /// Put the current row back to what it started as.
-    fn reset_shape_row(&mut self) {
-        let Some(panel) = &self.overlays.shape else {
-            return;
-        };
+    fn reset_row(&mut self, services: &mut Services) {
         let starts = Starts {
-            ends: self.shape_ends(panel),
-            source: panel.default_source,
-            part: Some(panel.parts[0].drum),
+            ends: self.ends(services),
+            source: self.default_source,
+            part: Some(self.parts[0].drum),
         };
-        self.change_shape(|panel| {
-            let mut shape = panel.shape;
-            panel.row.reset(&mut shape, &panel.context(), starts);
-            panel.shape = shape;
-            let rows = panel.rows();
-            if !rows.contains(&panel.row) {
-                panel.row = if rows.contains(&GenParam::Where) {
-                    GenParam::Where
-                } else {
-                    GenParam::Fill
-                };
-            }
-        });
+        self.change(
+            |panel| {
+                let mut shape = panel.shape;
+                panel.row.reset(&mut shape, &panel.context(), starts);
+                panel.shape = shape;
+                let rows = panel.rows();
+                if !rows.contains(&panel.row) {
+                    panel.row = if rows.contains(&GenParam::Where) {
+                        GenParam::Where
+                    } else {
+                        GenParam::Fill
+                    };
+                }
+            },
+            services,
+        );
     }
 
-    fn open_shape_picker(&mut self) {
-        let Some(panel) = &self.overlays.shape else {
-            return;
-        };
-        let title = match panel.row {
+    /// `K`: the row's choices, as a picker over the panel, or why it has none.
+    fn choices(&self, services: &mut Services) -> Outcome {
+        let title = match self.row {
             GenParam::Source => "Follow",
             row => row.name(),
         };
         let follows = |source: Source| {
-            let rows = panel
+            let rows = self
                 .base
                 .source_phrase(source)
                 .map_or(0, |phrase| phrase.loop_steps().len());
-            let name = self.services.track_name(source.track);
+            let name = services.track_name(source.track);
             format!("Track {name}, {rows} rows")
         };
         let picker = choice_picker(
             title,
-            panel.row,
-            &panel.shape,
-            &panel.context(),
+            self.row,
+            &self.shape,
+            &self.context(),
             Pick::ShapeChoice,
             Some(&follows),
         );
         match picker {
-            Some(picker) => self.show_picker(picker),
+            Some(picker) => Outcome::Open(Box::new(picker)),
             None => {
-                self.services.status =
+                services.status =
                     "K chooses from a list on Fill, Shape, Rate, Where, Source and Part".to_owned();
+                Outcome::Done
             }
         }
     }
 
-    pub(crate) fn pick_shape_choice(&mut self, choice: Choice) {
-        self.change_shape(|panel| choice.apply(&mut panel.shape));
-    }
-
-    fn start_shape_typing(&mut self) {
-        let Some(panel) = &self.overlays.shape else {
-            return;
-        };
-        match panel.row.typing(panel.column) {
-            Typing::Listed => self.open_shape_picker(),
-            Typing::Toggled => self.adjust_shape(1, false),
-            _ => {
-                if let Some(panel) = &mut self.overlays.shape {
-                    panel.typing = Some(TypedValue::default());
-                }
-            }
+    /// `i`: type the row, or choose from its list, or switch it.
+    fn start_typing(&mut self, services: &mut Services) -> Outcome {
+        match self.row.typing(self.column) {
+            Typing::Listed => return self.choices(services),
+            Typing::Toggled => self.adjust(1, false, services),
+            _ => self.typing = Some(TypedValue::default()),
         }
+        Outcome::Done
     }
 
-    fn shape_typing_key(&mut self, code: KeyCode) {
-        let Some(panel) = &mut self.overlays.shape else {
-            return;
-        };
-        let typing = panel.row.typing(panel.column);
-        let Some(text) = &mut panel.typing else {
+    fn typed(&mut self, code: KeyCode, services: &mut Services) {
+        let typing = self.row.typing(self.column);
+        let Some(text) = &mut self.typing else {
             return;
         };
         // `Enter` keeps a single hex digit too, here.
@@ -1071,23 +1162,51 @@ impl App {
         };
         match typed {
             Typed::Editing => {}
-            Typed::Cancel => panel.typing = None,
+            Typed::Cancel => self.typing = None,
             Typed::Commit(text) => {
-                panel.typing = None;
-                self.commit_shape_typing(&text);
+                self.typing = None;
+                self.commit_typing(&text, services);
             }
         }
     }
 
-    fn commit_shape_typing(&mut self, text: &str) {
+    fn commit_typing(&mut self, text: &str, services: &mut Services) {
         let mut refused = None;
-        self.change_shape(|panel| {
-            let mut shape = panel.shape;
-            refused = panel.row.typed(&mut shape, &panel.context(), text).err();
-            panel.shape = shape;
-        });
+        self.change(
+            |panel| {
+                let mut shape = panel.shape;
+                refused = panel.row.typed(&mut shape, &panel.context(), text).err();
+                panel.shape = shape;
+            },
+            services,
+        );
         if let Some(reason) = refused {
-            self.services.status = reason.to_owned();
+            services.status = reason.to_owned();
         }
+    }
+}
+
+impl App {
+    /// Give the shape panel a key. A shape kept is remembered, for `.` to shape again.
+    pub(crate) fn shape_key(&mut self, key: Key, now: Instant) {
+        let Some(panel) = self.overlays.shape.as_mut() else {
+            return;
+        };
+        let outcome = crate::overlays::give(
+            panel,
+            &self.table,
+            &mut self.grammar,
+            &mut self.services,
+            &self.modes,
+            key,
+            now,
+        );
+        if matches!(outcome, Outcome::Close)
+            && let Some(panel) = self.overlays.shape.take()
+            && panel.kept
+        {
+            self.remember_shape(&panel);
+        }
+        self.settled(outcome, false);
     }
 }
