@@ -9,6 +9,7 @@ mod accumulators;
 mod arps;
 mod bank;
 mod beads;
+mod bypassed_amp;
 mod choke;
 mod clouds;
 mod compressors;

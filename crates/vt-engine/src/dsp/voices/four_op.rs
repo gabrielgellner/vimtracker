@@ -76,6 +76,8 @@ const RATIOS: [f32; 20] = [
 /// How far `Fine` moves a ratio either way at its ends, in cents. It's squared on the way, so the
 /// middle, where a slight detune lives, has most of the knob.
 const FINE_CENTS: f32 = 600.0;
+/// Where a released operator's envelope is taken as gone: -90 dB.
+const SILENT: f32 = 3.2e-5;
 /// How far a modulator at full level moves its target's phase, in turns, before taming: about
 /// 12.6 radians, as far as a DX7's go.
 const INDEX: f32 = 2.0;
@@ -403,6 +405,13 @@ impl SynthEngine for FourOp {
     /// Let go of the note: every operator's envelope goes to its release.
     fn release(&mut self) {
         self.stage = [Stage::Release; OPERATORS];
+    }
+
+    /// Whether every operator, let go, has fallen past -90 dB, its envelope by how far it
+    /// reaches, where its sound is gone and a voice ending there makes no step.
+    fn rung_out(&self) -> bool {
+        self.stage.iter().all(|stage| *stage == Stage::Release)
+            && self.gain.to_array().iter().all(|gain| *gain < SILENT)
     }
 
     /// The next frame, at a frequency as a fraction of the sample rate.

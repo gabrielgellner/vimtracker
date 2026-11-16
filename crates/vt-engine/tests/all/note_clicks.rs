@@ -320,6 +320,16 @@ fn random_16ths_carried_without_reset_change_as_cleanly_as_a_tie() {
             clicks.push(name);
         }
     }
+    // With the notes' shape switched out there's none to start again: the machine's own, or
+    // none, shapes the notes, which run into one another as tied (decision 371).
+    let name = "CSaw, note shape switched out";
+    let switched = Case {
+        bypassed: true,
+        ..Case::plain(Source::Synth(SynthVoice::CSaw))
+    };
+    if !clean(&measure(name, switched, &notes), false) {
+        clicks.push(name);
+    }
     assert!(clicks.is_empty(), "these click at each note: {clicks:?}");
 }
 
@@ -363,13 +373,6 @@ fn random_16ths_carried_with_reset_dip_to_silence_without_a_click() {
             "CSaw at 140 BPM",
             Case {
                 bpm: 140,
-                ..Case::plain(csaw)
-            },
-        ),
-        (
-            "CSaw, note shape switched out",
-            Case {
-                bypassed: true,
                 ..Case::plain(csaw)
             },
         ),

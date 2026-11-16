@@ -130,6 +130,12 @@ macro_rules! synths {
                 }
             }
 
+            fn rung_out(&self) -> bool {
+                match self {
+                    $(Self::$voice(synth) => SynthEngine::rung_out(synth),)+
+                }
+            }
+
             fn drifts(&self) -> bool {
                 match self {
                     $(Self::$voice(_) => <$engine as SynthEngine>::DRIFTS,)+
@@ -794,6 +800,11 @@ impl Voice {
                 self.shape
                     .finished_holding(self.elapsed, self.envelope_rate)
                     && self.amp[1] == 0.0
+            }
+            // With no shape of its own, it ends as its machine settles, at full: at once for one
+            // with no envelope of its own, as a raw oscillator with no amp would (decision 371).
+            Stage::Released { .. } if self.shape == Envelope::Open => {
+                self.synth.as_ref().is_none_or(Synth::rung_out)
             }
             Stage::Released { .. } => {
                 self.shape

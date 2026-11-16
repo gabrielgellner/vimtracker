@@ -160,8 +160,8 @@ impl Engine {
     }
 
     /// The shape of a track's notes: its first envelope on `Vol`, whichever slot that is, if it's
-    /// in. Switched out, or with none, its notes have the plain shape a new track's have, from
-    /// the next one.
+    /// in. Switched out, its notes have none, and the machine's own envelope shapes them (decision
+    /// 371). With no envelope on `Vol`, they have the plain shape a new track's have.
     pub(super) fn note_shape(&self, index: usize) -> Envelope {
         let Some(track) = self.current.song.tracks.get(index) else {
             return Envelope::note_shape();
@@ -169,7 +169,12 @@ impl Engine {
         // Its own settings as macros and modulation have them now.
         note_shape_slot(&track.mods)
             .map(|at| self.tracks[index].heard_mod(track, at))
-            .filter(|slot| !slot.bypassed)
-            .map_or(Envelope::note_shape(), |slot| slot.envelope())
+            .map_or(Envelope::note_shape(), |slot| {
+                if slot.bypassed {
+                    Envelope::Open
+                } else {
+                    slot.envelope()
+                }
+            })
     }
 }
