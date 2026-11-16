@@ -557,9 +557,15 @@ impl TrackState {
         self.wake();
         // `Acid` plays one note at a time, and the next carries on from its filter and accent.
         let acid = note.synth == Some(SynthVoice::Acid) && self.voice.plays_acid();
+        // With `Phase` at `Reset`, a synth whose sound has a phase starts again at the bottom of
+        // the dip, which it always takes (decision 370).
+        let restart = self.held_phase >= 0.5 && note.synth.is_some_and(SynthVoice::has_phase);
         // Any other synth that holds its notes carries on too, its oscillators running on into
-        // the next note rather than a new voice starting under the old one's fade.
-        let carries = !acid && self.voice.carries(note.synth);
+        // the next note rather than a new voice starting under the old one's fade. At `Free`, so
+        // does one gone quiet on its own since its last note, from where its oscillators stopped
+        // (decision 374).
+        let resumes = !acid && !restart && self.voice.resumes(note.synth);
+        let carries = !acid && (resumes || self.voice.carries(note.synth));
         // A note on a voice of its own cuts the one sounding, and starts under its fade.
         let cuts = !acid && !carries && self.voice.active();
         if !acid && !carries {
@@ -594,9 +600,11 @@ impl TrackState {
         });
         // `Acid` carrying on keeps the drift it has, and rolls its own offsets as it starts.
         let drift = (!acid && self.voice.drifts()).then(|| self.drift_rng.next_u32());
-        // With `Phase` at `Reset`, a synth whose sound has a phase starts again at the bottom of
-        // the dip, which it always takes (decision 370).
-        let restart = self.held_phase >= 0.5 && note.synth.is_some_and(SynthVoice::has_phase);
+        if resumes {
+            // It has played nothing to slew from, as a new voice hasn't.
+            self.voice.set_pitch(self.pitch);
+            self.fresh_voice = true;
+        }
         if carries {
             self.voice.carry(Carry {
                 note,

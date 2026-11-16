@@ -90,6 +90,44 @@ fn reset_starts_each_repeated_note_the_same_to_the_bit() {
 }
 
 #[test]
+fn free_runs_on_after_a_pluck_has_died_away() {
+    // A pluck dies away before the next note, and its voice goes quiet. At `Free` the next note
+    // takes the voice up again, its oscillators on from where they stopped, so the same note
+    // starts somewhere else each time; at `Reset` each starts on a voice of its own, the same
+    // frame for frame (decision 374).
+    for voice in [
+        SynthVoice::VirtualAnalog,
+        SynthVoice::Fm,
+        SynthVoice::FourOp,
+        SynthVoice::CSaw,
+    ] {
+        let pluck = |phase| {
+            let mut plucked = song(voice, phase, &AGAIN);
+            plucked.tracks[0].mods[0].adsr = Adsr {
+                decay_ms: 20,
+                sustain: 0,
+                ..Adsr::note_shape()
+            };
+            render(plucked, 4)
+        };
+        let note = |out: &[f32], step: usize| out[step * STEP..step * STEP + HEARD].to_vec();
+        let reset = pluck(Phase::Reset);
+        let between = apart(&note(&reset, 2), &note(&reset, 3));
+        assert!(between == 0.0, "{voice:?} with Reset: {between}");
+        assert!(note(&reset, 2).iter().any(|sample| *sample != 0.0));
+        let free = pluck(Phase::Free);
+        assert!(
+            free[2 * STEP - 100..2 * STEP]
+                .iter()
+                .all(|sample| *sample == 0.0),
+            "{voice:?} has died away before the next note"
+        );
+        let between = apart(&note(&free, 2), &note(&free, 3));
+        assert!(between > 0.01, "{voice:?} with Free: {between}");
+    }
+}
+
+#[test]
 fn free_is_the_carried_voice_as_it_was() {
     // `Free` is what a track had before it could choose: a song that doesn't set it plays as one
     // set to `Free` does.

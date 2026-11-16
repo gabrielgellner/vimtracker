@@ -301,7 +301,9 @@ it, and on the Roto it's the first knob of the Play device's second page. See
 on from note to note or start again on each. A synth that holds its notes plays the
 next one on the voice already sounding (see **Envelopes** in **The Mod page**). At
 `Free`, as a track starts, they run on, as an analog synth's do, so each note starts
-wherever they've got to. At `Reset` they start again from where a new note starts
+wherever they've got to, even after the last note has died away, as a pluck's does
+before the next: its voice waits, quiet, and the next note on the same machine takes
+it up again where its oscillators stopped. At `Reset` they start again from where a new note starts
 them, as Elektron's oscillator reset, Operator's retrigger and Serum's retrig do, so
 every note at the same pitch starts the same. That can only happen at silence, so
 each note with `Reset` takes the short dip to nothing before its attack, whatever the

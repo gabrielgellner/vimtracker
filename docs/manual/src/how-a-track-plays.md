@@ -533,7 +533,7 @@ same note at full sustain sounding as one held note; with it on, the level dips 
 nothing for a moment first, so each note is struck. A note with a voice of its own, a
 sample's or a drum's, always attacks from nothing. The track's `Phase`, on the Play
 device, says what the oscillators do through the change: at `Free` they run on, so a
-note starts wherever they are, and at `Reset` they start again at the bottom of the dip,
+note starts wherever they are, even after a pluck has died away before it, and at `Reset` they start again at the bottom of the dip,
 so the same note starts the same every time.
 
 `b` on the Mod page switches an envelope or an LFO out, and what it moves glides back
