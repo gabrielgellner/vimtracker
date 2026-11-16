@@ -9,7 +9,7 @@ use vt_model::action::Action;
 use vt_model::bank::BankEntry;
 use vt_model::constants::FIXED_TRACKS;
 use vt_model::label::is_name;
-use vt_model::song::{Launch, Machine, TrackKind};
+use vt_model::song::{Machine, TrackKind};
 use vt_model::speed::Speed;
 
 use super::{App, TrackLive};
@@ -124,15 +124,6 @@ impl App {
         }
     }
 
-    /// When a realign or a switch on the grid lands: on the launch grid's next line, or on the next
-    /// bar when launches wait for a chain's end, as each track's chain ends somewhere else.
-    pub(crate) fn grid_when(&self) -> String {
-        match self.song().launch {
-            Launch::ChainEnd => "on the next bar".to_owned(),
-            every => every.when(),
-        }
-    }
-
     /// Switch the cursor's track's mute, or its solo, at the next line of the launch grid, or
     /// take back a switch waiting for it. The engine switches it, with every other waiting for the
     /// same line, and the live controls follow from its report. Stopped, there's no grid coming
@@ -190,7 +181,7 @@ impl App {
         self.services.status = if waiting {
             format!("{name}'s {what} switch taken back")
         } else {
-            let when = self.grid_when();
+            let when = self.services.grid_when();
             format!("{name} {verb} {when}; Space g {key} again takes it back")
         };
     }
@@ -210,7 +201,7 @@ impl App {
         self.services.status = if self.services.reported.realigning {
             "Realign taken back".to_owned()
         } else {
-            let when = self.grid_when();
+            let when = self.services.grid_when();
             format!("Every track realigns {when}; Space A again takes it back")
         };
     }
@@ -238,7 +229,7 @@ impl App {
         self.services.status = if self.services.reported.realigning_tracks[track] {
             format!("{name}'s realign taken back")
         } else {
-            let when = self.grid_when();
+            let when = self.services.grid_when();
             format!("{name} realigns {when}; Space a again takes it back")
         };
     }

@@ -39,7 +39,7 @@ use vt_model::order::Dealer;
 use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
 use vt_model::selection::{Extent, Field};
-use vt_model::song::{ChainEntry, Phrase, Section, Song, Track};
+use vt_model::song::{ChainEntry, Launch, Phrase, Section, Song, Track};
 
 use crate::app::{Cursor, Momentary, TrackLive};
 use crate::input::mode::View;
@@ -265,6 +265,15 @@ impl Services {
     /// The current song.
     pub fn song(&self) -> &Arc<Song> {
         self.history.current()
+    }
+
+    /// When a realign or a switch on the grid lands: on the launch grid's next line, or on the next
+    /// bar when launches wait for a chain's end, as each track's chain ends somewhere else.
+    pub(crate) fn grid_when(&self) -> String {
+        match self.song().launch {
+            Launch::ChainEnd => "on the next bar".to_owned(),
+            every => every.when(),
+        }
     }
 
     /// Run an action and make the result current. A fader it moves that the steps drive is
