@@ -28,6 +28,7 @@ use guides::GuideView;
 use help::Help;
 use mapping::MappingView;
 use picker::Picker;
+use picker::exploring::Explorer;
 use shape::ShapePanel;
 
 /// One of the program's overlays as a component, as a [`crate::pages::Page`] is: its own state,
@@ -165,13 +166,15 @@ pub(crate) fn give<O: Overlay>(
     outcome
 }
 
-/// The overlays that are open, and what they keep between their openings: the picker, the `:`
-/// line and its history, how far the help and the guide have scrolled, the shape panel and a
-/// macro's mapping view.
-#[derive(Default)]
+/// The overlays that are open, and what they keep between their openings: the picker and the
+/// explorer's files, places and tags, the `:` line and its history, how far the help and the
+/// guide have scrolled, the shape panel and a macro's mapping view.
 pub struct Overlays {
     /// The open picker or explorer.
     pub picker: Option<Picker>,
+    /// The file explorer: the kit in use, the files it reads and plays, its places and tags, and
+    /// what a folder chosen in it goes on to.
+    pub explorer: Explorer,
     /// The `:` line as typed so far, its list of matches and the lines run before.
     pub command: CommandLine,
     /// `Space k`'s list of every key, and how far it has scrolled.
@@ -186,4 +189,21 @@ pub struct Overlays {
     pub(crate) shape_command: Option<(Selection, Field)>,
     /// The search for a setting under way, `/` on the track page or the mixer.
     pub field_jump: Option<FieldJump>,
+}
+
+impl Overlays {
+    /// None open, and an explorer that reads files at this rate.
+    pub(crate) fn new(rate: u32) -> Self {
+        Self {
+            picker: None,
+            explorer: Explorer::new(rate),
+            command: CommandLine::default(),
+            help: Help::default(),
+            guide: GuideView::default(),
+            shape: None,
+            mapping: None,
+            shape_command: None,
+            field_jump: None,
+        }
+    }
 }
