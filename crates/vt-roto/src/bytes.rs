@@ -5,10 +5,10 @@ use thiserror::Error;
 use xxhash_rust::xxh3::xxh3_64;
 
 /// How many bytes a name takes in a message, its end marker included.
-pub const LABEL_BYTES: usize = 13;
+pub(crate) const LABEL_BYTES: usize = 13;
 
 /// How many characters of a name the Roto shows.
-pub const LABEL_CHARS: usize = LABEL_BYTES - 1;
+pub(crate) const LABEL_CHARS: usize = LABEL_BYTES - 1;
 
 /// Why a message couldn't be read.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -141,7 +141,7 @@ impl PluginHash {
     }
 
     /// The hash the serial API sends for no plugin, all `FF`.
-    pub const NONE: Self = Self([0xFF; 8]);
+    pub(crate) const NONE: Self = Self([0xFF; 8]);
 }
 
 /// Which setting a control is mapped to, as six 7-bit bytes, beside its index.
@@ -193,7 +193,7 @@ impl Rgb {
 }
 
 /// The most a number in two 7-bit bytes can be.
-pub const PAIR_MAX: u16 = 0x3FFF;
+pub(crate) const PAIR_MAX: u16 = 0x3FFF;
 
 /// A number up to 16383 as two 7-bit bytes, the high one first, as SysEx sends track indices and
 /// positions. Past 16383 it's the top.
@@ -210,48 +210,48 @@ pub(crate) fn push_wide(out: &mut Vec<u8>, value: u16) {
 
 /// Reads a message's bytes in order, and fails rather than panics when they run out.
 #[derive(Debug)]
-pub struct Reader<'a> {
+pub(crate) struct Reader<'a> {
     bytes: &'a [u8],
     at: usize,
 }
 
 impl<'a> Reader<'a> {
-    pub fn new(bytes: &'a [u8]) -> Self {
+    pub(crate) fn new(bytes: &'a [u8]) -> Self {
         Self { bytes, at: 0 }
     }
 
-    pub fn byte(&mut self) -> Result<u8, DecodeError> {
+    pub(crate) fn byte(&mut self) -> Result<u8, DecodeError> {
         let byte = *self.bytes.get(self.at).ok_or(DecodeError::Short)?;
         self.at += 1;
         Ok(byte)
     }
 
-    pub fn take(&mut self, count: usize) -> Result<&'a [u8], DecodeError> {
+    pub(crate) fn take(&mut self, count: usize) -> Result<&'a [u8], DecodeError> {
         let end = self.at.checked_add(count).ok_or(DecodeError::Short)?;
         let bytes = self.bytes.get(self.at..end).ok_or(DecodeError::Short)?;
         self.at = end;
         Ok(bytes)
     }
 
-    pub fn array<const N: usize>(&mut self) -> Result<[u8; N], DecodeError> {
+    pub(crate) fn array<const N: usize>(&mut self) -> Result<[u8; N], DecodeError> {
         let bytes = self.take(N)?;
         Ok(std::array::from_fn(|at| bytes[at]))
     }
 
     /// A number in two 7-bit bytes, the high one first.
-    pub fn pair(&mut self) -> Result<u16, DecodeError> {
+    pub(crate) fn pair(&mut self) -> Result<u16, DecodeError> {
         let high = self.byte()?;
         let low = self.byte()?;
         Ok((u16::from(high & 0x7F) << 7) | u16::from(low & 0x7F))
     }
 
     /// A number in two 8-bit bytes, the high one first.
-    pub fn wide(&mut self) -> Result<u16, DecodeError> {
+    pub(crate) fn wide(&mut self) -> Result<u16, DecodeError> {
         Ok(u16::from_be_bytes(self.array()?))
     }
 
     /// A yes or no, sent as `00` or `01`.
-    pub fn flag(&mut self, what: &'static str) -> Result<bool, DecodeError> {
+    pub(crate) fn flag(&mut self, what: &'static str) -> Result<bool, DecodeError> {
         match self.byte()? {
             0 => Ok(false),
             1 => Ok(true),
@@ -259,16 +259,16 @@ impl<'a> Reader<'a> {
         }
     }
 
-    pub fn label(&mut self) -> Result<Label, DecodeError> {
+    pub(crate) fn label(&mut self) -> Result<Label, DecodeError> {
         Label::read(self)
     }
 
-    pub fn remaining(&self) -> usize {
+    pub(crate) fn remaining(&self) -> usize {
         self.bytes.len() - self.at
     }
 
     /// Fails if any bytes are left, as a command that's longer than it should be was misread.
-    pub fn finish(self) -> Result<(), DecodeError> {
+    pub(crate) fn finish(self) -> Result<(), DecodeError> {
         match self.remaining() {
             0 => Ok(()),
             more => Err(DecodeError::Trailing(more)),

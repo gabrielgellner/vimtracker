@@ -12,8 +12,10 @@ use crate::sysex::{Daw, FirmwareVersion, FromRoto, ToRoto};
 
 /// The API version this was written against. Nothing checks the Roto's against it, but it's kept
 /// as the record of which version of the vendor's document the tables follow.
-pub const API_MAJOR: u8 = 1;
-pub const API_MINOR: u8 = 6;
+#[expect(dead_code, reason = "the record of the document's version")]
+pub(crate) const API_MAJOR: u8 = 1;
+#[expect(dead_code, reason = "the record of the document's version")]
+pub(crate) const API_MINOR: u8 = 6;
 
 /// Where the handshake is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,7 +47,6 @@ pub enum Change {
 pub struct Session {
     daw: Daw,
     state: State,
-    firmware: Option<FirmwareVersion>,
     api: Option<(u8, u8)>,
 }
 
@@ -55,7 +56,6 @@ impl Session {
         Self {
             daw,
             state: State::Idle,
-            firmware: None,
             api: None,
         }
     }
@@ -68,10 +68,6 @@ impl Session {
         self.state == State::Connected
     }
 
-    pub fn firmware(&self) -> Option<&FirmwareVersion> {
-        self.firmware.as_ref()
-    }
-
     pub fn api_version(&self) -> Option<(u8, u8)> {
         self.api
     }
@@ -79,13 +75,12 @@ impl Session {
     /// The link is open: say so, and wait for the Roto's ping.
     pub fn start(&mut self) -> Vec<ToRoto> {
         self.state = State::Waiting;
-        self.firmware = None;
         self.api = None;
         vec![ToRoto::DawStarted]
     }
 
     /// The Roto went away, unplugged or its port closed.
-    pub fn lost(&mut self) {
+    pub(crate) fn lost(&mut self) {
         self.state = State::Idle;
     }
 
@@ -106,7 +101,6 @@ impl Session {
                 )
             }
             FromRoto::FirmwareVersion(version) => {
-                self.firmware = Some(version.clone());
                 (Vec::new(), Some(Change::FirmwareVersion(version)))
             }
             FromRoto::ApiVersion { major, minor } => {

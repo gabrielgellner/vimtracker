@@ -11,7 +11,7 @@ repository = "https://github.com/gabrielgellner/vimtracker"
 rust-version = "1.100.0"
 
 # What every crate warns on, taken with `lints.workspace = true`. A crate's own extra, such as
-# `unreachable_pub` in `vt-engine` and `vt-tui`, stays in its `lib.rs`.
+# `unreachable_pub` in `vt-engine`, `vt-tui` and `vt-roto`, stays in its `lib.rs`.
 [workspace.lints.clippy]
 float_cmp = "warn"
 match_same_arms = "warn"

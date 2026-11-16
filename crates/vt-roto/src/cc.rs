@@ -6,21 +6,21 @@
 //! business, not this module's.
 
 /// The channel every CC is on, 16, as the status byte counts it from 0.
-pub const CHANNEL: u8 = 15;
+pub(crate) const CHANNEL: u8 = 15;
 
 /// A CC on the Roto's channel.
-pub const CONTROL_CHANGE: u8 = 0xB0 | CHANNEL;
+pub(crate) const CONTROL_CHANGE: u8 = 0xB0 | CHANNEL;
 
 /// Where each kind of control starts.
-pub const KNOB_HIGH: u8 = 12;
+pub(crate) const KNOB_HIGH: u8 = 12;
 pub const KNOB_LOW: u8 = 44;
-pub const SWITCH: u8 = 20;
-pub const TRANSPORT: u8 = 28;
-pub const TOUCH: u8 = 52;
+pub(crate) const SWITCH: u8 = 20;
+pub(crate) const TRANSPORT: u8 = 28;
+pub(crate) const TOUCH: u8 = 52;
 /// Sent with a knob's number, for its setting back at its default: MIX mode's "level at 0 dB",
 /// which the Ableton script takes for any knob's default.
-pub const DEFAULT: u8 = 64;
-pub const METER: u8 = 65;
+pub(crate) const DEFAULT: u8 = 64;
+pub(crate) const METER: u8 = 65;
 
 /// How many knobs, switches and meters.
 pub const KNOBS: u8 = 8;
@@ -151,7 +151,7 @@ pub enum Side {
 
 /// Sets one side of a MIX meter, from 0 to 127. In MIX mode's single track, the track's meter is
 /// the first.
-pub fn meter(track: u8, side: Side, level: u8) -> [u8; 3] {
+pub(crate) fn meter(track: u8, side: Side, level: u8) -> [u8; 3] {
     let offset = match side {
         Side::Left => 0,
         Side::Right => 1,

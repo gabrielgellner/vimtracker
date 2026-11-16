@@ -16,19 +16,19 @@
 use crate::bytes::{DecodeError, Label, ParamHash, PluginHash, Reader, Rgb, push_pair};
 
 /// The bytes before every message: the start of SysEx, Melbourne Instruments' ID and the Roto's.
-pub const HEADER: [u8; 5] = [0xF0, 0x00, 0x22, 0x03, 0x02];
+pub(crate) const HEADER: [u8; 5] = [0xF0, 0x00, 0x22, 0x03, 0x02];
 
 /// The byte that ends every message.
-pub const END: u8 = 0xF7;
+pub(crate) const END: u8 = 0xF7;
 
 /// The groups of commands.
-pub const GENERAL: u8 = 0x0A;
-pub const PLUGIN: u8 = 0x0B;
-pub const MIX: u8 = 0x0C;
+pub(crate) const GENERAL: u8 = 0x0A;
+pub(crate) const PLUGIN: u8 = 0x0B;
+pub(crate) const MIX: u8 = 0x0C;
 
 /// How many names come with a step knob's details at most. A knob can have more steps, up to
 /// [`MAX_STEPS`], but past this its steps have no names.
-pub const MAX_NAMED_STEPS: u8 = 16;
+pub(crate) const MAX_NAMED_STEPS: u8 = 16;
 
 /// The most steps a knob has.
 pub const MAX_STEPS: u8 = 24;
@@ -425,7 +425,7 @@ pub struct FirmwareVersion {
 
 impl FirmwareVersion {
     /// How many bytes the commit takes.
-    pub const COMMIT_BYTES: usize = 7;
+    pub(crate) const COMMIT_BYTES: usize = 7;
 
     pub(crate) fn write(&self, out: &mut Vec<u8>) {
         out.extend_from_slice(&[self.major, self.minor, self.patch]);
@@ -478,7 +478,7 @@ fn frame(group: u8, command: u8, data: &[u8]) -> Vec<u8> {
 }
 
 /// A message's group, command and data, if it's the Roto's.
-pub fn unframe(message: &[u8]) -> Result<(u8, u8, &[u8]), DecodeError> {
+pub(crate) fn unframe(message: &[u8]) -> Result<(u8, u8, &[u8]), DecodeError> {
     let inner = message
         .strip_prefix(&HEADER)
         .and_then(|rest| rest.strip_suffix(&[END]))
@@ -490,7 +490,7 @@ pub fn unframe(message: &[u8]) -> Result<(u8, u8, &[u8]), DecodeError> {
 }
 
 /// Whether a MIDI message is one of the Roto's SysEx messages.
-pub fn is_roto_sysex(message: &[u8]) -> bool {
+pub(crate) fn is_roto_sysex(message: &[u8]) -> bool {
     message.starts_with(&HEADER) && message.last() == Some(&END)
 }
 
