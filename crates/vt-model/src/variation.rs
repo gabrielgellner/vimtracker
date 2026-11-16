@@ -9,6 +9,7 @@
 //! and the column, rather than a draw from the track's generator, so `CHA` rolls as it did, a
 //! render repeats, and playing from a step hears what playing up to it would.
 
+use crate::random::splitmix64;
 use crate::settings::{Kind, SettingId, Units};
 use crate::step::{FxCommand, FxSlot};
 
@@ -85,8 +86,9 @@ const ROLL_STREAM: u64 = 0x726e_6400_0000_0000;
 impl Roll {
     /// The roll for a track's `RND` in a column, at the track's count since its chain started.
     pub fn new(seed: u64, track: usize, count: i64, column: usize) -> Self {
-        let track = mix(mix(seed) ^ mix(ROLL_STREAM.wrapping_add(track as u64)));
-        Self(mix(mix(track ^ count as u64) ^ column as u64))
+        let track =
+            splitmix64(splitmix64(seed) ^ splitmix64(ROLL_STREAM.wrapping_add(track as u64)));
+        Self(splitmix64(splitmix64(track ^ count as u64) ^ column as u64))
     }
 
     /// Whether it varies, a chance of `x` in `F`: never at `0` and always at `F`.
@@ -100,7 +102,7 @@ impl Roll {
         if most == 0 {
             return 0;
         }
-        let size = below(mix(self.0), 2 * u64::from(most)) as i16;
+        let size = below(splitmix64(self.0), 2 * u64::from(most)) as i16;
         if size < most as i16 {
             -(size + 1)
         } else {
@@ -110,7 +112,7 @@ impl Roll {
 
     /// Somewhere from `most` below to `most` above, each as likely, nothing among them.
     pub fn within(self, most: u16) -> i16 {
-        below(mix(self.0), 2 * u64::from(most) + 1) as i16 - most as i16
+        below(splitmix64(self.0), 2 * u64::from(most) + 1) as i16 - most as i16
     }
 }
 
@@ -188,14 +190,6 @@ pub fn text(value: u8, varies: Varies, scale_on: bool) -> String {
             format!("{percent}% of the times it plays, moves {name} up to {how} either way")
         }
     }
-}
-
-/// SplitMix64's finaliser, which spreads every bit of what goes in over what comes out.
-const fn mix(value: u64) -> u64 {
-    let mut x = value.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    x = (x ^ (x >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    x ^ (x >> 31)
 }
 
 /// A number below `below` from a hash, without the bias a remainder has.

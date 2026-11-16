@@ -305,15 +305,15 @@ pub fn after_silence(pyramid: &Pyramid, frames: Range<u64>, quiet: f32, gap: u64
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::random::NumericalRecipesLcg;
 
     /// Silence with a short burst of noise at each of these frames, at a level, in two channels.
     fn clicks(frames: usize, at: &[(usize, f32)]) -> Vec<f32> {
         let mut samples = vec![0.0_f32; frames * 2];
-        let mut seed = 99_u32;
+        let mut rng = NumericalRecipesLcg::new(99);
         for (start, level) in at {
             for frame in *start..(*start + 400).min(frames) {
-                seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-                let noise = (seed >> 8) as f32 / (1 << 24) as f32 * 2.0 - 1.0;
+                let noise = (rng.next_u32() >> 8) as f32 / (1 << 24) as f32 * 2.0 - 1.0;
                 let fade = 1.0 - (frame - start) as f32 / 400.0;
                 samples[frame * 2] = noise * level * fade;
                 samples[frame * 2 + 1] = noise * level * fade * 0.5;

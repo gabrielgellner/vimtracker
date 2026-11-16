@@ -107,11 +107,10 @@ struct Cost {
 fn drums() -> Vec<f32> {
     let rate = 48_000;
     let beat = rate / 2;
-    let mut noise = 0x1234_5678_u32;
+    let mut noise = vt_model::random::NumericalRecipesLcg::new(0x1234_5678);
     let mut frames = vec![0.0_f32; beat * 16];
     for (index, frame) in frames.iter_mut().enumerate() {
-        noise = noise.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-        let white = (noise >> 8) as f32 / (1 << 23) as f32 - 1.0;
+        let white = (noise.next_u32() >> 8) as f32 / (1 << 23) as f32 - 1.0;
         let in_beat = (index % beat) as f32 / rate as f32;
         let in_half = (index % (beat / 2)) as f32 / rate as f32;
         let kick = (std::f32::consts::TAU * 55.0 * in_beat).sin() * (-in_beat * 9.0).exp();

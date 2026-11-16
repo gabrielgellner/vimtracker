@@ -293,11 +293,10 @@ const DRUMS_HASH: ContentHash = ContentHash(0xD2D2);
 /// snare on two and four, and a closed hat between, in stereo with the hat to the right.
 fn drums() -> Decoded {
     let beat = RATE as usize / 2;
-    let mut noise = 0x1234_5678_u32;
+    let mut noise = vt_model::random::NumericalRecipesLcg::new(0x1234_5678);
     let mut samples = Vec::with_capacity(beat * 8 * 2);
     for index in 0..beat * 8 {
-        noise = noise.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-        let white = (noise >> 8) as f32 / (1 << 23) as f32 - 1.0;
+        let white = (noise.next_u32() >> 8) as f32 / (1 << 23) as f32 - 1.0;
         let in_beat = (index % beat) as f32 / RATE as f32;
         let in_half = (index % (beat / 2)) as f32 / RATE as f32;
         let kick = (std::f32::consts::TAU * 55.0 * in_beat).sin() * (-in_beat * 9.0).exp();

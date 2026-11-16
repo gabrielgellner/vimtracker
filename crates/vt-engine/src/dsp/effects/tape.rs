@@ -45,9 +45,9 @@ use vt_model::insert::{Tape as Settings, from_middle, tape_drive_db};
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::line::StereoLine;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
-use crate::dsp::blocks::xorshift::Xorshift;
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::{Rung, SlotEffect};
+use vt_model::random::Xorshift32;
 
 /// The rate Airwindows' filters and slews are tuned at, and Beads' delays.
 const AIRWINDOWS_RATE: f32 = 44_100.0;
@@ -399,7 +399,7 @@ pub(super) struct Wobble {
     drift: f32,
     /// How far round the drift goes each frame, now.
     drift_step: f32,
-    random: Xorshift,
+    random: Xorshift32,
     /// How far back the line is read, how far that moves each frame, and how many frames until
     /// the next is worked out. Without one, the next is jumped to.
     delay: Option<f32>,
@@ -414,7 +414,7 @@ impl Wobble {
             flutter: 0.0,
             drift: 0.0,
             drift_step: FIRST_DRIFT_HZ / rate as f32,
-            random: Xorshift::new(0x9E37_79B9),
+            random: Xorshift32::new(0x9E37_79B9),
             delay: None,
             slope: 0.0,
             countdown: 0,

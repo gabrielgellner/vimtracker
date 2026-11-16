@@ -29,6 +29,7 @@ use crate::dsp::blocks::oversampler::Decimator;
 use crate::dsp::blocks::plaits_parts::DcBlocker;
 use crate::dsp::blocks::sine_table::SINE;
 use crate::dsp::voices::SynthEngine;
+use vt_model::random::NumericalRecipesLcg;
 
 /// Braids renders at 96 kHz, and these at twice the program's rate, which at 48 kHz is the same.
 pub(super) const OVERSAMPLING: usize = 2;
@@ -44,24 +45,18 @@ pub(super) fn whole(value: f32) -> i32 {
     (value.clamp(0.0, 1.0) * 32_767.0) as i32
 }
 
-/// stmlib's `Random`, a linear congruential generator, seeded for each note so a render repeats.
+/// stmlib's `Random`, the Numerical Recipes LCG, seeded for each note so a render repeats.
 #[derive(Debug, Clone, Copy)]
-pub(super) struct Lcg {
-    state: u32,
-}
+pub(super) struct Lcg(NumericalRecipesLcg);
 
 impl Lcg {
     pub(super) fn new(seed: u32) -> Self {
-        Self { state: seed }
+        Self(NumericalRecipesLcg::new(seed))
     }
 
     #[inline]
     pub(super) fn word(&mut self) -> u32 {
-        self.state = self
-            .state
-            .wrapping_mul(1_664_525)
-            .wrapping_add(1_013_904_223);
-        self.state
+        self.0.next_u32()
     }
 
     /// A 16-bit sample of noise.

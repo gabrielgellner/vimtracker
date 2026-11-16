@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::lfo::{DIVISION_NAMES, DIVISION_TICKS};
+use crate::random::{GOLDEN_GAMMA, splitmix64};
 
 /// How many values a slot keeps.
 pub const STEPS: usize = 16;
@@ -389,21 +390,13 @@ pub fn smoothed([earlier, before, own, after]: [f32; 4], at: f32, smooth: f32) -
 /// a mix of the key and the lap, so each time round is dealt afresh and a render deals the same.
 fn dealt(length: usize, lap: i64, key: u64) -> [u8; STEPS] {
     let mut order: [u8; STEPS] = std::array::from_fn(|at| at as u8);
-    let mut state = key ^ (lap as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    let mut state = key ^ (lap as u64).wrapping_mul(GOLDEN_GAMMA);
     for at in (1..length).rev() {
-        state = mix(state);
+        state = splitmix64(state);
         let other = (state % (at as u64 + 1)) as usize;
         order.swap(at, other);
     }
     order
-}
-
-/// SplitMix64's mix, a stateless step from one value to the next.
-fn mix(mut value: u64) -> u64 {
-    value = value.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    value = (value ^ (value >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    value = (value ^ (value >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    value ^ (value >> 31)
 }
 
 impl Steps {
