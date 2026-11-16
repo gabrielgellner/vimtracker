@@ -404,7 +404,16 @@ impl Engine {
             return;
         }
         let tie = tying && plays && fx.delay.is_none() && matches!(event, Note::On(_));
-        if plays && fx.delay.is_none() && matches!(event, Note::On(_)) && !tie {
+        // In `Legato`, a row's note arriving while the one sounding still has its gate open ties
+        // into it as a `HLD` does, after this row's locks, so a lock of `Mode` here counts. A
+        // `Multi`'s later pulses strike, as a ratchet's hits do (decision 380).
+        let legato = !tie
+            && first
+            && plays
+            && fx.delay.is_none()
+            && matches!(event, Note::On(_))
+            && self.ties_legato(index);
+        if plays && fx.delay.is_none() && matches!(event, Note::On(_)) && !tie && !legato {
             self.start_modulation(index);
         }
         if !self.tracks[index].sounding() {
@@ -471,7 +480,7 @@ impl Engine {
                     });
                     self.tracks[index].pitch_varied = varied;
                 }
-                self.start_row_note(index, on, tie, start_at, start_frames > 0);
+                self.start_row_note(index, on, tie, legato, start_at, start_frames > 0);
             }
         }
         // A note's gate closes its length of the way through its last pulse: a `Single`'s is its
@@ -552,19 +561,32 @@ impl Engine {
         velocity.min(u32::from(MAX_VELOCITY)) as u8
     }
 
-    /// Start a row's note: tied into the one before, held until its `DEL` has gone by, `delayed`,
-    /// started now, or left to its tail while the track isn't heard.
+    /// Whether a note starting now on a track ties into the one sounding by `Legato`: the note it
+    /// would play, after this row's locks, is on the synth or sample sounding, whose gate is
+    /// still open (decision 380).
+    fn ties_legato(&self, index: usize) -> bool {
+        self.tracks[index].legato()
+            && self
+                .note_on(index, 0, 0, self.note_shape(index))
+                .is_some_and(|on| self.tracks[index].ties_legato(&on))
+    }
+
+    /// Start a row's note: tied into the one before, by a `Hold` or by `Legato`, held until its
+    /// `DEL` has gone by, `delayed`, started now, or left to its tail while the track isn't heard.
     fn start_row_note(
         &mut self,
         index: usize,
         on: Option<NoteOn>,
         tie: bool,
+        legato: bool,
         start_at: u64,
         delayed: bool,
     ) {
         match on {
             // A `Hold` before it ties into this note, with no new attack.
             Some(on) if tie => self.tracks[index].tie(on),
+            // So does `Legato`, as a new row's note.
+            Some(on) if legato => self.tracks[index].tie_legato(on),
             Some(on) if delayed => {
                 self.tracks[index].last_note = Some(on);
                 self.tracks[index].wake();

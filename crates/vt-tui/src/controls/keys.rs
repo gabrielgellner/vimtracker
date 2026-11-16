@@ -64,6 +64,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
         Control::Reset => "reset",
         Control::Glide => "glide",
         Control::Phase => "phase",
+        Control::VoiceMode => "voicemode",
         Control::Limiter => "limiter",
         Control::Safe => "safe",
         Control::FilterType => "type",

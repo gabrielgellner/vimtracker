@@ -160,19 +160,26 @@ impl Engine {
                 && delayed.at <= clock
             {
                 self.tracks[index].delayed = None;
-                self.start_modulation(index);
-                if self.plays(index) {
-                    let (kill, off, gate, retrigger) = {
-                        let t = &self.tracks[index];
-                        (t.kill_at, t.off_at, t.gate_at, t.retrigger)
-                    };
-                    self.tracks[index].start(delayed.note, self.rate);
-                    self.choke(index);
-                    let t = &mut self.tracks[index];
-                    t.kill_at = kill;
-                    t.off_at = off;
-                    t.gate_at = gate;
-                    t.retrigger = retrigger;
+                // In `Legato`, a delayed note whose start finds the gate open ties as any note
+                // does, keeping what its row timed for it (decision 380).
+                let plays = self.plays(index);
+                if plays && self.tracks[index].ties_legato(&delayed.note) {
+                    self.tracks[index].tie(delayed.note);
+                } else {
+                    self.start_modulation(index);
+                    if plays {
+                        let (kill, off, gate, retrigger) = {
+                            let t = &self.tracks[index];
+                            (t.kill_at, t.off_at, t.gate_at, t.retrigger)
+                        };
+                        self.tracks[index].start(delayed.note, self.rate);
+                        self.choke(index);
+                        let t = &mut self.tracks[index];
+                        t.kill_at = kill;
+                        t.off_at = off;
+                        t.gate_at = gate;
+                        t.retrigger = retrigger;
+                    }
                 }
             }
             // Whatever ends the note ends its arpeggio.

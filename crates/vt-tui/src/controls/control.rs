@@ -96,6 +96,8 @@ pub enum Control {
     Glide,
     /// Whether a synth's oscillators run on from note to note or start again on each.
     Phase,
+    /// How its notes join: each struck, or tied into one whose gate is still open.
+    VoiceMode,
     /// The song's limiter, on or off, after the master's `Level`: the master's alone.
     Limiter,
     FilterType,
@@ -158,6 +160,7 @@ impl Control {
             Self::Reset => "Reset",
             Self::Glide => "Glide",
             Self::Phase => "Phase",
+            Self::VoiceMode => "Mode",
             Self::Limiter => "Limiter",
             Self::Machine => "Machine",
             Self::Setting(_) => "Setting",
@@ -253,6 +256,10 @@ impl Control {
             Self::Speed => Some((SettingId::SPEED, u16::from(track.speed.index()) << 8)),
             Self::Glide => Some((SettingId::GLIDE, u16::from(track.glide) << 8)),
             Self::Phase => Some((SettingId::PHASE, u16::from(track.phase.index()) << 8)),
+            Self::VoiceMode => Some((
+                SettingId::VOICE_MODE,
+                u16::from(track.voice_mode.index()) << 8,
+            )),
             // What it plays, which is its type's first where its type doesn't offer the track's.
             Self::FilterMode if track.filter.has_modes() => Some((
                 SettingId::FILTER_MODE,
@@ -346,6 +353,7 @@ impl Control {
             | Self::Speed
             | Self::Reset
             | Self::Glide
+            | Self::VoiceMode
             | Self::Accumulator(_)
             | Self::Arpeggio(_)
             | Self::Lane(..) => track.is_sound(),

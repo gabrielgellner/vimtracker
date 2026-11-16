@@ -80,7 +80,7 @@ and its settings in up to four columns of three.
 | Filter | Type, mode | `Cut` `Res` `Drive`; `Punch` `Safe`; `Low cut` `High cut` |
 | Output | | `Trim` `Level` `Pan`; `Send A` `Send B` `Group`; `Role` |
 | Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; |
-| | | `Choke` `Velocity` `Quantise`; a synth's `Phase` |
+| | | `Choke` `Velocity` `Quantise`; a synth's `Phase`, `Mode` |
 
 A machine's type is the setting that changes its character: the sample the sampler
 plays, `Acid`'s `Wave`, `Supersaw`'s `Stack`, 6-op's `Patch`, and the chord of `Chord`
@@ -322,6 +322,26 @@ note, and on the Roto it's the second knob of the Play device's second page. A
 noise, a struck or blown model and `Acid` have no phase to start again, so it's
 dimmed there and does nothing, and a sampler, which starts its sample again on each
 note anyway, hasn't one.
+
+`Mode`, under `Phase`, or alone in the sampler's fourth column, is how the track's
+notes join. At `Mono`, as a track starts, each note is struck, as described under
+**Envelopes** in **The Mod page**: a synth that holds its notes carries its voice on,
+with the notes' shape's `Reset` deciding whether it dips first, and anything else
+starts under the last note's fade. `Legato` is `Mono` with one rule more: a note
+that arrives while the one sounding still has its gate open, on the same synth, or
+the same sample and slice, ties into it as a `HLD` does. Its pitch moves, gliding by
+`Glide` if that's set, it takes the new velocity, and nothing is struck again: no
+envelope or mod slot starts over, and a struck voice rings on at the new pitch. A
+note that comes after the gate has closed, by the row's `LEN`, the track's `Gate` or
+an `OFF`, is a `Mono` note. At the full `Gate` most machines start with, every note
+holds into the next, so each one ties; a shorter `Gate` or a `LEN` on a row lets
+the next note strike, as on a 303. `Acid`'s own `Gate` lets each note go, so it plays
+as in `Mono` until a note is held into the next, which then slides. A `RET`'s
+ratchets always strike, as they're there to be heard, and so do a `MLT`'s later
+pulses, and an arpeggio with `Retrig` on. `=` and `-` move through the list, `K`
+and `i` choose from it, and `x` goes back to `Mono`, which is dimmed. A step's
+`VMOD` sets it for its note, and on the Roto it's on the Play device's second page,
+after `Quantise` and a synth's `Phase`.
 
 `Speed` is how long each of the track's steps is, from `1/32` to `1/4` with the
 triplets between, so one track can play eighths or triplets against the others'

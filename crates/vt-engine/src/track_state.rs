@@ -261,6 +261,8 @@ pub(crate) struct TrackState {
     held_glide: f32,
     /// What `Phase` holds, as a place in `Phase::ALL`.
     held_phase: f32,
+    /// What `Mode` holds, as a place in `VoiceMode::ALL`.
+    held_voice_mode: f32,
     /// Held `SMP`, `STA`, `SLEN` and `PLY`, the sampler's settings, which its next note reads as it
     /// starts, on the `00` to `FF` scale: the bank entry it plays by number, and how it cuts it.
     held_sampler: [f32; SAMPLER_SETTINGS],
@@ -416,6 +418,7 @@ impl TrackState {
             held_velocity_delta: f32::from(SettingId::VELOCITY_DELTA.entry().default),
             held_glide: f32::from(SettingId::GLIDE.entry().default),
             held_phase: f32::from(SettingId::PHASE.entry().default),
+            held_voice_mode: f32::from(SettingId::VOICE_MODE.entry().default),
             held_sampler: std::array::from_fn(|at| {
                 SettingId::sampler(at).map_or(0.0, |id| f32::from(id.entry().default))
             }),
@@ -474,6 +477,27 @@ impl TrackState {
         self.new_note = true;
         self.voice.tie(note, glide_ms(self.held_glide));
         self.tell_slots_the_note();
+    }
+
+    /// Whether a note starting now ties into the one sounding rather than striking: in `Legato`,
+    /// while that note's gate is still open on the same synth or sample (decision 380).
+    pub(crate) fn ties_legato(&self, note: &NoteOn) -> bool {
+        self.legato() && self.voice.gate_open_on(note)
+    }
+
+    /// Whether its `Mode` is `Legato`, as held now, with a lock on the row starting a note.
+    pub(crate) fn legato(&self) -> bool {
+        self.held_voice_mode >= 0.5
+    }
+
+    /// Tie a note into the one sounding, as `Legato` does, as a new row's note: what was timed for
+    /// the note before is dropped, as a struck note drops it, and the row times its own.
+    pub(crate) fn tie_legato(&mut self, note: NoteOn) {
+        self.delayed = None;
+        self.kill_at = None;
+        self.off_at = None;
+        self.gate_at = None;
+        self.tie(note);
     }
 
     /// What each slot moved the pitch of the last note started by, once, for the report.

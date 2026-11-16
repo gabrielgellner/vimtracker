@@ -1040,8 +1040,8 @@ fn the_track_page_sets_pitch_and_a_choke_group() {
     press(&mut app, "x");
     assert_eq!(track(&app).pitch, 0x80);
 
-    // Along the row past Speed.
-    press(&mut app, "$");
+    // Along the row past Speed, short of `Mode`.
+    press(&mut app, "$h");
     assert_eq!(app.track_control().label(), "Choke");
     press(&mut app, "=");
     assert_eq!(track(&app).choke, Some(1));
@@ -1130,8 +1130,8 @@ fn the_track_page_quantises_the_nudges_from_under_velocity_and_leaves_them_writt
 }
 
 #[test]
-fn a_synths_play_device_has_its_phase_and_a_samplers_hasnt() {
-    use vt_model::song::Phase;
+fn a_synths_play_device_has_its_phase_and_mode_and_a_samplers_its_mode() {
+    use vt_model::song::{Phase, VoiceMode};
     use vt_tui::screen::status::value_shown;
     let mut song = Song::new(1);
     song.tracks[0].machine = Machine::Plaits(SynthVoice::VirtualAnalog);
@@ -1147,15 +1147,25 @@ fn a_synths_play_device_has_its_phase_and_a_samplers_hasnt() {
     assert_eq!(value_shown(&app).as_deref(), Some("Reset"));
     press(&mut app, "x");
     assert_eq!(app.song().tracks[0].phase, Phase::Free);
+    press(&mut app, "j");
+    assert_eq!(app.track_control().label(), "Mode");
+    assert_eq!(value_shown(&app).as_deref(), Some("Mono"));
+    press(&mut app, "=");
+    assert_eq!(app.song().tracks[0].voice_mode, VoiceMode::Legato);
+    assert_eq!(value_shown(&app).as_deref(), Some("Legato"));
+    press(&mut app, "x");
+    assert_eq!(app.song().tracks[0].voice_mode, VoiceMode::Mono);
 
     let (mut app, _realtime) = on_track_page();
     assert_eq!(app.song().tracks[0].machine, Machine::Sampler);
     press(&mut app, " 5}2}$");
     assert_eq!(
         app.track_control().label(),
-        "Choke",
-        "a sampler's Play ends at its third column"
+        "Mode",
+        "a sampler's fourth column has only its Mode"
     );
+    press(&mut app, "=");
+    assert_eq!(app.song().tracks[0].voice_mode, VoiceMode::Legato);
 }
 
 #[test]

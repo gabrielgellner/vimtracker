@@ -538,6 +538,18 @@ device, says what the oscillators do through the change: at `Free` they run on, 
 note starts wherever they are, even after a pluck has died away before it, and at `Reset` they start again at the bottom of the dip,
 so the same note starts the same every time.
 
+That's the track's `Mode` at `Mono`, as a track starts. At `Legato`, under `Phase` on
+the Play device, a note that comes while the last one's gate is still open ties into
+it as a `HLD` does, gliding by `Glide`, with no envelope started again; only a note
+after the gate has closed, by `LEN`, `Gate` or an `OFF`, is struck. At the full
+`Gate` most machines start with, every note ties into the next. A `RET`'s ratchets
+always strike.
+
+```text
+Gate FF:    C-3 ──────── E-3 ──────── G-3 ────      one note, gliding
+Gate 80:    C-3 ────     E-3 ────     G-3 ────      each struck, as in Mono
+```
+
 `b` on the Mod page switches an envelope or an LFO out, and what it moves glides back
 over 5 ms. It keeps running underneath, so switched back in, an LFO is in phase with
 one that was never out, and an envelope is where the held note has it.
