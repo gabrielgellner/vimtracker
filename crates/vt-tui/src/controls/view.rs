@@ -25,7 +25,7 @@ use vt_model::listed::Listed;
 use vt_model::modulation::{
     MOD_SLOTS, ModField, ModKind, ModUnits, default_mod, depth_text, note_shape_slot,
 };
-use vt_model::param::{Descriptor, HEX_JUMP, NUMBER, PERCENT, kept};
+use vt_model::param::{Descriptor, HEX_JUMP, NUMBER, PERCENT, Reading, kept};
 use vt_model::settings::{
     Kind, LONGEST_GLIDE_MS, SettingId, Units, gate_percent, gate_value, glide_ms, rows_text,
 };
@@ -254,24 +254,28 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
             let id = control.setting_on(track)?;
             let entry = id.entry();
             let value = track.setting(id);
-            let of = of.hex(value, entry.kind.top(), entry.default);
+            let described = entry.described();
             match entry.kind {
-                // A list of a machine's still steps as hex does, stopping at its last, and reads
-                // by the choice it's on. A slice reads as its number, with its name after it.
-                Kind::Stepped { choices, .. } => ParamView {
-                    bar: None,
-                    choices: choices.iter().copied().map(Choice::named).collect(),
-                    numbered: id != SettingId::SLICE,
-                    cell: match choices.get(usize::from(value)) {
-                        Some(choice) if id != SettingId::SLICE => (*choice).to_owned(),
-                        _ => of.cell.clone(),
-                    },
-                    ..of
-                },
-                Kind::Continuous { middle, .. } => ParamView {
-                    centred: middle,
-                    ..of
-                },
+                // A list of a machine's still steps as hex does, stopping at its last, is typed in
+                // hex, and reads by the choice it's on. A slice reads as its number, with its name
+                // after it.
+                Kind::Stepped { .. } => {
+                    let hex = Descriptor {
+                        reading: Reading::Listed,
+                        choices: described.choices,
+                        ..Descriptor::hex(entry.key, entry.name, entry.kind.top(), entry.default)
+                    };
+                    let view = of.described(&hex, i32::from(value));
+                    ParamView {
+                        numbered: id != SettingId::SLICE,
+                        cell: match usize::from(value) >= view.choices.len() || id == SettingId::SLICE {
+                            true => format!("{value:02X}"),
+                            false => view.cell.clone(),
+                        },
+                        ..view
+                    }
+                }
+                Kind::Continuous { .. } => entry_view(of, control, track, &described, value),
             }
         }
         Control::Base(which) => {
@@ -308,28 +312,18 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
         }
         Control::InsertParam(slot, param) => {
             let insert = track.inserts[slot];
-            let found = *insert.params().get(param)?;
-            let value = insert.value(param);
-            if found.choices().is_empty() {
-                of.hex(value, 0xFF, found.default)
-            } else {
-                let list = of
-                    .listed(
-                        found.choices().iter().copied().map(Choice::named),
-                        usize::from(value),
-                        usize::from(found.default),
-                        found.wraps(),
-                    );
-                ParamView {
-                    toggle: found.is_toggle(),
-                    typing: if found.is_toggle() {
-                        Typing::Toggled
-                    } else {
-                        Typing::Listed
-                    },
-                    ..list
-                }
-            }
+            let found = insert.params().get(param)?;
+            // An effect's value runs to `FF` on its bar, as its slot keeps it, and its bar isn't
+            // drawn from the middle, whatever its entry says.
+            let described = match found.kind {
+                Kind::Continuous { .. } => Descriptor {
+                    bounds: (0, 0xFF),
+                    centred: false,
+                    ..found.described()
+                },
+                Kind::Stepped { .. } => found.described(),
+            };
+            entry_view(of, control, track, &described, insert.value(param))
         }
         Control::Insert(slot) => {
             let insert = track.inserts[slot];
@@ -536,6 +530,20 @@ fn registry(control: Control, track: &Track) -> Option<(SettingId, u16)> {
     control
         .value_on(track)
         .filter(|(id, _)| id.exists_on(track))
+}
+
+/// A registry setting's view at its value, as its entry describes it, its text in its units read
+/// with the fine part the track keeps for it. The view's own fine part is the tail's to say.
+fn entry_view(
+    of: ParamView,
+    control: Control,
+    track: &Track,
+    described: &Descriptor,
+    value: u8,
+) -> ParamView {
+    let fine = registry(control, track).map(|(_, value)| value as u8);
+    let view = ParamView { fine, ..of }.described(described, i32::from(value));
+    ParamView { fine: None, ..view }
 }
 
 /// A registry setting's units, if it reads in any rather than by a list's names.

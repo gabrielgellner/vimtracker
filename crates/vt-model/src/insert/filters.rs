@@ -7,12 +7,12 @@ use crate::constants::UNITY_LEVEL;
 
 use super::pitch::{MOST_SHIFT, PITCH_PARAMS};
 use super::{
-    AMOUNT_PARAM, Columns, GAIN_PARAM, Kind, MIX_PARAM, Param, Place, SOURCE_NAMES, Units,
+    AMOUNT_PARAM, Columns, Entry, GAIN_PARAM, Kind, MIX_PARAM, Place, SOURCE_NAMES, Units,
     hex_param, source_track,
 };
 
 /// An EQ's, in the order the page shows them.
-pub(crate) const EQ_PARAMS: [Param; 8] = [
+pub(crate) const EQ_PARAMS: [Entry; 8] = [
     hex_param(
         "Low freq",
         "lowfreq",
@@ -126,8 +126,8 @@ const GATE_MODE_NAMES: [&str; 3] = ["Gate", "Filter", "VCA"];
 
 /// A low-pass gate's, in the order the page shows them, as columns of two: what it opens and how
 /// far, where it rests and its resonance, then how slowly it responds and what it hears.
-pub(crate) const LPG_PARAMS: [Param; 8] = [
-    Param {
+pub(crate) const LPG_PARAMS: [Entry; 8] = [
+    Entry {
         name: "Mode",
         key: "mode",
         // Choosing a mode chooses a sound, so steps don't lock it.
@@ -139,7 +139,7 @@ pub(crate) const LPG_PARAMS: [Param; 8] = [
         default: 0,
         place: Place::Type,
     },
-    Param {
+    Entry {
         default: LowPassGate::DEFAULT.amount,
         ..AMOUNT_PARAM
     },
@@ -151,7 +151,7 @@ pub(crate) const LPG_PARAMS: [Param; 8] = [
         "RESP",
         LowPassGate::DEFAULT.response,
     ),
-    Param {
+    Entry {
         name: "Source",
         key: "source",
         // What it hears is part of how it's set up, so steps don't change it.
@@ -163,7 +163,7 @@ pub(crate) const LPG_PARAMS: [Param; 8] = [
         default: LowPassGate::DEFAULT.source,
         place: Place::Own,
     },
-    Param {
+    Entry {
         default: 0xFF,
         ..MIX_PARAM
     },
@@ -232,8 +232,8 @@ impl LowPassGate {
 
 /// A resonator's, in the order the page shows them, as columns of two: its pitch and how its
 /// partials spread, how bright and how long it rings, then where it's struck and how wide it is.
-pub(crate) const RESO_PARAMS: [Param; 8] = [
-    Param {
+pub(crate) const RESO_PARAMS: [Entry; 8] = [
+    Entry {
         name: "Tune",
         key: "tune",
         label: Some("TUNE"),
@@ -245,7 +245,7 @@ pub(crate) const RESO_PARAMS: [Param; 8] = [
     hex_param("Decay", "decay", "DCAY", Resonator::DEFAULT.decay),
     hex_param("Position", "position", "POS", Resonator::DEFAULT.position),
     hex_param("Width", "width", "WDTH", Resonator::DEFAULT.width),
-    Param {
+    Entry {
         default: 0xFF,
         ..MIX_PARAM
     },
@@ -330,8 +330,8 @@ const COMB_MODE_NAMES: [&str; 2] = ["Comb", "Flange"];
 
 /// A comb's, in the order the page shows them, as columns of two: what it is and its pitch, how
 /// long it rings and how bright, then how wide a band it keeps and the mix, then its gain.
-pub(crate) const COMB_PARAMS: [Param; 7] = [
-    Param {
+pub(crate) const COMB_PARAMS: [Entry; 7] = [
+    Entry {
         name: "Mode",
         key: "mode",
         // Choosing a mode chooses a sound, so steps don't lock it.
@@ -343,7 +343,7 @@ pub(crate) const COMB_PARAMS: [Param; 7] = [
         default: 0,
         place: Place::Type,
     },
-    Param {
+    Entry {
         name: "Tune",
         key: "tune",
         label: Some("TUNE"),
@@ -353,7 +353,7 @@ pub(crate) const COMB_PARAMS: [Param; 7] = [
     hex_param("Feedback", "feedback", "FDBK", Comb::DEFAULT.feedback).centred(),
     hex_param("Tone", "tone", "TONE", Comb::DEFAULT.tone),
     hex_param("Spread", "spread", "SPRD", Comb::DEFAULT.spread),
-    Param {
+    Entry {
         default: 0xFF,
         ..MIX_PARAM
     },
@@ -433,12 +433,12 @@ pub fn vowel_blend(value: f32) -> (usize, usize, f32) {
 
 /// A vowel filter's, in the order the page shows them, as columns of two: which vowel and how big
 /// a voice, how sharp its formants are and how far they follow the note, then the mix and gain.
-pub(crate) const VOWEL_PARAMS: [Param; 6] = [
+pub(crate) const VOWEL_PARAMS: [Entry; 6] = [
     hex_param("Vowel", "vowel", "VOWL", Vowel::DEFAULT.vowel).units(Units::Vowel),
     hex_param("Size", "size", "SIZE", Vowel::DEFAULT.size),
     hex_param("Res", "res", "RESO", Vowel::DEFAULT.resonance),
     hex_param("Track", "track", "TRK", Vowel::DEFAULT.track),
-    Param {
+    Entry {
         default: 0xFF,
         ..MIX_PARAM
     },

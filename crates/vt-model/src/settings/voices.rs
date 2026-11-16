@@ -1,7 +1,7 @@
 //! Each synth voice's settings, in the order it takes them, which its
 //! [`VoiceSpec`](crate::machine::VoiceSpec) in [`VOICES`](crate::machine::VOICES) names.
 
-use super::{Entry, Kind, Units, centred, level, same_key};
+use super::{Entry, Kind, Place, Units, centred, level, same_key};
 use crate::machine::{DEFAULT_ACCENT, SynthVoice};
 use crate::patch_names::PATCH_NAMES;
 
@@ -75,6 +75,7 @@ pub(crate) const SUPERSAW: [Entry; 9] = [
             wraps: false,
         },
         default: 0,
+        place: Place::Own,
     },
     level("detune", "Detune", "DTUN", 0x60),
     centred("warp", "Warp", "WARP"),
@@ -88,6 +89,7 @@ pub(crate) const SUPERSAW: [Entry; 9] = [
             wraps: false,
         },
         default: 6,
+        place: Place::Own,
     },
     level("shape", "Shape", "SHPE", 0x00),
     level("width", "Width", "WDTH", 0x80),
@@ -124,6 +126,7 @@ pub(crate) const ACID: [Entry; 9] = [
             wraps: false,
         },
         default: 0,
+        place: Place::Own,
     },
     in_units("cutoff", "Cutoff", "FREQ", 0x80, Units::AcidCutoff),
     level("resonance", "Resonance", "RESO", 0x80),
@@ -148,6 +151,7 @@ const CHORD_TYPE: Entry = Entry {
         wraps: false,
     },
     default: 10,
+    place: Place::Own,
 };
 pub(crate) const TERRAIN: [Entry; 3] = [
     level("terrain", "Terrain", "TERR", 0x00),
@@ -186,6 +190,7 @@ pub(crate) const SIX_OP: [Entry; 4] = [
         },
         // E.PIANO 1.
         default: 0x20,
+        place: Place::Own,
     },
     centred("bright", "Bright", "BRT"),
     centred("time", "Time", "TIME"),
@@ -261,6 +266,7 @@ pub(crate) const SYNC: [Entry; 3] = [
             wraps: false,
         },
         default: 0,
+        place: Place::Own,
     },
     level("interval", "Interval", "INTV", 0x40),
     level("mix", "Mix", "MIX", 0xC0),
@@ -278,6 +284,7 @@ pub(crate) const TRIPLE: [Entry; 3] = [
             wraps: false,
         },
         default: 0,
+        place: Place::Own,
     },
     level("second", "Second", "SCND", 0xA8),
     level("third", "Third", "THRD", 0xC0),
@@ -305,6 +312,7 @@ pub(crate) const Z_FILTER: [Entry; 3] = [
             wraps: false,
         },
         default: 0,
+        place: Place::Own,
     },
     level("cutoff", "Cutoff", "FREQ", 0x60),
     level("shape", "Shape", "SHPE", 0x40),
@@ -416,6 +424,7 @@ const fn listed(
             wraps: false,
         },
         default,
+        place: Place::Own,
     }
 }
 
