@@ -16,6 +16,7 @@ use vt_model::constants::BAR_STEPS;
 use vt_model::kit::MAX_TUNE;
 use vt_model::onsets::MOST_SENS;
 
+use crate::input::wheel::Places;
 use crate::overlays::command::parse::MOST_SAMPLE_DB;
 use crate::overlays::picker::{Item, Pick, Picker};
 use crate::pages::sample::draw::time;
@@ -409,6 +410,25 @@ impl SamplePage {
         };
         let to = to.clamp(i64::from(low), i64::from(high)) as i32;
         self.put_setting(shown, setting, Some(to), services);
+    }
+
+    /// The places of the settings row's setting for the mouse wheel, where it's off and on or
+    /// `Warp`'s list.
+    pub(crate) fn wheel_places(&self, services: &Services) -> Option<Places> {
+        let setting = self.setting?;
+        if !matches!(
+            setting,
+            SampleSetting::Snap | SampleSetting::Reverse | SampleSetting::Warp
+        ) {
+            return None;
+        }
+        let shown = self.shown(services).ok()?;
+        let (value, _) = shown.setting_value(setting, self.cursor);
+        let (low, high) = setting.range(shown.length());
+        Some(Places {
+            up: value < high,
+            down: value > low,
+        })
     }
 
     /// `x` on the settings rows: a slice's setting back to the entry's, or the entry's to its
