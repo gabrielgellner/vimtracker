@@ -169,7 +169,9 @@ impl App {
                 section: self.services.cursor.section,
                 reset,
             }),
-            Line::Loop => self.toggle_loop(),
+            Line::Loop => self
+                .song_view
+                .toggle_loop(self.modes.view, &mut self.services),
             Line::Launch(Some(launch)) => {
                 self.services.apply(&Action::SetLaunch(launch));
                 self.services.status = format!("Launches start {}", launch.when());
@@ -178,7 +180,10 @@ impl App {
                 let launch = self.song().launch;
                 self.services.status = format!("Launches start {}", launch.when());
             }
-            Line::Label(label) => self.label_chain(label),
+            Line::Label(label) => {
+                self.song_view
+                    .label_chain(self.modes.view, label, &mut self.services);
+            }
             Line::MacroName(name) => self.name_macro(&name),
             Line::Preset(line) => self.preset_line(line),
             Line::Patch(line) => self.patch_line(line),
