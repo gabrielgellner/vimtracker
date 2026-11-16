@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
+use vt_model::constants::RESTART_DIP_FRAMES;
 use vt_model::envelope::{Adsr, Curve};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
@@ -792,8 +793,8 @@ fn a_held_note_has_no_edges_at_block_boundaries() {
 }
 
 // #942: the dip `Reset` makes on a carried note, and plucks with a sustain of 0. These print what
-// they measure, for the issue, and assert nothing. With `VT_DIP=frames` and `VT_DIP_CURVE=cos` on
-// the branch `measure/942-retrig-dip`, the dip is another candidate's.
+// they measure, for the issue, and assert nothing. The branches `measure/942-retrig-dip` and
+// `measure/376-default-envelope` put other dips behind `VT_DIP` and `VT_DIP_CURVE`.
 
 /// What a change's notch is against the same change tied, over its first 10 ms.
 struct Notch {
@@ -836,12 +837,54 @@ fn notch(new: &Folded, tied: &Folded) -> Notch {
 }
 
 #[test]
+fn the_restart_dip_is_short_and_adds_no_corner() {
+    // `Reset`'s dip on a carried note, a raised cosine over 32 frames (decision 377): it takes
+    // out less of each step than the 64 straight frames it replaced did, 1.69 ms, and on a
+    // near-sine, `FM`, adds nothing to the top of the spectrum over what a straight 1 ms attack
+    // after it does, where a straight or a shorter dip added 3 to 8 dB.
+    let notes = random_notes();
+    let steps = notes.len() * LOOPS;
+    let measure = |source, adsr| {
+        let case = Case {
+            adsr: Some(adsr),
+            ..Case::plain(source)
+        };
+        notch(
+            &fold(&render(&case, &rows(&notes, false), steps), case.step()),
+            &fold(&render(&case, &rows(&notes, true), steps), case.step()),
+        )
+    };
+    let mut wrong = Vec::new();
+    for (name, voice) in [
+        ("CSaw", SynthVoice::CSaw),
+        ("VA", SynthVoice::VirtualAnalog),
+    ] {
+        let n = measure(Source::Synth(voice), Adsr::note_shape());
+        print_notch(name, "the plain shape", &n);
+        if n.depth_db > -10.0 || n.lost_ms > 1.4 || n.top_db > 3.0 {
+            wrong.push(name);
+        }
+    }
+    let lin = Adsr {
+        curve: Curve::Lin,
+        ..Adsr::note_shape()
+    };
+    let n = measure(Source::Synth(SynthVoice::Fm), lin);
+    print_notch("FM", "Lin", &n);
+    if n.lost_ms > 1.2 || n.top_db > 9.5 {
+        wrong.push("FM");
+    }
+    assert!(
+        wrong.is_empty(),
+        "these dip too long or with a corner: {wrong:?}"
+    );
+}
+
+#[test]
 #[ignore = "measures #942's dip, printing it"]
 fn retrig_notch_table() {
     let notes = random_notes();
-    let dip = std::env::var("VT_DIP").unwrap_or_else(|_| "64".into());
-    let curve = std::env::var("VT_DIP_CURVE").unwrap_or_else(|_| "lin".into());
-    println!("the dip: {dip} frames, {curve}");
+    println!("the dip: {RESTART_DIP_FRAMES} frames, a raised cosine");
     let reset = Some(Adsr {
         reset: true,
         ..Adsr::note_shape()

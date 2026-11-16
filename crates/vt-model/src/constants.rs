@@ -64,9 +64,12 @@ pub(crate) const HISTORY_LIMIT: usize = 1000;
 pub const SMOOTHING_MS: u32 = 10;
 /// Tuning: smoothing on what envelopes move, short enough to keep a fast snap.
 pub const FAST_SMOOTHING_MS: u32 = 1;
-/// Tuning: the shortest fade, at a sample's or a loop's edge, and a note carried on a sounding
-/// voice dipping to nothing with `Reset`.
+/// Tuning: the shortest fade, at a sample's or a loop's edge.
 pub const DECLICK_FRAMES: u32 = 64;
+/// Tuning: how long a note carried on a sounding voice dips to nothing with `Reset`, or `Phase`
+/// at `Reset`, before its attack, 0.67 ms at 48 kHz, on a raised cosine: the shortest whose
+/// corners add nothing to the top of the spectrum on a near-sine (decision 377).
+pub const RESTART_DIP_FRAMES: u32 = 32;
 /// Tuning: how long a voice that's cut off fades, 2.7 ms at 48 kHz, as the Deluge's do: by a new
 /// note that starts a voice of its own, as a sampler's does, a choke, `KIL` or the transport
 /// stopping. A new note whose attack is shorter rises over it as the old one falls, at equal

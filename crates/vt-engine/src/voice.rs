@@ -31,7 +31,7 @@ use crate::dsp::voices::wave_terrain::WaveTerrain;
 use crate::dsp::voices::waveshaping::Waveshaping;
 use crate::dsp::voices::wavetable::Wavetable;
 use crate::dsp::voices::{Settings, SynthEngine};
-use vt_model::constants::{CUT_FADE_FRAMES, DECLICK_FRAMES};
+use vt_model::constants::{CUT_FADE_FRAMES, RESTART_DIP_FRAMES};
 use vt_model::envelope::Envelope;
 use vt_model::playable::Span;
 use vt_model::samples::{Frames, SampleId};
@@ -54,9 +54,11 @@ enum Stage {
     Released {
         from: f32,
     },
-    /// A short fade, to avoid a click: a carried note's dip to nothing.
-    Fading {
-        per_frame: f32,
+    /// A carried note's dip to nothing with `Reset`, from the level it had over
+    /// [`RESTART_DIP_FRAMES`], so many frames into it.
+    Dip {
+        from: f32,
+        at: u32,
     },
     /// Cut off, by a new note on a voice of its own, a choke, `KIL` or the transport stopping:
     /// a fade from the level it had over [`CUT_FADE_FRAMES`], so many frames into it.
@@ -72,6 +74,18 @@ enum Stage {
 fn cut_fall(at: u32) -> f32 {
     let into = (at as f32 / CUT_FADE_FRAMES as f32).min(1.0);
     (std::f32::consts::FRAC_PI_2 * into).cos()
+}
+
+/// How much of a carried note's level is left `at` frames into its dip, counting the frame being
+/// made: half a cosine, flat where it starts and where it reaches nothing, so neither end is a
+/// corner the top of the spectrum hears (decision 377).
+#[inline]
+fn dip_fall(at: u32) -> f32 {
+    if at >= RESTART_DIP_FRAMES {
+        return 0.0;
+    }
+    let into = at as f32 / RESTART_DIP_FRAMES as f32;
+    0.5 * (1.0 + (std::f32::consts::PI * into).cos())
 }
 
 /// How far a new note rises over the fade of the one it cut, `at` frames into it: the fall's
@@ -491,7 +505,7 @@ impl Voice {
     pub(crate) fn carries(&self, synth: Option<SynthVoice>) -> bool {
         let sounding = match self.stage {
             Stage::Held { .. } | Stage::Released { .. } => true,
-            Stage::Fading { .. } => self.carried.is_some(),
+            Stage::Dip { .. } => self.carried.is_some(),
             Stage::Cut { .. } | Stage::Idle => false,
         };
         sounding && self.plays_on(synth)
@@ -535,10 +549,11 @@ impl Voice {
         }
         if carry.dip {
             self.carried = Some(carry);
-            // The dip is a cut's fade, from what's heard.
+            // The dip is a ramp of its own, from what's heard.
             self.level = self.amp[1];
-            self.stage = Stage::Fading {
-                per_frame: 1.0 / DECLICK_FRAMES as f32,
+            self.stage = Stage::Dip {
+                from: self.level,
+                at: 0,
             };
             return;
         }
@@ -819,7 +834,10 @@ impl Voice {
         self.level = match self.stage {
             Stage::Held { from } => self.shape.held(self.elapsed, from, self.envelope_rate),
             Stage::Released { from } => self.shape.released(self.elapsed, from, self.envelope_rate),
-            Stage::Fading { per_frame } => self.level - per_frame,
+            Stage::Dip { from, at } => {
+                self.stage = Stage::Dip { from, at: at + 1 };
+                from * dip_fall(at + 1)
+            }
             Stage::Cut { from, at } => {
                 self.stage = Stage::Cut { from, at: at + 1 };
                 from * cut_fall(at)
@@ -834,7 +852,7 @@ impl Voice {
         let c = self.amp_coefficient;
         self.amp[0] += (self.level - self.amp[0]) * c;
         self.amp[1] += (self.amp[0] - self.amp[1]) * c;
-        let fading = matches!(self.stage, Stage::Fading { .. } | Stage::Cut { .. });
+        let fading = matches!(self.stage, Stage::Dip { .. } | Stage::Cut { .. });
         if fading
             || self.level >= self.amp[1]
             || self
@@ -902,7 +920,7 @@ impl Voice {
                     && self.amp[1] == 0.0
                     && self.synth.as_ref().is_none_or(Synth::settled)
             }
-            Stage::Fading { .. } | Stage::Cut { .. } => self.level <= 0.0 && self.amp[1] == 0.0,
+            Stage::Dip { .. } | Stage::Cut { .. } => self.level <= 0.0 && self.amp[1] == 0.0,
             Stage::Idle => false,
         } || !more;
         self.elapsed += 1;

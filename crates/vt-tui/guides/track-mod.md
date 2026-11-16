@@ -144,10 +144,12 @@ or a legato line keeps its punch rather than crawling up from halfway each time.
 the next note on the voice already sounding, as a mono synth does: its oscillators
 run on, the pitch moves to the new note and the envelope starts again. With the
 notes' shape's `Reset` on, as a new track has it, the level falls to nothing over
-a short fade first, about a millisecond, and the attack starts from there, so each
-note is struck, with a small gap before it, without a click, and a long attack
-opens from nothing on every note. The gap is the fade and the start of the attack:
-the `Analog` curve, whose attack starts fast, makes it the tightest. With `Reset`
+a short fade first, two thirds of a millisecond on a smooth curve, and the attack
+starts from there, so each note is struck, with a small gap before it, without a
+click, and a long attack opens from nothing on every note. The gap is the fade and
+the start of the attack: about 1.3 ms of sound a note on `Exp`, which starts its
+attack slowly, and 1 ms on the `Analog` curve, whose attack starts fast, the
+tightest. With `Reset`
 off, the attack starts at once from where the level is, as an analog envelope
 retriggers, so a run of notes flows into one another with no gap, and a long
 attack goes on opening across fast notes. At full sustain the level is then
