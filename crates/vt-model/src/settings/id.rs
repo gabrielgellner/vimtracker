@@ -175,6 +175,8 @@ impl SettingId {
     /// How a track's notes join: a place in
     /// [`VoiceMode::ALL`](crate::song::VoiceMode::ALL).
     pub const VOICE_MODE: Self = Self(LATER_TRACK_START as u16 + 1);
+    /// Whether the filter's cutoff follows the note's pitch: `0` off, `1` on.
+    pub const KEY_TRACK: Self = Self(LATER_TRACK_START as u16 + 2);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.
