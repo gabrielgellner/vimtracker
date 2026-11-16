@@ -1,5 +1,5 @@
 //! Editing a setting from its view: where `=`, `-`, `+` and `_` take it, its fine part, what
-//! `i`'s text sets it to, what `x` puts back and what `K` lists (the UI plan's §3.3). These read
+//! `i`'s text sets it to, what `x` puts back, what `dd` sets it to ([`nothing_within`]) and what `K` lists (the UI plan's §3.3). These read
 //! only the [`ParamView`], so they know no device and no track: the page writes what they give back
 //! with `controls::set`, the one way every described setting is written.
 
@@ -97,6 +97,19 @@ pub(crate) fn reset(view: &ParamView) -> i32 {
     view.default
 }
 
+/// Nothing, for a value within `bounds`: a value either side of none, as a depth or a tune is, at
+/// none; one drawn from its middle, as pan is, at its middle; and anything else, a level, a time,
+/// a switch or a list, at its lowest, which is off or its first choice.
+pub(crate) fn nothing_within((low, high): (i32, i32), centred: bool) -> i32 {
+    if low < 0 && high > 0 {
+        0
+    } else if centred {
+        low + (high - low + 1) / 2
+    } else {
+        low
+    }
+}
+
 /// `K`'s list for a setting, opened on the value it has, with a machine's own lists numbered,
 /// or none for a value that isn't a choice.
 pub(crate) fn choices(view: &ParamView) -> Option<ChoiceList> {
@@ -132,6 +145,24 @@ mod tests {
 
     fn shown(control: Control, track: &Track) -> ParamView {
         view(control, track, &Song::new(1), false).unwrap()
+    }
+
+    #[test]
+    fn nothing_is_none_either_side_the_middle_of_a_centred_value_and_else_the_lowest() {
+        let mut track = Track::default();
+        track.mods[0].kind = ModKind::Ahd;
+        let depth = shown(Control::Mod(0, ModField::Depth), &track);
+        assert!(depth.bounds.0 < 0);
+        assert_eq!(nothing_within(depth.bounds, depth.centred), 0, "a depth");
+        let hold = shown(Control::Mod(0, ModField::Hold), &track);
+        assert_eq!(
+            nothing_within(hold.bounds, hold.centred),
+            0,
+            "0 ms, not Note"
+        );
+        assert_eq!(nothing_within((0, 0xFF), true), 0x80, "pan");
+        assert_eq!(nothing_within((0, 0xFF), false), 0, "a level");
+        assert_eq!(nothing_within((1, 16), false), 1, "a count");
     }
 
     #[test]

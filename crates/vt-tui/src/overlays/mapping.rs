@@ -252,6 +252,7 @@ impl Services {
                 | Cmd::IncreaseLarge
                 | Cmd::DecreaseLarge
                 | Cmd::ClearField
+                | Cmd::ToNothing
                 | Cmd::PickValue
                 | Cmd::EnterInsert
         );

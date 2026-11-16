@@ -1,5 +1,5 @@
 //! Changing the setting under the cursor: `=` and `-` and their large steps, the fine digits, and
-//! `x` back to its default. Each is a function over the [`Services`], given the setting, as the
+//! `x` back to its default, and `dd` to nothing. Each is a function over the [`Services`], given the setting, as the
 //! track page and the mixer both turn them. Every setting the page describes goes one way: its
 //! [`view`], `param::edit` for where a key takes it, and [`set`] to write it. Only what the view
 //! doesn't write keeps its own arm: the live mute and solo, the song's limiter, a sampler's
@@ -298,6 +298,87 @@ pub(super) fn reset_control(services: &mut Services, control: Control) {
                 }
             }
         }
+    }
+}
+
+/// `dd`: set the setting under the cursor to nothing, as [`edit::nothing`] reads it from its
+/// view, with any fine part at `00`, as one undo step, and say what it set. An effect's setting
+/// whose entry is drawn from its middle goes to its middle, though its bar isn't. The live mute
+/// and solo and the song's limiter go off, a sampler's sample to `Off`, and its tune and cents to
+/// none. What a machine or a modulator is, and a modulator's rate, which isn't one number, have no
+/// nothing, and the status line says so.
+pub(super) fn to_nothing(services: &mut Services, control: Control) {
+    let track = services.page_track();
+    match control {
+        Control::Gen { .. } | Control::NewGenerator(_) => return,
+        Control::Machine => {
+            services.status = "dd doesn't change the machine: K picks another".to_owned();
+            return;
+        }
+        Control::Mod(_, ModField::Type) => {
+            services.status =
+                "dd doesn't change a modulator's type: b switches it out, K picks another"
+                    .to_owned();
+            return;
+        }
+        Control::Mod(_, ModField::Rate) => {
+            services.status = "A rate has no nothing: x puts it back".to_owned();
+            return;
+        }
+        Control::Mute | Control::Solo => {
+            let live = services
+                .live
+                .levels
+                .get(services.cursor.track)
+                .copied()
+                .unwrap_or_default();
+            if (control == Control::Mute && live.mute) || (control == Control::Solo && live.solo) {
+                toggle_control(services, control);
+            }
+        }
+        Control::Limiter => {
+            if services.song().limiter {
+                set_limiter(services, false);
+            }
+            return;
+        }
+        Control::Sample => {
+            services.apply(&Action::SetTrackSample {
+                track: services.cursor.track,
+                sample: 0,
+            });
+        }
+        // It says what it set itself.
+        Control::Tune | Control::Cents => return set_tuning(services, control, Some(0)),
+        _ => {
+            let Some(shown) = view_on(services, control, &track) else {
+                return;
+            };
+            let centred = shown.centred
+                || matches!(control, Control::InsertParam(slot, param)
+                    if track.inserts[slot].params().get(param)
+                        .is_some_and(|entry| entry.described().centred));
+            let value = edit::nothing_within(shown.bounds, centred);
+            let fine = control.fine_on(&track).map(|_| 0);
+            let changed = value != shown.value || shown.fine.is_some_and(|fine| fine != 0);
+            // Already nothing, it leaves no undo step, as `x` at the default doesn't.
+            if changed
+                && let Some(action) = set(
+                    control,
+                    services.cursor.track,
+                    &track,
+                    services.song(),
+                    value,
+                    fine,
+                )
+            {
+                services.apply(&action);
+            }
+        }
+    }
+    let track = services.page_track();
+    if let Some(now) = view_on(services, control, &track) {
+        services.status = format!("{} to {}", now.name, now.cell.trim());
     }
 }
 

@@ -27,6 +27,7 @@ use crate::overlays::shape::choice_picker;
 use crate::pages::{CtxMut, Outcome};
 use crate::services::Services;
 use crate::services::generators::{LiveGen, generator_label};
+use crate::widgets::param::edit;
 
 use super::TrackPage;
 use crate::controls::{Control, DEVICE_ROWS, Page};
@@ -134,7 +135,7 @@ impl TrackPage {
 
     /// Run one of the Gen page's edits, which reshape the generator setting under the cursor,
     /// `control`, `times` being its count, at least 1: `=` `-` `+` `_`, `x`, `K`, `i`,
-    /// `Space g a`, `dd` and `r`, and `p`, which is refused. `Enter`, which opens the shape panel
+    /// `Space g a`, `dd`, which on `Fill` takes the generator away, and `r`, and `p`, which is refused. `Enter`, which opens the shape panel
     /// in the phrase view, is passed back, as is any other key, and every key off the Gen page or on
     /// the mixer.
     pub(super) fn gen_edit(
@@ -161,7 +162,7 @@ impl TrackPage {
             Cmd::PickValue => return edit.open_picker(),
             Cmd::EnterInsert => return edit.start_typing(),
             Cmd::ApplyGenerator => edit.apply(),
-            Cmd::RemoveRow => edit.remove(),
+            Cmd::ToNothing => edit.set_nothing(),
             Cmd::RollGenerator => edit.roll(),
             Cmd::Paste => return Outcome::Refused("p puts an effect in a slot, on the FX page"),
             _ => return Outcome::Passed,
@@ -385,12 +386,41 @@ impl GenEdit<'_> {
         };
     }
 
-    /// `dd`: take the generator away, putting back what was under it.
-    fn remove(&mut self) {
-        let Some((phrase, generator, _)) = self.here() else {
-            self.services.status = "dd takes a generator away: go to one first".to_owned();
+    /// `dd`: the setting to nothing, as the track page's settings go, or on `Fill`, which says what
+    /// the generator is, the generator taken away. A setting that's only typed, as a `List`'s values
+    /// are, has no nothing, and the status line says so.
+    fn set_nothing(&mut self) {
+        let Some((phrase, generator, param)) = self.here() else {
+            self.services.status = "Empty has nothing to clear: K makes a column live".to_owned();
             return;
         };
+        if param == GenParam::Fill {
+            return self.remove(phrase, generator);
+        }
+        let Some(live) = self.live(phrase, generator) else {
+            return;
+        };
+        let context = live.context();
+        let Some(bounds) = param.bounds(&context) else {
+            self.services.status = format!("{} is only typed: x puts it back", param.name());
+            return;
+        };
+        let centred = param.described(&live.generator.shape, &context).centred;
+        let value = edit::nothing_within(bounds, centred);
+        let said = self.services.status.clone();
+        self.reshape(|_, param, shape, context| param.set_number(shape, context, value));
+        // A shape refused says why, which stays.
+        if self.services.status != said {
+            return;
+        }
+        if let Some(live) = self.live(phrase, generator) {
+            let shown = param.shown(&live.generator.shape, &live.context());
+            self.services.status = format!("{} to {}", param.name(), shown.trim());
+        }
+    }
+
+    /// `dd` on `Fill`: take the generator away, putting back what was under it.
+    fn remove(&mut self, phrase: u32, generator: usize) {
         let name = self.name(phrase, generator);
         self.services.apply(&Action::RemoveGenerator {
             track: self.services.cursor.track,

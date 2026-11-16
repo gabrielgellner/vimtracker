@@ -26,6 +26,7 @@ box on its right. The device with the cursor has the brighter frame.
 | `gg` `G` | The top or bottom of the column |
 | `K` | On the type, choose another; on the mode, polarity or `Dest`, list them |
 | `x` | Put back the slot's first type, or on the polarity, the type's |
+| `dd` | A setting to nothing, as on the Sound page; not the type or `Rate` |
 | `b` | Switch this slot out, to hear without it, or back in |
 
 **Changing a type.** `K` on the type lists `ADSR`, `AHD`, `Drum`, `LPG`, `LFO`, `Steps` and `Track`, each with what it

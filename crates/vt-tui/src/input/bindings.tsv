@@ -204,7 +204,6 @@ Track	g g	Move(First)	First row, of this column of devices
 Track	G	Move(Last)	Last row, of this column of devices
 Track	H	PreviousPage	Previous page: Sound, Mod, FX, Gen
 Track	L	NextPage	Next page: Sound, Mod, FX, Gen
-Track	d d	RemoveRow	Take an effect out of its slot, or a generator away
 Track	p	Paste	Put the effect taken in this slot
 Track	b	Bypass	Switch this effect or modulator out, or back in
 Track	z i	ZoomSlot	On the FX page, zoom in on this slot, or back out
@@ -233,6 +232,7 @@ Track	D-j	DecreaseLarge	Decrease the value, a large step
 Track	C-a	Increase	Increase the value
 Track	C-x	Decrease	Decrease the value
 Track	x	ClearField	Back to its default
+Track	d d	ToNothing	To nothing; on an effect's name or a generator's Fill, take it out
 Track	K	PickValue	Choose this setting from a list
 Track	;	Audition	Play the sound on a w s e d f, until ; again
 Track	z a	ToggleFold	Fold this group, or the one this track is in, or open it
@@ -377,6 +377,7 @@ Mixer	D-j	DecreaseLarge	Decrease the value, a large step
 Mixer	C-a	Increase	Increase the value
 Mixer	C-x	Decrease	Decrease the value
 Mixer	x	ClearField	Back to its default
+Mixer	d d	ToNothing	To nothing: its lowest, off or its centre
 Mixer	K	PickValue	Switch mute or solo
 Mixer	/	FieldJump	Jump to a setting by its name
 Mixer	g d	OpenItem	Go to the macro holding this fader
