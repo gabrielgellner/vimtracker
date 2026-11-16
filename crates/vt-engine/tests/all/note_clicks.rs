@@ -4,9 +4,9 @@
 //! averaged over many random notes, against the same notes tied with `HLD`, whose voice carries on
 //! from note to note without a new attack: a mono synth's legato, the cleanest a change can be.
 //!
-//! They're ignored: they print what they measure, for the diagnosis, and assert what a clean
-//! note change should do, which today it doesn't. Run them with
-//! `cargo test --release -p vt-engine --test all note_clicks -- --ignored --nocapture`.
+//! Each prints what it measures, as the diagnosis of #931 did, and asserts what a clean change
+//! does. Those still ignored assert what today's engine doesn't do yet. Run them all with
+//! `cargo test --release -p vt-engine --test all note_clicks -- --include-ignored --nocapture`.
 
 use std::sync::Arc;
 
@@ -386,39 +386,50 @@ fn random_16ths_change_notes_as_cleanly_as_a_tie() {
     assert!(clicks.is_empty(), "these click at each note: {clicks:?}");
 }
 
+/// The most a sound falls to an exact silence in one frame, against its peak.
+fn drop_to_silence(part: &[f32]) -> f32 {
+    let peak = part.iter().fold(0.0_f32, |most, s| most.max(s.abs()));
+    let drop = part
+        .windows(2)
+        .filter(|pair| pair[1] == 0.0)
+        .map(|pair| pair[0].abs())
+        .fold(0.0_f32, f32::max);
+    drop / peak.max(1e-9)
+}
+
 #[test]
-#[ignore = "diagnosis: a sustain of 0 makes each note a 1 ms blip"]
-fn an_attack_of_1_ms_and_nothing_else_is_a_blip() {
+fn a_blip_with_no_decay_falls_to_silence_rather_than_drops() {
+    // A 1 ms attack with a decay of 0 to a sustain of 0: a blip, as it's set, but one whose decay
+    // takes the shortest fall, a millisecond, rather than stepping to nothing in a frame.
     let case = Case {
         adsr: Some(adsr(1, 0, 0, 0)),
         ..Case::plain(Source::Synth(SynthVoice::CSaw))
     };
     let out = render(&case, &rows(&random_notes(), false), 16);
     let step = case.step() as usize;
-    for (index, note) in out.chunks(step).enumerate().take(4) {
+    let mut worst = 0.0_f32;
+    for (index, note) in out.chunks(step).enumerate() {
         let peak = note.iter().fold(0.0_f32, |most, s| most.max(s.abs()));
         let heard = note
             .iter()
             .rposition(|s| s.abs() > peak * 0.01)
             .unwrap_or(0);
-        // The last frame heard, against the note's peak: where it drops to nothing.
-        let last = note[heard].abs();
-        println!(
-            "step {index}: peak {peak:.3}, heard for {:.2} ms, then a drop of {:.2} of its peak \
-             to silence in one frame",
-            heard as f32 * 1000.0 / RATE as f32,
-            last / peak.max(1e-9)
-        );
+        let drop = drop_to_silence(note);
+        if index < 4 {
+            println!(
+                "step {index}: peak {peak:.3}, heard for {:.2} ms, then a drop of {drop:.3} of \
+                 its peak to silence in one frame",
+                heard as f32 * 1000.0 / RATE as f32,
+            );
+        }
+        // Heard for its attack and its fall, about 2 ms, and no longer.
+        assert!((80..=110).contains(&heard), "step {index} is heard for {heard} frames");
+        worst = worst.max(drop);
     }
-    let heard = out[..step]
-        .iter()
-        .rposition(|s| s.abs() > 1e-4)
-        .unwrap_or(0);
-    assert!(heard > step / 2, "a note lasts {heard} frames of {step}");
+    assert!(worst < 0.02, "a blip drops to silence from {worst:.3} of its peak");
 }
 
 #[test]
-#[ignore = "diagnosis: a release of 0 drops to silence in a frame"]
 fn a_gate_closing_with_no_release_fades_rather_than_drops() {
     let notes = random_notes();
     let mut drops = Vec::new();
@@ -457,7 +468,8 @@ fn a_gate_closing_with_no_release_fades_rather_than_drops() {
             let level = out[start + 480..close - 48]
                 .iter()
                 .fold(0.0_f32, |most, s| most.max(s.abs()));
-            let jump = out[close - 48..close + 48]
+            // A release of 0 takes the shortest fall, a millisecond, so it's over within 2.
+            let jump = out[close - 48..close + 96]
                 .windows(2)
                 .filter(|pair| pair[1] == 0.0)
                 .map(|pair| pair[0].abs())
