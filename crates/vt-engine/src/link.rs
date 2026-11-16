@@ -817,6 +817,29 @@ mod tests {
         assert_eq!(blocks(&mut rt, 200), 0);
     }
 
+    /// Tracks gliding every note at `Always`, struck, carried and tied (decision 382).
+    #[test]
+    fn glide_mode_always_never_allocates_in_the_callback() {
+        let pool = samples();
+        let mut always = song(8, 16);
+        for (index, track) in always.tracks.iter_mut().take(8).enumerate() {
+            track.glide_mode = vt_model::song::GlideMode::Always;
+            track.glide = 0x80;
+            if index % 4 < 2 {
+                track.voice_mode = vt_model::song::VoiceMode::Legato;
+                track.gate_length = Some(0x80);
+            }
+            if index % 2 == 0 {
+                track.machine =
+                    vt_model::song::Machine::Plaits(vt_model::song::SynthVoice::VirtualAnalog);
+            }
+        }
+        let engine = Engine::new(48_000, published(always, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        assert_eq!(blocks(&mut rt, 200), 0);
+    }
+
     #[test]
     fn a_length_changing_while_playing_never_allocates_in_the_callback() {
         let pool = samples();
