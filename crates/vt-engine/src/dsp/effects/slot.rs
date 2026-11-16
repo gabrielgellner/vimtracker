@@ -55,7 +55,10 @@ pub(crate) trait SlotEffect: Sized {
     fn new(rate: u32) -> Self;
     /// Take what's set now, where the song is and this many frames in.
     fn follow(&mut self, settings: Self::Settings, song: SongPlace, frames: u64);
-    /// Jump to what's set, as it's only just started.
+    /// Jump its settings to what's set, rather than gliding there: as it's only just started,
+    /// and, kept in a slot, on every row read and preview while the track is quiet
+    /// ([`InsertState::settle`]). Only settings jump: what the sound left in it, a filter's or
+    /// a detector's state, a buffer or a phase, is its own and stays.
     fn settle(&mut self) {}
     /// Empty what it keeps, before the pool hands it out again.
     fn clear(&mut self);
@@ -297,6 +300,15 @@ macro_rules! kept {
                         follow_fresh(dsp, settings, song, frames, fresh);
                     })+
                     _ => {}
+                }
+            }
+
+            /// Jump to what's set rather than gliding there, by its own `settle`, so no kept
+            /// effect is left out.
+            fn settle(&mut self) {
+                match self {
+                    Self::None => {}
+                    $(Self::$kind(dsp) => SlotEffect::settle(dsp),)+
                 }
             }
 
@@ -880,19 +892,18 @@ impl InsertState {
         self.on.target = if bypassed { 0.0 } else { 1.0 };
     }
 
-    /// Jump to the settings, for playing from the start. Of what the slot keeps for its effect,
-    /// a distortion, a phaser and Glue's clip jump; the others carry on from where they were.
+    /// Jump to the settings rather than gliding there: its switch, amount, mix and gain, and
+    /// every setting of an effect kept in the slot. The track calls it on every row read, and
+    /// every preview started, while nothing's sounding through it and no slot's tail is ringing,
+    /// so a jump has nothing to step. An effect in the pool isn't settled here: it jumps as it's
+    /// taken from the pool, with its buffer empty, and a resonator, comb or frequency shifter as
+    /// it wakes.
     pub fn settle(&mut self) {
         self.on.settle();
         self.amount.settle();
         self.mix.settle();
         self.gain.settle();
-        match &mut self.kept {
-            Kept::Distort(distort) => distort.settle(),
-            Kept::Phaser(phaser) => phaser.settle(),
-            Kept::Compressor(squeeze) => squeeze.peak_clip.settle(),
-            Kept::None | Kept::Eq(_) | Kept::Lpg(_) | Kept::Vowel(_) | Kept::Exciter(_) => {}
-        }
+        self.kept.settle();
     }
 
     /// How hard its distortion goes, eased, for Distort's tests.
@@ -1132,6 +1143,95 @@ mod tests {
     const RATE: u32 = 48_000;
     /// Settings take effect at once, as the smoother has nothing to do.
     const NO_SMOOTHING: f32 = 1.0;
+
+    #[test]
+    fn every_kept_effect_settles_on_what_moved_while_it_was_quiet() {
+        use vt_model::insert::{Exciter, LowPassGate, Phaser, Vowel};
+        // A track coming back after its slot's settings moved while it was quiet, by an edit, a
+        // lock left over or playing from the top, starts on them as a slot just filled does,
+        // rather than gliding there from where it was (#923).
+        let effects = [
+            Insert::Distort(Distort::DEFAULT),
+            Insert::Eq(Equaliser::DEFAULT),
+            Insert::Compressor(Compressor::DEFAULT),
+            Insert::Compressor(Compressor {
+                kind: CompressorType::Console,
+                ..Compressor::DEFAULT
+            }),
+            Insert::Compressor(Compressor {
+                kind: CompressorType::Glue,
+                ..Compressor::DEFAULT
+            }),
+            Insert::Lpg(LowPassGate::DEFAULT),
+            Insert::Exciter(Exciter::DEFAULT),
+            Insert::Phaser(Phaser::DEFAULT),
+            Insert::Vowel(Vowel::DEFAULT),
+        ];
+        for (kind, _) in KEPT_IN_SLOT {
+            assert!(
+                effects.iter().any(|insert| insert.kind() == Some(kind)),
+                "{kind:?} isn't tried"
+            );
+        }
+        let sidechains = SidechainFrames::default();
+        let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
+        let tone: Vec<f32> = sines(RATE as usize / 50, 220.0, 0.5, RATE).collect();
+        for was in effects {
+            // Every setting moved but its type, its mix and its gain, which the slot eases; what
+            // it hears, which stays its own input; and a phaser's rate, which would have moved
+            // its sweep on while it was quiet.
+            let params = was.kind().unwrap().params();
+            let phaser = matches!(was, Insert::Phaser(_));
+            let moved = (0..params.len())
+                .filter(|&at| {
+                    !matches!(params[at].place, Place::Type | Place::Output)
+                        && params[at].key != "source"
+                        && !(phaser && params[at].key == "rate")
+                })
+                .fold(was, |insert, at| {
+                    let value = insert.read(at).unwrap();
+                    let top = params[at].kind.top();
+                    let to = if value > top / 2 {
+                        top / 4
+                    } else {
+                        top - top / 4
+                    };
+                    insert.write(at, f32::from(to))
+                });
+            assert_ne!(moved, was, "{was:?} has settings to move");
+            // Quiet for a while, one set so all along and the other moved at the end, then each
+            // settled, as a row read while the track's quiet settles it.
+            let quiet = |insert| {
+                let mut state = InsertState::default();
+                state.set(insert);
+                for _ in 0..RATE / 10 {
+                    state.process([0.0; 2], smoothing, RATE, &sidechains);
+                }
+                state
+            };
+            let mut set = quiet(moved);
+            let mut moving = quiet(was);
+            moving.set(moved);
+            for state in [&mut set, &mut moving] {
+                state.settle();
+            }
+            // Not opposite sides, as a gate hears the two together.
+            let heard = |state: &mut InsertState| -> Vec<[u32; 2]> {
+                tone.iter()
+                    .map(|&sample| {
+                        state
+                            .process([sample, sample * 0.5], smoothing, RATE, &sidechains)
+                            .map(f32::to_bits)
+                    })
+                    .collect()
+            };
+            assert_eq!(
+                heard(&mut moving),
+                heard(&mut set),
+                "{moved:?} glided rather than starting on what's set"
+            );
+        }
+    }
 
     #[test]
     fn an_empty_slot_passed_by_gives_what_working_it_through_does() {

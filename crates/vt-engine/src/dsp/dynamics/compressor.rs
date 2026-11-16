@@ -109,6 +109,20 @@ impl Compressor {
         }
     }
 
+    /// Jump to what's set at the next frame rather than gliding there, as the first frame does:
+    /// its type's curve, `Makeup` and whether `Auto` is on. It takes its settings frame by frame,
+    /// so it forgets what it took. The detector and what `Auto` has heard are what the sound
+    /// left, and carry on.
+    pub(crate) fn settle(&mut self) {
+        match &mut self.kind {
+            Kind::Clean(clean) => clean.settle(),
+            Kind::Console(console) => console.settle(),
+            Kind::Glue(glue) => glue.settle(),
+        }
+        self.makeup_from = None;
+        self.auto.keeps = None;
+    }
+
     /// One frame turned down by what `key` asks for, as its type does, then turned up by `Auto`
     /// and `Makeup`, all wet. `key` is the frame itself unless it hears another track. Changing
     /// type starts the new one afresh.
@@ -253,6 +267,11 @@ pub fn curve_db(level: f32, settings: Settings) -> f32 {
 }
 
 impl Clean {
+    /// Jump to what's set at the next frame, as the first frame does.
+    fn settle(&mut self) {
+        self.times = None;
+    }
+
     /// Take what's set now, jumping to it the first time.
     fn follow(&mut self, settings: Settings, rate: u32) -> [f32; 2] {
         if let Some((was, times)) = self.times
@@ -313,6 +332,10 @@ impl SlotEffect for Compressor {
 
     /// It takes its settings frame by frame instead.
     fn follow(&mut self, _settings: Settings, _song: SongPlace, _frames: u64) {}
+
+    fn settle(&mut self) {
+        self.settle();
+    }
 
     fn clear(&mut self) {
         *self = Self::default();
