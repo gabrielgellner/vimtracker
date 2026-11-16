@@ -180,10 +180,12 @@ pub(crate) struct Macro<M> {
 }
 
 /// How long a new voice plays ahead to settle its DC blocker, in seconds: whole cycles of its note
-/// at least this long, so waves a little apart in tune, as `Triple`'s, come out about centred,
-/// and no longer than this, a cycle of a note down to about 40 Hz.
-const SHORTEST_AHEAD: f32 = 0.01;
-const LONGEST_AHEAD: f32 = 0.025;
+/// at least this long, as a high note's first cycle or two aren't yet its settled ones...
+const SHORTEST_AHEAD: f32 = 0.004;
+/// ...and no longer than this, a cycle of a note down to `C-2`, about 65 Hz. Under it, part of a
+/// cycle settles it nearly as well, and sixteen tracks starting together stay well within a
+/// block's time (decision 369).
+const LONGEST_AHEAD: f32 = 0.016;
 
 impl<M: Model> SynthEngine for Macro<M> {
     const NOISE: bool = M::NOISE;

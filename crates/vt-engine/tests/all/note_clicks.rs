@@ -611,7 +611,7 @@ fn held(voice: SynthVoice, note: u8) -> (f64, Vec<f64>) {
     };
     let level = rms(&out[RATE as usize / 2..RATE as usize]);
     let offsets = out[..RATE as usize / 10]
-        .chunks(window)
+        .chunks_exact(window)
         .map(|part| mean(part) / level)
         .collect();
     let windows: Vec<f64> = out[RATE as usize / 10..RATE as usize]
@@ -640,7 +640,7 @@ fn the_first_note_after_a_rest_starts_with_no_offset() {
         SynthVoice::WaveLine,
         SynthVoice::VirtualAnalog,
     ] {
-        for note in [48, 60, 72, 84] {
+        for note in [36, 48, 60, 72, 84] {
             let (swing, offset) = held(voice, note);
             // The first window has the attack in it, so the ones after are what's left over.
             let first = offset
