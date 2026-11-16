@@ -191,29 +191,32 @@ impl Default for Adsr {
 }
 
 impl Adsr {
-    /// The shape a note has with nothing else set: a click-free start, and a short release. A
-    /// note carried on by the voice already sounding attacks from where the level is, as an
-    /// analog envelope retriggers, with no dip to nothing first (decision 373).
+    /// The shape a note has with nothing else set, as Live's Meld starts: a click-free start, a
+    /// decay that does nothing at full sustain but lets a lowered one fall rather than step, a
+    /// short release, and each note struck from nothing (decision 376).
     pub const fn note_shape() -> Self {
         Self {
             attack_ms: 1,
-            decay_ms: 0,
+            decay_ms: 600,
             sustain: 100,
             release_ms: 50,
-            reset: false,
+            reset: true,
             curve: Curve::Exp,
         }
     }
 
-    /// A modulating envelope's starting point: the note shape's attack and release, with a decay
-    /// to nothing, as a filter's envelope has, starting from nothing on each note. It's the
-    /// default songs leave unsaved, so its `Reset` stays on whatever the note shape's is.
+    /// A modulating envelope's starting point: a decay to nothing, as a filter's envelope has,
+    /// starting from nothing on each note. It's the default songs leave unsaved, so every field
+    /// is its own, whatever the note shape's are, or a saved song's `Mod 2` and `Mod 3` would
+    /// change as they load.
     pub const fn decay() -> Self {
         Self {
+            attack_ms: 1,
             decay_ms: 200,
             sustain: 0,
+            release_ms: 50,
             reset: true,
-            ..Self::note_shape()
+            curve: Curve::Exp,
         }
     }
 
@@ -1175,9 +1178,45 @@ mod tests {
             );
         }
         assert!(ahd.one_shot() && !adsr.one_shot());
-        // The note's shape retriggers from where it is, and a modulating envelope from nothing
-        // (decision 373).
-        assert!(ahd.reset() && !adsr.reset() && Envelope::Adsr(Adsr::decay()).reset());
+        // The note's shape and a modulating envelope both start each note from nothing
+        // (decision 376).
+        let carried = Envelope::Adsr(Adsr {
+            reset: false,
+            ..four
+        });
+        assert!(ahd.reset() && adsr.reset() && !carried.reset());
+        assert!(Envelope::note_shape().reset() && Envelope::Adsr(Adsr::decay()).reset());
         assert_eq!(Envelope::note_shape(), Envelope::Adsr(Adsr::note_shape()));
+    }
+
+    #[test]
+    fn the_note_shapes_decay_does_nothing_at_full_sustain() {
+        // Its decay is there for a lowered sustain to fall over: at full, the level is exactly
+        // what a decay of 0 gives, so the default sounds as it did.
+        let shape = Adsr::note_shape();
+        let none = Adsr {
+            decay_ms: 0,
+            ..shape
+        };
+        for frames in (0..100_000).step_by(37) {
+            assert_eq!(
+                shape.held(frames, 0.0, RATE).to_bits(),
+                none.held(frames, 0.0, RATE).to_bits()
+            );
+        }
+        // Lowered, it falls over its decay rather than stepping as the attack ends.
+        let lowered = Adsr {
+            sustain: 50,
+            ..shape
+        };
+        assert!(lowered.held(48 + 48, 0.0, RATE) > 0.99);
+        close(lowered.held(48 + 28_800, 0.0, RATE), 0.5);
+    }
+
+    #[test]
+    fn a_modulating_envelopes_default_is_what_songs_left_unsaved() {
+        // Songs don't save `Adsr::decay()`, so it must stay as it was whatever the note shape is.
+        let text = "(attack_ms:1,decay_ms:200,sustain:0,release_ms:50,reset:true,curve:Exp)";
+        assert_eq!(ron::from_str::<Adsr>(text).unwrap(), Adsr::decay());
     }
 }

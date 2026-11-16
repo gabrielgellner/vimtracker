@@ -600,10 +600,10 @@ fn a_mod_slots_settings_are_words_and_its_reset_a_toggle() {
     assert_drawn(
         &row(&app, 8, 1, 72),
         &[
-            "  Release   50 ms      Reset     \u{f204}                                      ",
+            "  Release   50 ms      Reset     \u{f205}                                      ",
             "..aaaaaaaaaa...........aaaaaaaaaabbb....................................",
             "a fg OVERLAY2",
-            "b fg OVERLAY0",
+            "b fg GREEN",
         ],
     );
     // Its title, with the cursor in the slot, and the next slot's, without.
