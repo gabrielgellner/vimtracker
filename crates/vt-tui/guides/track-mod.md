@@ -79,6 +79,13 @@ so it has no depth and shows `--`. A new track's is `Mod 1`. Make `Mod 1` an LFO
 and the next envelope on `Vol` shapes the notes instead, or with none, they have
 the plain shape a new track's have.
 
+**A new track's notes** rise over 1 ms, decay over 600 ms to a sustain of 100%,
+release over 50 ms, on `Exp`, with `Reset` on, as Live's Meld starts. At full
+sustain the decay does nothing. Lower `Sustain` and each note falls to it over the
+decay rather than dropping there as its attack ends, which is a click: with
+`Decay` at 0 and `Sustain` at 50%, each note jumps to full for a millisecond and
+falls by half at once. Shorten the decay for a pluck.
+
 **Switched out**, from the next note, the notes have no shape at all: the sound
 passes through at full from its first frame and through its release, and a note
 ends as its machine settles. It doesn't hand the job on to a later envelope. That's
@@ -136,13 +143,16 @@ or a legato line keeps its punch rather than crawling up from halfway each time.
 **From note to note,** a synth that holds its notes, as `VA` and `CSaw` do, plays
 the next note on the voice already sounding, as a mono synth does: its oscillators
 run on, the pitch moves to the new note and the envelope starts again. With the
-notes' shape's `Reset` off, as a new track has it, the attack starts at once from
-where the level is, as an analog envelope retriggers, so a run of notes flows into
-one another with no gap. At full sustain the level is already at the top, so the
-same note again sounds as one held note, as it does on an analog mono synth, and
-only a new pitch or velocity is heard. With `Reset` on, the level falls to nothing
-over a short fade first, about a millisecond, and the attack starts from there, so
-each note is struck, with a small gap before it, without a click.
+notes' shape's `Reset` on, as a new track has it, the level falls to nothing over
+a short fade first, about a millisecond, and the attack starts from there, so each
+note is struck, with a small gap before it, without a click, and a long attack
+opens from nothing on every note. The gap is the fade and the start of the attack:
+the `Analog` curve, whose attack starts fast, makes it the tightest. With `Reset`
+off, the attack starts at once from where the level is, as an analog envelope
+retriggers, so a run of notes flows into one another with no gap, and a long
+attack goes on opening across fast notes. At full sustain the level is then
+already at the top, so the same note again sounds as one held note, as it does on
+an analog mono synth, and only a new pitch or velocity is heard.
 
 `Reset` only ever acts on a note carried on like that. A sample, the struck voices,
 `Kick`, `Snare`, `Hat`, `String`, `Modal`, `Bell` and `Drum`, and `Bowed`, `Blown`

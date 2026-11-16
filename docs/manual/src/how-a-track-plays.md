@@ -527,10 +527,12 @@ LFO 1:      ∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿�
 
 A synth that holds its notes, such as `VA` or `CSaw`, plays each note on the voice
 already sounding, as a mono synth does: the oscillators keep running, the pitch moves
-and the envelopes start again. With the notes' shape's `Reset` off, as a new track has
-it, the attack starts from where the level is and the notes flow into each other, the
-same note at full sustain sounding as one held note; with it on, the level dips to
-nothing for a moment first, so each note is struck. A note with a voice of its own, a
+and the envelopes start again. With the notes' shape's `Reset` on, as a new track has
+it, the level dips to nothing for a moment first, so each note is struck from nothing;
+with it off, the attack starts from where the level is and the notes flow into each
+other, the same note at full sustain sounding as one held note. A new track's notes
+rise over 1 ms, decay over 600 ms to a sustain of 100% and release over 50 ms, so a
+lowered sustain falls over the decay rather than dropping there at once. A note with a voice of its own, a
 sample's or a drum's, always attacks from nothing. The track's `Phase`, on the Play
 device, says what the oscillators do through the change: at `Free` they run on, so a
 note starts wherever they are, even after a pluck has died away before it, and at `Reset` they start again at the bottom of the dip,

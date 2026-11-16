@@ -87,7 +87,7 @@
 <text x="27" y="166" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Release   </text>
 <text x="117" y="166" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">400 ms     </text>
 <text x="216" y="166" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Reset     </text>
-<use href="#sf204" transform="matrix(0.0087890625 0 0 -0.0087890625 306 166.89648)" fill="#737994"/>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 306 166.89648)" fill="#a6d189"/>
 <text x="405" y="166" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="630" y="166" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="657" y="166" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>

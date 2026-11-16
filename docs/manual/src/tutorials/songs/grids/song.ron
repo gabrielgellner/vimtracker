@@ -42,10 +42,10 @@
                 depth: 0,
                 adsr: (
                     attack_ms: 1,
-                    decay_ms: 0,
+                    decay_ms: 600,
                     sustain: 100,
                     release_ms: 50,
-                    reset: false,
+                    reset: true,
                     curve: Exp,
                 ),
             ), (
@@ -219,10 +219,10 @@
                 depth: 0,
                 adsr: (
                     attack_ms: 1,
-                    decay_ms: 0,
+                    decay_ms: 600,
                     sustain: 100,
                     release_ms: 50,
-                    reset: false,
+                    reset: true,
                     curve: Exp,
                 ),
             ), (
@@ -399,10 +399,10 @@
                 depth: 0,
                 adsr: (
                     attack_ms: 1,
-                    decay_ms: 0,
+                    decay_ms: 600,
                     sustain: 100,
                     release_ms: 50,
-                    reset: false,
+                    reset: true,
                     curve: Exp,
                 ),
             ), (
@@ -580,10 +580,10 @@
                 depth: 0,
                 adsr: (
                     attack_ms: 1,
-                    decay_ms: 0,
+                    decay_ms: 600,
                     sustain: 100,
                     release_ms: 50,
-                    reset: false,
+                    reset: true,
                     curve: Exp,
                 ),
             ), (
@@ -669,10 +669,10 @@
                 depth: 0,
                 adsr: (
                     attack_ms: 1,
-                    decay_ms: 0,
+                    decay_ms: 600,
                     sustain: 100,
                     release_ms: 50,
-                    reset: false,
+                    reset: true,
                     curve: Exp,
                 ),
             ), (
@@ -724,10 +724,10 @@
                 depth: 0,
                 adsr: (
                     attack_ms: 1,
-                    decay_ms: 0,
+                    decay_ms: 600,
                     sustain: 100,
                     release_ms: 50,
-                    reset: false,
+                    reset: true,
                     curve: Exp,
                 ),
             ), (
@@ -779,10 +779,10 @@
                 depth: 0,
                 adsr: (
                     attack_ms: 1,
-                    decay_ms: 0,
+                    decay_ms: 600,
                     sustain: 100,
                     release_ms: 50,
-                    reset: false,
+                    reset: true,
                     curve: Exp,
                 ),
             ), (
@@ -834,10 +834,10 @@
                 depth: 0,
                 adsr: (
                     attack_ms: 1,
-                    decay_ms: 0,
+                    decay_ms: 600,
                     sustain: 100,
                     release_ms: 50,
-                    reset: false,
+                    reset: true,
                     curve: Exp,
                 ),
             ), (
@@ -899,10 +899,10 @@
                 depth: 0,
                 adsr: (
                     attack_ms: 1,
-                    decay_ms: 0,
+                    decay_ms: 600,
                     sustain: 100,
                     release_ms: 50,
-                    reset: false,
+                    reset: true,
                     curve: Exp,
                 ),
             ), (
@@ -962,10 +962,10 @@
                 depth: 0,
                 adsr: (
                     attack_ms: 1,
-                    decay_ms: 0,
+                    decay_ms: 600,
                     sustain: 100,
                     release_ms: 50,
-                    reset: false,
+                    reset: true,
                     curve: Exp,
                 ),
             ), (
@@ -1017,10 +1017,10 @@
                 depth: 0,
                 adsr: (
                     attack_ms: 1,
-                    decay_ms: 0,
+                    decay_ms: 600,
                     sustain: 100,
                     release_ms: 50,
-                    reset: false,
+                    reset: true,
                     curve: Exp,
                 ),
             ), (

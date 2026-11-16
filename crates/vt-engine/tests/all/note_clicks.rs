@@ -308,13 +308,15 @@ fn measure(name: &str, case: Case, notes: &[String]) -> Change {
     change
 }
 
-/// The note shape with its times and sustain changed.
+/// The note shape with its times and sustain changed, and without `Reset`, so a carried note
+/// runs on from where its level is and only the times set are heard.
 fn adsr(attack_ms: u16, decay_ms: u16, sustain: u8, release_ms: u16) -> Adsr {
     Adsr {
         attack_ms,
         decay_ms,
         sustain,
         release_ms,
+        reset: false,
         ..Adsr::note_shape()
     }
 }
@@ -325,11 +327,12 @@ fn clean(change: &Change, drifting: bool) -> bool {
     change.dip_db > -1.5 && change.top_db < 3.0 && (drifting || change.offset < 0.05)
 }
 
-/// No reset on the note shape: the attack starts from where the level is. It's the plain note
-/// shape's, a new track's (decision 373).
+/// The plain note shape with `Reset` turned off: the attack starts from where the level is.
 fn no_reset() -> Option<Adsr> {
-    assert!(!Adsr::note_shape().reset);
-    None
+    Some(Adsr {
+        reset: false,
+        ..Adsr::note_shape()
+    })
 }
 
 #[test]
@@ -1159,6 +1162,245 @@ fn sustain_zero_pluck_table() {
                 p.offset,
                 p.model_offset
             );
+        }
+    }
+}
+
+/// Random notes on every row, each at a random velocity from `40` to `7F`.
+fn velocity_rows(notes: &[String], tied: bool) -> Vec<String> {
+    let fx = if tied { "HLD1" } else { "---" };
+    let mut seed = 0x0BAD_5EED_u32;
+    notes
+        .iter()
+        .map(|note| {
+            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            format!("{note} {:02X} {fx} --- ---", 0x40 + (seed >> 16) % 0x40)
+        })
+        .collect()
+}
+
+const OFF_ROW: &str = "OFF -- --- --- ---";
+
+/// How much brighter than its wave the first 3 ms of the notes on the rows `at` are, for the top
+/// of the spectrum against the level, as `pluck_onset_table` measures it.
+fn onset_brightness(case: &Case, rows: &[String], at: &[usize]) -> f64 {
+    let steps = rows.len() * LOOPS;
+    let running = Case {
+        adsr: Some(adsr(0, 0, 100, 0)),
+        ..*case
+    };
+    let held: Vec<String> = rows
+        .iter()
+        .map(|row| {
+            if row.starts_with("OFF") {
+                "C-3 7F HLD1 --- ---".into()
+            } else {
+                row.replace(" --- --- ---", " HLD1 --- ---")
+            }
+        })
+        .collect();
+    let tied = render(&running, &held, steps);
+    let out = render(case, rows, steps);
+    let step = case.step();
+    let power = |out: &[f32], from: usize, to: usize| {
+        (from..to).map(|i| f64::from(out[i]).powi(2)).sum::<f64>()
+    };
+    let first = step.ceil() as usize;
+    let own = top_over(&tied, first, tied.len()) / power(&tied, first, tied.len());
+    let ms = RATE as usize / 1000;
+    let (mut top, mut level) = (0.0, 0.0);
+    for k in rows.len()..steps {
+        if !at.contains(&(k % rows.len())) {
+            continue;
+        }
+        let s = (k as f64 * step) as usize;
+        top += top_over(&out, s, s + 3 * ms);
+        level += power(&out, s, s + 3 * ms);
+    }
+    10.0 * (top / level / own).log10()
+}
+
+fn print_notch(name: &str, label: &str, n: &Notch) {
+    println!(
+        "{name:<12} {label:<26} | depth {:>6.1} dB | 3/6/20 dB down {:.1}/{:.1}/{:.1} ms | lost \
+         {:.2} ms | back {:.1} ms | top {:+.1} dB",
+        n.depth_db, n.down_ms[0], n.down_ms[1], n.down_ms[2], n.lost_ms, n.back_ms, n.top_db
+    );
+}
+
+#[test]
+#[ignore = "measures a brand-new track, printing it"]
+fn fresh_track_table() {
+    // A brand-new track's notes as they are, nothing set: what each note change does against the
+    // same notes tied, and what a note after an `OFF` adds at its start.
+    let notes = random_notes();
+    println!("note shape: {:?}", Adsr::note_shape());
+    for (name, source) in [
+        ("CSaw", Source::Synth(SynthVoice::CSaw)),
+        ("VA", Source::Synth(SynthVoice::VirtualAnalog)),
+        ("Sampled saw", Source::SampledSaw),
+    ] {
+        let case = Case::plain(source);
+        let steps = notes.len() * LOOPS;
+        let same: Vec<String> = vec!["C-3".into(); notes.len()];
+        for (pattern, new, tied) in [
+            ("random notes", rows(&notes, false), rows(&notes, true)),
+            (
+                "random velocities",
+                velocity_rows(&notes, false),
+                velocity_rows(&notes, true),
+            ),
+            ("the same note", rows(&same, false), rows(&same, true)),
+        ] {
+            let n = notch(
+                &fold(&render(&case, &new, steps), case.step()),
+                &fold(&render(&case, &tied, steps), case.step()),
+            );
+            print_notch(name, pattern, &n);
+        }
+        // Every fourth row an `OFF`, so the note after it starts after a release.
+        let with_offs: Vec<String> = rows(&notes, false)
+            .into_iter()
+            .enumerate()
+            .map(|(i, row)| if i % 4 == 3 { OFF_ROW.into() } else { row })
+            .collect();
+        let after: Vec<usize> = (0..notes.len()).filter(|i| i % 4 == 0).collect();
+        let changes: Vec<usize> = (0..notes.len())
+            .filter(|i| i % 4 == 1 || i % 4 == 2)
+            .collect();
+        println!(
+            "{name:<12} {:<26} | brighter than its wave in 3 ms: after an OFF {:+.1} dB, at a \
+             change {:+.1} dB",
+            "OFF every 4th row",
+            onset_brightness(&case, &with_offs, &after),
+            onset_brightness(&case, &with_offs, &changes),
+        );
+    }
+}
+
+#[test]
+#[ignore = "measures a lowered sustain's corner, printing it"]
+fn sustain_corner_table() {
+    // How much brighter than its wave a note's first 3 ms are, with the sustain lowered under
+    // decays of 0 to 600 ms: a decay of 0 drops to the sustain in a step as the attack ends.
+    let notes = random_notes();
+    let all: Vec<usize> = (0..notes.len()).collect();
+    for (name, source) in [
+        ("CSaw", Source::Synth(SynthVoice::CSaw)),
+        ("VA", Source::Synth(SynthVoice::VirtualAnalog)),
+        ("Sampled saw", Source::SampledSaw),
+    ] {
+        for reset in [false, true] {
+            let mut line = String::new();
+            for (decay, sustain) in [(0, 100), (0, 50), (5, 50), (50, 50), (200, 50), (600, 50)] {
+                let case = Case {
+                    adsr: Some(Adsr {
+                        reset,
+                        ..adsr(1, decay, sustain, 50)
+                    }),
+                    ..Case::plain(source)
+                };
+                // The level's fall over the 4 ms after its peak, against the 4 ms after those:
+                // a step to the sustain falls in the first and not the second.
+                let steps = notes.len() * LOOPS;
+                let folded = fold(&render(&case, &rows(&notes, false), steps), case.step());
+                let at = |ms: f64| folded.level[(ms * 2.0) as usize];
+                let peak = (0..6).map(|w| folded.level[w]).fold(0.0, f64::max);
+                line += &format!(
+                    " | D {decay} S {sustain} {:+.1} {:+.1} / {:+.1}",
+                    onset_brightness(&case, &rows(&notes, false), &all),
+                    decibels(at(5.0) / peak),
+                    decibels(at(9.0) / at(5.0)),
+                );
+            }
+            println!("{name:<12} reset {reset:<5}{line}");
+        }
+    }
+}
+
+#[test]
+#[ignore = "measures candidate note shapes, printing them"]
+fn default_shape_table() {
+    // Candidate note shapes on random 16ths, against the same notes tied: what `Reset`'s dip and
+    // the attack after it take out of each step, and what a lowered sustain does (#948).
+    let notes = random_notes();
+    let shape = |attack_ms, decay_ms, sustain, release_ms, curve, reset| Adsr {
+        attack_ms,
+        decay_ms,
+        sustain,
+        release_ms,
+        reset,
+        curve,
+    };
+    let shapes = [
+        (
+            "A1 D0 S100 Exp, off",
+            shape(1, 0, 100, 50, Curve::Exp, false),
+        ),
+        (
+            "A1 D600 S100 Exp, on",
+            shape(1, 600, 100, 50, Curve::Exp, true),
+        ),
+        (
+            "A2 D600 S100 Exp, on",
+            shape(2, 600, 100, 50, Curve::Exp, true),
+        ),
+        (
+            "A1 D600 S100 Lin, on",
+            shape(1, 600, 100, 50, Curve::Lin, true),
+        ),
+        (
+            "A1 D600 S100 Analog, on",
+            shape(1, 600, 100, 50, Curve::Analog, true),
+        ),
+        (
+            "A2 D600 S100 Analog, on",
+            shape(2, 600, 100, 50, Curve::Analog, true),
+        ),
+        (
+            "A0 D600 S100 Exp, on",
+            shape(0, 600, 100, 50, Curve::Exp, true),
+        ),
+        ("A1 D0 S50 Exp, off", shape(1, 0, 50, 50, Curve::Exp, false)),
+        ("A1 D0 S50 Exp, on", shape(1, 0, 50, 50, Curve::Exp, true)),
+        (
+            "A1 D600 S50 Exp, off",
+            shape(1, 600, 50, 50, Curve::Exp, false),
+        ),
+        (
+            "A1 D600 S50 Exp, on",
+            shape(1, 600, 50, 50, Curve::Exp, true),
+        ),
+        (
+            "A1 D600 S20 R600 Exp, on",
+            shape(1, 600, 20, 600, Curve::Exp, true),
+        ),
+        (
+            "A50 D600 S100 Exp, off",
+            shape(50, 600, 100, 50, Curve::Exp, false),
+        ),
+        (
+            "A50 D600 S100 Exp, on",
+            shape(50, 600, 100, 50, Curve::Exp, true),
+        ),
+    ];
+    for (name, source) in [
+        ("CSaw", Source::Synth(SynthVoice::CSaw)),
+        ("VA", Source::Synth(SynthVoice::VirtualAnalog)),
+        // Near a sine at its defaults, where the top of the spectrum shows a dip's corners.
+        ("FM", Source::Synth(SynthVoice::Fm)),
+    ] {
+        for (label, adsr) in &shapes {
+            let case = Case {
+                adsr: Some(*adsr),
+                ..Case::plain(source)
+            };
+            let steps = notes.len() * LOOPS;
+            let n = notch(
+                &fold(&render(&case, &rows(&notes, false), steps), case.step()),
+                &fold(&render(&case, &rows(&notes, true), steps), case.step()),
+            );
+            print_notch(name, label, &n);
         }
     }
 }
