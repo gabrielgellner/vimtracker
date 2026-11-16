@@ -557,7 +557,9 @@ impl App {
         };
         self.finish_kit(seeds, &problems);
         let tracks: Vec<usize> = (first..first + count).collect();
-        self.offer_kit_beat(&tracks);
+        if let Some(picker) = self.services.kit_beat_picker(&tracks) {
+            self.show_picker(picker);
+        }
     }
 
     /// Remove the bank's entries nothing names, as one undo step: no track's `Sample` and no

@@ -8,9 +8,11 @@ use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::{GenParam, Shape, ShapeColumn, Where, is_empty};
 use vt_model::step::FxCommand;
 
-use crate::app::{App, Selection, TrackSpan};
-use crate::input::mode::Mode;
+use crate::app::{Selection, TrackSpan};
+use crate::input::mode::View;
 use crate::overlays::picker::{Pick, Picker};
+use crate::pages::Outcome;
+use crate::services::Services;
 use crate::services::generators::{Part, column_label, generator_label, on_column};
 
 use super::{Refusal, ShapePanel};
@@ -36,38 +38,41 @@ fn fitted(shape: Shape, column: ShapeColumn) -> Result<Shape, String> {
     Ok(Shape { place, ..shape })
 }
 
-impl App {
+impl Services {
     /// Make a column of the phrase under the cursor live over its loop, or its lane, with the
     /// shape the panel opens with, as `vG`, `S` and `L` would, for the Gen page's `Empty`. An
-    /// empty FX column lists the commands first. Says whether it did.
-    pub(crate) fn make_live(&mut self, field: Field, command: Option<FxCommand>) -> bool {
+    /// empty FX column lists the commands first: the error holds the list to open, or none where
+    /// the column can't be made live, the status line saying why.
+    pub(crate) fn make_live(
+        &mut self,
+        field: Field,
+        command: Option<FxCommand>,
+        view: View,
+    ) -> Result<(), Option<Picker>> {
         let selection = self.loop_selection(field);
-        let panel = match self.new_panel(selection, field, command) {
+        let panel = match ShapePanel::new(selection, field, command, self, view) {
             Ok(panel) => panel,
             Err(Refusal::Reason(reason)) => {
-                self.services.status = reason.to_owned();
-                return false;
+                self.status = reason.to_owned();
+                return Err(None);
             }
             Err(Refusal::Command(track)) => {
-                let (_, items) = self
-                    .services
-                    .fx_command_items(track, |command| Pick::GenCommand { field, command });
-                self.show_picker(Picker::new("FX commands", items).searching(""));
-                self.services.status =
-                    "Choose the command to write on the empty FX column".to_owned();
-                return false;
+                let (_, items) =
+                    self.fx_command_items(track, |command| Pick::GenCommand { field, command });
+                self.status = "Choose the command to write on the empty FX column".to_owned();
+                return Err(Some(Picker::new("FX commands", items).searching("")));
             }
         };
-        self.services.apply(&panel.live_action());
+        self.apply(&panel.live_action());
         let name = column_label(panel.parts[0].column);
-        self.services.status = format!("{name} is live: turn it here, Enter opens the panel on it");
-        true
+        self.status = format!("{name} is live: turn it here, Enter opens the panel on it");
+        Ok(())
     }
 
     /// A column of the phrase under the cursor over its loop, as `vG` selects it.
     fn loop_selection(&self, field: Field) -> Selection {
-        let extent = self.services.extent();
-        let track = self.services.cursor.track;
+        let extent = self.extent();
+        let track = self.cursor.track;
         Selection {
             range: StepRange::between(extent.start, extent.start + extent.length.max(1) - 1),
             scope: Scope::column(field.group()),
@@ -85,15 +90,14 @@ impl App {
         command: Option<FxCommand>,
         shape: Shape,
         live: Option<usize>,
+        view: View,
     ) -> Result<Action, String> {
-        let track = self.services.cursor.track;
+        let track = self.cursor.track;
         let phrase = self
-            .services
             .phrase_id()
             .ok_or("This track has no phrase here for the patch's generators")?;
         if let Some(generator) = live {
             let column = self
-                .services
                 .phrase_here()
                 .and_then(|found| found.generators().get(generator))
                 .map(|found| found.column)
@@ -106,7 +110,7 @@ impl App {
             });
         }
         let selection = self.loop_selection(field);
-        let mut panel = match self.new_panel(selection, field, command) {
+        let mut panel = match ShapePanel::new(selection, field, command, self, view) {
             Ok(panel) => panel,
             Err(Refusal::Reason(reason)) => return Err(reason.to_owned()),
             Err(Refusal::Command(_)) => {
@@ -120,14 +124,13 @@ impl App {
     /// The live generator under the cursor: its phrase, and its place in the phrase's list. On the
     /// cursor's column, it's the one covering the cursor's row, or else the nearest.
     pub(crate) fn generator_here(&self) -> Option<(u32, usize)> {
-        let phrase = self.services.phrase_id()?;
-        let step = self.services.cursor.step;
-        self.services
-            .phrase_here()?
+        let phrase = self.phrase_id()?;
+        let step = self.cursor.step;
+        self.phrase_here()?
             .generators()
             .iter()
             .enumerate()
-            .filter(|(_, generator)| on_column(self.services.cursor.field, generator.column))
+            .filter(|(_, generator)| on_column(self.cursor.field, generator.column))
             .filter_map(|(index, generator)| {
                 let rows = generator.rows()?;
                 let away = if step < rows.first {
@@ -141,19 +144,35 @@ impl App {
             .map(|(_, index)| (phrase, index))
     }
 
-    /// Open the panel again on the live generator under the cursor, on its saved shape.
-    pub(crate) fn reopen_generator(&mut self) {
-        let Some((phrase, index)) = self.generator_here() else {
-            self.services.status =
-                "No live column here. Select rows, press S, then L to keep it live".to_owned();
+    /// Apply the live generator under the cursor, leaving its values as plain ones: as last heard
+    /// where something moved it as it played.
+    pub(crate) fn apply_generator_here(&mut self) {
+        let Some((phrase, generator)) = self.generator_here() else {
+            self.status = "No live column here to apply".to_owned();
             return;
         };
-        let base = Arc::clone(self.song());
-        let track = self.services.cursor.track;
+        let track = self.cursor.track;
+        let name =
+            generator_label(&self.song().tracks[track].phrases[&phrase].generators()[generator]);
+        self.apply_generator(track, phrase, generator, &name);
+    }
+}
+
+impl ShapePanel {
+    /// The panel open again on the live generator under the cursor, on its saved shape, or
+    /// nothing, the status line saying why.
+    pub(crate) fn reopen(services: &mut Services, view: View) -> Outcome {
+        let Some((phrase, index)) = services.generator_here() else {
+            services.status =
+                "No live column here. Select rows, press S, then L to keep it live".to_owned();
+            return Outcome::Done;
+        };
+        let base = Arc::clone(services.song());
+        let track = services.cursor.track;
         let found = &base.tracks[track].phrases[&phrase];
         let generator = &found.generators()[index];
         let Some(range) = generator.rows() else {
-            return;
+            return Outcome::Done;
         };
         // It generates if its column is empty without it.
         let under = generator.under(found.steps());
@@ -167,16 +186,13 @@ impl App {
         };
         let shape = generator.shape;
         let (sources, default_source) = match part.column {
-            ShapeColumn::Note { .. } => {
-                self.services
-                    .follow_sources(&base, &[part], self.modes.view)
-            }
+            ShapeColumn::Note { .. } => services.follow_sources(&base, &[part], view),
             _ => (Vec::new(), None),
         };
-        self.overlays.shape = Some(ShapePanel {
+        Outcome::Shape(Box::new(Self {
             selection: Selection {
                 range,
-                scope: Scope::column(self.services.cursor.field.group()),
+                scope: Scope::column(services.cursor.field.group()),
                 tracks: TrackSpan::between(track, track),
             },
             parts: vec![part],
@@ -190,24 +206,6 @@ impl App {
             sources,
             default_source,
             kept: false,
-        });
-        self.modes.mode = Mode::Shape;
-        if let Some(panel) = &self.overlays.shape {
-            panel.preview(&mut self.services);
-        }
-    }
-
-    /// Apply the live generator under the cursor, leaving its values as plain ones: as last heard
-    /// where something moved it as it played.
-    pub(crate) fn apply_generator_here(&mut self) {
-        let Some((phrase, generator)) = self.generator_here() else {
-            self.services.status = "No live column here to apply".to_owned();
-            return;
-        };
-        let track = self.services.cursor.track;
-        let name =
-            generator_label(&self.song().tracks[track].phrases[&phrase].generators()[generator]);
-        self.services
-            .apply_generator(track, phrase, generator, &name);
+        }))
     }
 }

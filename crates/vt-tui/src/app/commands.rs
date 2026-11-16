@@ -165,7 +165,7 @@ impl App {
                 ..
             } => self.render(&path, rows, tail),
             Line::Double => self.double(),
-            Line::GenApply => self.apply_generator_here(),
+            Line::GenApply => self.services.apply_generator_here(),
             Line::SetSkip(size) => self.services.apply(&Action::SetSkipSize(size)),
             Line::SetScale(kind) => self.services.set_scale(Scale {
                 on: true,
