@@ -209,7 +209,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     });
     let mut app = App::new(song, path, samples, handle, rate);
     app.use_analysis_cache(analysis::cache_folder());
-    app.audio = crate::app::AudioState {
+    app.audio_page.audio = crate::pages::audio::AudioState {
         device,
         buffer,
         running: true,
@@ -218,7 +218,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
         inputs: audio::input_devices(),
         input: heard.name,
         full_speed,
-        ..crate::app::AudioState::default()
+        ..crate::pages::audio::AudioState::default()
     };
     if let Some(note) = heard.note
         && status.is_empty()
@@ -411,27 +411,27 @@ fn main_loop(
         // A device that changes or goes away stops audio, and the audio page chooses again.
         if stream.is_some() && stats.lost.load(Ordering::Acquire) {
             *stream = None;
-            app.audio.running = false;
-            app.audio.devices = audio::devices();
+            app.audio_page.audio.running = false;
+            app.audio_page.audio.devices = audio::devices();
             app.services.status =
                 "The audio device changed or went away, so audio stopped. Space 9 L chooses one"
                     .to_owned();
         }
-        app.audio.latency_us = stats.latency.load(Ordering::Relaxed);
-        app.audio.input_latency_us = stats.input_latency.load(Ordering::Relaxed);
-        app.audio.late = stats.late.load(Ordering::Relaxed);
-        app.audio.xruns = stats.errors.load(Ordering::Relaxed);
-        if std::mem::take(&mut app.audio.refresh) {
-            app.audio.devices = audio::devices();
-            app.audio.inputs = audio::input_devices();
+        app.audio_page.audio.latency_us = stats.latency.load(Ordering::Relaxed);
+        app.audio_page.audio.input_latency_us = stats.input_latency.load(Ordering::Relaxed);
+        app.audio_page.audio.late = stats.late.load(Ordering::Relaxed);
+        app.audio_page.audio.xruns = stats.errors.load(Ordering::Relaxed);
+        if std::mem::take(&mut app.audio_page.audio.refresh) {
+            app.audio_page.audio.devices = audio::devices();
+            app.audio_page.audio.inputs = audio::input_devices();
         }
-        if let Some(choice) = app.audio_request.take() {
+        if let Some(choice) = app.audio_page.request.take() {
             // The old stream lets go of its device first.
             *stream = None;
             match switch_audio(app, &choice, stats) {
                 Ok(playing) => *stream = Some(playing),
                 Err(error) => {
-                    app.audio.running = false;
+                    app.audio_page.audio.running = false;
                     app.services.status = format!("Couldn't play through that: {error}");
                 }
             }
@@ -509,19 +509,23 @@ fn switch_audio(
     let note = output.note.clone();
     let heard = hear_input(choice, rate, &mut realtime, stats);
     let note = note.or(heard.note);
-    let (stream, buffer) = output.start(realtime, Arc::clone(stats), app.audio.full_speed)?;
+    let (stream, buffer) =
+        output.start(realtime, Arc::clone(stats), app.audio_page.audio.full_speed)?;
     app.reconnect(handle, samples, rate);
-    app.audio.input = heard.name;
-    app.audio.inputs = audio::input_devices();
-    app.audio.device = device;
-    app.audio.buffer = buffer;
-    app.audio.running = true;
-    app.audio.choice = choice.clone();
-    app.audio.devices = audio::devices();
+    app.audio_page.audio.input = heard.name;
+    app.audio_page.audio.inputs = audio::input_devices();
+    app.audio_page.audio.device = device;
+    app.audio_page.audio.buffer = buffer;
+    app.audio_page.audio.running = true;
+    app.audio_page.audio.choice = choice.clone();
+    app.audio_page.audio.devices = audio::devices();
     app.services.status = match (note, errors.first()) {
         (Some(note), _) => note,
         (None, Some(error)) => error.to_string(),
-        (None, None) => format!("Playing through {} at {rate} Hz", app.audio.device),
+        (None, None) => format!(
+            "Playing through {} at {rate} Hz",
+            app.audio_page.audio.device
+        ),
     };
     if let Err(error) = choice.save() {
         app.services.status = format!("Playing, but the choice couldn't be kept: {error}");

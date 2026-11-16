@@ -27,26 +27,26 @@ fn the_audio_page_chooses_a_buffer_a_rate_and_a_device() {
     press(&mut app, "jj-");
     assert_eq!(column_name(&app), "Buffer");
     assert_eq!(
-        app.audio_request,
+        app.audio_page.request,
         Some(AudioChoice {
             buffer: Some(256),
             ..AudioChoice::default()
         })
     );
     // As if the main loop had opened it.
-    app.audio.choice = app.audio_request.take().unwrap();
-    app.audio.buffer = Some(256);
+    app.audio_page.audio.choice = app.audio_page.request.take().unwrap();
+    app.audio_page.audio.buffer = Some(256);
     press(&mut app, "k-");
-    assert_eq!(app.audio_request.as_ref().unwrap().rate, Some(44_100));
-    app.audio_request = None;
+    assert_eq!(app.audio_page.request.as_ref().unwrap().rate, Some(44_100));
+    app.audio_page.request = None;
     // Another device keeps the buffer only if it takes it.
     press(&mut app, "k=");
-    let request = app.audio_request.take().unwrap();
+    let request = app.audio_page.request.take().unwrap();
     assert_eq!(request.device.as_deref(), Some("coreaudio:headset"));
     assert_eq!(request.buffer, None, "the headset doesn't take 256");
     // x goes back to the system's own choice for the row, and K lists the choices.
     press(&mut app, "jjx");
-    assert_eq!(app.audio_request.take().unwrap().buffer, None);
+    assert_eq!(app.audio_page.request.take().unwrap().buffer, None);
     press(&mut app, "K");
     assert_eq!(app.modes.mode, Mode::Picker);
     let labels: Vec<String> = app
@@ -70,13 +70,13 @@ fn the_audio_page_chooses_a_buffer_a_rate_and_a_device() {
         "it opens on the one playing"
     );
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.audio_request, None, "which is already playing");
+    assert_eq!(app.audio_page.request, None, "which is already playing");
 }
 
 #[test]
 fn the_audio_page_shows_what_plays_and_when_it_stops() {
     let (mut app, _realtime) = on_the_audio_page();
-    app.audio.latency_us = 21_300;
+    app.audio_page.audio.latency_us = 21_300;
     let text = |app: &App| -> Vec<String> {
         let backend = ratatui::backend::TestBackend::new(90, 12);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
@@ -117,12 +117,12 @@ fn the_audio_page_shows_what_plays_and_when_it_stops() {
         text(&app)[6].contains("Scrolling turns the setting under the cursor"),
         "{lines:?}"
     );
-    app.audio.input = Some("Line in".to_owned());
+    app.audio_page.audio.input = Some("Line in".to_owned());
     assert!(
         text(&app)[5].contains("Line in, heard only by the recorder"),
         "{lines:?}"
     );
-    app.audio.running = false;
+    app.audio_page.audio.running = false;
     assert!(text(&app).iter().any(|line| line.contains("Stopped")));
 }
 
@@ -222,8 +222,8 @@ fn dropouts_put_a_warning_at_the_right_of_the_status_line_only_once_there_are_an
         "nothing is going on in the background"
     );
     assert_eq!(app.background_work(), None);
-    app.audio.late = 2;
-    app.audio.xruns = 1;
+    app.audio_page.audio.late = 2;
+    app.audio_page.audio.xruns = 1;
     let line = status_line(&app);
     assert!(line.ends_with(&format!("{WARNING} 3  ")), "{line}");
 }

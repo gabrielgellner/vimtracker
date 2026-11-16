@@ -402,7 +402,10 @@ impl App {
     /// Where a place the engine last reported has got to at the frame or key being handled, less
     /// the output's latency.
     fn carried_on(&self, place: TrackPlace) -> f64 {
-        self.carried_by(place, Duration::from_micros(self.audio.latency_us))
+        self.carried_by(
+            place,
+            Duration::from_micros(self.audio_page.audio.latency_us),
+        )
     }
 
     /// Where a place the engine last reported has got to at the frame or key being handled, less

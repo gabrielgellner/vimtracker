@@ -200,7 +200,7 @@ impl App {
                 "This song is read-only, so nothing is recorded into its folder".to_owned();
             return;
         }
-        if source == Source::Input && self.audio.input.is_none() {
+        if source == Source::Input && self.audio_page.audio.input.is_none() {
             self.services.status =
                 "No input is open: Space 9 L, then Input, chooses one".to_owned();
             return;
@@ -286,7 +286,7 @@ impl App {
     /// How many frames late the input hears what plays: out through the output's buffer and
     /// device, and back in through the input's.
     fn input_latency(&self) -> u64 {
-        let micros = self.audio.latency_us + self.audio.input_latency_us;
+        let micros = self.audio_page.audio.latency_us + self.audio_page.audio.input_latency_us;
         micros * u64::from(self.services.rate) / 1_000_000
     }
 

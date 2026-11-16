@@ -15,13 +15,12 @@ use vt_model::selection::Field;
 
 use std::time::Instant;
 
+use crate::app::Selection;
 use crate::app::grammar::Grammar;
-use crate::app::{Modes, Selection};
 use crate::input::bindings::{Cmd, Resolved, Table};
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
 use crate::pages::{Ctx, CtxMut, Outcome};
-use crate::services::Services;
 use command::CommandLine;
 use field_jump::FieldJump;
 use guides::GuideView;
@@ -150,13 +149,11 @@ pub(crate) fn give<O: Overlay>(
     overlay: &mut O,
     table: &Table,
     grammar: &mut Grammar,
-    services: &mut Services,
-    modes: &Modes,
+    mut ctx: CtxMut,
     key: Key,
     now: Instant,
 ) -> Outcome {
     let was_waiting = !grammar.pending.is_empty();
-    let mut ctx = CtxMut { services, modes };
     let outcome = press(overlay, table, &mut grammar.pending, key, &mut ctx);
     match (was_waiting, grammar.pending.is_empty()) {
         (false, false) => grammar.pending_since = Some(now),

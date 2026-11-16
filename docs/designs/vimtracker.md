@@ -965,8 +965,8 @@ A key goes, in this order, to the first that takes it:
 2.  the page on screen (`App::run_page`), through `Page::key`;
 3.  what the page passed back, which is `App`'s: for the track page and the mixer,
     `App::run_across_pages`, the commands across pages (`i`'s mode, `/`, `M`, `gm`, the Keys mode,
-    the Gen page's keys and the pickers) and then the track page's edits, which the mixer shares;
-    for the project page's Audio sub-page, `App::run_audio_page`, while the other pages' go on;
+    the Gen page's keys and the pickers) and then the track page's edits, which the mixer shares,
+    while the other pages' go on;
 4.  the tree of chains and phrases (`App::run_tree`);
 5.  the grammar's operators, the motion after one, and the Visual modes (`App::run_grammar`);
 6.  the global `match` in `App::run`.

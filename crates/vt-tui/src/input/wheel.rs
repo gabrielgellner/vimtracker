@@ -160,6 +160,46 @@ impl Default for Wheel {
     }
 }
 
+impl Wheel {
+    /// Turns the wheel on or off, keeping the choice for this machine and saying so on the status
+    /// line, as the audio page's `Wheel` row does. A turn under way is left to end as it pauses:
+    /// a key reaching the row has ended it already, and once the wheel is off no tick adds to it.
+    pub(crate) fn switch(&mut self, on: bool, status: &mut String) {
+        if self.setting.on == on {
+            return;
+        }
+        self.setting.on = on;
+        *status = if on {
+            "Wheel on: scrolling turns the setting under the cursor, and Shift-drag selects text"
+        } else {
+            "Wheel off: the terminal has its mouse back"
+        }
+        .to_owned();
+        self.save_setting(status);
+    }
+
+    /// Turns the value with the fingers or against them, keeping the choice for this machine.
+    pub(crate) fn reverse(&mut self, reversed: bool, status: &mut String) {
+        self.setting.reversed = reversed;
+        *status = if reversed {
+            "The wheel turns against the fingers"
+        } else {
+            "The wheel turns with the fingers"
+        }
+        .to_owned();
+        self.save_setting(status);
+    }
+
+    /// Keeps the wheel's setting for next time, saying so if it can't be.
+    fn save_setting(&self, status: &mut String) {
+        if let Some(path) = &self.setting_path
+            && let Err(error) = self.setting.save_to(path)
+        {
+            *status = format!("{}: couldn't be saved: {error}", path.display());
+        }
+    }
+}
+
 /// One turn of the wheel, from its first tick until it pauses.
 #[derive(Debug, Clone)]
 struct Gesture {
@@ -416,46 +456,9 @@ impl App {
         }
     }
 
-    /// Turns the value with the fingers or against them, keeping the choice for this machine.
-    pub(crate) fn set_wheel_reversed(&mut self, reversed: bool) {
-        self.wheel.setting.reversed = reversed;
-        self.services.status = if reversed {
-            "The wheel turns against the fingers"
-        } else {
-            "The wheel turns with the fingers"
-        }
-        .to_owned();
-        self.save_wheel_setting();
-    }
-
-    /// Keeps the wheel's setting for next time, saying so if it can't be.
-    fn save_wheel_setting(&mut self) {
-        if let Some(path) = self.wheel.setting_path.clone()
-            && let Err(error) = self.wheel.setting.save_to(&path)
-        {
-            self.services.status = format!("{}: couldn't be saved: {error}", path.display());
-        }
-    }
-
     /// Whether the terminal should be sending the mouse.
     pub fn wants_mouse(&self) -> bool {
         self.wheel.setting.on
-    }
-
-    /// Turns the wheel on or off, keeping the choice for this machine.
-    pub(crate) fn set_wheel(&mut self, on: bool) {
-        if self.wheel.setting.on == on {
-            return;
-        }
-        self.end_wheel_gesture();
-        self.wheel.setting.on = on;
-        self.services.status = if on {
-            "Wheel on: scrolling turns the setting under the cursor, and Shift-drag selects text"
-        } else {
-            "Wheel off: the terminal has its mouse back"
-        }
-        .to_owned();
-        self.save_wheel_setting();
     }
 
     /// Whether this key adjusts something here, so a tick may press it: with no keys typed before

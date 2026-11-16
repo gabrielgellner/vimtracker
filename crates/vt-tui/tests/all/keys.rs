@@ -568,15 +568,15 @@ fn cmd_with_the_movement_keys_steps_through_the_audio_pages_choices() {
     let (mut app, _realtime) = on_the_audio_page();
     // On the buffer, playing at 256, so there's a choice either way.
     press(&mut app, "jj");
-    app.audio.buffer = Some(256);
+    app.audio_page.audio.buffer = Some(256);
     // With no large step through a list, Cmd-k and Cmd-j step as Cmd-l and Cmd-h, as before.
     for (plain, cmds) in [("=", ["D-l", "D-k"]), ("-", ["D-h", "D-j"])] {
         press(&mut app, plain);
-        let by_plain = app.audio_request.take();
+        let by_plain = app.audio_page.request.take();
         assert!(by_plain.is_some(), "{plain} chooses");
         for cmd in cmds {
             with_cmd(&mut app, cmd);
-            assert_eq!(app.audio_request.take(), by_plain, "{cmd} as {plain}");
+            assert_eq!(app.audio_page.request.take(), by_plain, "{cmd} as {plain}");
         }
     }
 }

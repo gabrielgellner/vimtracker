@@ -89,7 +89,7 @@ fn the_wheel_is_off_until_turned_on_on_the_audio_page_and_kept_for_the_machine()
     assert_eq!(steps(&app), [NOTE], "a report while it's off does nothing");
     // Its row is after the buffer and the input, before the Roto's.
     press(&mut app, " 9Ljjjj");
-    assert_eq!(app.audio_row_here(), AudioRow::Wheel);
+    assert_eq!(app.audio_page.row_here(), AudioRow::Wheel);
     press(&mut app, "=");
     assert!(app.wants_mouse());
     assert!(
@@ -197,7 +197,7 @@ fn the_value_follows_the_fingers_under_natural_scrolling_unless_reversed() {
         .join(vt_tui::input::wheel::SETTING_FILE);
     app.wheel.setting_path = Some(path.clone());
     press(&mut app, " 9Ljjjjj");
-    assert_eq!(app.audio_row_here(), AudioRow::WheelDirection);
+    assert_eq!(app.audio_page.row_here(), AudioRow::WheelDirection);
     press(&mut app, "=");
     assert!(app.wheel.setting.reversed);
     assert!(WheelSetting::load_from(&path).reversed);
