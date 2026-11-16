@@ -1562,6 +1562,12 @@ impl SlotEffect for Clouds {
         self.settle();
     }
 
+    /// Nothing: with `Blend` all dry, what it feeds back and its reverb go on with none of them
+    /// coming out, so the quiet its slot hears doesn't show it holds nothing, and a jump of its
+    /// loop's place, a mode or a level could step what's still in it. It jumps only as it's
+    /// taken from the pool.
+    fn settle_quiet(&mut self) {}
+
     fn clear(&mut self) {
         self.clear();
     }

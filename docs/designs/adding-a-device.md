@@ -85,8 +85,22 @@ in its row and its Roto layout in `layouts.rs`, and neither is worked out from t
    and every preview started while its track is quiet, with no voice sounding and no slot's tail
    ringing, so a track that comes back after its settings moved starts on them. One that takes its
    settings frame by frame, as the LPG and the compressor do, forgets what it took, so its next
-   frame jumps as its first did. A pooled effect's runs only as it's taken from the pool, with its
-   buffer empty, where jumping a delay's time or a rotor's speed can't be heard.
+   frame jumps as its first did.
+
+   A pooled effect's `settle` runs as it's taken from the pool, with its buffer empty, and may
+   jump more than its settings there: a delay's time, a tape's or rotor's speed, a mode's
+   crossfade. On those quiet rows and previews its `settle_quiet` runs, which is all of `settle`
+   unless it says otherwise (decision 365). The track runs it only once no slot is `ringing()`,
+   so it's safe only if giving nothing for its `quiet_frames`, with nothing coming in, shows it
+   holds nothing it would play. Make `quiet_frames` long enough for that, and `u32::MAX` while
+   it's frozen or looping, as Grains, Clouds and Beads are; `slot.rs`'s
+   `a_slot_rings_while_its_effect_in_the_pool_holds_anything_it_would_play` tries it in each of
+   its types and at its longest tail. Where the quiet can't show it, `settle_quiet` jumps only
+   what can't step what it may still hold, or nothing: the delay jumps its time only as far back
+   as its quiet has shown empty, and the Echo, Clouds and Beads, whose own level can keep what
+   goes round in them from coming out, jump nothing.
+   `every_pooled_effect_settles_on_what_moved_while_it_was_quiet` fails until a new one starts on
+   what moved, or is held back there with its reason.
 
    `FACTS` won't build if the effect is in neither list or in both, or lacks the `Mix` or `Gain`
    its `MIXING` needs. `slot.rs`'s `the_slot_reads_each_effects_levels_from_its_own_settings`

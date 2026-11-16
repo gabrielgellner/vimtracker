@@ -281,6 +281,22 @@ impl Delay {
         self.drive.settle();
     }
 
+    /// Jump to the settings on a quiet row, once its slot has heard nothing from it for its
+    /// reach, which shows that much of its buffer is empty. Its time and `Wow` jump only if they
+    /// read no further back than that, or it's empty: further back is what it played before,
+    /// which a jump would read straight into. Otherwise they glide there, as a time moved while
+    /// it plays does.
+    pub(crate) fn settle_quiet(&mut self) {
+        let reach = self.target_frames + self.wow_frames * f64::from(self.wow.target);
+        if !self.used || reach <= self.reach() {
+            self.settle();
+        } else {
+            self.feedback.settle();
+            self.width.settle();
+            self.drive.settle();
+        }
+    }
+
     /// How long it is now, in frames.
     #[cfg(test)]
     pub(crate) fn frames(&self) -> f64 {
@@ -394,6 +410,10 @@ impl SlotEffect for Delay {
 
     fn settle(&mut self) {
         self.settle();
+    }
+
+    fn settle_quiet(&mut self) {
+        self.settle_quiet();
     }
 
     fn clear(&mut self) {

@@ -140,6 +140,14 @@ macro_rules! memories {
                 }
             }
 
+            /// Jump to what's set rather than gliding there, as a quiet row or preview does, by its
+            /// own `settle_quiet`, so no effect in the pool is left out.
+            pub(crate) fn settle_quiet(&mut self) {
+                match self {
+                    $(Self::$kind(dsp) => SlotEffect::settle_quiet(&mut **dsp),)+
+                }
+            }
+
             /// Move what goes by the frame rather than by what it's done to where it is this many
             /// frames in, as taking its settings does: a reverb's and a plate's wobbles, Clouds'
             /// and Beads' reverbs', and the song's steps Beads follows.
