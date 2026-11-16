@@ -129,14 +129,15 @@ setting under the cursor. It's off until you turn it on: `=` turns it on and `-`
 
 While it's on, the fingers going up or right raise the setting under the cursor and down
 or left lower it, as a level bar fills, wherever `=` and `-` change something, a
-selection included. Shift takes the large step. Where the pointer is doesn't matter, and
-clicks and drags do nothing. The guide to selecting and editing says how far each tick
-goes.
+selection included. Up and down and sideways work the same. Speed alone says how far a
+tick goes, so Shift does nothing, and a list or a toggle goes a choice at a time and stops
+at its ends. Where the pointer is doesn't matter, and clicks and drags do nothing. The
+guide to selecting and editing says how far each tick goes.
 
 The row below, `Direction`, says which way: with the fingers, as it starts, or against
 them. vimtracker asks macOS whether it scrolls naturally as it starts, so the value
 follows the fingers either way. `=`, `-`, `K`, `i` or Enter switch it, and `x` puts it
-back with the fingers. It's kept in `wheel.ron` too.
+back with the fingers; the wheel itself leaves it alone. It's kept in `wheel.ron` too.
 
 kitty and Ghostty send vimtracker the mouse while it's on, so a plain drag no longer
 selects text. Hold Shift and drag to select, in either. Turning it off gives the terminal

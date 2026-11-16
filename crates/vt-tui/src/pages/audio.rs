@@ -19,7 +19,7 @@ use vt_model::selection::Motion;
 
 use crate::input::bindings::Cmd;
 use crate::input::mode::View;
-use crate::input::wheel::Wheel;
+use crate::input::wheel::{Places, Wheel, WheelSetting};
 use crate::overlays::picker::{Item, Pick, Picker};
 use crate::pages::project::editing::page_beside;
 use crate::pages::{Ctx, CtxMut, Outcome, Page};
@@ -323,6 +323,20 @@ impl AudioPage {
             AudioRow::Roto | AudioRow::Wheel | AudioRow::WheelDirection => None,
         };
         (options, current)
+    }
+
+    /// The row's places for the mouse wheel: a list of choices, or off and on. The wheel's own
+    /// `Direction` has none, as the wheel leaves it alone.
+    pub(crate) fn wheel_places(&self, wheel: WheelSetting, services: &Services) -> Option<Places> {
+        match self.row_here() {
+            AudioRow::Roto => Some(Places::switch(services.roto.setting.on)),
+            AudioRow::Wheel => Some(Places::switch(wheel.on)),
+            AudioRow::WheelDirection => None,
+            row @ (AudioRow::Device | AudioRow::Rate | AudioRow::Buffer | AudioRow::Input) => {
+                let (options, current) = self.options(row, services.rate);
+                Some(Places::of(current, options.len()))
+            }
+        }
     }
 
     /// What a key does on the Roto's row, as on the master's `Limiter`: `=` turns it on and `-`
