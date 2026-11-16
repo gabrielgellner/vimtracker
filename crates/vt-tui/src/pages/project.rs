@@ -22,10 +22,8 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::Motion;
 use vt_model::song::{LAUNCH_WORDS, Launch, Song};
 
-use crate::app::App;
 use crate::input::bindings::Cmd;
 use crate::input::mode::View;
-use crate::pages::project::editing::page_beside;
 use crate::pages::{Ctx, CtxMut, Outcome, Page};
 
 /// How far a small and a large step move the tempo, in thousandths of a BPM, and its fine part.
@@ -420,20 +418,12 @@ impl Page for ProjectPage {
     }
 }
 
-impl App {
-    /// `Space 9`: the project page, on whichever of its sub-pages showed last, as a jump.
-    pub(crate) fn show_project(&mut self) {
-        let last = self
-            .recent_views
-            .iter()
-            .find(|view| PROJECT_PAGES.contains(view))
-            .copied()
-            .unwrap_or(View::Project);
-        self.jump_to_view(last);
-    }
-
-    /// `H` and `L` on the Audio sub-page: the sub-page beside this one, or this one at either end.
-    pub(crate) fn show_project_page_beside(&mut self, next: bool) {
-        self.show_view(page_beside(self.modes.view, next));
-    }
+/// `Space 9`'s sub-page of the project page: whichever showed last, from the views most recently
+/// used first.
+pub(crate) fn last_shown(recent: &[View]) -> View {
+    recent
+        .iter()
+        .find(|view| PROJECT_PAGES.contains(view))
+        .copied()
+        .unwrap_or(View::Project)
 }
