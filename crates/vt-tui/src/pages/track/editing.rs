@@ -34,6 +34,7 @@ pub(super) fn write(
             | Control::Accumulator(_)
             | Control::Arpeggio(_)
             | Control::Safe
+            | Control::KeyTrack
             | Control::Lane(..)
     );
     if only_changes && value == view.value {
@@ -395,7 +396,7 @@ fn next_sample(services: &Services, from: u8, up: bool, count: usize) -> u8 {
     found.unwrap_or(from)
 }
 
-/// Switch the track's mute, solo or filter's `Safe`, or the song's limiter.
+/// Switch the track's mute, solo or filter's `Safe` or `Key track`, or the song's limiter.
 pub(super) fn toggle_control(services: &mut Services, control: Control) {
     match control {
         Control::Mute => services.toggle_mute(),
@@ -403,6 +404,10 @@ pub(super) fn toggle_control(services: &mut Services, control: Control) {
         Control::Safe => services.apply(&Action::SetTrackSafe {
             track: services.cursor.track,
             on: !services.page_track().safe,
+        }),
+        Control::KeyTrack => services.apply(&Action::SetTrackKeyTrack {
+            track: services.cursor.track,
+            on: !services.page_track().key_track,
         }),
         _ => services.toggle_solo(),
     }

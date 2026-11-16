@@ -67,6 +67,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
         Control::VoiceMode => "voicemode",
         Control::Limiter => "limiter",
         Control::Safe => "safe",
+        Control::KeyTrack => "keytrack",
         Control::FilterType => "type",
         Control::FilterMode => "mode",
         Control::Mod(_, field) => match field {

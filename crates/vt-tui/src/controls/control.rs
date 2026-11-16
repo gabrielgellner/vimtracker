@@ -105,6 +105,8 @@ pub enum Control {
     FilterMode,
     /// Whether the filter's `Res` stops short of ringing by itself, on or off.
     Safe,
+    /// Whether the filter's cutoff follows the note's pitch, on or off, which a step can lock.
+    KeyTrack,
     /// One of a mod slot's settings, by the slot's place.
     Mod(usize, ModField),
     Accumulator(AccumulatorField),
@@ -172,6 +174,7 @@ impl Control {
             Self::FilterType => "Filter",
             Self::FilterMode => "Mode",
             Self::Safe => "Safe",
+            Self::KeyTrack => "Key track",
             Self::Level => "Level",
             Self::Trim => "Trim",
             Self::Groove => "Groove",
@@ -260,6 +263,7 @@ impl Control {
                 SettingId::VOICE_MODE,
                 u16::from(track.voice_mode.index()) << 8,
             )),
+            Self::KeyTrack => Some((SettingId::KEY_TRACK, u16::from(track.key_track) << 8)),
             // What it plays, which is its type's first where its type doesn't offer the track's.
             Self::FilterMode if track.filter.has_modes() => Some((
                 SettingId::FILTER_MODE,
@@ -354,6 +358,7 @@ impl Control {
             | Self::Reset
             | Self::Glide
             | Self::VoiceMode
+            | Self::KeyTrack
             | Self::Accumulator(_)
             | Self::Arpeggio(_)
             | Self::Lane(..) => track.is_sound(),
@@ -413,6 +418,7 @@ impl Control {
                 | Self::Solo
                 | Self::Limiter
                 | Self::Safe
+                | Self::KeyTrack
                 | Self::FilterType
                 | Self::FilterMode
                 | Self::Groove
