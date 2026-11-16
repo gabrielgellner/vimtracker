@@ -18,7 +18,6 @@ use crate::overlays::help::Help;
 use crate::overlays::picker::{Item, Pick, Picker};
 use crate::overlays::shape::ShapePanel;
 use crate::pages::CtxMut;
-use crate::pages::phrase::PhraseView;
 use crate::pages::project;
 use crate::pages::sample::SampleKey;
 use crate::pages::sample::auditioning::{PADS, pad_key};
@@ -680,12 +679,6 @@ impl App {
                 self.modes.mode = Mode::Help;
             }
             Cmd::Guides => self.show_picker(guides::picker(self.guide_here())),
-            // The phrase view lists its cell's choices. A page that passes `K` back, the sample
-            // page with nothing to show, lists the cursor's phrase cell's, as it always has.
-            Cmd::PickValue => {
-                let outcome = PhraseView::field_picker(&self.services);
-                self.settled(outcome, true);
-            }
             Cmd::Shape => self.open_shape(),
             // The sample page's marks: `'` and `m` wait for a letter, as an operator waits for a
             // motion, and `]'` and `['` are jumps, the jump list's.

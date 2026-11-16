@@ -961,6 +961,33 @@ fn a_track_with_no_sample_says_so() {
 }
 
 #[test]
+fn k_on_a_track_with_no_sample_lists_the_bank_to_choose_one() {
+    let mut song = Song::new(2);
+    let number = song
+        .bank
+        .add(BankEntry::of_file("one.wav", ContentHash(0xA1)))
+        .unwrap();
+    song.tracks[0].machine = Machine::Sampler;
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, _realtime) = connect(Engine::new(RATE, version));
+    let mut app = App::new(song, None, samples, handle, RATE);
+    keys(&mut app, "Space 0");
+    assert!(
+        app.services.status.contains("plays no sample"),
+        "{}",
+        app.services.status
+    );
+    keys(&mut app, "K");
+    assert_eq!(app.modes.mode, Mode::Picker);
+    assert_eq!(app.overlays.picker.as_ref().unwrap().title, "Bank");
+    // Past `Off`, to the bank's first sample.
+    keys(&mut app, "j Enter");
+    assert_eq!(app.song().tracks[0].sample(), number);
+    assert_eq!(app.modes.view, View::Sample);
+}
+
+#[test]
 fn every_key_on_the_page_is_listed() {
     let (app, _realtime) = on_page();
     let rows = app.help_rows();

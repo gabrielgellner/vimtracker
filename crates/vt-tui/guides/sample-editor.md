@@ -11,6 +11,10 @@ writes a new file.
 page's Machine title, or on a step's `SLI` to land on that slice. `C-o` goes back to
 where you came from. `W` and `B` show the next or previous track's sample.
 
+A track that plays no sample shows nothing here: `K` lists the bank, as `:bank`
+does, to choose one for it, or opens the explorer to add a file while the bank is
+empty.
+
 The start is marked in teal, the end in red, the loop in blue, and each slice's
 start in peach, with its number in the ruler above. The rows under the waveform
 are the whole sample, its points, `Snap`, `Sens`, `Steps` and `Warp`, the slice
