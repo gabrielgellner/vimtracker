@@ -7,7 +7,7 @@ use crate::constants::{MAX_LEVEL, UNITY_LEVEL};
 use crate::groove::GROOVE_CHOICES;
 use crate::lane::{LANE_RATES, LENGTH_AS_WRITTEN, RATE_AS_WRITTEN};
 use crate::param::{Choice, Descriptor, Reading, Typing};
-use crate::song::{FILTER_MODE_NAMES, FULL_GATE, PHASE_NAMES};
+use crate::song::{FILTER_MODE_NAMES, FULL_GATE, PHASE_NAMES, VOICE_MODE_NAMES};
 use crate::speed::{SPEED_NAMES, Speed};
 
 mod id;
@@ -359,7 +359,7 @@ const TRACK_GROUPS: [&str; 16] = [
 
 /// The track's own settings added since places were fixed, at the end of the table so none moves
 /// (#718): the track's own after [`TRACK`]'s, in the order they came.
-const LATER_TRACK: [Entry; 1] = [
+const LATER_TRACK: [Entry; 2] = [
     // Whether a synth's oscillators run on from note to note or start again on each, read as a
     // note starts, so a lock on its row sets it for that note (decision 370).
     Entry {
@@ -373,9 +373,22 @@ const LATER_TRACK: [Entry; 1] = [
         default: 0,
         place: Place::Own,
     },
+    // Whether a note ties into one whose gate is still open, read as a note starts, so a lock on
+    // its row sets it for that note (decision 380).
+    Entry {
+        key: "voicemode",
+        name: "Mode",
+        label: Some("VMOD"),
+        kind: Kind::Stepped {
+            choices: &VOICE_MODE_NAMES,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
 ];
 /// What each of [`LATER_TRACK`] is listed with.
-const LATER_TRACK_GROUPS: [&str; 1] = ["Machine"];
+const LATER_TRACK_GROUPS: [&str; 2] = ["Machine", "Machine"];
 /// How many of the track's own there are, [`TRACK`]'s and [`LATER_TRACK`]'s.
 const TRACK_SETTINGS: usize = TRACK.len() + LATER_TRACK.len();
 

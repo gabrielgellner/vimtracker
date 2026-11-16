@@ -33,7 +33,7 @@ use crate::macros::{MACROS, Macro};
 use crate::modulation::{MOD_SLOTS, ModSlot, default_mod};
 use crate::ron_file;
 use crate::settings::{Owner, SettingId};
-use crate::song::{FilterMode, FilterType, Machine, Phase, Track};
+use crate::song::{FilterMode, FilterType, Machine, Phase, Track, VoiceMode};
 
 /// The format presets are written in. A preset from a later format isn't read; one from this
 /// format missing a setting takes the setting's default, so presets outlive the builds that made
@@ -244,6 +244,8 @@ pub struct Sound {
     pub velocity_delta: u8,
     #[serde(default, skip_serializing_if = "Phase::is_free")]
     pub phase: Phase,
+    #[serde(default, skip_serializing_if = "VoiceMode::is_mono")]
+    pub voice_mode: VoiceMode,
     /// The effects in its slots, in order.
     #[serde(default, skip_serializing_if = "no_inserts")]
     pub inserts: [Insert; INSERTS],
@@ -297,6 +299,7 @@ copied!(
     gate_length,
     velocity_delta,
     phase,
+    voice_mode,
     inserts,
 );
 

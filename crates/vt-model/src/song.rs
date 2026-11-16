@@ -32,7 +32,7 @@ use crate::view::ViewState;
 pub use crate::filter::{FILTER_MODE_NAMES, FilterMode, FilterType};
 pub use crate::machine::{
     ACID_GATE, DEFAULT_ACCENT, FULL_GATE, Machine, PHASE_NAMES, Phase, Role, SIX_OP_PATCHES,
-    SynthVoice,
+    SynthVoice, VOICE_MODE_NAMES, VoiceMode,
 };
 pub use crate::phrase::{Lane, Phrase, Visit};
 
@@ -259,6 +259,9 @@ pub struct Track {
     /// Whether a synth's oscillators run on from note to note or start again on each.
     #[serde(default, skip_serializing_if = "Phase::is_free")]
     pub phase: Phase,
+    /// How its notes join: each struck, or tied into one whose gate is still open.
+    #[serde(default, skip_serializing_if = "VoiceMode::is_mono")]
+    pub voice_mode: VoiceMode,
     /// How its `ACU`s move its notes: how far, what happens at the limits, and when they start
     /// again.
     #[serde(default, skip_serializing_if = "is_default_accumulation")]
@@ -693,6 +696,7 @@ impl Default for Track {
             reset: None,
             glide: 0,
             phase: Phase::Free,
+            voice_mode: VoiceMode::Mono,
             accumulation: Accumulation::default(),
             arpeggio: Arpeggio::default(),
             lanes: [LaneMove::default(); FX_SLOTS],
@@ -1453,6 +1457,29 @@ mod tests {
         assert_eq!(
             track.value_of(SettingId::PHASE) >> 8,
             u16::from(Phase::Reset.index())
+        );
+    }
+
+    #[test]
+    fn a_tracks_voice_mode_saves_only_at_legato_and_a_sound_preset_keeps_it() {
+        let track: Track = ron::from_str("(mute: false, solo: false)").unwrap();
+        assert_eq!(track.voice_mode, VoiceMode::Mono);
+        assert!(!ron::to_string(&track).unwrap().contains("voice_mode"));
+        let track = Track {
+            voice_mode: VoiceMode::Legato,
+            ..Track::default()
+        };
+        let text = ron::to_string(&track).unwrap();
+        assert!(text.contains("voice_mode:Legato"), "{text}");
+        assert_eq!(
+            ron::from_str::<Track>(&text).unwrap().voice_mode,
+            VoiceMode::Legato
+        );
+        let preset = crate::preset::SoundPreset::of(&track, None);
+        assert_eq!(preset.sound.voice_mode, VoiceMode::Legato);
+        assert_eq!(
+            track.value_of(SettingId::VOICE_MODE) >> 8,
+            u16::from(VoiceMode::Legato.index())
         );
     }
 

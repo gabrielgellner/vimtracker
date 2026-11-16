@@ -29,7 +29,7 @@ use crate::settings::SettingId;
 use crate::shape::{Shape, ShapeColumn, Source};
 use crate::song::{
     ChainEntry, FilterMode, FilterType, Lane, Launch, Machine, Phase, Phrase, Repeat, Role,
-    Section, SectionStart, Song, Track,
+    Section, SectionStart, Song, Track, VoiceMode,
 };
 use crate::speed::Speed;
 use crate::step::{FxSlot, Gate, Mark, Note, Step};
@@ -384,6 +384,11 @@ pub enum Action {
     SetTrackPhase {
         track: usize,
         phase: Phase,
+    },
+    /// Set how a track's notes join: each struck, or tied into one whose gate is still open.
+    SetTrackVoiceMode {
+        track: usize,
+        mode: VoiceMode,
     },
     /// Set how many of the song's steps a track's chain plays before starting again, from 1 to
     /// `MAX_TRACK_RESET`, or `None` to play on.
@@ -795,6 +800,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
         | Action::SetTrackGateLength { .. }
         | Action::SetTrackSpeed { .. }
         | Action::SetTrackPhase { .. }
+        | Action::SetTrackVoiceMode { .. }
         | Action::SetTrackReset { .. }
         | Action::SetTrackGlide { .. }
         | Action::SetTrackSafe { .. }

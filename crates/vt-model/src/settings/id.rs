@@ -172,6 +172,9 @@ impl SettingId {
     /// Whether a synth's oscillators start again on each note: a place in
     /// [`Phase::ALL`](crate::song::Phase::ALL).
     pub const PHASE: Self = Self(LATER_TRACK_START as u16);
+    /// How a track's notes join: a place in
+    /// [`VoiceMode::ALL`](crate::song::VoiceMode::ALL).
+    pub const VOICE_MODE: Self = Self(LATER_TRACK_START as u16 + 1);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.

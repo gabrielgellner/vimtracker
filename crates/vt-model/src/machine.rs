@@ -603,6 +603,60 @@ impl Phase {
 
 crate::listed::listed!(Phase: meaning);
 
+/// How a track's notes join, its `Mode` (decision 380). Each mode keeps to its own behaviour:
+/// `Legato` adds one rule to `Mono` and takes nothing else from anywhere.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
+)]
+pub enum VoiceMode {
+    /// One voice, each note struck: a holding synth carries its voice on, by `Reset`'s dip or
+    /// from where its level is, and anything else starts under the old note's fade.
+    #[default]
+    Mono,
+    /// As `Mono`, but a note arriving while the one sounding still has its gate open, on the same
+    /// synth or sample, ties into it as `HLD` ties: its pitch moves, by `Glide` if set, and its
+    /// velocity is taken, with nothing struck again.
+    Legato,
+}
+
+/// What each voice mode is called, in order.
+pub const VOICE_MODE_NAMES: [&str; 2] = ["Mono", "Legato"];
+
+impl VoiceMode {
+    /// Both, in order.
+    pub const ALL: [Self; 2] = [Self::Mono, Self::Legato];
+
+    /// Its place in [`VoiceMode::ALL`].
+    pub const fn index(self) -> u8 {
+        self as u8
+    }
+
+    /// The one at a place in [`VoiceMode::ALL`], the last for one past it.
+    pub fn from_index(index: u8) -> Self {
+        Self::ALL[usize::from(index).min(Self::ALL.len() - 1)]
+    }
+
+    /// The name on screen.
+    pub const fn name(self) -> &'static str {
+        VOICE_MODE_NAMES[self as usize]
+    }
+
+    /// What it does, for a list to choose from.
+    pub(crate) const fn meaning(self) -> &'static str {
+        match self {
+            Self::Mono => "each note strikes",
+            Self::Legato => "a note ties into one whose gate is open",
+        }
+    }
+
+    /// Whether it's `Mono`, as a track starts, which a song doesn't save.
+    pub(crate) fn is_mono(&self) -> bool {
+        *self == Self::Mono
+    }
+}
+
+crate::listed::listed!(VoiceMode: meaning);
+
 /// One synth voice, described once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct VoiceSpec {
