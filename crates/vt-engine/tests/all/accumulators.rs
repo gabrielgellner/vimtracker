@@ -31,7 +31,7 @@ const C_MAJOR: Scale = Scale {
 fn song(rows: &[&str], accumulation: Accumulation) -> Song {
     let mut song = Song::new(1);
     song.limiter = false;
-    song.scale = C_MAJOR;
+    song.saved_scale = C_MAJOR;
     song.sample_on(0, "ramp");
     let track = &mut song.tracks[0];
     track.mods[0].adsr.attack_ms = 0;
@@ -211,7 +211,7 @@ fn a_negative_amount_goes_down_to_the_lower_limit() {
 #[test]
 fn degrees_with_the_scale_on_and_semitones_with_it_off() {
     let mut chromatic = song(&["C-3 -- acu:01"], Accumulation::default());
-    chromatic.scale.on = false;
+    chromatic.saved_scale.on = false;
     assert_eq!(notes(&chromatic, 4), named("C C# D D#"));
     // Two degrees a time in C major goes through the thirds.
     let thirds = song(&["C-3 -- acu:02"], Accumulation::default());
@@ -248,7 +248,7 @@ fn a_row_skipped_by_a_condition_or_a_chance_doesnt_add() {
     assert_eq!(notes(&condition, 7), named("C . D . E . F"));
     // With a chance, each note that plays is one more than the one before.
     let mut chance = song(&["C-3 -- cha:80 acu:01"], Accumulation::default());
-    chance.scale.on = false;
+    chance.saved_scale.on = false;
     let heard: Vec<i32> = notes(&chance, 32).into_iter().flatten().collect();
     assert!(heard.len() > 4 && heard.len() < 28, "{heard:?}");
     let expected: Vec<i32> = (0..heard.len() as i32)

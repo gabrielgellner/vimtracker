@@ -26,6 +26,8 @@
 //! from Melbourne Instruments' API documents and its MIT-licensed Ableton, Bitwig and Logic
 //! scripts, whose notice is in this crate's `NOTICE`.
 
+#![warn(unreachable_pub)]
+
 pub mod bytes;
 pub mod cc;
 pub mod colour;

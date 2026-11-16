@@ -148,11 +148,13 @@ tests' signals in `vt-engine`'s `src/dsp/signals.rs`. One file's tests run with
   it, so an error names the file. A new file the program writes uses its `write` or `write_atomic`, which write a temporary file beside it and rename it
   over, so a crash mid-write leaves the file before whole, rather than a bare `fs::write`.
 
-**Visibility.** In `vt-tui` and `vt-engine`, make new code `pub(crate)` unless another crate, a
-test, an example or `main.rs` uses it. Both crates' `lib.rs` warn on `unreachable_pub`, which says
+**Visibility.** In `vt-tui`, `vt-engine` and `vt-roto`, make new code `pub(crate)` unless another
+crate, a test, an example or `main.rs` uses it. Their `lib.rs` warn on `unreachable_pub`, which says
 when a `pub` can't be reached from outside, and that keeps the dead-code lint working. In
 `vt-engine`, `dsp` is `pub(crate)`: reach it from outside only through `pictures` or `parts`.
-`vt-model` and `vt-roto` keep their modules `pub`, as the other crates use nearly all of them.
+`vt-roto` keeps its modules `pub`, so the lint can't see an item in one that no other crate names:
+make it `pub(crate)` yourself. `vt-model` keeps its modules `pub`, as the other crates use nearly
+all of them.
 
 A new effect, voice, generator or mod type has a checklist of its own,
 [docs/designs/adding-a-device.md](docs/designs/adding-a-device.md): every place it takes, what the
@@ -191,7 +193,7 @@ why, with the before and after the bless prints.
 The lints every crate warns on are in `Cargo.toml`'s `[workspace.lints]`, and each crate takes
 them with `[lints] workspace = true`, so they reach its tests, examples and binaries as well as
 its library. Add a lint for all four crates there, not as an attribute in a `lib.rs`. A crate's
-own extra stays in its `lib.rs`: `unreachable_pub` in `vt-engine` and `vt-tui`. Where a lint is
+own extra stays in its `lib.rs`: `unreachable_pub` in `vt-engine`, `vt-tui` and `vt-roto`. Where a lint is
 wrong for one function, as `float_cmp` is for a test that two renders match bit for bit, allow it
 there with a reason: `#[allow(clippy::float_cmp, reason = "silence is exact zeros")]`.
 

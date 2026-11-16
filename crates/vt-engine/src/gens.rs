@@ -698,7 +698,7 @@ mod tests {
 
     fn acid_column(song: &Song) -> ShapeColumn {
         ShapeColumn::Note {
-            scale: song.scale,
+            scale: song.saved_scale,
             writes: Some(0x64),
         }
     }
@@ -998,7 +998,7 @@ mod tests {
         let real = Duration::from_secs_f64(frames as f64 / f64::from(RATE));
         let steps = vec![Step::default(); MAX_PHRASE_STEPS];
         let column = ShapeColumn::Note {
-            scale: song.scale,
+            scale: song.saved_scale,
             writes: Some(0x64),
         };
         let mut cells = vec![GenCell::Under; MAX_PHRASE_STEPS];

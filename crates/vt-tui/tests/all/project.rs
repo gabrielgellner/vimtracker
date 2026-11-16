@@ -139,7 +139,7 @@ fn a_plain_write_keeps_live_mutes_and_solos() {
     tap(&mut app, " m");
     command(&mut app, "w");
     let saved = vt_model::project::load_song(&folder).unwrap();
-    assert!(saved.tracks[0].mute);
+    assert!(saved.tracks[0].saved_mute);
     std::fs::remove_dir_all(&folder).unwrap();
 }
 
@@ -1404,7 +1404,7 @@ fn the_project_page_has_the_songs_settings_then_this_machines_audio_on_h_and_l()
 fn a_read_only_project() -> (App, Realtime, PathBuf) {
     let path = folder();
     let song = Song {
-        read_only: true,
+        saved_read_only: true,
         ..Song::new(2)
     };
     vt_model::project::save_song(&path, &song).unwrap();
@@ -1462,7 +1462,7 @@ fn w_refuses_a_read_only_song_and_w_bang_writes_over_it_keeping_it_read_only() {
     );
     let saved = load_song(&path).unwrap();
     assert_eq!(saved.tracks[0].phrases[&0].steps()[0].note, Note::On(60));
-    assert!(saved.read_only, ":w! keeps it parked");
+    assert!(saved.saved_read_only, ":w! keeps it parked");
     assert!(app.services.live.read_only);
     std::fs::remove_dir_all(&path).unwrap();
 }
@@ -1480,7 +1480,7 @@ fn w_to_a_new_folder_saves_a_copy_that_isnt_read_only_to_carry_on_in() {
     assert_eq!(app.services.folder.as_deref(), Some(copy.as_path()));
     assert!(!app.services.live.read_only, "the copy is the user's own");
     assert!(!app.window_title().contains("[RO]"));
-    assert!(!load_song(&copy).unwrap().read_only);
+    assert!(!load_song(&copy).unwrap().saved_read_only);
     assert!(
         !std::fs::read_to_string(copy.join("song.ron"))
             .unwrap()
@@ -1553,10 +1553,13 @@ fn set_readonly_and_readwrite_switch_it_and_the_status_line_and_title_say_ro() {
     command(&mut app, "set rw");
     command(&mut app, "w");
     assert!(!app.services.dirty, "{}", app.services.status);
-    assert!(!load_song(&path).unwrap().read_only);
+    assert!(!load_song(&path).unwrap().saved_read_only);
     command(&mut app, "set ro");
     command(&mut app, "w!");
-    assert!(load_song(&path).unwrap().read_only, "saved with the song");
+    assert!(
+        load_song(&path).unwrap().saved_read_only,
+        "saved with the song"
+    );
     // Switching it to what it is already changes nothing.
     command(&mut app, "set ro");
     assert!(!app.services.dirty);
@@ -1611,7 +1614,7 @@ fn a_read_only_song_autosaves_and_restoring_never_writes_over_it() {
         before,
         "and so does :w"
     );
-    assert!(load_song(&path).unwrap().read_only);
+    assert!(load_song(&path).unwrap().saved_read_only);
     std::fs::remove_dir_all(&path).unwrap();
 }
 

@@ -275,7 +275,7 @@ fn generators(dump: &mut Dump) {
                 song.tracks[track].phrases.insert(0, phrase);
             }
             if let ShapeColumn::Note { scale, .. } = column {
-                song.scale = scale;
+                song.saved_scale = scale;
             }
         });
         for fill in column.fills() {

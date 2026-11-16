@@ -507,7 +507,7 @@ fn a_moving_generator_on_notes_renders_through_the_scale_it_was_given() {
         ..major
     };
     let mut song = Song::new(1);
-    song.scale = major;
+    song.saved_scale = major;
     song.tracks[0].machine = Machine::Plaits(SynthVoice::VirtualAnalog);
     let rests = Phrase::from_steps(vec![Step::default(); 16]);
     song.tracks[0].phrases.insert(0, Arc::new(rests));

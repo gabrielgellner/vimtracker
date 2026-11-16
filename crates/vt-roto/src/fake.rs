@@ -10,8 +10,8 @@ use std::sync::{Arc, Mutex};
 use crate::bytes::{Label, ParamHash, PluginHash};
 use crate::cc::{self, ControlEvent};
 use crate::serial::{
-    self, Code, MAX_PLUGIN_SETUPS, MIDI_SETUPS, Mode, Notice, PluginKnobConfig, PluginSwitchConfig,
-    Reply, Request, StoredKind, StoredPlugin,
+    self, Code, MAX_PLUGIN_SETUPS, MIDI_SETUPS, Mode, PluginKnobConfig, PluginSwitchConfig, Reply,
+    Request, StoredKind, StoredPlugin,
 };
 use crate::store::Serial;
 use crate::sysex::{
@@ -21,7 +21,7 @@ use crate::sysex::{
 use crate::transport::{Deliver, LinkError, MidiSend, Ports};
 
 /// What the fake says its firmware is, unless told otherwise.
-pub fn default_firmware() -> FirmwareVersion {
+pub(crate) fn default_firmware() -> FirmwareVersion {
     FirmwareVersion {
         major: 3,
         minor: 3,
@@ -282,7 +282,7 @@ impl FakeRoto {
     }
 
     /// The message that says which mode it's in, as it sends when MODE is pressed.
-    pub fn mode_message(&self) -> FromRoto {
+    pub(crate) fn mode_message(&self) -> FromRoto {
         match self.mode {
             Mode::Plugin => FromRoto::SetPluginMode,
             Mode::Mix | Mode::Midi => FromRoto::SetMixAllTracksMode {
@@ -647,11 +647,6 @@ impl FakeRoto {
                 }
             }
         }
-    }
-
-    /// A PLUGIN setup chosen on the Roto, as the serial notice it sends.
-    pub fn select_plugin(&mut self, hash: Option<PluginHash>) -> Vec<u8> {
-        Notice::PluginSelected(hash).encode()
     }
 }
 

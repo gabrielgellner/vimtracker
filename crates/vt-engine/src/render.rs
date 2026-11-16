@@ -58,8 +58,8 @@ pub fn render_loop(version: Arc<Published>, rate: u32, options: RenderOptions) -
 
     let mut engine = Engine::new(rate, version);
     for (index, track) in song.tracks.iter().enumerate() {
-        engine.set_mute(index, track.mute);
-        engine.set_solo(index, track.solo);
+        engine.set_mute(index, track.saved_mute);
+        engine.set_solo(index, track.saved_solo);
     }
     engine.play_from(0);
     let mut discard = vec![0.0; warm * 2];
@@ -87,7 +87,7 @@ pub struct Stem {
 pub(crate) fn stem_tracks(song: &Song, each_track: bool) -> Vec<usize> {
     let sounds = song.sound_tracks();
     let mut tracks: Vec<usize> = (0..sounds)
-        .filter(|track| song.heard(*track))
+        .filter(|track| song.heard_as_saved(*track))
         .map(|track| match song.group_track_of(track) {
             Some(group) if !each_track => group,
             _ => track,
@@ -115,12 +115,12 @@ pub fn render_stems(version: &Published, rate: u32, options: RenderOptions) -> V
             // Only a track this changes is written to, as writing to one copies it.
             for other in 0..alone.tracks.len() {
                 let track = &alone.tracks[other];
-                let mute = track.mute && other != index && Some(other) != group;
+                let mute = track.saved_mute && other != index && Some(other) != group;
                 let solo = other == index;
-                if (mute, solo) != (track.mute, track.solo) {
+                if (mute, solo) != (track.saved_mute, track.saved_solo) {
                     let track = &mut alone.tracks[other];
-                    track.mute = mute;
-                    track.solo = solo;
+                    track.saved_mute = mute;
+                    track.saved_solo = solo;
                 }
             }
             let alone = Published::new(Arc::new(alone), Arc::clone(&version.samples));

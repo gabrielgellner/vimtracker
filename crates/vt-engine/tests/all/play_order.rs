@@ -65,7 +65,7 @@ fn flat_pool() -> Arc<SamplePool> {
 fn song(rows: &[&str], order: Order) -> Song {
     let mut song = Song::new(1);
     song.limiter = false;
-    song.scale = Scale {
+    song.saved_scale = Scale {
         on: true,
         root: 0,
         kind: ScaleKind::Major,

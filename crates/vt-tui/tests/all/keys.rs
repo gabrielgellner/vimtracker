@@ -391,14 +391,14 @@ fn a_save_while_a_mute_key_is_down_keeps_it_as_it_was() {
     app.key(Key::char('m'), now);
     command(&mut app, "w");
     let saved = vt_model::project::load_song(&path).unwrap();
-    assert!(!saved.tracks[0].mute, "it may yet go back");
+    assert!(!saved.tracks[0].saved_mute, "it may yet go back");
     assert!(!app.services.dirty);
     // Let go as a tap, it stays muted, and the song has changed since the save.
     app.key_released(Key::char('m'), now + Duration::from_millis(100));
     assert!(app.services.live.levels[0].mute);
     assert!(app.services.dirty);
     command(&mut app, "w");
-    assert!(vt_model::project::load_song(&path).unwrap().tracks[0].mute);
+    assert!(vt_model::project::load_song(&path).unwrap().tracks[0].saved_mute);
     std::fs::remove_dir_all(&path).unwrap();
 }
 
