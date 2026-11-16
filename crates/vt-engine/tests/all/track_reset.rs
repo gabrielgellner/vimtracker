@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use vt_engine::engine::Engine;
+use vt_model::constants::CUT_FADE_FRAMES;
 use vt_model::groove::GrooveId;
 use vt_model::song::{Chain, ChainEntry, Launch, Phrase, Section, Song};
 use vt_model::speed::Speed;
@@ -227,7 +228,8 @@ fn a_reset_is_a_chain_start_so_a_first_pass_condition_plays_again() {
     let mut first = song(&[&["C-3 40 cnd:07", "C-3 10", "C-3 10"]]);
     first.tracks[0].reset = Some(8);
     let out = played(&first, 24);
-    let level = |step: usize| out[(step * STEP + 100) * 2];
+    // Once the step before's note has faded under this one's.
+    let level = |step: usize| out[(step * STEP + CUT_FADE_FRAMES as usize + 100) * 2];
     let loudest = (0..24).map(level).fold(0.0, f32::max);
     let loud: Vec<usize> = (0..24)
         .filter(|step| level(*step) > loudest * 0.75)

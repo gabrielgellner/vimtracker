@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use vt_model::constants::CUT_FADE_FRAMES;
 use vt_model::lfo::{Lfo, Rate, Shape};
 use vt_model::modulation::{ModSlot, default_mod};
 use vt_model::settings::{SHORTEST_GATE, SettingId};
@@ -351,8 +352,9 @@ fn a_moved_length_stays_between_1_and_100_percent() {
         "{}",
         heard_for(&out, 0)
     );
+    // The long note before it holds into it, and fades under it for as long as a cut does.
     assert!(
-        heard_for(&out, 3).abs_diff(shortest) < NEAR,
+        heard_for(&out, 3).abs_diff(shortest.max(CUT_FADE_FRAMES as usize)) < NEAR,
         "{}",
         heard_for(&out, 3)
     );

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use vt_engine::engine::{Engine, Transport};
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
+use vt_model::constants::CUT_FADE_FRAMES;
 use vt_model::insert::{Distort, DistortType, INSERTS, Insert};
 use vt_model::samples::SamplePool;
 use vt_model::song::{Song, level_gain};
@@ -210,10 +211,10 @@ fn del_delays_the_note_by_groove_units() {
 fn kil_cuts_after_groove_units_counted_from_a_delayed_start() {
     let out = render(song(&["C-3 -- kil:03 --- ---"]), flat(0.5), STEP);
     assert_ne!(out[UNIT * 3 - 1][0], 0.0);
-    assert_eq!(out[UNIT * 3 + 100][0], 0.0);
+    assert_eq!(out[UNIT * 3 + CUT_FADE_FRAMES as usize + 8][0], 0.0);
     let out = render(song(&["C-3 -- del:02 kil:01 ---"]), flat(0.5), STEP);
     assert_ne!(out[UNIT * 2 + 100][0], 0.0);
-    assert_eq!(out[UNIT * 3 + 100][0], 0.0);
+    assert_eq!(out[UNIT * 3 + CUT_FADE_FRAMES as usize + 8][0], 0.0);
 }
 
 #[test]
@@ -224,7 +225,7 @@ fn kil_on_a_step_with_no_note_cuts_the_playing_voice() {
         STEP * 2,
     );
     assert_ne!(out[STEP + 500][0], 0.0);
-    assert_eq!(out[STEP + UNIT + 100][0], 0.0);
+    assert_eq!(out[STEP + UNIT + CUT_FADE_FRAMES as usize + 8][0], 0.0);
 }
 
 #[test]

@@ -139,7 +139,7 @@ fn with_glide_off_a_tie_jumps_as_before() {
         2,
     );
     // Past the note before's fade, which a new note's start cuts it with.
-    assert!((semitones_at(&struck, STEP + 200) - 12.0).abs() < 0.01);
+    assert!((semitones_at(&struck, STEP + 300) - 12.0).abs() < 0.01);
 }
 
 #[test]
