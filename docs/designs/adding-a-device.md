@@ -174,16 +174,16 @@ every fill writes on every column in `renders.txt`: write its lines with
    envelope, its mode's label, polarity, title, fields and grid), any `ModField` it has that no
    other type has, and its arms in `bounds`, `field` and `set_field`. The compiler asks for the row
    and the `Mode` arms (`modes` too); the other fields have a catch-all. A new `ModField` also
-   takes its arms in `name` and `units`, which the compiler asks for, and in `choices` if it's a
-   list. A setting macros and modulation move goes in `MOD_OWN_FIELDS` and the registry's
+   takes its arms in `name` and `ModSlot::reading`, which the compiler asks for, and in
+   `choices` if it's a list; `ModSlot::described` turns its reading into its bounds, steps,
+   typing and refusals, and needs an arm only for a reading no setting has yet. A setting macros and modulation move goes in `MOD_OWN_FIELDS` and the registry's
    `settings/mods.rs`.
 3. **Its running**, in `vt-engine/src/track_state/mods.rs`. The compiler asks for its arms there.
 4. **The Roto**: its layout and `BY_MOD` row in `roto/layouts.rs`. The compiler asks for the row.
 5. **The Mod page**, in `vt-tui/src/pages/track/`: its picture in `pictures.rs`'s `mod_panels`,
    whose match the compiler asks for (`continue` for none). Its cells, `K` lists, steps and typing
-   come from step 2 (#833): `view.rs`'s `mod_view` builds each setting by its `ModField::units`,
-   so it changes only for units no setting has yet, whose arm the compiler asks for, or for a mode
-   whose list is titled other than a curve. `pickers.rs` changes only for a setting picked from a
+   come from step 2: `view.rs`'s `mod_view` fills each from `ModSlot::described`, so it changes
+   only for a mode whose list is titled other than a curve. `pickers.rs` changes only for a setting picked from a
    list of its own, as `Type`, `Rate` and `Fade` are.
 6. **The guide**: `vt-tui/guides/track-mod.md`.
 

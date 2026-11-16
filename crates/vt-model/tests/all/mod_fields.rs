@@ -7,8 +7,9 @@ use vt_model::constants::MAX_LEVEL;
 use vt_model::envelope::{Adsr, Ahd, Curve, Drum, Hold, Lpg};
 use vt_model::lfo::{Fade, Lfo, LfoMode, Rate, Shape};
 use vt_model::modulation::{
-    MOD_LOCKED_FIELDS, MOD_OWN_FIELDS, MOD_SPECS, ModField, ModKind, ModSlot, ModUnits, Polarity,
+    MOD_LOCKED_FIELDS, MOD_OWN_FIELDS, MOD_SPECS, ModField, ModKind, ModSlot, Polarity,
 };
+use vt_model::param::Reading;
 use vt_model::settings::{MOD_OWN_SETTINGS, SettingId};
 use vt_model::song::Track;
 use vt_model::steps::{Loop, StepRate, Steps, StepsMode};
@@ -403,7 +404,7 @@ fn each_setting_a_type_has_shows_as_text_and_a_lists_choices_are_its_values() {
         let slot = distinct(kind);
         for field in FIELDS.into_iter().filter(|field| field.on(kind)) {
             let text = slot.text(field);
-            let listed = field.units() == ModUnits::Listed;
+            let listed = slot.reading(field) == Reading::Listed;
             match field {
                 // Where it goes is its track's to name and list.
                 ModField::Destination => assert_eq!(text, None),
