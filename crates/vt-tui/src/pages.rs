@@ -415,6 +415,10 @@ impl App {
                     self.overlays.mapping = None;
                     self.modes.mode = Mode::Normal;
                 }
+                Mode::Shape => {
+                    self.overlays.shape = None;
+                    self.modes.mode = Mode::Normal;
+                }
                 _ => {
                     self.overlays.picker = None;
                     // A shape waiting for its command is given up.

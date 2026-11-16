@@ -64,7 +64,7 @@ fn drawn(app: &App) -> String {
     let backend = ratatui::backend::TestBackend::new(52, 12);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::overlays::shape::draw::draw(frame, frame.area(), app, &panel))
+        .draw(|frame| vt_tui::overlays::shape::draw::draw(frame, frame.area(), &app.ctx(), &panel))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..12)

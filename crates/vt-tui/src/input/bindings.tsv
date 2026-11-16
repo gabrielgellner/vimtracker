@@ -965,3 +965,25 @@ Mapping	~	InMapping(Swap)	Swap the range's ends
 Mapping	i	InMapping(Type)	Type it, an end in hex and a bend from -100 to 100
 Mapping	d	InMapping(Delete)	Twice: take the setting off the macro
 Mapping	u	InMapping(Undo)	Undo
+Shape	Esc	InShape(Cancel)	Close, putting back what was there
+Shape	Enter	InShape(Keep)	Keep it, as plain values
+Shape	L	InShape(KeepLive)	Keep it live, as a generator
+Shape	j	InShape(Down)	The next setting
+Shape	Down	InShape(Down)	The next setting
+Shape	k	InShape(Up)	The setting before
+Shape	Up	InShape(Up)	The setting before
+Shape	=	InShape(Increase)	Increase the setting
+Shape	D-l	InShape(Increase)	Increase the setting
+Shape	-	InShape(Decrease)	Decrease the setting
+Shape	D-h	InShape(Decrease)	Decrease the setting
+Shape	+	InShape(IncreaseLarge)	Increase the setting a large step
+Shape	D-k	InShape(IncreaseLarge)	Increase the setting a large step
+Shape	_	InShape(DecreaseLarge)	Decrease the setting a large step
+Shape	D-j	InShape(DecreaseLarge)	Decrease the setting a large step
+Shape	x	InShape(Reset)	The setting back to what it started as
+Shape	~	InShape(Swap)	Swap the ends, or reverse a list
+Shape	r	InShape(Roll)	Roll it again
+Shape	K	InShape(Choose)	Choose from a list
+Shape	i	InShape(Type)	Type the setting
+Shape	Tab	InShape(Play)	Play, or pause in place
+Shape	S-Tab	InShape(PlayFromStart)	Play from the start

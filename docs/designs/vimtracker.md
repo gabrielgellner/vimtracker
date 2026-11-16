@@ -944,7 +944,12 @@ setting's row and field for `App` to move the cursor to, and `Do` with `Tab`'s a
 (`MappingView`) changes the macro's mappings through the services itself, answers `Do(Undo)`
 for `u`, after which `App::mapping_key` keeps it on a mapping or closes it, and `Close` when
 `dd` leaves the macro holding nothing; opening it, and `M`, `gd` and `:macro`, are the track
-page's still. The others still read their keys in `App`'s methods.
+page's still. The shape panel (`ShapePanel`) previews, keeps and puts back the song through
+the services itself, answers `Open` with a row's choices, `Do` for `Tab` and `Shift-Tab`, which
+play even while a value is typed, and `Close` once it's kept or put back; `App::shape_key`
+remembers a kept shape for `.`, the one thing of `App`'s it needs. Opening it, `gl` and `.`'s
+shaping again are the grammar's and stay on `App`. The explorer still reads its keys in `App`'s
+methods.
 
 A key goes, in this order, to the first that takes it:
 

@@ -418,7 +418,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let pending = if app.pending().is_empty()
         || matches!(
             app.modes.mode,
-            Mode::Picker | Mode::Command | Mode::Jump | Mode::Mapping
+            Mode::Picker | Mode::Command | Mode::Jump | Mode::Mapping | Mode::Shape
         ) {
         String::new()
     } else {
