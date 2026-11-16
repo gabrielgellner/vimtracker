@@ -399,7 +399,7 @@ impl Engine {
         };
         if !row {
             if !self.tracks[index].sounding() {
-                self.tracks[index].settle();
+                self.tracks[index].settle(self.rate);
             }
             return;
         }
@@ -408,7 +408,7 @@ impl Engine {
             self.start_modulation(index);
         }
         if !self.tracks[index].sounding() {
-            self.tracks[index].settle();
+            self.tracks[index].settle(self.rate);
         }
         let start_frames = fx
             .delay

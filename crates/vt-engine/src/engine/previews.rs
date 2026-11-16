@@ -126,7 +126,7 @@ impl Engine {
         let previewing = self.previews.on_track(&sounding, track);
         let state = &mut self.tracks[track];
         if !state.sounding() && !previewing {
-            state.settle();
+            state.settle(self.rate);
         }
         self.previews
             .start(track, on, state.synth_settings(), self.rate);
@@ -179,7 +179,7 @@ impl Engine {
             return;
         };
         if !state.sounding() && !previewing {
-            state.settle();
+            state.settle(self.rate);
         }
         let on = NoteOn {
             release_after,
@@ -314,7 +314,7 @@ impl Engine {
             };
             let track = &mut self.tracks[index];
             if !track.sounding() {
-                track.settle();
+                track.settle(self.rate);
             }
             let last_note = track.last_note;
             track.start(on, self.rate);
