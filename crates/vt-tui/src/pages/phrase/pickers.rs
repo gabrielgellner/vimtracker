@@ -1,8 +1,6 @@
 //! `K` on a phrase cell: the lists of what its gate, its length and its FX columns can hold, and
 //! the orders the phrase's rows can play in, which `:order` lists. Each is built from the
 //! [`Services`] and given back to be shown; what a choice does is the picker's, in `picking.rs`.
-//! `App::open_field_picker` stays `App`'s, as a sample or slice lock's list is built from the
-//! bank's, which is `App`'s.
 
 use vt_model::accumulator::{MOST_DEGREES, amount, amount_text, amount_value};
 use vt_model::action::Action;
@@ -13,7 +11,6 @@ use vt_model::settings::{SettingId, gate_percent};
 use vt_model::song::FULL_GATE;
 use vt_model::step::{FxCommand, GateKind};
 
-use crate::app::App;
 use crate::overlays::command::parse::Line;
 use crate::overlays::picker::{Item, Pick, Picker};
 use crate::pages::Outcome;
@@ -199,6 +196,70 @@ impl PhraseView {
             Picker::new("This phrase's order", items).opened_on(at),
         ))
     }
+
+    /// `K`: choose the field under the cursor from a list, in the columns that are one.
+    pub(crate) fn field_picker(services: &Services) -> Outcome {
+        let command = |slot| services.current_slot(slot).and_then(|s| s.command);
+        let picker = match services.cursor.field {
+            // A condition's value is one of a list, so `K` on it lists them.
+            Field::FxValue(slot) if command(slot) == Some(FxCommand::Cnd) => {
+                Self::condition_picker(services, slot)
+            }
+            // So is an amount, as a signed byte is hard to type.
+            Field::FxValue(slot) if command(slot) == Some(FxCommand::Acu) => {
+                Self::amount_picker(services, slot)
+            }
+            // And a sample lock's is one of the bank's.
+            Field::FxValue(slot) if command(slot) == Some(FxCommand::Set(SettingId::SAMPLE)) => {
+                Self::sample_lock_picker(services, slot)
+            }
+            // And a slice lock's is one of the slices of the sample the step plays.
+            Field::FxValue(slot) if command(slot) == Some(FxCommand::Set(SettingId::SLICE)) => {
+                Self::slice_lock_picker(services, slot)
+            }
+            Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
+                Self::fx_picker(services, slot, "")
+            }
+            Field::Gate => Self::gate_picker(services),
+            Field::GateLength => Self::length_picker(services),
+            Field::Note | Field::Velocity | Field::Nudge => {
+                return Outcome::Refused("K chooses on the gate and FX columns");
+            }
+        };
+        Outcome::Open(Box::new(picker))
+    }
+
+    /// The sample a step's `SMP` locks, from the bank, on the slot's own.
+    pub(crate) fn sample_lock_picker(services: &Services, slot: usize) -> Picker {
+        let current = services
+            .current_slot(slot)
+            .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SAMPLE)))
+            .map_or(0, |cell| cell.coarse());
+        let items = services.bank_items(|number| Pick::SampleLock { slot, number });
+        let at = services.bank_place(current);
+        Picker::new("Sample lock", items).opened_on(Some(at))
+    }
+
+    /// The slice a step's `SLI` locks, from the slices of the sample the step plays: first by each
+    /// letter naming one, as `'a  03  0.214 s`, which keeps to its slice as slices before it come
+    /// and go, and then by number.
+    pub(crate) fn slice_lock_picker(services: &Services, slot: usize) -> Picker {
+        let current = services
+            .current_slot(slot)
+            .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SLICE)));
+        let number = services.step_entry();
+        let mut items = services.mark_items(number, |letter| Pick::SliceMarkLock { slot, letter });
+        let named = items.len();
+        items.extend(services.slice_items(number, |number| Pick::SliceLock { slot, number }));
+        let at = match current.map(|cell| (cell.slice_mark(), cell.coarse())) {
+            Some((Some(letter), _)) => items[..named]
+                .iter()
+                .position(|item| item.pick == Pick::SliceMarkLock { slot, letter }),
+            Some((None, number)) => Some(named + usize::from(number).min(items.len() - named - 1)),
+            None => Some(named),
+        };
+        Picker::new("Slice lock", items).opened_on(at)
+    }
 }
 
 impl Services {
@@ -242,49 +303,6 @@ impl Services {
             order,
         });
         self.status = format!("This phrase plays {}: {}", order, order.describe(rows));
-    }
-}
-
-impl App {
-    /// Choose this field from a list, in the columns that are one.
-    pub(crate) fn open_field_picker(&mut self) {
-        let services = &self.services;
-        match services.cursor.field {
-            // A condition's value is one of a list, so `K` on it lists them.
-            Field::FxValue(slot)
-                if services.current_slot(slot).and_then(|s| s.command) == Some(FxCommand::Cnd) =>
-            {
-                self.show_picker(PhraseView::condition_picker(services, slot));
-            }
-            // So is an amount, as a signed byte is hard to type.
-            Field::FxValue(slot)
-                if services.current_slot(slot).and_then(|s| s.command) == Some(FxCommand::Acu) =>
-            {
-                self.show_picker(PhraseView::amount_picker(services, slot));
-            }
-            // And a sample lock's is one of the bank's.
-            Field::FxValue(slot)
-                if services.current_slot(slot).and_then(|s| s.command)
-                    == Some(FxCommand::Set(SettingId::SAMPLE)) =>
-            {
-                self.open_sample_lock_picker(slot);
-            }
-            // And a slice lock's is one of the slices of the sample the step plays.
-            Field::FxValue(slot)
-                if services.current_slot(slot).and_then(|s| s.command)
-                    == Some(FxCommand::Set(SettingId::SLICE)) =>
-            {
-                self.open_slice_lock_picker(slot);
-            }
-            Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
-                self.show_picker(PhraseView::fx_picker(services, slot, ""));
-            }
-            Field::Gate => self.show_picker(PhraseView::gate_picker(services)),
-            Field::GateLength => self.show_picker(PhraseView::length_picker(services)),
-            Field::Note | Field::Velocity | Field::Nudge => {
-                self.services.status = "K chooses on the gate and FX columns".to_owned();
-            }
-        }
     }
 }
 
