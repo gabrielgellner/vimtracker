@@ -1007,15 +1007,21 @@ only name Normal's keys on those pages, for the binding table.
     setting, `wheel.ron` in the config folder, is on; the main loop asks the terminal for mouse
     reports only then. `App::mouse_event` reads both axes as one knob, flipped to follow the
     fingers under macOS's natural scrolling (`wheel::natural_scrolling`, read at start) and by
-    the setting's `reversed`. A gesture drops a tick the other way that comes too soon, as a
-    bounce, and keeps a decaying speed that sizes each tick by `wheel::tick_size`, the constants
-    all in `wheel::feel`. Ticks are owed, and `App::wheel_frame`, each frame, or any key, makes
-    what's owed as one press of `=` `-` `+` `_`, or the sample page's Cmd-l and Cmd-h, with a
-    count, through `App::press`, in whatever mode binds them, so every page and a locked
-    selection take it as they take the key. Where the setting has a finer step than `=`, the
-    cursor is put on its fine part for the press and back after. A gesture's presses are squashed
-    into one undo step (`History::squash_to`, as the Roto's touch to let-go), and in a selection
-    `Adjustments::join_from` keeps its running total in step (decisions 162 and 163).
+    the setting's `reversed`, a sideways tick weighed by the cell's width over its height
+    (`Wheel::cell`, from the main loop's window size) and Shift ignored. A gesture drops a tick
+    the other way that comes too soon, as a bounce, waiting out a fling's momentum, and keeps a
+    decaying speed that sizes each tick by `wheel::tick_size`, the constants all in
+    `wheel::feel`. A list or a toggle (`wheel::Places`, from a described setting's view, a
+    phrase's listed FX value, or the audio, project and sample pages' own `wheel_places`) moves
+    a place at a time through the gesture's detent, and only while it has a place that way, so
+    the wheel never goes round where `=` does. Ticks are owed, and `App::wheel_frame`, each
+    frame, or any key, makes what's owed as one press of `=` `-`, or the sample page's Cmd-l
+    and Cmd-h, with a count, through `App::press`, in whatever mode binds them, so every page
+    and a locked selection take it as they take the key. Where the setting has a finer step
+    than `=`, the cursor is put on its fine part for the press and back after. A gesture's
+    presses are squashed into one undo step (`History::squash_to`, as the Roto's touch to
+    let-go), and in a selection `Adjustments::join_from` keeps its running total in step
+    (decisions 162, 163 and 372).
 *   **`bindings.rs`:** the binding table, one list of mode, key sequence, `Cmd` and description,
     assembled from its own rows, each component page's `Page::KEYS` and each overlay's
     `Overlay::KEYS`, and pinned row by row in

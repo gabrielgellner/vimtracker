@@ -35,7 +35,7 @@ Follow one with a motion or a target, or double it for this whole step:
 | `gv` | Select the last selection again |
 | `=` `-` `+` `_` | Move every value a small or large step, and stay selected |
 | `D-l` `D-h` `D-k` `D-j` | Cmd and `l` `h` `k` `j`: as `=` `-` `+` `_` |
-| The mouse wheel | As `=` `-`, and with Shift as `+` `_`, once it's on |
+| The mouse wheel | As `=` `-`, further the faster it goes, once it's on |
 | `>` `<`, `C-a` `C-x` | Move every value a step, and stay selected |
 | `r` | Fill the cursor's column, and stay selected |
 | `u` `C-r` | Undo or redo one change, and stay selected |
@@ -875,28 +875,45 @@ keyboard. Where the pointer is doesn't matter.
 
 | Wheel | Does |
 |---|---|
-| Fingers up or right | As `=`, in the setting's fine step |
-| Fingers down or left | As `-`, in the setting's fine step |
-| Shift and any way | As `+` `_` |
+| Fingers up or right | As `=`, in the setting's fine step, more the faster |
+| Fingers down or left | As `-`, in the setting's fine step, more the faster |
+| On a list or a toggle | The next or previous choice, on or off, stopping at the ends |
 
-Up and down and sideways are the same knob, as a trackpad's fingers drift from
-one to the other. The value follows the fingers, as a level bar fills, whether
-or not macOS scrolls naturally; the audio page's `Direction` row turns it the
-other way.
+Up and down and sideways are the same knob, and work the same, as a trackpad's
+fingers drift from one to the other. The value follows the fingers, as a level
+bar fills, whether or not macOS scrolls naturally; the audio page's `Direction`
+row turns it the other way. The terminal sends about twice as many ticks for a
+swipe sideways, as its columns are narrower than its rows, so a sideways tick
+counts for less, and the same swipe goes as far either way.
 
-On a value with fine digits a tick is a 16th of `=`'s step, a step of the first
-fine digit, as if the cursor were on them; with the cursor on the fine digits
-themselves, a tick is their own `=`. On the tempo a tick is a tenth of a BPM,
-or a hundredth on its fine part, and on the sample page a 16th of a pixel, as
-Cmd-l and Cmd-h nudge a point. A slow or steady turn moves the same for every
-tick, so twice the swipe is twice the change; only a fast swipe takes more at a
-time, up to one of `=`'s steps, to sweep across. Everywhere else a tick is one
-of `=`'s steps: a semitone on a note, the next choice in a list. On a selection
-it moves every value, as `=` does, and keeps it selected.
+Speed sizes each tick, and Shift does nothing. On a value with fine digits a
+slow tick is a 16th of `=`'s step, a step of the first fine digit, as if the
+cursor were on them; with the cursor on the fine digits themselves, a tick is
+their own `=`. On the tempo a slow tick is a tenth of a BPM, or a hundredth on
+its fine part, and on the sample page a 16th of a pixel, as Cmd-l and Cmd-h
+nudge a point. A slow or steady turn moves the same for every tick, so twice
+the swipe is twice the change. A faster swipe takes more each tick, up to 16
+of `=`'s steps, so a quick fling and its momentum cross a value's whole range.
+Where `=` is already the finest step, a semitone on a note, a slow tick is one
+`=`, and only a fast swipe takes more. On a selection it moves every value, as
+`=` does, and keeps it selected.
+
+A list or a toggle goes a choice at a time, and stops at either end where `=`
+goes round. Up or right puts a toggle on, and down or left off. The first tick
+moves it, and then every third, at most four times a second, so a slow turn
+steps through. A flick moves it a choice or two, and the momentum after it,
+or its bounce at the end, moves it no further, so a toggle never flips back.
+Another flick moves it on. To go far in a long list, `K` lists it. The wheel
+leaves the audio page's `Direction` row alone, as turning it would turn the
+wheel round.
+
+After a quick swipe, macOS goes on scrolling for about a second once the fingers
+lift. A tick the other way in that time is taken as its bounce and let go,
+unless three come in a row or the wheel was still for a moment first.
 
 One turn is one undo: `u` takes back everything from the first tick until the
-wheel stops for a moment, or a key is pressed. `.` still repeats the last
-change made with keys.
+wheel stops for a moment, its momentum included, or a key is pressed. `.` still
+repeats the last change made with keys.
 
 `K` on an FX column lists the commands by group, searching as it opens. If the
 slot is empty, type the value next. If it has one, it stays.
