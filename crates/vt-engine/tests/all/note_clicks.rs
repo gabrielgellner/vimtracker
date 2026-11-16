@@ -208,6 +208,8 @@ struct Change {
     dip_ms: f64,
     top_db: f64,
     offset: f64,
+    /// The level against the tied one in the last 0.5 ms of the 3, where a note is back.
+    back_db: f64,
     /// The level against the tied one, each 0.5 ms of the first 3 ms, for the eye.
     levels: String,
     /// The offset against the tied one, every 4 ms of the first 40, in hundredths of the level.
@@ -232,6 +234,7 @@ fn change(new: &Folded, tied: &Folded) -> Change {
         dip_ms: level.iter().filter(|db| **db < -3.0).count() as f64 * WINDOW as f64 * 1000.0
             / f64::from(RATE),
         top_db: top,
+        back_db: level.last().copied().unwrap_or(0.0),
         offset: moved.iter().fold(0.0_f64, |most, o| most.max(o.abs())),
         levels: level
             .iter()
@@ -275,18 +278,57 @@ fn adsr(attack_ms: u16, decay_ms: u16, sustain: u8, release_ms: u16) -> Adsr {
     }
 }
 
-/// Whether a change sounds as clean as a tie, near enough.
-fn clean(change: &Change) -> bool {
-    change.dip_db > -1.5 && change.top_db < 3.0 && change.offset < 0.05
+/// Whether a change sounds as clean as a tie, near enough: no dip, no click, and, unless each
+/// note drifts a level and a cutoff of its own, which a tie doesn't, no offset either.
+fn clean(change: &Change, drifting: bool) -> bool {
+    change.dip_db > -1.5 && change.top_db < 3.0 && (drifting || change.offset < 0.05)
+}
+
+/// No reset on the note shape: the attack starts from where the level is.
+fn no_reset() -> Option<Adsr> {
+    Some(Adsr {
+        reset: false,
+        ..Adsr::note_shape()
+    })
 }
 
 #[test]
-#[ignore = "diagnosis: a note on every 16th clicks at each change"]
-fn random_16ths_change_notes_as_cleanly_as_a_tie() {
+fn random_16ths_carried_without_reset_change_as_cleanly_as_a_tie() {
+    // A synth that holds carries its voice on into the next note: its oscillator runs on, so
+    // without `Reset` a change is a tie's, but for the attack starting again from where it is.
+    let notes = random_notes();
+    let mut clicks = Vec::new();
+    for (name, voice, drift) in [
+        ("CSaw, no reset", SynthVoice::CSaw, false),
+        ("Saw Sq, no reset", SynthVoice::SawSquare, false),
+        ("Morph, no reset", SynthVoice::Morph, false),
+        ("VA, no reset", SynthVoice::VirtualAnalog, false),
+        ("VA drifting, no reset", SynthVoice::VirtualAnalog, true),
+        ("FM, no reset", SynthVoice::Fm, false),
+        ("4-op, no reset", SynthVoice::FourOp, false),
+    ] {
+        let case = Case {
+            adsr: no_reset(),
+            drift,
+            ..Case::plain(Source::Synth(voice))
+        };
+        if !clean(&measure(name, case, &notes), drift) {
+            clicks.push(name);
+        }
+    }
+    assert!(clicks.is_empty(), "these click at each note: {clicks:?}");
+}
+
+#[test]
+fn random_16ths_carried_with_reset_dip_to_silence_without_a_click() {
+    // With `Reset`, as a note's shape starts, a carried note's level falls to nothing over the
+    // short fade on the same voice, and then attacks: a gap at each change, on purpose, so each
+    // note is struck, but no click, as the oscillator runs on through it.
     let csaw = Source::Synth(SynthVoice::CSaw);
     let va = Case::plain(Source::Synth(SynthVoice::VirtualAnalog));
     let notes = random_notes();
-    let cases = [
+    let mut clicks = Vec::new();
+    for (name, case) in [
         ("CSaw, nothing tweaked", Case::plain(csaw)),
         (
             "CSaw at 140 BPM",
@@ -310,74 +352,45 @@ fn random_16ths_change_notes_as_cleanly_as_a_tie() {
             },
         ),
         (
-            "CSaw, A 5 ms",
-            Case {
-                adsr: Some(adsr(5, 0, 100, 50)),
-                ..Case::plain(csaw)
-            },
-        ),
-        (
-            "CSaw, no reset",
-            Case {
-                adsr: Some(Adsr {
-                    reset: false,
-                    ..Adsr::note_shape()
-                }),
-                ..Case::plain(csaw)
-            },
-        ),
-        (
             "Saw Sq, nothing tweaked",
             Case::plain(Source::Synth(SynthVoice::SawSquare)),
         ),
-        (
-            "VA, nothing tweaked",
-            Case::plain(Source::Synth(SynthVoice::VirtualAnalog)),
-        ),
+        ("VA, nothing tweaked", va),
+        ("VA drifting, nothing tweaked", Case { drift: true, ..va }),
+    ] {
+        let change = measure(name, case, &notes);
+        // Down to silence in the dip, back within 3 ms, and nothing at the top of the spectrum
+        // the tie hasn't.
+        if change.dip_db > -15.0 || change.back_db < -3.0 || change.top_db > 3.0 {
+            clicks.push(name);
+        }
+    }
+    // These are saws: on a near-sine, such as `FM` at its defaults, the top of the spectrum also
+    // shows the corner where the note shape's own 1 ms attack ends, which every new note has.
+    assert!(clicks.is_empty(), "these click or don't dip: {clicks:?}");
+}
+
+#[test]
+#[ignore = "diagnosis: a new voice starting under the last one's fade dips at each change"]
+fn random_16ths_on_a_new_voice_change_as_cleanly_as_a_tie() {
+    // A sampler starts each note again, and a synth that doesn't carry starts a voice of its own,
+    // under the old one's fade.
+    let notes = random_notes();
+    let mut clicks = Vec::new();
+    for (name, case) in [
         (
             "Sampled saw, nothing tweaked",
             Case::plain(Source::SampledSaw),
         ),
-        ("VA drifting, nothing tweaked", Case { drift: true, ..va }),
         (
-            "VA drifting, A 1 D 0 S 100 R 0",
+            "Sampled saw, no reset",
             Case {
-                drift: true,
-                adsr: Some(adsr(1, 0, 100, 0)),
-                ..va
+                adsr: no_reset(),
+                ..Case::plain(Source::SampledSaw)
             },
         ),
-        (
-            "VA drifting, A 0",
-            Case {
-                drift: true,
-                adsr: Some(adsr(0, 0, 100, 50)),
-                ..va
-            },
-        ),
-        (
-            "VA drifting, A 5 ms",
-            Case {
-                drift: true,
-                adsr: Some(adsr(5, 0, 100, 50)),
-                ..va
-            },
-        ),
-        (
-            "VA drifting, no reset",
-            Case {
-                drift: true,
-                adsr: Some(Adsr {
-                    reset: false,
-                    ..Adsr::note_shape()
-                }),
-                ..va
-            },
-        ),
-    ];
-    let mut clicks = Vec::new();
-    for (name, case) in cases {
-        if !clean(&measure(name, case, &notes)) {
+    ] {
+        if !clean(&measure(name, case, &notes), false) {
             clicks.push(name);
         }
     }
@@ -385,7 +398,10 @@ fn random_16ths_change_notes_as_cleanly_as_a_tie() {
     // tied one is, and the two line up frame for frame.
     let same = vec!["C-3".to_string(); 16];
     let name = "Sampled saw, the same note";
-    if !clean(&measure(name, Case::plain(Source::SampledSaw), &same)) {
+    if !clean(
+        &measure(name, Case::plain(Source::SampledSaw), &same),
+        false,
+    ) {
         clicks.push(name);
     }
     assert!(clicks.is_empty(), "these click at each note: {clicks:?}");
