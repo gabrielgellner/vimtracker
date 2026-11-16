@@ -382,7 +382,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     // Sections selected with `V` in the song view are Visual's too. The FX page zoomed in on a
     // slot says so, in the page's own colour, but the keyboard's mode is named over it.
     let special = app
-        .sample_mode()
+        .sample_page
+        .badge(app.modes.view, app.modes.mode)
         .or_else(|| app.song_view.anchor.map(|_| Mode::VisualField.label()))
         .or_else(|| (app.fx_zoomed() && app.modes.mode != Mode::Keys).then_some("ZOOM"));
     let badge = match special {

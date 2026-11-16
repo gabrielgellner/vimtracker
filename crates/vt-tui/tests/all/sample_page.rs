@@ -1651,7 +1651,11 @@ fn semicolon_plays_the_slice_under_the_cursor_and_its_playhead_follows() {
         "from the slice's start, not the cursor"
     );
     let shown = app.sample_shown().unwrap();
-    assert_eq!(app.sample_playheads(&shown), [QUARTERS[2] + 1000]);
+    assert_eq!(
+        app.sample_page
+            .playheads(&shown, &app.services.reported.playheads),
+        [QUARTERS[2] + 1000]
+    );
     // A tap plays to the slice's end, and no further.
     play(
         &mut realtime,
@@ -1661,7 +1665,11 @@ fn semicolon_plays_the_slice_under_the_cursor_and_its_playhead_follows() {
     assert_eq!(realtime.engine().previews_sounding(), 1, "a tap plays on");
     play(&mut realtime, &mut app, 1000);
     assert!(heads(&realtime).is_empty(), "it ends with the slice");
-    assert!(app.sample_playheads(&shown).is_empty());
+    assert!(
+        app.sample_page
+            .playheads(&shown, &app.services.reported.playheads)
+            .is_empty()
+    );
 }
 
 #[test]
@@ -2391,7 +2399,7 @@ fn semicolon_and_space_c_are_heard_from_a_file_loaded_at_another_rate() {
     let mut app = App::new(song, None, samples, handle, RATE);
     command(&mut app, &format!("sample {}", file.display()));
     // The page shows it once it's analysed, on a thread of its own.
-    app.finish_analysis();
+    app.services.finish_analysis();
     assert!(app.sample_shown().is_ok(), "analysed");
     keys(&mut app, "Space 0");
     assert_eq!(app.modes.view, View::Sample);
@@ -2410,7 +2418,9 @@ fn semicolon_and_space_c_are_heard_from_a_file_loaded_at_another_rate() {
         );
         let shown = app.sample_shown().unwrap();
         assert!(
-            !app.sample_playheads(&shown).is_empty(),
+            !app.sample_page
+                .playheads(&shown, &app.services.reported.playheads)
+                .is_empty(),
             "{audition}'s playhead"
         );
         assert!(

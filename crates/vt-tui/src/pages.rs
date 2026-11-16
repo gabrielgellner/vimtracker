@@ -65,7 +65,6 @@ use crate::services::audio::SlowdownReadout;
 use crate::services::folding::Folds;
 use crate::services::generators::LiveGen;
 use crate::services::meter::Meter;
-use crate::services::sampling::still_recording;
 use crate::widgets::setting::{CellLook, Focus};
 
 /// What a key did, as far as the page or the overlay it went to alone can tell, and what it asks
@@ -757,11 +756,7 @@ impl<'a> Ctx<'a> {
     /// What the sample page shows for the cursor's track, or why it can't show it: the entry the
     /// page is on, which a jump may have chosen, unless it's still recording.
     pub fn sample_shown(&self, page: &SamplePage) -> Result<Shown, String> {
-        let (number, entry) = page.entry_here(self.song(), self.cursor().track)?;
-        if let Some(why) = still_recording(self.page.recording, number) {
-            return Err(why);
-        }
-        Shown::of(self.samples(), number, entry)
+        page.shown_while(self.services, self.page.recording)
     }
 
     /// Where each voice playing a sample through the cursor's track is in it, as the engine last

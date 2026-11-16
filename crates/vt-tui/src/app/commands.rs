@@ -51,11 +51,38 @@ impl App {
             }
             Line::Sample(Some(path)) => self.sample(&path),
             Line::Sample(None) => self.open_default_sample_picker(),
-            Line::SampleChange(change) => self.change_sample(change),
-            Line::Slice(change, range) => self.change_slices(change, range),
-            Line::Mark { letter, slice } => self.set_mark(letter, slice),
-            Line::Marks => self.open_marks_picker(),
-            Line::DelMarks(letters) => self.delete_marks(letters.as_deref()),
+            Line::SampleChange(change) => self.services.change_sample(change),
+            Line::Slice(change, range) => {
+                let recording = self.sampling_shown();
+                self.sample_page.change_slices(
+                    change,
+                    range,
+                    self.modes.view,
+                    recording,
+                    &mut self.services,
+                );
+            }
+            Line::Mark { letter, slice } => {
+                self.sample_page
+                    .set_mark(letter, slice, self.modes.view, &mut self.services);
+            }
+            Line::Marks => {
+                self.modes.count = None;
+                match self
+                    .sample_page
+                    .marks_picker(self.modes.view, &self.services)
+                {
+                    Ok(picker) => self.show_picker(picker),
+                    Err(why) => self.services.status = why,
+                }
+            }
+            Line::DelMarks(letters) => {
+                self.sample_page.delete_marks(
+                    letters.as_deref(),
+                    self.modes.view,
+                    &mut self.services,
+                );
+            }
             Line::Kit(Some(name)) => self.use_kit(&self.services.kit_path(&name)),
             Line::Bank => self.open_bank_picker(),
             Line::BankClean => self.clean_bank(),
@@ -68,7 +95,7 @@ impl App {
             Line::Kit(None) => self.open_kit_explorer(),
             Line::Name(name) => self.name_track(name),
             Line::Bpm(millibpm) => self.services.apply(&Action::SetMilliBpm(millibpm)),
-            Line::GrabTempo => self.grab_tempo(),
+            Line::GrabTempo => self.services.grab_tempo(),
             Line::TrackAdd(count) => {
                 let was = self.song().sound_tracks();
                 self.services.apply(&Action::AddTracks(count));
@@ -230,7 +257,7 @@ impl App {
     /// and audio keeps playing on its own thread. It waits for the bank's analyses, so a
     /// normalised sample renders the same however far they'd got.
     fn render(&mut self, path: &Path, rows: Option<usize>, tail: bool) {
-        self.finish_analysis();
+        self.services.finish_analysis();
         let version = Published::new(self.song_to_save(), Arc::clone(&self.services.samples));
         let options = RenderOptions {
             rows,
@@ -251,7 +278,7 @@ impl App {
     /// Render one file per group, and per track in none, that would be heard, into a folder, or
     /// one per track if asked.
     fn render_stems(&mut self, folder: &Path, options: RenderOptions) {
-        self.finish_analysis();
+        self.services.finish_analysis();
         let version = Published::new(self.song_to_save(), Arc::clone(&self.services.samples));
         self.services.status =
             match crate::run::write_stems(&version, folder, self.services.rate, options) {

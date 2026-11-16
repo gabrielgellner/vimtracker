@@ -161,25 +161,16 @@ impl Services {
             }
         }
     }
-}
-
-impl App {
-    /// Keep the bank's analyses in a cache folder from now on, as the program does and tests
-    /// needn't, and ask for those not in yet.
-    pub fn use_analysis_cache(&mut self, folder: Option<PathBuf>) {
-        self.services.analyst = Analyst::new(folder);
-        self.services.analyse_bank();
-    }
 
     /// Take in the analyses done in the background, and play with them.
     pub(crate) fn take_analyses(&mut self) {
-        let done = self.services.analyst.poll();
+        let done = self.analyst.poll();
         self.keep_analyses(done);
     }
 
     /// Wait for every analysis asked for, then take them in, as a render must and as tests do.
     pub fn finish_analysis(&mut self) {
-        let done = self.services.analyst.wait(WAIT);
+        let done = self.analyst.wait(WAIT);
         self.keep_analyses(done);
     }
 
@@ -191,14 +182,33 @@ impl App {
             if let Ok((analysis, _)) = analysed.result
                 && analysis.hash == analysed.asked
             {
-                pool.get_or_insert_with(|| SamplePool::clone(&self.services.samples))
+                pool.get_or_insert_with(|| SamplePool::clone(&self.samples))
                     .insert_analysis(analysis);
             }
         }
         if let Some(pool) = pool {
-            self.services.samples = Arc::new(pool);
-            self.services.publish();
+            self.samples = Arc::new(pool);
+            self.publish();
         }
+    }
+
+    /// The analysis of an entry's file, waiting for it if it's on its way.
+    pub(crate) fn entry_analysis(&mut self, entry: &BankEntry) -> Option<Arc<Analysis>> {
+        let hash = entry.source()?.hash;
+        if self.samples.analysis(hash).is_none() {
+            self.analyse_bank();
+            self.finish_analysis();
+        }
+        self.samples.analysis(hash).cloned()
+    }
+}
+
+impl App {
+    /// Keep the bank's analyses in a cache folder from now on, as the program does and tests
+    /// needn't, and ask for those not in yet.
+    pub fn use_analysis_cache(&mut self, folder: Option<PathBuf>) {
+        self.services.analyst = Analyst::new(folder);
+        self.services.analyse_bank();
     }
 
     /// The bank entry the current track plays, and its number, or why there's none.
@@ -213,16 +223,6 @@ impl App {
             Some(entry) => Ok((number, entry.clone())),
             None => Err(format!("Track {:02} plays no sample", track + 1)),
         }
-    }
-
-    /// The analysis of an entry's file, waiting for it if it's on its way.
-    pub(crate) fn entry_analysis(&mut self, entry: &BankEntry) -> Option<Arc<Analysis>> {
-        let hash = entry.source()?.hash;
-        if self.services.samples.analysis(hash).is_none() {
-            self.services.analyse_bank();
-            self.finish_analysis();
-        }
-        self.services.samples.analysis(hash).cloned()
     }
 
     /// Bring the current track's sample to a peak level, in hundredths of a dBFS, or stop
@@ -246,6 +246,7 @@ impl App {
         }
         entry.edit.play.normalize = level;
         let peak = self
+            .services
             .entry_analysis(&entry)
             .map(|analysis| analysis.peak)
             .filter(|peak| *peak > 0.0);
@@ -277,7 +278,7 @@ impl App {
                 return;
             }
         };
-        let Some(analysis) = self.entry_analysis(&entry) else {
+        let Some(analysis) = self.services.entry_analysis(&entry) else {
             self.services.status = format!(
                 "Sample {number:02X} can't be analysed: its file is missing or has changed"
             );

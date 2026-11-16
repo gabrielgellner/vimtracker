@@ -326,13 +326,34 @@ impl App {
                 });
             }
             Pick::SampleLock { slot, number } => self.pick_sample_lock(slot, number),
-            Pick::SliceLock { slot, number } => self.pick_slice_lock(slot, number),
-            Pick::SliceMarkLock { slot, letter } => self.pick_slice_mark_lock(slot, letter),
+            // A slice chosen for an `SLI`, by number or by a letter, keeping the slot's mark.
+            Pick::SliceLock { slot, number } => {
+                let mark = self.services.slice_lock_mark(slot);
+                self.services.cursor.field = Field::FxValue(slot);
+                self.set_field(FieldValue::Slot(
+                    slot,
+                    FxSlot {
+                        command: Some(FxCommand::Set(SettingId::SLICE)),
+                        value: u16::from(number) << 8,
+                        mark,
+                    },
+                ));
+            }
+            Pick::SliceMarkLock { slot, letter } => {
+                let mark = self.services.slice_lock_mark(slot);
+                self.services.cursor.field = Field::FxValue(slot);
+                self.set_field(FieldValue::Slot(slot, FxSlot::slice_by_mark(letter, mark)));
+            }
             Pick::Mark(letter) => self.jump_to_mark(letter),
             Pick::SampleSetting(setting) => {
                 self.sample_page.pick_setting(setting, &mut self.services);
             }
-            Pick::SampleValue { setting, value } => self.pick_sample_value(setting, value),
+            Pick::SampleValue { setting, value } => {
+                if let Ok(shown) = self.sample_page_here() {
+                    self.sample_page
+                        .put_setting(&shown, setting, value, &mut self.services);
+                }
+            }
             Pick::Tuning { control, value } => set_tuning(&mut self.services, control, value),
             Pick::Track(track) => self.go_to_track(track),
             Pick::Audio(choice) => self.audio_page.choose(choice),

@@ -279,7 +279,7 @@ fn r_on_the_sample_page_records_and_shows_the_recording_once_it_stops() {
     tap(&mut app, "R");
     run(&mut app, &mut rt, STEP * 4);
     assert!(app.sampling.live.is_none(), "{}", app.services.status);
-    app.finish_analysis();
+    app.services.finish_analysis();
     let shown = app.sample_shown().unwrap();
     assert_eq!(shown.number, number);
     assert_eq!(
