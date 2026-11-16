@@ -26,6 +26,7 @@ use super::braids_parts::{
     BRAIDS_BLOCK, INNER, Lcg, MODERATE_OVERDRIVE, Macro, Model, Pitch, sine, waveshape, whole,
 };
 use vt_model::machine::SynthVoice;
+use vt_model::random::NumericalRecipesLcg;
 use vt_model::settings::voice_place;
 
 /// Noise through two resonant peaks, one at the note and one up to five octaves either way.
@@ -264,10 +265,7 @@ impl Model for ClockedNoiseModel {
         for out in out.iter_mut() {
             self.phase = self.phase.wrapping_add(increment);
             if self.phase < increment {
-                self.state = self
-                    .state
-                    .wrapping_mul(1_664_525)
-                    .wrapping_add(1_013_904_223);
+                self.state = NumericalRecipesLcg::step(self.state);
                 self.cycle = self.cycle.wrapping_add(cycle_increment);
                 if self.cycle < cycle_increment {
                     self.state = self.seed;

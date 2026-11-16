@@ -1190,16 +1190,16 @@ fn svf_output(kind: FilterType, input: f32, band: f32, low: f32, k: f32) -> f32 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vt_model::random::NumericalRecipesLcg;
 
     const RATE: u32 = 48_000;
 
     /// A loud burst with noise on it, then silence: how many frames until `step` gives exact
     /// silence for a second on end, within `seconds`, or none.
     fn frames_to_silence(seconds: usize, mut step: impl FnMut(f32) -> f32) -> Option<usize> {
-        let mut noise = 1_u32;
+        let mut rng = NumericalRecipesLcg::new(1);
         for frame in 0..RATE as usize / 5 {
-            noise = noise.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-            let noise = (noise >> 9) as f32 / (1 << 23) as f32 - 0.5;
+            let noise = (rng.next_u32() >> 9) as f32 / (1 << 23) as f32 - 0.5;
             step((frame as f32 * 0.03).sin() * 0.9 + noise);
         }
         let mut silent_since = None;

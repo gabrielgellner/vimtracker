@@ -370,6 +370,7 @@ impl Rung for Reverb {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vt_model::random::NumericalRecipesLcg;
 
     const RATE: u32 = 48_000;
 
@@ -389,11 +390,10 @@ mod tests {
 
     /// A short burst of something broad, and then what comes out until this many frames.
     fn burst(reverb: &mut Reverb, frames: usize) -> Vec<[f32; 2]> {
-        let mut noise = 1_u32;
+        let mut rng = NumericalRecipesLcg::new(1);
         (0..frames)
             .map(|at| {
-                noise = noise.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-                let sample = (noise >> 16) as f32 / 32_768.0 - 1.0;
+                let sample = (rng.next_u32() >> 16) as f32 / 32_768.0 - 1.0;
                 let level = if at < 480 { sample * 0.5 } else { 0.0 };
                 reverb.process([level, level])
             })

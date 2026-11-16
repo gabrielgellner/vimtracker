@@ -9,6 +9,8 @@
 
 use std::time::{Duration, Instant};
 
+use vt_model::random::MmixLcg;
+
 /// Which kernel this is, so a full speed kept from another is never compared with it.
 pub const KERNEL_VERSION: u32 = 1;
 /// The kernel's rounds: about 1.2 µs on an Apple M5's performance core at full speed.
@@ -31,14 +33,13 @@ const MOST: f64 = 8.0;
 /// its time at full speed is how much the core is slowed.
 #[inline(never)]
 pub fn kernel(seed: u64) -> u64 {
+    let mut rng = MmixLcg::new(seed);
     let mut state = seed;
     let mut lanes = [0.0_f32; LANES];
     let coefficients: [f32; LANES] = std::array::from_fn(|lane| 0.5 + lane as f32 / 128.0);
     for _ in 0..ROUNDS {
         // Knuth's MMIX generator, with its top 24 bits as a sample from 0 to 1.
-        state = state
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(1_442_695_040_888_963_407);
+        state = rng.next_u64();
         let input = (state >> 40) as f32 * (1.0 / 16_777_216.0);
         for (level, coefficient) in lanes.iter_mut().zip(coefficients) {
             *level = *level * coefficient + input * (1.0 - coefficient);

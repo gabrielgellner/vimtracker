@@ -10,6 +10,7 @@ use std::path::PathBuf;
 
 use vt_model::constants::MAX_PHRASE_STEPS;
 use vt_model::lfo::Rate;
+use vt_model::random::SplitMix64;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
@@ -24,15 +25,15 @@ use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 use crate::rt_guard::forbidden;
 
 /// SplitMix64, so the cases are the same on every run.
-struct Dice(u64);
+struct Dice(SplitMix64);
 
 impl Dice {
+    fn new(seed: u64) -> Self {
+        Self(SplitMix64::new(seed))
+    }
+
     fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
+        self.0.next_u64()
     }
 
     fn below(&mut self, count: u64) -> u64 {
@@ -266,7 +267,7 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
     };
     // Settings added since are drawn from the seed, so the other draws, and the other fills'
     // hashes, stay as they were.
-    let mut more = Dice(shape.seed ^ 0x3A1C);
+    let mut more = Dice::new(shape.seed ^ 0x3A1C);
     shape.walk = Walk {
         step: more.below(40) as u8,
         edge: more.pick(&[Edge::Reflect, Edge::Wrap]),
@@ -376,7 +377,7 @@ const VARIANTS: [Variant; 13] = [
 /// A `Where` of `Cells` (decision 326), drawn from the seed: any rule, any start, on one column
 /// or as one of up to eight tracks across, on any pass.
 fn on_cells(shape: &mut Shape) {
-    let mut more = Dice(shape.seed ^ 0xCE11);
+    let mut more = Dice::new(shape.seed ^ 0xCE11);
     let rule = if more.chance(40) {
         more.pick(&[30, 90, 110, 184])
     } else {
@@ -407,7 +408,7 @@ fn on_cells(shape: &mut Shape) {
 /// A named rhythm as the `Where` (decision 327), its rhythm, part and `Child` drawn from the seed,
 /// some children at the ends.
 fn world_rows(shape: &mut Shape) {
-    let mut more = Dice(shape.seed ^ 0x2017);
+    let mut more = Dice::new(shape.seed ^ 0x2017);
     let child = if more.chance(30) {
         more.pick(&[0, 100])
     } else {
@@ -423,7 +424,7 @@ fn world_rows(shape: &mut Shape) {
 /// One of Marbles' rhythms as the `Where` (decision 321), drawn from the seed, some at the ends of
 /// its amount.
 fn marbles_rows(shape: &mut Shape) {
-    let mut more = Dice(shape.seed ^ 0x7A11);
+    let mut more = Dice::new(shape.seed ^ 0x7A11);
     let amount = if more.chance(20) {
         more.pick(&[0, 100])
     } else {
@@ -443,7 +444,7 @@ fn marbles_rows(shape: &mut Shape) {
 /// A `Follow`'s mutations (decision 307), drawn from its seed: up to the most, each kind on or
 /// off, as a Bloom branch's are.
 fn mutated_follow(shape: &mut Shape) {
-    let mut more = Dice(shape.seed ^ 0xB10F);
+    let mut more = Dice::new(shape.seed ^ 0xB10F);
     shape.follow.mutation = more.below(u64::from(MAX_MUTATION) + 1) as u8;
     shape.follow.mutate = Mutations {
         repitch: more.chance(60),
@@ -457,7 +458,7 @@ fn mutated_follow(shape: &mut Shape) {
 /// A `Random`'s spread, bias, steps and weights, drawn from its seed, some at their ends; an
 /// `Acid`'s riff takes the spread and bias (decision 322).
 fn shaped_random(shape: &mut Shape) {
-    let mut more = Dice(shape.seed ^ 0x6A2B);
+    let mut more = Dice::new(shape.seed ^ 0x6A2B);
     let spread = if more.chance(25) {
         more.pick(&[0, 50, 100])
     } else {
@@ -557,11 +558,11 @@ fn hashes(
 ) -> BTreeMap<String, (String, usize)> {
     let mut found = BTreeMap::new();
     for (fill, kind, more) in fills() {
-        for at in 0..columns(&mut Dice(0)).len() {
-            let name = format!("{fill} on {}", columns(&mut Dice(0))[at].0);
+        for at in 0..columns(&mut Dice::new(0)).len() {
+            let name = format!("{fill} on {}", columns(&mut Dice::new(0))[at].0);
             let mut seed = 0xcbf2_9ce4_8422_2325_u64;
             fnv(&mut seed, name.as_bytes());
-            let mut dice = Dice(seed);
+            let mut dice = Dice::new(seed);
             let (mut hash, mut rows) = (0xcbf2_9ce4_8422_2325_u64, 0);
             for _ in 0..CASES {
                 let column = columns(&mut dice)[at].1;
@@ -626,7 +627,7 @@ fn every_fill_writes_what_it_wrote_before_on_every_column() {
     let found = hashes(rendered);
     // Every fill a column offers writes something over its cases, so each hash means something.
     for (fill, kind, _) in fills() {
-        for (name, column) in columns(&mut Dice(0)) {
+        for (name, column) in columns(&mut Dice::new(0)) {
             let (_, rows) = found[&format!("{fill} on {name}")];
             assert!(
                 rows > 0 || !column.fills().contains(&kind),
@@ -670,7 +671,7 @@ fn a_cell_is_at_most_32_bytes() {
 
 #[test]
 fn every_fill_renders_on_every_column_without_allocating() {
-    let mut dice = Dice(0xA110C);
+    let mut dice = Dice::new(0xA110C);
     let mut cells = vec![GenCell::Under; MAX_PHRASE_STEPS];
     for kind in FillKind::ALL {
         for (name, column) in columns(&mut dice) {

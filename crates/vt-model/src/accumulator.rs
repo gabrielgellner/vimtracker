@@ -384,6 +384,7 @@ impl Reset {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::random::Xorshift32;
     use crate::scale::ScaleKind;
 
     /// The offsets an accumulator plays over some adds, from the note as written.
@@ -411,13 +412,8 @@ mod tests {
 
     /// Rolls from a small generator, xorshift, for a long random walk.
     fn dice(seed: u32) -> impl FnMut() -> u32 {
-        let mut state = seed.max(1);
-        move || {
-            state ^= state << 13;
-            state ^= state >> 17;
-            state ^= state << 5;
-            state
-        }
+        let mut rng = Xorshift32::new(seed.max(1));
+        move || rng.next_u32()
     }
 
     #[test]

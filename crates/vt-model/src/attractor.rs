@@ -26,6 +26,7 @@
 //! kept within it, so its rare furthest reaches touch the ends and never pass them.
 
 use crate::lfo::Shape;
+use crate::random::splitmix64;
 
 /// How many steps the point takes in a cycle of the LFO's rate.
 pub const STEPS_PER_CYCLE: f64 = 128.0;
@@ -239,7 +240,8 @@ impl Attractor {
     /// settled on the attractor for one cycle and up to three more by the key, at this deform.
     pub fn seeded(system: System, key: u64, deform: f32, cycles: f64) -> Self {
         let pace = Pace::of(system, deform);
-        let keyed = (mixed(key) >> 11) as f64 / (1_u64 << 53) as f64;
+        // The key mixed, so neighbouring keys settle for very different times.
+        let keyed = (splitmix64(key) >> 11) as f64 / (1_u64 << 53) as f64;
         let settle = ((SETTLE_CYCLES + KEYED_CYCLES * keyed) * STEPS_PER_CYCLE) as usize;
         let mut point = Point::of(system, system.start(), pace);
         for _ in 0..settle {
@@ -328,14 +330,6 @@ pub fn attractor_at(system: System, cycles: f64, key: u64, deform: f32) -> [f32;
         assert!(attractor.reach(reached, deform), "it can always go on");
     }
     attractor.point(cycles, deform)
-}
-
-/// A key mixed so neighbouring keys settle for very different times.
-fn mixed(key: u64) -> u64 {
-    let mut mixed = key.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    mixed = (mixed ^ (mixed >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    mixed = (mixed ^ (mixed >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    mixed ^ (mixed >> 31)
 }
 
 #[cfg(test)]

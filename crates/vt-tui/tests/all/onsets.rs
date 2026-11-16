@@ -33,15 +33,14 @@ const HIT_FRAMES: u64 = 8000;
 /// Silence with hits of noise at the frames given, each at its level, decaying.
 fn hits() -> Decoded {
     let mut samples = vec![0.0_f32; LENGTH * 2];
-    let mut seed = 7_u32;
+    let mut rng = vt_model::random::NumericalRecipesLcg::new(7);
     let all = HITS
         .iter()
         .map(|at| (*at, 0.9))
         .chain(GHOSTS.iter().map(|at| (*at, 0.02)));
     for (start, level) in all {
         for frame in start..start + HIT_FRAMES {
-            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-            let noise = (seed >> 8) as f32 / (1 << 24) as f32 * 2.0 - 1.0;
+            let noise = (rng.next_u32() >> 8) as f32 / (1 << 24) as f32 * 2.0 - 1.0;
             let gain = 0.5_f32.powf((frame - start) as f32 / (HIT_FRAMES / 10) as f32);
             let value = noise * level * gain;
             samples[frame as usize * 2] = value;

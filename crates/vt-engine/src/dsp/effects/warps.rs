@@ -41,10 +41,10 @@ use crate::dsp::blocks::clip::soft_clip;
 use crate::dsp::blocks::oversampler::PairOversampler;
 use crate::dsp::blocks::plaits_parts::{DcBlocker, Svf};
 use crate::dsp::blocks::smoother::Smoothed;
-use crate::dsp::blocks::xorshift::Xorshift;
 use crate::dsp::effects::distort::saturating_gains;
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::SlotEffect;
+use vt_model::random::Xorshift32;
 
 /// Where `Algo` is at `FF`, out of 256.
 const TOP_OF_ALGO: f32 = 255.0 / 256.0;
@@ -227,7 +227,7 @@ struct Oscillator {
     increment: f32,
     note: f32,
     noise: Svf,
-    seed: Xorshift,
+    seed: Xorshift32,
     /// Warps' one-poles taking the edge off the saw, at this rate, and the rate itself.
     saw_smoothing: f32,
     rate: u32,
@@ -255,7 +255,7 @@ impl Oscillator {
             increment: 0.0,
             note: f32::NAN,
             noise: Svf::default(),
-            seed: Xorshift::new(0x2545_f491),
+            seed: Xorshift32::new(0x2545_f491),
             saw_smoothing: at_rate(0.3, rate),
             rate,
         }

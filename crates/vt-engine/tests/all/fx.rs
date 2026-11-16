@@ -1169,12 +1169,9 @@ fn a_comb_rings_at_the_note_the_track_plays() {
 fn a_vowel_filter_says_its_vowel_whatever_the_note() {
     use vt_model::insert::Vowel;
     // White noise, played at `C-3` and an octave up, through `A` and through `I`.
-    let mut seed = 1_u32;
+    let mut rng = vt_model::random::NumericalRecipesLcg::new(1);
     let noise: Vec<[f32; 2]> = (0..RATE as usize * 4)
-        .map(|_| {
-            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-            [(seed >> 8) as f32 / 8_388_608.0 - 1.0; 2]
-        })
+        .map(|_| [(rng.next_u32() >> 8) as f32 / 8_388_608.0 - 1.0; 2])
         .collect();
     let played = |vowel: u8, note: &str| {
         let mut song = song(&[&format!("{note} -- --- --- ---")]);

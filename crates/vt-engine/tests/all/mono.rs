@@ -8,6 +8,7 @@ use vt_model::insert::{
     Compressor, CompressorType, Distort, DistortType, Equaliser, Exciter, GateMode, Insert,
     LowPassGate, Vowel,
 };
+use vt_model::random::Xorshift32;
 
 const RATE: u32 = 48_000;
 
@@ -76,14 +77,11 @@ fn slot(insert: Insert) -> InsertState {
 
 /// Noise from a fixed seed, loud and quiet in turns.
 fn noise(frames: usize, seed: u32) -> Vec<f32> {
-    let mut state = seed.max(1);
+    let mut rng = Xorshift32::new(seed.max(1));
     (0..frames)
         .map(|at| {
-            state ^= state << 13;
-            state ^= state >> 17;
-            state ^= state << 5;
             let level = if (at / 2400) % 2 == 0 { 0.9 } else { 0.05 };
-            (state as f32 / u32::MAX as f32 * 2.0 - 1.0) * level
+            (rng.unit() * 2.0 - 1.0) * level
         })
         .collect()
 }

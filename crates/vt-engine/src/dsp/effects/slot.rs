@@ -1127,6 +1127,7 @@ mod tests {
     use super::*;
     use crate::dsp::signals::{peak, sines};
     use vt_model::insert::{Compressor, CompressorType, Delay, Equaliser};
+    use vt_model::random::NumericalRecipesLcg;
 
     const RATE: u32 = 48_000;
     /// Settings take effect at once, as the smoother has nothing to do.
@@ -1496,10 +1497,9 @@ mod tests {
         let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
         let sidechains = SidechainFrames::default();
         let mut state = holding(insert);
-        let mut noise = 1_u32;
+        let mut rng = NumericalRecipesLcg::new(1);
         for sample in sines(RATE as usize / 5, 220.0, 0.9, RATE) {
-            noise = noise.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-            let noise = (noise >> 9) as f32 / (1 << 23) as f32 - 0.5;
+            let noise = (rng.next_u32() >> 9) as f32 / (1 << 23) as f32 - 0.5;
             let frame = [sample + noise, sample * 0.7 - noise];
             state.process_sides(frame, false, smoothing, RATE, &sidechains);
         }
