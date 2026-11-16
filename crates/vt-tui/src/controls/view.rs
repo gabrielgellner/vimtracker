@@ -25,6 +25,7 @@ use vt_model::listed::Listed;
 use vt_model::modulation::{
     MOD_SLOTS, ModField, ModKind, ModUnits, default_mod, depth_text, note_shape_slot,
 };
+use vt_model::param::{Descriptor, HEX_JUMP, NUMBER, PERCENT, kept};
 use vt_model::settings::{
     Kind, LONGEST_GLIDE_MS, SettingId, Units, gate_percent, gate_value, glide_ms, rows_text,
 };
@@ -49,9 +50,8 @@ pub(crate) const IN_SCALE_PITCH: &str = "Pitch in scale";
 const PHASE_NUDGE: i32 = 15;
 const PHASE_JUMP: i32 = 90;
 const AXIS_JUMP: i32 = 120;
-/// How many small steps a large one is: a hex value's and a list's, a percentage's, an octave's
-/// and an accumulator limit's, which is an octave of a seven-note scale.
-const HEX_JUMP: i32 = 0x10;
+/// How many small steps a large one is: a percentage's, an octave's and an accumulator limit's,
+/// which is an octave of a seven-note scale.
 const PERCENT_JUMP: i32 = 10;
 const OCTAVE: i32 = 12;
 const LIMIT_JUMP: i32 = 7;
@@ -91,18 +91,8 @@ impl ParamView {
 
     /// Two hex digits from `00` to `top`, with a bar.
     fn hex(self, value: u8, top: u8, default: u8) -> Self {
-        Self {
-            value: i32::from(value),
-            bounds: (0, i32::from(top)),
-            default: i32::from(default),
-            nudge: Steps::even(1),
-            jump: Steps::even(HEX_JUMP),
-            bar: Some(value),
-            cell: format!("{value:02X}"),
-            typing: Typing::Hex,
-            reads: Reads::Hex { shift: 0 },
-            ..self
-        }
+        let described = Descriptor::hex(self.key, self.name, top, default);
+        self.described(&described, i32::from(value))
     }
 
     /// One of a list, by its place, one step at a time either way, going round past the ends if
@@ -114,52 +104,23 @@ impl ParamView {
         default: usize,
         wraps: bool,
     ) -> Self {
-        let choices: Vec<Choice> = choices.into_iter().collect();
-        let cell = choices
-            .get(at)
-            .map_or_else(String::new, |choice| choice.name.clone().into_owned());
-        Self {
-            value: at as i32,
-            bounds: (0, choices.len().saturating_sub(1) as i32),
-            default: default as i32,
-            nudge: Steps::even(1),
-            jump: Steps::even(HEX_JUMP),
-            wraps,
-            choices,
-            cell,
-            typing: Typing::Listed,
-            ..self
-        }
+        let described = Descriptor::listed(self.key, self.name, choices, default, wraps);
+        self.described(&described, at as i32)
     }
 
     /// Off or on, as `on` and `off` in words, and as a switch in its cell: `=` puts it on and
     /// `-` takes it off.
     fn switch(self, on: bool, default: bool) -> Self {
-        Self {
-            value: i32::from(on),
-            bounds: (0, 1),
-            default: i32::from(default),
-            nudge: Steps::even(1),
-            jump: Steps::even(1),
-            toggle: true,
-            cell: on_off(on),
-            typing: Typing::Toggled,
-            ..self
-        }
+        let described = Descriptor::switch(self.key, self.name, default);
+        self.described(&described, i32::from(on))
     }
 
     /// A whole number from `low` to `high`, reading as `cell`, typed in decimal.
-    fn whole(self, value: i32, (low, high): (i32, i32), default: i32, cell: String) -> Self {
+    fn whole(self, value: i32, bounds: (i32, i32), default: i32, cell: String) -> Self {
+        let described = Descriptor::whole(self.key, self.name, bounds, default);
         Self {
-            value,
-            bounds: (low, high),
-            default,
-            nudge: Steps::even(1),
-            jump: Steps::even(1),
             cell,
-            typing: Typing::Whole { signed: low < 0 },
-            reads: NUMBER,
-            ..self
+            ..self.described(&described, value)
         }
     }
 
@@ -199,22 +160,6 @@ impl ParamView {
         Self { title, ..self }
     }
 }
-
-/// A whole number as it's typed, nothing before it or after it.
-const NUMBER: Reads = Reads::Number {
-    before: None,
-    after: "",
-    off: false,
-    from_one: false,
-};
-
-/// The same followed by a percent sign, or not.
-const PERCENT: Reads = Reads::Number {
-    before: None,
-    after: "%",
-    off: false,
-    from_one: false,
-};
 
 /// A number from 1, or `off` for none.
 const OFF_OR: Reads = Reads::Number {
@@ -1087,11 +1032,7 @@ pub fn set(
     fine: Option<u8>,
 ) -> Option<Action> {
     let shown = view(control, track, song, false)?;
-    let (low, high) = shown.bounds;
-    let value = match shown.wraps && high > low {
-        true => low + (value - low).rem_euclid(high - low + 1),
-        false => value.clamp(low, high),
-    };
+    let value = kept(i64::from(value), shown.bounds, shown.wraps);
     // Each fits what keeps it, being within its bounds.
     let byte = value as u8;
     let index = value as usize;

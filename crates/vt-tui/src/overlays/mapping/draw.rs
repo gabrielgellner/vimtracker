@@ -9,10 +9,10 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
-use crate::app::App;
 use crate::controls::macro_name;
 use crate::graphics::PanelKey;
 use crate::overlays::mapping::{MapField, MappingView, bend_text, end_text};
+use crate::pages::Ctx;
 use crate::widgets::theme;
 use crate::widgets::{image, popup};
 
@@ -37,8 +37,8 @@ fn width_of(field: MapField) -> usize {
 }
 
 /// Draw the mapping view in the middle of an area.
-pub fn draw(frame: &mut Frame, area: Rect, app: &App, view: &MappingView) {
-    let Some(track) = app.song().tracks.get(app.services.cursor.track) else {
+pub fn draw(frame: &mut Frame, area: Rect, ctx: &Ctx, view: &MappingView) {
+    let Some(track) = ctx.song().tracks.get(ctx.cursor().track) else {
         return;
     };
     let held = &track.macros[view.at];
@@ -99,7 +99,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, view: &MappingView) {
                 },
             };
             let style = if on {
-                theme::cursor(app.modes.mode)
+                theme::cursor(ctx.mode())
             } else if by_hand || (field.bends() && map.is_straight()) {
                 // A straight response is dim, so a bent one stands out.
                 theme::dim()

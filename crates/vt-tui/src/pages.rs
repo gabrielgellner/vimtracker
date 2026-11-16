@@ -116,6 +116,12 @@ pub enum Outcome {
     /// Done, and `Space k`'s list of keys opens at this mode's, over what's open, which it goes
     /// back to when it closes, as `?` in a picker opens it at the picker's.
     Keys(Mode),
+    /// Done, and what's open closes and the cursor lands on this setting of the track page or
+    /// the mixer, by row and field, as a jump `Ctrl-O` comes back from, as `/` lands.
+    Land { row: usize, field: usize },
+    /// Done, and this command of the table's runs as `App::run` runs it, the mode staying as it
+    /// is, as `Tab` plays from a field jump.
+    Do(Cmd),
 }
 
 /// One of the program's pages as a component: its own state, its keys, its drawing and its
@@ -186,6 +192,8 @@ pub(crate) struct PageState<'a> {
     wheel: WheelSetting,
     cpu_percent: u64,
     slowdown: &'a SlowdownReadout,
+    /// The search for a setting under way, whose labels go over the settings it finds.
+    field_jump: Option<&'a FieldJump>,
 }
 
 /// What a page is given to run a key: the shared services, to read and change, and the modes that
@@ -197,7 +205,7 @@ pub(crate) struct CtxMut<'a> {
 
 impl App {
     /// What a page reads, to be drawn with.
-    pub(crate) fn ctx(&self) -> Ctx<'_> {
+    pub fn ctx(&self) -> Ctx<'_> {
         Ctx {
             services: &self.services,
             modes: &self.modes,
@@ -233,6 +241,7 @@ impl App {
             wheel: self.wheel.setting,
             cpu_percent: self.readouts.cpu.percent(),
             slowdown: &self.readouts.slowdown,
+            field_jump: self.overlays.field_jump.as_ref(),
         }
     }
 
@@ -398,6 +407,18 @@ impl App {
                     self.modes.mode = Mode::Normal;
                 }
                 Mode::Command => self.modes.mode = Mode::Normal,
+                Mode::Jump => {
+                    self.overlays.field_jump = None;
+                    self.modes.mode = Mode::Normal;
+                }
+                Mode::Mapping => {
+                    self.overlays.mapping = None;
+                    self.modes.mode = Mode::Normal;
+                }
+                Mode::Shape => {
+                    self.overlays.shape = None;
+                    self.modes.mode = Mode::Normal;
+                }
                 _ => {
                     self.overlays.picker = None;
                     // A shape waiting for its command is given up.
@@ -414,6 +435,17 @@ impl App {
                 self.explorer.naming = naming;
                 self.choose(pick);
             }
+            Outcome::Land { row, field } => {
+                self.overlays.field_jump = None;
+                self.modes.mode = Mode::Normal;
+                self.record_jump();
+                if self.modes.view == View::Mixer {
+                    self.mixer_page.row = field;
+                } else {
+                    self.move_control(row, field);
+                }
+            }
+            Outcome::Do(cmd) => self.run(cmd),
             Outcome::Tag { item, tags } => {
                 self.tag_item(item, tags);
                 self.refresh_preview();
@@ -503,7 +535,7 @@ impl<'a> Ctx<'a> {
 
     /// The search for a setting under way, whose labels go over the settings it finds.
     pub fn field_jump(&self) -> Option<&'a FieldJump> {
-        self.modes.field_jump.as_ref()
+        self.page.field_jump
     }
 
     /// How the modes show a setting's cell with the cursor on it this way: in the mode's colour,

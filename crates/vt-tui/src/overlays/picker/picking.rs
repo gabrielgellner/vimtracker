@@ -408,7 +408,11 @@ impl App {
                 kind,
                 ..self.services.live.scale
             }),
-            Pick::ShapeChoice(choice) => self.pick_shape_choice(choice),
+            Pick::ShapeChoice(choice) => {
+                if let Some(panel) = self.overlays.shape.as_mut() {
+                    panel.change(|panel| choice.apply(&mut panel.shape), &mut self.services);
+                }
+            }
             Pick::GenChoice {
                 phrase,
                 generator,

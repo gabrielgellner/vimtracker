@@ -938,7 +938,19 @@ answers `Run` with the line typed, `Close` on `Esc` or a line that doesn't parse
 `Enter(Normal)` on `Backspace` in an empty line; `App::command_line_key` lends it the folder of
 the presets `:preset` lists here, which only the track page knows, and once it's left by `Esc`
 or run, ends the song view's selection and says if the history couldn't be kept. The random
-names it rolls with `C-r` are `Services::names`. The others still read their keys in `App`'s
+names it rolls with `C-r` are `Services::names`. `/`'s field jump (`FieldJump`, in
+`Overlays::field_jump`, which pages read through `Ctx::field_jump` for its labels) is given the
+page's settings and the cursor's place among them before each key, answers `Land` with the
+setting's row and field for `App` to move the cursor to, and `Do` with `Tab`'s and
+`Shift-Tab`'s commands, which play as they do in Normal. A macro's mapping view
+(`MappingView`) changes the macro's mappings through the services itself, answers `Do(Undo)`
+for `u`, after which `App::mapping_key` keeps it on a mapping or closes it, and `Close` when
+`dd` leaves the macro holding nothing; opening it, and `M`, `gd` and `:macro`, are the track
+page's still. The shape panel (`ShapePanel`) previews, keeps and puts back the song through
+the services itself, answers `Open` with a row's choices, `Do` for `Tab` and `Shift-Tab`, which
+play even while a value is typed, and `Close` once it's kept or put back; `App::shape_key`
+remembers a kept shape for `.`, the one thing of `App`'s it needs. Opening it, `gl` and `.`'s
+shaping again are the grammar's and stay on `App`. The explorer still reads its keys in `App`'s
 methods.
 
 A key goes, in this order, to the first that takes it:
@@ -1122,12 +1134,17 @@ entry, and `generators.rs`, which works through the live generators' sources and
     and the Roto's value text read the view. It's vt-tui's, not the model's, as it's resolved from
     `Control`, from a live generator, and by the scale lock the program keeps outside the song;
     what it holds is description only, with nothing of the cursor, the modes or the report.
-    `Ctx::param_view` resolves one with the program's scale.
+    `Ctx::param_view` resolves one with the program's scale. The value-free part of a view is
+    the model's `Descriptor` (`vt-model/src/param.rs`, #873): its names, bounds, default, steps
+    and `Pace`, whether it wraps or is centred, its `Choice`s, its `Typing` and `Reads`, and a
+    `Reading` that says how a value shows; `ParamView::described` fills a view from one at a
+    value, and the page's small builders (`hex`, `listed`, `switch`, `whole`) are its
+    constructors.
 *   **Each setting edited one way** (`widgets/param/edit.rs`, the UI plan's U8, #739). Pure
     functions over the `ParamView` say where a key takes a value: `stepped` for `=` `-` `+` `_`
     and a count, by the view's `pace` where a step depends on the value, so a count moves a list
     that many choices; `stepped_fine` on the fine digits; `typed` for `i`'s text, by the view's
-    `reads` and its `why_not`; `reset` for `x`; and `choices` for `K`'s list, which
+    `reads` and its `why_not` (`Reads::parse`, the model's); `reset` for `x`; and `choices` for `K`'s list, which
     `pickers::choice_picker` opens, each item a `Pick::Param` that `set` writes. A Roto knob's
     turn (`roto/edits.rs`) finds its value in the same view, `edit::shared` and `edit::at_place`,
     and writes it with `set`. `editing.rs`, `typing.rs` and `pickers.rs` keep their own arms only

@@ -937,3 +937,53 @@ Command	C-n	InCommand(NextMatch)	In the list of matches: the next
 Command	C-p	InCommand(PreviousMatch)	In the list of matches: the one before
 Command	Backspace	InCommand(Erase)	Erase a character, or close once the line is empty
 Command	C-r	InCommand(RollName)	On a name line: another random name
+Jump	Tab	InJump(Play)	Play, or pause in place
+Jump	S-Tab	InJump(PlayFromStart)	Play from the start
+Jump	Enter	InJump(Land)	Land on the nearest match
+Jump	Backspace	InJump(Erase)	Erase a letter, or close once the search is empty
+Jump	Esc	InJump(Close)	Close
+Mapping	Esc	InMapping(Close)	Close
+Mapping	q	InMapping(Close)	Close
+Mapping	j	InMapping(Down)	The next setting
+Mapping	Down	InMapping(Down)	The next setting
+Mapping	k	InMapping(Up)	The setting before
+Mapping	Up	InMapping(Up)	The setting before
+Mapping	h	InMapping(Left)	Left, across Min, Max, Curve and S
+Mapping	Left	InMapping(Left)	Left, across Min, Max, Curve and S
+Mapping	l	InMapping(Right)	Right, across Min, Max, Curve and S
+Mapping	Right	InMapping(Right)	Right, across Min, Max, Curve and S
+Mapping	=	InMapping(Increase)	Up a step, an end's coarse step or a bend's 5
+Mapping	D-l	InMapping(Increase)	Up a step, an end's coarse step or a bend's 5
+Mapping	-	InMapping(Decrease)	Down a step, an end's coarse step or a bend's 5
+Mapping	D-h	InMapping(Decrease)	Down a step, an end's coarse step or a bend's 5
+Mapping	+	InMapping(IncreaseLarge)	Up a large step, 10 coarse steps or a bend's 25
+Mapping	D-k	InMapping(IncreaseLarge)	Up a large step, 10 coarse steps or a bend's 25
+Mapping	_	InMapping(DecreaseLarge)	Down a large step, 10 coarse steps or a bend's 25
+Mapping	D-j	InMapping(DecreaseLarge)	Down a large step, 10 coarse steps or a bend's 25
+Mapping	x	InMapping(Straighten)	On Curve or S: back to straight
+Mapping	~	InMapping(Swap)	Swap the range's ends
+Mapping	i	InMapping(Type)	Type it, an end in hex and a bend from -100 to 100
+Mapping	d	InMapping(Delete)	Twice: take the setting off the macro
+Mapping	u	InMapping(Undo)	Undo
+Shape	Esc	InShape(Cancel)	Close, putting back what was there
+Shape	Enter	InShape(Keep)	Keep it, as plain values
+Shape	L	InShape(KeepLive)	Keep it live, as a generator
+Shape	j	InShape(Down)	The next setting
+Shape	Down	InShape(Down)	The next setting
+Shape	k	InShape(Up)	The setting before
+Shape	Up	InShape(Up)	The setting before
+Shape	=	InShape(Increase)	Increase the setting
+Shape	D-l	InShape(Increase)	Increase the setting
+Shape	-	InShape(Decrease)	Decrease the setting
+Shape	D-h	InShape(Decrease)	Decrease the setting
+Shape	+	InShape(IncreaseLarge)	Increase the setting a large step
+Shape	D-k	InShape(IncreaseLarge)	Increase the setting a large step
+Shape	_	InShape(DecreaseLarge)	Decrease the setting a large step
+Shape	D-j	InShape(DecreaseLarge)	Decrease the setting a large step
+Shape	x	InShape(Reset)	The setting back to what it started as
+Shape	~	InShape(Swap)	Swap the ends, or reverse a list
+Shape	r	InShape(Roll)	Roll it again
+Shape	K	InShape(Choose)	Choose from a list
+Shape	i	InShape(Type)	Type the setting
+Shape	Tab	InShape(Play)	Play, or pause in place
+Shape	S-Tab	InShape(PlayFromStart)	Play from the start

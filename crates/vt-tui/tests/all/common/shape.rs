@@ -14,7 +14,7 @@ pub fn shape_panel(app: &App, width: u16, height: u16) -> String {
     let backend = ratatui::backend::TestBackend::new(width, height);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::overlays::shape::draw::draw(frame, frame.area(), app, &panel))
+        .draw(|frame| vt_tui::overlays::shape::draw::draw(frame, frame.area(), &app.ctx(), &panel))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..height)

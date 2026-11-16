@@ -11,9 +11,12 @@ use crate::input::keys::{Key, parse, parse_sequence};
 use crate::input::mode::{Mode, View};
 use crate::overlays::Overlay as _;
 use crate::overlays::command::{CommandKey, CommandLine};
+use crate::overlays::field_jump::{FieldJump, JumpKey};
 use crate::overlays::guides::{GuideKey, GuideView};
 use crate::overlays::help::{Help, HelpKey};
+use crate::overlays::mapping::{MappingKey, MappingView};
 use crate::overlays::picker::{Picker, PickerKey};
+use crate::overlays::shape::{ShapeKey, ShapePanel};
 use crate::pages::Page as _;
 use crate::pages::audio::AudioPage;
 use crate::pages::chain::ChainView;
@@ -207,6 +210,12 @@ pub enum Cmd {
     InGuide(GuideKey),
     /// A key of the `:` line.
     InCommand(CommandKey),
+    /// A key of `/`'s field jump.
+    InJump(JumpKey),
+    /// A key of a macro's mapping view.
+    InMapping(MappingKey),
+    /// A key of the shape panel.
+    InShape(ShapeKey),
 }
 
 /// One row of the table.
@@ -435,6 +444,9 @@ pub fn bindings() -> Vec<Binding> {
     add(Help::MODE, Help::KEYS);
     add(GuideView::MODE, GuideView::KEYS);
     add(CommandLine::MODE, CommandLine::KEYS);
+    add(FieldJump::MODE, FieldJump::KEYS);
+    add(MappingView::MODE, MappingView::KEYS);
+    add(ShapePanel::MODE, ShapePanel::KEYS);
     with_cmd_adjusts(rows)
 }
 
