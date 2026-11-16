@@ -464,6 +464,10 @@ impl TrackState {
                     self.held_voice_mode = value;
                     return;
                 }
+                SettingId::KEY_TRACK => {
+                    self.held_key_track = value;
+                    return;
+                }
                 _ => return,
             },
             // Read as a note starts, which keeps what it chose until it ends.
