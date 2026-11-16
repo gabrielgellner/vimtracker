@@ -81,6 +81,9 @@ pub(super) fn edit(next: &mut Song, action: &Action) -> Result<(), EditError> {
                 .ok_or(EditError::NoTrack(*track))?
                 .speed = *speed;
         }
+        Action::SetTrackPhase { track, phase } => {
+            track_mut(next, *track)?.phase = *phase;
+        }
         Action::SetTrackReset { track, reset } => {
             if reset.is_some_and(|steps| !(1..=MAX_TRACK_RESET).contains(&steps)) {
                 return Err(EditError::TrackReset);

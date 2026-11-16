@@ -29,7 +29,9 @@ use vt_model::settings::{
 };
 use vt_model::shape::params::Typing;
 use vt_model::shape::{Context, GenParam, Where};
-use vt_model::song::{FilterType, Machine, Role, Song, SynthVoice, Track, reset_name, trim_text};
+use vt_model::song::{
+    FilterType, Machine, Phase, Role, Song, SynthVoice, Track, reset_name, trim_text,
+};
 use vt_model::speed::Speed;
 
 use crate::services::banking::{sample_shown, sample_text};
@@ -364,6 +366,7 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
             }
         }
         Control::Speed => listed_of(of, track.speed, Speed::Sixteenth, false),
+        Control::Phase => listed_of(of, track.phase, Phase::Free, false),
         Control::Groove => {
             let plays = track.groove.unwrap_or(song.groove);
             of.listed(
@@ -574,6 +577,9 @@ fn at_default(control: Control, track: &Track) -> bool {
         || control == Control::Speed && track.speed == Speed::Sixteenth
         || control == Control::Reset && track.reset.is_none()
         || control == Control::Glide && track.glide == 0
+        // `Free`, and on a voice whose sound has no phase, where it does nothing.
+        || control == Control::Phase
+            && (track.phase == Phase::Free || !track.voice().is_some_and(SynthVoice::has_phase))
         || control == Control::FilterMode && !track.filter.has_modes()
         || control == Control::Base(TrackControl::Punch) && !track.filter.has_punch()
         || control == Control::Safe && !track.filter.has_safe()
@@ -967,6 +973,10 @@ pub fn set(
         Control::Speed => Action::SetTrackSpeed {
             track: at,
             speed: Speed::from_index(index),
+        },
+        Control::Phase => Action::SetTrackPhase {
+            track: at,
+            phase: Phase::from_index(index as u8),
         },
         Control::Groove => Action::SetTrackGroove {
             track: at,

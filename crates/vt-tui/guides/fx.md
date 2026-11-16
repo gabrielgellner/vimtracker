@@ -54,6 +54,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `RATE` | The step's speed: `00` 1/32, `02` 1/16, `04` 1/8, `06` 1/4 |
 | `QNT` | Nudges brought to the grid: `00` none, `80` half, `FF` all |
 | `GLD` | How long a tie glides into the next note: `00` off, `80` about 60 ms |
+| `OSC` | A synth's `Phase` for the row's note: `00` Free, `01` Reset |
 | `1BYP` | Switch slot 1 out, `01`, or back in, `00`. `2BYP` to `4BYP` the others |
 | `DEP4` | Mod 4's depth: `80` is none, as on the Mod page. `DEP5` `DEP6` too |
 | `DEP2` | An envelope's depth. `DEP1` `DEP3` too, but not the notes' shape |

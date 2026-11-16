@@ -1130,6 +1130,35 @@ fn the_track_page_quantises_the_nudges_from_under_velocity_and_leaves_them_writt
 }
 
 #[test]
+fn a_synths_play_device_has_its_phase_and_a_samplers_hasnt() {
+    use vt_model::song::Phase;
+    use vt_tui::screen::status::value_shown;
+    let mut song = Song::new(1);
+    song.tracks[0].machine = Machine::Plaits(SynthVoice::VirtualAnalog);
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, _realtime) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    press(&mut app, " 5}2}$");
+    assert_eq!(app.track_control().label(), "Phase");
+    assert_eq!(value_shown(&app).as_deref(), Some("Free"));
+    press(&mut app, "=");
+    assert_eq!(app.song().tracks[0].phase, Phase::Reset);
+    assert_eq!(value_shown(&app).as_deref(), Some("Reset"));
+    press(&mut app, "x");
+    assert_eq!(app.song().tracks[0].phase, Phase::Free);
+
+    let (mut app, _realtime) = on_track_page();
+    assert_eq!(app.song().tracks[0].machine, Machine::Sampler);
+    press(&mut app, " 5}2}$");
+    assert_eq!(
+        app.track_control().label(),
+        "Choke",
+        "a sampler's Play ends at its third column"
+    );
+}
+
+#[test]
 fn the_track_page_sets_how_long_notes_last() {
     use vt_tui::screen::status::value_shown;
     let (mut app, _realtime) = on_track_page();

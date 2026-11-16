@@ -456,6 +456,10 @@ impl TrackState {
                     self.held_glide = value;
                     return;
                 }
+                SettingId::PHASE => {
+                    self.held_phase = value;
+                    return;
+                }
                 _ => return,
             },
             // Read as a note starts, which keeps what it chose until it ends.

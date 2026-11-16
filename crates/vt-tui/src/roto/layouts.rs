@@ -780,20 +780,36 @@ const MASTER_OUTPUT: DeviceLayout = stored(
 const PLAY: DeviceLayout = live(
     "play",
     &[
-        knobs(
-            "Play",
-            [
-                s("pitch"),
-                s("glide"),
-                s("gate"),
-                s("choke"),
-                s("speed"),
-                s("groove"),
-                s("reset"),
-                s("velocity"),
-            ],
-        ),
+        PLAY_PAGE,
         knobs("Timing", [s("quantise"), __, __, __, __, __, __, __]),
+    ],
+);
+
+/// The Play device's first page, a synth's and a sampler's.
+const PLAY_PAGE: Page<Setting> = knobs(
+    "Play",
+    [
+        s("pitch"),
+        s("glide"),
+        s("gate"),
+        s("choke"),
+        s("speed"),
+        s("groove"),
+        s("reset"),
+        s("velocity"),
+    ],
+);
+
+/// A synth's: the sampler's, with whether its oscillators start again on each note beside
+/// `Quantise`.
+const SYNTH_PLAY: DeviceLayout = live(
+    "synthplay",
+    &[
+        PLAY_PAGE,
+        knobs(
+            "Timing",
+            [s("quantise"), s("phase"), __, __, __, __, __, __],
+        ),
     ],
 );
 
@@ -2182,13 +2198,14 @@ const BY_MOD: [&DeviceLayout; ModKind::ALL.len()] = by_kind([
 ]);
 
 /// The layouts of the devices every track has of its own, apart from its machine's.
-const TRACKS_OWN: [&DeviceLayout; 9] = [
+const TRACKS_OWN: [&DeviceLayout; 10] = [
     &FILTER,
     &OUTPUT,
     &GROUP_OUTPUT,
     &RETURN_OUTPUT,
     &MASTER_OUTPUT,
     &PLAY,
+    &SYNTH_PLAY,
     &ACCUMULATOR,
     &ARPEGGIO,
     &MACROS,
@@ -2266,6 +2283,7 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
         }
         Some(Control::Insert(slot)) => effect_layout(track.inserts[slot]),
         Some(Control::FilterType) => &FILTER,
+        Some(Control::Base(TrackControl::Pitch)) if track.voice().is_some() => &SYNTH_PLAY,
         Some(Control::Base(TrackControl::Pitch)) => &PLAY,
         Some(Control::Mod(slot, _)) => BY_MOD[track.mods[slot].kind as usize],
         Some(Control::Accumulator(_)) => &ACCUMULATOR,

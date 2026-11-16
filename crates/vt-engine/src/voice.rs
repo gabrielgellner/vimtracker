@@ -148,9 +148,9 @@ macro_rules! synths {
                 }
             }
 
-            fn restart_phase(&mut self) {
+            fn restart_phase(&mut self, rate: u32) {
                 match self {
-                    $(Self::$voice(synth) => SynthEngine::restart_phase(synth),)+
+                    $(Self::$voice(synth) => SynthEngine::restart_phase(synth, rate),)+
                 }
             }
 
@@ -480,7 +480,7 @@ impl Voice {
             return;
         };
         if carry.restart {
-            synth.restart_phase();
+            synth.restart_phase(self.rate);
         }
         synth.trigger(note.accent);
         if let Some(seed) = carry.noise {
