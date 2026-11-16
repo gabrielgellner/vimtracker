@@ -73,9 +73,10 @@ impl ParamView {
     /// Its description at `value`, as the model describes the setting: its range, steps, list,
     /// typing and how the value reads in its cell. Its names, title, units and fine part are left
     /// as they are.
-    pub fn described(self, described: &Descriptor, value: i32) -> Self {
+    pub fn described(self, described: Descriptor, value: i32) -> Self {
         let (nudge, jump) = described.steps(value);
         let shown = described.shown(value, self.fine);
+        let (bar, toggle) = (described.bar(value), described.reading == Reading::Switch);
         Self {
             value,
             bounds: described.bounds,
@@ -85,14 +86,14 @@ impl ParamView {
             pace: described.pace,
             wraps: described.wraps,
             centred: described.centred,
-            bar: described.bar(value),
-            toggle: described.reading == Reading::Switch,
-            choices: described.choices.clone(),
+            bar,
+            toggle,
+            choices: described.choices,
             cell: shown.cell,
             text: shown.text,
             typing: described.typing,
             reads: described.reads,
-            why_not: described.why_not.clone(),
+            why_not: described.why_not,
             ..self
         }
     }

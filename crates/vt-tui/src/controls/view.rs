@@ -22,9 +22,7 @@ use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lane::{LANE_RATES, LaneMove, RATE_AS_WRITTEN, length_rows};
 use vt_model::listed::Listed;
-use vt_model::modulation::{
-    MOD_SLOTS, ModField, ModKind, ModUnits, default_mod, depth_text, note_shape_slot,
-};
+use vt_model::modulation::{MOD_SLOTS, ModField, ModKind, default_mod, note_shape_slot};
 use vt_model::param::{Descriptor, HEX_JUMP, NUMBER, PERCENT, Reading, kept};
 use vt_model::settings::{
     Kind, LONGEST_GLIDE_MS, SettingId, Units, gate_percent, gate_value, glide_ms, rows_text,
@@ -33,7 +31,6 @@ use vt_model::shape::params::{Typing, Units as GenUnits};
 use vt_model::shape::{Context, GenParam, Where};
 use vt_model::song::{FilterType, Machine, Role, Song, SynthVoice, Track, reset_name, trim_text};
 use vt_model::speed::Speed;
-use vt_model::tracking::Source;
 
 use crate::services::banking::{sample_shown, sample_text};
 use crate::services::generators::with_live;
@@ -45,15 +42,9 @@ use super::{AccumulatorField, ArpField, Control, LaneField, key, macro_name};
 /// What a slot going to `Pitch` in scale shows as its destination.
 pub(crate) const IN_SCALE_PITCH: &str = "Pitch in scale";
 
-/// How far a small and a large step move a phase, in degrees, and an attractor's large one, from
-/// one axis to the next: `x` at 0°, `y` at 120° and `z` at 240°.
-const PHASE_NUDGE: i32 = 15;
-const PHASE_JUMP: i32 = 90;
-const AXIS_JUMP: i32 = 120;
-/// How many small steps a large one is: a percentage's, an octave's and an accumulator limit's,
-/// which is an octave of a seven-note scale.
+/// How many small steps a large one is: a percentage's and an accumulator limit's, which is an
+/// octave of a seven-note scale.
 const PERCENT_JUMP: i32 = 10;
-const OCTAVE: i32 = 12;
 const LIMIT_JUMP: i32 = 7;
 
 impl ParamView {
@@ -92,7 +83,7 @@ impl ParamView {
     /// Two hex digits from `00` to `top`, with a bar.
     fn hex(self, value: u8, top: u8, default: u8) -> Self {
         let described = Descriptor::hex(self.key, self.name, top, default);
-        self.described(&described, i32::from(value))
+        self.described(described, i32::from(value))
     }
 
     /// One of a list, by its place, one step at a time either way, going round past the ends if
@@ -105,14 +96,14 @@ impl ParamView {
         wraps: bool,
     ) -> Self {
         let described = Descriptor::listed(self.key, self.name, choices, default, wraps);
-        self.described(&described, at as i32)
+        self.described(described, at as i32)
     }
 
     /// Off or on, as `on` and `off` in words, and as a switch in its cell: `=` puts it on and
     /// `-` takes it off.
     fn switch(self, on: bool, default: bool) -> Self {
         let described = Descriptor::switch(self.key, self.name, default);
-        self.described(&described, i32::from(on))
+        self.described(described, i32::from(on))
     }
 
     /// A whole number from `low` to `high`, reading as `cell`, typed in decimal.
@@ -120,7 +111,7 @@ impl ParamView {
         let described = Descriptor::whole(self.key, self.name, bounds, default);
         Self {
             cell,
-            ..self.described(&described, value)
+            ..self.described(described, value)
         }
     }
 
@@ -265,7 +256,7 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
                         choices: described.choices,
                         ..Descriptor::hex(entry.key, entry.name, entry.kind.top(), entry.default)
                     };
-                    let view = of.described(&hex, i32::from(value));
+                    let view = of.described(hex, i32::from(value));
                     ParamView {
                         numbered: id != SettingId::SLICE,
                         cell: match usize::from(value) >= view.choices.len() || id == SettingId::SLICE {
@@ -275,7 +266,7 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
                         ..view
                     }
                 }
-                Kind::Continuous { .. } => entry_view(of, control, track, &described, value),
+                Kind::Continuous { .. } => entry_view(of, control, track, described, value),
             }
         }
         Control::Base(which) => {
@@ -323,7 +314,7 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
                 },
                 Kind::Stepped { .. } => found.described(),
             };
-            entry_view(of, control, track, &described, insert.value(param))
+            entry_view(of, control, track, described, insert.value(param))
         }
         Control::Insert(slot) => {
             let insert = track.inserts[slot];
@@ -538,7 +529,7 @@ fn entry_view(
     of: ParamView,
     control: Control,
     track: &Track,
-    described: &Descriptor,
+    described: Descriptor,
     value: u8,
 ) -> ParamView {
     let fine = registry(control, track).map(|(_, value)| value as u8);
@@ -597,138 +588,18 @@ fn untuned(song: &Song, track: &Track, control: Control) -> bool {
         && tuning(song, track).is_none_or(|tuning| tuning.at_rest(control))
 }
 
-/// One of a mod slot's settings, under its type, as its [`ModUnits`] read and step, with the
-/// page's own: each slot's titles, where it goes, and the note-shaping slot's `--`.
+/// One of a mod slot's settings, as the model describes it under its type, with the page's own:
+/// each slot's titles, where it goes, the note-shaping slot's `--`, and a type only `K` picks.
 fn mod_view(of: ParamView, track: &Track, slot: usize, field: ModField) -> ParamView {
     let modulator = &track.mods[slot];
-    let (low, high) = modulator.bounds(field).unwrap_or((0, 0));
-    let choices = modulator.choices(field).into_iter();
-    let of = ParamView {
-        value: modulator.field(field).unwrap_or(0),
-        bounds: (low, high),
-        default: modulator.default_field(slot, field).unwrap_or(0),
-        nudge: Steps::even(1),
-        jump: Steps::even(HEX_JUMP),
-        choices: choices
-            .map(|(name, meaning)| Choice::named(name).meaning(meaning))
-            .collect(),
-        cell: modulator.text(field).unwrap_or_else(|| "--".to_owned()),
-        typing: Typing::Whole { signed: false },
-        ..of
-    };
-    let name = field.name();
-    // A signed amount in hex, as a depth is.
-    let signed = |of: ParamView, what: &str| {
-        let (low, high) = (depth_text(low as i16), depth_text(high as i16));
-        ParamView {
-            typing: Typing::Whole { signed: true },
-            ..of
-        }
-        .reads(
-            Reads::HexWithin { signed: true },
-            format!("{what} is hex from {low} to {high}"),
-        )
-    };
-    let view = match field.units() {
-        ModUnits::Listed | ModUnits::Switch => ParamView {
-            wraps: true,
-            typing: Typing::Listed,
-            ..of
+    let view = match modulator.field(field) {
+        Some(value) => of.described(modulator.described(slot, field), value),
+        // A rate, where it goes, and a setting its type hasn't, which reads as its slot says or
+        // as nothing.
+        None => ParamView {
+            cell: modulator.text(field).unwrap_or_else(|| "--".to_owned()),
+            ..of.described(modulator.described(slot, field), 0)
         },
-        // An envelope's times step finer while they're short.
-        ModUnits::Time => of.paced(Pace::Time).reads(
-            NUMBER,
-            format!("Times are milliseconds from {low} to {high}"),
-        ),
-        // `Note` is below no time, so `-` from 0 ms holds for the note.
-        ModUnits::Hold => of.paced(Pace::Hold).reads(
-            Reads::Hold,
-            format!("{name} is milliseconds from 0 to {high}, or note"),
-        ),
-        ModUnits::Percent => ParamView {
-            jump: Steps::even(PERCENT_JUMP),
-            ..of
-        }
-        .reads(PERCENT, format!("{name} is a percent from {low} to {high}")),
-        ModUnits::Count { what, from_one } => {
-            let first = i32::from(from_one);
-            ParamView {
-                jump: Steps::even(1),
-                ..of
-            }
-            .reads(
-                Reads::Number {
-                    before: None,
-                    after: "",
-                    off: false,
-                    from_one,
-                },
-                format!("{name} is {what}, from {} to {}", low + first, high + first),
-            )
-        }
-        ModUnits::Hex => ParamView {
-            typing: Typing::Hex,
-            ..of
-        }
-        .reads(
-            Reads::HexWithin { signed: false },
-            format!("{name} is hex from {low:02X} to {high:02X}"),
-        ),
-        ModUnits::Signed => signed(of, name),
-        ModUnits::Step => signed(
-            ParamView {
-                jump: Steps::even(OCTAVE),
-                ..of
-            },
-            "A step",
-        ),
-        // An attractor's large step goes from one axis to the next.
-        ModUnits::Degrees => ParamView {
-            nudge: Steps::even(PHASE_NUDGE),
-            jump: Steps::even(match modulator.lfo.shape.is_attractor() {
-                true => AXIS_JUMP,
-                false => PHASE_JUMP,
-            }),
-            wraps: true,
-            ..of
-        }
-        .reads(NUMBER, format!("{name} is degrees from {low} to {high}")),
-        // These step through their own kinds.
-        ModUnits::Rate => ParamView {
-            nudge: Steps::NONE,
-            jump: Steps::NONE,
-            typing: Typing::Rate,
-            ..of
-        },
-        ModUnits::Fade => ParamView {
-            nudge: Steps::NONE,
-            jump: Steps::NONE,
-            ..of
-        },
-        // A large step on a map of notes is an octave.
-        ModUnits::Mapped => {
-            let source = modulator.track.source;
-            let (lowest, highest) = (source.text(low as u8), source.text(high as u8));
-            match source == Source::Note {
-                true => ParamView {
-                    jump: Steps::even(OCTAVE),
-                    typing: Typing::Named { list: false },
-                    ..of
-                }
-                .reads(
-                    Reads::Note,
-                    format!("{name} is a note from {lowest} to {highest}"),
-                ),
-                false => ParamView {
-                    typing: Typing::Hex,
-                    ..of
-                }
-                .reads(
-                    Reads::HexWithin { signed: false },
-                    format!("{name} is hex from {lowest} to {highest}"),
-                ),
-            }
-        }
     };
     // The slot that shapes each note does so with its level, one way only, rather than moving
     // a value.

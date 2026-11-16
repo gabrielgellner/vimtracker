@@ -9,11 +9,21 @@ use crate::envelope::{Curve, Hold, MAX_HOLD_MS, MAX_RATCHET};
 use crate::grid::Grid;
 use crate::lfo::{Fade, LfoMode, MAX_DEFORM, Shape};
 use crate::listed::Listed;
+use crate::param::{Choice, Descriptor, HEX_JUMP, NUMBER, PERCENT, Pace, Reading, Reads, Typing};
 use crate::settings::{MOD_OWN_SETTINGS, SettingId};
 use crate::steps::{Loop, MAX_MUTATE, MAX_STEP, STEPS, StepsMode};
 use crate::tracking::Source;
 
 use super::{MAX_DEPTH, ModKind, ModSlot, Polarity, default_mod, depth_text};
+
+/// How far a small and a large step move a phase, in degrees, and an attractor's large one, from
+/// one axis to the next: `x` at 0°, `y` at 120° and `z` at 240°.
+const PHASE_NUDGE: i32 = 15;
+const PHASE_JUMP: i32 = 90;
+const AXIS_JUMP: i32 = 120;
+/// How many small steps a percentage's large one is, and an octave's, of semitones.
+const PERCENT_JUMP: i32 = 10;
+const OCTAVE: i32 = 12;
 
 /// One setting of a mod slot: its type, its mode, where it goes and how far, which every type has
 /// in its own way, then each type's own, which mean what they do under the slot's type.
@@ -136,41 +146,6 @@ impl ModField {
         }
     }
 
-    /// How it reads and steps, which the Mod page builds its view from.
-    pub fn units(self) -> ModUnits {
-        match self {
-            Self::Type
-            | Self::Mode
-            | Self::Polarity
-            | Self::Destination
-            | Self::Shape
-            | Self::Loop => ModUnits::Listed,
-            Self::Reset => ModUnits::Switch,
-            Self::Attack | Self::Decay | Self::Release | Self::Peak => ModUnits::Time,
-            Self::Hold => ModUnits::Hold,
-            Self::Sustain | Self::Body | Self::Mutate => ModUnits::Percent,
-            Self::Ratchet => ModUnits::Count {
-                what: "how many strikes",
-                from_one: false,
-            },
-            Self::Length => ModUnits::Count {
-                what: "how many steps",
-                from_one: false,
-            },
-            Self::Start => ModUnits::Count {
-                what: "a step",
-                from_one: true,
-            },
-            Self::Colour => ModUnits::Hex,
-            Self::Depth | Self::Smooth | Self::Deform => ModUnits::Signed,
-            Self::Step(_) => ModUnits::Step,
-            Self::Phase => ModUnits::Degrees,
-            Self::Rate => ModUnits::Rate,
-            Self::Fade => ModUnits::Fade,
-            Self::Low | Self::High => ModUnits::Mapped,
-        }
-    }
-
     /// Its place among a slot's type's own settings in the registry, if macros and modulation
     /// move it: an index of [`MOD_OWN_FIELDS`].
     pub fn own(self) -> Option<usize> {
@@ -192,40 +167,6 @@ impl ModField {
             (None, None) => None,
         }
     }
-}
-
-/// How one of a slot's settings reads and steps, whatever type has it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ModUnits {
-    /// One of a list, by its place in [`ModSlot::choices`], or where it goes, by the track's.
-    Listed,
-    /// Off or on.
-    Switch,
-    /// Milliseconds, whose steps grow as it gets longer.
-    Time,
-    /// An AHD's hold: milliseconds, or `Note` below none.
-    Hold,
-    Percent,
-    /// How many, `what` saying of what, shown counted from 1 where `from_one`.
-    Count {
-        what: &'static str,
-        from_one: bool,
-    },
-    /// Hex from `00`.
-    Hex,
-    /// Hex either side of none, with its sign.
-    Signed,
-    /// One of Steps' values: signed hex, whose large step is an octave, as on `Pitch` it's
-    /// semitones.
-    Step,
-    /// Degrees round a cycle, going round past either end.
-    Degrees,
-    /// A division or hertz, or Steps' own rate, which steps through its kinds.
-    Rate,
-    /// An LFO's fade, which steps through its kinds.
-    Fade,
-    /// Track's map: a note or hex, by what it follows.
-    Mapped,
 }
 
 /// One mod type described: its name and what it is, and which settings it has and where they sit
@@ -603,9 +544,9 @@ impl ModSlot {
         }
     }
 
-    /// One of its settings as its cell shows it, by its [`ModField::units`]: `120 ms`, `63%`,
-    /// `-42`, `Note` for an AHD's hold, and an attractor's phase by the axis heard where it's one
-    /// alone. None for one its type hasn't, or for where it goes, which its track names.
+    /// One of its settings as its cell shows it, as it's described: `120 ms`, `63%`, `-42`,
+    /// `Note` for an AHD's hold, and an attractor's phase by the axis heard where it's one alone.
+    /// None for one its type hasn't, or for where it goes, which its track names.
     pub fn text(&self, field: ModField) -> Option<String> {
         let Some(value) = self.field(field) else {
             // A rate isn't one number. One a note, Steps have none.
@@ -617,29 +558,186 @@ impl ModSlot {
                 }
             });
         };
-        let attractor = self.lfo.shape.is_attractor();
-        Some(match field.units() {
-            ModUnits::Listed => {
-                let at = usize::try_from(value).ok()?;
-                self.choices(field).into_iter().nth(at)?.0.into_owned()
+        // What it's put back to doesn't change how it reads, so any slot's will do.
+        Some(self.described(0, field).shown(value, None).cell)
+    }
+
+    /// How one of its settings reads under its type: by a list's names, `on` or `off`, a time,
+    /// a percentage, a count, hex, a signed amount, degrees, a rate, a fade, or Track's map by what
+    /// it follows. Where it goes is its track's to say.
+    pub fn reading(&self, field: ModField) -> Reading {
+        match field {
+            ModField::Type
+            | ModField::Mode
+            | ModField::Polarity
+            | ModField::Destination
+            | ModField::Shape
+            | ModField::Loop => Reading::Listed,
+            ModField::Reset => Reading::Switch,
+            ModField::Attack | ModField::Decay | ModField::Release | ModField::Peak => {
+                Reading::Time
             }
-            ModUnits::Switch => if value != 0 { "on" } else { "off" }.to_owned(),
-            ModUnits::Hold if value < 0 => "Note".to_owned(),
-            ModUnits::Time | ModUnits::Hold => format!("{value} ms"),
-            ModUnits::Percent => format!("{value}%"),
-            ModUnits::Count { from_one, .. } => (value + i32::from(from_one)).to_string(),
-            ModUnits::Hex => format!("{value:02X}"),
-            ModUnits::Signed | ModUnits::Step => depth_text(value as i16),
-            ModUnits::Degrees => match value {
-                0 if attractor => "x".to_owned(),
-                120 if attractor => "y".to_owned(),
-                240 if attractor => "z".to_owned(),
-                _ => format!("{value}°"),
+            ModField::Hold => Reading::Hold,
+            ModField::Sustain | ModField::Body | ModField::Mutate => Reading::Percent,
+            ModField::Ratchet => Reading::Count {
+                what: "how many strikes",
+                from_one: false,
             },
-            ModUnits::Fade => self.lfo.fade.to_string(),
-            ModUnits::Mapped => self.track.source.text(value as u8),
-            ModUnits::Rate => return None,
-        })
+            ModField::Length => Reading::Count {
+                what: "how many steps",
+                from_one: false,
+            },
+            ModField::Start => Reading::Count {
+                what: "a step",
+                from_one: true,
+            },
+            ModField::Colour => Reading::Hex,
+            ModField::Depth | ModField::Smooth | ModField::Deform | ModField::Step(_) => {
+                Reading::SignedHex
+            }
+            // An attractor's phase is heard alone on an axis at each third of the way round.
+            ModField::Phase => Reading::Degrees {
+                axes: self.lfo.shape.is_attractor(),
+            },
+            ModField::Rate => Reading::Rate,
+            ModField::Fade => Reading::Fade,
+            ModField::Low | ModField::High => Reading::Mapped(self.track.source),
+        }
+    }
+
+    /// One of the `slot`th slot's settings described under its type, as it reads, steps and is
+    /// typed. A rate and where it goes aren't one number, nor is a setting its type hasn't: they're
+    /// described with no bounds, and stepped and listed by their own rules. The registry's name
+    /// and key for it are the page's; this names it by its field.
+    pub fn described(&self, slot: usize, field: ModField) -> Descriptor {
+        let (low, high) = self.bounds(field).unwrap_or((0, 0));
+        let name = field.name();
+        let reading = self.reading(field);
+        let of = Descriptor {
+            reading,
+            bounds: (low, high),
+            default: self.default_field(slot, field).unwrap_or(0),
+            nudge: 1,
+            jump: HEX_JUMP,
+            choices: self
+                .choices(field)
+                .into_iter()
+                .map(|(name, meaning)| Choice::named(name).meaning(meaning))
+                .collect(),
+            typing: Typing::Whole { signed: false },
+            reads: Reads::No,
+            ..Descriptor::whole(name, name, (low, high), 0)
+        };
+        // A signed amount in hex, as a depth is.
+        let signed = |of: Descriptor, what: &str| Descriptor {
+            typing: Typing::Whole { signed: true },
+            reads: Reads::HexWithin { signed: true },
+            why_not: Cow::Owned(format!(
+                "{what} is hex from {} to {}",
+                depth_text(low as i16),
+                depth_text(high as i16)
+            )),
+            ..of
+        };
+        let why = |text: String| Cow::Owned(text);
+        match reading {
+            Reading::Listed | Reading::Switch => Descriptor {
+                wraps: true,
+                typing: Typing::Listed,
+                ..of
+            },
+            // An envelope's times step finer while they're short.
+            Reading::Time => Descriptor {
+                pace: Pace::Time,
+                reads: NUMBER,
+                why_not: why(format!("Times are milliseconds from {low} to {high}")),
+                ..of
+            },
+            // `Note` is below no time, so `-` from 0 ms holds for the note.
+            Reading::Hold => Descriptor {
+                pace: Pace::Hold,
+                reads: Reads::Hold,
+                why_not: why(format!("{name} is milliseconds from 0 to {high}, or note")),
+                ..of
+            },
+            Reading::Percent => Descriptor {
+                jump: PERCENT_JUMP,
+                reads: PERCENT,
+                why_not: why(format!("{name} is a percent from {low} to {high}")),
+                ..of
+            },
+            Reading::Count { what, from_one } => {
+                let first = i32::from(from_one);
+                Descriptor {
+                    jump: 1,
+                    reads: Reads::Number {
+                        before: None,
+                        after: "",
+                        off: false,
+                        from_one,
+                    },
+                    why_not: why(format!(
+                        "{name} is {what}, from {} to {}",
+                        low + first,
+                        high + first
+                    )),
+                    ..of
+                }
+            }
+            Reading::Hex => Descriptor {
+                typing: Typing::Hex,
+                reads: Reads::HexWithin { signed: false },
+                why_not: why(format!("{name} is hex from {low:02X} to {high:02X}")),
+                ..of
+            },
+            // One of Steps' values steps an octave large, as on `Pitch` it's semitones.
+            Reading::SignedHex => match field {
+                ModField::Step(_) => signed(Descriptor { jump: OCTAVE, ..of }, "A step"),
+                _ => signed(of, name),
+            },
+            // An attractor's large step goes from one axis to the next.
+            Reading::Degrees { axes } => Descriptor {
+                nudge: PHASE_NUDGE,
+                jump: if axes { AXIS_JUMP } else { PHASE_JUMP },
+                wraps: true,
+                reads: NUMBER,
+                why_not: why(format!("{name} is degrees from {low} to {high}")),
+                ..of
+            },
+            // These step through their own kinds.
+            Reading::Rate => Descriptor {
+                nudge: 0,
+                jump: 0,
+                typing: Typing::Rate,
+                ..of
+            },
+            Reading::Fade => Descriptor {
+                nudge: 0,
+                jump: 0,
+                ..of
+            },
+            // A large step on a map of notes is an octave.
+            Reading::Mapped(source) => {
+                let (lowest, highest) = (source.text(low as u8), source.text(high as u8));
+                match source == Source::Note {
+                    true => Descriptor {
+                        jump: OCTAVE,
+                        typing: Typing::Named { list: false },
+                        reads: Reads::Note,
+                        why_not: why(format!("{name} is a note from {lowest} to {highest}")),
+                        ..of
+                    },
+                    false => Descriptor {
+                        typing: Typing::Hex,
+                        reads: Reads::HexWithin { signed: false },
+                        why_not: why(format!("{name} is hex from {lowest} to {highest}")),
+                        ..of
+                    },
+                }
+            }
+            // No setting of a slot reads as these.
+            Reading::Byte { .. } | Reading::Number => of,
+        }
     }
 
     /// Set one of its settings, as [`ModSlot::field`] gives it, kept within its

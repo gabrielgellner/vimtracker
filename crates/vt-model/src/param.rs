@@ -10,10 +10,13 @@
 use std::borrow::Cow;
 
 use crate::constants::BAR_STEPS;
+use crate::lfo::Fade;
 use crate::listed::Listed;
+use crate::modulation::depth_text;
 use crate::settings::{Kind, LONGEST_GLIDE_MS, Units, glide_value};
 use crate::song::reset_named;
 use crate::step::Note;
+use crate::tracking::Source;
 
 /// How many small steps an envelope time's large one is.
 const TIME_JUMP: i32 = 10;
@@ -305,17 +308,45 @@ impl Choice {
 /// How a setting's values read, the one vocabulary every family's settings share.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reading {
-    /// Two hex digits, on a bar.
+    /// Two hex digits.
     Hex,
     /// A registry setting's byte: two hex digits on a bar, and in real units on the status line
     /// with its fine part, as [`Kind::shown`] says them.
-    Byte { units: Units, top: u8, middle: bool },
+    Byte {
+        units: Units,
+        top: u8,
+        middle: bool,
+    },
     /// One of its choices, by its place among them: the choice's name.
     Listed,
     /// Off or on, as `on` and `off`.
     Switch,
     /// A whole number.
     Number,
+    /// Milliseconds, whose steps grow as it gets longer.
+    Time,
+    /// An AHD's hold: milliseconds, or `Note` below none.
+    Hold,
+    Percent,
+    /// How many, `what` saying of what, shown counted from 1 where `from_one`.
+    Count {
+        what: &'static str,
+        from_one: bool,
+    },
+    /// Hex either side of none, with its sign, as a depth is.
+    SignedHex,
+    /// Degrees round a cycle, read as the axis heard at each third of the way round where it has
+    /// `axes`, as an attractor's phase does.
+    Degrees {
+        axes: bool,
+    },
+    /// A division or hertz, or Steps' own rate, which isn't one number and reads as its holder
+    /// says.
+    Rate,
+    /// An LFO's fade, by its place among [`Fade::ALL`].
+    Fade,
+    /// What a Track mod slot's map follows: a note, or hex, as its source reads.
+    Mapped(Source),
 }
 
 /// How a value shows: in its cell, and on the status line after its name, where that says more
@@ -356,6 +387,8 @@ pub struct Descriptor {
     pub reads: Reads,
     /// What the status line says when typing doesn't read.
     pub why_not: Cow<'static, str>,
+    /// Whether it has a bar beside its value.
+    pub barred: bool,
 }
 
 impl Descriptor {
@@ -377,6 +410,7 @@ impl Descriptor {
             typing: Typing::Listed,
             reads: Reads::No,
             why_not: Cow::Borrowed(""),
+            barred: false,
         }
     }
 
@@ -390,6 +424,7 @@ impl Descriptor {
             jump: HEX_JUMP,
             typing: Typing::Hex,
             reads: Reads::Hex { shift: 0 },
+            barred: true,
             ..Self::named(key, name)
         }
     }
@@ -464,6 +499,23 @@ impl Descriptor {
                 .map_or_else(String::new, |choice| choice.name.clone().into_owned()),
             Reading::Switch => if value != 0 { "on" } else { "off" }.to_owned(),
             Reading::Number => value.to_string(),
+            Reading::Hold if value < 0 => "Note".to_owned(),
+            Reading::Time | Reading::Hold => format!("{value} ms"),
+            Reading::Percent => format!("{value}%"),
+            Reading::Count { from_one, .. } => (value + i32::from(from_one)).to_string(),
+            Reading::SignedHex => depth_text(value as i16),
+            Reading::Degrees { axes } => match value {
+                0 if axes => "x".to_owned(),
+                120 if axes => "y".to_owned(),
+                240 if axes => "z".to_owned(),
+                _ => format!("{value}°"),
+            },
+            Reading::Rate => String::new(),
+            Reading::Fade => usize::try_from(value)
+                .ok()
+                .and_then(|at| Fade::ALL.get(at))
+                .map_or_else(String::new, ToString::to_string),
+            Reading::Mapped(source) => source.text(value as u8),
         };
         Shown { cell, text }
     }
@@ -471,8 +523,9 @@ impl Descriptor {
     /// Where a value sits on its bar, 0 to 255, or none for a setting with no bar.
     pub fn bar(&self, value: i32) -> Option<u8> {
         match self.reading {
+            _ if !self.barred => None,
             Reading::Hex | Reading::Byte { .. } => Some(value.clamp(0, 0xFF) as u8),
-            Reading::Listed | Reading::Switch | Reading::Number => None,
+            _ => None,
         }
     }
 
