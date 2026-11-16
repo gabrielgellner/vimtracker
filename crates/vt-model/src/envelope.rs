@@ -28,6 +28,11 @@ pub(crate) fn time_value(ms: u16) -> u16 {
     ((1.0 + along * 254.0) * 256.0).round() as u16
 }
 
+/// The shortest a decay or a release takes, whatever it's set to: one set to 0 falls over a
+/// millisecond rather than in a frame, a step that clicks, as Braids', Peaks' and Surge's
+/// envelopes floor their stages (decision 366). An attack of 0 is still a step, asked for.
+const SHORTEST_FALL_MS: u16 = 1;
+
 /// How far `Exp`'s decays and releases bend: the same as Mutable Instruments' Peaks.
 const FALL_RATE: f32 = 4.0;
 /// How far `Snap`'s bend, twice as far, so they fall about twice as fast and then have a longer
@@ -234,7 +239,7 @@ impl Adsr {
             Attack::Rising(at) => return self.curve.rise(at),
             Attack::Done(after) => after,
         };
-        let decay = frames_of(self.decay_ms, rate);
+        let decay = fall_frames(self.decay_ms, rate);
         let sustain = self.sustain_level();
         if into_decay < decay {
             return 1.0 + (sustain - 1.0) * self.curve.fall(into_decay as f32 / decay as f32);
@@ -245,7 +250,7 @@ impl Adsr {
     /// The level some frames after a release, starting from where it was.
     #[inline]
     pub fn released(&self, frames: u64, from: f32, rate: u32) -> f32 {
-        let release = frames_of(self.release_ms, rate);
+        let release = fall_frames(self.release_ms, rate);
         if frames < release {
             from * (1.0 - self.curve.fall(frames as f32 / release as f32))
         } else {
@@ -257,13 +262,13 @@ impl Adsr {
     #[inline]
     pub(crate) fn finished_holding(&self, frames: u64, rate: u32) -> bool {
         self.sustain == 0
-            && frames >= frames_of(self.attack_ms, rate) + frames_of(self.decay_ms, rate)
+            && frames >= frames_of(self.attack_ms, rate) + fall_frames(self.decay_ms, rate)
     }
 
     /// Whether a release has reached silence.
     #[inline]
     pub(crate) fn finished_releasing(&self, frames: u64, rate: u32) -> bool {
-        frames >= frames_of(self.release_ms, rate)
+        frames >= fall_frames(self.release_ms, rate)
     }
 }
 
@@ -336,7 +341,7 @@ impl Ahd {
         let Some(into_decay) = into_hold.checked_sub(hold) else {
             return 1.0;
         };
-        let decay = frames_of(self.decay_ms, rate);
+        let decay = fall_frames(self.decay_ms, rate);
         if into_decay < decay {
             1.0 - self.curve.fall(into_decay as f32 / decay as f32)
         } else {
@@ -348,7 +353,7 @@ impl Ahd {
     /// decays from there. A one-shot is never released, as it plays through.
     #[inline]
     pub fn released(&self, frames: u64, from: f32, rate: u32) -> f32 {
-        let decay = frames_of(self.decay_ms, rate);
+        let decay = fall_frames(self.decay_ms, rate);
         if frames < decay {
             from * (1.0 - self.curve.fall(frames as f32 / decay as f32))
         } else {
@@ -365,7 +370,7 @@ impl Ahd {
                 frames
                     >= frames_of(self.attack_ms, rate)
                         + frames_of(hold, rate)
-                        + frames_of(self.decay_ms, rate)
+                        + fall_frames(self.decay_ms, rate)
             }
         }
     }
@@ -373,7 +378,7 @@ impl Ahd {
     /// Whether the decay from a note's end has reached silence.
     #[inline]
     pub(crate) fn finished_releasing(&self, frames: u64, rate: u32) -> bool {
-        frames >= frames_of(self.decay_ms, rate)
+        frames >= fall_frames(self.decay_ms, rate)
     }
 }
 
@@ -449,7 +454,7 @@ impl Drum {
             return self.strike((frames % peak) as f32 / peak as f32);
         }
         let into_decay = frames - struck;
-        let decay = frames_of(self.decay_ms, rate);
+        let decay = fall_frames(self.decay_ms, rate);
         if into_decay < decay {
             body * (1.0 - self.curve.fall(into_decay as f32 / decay as f32))
         } else {
@@ -461,7 +466,7 @@ impl Drum {
     /// was, as an AHD's.
     #[inline]
     pub(crate) fn released(&self, frames: u64, from: f32, rate: u32) -> f32 {
-        let decay = frames_of(self.decay_ms, rate);
+        let decay = fall_frames(self.decay_ms, rate);
         if frames < decay {
             from * (1.0 - self.curve.fall(frames as f32 / decay as f32))
         } else {
@@ -472,13 +477,13 @@ impl Drum {
     /// Whether a note has gone silent for good: once its body has decayed.
     #[inline]
     pub(crate) fn finished_holding(&self, frames: u64, rate: u32) -> bool {
-        frames >= self.strikes(rate).1 + frames_of(self.decay_ms, rate)
+        frames >= self.strikes(rate).1 + fall_frames(self.decay_ms, rate)
     }
 
     /// Whether a release has reached silence.
     #[inline]
     pub(crate) fn finished_releasing(&self, frames: u64, rate: u32) -> bool {
-        frames >= frames_of(self.decay_ms, rate)
+        frames >= fall_frames(self.decay_ms, rate)
     }
 }
 
@@ -534,7 +539,7 @@ impl Lpg {
     /// there, as every fall is.
     #[inline]
     pub fn fall(&self, seconds: f32) -> f32 {
-        let decay = f32::from(self.decay_ms) / 1000.0;
+        let decay = f32::from(self.decay_ms.max(SHORTEST_FALL_MS)) / 1000.0;
         if seconds >= decay {
             return 0.0;
         }
@@ -575,13 +580,13 @@ impl Lpg {
     /// Whether a note has gone silent for good: once its fall has landed.
     #[inline]
     pub(crate) fn finished_holding(&self, frames: u64, rate: u32) -> bool {
-        frames >= frames_of(self.attack_ms, rate) + frames_of(self.decay_ms, rate)
+        frames >= frames_of(self.attack_ms, rate) + fall_frames(self.decay_ms, rate)
     }
 
     /// Whether a release has reached silence.
     #[inline]
     pub(crate) fn finished_releasing(&self, frames: u64, rate: u32) -> bool {
-        frames >= frames_of(self.decay_ms, rate)
+        frames >= fall_frames(self.decay_ms, rate)
     }
 }
 
@@ -670,6 +675,12 @@ impl Envelope {
 #[inline]
 fn frames_of(ms: u16, rate: u32) -> u64 {
     u64::from(ms) * u64::from(rate) / 1000
+}
+
+/// A decay's or a release's frames, at least [`SHORTEST_FALL_MS`]'s.
+#[inline]
+fn fall_frames(ms: u16, rate: u32) -> u64 {
+    frames_of(ms.max(SHORTEST_FALL_MS), rate)
 }
 
 #[cfg(test)]
@@ -804,11 +815,45 @@ mod tests {
     fn zero_length_stages_are_skipped_safely() {
         let env = adsr(0, 0, 100, 0);
         close(env.held(0, 0.0, RATE), 1.0);
-        close(env.released(0, 1.0, RATE), 0.0);
-        assert!(env.finished_releasing(0, RATE));
         let dropped = adsr(0, 0, 40, 0);
-        close(dropped.held(0, 0.0, RATE), 0.4);
-        assert!(adsr(0, 0, 0, 0).finished_holding(0, RATE));
+        close(dropped.held(SHORTEST, 0.0, RATE), 0.4);
+        assert!(adsr(0, 0, 0, 0).finished_holding(SHORTEST, RATE));
+    }
+
+    /// The shortest fall's frames at [`RATE`].
+    const SHORTEST: u64 = RATE as u64 * SHORTEST_FALL_MS as u64 / 1000;
+
+    #[test]
+    fn a_fall_of_0_takes_the_shortest_fall_rather_than_a_frame() {
+        let env = adsr(0, 0, 0, 0);
+        // A decay of 0 falls from full over a millisecond, never in one frame.
+        close(env.held(0, 0.0, RATE), 1.0);
+        let halfway = env.held(SHORTEST / 2, 0.0, RATE);
+        assert!((0.05..0.5).contains(&halfway), "{halfway}");
+        assert!(!env.finished_holding(SHORTEST - 1, RATE));
+        assert!(env.finished_holding(SHORTEST, RATE));
+        // A release of 0 too, from wherever it was.
+        close(env.released(0, 0.8, RATE), 0.8);
+        assert!(env.released(SHORTEST - 1, 0.8, RATE) < 0.01);
+        close(env.released(SHORTEST, 0.8, RATE), 0.0);
+        assert!(!env.finished_releasing(SHORTEST - 1, RATE));
+        assert!(env.finished_releasing(SHORTEST, RATE));
+        // An AHD's decay, a drum's and a low-pass gate's.
+        let note = ahd(0, Hold::Note, 0);
+        assert!(note.released(SHORTEST / 2, 1.0, RATE) > 0.05);
+        assert!(drum(0, 50, 0, 1).held(SHORTEST / 2, RATE) > 0.0);
+        let lpg = Lpg {
+            attack_ms: 0,
+            decay_ms: 0,
+            ..Lpg::default()
+        };
+        assert!(lpg.held(SHORTEST / 4, 0.0, RATE) > 0.0);
+        assert!(lpg.finished_holding(SHORTEST, RATE));
+        // A longer one is as it was.
+        close(
+            adsr(0, 10, 0, 0).held(240, 0.0, RATE),
+            1.0 - Curve::Exp.fall(0.5),
+        );
     }
 
     #[test]
@@ -952,11 +997,11 @@ mod tests {
     #[test]
     fn an_ahd_with_no_times_is_safe() {
         let env = ahd(0, Hold::Ms(0), 0);
-        close(env.held(0, 0.0, RATE), 0.0);
-        assert!(env.finished_holding(0, RATE));
+        close(env.held(SHORTEST, 0.0, RATE), 0.0);
+        assert!(env.finished_holding(SHORTEST, RATE));
         let note = ahd(0, Hold::Note, 0);
         close(note.held(0, 0.0, RATE), 1.0);
-        close(note.released(0, 1.0, RATE), 0.0);
+        close(note.released(SHORTEST, 1.0, RATE), 0.0);
     }
 
     #[test]
@@ -1028,8 +1073,8 @@ mod tests {
     #[test]
     fn a_drum_with_no_times_is_safe_and_its_range_is_checked() {
         let none = drum(0, 50, 0, 4);
-        close(none.held(0, RATE), 0.0);
-        assert!(none.finished_holding(0, RATE));
+        close(none.held(SHORTEST, RATE), 0.0);
+        assert!(none.finished_holding(SHORTEST, RATE));
         assert!(drum(MAX_ENVELOPE_MS, 100, MAX_ENVELOPE_MS, MAX_RATCHET).in_range());
         assert!(!drum(0, 101, 0, 1).in_range());
         assert!(!drum(0, 0, 0, 0).in_range());

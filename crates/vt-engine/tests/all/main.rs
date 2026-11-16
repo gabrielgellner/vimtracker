@@ -40,6 +40,7 @@ mod mod_slots;
 mod modulator_bypass;
 mod mono;
 mod normalize;
+mod note_clicks;
 mod nudge;
 mod pedals;
 mod play_order;
