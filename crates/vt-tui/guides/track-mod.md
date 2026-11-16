@@ -149,7 +149,7 @@ each note is struck, with a small gap before it, without a click.
 and `Fluted`, whose strike starts their string or bore again from still, start each
 note afresh, the last one fading under it, and a fresh note always attacks from
 nothing, whatever `Reset` says. So does a synth's note after the last one has died
-away. `Acid` carries on as a 303 does, whatever `Reset` says. The track's `Phase`,
+away, though at `Phase` `Free` its oscillators go on from where they stopped. `Acid` carries on as a 303 does, whatever `Reset` says. The track's `Phase`,
 on the Sound page's Play device, says whether the oscillators run on through the
 change or start again at the bottom of the dip.
 

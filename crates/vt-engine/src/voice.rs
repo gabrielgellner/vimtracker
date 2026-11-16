@@ -337,6 +337,9 @@ pub(crate) struct Voice {
     holds: bool,
     /// A note carried on, waiting for the fade to reach nothing.
     carried: Option<Carry>,
+    /// Whether it went quiet on its own, its envelope run to nothing, rather than cut, so a note
+    /// on the same synth can take it up again (decision 374).
+    rested: bool,
     /// Frames into its rise over the fade of the note it cut, while it's rising.
     rising: Option<u32>,
 }
@@ -370,6 +373,7 @@ impl Default for Voice {
             settings: Settings::default(),
             holds: false,
             carried: None,
+            rested: false,
             rising: None,
         }
     }
@@ -460,6 +464,7 @@ impl Voice {
             holds: note.synth.is_some_and(SynthVoice::holds),
             settings: Settings::default(),
             carried: None,
+            rested: false,
             rising: None,
         }
     }
@@ -489,8 +494,21 @@ impl Voice {
             Stage::Fading { .. } => self.carried.is_some(),
             Stage::Cut { .. } | Stage::Idle => false,
         };
-        sounding
-            && self.holds
+        sounding && self.plays_on(synth)
+    }
+
+    /// Whether a note on this synth takes up this voice after it has gone quiet on its own, its
+    /// envelope run to nothing, rather than starting a voice of its own: its oscillators go on
+    /// from where they stopped, as an analog synth's run on between notes, so `Phase` at `Free`
+    /// stays free after a pluck. A voice cut by a new note, a choke, `KIL` or stopping doesn't
+    /// (decision 374).
+    pub(crate) fn resumes(&self, synth: Option<SynthVoice>) -> bool {
+        self.stage == Stage::Idle && self.rested && self.plays_on(synth)
+    }
+
+    /// Whether its synth holds its notes and carries them, and is the one a note is for.
+    fn plays_on(&self, synth: Option<SynthVoice>) -> bool {
+        self.holds
             && self.synth.as_ref().is_some_and(|playing| {
                 playing.carries() && synth.is_some_and(|voice| playing.voice() == voice)
             })
@@ -504,6 +522,17 @@ impl Voice {
     pub(crate) fn carry(&mut self, carry: Carry) {
         // What was timed for the note before is the old note's.
         self.release_after = None;
+        if self.stage == Stage::Idle {
+            // Gone quiet on its own, it has no level to dip from or velocity to glide from: the
+            // note starts as on a voice of its own, at its own pitch, but on the synth as it was.
+            self.carried = None;
+            self.rested = false;
+            self.level = 0.0;
+            self.amp = [0.0; 2];
+            self.pitch = self.pitch_target;
+            self.strike(carry);
+            return;
+        }
         if carry.dip {
             self.carried = Some(carry);
             // The dip is a cut's fade, from what's heard.
@@ -697,6 +726,8 @@ impl Voice {
     /// Fade out quickly, to avoid a click.
     pub(crate) fn fade(&mut self) {
         self.carried = None;
+        // Cut, even after going quiet, the next note starts afresh.
+        self.rested = false;
         if self.active() {
             // The fade is a ramp of its own, from what's heard, a rise over a cut before it too,
             // which the amp follows at once.
@@ -876,6 +907,9 @@ impl Voice {
         } || !more;
         self.elapsed += 1;
         if finished {
+            // Its envelope run to nothing, not cut and not a sample ended, a synth's voice can
+            // be taken up again.
+            self.rested = more && matches!(self.stage, Stage::Held { .. } | Stage::Released { .. });
             self.stage = Stage::Idle;
             // A dip reaching nothing starts the note carried on, at its own pitch at once.
             if let Some(carry) = self.carried.take() {
