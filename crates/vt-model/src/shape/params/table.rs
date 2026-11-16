@@ -1,11 +1,36 @@
-//! What's fixed of each generator setting, a row for each: its key, name and units, how it's
-//! typed, its bounds and steps, and how it's read and set as a number.
+//! Each generator setting, declared once: its `GenParam` variant and the row of what's fixed of
+//! it, its key, name and units, how it's typed, its bounds and steps, and how it's read and set
+//! as a number.
 
 use super::*;
 
-/// Every generator setting's description, by [`GenParam`].
-pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
-    GenParamSpec {
+/// Every generator setting, declared once, in the order the shape panel lists them: its
+/// `GenParam` variant, with what it is, and its row. The macro writes the enum, [`GenParam::ALL`]
+/// and [`GEN_PARAMS`] from it, so a new setting is one entry here, its variant's place in the list
+/// being its place on the panel.
+macro_rules! gen_params {
+    ($($(#[$doc:meta])* $param:ident => $row:expr),+ $(,)?) => {
+        /// A generator's setting. [`GenParam::ALL`] is every one, in the order the shape panel
+        /// lists them; [`GenParam::exists_for`] says which a shape has, and [`GEN_PARAMS`]
+        /// describes each.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub enum GenParam {
+            $($(#[$doc])* $param,)+
+        }
+
+        impl GenParam {
+            /// Every setting, in the order the shape panel lists them.
+            pub const ALL: [Self; [$(stringify!($param)),+].len()] = [$(Self::$param),+];
+        }
+
+        /// Every generator setting's description, by [`GenParam`].
+        pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [$($row),+];
+    };
+}
+
+gen_params! {
+    /// What goes in the rows, which decides the rest.
+    Fill => GenParamSpec {
         key: "fill",
         name: "Fill",
         units: Reading::Listed,
@@ -17,7 +42,8 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, context| GenParam::Fill.chosen_number(shape, context),
         set: |shape, context, at| GenParam::Fill.choose(shape, context, at),
     },
-    GenParamSpec {
+    /// The two values a fill goes between.
+    From => GenParamSpec {
         key: "from",
         name: "From",
         units: Reading::Column,
@@ -29,7 +55,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.from)),
         set: |shape, _, number| shape.from = number as u8,
     },
-    GenParamSpec {
+    To => GenParamSpec {
         key: "to",
         name: "To",
         units: Reading::Column,
@@ -41,7 +67,8 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.to)),
         set: |shape, _, number| shape.to = number as u8,
     },
-    GenParamSpec {
+    /// An `Acid` fill's own: how many notes its riff has.
+    Notes => GenParamSpec {
         key: "notes",
         name: "Notes",
         units: Reading::Number,
@@ -53,7 +80,36 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.acid.notes)),
         set: |shape, _, number| shape.acid.notes = number as u8,
     },
-    GenParamSpec {
+    /// A `Random` fill's own, after Marbles: how widely its values spread and which way they
+    /// lean. `Spread` and `Bias` also lean the notes an `Acid` riff's set holds.
+    Spread => GenParamSpec {
+        key: "spread",
+        name: "Spread",
+        units: Reading::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, MAX_SPREAD as i32),
+        stepping: PERCENT,
+        engine: true,
+        app_only: false,
+        get: |shape, _| Some(i32::from(shape.random.spread)),
+        set: |shape, _, number| shape.random.spread = number as u8,
+    },
+    Bias => GenParamSpec {
+        key: "bias",
+        name: "Bias",
+        units: Reading::Bend,
+        typing: SIGNED,
+        bounds: Bounds::Fixed(-(MAX_BIAS as i32), MAX_BIAS as i32),
+        stepping: BEND,
+        engine: true,
+        app_only: false,
+        get: |shape, _| Some(i32::from(shape.random.bias)),
+        set: |shape, _, number| shape.random.bias = number as i8,
+    },
+    // How many of the scale's degrees it lets through, on notes alone.,
+    /// An `Acid` fill's own, after its notes: the chances of an octave, of a row playing on an
+    /// empty column, of an accent and of a slide; and whether a roll keeps the pitches.
+    Octave => GenParamSpec {
         key: "octave",
         name: "Octave",
         units: Reading::Percent,
@@ -65,7 +121,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.acid.octave)),
         set: |shape, _, number| shape.acid.octave = number as u8,
     },
-    GenParamSpec {
+    Density => GenParamSpec {
         key: "density",
         name: "Density",
         units: Reading::Percent,
@@ -77,7 +133,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.acid.density)),
         set: |shape, _, number| shape.acid.density = number as u8,
     },
-    GenParamSpec {
+    Accent => GenParamSpec {
         key: "accent",
         name: "Accent",
         units: Reading::Percent,
@@ -89,7 +145,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.acid.accent)),
         set: |shape, _, number| shape.acid.accent = number as u8,
     },
-    GenParamSpec {
+    Slide => GenParamSpec {
         key: "slide",
         name: "Slide",
         units: Reading::Percent,
@@ -101,8 +157,8 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.acid.slide)),
         set: |shape, _, number| shape.acid.slide = number as u8,
     },
-    // `1` to keep the pitches.
-    GenParamSpec {
+    // `1` to keep the pitches.,
+    Pitches => GenParamSpec {
         key: "pitches",
         name: "Pitches",
         units: Reading::Listed,
@@ -114,7 +170,9 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.acid.keep)),
         set: |shape, _, number| shape.acid.keep = number != 0,
     },
-    GenParamSpec {
+    /// How many rows each part of an `Acid` line loops on, after Kria: its rhythm on an empty
+    /// column, its notes, octaves, accents and slides; none for a part drawn afresh each row.
+    TrigLoop => GenParamSpec {
         key: "trigloop",
         name: "Trig loop",
         units: Reading::Number,
@@ -126,7 +184,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.acid.loops.trigs)),
         set: |shape, _, number| shape.acid.loops.trigs = number as u8,
     },
-    GenParamSpec {
+    NoteLoop => GenParamSpec {
         key: "noteloop",
         name: "Note loop",
         units: Reading::Number,
@@ -138,7 +196,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.acid.loops.notes)),
         set: |shape, _, number| shape.acid.loops.notes = number as u8,
     },
-    GenParamSpec {
+    OctaveLoop => GenParamSpec {
         key: "octloop",
         name: "Oct loop",
         units: Reading::Number,
@@ -150,7 +208,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.acid.loops.octaves)),
         set: |shape, _, number| shape.acid.loops.octaves = number as u8,
     },
-    GenParamSpec {
+    AccentLoop => GenParamSpec {
         key: "accloop",
         name: "Acc loop",
         units: Reading::Number,
@@ -162,7 +220,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.acid.loops.accents)),
         set: |shape, _, number| shape.acid.loops.accents = number as u8,
     },
-    GenParamSpec {
+    SlideLoop => GenParamSpec {
         key: "slideloop",
         name: "Sld loop",
         units: Reading::Number,
@@ -174,7 +232,9 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.acid.loops.slides)),
         set: |shape, _, number| shape.acid.loops.slides = number as u8,
     },
-    GenParamSpec {
+    /// A `Follow` fill's own: the phrase it follows, the canon's moves on the way (transposed,
+    /// inverted about a note, backwards and late), and whether it copies the FX columns too.
+    Source => GenParamSpec {
         key: "source",
         name: "Source",
         units: Reading::Listed,
@@ -186,7 +246,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, context| GenParam::Source.chosen_number(shape, context),
         set: |shape, context, at| GenParam::Source.choose(shape, context, at),
     },
-    GenParamSpec {
+    Transpose => GenParamSpec {
         key: "transpose",
         name: "Transpose",
         units: Reading::Interval,
@@ -202,7 +262,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.follow.transpose)),
         set: |shape, _, number| shape.follow.transpose = number as i8,
     },
-    GenParamSpec {
+    Invert => GenParamSpec {
         key: "invert",
         name: "Invert",
         units: Reading::Listed,
@@ -214,8 +274,8 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.follow.invert)),
         set: |shape, _, number| shape.follow.invert = number != 0,
     },
-    // The note it turns about: the first note of the source until it's set.
-    GenParamSpec {
+    // The note it turns about: the first note of the source until it's set.,
+    Axis => GenParamSpec {
         key: "axis",
         name: "About",
         units: Reading::Column,
@@ -230,7 +290,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         },
         set: |shape, _, number| shape.follow.axis = Some(number as u8),
     },
-    GenParamSpec {
+    Reverse => GenParamSpec {
         key: "reverse",
         name: "Reverse",
         units: Reading::Listed,
@@ -242,8 +302,8 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.follow.reverse)),
         set: |shape, _, number| shape.follow.reverse = number != 0,
     },
-    // How many rows late it is, round the source's loop.
-    GenParamSpec {
+    // How many rows late it is, round the source's loop.,
+    Late => GenParamSpec {
         key: "late",
         name: "Rotate",
         units: Reading::Rows,
@@ -255,7 +315,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.follow.rotate)),
         set: |shape, _, number| shape.follow.rotate = number as u16,
     },
-    GenParamSpec {
+    CopyFx => GenParamSpec {
         key: "fx",
         name: "FX",
         units: Reading::Listed,
@@ -267,7 +327,10 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.follow.fx)),
         set: |shape, _, number| shape.follow.fx = number != 0,
     },
-    GenParamSpec {
+    /// A `Follow` that mutates, as a Bloom branch does: how many changes it makes to what it
+    /// copies, and which kinds it may make (a note moved in the scale, the line shifted, a span
+    /// backwards, a ratchet, a note dropped or added).
+    Mutation => GenParamSpec {
         key: "mutation",
         name: "Mutation",
         units: Reading::Number,
@@ -279,7 +342,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.follow.mutation)),
         set: |shape, _, number| shape.follow.mutation = number as u8,
     },
-    GenParamSpec {
+    Repitch => GenParamSpec {
         key: "repitch",
         name: "Repitch",
         units: Reading::Listed,
@@ -291,7 +354,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.follow.mutate.repitch)),
         set: |shape, _, number| shape.follow.mutate.repitch = number != 0,
     },
-    GenParamSpec {
+    Shift => GenParamSpec {
         key: "shift",
         name: "Shift",
         units: Reading::Listed,
@@ -303,7 +366,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.follow.mutate.shift)),
         set: |shape, _, number| shape.follow.mutate.shift = number != 0,
     },
-    GenParamSpec {
+    Retro => GenParamSpec {
         key: "retro",
         name: "Retro",
         units: Reading::Listed,
@@ -315,7 +378,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.follow.mutate.retro)),
         set: |shape, _, number| shape.follow.mutate.retro = number != 0,
     },
-    GenParamSpec {
+    Ratchet => GenParamSpec {
         key: "ratchet",
         name: "Ratchet",
         units: Reading::Listed,
@@ -327,7 +390,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.follow.mutate.ratchet)),
         set: |shape, _, number| shape.follow.mutate.ratchet = number != 0,
     },
-    GenParamSpec {
+    DropAdd => GenParamSpec {
         key: "drop",
         name: "Drop/add",
         units: Reading::Listed,
@@ -339,8 +402,9 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.follow.mutate.drop)),
         set: |shape, _, number| shape.follow.mutate.drop = number != 0,
     },
-    // In hex on a column whose values are, and as a number on notes and nudges.
-    GenParamSpec {
+    // In hex on a column whose values are, and as a number on notes and nudges.,
+    /// A `Walk`'s largest move and what it does at the ends, and how many values a `1/f` sums.
+    Step => GenParamSpec {
         key: "step",
         name: "Step",
         units: Reading::Walk,
@@ -356,8 +420,8 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.walk.step)),
         set: |shape, _, number| shape.walk.step = number as u8,
     },
-    // `1` to wrap.
-    GenParamSpec {
+    // `1` to wrap.,
+    Edge => GenParamSpec {
         key: "edge",
         name: "Edge",
         units: Reading::Listed,
@@ -375,7 +439,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
             };
         },
     },
-    GenParamSpec {
+    Depth => GenParamSpec {
         key: "depth",
         name: "Depth",
         units: Reading::Number,
@@ -387,32 +451,9 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.pink.depth)),
         set: |shape, _, number| shape.pink.depth = number as u8,
     },
-    GenParamSpec {
-        key: "spread",
-        name: "Spread",
-        units: Reading::Percent,
-        typing: WHOLE,
-        bounds: Bounds::Fixed(0, MAX_SPREAD as i32),
-        stepping: PERCENT,
-        engine: true,
-        app_only: false,
-        get: |shape, _| Some(i32::from(shape.random.spread)),
-        set: |shape, _, number| shape.random.spread = number as u8,
-    },
-    GenParamSpec {
-        key: "bias",
-        name: "Bias",
-        units: Reading::Bend,
-        typing: SIGNED,
-        bounds: Bounds::Fixed(-(MAX_BIAS as i32), MAX_BIAS as i32),
-        stepping: BEND,
-        engine: true,
-        app_only: false,
-        get: |shape, _| Some(i32::from(shape.random.bias)),
-        set: |shape, _, number| shape.random.bias = number as i8,
-    },
-    // How many of the scale's degrees it lets through, on notes alone.
-    GenParamSpec {
+    /// A `Random` fill's own on notes: how many degrees it lets through, the most important
+    /// first, and how often each comes.
+    Steps => GenParamSpec {
         key: "steps",
         name: "Steps",
         units: Reading::Number,
@@ -434,7 +475,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
             }
         },
     },
-    GenParamSpec {
+    Weights => GenParamSpec {
         key: "weights",
         name: "Weights",
         units: Reading::Weights,
@@ -446,7 +487,8 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |_, _| None,
         set: |_, _, _| {},
     },
-    GenParamSpec {
+    /// What `Multiply` multiplies the rhythm by, and whether factors 2 and 3 mask it first.
+    Factor => GenParamSpec {
         key: "factor",
         name: "Factor",
         units: Reading::Number,
@@ -458,7 +500,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.bits.factor)),
         set: |shape, _, number| shape.bits.factor = number as u8,
     },
-    GenParamSpec {
+    Masks => GenParamSpec {
         key: "masks",
         name: "Masks",
         units: Reading::Listed,
@@ -470,8 +512,11 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.bits.masks)),
         set: |shape, _, number| shape.bits.masks = number != 0,
     },
-    // Its parts' places, without a list, so the engine can hold it.
-    GenParamSpec {
+    // Its parts' places, without a list, so the engine can hold it.,
+    /// A `Grids` fill's own: the part its track plays, the note it writes on an empty column, the
+    /// place on the map, each part's density, how far chaos raises each step, and whether a row
+    /// is a 32nd.
+    Part => GenParamSpec {
         key: "part",
         name: "Part",
         units: Reading::Listed,
@@ -483,8 +528,8 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(shape.grids.part?.index() as i32),
         set: |shape, _, at| shape.grids.part = Some(DrumPart::ALL[at as usize]),
     },
-    // The note a `Grids` or `Divisions` writes on an empty column, its `From`.
-    GenParamSpec {
+    // The note a `Grids` or `Divisions` writes on an empty column, its `From`.,
+    Pitch => GenParamSpec {
         key: "note",
         name: "Note",
         units: Reading::Column,
@@ -496,7 +541,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.from)),
         set: |shape, _, number| shape.from = number as u8,
     },
-    GenParamSpec {
+    MapX => GenParamSpec {
         key: "x",
         name: "X",
         units: Reading::Hex,
@@ -508,7 +553,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.grids.x)),
         set: |shape, _, number| shape.grids.x = number as u8,
     },
-    GenParamSpec {
+    MapY => GenParamSpec {
         key: "y",
         name: "Y",
         units: Reading::Hex,
@@ -520,7 +565,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.grids.y)),
         set: |shape, _, number| shape.grids.y = number as u8,
     },
-    GenParamSpec {
+    KickDensity => GenParamSpec {
         key: "bd",
         name: "BD fill",
         units: Reading::Hex,
@@ -532,7 +577,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.grids.density[DrumPart::Kick.index()])),
         set: |shape, _, number| shape.grids.density[DrumPart::Kick.index()] = number as u8,
     },
-    GenParamSpec {
+    SnareDensity => GenParamSpec {
         key: "sd",
         name: "SD fill",
         units: Reading::Hex,
@@ -544,7 +589,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.grids.density[DrumPart::Snare.index()])),
         set: |shape, _, number| shape.grids.density[DrumPart::Snare.index()] = number as u8,
     },
-    GenParamSpec {
+    HatDensity => GenParamSpec {
         key: "hh",
         name: "HH fill",
         units: Reading::Hex,
@@ -556,7 +601,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.grids.density[DrumPart::Hats.index()])),
         set: |shape, _, number| shape.grids.density[DrumPart::Hats.index()] = number as u8,
     },
-    GenParamSpec {
+    Chaos => GenParamSpec {
         key: "chaos",
         name: "Chaos",
         units: Reading::Hex,
@@ -568,8 +613,8 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.grids.chaos)),
         set: |shape, _, number| shape.grids.chaos = number as u8,
     },
-    // `1` for a row of a 32nd.
-    GenParamSpec {
+    // `1` for a row of a 32nd.,
+    Rows => GenParamSpec {
         key: "rows",
         name: "Rows",
         units: Reading::Listed,
@@ -581,8 +626,11 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.grids.fine)),
         set: |shape, _, number| shape.grids.fine = number != 0,
     },
-    // Its choices' places, without a list, so the engine can hold it, as for each list below.
-    GenParamSpec {
+    // Its choices' places, without a list, so the engine can hold it, as for each list below.,
+    /// A `Divisions` fill's own: the channel its track plays, the bar its dice are fixed for and
+    /// how long a row is, and each division's chance, its own channel's (or `A`'s) and then `B`'s,
+    /// which only `A+B` plays.
+    Channel => GenParamSpec {
         key: "channel",
         name: "Channel",
         units: Reading::Listed,
@@ -594,7 +642,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(shape.divisions.channel?.index() as i32),
         set: |shape, _, at| shape.divisions.channel = Some(Channel::ALL[at as usize]),
     },
-    GenParamSpec {
+    Bar => GenParamSpec {
         key: "bar",
         name: "Bar",
         units: Reading::Listed,
@@ -606,7 +654,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(shape.divisions.bar.index() as i32),
         set: |shape, _, at| shape.divisions = shape.divisions.with_bar(Bar::ALL[at as usize]),
     },
-    GenParamSpec {
+    Quarters => GenParamSpec {
         key: "d4",
         name: "1/4",
         units: Reading::Percent,
@@ -618,7 +666,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| division_chance(shape, 0, Division::Quarter),
         set: |shape, _, number| set_division_chance(shape, 0, Division::Quarter, number),
     },
-    GenParamSpec {
+    Eighths => GenParamSpec {
         key: "d8",
         name: "1/8",
         units: Reading::Percent,
@@ -630,7 +678,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| division_chance(shape, 0, Division::Eighth),
         set: |shape, _, number| set_division_chance(shape, 0, Division::Eighth, number),
     },
-    GenParamSpec {
+    Sixteenths => GenParamSpec {
         key: "d16",
         name: "1/16",
         units: Reading::Percent,
@@ -642,7 +690,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| division_chance(shape, 0, Division::Sixteenth),
         set: |shape, _, number| set_division_chance(shape, 0, Division::Sixteenth, number),
     },
-    GenParamSpec {
+    QuarterTriplets => GenParamSpec {
         key: "d4t",
         name: "1/4T",
         units: Reading::Percent,
@@ -654,7 +702,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| division_chance(shape, 0, Division::QuarterTriplet),
         set: |shape, _, number| set_division_chance(shape, 0, Division::QuarterTriplet, number),
     },
-    GenParamSpec {
+    EighthTriplets => GenParamSpec {
         key: "d8t",
         name: "1/8T",
         units: Reading::Percent,
@@ -666,7 +714,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| division_chance(shape, 0, Division::EighthTriplet),
         set: |shape, _, number| set_division_chance(shape, 0, Division::EighthTriplet, number),
     },
-    GenParamSpec {
+    SixteenthTriplets => GenParamSpec {
         key: "d16t",
         name: "1/16T",
         units: Reading::Percent,
@@ -678,7 +726,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| division_chance(shape, 0, Division::SixteenthTriplet),
         set: |shape, _, number| set_division_chance(shape, 0, Division::SixteenthTriplet, number),
     },
-    GenParamSpec {
+    QuartersB => GenParamSpec {
         key: "b4",
         name: "B 1/4",
         units: Reading::Percent,
@@ -690,7 +738,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| division_chance(shape, 1, Division::Quarter),
         set: |shape, _, number| set_division_chance(shape, 1, Division::Quarter, number),
     },
-    GenParamSpec {
+    EighthsB => GenParamSpec {
         key: "b8",
         name: "B 1/8",
         units: Reading::Percent,
@@ -702,7 +750,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| division_chance(shape, 1, Division::Eighth),
         set: |shape, _, number| set_division_chance(shape, 1, Division::Eighth, number),
     },
-    GenParamSpec {
+    SixteenthsB => GenParamSpec {
         key: "b16",
         name: "B 1/16",
         units: Reading::Percent,
@@ -714,7 +762,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| division_chance(shape, 1, Division::Sixteenth),
         set: |shape, _, number| set_division_chance(shape, 1, Division::Sixteenth, number),
     },
-    GenParamSpec {
+    QuarterTripletsB => GenParamSpec {
         key: "b4t",
         name: "B 1/4T",
         units: Reading::Percent,
@@ -726,7 +774,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| division_chance(shape, 1, Division::QuarterTriplet),
         set: |shape, _, number| set_division_chance(shape, 1, Division::QuarterTriplet, number),
     },
-    GenParamSpec {
+    EighthTripletsB => GenParamSpec {
         key: "b8t",
         name: "B 1/8T",
         units: Reading::Percent,
@@ -738,7 +786,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| division_chance(shape, 1, Division::EighthTriplet),
         set: |shape, _, number| set_division_chance(shape, 1, Division::EighthTriplet, number),
     },
-    GenParamSpec {
+    SixteenthTripletsB => GenParamSpec {
         key: "b16t",
         name: "B 1/16T",
         units: Reading::Percent,
@@ -750,7 +798,9 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| division_chance(shape, 1, Division::SixteenthTriplet),
         set: |shape, _, number| set_division_chance(shape, 1, Division::SixteenthTriplet, number),
     },
-    GenParamSpec {
+    /// A `Ring` fill's own: how likely a bit coming round is replaced, how likely a new bit is a
+    /// 1, and how many bits go round.
+    Change => GenParamSpec {
         key: "change",
         name: "Change",
         units: Reading::Percent,
@@ -762,7 +812,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.ring.change)),
         set: |shape, _, number| shape.ring.change = number as u8,
     },
-    GenParamSpec {
+    Ones => GenParamSpec {
         key: "ones",
         name: "Chance",
         units: Reading::Percent,
@@ -774,7 +824,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.ring.chance)),
         set: |shape, _, number| shape.ring.chance = number as u8,
     },
-    GenParamSpec {
+    RingLength => GenParamSpec {
         key: "length",
         name: "Length",
         units: Reading::Number,
@@ -786,8 +836,11 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.ring.length)),
         set: |shape, _, number| shape.ring.length = number as u8,
     },
-    // `1` for a minor first chord.
-    GenParamSpec {
+    // `1` for a minor first chord.,
+    /// A `Tonnetz`' own: whether its first chord is major or minor, what a track writes of the
+    /// chords, where its moves come from, the list of them, each move's weight, the loop's length,
+    /// and whether it keeps to the scale.
+    Triad => GenParamSpec {
         key: "triad",
         name: "Triad",
         units: Reading::Listed,
@@ -805,7 +858,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
             };
         },
     },
-    GenParamSpec {
+    Voice => GenParamSpec {
         key: "voice",
         name: "Voice",
         units: Reading::Listed,
@@ -817,7 +870,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(shape.tonnetz.voice?.index() as i32),
         set: |shape, _, at| shape.tonnetz.voice = Some(TonnetzVoice::ALL[at as usize]),
     },
-    GenParamSpec {
+    Moves => GenParamSpec {
         key: "moves",
         name: "Moves",
         units: Reading::Listed,
@@ -829,7 +882,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(shape.tonnetz.moves.index() as i32),
         set: |shape, _, at| shape.tonnetz.moves = Moves::ALL[at as usize],
     },
-    GenParamSpec {
+    MoveList => GenParamSpec {
         key: "list",
         name: "List",
         units: Reading::Listed,
@@ -841,7 +894,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |_, _| None,
         set: |_, _, _| {},
     },
-    GenParamSpec {
+    PWeight => GenParamSpec {
         key: "p",
         name: "P",
         units: Reading::Number,
@@ -853,7 +906,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.tonnetz.weights[0])),
         set: |shape, _, number| shape.tonnetz.weights[0] = number as u8,
     },
-    GenParamSpec {
+    LWeight => GenParamSpec {
         key: "l",
         name: "L",
         units: Reading::Number,
@@ -865,7 +918,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.tonnetz.weights[1])),
         set: |shape, _, number| shape.tonnetz.weights[1] = number as u8,
     },
-    GenParamSpec {
+    RWeight => GenParamSpec {
         key: "r",
         name: "R",
         units: Reading::Number,
@@ -877,7 +930,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.tonnetz.weights[2])),
         set: |shape, _, number| shape.tonnetz.weights[2] = number as u8,
     },
-    GenParamSpec {
+    LoopLength => GenParamSpec {
         key: "loop",
         name: "Length",
         units: Reading::Number,
@@ -889,7 +942,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.tonnetz.length)),
         set: |shape, _, number| shape.tonnetz.length = number as u8,
     },
-    GenParamSpec {
+    InScale => GenParamSpec {
         key: "inscale",
         name: "Scale",
         units: Reading::Listed,
@@ -901,7 +954,9 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.tonnetz.in_scale)),
         set: |shape, _, number| shape.tonnetz.in_scale = number != 0,
     },
-    GenParamSpec {
+    /// A `Variation`'s own: how many rows before each row its next hangs on, and how far from
+    /// the likeliest it may stray.
+    Order => GenParamSpec {
         key: "order",
         name: "Order",
         units: Reading::Number,
@@ -913,7 +968,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.variation.order)),
         set: |shape, _, number| shape.variation.order = number as u8,
     },
-    GenParamSpec {
+    Temperature => GenParamSpec {
         key: "temperature",
         name: "Temp",
         units: Reading::Percent,
@@ -925,7 +980,8 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.variation.temperature)),
         set: |shape, _, number| shape.variation.temperature = number as u8,
     },
-    GenParamSpec {
+    /// The bits `Invert bits` flips and `Mask bits` keeps, and how far `Rotate bits` turns them.
+    Flip => GenParamSpec {
         key: "flip",
         name: "Flip",
         units: Reading::Bits,
@@ -937,7 +993,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.bits.flip)),
         set: |shape, _, number| shape.bits.flip = number as u8,
     },
-    GenParamSpec {
+    Keep => GenParamSpec {
         key: "keep",
         name: "Keep",
         units: Reading::Bits,
@@ -949,7 +1005,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.bits.keep)),
         set: |shape, _, number| shape.bits.keep = number as u8,
     },
-    GenParamSpec {
+    Turn => GenParamSpec {
         key: "turn",
         name: "Turn",
         units: Reading::Number,
@@ -961,7 +1017,8 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.bits.turn)),
         set: |shape, _, number| shape.bits.turn = number as u8,
     },
-    GenParamSpec {
+    /// How a ramp bends, early or late, and how it eases at both ends.
+    Curve => GenParamSpec {
         key: "curve",
         name: "Curve",
         units: Reading::Bend,
@@ -973,7 +1030,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.curve)),
         set: |shape, _, number| shape.curve = number as i8,
     },
-    GenParamSpec {
+    S => GenParamSpec {
         key: "s",
         name: "S",
         units: Reading::Bend,
@@ -985,7 +1042,8 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.s)),
         set: |shape, _, number| shape.s = number as i8,
     },
-    GenParamSpec {
+    /// A `Wave`'s shape, the length of its cycle, and where in it the first row falls.
+    Wave => GenParamSpec {
         key: "wave",
         name: "Shape",
         units: Reading::Listed,
@@ -997,7 +1055,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, context| GenParam::Wave.chosen_number(shape, context),
         set: |shape, context, at| GenParam::Wave.choose(shape, context, at),
     },
-    GenParamSpec {
+    Rate => GenParamSpec {
         key: "rate",
         name: "Rate",
         units: Reading::Listed,
@@ -1009,7 +1067,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, context| GenParam::Rate.chosen_number(shape, context),
         set: |shape, context, at| GenParam::Rate.choose(shape, context, at),
     },
-    GenParamSpec {
+    Phase => GenParamSpec {
         key: "phase",
         name: "Phase",
         units: Reading::Degrees { axes: false },
@@ -1021,7 +1079,8 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.phase)),
         set: |shape, _, number| shape.phase = number as u16,
     },
-    GenParamSpec {
+    /// A `List`'s values, in place of `From` and `To`.
+    Values => GenParamSpec {
         key: "values",
         name: "Values",
         units: Reading::Column,
@@ -1033,7 +1092,8 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |_, _| None,
         set: |_, _, _| {},
     },
-    GenParamSpec {
+    /// How many rows in a row take each value.
+    Run => GenParamSpec {
         key: "run",
         name: "Run",
         units: Reading::Number,
@@ -1045,7 +1105,9 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(i32::from(shape.run)),
         set: |shape, _, number| shape.run = number as u16,
     },
-    GenParamSpec {
+    /// Which rows get a value, and its amount: an `Every`'s step, a `Chance`'s percent, or
+    /// Euclid's hits and rotation, or a `Cells`' rule and the row it starts from.
+    Where => GenParamSpec {
         key: "where",
         name: "Where",
         units: Reading::Listed,
@@ -1057,8 +1119,8 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, context| GenParam::Where.chosen_number(shape, context),
         set: |shape, context, at| GenParam::Where.choose(shape, context, at),
     },
-    // The amount of the `Where` it's named for, as each below is, and none while it has another.
-    GenParamSpec {
+    // The amount of the `Where` it's named for, as each below is, and none while it has another.,
+    Every => GenParamSpec {
         key: "every",
         name: "Amount",
         units: Reading::Rows,
@@ -1077,7 +1139,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
             }
         },
     },
-    GenParamSpec {
+    Chance => GenParamSpec {
         key: "chance",
         name: "Amount",
         units: Reading::Percent,
@@ -1096,8 +1158,8 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
             }
         },
     },
-    // Of the rows the column could change, so no more than them.
-    GenParamSpec {
+    // Of the rows the column could change, so no more than them.,
+    Hits => GenParamSpec {
         key: "hits",
         name: "Hits",
         units: Reading::OfRows,
@@ -1116,7 +1178,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
             }
         },
     },
-    GenParamSpec {
+    Rotate => GenParamSpec {
         key: "rotate",
         name: "Rotate",
         units: Reading::Number,
@@ -1135,7 +1197,10 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
             }
         },
     },
-    GenParamSpec {
+    /// The amounts of Marbles' rhythms: how many rows `Clusters` plays, the Bias of `Markov` and
+    /// of `3 states`, and the first track's share of `Complementary`'s rows, then which side of
+    /// its coin this track is.
+    Clusters => GenParamSpec {
         key: "clusters",
         name: "Amount",
         units: Reading::Percent,
@@ -1154,7 +1219,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
             }
         },
     },
-    GenParamSpec {
+    Markov => GenParamSpec {
         key: "markov",
         name: "Amount",
         units: Reading::Percent,
@@ -1173,7 +1238,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
             }
         },
     },
-    GenParamSpec {
+    States => GenParamSpec {
         key: "states",
         name: "Amount",
         units: Reading::Percent,
@@ -1192,7 +1257,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
             }
         },
     },
-    GenParamSpec {
+    Share => GenParamSpec {
         key: "share",
         name: "Amount",
         units: Reading::Percent,
@@ -1211,8 +1276,8 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
             }
         },
     },
-    // `1` for the second side of the coin.
-    GenParamSpec {
+    // `1` for the second side of the coin.,
+    Side => GenParamSpec {
         key: "side",
         name: "Side",
         units: Reading::Listed,
@@ -1231,7 +1296,9 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
             }
         },
     },
-    GenParamSpec {
+    /// A named rhythm's settings: which rhythm, which of its parts this track plays, and
+    /// `Child`, the chance each of the part's hits plays.
+    Rhythm => GenParamSpec {
         key: "rhythm",
         name: "Rhythm",
         units: Reading::Listed,
@@ -1246,7 +1313,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         },
         set: |shape, _, at| Choice::World(World::ALL[at as usize]).apply(shape),
     },
-    GenParamSpec {
+    Role => GenParamSpec {
         key: "role",
         name: "Part",
         units: Reading::Listed,
@@ -1261,7 +1328,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         },
         set: |shape, _, at| Choice::Role(Role::ALL[at as usize]).apply(shape),
     },
-    GenParamSpec {
+    Child => GenParamSpec {
         key: "child",
         name: "Child",
         units: Reading::Percent,
@@ -1280,7 +1347,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
             }
         },
     },
-    GenParamSpec {
+    Rule => GenParamSpec {
         key: "rule",
         name: "Rule",
         units: Reading::Number,
@@ -1299,7 +1366,7 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
             }
         },
     },
-    GenParamSpec {
+    CellStart => GenParamSpec {
         key: "start",
         name: "Start",
         units: Reading::Listed,
@@ -1318,8 +1385,10 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
             }
         },
     },
-    // Its choices' places, worked out without listing them, so the engine can hold it.
-    GenParamSpec {
+    // Its choices' places, worked out without listing them, so the engine can hold it.,
+    /// How many passes each of its variations lasts, a new seed each time, for a shape that
+    /// draws from its seed: none, each pass, or every two, four or eight.
+    Vary => GenParamSpec {
         key: "vary",
         name: "Vary",
         units: Reading::Listed,
@@ -1331,4 +1400,4 @@ pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
         get: |shape, _| Some(VARIES.iter().position(|passes| *passes == shape.vary)? as i32),
         set: |shape, _, at| shape.vary = VARIES[at as usize],
     },
-];
+}

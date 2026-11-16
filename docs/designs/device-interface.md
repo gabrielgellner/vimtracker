@@ -70,13 +70,15 @@ each family produces itself, with one `Reading` for how a value shows. Steps, ea
 | 2, `Descriptor`, `Reading`, and `Steps`, `Pace`, `Reads`, `Choice` and `Typing` in the model | the shared constructors | #900 |
 | 3, `insert::Param` folded into `Entry` (decision 357); `Entry::described` | machine settings, effects | #904 |
 | 4, `ModSlot::reading` and `described`; `ModUnits` goes | mod slots | #906 |
-| 5, `GenParam::described`; the generators' `Units` goes, a step still measured | generators | |
-| 6, the `GenParam` tables from one list | | |
+| 5, `GenParam::described`; the generators' `Units` goes, a step still measured | generators | #908 |
+| 6, `gen_params!`: the enum, `ALL` and `GEN_PARAMS` from one list (#809's item 6) | generators | the PR that closes #873 |
+
+Where it differs from the design note: `Control::Base` isn't described from the registry, as four
+of its controls have no entry; a Gen setting's step is still measured on the shape, as the row's
+`Stepping` gives a different step at an end; and `exists_for`, `shown`, `reset` and `typed` stay
+`GenParam`'s matches (decision 342), outside the list.
 
 What's left:
-- **The `GenParam` macro** (#809's item 6). `GenParam`'s 99 settings are still listed three times:
-  the enum, `ALL` and `GEN_PARAMS`. One macro would write them from one list; it's deferred until a
-  generator is next added.
 - **Decided by the user, 2026-11-15:**
   - #809 item 2's step 5 (one Hermite form, a shared `DcBlocker`) is **declined**: share DSP only
     where it's bit-identical, and keep the variants the sound needs.
