@@ -10,6 +10,7 @@ use vt_model::insert::{
     Comb, CombMode, Delay, EffectKind, Equaliser, Flanger, FreqShift, GateMode, Insert, Limiter,
     LowPassGate, MOST_SHIFT, Phaser, Pitch, Resonator, Tape, Vowel, Warps,
 };
+use vt_model::random::Xorshift32;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::settings::{MAX_MACHINE_SETTINGS, SettingId, voice_key};
@@ -182,13 +183,10 @@ fn moved(kind: EffectKind) -> Insert {
 /// both sides for its first quarter, then the right side apart from the left, and held at a third
 /// of its level to the end.
 fn pool() -> Arc<SamplePool> {
-    let mut seed = 0x1234_5678_u32;
+    let mut rng = Xorshift32::new(0x1234_5678);
     let frames = (0..RATE as usize / 2)
         .map(|frame| {
-            seed ^= seed << 13;
-            seed ^= seed >> 17;
-            seed ^= seed << 5;
-            let noise = seed as f32 / u32::MAX as f32 * 2.0 - 1.0;
+            let noise = rng.unit() * 2.0 - 1.0;
             let t = frame as f32 / RATE as f32;
             let saw = |hertz: f32| 2.0 * (t * hertz).fract() - 1.0;
             let body = 0.3 + 0.7 * (-t * 8.0).exp();

@@ -9,6 +9,7 @@ use thiserror::Error;
 
 use crate::attractor::{System, attractor_at};
 use crate::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
+use crate::random::splitmix64_nth;
 
 const BAR_TICKS: u32 = TICKS_PER_QUARTER as u32 * 4;
 const MAX_RATE_BARS: u32 = 64;
@@ -487,12 +488,7 @@ pub(crate) fn catmull_rom([before, from, to, after]: [f32; 4], t: f32) -> f32 {
 
 /// A value from -1 to 1 for one cycle, from a stateless mix so nothing has to be stepped.
 fn random(key: u64, cycle: i64) -> f32 {
-    let mut mixed = key
-        .wrapping_add((cycle as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
-        .wrapping_add(0x9E37_79B9_7F4A_7C15);
-    mixed = (mixed ^ (mixed >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    mixed = (mixed ^ (mixed >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    mixed ^= mixed >> 31;
+    let mixed = splitmix64_nth(key, cycle as u64);
     (mixed >> 40) as f32 / (1_u64 << 23) as f32 - 1.0
 }
 

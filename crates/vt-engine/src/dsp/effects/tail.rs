@@ -254,16 +254,16 @@ pub(crate) mod measure {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vt_model::random::NumericalRecipesLcg;
 
     #[test]
     fn a_measured_exponential_falls_as_it_was_made() {
         // White noise falling 60 dB in 1.3 s is measured at 1.3 s at either frequency.
         let rate = 48_000;
-        let mut noise = 1_u32;
+        let mut rng = NumericalRecipesLcg::new(1);
         let response: Vec<f32> = (0..rate as usize * 2)
             .map(|at| {
-                noise = noise.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-                let sample = (noise >> 16) as f32 / 32_768.0 - 1.0;
+                let sample = (rng.next_u32() >> 16) as f32 / 32_768.0 - 1.0;
                 sample * 10_f32.powf(-3.0 * at as f32 / (1.3 * rate as f32))
             })
             .collect();

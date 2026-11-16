@@ -33,6 +33,7 @@ use crate::dsp::blocks::clip::soft_clip;
 use crate::dsp::blocks::sine_table::sine_pm;
 use crate::dsp::voices::SynthEngine;
 use vt_model::machine::SynthVoice;
+use vt_model::random::Xorshift32;
 use vt_model::settings::voice_place;
 
 /// How many frames are worked out at once, as in Plaits, whose envelopes move once a block.
@@ -454,7 +455,7 @@ struct Lfo {
     delay_increment: [f32; 2],
     value: f32,
     random_value: f32,
-    random: u32,
+    random: Xorshift32,
     amp_mod_depth: f32,
     pitch_mod_depth: f32,
     waveform: u8,
@@ -470,7 +471,7 @@ impl Lfo {
             delay_increment: [0.1; 2],
             value: 0.0,
             random_value: 0.0,
-            random: 0x2545_f491,
+            random: Xorshift32::new(0x2545_f491),
             amp_mod_depth: 0.0,
             pitch_mod_depth: 0.0,
             waveform: 0,
@@ -500,10 +501,7 @@ impl Lfo {
         self.phase += scale * self.frequency;
         if self.phase >= 1.0 {
             self.phase -= 1.0;
-            self.random ^= self.random << 13;
-            self.random ^= self.random >> 17;
-            self.random ^= self.random << 5;
-            self.random_value = self.random as f32 / 4_294_967_296.0;
+            self.random_value = self.random.unit();
         }
         self.value = self.wave();
         let increment = self.delay_increment[usize::from(self.delay_phase >= 0.5)];

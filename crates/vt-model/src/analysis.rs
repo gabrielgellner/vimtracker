@@ -494,6 +494,7 @@ fn keep(folder: &Path, analysis: &Analysis) -> Result<(), crate::ron_file::Error
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::random::MuslLcg;
 
     /// A wobbling stereo signal whose channels differ, long enough for several levels, with an
     /// odd length so the last buckets are partly full.
@@ -557,11 +558,8 @@ mod tests {
         let samples = signal(frames as usize);
         let pyramid = Pyramid::build(&samples, 2);
         let size = Pyramid::bucket_frames(0);
-        let mut seed = 12_345_u64;
-        let mut next = |below: u64| {
-            seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
-            (seed >> 33) % below
-        };
+        let mut rng = MuslLcg::new(12_345);
+        let mut next = |below: u64| (rng.next_u64() >> 33) % below;
         for _ in 0..500 {
             let (a, b) = (next(frames + 1), next(frames + 1));
             let (start, end) = (a.min(b), a.max(b));

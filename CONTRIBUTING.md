@@ -166,6 +166,12 @@ golden hears is pinned the same way, with a comment saying which goldens (decisi
 also holds what those crates bring in, such as `rustfft` under `realfft`, which `cargo update`
 moves, so run the tests after one.
 
+Randomness comes from `vt_model::random`, never from a crate such as `rand` or a generator
+written out in place: a saved seed must play the same notes in every later version, and a crate
+may change its values in a release. The module has SplitMix64, three LCGs, PCG32 and xorshift32,
+each tested against published values; a new use takes one of them, or adds a generator there
+with a test of its own (decision 361).
+
 ### The compiler and the lints
 
 `rust-toolchain.toml` pins the compiler to one stable release, and the workflows install the

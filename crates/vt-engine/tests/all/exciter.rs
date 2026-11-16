@@ -5,6 +5,7 @@ use std::sync::Arc;
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_frames, render_loop};
 use vt_model::insert::{Exciter, Insert};
+use vt_model::random::Xorshift32;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::Song;
@@ -15,13 +16,10 @@ const RATE: u32 = 48_000;
 
 /// A short, bright, decaying noise, as a hat, from a fixed seed so no audio file is needed.
 fn pool() -> Arc<SamplePool> {
-    let mut seed = 0x1234_5678_u32;
+    let mut rng = Xorshift32::new(0x1234_5678);
     let frames = (0..4800)
         .map(|i| {
-            seed ^= seed << 13;
-            seed ^= seed >> 17;
-            seed ^= seed << 5;
-            let noise = seed as f32 / u32::MAX as f32 * 2.0 - 1.0;
+            let noise = rng.unit() * 2.0 - 1.0;
             let value = noise * (1.0 - i as f32 / 4800.0).powi(3) * 0.5;
             [value, value]
         })

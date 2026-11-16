@@ -27,6 +27,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use crate::random::splitmix64;
 use crate::step::Step;
 
 pub use metropolix::{Arp, JUMP_START, MOST_ROWS};
@@ -433,13 +434,15 @@ pub struct Dealer(u64);
 impl Dealer {
     /// A track's, for the project's seed.
     pub fn new(seed: u64, track: usize) -> Self {
-        Self(mix(mix(seed) ^ mix(ORDER_STREAM.wrapping_add(track as u64))))
+        Self(splitmix64(
+            splitmix64(seed) ^ splitmix64(ORDER_STREAM.wrapping_add(track as u64)),
+        ))
     }
 
     /// The deal for one time round a track's chain, counted from where it started, and one place
     /// in it, so a phrase twice in its chain is dealt twice.
     pub fn deal(self, lap: i64, slot: usize) -> Deal {
-        Deal(mix(mix(self.0 ^ lap as u64) ^ slot as u64))
+        Deal(splitmix64(splitmix64(self.0 ^ lap as u64) ^ slot as u64))
     }
 }
 
@@ -449,14 +452,6 @@ pub struct Deal(u64);
 
 /// Keeps a dealer's hashes apart from any other the seed is hashed for.
 const ORDER_STREAM: u64 = 0x6f72_6465_7200_0000;
-
-/// SplitMix64's finaliser, which spreads every bit of what goes in over what comes out.
-const fn mix(value: u64) -> u64 {
-    let mut x = value.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    x = (x ^ (x >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    x ^ (x >> 31)
-}
 
 /// A number below `below` from a hash, without the bias a remainder has.
 fn below(hash: u64, below: usize) -> usize {
@@ -476,7 +471,7 @@ fn shuffled(deal: Deal, rows: usize, visit: usize) -> usize {
     loop {
         let (mut left, mut right) = (at >> half, at & mask);
         for round in 0..4u64 {
-            let turned = left ^ (mix(deal.0 ^ (round << 56) ^ right) & mask);
+            let turned = left ^ (splitmix64(deal.0 ^ (round << 56) ^ right) & mask);
             left = right;
             right = turned;
         }
@@ -495,7 +490,7 @@ fn picked(deal: Deal, rows: usize, visit: usize, attempt: u64) -> usize {
 
 /// A pass's roll of the dice for a visit, on a try at it.
 fn roll(deal: Deal, visit: usize, attempt: u64) -> u64 {
-    mix(deal.0 ^ mix((visit as u64) << 8 | attempt))
+    splitmix64(deal.0 ^ splitmix64((visit as u64) << 8 | attempt))
 }
 
 /// Which way `Brownian` steps at a visit, as the Metropolix's: a row on half the time, staying a

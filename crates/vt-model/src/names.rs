@@ -5,6 +5,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::constants::MAX_PROJECT_NAME_CHARS;
+use crate::random::SplitMix64;
 
 /// The adjectives that start most names.
 pub const ADJECTIVES: &str = include_str!("names/adjectives.txt");
@@ -23,13 +24,15 @@ pub fn words(list: &'static str) -> impl Iterator<Item = &'static str> {
 /// Makes random names, from a seed that each name moves on.
 #[derive(Debug, Clone)]
 pub struct Names {
-    state: u64,
+    numbers: SplitMix64,
 }
 
 impl Names {
     /// Start from a seed, so the same names come each time.
     pub fn seeded(seed: u64) -> Self {
-        Self { state: seed }
+        Self {
+            numbers: SplitMix64::new(seed),
+        }
     }
 
     /// Start from the clock, so each run names things differently. It's apart from the song's
@@ -41,26 +44,17 @@ impl Names {
         Self::seeded(nanos ^ u64::from(std::process::id()).rotate_left(32))
     }
 
-    /// The next random number, by SplitMix64.
-    fn next_number(&mut self) -> u64 {
-        self.state = self.state.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.state;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    }
-
     /// A random word from a list.
     fn word(&mut self, list: &'static str) -> &'static str {
         let count = words(list).count() as u64;
-        let at = (self.next_number() % count) as usize;
+        let at = (self.numbers.next_u64() % count) as usize;
         words(list).nth(at).expect("the index is in the list")
     }
 
     /// A new name, two different words joined by a hyphen.
     pub fn name(&mut self) -> String {
         loop {
-            let first = if self.next_number().is_multiple_of(10) {
+            let first = if self.numbers.next_u64().is_multiple_of(10) {
                 self.word(NOUNS)
             } else {
                 self.word(ADJECTIVES)

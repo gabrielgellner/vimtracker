@@ -39,10 +39,10 @@ use vt_model::insert::{
 
 use crate::dsp::blocks::line::hermite;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
-use crate::dsp::blocks::xorshift::Xorshift;
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::dsp::filters::filter::soft_clip;
+use vt_model::random::Xorshift32;
 
 /// How many grains can play at once, as Beads'.
 pub(crate) const GRAINS: usize = 32;
@@ -483,7 +483,7 @@ pub(crate) struct Granular {
     peak: f32,
     peak_smoothed: f32,
     release: f32,
-    random_state: Xorshift,
+    random_state: Xorshift32,
     rate: u32,
     smoothing: f32,
 }
@@ -520,7 +520,7 @@ impl Granular {
             peak: 0.5,
             peak_smoothed: 0.5,
             release: 1.0 / (rate_f * LIMITER_RELEASE_SECONDS),
-            random_state: Xorshift::new(0x2545_F491),
+            random_state: Xorshift32::new(0x2545_F491),
             rate,
             smoothing: coefficient(rate),
         };

@@ -67,6 +67,7 @@ pub use world::{MAX_PULSES, Role, World};
 use crate::constants::{MAX_PHRASE_STEPS, TICKS_PER_QUARTER};
 use crate::grid::GRID_ROWS;
 use crate::lfo::{Rate, Shape as Wave};
+use crate::random::splitmix64_nth;
 use crate::scale::Scale;
 use crate::selection::StepRange;
 use crate::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIDDLE_C, MIN_NOTE, Note, Step, nudge_text};
@@ -1311,12 +1312,7 @@ pub fn curved(t: f64, curve: i8, s: i8) -> f64 {
 
 /// A stateless number for a row, so a row's result doesn't depend on any other's.
 fn mix(seed: u64, row: usize) -> u64 {
-    let mut mixed = seed
-        .wrapping_add((row as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
-        .wrapping_add(0x9E37_79B9_7F4A_7C15);
-    mixed = (mixed ^ (mixed >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    mixed = (mixed ^ (mixed >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    mixed ^ (mixed >> 31)
+    splitmix64_nth(seed, row as u64)
 }
 
 /// The seed a shape uses on the `nth` of the tracks it shapes at once, counted from 0, so each
