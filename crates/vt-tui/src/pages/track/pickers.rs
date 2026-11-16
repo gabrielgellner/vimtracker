@@ -159,7 +159,7 @@ pub(super) fn control_picker(control: Control, services: &mut Services) -> Outco
     let page = services.page_track();
     match control {
         // Something that's only on or off switches, as there's nothing to choose between.
-        Control::Mute | Control::Solo | Control::Limiter | Control::Safe => {
+        Control::Mute | Control::Solo | Control::Limiter | Control::Safe | Control::KeyTrack => {
             toggle_control(services, control);
             Outcome::Done
         }

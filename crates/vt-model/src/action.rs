@@ -407,6 +407,11 @@ pub enum Action {
         track: usize,
         on: bool,
     },
+    /// Switch a track filter's `Key track` on or off, which has its cutoff follow the note.
+    SetTrackKeyTrack {
+        track: usize,
+        on: bool,
+    },
     /// Set how a track's `ACU`s move its notes.
     SetAccumulation {
         track: usize,
@@ -804,6 +809,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
         | Action::SetTrackReset { .. }
         | Action::SetTrackGlide { .. }
         | Action::SetTrackSafe { .. }
+        | Action::SetTrackKeyTrack { .. }
         | Action::SetAccumulation { .. }
         | Action::SetArpeggio { .. }
         | Action::SetLaneMove { .. }

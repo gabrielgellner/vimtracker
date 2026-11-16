@@ -19,7 +19,7 @@ const PINS: &[(&str, &str, Option<u64>)] = &[
     ("ahd", "5a07600558463116", Some(0x6ac099d2900e839a)),
     ("arpeggio", "4d0246581a565a57", Some(0xc763c12937d33337)),
     ("drum", "2e4a7f664b110856", Some(0xb85f83c73b7ab338)),
-    ("filter", "5429415763571841", Some(0x756f3b86935c7488)),
+    ("filter", "5429415763571841", Some(0xf8b92c90bf82b8f8)),
     ("fx/beads", "111d3b013624760a", Some(0xe9725f77e5007ff9)),
     ("fx/chorus", "156654564f3a0a35", None),
     ("fx/clouds", "235230280f0a5776", Some(0xd8a7d432fd02edd7)),

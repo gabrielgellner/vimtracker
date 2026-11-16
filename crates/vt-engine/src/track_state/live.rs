@@ -227,7 +227,7 @@ impl TrackState {
         LiveValues {
             level,
             pan,
-            cutoff: moved(self.cutoff.target, SettingId::CUT),
+            cutoff: moved(self.cutoff.target + self.key_track.value, SettingId::CUT),
             resonance: moved(self.resonance.target, SettingId::RES),
             send_a,
             send_b,

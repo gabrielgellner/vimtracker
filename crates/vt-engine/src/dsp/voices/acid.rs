@@ -246,6 +246,8 @@ pub(crate) struct Acid {
     phase: f32,
     /// The frequency it plays now, as a fraction of the rate, which a slide moves toward the note.
     heard: f32,
+    /// The frequency it was last given, which a slide moves `heard` toward.
+    given: f32,
     sliding: bool,
     /// Whether the next frame takes its note's pitch at once, as a new note does.
     jump: bool,
@@ -311,6 +313,7 @@ impl SynthEngine for Acid {
             rate,
             phase: 0.0,
             heard: 0.0,
+            given: 0.0,
             sliding: false,
             jump: true,
             accented: false,
@@ -395,6 +398,15 @@ impl SynthEngine for Acid {
         self.level < SETTLED && self.sweep < SETTLED
     }
 
+    /// Where its slide has its pitch, against the note it's sliding to.
+    fn slid(&self) -> f32 {
+        if self.given > 0.0 {
+            self.heard / self.given
+        } else {
+            1.0
+        }
+    }
+
     /// The next frame, at a frequency as a fraction of the sample rate.
     #[inline]
     fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
@@ -434,6 +446,7 @@ impl SynthEngine for Acid {
 
         // A new note takes its pitch at once, and a slide glides there.
         let target = frequency.clamp(1e-6, 0.45);
+        self.given = target;
         if self.jump || !self.sliding {
             self.heard = target;
             self.jump = false;

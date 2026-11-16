@@ -16,6 +16,9 @@ use super::TrackState;
 const FILTER_UPDATE_FRAMES: u32 = 32;
 /// How close to wide open the utility filter counts as out of the way, on `0..=1`.
 const TRIM_OPEN: f32 = 0.001;
+/// How far an octave moves the cutoff on its `0..=1` scale, which spans 20 Hz to 20 kHz, a
+/// thousandfold: `Key track` moves it an octave for each octave of the note.
+const CUTOFF_PER_OCTAVE: f32 = 1.0 / 9.965_784;
 
 /// The pan gains for a `0..=1` position. The centre is unity, and it keeps equal power.
 #[inline]
@@ -166,6 +169,23 @@ impl TrackState {
             .plays(FilterMode::at(place).unwrap_or_default())
     }
 
+    /// What `Key track` adds to the cutoff this frame: the voice's note in octaves from `C-3`, an
+    /// octave of cutoff for each, smoothed as `CUT` is, and nothing while it's off. Its first
+    /// note after the filter has settled is taken at once, as the cutoff is (decision 381).
+    #[inline]
+    fn followed_key(&mut self, on: bool, run: RunContext) -> f32 {
+        if on {
+            self.key_track.target = self.voice.key_octaves() * CUTOFF_PER_OCTAVE;
+        } else {
+            self.key_track.target = 0.0;
+        }
+        if self.key_settles && self.voice.active() {
+            self.key_settles = false;
+            self.key_track.settle();
+        }
+        self.key_track.next(run.smoothing)
+    }
+
     /// Trim, filter, level and pan one frame of voice output, and work out what it sends.
     #[inline]
     pub(crate) fn shape(
@@ -183,9 +203,11 @@ impl TrackState {
         let input = [input[0] * trim, input[1] * trim]
             .map(|sample| if sample.is_finite() { sample } else { 0.0 });
         self.take_in_after_trim(input);
+        let key_tracks = self.held_key_track >= 0.5;
         let cutoff = (self.cutoff.next(run.smoothing)
             + self.cut_offset.next(run.fast)
-            + self.cut_envelope.next(run.fast))
+            + self.cut_envelope.next(run.fast)
+            + self.followed_key(key_tracks, run))
         .clamp(0.0, 1.0);
         let resonance = (self.resonance.next(run.smoothing)
             + self.res_offset.next(run.fast)
@@ -198,7 +220,10 @@ impl TrackState {
         let drive = self.drive.next(run.smoothing);
         let punch = self.punch.next(run.smoothing);
         let safe = self.safe.next(run.smoothing);
+        // Following the key, the filter keeps running at the top, so a lower note doesn't start it
+        // from where it stopped.
         let open = self.filter_type == FilterType::LowPass
+            && !key_tracks
             && cutoff > 0.999
             && resonance < 0.001
             && drive < 0.001

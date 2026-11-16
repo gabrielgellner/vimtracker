@@ -96,6 +96,7 @@ pub(crate) fn filter_being_edited(page: &TrackPage, ctx: &Ctx) -> bool {
         Control::FilterType
             | Control::FilterMode
             | Control::Safe
+            | Control::KeyTrack
             | Control::Base(
                 TrackControl::Cutoff
                     | TrackControl::Resonance

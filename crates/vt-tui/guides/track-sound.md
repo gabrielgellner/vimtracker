@@ -77,7 +77,8 @@ and its settings in up to four columns of three.
 | Device | Title | Settings, column by column |
 |---|---|---|
 | Machine | Machine, type | The machine's own; a sample's `Tune` `Cents` |
-| Filter | Type, mode | `Cut` `Res` `Drive`; `Punch` `Safe`; `Low cut` `High cut` |
+| Filter | Type, mode | `Cut` `Res` `Drive`; `Punch` `Safe` `Key track`; |
+| | | `Low cut` `High cut` |
 | Output | | `Trim` `Level` `Pan`; `Send A` `Send B` `Group`; `Role` |
 | Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; |
 | | | `Choke` `Velocity` `Quantise`; a synth's `Phase`, `Mode` |
@@ -138,6 +139,7 @@ shows what it plays.
 | Drive | How hard it's driven, from `00` for clean |
 | Punch | How high a loud ring starts over `Cut`, from `00` for none |
 | Safe | On, `Res` stops short of ringing by itself |
+| Key track | On, `Cut` follows the note: an octave for an octave |
 | Filter | `LP` `HP` `BP` `Notch` `Ladder` `Diode` `MS20 LP` `MS20 HP` `Dirty` `OB-X` |
 | Mode | How the type responds: `--` where it has none |
 | Low cut, High cut | The utility filter: `00` and `FF` are off |
@@ -163,6 +165,20 @@ switches it, `=` puts it on and `-` takes it off. Steps and modulators don't
 move it, as with `Drive`, but a `RES` lock or an LFO on `Res` stops short too.
 The clean types never ring by themselves, so on `LP`, `HP`, `BP` and `Notch`
 it's dim and does nothing.
+
+`Key track`, under `Safe`, moves the cutoff with the note, as most synths' filters
+can: an octave up in the note is an octave up in the cutoff, and `C-3` leaves it
+where `Cut` is. Without it the cutoff stays put while the notes move, so a
+resonant peak a low note sits in is left far above the notes an octave higher,
+and a run up the keys gets quieter and duller as it goes. With it each note meets
+the filter as `C-3` does, so the same `Cut` and `Res` sound alike all the way up.
+It follows the note as it sounds: after the chain's transpose, with `Pitch`, a
+glide or `Acid`'s slide as far as it's gone, and what modulation does to `Pitch`,
+but not a sample's own tune. A new note's cutoff moves there as a change of
+`Cut` does, quickly but without a click, and a glide takes it along. It adds to
+`Cut`, `CUT` locks and what modulates `Cut`, and stops at the filter's ends.
+`K` switches it, `=` puts it on and `-` takes it off, and a step can lock it,
+`KTRK` `01` on and `00` off, for its row. The curve follows it as the notes play.
 
 `Low cut` and `High cut` are a second, simple
 filter after the main one, for thinning out a sound without giving up the main

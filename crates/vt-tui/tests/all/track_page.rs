@@ -893,6 +893,25 @@ fn the_track_page_switches_the_filters_safe_beside_res() {
 }
 
 #[test]
+fn the_track_page_switches_the_filters_key_track_under_safe() {
+    let (mut app, _realtime) = on_track_page();
+    let on = |app: &App| app.song().tracks[0].key_track;
+    press(&mut app, "$hjj");
+    assert_eq!(app.track_control().label(), "Key track");
+    // As `Safe`: `K` switches it, `=` puts it on and `-` takes it off.
+    press(&mut app, "K");
+    assert!(on(&app));
+    press(&mut app, "-");
+    assert!(!on(&app));
+    press(&mut app, "=");
+    assert!(on(&app));
+    press(&mut app, "u");
+    assert!(!on(&app));
+    press(&mut app, "=x");
+    assert!(!on(&app), "off is its default");
+}
+
+#[test]
 fn the_track_page_sets_the_filters_type_and_drive() {
     let (mut app, _realtime) = on_track_page();
     let track = |app: &App| app.song().tracks[0].clone();
@@ -2131,10 +2150,10 @@ fn a_jump_labels_matching_settings_nearest_first_and_lands_on_the_value() {
     press(&mut app, " 5/");
     assert_eq!(app.modes.mode, Mode::Jump);
     assert!(jump_labels(&app).is_empty(), "nothing until you type");
-    // Machine, Slice, the sampler's Cents and Punch take the first labels for the `c`, and go
-    // when the search narrows, leaving the rest as they were.
+    // Machine, Slice, the sampler's Cents, Punch and Key track take the first labels for the
+    // `c`, and go when the search narrows, leaving the rest as they were.
     press(&mut app, "cu");
-    assert_eq!(jump_labels(&app), ["f Cut", "j Low cut", "k High cut"]);
+    assert_eq!(jump_labels(&app), ["f Cut", "j Low cut", "l High cut"]);
 
     press(&mut app, "j");
     assert_eq!(app.modes.mode, Mode::Normal);
@@ -2285,7 +2304,7 @@ fn a_jumps_labels_also_follow_the_names_being_searched() {
     // Over the letter after what's typed, in the same columns as without a label.
     assert!(line(&app, "Cuf").starts_with("Cuf       fF00 ▕"));
     assert!(line(&app, "Low cuj").starts_with("Low cuj   j0   ▕"));
-    assert!(line(&app, "High cuk").starts_with("High cuk  kF   ▕"));
+    assert!(line(&app, "High cul").starts_with("High cul  lF   ▕"));
     assert!(line(&app, "Res").starts_with("Res       0000 ▕"));
     // It moves along as you type, and past the end of a name it sits just after it.
     press(&mut app, "t");
@@ -2495,12 +2514,12 @@ fn j_and_k_come_back_to_the_column_a_shorter_row_moved_them_from() {
     press(&mut app, "jhk");
     assert_eq!(app.track_control(), Control::InsertParam(0, 2));
 
-    // On the Sound page, through the Filter's last row, which has only its first column, and on
-    // into the next device's third.
+    // On the Sound page, through the Filter's last row, which has only its first two columns,
+    // and on into the next device's third.
     press(&mut app, "HHgg}j$");
     assert_eq!(app.track_control().label(), "Low cut");
     press(&mut app, "jj");
-    assert_eq!(app.track_control().label(), "Drive");
+    assert_eq!(app.track_control().label(), "Key track");
     press(&mut app, "j");
     assert_eq!(app.track_control().label(), "Role");
     press(&mut app, "kk");

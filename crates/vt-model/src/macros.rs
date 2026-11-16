@@ -471,6 +471,7 @@ impl Track {
             SettingId::GLIDE => self.glide,
             SettingId::PHASE => self.phase.index(),
             SettingId::VOICE_MODE => self.voice_mode.index(),
+            SettingId::KEY_TRACK => u8::from(self.key_track),
             _ => id.entry().default,
         }
     }
@@ -584,6 +585,7 @@ impl Track {
                     SettingId::GLIDE => self.glide = coarse,
                     SettingId::PHASE => self.phase = Phase::from_index(coarse),
                     SettingId::VOICE_MODE => self.voice_mode = VoiceMode::from_index(coarse),
+                    SettingId::KEY_TRACK => self.key_track = coarse != 0,
                     _ => return,
                 }
                 self.set_fine(id, fine);

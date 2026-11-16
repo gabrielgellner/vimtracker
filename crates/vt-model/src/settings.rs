@@ -359,7 +359,7 @@ const TRACK_GROUPS: [&str; 16] = [
 
 /// The track's own settings added since places were fixed, at the end of the table so none moves
 /// (#718): the track's own after [`TRACK`]'s, in the order they came.
-const LATER_TRACK: [Entry; 2] = [
+const LATER_TRACK: [Entry; 3] = [
     // Whether a synth's oscillators run on from note to note or start again on each, read as a
     // note starts, so a lock on its row sets it for that note (decision 370).
     Entry {
@@ -386,9 +386,22 @@ const LATER_TRACK: [Entry; 2] = [
         default: 0,
         place: Place::Own,
     },
+    // Whether the filter's cutoff follows the note's pitch, an octave for an octave from `C-3`,
+    // read every frame, so a lock on a row sets it for that row (decision 381).
+    Entry {
+        key: "keytrack",
+        name: "Key track",
+        label: Some("KTRK"),
+        kind: Kind::Stepped {
+            choices: &OFF_ON,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
 ];
 /// What each of [`LATER_TRACK`] is listed with.
-const LATER_TRACK_GROUPS: [&str; 2] = ["Machine", "Machine"];
+const LATER_TRACK_GROUPS: [&str; 3] = ["Machine", "Machine", "Filter"];
 /// How many of the track's own there are, [`TRACK`]'s and [`LATER_TRACK`]'s.
 const TRACK_SETTINGS: usize = TRACK.len() + LATER_TRACK.len();
 

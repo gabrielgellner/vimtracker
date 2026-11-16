@@ -110,6 +110,12 @@ pub(crate) trait SynthEngine: Copy {
 
     /// Choose the noise of a synth that draws any, so each hit differs but a render repeats.
     fn seed_noise(&mut self, _seed: u32) {}
+
+    /// How far its pitch is from the frequency it's given, as a ratio, for a voice that slides
+    /// its pitch itself, as `Acid` does: what the track filter's `Key track` follows besides it.
+    fn slid(&self) -> f32 {
+        1.0
+    }
 }
 
 /// A voice's settings, each on `0..=1`, in the order of its entries in `vt-model`'s
