@@ -259,6 +259,8 @@ pub(crate) struct TrackState {
     held_velocity_delta: f32,
     /// Held `GLD`, how long a tie glides into the next note, on the `00` to `FF` scale.
     held_glide: f32,
+    /// What `Phase` holds, as a place in `Phase::ALL`.
+    held_phase: f32,
     /// Held `SMP`, `STA`, `SLEN` and `PLY`, the sampler's settings, which its next note reads as it
     /// starts, on the `00` to `FF` scale: the bank entry it plays by number, and how it cuts it.
     held_sampler: [f32; SAMPLER_SETTINGS],
@@ -413,6 +415,7 @@ impl TrackState {
             held_gate_delta: f32::from(SettingId::GATE_DELTA.entry().default),
             held_velocity_delta: f32::from(SettingId::VELOCITY_DELTA.entry().default),
             held_glide: f32::from(SettingId::GLIDE.entry().default),
+            held_phase: f32::from(SettingId::PHASE.entry().default),
             held_sampler: std::array::from_fn(|at| {
                 SettingId::sampler(at).map_or(0.0, |id| f32::from(id.entry().default))
             }),
@@ -591,14 +594,16 @@ impl TrackState {
         });
         // `Acid` carrying on keeps the drift it has, and rolls its own offsets as it starts.
         let drift = (!acid && self.voice.drifts()).then(|| self.drift_rng.next_u32());
+        // With `Phase` at `Reset`, a synth whose sound has a phase starts again at the bottom of
+        // the dip, which it always takes (decision 370).
+        let restart = self.held_phase >= 0.5 && note.synth.is_some_and(SynthVoice::has_phase);
         if carries {
             self.voice.carry(Carry {
                 note,
                 noise,
                 drift,
-                dip: note.shape.reset(),
-                // Its oscillators run on: a track can't ask for them to start again yet (#932).
-                restart: false,
+                dip: note.shape.reset() || restart,
+                restart,
             });
             return;
         }
