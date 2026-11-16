@@ -875,9 +875,9 @@ keyboard. Where the pointer is doesn't matter.
 
 | Wheel | Does |
 |---|---|
-| Fingers up or right | As `=`, in the setting's fine step, more the faster |
-| Fingers down or left | As `-`, in the setting's fine step, more the faster |
-| On a list or a toggle | The next or previous choice, on or off, stopping at the ends |
+| Fingers up or right | As `=`, in the fine step, more the faster |
+| Fingers down or left | As `-`, in the fine step, more the faster |
+| On a list or a toggle | A choice at a time, stopping at the ends |
 
 Up and down and sideways are the same knob, and work the same, as a trackpad's
 fingers drift from one to the other. The value follows the fingers, as a level
