@@ -37,7 +37,10 @@ fn saving_needs_a_folder_then_round_trips() {
     assert_eq!(app.modes.mode, Mode::Picker, "the explorer chooses where");
     assert_eq!(app.overlays.picker.as_ref().unwrap().title, "Save in");
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.explorer.naming, None, "nothing waits for a name");
+    assert_eq!(
+        app.overlays.explorer.naming, None,
+        "nothing waits for a name"
+    );
     let path = folder();
     command(&mut app, &format!("w {}", path.display()));
     assert!(!app.services.dirty, "{}", app.services.status);
@@ -415,7 +418,8 @@ fn e_with_no_folder_opens_a_project_from_beside_this_one_with_its_preview() {
     );
     assert_eq!(app.song().millibpm, 137_630);
     assert_eq!(
-        app.explorer
+        app.overlays
+            .explorer
             .recent_places
             .of(vt_tui::overlays::picker::explorer::Purpose::Project),
         std::slice::from_ref(&root)
@@ -551,7 +555,8 @@ fn new_bang_starts_a_project_and_discards_unsaved_changes() {
 fn saving_a_new_project_chooses_a_folder_then_names_it_on_the_command_line() {
     let root = projects();
     let (mut app, _realtime) = app();
-    app.explorer
+    app.overlays
+        .explorer
         .recent_places
         .add(vt_tui::overlays::picker::explorer::Purpose::Save, &root)
         .unwrap();
@@ -630,7 +635,8 @@ fn a_new_project_has_a_random_name_numbered_in_a_folder_that_has_it() {
     );
     // A folder with the name already in it gets it numbered, as the project keeps its name.
     std::fs::create_dir_all(root.join(&name)).unwrap();
-    app.explorer
+    app.overlays
+        .explorer
         .recent_places
         .add(vt_tui::overlays::picker::explorer::Purpose::Save, &root)
         .unwrap();
@@ -765,6 +771,7 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
     // A project with no folder yet renders under its random name.
     let (mut unsaved, _unsaved_realtime) = self::app();
     unsaved
+        .overlays
         .explorer
         .recent_places
         .add(vt_tui::overlays::picker::explorer::Purpose::Render, &root)
@@ -1046,7 +1053,8 @@ fn saving_a_project_somewhere_new_names_it_after_the_folder_and_keeps_the_name_a
     app.services
         .apply(&vt_model::action::Action::SetSongName("verse".to_owned()));
     // Saving starts with its name.
-    app.explorer
+    app.overlays
+        .explorer
         .recent_places
         .add(vt_tui::overlays::picker::explorer::Purpose::Save, &root)
         .unwrap();
@@ -1083,7 +1091,8 @@ fn saving_a_project_somewhere_new_names_it_after_the_folder_and_keeps_the_name_a
     let (mut copy, _copy_realtime) = self::app();
     copy.services
         .apply(&vt_model::action::Action::SetSongName("one".to_owned()));
-    copy.explorer
+    copy.overlays
+        .explorer
         .recent_places
         .add(vt_tui::overlays::picker::explorer::Purpose::Save, &root)
         .unwrap();
