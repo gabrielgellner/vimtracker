@@ -26,7 +26,7 @@ pub const CUSTOM_GROOVES: usize = 8;
 /// How late swing puts every other step, in ticks, for a swing in tenths of a percent: 66% puts
 /// the second step of each pair 66% of the pair's way along. It's how vimtracker swung before
 /// grooves, so the swing grooves play as that did.
-pub const fn swing_push(tenths: u16) -> i16 {
+pub(crate) const fn swing_push(tenths: u16) -> i16 {
     let tenths = tenths as u64;
     ((TICKS_PER_STEP * 2 * tenths + 500) / 1000) as i16 - TICKS_PER_STEP as i16
 }
@@ -61,7 +61,7 @@ fn is_zero(value: &u8) -> bool {
 
 /// Why a groove read from a song can't be played.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum GrooveError {
+pub(crate) enum GrooveError {
     #[error("a groove has from 1 to {MAX_GROOVE_STEPS} steps")]
     Steps,
     #[error("a groove's first step lands on the grid, so its push is 0")]
@@ -169,7 +169,7 @@ impl Groove {
     }
 
     /// Each step's velocity, in percent, in order.
-    pub fn velocities(&self) -> &[u8] {
+    pub(crate) fn velocities(&self) -> &[u8] {
         &self.velocities[..self.steps()]
     }
 
@@ -239,7 +239,7 @@ impl Groove {
 
 /// The grooves every project has, in the order lists show them, with the project's own after.
 /// `GRV` on a step has "Project" before them, for the project's groove.
-pub const GROOVE_CHOICES: [&str; 27] = [
+pub(crate) const GROOVE_CHOICES: [&str; 27] = [
     "Project",
     "Straight",
     "Swing 52",
@@ -270,7 +270,7 @@ pub const GROOVE_CHOICES: [&str; 27] = [
 ];
 
 /// Every groove's name, without the step's "Project".
-pub const GROOVE_NAMES: &[&str] = match GROOVE_CHOICES.split_first() {
+pub(crate) const GROOVE_NAMES: &[&str] = match GROOVE_CHOICES.split_first() {
     Some((_, names)) => names,
     None => &GROOVE_CHOICES,
 };
@@ -351,7 +351,7 @@ impl GrooveId {
     }
 
     /// The groove that comes with the program, if it's one of those.
-    pub fn preset(self) -> Option<Groove> {
+    pub(crate) fn preset(self) -> Option<Groove> {
         PRESETS.get(self.index()).copied()
     }
 

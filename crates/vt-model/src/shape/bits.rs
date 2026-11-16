@@ -61,13 +61,13 @@ impl Default for Bits {
 }
 
 impl Bits {
-    pub fn is_default(&self) -> bool {
+    pub(crate) fn is_default(&self) -> bool {
         *self == Self::default()
     }
 
     /// A rhythm of sixteen rows, the first the lowest bit, multiplied: masked first where
     /// `masks` says, and kept to sixteen bits.
-    pub fn product(self, rhythm: u16) -> u16 {
+    pub(crate) fn product(self, rhythm: u16) -> u16 {
         let masked = match (self.masks, self.factor) {
             (true, 2) => rhythm & MASK_TWO,
             (true, 3) => rhythm & MASK_THREE,
@@ -78,7 +78,7 @@ impl Bits {
 
     /// A value from 0 to `top` with its bits reworked by a bit transform, kept to `top`. It has
     /// as many bits as `top` needs, so on Velocity flipping all of them is `7F` less the value.
-    pub fn worked(self, kind: FillKind, value: u8, top: u8) -> u8 {
+    pub(crate) fn worked(self, kind: FillKind, value: u8, top: u8) -> u8 {
         let width = width(top);
         let all = (u16::MAX >> (16 - width)) as u8;
         let value = value & all;
@@ -96,7 +96,7 @@ impl Bits {
 }
 
 /// How many bits a column's values take, from 0 to `top`: 7 for a velocity, 5 for a nudge.
-pub fn width(top: u8) -> u32 {
+pub(crate) fn width(top: u8) -> u32 {
     (u8::BITS - top.leading_zeros()).max(1)
 }
 

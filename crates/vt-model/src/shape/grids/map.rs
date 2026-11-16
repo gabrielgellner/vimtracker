@@ -24,7 +24,7 @@ pub const STEPS: usize = 32;
 
 /// The patterns, by node: the kick's 32 steps, the snare's, then the hats'.
 #[rustfmt::skip]
-pub const NODES: [[u8; 3 * STEPS]; 25] = [
+pub(crate) const NODES: [[u8; 3 * STEPS]; 25] = [
     // node_0
     [
         255, 0, 0, 0, 0, 0, 145, 0, 0, 0, 0, 0, 218, 0, 0, 0,
@@ -254,7 +254,7 @@ pub const NODES: [[u8; 3 * STEPS]; 25] = [
 
 /// Which node sits at each point of the 5 by 5 map, by X and then Y.
 #[rustfmt::skip]
-pub const MAP: [[usize; 5]; 5] = [
+pub(crate) const MAP: [[usize; 5]; 5] = [
     [10, 8, 0, 9, 11],
     [15, 7, 13, 12, 6],
     [18, 14, 4, 5, 3],

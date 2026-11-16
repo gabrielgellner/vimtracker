@@ -234,7 +234,7 @@ impl FilterMode {
     }
 
     /// What it does, for a list to show.
-    pub fn meaning(self) -> &'static str {
+    pub(crate) fn meaning(self) -> &'static str {
         match self {
             Self::Slope12 => "12 dB an octave, one filter",
             Self::Slope24 => "24 dB an octave, a second filter after the first",

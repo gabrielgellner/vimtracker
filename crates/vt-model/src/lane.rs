@@ -20,7 +20,7 @@ pub const LANE_RATES: [&str; 31] = [
 
 /// Where a lane's `Length` and `Rate` sit at rest, `+0` and `×1`, which leave every phrase's lane
 /// as it's written.
-pub const LENGTH_AS_WRITTEN: u8 = 0x80;
+pub(crate) const LENGTH_AS_WRITTEN: u8 = 0x80;
 pub const RATE_AS_WRITTEN: u8 = 15;
 
 /// Where an FX column loops on its own, among a phrase's stored steps. It drifts against the
@@ -98,7 +98,7 @@ pub fn length_rows(value: u8) -> i32 {
 /// A division at a `Rate`, by its place in [`LANE_RATES`]: times `n` at `÷n`, slower, and over `n`
 /// at `×n`, faster, rounded to the nearest whole step and kept from 1 to [`MOST_DIVISION`], so a
 /// lane of a step a row goes no faster.
-pub fn rate_division(division: usize, rate: usize) -> usize {
+pub(crate) fn rate_division(division: usize, rate: usize) -> usize {
     let division = division.clamp(1, MOST_DIVISION);
     let rate = rate.min(LANE_RATES.len() - 1);
     let at_rest = usize::from(RATE_AS_WRITTEN);
@@ -143,7 +143,7 @@ impl Default for LaneMove {
 
 impl LaneMove {
     /// Whether it leaves every lane as it's written.
-    pub fn at_rest(self) -> bool {
+    pub(crate) fn at_rest(self) -> bool {
         self == Self::default()
     }
 
@@ -156,7 +156,7 @@ impl LaneMove {
     }
 
     /// Set one of its two values, by its place, `Rate` kept to its list.
-    pub fn set(&mut self, at: usize, value: u8) {
+    pub(crate) fn set(&mut self, at: usize, value: u8) {
         match at {
             0 => self.length = value,
             _ => self.rate = value.min(LANE_RATES.len() as u8 - 1),

@@ -274,7 +274,7 @@ fn default_tone() -> u8 {
 }
 
 /// How far a tape's `Drive` turns what goes in up or down, at either end, in dB.
-pub const MOST_TAPE_DRIVE_DB: f32 = 18.0;
+pub(crate) const MOST_TAPE_DRIVE_DB: f32 = 18.0;
 
 /// A tape's drive in dB, for a value on the `00` to `FF` scale: from -18 dB, through 0 dB at `80`,
 /// to +18 dB.
@@ -353,11 +353,11 @@ impl Tape {
 }
 
 /// Where an exciter's high-pass is at the bottom and top of `Tone`, in Hz, as Surge's.
-pub const EXCITER_TONE_HZ: (f32, f32) = (500.0, 10_000.0);
+pub(crate) const EXCITER_TONE_HZ: (f32, f32) = (500.0, 10_000.0);
 /// How fast its level detector rises and falls at the ends of `Attack` and `Release`, in ms, as
 /// Surge's knobs go.
-pub const EXCITER_ATTACK_MS: (f32, f32) = (5.0, 20.0);
-pub const EXCITER_RELEASE_MS: (f32, f32) = (50.0, 200.0);
+pub(crate) const EXCITER_ATTACK_MS: (f32, f32) = (5.0, 20.0);
+pub(crate) const EXCITER_RELEASE_MS: (f32, f32) = (50.0, 200.0);
 
 /// Between two ends on a log scale, for a value on the `00` to `FF` scale.
 fn exciter_scale(value: f32, (low, high): (f32, f32)) -> f32 {

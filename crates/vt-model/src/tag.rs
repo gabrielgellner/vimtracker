@@ -23,7 +23,7 @@ use crate::song::Machine;
 pub const TAGS_FILE: &str = "tags.ron";
 
 /// The most characters a tag has.
-pub const MAX_TAG_CHARS: usize = 24;
+pub(crate) const MAX_TAG_CHARS: usize = 24;
 
 /// A sample that's a loop, and one that's a single hit.
 pub const LOOP: &str = "loop";
@@ -67,7 +67,7 @@ impl Tag {
 
 /// Whether a tag can be called this: lower-case letters and digits, with single dashes between
 /// them, up to [`MAX_TAG_CHARS`]. Tags are flat, so there's no `/`.
-pub fn is_tag(name: &str) -> bool {
+pub(crate) fn is_tag(name: &str) -> bool {
     let allowed = |c: char| (c.is_alphanumeric() && !c.is_uppercase()) || c == '-';
     !name.is_empty()
         && name.chars().count() <= MAX_TAG_CHARS
@@ -206,7 +206,7 @@ fn is_drum(tag: &str) -> bool {
 }
 
 /// The tags a kit's label says, as the Rytm names its drums: `BD` a kick, `OH` an open hat.
-pub fn label_tags(label: &str) -> &'static [&'static str] {
+pub(crate) fn label_tags(label: &str) -> &'static [&'static str] {
     let label = label.trim().to_ascii_uppercase();
     match label.trim_end_matches(|c: char| c.is_ascii_digit()) {
         "BD" | "KD" => &["kick"],
@@ -227,7 +227,7 @@ pub fn label_tags(label: &str) -> &'static [&'static str] {
 /// nearest folder named for loops or one-shots decides, as Ableton's library has `Loops` and
 /// `One Shots`, whose one-shots can have a tempo in their names. Otherwise `loop` in its name,
 /// or a tempo, such as `Break 120 bpm.wav`, makes it a loop, as sample packs name them.
-pub fn loop_by_name(path: &Path) -> Option<bool> {
+pub(crate) fn loop_by_name(path: &Path) -> Option<bool> {
     for folder in path.ancestors().skip(1) {
         let Some(name) = folder.file_name() else {
             continue;
@@ -326,7 +326,7 @@ pub fn guess_heard(frames: u64, rate: u32, end: Option<u64>) -> Option<&'static 
 
 /// The tags a machine gives a sound preset: `sampler`, or a synth voice's kind and name, as
 /// `analog` and `acid`, with `synth` or, for the drum voices, `drum`.
-pub fn machine_tags(machine: Machine) -> Vec<String> {
+pub(crate) fn machine_tags(machine: Machine) -> Vec<String> {
     let voice = match machine {
         Machine::Sampler => return vec!["sampler".to_owned()],
         Machine::Plaits(voice) => voice,
@@ -440,7 +440,8 @@ impl TagLibrary {
     }
 
     /// Whether any file has tags given by hand or guesses taken off.
-    pub fn is_empty(&self) -> bool {
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
         self.files.is_empty()
     }
 

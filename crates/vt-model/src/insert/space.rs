@@ -133,7 +133,7 @@ impl Delay {
 /// together, from the first, the closest to the record head, to the third, then the same with the
 /// spring reverb, and the reverb alone. Each is named by its number on the selector, the heads it
 /// plays and whether the reverb is on.
-pub const ECHO_MODE_NAMES: [&str; 12] = [
+pub(crate) const ECHO_MODE_NAMES: [&str; 12] = [
     "1: H1",
     "2: H2",
     "3: H3",
@@ -170,10 +170,10 @@ pub fn echo_mode(mode: u8) -> ([bool; 3], bool) {
 }
 
 /// How many choices a Space Echo's `Sync` has: `Free`, then every note division.
-pub const ECHO_SYNCS: usize = DIVISION_NAMES.len() + 1;
+pub(crate) const ECHO_SYNCS: usize = DIVISION_NAMES.len() + 1;
 /// Their names: `Free`, where `Rate` sets the tape's speed, then the divisions the first head can
 /// be timed to.
-pub const ECHO_SYNC_NAMES: [&str; ECHO_SYNCS] = {
+pub(crate) const ECHO_SYNC_NAMES: [&str; ECHO_SYNCS] = {
     let mut names = ["Free"; ECHO_SYNCS];
     let mut at = 0;
     while at < DIVISION_NAMES.len() {
@@ -199,7 +199,7 @@ pub fn echo_head_seconds(rate: f32) -> f32 {
 /// run away a little past 1.
 pub const MOST_INTENSITY: f32 = 1.2;
 /// How far a Space Echo's `Input` turns what goes in up or down at most, in dB.
-pub const MOST_ECHO_INPUT_DB: f32 = 24.0;
+pub(crate) const MOST_ECHO_INPUT_DB: f32 = 24.0;
 
 /// How far a Space Echo's `Input` turns what goes in up or down, in dB, for a value on the `00`
 /// to `FF` scale: evenly from 24 dB down at `00`, through none at `80`, to 24 up at `FF`.
@@ -216,7 +216,7 @@ pub const ECHO_TREBLE: (f32, f32, f32) = (1038.0, 15.38, 2.077);
 /// How far a Space Echo's shelf lifts or cuts where it's flat again, past its corners, in dB,
 /// for a value on the `00` to `FF` scale: none at `80`, and as its taper goes to its most either
 /// way, so `C0` lifts the bass 10 dB and the treble 3.6.
-pub fn echo_shelf_db(value: f32, (_, most_db, power): (f32, f32, f32)) -> f32 {
+pub(crate) fn echo_shelf_db(value: f32, (_, most_db, power): (f32, f32, f32)) -> f32 {
     let k = from_middle(value);
     most_db * k.abs().powf(power) * k.signum()
 }
@@ -634,7 +634,7 @@ impl Space {
 /// beat, `1/4`, as a stutter is a roll or a glitch rather than a loop.
 pub const REPEAT_LENGTHS: usize = 13;
 /// Their names.
-pub const REPEAT_LENGTH_NAMES: [&str; REPEAT_LENGTHS] = {
+pub(crate) const REPEAT_LENGTH_NAMES: [&str; REPEAT_LENGTHS] = {
     let mut names = [""; REPEAT_LENGTHS];
     let mut at = 0;
     while at < REPEAT_LENGTHS {
@@ -645,13 +645,13 @@ pub const REPEAT_LENGTH_NAMES: [&str; REPEAT_LENGTHS] = {
 };
 /// How many times a stutter plays its piece again after it's first heard, and `Hold`, which
 /// repeats it for as long as `Trig` is on.
-pub const REPEAT_NAMES: [&str; 17] = [
+pub(crate) const REPEAT_NAMES: [&str; 17] = [
     "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "Hold",
 ];
 /// The place of `Hold` among them.
 pub const HOLD_REPEATS: u8 = REPEAT_NAMES.len() as u8 - 1;
 /// How much quieter each of a stutter's repeats is than the one before at most, in dB.
-pub const MOST_REPEAT_DECAY_DB: f32 = 12.0;
+pub(crate) const MOST_REPEAT_DECAY_DB: f32 = 12.0;
 
 /// How much quieter each of a stutter's repeats is than the one before, in dB, for a value on the
 /// `00` to `FF` scale: none at `00`, in proportion to 12 dB at `FF`, so `80` about halves each.

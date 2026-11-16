@@ -123,7 +123,7 @@ pub fn flanger_feedback(value: f32) -> f32 {
 }
 
 /// How many all-passes a phaser can have, as Vital's does: each four make two notches.
-pub const STAGE_NAMES: [&str; 3] = ["4", "8", "12"];
+pub(crate) const STAGE_NAMES: [&str; 3] = ["4", "8", "12"];
 
 /// The `Rate` of a phaser or flanger: how long its sweep takes, in note lengths.
 const fn sweep_param(default: u8) -> Entry {
@@ -360,7 +360,7 @@ impl Rotary {
 
 /// What Warps can take as its modulator: its own oscillator, a track by its number, or a return,
 /// as the compressor's `Source` but with the oscillator in place of `Self`.
-pub const WARPS_SOURCE_NAMES: [&str; SOURCE_NAMES.len()] = {
+pub(crate) const WARPS_SOURCE_NAMES: [&str; SOURCE_NAMES.len()] = {
     let mut names = SOURCE_NAMES;
     names[0] = "Osc";
     names
@@ -368,11 +368,11 @@ pub const WARPS_SOURCE_NAMES: [&str; SOURCE_NAMES.len()] = {
 
 /// The waveforms Warps' oscillator plays, as Warps' own: a sine, a triangle, a saw, a square, and
 /// noise low-passed at four times its pitch.
-pub const WAVE_NAMES: [&str; 5] = ["Sine", "Tri", "Saw", "Square", "Noise"];
+pub(crate) const WAVE_NAMES: [&str; 5] = ["Sine", "Tri", "Saw", "Square", "Noise"];
 
 /// What Warps' `Algo` goes through from `00` to `FF`, as the status line names them: its six
 /// cross-modulations, the modulator on its own as it fades over, and the vocoder.
-pub const ALGORITHM_NAMES: [&str; 8] = [
+pub(crate) const ALGORITHM_NAMES: [&str; 8] = [
     "Xfade", "Fold", "Ring", "Digital", "XOR", "Compare", "Mod", "Vocoder",
 ];
 
@@ -380,7 +380,7 @@ pub const ALGORITHM_NAMES: [&str; 8] = [
 /// only the modulator, and where it's only the vocoder, on its `0` to `1` scale.
 pub const ALGORITHM_FADE_START: f32 = 0.675;
 pub const ALGORITHM_MODULATOR: f32 = 0.7;
-pub const ALGORITHM_VOCODER: f32 = 0.725;
+pub(crate) const ALGORITHM_VOCODER: f32 = 0.725;
 
 /// Where Warps' algorithm knob is, from `0` to `1`, for `Algo` on the `00` to `FF` scale. It's
 /// out of 256, so each cross-modulation, an eighth of the way from the last, lands on a value:
@@ -393,7 +393,7 @@ pub fn algorithm_knob(value: f32) -> f32 {
 /// it's between and how far it is from the first to the second. Each cross-modulation is an
 /// eighth of the way from the last, as Warps' knob has them, then it fades through the modulator
 /// into the vocoder.
-pub fn algorithm_blend(value: f32) -> (usize, usize, f32) {
+pub(crate) fn algorithm_blend(value: f32) -> (usize, usize, f32) {
     let at = algorithm_knob(value);
     if at < 0.625 {
         let place = at * 8.0;

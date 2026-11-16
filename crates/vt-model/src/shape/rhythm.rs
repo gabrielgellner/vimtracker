@@ -54,15 +54,15 @@ const CLUSTER_RUN: u64 = 0xC105_7E01;
 const MARKOV: u64 = 0x3A2C_0F00;
 const STATES: u64 = 0x7E57_A7E0;
 /// The shortest and longest run of a cluster.
-pub const SHORTEST_RUN: u64 = 2;
-pub const LONGEST_RUN: u64 = 4;
+pub(crate) const SHORTEST_RUN: u64 = 2;
+pub(crate) const LONGEST_RUN: u64 = 4;
 /// How far back a Markov rhythm looks for what to repeat, Marbles' eight ticks.
-pub const MARKOV_PERIOD: u32 = 8;
+pub(crate) const MARKOV_PERIOD: u32 = 8;
 /// How many rows a Markov rhythm hears before the ones it writes, at least: as far back as it
 /// looks.
 const LEAD_IN: usize = MARKOV_PERIOD as usize;
 /// After more than this many rests in a row, a Markov rhythm's next row is far likelier to play.
-pub const MARKOV_STREAK: u32 = 24;
+pub(crate) const MARKOV_STREAK: u32 = 24;
 
 /// The rows of `open` a cluster rhythm plays: at each row not in a run, a run of two to four rows
 /// starts with a chance worked out so that `percent` of the rows play, as the runs are three long
@@ -90,7 +90,7 @@ pub(super) fn clusters(open: &Rows, percent: u8, seed: u64) -> Rows {
 /// Marbles' Markov rules for one channel: the chance, as a logit, of a row playing after
 /// `history`, whose lowest bit is the row before and whose eighth is eight rows before, and
 /// `streak` rests in a row, at a `bias` of 0 to 100.
-pub fn markov_logit(bias: u8, history: u32, streak: u32) -> f64 {
+pub(crate) fn markov_logit(bias: u8, history: u32, streak: u32) -> f64 {
     let b = 1.5 * f64::from(bias.min(100)) / 100.0 - 0.5;
     let periodic = history >> (MARKOV_PERIOD - 1) & 1 == 1;
     let dense = history & 1 == 1;
@@ -106,7 +106,7 @@ pub fn markov_logit(bias: u8, history: u32, streak: u32) -> f64 {
 }
 
 /// The chance a logit is.
-pub fn logistic(logit: f64) -> f64 {
+pub(crate) fn logistic(logit: f64) -> f64 {
     1.0 / (1.0 + exp(-logit))
 }
 
@@ -154,7 +154,7 @@ pub(super) fn markov(open: &Rows, bias: u8, seed: u64) -> Rows {
 
 /// What a row is in a three-state rhythm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum State {
+pub(crate) enum State {
     Gate,
     Rest,
     Tie,
@@ -162,7 +162,7 @@ pub enum State {
 
 /// Marbles' three states at a `bias` of 0 to 100, for a draw `u` from 0 to 1: a rest below
 /// `0.75 - |bias - 0.5|`, the gate above a threshold past that, and the tie between.
-pub fn state(bias: u8, u: f64) -> State {
+pub(crate) fn state(bias: u8, u: f64) -> State {
     let bias = f64::from(bias.min(100)) / 100.0;
     let none = 0.75 - (bias - 0.5).abs();
     let threshold = none + (1.0 - none) * (0.25 + bias * 0.5);

@@ -504,7 +504,7 @@ impl ModSlot {
 
     /// What the `slot`th slot's setting goes back to under this type, as the slot starts, with
     /// Track's map's ends those of the source it follows.
-    pub fn default_field(&self, slot: usize, field: ModField) -> Option<i32> {
+    pub(crate) fn default_field(&self, slot: usize, field: ModField) -> Option<i32> {
         let mut fresh = ModSlot {
             kind: self.kind,
             ..default_mod(slot)

@@ -264,7 +264,7 @@ impl Kind {
     }
 
     /// Whether it goes round past either end, as a phase does.
-    pub fn wraps(self) -> bool {
+    pub(crate) fn wraps(self) -> bool {
         matches!(
             self,
             Self::Continuous {
@@ -272,11 +272,6 @@ impl Kind {
                 ..
             }
         )
-    }
-
-    /// Whether it has a middle that bars draw from.
-    pub fn centred(self) -> bool {
-        matches!(self, Self::Continuous { middle: true, .. })
     }
 
     /// A value in real units, for the status line: `1.21 kHz`, `-6.0 dB`, `25 % L` or a choice's

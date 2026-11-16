@@ -28,10 +28,10 @@
 //! | `0x33E` | 2 | Checksum: the sum of the bytes from `0x010` up to it, as 16 bits |
 
 /// How long an `.ot` file is.
-pub const OT_SIZE: usize = 832;
+pub(crate) const OT_SIZE: usize = 832;
 
 /// The most slices an `.ot` holds.
-pub const OT_SLICES: usize = 64;
+pub(crate) const OT_SLICES: usize = 64;
 
 /// What an `.ot` starts with, but for its four bytes of zeros.
 const FORM: &[u8; 4] = b"FORM";
@@ -89,7 +89,7 @@ pub struct OtFile {
 
 /// Why some bytes aren't an `.ot` file.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum OtError {
+pub(crate) enum OtError {
     #[error("it's {0} bytes, not the 832 of an .ot file")]
     Size(usize),
     #[error("it doesn't start as an .ot file does")]
@@ -137,7 +137,7 @@ impl OtFile {
     }
 
     /// Read an `.ot` file's bytes.
-    pub fn read(bytes: &[u8]) -> Result<Self, OtError> {
+    pub(crate) fn read(bytes: &[u8]) -> Result<Self, OtError> {
         if bytes.len() != OT_SIZE {
             return Err(OtError::Size(bytes.len()));
         }
@@ -219,13 +219,13 @@ impl OtFile {
     }
 
     /// The gain in decibels, from -24 to +24.
-    pub fn gain_db(&self) -> f32 {
+    pub(crate) fn gain_db(&self) -> f32 {
         (f32::from(self.gain.min(96)) - 48.0) / 2.0
     }
 
     /// The tempo in thousandths of a BPM, as a song keeps its own, if it's one the machine can
     /// have, 30 to 300 BPM.
-    pub fn millibpm(&self) -> Option<u32> {
+    pub(crate) fn millibpm(&self) -> Option<u32> {
         (720..=7200)
             .contains(&self.tempo)
             .then(|| self.tempo * 1000 / 24)

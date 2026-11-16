@@ -81,7 +81,7 @@ impl PatchGen {
     }
 
     /// The command an FX generator writes, if it's one this build knows.
-    pub fn fx_command(&self) -> Option<FxCommand> {
+    pub(crate) fn fx_command(&self) -> Option<FxCommand> {
         self.command.as_deref().and_then(FxCommand::from_key)
     }
 
@@ -129,7 +129,7 @@ impl Placement {
     /// A setting of the patch's on the track: one of its slots' or macros' renumbered to where
     /// that went, an FX column's lane's to the column its generator went on, and any other as it
     /// is.
-    pub fn setting(&self, id: SettingId) -> SettingId {
+    pub(crate) fn setting(&self, id: SettingId) -> SettingId {
         if let (Owner::Lane(slot), at) = id.owner() {
             return SettingId::lane(self.column(slot), at).unwrap_or(id);
         }
@@ -140,7 +140,7 @@ impl Placement {
 
     /// The FX column an FX column of the patch's goes on: where its generator was put, or the
     /// same one.
-    pub fn column(&self, slot: usize) -> usize {
+    pub(crate) fn column(&self, slot: usize) -> usize {
         self.fx.get(&slot).copied().unwrap_or(slot)
     }
 }
@@ -269,7 +269,7 @@ impl Patch {
     /// patch. A slot or macro an FX generator locks comes too, as `DEP4` or `MAC2`, so its lock
     /// follows the part when the patch is added. None if no macro holds anything, as a patch is
     /// its macros' device.
-    pub fn of_track(track: &Track, phrase: Option<&Phrase>) -> Option<Self> {
+    pub(crate) fn of_track(track: &Track, phrase: Option<&Phrase>) -> Option<Self> {
         let columns: BTreeSet<GenColumn> = track
             .macros
             .iter()
@@ -365,17 +365,17 @@ impl Patch {
     }
 
     /// Whether it holds the accumulator, as something in it reaches it.
-    pub fn holds_accumulation(&self) -> bool {
+    pub(crate) fn holds_accumulation(&self) -> bool {
         self.reaches().any(|id| id.owner().0 == Owner::Accumulation)
     }
 
     /// Whether it holds the arpeggio, as something in it reaches it.
-    pub fn holds_arpeggio(&self) -> bool {
+    pub(crate) fn holds_arpeggio(&self) -> bool {
         self.reaches().any(|id| id.owner().0 == Owner::Arpeggio)
     }
 
     /// Whether it holds an FX column's `Length` and `Rate`, as something in it reaches one.
-    pub fn holds_lane(&self, slot: usize) -> bool {
+    pub(crate) fn holds_lane(&self, slot: usize) -> bool {
         self.reaches().any(|id| id.owner().0 == Owner::Lane(slot))
     }
 
@@ -434,7 +434,7 @@ impl Patch {
     /// setting is on one macro at most, and the accumulator and arpeggio if it holds them. What
     /// reached a slot or macro it puts over is let go, as that's another part now. The sound
     /// is left alone.
-    pub fn add_to(&self, track: &mut Track, placement: &Placement) {
+    pub(crate) fn add_to(&self, track: &mut Track, placement: &Placement) {
         let mods = |at: usize| placement.mods.get(at).copied();
         let macros = |at: usize| placement.macros.get(at).copied();
         let replaced = |id: SettingId| match id.owner().0 {
@@ -501,7 +501,7 @@ impl Patch {
 
     /// What it needs, for a list: its generators, then how many mod slots and macros, as
     /// `1 slot, 3 macros` or `Note generator, 2 macros`.
-    pub fn needs(&self) -> String {
+    pub(crate) fn needs(&self) -> String {
         let count = |n: usize, one: &str, many: &str| match n {
             0 => None,
             1 => Some(format!("1 {one}")),

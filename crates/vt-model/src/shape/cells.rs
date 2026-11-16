@@ -55,7 +55,7 @@ impl Start {
     pub const ALL: [Self; 3] = [Self::Seed, Self::One, Self::Hits];
 
     /// The name on screen.
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Seed => "Seed",
             Self::One => "One",
@@ -64,7 +64,7 @@ impl Start {
     }
 
     /// What it starts from, for a list to choose from.
-    pub fn description(self) -> &'static str {
+    pub(crate) fn description(self) -> &'static str {
         match self {
             Self::Seed => "Cells drawn from the seed",
             Self::One => "One cell in the middle",
@@ -73,7 +73,7 @@ impl Start {
     }
 
     /// Its place among the starts.
-    pub fn index(self) -> usize {
+    pub(crate) fn index(self) -> usize {
         self as usize
     }
 
@@ -123,7 +123,7 @@ impl Default for Cells {
 
 impl Cells {
     /// The same, stepped on by so many generations, as a pass plays it.
-    pub fn stepped_by(self, generations: i64) -> Self {
+    pub(crate) fn stepped_by(self, generations: i64) -> Self {
         Self {
             stepped: generations.rem_euclid(ACROSS_GENERATIONS as i64) as u16,
             ..self

@@ -17,7 +17,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// How many entries the bank holds, numbered `01` to `FF`. `00` is no sample, as a Digitakt's
 /// `OFF` is, so a track or a step can choose silence and a new track plays nothing.
-pub const BANK_SIZE: usize = 255;
+pub(crate) const BANK_SIZE: usize = 255;
 
 /// A file's content hash: 128 bits of XXH3 over its bytes, so a file is known by what's in it as
 /// well as where it is.
@@ -142,7 +142,7 @@ pub enum Warp {
 }
 
 /// What each warp is called, in order, as the sample page lists them.
-pub const WARP_NAMES: [&str; 2] = ["Re-pitch", "Beats"];
+pub(crate) const WARP_NAMES: [&str; 2] = ["Re-pitch", "Beats"];
 
 impl Warp {
     pub const ALL: [Self; 2] = [Self::Repitch, Self::Beats];
@@ -175,12 +175,12 @@ fn is_zero<T: Default + PartialEq>(value: &T) -> bool {
 
 impl PlayParams {
     /// What the gain multiplies the sound by.
-    pub fn gain(self) -> f32 {
+    pub(crate) fn gain(self) -> f32 {
         10_f32.powf(self.gain_db / 20.0)
     }
 
     /// How much faster than its note the sample plays, for its tune and cents.
-    pub fn speed(self) -> f64 {
+    pub(crate) fn speed(self) -> f64 {
         let semitones = f64::from(self.tune) + f64::from(self.cents) / 100.0;
         2_f64.powf(semitones / 12.0)
     }
@@ -235,10 +235,10 @@ pub struct Points {
 }
 
 /// The letters that can name a slice, as Vim's marks within a file are `a` to `z`.
-pub const MARK_LETTERS: std::ops::RangeInclusive<char> = 'a'..='z';
+pub(crate) const MARK_LETTERS: std::ops::RangeInclusive<char> = 'a'..='z';
 
 /// How many letters can name slices.
-pub const MARK_COUNT: usize = 26;
+pub(crate) const MARK_COUNT: usize = 26;
 
 /// Whether a letter can name a slice.
 pub fn is_mark(letter: char) -> bool {
@@ -246,13 +246,13 @@ pub fn is_mark(letter: char) -> bool {
 }
 
 /// A mark's place among the letters, `a` first, if it's one.
-pub fn mark_index(letter: char) -> Option<usize> {
+pub(crate) fn mark_index(letter: char) -> Option<usize> {
     is_mark(letter).then(|| letter as usize - 'a' as usize)
 }
 
 /// A slice's own name within its entry, which it keeps as slices before it come and go and its
 /// number changes, so a mark can name it. It's never given to another slice of the entry.
-pub type SliceId = u32;
+pub(crate) type SliceId = u32;
 
 /// The most slices an entry can have: as many as `SLI`'s two hex digits number, `00` to `FF`.
 pub const MAX_SLICES: usize = 256;
@@ -300,7 +300,7 @@ pub const MOST_PAN: i8 = 50;
 
 impl SliceParams {
     /// Whether the slice plays just as its entry does.
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         *self == Self::default()
     }
 
@@ -479,7 +479,7 @@ impl Points {
 
     /// Where the slices would start with a slice joined to the next, by its number: the same
     /// without the next one's start, or none if there's no next.
-    pub fn join_starts(&self, number: usize) -> Option<Vec<u64>> {
+    pub(crate) fn join_starts(&self, number: usize) -> Option<Vec<u64>> {
         self.slices.get(number + 1)?;
         let mut starts: Vec<u64> = self.slices.iter().map(|slice| slice.start).collect();
         starts.remove(number + 1);
@@ -724,7 +724,7 @@ impl Bank {
     }
 
     /// Every entry, in order of number, to change.
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = (u8, &mut BankEntry)> {
+    pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = (u8, &mut BankEntry)> {
         self.entries
             .iter_mut()
             .map(|(number, entry)| (*number, entry))

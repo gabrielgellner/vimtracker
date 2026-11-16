@@ -7,13 +7,13 @@ pub const UNITY_LEVEL: u8 = 0xE0;
 /// The highest level value, at +6 dB as on Ableton Live's faders. Anything above it snaps to it.
 pub const MAX_LEVEL: u8 = 0xF8;
 /// How many dB one step of a level value is.
-pub const DB_PER_LEVEL: f32 = 0.25;
+pub(crate) const DB_PER_LEVEL: f32 = 0.25;
 /// The trim value that leaves what comes into a channel as it is, at 0 dB, in the middle of its
 /// range so it can cut and boost.
 pub const UNITY_TRIM: u8 = 0x80;
 /// How many dB one step of a trim value is: a level value's, so `FF` is +31.75 dB, `01` is
 /// -31.75 dB, and `00` is off.
-pub const DB_PER_TRIM: f32 = DB_PER_LEVEL;
+pub(crate) const DB_PER_TRIM: f32 = DB_PER_LEVEL;
 /// Tracks that play sounds a song can have.
 pub const MAX_SOUND_TRACKS: usize = 64;
 /// The group tracks every song has after those, each summing the tracks put in it. They're saved in
@@ -35,7 +35,7 @@ pub const GROOVE_UNIT_TICKS: u64 = 40;
 /// quarter as the MPC's sequencer counts.
 pub const NUDGE_TICKS: u64 = TICKS_PER_STEP / 24;
 /// Steps in a new phrase.
-pub const DEFAULT_PHRASE_STEPS: usize = 16;
+pub(crate) const DEFAULT_PHRASE_STEPS: usize = 16;
 /// The most steps a phrase keeps, so a big count on a paste or a slide can't use up memory.
 pub const MAX_PHRASE_STEPS: usize = 4096;
 /// Steps per beat, for `ib` and `{ }`.
@@ -58,7 +58,7 @@ pub const MIN_MILLIBPM: u32 = 20_000;
 /// Highest tempo, in thousandths of a BPM.
 pub const MAX_MILLIBPM: u32 = 400_000;
 /// Undo versions kept.
-pub const HISTORY_LIMIT: usize = 1000;
+pub(crate) const HISTORY_LIMIT: usize = 1000;
 
 /// Tuning: smoother time for filter, volume and pan changes.
 pub const SMOOTHING_MS: u32 = 10;

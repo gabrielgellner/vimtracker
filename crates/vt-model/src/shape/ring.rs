@@ -77,7 +77,7 @@ pub struct Kept {
 }
 
 impl Ring {
-    pub fn is_default(&self) -> bool {
+    pub(crate) fn is_default(&self) -> bool {
         Self { pass: 0, ..*self } == Self::default()
     }
 
@@ -138,7 +138,7 @@ impl Ring {
 
     /// The register as its pass starts, over a span of `rows`: the bits taken in on the 16 rows
     /// before, the newest in bit 0.
-    pub fn register(&self, seed: u64, rows: usize) -> u16 {
+    pub(crate) fn register(&self, seed: u64, rows: usize) -> u16 {
         let start = self.start(seed);
         let origin = self.origin(rows);
         let first = i64::from(self.pass) * rows as i64;
@@ -162,7 +162,7 @@ impl Ring {
 
     /// The register after each row of its pass, over a span of `rows`, in order: a row plays if
     /// bit 0 is a 1, and its pitch is the lowest eight bits.
-    pub fn rows(&self, seed: u64, rows: usize) -> impl Iterator<Item = u16> + '_ {
+    pub(crate) fn rows(&self, seed: u64, rows: usize) -> impl Iterator<Item = u16> + '_ {
         let origin = self.origin(rows) + u64::from(self.pass) * rows as u64;
         let len = self.len() as u32;
         let mut bits = self.register(seed, rows);

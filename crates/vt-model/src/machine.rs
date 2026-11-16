@@ -35,7 +35,7 @@ pub enum Machine {
 
 impl Machine {
     /// How much of its last pulse a note lasts until a track sets its own `Gate`.
-    pub fn gate_length(self) -> u8 {
+    pub(crate) fn gate_length(self) -> u8 {
         match self {
             Self::Sampler => FULL_GATE,
             Self::Plaits(voice) => voice.spec().gate,
@@ -218,7 +218,7 @@ impl Role {
     }
 
     /// What it's for, for a list to show.
-    pub fn meaning(self) -> &'static str {
+    pub(crate) fn meaning(self) -> &'static str {
         match self {
             Self::Auto => "Whatever its machine is for",
             Self::None => "No colour",
@@ -488,7 +488,7 @@ impl SynthVoice {
     ];
 
     /// The kind the machine list shows it under.
-    pub fn kind(self) -> &'static str {
+    pub(crate) fn kind(self) -> &'static str {
         Self::KINDS
             .iter()
             .find(|(_, voices)| voices.contains(&self))
@@ -497,7 +497,7 @@ impl SynthVoice {
 
     /// Its description.
     #[inline]
-    pub const fn spec(self) -> &'static VoiceSpec {
+    pub(crate) const fn spec(self) -> &'static VoiceSpec {
         &VOICES[self as usize]
     }
 
@@ -507,7 +507,7 @@ impl SynthVoice {
     }
 
     /// What it does, for a list to show.
-    pub const fn meaning(self) -> &'static str {
+    pub(crate) const fn meaning(self) -> &'static str {
         self.spec().meaning
     }
 
@@ -526,7 +526,7 @@ crate::listed::listed!(SynthVoice: meaning);
 
 /// One synth voice, described once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct VoiceSpec {
+pub(crate) struct VoiceSpec {
     /// What its settings are stored under, which never changes.
     pub key: &'static str,
     /// On screen and in lists.
@@ -553,7 +553,7 @@ pub struct VoiceSpec {
 }
 
 /// Every voice's description, by [`SynthVoice`].
-pub const VOICES: [VoiceSpec; SynthVoice::ALL.len()] = [
+pub(crate) const VOICES: [VoiceSpec; SynthVoice::ALL.len()] = [
     VoiceSpec {
         key: "va",
         name: "VA",

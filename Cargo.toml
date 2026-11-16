@@ -10,8 +10,8 @@ repository = "https://github.com/gabrielgellner/vimtracker"
 # The compiler `rust-toolchain.toml` pins.
 rust-version = "1.100.0"
 
-# What every crate warns on, taken with `lints.workspace = true`. A crate's own extra, such as
-# `unreachable_pub` in `vt-engine`, `vt-tui` and `vt-roto`, stays in its `lib.rs`.
+# What every crate warns on, taken with `lints.workspace = true`. `unreachable_pub` is in each
+# crate's `lib.rs` instead, as here it would reach the tests' own modules too.
 [workspace.lints.clippy]
 float_cmp = "warn"
 match_same_arms = "warn"

@@ -129,11 +129,16 @@ mod param_key {
 
     use crate::shape::GenParam;
 
-    pub fn serialize<S: Serializer>(param: &GenParam, serializer: S) -> Result<S::Ok, S::Error> {
+    pub(crate) fn serialize<S: Serializer>(
+        param: &GenParam,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(param.key())
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<GenParam, D::Error> {
+    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<GenParam, D::Error> {
         let key = String::deserialize(deserializer)?;
         GenParam::by_key(&key).ok_or_else(|| {
             serde::de::Error::custom(format!("there's no generator setting called {key}"))
@@ -252,14 +257,14 @@ impl MacroMap {
     /// ramp ([`curved`]), `curve` first and `s` over it, so `S` eases the ends of whatever
     /// `Curve` makes. It starts at 0 and ends at 1 however it's bent, so its ends are always
     /// `min` and `max`.
-    pub fn response(&self, along: f32) -> f32 {
+    pub(crate) fn response(&self, along: f32) -> f32 {
         response(along, self.curve, self.s)
     }
 
     /// Whether its ends are values its setting takes, and its `curve` and `s` within -100 to 100.
     /// A generator's ends are kept to its bounds as they're used, as those hang on the phrase
     /// it's in.
-    pub fn in_range(&self) -> bool {
+    pub(crate) fn in_range(&self) -> bool {
         let fits = match self.target {
             MacroTarget::Setting(id) => {
                 let top = top_value(id.entry().kind);
@@ -328,7 +333,7 @@ impl MacroMap {
 
 impl Macro {
     /// Whether it's as a new track's are: no name, at `00`, holding nothing.
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         *self == Self::default()
     }
 
@@ -356,7 +361,7 @@ pub fn valid_name(name: &str) -> bool {
 
 impl Track {
     /// Whether any of its macros holds a generator's setting.
-    pub fn has_gen_maps(&self) -> bool {
+    pub(crate) fn has_gen_maps(&self) -> bool {
         self.macros
             .iter()
             .flat_map(|held| &held.maps)
@@ -367,7 +372,7 @@ impl Track {
     /// setting a macro holds on its column put where the macro's turn puts it, kept to the
     /// setting's bounds in that phrase. None if no macro holds any of its settings, or only ones
     /// its shape hasn't. `steps` are the phrase's, and `source` the loop a `Follow` reads.
-    pub fn held_shape(
+    pub(crate) fn held_shape(
         &self,
         generator: &Generator,
         steps: &[Step],
@@ -523,7 +528,7 @@ impl Track {
     /// Put a setting at a value, with a coarse byte and a fine one, wherever its owner keeps it,
     /// as a macro would: for the pages to show what a macro gives what it holds. A groove, which
     /// is chosen, and `Vol` and `LDLT`, which the track doesn't keep, are left alone.
-    pub fn set_value_of(&mut self, id: SettingId, value: u16) {
+    pub(crate) fn set_value_of(&mut self, id: SettingId, value: u16) {
         let [coarse, fine] = value.to_be_bytes();
         let scaled = f32::from(value) / 256.0;
         match id.owner() {

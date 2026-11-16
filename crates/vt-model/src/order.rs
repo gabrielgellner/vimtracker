@@ -242,7 +242,7 @@ impl Order {
 
     /// Whether `:order` takes words or numbers after its name: a jump's, an arp's, a snake's or
     /// Cartesian's.
-    pub const fn takes_words(self) -> bool {
+    pub(crate) const fn takes_words(self) -> bool {
         matches!(
             self,
             Self::Jump(_) | Self::Arp(_) | Self::Snake(_) | Self::Cartesian(_)
@@ -270,7 +270,7 @@ impl Order {
 
     /// Whether it picks a row at a time until the pass is full, rather than going round a round of
     /// places: `Random`, `Quasi-random` and `Brownian`.
-    pub const fn picks(self) -> bool {
+    pub(crate) const fn picks(self) -> bool {
         matches!(self, Self::Brownian | Self::QuasiRandom | Self::Random)
     }
 
@@ -283,7 +283,7 @@ impl Order {
     /// How many places a round of this many rows has before it repeats, for every order but those
     /// that pick until the pass is full. Each is a visit to a row, but for a grid order's places on
     /// cells past the last row.
-    pub fn places(self, rows: usize) -> usize {
+    pub(crate) fn places(self, rows: usize) -> usize {
         match self {
             Self::UpDown | Self::DownUp | Self::Pedal if rows > 1 => 2 * rows - 2,
             Self::UpDownInc | Self::DownUpInc | Self::Hopscotch => 2 * rows,
@@ -300,7 +300,7 @@ impl Order {
     /// [`Order::places`], or none for a grid order's cell past the last row. The orders that pick
     /// pick among every row here, `Quasi-random` and `Brownian` walking from the pass's first
     /// place to this one; a round leaves out the rows that take no time.
-    pub fn row(self, rows: usize, place: usize, deal: Deal) -> Option<usize> {
+    pub(crate) fn row(self, rows: usize, place: usize, deal: Deal) -> Option<usize> {
         if rows <= 1 {
             return Some(0);
         }
@@ -441,7 +441,7 @@ impl Dealer {
 
     /// The deal for one time round a track's chain, counted from where it started, and one place
     /// in it, so a phrase twice in its chain is dealt twice.
-    pub fn deal(self, lap: i64, slot: usize) -> Deal {
+    pub(crate) fn deal(self, lap: i64, slot: usize) -> Deal {
         Deal(splitmix64(splitmix64(self.0 ^ lap as u64) ^ slot as u64))
     }
 }

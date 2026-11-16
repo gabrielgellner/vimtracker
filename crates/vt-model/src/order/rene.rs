@@ -18,7 +18,7 @@ pub struct Grid {
 
 impl Grid {
     /// The grid this many rows are read as.
-    pub const fn of(rows: usize) -> Self {
+    pub(crate) const fn of(rows: usize) -> Self {
         let width = if rows > 32 { 8 } else { 4 };
         let height = rows.div_ceil(width);
         Self {
@@ -28,7 +28,7 @@ impl Grid {
     }
 
     /// How many cells it has, rows past the last included.
-    pub const fn cells(self) -> usize {
+    pub(crate) const fn cells(self) -> usize {
         self.width * self.height
     }
 
@@ -86,17 +86,8 @@ impl Snake {
         }
     }
 
-    /// Its number, from 1, which `:order snake` takes as well as its word.
-    pub fn number(self) -> usize {
-        Self::ALL
-            .iter()
-            .position(|snake| *snake == self)
-            .unwrap_or(0)
-            + 1
-    }
-
     /// The snake a word or a number from 1 names, ignoring case.
-    pub fn named(text: &str) -> Option<Self> {
+    pub(crate) fn named(text: &str) -> Option<Self> {
         let text = text.trim();
         if let Ok(number) = text.parse::<usize>() {
             return number
@@ -109,7 +100,7 @@ impl Snake {
     }
 
     /// What it plays in a phrase of 16 rows, the 4×4 grid, counted from 1.
-    pub const fn meaning(self) -> &'static str {
+    pub(crate) const fn meaning(self) -> &'static str {
         match self {
             Self::Zigzag => "Along a line, back along the next: 1 2 3 4 8 7 6 5 9 10 11 12 16 …",
             Self::Columns => "Down each column of the grid: 1 5 9 13 2 6 10 14 3 7 11 15 4 …",
@@ -123,7 +114,7 @@ impl Snake {
     }
 
     /// The cell at a place along the path, with the place below the grid's cells.
-    pub fn cell(self, grid: Grid, place: usize) -> usize {
+    pub(crate) fn cell(self, grid: Grid, place: usize) -> usize {
         let Grid { width, height } = grid;
         match self {
             Self::Zigzag => {
@@ -270,7 +261,7 @@ impl Default for Cartesian {
 impl Cartesian {
     /// What `:order cartesian` alone and the list give: X every row and Y every three, over the
     /// whole grid, so the two fall out of step.
-    pub const START: Self = Self {
+    pub(crate) const START: Self = Self {
         x_rate: 1,
         y_rate: 3,
         x_length: 0,
@@ -278,7 +269,7 @@ impl Cartesian {
     };
 
     /// The one numbers after `:order cartesian` give: none, its rates, or its rates and lengths.
-    pub fn named(words: &[&str]) -> Option<Self> {
+    pub(crate) fn named(words: &[&str]) -> Option<Self> {
         let numbers: Option<Vec<u8>> = words.iter().map(|word| word.parse().ok()).collect();
         let rate = |rate: u8| (1..=MAX_RATE).contains(&rate);
         let length = |length: u8| (1..=MAX_LENGTH).contains(&length);
@@ -312,7 +303,7 @@ impl Cartesian {
     }
 
     /// Whether its lengths are the grid's, as given by none.
-    pub fn is_whole(self) -> bool {
+    pub(crate) fn is_whole(self) -> bool {
         self.x_length == 0 && self.y_length == 0
     }
 
@@ -325,7 +316,7 @@ impl Cartesian {
     }
 
     /// How far each counter counts on a grid: its length, within the grid, or the grid's own.
-    pub fn lengths(self, grid: Grid) -> (usize, usize) {
+    pub(crate) fn lengths(self, grid: Grid) -> (usize, usize) {
         let length = |set: u8, whole: usize| {
             let most = whole.min(usize::from(MAX_LENGTH));
             if set == 0 {
@@ -341,21 +332,21 @@ impl Cartesian {
     }
 
     /// How many places a round has before both counters are back where they started.
-    pub fn places(self, grid: Grid) -> usize {
+    pub(crate) fn places(self, grid: Grid) -> usize {
         let (x_rate, y_rate) = self.rates();
         let (x_length, y_length) = self.lengths(grid);
         lcm(x_rate * x_length, y_rate * y_length)
     }
 
     /// The cell at a place of its round.
-    pub fn cell(self, grid: Grid, place: usize) -> usize {
+    pub(crate) fn cell(self, grid: Grid, place: usize) -> usize {
         let (x_rate, y_rate) = self.rates();
         let (x_length, y_length) = self.lengths(grid);
         grid.at(place / x_rate % x_length, place / y_rate % y_length)
     }
 
     /// What it does on a grid, in words.
-    pub fn describe(self, grid: Grid) -> String {
+    pub(crate) fn describe(self, grid: Grid) -> String {
         let (x_rate, y_rate) = self.rates();
         let (x_length, y_length) = self.lengths(grid);
         let every = |rate: usize| match rate {

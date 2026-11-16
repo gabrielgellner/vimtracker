@@ -47,7 +47,7 @@ impl ScaleKind {
     ];
 
     /// Its notes, in semitones above the root, from the root itself.
-    pub fn intervals(self) -> &'static [u8] {
+    pub(crate) fn intervals(self) -> &'static [u8] {
         match self {
             Self::Major => &[0, 2, 4, 5, 7, 9, 11],
             Self::Minor => &[0, 2, 3, 5, 7, 8, 10],
@@ -167,7 +167,7 @@ impl Scale {
 
     /// A note moved some way through the scale. One step from a note outside it lands on the next
     /// one in, and it stops at the last one in range.
-    pub fn moved(self, note: u8, by: i32) -> u8 {
+    pub(crate) fn moved(self, note: u8, by: i32) -> u8 {
         let direction = by.signum();
         let mut current = i32::from(note);
         for _ in 0..by.unsigned_abs() {

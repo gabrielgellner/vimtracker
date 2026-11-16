@@ -179,7 +179,7 @@ effects! {
 
 /// How a delay goes to a new time: gliding there, which bends the repeats' pitch as tape does, or
 /// jumping, crossfading from where it read to where it reads now, so they keep their pitch.
-pub const RETIMES: [&str; 2] = ["Glide", "Jump"];
+pub(crate) const RETIMES: [&str; 2] = ["Glide", "Jump"];
 
 /// The most settings any effect shows at once, in the type or mode it's in: a grid's twelve and
 /// its type or mode in the title, and Beads' quality beside its mode there.
@@ -300,7 +300,7 @@ impl Insert {
     }
 
     /// What it does, for a list to choose from.
-    pub fn meaning(self) -> &'static str {
+    pub(crate) fn meaning(self) -> &'static str {
         self.kind()
             .map_or("Nothing here", |kind| kind.spec().meaning)
     }
@@ -424,7 +424,8 @@ impl Insert {
     /// The next or previous effect, as it starts, going round. It's the same kind of slot if the
     /// settings differ, so stepping always changes the effect.
     #[must_use]
-    pub fn stepped(self, up: bool) -> Self {
+    #[cfg(test)]
+    pub(crate) fn stepped(self, up: bool) -> Self {
         let at = Self::ALL
             .iter()
             .position(|effect| std::mem::discriminant(effect) == std::mem::discriminant(&self))

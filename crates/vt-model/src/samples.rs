@@ -81,7 +81,7 @@ impl Sound {
 
     /// Its frames, to read.
     #[inline]
-    pub fn frames(&self) -> Frames<'_> {
+    pub(crate) fn frames(&self) -> Frames<'_> {
         match self {
             Self::Loaded(data) => Frames::Loaded(&data.frames),
             Self::Growing(growing) => Frames::Growing(growing),
@@ -122,19 +122,6 @@ impl Frames<'_> {
             }
             Self::Growing(growing) => growing.pair(index),
         }
-    }
-
-    /// How many frames can be read now.
-    pub fn len(self) -> usize {
-        match self {
-            Self::Loaded(frames) => frames.len(),
-            Self::Growing(growing) => growing.written() as usize,
-        }
-    }
-
-    /// Whether none can be read yet.
-    pub fn is_empty(self) -> bool {
-        self.len() == 0
     }
 }
 
@@ -265,14 +252,6 @@ impl SamplePool {
     #[inline]
     pub fn frames(&self, id: SampleId) -> Option<Frames<'_>> {
         self.samples.get(id as usize).map(Sound::frames)
-    }
-
-    /// A sample still being written, by ID.
-    pub fn growing(&self, id: SampleId) -> Option<&Arc<Growing>> {
-        match self.samples.get(id as usize)? {
-            Sound::Growing(growing) => Some(growing),
-            Sound::Loaded(_) => None,
-        }
     }
 
     /// The number of samples loaded.

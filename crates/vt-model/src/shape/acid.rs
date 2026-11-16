@@ -89,7 +89,7 @@ pub struct Loops {
 }
 
 impl Loops {
-    pub fn is_off(&self) -> bool {
+    pub(crate) fn is_off(&self) -> bool {
         *self == Self::default()
     }
 
@@ -141,7 +141,7 @@ impl Default for Acid {
 }
 
 impl Acid {
-    pub fn is_default(&self) -> bool {
+    pub(crate) fn is_default(&self) -> bool {
         Self { pass: 0, ..*self } == Self::default()
     }
 
@@ -164,7 +164,7 @@ impl Acid {
     }
 
     /// The pass as it's kept, round the loops' period, past which every pass is one before it.
-    pub fn round(pass: i64, loops: Loops) -> u32 {
+    pub(crate) fn round(pass: i64, loops: Loops) -> u32 {
         pass.rem_euclid(loops.period() as i64) as u32
     }
 }

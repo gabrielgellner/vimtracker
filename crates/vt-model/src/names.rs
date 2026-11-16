@@ -8,16 +8,16 @@ use crate::constants::MAX_PROJECT_NAME_CHARS;
 use crate::random::SplitMix64;
 
 /// The adjectives that start most names.
-pub const ADJECTIVES: &str = include_str!("names/adjectives.txt");
+pub(crate) const ADJECTIVES: &str = include_str!("names/adjectives.txt");
 
 /// The nouns that end every name, and start one in ten.
-pub const NOUNS: &str = include_str!("names/nouns.txt");
+pub(crate) const NOUNS: &str = include_str!("names/nouns.txt");
 
 /// How many names are tried before one that's taken is given a number instead.
 const TRIES: usize = 1000;
 
 /// The words in a list, one to a line.
-pub fn words(list: &'static str) -> impl Iterator<Item = &'static str> {
+pub(crate) fn words(list: &'static str) -> impl Iterator<Item = &'static str> {
     list.lines().map(str::trim).filter(|word| !word.is_empty())
 }
 
@@ -29,7 +29,7 @@ pub struct Names {
 
 impl Names {
     /// Start from a seed, so the same names come each time.
-    pub fn seeded(seed: u64) -> Self {
+    pub(crate) fn seeded(seed: u64) -> Self {
         Self {
             numbers: SplitMix64::new(seed),
         }

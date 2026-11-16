@@ -54,8 +54,8 @@ pub const CHORD_SETTING: SettingId = match SettingId::voice(SynthVoice::Chord, 0
     None => panic!("the Chord voice has a chord"),
 };
 /// The places of major and minor in the `Chord` voice's list of chords, Plaits' `M` and `m`.
-pub const MAJOR_CHORD: u8 = 10;
-pub const MINOR_CHORD: u8 = 3;
+pub(crate) const MAJOR_CHORD: u8 = 10;
+pub(crate) const MINOR_CHORD: u8 = 3;
 /// The notes' names, sharps for the black keys, as a chord is named.
 const NAMES: [&str; 12] = [
     "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
@@ -77,7 +77,7 @@ impl Move {
     pub const ALL: [Self; 3] = [Self::P, Self::L, Self::R];
 
     /// The letter it's written as.
-    pub fn letter(self) -> char {
+    pub(crate) fn letter(self) -> char {
         match self {
             Self::P => 'P',
             Self::L => 'L',
@@ -86,7 +86,7 @@ impl Move {
     }
 
     /// The move a letter names, in either case.
-    pub fn from_letter(letter: char) -> Option<Self> {
+    pub(crate) fn from_letter(letter: char) -> Option<Self> {
         match letter.to_ascii_uppercase() {
             'P' => Some(Self::P),
             'L' => Some(Self::L),
@@ -96,7 +96,7 @@ impl Move {
     }
 
     /// Its place among the moves.
-    pub fn index(self) -> usize {
+    pub(crate) fn index(self) -> usize {
         self as usize
     }
 }
@@ -111,7 +111,7 @@ pub enum Quality {
 
 impl Quality {
     /// The name on screen.
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Major => "Major",
             Self::Minor => "Minor",
@@ -119,7 +119,7 @@ impl Quality {
     }
 
     /// The other one.
-    pub fn other(self) -> Self {
+    pub(crate) fn other(self) -> Self {
         match self {
             Self::Major => Self::Minor,
             Self::Minor => Self::Major,
@@ -136,7 +136,7 @@ pub struct Triad {
 
 impl Triad {
     /// The triad on a root, any note, by its place in the octave.
-    pub fn new(root: u8, quality: Quality) -> Self {
+    pub(crate) fn new(root: u8, quality: Quality) -> Self {
         Self {
             root: root % 12,
             quality,
@@ -153,7 +153,7 @@ impl Triad {
     }
 
     /// The triad a move makes of it.
-    pub fn moved(self, by: Move) -> Self {
+    pub(crate) fn moved(self, by: Move) -> Self {
         let (up, quality) = match (by, self.quality) {
             (Move::P, quality) => (0, quality.other()),
             // C major to E minor, and E minor back.
@@ -167,7 +167,7 @@ impl Triad {
     }
 
     /// The note a move takes out of it, and the one it brings in, by their places in the octave.
-    pub fn changes(self, by: Move) -> (u8, u8) {
+    pub(crate) fn changes(self, by: Move) -> (u8, u8) {
         let (before, after) = (self.notes(), self.moved(by).notes());
         let gone = before.into_iter().find(|note| !after.contains(note));
         let new = after.into_iter().find(|note| !before.contains(note));
@@ -221,7 +221,7 @@ impl MoveList {
 
     /// Moves as they're typed, their letters in either case, with or without spaces: one to
     /// [`MAX_MOVES`] of them.
-    pub fn parse(text: &str) -> Option<Self> {
+    pub(crate) fn parse(text: &str) -> Option<Self> {
         let moves: Option<Vec<Move>> = text
             .chars()
             .filter(|c| !c.is_whitespace())
@@ -284,7 +284,7 @@ impl Moves {
     pub const ALL: [Self; 3] = [Self::List, Self::Random, Self::Loop];
 
     /// The name on screen.
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::List => "List",
             Self::Random => "Random",
@@ -293,7 +293,7 @@ impl Moves {
     }
 
     /// What it does, for a list to choose from.
-    pub fn description(self) -> &'static str {
+    pub(crate) fn description(self) -> &'static str {
         match self {
             Self::List => "The moves as typed, going round",
             Self::Random => "Each move drawn by its weight",
@@ -302,7 +302,7 @@ impl Moves {
     }
 
     /// Its place among them.
-    pub fn index(self) -> usize {
+    pub(crate) fn index(self) -> usize {
         self as usize
     }
 }
@@ -327,7 +327,7 @@ impl Voice {
     pub const ALL: [Self; 5] = [Self::Chord, Self::Root, Self::Low, Self::Mid, Self::High];
 
     /// The name on screen.
-    pub fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Chord => "Chord",
             Self::Root => "Root",
@@ -338,7 +338,7 @@ impl Voice {
     }
 
     /// What it writes, for a list to choose from.
-    pub fn description(self) -> &'static str {
+    pub(crate) fn description(self) -> &'static str {
         match self {
             Self::Chord => "The root, and the chord for the Chord voice",
             Self::Root => "The chord's root alone",
@@ -349,13 +349,13 @@ impl Voice {
     }
 
     /// Its place among the voices.
-    pub fn index(self) -> usize {
+    pub(crate) fn index(self) -> usize {
         self as usize
     }
 
     /// The voice the `nth` of the tracks shaped at once plays: the low, the middle and the high,
     /// going round.
-    pub fn across(nth: usize) -> Self {
+    pub(crate) fn across(nth: usize) -> Self {
         [Self::Low, Self::Mid, Self::High][nth % 3]
     }
 
@@ -409,18 +409,18 @@ impl Default for Tonnetz {
 }
 
 impl Tonnetz {
-    pub fn is_default(&self) -> bool {
+    pub(crate) fn is_default(&self) -> bool {
         *self == Self::default()
     }
 
     /// Whether its moves are drawn from the seed.
-    pub fn draws(&self) -> bool {
+    pub(crate) fn draws(&self) -> bool {
         self.moves != Moves::List
     }
 
     /// It as it goes on the `nth` of the tracks shaped at once: with a voice of its own if the
     /// panel gave it none.
-    pub fn on_track(self, nth: usize) -> Self {
+    pub(crate) fn on_track(self, nth: usize) -> Self {
         Self {
             voice: self.voice.or(Some(Voice::across(nth))),
             ..self
