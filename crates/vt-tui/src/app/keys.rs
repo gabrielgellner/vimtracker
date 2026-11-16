@@ -16,6 +16,7 @@ use crate::overlays;
 use crate::overlays::guides;
 use crate::overlays::help::Help;
 use crate::overlays::picker::{Item, Pick, Picker};
+use crate::pages::project;
 use crate::pages::sample::SampleKey;
 use crate::pages::sample::marking::MarkWait;
 
@@ -600,7 +601,7 @@ impl App {
                 self.jump_to_view(view);
             }
             Cmd::ShowTrackPage(page) => self.show_track_page(page),
-            Cmd::ShowProject => self.show_project(),
+            Cmd::ShowProject => self.jump_to_view(project::last_shown(&self.recent_views)),
             Cmd::Picker => self.open_view_picker(),
             Cmd::TrackPicker => self.open_picker(self.services.track_picker()),
             Cmd::Help => {
