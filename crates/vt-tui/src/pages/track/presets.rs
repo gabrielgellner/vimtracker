@@ -10,11 +10,12 @@ use vt_model::preset::{
     preset_path, save,
 };
 
-use crate::app::App;
 use crate::controls::{Control, Page};
 use crate::input::mode::View;
-use crate::overlays::command::parse::PresetLine;
 use crate::overlays::picker::explorer::{Purpose, place_name};
+use crate::overlays::picker::places::RecentPlaces;
+use crate::pages::track::TrackPage;
+use crate::services::Services;
 use crate::services::config::home_folder;
 
 /// What a preset command acts on.
@@ -81,14 +82,15 @@ pub(crate) fn named_file(
         .filter(|path| path.is_file()))
 }
 
-impl App {
+impl TrackPage {
     /// What `:preset` acts on here: on the FX page with the cursor on a slot, its effect, and
     /// anywhere else the cursor's track's sound.
-    fn preset_target(&self) -> Target {
-        let track = self.services.cursor.track;
-        if self.modes.view == View::Track
-            && self.track_page.page == Page::Fx
-            && let Control::Insert(slot) | Control::InsertParam(slot, _) = self.track_control()
+    fn preset_target(&self, view: View, services: &Services) -> Target {
+        let track = services.cursor.track;
+        if view == View::Track
+            && self.page == Page::Fx
+            && let Control::Insert(slot) | Control::InsertParam(slot, _) =
+                self.control(services.track_here())
         {
             return Target::Effect { track, slot };
         }
@@ -96,11 +98,144 @@ impl App {
     }
 
     /// The folder of the presets `:preset` lists here, `sounds` or `effects`, for completion.
-    pub(crate) fn presets_here(&self) -> Option<PathBuf> {
-        let kind = self.preset_target().kind();
-        Some(self.services.settings.preset_folder()?.join(kind.folder()))
+    pub(crate) fn presets_here(&self, view: View, services: &Services) -> Option<PathBuf> {
+        let kind = self.preset_target(view, services).kind();
+        Some(services.settings.preset_folder()?.join(kind.folder()))
     }
 
+    /// The kind of presets `:preset` lists for what's under the cursor, in the presets folder's
+    /// `sounds` or `effects`, to load one, as Ableton's hot-swap opens its browser on a device's
+    /// presets; or none, the status line saying why.
+    pub(crate) fn presets_to_browse(
+        &self,
+        view: View,
+        services: &mut Services,
+    ) -> Option<PresetKind> {
+        let target = self.preset_target(view, services);
+        if !services.takes_sound(target) {
+            return None;
+        }
+        let folder = services.presets_folder()?;
+        let kind = target.kind();
+        let folder = folder.join(kind.folder());
+        if !folder.is_dir() {
+            let home = home_folder();
+            services.status = format!(
+                "No {} presets yet: :preset save name saves {} in {}",
+                kind.noun(),
+                target.said(),
+                place_name(&folder, home.as_deref())
+            );
+            return None;
+        }
+        Some(kind)
+    }
+
+    /// Save what's under the cursor as a preset of this name, in its kind's folder, which is made
+    /// if it isn't there, as [`Services::save_named`] does. A name that's taken is refused unless
+    /// forced.
+    pub(crate) fn save_preset(
+        &self,
+        name: &str,
+        force: bool,
+        view: View,
+        services: &mut Services,
+    ) -> Option<Saved> {
+        let target = self.preset_target(view, services);
+        if !services.takes_sound(target) {
+            return None;
+        }
+        let saved = format!("{} as {name}", target.said());
+        match target {
+            Target::Sound(track) => services.save_named(
+                name,
+                force,
+                |services| {
+                    let sample = services.preset_sample(track);
+                    Ok(SoundPreset::of(&services.song().tracks[track], sample))
+                },
+                |_| saved,
+            ),
+            Target::Effect { track, slot } => services.save_named(
+                name,
+                force,
+                |services| {
+                    EffectPreset::of(&services.song().tracks[track], slot).ok_or_else(|| {
+                        format!("FX {} is empty, so there's nothing to save", slot + 1)
+                    })
+                },
+                |_| saved,
+            ),
+        }
+    }
+
+    /// `:preset load name`: the preset of that name for what's under the cursor.
+    pub(crate) fn load_preset_named(&self, name: &str, view: View, services: &mut Services) {
+        let kind = self.preset_target(view, services).kind();
+        let Some(folder) = services.presets_folder() else {
+            return;
+        };
+        match named_file(Some(&folder), kind, name) {
+            Ok(Some(path)) => self.load_preset(kind, &path, view, services),
+            Ok(None) => {
+                services.status = format!(
+                    "There's no {} preset called {name} in {}",
+                    kind.noun(),
+                    kind_place(&folder, kind)
+                );
+            }
+            Err(error) => services.status = error.to_string(),
+        }
+    }
+
+    /// Load a sound or effect preset on what's under the cursor, as one undo step: a sound on its
+    /// track, keeping the track's level, pan, sends, name and phrases, or an effect into the slot
+    /// under it. A patch is added to the track instead ([`Services::add_patch`]).
+    pub(crate) fn load_preset(
+        &self,
+        kind: PresetKind,
+        path: &Path,
+        view: View,
+        services: &mut Services,
+    ) {
+        let target = self.preset_target(view, services);
+        let name = preset_name(path);
+        match (kind, target) {
+            // A sound loads on the track, from its FX page too.
+            (PresetKind::Sound, Target::Sound(track) | Target::Effect { track, .. }) => {
+                services.load_sound_preset(track, path, &name);
+            }
+            (PresetKind::Effect, Target::Effect { track, slot }) => {
+                services.load_effect_preset(track, slot, path, &name);
+            }
+            (PresetKind::Effect, Target::Sound(_)) => {
+                services.status =
+                    "An effect preset loads into an FX slot: put the cursor on one on the FX page"
+                        .to_owned();
+            }
+            (PresetKind::Patch, _) => {}
+        }
+    }
+}
+
+/// A preset just saved: its kind, the folder it's in, which the explorer keeps among its recent
+/// places, and what the status line says.
+pub(crate) struct Saved {
+    kind: PresetKind,
+    folder: PathBuf,
+    said: String,
+}
+
+impl Saved {
+    /// Keep the folder among the explorer's recent places for the kind, and say what was saved,
+    /// over any trouble keeping the place.
+    pub(crate) fn keep(self, places: &mut RecentPlaces, services: &mut Services) {
+        let _ = places.add(Purpose::Preset(self.kind), &self.folder);
+        services.status = self.said;
+    }
+}
+
+impl Services {
     /// Whether this track plays sounds, saying `not_sound` if it doesn't.
     pub(crate) fn plays_sounds(&mut self, track: usize, not_sound: &str) -> bool {
         let sound = self
@@ -109,7 +244,7 @@ impl App {
             .get(track)
             .is_some_and(vt_model::song::Track::is_sound);
         if !sound {
-            not_sound.clone_into(&mut self.services.status);
+            not_sound.clone_into(&mut self.status);
         }
         sound
     }
@@ -124,126 +259,66 @@ impl App {
 
     /// The presets folder, or none, saying so.
     pub(crate) fn presets_folder(&mut self) -> Option<PathBuf> {
-        let folder = self.services.settings.preset_folder();
+        let folder = self.settings.preset_folder();
         if folder.is_none() {
-            self.services.status = NO_FOLDER.to_owned();
+            self.status = NO_FOLDER.to_owned();
         }
         folder
     }
 
-    /// `:preset`, `:preset save` and `:preset load`.
-    pub(crate) fn preset_line(&mut self, line: PresetLine) {
-        match line {
-            PresetLine::Browse => self.open_preset_explorer(),
-            PresetLine::Save { name, force } => self.save_preset(&name, force),
-            PresetLine::Load(name) => self.load_preset_named(&name),
-        }
-    }
-
-    /// List the presets for what's under the cursor, in the presets folder's `sounds` or
-    /// `effects`, to load one, as Ableton's hot-swap opens its browser on a device's presets.
-    pub(crate) fn open_preset_explorer(&mut self) {
-        let target = self.preset_target();
-        if !self.takes_sound(target) {
-            return;
-        }
-        let Some(folder) = self.presets_folder() else {
-            return;
-        };
-        let kind = target.kind();
-        let folder = folder.join(kind.folder());
-        if !folder.is_dir() {
-            let home = home_folder();
-            self.services.status = format!(
-                "No {} presets yet: :preset save name saves {} in {}",
-                kind.noun(),
-                target.said(),
-                place_name(&folder, home.as_deref())
-            );
-            return;
-        }
-        let purpose = Purpose::Preset(kind);
-        let roots = self.places(purpose);
-        self.open_explorer(purpose, roots, None);
-    }
-
-    /// Save what's under the cursor as a preset of this name, in its kind's folder, which is made
-    /// if it isn't there. A name that's taken is refused unless forced.
-    pub(crate) fn save_preset(&mut self, name: &str, force: bool) {
-        let target = self.preset_target();
-        if !self.takes_sound(target) {
-            return;
-        }
-        let saved = format!("{} as {name}", target.said());
-        match target {
-            Target::Sound(track) => self.save_named(
-                name,
-                force,
-                |app| {
-                    let sample = app.preset_sample(track);
-                    Ok(SoundPreset::of(&app.song().tracks[track], sample))
-                },
-                |_| saved,
-            ),
-            Target::Effect { track, slot } => self.save_named(
-                name,
-                force,
-                |app| {
-                    EffectPreset::of(&app.song().tracks[track], slot).ok_or_else(|| {
-                        format!("FX {} is empty, so there's nothing to save", slot + 1)
-                    })
-                },
-                |_| saved,
-            ),
-        }
-    }
-
     /// Save a preset of this name in its kind's folder, which is made if it isn't there: what
     /// `make` makes, or else why there's nothing to save. A name that's taken is refused unless
-    /// forced. `saved` says what's saved as what, for the status line.
+    /// forced. `saved` says what's saved as what, for the status line. Returns what was saved
+    /// where, or none, the status line saying why.
     pub(crate) fn save_named<P: Preset>(
         &mut self,
         name: &str,
         force: bool,
         make: impl FnOnce(&Self) -> Result<P, String>,
         saved: impl FnOnce(&P) -> String,
-    ) {
-        let Some(folder) = self.presets_folder() else {
-            return;
-        };
+    ) -> Option<Saved> {
+        let folder = self.presets_folder()?;
         let path = match preset_path(&folder, P::KIND, name) {
             Ok(path) => path,
             Err(error) => {
-                self.services.status = error.to_string();
-                return;
+                self.status = error.to_string();
+                return None;
             }
         };
         let preset = match make(self) {
             Ok(preset) => preset,
             Err(why) => {
-                self.services.status = why;
-                return;
+                self.status = why;
+                return None;
             }
         };
         match save(&path, &preset, force) {
             Ok(()) => {
-                if let Some(saved_in) = path.parent() {
-                    self.note_place(Purpose::Preset(P::KIND), saved_in);
-                }
-                self.services.status = format!(
+                let said = format!(
                     "Saved {}, in {}",
                     saved(&preset),
                     kind_place(&folder, P::KIND)
                 );
+                match path.parent() {
+                    Some(saved_in) => {
+                        return Some(Saved {
+                            kind: P::KIND,
+                            folder: saved_in.to_owned(),
+                            said,
+                        });
+                    }
+                    None => self.status = said,
+                }
             }
             Err(PresetError::Taken(_)) => {
                 let (called, command) = called(P::KIND);
-                self.services.status = format!(
+                self.status = format!(
                     "There's a {called} called {name} already: {command}! save {name} writes over it"
                 );
             }
-            Err(error) => self.services.status = error.to_string(),
+            Err(error) => self.status = error.to_string(),
         }
+        None
     }
 
     /// The bank entry a track's sampler plays, with its files by their full paths, so a preset
@@ -252,58 +327,11 @@ impl App {
         let number = self.song().tracks.get(track)?.sample();
         let mut entry = self.song().bank.get(number)?.clone();
         for source in entry.sources_mut() {
-            let resolved =
-                vt_model::project::resolve_sample(self.services.folder.as_deref(), &source.path);
+            let resolved = vt_model::project::resolve_sample(self.folder.as_deref(), &source.path);
             let full = resolved.canonicalize().unwrap_or(resolved);
             source.path = full.display().to_string();
         }
         Some(entry)
-    }
-
-    /// `:preset load name`: the preset of that name for what's under the cursor.
-    fn load_preset_named(&mut self, name: &str) {
-        let kind = self.preset_target().kind();
-        let Some(folder) = self.presets_folder() else {
-            return;
-        };
-        match named_file(Some(&folder), kind, name) {
-            Ok(Some(path)) => self.load_preset(kind, &path),
-            Ok(None) => {
-                self.services.status = format!(
-                    "There's no {} preset called {name} in {}",
-                    kind.noun(),
-                    kind_place(&folder, kind)
-                );
-            }
-            Err(error) => self.services.status = error.to_string(),
-        }
-    }
-
-    /// Load a preset on what's under the cursor, as one undo step: a sound on its track, keeping
-    /// the track's level, pan, sends, name and phrases, or an effect into the slot under it.
-    pub(crate) fn load_preset(&mut self, kind: PresetKind, path: &Path) {
-        if kind == PresetKind::Patch {
-            let over = std::mem::take(&mut self.overlays.explorer.patch_over);
-            self.add_patch(path, over);
-            return;
-        }
-        let target = self.preset_target();
-        let name = preset_name(path);
-        match (kind, target) {
-            (PresetKind::Sound, Target::Sound(track)) => self.load_sound_preset(track, path, &name),
-            (PresetKind::Effect, Target::Effect { track, slot }) => {
-                self.load_effect_preset(track, slot, path, &name);
-            }
-            (PresetKind::Effect, Target::Sound(_)) => {
-                self.services.status =
-                    "An effect preset loads into an FX slot: put the cursor on one on the FX page"
-                        .to_owned();
-            }
-            (PresetKind::Sound, Target::Effect { track, .. }) => {
-                self.load_sound_preset(track, path, &name);
-            }
-            (PresetKind::Patch, _) => {}
-        }
     }
 
     fn load_sound_preset(&mut self, track: usize, path: &Path, name: &str) {
@@ -313,7 +341,7 @@ impl App {
         let preset = match load::<SoundPreset>(path) {
             Ok(preset) => preset,
             Err(error) => {
-                self.services.status = error.to_string();
+                self.status = error.to_string();
                 return;
             }
         };
@@ -326,7 +354,7 @@ impl App {
                     number
                 }
                 Err(error) => {
-                    self.services.status = format!("{name} can't load: {error}");
+                    self.status = format!("{name} can't load: {error}");
                     return;
                 }
             },
@@ -336,10 +364,10 @@ impl App {
             preset: Box::new(preset),
             sample,
         });
-        self.services.status.clear();
-        self.services.apply(&Action::Batch(actions));
-        if self.services.status.is_empty() {
-            self.services.status = format!(
+        self.status.clear();
+        self.apply(&Action::Batch(actions));
+        if self.status.is_empty() {
+            self.status = format!(
                 "Track {:02} plays {name}, keeping its phrases, level and sends: u undoes it",
                 track + 1
             );
@@ -350,26 +378,26 @@ impl App {
         let preset = match load::<EffectPreset>(path) {
             Ok(preset) => preset,
             Err(error) => {
-                self.services.status = error.to_string();
+                self.status = error.to_string();
                 return;
             }
         };
         let fine = match preset.fine_in(slot) {
             Ok(fine) => fine,
             Err(error) => {
-                self.services.status = error;
+                self.status = error;
                 return;
             }
         };
-        self.services.status.clear();
-        self.services.apply(&Action::LoadEffect {
+        self.status.clear();
+        self.apply(&Action::LoadEffect {
             track,
             slot,
             insert: preset.effect,
             fine,
         });
-        if self.services.status.is_empty() {
-            self.services.status = format!(
+        if self.status.is_empty() {
+            self.status = format!(
                 "FX {} of track {:02} is {name}, a {}: u undoes it",
                 slot + 1,
                 track + 1,

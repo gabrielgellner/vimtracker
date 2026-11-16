@@ -13,6 +13,7 @@ use vt_model::accumulator::amount;
 use vt_model::action::{Action, FieldValue};
 use vt_model::condition::Condition;
 use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot};
+use vt_model::preset::PresetKind;
 use vt_model::scale::Scale;
 use vt_model::selection::Field;
 use vt_model::settings::SettingId;
@@ -268,11 +269,20 @@ impl App {
             Pick::Folder(folder) => self.name_in(&folder),
             Pick::Preset { kind, path } => {
                 self.note_place_of(Purpose::Preset(kind), &path);
-                self.load_preset(kind, &path);
+                let view = self.modes.view;
+                // A patch goes over the last mod slots and macros if `:patch!` listed it.
+                if kind == PresetKind::Patch {
+                    let over = std::mem::take(&mut self.overlays.explorer.patch_over);
+                    self.services.add_patch(&path, over, view);
+                } else {
+                    self.track_page
+                        .load_preset(kind, &path, view, &mut self.services);
+                }
             }
             Pick::FactoryPatch(name) => {
                 let over = std::mem::take(&mut self.overlays.explorer.patch_over);
-                self.add_factory_patch(&name, over);
+                self.services
+                    .add_factory_patch(&name, over, self.modes.view);
             }
             Pick::Prompt(text) => {
                 self.overlays.command.line = text;
