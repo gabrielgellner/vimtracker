@@ -593,6 +593,10 @@ pub enum Envelope {
     Ahd(Ahd),
     Drum(Drum),
     Lpg(Lpg),
+    /// None at all: full from a note's first frame through its release, for a note's shape when
+    /// the slot that shapes the notes is switched out, so a machine's own envelope shapes it and
+    /// the note ends as the machine settles (decision 371).
+    Open,
 }
 
 impl Envelope {
@@ -609,6 +613,7 @@ impl Envelope {
             Self::Ahd(ahd) => ahd.reset,
             Self::Drum(_) => true,
             Self::Lpg(lpg) => lpg.reset,
+            Self::Open => false,
         }
     }
 
@@ -616,7 +621,7 @@ impl Envelope {
     #[inline]
     pub fn one_shot(&self) -> bool {
         match self {
-            Self::Adsr(_) => false,
+            Self::Adsr(_) | Self::Open => false,
             Self::Ahd(ahd) => ahd.one_shot(),
             Self::Drum(_) | Self::Lpg(_) => true,
         }
@@ -630,6 +635,7 @@ impl Envelope {
             Self::Ahd(ahd) => ahd.held(frames, from, rate),
             Self::Drum(drum) => drum.held(frames, rate),
             Self::Lpg(lpg) => lpg.held(frames, from, rate),
+            Self::Open => 1.0,
         }
     }
 
@@ -641,6 +647,7 @@ impl Envelope {
             Self::Ahd(ahd) => ahd.released(frames, from, rate),
             Self::Drum(drum) => drum.released(frames, from, rate),
             Self::Lpg(lpg) => lpg.released(frames, from, rate),
+            Self::Open => from,
         }
     }
 
@@ -652,6 +659,7 @@ impl Envelope {
             Self::Ahd(ahd) => ahd.finished_holding(frames, rate),
             Self::Drum(drum) => drum.finished_holding(frames, rate),
             Self::Lpg(lpg) => lpg.finished_holding(frames, rate),
+            Self::Open => false,
         }
     }
 
@@ -663,6 +671,8 @@ impl Envelope {
             Self::Ahd(ahd) => ahd.finished_releasing(frames, rate),
             Self::Drum(drum) => drum.finished_releasing(frames, rate),
             Self::Lpg(lpg) => lpg.finished_releasing(frames, rate),
+            // It ends with the machine, which only the voice knows.
+            Self::Open => true,
         }
     }
 }

@@ -444,6 +444,8 @@ pub(crate) fn envelope_in(
         Envelope::Ahd(ahd) => ahd_stage_ends(ahd).to_vec(),
         Envelope::Drum(drum) => drum_stage_ends(drum),
         Envelope::Lpg(lpg) => lpg_stage_ends(lpg).to_vec(),
+        // A note's shape with its slot switched out, which no slot draws: full all the way.
+        Envelope::Open => vec![1.0],
     };
     // Between each stage and the next: attack and decay, decay and sustain, and sustain and
     // release, or attack and hold, and hold and decay.
@@ -456,6 +458,7 @@ pub(crate) fn envelope_in(
         // It strikes from nothing to full at once, so its line goes straight up at the start.
         Envelope::Drum(drum) => plot.curve(|x| drum_level_at(drum, x), 0.0, &ends),
         Envelope::Lpg(lpg) => plot.curve(|x| lpg_level_at(lpg, x), 0.0, &ends),
+        Envelope::Open => plot.curve(|_| 1.0, 1.0, &ends),
     }
     plot
 }
