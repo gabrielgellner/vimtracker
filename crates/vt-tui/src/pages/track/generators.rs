@@ -162,7 +162,7 @@ impl TrackPage {
             Cmd::PickValue => return edit.open_picker(),
             Cmd::EnterInsert => return edit.start_typing(),
             Cmd::ApplyGenerator => edit.apply(),
-            Cmd::ToNothing => edit.to_nothing(),
+            Cmd::ToNothing => edit.set_nothing(),
             Cmd::RollGenerator => edit.roll(),
             Cmd::Paste => return Outcome::Refused("p puts an effect in a slot, on the FX page"),
             _ => return Outcome::Passed,
@@ -389,7 +389,7 @@ impl GenEdit<'_> {
     /// `dd`: the setting to nothing, as the track page's settings go, or on `Fill`, which says what
     /// the generator is, the generator taken away. A setting that's only typed, as a `List`'s values
     /// are, has no nothing, and the status line says so.
-    fn to_nothing(&mut self) {
+    fn set_nothing(&mut self) {
         let Some((phrase, generator, param)) = self.here() else {
             self.services.status = "Empty has nothing to clear: K makes a column live".to_owned();
             return;
