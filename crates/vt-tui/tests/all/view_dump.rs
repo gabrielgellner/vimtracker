@@ -239,11 +239,18 @@ fn macros_and_lanes(dump: &mut Dump) {
     dump.page("macros", &mapped, Page::Gen);
     for (tag, moved) in [
         ("lane at rest", LaneMove::default()),
-        ("lane moved", LaneMove { length: 3, rate: 9 }),
+        (
+            "lane moved",
+            LaneMove {
+                length: 3,
+                rate: 9,
+                start: 2,
+            },
+        ),
     ] {
         let on = song(|song| song.tracks[0].lanes = [moved; FX_SLOTS]);
         for slot in 0..FX_SLOTS {
-            for field in [LaneField::Length, LaneField::Rate] {
+            for field in [LaneField::Length, LaneField::Rate, LaneField::Start] {
                 dump.control(tag, &on, Control::Lane(slot, field));
             }
         }

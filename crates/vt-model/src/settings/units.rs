@@ -384,7 +384,8 @@ impl Kind {
                     Hold::Note => "Note".to_owned(),
                     Hold::Ms(ms) => format!("{ms} ms"),
                 },
-                Units::Rows => rows_text((coarse.round() as i32 - 128).clamp(-128, 127)),
+                Units::Rows if middle => rows_text((coarse.round() as i32 - 128).clamp(-128, 127)),
+                Units::Rows => rows_text(coarse.round() as i32),
                 Units::Orders => orders_text((coarse.round() as i32 - 128).clamp(-128, 127)),
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {

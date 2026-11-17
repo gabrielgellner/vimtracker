@@ -65,6 +65,8 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `REV` | The walk the other way up, `01`, or as written, `00` |
 | `ORDX` | The order's first number: `00` the phrase's own, `01` to `10` |
 | `ORDY` | The order's second number: `00` the phrase's own, `01` to `10` |
+| `PLEN` | Rows the order walks, up or down from the loop's: `80` is none |
+| `PSTA` | The row the order's window starts on, rows on from the first |
 | `GLD` | How long a tie glides into the next note: `00` off, `80` about 60 ms |
 | `OSC` | A synth's `Phase` for the row's note: `00` Free, `01` Reset |
 | `VMOD` | The track's `Mode` for the row's note: `00` Mono, `01` Legato |
@@ -102,6 +104,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `MAC2` | Macro 2. `MAC3` `MAC4` `MAC5` `MAC6` `MAC7` `MAC8` the others |
 | `LLEN1` | FX 1's lanes' length, rows up or down: `80` is none. `LLEN2` `LLEN3` too |
 | `LRAT1` | FX 1's lanes' speed: `÷` slower, `×` faster. `LRAT2` `LRAT3` too |
+| `LSTA1` | FX 1's lanes' first row, rows on from their own. `LSTA2` `LSTA3` too |
 
 Each voice has its own settings, and the track keeps every voice's values, so
 changing voice and back loses nothing. A lock for a voice the track isn't
@@ -503,8 +506,10 @@ the track's `Jump`, in the Play device's title. See **Order** in **Editing**.
 page's `Phrase` device does, read before the row lands, as `JMP` is: a lock on a
 row moves the step that walks to that row. `ORD` goes so many places on through
 the list of orders from the phrase's own, `80` as written; `REV` turns the walk
-the other way up; `ORDX` and `ORDY` are the order's numbers, `00` its own. See
-**Order** in **Editing**.
+the other way up; `ORDX` and `ORDY` are the order's numbers, `00` its own.
+`PLEN` and `PSTA` are the window of rows the order walks, read the same way:
+`PLEN` rows more or fewer than the loop's, `80` as written, and `PSTA` the row it
+starts on. See **Order** in **Editing**.
 
 ## Speed
 

@@ -1122,6 +1122,17 @@ they move it, the title names the order heard with the phrase's own after it,
 `Hopscotch reversed (Jump 3)`, and the playhead follows the row playing.
 `Order` and `Reverse` choose the walk and `Jump` then scrambles it.
 
+`Phrase` also has the window of rows the order walks, as Kria's loop and the
+Cirklon's last step set one live. `Length` is rows up or down from the loop's,
+`+0` as written: at `-4` a loop of 8 walks its first 4, and at `+2` it walks 10,
+its first two again after its last. `Start` is the row the window starts on,
+rows on from the first, going round the loop. A pass still lasts the loop's
+steps, so the chain and the section keep time, and the walk carries on from one
+pass to the next, as it does for `up-down`: 6 rows walked in passes of 8 play `1
+2 3 4 5 6 1 2`, then `3 4 5 6 1 2 3 4`. `Reverse` turns the window the other way
+up. `PLEN` and `PSTA` on a row move the step that walks to it, and the title
+names the window, `Forward, 4 rows from 3 (Forward)`.
+
 **Jump** scrambles an order by degrees: it's the chance each step plays any row
 of the phrase instead of the one the order walks to, and then the walk carries
 on where it was. `0 %` plays the order as it is and `100 %` any row each step,
@@ -1183,9 +1194,11 @@ shows what's heard first and its own after, dim, as `FX1:6/4 (4/2)`, the
 playhead sits on the row being read, a copy's own, and rows past a shortened
 lane are dim. A turn takes effect at the lane's next row, which counts along
 from where it is rather than jumping; playing from a step works its place out
-again there. A column without a lane isn't touched. A step locks them with
-`LLEN1` and `LRAT1`, `2` and `3` for the other columns, and a mod slot, a
-macro and the Roto turn them too.
+again there. A column without a lane isn't touched. `Start` moves the row each
+lane starts on, so many of its own rows on, going round them: at `1`, `a b c d`
+plays `b c d a`, and the title adds it, `FX1:4 from 2 (4)`. A step locks them
+with `LLEN1`, `LRAT1` and `LSTA1`, `2` and `3` for the other columns, and a mod
+slot, a macro and the Roto turn them too.
 
 `gg`, `G`, `{`, `}`, `ib`, `ic` and `ip` go by the loop. `5G` means row `04`.
 `j` and `k` carry on past its edges. `Space c` on a dim row plays from `00`, and

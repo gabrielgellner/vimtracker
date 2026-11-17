@@ -787,6 +787,7 @@ mod tests {
                     *moved = vt_model::lane::LaneMove {
                         length: (0x7C + (round * 5 + slot) % 9) as u8,
                         rate: ((round * 7 + slot) % vt_model::lane::LANE_RATES.len()) as u8,
+                        start: ((round * 11 + slot) % 9) as u8,
                     };
                 }
             }
@@ -816,6 +817,8 @@ mod tests {
                 track.reverse = ((round + at) % 2) as u8;
                 track.order_x = ((round * 5 + at) % 17) as u8;
                 track.order_y = ((round * 7 + at) % 17) as u8;
+                track.phrase_length = (0x78 + (round * 3 + at) % 0x12) as u8;
+                track.phrase_start = ((round * 5 + at) % 20) as u8;
             }
             handle.publish(published(next, &pool));
             violations += blocks(&mut rt, 1);
