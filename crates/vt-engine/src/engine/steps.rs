@@ -581,7 +581,7 @@ impl Engine {
         }
         // A row's `ACU` adds once as it plays, or on each pulse of a `MLT` and each hit of a `RET`
         // as the track says. A note that's skipped, or rests, adds nothing.
-        let accumulation = owner.accumulation;
+        let accumulation = self.tracks[index].heard_accumulation(owner);
         let adds = first || accumulation.adds != Adds::Row;
         let key = RowKey {
             phrase: position.phrase,
@@ -1109,7 +1109,7 @@ impl Engine {
         let Some(owner) = self.current.song.tracks.get(index) else {
             return (0, 0);
         };
-        match owner.accumulation.reset {
+        match self.tracks[index].heard_accumulation(owner).reset {
             Reset::Play => (0, 0),
             Reset::Chain => (pending.start, 0),
             Reset::Loops(loops) => {

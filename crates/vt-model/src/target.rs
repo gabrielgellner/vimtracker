@@ -197,9 +197,13 @@ impl SettingId {
                     }
             }
             (Owner::Accumulation, 0) => "How far above its note an accumulator goes".to_owned(),
-            (Owner::Accumulation, _) => "How far below its note an accumulator goes".to_owned(),
+            (Owner::Accumulation, 1) => "How far below its note an accumulator goes".to_owned(),
+            (Owner::Accumulation, 2) => "What an accumulator does at its limit".to_owned(),
+            (Owner::Accumulation, 3) => "When an accumulator adds".to_owned(),
+            (Owner::Accumulation, _) => "When accumulators start again".to_owned(),
             (Owner::Arpeggio, 0) => "How fast an arpeggio plays its notes".to_owned(),
-            (Owner::Arpeggio, _) => "How many octaves an arpeggio climbs".to_owned(),
+            (Owner::Arpeggio, 1) => "How many octaves an arpeggio climbs".to_owned(),
+            (Owner::Arpeggio, _) => "The order an arpeggio plays its notes in".to_owned(),
             (Owner::Lane(slot), 0) => format!(
                 "How many rows FX{}'s lane plays, up or down from its own",
                 slot + 1

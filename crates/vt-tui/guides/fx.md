@@ -89,6 +89,10 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `HOLD2` | An AHD's hold: `00` none, up to 2 s at `FE`, and the note at `FF` |
 | `PEAK2` | A drum envelope's peak, on its times' scale, as a macro turns it |
 | `RTCH2` | A drum envelope's strikes: `00` one, `07` eight |
+| `ALIM` | The accumulator's `Limit`: `00` Wrap, `02` Bounce, `04` Hold, `05` Random |
+| `AADD` | When an `ACU` adds: `00` Row, `01` Pulse, `02` Retrig |
+| `ARST` | The accumulator's `Reset`: `00` Chain, `01` Play, `02` 1 loop, `11` 16 |
+| `AMOD` | The arpeggio's mode: `00` Up, `01` Down, `04` Random |
 | `EATK2` | An envelope's attack: `00` none, `01` 1 ms to `FF` 8 s. `EATK1` `EATK3` too |
 | `EDEC2` | An envelope's decay, on the same times. `EDEC1` the notes', `EDEC3` too |
 | `ESUS2` | An envelope's sustain: `00` none, `64` all. `ESUS1` `ESUS3` too |
@@ -406,6 +410,14 @@ section that brings it in or resets, a launch, a realign, `:reset` and the
 track's own `Reset`. A phrase played twice
 in its chain moves on each time.
 
+`Limit`, `Adds` and `Reset` lock from a row, as `ALIM`, `AADD` and `ARST`, and a
+macro, a lane or a mod slot can move them, a zone of its range for each choice.
+A lock is heard from its row to the track's next note: `ALIM 04` on one row holds
+that row's walk at the limit while the others wrap, and `AADD 01` adds on each
+pulse of that row's `MLT`. `ARST` is read as its row plays, so a row locked to a
+`Reset` other than the track's starts the accumulators again as it plays if they
+were counting another way.
+
 The grid shows notes as written. While playing, the row under the playhead shows
 the note heard, before the chain's transpose, and the status line says it on the
 Note column.
@@ -438,6 +450,11 @@ twice, `Up-down-inc` plays them twice, and `Random` picks any of them each time,
 `Oct` at 2, `ARP 00` goes between the note and its octave. With `Retrig` off each
 note only changes the pitch, and on `Acid` it slides; on, each note starts again
 with its envelopes, as a `RET` does.
+
+`Mode` locks from a row as `AMOD`, and a macro, a lane or a mod slot can move it,
+a zone of its range for each mode. The arpeggio takes its mode as its note
+starts, so `AMOD 01` on a row plays that row's arpeggio down and the next note
+goes back to the track's own.
 
 It lasts as long as its note: through the row's pulses and any empty rows after,
 until the next note, an `OFF`, a `KIL`, a rest or the note's gate closing. A
