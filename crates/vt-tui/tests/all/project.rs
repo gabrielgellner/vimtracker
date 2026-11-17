@@ -1690,8 +1690,14 @@ fn the_project_page_shows_the_seed_as_eight_hex_digits() {
     command(&mut app, "seed 3a9f12c4");
     assert_eq!(app.song().seed, 0x3A9F_12C4, "either case is hex");
     let lines = project_page_lines(&app);
-    assert!(lines.iter().any(|line| line.contains("3A9F12C4")), "{lines:#?}");
+    assert!(
+        lines.iter().any(|line| line.contains("3A9F12C4")),
+        "{lines:#?}"
+    );
     command(&mut app, "seed 42");
     let lines = project_page_lines(&app);
-    assert!(lines.iter().any(|line| line.contains("00000042")), "{lines:#?}");
+    assert!(
+        lines.iter().any(|line| line.contains("00000042")),
+        "{lines:#?}"
+    );
 }
