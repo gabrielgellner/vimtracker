@@ -77,13 +77,14 @@ fn a_macro_is_a_setting_called_mac_with_its_number() {
 }
 
 #[test]
-fn a_slots_own_settings_are_moved_but_never_locked() {
+fn a_slots_own_settings_are_moved_and_locked() {
     let mut track = Song::new(1).tracks[0].clone();
     track.mods[4].kind = ModKind::Steps;
     let mutate = SettingId::mod_own(4, 7).unwrap();
     assert_eq!(mutate.key(), "mod5.mutate");
     assert_eq!(mutate.owner(), (Owner::ModOwn(4), 7));
-    assert!(!mutate.lockable());
+    assert!(mutate.lockable());
+    assert_eq!(mutate.label().as_deref(), Some("MUT5"));
     assert!(mutate.exists_on(&track));
     assert_eq!(mutate.name_on(&track), "M5 Mutate");
     assert!(SettingId::for_mod(&track, 2).contains(&mutate));
@@ -92,7 +93,7 @@ fn a_slots_own_settings_are_moved_but_never_locked() {
         "no slot moves its own, nor one before it"
     );
     assert!(SettingId::for_macro(&track).contains(&mutate));
-    assert!(!FxCommand::on_track(&track).contains(&FxCommand::Set(mutate)));
+    assert!(FxCommand::on_track(&track).contains(&FxCommand::Set(mutate)));
     let attack = SettingId::mod_own(4, 0).unwrap();
     assert!(!attack.exists_on(&track), "Steps have no attack");
     assert_eq!(attack.name_on(&track), "M5 Attack ---");
