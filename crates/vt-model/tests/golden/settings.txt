@@ -1283,3 +1283,9 @@
 1282 keytrack
 1283 glidemode
 1284 jump
+1285 drive
+1286 punch
+1287 lowcut
+1288 highcut
+1289 type
+1290 safe

@@ -15,7 +15,6 @@ use vt_model::steps::{Loop, MAX_STEP, STEPS, StepRate, Steps, StepsMode, smoothe
 
 use crate::dsp::effects::memory::{MemoryPool, SongPlace};
 use crate::dsp::effects::slot::{BYPASS_FADE_MS, InsertState};
-use crate::dsp::filters::filter::Channel;
 use crate::rng::Pcg32;
 use crate::voice::NoteOn;
 
@@ -928,17 +927,7 @@ impl TrackState {
         }
         self.filter_moving = filter_moving;
         self.report_pitch(track);
-        // A different filter starts from silence rather than from another's state.
-        if self.filter_type != track.filter {
-            self.filter_type = track.filter;
-            self.filter = [Channel::default(); 2];
-            self.coefficients = None;
-        }
-        self.drive.target = f32::from(track.drive) / 255.0;
-        self.punch.target = f32::from(track.punch) / 255.0;
-        self.safe.target = f32::from(u8::from(track.safe));
-        self.low_cut.target = f32::from(track.low_cut) / 255.0;
-        self.high_cut.target = f32::from(track.high_cut) / 255.0;
+        self.move_filter_settings();
         self.cut_offset.target = self.offsets[SettingId::CUT.index()];
         self.res_offset.target = self.offsets[SettingId::RES.index()];
         self.pan_offset.target = self.offsets[SettingId::PAN.index()];

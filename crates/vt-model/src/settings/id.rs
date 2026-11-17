@@ -183,6 +183,18 @@ impl SettingId {
     /// The chance each step plays any row of its phrase instead of the one its order walks to, from
     /// none at `00` to every step at `FF`.
     pub const JUMP: Self = Self(LATER_TRACK_START as u16 + 4);
+    /// How hard the sound is pushed into the filter.
+    pub const DRIVE: Self = Self(LATER_TRACK_START as u16 + 5);
+    /// How far a clean filter's ringing peak starts higher and falls in pitch.
+    pub const PUNCH: Self = Self(LATER_TRACK_START as u16 + 6);
+    /// The utility high-pass after the filter, off at `00`.
+    pub const LOW_CUT: Self = Self(LATER_TRACK_START as u16 + 7);
+    /// The utility low-pass after the filter, off at `FF`.
+    pub const HIGH_CUT: Self = Self(LATER_TRACK_START as u16 + 8);
+    /// The filter's type: a place in [`FilterType::ALL`](crate::song::FilterType::ALL).
+    pub const FILTER_TYPE: Self = Self(LATER_TRACK_START as u16 + 9);
+    /// Whether the filter's `Res` stops short of ringing by itself: `0` off, `1` on.
+    pub const SAFE: Self = Self(LATER_TRACK_START as u16 + 10);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.

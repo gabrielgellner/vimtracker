@@ -19,6 +19,7 @@ mod engine;
 mod envelope;
 mod exciter;
 mod files;
+mod filter_settings;
 mod four_op;
 mod fx;
 mod gate_length;

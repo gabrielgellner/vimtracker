@@ -8,7 +8,7 @@ use vt_model::macros::{MACROS, MacroTarget};
 use vt_model::settings::{
     FADER_COUNT, FADERS, MAX_MACHINE_SETTINGS, Owner, PLAYED_SETTINGS, SettingId,
 };
-use vt_model::song::{Track, level_gain};
+use vt_model::song::{FilterType, Track, level_gain};
 use vt_model::step::{FxSlot, Mark};
 
 use crate::dsp::voices::Settings;
@@ -471,6 +471,26 @@ impl TrackState {
                 }
                 SettingId::GLIDE_MODE => {
                     self.held_glide_mode = value;
+                    return;
+                }
+                // Heard from the next frame, through their smoothers, with what modulation adds.
+                SettingId::DRIVE | SettingId::PUNCH | SettingId::LOW_CUT | SettingId::HIGH_CUT => {
+                    *match id {
+                        SettingId::DRIVE => &mut self.held_drive,
+                        SettingId::PUNCH => &mut self.held_punch,
+                        SettingId::LOW_CUT => &mut self.held_low_cut,
+                        _ => &mut self.held_high_cut,
+                    } = value / 255.0;
+                    self.move_filter_settings();
+                    return;
+                }
+                SettingId::SAFE => {
+                    self.safe.target = if value >= 0.5 { 1.0 } else { 0.0 };
+                    return;
+                }
+                SettingId::FILTER_TYPE => {
+                    let place = value.round().clamp(0.0, f32::from(u8::MAX)) as u8;
+                    self.switch_filter(FilterType::at(place));
                     return;
                 }
                 _ => return,

@@ -40,6 +40,12 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `RES` | Filter resonance |
 | `MODE` | The filter's mode, by its place: see the Sound page's guide |
 | `KTRK` | The filter's `Key track` for the row: `00` off, `01` on |
+| `FTYP` | The filter's type, by its place: `00` LP, `01` HP, `04` Ladder, `09` OB-X |
+| `FDRV` | The filter's `Drive` |
+| `FPCH` | The filter's `Punch`, which the clean types hear |
+| `SAFE` | The filter's `Safe`: `00` off, `01` on |
+| `LCUT` | The utility high-pass after the filter: `00` off |
+| `HCUT` | The utility low-pass after the filter: `FF` off |
 | `SNA` | Send to return `A` |
 | `SNB` | Send to return `B` |
 | `PNCH` | A voice's setting, by its own label, like Punch on `Kick` |
