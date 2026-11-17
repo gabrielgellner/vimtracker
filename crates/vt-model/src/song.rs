@@ -259,6 +259,10 @@ pub struct Track {
     /// Where held `PSTA` starts: the row the window its phrases' orders walk over starts on.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub phrase_start: u8,
+    /// Where held `CDLT` starts: how far every row's chance to play is moved up or down, by
+    /// [`moved_chance`](crate::settings::moved_chance), with `80` as none (decision 405).
+    #[serde(default = "centre", skip_serializing_if = "is_centre")]
+    pub chance_delta: u8,
     /// Where held `DLP` starts: how many steps its dice loop over, `00` off, as
     /// [`crate::dice::DICE_LOOP_LENGTHS`] has them (decision 410).
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -509,6 +513,7 @@ impl Track {
             TrackControl::OrderY => self.order_y,
             TrackControl::PhraseLength => self.phrase_length,
             TrackControl::PhraseStart => self.phrase_start,
+            TrackControl::ChanceDelta => self.chance_delta,
             TrackControl::DiceLoop => self.dice_loop,
             TrackControl::DiceMutate => self.dice_mutate,
             TrackControl::DiceJump => self.dice_jump,
@@ -538,6 +543,7 @@ impl Track {
             TrackControl::OrderY => &mut self.order_y,
             TrackControl::PhraseLength => &mut self.phrase_length,
             TrackControl::PhraseStart => &mut self.phrase_start,
+            TrackControl::ChanceDelta => &mut self.chance_delta,
             TrackControl::DiceLoop => &mut self.dice_loop,
             TrackControl::DiceMutate => &mut self.dice_mutate,
             TrackControl::DiceJump => &mut self.dice_jump,
@@ -582,8 +588,7 @@ impl Track {
             .iter()
             .enumerate()
             .filter_map(move |(at, held)| {
-                held.maps
-                    .iter()
+                held.own_maps()
                     .find(|map| map.target == target)
                     .map(|map| (at, map))
             })
@@ -781,6 +786,7 @@ impl Default for Track {
             order_y: 0,
             phrase_length: centre(),
             phrase_start: 0,
+            chance_delta: centre(),
             dice_loop: 0,
             dice_mutate: 0,
             dice_jump: 0,

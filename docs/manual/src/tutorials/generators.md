@@ -911,6 +911,9 @@ order, so three tracks of samples named `BD`, `SD` and `CH`, or nothing at all, 
 *   `r` on the hats rolls their chaos again; `Chaos` `00` makes both bars the same.
 *   On the Gen page, `Space 8`, the drum's device is titled `Grids  BD`, its map, density and
     chaos ready to turn while it plays, and on the Roto its first knobs.
+*   One map for the whole kit: tracks 1 to 3 in group 1, and each drum's `X` and `Y` on the
+    group's macros 1 and 2, `G1 1` and `G1 2` in `M`'s list. Two knobs move the kit round the
+    map together, and an LFO on the group's track with `Dest` on its macro 1 walks it.
 
 ## Vermona's randomRHYTHM
 
@@ -1166,7 +1169,9 @@ draws again.
 **Try next.**
 
 *   `gl` on the hat and `Amount` `30`, then the same on the percussion: it takes most of the
-    rows now. Each generator keeps its own amount, so turn both, or map both to one macro.
+    rows now. Each generator keeps its own amount, so turn both, or give them one knob: put the
+    hat and the percussion in group 1, `Group` `G1` on each one's Sound page, and map each one's
+    `Amount` to the group's macro 1, `G1 1` in the list `M` gives. That macro turns both.
 *   The percussion's `Side` at `First`: it plays the hat's rows, together.
 *   On the kick, `Amount` `100%` repeats its eight rows exactly; `33%` is a sparse coin; `0%` is
     busier, and never plays the same eight rows twice.

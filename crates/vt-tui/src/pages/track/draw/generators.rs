@@ -76,7 +76,7 @@ fn draw_macros(
         let line = format!(
             "{} → {}",
             macro_name(&track.macros[at], at),
-            holds(track, at)
+            holds(ctx.song(), ctx.cursor().track, at)
         );
         frame.render_widget(Line::styled(line, theme::dim()), take_top(&mut settings, 1));
     }

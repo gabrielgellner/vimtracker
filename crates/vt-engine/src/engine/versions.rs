@@ -409,6 +409,53 @@ impl Engine {
             }
             state.put_macros_again(track);
         }
+        self.follow_group_macros(old);
+    }
+
+    /// Have each group's macros put what they hold on its tracks again, as their maps, the group's
+    /// tracks or the tracks themselves may have changed: what a group's macro held of a track and
+    /// holds no longer goes back to the track's own (decision 408).
+    fn follow_group_macros(&mut self, old: &Published) {
+        let (now, was) = (&self.current.group_macros, &old.group_macros);
+        if !now.any() && !was.any() {
+            return;
+        }
+        let song = &self.current.song;
+        let sounds = song.sound_tracks().min(self.tracks.len());
+        for (index, state) in self.tracks.iter_mut().enumerate().take(sounds) {
+            let (member, was_member) = (now.members[index], was.members[index]);
+            if let Some((group, place)) = was_member {
+                let track = &song.tracks[index];
+                let holds = |target| {
+                    member.is_some_and(|(group, place)| {
+                        let macros = &song.tracks[group].macros;
+                        macros
+                            .iter()
+                            .any(|held| held.map_on(Some(place), target).is_some())
+                    })
+                };
+                let before = old.song.tracks[group].macros.iter();
+                let mut let_go = false;
+                for map in before.flat_map(|held| &held.maps) {
+                    if map.member != Some(place) || holds(map.target) {
+                        continue;
+                    }
+                    let_go = true;
+                    if let Some(id) = map.target.setting() {
+                        state.set_base(id, base_of(id, track));
+                    }
+                }
+                // A generator's setting goes back to its shape, and the track's own macros put
+                // theirs again.
+                if let_go {
+                    state.put_macros_again(track);
+                }
+            }
+            if member.is_some() {
+                state.put_group_macros_again();
+            }
+        }
+        self.put_group_macros();
     }
 
     /// Move the tempo origin here if the tempo changed, so the next step's time stays right.

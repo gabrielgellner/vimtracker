@@ -20,7 +20,7 @@ use crate::controls::param::ParamView;
 use crate::controls::share;
 use crate::controls::tuning::{TuneOf, Tuning, tuning};
 use crate::controls::{Control, DeviceSpec};
-use crate::overlays::mapping::holding;
+use crate::overlays::mapping::{holding, target_of};
 use crate::pages::Ctx;
 use crate::pages::track::TrackPage;
 use crate::services::automating::fader_of;
@@ -42,6 +42,8 @@ const TUNE_WIDTH: usize = 8;
 const TO: &str = "→ ";
 /// What a Steps slot's `Jump`, or the Play device's, is called in its title, before its chance.
 const JUMP: &str = "Jump ";
+/// What the Play device's `CDLT` is called in its title, before its value.
+const CHANCE: &str = "Chance ";
 /// What a Steps slot's `Spread` and `Bias` are called in its title, before their amounts.
 const SPREAD: &str = "Spread ";
 const BIAS: &str = "Bias ";
@@ -182,6 +184,7 @@ impl<'a> TrackCells<'a> {
         let before = match control {
             Control::Mod(_, ModField::Destination) => Some(TO),
             Control::Mod(_, ModField::Jump) | Control::Base(TrackControl::Jump) => Some(JUMP),
+            Control::Base(TrackControl::ChanceDelta) => Some(CHANCE),
             Control::Mod(_, ModField::Spread) => Some(SPREAD),
             Control::Mod(_, ModField::Bias) => Some(BIAS),
             Control::Base(TrackControl::DiceLoop) => Some(DICE_LOOP),
@@ -253,10 +256,22 @@ impl<'a> TrackCells<'a> {
     /// draws and a cell with none marks it held by. A generator's setting with no bounds, such as
     /// its `Wave`, is held across its whole list.
     fn macro_range(&self, control: Control) -> Option<(u8, u8)> {
+        // Its group's macro has the last word, so its range is the one drawn (decision 408).
+        let held = target_of(control, self.track).and_then(|target| {
+            let song = self.ctx.song();
+            song.group_holding(self.ctx.cursor().track, target)
+                .map(|(_, map)| *map)
+        });
         let Control::Gen { param, .. } = control else {
-            return macro_range(control, self.track);
+            return match held {
+                Some(map) => map
+                    .target
+                    .setting()
+                    .map(|_| (((map.min >> 8) as u8), ((map.max >> 8) as u8))),
+                None => macro_range(control, self.track),
+            };
         };
-        let (_, map) = holding(control, self.track).next()?;
+        let map = held.or_else(|| holding(control, self.track).next().map(|(_, map)| *map))?;
         let (_, context) = self.generator.as_ref()?;
         let Some(bounds) = param.bounds(context) else {
             return Some((0, u8::MAX));

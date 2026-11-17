@@ -260,10 +260,12 @@ pub enum Action {
         at: usize,
         map: MacroMap,
     },
-    /// Take a setting off whichever of a track's macros holds it.
+    /// Take a setting off whichever of a track's macros holds it: on the track itself, or with
+    /// `member` on the track at that place in a group track's group.
     UnmapMacro {
         track: usize,
         target: MacroTarget,
+        member: Option<u8>,
     },
     /// Name one of a track's macros, or give it back its first mapping's name with `None`.
     NameMacro {
@@ -611,6 +613,7 @@ pub enum TrackControl {
     OrderY,
     PhraseLength,
     PhraseStart,
+    ChanceDelta,
     DiceLoop,
     DiceMutate,
     DiceJump,
@@ -618,7 +621,7 @@ pub enum TrackControl {
 
 impl TrackControl {
     /// Every one, in the order they're declared.
-    pub const ALL: [Self; 22] = [
+    pub const ALL: [Self; 23] = [
         Self::Cutoff,
         Self::Resonance,
         Self::Pan,
@@ -638,6 +641,7 @@ impl TrackControl {
         Self::OrderY,
         Self::PhraseLength,
         Self::PhraseStart,
+        Self::ChanceDelta,
         Self::DiceLoop,
         Self::DiceMutate,
         Self::DiceJump,
@@ -665,6 +669,7 @@ impl TrackControl {
             Self::OrderY => Some(SettingId::ORDER_Y),
             Self::PhraseLength => Some(SettingId::PHRASE_LENGTH),
             Self::PhraseStart => Some(SettingId::PHRASE_START),
+            Self::ChanceDelta => Some(SettingId::CHANCE_DELTA),
             Self::DiceLoop => Some(SettingId::DICE_LOOP),
             Self::DiceMutate => Some(SettingId::DICE_MUTATE),
             Self::DiceJump => Some(SettingId::DICE_JUMP),

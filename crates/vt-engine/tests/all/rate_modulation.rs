@@ -91,6 +91,7 @@ fn rate_on_macro(song: &mut Song, slot: usize, from: u16, to: u16) {
         curve: 0,
         s: 0,
         zone: Default::default(),
+        member: None,
     }];
 }
 
@@ -500,6 +501,7 @@ fn unmoved() -> Song {
                 curve: 0,
                 s: 0,
                 zone: Default::default(),
+                member: None,
             });
             track.macros[1].value = 0x4000;
             track.macros[1].maps.push(MacroMap {
@@ -509,6 +511,7 @@ fn unmoved() -> Song {
                 curve: 0,
                 s: 0,
                 zone: Default::default(),
+                member: None,
             });
         }
     }

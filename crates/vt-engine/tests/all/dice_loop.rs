@@ -249,8 +249,23 @@ fn a_lock_a_lane_an_lfo_and_a_macro_reach_it() {
         curve: 0,
         s: 0,
         zone: Zone::default(),
+        member: None,
     }];
     assert_eq!(heard(&turned, 32), fresh, "at none it's off");
     turned.tracks[0].macros[0].value = 0xFFFF;
     assert_eq!(heard(&turned, 32), heard(&song(&[MOVED], FOUR, 0, 0), 32));
+}
+
+#[test]
+fn a_locked_loop_holds_what_chance_up_or_down_thins_and_what_it_moves() {
+    // `CDLT` below `80` thins rows with no `CHA` by the loop's dice too.
+    let mut thinned = song(&["C-3 --"], EIGHT, 0, 0);
+    thinned.tracks[0].chance_delta = 0x40;
+    let pattern: Vec<char> = hits(&thinned, 64).chars().collect();
+    assert!(repeats(&pattern, 8), "{pattern:?}");
+    assert!(pattern.contains(&'x') && pattern.contains(&'.'));
+    // And a looped `CHA` is moved by it, as a fresh one is.
+    let mut raised = song(&[HALF], EIGHT, 0, 0);
+    raised.tracks[0].chance_delta = 0xFF;
+    assert_eq!(hits(&raised, 16), "x".repeat(16));
 }

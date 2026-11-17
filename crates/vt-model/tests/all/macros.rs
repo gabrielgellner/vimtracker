@@ -38,6 +38,7 @@ fn map(at: usize, target: MacroTarget, min: u16, max: u16) -> Action {
             curve: 0,
             s: 0,
             zone: Default::default(),
+            member: None,
         },
     }
 }
@@ -155,6 +156,7 @@ fn a_setting_is_on_one_macro_at_most_and_moves_when_mapped_to_another() {
         &Action::UnmapMacro {
             track: 0,
             target: cut(),
+            member: None,
         },
     )
     .unwrap();
@@ -212,4 +214,93 @@ fn macros_are_saved_only_once_something_is_set_and_read_back() {
     assert!(text.contains("macros"), "{text}");
     assert!(text.contains("Setting(\"cut\")"), "{text}");
     assert_eq!(&load_song(&dir).unwrap(), song.as_ref());
+}
+
+/// A song of three tracks, the first two in group 1, and the group's track.
+fn grouped() -> (Arc<Song>, usize) {
+    let mut song = Song::new(3);
+    song.tracks[0].group = Some(1);
+    song.tracks[1].group = Some(1);
+    let group = song
+        .fixed_track(vt_model::song::TrackKind::Group(1))
+        .unwrap();
+    (Arc::new(song), group)
+}
+
+/// A mapping of `Cut` over its whole range on the track at `member` in a group.
+fn on(member: Option<u8>) -> MacroMap {
+    MacroMap {
+        member,
+        ..MacroMap::whole(cut())
+    }
+}
+
+#[test]
+fn a_groups_macro_holds_a_setting_on_a_track_of_its_group_by_its_place() {
+    let (song, group) = grouped();
+    assert_eq!(song.group_place(1), Some((group, 1)));
+    assert_eq!(song.group_place(2), None);
+    assert_eq!(song.group_member(group, 0), Some(0));
+    let mapped = |song: &Arc<Song>, member| {
+        edit(
+            song,
+            &Action::MapMacro {
+                track: group,
+                at: 0,
+                map: on(member),
+            },
+        )
+        .unwrap()
+    };
+    // The group's own `Cut` and its second track's are two mappings, side by side.
+    let song = mapped(&mapped(&song, None), Some(1));
+    assert_eq!(song.tracks[group].macros[0].maps, [on(None), on(Some(1))]);
+    assert_eq!(
+        song.tracks[group].macro_holding(cut()).unwrap().1,
+        &on(None)
+    );
+    assert_eq!(song.group_holding(1, cut()).unwrap(), (0, &on(Some(1))));
+    assert!(song.group_holding(0, cut()).is_none());
+    // Turned to the top, the second track is shown with its `Cut` there, and the first isn't.
+    let song = edit(
+        &song,
+        &Action::SetMacro {
+            track: group,
+            at: 0,
+            value: 0xFF00,
+        },
+    )
+    .unwrap();
+    let mut low = (*song).clone();
+    low.tracks[1].cutoff = 0x10;
+    assert_eq!(low.track_with_macros(1).cutoff, 0xFF);
+    assert_eq!(low.track_with_macros(0).cutoff, low.tracks[0].cutoff);
+    // Saved only when set.
+    let text = ron::to_string(&song.tracks[group].macros[0]).unwrap();
+    assert_eq!(text.matches("member").count(), 1, "{text}");
+    // Taken off one track, the other's stays.
+    let song = edit(
+        &song,
+        &Action::UnmapMacro {
+            track: group,
+            target: cut(),
+            member: Some(1),
+        },
+    )
+    .unwrap();
+    assert_eq!(song.tracks[group].macros[0].maps, [on(None)]);
+}
+
+#[test]
+fn only_a_group_has_tracks_for_its_macros_to_reach() {
+    let (song, _) = grouped();
+    let refused = edit(
+        &song,
+        &Action::MapMacro {
+            track: 0,
+            at: 0,
+            map: on(Some(0)),
+        },
+    );
+    assert_eq!(refused.unwrap_err(), EditError::Macro);
 }

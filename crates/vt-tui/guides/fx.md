@@ -70,6 +70,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `ORDY` | The order's second number: `00` the phrase's own, `01` to `10` |
 | `PLEN` | Rows the order walks, up or down from the loop's: `80` is none |
 | `PSTA` | The row the order's window starts on, rows on from the first |
+| `CDLT` | Every row's chance up or down: `80` none, `40` half, `00` none play |
 | `GLD` | How long a tie glides into the next note: `00` off, `80` about 60 ms |
 | `OSC` | A synth's `Phase` for the row's note: `00` Free, `01` Reset |
 | `VMOD` | The track's `Mode` for the row's note: `00` Mono, `01` Legato |
@@ -289,6 +290,43 @@ instead of it. Nothing has passed when playing starts. `CHA` is still rolled whe
 condition fails it, so its results stay the same, and a failed `CHA` skips only the
 note, as it always has.
 
+### Moving every chance
+
+`CDLT`, `Chance up or down`, moves every row's chance to play at once, as the
+Metropolix's Probability and Elektron's track `PROB` do, so it's a density
+fader for the whole track. It starts from the track's `Chance`, in the title of
+the Sound page's Play device, at `80`, where everything plays as written.
+
+Below `80` it scales every chance down: `40` halves each, so a `CHA 80` plays a
+quarter of the time, and `00` plays nothing. A row with no `CHA` counts as one
+that always plays and thins too, so a plain hat line loses notes as it turns
+down, about as many as the turn says: `40` keeps about half. Above `80` it
+closes the rest of the way to always: `C0` brings in about half of what each
+`CHA` was missing, and `FF` plays every row, a `CHA 00` too. Rows keep their
+order either way, so a ghost note at `CHA 40` still thins before the hat beside
+it that always plays. It moves an `RND`'s chance digit the same way, so the
+track's variations come more or less often with it.
+
+A row decides with the same roll however `CDLT` is turned, so turning it up
+only brings notes in and turning it down only takes them out, and a render
+repeats. The rows that have no `CHA` are rolled from the `:seed`, the track and
+how far it is into its chain, as `RND` is, so every `CHA` keeps the results it
+had.
+
+A row with a condition, `CND`, plays when its condition says, as Elektron's
+conditions override `PROB`, though a `CHA` on it still moves. `PRE` and `NEI`
+read what a row's `CHA` came to with its chance moved, so a `PRE` row after a
+thinned `CHA` row is thinned with it: a flam stays a flam. A row with no `CHA`
+that `CDLT` thins isn't a condition, and leaves what `PRE` reads as it was, so
+turning the fader never changes which row a `PRE` follows. Like a failed
+`CHA`, a thinned row skips only its note, and its locks still run.
+
+`CDLT` on a row sets it for that row: `CDLT 00` drops the row's note whatever
+its chance, and `CHA 00 CDLT FF` plays it. It's read before the row's locks
+run, as `QNT` is, and a note there ends the last row's lock of it first. A lane
+of it is a density pattern of its own, a mod slot or a macro can move it, and
+the Roto has it on the Play device's second page.
+
 `Space l` turns fill on or off, and held, it's on until you let go. The status
 line says `FILL` while it's on.
 
@@ -447,7 +485,7 @@ selection, and takes their `RND`s out, so the pass you liked stays.
 
 A track's dice can go round in a loop, as Marbles' Déjà vu does: with its
 `Dice loop` on, in the title of the Sound page's Play device, each step's `CHA`s
-and `RND`s roll the dice of a place in a loop of that many steps rather than
+and `RND`s, and the rows `CDLT` thins, roll the dice of a place in a loop of that many steps rather than
 fresh ones, so a run of chances you like comes round again. It's `Off`, as
 every track starts, then 1 to 16 steps, as Marbles' `Length` goes, then 32 and
 64 for two and four bars of sixteenths. The places keep to the track's own count

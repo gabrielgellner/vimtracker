@@ -23,6 +23,7 @@ mod fx_zoom;
 mod gen_page;
 mod grammar;
 mod grids;
+mod group_macros;
 mod groups;
 mod guides;
 mod heard_generators;

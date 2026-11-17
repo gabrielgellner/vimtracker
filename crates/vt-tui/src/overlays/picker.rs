@@ -69,6 +69,9 @@ pub enum Pick {
     TrackPage(Page),
     /// Put the setting under the cursor on this macro, move it there, or take it off.
     Macro(usize),
+    /// Put the setting under the cursor on this macro of its group's track, move it there, or
+    /// take it off (decision 408).
+    GroupMacro(usize),
     /// Go to this macro, one of those holding the setting under the cursor, in the Gen page's band.
     MacroHolding(usize),
     Sample(PathBuf),

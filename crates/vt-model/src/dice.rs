@@ -49,12 +49,13 @@ pub struct DiceStep {
     pub count: i64,
 }
 
-/// Whether a looped `CHA` in this column comes up, a chance of `value` out of 255, rolled from the
-/// step whose dice it is: `00` never does and `FF` always does, as with no loop.
-pub fn looped_chance(seed: u64, track: usize, step: DiceStep, column: usize, value: u8) -> bool {
+/// Whether a looped `CHA` in this column comes up, a chance of `chance` out of 255, as `CDLT` moves
+/// it, rolled from the step whose dice it is: `00` never does and `FF` always does, as with no
+/// loop.
+pub fn looped_chance(seed: u64, track: usize, step: DiceStep, column: usize, chance: f32) -> bool {
     let hash = track_hash(seed, CHANCE_STREAM, track) ^ splitmix64(step.running as u64);
     let roll = splitmix64(splitmix64(hash) ^ column as u64);
-    below(roll, 255) < u64::from(value)
+    (below(roll, 255) as f32) < chance
 }
 
 /// The settings a loop is played with at a step, after locks and modulation, each on its own
@@ -249,11 +250,11 @@ mod tests {
     #[test]
     fn a_looped_chance_never_comes_up_at_none_and_always_at_full() {
         for running in 0..200 {
-            assert!(!looped_chance(1, 0, step(running), 0, 0));
-            assert!(looped_chance(1, 0, step(running), 0, 0xFF));
+            assert!(!looped_chance(1, 0, step(running), 0, 0.0));
+            assert!(looped_chance(1, 0, step(running), 0, 255.0));
         }
         let hits = (0..2000)
-            .filter(|at| looped_chance(1, 0, step(*at), 0, 0x80))
+            .filter(|at| looped_chance(1, 0, step(*at), 0, 128.0))
             .count();
         assert!((900..1100).contains(&hits), "{hits}");
     }

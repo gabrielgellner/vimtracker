@@ -11,14 +11,16 @@ use vt_model::dice::{DiceStep, looped_chance};
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
 use vt_model::order::{WalkMove, jumped};
 use vt_model::phrase::Phrase;
-use vt_model::settings::SettingId;
+use vt_model::settings::{SettingId, moved_chance};
 use vt_model::shape::RowView;
 use vt_model::song::{ChainPosition, Song, Track};
 use vt_model::speed::Speed;
 use vt_model::step::{
     FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step, most_nudge,
 };
-use vt_model::variation::{Roll, Variation, Varies, varied_lock, varied_ratchet, varies_at};
+use vt_model::variation::{
+    Roll, Variation, Varies, thin_keeps, varied_lock, varied_ratchet, varies_at,
+};
 
 use crate::gens::{Passes, Played, RowAt};
 use crate::track_state::{
@@ -545,16 +547,21 @@ impl Engine {
         let first = position.pulse == 0;
         let gate = step.gate_kind();
         let mut fx = self.read_row_fx(index, phrase, read, &step);
-        // `CHA` and `CND` go first, as whether the note plays decides whether locks end.
+        // `CHA` and `CND` go first, as whether the note plays decides whether locks end, with
+        // the chances moved by the `CDLT` the row reads before its locks run.
+        let moved = self.row_chance_delta(index, &fx.fx, &step, first);
         let decided = match pending.plays {
             Some(decided) => decided,
-            None => self.decide_row(index, &fx.fx, &pending, position),
+            None => {
+                let strikes = matches!(step.note, Note::On(_));
+                self.decide_row(index, &fx.fx, &pending, position, strikes, moved)
+            }
         };
         let plays = decided.note;
         let variation = if row && decided.fx {
             // An `RND` rolls the dice of the step its track's dice loop holds, if it's on.
             let rolls = pending.dice.map_or(count, |dice| dice.count);
-            self.vary(index, &mut fx.fx, &fx.read, &fx.lane_steps, rolls)
+            self.vary(index, &mut fx.fx, &fx.read, &fx.lane_steps, rolls, moved)
         } else {
             NoteVariation::default()
         };
@@ -602,7 +609,12 @@ impl Engine {
         // A `MAC` lock on the row reaches what its macro holds of the generators on the row itself,
         // as it reaches any other setting: the macros are put now, and the row read again if that
         // moved a generator, so its note is heard with it.
-        let (step, gate, event) = if row && first && self.tracks[index].put_macros_now(owner) {
+        // A group's go onto its tracks at once too, which read their rows after it (decision 408).
+        let reread = row && first && self.tracks[index].put_macros_now(owner);
+        if row && first && self.current.group_macros.leads(index) {
+            self.put_group_macros();
+        }
+        let (step, gate, event) = if reread {
             let step = self.view_row(index, read, row_at, written, played);
             let gate = step.gate_kind();
             (step, gate, event_of(step.note, gate, first))
@@ -878,15 +890,41 @@ impl Engine {
         fx
     }
 
+    /// The `CDLT` a row's chances are moved by, on the `00` to `FF` scale: a lock of it among the
+    /// row's FX, or in a lane at it, the last column's winning as it would when the locks run,
+    /// read before they do, or what the track holds, under any lock a note on the row's first
+    /// pulse would end, with what modulation adds (decision 405).
+    fn row_chance_delta(
+        &self,
+        index: usize,
+        fx: &[FxSlot; FX_SLOTS],
+        step: &RowView,
+        first: bool,
+    ) -> f32 {
+        let own = fx
+            .iter()
+            .rev()
+            .find(|slot| slot.command == Some(FxCommand::Set(SettingId::CHANCE_DELTA)))
+            .map(|slot| f32::from(slot.value) / 256.0);
+        let note = first && matches!(step.note, Note::On(_)) && step.gate_kind() != GateKind::Rest;
+        self.tracks[index].chance_delta(own, note)
+    }
+
     /// Decide a row's `CHA`s and `CND`s. A row's own are decided once, on its first pulse, by the
     /// step's first part to land, and later pulses keep what that decided. Every `CHA` is rolled
-    /// whatever the conditions say, so its rolls are the same with or without them.
+    /// whatever the conditions say, so its rolls are the same with or without them. Each `CHA`'s
+    /// chance is moved by `moved`, the row's `CDLT`, and below `80` a row that `strikes` a note
+    /// with no `CHA` and no condition counts as a `CHA FF` and thins too, rolled apart from the
+    /// `CHA`s so theirs stay as they were; what that decides isn't a condition, so `PRE` and `NEI`
+    /// don't read it (decision 405).
     fn decide_row(
         &mut self,
         index: usize,
         fx: &[FxSlot; FX_SLOTS],
         pending: &PendingStep,
         position: ChainPosition,
+        strikes: bool,
+        moved: f32,
     ) -> Decided {
         let first = position.pulse == 0;
         let mut decided = if first {
@@ -902,11 +940,25 @@ impl Engine {
             }
             // With the dice loop on, the dice of the step it holds; otherwise the track's stream.
             let rolled = match pending.dice {
-                Some(dice) => looped_chance(seed, index, dice, column, slot.coarse()),
-                None => self.tracks[index].rng.chance(slot.coarse()),
+                Some(dice) => {
+                    let chance = moved_chance(f32::from(slot.coarse()), 255.0, moved);
+                    looped_chance(seed, index, dice, column, chance)
+                }
+                None => self.tracks[index].rng.chance_moved(slot.coarse(), moved),
             };
             decided.note &= rolled;
             chance = Some(chance.unwrap_or(true) && rolled);
+        }
+        let conditioned = || {
+            fx.iter().any(|slot| {
+                slot.command == Some(FxCommand::Cnd)
+                    && Condition::from_value(slot.coarse()).is_some()
+            })
+        };
+        if first && strikes && moved < 128.0 && chance.is_none() && !conditioned() {
+            // Thinned by the dice of the step the dice loop holds, if it's on.
+            let rolls = pending.dice.map_or(pending.count, |dice| dice.count);
+            decided.note &= thin_keeps(seed, index, rolls, moved);
         }
         if !self.conditions_hold(index, fx, pending, position, chance) {
             decided = Decided {
@@ -993,7 +1045,7 @@ impl Engine {
 
     /// Roll a row's `RND`s, left to right as they run, and vary what each has to its left: a
     /// lock's value, or whether a `RET` ratchets and its units, in `fx` before they run, and the
-    /// note by what comes back. A lock or a `RET` that doesn't run on this pulse isn't varied.
+    /// note by what comes back. Each one's chance is moved by `moved`, the row's `CDLT`. A lock or a `RET` that doesn't run on this pulse isn't varied.
     fn vary(
         &self,
         index: usize,
@@ -1001,6 +1053,7 @@ impl Engine {
         read: &[FxSlot; FX_SLOTS],
         lane_steps: &[Option<usize>; FX_SLOTS],
         count: i64,
+        moved: f32,
     ) -> NoteVariation {
         let seed = self.current.song.seed;
         let mut variation = NoteVariation::default();
@@ -1010,7 +1063,7 @@ impl Engine {
             }
             let chance = Variation::of(fx[column].coarse());
             let roll = Roll::new(seed, index, count, column);
-            let hits = roll.hits(chance);
+            let hits = roll.hits_moved(chance, moved);
             let left = column.saturating_sub(1);
             match varies_at(read, column) {
                 Varies::Note => {

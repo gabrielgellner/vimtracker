@@ -339,7 +339,15 @@ order as it is, to `100 %`, any row every step. It's where held `JMP` starts, so
 a step's `JMP` or a lane's replaces it and an LFO on `JMP` moves around it, and
 on the Roto it's on the Play device's second page. See **Order** in **Editing**.
 
-`Dice`, `Mutate` and `Dice jump`, after `Jump` in the Play device's title, are
+`Chance`, after `Jump` in the title, moves every row's chance to play up or
+down, a density fader for the track, from `00`, nothing plays, through `80`,
+everything as written, to `FF`, every row plays, a `CHA 00` too. Below `80` it
+scales every chance down, rows with no `CHA` too, so `40` plays about half the
+notes; above it, it brings in the rows each `CHA` drops. It's where held
+`CDLT` starts, so a step's `CDLT` or a lane's replaces it and an LFO on `CDLT`
+moves around it, and on the Roto it's on the Play device's second page after
+`Jump`. See **Moving every chance** in **FX commands**.
+`Dice`, `Mutate` and `Dice jump`, after `Chance` in the Play device's title, are
 the track's dice loop, as Marbles' Déjà vu and Length are. `Dice`, the loop's
 length, is `Off`, or 1 to 16 steps, then 32 or 64: with it on, the `CHA`s and
 `RND`s of each step roll the dice of a place in a loop of that many steps,
@@ -347,7 +355,7 @@ rather than fresh ones. `Mutate` is the chance a place rolls afresh as it comes
 round, from `0 %`, a locked loop, to `100 %`, fresh dice every step, and
 `Dice jump` the chance a step takes the dice of another place, so a locked loop
 plays out of order. They're where held `DLP`, `DMU` and `DJMP` start, a macro or
-an LFO moves them, and the Roto has them on the Play device's second page. See
+an LFO moves them, and the Roto has them on the Play device's third page. See
 **Looping the dice** in **FX commands**.
 
 `Phase`, in a fourth column of a synth's Play device, is whether its oscillators run
@@ -489,6 +497,11 @@ too. A group's Sound page has an Output with `Trim`, `Level`, `Pan` and its send
 where a track's are, and under it Tracks, the tracks in it, in its colour, each with
 its own mute or solo. Its `Trim` is at its input, so it sets how hard the sum of its
 tracks hits its slots. The rest is as on a return.
+
+A group's macros can hold settings on its tracks as well as its own, so one knob turns the
+cutoff on every drum, or `Hits` on each of their generators: `M` on a track's setting lists
+the group's macros after the track's own. The Gen page's guide has the details, under
+Group macros.
 
 Each group has a colour: its icon, its strip on the mixer and the `G1` under each of its
 tracks' strips share it, as does a track's `Group` on its Sound page. Its tracks are

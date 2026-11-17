@@ -340,6 +340,7 @@ fn a_macro_turns_an_lfos_shape() {
         curve: 0,
         s: 0,
         zone: Default::default(),
+        member: None,
     }];
     for (turn, shape) in [(0x0000, Shape::Sine), (0x8000, Shape::Square)] {
         song.tracks[0].macros[0].value = turn;

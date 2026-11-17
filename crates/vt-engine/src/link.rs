@@ -949,6 +949,7 @@ mod tests {
                 curve: 0,
                 s: 0,
                 zone: Default::default(),
+                member: None,
             }];
             track.macros[0].value = 0x4000;
             let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
