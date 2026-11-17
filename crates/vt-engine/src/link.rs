@@ -766,7 +766,7 @@ mod tests {
     }
 
     /// Lanes changing, their divisions too, and each track's `Length` and `Rate` for every FX
-    /// column turned every block.
+    /// column turned every block, with `Cue` on for half the tracks (decision 402).
     #[test]
     fn lanes_changing_while_playing_never_allocate_in_the_callback() {
         let pool = samples();
@@ -776,7 +776,8 @@ mod tests {
         let mut violations = blocks(&mut rt, 4);
         for round in 0..200 {
             let mut next = song(8, 16);
-            for track in next.tracks.iter_mut().take(8) {
+            for (at, track) in next.tracks.iter_mut().take(8).enumerate() {
+                track.cue = (at % 2) as u8;
                 let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
                 for (slot, moved) in track.lanes.iter_mut().enumerate() {
                     let lane = vt_model::song::Lane {
@@ -799,7 +800,8 @@ mod tests {
     }
 
     /// Each track's `Phrase` settings turned every block, through every order and the dealt ones,
-    /// reversed and numbered, so every step walks another way (decision 400).
+    /// reversed and numbered, so every step walks another way (decision 400), its window cued on
+    /// and off (decision 402).
     #[test]
     fn the_walk_moving_every_block_never_allocates_in_the_callback() {
         use vt_model::order::Order;
@@ -819,6 +821,7 @@ mod tests {
                 track.order_y = ((round * 7 + at) % 17) as u8;
                 track.phrase_length = (0x78 + (round * 3 + at) % 0x12) as u8;
                 track.phrase_start = ((round * 5 + at) % 20) as u8;
+                track.cue = ((round / 3 + at) % 2) as u8;
             }
             handle.publish(published(next, &pool));
             violations += blocks(&mut rt, 1);

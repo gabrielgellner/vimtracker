@@ -151,3 +151,24 @@ fn length_and_start_set_the_window_and_the_titles_say_it() {
         title(&app)
     );
 }
+
+#[test]
+fn cue_is_a_switch_beside_the_window() {
+    let (mut app, _realtime) = on_phrase_device();
+    keys(&mut app, "jll");
+    assert_eq!(app.track_control(), Control::Base(TrackControl::Cue));
+    let line = status_line(&app);
+    assert!(
+        line.contains("Off: a new length, start or lane rate is heard at once"),
+        "{line}"
+    );
+    keys(&mut app, "=");
+    assert_eq!(app.song().tracks[0].cue, 1);
+    let line = status_line(&app);
+    assert!(
+        line.contains("On: a new length, start or lane rate waits for its loop to come round"),
+        "{line}"
+    );
+    keys(&mut app, "-");
+    assert_eq!(app.song().tracks[0].cue, 0);
+}

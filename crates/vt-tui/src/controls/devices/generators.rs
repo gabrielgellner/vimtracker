@@ -174,7 +174,8 @@ impl DeviceSpec {
     }
 
     /// The track's settings that move the walk of its phrases' rows, `Order`, `Reverse`,
-    /// `Order X` and `Order Y`, as a device of their own, `Phrase` (decision 400).
+    /// `Order X` and `Order Y`, with the window's `Length` and `Start` and its `Cue` under them,
+    /// as a device of their own, `Phrase` (decisions 400 to 402).
     pub(crate) fn phrase() -> Self {
         let mut grid = [[None; DEVICE_COLUMNS]; GRID_ROWS];
         for (column, control) in WALK_CONTROLS.into_iter().enumerate() {
@@ -183,6 +184,8 @@ impl DeviceSpec {
         // The window under the order, as a lane's `Length` comes first on its device.
         grid[1][0] = Some(Control::Base(TrackControl::PhraseLength));
         grid[1][1] = Some(Control::Base(TrackControl::PhraseStart));
+        // Whether a turn of the window, or of a lane's, waits for its loop (decision 402).
+        grid[1][2] = Some(Control::Base(TrackControl::Cue));
         Self {
             identity: PHRASE.to_owned(),
             switchable: false,

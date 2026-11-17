@@ -49,8 +49,12 @@ and `gd` work on them as on any of the track's settings, a step's `ORD`, `REV`,
 down from the loop's, `+0` as written, its own rows again past its last, and
 `Start` the row it starts on, rows on from the first, going round; the title adds
 it, `· here Forward, 4 rows from 3, its own Forward`. A pass keeps the loop's
-steps, so the chain keeps time; a step's `PLEN` and `PSTA` lock them. The Roto
-has the six on knobs 1 to 6.
+steps, so the chain keeps time; a step's `PLEN` and `PSTA` lock them. Beside
+them, `Cue` is a switch, `Off` as it starts: on, a turn of `Length` or `Start`
+waits for the pass to end, and a turn of a lane's `Length`, `Rate` or `Start`
+for the lane to come round to its first row, as Kria's division cueing does.
+The order's four still move at once. `CUE` on a step locks it. The Roto has the
+seven on knobs 1 to 7.
 
 **A lane's Length, Rate and Start.** Each FX column with a lane in the phrase has a
 device of its own, `FX1 Lane`, under that column's generator if it has one, as

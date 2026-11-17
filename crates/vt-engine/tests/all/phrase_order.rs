@@ -469,3 +469,114 @@ fn the_playhead_follows_the_window() {
         assert_eq!(position.step, (4 + step % 6) % 8, "six rows from the fifth");
     }
 }
+
+/// The rows a track plays over this many steps from the top, and the windows it read, swapping
+/// in `turned` after `at` steps, as an edit or a turn while playing does.
+fn played_turning(song: &Song, turned: &Song, at: usize, steps: usize) -> Vec<(usize, u8)> {
+    let mut engine = Engine::new(RATE, crate::support::no_samples::version(song));
+    engine.play_from(0);
+    let mut out = vec![0.0; STEP * 2];
+    (0..steps)
+        .map(|step| {
+            if step == at {
+                engine.swap(crate::support::no_samples::version(turned));
+            }
+            engine.process(&mut out);
+            let place = engine.track_heard(0);
+            let position = song.tracks[0]
+                .chain_position(
+                    0,
+                    place.count as usize,
+                    Dealer::new(song.seed, 0),
+                    place.walk,
+                )
+                .unwrap();
+            (position.step, place.walk.length)
+        })
+        .collect()
+}
+
+/// The song with the track's `Cue` on or off (decision 402).
+fn cued(mut song: Song, on: bool) -> Song {
+    song.tracks[0].cue = u8::from(on);
+    song
+}
+
+#[test]
+fn with_cue_on_a_new_window_waits_for_the_next_pass() {
+    // `PLEN` turned to four rows three steps into a pass of eight.
+    for on in [false, true] {
+        let own = cued(song(8, Order::Forward), on);
+        let short = holding(own.clone(), windowed(0x7C, 0));
+        let played = played_turning(&own, &short, 3, 16);
+        let rows: Vec<usize> = played.iter().map(|(row, _)| *row).collect();
+        if on {
+            // The pass plays out its eight rows, and the next takes the four.
+            assert_eq!(
+                rows,
+                manual("1 2 3 4 5 6 7 8 1 2 3 4 1 2 3 4"),
+                "{played:?}"
+            );
+            assert!(played[..8].iter().all(|(_, length)| *length == 0x80));
+            assert!(played[8..].iter().all(|(_, length)| *length == 0x7C));
+        } else {
+            // At once: the fourth row, then round the four.
+            assert_eq!(
+                rows,
+                manual("1 2 3 4 1 2 3 4 1 2 3 4 1 2 3 4"),
+                "{played:?}"
+            );
+        }
+    }
+    // `PSTA` waits as `PLEN` does.
+    let own = cued(song(8, Order::Forward), true);
+    let moved = holding(own.clone(), windowed(0x80, 4));
+    assert_eq!(
+        played_turning(&own, &moved, 5, 16)
+            .iter()
+            .map(|(row, _)| *row)
+            .collect::<Vec<_>>(),
+        manual("1 2 3 4 5 6 7 8 5 6 7 8 1 2 3 4")
+    );
+}
+
+#[test]
+fn cue_moves_nothing_until_something_turns() {
+    for order in [Order::Forward, Order::UpDown, Order::Shuffle] {
+        let own = holding(song(8, order), windowed(0x7D, 2));
+        let frames = |song: &Song| render_frames(version(song, ramp_pool()), RATE, 24 * STEP);
+        assert_eq!(frames(&own), frames(&cued(own.clone(), true)), "{order:?}");
+    }
+}
+
+#[test]
+fn with_cue_on_an_lfo_on_the_window_moves_it_a_pass_at_a_time() {
+    let mut lfo = cued(song(8, Order::Forward), true);
+    lfo.tracks[0].mods[3] = ModSlot::lfo(
+        Some(SettingId::PHRASE_LENGTH),
+        Lfo {
+            shape: Shape::Tri,
+            rate: Rate::Steps(12),
+            ..Lfo::default()
+        },
+    )
+    .with_depth(0x20);
+    let mut engine = Engine::new(RATE, crate::support::no_samples::version(&lfo));
+    engine.play_from(0);
+    let mut out = vec![0.0; STEP * 2];
+    let lengths: Vec<u8> = (0..32)
+        .map(|_| {
+            engine.process(&mut out);
+            engine.track_heard(0).walk.length
+        })
+        .collect();
+    for pass in lengths.chunks(8) {
+        assert!(pass.iter().all(|length| *length == pass[0]), "{lengths:?}");
+    }
+    assert!(lengths.iter().any(|length| *length != 0x80), "{lengths:?}");
+    assert_eq!(
+        rows_heard(&lfo, 32),
+        rows_heard(&lfo, 32),
+        "a render repeats"
+    );
+}

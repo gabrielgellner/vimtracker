@@ -69,6 +69,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `PSTA` | The row the order's window starts on, rows on from the first |
 | `CDLT` | Every row's chance up or down: `80` none, `40` half, `00` none play |
 | `CTGT` | What a row's chance decides: `00` the whole row, `01` each pulse |
+| `CUE` | A new window or lane waits for its loop, `01`, or moves at once, `00` |
 | `GLD` | How long a tie glides into the next note: `00` off, `80` about 60 ms |
 | `OSC` | A synth's `Phase` for the row's note: `00` Free, `01` Reset |
 | `VMOD` | The track's `Mode` for the row's note: `00` Mono, `01` Legato |
@@ -560,7 +561,8 @@ the list of orders from the phrase's own, `80` as written; `REV` turns the walk
 the other way up; `ORDX` and `ORDY` are the order's numbers, `00` its own.
 `PLEN` and `PSTA` are the window of rows the order walks, read the same way:
 `PLEN` rows more or fewer than the loop's, `80` as written, and `PSTA` the row it
-starts on. See **Order** in **Editing**.
+starts on. `CUE` `01` has a new window, and a lane's new length, rate or start,
+wait for their loop to come round. See **Order** in **Editing**.
 
 ## Speed
 

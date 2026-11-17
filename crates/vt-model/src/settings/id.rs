@@ -217,6 +217,9 @@ impl SettingId {
     /// What a row's chance decides: `0` the whole row, `1` each of its pulses and ratchets
     /// (decision 406).
     pub const CHANCE_TARGET: Self = Self(LATER_TRACK_START as u16 + 18);
+    /// Whether a turn of the phrase's window or a lane's `Length`, `Rate` or `Start` waits for
+    /// its loop to come round (decision 402).
+    pub const CUE: Self = Self(LATER_TRACK_START as u16 + 19);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.

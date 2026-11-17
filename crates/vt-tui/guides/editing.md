@@ -1133,6 +1133,15 @@ pass to the next, as it does for `up-down`: 6 rows walked in passes of 8 play `1
 up. `PLEN` and `PSTA` on a row move the step that walks to it, and the title
 names the window, `Forward, 4 rows from 3 (Forward)`.
 
+**Cue**, beside them, makes a new window wait for the next pass, as Kria's
+division cueing makes a new division wait for its loop to restart. It's `Off` as
+it starts, and a turn is heard on the next step. `On`, the pass takes `Length`
+and `Start` at its first step and keeps them to its last, so a macro or an LFO
+on them moves the window a pass at a time and the loop's phrasing holds. It
+holds a lane the same way, its `Length`, `Rate` and `Start` taken as it comes
+round to its first row. The order itself, `Order`, `Reverse`, `Order X` and
+`Order Y`, still moves at once, as the Metropolix's does.
+
 **Jump** scrambles an order by degrees: it's the chance each step plays any row
 of the phrase instead of the one the order walks to, and then the walk carries
 on where it was. `0 %` plays the order as it is and `100 %` any row each step,
