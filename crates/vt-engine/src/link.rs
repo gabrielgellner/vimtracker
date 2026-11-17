@@ -976,6 +976,57 @@ mod tests {
         assert_eq!(blocks(&mut rt, 200), 0);
     }
 
+    /// Tracks whose rows slide their locks, and the next note's, to where each next changes, back
+    /// to the track's own too, a macro's among them, under a window turned every block
+    /// (decision 417).
+    #[test]
+    fn slides_never_allocate_in_the_callback() {
+        use vt_model::macros::{MacroMap, MacroTarget};
+        use vt_model::settings::SettingId;
+        let pool = samples();
+        let sliding = |round: usize| {
+            let mut sliding = song(8, 16);
+            for (index, track) in sliding.tracks.iter_mut().take(8).enumerate() {
+                track.phrase_length = (0x7A + (round + index) % 6) as u8;
+                track.cue = (index % 2) as u8;
+                track.macros[0].maps = vec![MacroMap {
+                    target: MacroTarget::Setting(SettingId::RES),
+                    min: 0,
+                    max: 0xC000,
+                    curve: 0,
+                    s: 0,
+                    zone: Default::default(),
+                    member: None,
+                }];
+                if index % 2 == 0 {
+                    track.machine =
+                        vt_model::song::Machine::Plaits(vt_model::song::SynthVoice::VirtualAnalog);
+                }
+                let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+                for step in 0..16 {
+                    let text = match (step + index) % 4 {
+                        0 => format!("C-3 64 cut:{:02X} sld:01 macro1:40", step * 16),
+                        1 => "--- -- vol:A0 sld:01 pan:20".to_owned(),
+                        2 => "C-3 64 type:04 sld:01 ---".to_owned(),
+                        _ => "C-3 64 cut:E0 macro1:F0 vol:60".to_owned(),
+                    };
+                    *phrase.step_mut(step).unwrap() = text.parse().unwrap();
+                }
+            }
+            sliding
+        };
+        let engine = Engine::new(48_000, published(sliding(0), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 0..200 {
+            handle.publish(published(sliding(round), &pool));
+            violations += blocks(&mut rt, 1);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
     /// Tracks gliding every note at `Always`, struck, carried and tied (decision 382).
     #[test]
     fn glide_mode_always_never_allocates_in_the_callback() {

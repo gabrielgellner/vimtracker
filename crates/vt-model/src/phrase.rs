@@ -10,7 +10,7 @@ use crate::order::{Deal, Order, Round, WalkMove};
 use crate::scale::Scale;
 use crate::selection::{Extent, StepRange};
 use crate::shape::{Shape, ShapeColumn, Source};
-use crate::step::{FxCommand, FxSlot, Step};
+use crate::step::{FxCommand, FxSlot, Note, Step};
 
 /// One track's sequence of steps, reusable by ID.
 ///
@@ -180,6 +180,60 @@ impl Phrase {
             time += steps[row].pulses();
         }
         None
+    }
+
+    /// The rows on from a visit of a round, for a slide (decision 417): in the order the rows play,
+    /// wrapping round the round to the visit's own row, each with how many steps there are from
+    /// the start of that visit's row to it.
+    fn ahead(
+        &self,
+        visit: usize,
+        deal: Deal,
+        walk: WalkMove,
+    ) -> impl Iterator<Item = (usize, &Step)> {
+        let steps = self.loop_steps();
+        let visits = self.round(deal, walk).count();
+        let mut time = 0;
+        self.round(deal, walk)
+            .cycle()
+            .skip(visit)
+            .take(visits + 1)
+            .map(move |row| {
+                let at = time;
+                time += steps[row].pulses();
+                (at, &steps[row])
+            })
+            .skip(1)
+    }
+
+    /// Where a setting next changes after a visit of a round, for a slide (decision 417): the
+    /// first row on that locks it, in a column with no lane of its own, with that value, or that
+    /// strikes a note, which ends a lock, with none; and how many steps away it is.
+    pub fn slide_to(
+        &self,
+        visit: usize,
+        deal: Deal,
+        walk: WalkMove,
+        command: FxCommand,
+    ) -> Option<(usize, Option<FxSlot>)> {
+        self.ahead(visit, deal, walk).find_map(|(time, step)| {
+            let locked = step
+                .fx
+                .iter()
+                .enumerate()
+                .find(|(slot, fx)| fx.command == Some(command) && self.lane(*slot).is_none());
+            match locked {
+                Some((_, fx)) => Some((time, Some(*fx))),
+                None => matches!(step.note, Note::On(_)).then_some((time, None)),
+            }
+        })
+    }
+
+    /// The next row on from a visit of a round that strikes a note, the next trig a slide goes
+    /// to, with how many steps away it is.
+    pub fn next_note(&self, visit: usize, deal: Deal, walk: WalkMove) -> Option<(usize, &Step)> {
+        self.ahead(visit, deal, walk)
+            .find(|(_, step)| matches!(step.note, Note::On(_)))
     }
 
     /// Its live generators, each on a column of its own rows or of a lane.
