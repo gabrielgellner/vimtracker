@@ -879,19 +879,22 @@ mod tests {
         }
     }
 
-    /// Mutate on the left half, coming down from its top to 0, and Smooth on the right, going up
-    /// from 0 to its top, on one macro, as Marbles' Déjà vu with Jump.
+    /// Mutate on the left half, coming down from its top to 0, and Jump on the right, going up
+    /// from 0 to its top, on one macro, as Marbles' Déjà vu.
     fn deja_vu() -> (MacroMap, MacroMap) {
-        let own = |field: usize| MacroTarget::Setting(SettingId::mod_own(0, field).unwrap());
-        let mutate = MacroMap::whole(own(7));
+        use crate::modulation::ModField;
+        let own = |field: ModField| {
+            MacroTarget::Setting(SettingId::mod_own(0, field.own().unwrap()).unwrap())
+        };
+        let mutate = MacroMap::whole(own(ModField::Mutate));
         let mutate = MacroMap {
             min: mutate.max,
             max: mutate.min,
             ..mutate
         }
         .zoned(Zone::new(0x00, 0x7F).unwrap());
-        let smooth = MacroMap::whole(own(8)).zoned(Zone::new(0x80, 0xFF).unwrap());
-        (mutate, smooth)
+        let jump = MacroMap::whole(own(ModField::Jump)).zoned(Zone::new(0x80, 0xFF).unwrap());
+        (mutate, jump)
     }
 
     #[test]
@@ -923,19 +926,19 @@ mod tests {
 
     #[test]
     fn a_left_half_and_a_right_half_make_one_macro_the_deja_vu_knob() {
-        let (mutate, smooth) = deja_vu();
-        let (top, smooth_top) = (mutate.min, smooth.max);
-        assert!(top > 0 && smooth_top > 0);
-        // At 00 Mutate is at its top and Smooth at 0; both are 0 at the middle; Smooth is at its
-        // top at FF.
-        assert_eq!((mutate.at(0.0), smooth.at(0.0)), (top, 0));
-        assert_eq!((mutate.at(127.0), smooth.at(127.0)), (0, 0));
-        assert_eq!((mutate.at(128.0), smooth.at(128.0)), (0, 0));
-        assert_eq!((mutate.at(255.0), smooth.at(255.0)), (0, smooth_top));
+        let (mutate, jump) = deja_vu();
+        let (top, jump_top) = (mutate.min, jump.max);
+        assert!(top > 0 && jump_top > 0);
+        // At 00 Mutate is at its top and Jump at 0; both are 0 at the middle; Jump is at its top
+        // at FF.
+        assert_eq!((mutate.at(0.0), jump.at(0.0)), (top, 0));
+        assert_eq!((mutate.at(127.0), jump.at(127.0)), (0, 0));
+        assert_eq!((mutate.at(128.0), jump.at(128.0)), (0, 0));
+        assert_eq!((mutate.at(255.0), jump.at(255.0)), (0, jump_top));
         // Halfway across each half, each is halfway along its range.
         let half = |top: u16| f32::from(top) / 2.0;
         assert!((f32::from(mutate.at(63.5)) - half(top)).abs() <= 256.0);
-        assert!((f32::from(smooth.at(191.5)) - half(smooth_top)).abs() <= 256.0);
+        assert!((f32::from(jump.at(191.5)) - half(jump_top)).abs() <= 256.0);
     }
 
     #[test]
