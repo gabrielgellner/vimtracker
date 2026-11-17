@@ -292,12 +292,15 @@ impl Default for SlotRun {
 impl SlotRun {
     /// Count its cycles and steps from a start again, a note's or the top of the song's, from
     /// where the song is at the rates they have then: so playing from anywhere, or a note that
-    /// restarts it, finds it where it would be had its rate never moved.
+    /// restarts it, finds it where it would be had its rate never moved. Its steps come round
+    /// again from the start, so each gets `Mutate`'s chance again, even at the count the last
+    /// note left it at (decision 397).
     pub(super) fn restart(&mut self, start: LfoStart) {
         self.start = start;
         self.lfo_lap.start(start);
         self.steps_lap.start(start);
         self.chaos = None;
+        self.counted = None;
         self.jumped = [(NO_COUNT, 0); JUMPS_KEPT];
     }
 

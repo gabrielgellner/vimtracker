@@ -442,6 +442,8 @@ until it's drawn again. `100%` draws a new one each time, and below that the loo
 drifts. The box shows what's heard: a step drawn is drawn at its drawn value, in
 the colour of a fader the steps drive, and on it the status line reads, say,
 `+3A drawn; +10 written`. It draws from the project's seed, so a render repeats.
+In `Trig` each note starts the steps again, so each note draws again, even one
+shorter than a step; a `Legato` tie doesn't start them, so it draws nothing.
 
 **Locking.** At `0%` the loop is locked, as the module's knob fully right locks
 it: nothing is drawn again, and what was drawn plays on, every time round. From the top, nothing is

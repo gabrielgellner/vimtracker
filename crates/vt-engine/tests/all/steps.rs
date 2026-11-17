@@ -534,3 +534,44 @@ fn a_macro_turns_jump() {
     assert_ne!(jumped, walk, "{jumped:?}");
     assert_eq!(jumped, played(&song, 16), "a render repeats");
 }
+
+/// In `Trig`, each note starts the slot again, so a note that ends before its first step does gets
+/// `Mutate`'s chance at that step each time, as a note that runs on gets it at each step it
+/// reaches: at 100% every note draws. `Free` counts on from the song's position whatever the notes
+/// do, drawing each step once as it comes round, and `Note` a step a note (decision 397).
+#[test]
+fn mutate_in_trig_draws_again_for_each_note_that_restarts_the_slot() {
+    let every_row = ["C-3 -- --- --- ---"; 8];
+    // A step of the slot's lasts two rows, so each note is shorter than a step.
+    let run = |mode| {
+        let slow = Steps {
+            values: values(&[0x10, 0x20]),
+            length: 2,
+            rate: StepRate::Note(480),
+            mutate: 100,
+            mode,
+            ..Steps::default()
+        };
+        // A small depth, so what's drawn doesn't pin the cutoff at either end.
+        let mut song = song(&every_row, slow);
+        song.tracks[0].mods[2].depth = 0x20;
+        cutoffs(&song, STEP, 8)
+    };
+    let trig = run(StepsMode::Trig);
+    let mut distinct = trig.clone();
+    distinct.dedup();
+    assert!(distinct.len() > 4, "each note draws: {trig:02X?}");
+    assert_eq!(trig, run(StepsMode::Trig), "a render repeats");
+    // `Free` draws once a step, two rows each.
+    let free = run(StepsMode::Free);
+    for pair in free.chunks(2) {
+        assert_eq!(pair[0], pair[1], "{free:02X?}");
+    }
+    assert_eq!(free, run(StepsMode::Free), "a render repeats");
+    // `Note` moves a step and draws at each note.
+    let note = run(StepsMode::Note);
+    let mut moved = note.clone();
+    moved.dedup();
+    assert!(moved.len() > 4, "{note:02X?}");
+    assert_eq!(note, run(StepsMode::Note), "a render repeats");
+}
