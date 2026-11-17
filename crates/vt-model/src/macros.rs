@@ -14,6 +14,7 @@ use crate::generator::Generator;
 use crate::insert::INSERTS;
 use crate::lfo::phase_value;
 use crate::modulation::{MOD_SLOTS, ModKind, Polarity, depth_of, depth_value};
+use crate::order::MOST_ORDER_NUMBER;
 use crate::settings::{Kind, Owner, SettingId, SettingSet};
 use crate::shape::{GenParam, MAX_BEND, Shape, ShapeColumn, curved};
 use crate::song::{FilterMode, FilterType, GlideMode, Phase, Track, VoiceMode};
@@ -557,6 +558,10 @@ impl Track {
             SettingId::VELOCITY_DELTA => self.velocity_delta,
             SettingId::QUANTISE => self.quantise,
             SettingId::JUMP => self.jump,
+            SettingId::ORDER => self.order,
+            SettingId::REVERSE => self.reverse,
+            SettingId::ORDER_X => self.order_x,
+            SettingId::ORDER_Y => self.order_y,
             SettingId::FILTER_MODE => self.filter_mode.index(),
             SettingId::GATE_LENGTH => self.gate_length(),
             SettingId::GROOVE => self
@@ -677,6 +682,10 @@ impl Track {
                     SettingId::VELOCITY_DELTA => self.velocity_delta = coarse,
                     SettingId::QUANTISE => self.quantise = coarse,
                     SettingId::JUMP => self.jump = coarse,
+                    SettingId::ORDER => self.order = coarse,
+                    SettingId::REVERSE => self.reverse = coarse.min(1),
+                    SettingId::ORDER_X => self.order_x = coarse.min(MOST_ORDER_NUMBER),
+                    SettingId::ORDER_Y => self.order_y = coarse.min(MOST_ORDER_NUMBER),
                     SettingId::FILTER_MODE => {
                         self.filter_mode =
                             FilterMode::ALL[usize::from(coarse).min(FilterMode::ALL.len() - 1)];

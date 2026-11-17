@@ -24,6 +24,7 @@ use crate::pages::phrase::PhraseView;
 use crate::pages::phrase::inspector;
 use crate::pages::phrase::timeline::{self, Line as TimeLine};
 use crate::services::folding::Order;
+use crate::services::walked_order;
 use crate::widgets::glyphs;
 use crate::widgets::group::{self, Switched};
 use crate::widgets::role;
@@ -466,7 +467,7 @@ fn column<'a>(ctx: &Ctx<'a>, track: usize) -> Option<Column<'a>> {
     let moving = ctx.playing_place(track, chain);
     let place =
         moving.unwrap_or_else(|| ctx.step_on(track, ctx.cursor().track, ctx.section_step()));
-    let mut position = owner.chain_position(chain, place, ctx.dealer(track))?;
+    let mut position = owner.chain_position(chain, place, ctx.dealer(track), ctx.walk(track))?;
     if let Some(row) = moving.and_then(|_| ctx.jumped_row(track)) {
         position.step = row;
     }
@@ -881,15 +882,18 @@ fn lane_details(phrase: &Phrase, heard: &[Option<Heard>; FX_SLOTS]) -> Vec<Span<
     spans
 }
 
-/// What the title says about the phrase after the chain: an order other than forward and its
-/// lanes' lengths, its live columns, and how many phrases follow it.
+/// What the title says about the phrase after the chain: an order other than forward, or the one
+/// the track's `Phrase` settings play it in with its own after it in brackets, and its lanes'
+/// lengths, its live columns, and how many phrases follow it.
 fn title_details(ctx: &Ctx, phrase: &Phrase) -> Vec<Span<'static>> {
     let bold = Style::new().add_modifier(Modifier::BOLD);
     // What's said about the phrase after the chain, each a group of its own, dim as a device
     // title's second words are: an order other than forward, and its lanes' lengths.
     let mut details = vec![];
-    if !phrase.order().is_forward() {
-        details.push(phrase.order().to_string());
+    match walked_order(phrase, ctx.walk(ctx.cursor().track)) {
+        Some(heard) => details.push(format!("{heard} ({})", phrase.order())),
+        None if !phrase.order().is_forward() => details.push(phrase.order().to_string()),
+        None => {}
     }
     let lanes = lane_details(phrase, &ctx.heard_lanes(phrase));
     // Its live columns are named, in the shape panel's colour, as their cells are drawn, each with

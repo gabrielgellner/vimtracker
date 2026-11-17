@@ -157,6 +157,10 @@ impl Control {
             Self::Base(TrackControl::VelocityDelta) => "Velocity",
             Self::Base(TrackControl::Quantise) => "Quantise",
             Self::Base(TrackControl::Jump) => "Jump",
+            Self::Base(TrackControl::Order) => "Order",
+            Self::Base(TrackControl::Reverse) => "Reverse",
+            Self::Base(TrackControl::OrderX) => "Order X",
+            Self::Base(TrackControl::OrderY) => "Order Y",
             Self::Choke => "Choke",
             Self::Group => "Group",
             Self::Role => "Role",
@@ -365,7 +369,11 @@ impl Control {
                 TrackControl::Pitch
                 | TrackControl::VelocityDelta
                 | TrackControl::Quantise
-                | TrackControl::Jump,
+                | TrackControl::Jump
+                | TrackControl::Order
+                | TrackControl::Reverse
+                | TrackControl::OrderX
+                | TrackControl::OrderY,
             )
             | Self::Choke
             | Self::Group
@@ -408,6 +416,16 @@ impl Control {
 
     /// Whether this is two hex digits, entered as soon as the second is typed.
     pub(crate) fn is_hex(self) -> bool {
+        // `Phrase`'s are places, a switch and lists (decision 400).
+        if let Self::Base(
+            TrackControl::Order
+            | TrackControl::Reverse
+            | TrackControl::OrderX
+            | TrackControl::OrderY,
+        ) = self
+        {
+            return false;
+        }
         matches!(
             self,
             Self::Base(_)
@@ -460,6 +478,7 @@ impl Control {
                 )
                 | Self::Arpeggio(ArpField::Rate | ArpField::Mode | ArpField::Retrig)
                 | Self::Lane(_, LaneField::Rate)
+                | Self::Base(TrackControl::Reverse | TrackControl::OrderX | TrackControl::OrderY)
         )
     }
 }

@@ -195,6 +195,15 @@ impl SettingId {
     pub const FILTER_TYPE: Self = Self(LATER_TRACK_START as u16 + 9);
     /// Whether the filter's `Res` stops short of ringing by itself: `0` off, `1` on.
     pub const SAFE: Self = Self(LATER_TRACK_START as u16 + 10);
+    /// How far through the list of orders from its phrase's own a track's phrases play in, `80`
+    /// as written (decision 400).
+    pub const ORDER: Self = Self(LATER_TRACK_START as u16 + 11);
+    /// Whether a track's phrases' walks go the other way up.
+    pub const REVERSE: Self = Self(LATER_TRACK_START as u16 + 12);
+    /// The first of the order's numbers, `00` for the phrase's own.
+    pub const ORDER_X: Self = Self(LATER_TRACK_START as u16 + 13);
+    /// The second of the order's numbers, `00` for the phrase's own.
+    pub const ORDER_Y: Self = Self(LATER_TRACK_START as u16 + 14);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.

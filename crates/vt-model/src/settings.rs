@@ -6,6 +6,7 @@
 use crate::constants::{MAX_LEVEL, UNITY_LEVEL};
 use crate::groove::GROOVE_CHOICES;
 use crate::lane::{LANE_RATES, LENGTH_AS_WRITTEN, RATE_AS_WRITTEN};
+use crate::order::{MOST_ORDER_NUMBER, ORDER_AS_WRITTEN};
 use std::borrow::Cow;
 
 use crate::param::{Choice, Descriptor, Reading, Typing};
@@ -30,7 +31,7 @@ pub use units::{
     ACID_SHORTEST_DECAY, BAND_DB, Kind, LEAST_Q, LONGEST_GLIDE_MS, MOST_Q, SHORTEST_GATE,
     SHORTEST_GLIDE_MS, Units, acid_cutoff_hz, acid_cutoff_position, acid_decay_ms, acid_drive_db,
     band_db, band_q, gate_delta, gate_percent, gate_share, gate_value, glide_ms, glide_value,
-    moved_velocity, quantised_nudge, rows_text, slide_ms, velocity_delta,
+    moved_velocity, orders_text, quantised_nudge, rows_text, slide_ms, velocity_delta,
 };
 pub use voices::{
     FOUR_OP_ALGORITHMS, FOUR_OP_EACH, FOUR_OP_SHARED, MAX_MACHINE_SETTINGS, voice_entries,
@@ -387,7 +388,7 @@ const TRACK_GROUPS: [&str; 16] = [
 
 /// The track's own settings added since places were fixed, at the end of the table so none moves
 /// (#718): the track's own after [`TRACK`]'s, in the order they came.
-const LATER_TRACK: [Entry; 11] = [
+const LATER_TRACK: [Entry; 15] = [
     // Whether a synth's oscillators run on from note to note or start again on each, read as a
     // note starts, so a lock on its row sets it for that note (decision 370).
     Entry {
@@ -497,11 +498,70 @@ const LATER_TRACK: [Entry; 11] = [
         default: 0,
         place: Place::Own,
     },
+    // The order the phrases' rows play in, as places on from each phrase's own `:order` in the
+    // list of orders, read before a row plays, as `JMP` is (decision 400).
+    Entry {
+        meaning: "how far on from the phrase's own order in the list its rows play in",
+        key: "order",
+        name: "Order",
+        label: Some("ORD"),
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: true,
+            units: Units::Orders,
+        },
+        default: ORDER_AS_WRITTEN,
+        place: Place::Own,
+    },
+    // Whether the phrases' walks go the other way up, as the Metropolix's Direction does.
+    Entry {
+        meaning: "whether the phrase's rows play the other way up, last row for first",
+        key: "reverse",
+        name: "Reverse",
+        label: Some("REV"),
+        kind: Kind::Stepped {
+            choices: &OFF_ON,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
+    // The order's two numbers in place of the phrase's own: a jump's, an arp's notes and step,
+    // the snake, Cartesian's rates.
+    Entry {
+        meaning: "the order's first number: a jump's rows, an arp's notes, the snake, X's rate",
+        key: "orderx",
+        name: "Order X",
+        label: Some("ORDX"),
+        kind: Kind::Stepped {
+            choices: &ORDER_NUMBERS,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
+    Entry {
+        meaning: "the order's second number: an arp's step, Y's rate",
+        key: "ordery",
+        name: "Order Y",
+        label: Some("ORDY"),
+        kind: Kind::Stepped {
+            choices: &ORDER_NUMBERS,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
 ];
 /// What each of [`LATER_TRACK`] is listed with.
-const LATER_TRACK_GROUPS: [&str; 11] = [
+const LATER_TRACK_GROUPS: [&str; 15] = [
     "Machine", "Machine", "Filter", "Machine", "Machine", "Filter", "Filter", "Filter", "Filter",
-    "Filter", "Filter",
+    "Filter", "Filter", "Machine", "Machine", "Machine", "Machine",
+];
+
+/// What `ORDX` and `ORDY` choose: the phrase's own number, or one from 1 to 16.
+const ORDER_NUMBERS: [&str; MOST_ORDER_NUMBER as usize + 1] = [
+    "Own", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16",
 ];
 /// How many of the track's own there are, [`TRACK`]'s and [`LATER_TRACK`]'s.
 const TRACK_SETTINGS: usize = TRACK.len() + LATER_TRACK.len();

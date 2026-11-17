@@ -78,7 +78,8 @@ fn every_generator_puts_each_setting_on_one_knob_and_the_app_keeps_what_it_is() 
             let song = song_with(shape);
             let track = &song.tracks[0];
             let devices = track_devices(track, Some(0));
-            let (page, _, _) = devices.last().unwrap();
+            // `Phrase` comes last.
+            let (page, _, _) = devices.iter().rev().nth(1).unwrap();
             assert_eq!(*page, Page::Gen, "{}", kind.name());
             // The generator's device, and an `Acid`'s `Loops` after it.
             let generators = devices.iter().filter(|(page, _, spec)| {
@@ -143,11 +144,11 @@ fn an_fx_columns_lane_is_a_device_of_its_own_with_its_length_and_rate_on_knobs()
     phrase.set_lane(0, Some(vt_model::song::Lane::new(0, 4)));
     let track = &song.tracks[0];
     let devices = live_devices(track, Some(0), &song, false);
-    let device = devices.last().unwrap();
+    let device = devices.iter().rev().nth(1).unwrap();
     assert_eq!(device.name.to_string(), "FX1 Lane");
     assert!(!device.stored, "live, as it has no buttons");
     let listed = track_devices(track, Some(0));
-    let spec = &listed.last().unwrap().2;
+    let spec = &listed.iter().rev().nth(1).unwrap().2;
     assert_eq!(layout_of(spec, track).kind, "gen/lane");
     let knobs: Vec<Control> = placement(spec, track, false)
         .knobs
@@ -176,8 +177,12 @@ fn a_generator_comes_after_the_mod_pages_devices_named_by_its_column_and_fill() 
     let track = &song.tracks[0];
     let without = live_devices(track, None, &song, false);
     let with = live_devices(track, Some(0), &song, false);
-    assert_eq!(with.len(), without.len() + 1, "one device, and no Empty");
-    let device = with.last().unwrap();
+    assert_eq!(
+        with.len(),
+        without.len() + 2,
+        "one device, then Phrase, and no Empty"
+    );
+    let device = with.iter().rev().nth(1).unwrap();
     assert_eq!(device.name.to_string(), "Note Ramp");
     assert!(!device.stored);
 }
@@ -186,7 +191,7 @@ fn a_generator_comes_after_the_mod_pages_devices_named_by_its_column_and_fill() 
 fn turning_a_knob_reshapes_the_column_as_the_pages_keys_do() {
     let song = song_with(shape(FillKind::Ramp, Where::Euclid { hits: 3, rotate: 0 }));
     let track = &song.tracks[0];
-    let device = track_devices(track, Some(0)).len() - 1;
+    let device = track_devices(track, Some(0)).len() - 2;
     // Knob 7 is the `Where`'s first: Euclid's hits, 0 to the 16 rows.
     let hits = control_at(track, Some(0), device, 7, false).unwrap();
     assert!(matches!(
@@ -228,7 +233,7 @@ fn knob_7_turns_the_amount_of_marbles_rhythms_and_the_app_keeps_complementarys_s
     ] {
         let song = song_with(shape(FillKind::Ramp, place));
         let track = &song.tracks[0];
-        let device = track_devices(track, Some(0)).len() - 1;
+        let device = track_devices(track, Some(0)).len() - 2;
         let amount = control_at(track, Some(0), device, 7, false).unwrap();
         let Control::Gen { param, .. } = amount else {
             panic!("{amount:?}");
@@ -268,7 +273,7 @@ fn knob_7_turns_a_rhythms_child_and_the_app_keeps_the_rhythm_and_its_part() {
     };
     let song = song_with(shape(FillKind::Ramp, place));
     let track = &song.tracks[0];
-    let device = track_devices(track, Some(0)).len() - 1;
+    let device = track_devices(track, Some(0)).len() - 2;
     let child = control_at(track, Some(0), device, 7, false).unwrap();
     let Control::Gen { param, .. } = child else {
         panic!("{child:?}");
@@ -304,12 +309,12 @@ fn an_acids_loops_are_a_device_of_their_own_after_it() {
     let names: Vec<String> = devices
         .iter()
         .rev()
-        .take(2)
+        .take(3)
         .map(|device| device.name.to_string())
         .collect();
-    assert_eq!(names, ["Note Loops", "Note Acid"]);
+    assert_eq!(names, ["Phrase", "Note Loops", "Note Acid"]);
     // Its knobs in the order the fill's chances come; on notes there, no rhythm of its own.
-    let last = track_devices(track, Some(0)).len() - 1;
+    let last = track_devices(track, Some(0)).len() - 2;
     let at = |index| control_at(track, Some(0), last, index, false);
     assert_eq!(at(1), None, "the rhythm is the notes'");
     let Some(Control::Gen { param, .. }) = at(2) else {
@@ -333,7 +338,7 @@ fn acids_pitches_is_a_two_step_knob() {
     let song = song_with(shape(FillKind::Acid, Where::Notes));
     let track = &song.tracks[0];
     // Before its `Loops`, the last device.
-    let device = track_devices(track, Some(0)).len() - 2;
+    let device = track_devices(track, Some(0)).len() - 3;
     let pitches = control_at(track, Some(0), device, 6, false).unwrap();
     let Feel::Steps(names) = knob(pitches, track, &song).unwrap().feel else {
         panic!("a list");

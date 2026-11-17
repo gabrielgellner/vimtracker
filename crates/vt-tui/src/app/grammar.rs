@@ -1356,7 +1356,12 @@ impl Services {
         } else {
             let chain = (*self.section_here()?.chains.get(track)?)?;
             song.tracks[track]
-                .chain_position(chain, self.section_step(view), self.dealer(track))?
+                .chain_position(
+                    chain,
+                    self.section_step(view),
+                    self.dealer(track),
+                    self.walk(track),
+                )?
                 .phrase
         };
         Some((id, song.tracks.get(track)?.phrases.get(&id)?.start()))

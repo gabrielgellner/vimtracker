@@ -272,13 +272,14 @@ impl Engine {
                 continue;
             }
             let dealer = self.dealer(index);
+            let walk = self.walk(index);
             let state = &mut self.tracks[index];
             let place = state.clock.count;
             let count = place - state.started;
             let next = count.rem_euclid(old_length);
             let laps = count.div_euclid(old_length);
             let lapped = |length: i64, at: i64| (laps.max(0) * length + at) as usize;
-            let Some(was_at) = before.chain_position(chain, lapped(old_length, next), dealer)
+            let Some(was_at) = before.chain_position(chain, lapped(old_length, next), dealer, walk)
             else {
                 continue;
             };
@@ -286,7 +287,13 @@ impl Engine {
             // its phrase's walk plays it nearest to where it was, or where it was if the pass
             // doesn't play it.
             let kept = track
-                .chain_place(chain, was_at.row_place(), laps.max(0) as usize, dealer)
+                .chain_place(
+                    chain,
+                    was_at.row_place(),
+                    laps.max(0) as usize,
+                    dealer,
+                    walk,
+                )
                 .unwrap_or(0) as i64;
             let moved = length != old_length || kept != next;
             if moved {
@@ -294,7 +301,7 @@ impl Engine {
             }
             let (Some(old_phrase), Some(at)) = (
                 before.phrases.get(&was_at.phrase),
-                track.chain_position(chain, lapped(length, kept), dealer),
+                track.chain_position(chain, lapped(length, kept), dealer, walk),
             ) else {
                 continue;
             };

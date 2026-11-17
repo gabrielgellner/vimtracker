@@ -61,6 +61,10 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `RATE` | The step's speed: `00` 1/32, `02` 1/16, `04` 1/8, `06` 1/4 |
 | `QNT` | Nudges brought to the grid: `00` none, `80` half, `FF` all |
 | `JMP` | The chance this step plays any row of the phrase: `00` none, `FF` every |
+| `ORD` | The order, places on in the list from the phrase's own: `80` its own |
+| `REV` | The walk the other way up, `01`, or as written, `00` |
+| `ORDX` | The order's first number: `00` the phrase's own, `01` to `10` |
+| `ORDY` | The order's second number: `00` the phrase's own, `01` to `10` |
 | `GLD` | How long a tie glides into the next note: `00` off, `80` about 60 ms |
 | `OSC` | A synth's `Phase` for the row's note: `00` Free, `01` Reset |
 | `VMOD` | The track's `Mode` for the row's note: `00` Mono, `01` Legato |
@@ -480,6 +484,13 @@ order walks to, from `00`, never, to `FF`, every step. It's read before the row
 lands, as `QNT` is: a lock on a row sets the chance for the step that walks to
 that row, and the row jumped to then plays with all of its own FX. It starts from
 the track's `Jump`, in the Play device's title. See **Order** in **Editing**.
+
+`ORD`, `REV`, `ORDX` and `ORDY` move the walk of the phrase's rows as the Gen
+page's `Phrase` device does, read before the row lands, as `JMP` is: a lock on a
+row moves the step that walks to that row. `ORD` goes so many places on through
+the list of orders from the phrase's own, `80` as written; `REV` turns the walk
+the other way up; `ORDX` and `ORDY` are the order's numbers, `00` its own. See
+**Order** in **Editing**.
 
 ## Speed
 

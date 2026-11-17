@@ -56,6 +56,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &ChainView, ctx: &Ctx) {
                 chain,
                 playhead,
                 ctx.dealer(ctx.cursor().track),
+                ctx.walk(ctx.cursor().track),
             )
         })
         .map(|position| position.slot);

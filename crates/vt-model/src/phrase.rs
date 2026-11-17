@@ -6,7 +6,7 @@ use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS};
 use crate::generator::{Generator, GeneratorFile, Span};
 pub use crate::lane::Lane;
 use crate::lane::MOST_DIVISION;
-use crate::order::{Deal, Order, Round};
+use crate::order::{Deal, Order, Round, Rows, WalkMove};
 use crate::scale::Scale;
 use crate::selection::{Extent, StepRange};
 use crate::shape::{Shape, ShapeColumn, Source};
@@ -138,9 +138,20 @@ impl Phrase {
         self.order = order;
     }
 
-    /// The rows of its loop one round of its order visits, in turn, with this deal if it's dealt.
-    pub(crate) fn round(&self, deal: Deal) -> Round<'_> {
-        Round::new(self.loop_steps(), self.order, deal)
+    /// The order its loop's rows play in on a track whose settings move its walk this way
+    /// (decision 400): its own, at rest.
+    pub fn order_walked(&self, walk: WalkMove) -> Order {
+        walk.order_of(self.order)
+    }
+
+    /// The rows of its loop one round of its order visits, in turn, as a track's walk moves it,
+    /// with this deal if it's dealt.
+    pub(crate) fn round(&self, deal: Deal, walk: WalkMove) -> Round<'_> {
+        Round::over(
+            Rows::new(self.loop_steps(), walk.reverse),
+            self.order_walked(walk),
+            deal,
+        )
     }
 
     /// The next value with this command in a slot, for a glide: looking on from a visit of a
@@ -150,14 +161,15 @@ impl Phrase {
         &self,
         visit: usize,
         deal: Deal,
+        walk: WalkMove,
         slot: usize,
         command: FxCommand,
     ) -> Option<(usize, FxSlot)> {
         let steps = self.loop_steps();
-        let visits = self.round(deal).count();
+        let visits = self.round(deal, walk).count();
         let mut time = 0;
         for (distance, row) in self
-            .round(deal)
+            .round(deal, walk)
             .cycle()
             .skip(visit)
             .take(visits)
@@ -343,12 +355,12 @@ impl Phrase {
     /// How many steps a round of its order lasts before its walk repeats: a pass for an order that
     /// visits each row once, and for a dealt one, whose round is a pass, and longer for one that
     /// visits some rows twice.
-    pub(crate) fn round_time(&self) -> usize {
-        if self.order.is_dealt() {
+    pub(crate) fn round_time(&self, walk: WalkMove) -> usize {
+        if self.order_walked(walk).is_dealt() {
             return self.time();
         }
         let steps = self.loop_steps();
-        self.round(Deal::default())
+        self.round(Deal::default(), walk)
             .map(|row| steps[row].pulses())
             .sum()
     }
@@ -359,18 +371,25 @@ impl Phrase {
     }
 
     /// The visit of its order's walk playing this many steps into a pass, this many passes since
-    /// its chain started, with the pass's deal if the order is dealt: its row, which of the row's
+    /// its chain started, with the pass's deal if the order is dealt, as a track's walk moves the
+    /// order (decision 400), worked out from the place alone: its row, which of the row's
     /// pulses, and which visit of the round it is. The walk carries on from one pass to the next,
     /// so a row whose pulses run past the end of a pass plays the rest of them at the start of the
     /// next. Skipped rows are passed over, and a loop that takes no time has none.
-    pub(crate) fn walk_at(&self, pass: usize, time: usize, deal: Deal) -> Option<Visit> {
-        let round = self.round_time();
+    pub(crate) fn walk_at(
+        &self,
+        pass: usize,
+        time: usize,
+        deal: Deal,
+        walk: WalkMove,
+    ) -> Option<Visit> {
+        let round = self.round_time(walk);
         if time >= self.time() || round == 0 {
             return None;
         }
         let steps = self.loop_steps();
         let mut left = (self.pass_start(pass, round) + time) % round;
-        for (visit, row) in self.round(deal).enumerate() {
+        for (visit, row) in self.round(deal, walk).enumerate() {
             let pulses = steps[row].pulses();
             if left < pulses {
                 return Some(Visit {
@@ -394,8 +413,9 @@ impl Phrase {
         pass: usize,
         near: usize,
         deal: Deal,
+        walk: WalkMove,
     ) -> Option<usize> {
-        let (length, round) = (self.time() as i64, self.round_time() as i64);
+        let (length, round) = (self.time() as i64, self.round_time(walk) as i64);
         let steps = self.loop_steps();
         let pulses = steps.get(row)?.pulses();
         if pulses == 0 || round == 0 {
@@ -407,7 +427,7 @@ impl Phrase {
         let mut started = -(self.pass_start(pass, round as usize) as i64);
         while started < length {
             let mut time = started;
-            for visited in self.round(deal) {
+            for visited in self.round(deal, walk) {
                 let place = time + pulse;
                 let closer = |best: i64| place.abs_diff(near as i64) < best.abs_diff(near as i64);
                 if visited == row && (0..length).contains(&place) && best.is_none_or(closer) {
@@ -669,7 +689,7 @@ pub(crate) mod tests {
         let phrase = Phrase::from_steps(steps);
         let found = |step, slot, command| {
             phrase
-                .glide_to(step, Deal::default(), slot, command)
+                .glide_to(step, Deal::default(), WalkMove::default(), slot, command)
                 .map(|(distance, fx)| (distance, fx.coarse()))
         };
         assert_eq!(found(0, 0, FxCommand::CUT), Some((2, 0x30)));
@@ -693,16 +713,16 @@ pub(crate) mod tests {
         assert_eq!(phrase.time(), 6);
         let deal = Deal::default();
         let rows: Vec<(usize, usize)> = (0..6)
-            .filter_map(|t| phrase.walk_at(0, t, deal))
+            .filter_map(|t| phrase.walk_at(0, t, deal, WalkMove::default()))
             .map(|visit| (visit.row, visit.pulse))
             .collect();
         assert_eq!(rows, [(0, 0), (1, 0), (1, 1), (1, 2), (3, 0), (3, 1)]);
-        assert_eq!(phrase.walk_at(0, 6, deal), None);
+        assert_eq!(phrase.walk_at(0, 6, deal, WalkMove::default()), None);
         assert_eq!(phrase.time_to(3), 4, "the skipped row takes no time");
         let skipped = gated(&["SGL0", "HLD0"]);
         assert_eq!(skipped.time(), 0);
         assert_eq!(
-            skipped.walk_at(0, 0, deal),
+            skipped.walk_at(0, 0, deal, WalkMove::default()),
             None,
             "nothing to play, and no hang"
         );
@@ -712,7 +732,11 @@ pub(crate) mod tests {
     fn walked(phrase: &Phrase, passes: usize) -> Vec<usize> {
         (0..passes)
             .flat_map(|pass| {
-                (0..phrase.time()).map(move |t| phrase.walk_at(pass, t, Deal::default()).unwrap())
+                (0..phrase.time()).map(move |t| {
+                    phrase
+                        .walk_at(pass, t, Deal::default(), WalkMove::default())
+                        .unwrap()
+                })
             })
             .map(|visit| visit.row + 1)
             .collect()
@@ -751,7 +775,7 @@ pub(crate) mod tests {
         let deal = Deal::default();
         let rows = |phrase: &Phrase, pass| -> Vec<(usize, usize)> {
             (0..phrase.time())
-                .filter_map(|t| phrase.walk_at(pass, t, deal))
+                .filter_map(|t| phrase.walk_at(pass, t, deal, WalkMove::default()))
                 .map(|visit| (visit.row, visit.pulse))
                 .collect()
         };
@@ -761,7 +785,7 @@ pub(crate) mod tests {
         phrase.set_order(Order::UpDown);
         assert_eq!(phrase.time(), 4, "the pass keeps the rows' length");
         assert_eq!(
-            phrase.round_time(),
+            phrase.round_time(WalkMove::default()),
             6,
             "while a round plays the middle row twice"
         );
@@ -783,13 +807,25 @@ pub(crate) mod tests {
         phrase.set_order(Order::UpDown);
         let deal = Deal::default();
         // The second pass plays 3 2 1 2: row 2 is at 1 and 3, and row 4 isn't in it.
-        assert_eq!(phrase.place_in_pass(1, 0, 1, 0, deal), Some(1));
-        assert_eq!(phrase.place_in_pass(1, 0, 1, 3, deal), Some(3));
-        assert_eq!(phrase.place_in_pass(3, 0, 1, 0, deal), None);
+        assert_eq!(
+            phrase.place_in_pass(1, 0, 1, 0, deal, WalkMove::default()),
+            Some(1)
+        );
+        assert_eq!(
+            phrase.place_in_pass(1, 0, 1, 3, deal, WalkMove::default()),
+            Some(3)
+        );
+        assert_eq!(
+            phrase.place_in_pass(3, 0, 1, 0, deal, WalkMove::default()),
+            None
+        );
         // A pulse it no longer has is its last.
         let mut pulses = gated(&["SGL1", "SGL2"]);
         pulses.set_order(Order::Reverse);
-        assert_eq!(pulses.place_in_pass(1, 5, 0, 0, deal), Some(1));
+        assert_eq!(
+            pulses.place_in_pass(1, 5, 0, 0, deal, WalkMove::default()),
+            Some(1)
+        );
     }
 
     #[test]
@@ -804,7 +840,13 @@ pub(crate) mod tests {
         phrase.set_order(Order::Reverse);
         let found = |phrase: &Phrase, visit| {
             phrase
-                .glide_to(visit, Deal::default(), 0, FxCommand::CUT)
+                .glide_to(
+                    visit,
+                    Deal::default(),
+                    WalkMove::default(),
+                    0,
+                    FxCommand::CUT,
+                )
                 .map(|(time, fx)| (time, fx.coarse()))
         };
         // Reverse plays rows 3 2 1 0, so from row 2, its visit 1, row 0 is two rows on.
