@@ -32,7 +32,7 @@ const BPM_JUMP: i64 = 10_000;
 pub(crate) const FINE_NUDGE: i64 = 10;
 const FINE_JUMP: i64 = 100;
 /// How far a large step moves the seed.
-const SEED_JUMP: u64 = 10;
+const SEED_JUMP: u64 = 0x10;
 /// How far a large step moves a push, in ticks, a humanise, in ticks, and a velocity, in percent.
 const PUSH_JUMP: i64 = 10;
 const HUMANISE_JUMP: i64 = 4;

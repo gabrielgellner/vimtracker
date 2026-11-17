@@ -34,8 +34,8 @@ enum Command {
         /// The length in steps, instead of the section's.
         #[arg(long, value_parser = clap::value_parser!(u64).range(1..))]
         rows: Option<u64>,
-        /// A random seed, instead of the project's.
-        #[arg(long)]
+        /// A random seed in hex, as the project page shows it, instead of the project's.
+        #[arg(long, value_parser = parse_seed)]
         seed: Option<u64>,
         /// Let sound ring out after the end, up to 10 seconds.
         #[arg(long)]
@@ -217,4 +217,9 @@ fn main() -> std::process::ExitCode {
             std::process::ExitCode::FAILURE
         }
     }
+}
+
+/// `--seed` in hex, as `:seed` takes it.
+fn parse_seed(text: &str) -> Result<u64, String> {
+    u64::from_str_radix(text, 16).map_err(|_| format!("{text} isn't a hex number"))
 }
