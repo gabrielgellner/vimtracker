@@ -297,6 +297,7 @@ them again, and `=` and `-` step through them.
 | `A2` to `AF` | `<2` to `<15` | Only before pass `n`, so a part drops out |
 | `B0` to `BF` | `>16` to `>31` | From pass 16 to 31 on |
 | `C0` to `CF` | `<16` to `<31` | Only before pass 16 to 31 |
+| `D0` to `FF` | `1%` to `99%` | That many times in 100, its locks with it |
 
 So `12` plays every other pass, and `44` the last of four. `>` and `<` are for
 builds: a hat with `95` joins on the fifth pass and stays, and an intro fill with
@@ -307,6 +308,15 @@ a section's reset, `:reset` and the track's `Reset`, and a section with `Rpt 8`
 builds across its repeats unless its Start is `reset`. `PRE` and `NEI` chain
 other rows to a built one. In the list, `K`, they're under **From**
 and **Until**.
+
+`D0` to `FF` are chances, Elektron's `X%`, under **Chance** in the list: `D0`
+is 1%, `DE` 25%, `E8` 50%, `F2` 75% and `FF` 99%, in finer steps toward either
+end, where they're heard most. Unlike `CHA`, which skips only the note, a `%`
+that fails skips the row's locks too, as any condition does, so `CND E8 VOL 00`
+silences the track half the time and leaves it be otherwise. It rolls the
+track's dice, from the `:seed`, the track and how far it is into its chain, as
+`RND` does, so a render repeats, the dice loop loops it, and `PRE` and `NEI`
+follow it as they follow a `CHA`.
 
 A pass is each time the track plays the row since its chain started, counting its
 own steps at its own speed, so a phrase played twice in its chain counts two passes
@@ -350,7 +360,8 @@ how far it is into its chain, as `RND` is, so every `CHA` keeps the results it
 had.
 
 A row with a condition, `CND`, plays when its condition says, as Elektron's
-conditions override `PROB`, though a `CHA` on it still moves. `PRE` and `NEI`
+conditions override `PROB`, though a `CHA` on it still moves, and so does a
+`%`, which is a chance like any other. `PRE` and `NEI`
 read what a row's `CHA` came to with its chance moved, so a `PRE` row after a
 thinned `CHA` row is thinned with it: a flam stays a flam. A row with no `CHA`
 that `CDLT` thins isn't a condition, and leaves what `PRE` reads as it was, so
@@ -545,8 +556,8 @@ selection, and takes their `RND`s out, so the pass you liked stays.
 ### Looping the dice
 
 A track's dice can go round in a loop, as Marbles' Déjà vu does: with its
-`Dice loop` on, in the title of the Sound page's Play device, each step's `CHA`s
-and `RND`s, and the rows `CDLT` thins, roll the dice of a place in a loop of that many steps rather than
+`Dice loop` on, in the title of the Sound page's Play device, each step's `CHA`s,
+`RND`s and `CND` chances, and the rows `CDLT` thins, roll the dice of a place in a loop of that many steps rather than
 fresh ones, so a run of chances you like comes round again. It's `Off`, as
 every track starts, then 1 to 16 steps, as Marbles' `Length` goes, then 32 and
 64 for two and four bars of sixteenths. The places keep to the track's own count
@@ -567,7 +578,7 @@ the top again, or from any step, fills it afresh. Everything it rolls comes from
 the `:seed`, the track and the step, so a render repeats. `DLP`, `DMU` and
 `DJMP` on a row set them for the step that plays it, read before it lands, as
 `JMP` is, and a lane, a mod slot or a macro moves them too. With `Dice mutate`
-at `FF` an `RND` rolls just as it does with the loop off.
+at `FF` an `RND` or a `CND` chance rolls just as it does with the loop off.
 
 ## Groove
 

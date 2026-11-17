@@ -2,6 +2,8 @@
 //! holds one as its value, so a part can change from pass to pass without each variation being
 //! written out.
 
+use crate::random::splitmix64;
+
 /// What a `CND` value asks before its row plays.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Condition {
@@ -21,6 +23,9 @@ pub enum Condition {
     From(u8),
     /// Only on the passes before this one, so a part drops out of a build: `<2` is `1ST`.
     Until(u8),
+    /// This many times in a hundred, rolled from the track's dice, as Elektron's `X%`: unlike a
+    /// `CHA`, a row that fails it skips its locks as well as its note.
+    Percent(u8),
 }
 
 /// The most passes a cycle can count, as on Elektron's machines.
@@ -29,6 +34,33 @@ pub(crate) const MOST_PASSES: u8 = 8;
 /// The latest pass a build can start or end on. `9n` and `An` count from 2 to 15 by their second
 /// digit, and `Bn` and `Cn` carry on from 16 to 31.
 pub(crate) const LATEST_BUILD: u8 = 31;
+
+/// The chances `D0` to `FF` hold, in percent, finer toward either end, where a step is heard
+/// most: an event once a song or a hat that almost always plays. Each has its complement, `1` and
+/// `99`, `25` and `75`, about `50`, but for `7`, the one left over from the 48 values, given to
+/// the rare end.
+pub const PERCENTS: [u8; 48] = [
+    1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 17, 20, 22, 25, 28, 30, 33, 35, 38, 40, 42, 45, 48, 50, 52,
+    55, 58, 60, 62, 65, 67, 70, 72, 75, 78, 80, 83, 85, 88, 90, 92, 94, 95, 96, 97, 98, 99,
+];
+
+/// The first `CND` value that's a chance.
+const FIRST_PERCENT: u8 = 0xD0;
+
+/// Keeps a `%`'s rolls apart from any other the seed is hashed for.
+const PERCENT_STREAM: u64 = 0x636e_6425_0000_0000;
+
+/// Whether a `%` in this column comes up with a chance of `chance`, from 0 to 1, as `CDLT` moves
+/// it. It's a hash of the project's seed, the track, `count`, its count since its chain started or
+/// the count of the step the dice loop holds, and the column, as an `RND`'s roll is, so each of a
+/// row's pulses reads the same die, a render repeats, the dice loop loops it, and turning `CDLT`
+/// up only adds rows.
+pub fn percent_comes_up(seed: u64, track: usize, count: i64, column: usize, chance: f32) -> bool {
+    let track =
+        splitmix64(splitmix64(seed) ^ splitmix64(PERCENT_STREAM.wrapping_add(track as u64)));
+    let roll = splitmix64(splitmix64(track ^ count as u64) ^ column as u64);
+    ((roll >> 40) as f32 / (1u64 << 24) as f32) < chance
+}
 
 /// The named conditions, in Elektron's order, whose values are `01` to `08`.
 const NAMED: [Condition; 8] = [
@@ -54,11 +86,14 @@ pub struct Situation {
     pub previous: bool,
     /// Whether the last condition decided on the track to the left passed.
     pub neighbour: bool,
+    /// Whether the row's die for a `%` came up under its chance, as the engine rolls it.
+    pub rolled: bool,
 }
 
 impl Condition {
     /// Every condition, in the order a list shows them: the named ones, then each pass of each
-    /// cycle from 2 to 8, as Elektron lists them, then the builds, from each pass and until each.
+    /// cycle from 2 to 8, as Elektron lists them, then the builds, from each pass and until each,
+    /// then the chances.
     pub fn all() -> impl Iterator<Item = Self> {
         NAMED
             .into_iter()
@@ -68,13 +103,17 @@ impl Condition {
             )
             .chain((2..=LATEST_BUILD).map(Self::From))
             .chain((2..=LATEST_BUILD).map(Self::Until))
+            .chain(PERCENTS.into_iter().map(Self::Percent))
     }
 
     /// The condition a `CND` value holds, if it's one: `01` to `08` for the named ones, two
     /// digits `xy` for pass `x` of every `y`, so `12` is `1:2`, `9n` from pass `n` on and `An`
-    /// before it, so `95` is `>5` and `A3` is `<3`, and `Bn` and `Cn` the same from pass 16, so
-    /// `B4` is `>20`.
+    /// before it, so `95` is `>5` and `A3` is `<3`, `Bn` and `Cn` the same from pass 16, so
+    /// `B4` is `>20`, and `D0` to `FF` the chances in [`PERCENTS`], so `E8` is `50%`.
     pub fn from_value(value: u8) -> Option<Self> {
+        if value >= FIRST_PERCENT {
+            return Some(Self::Percent(PERCENTS[usize::from(value - FIRST_PERCENT)]));
+        }
         let (pass, of) = (value >> 4, value & 0x0F);
         match pass {
             0 => NAMED.get(usize::from(of).checked_sub(1)?).copied(),
@@ -97,6 +136,10 @@ impl Condition {
             Self::Passes { pass, of } => pass << 4 | of,
             Self::From(pass) => build(0x9, 0xB, pass),
             Self::Until(pass) => build(0xA, 0xC, pass),
+            Self::Percent(percent) => PERCENTS
+                .iter()
+                .position(|p| *p == percent)
+                .map_or(0, |at| FIRST_PERCENT + at as u8),
             named => NAMED
                 .iter()
                 .position(|n| *n == named)
@@ -121,6 +164,7 @@ impl Condition {
             Self::Passes { pass, of } => format!("{pass}:{of}"),
             Self::From(pass) => format!(">{pass}"),
             Self::Until(pass) => format!("<{pass}"),
+            Self::Percent(percent) => format!("{percent}%"),
         }
     }
 
@@ -138,6 +182,7 @@ impl Condition {
             Self::Passes { pass, of } => format!("Pass {pass} of every {of}"),
             Self::From(pass) => format!("From pass {pass} on"),
             Self::Until(pass) => format!("Before pass {pass} only"),
+            Self::Percent(percent) => format!("{percent} times in 100, locks and all"),
         }
     }
 
@@ -151,6 +196,7 @@ impl Condition {
             Self::Passes { .. } => "Passes",
             Self::From(_) => "From",
             Self::Until(_) => "Until",
+            Self::Percent(_) => "Chance",
         }
     }
 
@@ -165,6 +211,15 @@ impl Condition {
             // `at.pass` counts from 0, and the build's pass from 1.
             Self::From(pass) => at.pass + 1 >= i64::from(pass),
             Self::Until(pass) => at.pass + 1 < i64::from(pass),
+            Self::Percent(_) => at.rolled,
+        }
+    }
+
+    /// Its chance from 0 to 1, if it's a `%`, before `CDLT` moves it.
+    pub fn chance(self) -> Option<f32> {
+        match self {
+            Self::Percent(percent) => Some(f32::from(percent) / 100.0),
+            _ => None,
         }
     }
 
@@ -177,7 +232,7 @@ impl Condition {
 
     /// The condition this many places on in the list, stopping at either end. A large step moves
     /// a pass to a longer or shorter cycle, keeping its place where it can, so `1:2` goes to `1:3`,
-    /// and a build's pass by four, so `>5` goes to `>9`.
+    /// a build's pass by four, so `>5` goes to `>9`, and a chance by four places.
     pub(crate) fn moved(self, by: i32, large: bool) -> Self {
         let build = |pass: u8| (i32::from(pass) + by * 4).clamp(2, i32::from(LATEST_BUILD)) as u8;
         match self {
@@ -190,6 +245,11 @@ impl Condition {
             }
             Self::From(pass) if large => return Self::From(build(pass)),
             Self::Until(pass) if large => return Self::Until(build(pass)),
+            Self::Percent(percent) if large => {
+                let at = PERCENTS.iter().position(|p| *p == percent).unwrap_or(0) as i32;
+                let at = (at + by * 4).clamp(0, PERCENTS.len() as i32 - 1);
+                return Self::Percent(PERCENTS[at as usize]);
+            }
             _ => {}
         }
         let list: Vec<Self> = Self::all().collect();
@@ -205,7 +265,7 @@ mod tests {
     #[test]
     fn every_condition_has_one_value_and_reads_back() {
         let all: Vec<Condition> = Condition::all().collect();
-        assert_eq!(all.len(), 8 + (2..=8).sum::<usize>() + 2 * 30);
+        assert_eq!(all.len(), 8 + (2..=8).sum::<usize>() + 2 * 30 + 48);
         for condition in &all {
             assert_eq!(Condition::from_value(condition.value()), Some(*condition));
         }
@@ -220,9 +280,13 @@ mod tests {
         assert_eq!(Condition::from_value(0xA3), Some(Condition::Until(3)));
         assert_eq!(Condition::from_value(0xB0), Some(Condition::From(16)));
         assert_eq!(Condition::from_value(0xCF), Some(Condition::Until(31)));
-        for value in [
-            0x00, 0x09, 0x11, 0x21, 0x19, 0x90, 0x91, 0xA0, 0xA1, 0xD0, 0xFF,
-        ] {
+        assert_eq!(Condition::from_value(0xD0), Some(Condition::Percent(1)));
+        assert_eq!(Condition::from_value(0xDE), Some(Condition::Percent(25)));
+        assert_eq!(Condition::from_value(0xE8), Some(Condition::Percent(50)));
+        assert_eq!(Condition::from_value(0xF2), Some(Condition::Percent(75)));
+        assert_eq!(Condition::from_value(0xFF), Some(Condition::Percent(99)));
+        assert_eq!(Condition::Percent(50).label(), "50%");
+        for value in [0x00, 0x09, 0x11, 0x21, 0x19, 0x90, 0x91, 0xA0, 0xA1] {
             assert_eq!(Condition::from_value(value), None, "{value:02X}");
         }
     }
@@ -295,6 +359,24 @@ mod tests {
     }
 
     #[test]
+    fn a_percent_holds_as_its_die_says_and_its_chance_is_its_share() {
+        let at = |rolled| Situation {
+            rolled,
+            ..Situation::default()
+        };
+        assert!(Condition::Percent(1).holds(at(true)));
+        assert!(!Condition::Percent(99).holds(at(false)));
+        assert_eq!(Condition::Percent(25).chance(), Some(0.25));
+        assert_eq!(Condition::First(true).chance(), None);
+        let heard = (0..10_000)
+            .filter(|count| percent_comes_up(9, 0, *count, 0, 0.25))
+            .count();
+        assert!((2300..2700).contains(&heard), "{heard}");
+        assert!((0..1000).all(|count| !percent_comes_up(9, 0, count, 0, 0.0)));
+        assert!((0..1000).all(|count| percent_comes_up(9, 0, count, 0, 1.0)));
+    }
+
+    #[test]
     fn moving_goes_through_the_list_and_a_large_step_changes_the_cycle() {
         let one_of_two = Condition::Passes { pass: 1, of: 2 };
         assert_eq!(Condition::First(false).moved(1, false), one_of_two);
@@ -318,10 +400,16 @@ mod tests {
         assert_eq!(Condition::From(5).moved(1, true), Condition::From(9));
         assert_eq!(Condition::Until(30).moved(1, true), Condition::Until(31));
         assert_eq!(Condition::From(3).moved(-1, true), Condition::From(2));
+        assert_eq!(Condition::Until(31).moved(1, false), Condition::Percent(1));
         assert_eq!(
-            Condition::Until(31).moved(1, false),
-            Condition::Until(31),
+            Condition::Percent(99).moved(1, false),
+            Condition::Percent(99),
             "the list's last"
         );
+        assert_eq!(
+            Condition::Percent(50).moved(1, true),
+            Condition::Percent(60)
+        );
+        assert_eq!(Condition::Percent(2).moved(-1, true), Condition::Percent(1));
     }
 }
