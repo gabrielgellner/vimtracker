@@ -35,6 +35,7 @@
 
 use std::f32::consts::TAU;
 
+use vt_model::constants::CUT_FADE_FRAMES;
 use vt_model::insert::{Chorus as Settings, ChorusType};
 
 use crate::dsp::blocks::coefficient::of_corner;
@@ -168,6 +169,15 @@ pub(crate) struct Chorus {
     line: StereoLine,
     wobbles: [Wobble; 2],
     kind: ChorusType,
+    /// The type it's going to, once its copies have faded out, and how far faded in they are: a
+    /// new type reads its line elsewhere, so the copies dip through nothing over
+    /// [`CUT_FADE_FRAMES`] each way rather than jump (decision 414).
+    next: ChorusType,
+    faded: f32,
+    /// How much of the first line is both sides together, as `Chorus` writes it, rather than the
+    /// left, as the rest do: it moves in a straight line over the whole dip, so a line's sound
+    /// never steps where the type changed.
+    together: f32,
     /// How much faster than Rings the wobbles go.
     speed: Smoothed,
     /// How far the copies move, from 0 to 1.
@@ -198,6 +208,9 @@ impl Chorus {
             line: StereoLine::new(size),
             wobbles: [Wobble::START; 2],
             kind: ChorusType::Chorus,
+            next: ChorusType::Chorus,
+            faded: 1.0,
+            together: 1.0,
             speed: Smoothed::at(1.0),
             depth: Smoothed::at(0.5),
             slower: TUNING_RATE / rate as f32,
@@ -222,6 +235,12 @@ impl Chorus {
     pub(crate) fn clear(&mut self) {
         self.line.clear();
         self.wobbles = [Wobble::START; 2];
+        self.settle_type();
+        self.clear_juno();
+    }
+
+    /// Empty the Juno's filters, for a type that starts afresh.
+    fn clear_juno(&mut self) {
         self.juno_phase = 0.0;
         self.juno_held = [0.0; 2];
         self.juno_tone = [0.0; 2];
@@ -230,7 +249,7 @@ impl Chorus {
 
     /// Take what's set now. The speed is two octaves either way of Rings' or the Juno's at `80`.
     pub(crate) fn follow(&mut self, settings: Settings) {
-        self.kind = settings.kind;
+        self.next = settings.kind;
         self.speed.target = ((f32::from(settings.rate) - 128.0) / 64.0).exp2();
         self.depth.target = f32::from(settings.depth) / 255.0;
     }
@@ -239,6 +258,64 @@ impl Chorus {
     pub(crate) fn settle(&mut self) {
         self.speed.settle();
         self.depth.settle();
+        self.settle_type();
+    }
+
+    /// Go to the type it's going to at once.
+    fn settle_type(&mut self) {
+        if self.next.is_juno() && !self.kind.is_juno() {
+            self.clear_juno();
+        }
+        self.kind = self.next;
+        self.faded = 1.0;
+        self.together = Self::together_in(self.kind);
+    }
+
+    /// How much of the first line is both sides together in a type.
+    fn together_in(kind: ChorusType) -> f32 {
+        if kind == ChorusType::Chorus { 1.0 } else { 0.0 }
+    }
+
+    /// Write a frame to the lines: the left, or both sides together as `together` says, to the
+    /// first, and the right to the second.
+    #[inline]
+    #[allow(clippy::float_cmp, reason = "its ramp lands on its ends exactly")]
+    fn write(&mut self, input: [f32; 2]) {
+        self.line.advance();
+        let both = (input[0] + input[1]) * 0.5;
+        let first = if self.together == 1.0 {
+            both
+        } else if self.together == 0.0 {
+            input[0]
+        } else {
+            input[0] + (both - input[0]) * self.together
+        };
+        self.line.write(0, first);
+        self.line.write(1, input[1]);
+    }
+
+    /// Move a frame through a change of type: the copies fade out, the type changes, and they
+    /// fade back in, while what the first line takes moves from one type's to the other's.
+    #[inline]
+    fn change_type(&mut self) {
+        let by = 1.0 / CUT_FADE_FRAMES as f32;
+        let to = Self::together_in(self.next);
+        self.together = if to > self.together {
+            (self.together + by * 0.5).min(to)
+        } else {
+            (self.together - by * 0.5).max(to)
+        };
+        if self.next == self.kind {
+            self.faded = (self.faded + by).min(1.0);
+        } else {
+            self.faded = (self.faded - by).max(0.0);
+            if self.faded == 0.0 {
+                if self.next.is_juno() && !self.kind.is_juno() {
+                    self.clear_juno();
+                }
+                self.kind = self.next;
+            }
+        }
     }
 
     /// A line's sound a number of frames back, read between samples.
@@ -271,29 +348,39 @@ impl Chorus {
 
     /// Feed one frame in and get the copies out, all wet.
     #[inline]
+    #[allow(clippy::float_cmp, reason = "its fades land on their ends exactly")]
     pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         let speed = self.speed.next(self.smoothing);
         let depth = self.depth.next(self.smoothing);
-        if self.kind.is_juno() {
-            return self.juno(input, speed, depth);
+        let changing = self.next != self.kind || self.faded != 1.0;
+        if changing {
+            self.change_type();
         }
-        self.rings(input, speed * self.slower, depth)
+        self.write(input);
+        let out = if self.kind.is_juno() {
+            self.juno(speed, depth)
+        } else {
+            self.rings(speed * self.slower, depth)
+        };
+        if changing {
+            let faded = self.faded * self.faded * (3.0 - 2.0 * self.faded);
+            return out.map(|side| side * faded);
+        }
+        out
     }
 
     /// One frame through a Juno's chorus: each side down its own line, read a few ms back where
     /// the sweep puts it, the right where the left would be half a turn on, or in I+II where the
     /// left is, then darkened and with no DC.
     #[inline]
-    fn juno(&mut self, input: [f32; 2], speed: f32, depth: f32) -> [f32; 2] {
+    fn juno(&mut self, speed: f32, depth: f32) -> [f32; 2] {
         let mode = juno_mode(self.kind);
         self.juno_phase += JUNO_HERTZ[mode] * speed * self.seconds_per_frame;
         if self.juno_phase >= 1.0 {
             self.juno_phase -= 1.0;
         }
-        self.line.advance();
         let mut out = [0.0; 2];
-        for (side, sample) in input.into_iter().enumerate() {
-            self.line.write(side, sample);
+        for side in 0..2 {
             let wave = juno_wave(mode, self.juno_phase + side as f32 * JUNO_RIGHT_TURNS[mode]);
             let read =
                 self.read_through(side, juno_delay_ms(mode, depth, wave) * self.frames_per_ms);
@@ -309,7 +396,7 @@ impl Chorus {
 
     /// One frame through Rings' chorus or ensemble.
     #[inline]
-    fn rings(&mut self, input: [f32; 2], speed: f32, depth: f32) -> [f32; 2] {
+    fn rings(&mut self, speed: f32, depth: f32) -> [f32; 2] {
         let speeds = match self.kind {
             ChorusType::Chorus => CHORUS_SPEEDS,
             _ => ENSEMBLE_SPEEDS,
@@ -317,12 +404,10 @@ impl Chorus {
         for (wobble, step) in self.wobbles.iter_mut().zip(speeds) {
             wobble.turn(step * speed);
         }
-        self.line.advance();
         let longer = self.longer;
         match self.kind {
             ChorusType::Chorus => {
                 // Both sides go down one line, and two taps each wobble apart from the other.
-                self.line.write(0, (input[0] + input[1]) * 0.5);
                 let amount = depth * CHORUS_DEPTH;
                 // The right side's are a quarter of a turn on: the cosines.
                 let [first, second] = self.wobbles;
@@ -334,8 +419,6 @@ impl Chorus {
             }
             _ => {
                 // Each side has its own line, and three copies a third of a turn apart cross over.
-                self.line.write(0, input[0]);
-                self.line.write(1, input[1]);
                 let (slow, fast) = (
                     depth * ENSEMBLE_DEPTH,
                     depth * ENSEMBLE_DEPTH * ENSEMBLE_FAST,
