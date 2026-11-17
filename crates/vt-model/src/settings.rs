@@ -723,10 +723,6 @@ const LANE: [Entry; 4] = [
 /// that came first, `Length` and `Rate`.
 pub(crate) const EARLY_LANE: usize = 2;
 
-/// How many of a lane's settings have their places after the track's own added later, before
-/// the sampler's: `Start`. Those after them, `Jump`, sit at the table's end.
-pub(crate) const LATER_LANE: usize = 1;
-
 /// How many settings each FX column's lane has.
 pub const LANE_SETTINGS: usize = LANE.len();
 
