@@ -38,6 +38,9 @@ pub struct LaneRead {
     pub row: usize,
     pub laps: i64,
     pub first: bool,
+    /// How many of the lane's own rows on it starts, as the track's `Start` for its column has it
+    /// (decision 401), kept small as a report carries one for every lane of every track.
+    pub start: u16,
     pub heard: Heard,
 }
 
@@ -46,7 +49,7 @@ impl LaneRead {
     /// out from the count, as playing from the top with nothing turned on the way places it: for
     /// drawing a playhead without playing.
     pub fn placed(lane: Lane, heard: Heard, count: i64) -> Self {
-        LaneRun::default().read(lane, count, (0, 0), 0, heard)
+        LaneRun::default().read(lane, count, (0, 0), 0, heard, 0)
     }
 }
 
@@ -90,6 +93,7 @@ impl LaneRun {
         entry: Entry,
         offset: i64,
         heard: Heard,
+        start: usize,
     ) -> LaneRead {
         if let Some((at, was, read)) = self.last
             && (at, was) == (count, entry)
@@ -106,9 +110,10 @@ impl LaneRun {
             self.left = heard.division.max(1);
         }
         let read = LaneRead {
-            row: lane.stored(self.row),
+            row: lane.stored_from(self.row, start),
             laps: self.laps,
             first,
+            start: start as u16,
             heard,
         };
         self.left -= 1;
@@ -156,8 +161,9 @@ impl TrackState {
         count: i64,
     ) -> LaneRead {
         let heard = self.heard_lane(slot, lane);
+        let start = self.lane_start(slot, lane);
         let offset = self.lane_offsets[slot];
-        self.lane_runs[slot].read(lane, count, entry, offset, heard)
+        self.lane_runs[slot].read(lane, count, entry, offset, heard, start)
     }
 
     /// Where an FX column's lane was going to read at the step `count` in `entry`, as it's heard
@@ -199,22 +205,37 @@ impl TrackState {
     /// How an FX column's lane is heard now: its own length and division moved by the track's
     /// `Length` and `Rate` for the column as a lock, a macro and modulation have them.
     pub(crate) fn heard_lane(&self, slot: usize, lane: Lane) -> Heard {
+        lane.heard(self.lane_moved(slot))
+    }
+
+    /// How many of a lane's own rows on it starts, as the track's `Start` for its column and what
+    /// modulation adds have it now (decision 401).
+    pub(crate) fn lane_start(&self, slot: usize, lane: Lane) -> usize {
+        lane.heard_start(self.lane_moved(slot))
+    }
+
+    /// An FX column's `Length`, `Rate` and `Start` as held, with what modulation adds.
+    fn lane_moved(&self, slot: usize) -> LaneMove {
         let value = |at: usize| {
             let by = SettingId::lane(slot, at).map_or(0.0, |id| self.offsets[id.index()]);
             (self.lane_held[slot][at] + by * 255.0)
                 .clamp(0.0, 255.0)
                 .round() as u8
         };
-        let moved = LaneMove {
+        LaneMove {
             length: value(0),
             rate: value(1).min(LANE_RATES.len() as u8 - 1),
-        };
-        lane.heard(moved)
+            start: value(2),
+        }
     }
 }
 
 /// What each FX column's `Length` and `Rate` hold at rest, on the `00` to `FF` scale.
 pub(super) fn lanes_at_rest() -> [f32; LANE_SETTINGS] {
     let rest = LaneMove::default();
-    [f32::from(rest.length), f32::from(rest.rate)]
+    [
+        f32::from(rest.length),
+        f32::from(rest.rate),
+        f32::from(rest.start),
+    ]
 }

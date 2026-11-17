@@ -26,12 +26,15 @@ use crate::track_state::{
 };
 use crate::voice::NoteOn;
 
-/// The settings that move a track's phrase's walk, read before a row plays (decision 400).
-const WALK_SETTINGS: [SettingId; 4] = [
+/// The settings that move a track's phrase's walk, read before a row plays (decisions 400 and
+/// 401).
+const WALK_SETTINGS: [SettingId; 6] = [
     SettingId::ORDER,
     SettingId::REVERSE,
     SettingId::ORDER_X,
     SettingId::ORDER_Y,
+    SettingId::PHRASE_LENGTH,
+    SettingId::PHRASE_START,
 ];
 
 /// Where each FX column's lane reads at a step, for those with one.

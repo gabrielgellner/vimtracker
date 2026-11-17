@@ -183,6 +183,7 @@ fn the_title_shows_what_a_lane_is_heard_as_and_its_own_and_the_playhead_the_row_
         moved: vt_model::lane::LaneMove {
             length: 0x82,
             rate: 14,
+            start: 0,
         },
     };
     app.services.apply(&moved);
@@ -235,6 +236,7 @@ fn rows_past_a_shortened_lane_are_dim() {
         moved: vt_model::lane::LaneMove {
             length: 0x7E,
             rate: 15,
+            start: 0,
         },
     });
     // At -2, the lane of 4 plays its first two, and the two past them are dim.

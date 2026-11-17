@@ -163,6 +163,7 @@ impl DeviceSpec {
         let mut grid = [[None; DEVICE_COLUMNS]; GRID_ROWS];
         grid[0][0] = Some(Control::Lane(slot, LaneField::Length));
         grid[0][1] = Some(Control::Lane(slot, LaneField::Rate));
+        grid[0][2] = Some(Control::Lane(slot, LaneField::Start));
         Self {
             identity: format!("FX{} {LANE}", slot + 1),
             switchable: false,
@@ -179,6 +180,9 @@ impl DeviceSpec {
         for (column, control) in WALK_CONTROLS.into_iter().enumerate() {
             grid[0][column] = Some(Control::Base(control));
         }
+        // The window under the order, as a lane's `Length` comes first on its device.
+        grid[1][0] = Some(Control::Base(TrackControl::PhraseLength));
+        grid[1][1] = Some(Control::Base(TrackControl::PhraseStart));
         Self {
             identity: PHRASE.to_owned(),
             switchable: false,

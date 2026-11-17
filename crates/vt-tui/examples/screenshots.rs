@@ -439,6 +439,7 @@ fn lane_moved(song: &mut Song) {
     song.tracks[0].lanes[0] = vt_model::lane::LaneMove {
         length: 0x82,
         rate: 14,
+        start: 0,
     };
 }
 

@@ -3,8 +3,8 @@
 use super::mods::{ACCUMULATION, ARPEGGIO, MACRO, MACRO_NAMES, MOD, MOD_OWN};
 use super::sampler::SAMPLER;
 use super::{
-    Entry, LANE, LATER_TRACK, LATER_TRACK_GROUPS, SLOT_OWN, TRACK, TRACK_GROUPS, TRACK_SETTINGS,
-    voice_entries, voice_key,
+    EARLY_LANE, Entry, LANE, LATER_TRACK, LATER_TRACK_GROUPS, SLOT_OWN, TRACK, TRACK_GROUPS,
+    TRACK_SETTINGS, voice_entries, voice_key,
 };
 use crate::constants::FX_SLOTS;
 use crate::insert::{EFFECTS, EffectKind, INSERTS};
@@ -93,7 +93,9 @@ const MOD_OWN_START: usize = MACROS_START + MACROS;
 const ACCUMULATION_START: usize = MOD_OWN_START + MOD_SLOTS * MOD_OWN.len();
 const ARPEGGIO_START: usize = ACCUMULATION_START + ACCUMULATION.len();
 const LANES_START: usize = ARPEGGIO_START + ARPEGGIO.len();
-const LATER_TRACK_START: usize = LANES_START + FX_SLOTS * LANE.len();
+const LATER_TRACK_START: usize = LANES_START + FX_SLOTS * EARLY_LANE;
+/// Each FX column's lane's settings added after the track's own, `Start` (decision 401).
+const LATER_LANE_START: usize = LATER_TRACK_START + LATER_TRACK.len();
 
 /// What a setting belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -204,6 +206,11 @@ impl SettingId {
     pub const ORDER_X: Self = Self(LATER_TRACK_START as u16 + 13);
     /// The second of the order's numbers, `00` for the phrase's own.
     pub const ORDER_Y: Self = Self(LATER_TRACK_START as u16 + 14);
+    /// How many rows more or fewer than its loop's a phrase's order walks over, `80` for none
+    /// (decision 401).
+    pub const PHRASE_LENGTH: Self = Self(LATER_TRACK_START as u16 + 15);
+    /// The row the window a phrase's order walks over starts on, rows on from its loop's first.
+    pub const PHRASE_START: Self = Self(LATER_TRACK_START as u16 + 16);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.
@@ -216,7 +223,7 @@ impl SettingId {
     pub const PLAY: Self = Self(SAMPLER_START as u16 + 4);
 
     /// How many settings there are.
-    pub const COUNT: usize = LATER_TRACK_START + LATER_TRACK.len();
+    pub const COUNT: usize = LATER_LANE_START + FX_SLOTS * (LANE.len() - EARLY_LANE);
 
     /// Every setting, in the table's order.
     pub fn all() -> impl Iterator<Item = Self> {
@@ -328,12 +335,18 @@ impl SettingId {
         }
     }
 
-    /// One of an FX column's lane's: 0 is `Length`, 1 is `Rate`.
+    /// One of an FX column's lane's: 0 is `Length`, 1 is `Rate`, 2 is `Start`, whose places come
+    /// after the track's own added later.
     pub const fn lane(slot: usize, setting: usize) -> Option<Self> {
-        if slot < FX_SLOTS && setting < LANE.len() {
-            Some(Self((LANES_START + slot * LANE.len() + setting) as u16))
-        } else {
+        if slot >= FX_SLOTS || setting >= LANE.len() {
             None
+        } else if setting < EARLY_LANE {
+            Some(Self((LANES_START + slot * EARLY_LANE + setting) as u16))
+        } else {
+            let later = LANE.len() - EARLY_LANE;
+            Some(Self(
+                (LATER_LANE_START + slot * later + setting - EARLY_LANE) as u16,
+            ))
         }
     }
 
@@ -364,12 +377,16 @@ impl SettingId {
     /// What it belongs to, and its place among that owner's settings.
     pub fn owner(self) -> (Owner, usize) {
         let at = self.index();
+        if at >= LATER_LANE_START {
+            let (within, later) = (at - LATER_LANE_START, LANE.len() - EARLY_LANE);
+            return (Owner::Lane(within / later), EARLY_LANE + within % later);
+        }
         if at >= LATER_TRACK_START {
             return (Owner::Track, TRACK.len() + at - LATER_TRACK_START);
         }
         if at >= LANES_START {
             let within = at - LANES_START;
-            return (Owner::Lane(within / LANE.len()), within % LANE.len());
+            return (Owner::Lane(within / EARLY_LANE), within % EARLY_LANE);
         }
         if at >= ARPEGGIO_START {
             return (Owner::Arpeggio, at - ARPEGGIO_START);
