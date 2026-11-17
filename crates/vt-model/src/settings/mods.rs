@@ -103,13 +103,13 @@ const COUNTS: [&str; MOST_DEGREES as usize] = [
     "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28",
 ];
 
-/// An envelope's time, unlabelled, so only modulation and macros move it.
-const fn time(key: &'static str, name: &'static str) -> Entry {
+/// An envelope's time, with its label.
+const fn time(key: &'static str, name: &'static str, label: &'static str) -> Entry {
     Entry {
         meaning: "",
         key,
         name,
-        label: None,
+        label: Some(label),
         kind: Kind::Continuous {
             top: 0xFF,
             middle: false,
@@ -120,13 +120,13 @@ const fn time(key: &'static str, name: &'static str) -> Entry {
     }
 }
 
-/// A percentage from none to all, unlabelled, as an envelope's sustain is.
-const fn percentage(key: &'static str, name: &'static str) -> Entry {
+/// A percentage from none to all, as an envelope's sustain is, with its label.
+const fn percentage(key: &'static str, name: &'static str, label: &'static str) -> Entry {
     Entry {
         meaning: "",
         key,
         name,
-        label: None,
+        label: Some(label),
         kind: Kind::Continuous {
             top: 100,
             middle: false,
@@ -138,22 +138,23 @@ const fn percentage(key: &'static str, name: &'static str) -> Entry {
 }
 
 /// A mod slot's type's own settings that a macro or modulation can move, by what they are, so an
-/// ADSR's, an AHD's and an LPG's `Attack` are one. The times, levels and amounts first are
-/// unlabelled, as a step's lock of one would be heard only from the next note; the lists, the
-/// hold, the peak, the fade and the ratchet after them are labelled, so steps lock them too, with
-/// the slot's number after the label, as `SHP4`. Each is on the slot only while its type has it.
+/// ADSR's, an AHD's and an LPG's `Attack` are one. Each is labelled, so steps lock it too, with
+/// the slot's number after the label, as `EDEC2` or `SHP4`, and a lock on a note's row is that
+/// note's (decision 407). An envelope's four are an `E` before Elektron's names, as `4-op`'s
+/// operators have `ATK1` to `REL4`. Each is on the slot only while its type has it.
 /// They're in [`MOD_OWN_FIELDS`](crate::modulation::MOD_OWN_FIELDS)' order, which names them.
 pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
-    time("attack", "Attack").means("how long it takes to rise to full, or the gate to open"),
-    time("decay", "Decay").means("how long it takes to fall back"),
-    percentage("sustain", "Sustain").means("the level it holds at while the note does"),
-    time("release", "Release").means("how long it takes to fall away once the note ends"),
-    percentage("body", "Body").means("the level the strike falls to before it decays"),
+    time("attack", "Attack", "EATK")
+        .means("how long it takes to rise to full, or the gate to open"),
+    time("decay", "Decay", "EDEC").means("how long it takes to fall back"),
+    percentage("sustain", "Sustain", "ESUS").means("the level it holds at while the note does"),
+    time("release", "Release", "EREL").means("how long it takes to fall away once the note ends"),
+    percentage("body", "Body", "BODY").means("the level the strike falls to before it decays"),
     Entry {
         meaning: "how far the gate's fall closes the filter as well as the level",
         key: "colour",
         name: "Colour",
-        label: None,
+        label: Some("CLR"),
         kind: Kind::Continuous {
             top: 0xFF,
             middle: false,
@@ -166,7 +167,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
         meaning: "how many of its values it plays",
         key: "length",
         name: "Length",
-        label: None,
+        label: Some("LEN"),
         kind: Kind::Stepped {
             choices: COUNTS.split_at(STEPS).0,
             wraps: false,
@@ -178,7 +179,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
         meaning: "the chance each value is drawn again as it comes round",
         key: "mutate",
         name: "Mutate",
-        label: None,
+        label: Some("MUT"),
         kind: Kind::Continuous {
             top: MAX_MUTATE,
             middle: false,
@@ -191,7 +192,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
         meaning: "how it goes from one value to the next, gliding or jumping",
         key: "smooth",
         name: "Smooth",
-        label: None,
+        label: Some("SMTH"),
         kind: Kind::Continuous {
             top: 0xFF,
             middle: true,
@@ -206,7 +207,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
         meaning: "how fast it cycles, or how long each value lasts",
         key: "rate",
         name: "Rate",
-        label: None,
+        label: Some("RATE"),
         kind: Kind::Continuous {
             top: 0xFF,
             middle: false,
@@ -219,7 +220,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
         meaning: "the chance each step goes to one of its values at random",
         key: "jump",
         name: "Jump",
-        label: None,
+        label: Some("JMP"),
         kind: Kind::Continuous {
             top: MAX_JUMP,
             middle: false,
@@ -256,9 +257,9 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
     },
     // A drum's peak, on the envelopes' time scale; the default is a new drum's 10 ms.
     Entry {
-        label: Some("PEAK"),
         default: 0x42,
-        ..time("peak", "Peak").means("how long the drum's first strike lasts before its body")
+        ..time("peak", "Peak", "PEAK")
+            .means("how long the drum's first strike lasts before its body")
     },
     // An LFO's fade, from the longest out through none to the longest in, as `+` goes; the
     // default is none.
@@ -283,7 +284,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
         meaning: "how far the values Mutate draws stray, from one value to the two ends",
         key: "spread",
         name: "Spread",
-        label: None,
+        label: Some("SPR"),
         kind: Kind::Continuous {
             top: MAX_SPREAD,
             middle: false,
@@ -297,7 +298,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
         meaning: "which way the values Mutate draws lean, low or high",
         key: "bias",
         name: "Bias",
-        label: None,
+        label: Some("BIAS"),
         kind: Kind::Continuous {
             top: 0xFF,
             middle: true,

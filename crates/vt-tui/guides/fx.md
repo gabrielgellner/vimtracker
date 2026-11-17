@@ -85,6 +85,19 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `HOLD2` | An AHD's hold: `00` none, up to 2 s at `FE`, and the note at `FF` |
 | `PEAK2` | A drum envelope's peak, on its times' scale, as a macro turns it |
 | `RTCH2` | A drum envelope's strikes: `00` one, `07` eight |
+| `EATK2` | An envelope's attack: `00` none, `01` 1 ms to `FF` 8 s. `EATK1` too |
+| `EDEC2` | An envelope's decay, on the same times. `EDEC1` the notes' own |
+| `ESUS2` | An envelope's sustain: `00` none, `64` all. `ESUS1` `ESUS3` too |
+| `EREL2` | An envelope's release, on the same times. `EREL1` `EREL3` too |
+| `BODY2` | A drum envelope's body: `00` none, `64` all |
+| `CLR2` | A gate's colour, how far it closes the filter: `00` none |
+| `RATE4` | An LFO's or Steps' rate, faster up the scale. `RATE5` `RATE6` too |
+| `LEN3` | A Steps slot's length: `00` one step, `0F` sixteen |
+| `MUT3` | A Steps slot's mutate: `00` none, `64` every value drawn again |
+| `SMTH3` | A Steps slot's smooth: `80` steps, above glides, below plucks |
+| `JMP3` | A Steps slot's jump: `00` none, `64` every step |
+| `SPR3` | A Steps slot's spread: `32` even, `00` the bias, `64` the ends |
+| `BIAS3` | A Steps slot's bias: `80` none, below low, above high |
 | `MAC1` | Macro 1, and every setting it turns, each along its range |
 | `MAC2` | Macro 2. `MAC3` `MAC4` `MAC5` `MAC6` `MAC7` `MAC8` the others |
 | `LLEN1` | FX 1's lanes' length, rows up or down: `80` is none. `LLEN2` `LLEN3` too |
@@ -95,13 +108,14 @@ changing voice and back loses nothing. A lock for a voice the track isn't
 playing, or an effect no longer in its slot, is drawn faint and does nothing
 until its voice or effect is back.
 
-A mod slot's lists, its shape, mode, loop or curve, and its odd times, an AHD's
-hold, a drum's peak and strikes and an LFO's fade, end in the slot's number, as
-`SHP4` is Mod 4's shape, and `K` lists each under its slot while the slot's type
-has it. A lock on another type, as `SHP4` once Mod 4 is an envelope, is drawn
-faint and does nothing. Each is heard from its row to the track's next note, as
-any lock is, and a swapped wave or mode carries on from where the slot is: see
-the Mod page's guide.
+A mod slot's own settings, its times, levels and rates, its lists and its odd
+times, end in the slot's number, as `EDEC1` is Mod 1's decay and `SHP4` Mod 4's
+shape, and `K` lists each under its slot while the slot's type has it. A lock on
+another type, as `SHP4` once Mod 4 is an envelope, is drawn faint and does
+nothing. Each is heard from its row to the track's next note, as any lock is, and
+one on a note's row is that note's from its start, so `EDEC1` per step is an
+Elektron box's amp decay per trig. A swapped wave or mode carries on from where
+the slot is: see the Mod page's guide.
 
 `LDLT` is for lanes. A note's length is its row's own, in its gate cell, or the
 track's `Gate`, and `LDLT` adds to it as the note starts, as an LFO adds to what

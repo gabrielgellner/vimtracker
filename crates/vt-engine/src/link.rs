@@ -1389,6 +1389,38 @@ mod tests {
         assert_eq!(blocks(&mut rt, 2000), 0);
     }
 
+    /// Each row's note with locks of its slots' own times, levels and rates, which its start of
+    /// the slots hears (decision 407).
+    #[test]
+    fn locks_of_a_slots_own_times_never_allocate_in_the_callback() {
+        use vt_model::modulation::ModKind;
+        let pool = samples();
+        let mut marked = song(8, 16);
+        for track in marked.tracks.iter_mut().take(8) {
+            track.mods[0].kind = ModKind::Adsr;
+            track.mods[0].destination = Some(SettingId::VOL);
+            track.mods[1].destination = Some(SettingId::CUT);
+            track.mods[1].depth = 0x40;
+            track.mods[2].kind = ModKind::Steps;
+            track.mods[2].destination = Some(SettingId::RES);
+            track.mods[2].depth = 0x40;
+            let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+            for step in 0..16 {
+                let text = match step % 4 {
+                    0 => "C-3 -- mod1.decay:40 mod2.rate:C0 mod3.length:03",
+                    1 => "C-3 -- mod1.attack:20 mod3.mutate:40 mod3.bias:C0",
+                    2 => "C-3 -- mod1.sustain:30g mod2.rate:20h mod3.jump:20",
+                    _ => "C-3 -- mod1.release:A0 mod3.smooth:F0 mod3.spread:10",
+                };
+                *phrase.step_mut(step).unwrap() = text.parse().unwrap();
+            }
+        }
+        let engine = Engine::new(48_000, published(marked, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        assert_eq!(blocks(&mut rt, 2000), 0);
+    }
+
     #[test]
     fn a_preview_through_a_track_never_allocates_in_the_callback() {
         let pool = samples();
