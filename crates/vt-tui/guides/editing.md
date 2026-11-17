@@ -100,7 +100,8 @@ It counts the rows it changes, so on Velocity it's that many notes.
 
 The fills with the most settings, `Random`, `Acid`, `Grids`, `Divisions`, `Ring`
 and `Tonnetz`, have a section each in **Generators in depth**: how their settings
-work together, and recipes to start from.
+work together, and recipes to start from. `Space ?` in the panel opens that guide at
+the fill's section, and on any other fill at this section; `Esc` comes back to the panel as it was.
 
 `Random` has two more rows, after Mutable Instruments' Marbles, for where its values fall
 between the ends:

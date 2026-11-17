@@ -846,6 +846,8 @@ pub enum ShapeKey {
     PlayFromStart,
     /// `Space d`: describe the setting under the cursor, or stop, as on the pages.
     Describe,
+    /// `Space ?`: the guide, at the fill's section.
+    Guide,
     /// `l`: into `Weights`' digits, or the next of them.
     Right,
     /// `h`: the digit before, or out of them from the first.
@@ -923,6 +925,11 @@ impl Overlay for ShapePanel {
         ),
         ("Space d", Cmd::InShape(ShapeKey::Describe), DESCRIBE),
         (
+            "Space ?",
+            Cmd::InShape(ShapeKey::Guide),
+            "The guide, at the fill's section",
+        ),
+        (
             "l",
             Cmd::InShape(ShapeKey::Right),
             "Into the weights, or the next digit",
@@ -948,6 +955,7 @@ impl Overlay for ShapePanel {
             ShapeKey::Play => return Outcome::Do(Cmd::PauseOrResume),
             ShapeKey::PlayFromStart => return Outcome::Do(Cmd::PlayFromStart),
             ShapeKey::Describe => return Outcome::Do(Cmd::ToggleDescription),
+            ShapeKey::Guide => return Outcome::Do(Cmd::Guides),
             ShapeKey::Cancel => {
                 services.history.replace_current(Arc::clone(&self.base));
                 services.publish();
@@ -1306,7 +1314,11 @@ impl ShapePanel {
             // `Esc` and `Enter` leave the digits, and the panel stays open.
             ShapeKey::Cancel | ShapeKey::Keep => self.weight = None,
             // Playing, rolling and the line describing the digit leave the cursor on it.
-            ShapeKey::Play | ShapeKey::PlayFromStart | ShapeKey::Describe | ShapeKey::Roll => {
+            ShapeKey::Play
+            | ShapeKey::PlayFromStart
+            | ShapeKey::Describe
+            | ShapeKey::Guide
+            | ShapeKey::Roll => {
                 return false;
             }
             _ => {

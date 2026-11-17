@@ -1016,6 +1016,7 @@ Shape	i	InShape(Type)	Type the setting
 Shape	Tab	InShape(Play)	Play, or pause in place
 Shape	S-Tab	InShape(PlayFromStart)	Play from the start
 Shape	Space d	InShape(Describe)	Describe the setting under the cursor, or stop
+Shape	Space ?	InShape(Guide)	The guide, at the fill's section
 Shape	l	InShape(Right)	Into the weights, or the next digit
 Shape	h	InShape(Left)	The digit before, or out of the weights
 Shape	^	InShape(First)	The first digit

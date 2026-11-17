@@ -5,7 +5,8 @@ The shape panel's fills with the most settings, one by one: what each is for, wh
 its settings do together, and a few recipes to start from. **Shaping a column** in
 the editing guide says how the panel opens and how its rows are set; this guide
 says what to set them to. `Space d` in the panel or on the Gen page says in a line
-what the setting under the cursor does.
+what the setting under the cursor does, and `Space ?` in the panel opens this guide at the
+fill's section; `Esc` goes back to the panel as it was.
 
 The recipes give a value for each field and leave the rest as the panel starts
 them. Those on the Note column are in C minor with the scale on. Each ends with
