@@ -226,6 +226,13 @@ impl SettingId {
     /// Whether a turn of the phrase's window or a lane's `Length`, `Rate` or `Start` waits for
     /// its loop to come round (decision 402).
     pub const CUE: Self = Self(LATER_TRACK_START as u16 + 19);
+    /// How many steps a track's dice loop over, `00` off, as [`crate::dice::DICE_LOOP_LENGTHS`]
+    /// has them (decision 410).
+    pub const DICE_LOOP: Self = Self(LATER_TRACK_START as u16 + 20);
+    /// The chance a step of a track's dice loop rolls afresh as it comes round, `00` locked.
+    pub const DICE_MUTATE: Self = Self(LATER_TRACK_START as u16 + 21);
+    /// The chance a step takes the dice of any step of its track's dice loop (decision 411).
+    pub const DICE_JUMP: Self = Self(LATER_TRACK_START as u16 + 22);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.

@@ -616,11 +616,14 @@ pub enum TrackControl {
     ChanceDelta,
     ChanceTarget,
     Cue,
+    DiceLoop,
+    DiceMutate,
+    DiceJump,
 }
 
 impl TrackControl {
     /// Every one, in the order they're declared.
-    pub const ALL: [Self; 22] = [
+    pub const ALL: [Self; 25] = [
         Self::Cutoff,
         Self::Resonance,
         Self::Pan,
@@ -643,6 +646,9 @@ impl TrackControl {
         Self::ChanceDelta,
         Self::ChanceTarget,
         Self::Cue,
+        Self::DiceLoop,
+        Self::DiceMutate,
+        Self::DiceJump,
     ];
 
     /// The setting this is the base of, if steps can set it too.
@@ -670,6 +676,9 @@ impl TrackControl {
             Self::ChanceDelta => Some(SettingId::CHANCE_DELTA),
             Self::ChanceTarget => Some(SettingId::CHANCE_TARGET),
             Self::Cue => Some(SettingId::CUE),
+            Self::DiceLoop => Some(SettingId::DICE_LOOP),
+            Self::DiceMutate => Some(SettingId::DICE_MUTATE),
+            Self::DiceJump => Some(SettingId::DICE_JUMP),
         }
     }
 }

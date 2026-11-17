@@ -352,6 +352,17 @@ moves around it, and on the Roto it's on the Play device's second page after
 Metropolix's probability can; it's where held `CTGT` starts.
 See **Moving every chance** in **FX commands**.
 
+`Dice`, `Mutate` and `Dice jump`, after `Target` in the Play device's title, are
+the track's dice loop, as Marbles' Déjà vu and Length are. `Dice`, the loop's
+length, is `Off`, or 1 to 16 steps, then 32 or 64: with it on, the `CHA`s and
+`RND`s of each step roll the dice of a place in a loop of that many steps,
+rather than fresh ones. `Mutate` is the chance a place rolls afresh as it comes
+round, from `0 %`, a locked loop, to `100 %`, fresh dice every step, and
+`Dice jump` the chance a step takes the dice of another place, so a locked loop
+plays out of order. They're where held `DLP`, `DMU` and `DJMP` start, a macro or
+an LFO moves them, and the Roto has them on the Play device's third page. See
+**Looping the dice** in **FX commands**.
+
 `Phase`, in a fourth column of a synth's Play device, is whether its oscillators run
 on from note to note or start again on each. A synth that holds its notes plays the
 next one on the voice already sounding (see **Envelopes** in **The Mod page**). At
