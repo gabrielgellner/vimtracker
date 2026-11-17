@@ -252,6 +252,13 @@ pub struct Track {
     /// Where held `ORDY` starts: the second of the order's numbers, `00` for its phrases' own.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub order_y: u8,
+    /// Where held `PLEN` starts: how many rows more or fewer than its loop's its phrases' orders
+    /// walk over, `80` for none (decision 401).
+    #[serde(default = "centre", skip_serializing_if = "is_centre")]
+    pub phrase_length: u8,
+    /// Where held `PSTA` starts: the row the window its phrases' orders walk over starts on.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub phrase_start: u8,
     /// The choke group it's in, if any, from 1 to `CHOKE_GROUPS`: a note on it cuts off what's
     /// sounding on the other tracks in the group, as a closed hat cuts an open one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -489,6 +496,8 @@ impl Track {
             TrackControl::Reverse => self.reverse,
             TrackControl::OrderX => self.order_x,
             TrackControl::OrderY => self.order_y,
+            TrackControl::PhraseLength => self.phrase_length,
+            TrackControl::PhraseStart => self.phrase_start,
         }
     }
 
@@ -513,6 +522,8 @@ impl Track {
             TrackControl::Reverse => &mut self.reverse,
             TrackControl::OrderX => &mut self.order_x,
             TrackControl::OrderY => &mut self.order_y,
+            TrackControl::PhraseLength => &mut self.phrase_length,
+            TrackControl::PhraseStart => &mut self.phrase_start,
         };
         *held = match control {
             TrackControl::SendA | TrackControl::SendB => value.min(MAX_LEVEL),
@@ -683,6 +694,8 @@ impl Track {
             reverse: self.reverse != 0,
             x: self.order_x,
             y: self.order_y,
+            length: self.phrase_length,
+            start: self.phrase_start,
         }
     }
 
@@ -749,6 +762,8 @@ impl Default for Track {
             reverse: 0,
             order_x: 0,
             order_y: 0,
+            phrase_length: centre(),
+            phrase_start: 0,
             choke: None,
             group: None,
             gate_length: None,

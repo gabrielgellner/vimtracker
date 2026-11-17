@@ -6,7 +6,7 @@ use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS};
 use crate::generator::{Generator, GeneratorFile, Span};
 pub use crate::lane::Lane;
 use crate::lane::MOST_DIVISION;
-use crate::order::{Deal, Order, Round, Rows, WalkMove};
+use crate::order::{Deal, Order, Round, WalkMove};
 use crate::scale::Scale;
 use crate::selection::{Extent, StepRange};
 use crate::shape::{Shape, ShapeColumn, Source};
@@ -147,11 +147,7 @@ impl Phrase {
     /// The rows of its loop one round of its order visits, in turn, as a track's walk moves it,
     /// with this deal if it's dealt.
     pub(crate) fn round(&self, deal: Deal, walk: WalkMove) -> Round<'_> {
-        Round::over(
-            Rows::new(self.loop_steps(), walk.reverse),
-            self.order_walked(walk),
-            deal,
-        )
+        Round::over(walk.rows(self.loop_steps()), self.order_walked(walk), deal)
     }
 
     /// The next value with this command in a slot, for a glide: looking on from a visit of a

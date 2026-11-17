@@ -37,6 +37,7 @@ pub enum ArpField {
 pub enum LaneField {
     Length,
     Rate,
+    Start,
 }
 
 impl LaneField {
@@ -47,15 +48,16 @@ impl LaneField {
         match self {
             Self::Length => 0,
             Self::Rate => 1,
+            Self::Start => 2,
         }
     }
 }
 
 /// What the status line calls each FX column's lane's settings.
-const LANE_NAMES: [[&str; 2]; FX_SLOTS] = [
-    ["FX1 Length", "FX1 Rate"],
-    ["FX2 Length", "FX2 Rate"],
-    ["FX3 Length", "FX3 Rate"],
+const LANE_NAMES: [[&str; 3]; FX_SLOTS] = [
+    ["FX1 Length", "FX1 Rate", "FX1 Start"],
+    ["FX2 Length", "FX2 Rate", "FX2 Start"],
+    ["FX3 Length", "FX3 Rate", "FX3 Start"],
 ];
 
 /// One setting on the page.
@@ -161,6 +163,8 @@ impl Control {
             Self::Base(TrackControl::Reverse) => "Reverse",
             Self::Base(TrackControl::OrderX) => "Order X",
             Self::Base(TrackControl::OrderY) => "Order Y",
+            Self::Base(TrackControl::PhraseLength) => "Length",
+            Self::Base(TrackControl::PhraseStart) => "Start",
             Self::Choke => "Choke",
             Self::Group => "Group",
             Self::Role => "Role",
@@ -207,6 +211,7 @@ impl Control {
             Self::NewGenerator(_) => "Empty",
             Self::Lane(_, LaneField::Length) => "Length",
             Self::Lane(_, LaneField::Rate) => "Rate",
+            Self::Lane(_, LaneField::Start) => "Start",
         }
     }
 
@@ -236,6 +241,9 @@ impl Control {
             // The sample's, which the status line says, as the track's `Pitch` is another.
             Self::Tune => "Sample tune",
             Self::Cents => "Sample cents",
+            // The phrase's, as a lane's are `Length` and `Start` too.
+            Self::Base(TrackControl::PhraseLength) => "Phrase length",
+            Self::Base(TrackControl::PhraseStart) => "Phrase start",
             // In full, as the Play device's column has room only for `Glides`.
             Self::GlideMode => "Glide mode",
             _ => self.label_on(track),
@@ -373,7 +381,9 @@ impl Control {
                 | TrackControl::Order
                 | TrackControl::Reverse
                 | TrackControl::OrderX
-                | TrackControl::OrderY,
+                | TrackControl::OrderY
+                | TrackControl::PhraseLength
+                | TrackControl::PhraseStart,
             )
             | Self::Choke
             | Self::Group
@@ -421,7 +431,9 @@ impl Control {
             TrackControl::Order
             | TrackControl::Reverse
             | TrackControl::OrderX
-            | TrackControl::OrderY,
+            | TrackControl::OrderY
+            | TrackControl::PhraseLength
+            | TrackControl::PhraseStart,
         ) = self
         {
             return false;

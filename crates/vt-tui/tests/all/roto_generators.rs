@@ -160,7 +160,8 @@ fn an_fx_columns_lane_is_a_device_of_its_own_with_its_length_and_rate_on_knobs()
         knobs,
         [
             Control::Lane(0, LaneField::Length),
-            Control::Lane(0, LaneField::Rate)
+            Control::Lane(0, LaneField::Rate),
+            Control::Lane(0, LaneField::Start)
         ]
     );
     // Turning `Length` to its top is the most rows it adds, as the page's `=` would.
