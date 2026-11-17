@@ -15,7 +15,7 @@ use crate::overlays::command::parse::Line;
 use crate::overlays::picker::{Item, Pick, Picker};
 use crate::pages::Outcome;
 use crate::pages::phrase::PhraseView;
-use crate::services::Services;
+use crate::services::{Services, walked_order};
 
 /// The lengths `K` lists on a gate cell's length, as shares of its last pulse: from a click, through
 /// a 303's half, to all of it.
@@ -303,6 +303,16 @@ impl Services {
             order,
         });
         self.status = format!("This phrase plays {}: {}", order, order.describe(rows));
+        // The track's `Phrase` settings may move it (decision 400).
+        let heard = self
+            .phrase_here()
+            .and_then(|phrase| walked_order(phrase, self.walk(self.cursor.track)));
+        if let Some(heard) = heard {
+            self.status = format!(
+                "This phrase's own order is {order}, and the track's Phrase settings play it as \
+                 {heard}"
+            );
+        }
     }
 }
 

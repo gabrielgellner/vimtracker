@@ -8,7 +8,7 @@ use vt_model::arpeggio::{ArpMode, Cycle};
 use vt_model::condition::{Condition, Situation};
 use vt_model::constants::{FX_SLOTS, NUDGE_TICKS, TICKS_PER_STEP};
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
-use vt_model::order::jumped;
+use vt_model::order::{WalkMove, jumped};
 use vt_model::phrase::Phrase;
 use vt_model::settings::SettingId;
 use vt_model::shape::RowView;
@@ -25,6 +25,14 @@ use crate::track_state::{
     Retrigger, RowKey, Worked,
 };
 use crate::voice::NoteOn;
+
+/// The settings that move a track's phrase's walk, read before a row plays (decision 400).
+const WALK_SETTINGS: [SettingId; 4] = [
+    SettingId::ORDER,
+    SettingId::REVERSE,
+    SettingId::ORDER_X,
+    SettingId::ORDER_Y,
+];
 
 /// Where each FX column's lane reads at a step, for those with one.
 pub(super) type LaneReads = [Option<LaneRead>; FX_SLOTS];
@@ -45,6 +53,9 @@ impl Engine {
         let count = running - self.tracks[index].started;
         // Each lane is read once a step, here, in order, so it counts along.
         let lanes = self.read_lanes(index, place, count);
+        // How its settings move its phrase's walk is read first, as it says which row the rest
+        // look at (decision 400).
+        let walk = self.walk_ahead(index, place, running, &lanes);
         // Whether it jumps to another row is decided before anything looks at the row, so its
         // groove, speed and nudge are the row's it plays.
         let jumped = self.jump_at(index, place, running, &lanes);
@@ -67,6 +78,7 @@ impl Engine {
             count,
             lanes,
             jumped,
+            walk,
             plays: None,
             start: self.tracks[index].chain_starts,
         };
@@ -109,6 +121,7 @@ impl Engine {
             speed,
             lanes,
             jumped,
+            walk,
         });
         state.clock.advance(ticks);
         for part in parts.into_iter().flatten() {
@@ -137,7 +150,7 @@ impl Engine {
         let (chain, place) = place?;
         let current = Arc::clone(&self.current);
         let owner = current.song.tracks.get(index)?;
-        let position = owner.chain_position(chain, place, self.dealer(index))?;
+        let position = owner.chain_position(chain, place, self.dealer(index), self.walk(index))?;
         let start = place - position.pulse;
         let kept = self.tracks[index].jump;
         if let Some(kept) = kept.filter(|kept| kept.chain == chain && kept.start == start) {
@@ -164,6 +177,58 @@ impl Engine {
         };
         self.tracks[index].jump = Some(JumpAt { chain, start, row });
         row
+    }
+
+    /// How a track's settings move its phrase's walk at the step it's working out, read before the
+    /// row plays, as `JMP` is (decision 400): an `ORD`, `REV`, `ORDX` or `ORDY` on the row the
+    /// walk held goes to, or in a lane at it, or what the track holds, each with what modulation
+    /// adds. With no lock on that row, none held and no lane, it's what's held, and at rest every
+    /// phrase walks as it's written. It's kept for the step's lookups, and rides with the step.
+    fn walk_ahead(
+        &mut self,
+        index: usize,
+        place: Option<(u32, usize)>,
+        running: i64,
+        lanes: &LaneReads,
+    ) -> WalkMove {
+        let held = self.tracks[index].held_walk();
+        self.tracks[index].walk = held;
+        let Some((chain, place)) = place else {
+            return held;
+        };
+        let current = Arc::clone(&self.current);
+        let Some(owner) = current.song.tracks.get(index) else {
+            return held;
+        };
+        let locks = |slot: &FxSlot| {
+            WALK_SETTINGS
+                .iter()
+                .any(|id| slot.command == Some(FxCommand::Set(*id)))
+        };
+        let locked = owner
+            .chain_position(chain, place, self.dealer(index), held)
+            .and_then(|position| owner.step_at(position))
+            .is_some_and(|step| step.fx.iter().any(locks));
+        let held_lock = WALK_SETTINGS
+            .iter()
+            .any(|id| self.tracks[index].locked(*id));
+        if !locked && !held_lock && lanes.iter().all(Option::is_none) {
+            return held;
+        }
+        let row = self.row_ahead(index, running, lanes);
+        let chosen = WALK_SETTINGS.map(|id| self.chosen_ahead(index, running, row, id, lanes));
+        let walk = self.tracks[index].walk_of(|id| {
+            let at = WALK_SETTINGS.iter().position(|walks| *walks == id);
+            at.map_or(0, |at| chosen[at])
+        });
+        self.tracks[index].walk = walk;
+        walk
+    }
+
+    /// How a track's settings move its phrase's walk at the step it's working out, or last worked
+    /// out (decision 400).
+    pub(super) fn walk(&self, index: usize) -> WalkMove {
+        self.tracks[index].walk
     }
 
     /// How far a row's nudge moves its note part, in ticks: as far as it's written, kept to just
@@ -195,7 +260,9 @@ impl Engine {
         let Some(owner) = current.song.tracks.get(index) else {
             return lanes;
         };
-        let Some(position) = owner.chain_position(chain, place, self.dealer(index)) else {
+        let Some(position) =
+            owner.chain_position(chain, place, self.dealer(index), self.walk(index))
+        else {
             return lanes;
         };
         let Some(phrase) = owner.phrases.get(&position.phrase) else {
@@ -221,7 +288,8 @@ impl Engine {
         let (chain, place) = self.track_place(index, running)?;
         let current = Arc::clone(&self.current);
         let owner = current.song.tracks.get(index)?;
-        let mut position = owner.chain_position(chain, place, self.dealer(index))?;
+        let mut position =
+            owner.chain_position(chain, place, self.dealer(index), self.walk(index))?;
         if let Some(row) = self.tracks[index]
             .jump
             .filter(|jump| jump.chain == chain && jump.start == place - position.pulse)
@@ -368,7 +436,9 @@ impl Engine {
             self.tracks[index].chain_pass = place as i64 / owner.chain_steps(chain).max(1) as i64;
             self.tracks[index].wake();
         }
-        let Some(mut position) = owner.chain_position(chain, place, self.dealer(index)) else {
+        let Some(mut position) =
+            owner.chain_position(chain, place, self.dealer(index), pending.walk)
+        else {
             return;
         };
         if let Some(row) = pending.jumped {
@@ -788,7 +858,13 @@ impl Engine {
         let to = phrase.and_then(|phrase| {
             match lane {
                 Some(lane) => phrase.next_in_lane(number, lane.row, command),
-                None => phrase.glide_to(position.visit, position.deal, number, command),
+                None => phrase.glide_to(
+                    position.visit,
+                    position.deal,
+                    position.walk,
+                    number,
+                    command,
+                ),
             }
             .map(|(steps, to)| (to, (steps * rows) as f64 * ticks as f64))
         });

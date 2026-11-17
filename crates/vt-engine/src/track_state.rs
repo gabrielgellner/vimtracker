@@ -4,6 +4,7 @@ use vt_model::constants::{FX_SLOTS, UNITY_LEVEL};
 use vt_model::insert::{EffectKind, INSERTS, Insert, MAX_KEPT_PARAMS};
 use vt_model::macros::MACROS;
 use vt_model::modulation::MOD_SLOTS;
+use vt_model::order::{MOST_ORDER_NUMBER, WalkMove};
 use vt_model::playable::Playable;
 use vt_model::settings::{
     FADER_COUNT, FADERS, LANE_SETTINGS, MAX_MACHINE_SETTINGS, MOD_OWN_SETTINGS, PLAYED_SETTINGS,
@@ -90,6 +91,9 @@ pub(crate) struct TrackState {
     pub accumulated: Option<u8>,
     /// What its `Jump` decided for the visit it's on, which its later pulses keep.
     pub(crate) jump: Option<JumpAt>,
+    /// How its settings move its phrase's walk at the step it last worked out, or is working out
+    /// (decision 400).
+    pub(crate) walk: WalkMove,
     /// The rolls a `Random` accumulator takes, apart from `rng` so `CHA` rolls as it did.
     pub accumulator_rng: Pcg32,
     /// What's added to the count for each FX column's lane, so a lane changed while playing stays
@@ -328,6 +332,7 @@ impl TrackState {
             accumulators: Accumulators::default(),
             accumulated: None,
             jump: None,
+            walk: WalkMove::default(),
             accumulator_rng: accumulator_rng(seed, index),
             voice: Voice::default(),
             tail: Voice::default(),
@@ -702,6 +707,43 @@ impl TrackState {
     /// What modulation adds to the track's `Jump` now, on the `00` to `FF` scale.
     pub(crate) fn jump_moved(&self) -> f32 {
         self.offsets[SettingId::JUMP.index()] * 255.0
+    }
+
+    /// What modulation adds to one of the track's own settings now, on the scale a step gives it:
+    /// the whole of a list, or `FF` for a value, at full depth.
+    pub(crate) fn moved_by(&self, id: SettingId) -> f32 {
+        self.offsets[id.index()] * id.entry().span()
+    }
+
+    /// One of the settings that move its phrase's walk, as chosen before a row plays (`chosen`,
+    /// what's held or a lock), with what modulation adds (decision 400).
+    pub(crate) fn walk_value(&self, id: SettingId, chosen: u8) -> u8 {
+        (f32::from(chosen) + self.moved_by(id))
+            .round()
+            .clamp(0.0, 255.0) as u8
+    }
+
+    /// Whether a step's lock holds a setting now, over what the track holds.
+    pub(crate) fn locked(&self, id: SettingId) -> bool {
+        self.values[id.index()].lock.is_some()
+    }
+
+    /// How its settings move its phrase's walk with no lock read on the row: what it holds, with
+    /// what modulation adds (decision 400).
+    pub(crate) fn held_walk(&self) -> WalkMove {
+        self.walk_of(|id| self.held_choice(id, false))
+    }
+
+    /// How its settings move its phrase's walk, from what's chosen of each before a row plays,
+    /// with what modulation adds.
+    pub(crate) fn walk_of(&self, mut chosen: impl FnMut(SettingId) -> u8) -> WalkMove {
+        let mut value = |id: SettingId| self.walk_value(id, chosen(id));
+        WalkMove {
+            order: value(SettingId::ORDER),
+            reverse: value(SettingId::REVERSE) >= 1,
+            x: value(SettingId::ORDER_X).min(MOST_ORDER_NUMBER),
+            y: value(SettingId::ORDER_Y).min(MOST_ORDER_NUMBER),
+        }
     }
 
     /// A row's nudge as it plays, in ticks, from the nudge written and the `QNT` the row chose

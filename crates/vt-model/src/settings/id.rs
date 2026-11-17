@@ -183,6 +183,15 @@ impl SettingId {
     /// The chance each step plays any row of its phrase instead of the one its order walks to, from
     /// none at `00` to every step at `FF`.
     pub const JUMP: Self = Self(LATER_TRACK_START as u16 + 4);
+    /// How far through the list of orders from its phrase's own a track's phrases play in, `80`
+    /// as written (decision 400).
+    pub const ORDER: Self = Self(LATER_TRACK_START as u16 + 5);
+    /// Whether a track's phrases' walks go the other way up.
+    pub const REVERSE: Self = Self(LATER_TRACK_START as u16 + 6);
+    /// The first of the order's numbers, `00` for the phrase's own.
+    pub const ORDER_X: Self = Self(LATER_TRACK_START as u16 + 7);
+    /// The second of the order's numbers, `00` for the phrase's own.
+    pub const ORDER_Y: Self = Self(LATER_TRACK_START as u16 + 8);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.

@@ -5,7 +5,7 @@ The fourth page, after FX, shows the live columns of the phrase under the cursor
 the one `gl` reopens, as devices you turn as you would a filter. Its title names
 the phrase, `Phrase 00`, and adds `▶ 02`, dim, while the track is playing another.
 A fixed track has no phrases, so its page has only the macros. Its first band is the
-track's eight macros (see **Macros**), then the live columns.
+track's eight macros (see **Macros**), then the live columns, then `Phrase`.
 
 Each live column is a device, under the macros, in the phrase view's order: Note, Velocity, Nudge,
 Length, then the FX columns. Its title is its fill and its `Where`, as `K` chooses
@@ -30,6 +30,22 @@ title, dim, when the loops come round together and when the phrase plays the sam
 again, `in step again every 420 rows, the phrase every 105 passes`. A value with a bar is brief, as `9` for hits,
 as its bar shows how many of how many; the status line says it in full, `Hits, 9
 of the 16 rows`.
+
+**Phrase.** The device after the live columns and lanes, before `Empty`, holds the track's settings that move
+the walk of its phrases' rows (see **Order** in the editing guide). They're the
+track's, so they move every phrase it plays, and each phrase keeps its own
+`:order`. `Order` is places on through the list of orders from the phrase's own,
+`+0` as written, centred as `Pitch` is: from `forward`, `+1` is `reverse` and
+`+2` `up-down`, and it stops at either end of the list, as the Metropolix's
+order CV does. `Reverse` turns the walk the other way up, so `forward` plays
+from the last row and `up-down` becomes `down-up`. `Order X` and `Order Y` are
+the order's two numbers, `Own` for the phrase's: a jump's rows, an arp's notes
+and step, the snake by its number, and Cartesian's X and Y rates. At the end of
+its title, dim, it says the order this phrase plays in: `· here Hopscotch, its
+own Jump 3`, or `· here Jump 3, as written`. `=` `-` `+` `_`, `i`, `K`, `x`, `M`
+and `gd` work on them as on any of the track's settings, a step's `ORD`, `REV`,
+`ORDX` and `ORDY` lock them, and a mod slot or an LFO can go to them. The Roto
+has them on knobs 1 to 4.
 
 **A lane's Length and Rate.** Each FX column with a lane in the phrase has a
 device of its own, `FX1 Lane`, under that column's generator if it has one, as

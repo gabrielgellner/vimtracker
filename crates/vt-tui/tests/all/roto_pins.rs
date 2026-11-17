@@ -61,6 +61,7 @@ const PINS: &[(&str, &str, Option<u64>)] = &[
     ("gen/follow", "21677c3742233c4a", None),
     ("gen/grids", "6b4c30382e646f7e", None),
     ("gen/lane", "40597901277f7f62", None),
+    ("gen/phrase", "410a4a367569112d", None),
     ("gen/list", "5f2b20107046781f", None),
     ("gen/multiply", "105e5c6a164d2950", None),
     ("gen/pink", "5f3a7b6f3d444634", None),

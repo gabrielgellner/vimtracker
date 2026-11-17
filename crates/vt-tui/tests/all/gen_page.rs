@@ -305,7 +305,8 @@ fn enter_opens_the_shape_panel_on_it_in_the_phrase_view() {
 #[test]
 fn empty_makes_another_column_live() {
     let (mut app, _rt) = on_gen_page();
-    keys(&mut app, "}");
+    // Past `Phrase`.
+    keys(&mut app, "}}");
     assert!(matches!(app.track_control(), Control::NewGenerator(0)));
     keys(&mut app, "K");
     let names: Vec<String> = app
@@ -341,11 +342,17 @@ fn empty_makes_another_column_live() {
 }
 
 #[test]
-fn a_phrase_with_none_has_only_the_macros_and_empty() {
+fn a_phrase_with_none_has_the_macros_phrase_and_empty() {
     let (mut app, _rt) = app_with(&[E; 8]);
     keys(&mut app, " 5LLL");
     assert_eq!(app.track_control(), Control::Macro(0));
-    assert_eq!(app.track_page.devices(app.services.track_here()).len(), 2);
+    assert_eq!(app.track_page.devices(app.services.track_here()).len(), 3);
+    keys(&mut app, "}");
+    assert_eq!(
+        app.track_control(),
+        Control::Base(vt_model::action::TrackControl::Order),
+        "Phrase, the track's"
+    );
     keys(&mut app, "}");
     assert!(matches!(app.track_control(), Control::NewGenerator(0)));
     keys(&mut app, "=");

@@ -1229,3 +1229,7 @@
 1228 keytrack
 1229 glidemode
 1230 jump
+1231 order
+1232 reverse
+1233 orderx
+1234 ordery

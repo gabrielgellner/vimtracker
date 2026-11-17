@@ -283,7 +283,9 @@ impl Engine {
                 tick % (u64::from(steps.max(1)) * TICKS_PER_STEP)
             });
             let place = (tick / owner.speed.ticks()) as usize;
-            let Some(position) = owner.chain_position(*chain, place, self.dealer(index)) else {
+            let Some(position) =
+                owner.chain_position(*chain, place, self.dealer(index), self.walk(index))
+            else {
                 continue;
             };
             let Some(step) = owner.step_at(position) else {

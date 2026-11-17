@@ -21,8 +21,8 @@ use crate::graphics::PanelKey;
 use crate::overlays::mapping::holds;
 use crate::pages::Ctx;
 use crate::pages::track::TrackPage;
-use crate::services::Services;
 use crate::services::generators::LiveGen;
+use crate::services::{Services, walked_order};
 use crate::widgets::device::{DEVICE_HEIGHT, Device};
 use crate::widgets::grid::{CellSource, CellWidths, ROW_STEP, SettingsGrid};
 use crate::widgets::image;
@@ -186,7 +186,7 @@ pub(super) fn playing_phrase(ctx: &Ctx) -> Option<u32> {
     let place = ctx.playing_place(track, chain)?;
     Some(
         owner
-            .chain_position(chain, place, ctx.dealer(track))?
+            .chain_position(chain, place, ctx.dealer(track), ctx.walk(track))?
             .phrase,
     )
 }
@@ -346,6 +346,36 @@ fn draw_lane(
     frame.render_widget(grid, Device::settings_area(area));
 }
 
+/// `Phrase`, the track's settings that move its phrases' walks, with the order the phrase under the
+/// cursor plays in at the end of its title, dim: `· here Hopscotch, its own Jump 3`, as the
+/// engine last read the settings while it plays and as the track holds them when stopped.
+fn draw_phrase(
+    frame: &mut Frame,
+    area: Rect,
+    page: &TrackPage,
+    ctx: &Ctx,
+    track: &Track,
+    device: &DeviceSpec,
+    focused: bool,
+) {
+    let phrase = page.phrase.and_then(|id| track.phrases.get(&id));
+    let after = phrase.map(|phrase| {
+        let own = phrase.order().to_string();
+        match walked_order(phrase, ctx.walk(ctx.cursor().track)) {
+            Some(heard) => format!("· here {heard}, its own {own}"),
+            None => format!("· here {own}, as written"),
+        }
+    });
+    let widget = Device::new(device.identity.clone())
+        .after(Line::styled(after.unwrap_or_default(), theme::dim()))
+        .focused(focused);
+    frame.render_widget(widget, area);
+    let cells = TrackCells::new(page, ctx, track);
+    let rows = device.grid.iter().copied().map(Vec::from).collect();
+    let grid = SettingsGrid::new(&cells, rows, GEN_CELLS);
+    frame.render_widget(grid, Device::settings_area(area));
+}
+
 fn lcm(a: u64, b: u64) -> u64 {
     fn gcd(a: u64, b: u64) -> u64 {
         if b == 0 { a } else { gcd(b, a % b) }
@@ -410,6 +440,9 @@ pub(super) fn draw(
             }
             (_, Some(Control::Lane(..))) => {
                 draw_lane(frame, area, page, ctx, track, device, at == cursor);
+            }
+            _ if device.is_phrase() => {
+                draw_phrase(frame, area, page, ctx, track, device, at == cursor);
             }
             (Some(Control::Gen { generator, .. }), _) => {
                 let focused = at == cursor;

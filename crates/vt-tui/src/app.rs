@@ -363,6 +363,7 @@ impl App {
                 progress: 0.0,
                 ticks: ticks as u32,
                 speed,
+                walk: self.song().tracks[track].walk(),
                 ..TrackPlace::default()
             };
             self.services.reported.places[track].lanes = self.services.placed_lanes(track);

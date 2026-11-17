@@ -21,7 +21,7 @@ use crate::insert::{INSERTS, Insert};
 use crate::lane::LaneMove;
 use crate::macros::{MACROS, Macro, MacroMap, MacroTarget};
 use crate::modulation::{MOD_SLOTS, ModSlot, default_mods};
-use crate::order::{Deal, Dealer};
+use crate::order::{Deal, Dealer, WalkMove};
 use crate::scale::Scale;
 use crate::settings::{Owner, SettingId};
 use crate::shape::Source;
@@ -239,6 +239,19 @@ pub struct Track {
     /// its order walks to, from none at `00` to every step at `FF` (decision 391).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub jump: u8,
+    /// Where held `ORD` starts: how far through the list of orders from its phrases' own each
+    /// plays in, `80` as written (decision 400).
+    #[serde(default = "centre", skip_serializing_if = "is_centre")]
+    pub order: u8,
+    /// Where held `REV` starts: whether its phrases' walks go the other way up, `01` for on.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub reverse: u8,
+    /// Where held `ORDX` starts: the first of the order's numbers, `00` for its phrases' own.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub order_x: u8,
+    /// Where held `ORDY` starts: the second of the order's numbers, `00` for its phrases' own.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub order_y: u8,
     /// The choke group it's in, if any, from 1 to `CHOKE_GROUPS`: a note on it cuts off what's
     /// sounding on the other tracks in the group, as a closed hat cuts an open one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -472,6 +485,10 @@ impl Track {
             TrackControl::VelocityDelta => self.velocity_delta,
             TrackControl::Quantise => self.quantise,
             TrackControl::Jump => self.jump,
+            TrackControl::Order => self.order,
+            TrackControl::Reverse => self.reverse,
+            TrackControl::OrderX => self.order_x,
+            TrackControl::OrderY => self.order_y,
         }
     }
 
@@ -492,6 +509,10 @@ impl Track {
             TrackControl::VelocityDelta => &mut self.velocity_delta,
             TrackControl::Quantise => &mut self.quantise,
             TrackControl::Jump => &mut self.jump,
+            TrackControl::Order => &mut self.order,
+            TrackControl::Reverse => &mut self.reverse,
+            TrackControl::OrderX => &mut self.order_x,
+            TrackControl::OrderY => &mut self.order_y,
         };
         *held = match control {
             TrackControl::SendA | TrackControl::SendB => value.min(MAX_LEVEL),
@@ -585,8 +606,15 @@ impl Track {
     /// Find a step within a chain, counted from where it started, looping the chain if the
     /// position is past its end. Which time round it is says how far each phrase's order has
     /// walked, as each pass of a phrase carries its walk on from the last, and deals any phrase in
-    /// it whose order is dealt, from the track's dealer.
-    pub fn chain_position(&self, chain: u32, step: usize, dealer: Dealer) -> Option<ChainPosition> {
+    /// it whose order is dealt, from the track's dealer. `walk` is how the track's settings move
+    /// each phrase's walk as the step is about to play (decision 400).
+    pub fn chain_position(
+        &self,
+        chain: u32,
+        step: usize,
+        dealer: Dealer,
+        walk: WalkMove,
+    ) -> Option<ChainPosition> {
         let total = self.chain_steps(chain);
         if total == 0 {
             return None;
@@ -601,7 +629,7 @@ impl Track {
             let time = phrase.time();
             if remaining < time {
                 let deal = dealer.deal(lap as i64, slot);
-                let visit = phrase.walk_at(lap, remaining, deal)?;
+                let visit = phrase.walk_at(lap, remaining, deal, walk)?;
                 return Some(ChainPosition {
                     slot,
                     phrase: entry.phrase,
@@ -611,6 +639,7 @@ impl Track {
                     time: remaining,
                     visit: visit.visit,
                     deal,
+                    walk,
                 });
             }
             remaining -= time;
@@ -627,6 +656,7 @@ impl Track {
         at: RowPlace,
         lap: usize,
         dealer: Dealer,
+        walk: WalkMove,
     ) -> Option<usize> {
         let entries = &self.chains.get(&chain)?.entries;
         let phrase = self.phrases.get(&entries.get(at.slot)?.phrase)?;
@@ -640,9 +670,20 @@ impl Track {
             .sum();
         let deal = dealer.deal(lap as i64, at.slot);
         let place = phrase
-            .place_in_pass(at.row, at.pulse, lap, at.near, deal)
+            .place_in_pass(at.row, at.pulse, lap, at.near, deal, walk)
             .unwrap_or_else(|| at.near.min(phrase.time().saturating_sub(1)));
         Some(before + place)
+    }
+
+    /// How its own settings move its phrases' walks, before any step's lock or modulation: its
+    /// `ORD`, `REV`, `ORDX` and `ORDY` (decision 400).
+    pub fn walk(&self) -> WalkMove {
+        WalkMove {
+            order: self.order,
+            reverse: self.reverse != 0,
+            x: self.order_x,
+            y: self.order_y,
+        }
     }
 
     /// The step at a position, once a chain position has been found.
@@ -704,6 +745,10 @@ impl Default for Track {
             velocity_delta: centre(),
             quantise: 0,
             jump: 0,
+            order: centre(),
+            reverse: 0,
+            order_x: 0,
+            order_y: 0,
             choke: None,
             group: None,
             gate_length: None,
@@ -956,6 +1001,8 @@ pub struct ChainPosition {
     /// in its order.
     pub visit: usize,
     pub deal: Deal,
+    /// How the track's settings moved the phrase's walk to find it (decision 400).
+    pub walk: WalkMove,
 }
 
 impl ChainPosition {
@@ -1764,7 +1811,7 @@ mod tests {
             (0..8)
                 .map(|step| {
                     track
-                        .chain_position(0, lap * 8 + step, dealer)
+                        .chain_position(0, lap * 8 + step, dealer, WalkMove::default())
                         .unwrap()
                         .step
                 })
@@ -1780,7 +1827,7 @@ mod tests {
             near: 0,
         };
         assert_eq!(
-            track.chain_place(0, place, 1, dealer),
+            track.chain_place(0, place, 1, dealer, WalkMove::default()),
             Some(3),
             "where the deal plays it"
         );
@@ -1807,7 +1854,9 @@ mod tests {
         let track = &song.tracks[0];
         assert_eq!(track.chain_steps(0), 6);
         let at = |step| {
-            let found = track.chain_position(0, step, Dealer::default()).unwrap();
+            let found = track
+                .chain_position(0, step, Dealer::default(), WalkMove::default())
+                .unwrap();
             (found.slot, found.step, found.pulse)
         };
         assert_eq!(at(2), (0, 0, 2));
@@ -1821,11 +1870,11 @@ mod tests {
             near: 0,
         };
         assert_eq!(
-            track.chain_place(0, place(1, 0), 0, Dealer::default()),
+            track.chain_place(0, place(1, 0), 0, Dealer::default(), WalkMove::default()),
             Some(4)
         );
         assert_eq!(
-            track.chain_place(0, place(0, 1), 0, Dealer::default()),
+            track.chain_place(0, place(0, 1), 0, Dealer::default(), WalkMove::default()),
             Some(3)
         );
     }
@@ -1853,7 +1902,7 @@ mod tests {
                 pulse: 0,
                 near: 0,
             };
-            track.chain_place(chain, place, 0, Dealer::default())
+            track.chain_place(chain, place, 0, Dealer::default(), WalkMove::default())
         };
         assert_eq!(found(0, 1, 2), Some(16 + 2));
         assert_eq!(found(0, 1, 4), None, "past its loop");
@@ -1883,19 +1932,19 @@ mod tests {
         );
         assert_eq!(song.tracks[0].chain_steps(0), 20);
         let position = song.tracks[0]
-            .chain_position(0, 17, Dealer::default())
+            .chain_position(0, 17, Dealer::default(), WalkMove::default())
             .unwrap();
         assert_eq!((position.slot, position.phrase, position.step), (1, 7, 1));
         assert_eq!(position.transpose, 3);
         assert_eq!(
             song.tracks[0]
-                .chain_position(0, 20, Dealer::default())
+                .chain_position(0, 20, Dealer::default(), WalkMove::default())
                 .unwrap()
                 .step,
             0
         );
         assert_eq!(
-            song.tracks[0].chain_position(99, 0, Dealer::default()),
+            song.tracks[0].chain_position(99, 0, Dealer::default(), WalkMove::default()),
             None
         );
     }
@@ -1991,7 +2040,7 @@ mod tests {
         song.tracks[0].phrases.insert(0, Arc::new(phrase));
         assert_eq!(song.tracks[0].chain_steps(0), 4);
         let position = song.tracks[0]
-            .chain_position(0, 5, Dealer::default())
+            .chain_position(0, 5, Dealer::default(), WalkMove::default())
             .unwrap();
         assert_eq!(position.step, 1, "the chain loops over the loop");
         assert_eq!(song.tracks[0].step_at(position).unwrap().velocity, Some(3));

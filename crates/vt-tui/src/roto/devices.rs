@@ -725,8 +725,8 @@ fn identity(
                 format!("vimtracker/gen/{}/loops", lower(&column)),
             )
         }
-        // An FX column's lane, as `FX1 Lane`.
-        Page::Gen if spec.lane_slot().is_some() => (
+        // An FX column's lane, as `FX1 Lane`, and `Phrase`.
+        Page::Gen if spec.lane_slot().is_some() || spec.is_phrase() => (
             spec.identity.clone(),
             format!("vimtracker/gen/{}", lower(&spec.identity)),
         ),

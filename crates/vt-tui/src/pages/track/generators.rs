@@ -125,12 +125,16 @@ fn reshape_live(
 impl TrackPage {
     /// Whether a key on the setting under the cursor, `control`, is the Gen page's: the track
     /// page is on screen, `view`, and on Gen, and the cursor isn't on the macros' band, first on
-    /// the page, or a lane's `Length` and `Rate`, which turn as the other pages' settings do. The mixer, which the track page may
+    /// the page, `Phrase`'s settings, or a lane's `Length` and `Rate`, which turn as the other
+    /// pages' settings do. The mixer, which the track page may
     /// be left on Gen behind, keeps its own keys.
     pub(super) fn on_gen(&self, view: View, control: Control) -> bool {
         view == View::Track
             && self.page == Page::Gen
-            && !matches!(control, Control::Macro(_) | Control::Lane(..))
+            && !matches!(
+                control,
+                Control::Macro(_) | Control::Lane(..) | Control::Base(_)
+            )
     }
 
     /// Run one of the Gen page's edits, which reshape the generator setting under the cursor,

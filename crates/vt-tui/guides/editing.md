@@ -1099,6 +1099,29 @@ plays from that row's step, with the walk wherever it is there. Changing the
 order while it plays keeps the row that was next, where the new walk plays it
 in the same pass, or stays put if that pass doesn't play it.
 
+**The track's Phrase settings** move the walk live, as the Metropolix's ORDER
+and Direction do when they're turned or sent CV. They're the track's, on the
+Gen page's `Phrase` device, so they move every phrase it plays, and `:order`
+stays each phrase's own:
+
+| Setting | Does |
+|---|---|
+| `Order` | Places on through the list from the phrase's own: `+0` its own |
+| `Reverse` | The walk the other way up: `up-down` as `down-up` |
+| `Order X` | The first number: a jump's, an arp's notes, the snake, X's rate |
+| `Order Y` | The second number: an arp's step, Y's rate |
+
+From `forward`, `Order` `+1` is `reverse` and `+2` `up-down`, and it stops at
+either end of the list. `Order X` and `Order Y` at `Own` keep the phrase's own
+numbers. They're read before the row plays, as `JMP` is: an `ORD` on a row moves the step
+that walks to that row, a lane of it reaches the steps it's at, and a macro, a
+mod slot or an LFO can turn them. The walk is still worked out from the place
+in the pass, so a pass keeps its length, the order changes on the next step, and
+a render repeats; `shuffle` and `random` are still dealt each pass. While
+they move it, the title names the order heard with the phrase's own after it,
+`Hopscotch reversed (Jump 3)`, and the playhead follows the row playing.
+`Order` and `Reverse` choose the walk and `Jump` then scrambles it.
+
 **Jump** scrambles an order by degrees: it's the chance each step plays any row
 of the phrase instead of the one the order walks to, and then the walk carries
 on where it was. `0 %` plays the order as it is and `100 %` any row each step,

@@ -195,7 +195,7 @@ pub fn line(song: &Song, choice: &Choice) -> Result<Line, NotesError> {
     // Whether the last row's note was a `Hold`, which ties into a note on the next row.
     let mut tied = false;
     for at in 0..steps {
-        let Some(position) = track.chain_position(chain, at, dealer) else {
+        let Some(position) = track.chain_position(chain, at, dealer, track.walk()) else {
             continue;
         };
         let Some(step) = track.step_at(position) else {

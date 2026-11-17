@@ -797,6 +797,33 @@ mod tests {
         assert_eq!(violations, 0);
     }
 
+    /// Each track's `Phrase` settings turned every block, through every order and the dealt ones,
+    /// reversed and numbered, so every step walks another way (decision 400).
+    #[test]
+    fn the_walk_moving_every_block_never_allocates_in_the_callback() {
+        use vt_model::order::Order;
+        let pool = samples();
+        let engine = Engine::new(48_000, published(song(8, 16), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 0..200 {
+            let mut next = song(8, 16);
+            for (at, track) in next.tracks.iter_mut().take(8).enumerate() {
+                let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+                phrase.set_order(Order::ALL[(round + at) % Order::ALL.len()]);
+                track.order = (0x70 + (round * 3 + at) % 0x20) as u8;
+                track.reverse = ((round + at) % 2) as u8;
+                track.order_x = ((round * 5 + at) % 17) as u8;
+                track.order_y = ((round * 7 + at) % 17) as u8;
+            }
+            handle.publish(published(next, &pool));
+            violations += blocks(&mut rt, 1);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
     /// Tracks in `Legato`, tying and striking, on synths and samples alike (decision 380).
     #[test]
     fn legato_never_allocates_in_the_callback() {

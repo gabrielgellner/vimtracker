@@ -15,6 +15,10 @@
 //! each a visit to a row, but for the grid orders, whose places on cells past the last row are
 //! passed over.
 //!
+//! A track can move the walk from its phrases' own (decision 400): its `ORD` goes so many places
+//! on through the list of orders, `REV` turns the rows the other way up, and `ORDX` and `ORDY`
+//! put numbers of their own in place of the order's, all read before a row plays, as a [`WalkMove`].
+//!
 //! A new order is a variant of [`Order`], with its own data in it if it has any, its places and
 //! the row at each worked out in [`Order::places`] and [`Order::row`], and its name, its words and
 //! what it means beside the others'. A family of them with parts of its own, as René's, has a
@@ -254,6 +258,44 @@ impl Order {
         matches!(self, Self::Jump(_) | Self::Arp(_) | Self::Cartesian(_))
     }
 
+    /// Its place in [`Order::ALL`]: its kind's, or a snake's own.
+    fn listed(self) -> usize {
+        Self::ALL
+            .iter()
+            .position(|listed| match self {
+                Self::Snake(_) => *listed == self,
+                _ => listed.is_like(self),
+            })
+            .unwrap_or(0)
+    }
+
+    /// The same order with `x` and `y` in place of its numbers where they aren't `00`, kept within
+    /// what each takes: a jump's rows, an arp's notes and step, the snake by number, and
+    /// Cartesian's X and Y rates. The others take none.
+    pub fn numbered(self, x: u8, y: u8) -> Self {
+        let or = |own: u8, set: u8, low: u8, high: u8| match set {
+            0 => own,
+            set => set.clamp(low, high),
+        };
+        match self {
+            Self::Jump(by) => Self::Jump(or(by, x, 2, MOST_ROWS)),
+            Self::Arp(arp) => Self::Arp(Arp {
+                notes: or(arp.notes, x, 2, MOST_ROWS),
+                step: or(arp.step, y, 1, MOST_ROWS),
+            }),
+            Self::Snake(_) => match x {
+                0 => self,
+                x => Self::Snake(Snake::ALL[usize::from(x.min(Snake::ALL.len() as u8)) - 1]),
+            },
+            Self::Cartesian(cartesian) => Self::Cartesian(Cartesian {
+                x_rate: or(cartesian.x_rate, x, 1, MAX_RATE),
+                y_rate: or(cartesian.y_rate, y, 1, MAX_RATE),
+                ..cartesian
+            }),
+            _ => self,
+        }
+    }
+
     /// Whether it's of the same kind as another, whatever their snakes or numbers.
     pub fn is_like(self, other: Self) -> bool {
         std::mem::discriminant(&self) == std::mem::discriminant(&other)
@@ -369,6 +411,102 @@ impl Order {
             }
             _ => picked(deal, rows, visit, attempt),
         }
+    }
+}
+
+/// Where `ORD` is at rest: each phrase's own order.
+pub const ORDER_AS_WRITTEN: u8 = 0x80;
+
+/// The most `ORDX` and `ORDY` choose, past `00` for the phrase's own.
+pub const MOST_ORDER_NUMBER: u8 = 16;
+
+/// How a track moves the walks of its phrases from their own, as its settings have it as a row is
+/// about to play (decision 400): `order` goes so many places on through [`Order::ALL`] from the
+/// phrase's own `:order`, `80` for none, as the Metropolix's order CV does; `reverse` turns its
+/// rows the other way up, as its Direction does; and `x` and `y` are numbers in place of the
+/// order's own, `00` for its own. At rest every phrase walks as it's written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WalkMove {
+    pub order: u8,
+    pub reverse: bool,
+    pub x: u8,
+    pub y: u8,
+}
+
+impl Default for WalkMove {
+    fn default() -> Self {
+        Self {
+            order: ORDER_AS_WRITTEN,
+            reverse: false,
+            x: 0,
+            y: 0,
+        }
+    }
+}
+
+impl WalkMove {
+    /// Whether it leaves every phrase walking as it's written.
+    pub fn is_own(self) -> bool {
+        self == Self::default()
+    }
+
+    /// The order a phrase whose own is `own` plays in: so many places on through the list, kept
+    /// at either end of it, with its numbers. Moved onto another kind, it has that kind's numbers
+    /// as the list gives them, unless `x` or `y` gives its own.
+    pub fn order_of(self, own: Order) -> Order {
+        let by = i32::from(self.order) - i32::from(ORDER_AS_WRITTEN);
+        let moved = match by {
+            0 => own,
+            by => {
+                let last = Order::ALL.len() as i32 - 1;
+                Order::ALL[(own.listed() as i32 + by).clamp(0, last) as usize]
+            }
+        };
+        moved.numbered(self.x, self.y)
+    }
+}
+
+/// The rows a walk goes over: a phrase's loop, the other way up for a track's `Reverse`, so its
+/// first place is the last row. An order walks its places, and each place is a row of the loop.
+#[derive(Debug, Clone, Copy)]
+pub struct Rows<'a> {
+    steps: &'a [Step],
+    reverse: bool,
+}
+
+impl<'a> Rows<'a> {
+    /// A loop's rows, the other way up if `reverse`.
+    pub fn new(steps: &'a [Step], reverse: bool) -> Self {
+        Self { steps, reverse }
+    }
+
+    /// How many there are.
+    pub fn len(self) -> usize {
+        self.steps.len()
+    }
+
+    /// Whether there are none.
+    pub fn is_empty(self) -> bool {
+        self.steps.is_empty()
+    }
+
+    /// The row of the loop at a place among them.
+    pub fn row(self, at: usize) -> usize {
+        if self.reverse {
+            self.steps.len() - 1 - at
+        } else {
+            at
+        }
+    }
+
+    /// The step at a place among them.
+    fn step(self, at: usize) -> &'a Step {
+        &self.steps[self.row(at)]
+    }
+
+    /// How many steps a pass of the loop lasts: every row's pulses.
+    fn time(self) -> usize {
+        self.steps.iter().map(Step::pulses).sum()
     }
 }
 
@@ -531,7 +669,8 @@ fn stagger(deal: Deal, visit: usize) -> isize {
 /// The rows one round of an order visits, in turn: the visits the walk repeats.
 #[derive(Debug, Clone)]
 pub struct Round<'a> {
-    steps: &'a [Step],
+    /// The rows it walks, each place a row of the loop.
+    rows: Rows<'a>,
     order: Order,
     deal: Deal,
     /// The place the round is at, which for an order that picks is its visit.
@@ -540,20 +679,27 @@ pub struct Round<'a> {
     places: usize,
     /// How many steps an order that picks has still to fill, as it stops when the pass is full.
     left: usize,
-    /// The row it played last, which `Quasi-random` doesn't play again and `Brownian` steps from.
+    /// The place it played last, which `Quasi-random` doesn't play again and `Brownian` steps
+    /// from.
     last: Option<usize>,
 }
 
 impl<'a> Round<'a> {
     /// A round of these rows in this order, with this deal if it's dealt.
     pub fn new(steps: &'a [Step], order: Order, deal: Deal) -> Self {
+        Self::over(Rows::new(steps, false), order, deal)
+    }
+
+    /// A round over rows as a track's walk has them, which an order that picks fills until a
+    /// pass of the loop is full.
+    pub fn over(rows: Rows<'a>, order: Order, deal: Deal) -> Self {
         Self {
-            steps,
+            rows,
             order,
             deal,
             visit: 0,
-            places: order.places(steps.len()),
-            left: steps.iter().map(Step::pulses).sum(),
+            places: order.places(rows.len()),
+            left: rows.time(),
             last: None,
         }
     }
@@ -563,7 +709,7 @@ impl<'a> Round<'a> {
     /// again, and so is the last row for `Quasi-random`. Only when no row fits what's left is the
     /// last row played again, or the last pick cut short.
     fn pick(&self) -> Option<usize> {
-        let (rows, visit, left) = (self.steps.len(), self.visit, self.left);
+        let (rows, visit, left) = (self.rows.len(), self.visit, self.left);
         let pick = |fits: &dyn Fn(usize) -> bool| {
             (0..PICKS)
                 .map(|attempt| self.order.pick(self.deal, rows, visit, self.last, attempt))
@@ -575,7 +721,7 @@ impl<'a> Round<'a> {
                         .find(|row| fits(*row))
                 })
         };
-        let pulses = |row: usize| self.steps[row].pulses();
+        let pulses = |row: usize| self.rows.step(row).pulses();
         let again =
             |row: usize| self.order == Order::QuasiRandom && rows > 2 && self.last == Some(row);
         pick(&|row| (1..=left).contains(&pulses(row)) && !again(row))
@@ -587,7 +733,7 @@ impl<'a> Round<'a> {
     /// then a row on, back or the same, passing over rows that take no time the way it's going. A
     /// row that runs past the end of the pass is cut short, as a walk can't pick again.
     fn stagger(&self) -> Option<usize> {
-        let rows = self.steps.len() as isize;
+        let rows = self.rows.len() as isize;
         let (from, way) = match self.last {
             None => (-1, 1),
             Some(last) => match stagger(self.deal, self.visit) {
@@ -597,7 +743,7 @@ impl<'a> Round<'a> {
         };
         (1..=rows)
             .map(|step| (from + way * step).rem_euclid(rows) as usize)
-            .find(|row| self.steps[*row].pulses() > 0)
+            .find(|row| self.rows.step(*row).pulses() > 0)
     }
 }
 
@@ -609,7 +755,7 @@ impl Iterator for Round<'_> {
     type Item = usize;
 
     fn next(&mut self) -> Option<usize> {
-        let rows = self.steps.len();
+        let rows = self.rows.len();
         if rows == 0 {
             return None;
         }
@@ -623,7 +769,7 @@ impl Iterator for Round<'_> {
             } else {
                 self.pick()
             }?;
-            self.left = self.left.saturating_sub(self.steps[row].pulses());
+            self.left = self.left.saturating_sub(self.rows.step(row).pulses());
             self.last = Some(row);
             row
         } else {
@@ -643,7 +789,7 @@ impl Iterator for Round<'_> {
             row
         };
         self.visit += 1;
-        Some(row)
+        Some(self.rows.row(row))
     }
 }
 
@@ -1017,6 +1163,72 @@ mod tests {
         assert_eq!(rows(Order::Snake(Snake::Spiral), 16), {
             manual("1 2 3 4 8 12 16 15 14 13 9 5 6 7 11 10")
         });
+    }
+
+    #[test]
+    fn a_walk_moves_through_the_list_from_the_phrases_own_and_numbers_it() {
+        let by = |order: u8| WalkMove {
+            order,
+            ..WalkMove::default()
+        };
+        assert_eq!(WalkMove::default().order_of(Order::Jump(5)), Order::Jump(5));
+        assert_eq!(by(0x81).order_of(Order::Forward), Order::Reverse);
+        assert_eq!(
+            by(0x7F).order_of(Order::Forward),
+            Order::Forward,
+            "kept at the start"
+        );
+        assert_eq!(
+            by(0xFF).order_of(Order::Forward),
+            Order::Cartesian(Cartesian::START),
+            "and at the end"
+        );
+        // Onto another kind with the list's numbers; a snake is its own place.
+        assert_eq!(by(0x7F).order_of(Order::Hopscotch), Order::Jump(JUMP_START));
+        assert_eq!(by(0x81).order_of(Order::Jump(5)), Order::Hopscotch);
+        assert_eq!(
+            by(0x81).order_of(Order::Snake(Snake::Zigzag)),
+            Order::Snake(Snake::Columns)
+        );
+        let numbered = |x, y| WalkMove {
+            x,
+            y,
+            ..WalkMove::default()
+        };
+        assert_eq!(
+            numbered(1, 0).order_of(Order::Jump(5)),
+            Order::Jump(2),
+            "kept to 2"
+        );
+        assert_eq!(
+            numbered(16, 0).order_of(Order::Snake(Snake::Zigzag)),
+            Order::Snake(Snake::Checker),
+            "kept to the eighth"
+        );
+        assert_eq!(
+            numbered(0, 4).order_of(Order::Arp(Arp::START)),
+            Order::Arp(Arp { notes: 3, step: 4 })
+        );
+        let sized = Cartesian::new(1, 3).sized(4, 2);
+        assert_eq!(
+            numbered(2, 5).order_of(Order::Cartesian(sized)),
+            Order::Cartesian(Cartesian::new(2, 5).sized(4, 2)),
+            "its lengths kept"
+        );
+        assert_eq!(numbered(5, 5).order_of(Order::Pedal), Order::Pedal);
+    }
+
+    #[test]
+    fn reversed_rows_are_walked_the_other_way_up() {
+        let steps = vec![Step::default(); 4];
+        let walked = |order| {
+            Round::over(Rows::new(&steps, true), order, Deal::default())
+                .map(|row| row + 1)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(walked(Order::Forward), manual("4 3 2 1"));
+        assert_eq!(walked(Order::UpDown), rows(Order::DownUp, 4));
+        assert_eq!(walked(Order::UpDownInc), rows(Order::DownUpInc, 4));
     }
 
     #[test]

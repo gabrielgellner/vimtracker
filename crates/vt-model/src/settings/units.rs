@@ -113,6 +113,8 @@ pub enum Units {
     EnvelopeTime,
     /// Rows either side of `80`, one a step, as a lane's `Length` moves its lane.
     Rows,
+    /// Places in the list of orders either side of `80`, one a step, as `ORD` moves a phrase's.
+    Orders,
 }
 
 /// The acid voice's cutoff at either end of its range, in Hz, where its filter resonates.
@@ -259,7 +261,7 @@ impl Kind {
     pub fn has_fine(self) -> bool {
         matches!(
             self,
-            Self::Continuous { units, .. } if units != Units::Decibels && units != Units::Rows
+            Self::Continuous { units, .. } if !matches!(units, Units::Decibels | Units::Rows | Units::Orders)
         )
     }
 
@@ -365,6 +367,7 @@ impl Kind {
                 }
                 Units::EnvelopeTime => format!("{} ms", time_at(coarse as f32)),
                 Units::Rows => rows_text((coarse.round() as i32 - 128).clamp(-128, 127)),
+                Units::Orders => orders_text((coarse.round() as i32 - 128).clamp(-128, 127)),
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {
                     let cents = ((coarse - 128.0) * 100.0).round() as i32;
@@ -391,6 +394,14 @@ fn side(coarse: f64) -> f64 {
 pub fn rows_text(rows: i32) -> String {
     let unit = if rows.abs() == 1 { "row" } else { "rows" };
     format!("{rows:+} {unit}")
+}
+
+/// How far on in the list of orders `ORD` moves a phrase's own: `Own` at none, else `+2 on`.
+pub fn orders_text(places: i32) -> String {
+    match places {
+        0 => "Own".to_owned(),
+        places => format!("{places:+} on"),
+    }
 }
 
 /// A time as it reads best: `0.25 ms`, `12 ms` or `1.00 s`.

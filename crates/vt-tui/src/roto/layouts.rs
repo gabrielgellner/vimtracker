@@ -1827,6 +1827,24 @@ const GEN_LANE: DeviceLayout = live(
         [s("length"), s("rate"), GAP, GAP, GAP, GAP, GAP, GAP],
     )],
 );
+/// The track's settings that move its phrases' walks, its own device as on the Gen page
+/// (decision 400).
+const GEN_PHRASE: DeviceLayout = live(
+    "gen/phrase",
+    &[knobs(
+        "Phrase",
+        [
+            s("order"),
+            s("reverse"),
+            s("orderx"),
+            s("ordery"),
+            GAP,
+            GAP,
+            GAP,
+            GAP,
+        ],
+    )],
+);
 /// A canon's moves; it writes every row, so it has no `Where`. Then its mutations, a Bloom
 /// branch's, on a page of their own, with `Vary` on knob 6 as elsewhere, as it draws once it
 /// mutates.
@@ -2252,8 +2270,13 @@ fn each_once(
 
 /// Every live generator's layout, a fill's each, and `Acid`'s loops', apart from [`ALL`], as a
 /// generator is a phrase's rather than a kind of device a track always has.
-pub static GENERATORS: LazyLock<Vec<&'static DeviceLayout>> =
-    LazyLock::new(|| each_once(BY_FILL.into_iter().chain([&GEN_ACID_LOOPS, &GEN_LANE])));
+pub static GENERATORS: LazyLock<Vec<&'static DeviceLayout>> = LazyLock::new(|| {
+    each_once(
+        BY_FILL
+            .into_iter()
+            .chain([&GEN_ACID_LOOPS, &GEN_LANE, &GEN_PHRASE]),
+    )
+});
 
 /// A live generator's layout, by its fill.
 pub(crate) fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
@@ -2312,6 +2335,7 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
         // The Play device, by its title's `Jump`.
         Some(Control::Base(TrackControl::Jump)) if track.voice().is_some() => &SYNTH_PLAY,
         Some(Control::Base(TrackControl::Jump)) => &PLAY,
+        Some(Control::Base(TrackControl::Order)) => &GEN_PHRASE,
         Some(Control::Mod(slot, _)) => BY_MOD[track.mods[slot].kind as usize],
         Some(Control::Accumulator(_)) => &ACCUMULATOR,
         Some(Control::Arpeggio(_)) => &ARPEGGIO,

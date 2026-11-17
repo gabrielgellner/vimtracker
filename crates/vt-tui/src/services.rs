@@ -39,7 +39,7 @@ use vt_model::constants::{DEFAULT_NOTE_VELOCITY, FX_SLOTS, MAX_TRACKS, TICKS_PER
 use vt_model::history::History;
 use vt_model::lane::Heard;
 use vt_model::names::Names;
-use vt_model::order::Dealer;
+use vt_model::order::{Dealer, WalkMove};
 use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
 use vt_model::selection::{Extent, Field};
@@ -421,7 +421,12 @@ impl Services {
         let owner = self.track_here()?;
         let chain = (*self.section_here()?.chains.get(self.cursor.track)?)?;
         let playhead = self.playing_place(self.cursor.track, chain)?;
-        let mut position = owner.chain_position(chain, playhead, self.dealer(self.cursor.track))?;
+        let mut position = owner.chain_position(
+            chain,
+            playhead,
+            self.dealer(self.cursor.track),
+            self.walk(self.cursor.track),
+        )?;
         if let Some(row) = self.jumped_row(self.cursor.track) {
             position.step = row;
         }
@@ -464,7 +469,8 @@ impl Services {
             let owner = self.song().tracks.get(track)?;
             let chain = (*self.section_here()?.chains.get(track)?)?;
             let place = self.playing_place(track, chain)?;
-            let position = owner.chain_position(chain, place, self.dealer(track))?;
+            let position =
+                owner.chain_position(chain, place, self.dealer(track), self.walk(track))?;
             let phrase = owner.phrases.get(&position.phrase)?;
             let count =
                 self.reported.places.get(track)?.count - self.reported.jam.get(track)?.started;
@@ -512,6 +518,24 @@ impl Services {
     /// What a track's dealt orders are dealt from, as the engine deals them.
     pub(crate) fn dealer(&self, track: usize) -> Dealer {
         Dealer::new(self.song().seed, track)
+    }
+
+    /// How a track's settings move its phrases' walks: as the engine reports it read them for
+    /// the step heard while the track plays, as its locks and modulation move them, and otherwise
+    /// as the track holds them (decision 400).
+    pub(crate) fn walk(&self, track: usize) -> WalkMove {
+        let moving = matches!(
+            self.reported.transport,
+            Transport::Playing | Transport::Paused
+        );
+        match self.reported.places.get(track) {
+            Some(place) if moving => place.walk,
+            _ => self
+                .song()
+                .tracks
+                .get(track)
+                .map_or_else(WalkMove::default, Track::walk),
+        }
     }
 
     /// The section being edited.
@@ -686,7 +710,12 @@ impl Services {
             .and_then(|s| s.chains.get(track).copied().flatten())
             .and_then(|chain| {
                 let place = self.step_on(track, from, section_step);
-                song.tracks[track].chain_position(chain, place, self.dealer(track))
+                song.tracks[track].chain_position(
+                    chain,
+                    place,
+                    self.dealer(track),
+                    self.walk(track),
+                )
             });
         match position {
             Some(position) => {
@@ -745,4 +774,14 @@ pub(crate) fn new_song(tracks: usize) -> vt_model::song::Song {
         seed: random_seed(),
         ..vt_model::song::Song::new(tracks)
     }
+}
+
+/// The order a phrase plays in as a track's walk moves it, `Reverse` after it, if that isn't the
+/// phrase's own (decision 400).
+pub(crate) fn walked_order(phrase: &Phrase, walk: WalkMove) -> Option<String> {
+    let order = phrase.order_walked(walk);
+    (order != phrase.order() || walk.reverse).then(|| {
+        let reverse = if walk.reverse { " reversed" } else { "" };
+        format!("{order}{reverse}")
+    })
 }

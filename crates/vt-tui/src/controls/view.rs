@@ -23,10 +23,12 @@ use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lane::{LANE_RATES, LaneMove, RATE_AS_WRITTEN, length_rows};
 use vt_model::listed::Listed;
 use vt_model::modulation::{MOD_SLOTS, ModField, ModKind, default_mod, note_shape_slot};
+use vt_model::order::ORDER_AS_WRITTEN;
 use vt_model::param::{Descriptor, HEX_JUMP, NUMBER, PERCENT, Reading, kept};
 use vt_model::settings::meanings as own;
 use vt_model::settings::{
-    Kind, LONGEST_GLIDE_MS, SettingId, Units, gate_percent, gate_value, glide_ms, rows_text,
+    Kind, LONGEST_GLIDE_MS, SettingId, Units, gate_percent, gate_value, glide_ms, orders_text,
+    rows_text,
 };
 use vt_model::shape::params::Typing;
 use vt_model::shape::{Context, GenParam, Where};
@@ -234,6 +236,7 @@ pub(crate) fn toggle_on(control: Control, track: &Track, song: &Song) -> Option<
         }
         Control::Mod(slot, ModField::Reset) => Some(track.mods[slot].envelope().reset()),
         Control::Arpeggio(ArpField::Retrig) => Some(track.arpeggio.retrig),
+        Control::Base(TrackControl::Reverse) => Some(track.reverse != 0),
         _ => None,
     }
 }
@@ -276,6 +279,12 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
                 Kind::Continuous { .. } => entry_view(of, control, track, described, value),
             }
         }
+        Control::Base(
+            which @ (TrackControl::Order
+            | TrackControl::Reverse
+            | TrackControl::OrderX
+            | TrackControl::OrderY),
+        ) => walk_view(of, track, which),
         Control::Base(which) => {
             let value = track.control(which);
             ParamView {
@@ -814,6 +823,73 @@ fn arpeggio_view(of: ParamView, arpeggio: Arpeggio, field: ArpField) -> ParamVie
     view.text(arpeggio_shown(field, arpeggio))
 }
 
+/// One of the settings that move a track's phrases' walks (decision 400): `Order` in places on
+/// through the list either side of the phrase's own, centred as a lane's `Length` is, `Reverse`
+/// a switch, and `Order X` and `Order Y` from `Own` to 16.
+fn walk_view(of: ParamView, track: &Track, which: TrackControl) -> ParamView {
+    let value = track.control(which);
+    match which {
+        TrackControl::Order => {
+            let by = i32::from(value) - i32::from(ORDER_AS_WRITTEN);
+            let shown = match by {
+                0 => "Own: each phrase plays in its own order".to_owned(),
+                by => format!(
+                    "{}: each phrase plays in the order {} {} its own in the list",
+                    orders_text(by),
+                    by.abs(),
+                    if by > 0 {
+                        "places after"
+                    } else {
+                        "places before"
+                    }
+                ),
+            };
+            ParamView {
+                centred: true,
+                bar: Some(value),
+                ..of.whole(by, (-128, 127), 0, format!("{by:+}"))
+            }
+            .steps(Steps::even(1), Steps::even(HEX_JUMP))
+            .reads(NUMBER, "Order is a number of places from -128 to +127")
+            .text(shown)
+        }
+        TrackControl::Reverse => {
+            let on = value != 0;
+            let shown = if on {
+                "On: each phrase walks its rows the other way up, from its last"
+            } else {
+                "Off: each phrase walks its rows the way up they're written"
+            };
+            of.switch(on, false).text(shown.to_owned())
+        }
+        _ => {
+            let x = which == TrackControl::OrderX;
+            let id = if x {
+                SettingId::ORDER_X
+            } else {
+                SettingId::ORDER_Y
+            };
+            let choices = id.entry().choices();
+            let at = usize::from(value).min(choices.len() - 1);
+            let shown = match (at, x) {
+                (0, true) => "Own: each order keeps its own first number".to_owned(),
+                (0, false) => "Own: each order keeps its own second number".to_owned(),
+                (at, true) => format!(
+                    "{at}: a jump of {at} rows, an arp of {at} notes, snake {at}, X every {at} rows"
+                ),
+                (at, false) => format!("{at}: an arp's runs {at} rows on, Y every {at} rows"),
+            };
+            of.listed(
+                choices.iter().map(|choice| Choice::named(*choice)),
+                at,
+                0,
+                false,
+            )
+            .text(shown)
+        }
+    }
+}
+
 /// One of an FX column's lane's settings: `Length` in rows either side of none, centred as
 /// `Pitch` is, and `Rate` from its list.
 fn lane_view(of: ParamView, moved: LaneMove, slot: usize, field: LaneField) -> ParamView {
@@ -976,6 +1052,11 @@ pub fn set(
             setting: control.setting_on(track)?,
             value: byte,
         }),
+        Control::Base(TrackControl::Order) => Action::SetTrackBase {
+            track: at,
+            control: TrackControl::Order,
+            value: (value + i32::from(ORDER_AS_WRITTEN)).clamp(0, 255) as u8,
+        },
         Control::Base(which) => with_fine(Action::SetTrackBase {
             track: at,
             control: which,
