@@ -230,6 +230,14 @@ pub(crate) fn phrase_value(services: &Services, field: Field) -> Option<String> 
                     services.live.scale.on,
                 ));
             }
+            if cell.command == Some(FxCommand::Sld) {
+                let shown = if cell.coarse() > 0 {
+                    "the row's locks slide to the next note's values"
+                } else {
+                    "off, the row's locks jump"
+                };
+                return Some(shown.to_owned());
+            }
             if cell.command == Some(FxCommand::Acu) {
                 return Some(amount_shown(
                     cell.coarse(),

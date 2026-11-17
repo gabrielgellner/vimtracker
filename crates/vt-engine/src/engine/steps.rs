@@ -633,11 +633,18 @@ impl Engine {
                 | FxCommand::Cnd
                 | FxCommand::Acu
                 | FxCommand::Arp
-                | FxCommand::Rnd,
+                | FxCommand::Rnd
+                | FxCommand::Sld,
             ) => row && decided.fx,
             _ if lane_steps[number].is_some() => pending.part.runs_lanes(),
             _ => row && decided.fx,
         };
+        // An `SLD` slides the row's locks of continuous settings, and the next note's, rather
+        // than having them jump (decision 417). A thinned row's locks run, so it slides too.
+        let slides = first
+            && fx.fx.iter().enumerate().any(|(number, slot)| {
+                slot.command == Some(FxCommand::Sld) && slot.coarse() > 0 && runs(number, slot)
+            });
         for (number, slot) in fx.fx.into_iter().enumerate() {
             let Some(command) = slot.command.filter(|_| runs(number, &slot)) else {
                 continue;
@@ -647,10 +654,16 @@ impl Engine {
                     fx.time(command, slot.coarse());
                 }
                 FxCommand::Acu | FxCommand::Arp => fx.pitch(command, slot.coarse()),
-                // Decided before any of them run.
-                FxCommand::Cha | FxCommand::Cnd | FxCommand::Rnd => {}
+                // Decided before any of them run, or read above.
+                FxCommand::Cha | FxCommand::Cnd | FxCommand::Rnd | FxCommand::Sld => {}
+                FxCommand::Set(_) if slides && slot.mark == Mark::Lock && command.glides() => {
+                    self.slide(index, slot, phrase, read, pending.ticks);
+                }
                 FxCommand::Set(_) => self.lock(index, number, slot, phrase, read, pending.ticks),
             }
+        }
+        if slides {
+            self.slide_into_note(index, &fx.fx, phrase, read, pending.ticks);
         }
         // A `MAC` lock on the row reaches what its macro holds of the generators on the row itself,
         // as it reaches any other setting: the macros are put now, and the row read again if that
@@ -1102,6 +1115,73 @@ impl Engine {
         });
         let now = self.song_time();
         self.tracks[index].start_glide(id, slot.value, to, now);
+    }
+
+    /// Slide a row's lock, under an `SLD`, from its value to where its setting next changes: the
+    /// next lock of it on, or the track's own value at the next note, which would end the lock
+    /// (decision 417). With nowhere to go it's a lock.
+    fn slide(
+        &mut self,
+        index: usize,
+        slot: FxSlot,
+        phrase: Option<&Phrase>,
+        read: Read,
+        ticks: u64,
+    ) {
+        let Some(command @ FxCommand::Set(id)) = slot.command else {
+            return;
+        };
+        let position = read.position;
+        let to = phrase.and_then(|phrase| {
+            phrase.slide_to(position.visit, position.deal, position.walk, command)
+        });
+        let Some((steps, to)) = to else {
+            self.tracks[index].set_value(id, slot.value, Mark::Lock);
+            return;
+        };
+        let now = self.song_time();
+        let ticks = steps as f64 * ticks as f64;
+        self.tracks[index].start_slide(id, Some(slot.value), to, ticks, now);
+    }
+
+    /// Slide what the next note locks and an `SLD` row doesn't, from where it's heard, so it
+    /// arrives as that note starts, as the Analog Four slides a value locked on either trig
+    /// (decision 417). A setting another row changes first, or in a column with a lane of its own,
+    /// is left to jump.
+    fn slide_into_note(
+        &mut self,
+        index: usize,
+        own: &[FxSlot],
+        phrase: Option<&Phrase>,
+        read: Read,
+        ticks: u64,
+    ) {
+        let Some(phrase) = phrase else {
+            return;
+        };
+        let position = read.position;
+        let (visit, deal, walk) = (position.visit, position.deal, position.walk);
+        let Some((steps, next)) = phrase.next_note(visit, deal, walk) else {
+            return;
+        };
+        let now = self.song_time();
+        for (column, slot) in next.fx.iter().enumerate() {
+            let Some(command @ FxCommand::Set(id)) = slot.command else {
+                continue;
+            };
+            if !command.glides()
+                || phrase.lane(column).is_some()
+                || own.iter().any(|own| own.command == Some(command))
+                || phrase
+                    .slide_to(visit, deal, walk, command)
+                    .map(|(at, _)| at)
+                    != Some(steps)
+            {
+                continue;
+            }
+            let ticks = steps as f64 * ticks as f64;
+            self.tracks[index].start_slide(id, None, Some(*slot), ticks, now);
+        }
     }
 
     /// Time a row's note as its `KIL`, `OFF` and `RET` say, from where it starts, `start_at`. A
