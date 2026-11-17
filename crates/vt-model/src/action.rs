@@ -637,7 +637,10 @@ impl TrackControl {
             Self::VelocityDelta => Some(SettingId::VELOCITY_DELTA),
             Self::Quantise => Some(SettingId::QUANTISE),
             Self::Jump => Some(SettingId::JUMP),
-            Self::Drive | Self::Punch | Self::LowCut | Self::HighCut => None,
+            Self::Drive => Some(SettingId::DRIVE),
+            Self::Punch => Some(SettingId::PUNCH),
+            Self::LowCut => Some(SettingId::LOW_CUT),
+            Self::HighCut => Some(SettingId::HIGH_CUT),
         }
     }
 }

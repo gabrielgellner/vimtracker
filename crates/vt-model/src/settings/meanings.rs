@@ -9,9 +9,7 @@ pub const MACHINE: &str = "what makes the track's sound";
 pub const SAMPLE: &str = "the sample from the bank the sampler plays";
 pub const TUNE: &str = "the sample's own tuning in semitones, or its slice's where it has one";
 pub const CENTS: &str = "the sample's own fine tuning, in cents, on top of its tune";
-pub const FILTER_TYPE: &str = "which filter the sound goes through";
 pub const FILTER_MODE: &str = "how the filter's type responds: its slope, or what it lets through";
-pub const SAFE: &str = "whether Res stops just short of where the filter rings by itself";
 pub const TRIM: &str = "turns what comes in up or down before anything else, for gain staging";
 pub const ROLE: &str = "what the track is for, which its colour shows";
 pub const CHOKE: &str = "a note here cuts off the other tracks in the same choke group";
@@ -28,8 +26,3 @@ pub const ACCUMULATOR_RESET: &str = "when the accumulators go back to the notes 
 pub const ARPEGGIO_MODE: &str = "the order the arpeggio plays the held notes in";
 pub const ARPEGGIO_RETRIG: &str =
     "whether each arpeggiated note starts the envelopes again, rather than only changing the pitch";
-pub const DRIVE: &str = "how hard the sound is pushed into the filter";
-pub const PUNCH: &str =
-    "how far a ringing peak starts higher and falls in pitch as it dies away, 00 off";
-pub const LOW_CUT: &str = "a high-pass after the filter, to thin the low end; 00 is off";
-pub const HIGH_CUT: &str = "a low-pass after the filter, to soften the top; FF is off";

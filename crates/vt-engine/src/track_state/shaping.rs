@@ -1,13 +1,14 @@
 //! The audio path of a track, a group, a return and the master: the trim, the filter, the
 //! slots, the level and the pan.
 
+use vt_model::constants::SMOOTHING_MS;
 use vt_model::settings::SettingId;
 use vt_model::song::{FilterMode, FilterType};
 
 use crate::dsp::blocks::sides::same_sides;
 use crate::dsp::blocks::smoother::{coefficient, fast_coefficient};
 use crate::dsp::effects::slot::SidechainFrames;
-use crate::dsp::filters::filter::{Coefficients, Ramp, safe_resonance};
+use crate::dsp::filters::filter::{Channel, Coefficients, Ramp, safe_resonance};
 
 use super::TrackState;
 
@@ -19,6 +20,44 @@ const TRIM_OPEN: f32 = 0.001;
 /// How far an octave moves the cutoff on its `0..=1` scale, which spans 20 Hz to 20 kHz, a
 /// thousandfold: `Key track` moves it an octave for each octave of the note.
 const CUTOFF_PER_OCTAVE: f32 = 1.0 / 9.965_784;
+
+/// The filter a change of type left, as it fades out under the new one, which starts from silence
+/// as a new filter does. It keeps its own state and the coefficients it had, so it carries on as
+/// it was, and fades over the smoothing's 10 ms, the time a lock of `CUT` takes to settle
+/// (decision 398).
+#[derive(Debug, Clone, Copy)]
+pub(super) struct LeavingFilter {
+    kind: FilterType,
+    channels: [Channel; 2],
+    /// Its coefficients, or none where it stood aside, wide open.
+    coefficients: Option<Coefficients>,
+    /// How much of it is still heard, from 1 down to 0.
+    share: f32,
+}
+
+impl LeavingFilter {
+    /// A frame of what the new filter gave, with this one's of the same input faded in under it
+    /// by what's left of it, a straight line between the two, as both filter the same sound.
+    #[inline]
+    fn under(&mut self, input: [f32; 2], filtered: [f32; 2], drive: f32, rate: u32) -> [f32; 2] {
+        // A drive this small takes the clean path rather than a very slight clip, as the new
+        // filter's does.
+        let drive = if drive < 0.001 { 0.0 } else { drive };
+        let old = match &self.coefficients {
+            Some(c) => [
+                self.channels[0].process(input[0], self.kind, drive, c),
+                self.channels[1].process(input[1], self.kind, drive, c),
+            ],
+            None => input,
+        };
+        let share = self.share;
+        self.share -= 1000.0 / (SMOOTHING_MS * rate) as f32;
+        [
+            filtered[0] + (old[0] - filtered[0]) * share,
+            filtered[1] + (old[1] - filtered[1]) * share,
+        ]
+    }
+}
 
 /// The pan gains for a `0..=1` position. The centre is unity, and it keeps equal power.
 #[inline]
@@ -112,8 +151,12 @@ impl TrackState {
     /// while it moves.
     #[inline]
     fn trimmed(&mut self, input: [f32; 2], run: RunContext) -> [f32; 2] {
-        let low_cut = self.low_cut.next(run.smoothing);
-        let high_cut = self.high_cut.next(run.smoothing);
+        let low_cut = self
+            .low_cut
+            .next(self.smoother_for(SettingId::LOW_CUT, run));
+        let high_cut = self
+            .high_cut
+            .next(self.smoother_for(SettingId::HIGH_CUT, run));
         let (low_on, high_on) = (low_cut > TRIM_OPEN, high_cut < 1.0 - TRIM_OPEN);
         if !low_on && !high_on {
             self.low_cut_coefficients = None;
@@ -169,6 +212,34 @@ impl TrackState {
             .plays(FilterMode::at(place).unwrap_or_default())
     }
 
+    /// Play another filter type. A new type starts from silence rather than from another's state,
+    /// so while anything has gone into the filter since it settled, the one it leaves carries on
+    /// and fades out under it rather than stopping dead (decision 398).
+    pub(super) fn switch_filter(&mut self, kind: FilterType) {
+        if kind == self.filter_type {
+            return;
+        }
+        let was = std::mem::replace(&mut self.filter_type, kind);
+        let channels = std::mem::take(&mut self.filter);
+        let coefficients = self.coefficients.take().map(|ramp| *ramp.now());
+        self.leaving = (!self.filter_quiet).then_some(LeavingFilter {
+            kind: was,
+            channels,
+            coefficients,
+            share: 1.0,
+        });
+    }
+
+    /// Put held `FDRV`, `FPCH`, `LCUT` and `HCUT`, with what modulation adds to each, where their
+    /// smoothers head.
+    pub(super) fn move_filter_settings(&mut self) {
+        let moved = |held: f32, id: SettingId| (held + self.offsets[id.index()]).clamp(0.0, 1.0);
+        self.drive.target = moved(self.held_drive, SettingId::DRIVE);
+        self.punch.target = moved(self.held_punch, SettingId::PUNCH);
+        self.low_cut.target = moved(self.held_low_cut, SettingId::LOW_CUT);
+        self.high_cut.target = moved(self.held_high_cut, SettingId::HIGH_CUT);
+    }
+
     /// What `Key track` adds to the cutoff this frame: the voice's note in octaves from `C-3`, an
     /// octave of cutoff for each, smoothed as `CUT` is, and nothing while it's off. Its first
     /// note after the filter has settled is taken at once, as the cutoff is (decision 381).
@@ -217,8 +288,11 @@ impl TrackState {
             + self.pan_offset.next(run.fast)
             + self.pan_envelope.next(run.fast))
         .clamp(0.0, 1.0);
-        let drive = self.drive.next(run.smoothing);
-        let punch = self.punch.next(run.smoothing);
+        if self.filter_quiet && (input[0] != 0.0 || input[1] != 0.0) {
+            self.filter_quiet = false;
+        }
+        let drive = self.drive.next(self.smoother_for(SettingId::DRIVE, run));
+        let punch = self.punch.next(self.smoother_for(SettingId::PUNCH, run));
         let safe = self.safe.next(run.smoothing);
         // Following the key, the filter keeps running at the top, so a lower note doesn't start it
         // from where it stopped.
@@ -267,6 +341,13 @@ impl TrackState {
                 None => input,
             }
         };
+        let filtered = match &mut self.leaving {
+            Some(leaving) => leaving.under(input, filtered, drive, run.rate),
+            None => filtered,
+        };
+        if self.leaving.is_some_and(|leaving| leaving.share <= 0.0) {
+            self.leaving = None;
+        }
         let filtered = self.trimmed(filtered, run);
         let filtered = self.through_slots(filtered, run, sidechains);
         self.sidechain = filtered;

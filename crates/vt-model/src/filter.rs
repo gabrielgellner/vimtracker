@@ -42,18 +42,17 @@ impl FilterType {
 
     /// The name on screen.
     pub fn name(self) -> &'static str {
-        match self {
-            Self::LowPass => "LP",
-            Self::HighPass => "HP",
-            Self::BandPass => "BP",
-            Self::Notch => "Notch",
-            Self::Ladder => "Ladder",
-            Self::Diode => "Diode",
-            Self::Ms20LowPass => "MS20 LP",
-            Self::Ms20HighPass => "MS20 HP",
-            Self::Dirty => "Dirty",
-            Self::ObX => "OB-X",
-        }
+        FILTER_TYPE_NAMES[usize::from(self.index())]
+    }
+
+    /// Its place in the list, which is a step's value for it.
+    pub fn index(self) -> u8 {
+        Self::ALL.iter().position(|kind| *kind == self).unwrap_or(0) as u8
+    }
+
+    /// The type at a place in the list, or the last for a place past its end.
+    pub fn at(index: u8) -> Self {
+        Self::ALL[usize::from(index).min(Self::ALL.len() - 1)]
     }
 
     /// What it does, for a list to show.
@@ -275,6 +274,11 @@ impl FilterMode {
 }
 
 crate::listed::listed!(FilterMode: meaning);
+
+/// Each type's name, in the list's order, for a step's value to show.
+pub const FILTER_TYPE_NAMES: [&str; 10] = [
+    "LP", "HP", "BP", "Notch", "Ladder", "Diode", "MS20 LP", "MS20 HP", "Dirty", "OB-X",
+];
 
 /// Each mode's name, in the list's order, for a step's value to show.
 pub const FILTER_MODE_NAMES: [&str; 24] = [
