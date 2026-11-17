@@ -110,15 +110,16 @@ const MASTER_OUTPUT: [&[Control]; 2] = [&[Control::Trim, Control::Level], &[Cont
 /// the rows are walked, as the phrase's order is (decision 391), then how far every row's chance
 /// to play is moved, which is whether they're played (decision 405), and whether that chance
 /// decides each row or each pulse (decision 406), then its dice loop, how many steps' dice repeat,
-/// how often they roll again and how often a step takes another's (decisions 410 and 411), as the
-/// grid is full.
-const PLAY_TITLE: [Option<Control>; 6] = [
+/// how often they roll again and how often a step takes another's (decisions 410 and 411), and
+/// last how late every other step lands on top of the groove (decision 420), as the grid is full.
+const PLAY_TITLE: [Option<Control>; 7] = [
     Some(base(TrackControl::Jump)),
     Some(base(TrackControl::ChanceDelta)),
     Some(base(TrackControl::ChanceTarget)),
     Some(base(TrackControl::DiceLoop)),
     Some(base(TrackControl::DiceMutate)),
     Some(base(TrackControl::DiceJump)),
+    Some(base(TrackControl::Swing)),
 ];
 
 /// How it plays its notes: their pitch and how they join and end, then the steps' timing, then

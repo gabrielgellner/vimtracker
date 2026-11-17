@@ -1317,7 +1317,8 @@
 1316 diceloop
 1317 dicemutate
 1318 dicejump
-1319 lane1.start
-1320 lane2.start
-1321 lane3.start
-1322 sampler.reverse
+1319 swing
+1320 lane1.start
+1321 lane2.start
+1322 lane3.start
+1323 sampler.reverse

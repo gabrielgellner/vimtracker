@@ -5,7 +5,7 @@
 
 use crate::constants::{MAX_LEVEL, UNITY_LEVEL};
 use crate::dice::DICE_LOOP_NAMES;
-use crate::groove::GROOVE_CHOICES;
+use crate::groove::{GROOVE_CHOICES, MOST_SWING};
 use crate::lane::{LANE_RATES, LENGTH_AS_WRITTEN, RATE_AS_WRITTEN};
 use crate::order::{MOST_ORDER_NUMBER, ORDER_AS_WRITTEN, WINDOW_AS_WRITTEN};
 use std::borrow::Cow;
@@ -390,7 +390,7 @@ const TRACK_GROUPS: [&str; 16] = [
 
 /// The track's own settings added since places were fixed, at the end of the table so none moves
 /// (#718): the track's own after [`TRACK`]'s, in the order they came.
-const LATER_TRACK: [Entry; 23] = [
+const LATER_TRACK: [Entry; 24] = [
     // Whether a synth's oscillators run on from note to note or start again on each, read as a
     // note starts, so a lock on its row sets it for that note (decision 370).
     Entry {
@@ -635,12 +635,27 @@ const LATER_TRACK: [Entry; 23] = [
     level("dicejump", "Dice jump", "DJMP", 0x00).means(
         "the chance a step takes the dice of any step of the loop, playing them out of order",
     ),
+    // How late the second of each pair of steps lands, on top of the groove, read as the pair's
+    // first step is worked out, as `GRV` is, so it holds for the pair (decision 420).
+    Entry {
+        meaning: "how late every other step lands, from 50 % straight to 75 %, on top of the groove",
+        key: "swing",
+        name: "Swing",
+        label: Some("SWG"),
+        kind: Kind::Continuous {
+            top: MOST_SWING,
+            middle: false,
+            units: Units::Swing,
+        },
+        default: 0,
+        place: Place::Own,
+    },
 ];
 /// What each of [`LATER_TRACK`] is listed with.
-const LATER_TRACK_GROUPS: [&str; 23] = [
+const LATER_TRACK_GROUPS: [&str; 24] = [
     "Machine", "Machine", "Filter", "Machine", "Machine", "Filter", "Filter", "Filter", "Filter",
     "Filter", "Filter", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
-    "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
+    "Machine", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
 ];
 
 /// What a row's chance decides, `CTGT`'s choices: the whole row, or each of its pulses and
@@ -1042,6 +1057,15 @@ mod tests {
         assert_eq!(shown(SettingId::VELOCITY_DELTA, 0x9000), "+10 vel");
         assert_eq!(shown(SettingId::VELOCITY_DELTA, 0x0000), "-80 vel");
         assert_eq!(SettingId::VELOCITY_DELTA.label(), Some("VDLT".into()));
+        assert_eq!(shown(SettingId::SWING, 0x0000), "50.0 %");
+        assert_eq!(shown(SettingId::SWING, 0xA000), "66.0 %");
+        assert_eq!(shown(SettingId::SWING, 0x4600), "57.0 %");
+        assert_eq!(shown(SettingId::SWING, 0xFA00), "75.0 %");
+        assert_eq!(SettingId::SWING.label(), Some("SWG".into()));
+        assert!(
+            !SettingId::SWING.entry().kind.has_fine(),
+            "a tenth of a percent a step"
+        );
         assert_eq!(shown(SettingId::QUANTISE, 0x0000), "0 %");
         assert_eq!(shown(SettingId::QUANTISE, 0x8000), "50 %");
         assert_eq!(shown(SettingId::QUANTISE, 0xFF00), "100 %");

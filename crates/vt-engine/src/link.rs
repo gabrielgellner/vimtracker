@@ -830,6 +830,49 @@ mod tests {
         assert_eq!(violations, 0);
     }
 
+    /// Each track's `Swing` turned every block through its whole range and past it, under an LFO
+    /// on it, over rows that lock `SWG` and choose grooves with `GRV`, so every pair reads it
+    /// afresh as it plays (decision 420).
+    #[test]
+    fn swing_moving_every_block_never_allocates_in_the_callback() {
+        let rows = [
+            "C-3 -- swing:A0 ---",
+            "D-3 -- ---",
+            "E-3 -- groove:0B swing:FA",
+            "--- -- --- --- ---",
+        ];
+        let swung = || {
+            let mut song = song(8, 16);
+            for track in song.tracks.iter_mut().take(8) {
+                track.mods[3] = vt_model::modulation::ModSlot::lfo(
+                    Some(SettingId::SWING),
+                    vt_model::lfo::Lfo::default(),
+                )
+                .with_depth(0x60);
+                let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+                for step in 0..16 {
+                    *phrase.step_mut(step).unwrap() = rows[step % rows.len()].parse().unwrap();
+                }
+            }
+            song
+        };
+        let pool = samples();
+        let engine = Engine::new(48_000, published(swung(), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 0..200 {
+            let mut next = swung();
+            for (at, track) in next.tracks.iter_mut().take(8).enumerate() {
+                track.swing = ((round * 29 + at * 13) % 256) as u8;
+            }
+            handle.publish(published(next, &pool));
+            violations += blocks(&mut rt, 1);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
     /// Each track's dice loop turned every block, its length through every choice and past them,
     /// its mutate and jump with it, over rows that roll `CHA` and `RND` and lock `DLP` and `DJMP`,
     /// so its ring fills, drifts and jumps as it plays (decisions 410 and 411).
