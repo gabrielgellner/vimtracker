@@ -259,6 +259,10 @@ pub struct Track {
     /// Where held `PSTA` starts: the row the window its phrases' orders walk over starts on.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub phrase_start: u8,
+    /// Where held `CDLT` starts: how far every row's chance to play is moved up or down, by
+    /// [`moved_chance`](crate::settings::moved_chance), with `80` as none (decision 405).
+    #[serde(default = "centre", skip_serializing_if = "is_centre")]
+    pub chance_delta: u8,
     /// The choke group it's in, if any, from 1 to `CHOKE_GROUPS`: a note on it cuts off what's
     /// sounding on the other tracks in the group, as a closed hat cuts an open one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -498,6 +502,7 @@ impl Track {
             TrackControl::OrderY => self.order_y,
             TrackControl::PhraseLength => self.phrase_length,
             TrackControl::PhraseStart => self.phrase_start,
+            TrackControl::ChanceDelta => self.chance_delta,
         }
     }
 
@@ -524,6 +529,7 @@ impl Track {
             TrackControl::OrderY => &mut self.order_y,
             TrackControl::PhraseLength => &mut self.phrase_length,
             TrackControl::PhraseStart => &mut self.phrase_start,
+            TrackControl::ChanceDelta => &mut self.chance_delta,
         };
         *held = match control {
             TrackControl::SendA | TrackControl::SendB => value.min(MAX_LEVEL),
@@ -764,6 +770,7 @@ impl Default for Track {
             order_y: 0,
             phrase_length: centre(),
             phrase_start: 0,
+            chance_delta: centre(),
             choke: None,
             group: None,
             gate_length: None,

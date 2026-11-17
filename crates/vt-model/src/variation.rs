@@ -10,7 +10,7 @@
 //! render repeats, and playing from a step hears what playing up to it would.
 
 use crate::random::splitmix64;
-use crate::settings::{Kind, SettingId, Units};
+use crate::settings::{Kind, SettingId, Units, moved_chance};
 use crate::step::{FxCommand, FxSlot};
 
 /// The highest chance, `F`: always.
@@ -96,6 +96,15 @@ impl Roll {
         below(self.0, u64::from(ALWAYS)) < u64::from(variation.chance)
     }
 
+    /// Whether it varies with its chance moved by a `CDLT` value (decision 405), as
+    /// [`moved_chance`] moves it out of `F`. At `80` it's [`Roll::hits`], to the bit, and the
+    /// same roll is compared however far it's moved, so turning `CDLT` up only adds hits.
+    pub fn hits_moved(self, variation: Variation, moved: f32) -> bool {
+        let chance = moved_chance(f32::from(variation.chance), f32::from(ALWAYS), moved);
+        // `below(_, F) < x` is the roll's place times `F` under `x`, which is exact in `f64`.
+        (((self.0 >> 32) * u64::from(ALWAYS)) as f64 / 4_294_967_296.0) < f64::from(chance)
+    }
+
     /// How far it moves something, from 1 to `most` either way, each as likely, so it always
     /// moves when it can; nothing with `most` at 0.
     pub fn moved_by(self, most: u16) -> i16 {
@@ -114,6 +123,20 @@ impl Roll {
     pub(crate) fn within(self, most: u16) -> i16 {
         below(splitmix64(self.0), 2 * u64::from(most) + 1) as i16 - most as i16
     }
+}
+
+/// Keeps the rolls `CDLT` thins rows with no `CHA` by apart from the `RND`s'.
+const THIN_STREAM: u64 = 0x6364_6c74_0000_0000;
+
+/// Whether a row with no `CHA` of its own still plays under a `CDLT` value below `80`, where it
+/// counts as a `CHA FF` moved down (decision 405). It's a hash of the project's seed, the track
+/// and its count since its chain started, as an `RND`'s roll is, rather than a draw from the
+/// track's generator, so every `CHA` rolls as it did, a render repeats, playing from a step hears
+/// what playing up to it would, and turning `CDLT` down only drops more of the rows.
+pub fn thin_keeps(seed: u64, track: usize, count: i64, moved: f32) -> bool {
+    let track = splitmix64(splitmix64(seed) ^ splitmix64(THIN_STREAM.wrapping_add(track as u64)));
+    let roll = splitmix64(track ^ count as u64);
+    ((roll >> 40) as f32 / (1u64 << 24) as f32) < moved_chance(1.0, 1.0, moved)
 }
 
 /// How far one step of an `RND`'s range moves a lock of this setting: a choice on a list, a

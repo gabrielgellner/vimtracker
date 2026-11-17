@@ -1307,6 +1307,7 @@
 1306 ordery
 1307 phraselength
 1308 phrasestart
-1309 lane1.start
-1310 lane2.start
-1311 lane3.start
+1309 chancedelta
+1310 lane1.start
+1311 lane2.start
+1312 lane3.start
