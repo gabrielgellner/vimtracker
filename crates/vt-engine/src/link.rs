@@ -2052,6 +2052,11 @@ mod tests {
                     SettingId::mod_own(5, 9).unwrap(),
                     SettingId::accumulation(0).unwrap(),
                     SettingId::arpeggio(1).unwrap(),
+                    // The accumulator's and arpeggio's lists (decision 413).
+                    SettingId::accumulation(2).unwrap(),
+                    SettingId::accumulation(3).unwrap(),
+                    SettingId::accumulation(4).unwrap(),
+                    SettingId::arpeggio(2).unwrap(),
                 ];
                 // Bent, as a mapping's response is worked out each block.
                 let bend = [0, 60, -80][index % 3];
@@ -2063,7 +2068,8 @@ mod tests {
                 track.macros[1].value = (round as u16 * 0x0140) % 0xFF00;
                 let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
                 for step in (0..16).step_by(3) {
-                    *phrase.step_mut(step).unwrap() = "C-3 -- macro2:C0 --- ---".parse().unwrap();
+                    *phrase.step_mut(step).unwrap() =
+                        "C-3 -- macro2:C0 acu.adds:01 arp.mode:04".parse().unwrap();
                 }
             }
             next
