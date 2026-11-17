@@ -287,7 +287,11 @@ fn hits(song: &Song, track: usize) -> usize {
 fn a_group_macro_holds_a_generators_settings_on_each_of_its_tracks() {
     // 1 + 15 × 0x44 / 0xFF is 5, and the other way 16 - 4 is 12.
     let (song, group) = kit(0x4400);
-    assert_eq!((hits(&song, 0), hits(&song, 1)), (5, 12), "its turn is written");
+    assert_eq!(
+        (hits(&song, 0), hits(&song, 1)),
+        (5, 12),
+        "its turn is written"
+    );
     // At its turn, what's written is what's heard, and nothing renders.
     let mut engine = Engine::new(RATE, version(&song));
     engine.play_from(0);

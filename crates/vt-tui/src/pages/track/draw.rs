@@ -385,12 +385,13 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx) -
     } else {
         area
     };
-    let Some(track) = ctx.song().tracks.get(ctx.cursor().track) else {
+    if ctx.song().tracks.get(ctx.cursor().track).is_none() {
         frame.render_widget(Paragraph::new("This track doesn't exist."), area);
         return Drawn::default();
-    };
-    // Each setting a macro holds shows where the macro puts it.
-    let shown = track.with_macros();
+    }
+    // Each setting a macro holds shows where the macro puts it, a group's macro too on a track
+    // in its group (decision 408).
+    let shown = ctx.song().track_with_macros(ctx.cursor().track);
     let track = shown.as_ref();
     let bold = Style::new().add_modifier(Modifier::BOLD);
     let tabs = Page::ALL.map(|tab| {

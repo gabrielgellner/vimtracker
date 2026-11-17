@@ -220,7 +220,9 @@ fn grouped() -> (Arc<Song>, usize) {
     let mut song = Song::new(3);
     song.tracks[0].group = Some(1);
     song.tracks[1].group = Some(1);
-    let group = song.fixed_track(vt_model::song::TrackKind::Group(1)).unwrap();
+    let group = song
+        .fixed_track(vt_model::song::TrackKind::Group(1))
+        .unwrap();
     (Arc::new(song), group)
 }
 
@@ -252,7 +254,10 @@ fn a_groups_macro_holds_a_setting_on_a_track_of_its_group_by_its_place() {
     // The group's own `Cut` and its second track's are two mappings, side by side.
     let song = mapped(&mapped(&song, None), Some(1));
     assert_eq!(song.tracks[group].macros[0].maps, [on(None), on(Some(1))]);
-    assert_eq!(song.tracks[group].macro_holding(cut()).unwrap().1, &on(None));
+    assert_eq!(
+        song.tracks[group].macro_holding(cut()).unwrap().1,
+        &on(None)
+    );
     assert_eq!(song.group_holding(1, cut()).unwrap(), (0, &on(Some(1))));
     assert!(song.group_holding(0, cut()).is_none());
     // Turned to the top, the second track is shown with its `Cut` there, and the first isn't.

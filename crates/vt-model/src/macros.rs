@@ -537,11 +537,17 @@ impl Song {
     /// by hand, on the `00` to `FF` scale: its own first, so its group's has the last word, as
     /// the engine puts them.
     fn holds_on(&self, track: usize) -> impl Iterator<Item = (f32, &MacroMap)> + '_ {
-        let group = self.group_place(track).map(|(group, _)| &self.tracks[group]);
-        let own = self.tracks.get(track).into_iter().flat_map(Track::own_holds);
-        let from_group = self.group_maps_on(track).filter_map(move |(at, map)| {
-            Some((f32::from(group?.macros[at].value) / 256.0, map))
-        });
+        let group = self
+            .group_place(track)
+            .map(|(group, _)| &self.tracks[group]);
+        let own = self
+            .tracks
+            .get(track)
+            .into_iter()
+            .flat_map(Track::own_holds);
+        let from_group = self
+            .group_maps_on(track)
+            .filter_map(move |(at, map)| Some((f32::from(group?.macros[at].value) / 256.0, map)));
         own.chain(from_group)
     }
 
@@ -607,7 +613,6 @@ impl Song {
 }
 
 impl Track {
-
     /// Where a setting is on this track before any step sets it, with a coarse byte and a fine
     /// one, whoever owns it: a voice keeps its own, an effect's setting is what's in its slot, or
     /// its default while another effect is there, and a mod slot's depth and phase are what its

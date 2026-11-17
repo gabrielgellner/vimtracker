@@ -956,7 +956,11 @@ mod tests {
         };
         track.mods[3].destination = SettingId::macro_at(0);
         let patch = Patch::of_track(&track, None).unwrap();
-        assert_eq!(patch.needs(), "1 slot, 1 macro", "its tracks' slots aren't its own");
+        assert_eq!(
+            patch.needs(),
+            "1 slot, 1 macro",
+            "its tracks' slots aren't its own"
+        );
         assert_eq!(patch.check_alone(), Ok(()));
         let text = ron::to_string(&patch).unwrap();
         assert!(text.contains("member:Some(1)"), "{text}");

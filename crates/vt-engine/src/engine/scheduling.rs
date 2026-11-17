@@ -353,7 +353,11 @@ impl Engine {
         // its row reaches theirs on this line (decision 408).
         let leaders = self.current.group_macros.leaders;
         let rest = (0..tracks).filter(|at| !leaders.contains(&Some(*at)));
-        let order = leaders.into_iter().flatten().filter(|at| *at < tracks).chain(rest);
+        let order = leaders
+            .into_iter()
+            .flatten()
+            .filter(|at| *at < tracks)
+            .chain(rest);
         for index in order {
             // A track's own realign, or its own reset, starts its chain again here, as a section
             // bringing it in would, a longer step cut short. A reset or realign of every track

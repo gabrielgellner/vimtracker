@@ -103,7 +103,8 @@ impl Engine {
             let Some((group, place)) = *member else {
                 continue;
             };
-            let (Some(state), Some(track)) = (self.tracks.get(group), current.song.tracks.get(group))
+            let (Some(state), Some(track)) =
+                (self.tracks.get(group), current.song.tracks.get(group))
             else {
                 continue;
             };

@@ -20,7 +20,7 @@ use crate::controls::param::ParamView;
 use crate::controls::share;
 use crate::controls::tuning::{TuneOf, Tuning, tuning};
 use crate::controls::{Control, DeviceSpec};
-use crate::overlays::mapping::holding;
+use crate::overlays::mapping::{holding, target_of};
 use crate::pages::Ctx;
 use crate::pages::track::TrackPage;
 use crate::services::automating::fader_of;
@@ -245,10 +245,22 @@ impl<'a> TrackCells<'a> {
     /// draws and a cell with none marks it held by. A generator's setting with no bounds, such as
     /// its `Wave`, is held across its whole list.
     fn macro_range(&self, control: Control) -> Option<(u8, u8)> {
+        // Its group's macro has the last word, so its range is the one drawn (decision 408).
+        let held = target_of(control, self.track).and_then(|target| {
+            let song = self.ctx.song();
+            song.group_holding(self.ctx.cursor().track, target)
+                .map(|(_, map)| *map)
+        });
         let Control::Gen { param, .. } = control else {
-            return macro_range(control, self.track);
+            return match held {
+                Some(map) => map
+                    .target
+                    .setting()
+                    .map(|_| (((map.min >> 8) as u8), ((map.max >> 8) as u8))),
+                None => macro_range(control, self.track),
+            };
         };
-        let (_, map) = holding(control, self.track).next()?;
+        let map = held.or_else(|| holding(control, self.track).next().map(|(_, map)| *map))?;
         let (_, context) = self.generator.as_ref()?;
         let Some(bounds) = param.bounds(context) else {
             return Some((0, u8::MAX));

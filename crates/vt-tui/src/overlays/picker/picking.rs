@@ -257,6 +257,11 @@ impl App {
                 let control = self.track_control();
                 self.services.map_to_macro(at, control, self.modes.view);
             }
+            Pick::GroupMacro(at) => {
+                let control = self.track_control();
+                self.services
+                    .map_to_group_macro(at, control, self.modes.view);
+            }
             Pick::MacroHolding(at) => self.go_to_macro(at),
             Pick::Use {
                 section,
