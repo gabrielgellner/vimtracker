@@ -260,7 +260,7 @@ fn renders_repeat_and_follow_the_seed() {
     let steps = 16 * 8;
     let once = hits(&thinned, steps);
     assert_eq!(once, hits(&thinned, steps));
-    let mut reseeded = thinned.clone();
+    let mut reseeded = thinned;
     reseeded.seed ^= 0x1234_5678;
     assert_ne!(once, hits(&reseeded, steps));
 }
