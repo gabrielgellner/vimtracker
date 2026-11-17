@@ -9,7 +9,7 @@ use vt_model::condition::{Condition, Situation, percent_comes_up};
 use vt_model::constants::{FX_SLOTS, NUDGE_TICKS, TICKS_PER_STEP};
 use vt_model::dice::{DiceStep, looped_chance};
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
-use vt_model::order::{WalkMove, jumped};
+use vt_model::order::{Dealer, WalkMove, jumped};
 use vt_model::phrase::Phrase;
 use vt_model::settings::{SettingId, moved_chance};
 use vt_model::shape::RowView;
@@ -65,10 +65,19 @@ impl Engine {
         let place = self.track_place(index, running);
         let count = running - self.tracks[index].started;
         // Each lane is read once a step, here, in order, so it counts along.
-        let lanes = self.read_lanes(index, place, count);
+        let runs = self.tracks[index].lane_runs_now();
+        let mut lanes = self.read_lanes(index, place, count);
         // How its settings move its phrase's walk is read first, as it says which row the rest
         // look at (decision 400).
-        let walk = self.walk_ahead(index, place, running, &lanes);
+        let mut walk = self.walk_ahead(index, place, running, &lanes);
+        // An `SED` on the row walked to, or in a lane at it, reseeds the track's dice before
+        // anything rolls them, and its lanes are read again, so a row of theirs starting here
+        // jumps from the new seed too (decision 421).
+        if self.reseed_at(index, running, count, &lanes) {
+            self.tracks[index].put_lane_runs(runs);
+            lanes = self.read_lanes(index, place, count);
+            walk = self.walk_ahead(index, place, running, &lanes);
+        }
         // Whether it jumps to another row is decided before anything looks at the row, so its
         // groove, speed and nudge are the row's it plays.
         let jumped = self.jump_at(index, place, running, &lanes);
@@ -96,6 +105,8 @@ impl Engine {
             jumped,
             walk,
             dice,
+            seed: self.tracks[index].dice_seed(self.current.song.seed),
+            unlooped: self.tracks[index].dice_step(DiceStep { running, count }),
             plays: None,
             start: self.tracks[index].chain_starts,
         };
@@ -190,7 +201,15 @@ impl Engine {
             let chosen = self.chosen_ahead(index, running, walked, SettingId::JUMP, lanes);
             let chance = ((f32::from(chosen) + moved) / 255.0).clamp(0.0, 1.0);
             let phrase = owner.phrases.get(&position.phrase)?;
-            jumped(phrase.loop_steps(), position.deal, position.visit, chance)
+            // After an `SED`, rolled from its seed at the count from its row (decision 421).
+            let (deal, visit) = match self.tracks[index].reseed {
+                Some(reseed) => {
+                    let since = running - self.tracks[index].started - reseed.from.count;
+                    (Dealer::new(reseed.seed, index).deal(since, 0), 0)
+                }
+                None => (position.deal, position.visit),
+            };
+            jumped(phrase.loop_steps(), deal, visit, chance)
         };
         self.tracks[index].jump = Some(JumpAt { chain, start, row });
         row
@@ -225,10 +244,30 @@ impl Engine {
         if settings.length == 0 {
             return None;
         }
-        let seed = self.current.song.seed;
-        self.tracks[index]
-            .dice
-            .roll(settings, seed, index, DiceStep { running, count })
+        // After an `SED`, rolled from its seed and counted from its row (decision 421).
+        let state = &mut self.tracks[index];
+        let seed = state.dice_seed(self.current.song.seed);
+        let now = state.dice_step(DiceStep { running, count });
+        state.dice.roll(settings, seed, index, now)
+    }
+
+    /// Reseed a track's dice if the row it's working out plays an `SED`, on its first pulse, or a
+    /// lane at it starts a row with one, the last column's winning (decision 421). It's read
+    /// before the row plays, from the row walked to, so its `Jump` rolls from the new seed. With
+    /// no `SED` on the track, nothing is read. Whether it reseeded them.
+    fn reseed_at(&mut self, index: usize, running: i64, count: i64, lanes: &LaneReads) -> bool {
+        if !self.current.reseeds(index) {
+            return false;
+        }
+        let Some(row) = self.row_ahead(index, running, lanes) else {
+            return false;
+        };
+        let Some(slot) = self.slot_ahead(index, running, row, FxCommand::Sed, lanes) else {
+            return false;
+        };
+        let from = DiceStep { running, count };
+        self.tracks[index].reseed(slot.coarse(), index, from);
+        true
     }
 
     /// Whether the row a track plays at this place in its chain, as written, locks any of these
@@ -390,7 +429,9 @@ impl Engine {
             return lanes;
         };
         let entry = (position.phrase, position.slot);
-        let dealer = self.dealer(index);
+        // After an `SED`, their jumps roll from its seed (decision 421).
+        let seed = self.tracks[index].dice_seed(self.current.song.seed);
+        let dealer = Dealer::new(seed, index);
         for (slot, read) in lanes.iter_mut().enumerate() {
             if let Some(lane) = phrase.lane(slot) {
                 *read = Some(self.tracks[index].lane_row(slot, lane, entry, count, dealer));
@@ -480,6 +521,23 @@ impl Engine {
             return self.tracks[index].held_choice(id, false);
         };
         let first = position.pulse == 0;
+        let chosen = self.slot_ahead(index, running, (position, view), FxCommand::Set(id), lanes);
+        let note = first && matches!(view.note, Note::On(_)) && view.gate_kind() != GateKind::Rest;
+        chosen.map_or_else(|| self.tracks[index].held_choice(id, note), FxSlot::coarse)
+    }
+
+    /// The slot of `command` a row has, read before it plays: on its row, on its first pulse, or
+    /// in a lane at it, a lock on each of a lane's row's steps and an event on its first, the last
+    /// column's winning as they run left to right.
+    fn slot_ahead(
+        &mut self,
+        index: usize,
+        running: i64,
+        (position, view): (ChainPosition, RowView),
+        command: FxCommand,
+        lanes: &LaneReads,
+    ) -> Option<FxSlot> {
+        let first = position.pulse == 0;
         let count = running - self.tracks[index].started;
         let current = Arc::clone(&self.current);
         let chain = self
@@ -496,7 +554,6 @@ impl Engine {
             position,
             lanes: *lanes,
         };
-        let mut chosen = None;
         for number in (0..FX_SLOTS).rev() {
             let slot = match (phrase, lanes[number]) {
                 (Some(phrase), Some(lane)) => phrase.steps().get(lane.row).and_then(|step| {
@@ -508,13 +565,11 @@ impl Engine {
                 (_, None) if first => view.fx(number).copied(),
                 (None, Some(_)) | (_, None) => None,
             };
-            if let Some(slot) = slot.filter(|slot| slot.command == Some(FxCommand::Set(id))) {
-                chosen = Some(slot.coarse());
-                break;
+            if let Some(slot) = slot.filter(|slot| slot.command == Some(command)) {
+                return Some(slot);
             }
         }
-        let note = first && matches!(view.note, Note::On(_)) && view.gate_kind() != GateKind::Rest;
-        chosen.unwrap_or_else(|| self.tracks[index].held_choice(id, note))
+        None
     }
 
     /// The groove a track's step plays with and its speed, worked out before it's played, as each
@@ -606,7 +661,7 @@ impl Engine {
         let plays = decided.note;
         let variation = if row && decided.fx {
             // An `RND` rolls the dice of the step its track's dice loop holds, if it's on.
-            let rolls = pending.dice.map_or(count, |dice| dice.count);
+            let rolls = (pending.seed, pending.rolls());
             self.vary(index, &mut fx.fx, &fx.read, &fx.lane_steps, rolls, moved)
         } else {
             NoteVariation::default()
@@ -654,8 +709,12 @@ impl Engine {
                     fx.time(command, slot.coarse());
                 }
                 FxCommand::Acu | FxCommand::Arp => fx.pitch(command, slot.coarse()),
-                // Decided before any of them run, or read above.
-                FxCommand::Cha | FxCommand::Cnd | FxCommand::Rnd | FxCommand::Sld => {}
+                // Decided before any of them run, read above, or, an `SED`, before the row plays.
+                FxCommand::Cha
+                | FxCommand::Cnd
+                | FxCommand::Rnd
+                | FxCommand::Sed
+                | FxCommand::Sld => {}
                 FxCommand::Set(_) if slides && slot.mark == Mark::Lock && command.glides() => {
                     self.slide(index, slot, phrase, read, pending.ticks);
                 }
@@ -781,8 +840,7 @@ impl Engine {
                 .map(|frames| start_at + frames);
         }
         // Each hit rolls the dice of the step the dice loop holds, if it's on.
-        let rolls = pending.dice.map_or(count, |dice| dice.count);
-        let keep = share.map(|share| (rolls, share));
+        let keep = share.map(|share| ((pending.seed, pending.rolls()), share));
         self.time_note(index, &fx, start_at, pending.ticks, accumulating, keep);
     }
 
@@ -1023,7 +1081,7 @@ impl Engine {
             self.tracks[index].row
         };
         let mut chance = None;
-        let seed = self.current.song.seed;
+        let seed = pending.seed;
         for (column, slot) in fx.iter().enumerate() {
             if slot.command != Some(FxCommand::Cha) {
                 continue;
@@ -1047,8 +1105,7 @@ impl Engine {
         };
         if first && strikes && moved < 128.0 && chance.is_none() && !conditioned() {
             // Thinned by the dice of the step the dice loop holds, if it's on.
-            let rolls = pending.dice.map_or(pending.count, |dice| dice.count);
-            decided.note &= thin_keeps(seed, index, rolls, moved);
+            decided.note &= thin_keeps(seed, index, pending.rolls(), moved);
         }
         let holds = self.conditions_hold(index, fx, pending, position, chance, moved);
         if !holds {
@@ -1069,9 +1126,7 @@ impl Engine {
         } else if let Some(share) = share
             && strikes
         {
-            let seed = self.current.song.seed;
-            let rolls = pending.dice.map_or(pending.count, |dice| dice.count);
-            decided.note &= kept(seed, index, rolls, 0, share);
+            decided.note &= kept(seed, index, pending.rolls(), 0, share);
         }
         if pending.part != Part::Whole {
             self.tracks[index].decide(pending.step, decided);
@@ -1193,7 +1248,7 @@ impl Engine {
         start_at: u64,
         ticks: u64,
         accumulates: Option<Accumulating>,
-        keep: Option<(i64, f32)>,
+        keep: Option<((u64, i64), f32)>,
     ) {
         if let Some(units) = fx.kill {
             self.tracks[index].kill_at = Some(start_at + self.groove_units(units, ticks));
@@ -1226,10 +1281,9 @@ impl Engine {
         fx: &mut [FxSlot; FX_SLOTS],
         read: &[FxSlot; FX_SLOTS],
         lane_steps: &[Option<usize>; FX_SLOTS],
-        count: i64,
+        (seed, count): (u64, i64),
         moved: f32,
     ) -> NoteVariation {
-        let seed = self.current.song.seed;
         let mut variation = NoteVariation::default();
         for column in 0..FX_SLOTS {
             if fx[column].command != Some(FxCommand::Rnd) {
@@ -1375,8 +1429,7 @@ impl Engine {
         chance: Option<bool>,
         moved: f32,
     ) -> bool {
-        let seed = self.current.song.seed;
-        let rolls = pending.dice.map_or(pending.count, |dice| dice.count);
+        let (seed, rolls) = (pending.seed, pending.rolls());
         let previous = self.tracks[index].passed;
         let neighbour = index
             .checked_sub(1)

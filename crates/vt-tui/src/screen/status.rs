@@ -238,6 +238,12 @@ pub(crate) fn phrase_value(services: &Services, field: Field) -> Option<String> 
                 };
                 return Some(shown.to_owned());
             }
+            if cell.command == Some(FxCommand::Sed) {
+                return Some(format!(
+                    "the track's dice roll from seed {:02X} from this row, the same each time it plays",
+                    cell.coarse()
+                ));
+            }
             if cell.command == Some(FxCommand::Acu) {
                 return Some(amount_shown(
                     cell.coarse(),

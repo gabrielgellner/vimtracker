@@ -5,7 +5,7 @@
 //! from `00`, a locked loop, to `FF`, fresh dice every step, as with no loop; `Dice jump` is the
 //! chance a step reads another place of the loop than the one it's at, so a locked loop plays its
 //! dice out of order. The rolls that decide both are hashes of the seed, the track and the step, so
-//! a render repeats.
+//! a render repeats. An `SED` reseeds them all from its row on (decision 421).
 //!
 //! The loop is a ring of fixed size, which the audio thread keeps for each track and fills as it
 //! plays, so it allocates nothing.
@@ -123,6 +123,38 @@ impl DiceLoop {
             self.filled |= 1u64 << place;
         }
         Some(self.kept[place])
+    }
+}
+
+/// Keeps the seeds an `SED` gives apart from any song's.
+const RESEED_STREAM: u64 = 0x7365_6400_0000_0000;
+
+/// Where a track's `SED` last reseeded its dice (decision 421): the seed its value gives, in
+/// place of the song's, and the track's own count and its count since its chain started at the
+/// row it played on, which the track's dice count from after it. The seed is the value's alone,
+/// so a passage with an `SED` rolls the same in any song, while the track is still hashed in, so
+/// two tracks with the same `SED` roll apart, as two tracks of one song do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Reseed {
+    pub seed: u64,
+    pub from: DiceStep,
+}
+
+impl Reseed {
+    /// An `SED` of `value` on the row at `from`.
+    pub fn new(value: u8, from: DiceStep) -> Self {
+        Self {
+            seed: splitmix64(RESEED_STREAM ^ u64::from(value)),
+            from,
+        }
+    }
+
+    /// The step `now` as the track's dice count it after the `SED`, from 0 at its row.
+    pub fn since(self, now: DiceStep) -> DiceStep {
+        DiceStep {
+            running: now.running - self.from.running,
+            count: now.count - self.from.count,
+        }
     }
 }
 
@@ -245,6 +277,23 @@ mod tests {
             .map(|at| dice.roll(eight, 7, 0, step(at)).unwrap().running)
             .collect();
         assert_eq!(back, [0, 1, 2, 3, 4, 5, 6, 7]);
+    }
+
+    #[test]
+    fn a_reseed_counts_from_its_row_and_its_value_alone_gives_its_seed() {
+        let at = DiceStep {
+            running: 40,
+            count: 8,
+        };
+        let reseed = Reseed::new(0x2A, at);
+        assert_eq!(reseed.since(at), DiceStep::default());
+        assert_eq!(
+            reseed.since(step(43)).running,
+            3,
+            "counted from the row it played on"
+        );
+        assert_eq!(Reseed::new(0x2A, step(0)).seed, reseed.seed);
+        assert_ne!(Reseed::new(0x2B, at).seed, reseed.seed);
     }
 
     #[test]

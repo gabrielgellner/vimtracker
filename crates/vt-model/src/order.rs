@@ -631,7 +631,7 @@ impl Dealer {
 
     /// The deal for one time round a track's chain, counted from where it started, and one place
     /// in it, so a phrase twice in its chain is dealt twice.
-    pub(crate) fn deal(self, lap: i64, slot: usize) -> Deal {
+    pub fn deal(self, lap: i64, slot: usize) -> Deal {
         Deal(splitmix64(splitmix64(self.0 ^ lap as u64) ^ slot as u64))
     }
 }

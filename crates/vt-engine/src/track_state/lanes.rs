@@ -5,6 +5,7 @@
 //! Division Cueing does (decision 402). Its `Jump` has a row play any of the lane's rows instead
 //! of the next, which no cue holds back, as a walk's choice isn't a loop's bounds (decision 415).
 
+use vt_model::constants::FX_SLOTS;
 use vt_model::lane::{Heard, LANE_RATES, Lane, LaneMove};
 use vt_model::order::{Dealer, lane_jumped};
 use vt_model::settings::{LANE_SETTINGS, SettingId};
@@ -49,6 +50,10 @@ pub(crate) struct LaneJump {
     pub dealer: Dealer,
     pub column: usize,
     pub chance: u8,
+    /// After an `SED`, the count of the track's steps since its row, which a row's jump is rolled
+    /// at in place of the lane's lap and row, so it jumps the same each time the row plays
+    /// (decision 421).
+    pub since: Option<i64>,
 }
 
 impl LaneJump {
@@ -58,6 +63,7 @@ impl LaneJump {
             dealer: Dealer::default(),
             column: 0,
             chance: 0,
+            since: None,
         }
     }
 }
@@ -159,7 +165,8 @@ impl LaneRun {
         let jumped = *self.jumped.get_or_insert_with(|| {
             let chance = f32::from(jump.chance) / 255.0;
             let rows = lane.length.max(1);
-            lane_jumped(jump.dealer, jump.column, self.laps, self.row, rows, chance)
+            let (lap, row) = jump.since.map_or((self.laps, self.row), |since| (since, 0));
+            lane_jumped(jump.dealer, jump.column, lap, row, rows, chance)
         });
         let read = LaneRead {
             row: jumped.map_or_else(|| lane.stored_from(self.row, start), |own| lane.stored(own)),
@@ -224,6 +231,7 @@ impl TrackState {
             dealer,
             column: slot,
             chance: self.lane_moved(slot).jump,
+            since: self.reseed.map(|reseed| count - reseed.from.count),
         };
         self.lane_runs[slot].read(lane, count, entry, offset, now, cue, jump)
     }
@@ -254,6 +262,16 @@ impl TrackState {
             cued: self.lane_runs[slot].cued,
             jumped: None,
         };
+    }
+
+    /// Where each lane is now, to put back with [`Self::put_lane_runs`] for reading them again.
+    pub(crate) fn lane_runs_now(&self) -> [LaneRun; FX_SLOTS] {
+        self.lane_runs
+    }
+
+    /// Put each lane back where [`Self::lane_runs_now`] found it.
+    pub(crate) fn put_lane_runs(&mut self, runs: [LaneRun; FX_SLOTS]) {
+        self.lane_runs = runs;
     }
 
     /// Forget where each lane is, so each is placed again from the count as it's next read.

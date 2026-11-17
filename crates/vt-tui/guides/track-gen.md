@@ -70,7 +70,8 @@ is the row each lane starts on, so many of its own rows on, going round them.
 `Jump` is the chance, `00` to `FF`, that each of its rows plays any of the lane's
 own rows instead of the next, as the Play device's `Jump` is for the phrase's:
 the lane counts on from where it was, and a slow row jumps once for all its
-steps. `Cue` never holds it back, as it's how the loop is walked, not its
+steps. After an `SED`, its jumps come out the same each time that row plays (see
+**Reseeding** in the FX guide). `Cue` never holds it back, as it's how the loop is walked, not its
 bounds. At the end of its title, dim, it says how this phrase's lane
 is heard against its own: `· here 6 rows, its own 4 rows`. `=` `-` `+` `_`, `i`,
 `K` on `Rate`, `x`, `M` and `gd` work on them as on any of the track's settings,
