@@ -570,11 +570,37 @@ to the `Depth` for the hardest notes.
 the Roto, `Low`, `High`, `Depth` and `Source` are the first four knobs, with the
 polarity on the button under `Depth`, and `Dest` on the next page.
 
-## Locking a slot's lists
+## Locking a slot's settings
 
-A step locks a slot's lists and its odd times, as an Elektron box locks its LFO's
-`WAVE`, `MODE` and `FADE`. Each label ends in the slot's number, and `K` lists each
-under its slot while the slot's type has it:
+A step locks a slot's own settings, its times, levels and rates as well as its lists,
+as an Elektron box locks its amp envelope's `DEC` or its LFO's `WAVE` on a trig. Each
+label ends in the slot's number, and `K` lists each under its slot while the slot's
+type has it:
+
+| Lock | Sets | Values |
+|---|---|---|
+| `EATK2` | An envelope's attack | `00` none, `01` 1 ms to `FF` 8 s |
+| `EDEC2` | An envelope's decay, or a drum's | the same times |
+| `ESUS2` | An envelope's sustain | `00` none to `64` all |
+| `EREL2` | An envelope's release | the same times |
+| `BODY2` | A drum's body | `00` none to `64` all |
+| `CLR2` | A gate's colour | `00` none to `FF`, in `Cut`'s steps |
+| `RATE4` | An LFO's or Steps' rate | faster up the scale |
+| `LEN3` | Steps' length | `00` one step to `0F` sixteen |
+| `MUT3` | Steps' mutate | `00` none to `64` every value |
+| `SMTH3` | Steps' smooth | `80` steps, up glides |
+| `JMP3` | Steps' jump | `00` none to `64` every step |
+| `SPR3` | Steps' spread | `32` even, `64` the ends |
+| `BIAS3` | Steps' bias | `80` none, up high |
+
+An envelope's are `E` before Elektron's names, as `4-op`'s operators have `ATK1` to
+`REL4` of their own. A lock on a note's row is that note's from its first frame: `EDEC1
+20` on one row and none on the next gives a short note then the slot's own, as a
+Digitakt's per-trig decay does, and the slot shaping the notes takes it too. A rate
+locked on a note's row runs from there. A `MAC` lock on a macro holding one of them
+is as exact.
+
+The lists and the odd times:
 
 | Lock | Sets | Values |
 |---|---|---|
