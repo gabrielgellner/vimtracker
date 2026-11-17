@@ -39,6 +39,7 @@ mod lanes;
 mod lfo;
 mod live_lengths;
 mod lockable_lists;
+mod lockable_times;
 mod macro_generators;
 mod macro_voices;
 mod macros;
