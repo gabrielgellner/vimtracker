@@ -1307,6 +1307,9 @@
 1306 ordery
 1307 phraselength
 1308 phrasestart
-1309 lane1.start
-1310 lane2.start
-1311 lane3.start
+1309 diceloop
+1310 dicemutate
+1311 dicejump
+1312 lane1.start
+1313 lane2.start
+1314 lane3.start

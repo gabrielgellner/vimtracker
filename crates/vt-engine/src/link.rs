@@ -827,6 +827,46 @@ mod tests {
         assert_eq!(violations, 0);
     }
 
+    /// Each track's dice loop turned every block, its length through every choice and past them,
+    /// its mutate and jump with it, over rows that roll `CHA` and `RND` and lock `DLP` and `DJMP`,
+    /// so its ring fills, drifts and jumps as it plays (decisions 410 and 411).
+    #[test]
+    fn the_dice_loop_moving_every_block_never_allocates_in_the_callback() {
+        let rows = [
+            "C-3 -- cha:80 rnd:F3 ---",
+            "D-3 -- rnd:F7 diceloop:04 ---",
+            "E-3 -- cha:40 dicejump:C0 ---",
+            "--- -- --- --- ---",
+        ];
+        let dice = || {
+            let mut song = song(8, 16);
+            for track in song.tracks.iter_mut().take(8) {
+                let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+                for step in 0..16 {
+                    *phrase.step_mut(step).unwrap() = rows[step % rows.len()].parse().unwrap();
+                }
+            }
+            song
+        };
+        let pool = samples();
+        let engine = Engine::new(48_000, published(dice(), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 0..200 {
+            let mut next = dice();
+            for (at, track) in next.tracks.iter_mut().take(8).enumerate() {
+                track.dice_loop = ((round + at) % 24) as u8;
+                track.dice_mutate = ((round * 37 + at * 11) % 256) as u8;
+                track.dice_jump = ((round * 53 + at * 7) % 256) as u8;
+            }
+            handle.publish(published(next, &pool));
+            violations += blocks(&mut rt, 1);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
     /// Tracks in `Legato`, tying and striking, on synths and samples alike (decision 380).
     #[test]
     fn legato_never_allocates_in_the_callback() {

@@ -4,6 +4,7 @@
 //! place in the table is its [`SettingId`], fixed when the program is built.
 
 use crate::constants::{MAX_LEVEL, UNITY_LEVEL};
+use crate::dice::DICE_LOOP_NAMES;
 use crate::groove::GROOVE_CHOICES;
 use crate::lane::{LANE_RATES, LENGTH_AS_WRITTEN, RATE_AS_WRITTEN};
 use crate::order::{MOST_ORDER_NUMBER, ORDER_AS_WRITTEN, WINDOW_AS_WRITTEN};
@@ -388,7 +389,7 @@ const TRACK_GROUPS: [&str; 16] = [
 
 /// The track's own settings added since places were fixed, at the end of the table so none moves
 /// (#718): the track's own after [`TRACK`]'s, in the order they came.
-const LATER_TRACK: [Entry; 17] = [
+const LATER_TRACK: [Entry; 20] = [
     // Whether a synth's oscillators run on from note to note or start again on each, read as a
     // note starts, so a lock on its row sets it for that note (decision 370).
     Entry {
@@ -580,11 +581,32 @@ const LATER_TRACK: [Entry; 17] = [
         default: 0,
         place: Place::Own,
     },
+    // The track's dice loop, after Marbles' Déjà vu and Length, read before a row plays, as `JMP`
+    // is (decisions 410 and 411): how many steps' dice it loops over, the chance a place rolls
+    // again as it comes round, and the chance a step reads another place.
+    Entry {
+        meaning: "how many steps the track's dice, CHA and RND, loop over; Off rolls fresh ones",
+        key: "diceloop",
+        name: "Dice loop",
+        label: Some("DLP"),
+        kind: Kind::Stepped {
+            choices: &DICE_LOOP_NAMES,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
+    level("dicemutate", "Dice mutate", "DMU", 0x00)
+        .means("the chance a step of the dice loop rolls afresh as it comes round; 00 locks it"),
+    level("dicejump", "Dice jump", "DJMP", 0x00).means(
+        "the chance a step takes the dice of any step of the loop, playing them out of order",
+    ),
 ];
 /// What each of [`LATER_TRACK`] is listed with.
-const LATER_TRACK_GROUPS: [&str; 17] = [
+const LATER_TRACK_GROUPS: [&str; 20] = [
     "Machine", "Machine", "Filter", "Machine", "Machine", "Filter", "Filter", "Filter", "Filter",
     "Filter", "Filter", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
+    "Machine", "Machine", "Machine",
 ];
 
 /// What `ORDX` and `ORDY` choose: the phrase's own number, or one from 1 to 16.

@@ -4,6 +4,7 @@
 use vt_model::accumulator::{Accumulation, Moves, Walk};
 use vt_model::arpeggio::{ArpMode, Cycle};
 use vt_model::constants::FX_SLOTS;
+use vt_model::dice::DiceStep;
 use vt_model::groove::Groove;
 use vt_model::modulation::MOD_SLOTS;
 use vt_model::order::WalkMove;
@@ -164,6 +165,9 @@ pub(crate) struct PendingStep {
     /// How its settings moved its phrase's walk, read as it was worked out, so a part landing
     /// after the next step is worked out plays the row it walked to (decision 400).
     pub walk: WalkMove,
+    /// The step whose dice its `CHA`s and `RND`s roll, if its track's dice loop is on, decided
+    /// as it was worked out (decision 410).
+    pub dice: Option<DiceStep>,
     /// What its row's `CHA` and `CND` decided, once the step's first part has decided them.
     pub plays: Option<Decided>,
     /// Which of its track's chain starts it was worked out after, which its accumulators count

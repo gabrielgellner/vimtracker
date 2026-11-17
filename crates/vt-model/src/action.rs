@@ -611,11 +611,14 @@ pub enum TrackControl {
     OrderY,
     PhraseLength,
     PhraseStart,
+    DiceLoop,
+    DiceMutate,
+    DiceJump,
 }
 
 impl TrackControl {
     /// Every one, in the order they're declared.
-    pub const ALL: [Self; 19] = [
+    pub const ALL: [Self; 22] = [
         Self::Cutoff,
         Self::Resonance,
         Self::Pan,
@@ -635,6 +638,9 @@ impl TrackControl {
         Self::OrderY,
         Self::PhraseLength,
         Self::PhraseStart,
+        Self::DiceLoop,
+        Self::DiceMutate,
+        Self::DiceJump,
     ];
 
     /// The setting this is the base of, if steps can set it too.
@@ -659,6 +665,9 @@ impl TrackControl {
             Self::OrderY => Some(SettingId::ORDER_Y),
             Self::PhraseLength => Some(SettingId::PHRASE_LENGTH),
             Self::PhraseStart => Some(SettingId::PHRASE_START),
+            Self::DiceLoop => Some(SettingId::DICE_LOOP),
+            Self::DiceMutate => Some(SettingId::DICE_MUTATE),
+            Self::DiceJump => Some(SettingId::DICE_JUMP),
         }
     }
 }

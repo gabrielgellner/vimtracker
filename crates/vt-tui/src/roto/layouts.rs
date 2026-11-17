@@ -778,8 +778,8 @@ const MASTER_OUTPUT: DeviceLayout = stored(
 /// A note's pitch and how it joins and ends, what cuts it off, then the steps' timing, and last
 /// how much louder or softer than written its notes play, a live dynamics knob. How near the grid
 /// its rows' nudges play, `Quantise`, past eight knobs, is on a second page, a live timing knob,
-/// with how its notes join, `Mode`, which of them glide, `Glide mode`, and how often its steps
-/// jump to any row, `Jump`.
+/// with how its notes join, `Mode`, which of them glide, `Glide mode`, how often its steps jump
+/// to any row, `Jump`, and its dice loop, `Dice loop`, `Dice mutate` and `Dice jump`.
 const PLAY: DeviceLayout = live(
     "play",
     &[
@@ -791,9 +791,9 @@ const PLAY: DeviceLayout = live(
                 s("voicemode"),
                 s("glidemode"),
                 s("jump"),
-                __,
-                __,
-                __,
+                s("diceloop"),
+                s("dicemutate"),
+                s("dicejump"),
                 __,
             ],
         ),
@@ -816,7 +816,7 @@ const PLAY_PAGE: Page<Setting> = knobs(
 );
 
 /// A synth's: the sampler's, with whether its oscillators start again on each note between
-/// `Quantise` and `Mode`, and `Glide mode` and `Jump` after.
+/// `Quantise` and `Mode`, and `Glide mode`, `Jump` and the dice loop after.
 const SYNTH_PLAY: DeviceLayout = live(
     "synthplay",
     &[
@@ -829,9 +829,9 @@ const SYNTH_PLAY: DeviceLayout = live(
                 s("voicemode"),
                 s("glidemode"),
                 s("jump"),
-                __,
-                __,
-                __,
+                s("diceloop"),
+                s("dicemutate"),
+                s("dicejump"),
             ],
         ),
     ],

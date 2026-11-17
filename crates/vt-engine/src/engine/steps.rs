@@ -7,6 +7,7 @@ use vt_model::accumulator::{Adds, MOST_DEGREES, Reset, amount, moved_note};
 use vt_model::arpeggio::{ArpMode, Cycle};
 use vt_model::condition::{Condition, Situation};
 use vt_model::constants::{FX_SLOTS, NUDGE_TICKS, TICKS_PER_STEP};
+use vt_model::dice::{DiceStep, looped_chance};
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
 use vt_model::order::{WalkMove, jumped};
 use vt_model::phrase::Phrase;
@@ -37,6 +38,13 @@ const WALK_SETTINGS: [SettingId; 6] = [
     SettingId::PHRASE_START,
 ];
 
+/// The settings of a track's dice loop, read before a row plays (decisions 410 and 411).
+const DICE_SETTINGS: [SettingId; 3] = [
+    SettingId::DICE_LOOP,
+    SettingId::DICE_MUTATE,
+    SettingId::DICE_JUMP,
+];
+
 /// Where each FX column's lane reads at a step, for those with one.
 pub(super) type LaneReads = [Option<LaneRead>; FX_SLOTS];
 
@@ -62,6 +70,9 @@ impl Engine {
         // Whether it jumps to another row is decided before anything looks at the row, so its
         // groove, speed and nudge are the row's it plays.
         let jumped = self.jump_at(index, place, running, &lanes);
+        // Which step's dice it rolls, read before the row plays too, so a lock on the row counts
+        // (decision 410).
+        let dice = self.dice_at(index, place, running, count, &lanes);
         // The groove counts the track's own steps from the start or the last reset, not its
         // loop, so an odd length stays on the beat, and a track at an eighth swings its eighths.
         let (groove, speed) = self.step_choices(index, running, &lanes);
@@ -82,6 +93,7 @@ impl Engine {
             lanes,
             jumped,
             walk,
+            dice,
             plays: None,
             start: self.tracks[index].chain_starts,
         };
@@ -180,6 +192,70 @@ impl Engine {
         };
         self.tracks[index].jump = Some(JumpAt { chain, start, row });
         row
+    }
+
+    /// Which step's dice the step a track is working out rolls, its `CHA`s and `RND`s, as its dice
+    /// loop decides, or `None` with the loop off, when they roll as they always have (decision
+    /// 410). Its settings are read before the row plays, as `JMP`'s are: a `DLP`, `DMU` or `DJMP`
+    /// on the row it plays, or in a lane at it, or what the track holds, with what modulation
+    /// adds. With the loop off, no lock on the row and no lane, nothing more is read.
+    fn dice_at(
+        &mut self,
+        index: usize,
+        place: Option<(u32, usize)>,
+        running: i64,
+        count: i64,
+        lanes: &LaneReads,
+    ) -> Option<DiceStep> {
+        let held = self.tracks[index].held_dice();
+        let locked =
+            lanes.iter().any(Option::is_some) || self.plays_lock(index, place, &DICE_SETTINGS);
+        let settings = if locked {
+            let row = self.row_ahead(index, running, lanes);
+            let chosen = DICE_SETTINGS.map(|id| self.chosen_ahead(index, running, row, id, lanes));
+            self.tracks[index].dice_of(|id| {
+                let at = DICE_SETTINGS.iter().position(|dice| *dice == id);
+                at.map_or(0, |at| chosen[at])
+            })
+        } else {
+            held
+        };
+        if settings.length == 0 {
+            return None;
+        }
+        let seed = self.current.song.seed;
+        self.tracks[index]
+            .dice
+            .roll(settings, seed, index, DiceStep { running, count })
+    }
+
+    /// Whether the row a track plays at this place in its chain, as written, locks any of these
+    /// settings: the row its `Jump` played in place of the one walked to, if it jumped.
+    fn plays_lock(&self, index: usize, place: Option<(u32, usize)>, ids: &[SettingId]) -> bool {
+        let Some((chain, place)) = place else {
+            return false;
+        };
+        let Some(owner) = self.current.song.tracks.get(index) else {
+            return false;
+        };
+        let Some(mut position) =
+            owner.chain_position(chain, place, self.dealer(index), self.walk(index))
+        else {
+            return false;
+        };
+        if let Some(row) = self.tracks[index]
+            .jump
+            .filter(|jump| jump.chain == chain && jump.start == place - position.pulse)
+            .and_then(|jump| jump.row)
+        {
+            position.step = row;
+        }
+        owner.step_at(position).is_some_and(|step| {
+            step.fx.iter().any(|slot| {
+                ids.iter()
+                    .any(|id| slot.command == Some(FxCommand::Set(*id)))
+            })
+        })
     }
 
     /// How a track's settings move its phrase's walk at the step it's working out, read before the
@@ -476,7 +552,9 @@ impl Engine {
         };
         let plays = decided.note;
         let variation = if row && decided.fx {
-            self.vary(index, &mut fx.fx, &fx.read, &fx.lane_steps, count)
+            // An `RND` rolls the dice of the step its track's dice loop holds, if it's on.
+            let rolls = pending.dice.map_or(count, |dice| dice.count);
+            self.vary(index, &mut fx.fx, &fx.read, &fx.lane_steps, rolls)
         } else {
             NoteVariation::default()
         };
@@ -817,8 +895,16 @@ impl Engine {
             self.tracks[index].row
         };
         let mut chance = None;
-        for slot in fx.iter().filter(|s| s.command == Some(FxCommand::Cha)) {
-            let rolled = self.tracks[index].rng.chance(slot.coarse());
+        let seed = self.current.song.seed;
+        for (column, slot) in fx.iter().enumerate() {
+            if slot.command != Some(FxCommand::Cha) {
+                continue;
+            }
+            // With the dice loop on, the dice of the step it holds; otherwise the track's stream.
+            let rolled = match pending.dice {
+                Some(dice) => looped_chance(seed, index, dice, column, slot.coarse()),
+                None => self.tracks[index].rng.chance(slot.coarse()),
+            };
             decided.note &= rolled;
             chance = Some(chance.unwrap_or(true) && rolled);
         }
