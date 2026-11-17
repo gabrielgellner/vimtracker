@@ -289,6 +289,23 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
             | TrackControl::PhraseStart
             | TrackControl::Cue),
         ) => walk_view(of, track, which),
+        Control::Base(TrackControl::ChanceTarget) => {
+            let at = usize::from(track.chance_target).min(vt_model::settings::CHANCE_TARGETS.len() - 1);
+            let meanings = [
+                "Row: a row's chance decides the whole row, its pulses and ratchets together",
+                "Pulse: a row's chance decides each of its pulses and ratchet hits on its own",
+            ];
+            of.listed(
+                vt_model::settings::CHANCE_TARGETS
+                    .iter()
+                    .zip(meanings)
+                    .map(|(name, meaning)| Choice::named(*name).meaning(meaning)),
+                at,
+                0,
+                false,
+            )
+            .text(meanings[at].to_owned())
+        }
         Control::Base(which) => {
             let value = track.control(which);
             ParamView {

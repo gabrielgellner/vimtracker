@@ -389,7 +389,7 @@ const TRACK_GROUPS: [&str; 16] = [
 
 /// The track's own settings added since places were fixed, at the end of the table so none moves
 /// (#718): the track's own after [`TRACK`]'s, in the order they came.
-const LATER_TRACK: [Entry; 19] = [
+const LATER_TRACK: [Entry; 20] = [
     // Whether a synth's oscillators run on from note to note or start again on each, read as a
     // note starts, so a lock on its row sets it for that note (decision 370).
     Entry {
@@ -586,6 +586,20 @@ const LATER_TRACK: [Entry; 19] = [
     // `80` none (decision 405).
     centred("chancedelta", "Chance up or down", "CDLT")
         .means("moves every row's chance to play up or down, a density fader"),
+    // Whether that chance decides each row once or each pulse and ratchet within it, as the
+    // Metropolix's probability targets a stage or a pulse (decision 406).
+    Entry {
+        meaning: "whether a row's chance decides the whole row or each pulse and ratchet in it",
+        key: "chancetarget",
+        name: "Chance target",
+        label: Some("CTGT"),
+        kind: Kind::Stepped {
+            choices: &CHANCE_TARGETS,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
     // Whether a turn of the window or a lane's length, rate or start waits for its loop to come
     // round, as Kria's Division Cueing does (decision 402).
     Entry {
@@ -602,11 +616,15 @@ const LATER_TRACK: [Entry; 19] = [
     },
 ];
 /// What each of [`LATER_TRACK`] is listed with.
-const LATER_TRACK_GROUPS: [&str; 19] = [
+const LATER_TRACK_GROUPS: [&str; 20] = [
     "Machine", "Machine", "Filter", "Machine", "Machine", "Filter", "Filter", "Filter", "Filter",
     "Filter", "Filter", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
-    "Machine", "Machine",
+    "Machine", "Machine", "Machine",
 ];
+
+/// What a row's chance decides, `CTGT`'s choices: the whole row, or each of its pulses and
+/// ratchets.
+pub const CHANCE_TARGETS: [&str; 2] = ["Row", "Pulse"];
 
 /// What `ORDX` and `ORDY` choose: the phrase's own number, or one from 1 to 16.
 const ORDER_NUMBERS: [&str; MOST_ORDER_NUMBER as usize + 1] = [

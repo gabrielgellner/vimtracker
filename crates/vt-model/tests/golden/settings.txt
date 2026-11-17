@@ -1308,7 +1308,7 @@
 1307 phraselength
 1308 phrasestart
 1309 chancedelta
-1310 cue
+1310 chancetarget
 1311 lane1.start
 1312 lane2.start
 1313 lane3.start

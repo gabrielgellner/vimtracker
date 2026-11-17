@@ -263,6 +263,10 @@ pub struct Track {
     /// [`moved_chance`](crate::settings::moved_chance), with `80` as none (decision 405).
     #[serde(default = "centre", skip_serializing_if = "is_centre")]
     pub chance_delta: u8,
+    /// Where held `CTGT` starts: whether a row's chance decides the whole row, `00`, or each of
+    /// its pulses and ratchets, `01` (decision 406).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub chance_target: u8,
     /// Where held `CUE` starts: whether a turn of the window or a lane's `Length`, `Rate` or
     /// `Start` waits for its loop to come round, `01` for on (decision 402).
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -507,6 +511,7 @@ impl Track {
             TrackControl::PhraseLength => self.phrase_length,
             TrackControl::PhraseStart => self.phrase_start,
             TrackControl::ChanceDelta => self.chance_delta,
+            TrackControl::ChanceTarget => self.chance_target,
             TrackControl::Cue => self.cue,
         }
     }
@@ -535,6 +540,7 @@ impl Track {
             TrackControl::PhraseLength => &mut self.phrase_length,
             TrackControl::PhraseStart => &mut self.phrase_start,
             TrackControl::ChanceDelta => &mut self.chance_delta,
+            TrackControl::ChanceTarget => &mut self.chance_target,
             TrackControl::Cue => &mut self.cue,
         };
         *held = match control {
@@ -776,6 +782,7 @@ impl Default for Track {
             phrase_length: centre(),
             phrase_start: 0,
             chance_delta: centre(),
+            chance_target: 0,
             cue: 0,
             choke: None,
             group: None,

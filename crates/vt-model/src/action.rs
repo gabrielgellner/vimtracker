@@ -614,12 +614,13 @@ pub enum TrackControl {
     PhraseLength,
     PhraseStart,
     ChanceDelta,
+    ChanceTarget,
     Cue,
 }
 
 impl TrackControl {
     /// Every one, in the order they're declared.
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 22] = [
         Self::Cutoff,
         Self::Resonance,
         Self::Pan,
@@ -640,6 +641,7 @@ impl TrackControl {
         Self::PhraseLength,
         Self::PhraseStart,
         Self::ChanceDelta,
+        Self::ChanceTarget,
         Self::Cue,
     ];
 
@@ -666,6 +668,7 @@ impl TrackControl {
             Self::PhraseLength => Some(SettingId::PHRASE_LENGTH),
             Self::PhraseStart => Some(SettingId::PHRASE_START),
             Self::ChanceDelta => Some(SettingId::CHANCE_DELTA),
+            Self::ChanceTarget => Some(SettingId::CHANCE_TARGET),
             Self::Cue => Some(SettingId::CUE),
         }
     }
