@@ -31,6 +31,7 @@ mod glide_mode;
 mod goldens;
 mod grid_mutes;
 mod groove;
+mod group_macros;
 mod groups;
 mod key_track;
 mod lane_moves;

@@ -4,7 +4,7 @@
 use vt_model::accumulator::Accumulation;
 use vt_model::arpeggio::Arpeggio;
 use vt_model::insert::INSERTS;
-use vt_model::macros::{MACROS, MacroTarget};
+use vt_model::macros::{MACROS, MacroMap, MacroTarget};
 use vt_model::settings::{
     FADER_COUNT, FADERS, MAX_MACHINE_SETTINGS, Owner, PLAYED_SETTINGS, SettingId,
 };
@@ -89,8 +89,10 @@ impl TrackState {
     pub(crate) fn put_macros_again(&mut self, track: &Track) {
         self.wake();
         self.macro_heard = [None; MACROS];
-        // A generator's setting no macro holds now goes back to its shape.
+        // A generator's setting no macro holds now goes back to its shape, and its group's
+        // macros put theirs again.
         self.gen_holds.forget_macros();
+        self.group_macro_heard = [None; MACROS];
         let moves = std::array::from_fn(|at| {
             SettingId::macro_at(at).map_or(0.0, |id| self.offsets[id.index()])
         });
@@ -124,19 +126,64 @@ impl TrackState {
                 continue;
             }
             self.macro_heard[at] = Some(value);
-            for map in &held.maps {
-                match map.target {
-                    MacroTarget::Setting(id) => self.set_base(id, map.at(value)),
-                    // A generator's is held for the engine to render with as it reads each row,
-                    // so a lock, a glide or modulation reaches it; at the macro's turn, it's what
-                    // the phrase holds, so nothing renders.
-                    MacroTarget::Gen { column, param } => {
-                        self.gen_holds
-                            .hold_by_macro(column, param, map.number_at(value));
-                    }
-                }
+            // A group's maps on its tracks are put on theirs, by the engine.
+            for map in held.own_maps() {
+                self.put_map(map, value);
             }
         }
+    }
+
+    /// Put a setting a macro holds where the macro has it at `value`, on the `00` to `FF` scale.
+    fn put_map(&mut self, map: &MacroMap, value: f32) {
+        match map.target {
+            MacroTarget::Setting(id) => self.set_base(id, map.at(value)),
+            // A generator's is held for the engine to render with as it reads each row, so a
+            // lock, a glide or modulation reaches it; at the macro's turn, it's what the phrase
+            // holds, so nothing renders.
+            MacroTarget::Gen { column, param } => {
+                self.gen_holds
+                    .hold_by_macro(column, param, map.number_at(value));
+            }
+        }
+    }
+
+    /// Where each of its macros is now, with what modulation last added, on the `00` to `FF`
+    /// scale: what a group's macros put on its tracks.
+    pub(crate) fn macro_turns(&self) -> [f32; MACROS] {
+        std::array::from_fn(|at| {
+            let moved = SettingId::macro_at(at).map_or(0.0, |id| self.offsets[id.index()]);
+            (self.macro_held[at] + moved * 255.0).clamp(0.0, 255.0)
+        })
+    }
+
+    /// Put each setting a group's macros hold on this track, at `place` in the group, where they
+    /// have it at `turns`, as [`TrackState::macro_turns`] gives them, after the track's own macros,
+    /// so the group's have the last word (decision 408). A macro that hasn't moved since does
+    /// nothing. Whether that moved a generator's setting, so a row is to be read again.
+    pub(crate) fn put_group_macros(
+        &mut self,
+        group: &Track,
+        place: u8,
+        turns: &[f32; MACROS],
+    ) -> bool {
+        let before = self.gen_holds.changes();
+        for (at, held) in group.macros.iter().enumerate() {
+            let value = turns[at];
+            if self.group_macro_heard[at] == Some(value) {
+                continue;
+            }
+            self.group_macro_heard[at] = Some(value);
+            for map in held.maps.iter().filter(|map| map.member == Some(place)) {
+                self.put_map(map, value);
+            }
+        }
+        self.gen_holds.changes() != before
+    }
+
+    /// Have its group's macros put what they hold on it again, as the group's maps or the
+    /// group itself may have changed.
+    pub(crate) fn put_group_macros_again(&mut self) {
+        self.group_macro_heard = [None; MACROS];
     }
 
     /// The accumulator's settings as they're heard, its `Up` and `Down` as macros and modulation

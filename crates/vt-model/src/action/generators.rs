@@ -22,7 +22,7 @@ type Hold = (usize, Option<Shape>);
 pub fn hold_generators(song: &mut Song) {
     for index in 0..song.tracks.len() {
         let track = &song.tracks[index];
-        let mapped = track.has_gen_maps();
+        let mapped = song.has_gen_maps(index);
         let held = || {
             track
                 .phrases
@@ -46,8 +46,8 @@ pub fn hold_generators(song: &mut Song) {
                         let source = generator
                             .source()
                             .and_then(|source| looked_up(&sources, source));
-                        let held = track
-                            .held_shape(generator, phrase.steps(), source)
+                        let held = song
+                            .held_shape(index, generator, phrase.steps(), source)
                             .filter(|held| *held != generator.shape);
                         (held != generator.held()).then_some((at, held))
                     })

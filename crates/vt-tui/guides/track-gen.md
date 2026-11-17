@@ -291,6 +291,26 @@ holds, as `MAC3 80`. A mod slot's `Dest` lists the eight under `Macros`, so an L
 sweeps every setting it holds, each across its own range. A step's lock of a setting the macro
 holds still wins on its row, and modulation of that setting goes on top.
 
+**Group macros.** A group's track has eight macros too, and they reach the settings of the tracks
+in the group as well as the group's own: one knob over a whole kit. `M` on a setting of a track in
+a group lists the group's eight after the track's own, as `G1 1 Kit`; `Enter` on one maps it
+there. The mapping keeps the track by its place in the group, first, second and so on, so a group's
+patch reaches the same places on any group; a track moved within the group or out of it leaves
+its place to the track now there.
+The group's mapping view (`gm` on the group's macro) names each setting after its track, as
+`Snare Cut`. On the track, the setting refuses a turn of its own, the status line says
+`on G1's macro 1`, and `gd` goes to that macro on the group's track. A setting both on one of the
+track's own macros and on the group's is heard where the group puts it; `M` moves it from one to
+the other. Generators' settings are reached too, each track's in its own phrases, so `Hits` on a
+kick, a snare and a hat can turn together from one macro.
+
+A mod slot on the group's track sends to its macros as to any, so an LFO on a group macro moves
+every setting it holds on every track, and a `MAC` lock on the group's own row reaches them from
+that row. A track's macro panel (`Space t`) still shows its own eight; the group's are on the
+group's track. Zones work as on any macro, so one group macro can crossfade between two tracks,
+one turned down over its left half and the other turned up over its right, as an Octatrack's
+crossfader does.
+
 ## Presets
 
 A preset saves a track's sound, or one slot's effect, to load on any track of any song, as
@@ -384,7 +404,9 @@ slot wherever the patch goes. Never the
 machine, the filter, the output or the effects: a macro mapped to one of those keeps the mapping
 by the setting's name, and on a track without that setting it does nothing. A track whose macros
 hold nothing has no patch to save; a sound preset (`:preset save`) keeps the whole track instead.
-
+A group's patch keeps its macros' mappings on its tracks by their places, and reaches the tracks
+at those places in the group it's added to; added to a sound track, which has no tracks of its
+own, those mappings are left out.
 | Command | Does |
 |---|---|
 | `:patch` | List the patches, to add one to this track |

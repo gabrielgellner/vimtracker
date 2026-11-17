@@ -120,10 +120,12 @@ pub fn value_shown(app: &App) -> Option<String> {
                         column: GenColumn::of(column),
                         param,
                     };
-                    Some(match held_text(track, target) {
-                        Some(held) => format!("{text}: {held}"),
-                        None => text,
-                    })
+                    Some(
+                        match held_text(app.song(), app.services.cursor.track, target) {
+                            Some(held) => format!("{text}: {held}"),
+                            None => text,
+                        },
+                    )
                 }
                 // A step `Mutate` has drawn plays the value drawn, so it says so, with what's
                 // written beside it, as its bar is drawn at the value drawn (decision 384).
@@ -146,9 +148,16 @@ pub fn value_shown(app: &App) -> Option<String> {
         .fader_note(app.services.cursor.track, control)
         .unwrap_or("");
     let held = match control {
-        Control::Macro(at) => format!(": holds {}", crate::overlays::mapping::holds(track, at)),
-        _ => held_text(track, MacroTarget::Setting(id))
-            .map_or_else(String::new, |held| format!(": {held}")),
+        Control::Macro(at) => format!(
+            ": holds {}",
+            crate::overlays::mapping::holds(app.song(), app.services.cursor.track, at)
+        ),
+        _ => held_text(
+            app.song(),
+            app.services.cursor.track,
+            MacroTarget::Setting(id),
+        )
+        .map_or_else(String::new, |held| format!(": {held}")),
     };
     let text = view(&heard)?.text;
     id.exists_on(track).then(|| format!("{text}{note}{held}"))

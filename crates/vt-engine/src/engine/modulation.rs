@@ -5,7 +5,7 @@ use vt_model::constants::{MAX_GROUPS, MAX_TRACKS};
 use vt_model::envelope::Envelope;
 use vt_model::modulation::{ModKind, note_shape_slot};
 
-use crate::track_state::{Drawn, LiveValues, NotePitch, TrackState};
+use crate::track_state::{Drawn, LiveValues, NotePitch, SongTime, TrackState};
 
 use super::{Engine, RestingBuses, Transport};
 
@@ -59,19 +59,61 @@ impl Engine {
                 && !self.previews.on_track(&previews, index);
             all_silent &= *silent;
         }
-        let tracks = self.tracks.iter_mut().enumerate();
-        for ((index, state), track) in tracks.zip(&self.current.song.tracks) {
+        // A group whose macros hold settings on its tracks goes first, and puts them there, so
+        // they hear them, and what moves its macros, this time (decision 408).
+        let leaders = self.current.group_macros.leaders;
+        if self.current.group_macros.any() {
+            for index in leaders.into_iter().flatten() {
+                self.modulate_or_rest(index, all_silent, now, stopped);
+            }
+            self.put_group_macros();
+        }
+        let tracks = self.current.song.tracks.len().min(self.tracks.len());
+        for index in (0..tracks).filter(|at| !leaders.contains(&Some(*at))) {
             let silent = if index < sounds {
                 silent[index]
             } else {
-                all_silent && !state.ringing(self.rate)
+                all_silent
             };
-            if silent && self.resting && state.rests(now, stopped) {
-                state.keep_resting(now);
-            } else {
-                state.modulate(track, index, now, stopped, &mut self.memory);
+            self.modulate_or_rest(index, silent, now, stopped);
+        }
+    }
+
+    /// Work out a track's modulation, or leave it resting while it's `silent`, or for a group, a
+    /// return or the master, while every sound track is, with no tail of its own ringing.
+    fn modulate_or_rest(&mut self, index: usize, silent: bool, now: SongTime, stopped: bool) {
+        let sounds = self.sounds();
+        let state = &mut self.tracks[index];
+        let track = &self.current.song.tracks[index];
+        let silent = silent && (index < sounds || !state.ringing(self.rate));
+        if silent && self.resting && state.rests(now, stopped) {
+            state.keep_resting(now);
+        } else {
+            state.modulate(track, index, now, stopped, &mut self.memory);
+        }
+    }
+
+    /// Have each group's macros put what they hold on its tracks where they have it now, with what
+    /// modulation last added to them, a macro that hasn't moved since doing nothing. Whether that
+    /// moved a generator's setting on any of them.
+    pub(super) fn put_group_macros(&mut self) -> bool {
+        let current = &self.current;
+        let mut moved = false;
+        for (index, member) in current.group_macros.members.iter().enumerate() {
+            let Some((group, place)) = *member else {
+                continue;
+            };
+            let (Some(state), Some(track)) =
+                (self.tracks.get(group), current.song.tracks.get(group))
+            else {
+                continue;
+            };
+            let turns = state.macro_turns();
+            if let Some(state) = self.tracks.get_mut(index) {
+                moved |= state.put_group_macros(track, place, &turns);
             }
         }
+        moved
     }
 
     /// Whether a track at rest is left as it is rather than worked out again, as it is unless a

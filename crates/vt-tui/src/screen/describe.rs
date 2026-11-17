@@ -15,7 +15,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Wrap};
 use vt_model::param::description;
-use vt_model::song::Track;
+use vt_model::song::Song;
 
 use crate::app::App;
 use crate::controls::{Control, ParamView, view};
@@ -68,8 +68,10 @@ pub fn text(app: &App) -> Option<String> {
     }
     let track = app.services.track_here()?;
     Some(match subject {
-        Subject::Macro(at) | Subject::Page(Control::Macro(at)) => macro_line(track, at),
-        Subject::Mapping(view) => mapping_line(track, view)?,
+        Subject::Macro(at) | Subject::Page(Control::Macro(at)) => {
+            macro_line(app.song(), app.services.cursor.track, at)
+        }
+        Subject::Mapping(view) => mapping_line(app.song(), app.services.cursor.track, view)?,
         // As it's heard, as the status line says it: where the steps' faders and the macros
         // have it.
         Subject::Page(control) => {
@@ -125,13 +127,14 @@ pub(crate) fn shape_line(panel: &ShapePanel) -> String {
 }
 
 /// A macro: what it moves, from where to where, and where it is now.
-pub(crate) fn macro_line(track: &Track, at: usize) -> String {
+pub(crate) fn macro_line(song: &Song, index: usize, at: usize) -> String {
+    let track = &song.tracks[index];
     let name = match track.macros[at].shown_name() {
         Some(named) => format!("Macro {} {named}", at + 1),
         None => format!("Macro {}", at + 1),
     };
     let now = track.macros[at].value >> 8;
-    match moves(track, at) {
+    match moves(song, index, at) {
         Some(moves) => format!("{name}: moves {moves}, now at {now:02X}."),
         None => format!("{name}: holds nothing yet, now at {now:02X}."),
     }

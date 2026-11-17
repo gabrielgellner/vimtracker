@@ -112,9 +112,14 @@ pub(super) fn edit(next: &mut Song, action: &Action) -> Result<(), EditError> {
             if *at >= MACROS || !map.in_range() {
                 return Err(EditError::Macro);
             }
-            let macros = &mut track_mut(next, *track)?.macros;
+            let found = track_mut(next, *track)?;
+            // Only a group has tracks of its own to reach.
+            if map.member.is_some() && !found.is_group() {
+                return Err(EditError::Macro);
+            }
+            let macros = &mut found.macros;
             for (place, held) in macros.iter_mut().enumerate() {
-                match held.map_of(map.target) {
+                match held.map_on(map.member, map.target) {
                     Some(found) if place == *at => held.maps[found] = *map,
                     Some(found) => {
                         held.maps.remove(found);
@@ -124,9 +129,14 @@ pub(super) fn edit(next: &mut Song, action: &Action) -> Result<(), EditError> {
                 }
             }
         }
-        Action::UnmapMacro { track, target } => {
+        Action::UnmapMacro {
+            track,
+            target,
+            member,
+        } => {
             for held in &mut track_mut(next, *track)?.macros {
-                held.maps.retain(|map| map.target != *target);
+                held.maps
+                    .retain(|map| map.target != *target || map.member != *member);
             }
         }
         Action::NameMacro { track, at, name } => {

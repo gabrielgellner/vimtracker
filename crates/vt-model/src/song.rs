@@ -571,8 +571,7 @@ impl Track {
             .iter()
             .enumerate()
             .filter_map(move |(at, held)| {
-                held.maps
-                    .iter()
+                held.own_maps()
                     .find(|map| map.target == target)
                     .map(|map| (at, map))
             })

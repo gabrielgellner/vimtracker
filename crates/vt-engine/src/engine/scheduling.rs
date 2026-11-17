@@ -349,7 +349,16 @@ impl Engine {
         }
         let grid = self.next_step * TICKS_PER_STEP;
         let tracks = self.current.song.tracks.len().min(MAX_TRACKS);
-        for index in 0..tracks {
+        // A group whose macros hold settings on its tracks goes first, so a lock of one of them on
+        // its row reaches theirs on this line (decision 408).
+        let leaders = self.current.group_macros.leaders;
+        let rest = (0..tracks).filter(|at| !leaders.contains(&Some(*at)));
+        let order = leaders
+            .into_iter()
+            .flatten()
+            .filter(|at| *at < tracks)
+            .chain(rest);
+        for index in order {
             // A track's own realign, or its own reset, starts its chain again here, as a section
             // bringing it in would, a longer step cut short. A reset or realign of every track
             // just now has started it here already.
