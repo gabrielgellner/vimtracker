@@ -166,7 +166,7 @@ fn playing_from_a_step_hears_the_build_as_playing_to_it_would() {
 
 #[test]
 fn a_value_that_isnt_a_condition_plays_as_none() {
-    assert_eq!(passes(&first_row("cnd:09"), 4), "xxxx");
+    assert_eq!(passes(&first_row("cnd:0B"), 4), "xxxx");
     assert_eq!(passes(&first_row("cnd:21"), 4), "xxxx");
     assert_eq!(passes(&first_row("cnd:91"), 4), "xxxx");
     assert_eq!(passes(&first_row("cnd:A0"), 4), "xxxx");

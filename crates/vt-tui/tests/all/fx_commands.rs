@@ -882,7 +882,7 @@ fn k_chooses_cnd_then_its_condition_from_a_list() {
     assert_eq!(slot(&app).coarse(), 0x44, "back through 1:5 to 4:4");
 
     // A value that isn't a condition isn't taken.
-    press(&mut app, "r09");
+    press(&mut app, "r0B");
     assert_eq!(slot(&app).coarse(), 0x44);
     assert!(
         app.services.status.contains("isn't a condition"),
@@ -896,6 +896,26 @@ fn k_chooses_cnd_then_its_condition_from_a_list() {
         value_shown(&app).as_deref(),
         Some("1ST, the first time round only")
     );
+    press(&mut app, "=");
+    assert_eq!(slot(&app).coarse(), 0x08, "on to !1ST");
+    press(&mut app, "=");
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("LST, the last time round before moving on")
+    );
+    press(&mut app, "KLST");
+    assert_eq!(
+        app.overlays
+            .picker
+            .as_ref()
+            .unwrap()
+            .current()
+            .unwrap()
+            .label,
+        "LST"
+    );
+    special(&mut app, KeyCode::Esc);
+    special(&mut app, KeyCode::Esc);
 
     // A build is in the list too, and `+` moves its pass by four.
     press(&mut app, "K>5");
