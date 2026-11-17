@@ -35,7 +35,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use vt_engine::engine::{PLAYHEADS, Playhead, SectionLoop, Transport};
 use vt_engine::link::JamState;
-use vt_engine::track_state::{Faders, LiveValues};
+use vt_engine::track_state::{Drawn, Faders, LiveValues};
 use vt_model::constants::FX_SLOTS;
 use vt_model::generator::Generator;
 use vt_model::order::Dealer;
@@ -666,6 +666,11 @@ impl<'a> Ctx<'a> {
     /// What the cursor's track is playing with right now, as the engine last said.
     pub fn live(&self) -> Option<LiveValues> {
         self.services.reported.live
+    }
+
+    /// What a Steps slot on the cursor's track has drawn with `Mutate`, as it's heard.
+    pub(crate) fn drawn(&self, slot: usize) -> Drawn {
+        self.services.drawn(slot)
     }
 
     /// The cursor's track as the latest report's live values were worked out from.

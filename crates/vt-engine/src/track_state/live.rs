@@ -47,7 +47,8 @@ pub struct LiveValues {
     /// light: none for one that isn't running, as an LFO's place is.
     pub steps: [Option<u8>; MOD_SLOTS],
     /// What each mod slot that's Steps has drawn with `Mutate` in place of its written values, as
-    /// it's heard, for `Space g a` to keep: nothing while `Mutate` is at none.
+    /// it's heard, for the Mod page to show and `Space g a` to keep: kept at `Mutate` 0%, which
+    /// locks it.
     pub drawn: [Drawn; MOD_SLOTS],
     /// Where each macro is as it's heard, with a lock or modulation, from `0000` to `FF00`.
     pub macros: [u16; MACROS],

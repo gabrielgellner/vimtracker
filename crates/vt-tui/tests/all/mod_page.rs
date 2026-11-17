@@ -2007,6 +2007,150 @@ fn the_step_playing_is_lit_in_the_playheads_colour() {
     assert_eq!(at(1).symbol(), "⠆");
 }
 
+/// A step `Mutate` has drawn is drawn at its drawn value, which is what's heard, in the colour of
+/// a value the hand isn't playing, and the status line says it's drawn (decision 384).
+#[test]
+fn a_drawn_step_is_drawn_at_its_drawn_value_shaded_and_the_status_says_drawn() {
+    use vt_engine::track_state::Drawn;
+    use vt_tui::screen::status::value_shown;
+    use vt_tui::widgets::theme;
+    let (mut app, mut realtime) = with_steps();
+    // The engine has the song with its Steps slot, so what it reports is of that.
+    for _ in 0..4 {
+        block(&mut realtime, &mut app);
+    }
+    let mut live = LiveValues::default();
+    let mut values = [0; 16];
+    values[1] = 0x7F;
+    live.drawn[3] = Drawn {
+        which: 0b10,
+        values,
+    };
+    app.services.reported.live = Some(live);
+    let backend = ratatui::backend::TestBackend::new(163, 40);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), &app, View::Track))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let lines = mod_page_text(&app);
+    let (top, left) = device_at(&lines, "Mod 4");
+    let (bottom, edge) = (top..top + 9)
+        .find_map(|row| {
+            let line: Vec<char> = lines[row].chars().collect();
+            let edge = line[left..].iter().position(|c| *c == '└')?;
+            Some((row, left + edge))
+        })
+        .unwrap();
+    // The middle row: the first step, written at `00`, has its tick, and the second, drawn at
+    // `+7F`, the foot of a bar halfway up, shaded.
+    let at = |step: usize| &buffer[((edge + 9 + step) as u16, (bottom - 3) as u16)];
+    assert_eq!((at(0).symbol(), at(0).fg), ("⠆", theme::OVERLAY2));
+    assert_eq!((at(1).symbol(), at(1).fg), ("⠃", theme::MAUVE));
+    assert_eq!(
+        app.song().tracks[0].mods[3].steps.values[1],
+        0,
+        "as written"
+    );
+    // On it, the status line says what's heard and what's written.
+    press(&mut app, "jlll");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Step(1)));
+    assert_eq!(value_shown(&app).as_deref(), Some("+7F drawn; 00 written"));
+    press(&mut app, "h");
+    assert!(value_shown(&app).is_none_or(|shown| !shown.contains("drawn")));
+}
+
+/// Turned down to 0%, `Mutate` locks the loop it drew, heard as drawn every time round; a drawn
+/// step edited is heard as written at once; and `Space g a` then writes exactly what's heard,
+/// after which nothing's drawn (decision 384).
+#[test]
+fn mutate_at_none_locks_the_drift_an_edit_wins_and_space_g_a_keeps_it() {
+    use vt_engine::link::Command;
+    use vt_model::step::Note;
+    let (mut app, mut realtime) = app();
+    with_a_sound(&mut app);
+    app.services.apply(&Action::SetTrackBase {
+        track: 0,
+        control: vt_model::action::TrackControl::Cutoff,
+        value: 0x80,
+    });
+    let written = Steps {
+        values: std::array::from_fn(|step| [0x10, 0x20, 0x30, 0x40, 0x50][step.min(4)]),
+        length: 4,
+        mutate: 100,
+        ..Steps::default()
+    };
+    let set = |app: &mut App, steps: Steps| {
+        app.services.apply(&Action::SetMod {
+            track: 0,
+            slot: 3,
+            modulator: ModSlot::steps(Some(SettingId::CUT), steps),
+        });
+    };
+    set(&mut app, written);
+    app.services.apply(&Action::SetNote {
+        track: 0,
+        phrase: 0,
+        step: 0,
+        note: Note::On(60),
+    });
+    press(&mut app, " 5L");
+    press(&mut app, &to_lfo(0));
+    for _ in 0..4 {
+        block(&mut realtime, &mut app);
+    }
+    app.services.handle.send(Command::PlayFrom { step: 0 });
+    run_for(&mut realtime, &mut app, 3000);
+    cutoffs_heard(&mut realtime, &mut app, 7);
+    // Turned down to 0%: from the next step on, the loop is as last drawn, every time round.
+    set(
+        &mut app,
+        Steps {
+            mutate: 0,
+            ..written
+        },
+    );
+    cutoffs_heard(&mut realtime, &mut app, 4);
+    let locked = cutoffs_heard(&mut realtime, &mut app, 4);
+    assert_eq!(cutoffs_heard(&mut realtime, &mut app, 4), locked, "locked");
+    let drawn = app.services.drawn(3);
+    assert_eq!(drawn.which & 0b1111, 0b1111, "reported at 0%: {drawn:?}");
+    // Up a step on the third value: it's heard as written at once, and no longer drawn.
+    press(&mut app, "jllll");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Step(2)));
+    press(&mut app, "=");
+    assert_eq!(app.song().tracks[0].mods[3].steps.values[2], 0x31);
+    let edited = cutoffs_heard(&mut realtime, &mut app, 4);
+    let mut want = locked.clone();
+    let third = locked
+        .iter()
+        .zip(&edited)
+        .position(|(was, now)| was != now)
+        .expect("the edit is heard");
+    want[third] = 0xB1;
+    assert_eq!(edited, want, "{locked:02X?}");
+    assert_eq!(app.services.drawn(3).value(2), None);
+    // `Space g a` writes what's heard, and nothing's drawn after it; it's heard just the same.
+    press(&mut app, " ga");
+    let kept = app.song().tracks[0].mods[3].steps;
+    assert_eq!(kept.values[2], 0x31, "the edit is written");
+    let as_heard: Vec<u8> = kept.values[..4]
+        .iter()
+        .map(|value| (0x80 + value).clamp(0, 0xFF) as u8)
+        .collect();
+    let lap = |from: usize| -> Vec<u8> { (0..4).map(|at| edited[(from + at) % 4]).collect() };
+    assert!(
+        (0..4).any(|from| lap(from) == as_heard),
+        "the loop heard: {as_heard:02X?} against {edited:02X?}"
+    );
+    assert_eq!(
+        cutoffs_heard(&mut realtime, &mut app, 4),
+        edited,
+        "heard the same"
+    );
+    assert_eq!(app.services.drawn(3).which & 0b1111, 0, "nothing's drawn");
+}
+
 #[test]
 fn a_steps_mutate_and_smooth_are_under_its_start() {
     let (mut app, _realtime) = with_steps();
@@ -2305,7 +2449,7 @@ fn space_g_a_keeps_what_mutate_drew_as_the_values_heard_in_one_undo_step() {
     assert_eq!(as_heard, heard, "what was heard");
     assert_eq!(
         app.services.status,
-        "Kept the 4 values Mod 4 drew: Mutate 0% now plays them"
+        "Kept the 4 values Mod 4 drew as written: the song has them"
     );
 
     // One undo takes them back, and redo keeps them again.

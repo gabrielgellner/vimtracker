@@ -10,6 +10,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
+use vt_engine::track_state::Drawn;
 use vt_model::modulation::{MOD_SLOTS, ModField, ModKind};
 use vt_model::song::Track;
 use vt_model::steps::MAX_STEP;
@@ -73,12 +74,15 @@ const BAR_DOTS: usize = MOD_PANEL_HEIGHT * 4 / 2;
 
 /// A Steps slot's panel: its values played as a row of thin bars up or down from none, one
 /// character each, in the middle of the box, spartan and in one colour, faint while the slot is
-/// switched out, with the step playing lit in the playhead's colour. Steps past its `Length` keep
-/// their values and aren't drawn. It gives back where the panel's first step is across it.
+/// switched out, with the step playing lit in the playhead's colour. A step `Mutate` has drawn is
+/// drawn at the value drawn, which is what's heard, in the colour of a value something other than
+/// the hand is playing, as a fader the steps drive is (decision 384). Steps past its `Length`
+/// keep their values and aren't drawn. It gives back where the panel's first step is across it.
 fn steps_panel(
     track: &Track,
     slot: usize,
     playing: Option<u8>,
+    drawn: Drawn,
     faint: bool,
 ) -> (GraphicPanel, usize) {
     let steps = &track.mods[slot].steps;
@@ -88,13 +92,16 @@ fn steps_panel(
     let lines = (0..MOD_PANEL_HEIGHT)
         .map(|row| {
             let mut spans = vec![Span::raw(" ".repeat(first))];
-            for (at, value) in values.iter().enumerate() {
-                let style = if playing == Some(at as u8) && !faint {
-                    theme::active()
-                } else {
-                    base
+            for (at, written) in values.iter().enumerate() {
+                let heard = drawn.value(at);
+                let style = match heard {
+                    _ if faint => base,
+                    _ if playing == Some(at as u8) => theme::active(),
+                    Some(_) => theme::automated(),
+                    None => base,
                 };
-                spans.push(Span::styled(bar_cell(*value, row).to_string(), style));
+                let value = heard.unwrap_or(*written);
+                spans.push(Span::styled(bar_cell(value, row).to_string(), style));
             }
             spans.push(Span::raw(
                 " ".repeat(MOD_PANEL_WIDTH - first - values.len()),
@@ -156,7 +163,7 @@ fn draw_device(
     let (panel, lfo) = match device.title[0] {
         Some(Control::Mod(slot, _)) if track.mods[slot].kind == ModKind::Steps => {
             let playing = ctx.live().and_then(|live| live.steps[slot]);
-            let (panel, first) = steps_panel(track, slot, playing, bypassed);
+            let (panel, first) = steps_panel(track, slot, playing, ctx.drawn(slot), bypassed);
             if let Control::Mod(at, ModField::Step(step)) = page.control_here(ctx)
                 && at == slot
             {
