@@ -67,6 +67,7 @@ mod resting;
 mod returns;
 mod reverbs;
 mod rotary;
+mod sampler_reverse;
 mod section_loops;
 mod sections;
 mod slices;

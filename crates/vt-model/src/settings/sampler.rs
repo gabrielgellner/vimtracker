@@ -1,6 +1,6 @@
 //! The sampler's settings, and what its stepped ones can be.
 
-use super::{Entry, Kind, Place, Units};
+use super::{Entry, Kind, OFF_ON, Place, Units};
 
 /// Each choice's two hex digits, for [`BANK_CHOICES`] to point into.
 static BANK_DIGITS: [[u8; 2]; 256] = {
@@ -103,8 +103,12 @@ const fn share(key: &'static str, name: &'static str, label: &'static str, defau
 /// How many settings the sampler has.
 pub const SAMPLER_SETTINGS: usize = SAMPLER.len();
 
+/// How many of them sit before the macros in the table; those added since, `Reverse`, sit at its
+/// end, so no setting's place moves.
+pub(super) const EARLY_SAMPLER: usize = 5;
+
 /// The sampler's own, which it keeps whatever it plays. `Length` isn't `LEN`, which is `Gate`'s.
-pub(super) const SAMPLER: [Entry; 5] = [
+pub(super) const SAMPLER: [Entry; 6] = [
     Entry {
         meaning: "which of the bank's samples plays",
         key: "sample",
@@ -139,6 +143,21 @@ pub(super) const SAMPLER: [Entry; 5] = [
         label: Some("PLY"),
         kind: Kind::Stepped {
             choices: &PLAY_CHOICES,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
+    // Turns the note round from the way its sample or slice plays, as the Digitakt's and the
+    // M8's reversed play modes do, but over each of `Play`'s, so it's a switch of its own: the
+    // same part of the sample plays, the other way (decision 412).
+    Entry {
+        meaning: "whether a note plays its part of the sample the other way from the sample's own",
+        key: "reverse",
+        name: "Reverse",
+        label: Some("SREV"),
+        kind: Kind::Stepped {
+            choices: &OFF_ON,
             wraps: false,
         },
         default: 0,

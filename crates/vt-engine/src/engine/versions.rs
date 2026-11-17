@@ -480,7 +480,7 @@ impl Engine {
 fn span_now(
     bank: &Bank,
     entry: Option<u8>,
-    (slice, thru): (u8, bool),
+    (slice, thru, turned): (u8, bool, bool),
     sample: SampleId,
 ) -> Option<Span> {
     let entry = usize::from(entry?);
@@ -489,7 +489,7 @@ fn span_now(
         return None;
     };
     let playable = place.as_deref()?;
-    (playable.sample == sample).then(|| playable.span(slice, thru))
+    (playable.sample == sample).then(|| playable.span(slice, thru, turned))
 }
 
 /// Have a voice follow its entry's changes.
@@ -501,7 +501,7 @@ fn follow_voice(voice: &mut Voice, bank: &Bank) {
 
 /// Have a note waiting to start follow its entry's changes.
 fn follow_note(note: &mut NoteOn, bank: &Bank) {
-    let slice = (note.slice, note.cut.mode == PlayMode::Thru);
+    let slice = (note.slice, note.cut.mode == PlayMode::Thru, note.cut.turned);
     if let Some(span) = span_now(bank, note.entry, slice, note.sample) {
         note.span = Some(span);
     }

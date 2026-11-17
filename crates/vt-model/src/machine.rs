@@ -122,7 +122,7 @@ impl Machine {
     /// own has them in its [`VoiceSpec::grid`].
     pub fn grid(self) -> Grid {
         let placed: &[&[&str]] = match self {
-            Self::Sampler => &[&["slice", "play"], &["start", "length"]],
+            Self::Sampler => &[&["slice", "play", "reverse"], &["start", "length"]],
             Self::Plaits(voice) => match voice.spec().grid {
                 Some(placed) => placed,
                 None => {

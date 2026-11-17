@@ -972,6 +972,50 @@ mod tests {
         assert_eq!(blocks(&mut rt, 200), 0);
     }
 
+    /// Sampler tracks whose steps turn their notes round every other row, through each play mode
+    /// and cut, on through included, with an LFO on `SREV` and a macro holding it
+    /// (decision 412).
+    #[test]
+    fn turning_a_samplers_notes_round_never_allocates_in_the_callback() {
+        use vt_model::macros::{MacroMap, MacroTarget};
+        use vt_model::settings::SettingId;
+        let pool = samples();
+        let mut turning = song(8, 16);
+        for (index, track) in turning.tracks.iter_mut().take(8).enumerate() {
+            track.mods[3] = vt_model::modulation::ModSlot::lfo(
+                Some(SettingId::SAMPLE_REVERSE),
+                vt_model::lfo::Lfo::default(),
+            )
+            .with_depth(0xFF);
+            if index % 2 == 0 {
+                track.macros[0].maps = vec![MacroMap {
+                    target: MacroTarget::Setting(SettingId::SAMPLE_REVERSE),
+                    min: 0,
+                    max: 0x0100,
+                    curve: 0,
+                    s: 0,
+                    zone: Default::default(),
+                    member: None,
+                }];
+                track.macros[0].value = 0xFF00;
+            }
+            let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+            for step in 0..16 {
+                let text = format!(
+                    "C-3 64 sampler.reverse:{:02X} sampler.play:{:02X} sampler.start:{:02X}",
+                    (step + index) % 2,
+                    step % 5,
+                    step * 8,
+                );
+                *phrase.step_mut(step).unwrap() = text.parse().unwrap();
+            }
+        }
+        let engine = Engine::new(48_000, published(turning, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        assert_eq!(blocks(&mut rt, 200), 0);
+    }
+
     /// Tracks gliding every note at `Always`, struck, carried and tied (decision 382).
     #[test]
     fn glide_mode_always_never_allocates_in_the_callback() {
