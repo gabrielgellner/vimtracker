@@ -1079,8 +1079,9 @@ and `Steps` on macros; add it with `:patch`.
 
 *   `gl` on the tune and `-` on `Steps`: at 3 it's a D minor arpeggio, at 1 only Ds, an octave
     line. All 7 is dorian again.
-*   `Steps` back to all 7, then `Weights` `F4F4F4F`: a hex digit a degree from D,
-    so all of dorian plays, but the chord's four notes most of the time, as on the meloDICER.
+*   `Steps` back to all 7, then `Weights` `F4F4F4F`: a hex digit a degree from D, each over
+    its note, so all of dorian plays, but the chord's four notes most of the time, as on the
+    meloDICER.
 *   `Spread` `0%` on the tune: one note, `D-4`, the middle of the range. With `Bias` `+50`, the
     `A-4` three quarters of the way up.
 *   On the Gen page, `Space 8`, `Spread` and `Bias` are cells to turn while it plays, and with

@@ -69,6 +69,7 @@ mod tracks;
 mod variation;
 mod view_dump;
 mod walks;
+mod weights;
 mod wheel;
 mod world_rhythms;
 

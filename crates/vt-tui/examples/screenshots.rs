@@ -284,6 +284,16 @@ const SHOTS: &[Shot] = &[
         size: FULL,
         ..PLAIN
     },
+    // The shape panel's random fill on an empty Note column in C minor pentatonic, its `Weights`
+    // gone into with `l` and `F08` typed, so the cursor is on the fourth digit, G's, each digit
+    // over its note.
+    Shot {
+        name: "shape-weights",
+        rows: &[],
+        keys: ":set scale=minor-pentatonic<Enter>vGSKrandom<Enter>jjjjjjlf08",
+        size: FULL,
+        ..PLAIN
+    },
     // The same acid's Sound page with the macro panel showing, and `Space d`'s line above it
     // describing `Res`, the cursor's setting, which macro 1 holds.
     Shot {
