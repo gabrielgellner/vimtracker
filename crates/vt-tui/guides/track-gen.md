@@ -193,9 +193,9 @@ the cursor beside them:
 |---|---|
 | `j` `k` | The next or previous setting |
 | `h` `l` | Across its `Min`, `Max`, `Curve`, `S` and the two ends of its `Zone` |
-| `=` `-` `+` `_` | Move an end a step or `10`, a bend `5` or `25`, a zone's end `01` or `10` |
-| `i` | Type it: an end or a zone's end in two hex digits, a bend `-100` to `100` and `Enter` |
-| `x` | Put `Curve` or `S` back to straight, `0`, or the `Zone` back to the whole turn |
+| `=` `-` `+` `_` | Move an end a step or `10`, a bend `5` or `25` |
+| `i` | Type it: an end in two hex digits, a bend `-100` to `100` and `Enter` |
+| `x` | Put `Curve` or `S` back to straight, `0`, or `Zone` to `00–FF` |
 | `~` | Swap `Min` and `Max`, so the setting goes the other way |
 | `dd` | Take the setting off the macro |
 | `u` | Take the last change back |
@@ -219,14 +219,14 @@ keeps each mapping's curve.
 
 **Each setting its own part of the turn.** A mapping's `Zone` is the part of the macro's turn it
 acts over, from a start to an end on the macro's `00` to `FF`, the whole turn, `00–FF`, to start
-with, shown dim while it is. Across the zone the setting goes from its `Min` at the zone's start
-to its `Max` at its end, along its `Curve` and `S`; below the zone it stays at its `Min`, and
+with, shown dim while it is. Its ends move as a range's do, `=` `-` a step and `+` `_` `10`, and
+`i` types one in two hex digits. Across the zone the setting goes from its `Min` at the zone's
+start to its `Max` at its end, along its `Curve` and `S`; below the zone it stays at its `Min`, and
 above it at its `Max`. A zone always starts below its end: to go the other way, swap `Min` and
-`Max` with `~`. The drawing has the setting flat outside the zone, and the status line and
-the line `Space d` shows say the zone, as `Res 0 % to 63 % over 80–FF`. Moving
-a zone moves what's heard at once, as a held setting outside it goes to its end. Locks and
-modulation of the macro reach each setting through its zone, and a sound preset or a patch keeps
-it.
+`Max` with `~`. The drawing has the setting flat outside the zone, and the status line and the line
+`Space d` shows say the zone, as `Res 0 % to 63 % over 80–FF`. Moving a zone moves what's heard at
+once, as a held setting outside it goes to its end. Locks and modulation of the macro reach each
+setting through its zone, and a sound preset or a patch keeps it.
 
 **Recipe: a bipolar knob.** Marbles' Déjà vu is one knob with two jobs: from the left to the
 middle it takes the random sequence from new each time to looped, and from the middle to the

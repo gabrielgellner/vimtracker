@@ -128,7 +128,8 @@ pub struct MappingView {
 
 impl MappingView {
     /// The picture the view wants on screen for the cursor's track: the response of the mapping
-    /// under its cursor, drawn again as its `Curve`, its `S`, its way or its macro's turn changes.
+    /// under its cursor, drawn again as its `Curve`, its `S`, its way, its zone or its macro's turn
+    /// changes.
     pub(crate) fn panels(&self, track: &Track) -> Vec<PanelWant> {
         let held = &track.macros[self.at];
         let Some(map) = held
