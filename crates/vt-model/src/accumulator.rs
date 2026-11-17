@@ -106,22 +106,37 @@ impl Default for Accumulation {
 }
 
 impl Accumulation {
-    /// `Up` at 0 or `Down` at 1, as the registry has them ([`SettingId::accumulation`]): a place in
-    /// a list from 1, with a coarse byte and a fine one.
+    /// `Up` at 0, `Down` at 1, `At limit` at 2, `Adds` at 3 or `Reset` at 4, as the registry has
+    /// them ([`SettingId::accumulation`]): a place in a list, with a coarse byte and a fine one.
     ///
     /// [`SettingId::accumulation`]: crate::settings::SettingId::accumulation
     pub fn own_value(self, at: usize) -> u16 {
-        let limit = if at == 0 { self.up } else { self.down };
-        u16::from(limit.saturating_sub(1)) << 8
+        let place = match at {
+            0 => self.up.saturating_sub(1),
+            1 => self.down.saturating_sub(1),
+            2 => AtLimit::ALL
+                .iter()
+                .position(|it| *it == self.at_limit)
+                .unwrap_or(0) as u8,
+            3 => Adds::ALL
+                .iter()
+                .position(|it| *it == self.adds)
+                .unwrap_or(0) as u8,
+            _ => Reset::all().position(|it| it == self.reset).unwrap_or(0) as u8,
+        };
+        u16::from(place) << 8
     }
 
-    /// Set `Up` or `Down` from a value on the `00` to `FF` scale, kept from 1 to [`MOST_DEGREES`].
+    /// Set one from a value on the `00` to `FF` scale, kept to its list: `Up` and `Down` from 1 to
+    /// [`MOST_DEGREES`].
     pub fn set_own(&mut self, at: usize, value: f32) {
-        let limit = value.round().clamp(0.0, f32::from(MOST_DEGREES - 1)) as u8 + 1;
-        if at == 0 {
-            self.up = limit;
-        } else {
-            self.down = limit;
+        let place = |count: usize| value.round().clamp(0.0, count as f32 - 1.0) as usize;
+        match at {
+            0 => self.up = place(usize::from(MOST_DEGREES)) as u8 + 1,
+            1 => self.down = place(usize::from(MOST_DEGREES)) as u8 + 1,
+            2 => self.at_limit = AtLimit::ALL[place(AtLimit::ALL.len())],
+            3 => self.adds = Adds::ALL[place(Adds::ALL.len())],
+            _ => self.reset = Reset::at(place(Reset::COUNT)),
         }
     }
 
@@ -267,7 +282,7 @@ pub fn moved_note(note: u8, offset: i16, scale: Scale) -> u8 {
 impl Moves {
     pub const ALL: [Self; 2] = [Self::Row, Self::Track];
 
-    pub(crate) fn name(self) -> &'static str {
+    pub(crate) const fn name(self) -> &'static str {
         match self {
             Self::Row => "Row",
             Self::Track => "Track",
@@ -296,7 +311,7 @@ impl AtLimit {
         Self::RandomBi,
     ];
 
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Wrap => "Wrap",
             Self::WrapBi => "Wrap bi",
@@ -326,7 +341,7 @@ crate::listed::listed!(AtLimit: meaning);
 impl Adds {
     pub const ALL: [Self; 3] = [Self::Row, Self::Pulse, Self::Retrig];
 
-    pub(crate) fn name(self) -> &'static str {
+    pub(crate) const fn name(self) -> &'static str {
         match self {
             Self::Row => "Row",
             Self::Pulse => "Pulse",
@@ -355,6 +370,18 @@ impl Adds {
 crate::listed::listed!(Adds: meaning);
 
 impl Reset {
+    /// How many choices there are: the chain, playing, and 1 to [`MOST_LOOPS`] loops.
+    pub const COUNT: usize = 2 + MOST_LOOPS as usize;
+
+    /// The choice at a place in [`Reset::all`]'s order, the last past the end.
+    pub fn at(place: usize) -> Self {
+        match place {
+            0 => Self::Chain,
+            1 => Self::Play,
+            loops => Self::Loops((loops.min(Self::COUNT - 1) - 1) as u8),
+        }
+    }
+
     /// Every choice, in the order a list shows them: the chain, playing, then 1 to 16 loops.
     pub fn all() -> impl Iterator<Item = Self> {
         [Self::Chain, Self::Play]

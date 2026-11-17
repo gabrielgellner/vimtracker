@@ -123,7 +123,7 @@ impl ArpMode {
         Self::Random,
     ];
 
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Up => "Up",
             Self::Down => "Down",
@@ -170,29 +170,32 @@ impl Default for Arpeggio {
 }
 
 impl Arpeggio {
-    /// `Rate` at 0 or `Octaves` at 1, as the registry has them ([`SettingId::arpeggio`]): a place
-    /// in a list, with a coarse byte and a fine one.
+    /// `Rate` at 0, `Octaves` at 1 or `Mode` at 2, as the registry has them
+    /// ([`SettingId::arpeggio`]): a place in a list, with a coarse byte and a fine one.
     ///
     /// [`SettingId::arpeggio`]: crate::settings::SettingId::arpeggio
     pub fn own_value(self, at: usize) -> u16 {
-        let place = if at == 0 {
-            ArpRate::ALL
+        let place = match at {
+            0 => ArpRate::ALL
                 .iter()
                 .position(|rate| *rate == self.rate)
-                .unwrap_or(0) as u8
-        } else {
-            self.octaves.saturating_sub(1)
+                .unwrap_or(0) as u8,
+            1 => self.octaves.saturating_sub(1),
+            _ => ArpMode::ALL
+                .iter()
+                .position(|mode| *mode == self.mode)
+                .unwrap_or(0) as u8,
         };
         u16::from(place) << 8
     }
 
-    /// Set `Rate` or `Octaves` from a value on the `00` to `FF` scale, kept to the list.
+    /// Set `Rate`, `Octaves` or `Mode` from a value on the `00` to `FF` scale, kept to the list.
     pub fn set_own(&mut self, at: usize, value: f32) {
         let place = |count: usize| value.round().clamp(0.0, count as f32 - 1.0) as usize;
-        if at == 0 {
-            self.rate = ArpRate::ALL[place(ArpRate::ALL.len())];
-        } else {
-            self.octaves = place(usize::from(MOST_OCTAVES)) as u8 + 1;
+        match at {
+            0 => self.rate = ArpRate::ALL[place(ArpRate::ALL.len())],
+            1 => self.octaves = place(usize::from(MOST_OCTAVES)) as u8 + 1,
+            _ => self.mode = ArpMode::ALL[place(ArpMode::ALL.len())],
         }
     }
 
