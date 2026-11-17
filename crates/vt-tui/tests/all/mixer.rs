@@ -570,9 +570,8 @@ fn gd_on_a_fader_a_macro_holds_goes_to_its_macro_and_c_o_comes_back() {
     assert_eq!(app.modes.view, View::Track);
     assert_eq!(app.track_page.page, Page::Gen);
     assert_eq!(app.track_control(), Control::Macro(2), "on the macro");
-    assert_eq!(app.modes.mode, Mode::Mapping);
-    assert_eq!(app.overlays.mapping.as_ref().unwrap().at, 2);
-    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.modes.mode, Mode::Normal, "no mapping view opens");
+    assert!(app.overlays.mapping.is_none());
     jump_back(&mut app);
     assert_eq!(app.modes.view, View::Mixer, "back on the mixer");
     assert_eq!(column_name(&app), "Pan", "on the fader it left from");
@@ -600,9 +599,8 @@ fn gd_on_a_fader_two_macros_hold_lists_them_and_on_one_none_holds_says_so() {
     special(&mut app, KeyCode::Down);
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.track_control(), Control::Macro(4));
-    assert_eq!(app.modes.mode, Mode::Mapping);
+    assert_eq!(app.modes.mode, Mode::Normal);
     // The next track's level is its own.
-    special(&mut app, KeyCode::Esc);
     press(&mut app, " 4lgd");
     assert_eq!(app.modes.view, View::Mixer, "it stays");
     assert!(app.services.status.contains("macro holding a fader"));

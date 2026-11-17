@@ -544,7 +544,7 @@ fn jump_back(app: &mut App) {
 }
 
 #[test]
-fn gd_on_a_setting_a_macro_holds_goes_to_its_mapping_on_the_gen_page_and_c_o_comes_back() {
+fn gd_on_a_setting_a_macro_holds_goes_to_the_macro_on_the_gen_page_and_c_o_comes_back() {
     use vt_tui::controls::Page;
     let (mut app, _realtime) = on_cut();
     // Res on macro 1, then Cut, its second mapping.
@@ -558,9 +558,16 @@ fn gd_on_a_setting_a_macro_holds_goes_to_its_mapping_on_the_gen_page_and_c_o_com
         Control::Macro(0),
         "on the macro, in the band"
     );
+    assert_eq!(app.modes.mode, Mode::Normal, "no mapping view opens");
+    assert!(app.overlays.mapping.is_none());
+    // So the next `=` turns the macro.
+    let before = app.song().tracks[0].macros[0].value;
+    press(&mut app, "=");
+    assert!(app.song().tracks[0].macros[0].value > before);
+    // `gm` still opens its mapping.
+    press(&mut app, "gm");
     assert_eq!(app.modes.mode, Mode::Mapping);
-    let view = app.overlays.mapping.as_ref().unwrap();
-    assert_eq!((view.at, view.row), (0, 1), "on Cut's mapping");
+    assert_eq!(app.overlays.mapping.as_ref().unwrap().at, 0);
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.modes.mode, Mode::Normal);
     jump_back(&mut app);
@@ -581,8 +588,7 @@ fn gd_on_a_generators_setting_goes_up_the_gen_page_to_its_macro_as_a_jump() {
     let hits = app.track_control();
     press(&mut app, "gd");
     assert_eq!(app.track_control(), Control::Macro(1));
-    assert_eq!(app.modes.mode, Mode::Mapping);
-    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.modes.mode, Mode::Normal);
     jump_back(&mut app);
     assert_eq!(
         app.track_control(),
@@ -641,8 +647,8 @@ fn gd_on_a_setting_two_macros_hold_lists_them_to_go_to() {
     special(&mut app, KeyCode::Down);
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.track_control(), Control::Macro(2));
-    assert_eq!(app.modes.mode, Mode::Mapping);
-    assert_eq!(app.overlays.mapping.as_ref().unwrap().at, 2);
+    assert_eq!(app.modes.mode, Mode::Normal);
+    assert!(app.overlays.mapping.is_none());
 }
 
 #[test]
