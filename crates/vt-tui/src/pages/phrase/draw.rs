@@ -1597,6 +1597,37 @@ fn marked_text(
     shown
 }
 
+/// Where the grid draws a row's own line, its first, for each row on screen when the view is drawn
+/// in an area: its line's top and the row's step, in order down the screen. A continuation line in
+/// the timeline isn't one, so what's drawn beside the rows stays level with each row's cells.
+pub(crate) fn rows_on_screen(ctx: &Ctx, view: &PhraseView, area: Rect) -> Vec<(u16, usize)> {
+    let Some(phrase) = ctx.phrase_here() else {
+        return Vec::new();
+    };
+    let grid = Grid::new(ctx, view, phrase, area);
+    grid.time_lines
+        .iter()
+        .skip(grid.first_line)
+        .take(grid.height)
+        .enumerate()
+        .filter(|(_, line)| line.pulse == 0 && line.index < grid.stored)
+        .map(|(at, line)| (area.y + 2 + at as u16, line.index))
+        .collect()
+}
+
+/// The columns a shaped column's cells take on screen, from an area's left edge, the first and
+/// one past the last: an FX column's value with its fine digits, a gate's length.
+pub(crate) fn column_cells(column: ShapeColumn) -> (u16, u16) {
+    let (start, end) = match column {
+        ShapeColumn::Fx { slot, .. } => (
+            field_range(Field::FxValue(slot)).0,
+            field_range(Field::FxFine(slot)).1,
+        ),
+        column => live_cells(column),
+    };
+    ((GUTTER + start) as u16, (GUTTER + end) as u16)
+}
+
 /// Draw the view in an area, as it's laid out and scrolled.
 pub(crate) fn draw(frame: &mut Frame, area: Rect, view: &PhraseView, ctx: &Ctx) {
     let Some(phrase) = ctx.phrase_here() else {

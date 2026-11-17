@@ -110,6 +110,26 @@ const LANE: &[&str] = &[
     "G-2 64 --- --- ---",
 ];
 
+/// A phrase of notes with their accents, for the shape panel's bars to show what a fill moves.
+const ACCENTS: &[&str] = &[
+    "C-3 7F --- --- ---",
+    "C-3 30 --- --- ---",
+    "D#3 58 --- --- ---",
+    "C-3 30 --- --- ---",
+    "G-3 7F --- --- ---",
+    "C-3 20 --- --- ---",
+    "A#2 60 --- --- ---",
+    "C-3 38 --- --- ---",
+    "C-3 7F --- --- ---",
+    "F-3 28 --- --- ---",
+    "D#3 50 --- --- ---",
+    "C-3 30 --- --- ---",
+    "G-2 70 --- --- ---",
+    "C-3 20 --- --- ---",
+    "A#2 48 --- --- ---",
+    "C-3 40 --- --- ---",
+];
+
 const SHOTS: &[Shot] = &[
     // Zoomed in once, so the start, the end and the loop all show.
     Shot {
@@ -291,6 +311,15 @@ const SHOTS: &[Shot] = &[
         name: "shape-weights",
         rows: &[],
         keys: ":set scale=minor-pentatonic<Enter>vGSKrandom<Enter>jjjjjjlf08",
+        size: FULL,
+        ..PLAIN
+    },
+    // The shape panel's ramp over a phrase's velocities, its ends swapped to rise, with the bars
+    // beside the column: each row's velocity now solid, and what it was before set back behind it.
+    Shot {
+        name: "shape-bars",
+        rows: ACCENTS,
+        keys: "lvGSKramp<Enter>~",
         size: FULL,
         ..PLAIN
     },

@@ -715,6 +715,16 @@ impl ShapeColumn {
         }
     }
 
+    /// Whether its values are amounts, which a bar can show as more or less: a note's pitch, a
+    /// velocity, a nudge, a length, and an FX value that's a level or a count. A list's choice, a
+    /// condition and the two digits of `RET`, `ARP` and `RND` aren't.
+    pub fn measured(self) -> bool {
+        match self {
+            Self::Fx { command, .. } => command.measured(),
+            _ => true,
+        }
+    }
+
     /// The lowest value this column takes.
     pub fn lowest(self) -> u8 {
         match self {
@@ -859,7 +869,7 @@ impl ShapeColumn {
 
     /// This column's value on a step, if it has one: an FX value's coarse digits. A row with no
     /// length of its own has none.
-    fn value(self, step: &Step) -> Option<u8> {
+    pub fn value(self, step: &Step) -> Option<u8> {
         let note = matches!(step.note, Note::On(_));
         match self {
             Self::Note { .. } => match step.note {
@@ -1530,6 +1540,20 @@ mod tests {
         let mut step: Step = "--- -- del:10".parse().unwrap();
         column.write(&mut step, 0x20);
         assert_eq!(step.to_string(), "--- -- res:20");
+    }
+
+    #[test]
+    fn a_column_of_amounts_is_measured_and_a_list_or_a_condition_isnt() {
+        use crate::settings::SettingId;
+        let fx = |command| ShapeColumn::Fx { slot: 0, command };
+        assert!(ShapeColumn::Velocity.measured());
+        assert!(ShapeColumn::Length.measured());
+        assert!(fx(FxCommand::CUT).measured());
+        assert!(fx(FxCommand::Set(SettingId::PAN)).measured());
+        assert!(fx(FxCommand::Del).measured());
+        assert!(!fx(FxCommand::Set(SettingId::FILTER_MODE)).measured());
+        assert!(!fx(FxCommand::Cnd).measured());
+        assert!(!fx(FxCommand::Arp).measured());
     }
 
     const VEL: ShapeColumn = ShapeColumn::Velocity;

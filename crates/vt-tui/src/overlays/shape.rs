@@ -23,6 +23,7 @@ use vt_model::shape::{
     Channel, Context, DrumPart, FillKind, GenParam, Grids, MAX_WEIGHT, Shape, ShapeColumn, Source,
     Starts, TonnetzVoice, Walk, Where, default_ends, default_step, degree_count, degree_name,
     divisions_seed, drum_parts, is_empty, on_track, open_rows, track_seed, variation_notes,
+    written_from,
 };
 use vt_model::song::{Machine, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
@@ -38,6 +39,7 @@ use crate::overlays::picker::{Item, Pick, Picker};
 use crate::pages::{Ctx, CtxMut, Outcome};
 use crate::services::Services;
 use crate::services::generators::{Part, column_label, settle, too_few};
+use crate::widgets::value_bars::{BarRow, ValueBars};
 
 /// The title of the list offering a beat after a kit's sounds are loaded as tracks.
 pub const KIT_BEAT_PICKER: &str = "Start a beat";
@@ -123,6 +125,41 @@ impl ShapePanel {
             sources: &self.sources,
             source: self.source_steps(),
         }
+    }
+
+    /// The bars of the column it shapes on the phrase in view, each row of its span with its value
+    /// as the panel opened and as it's shaped now, or none where the phrase in view isn't one it
+    /// shapes or the column's values aren't amounts.
+    pub(crate) fn value_bars(&self, ctx: &Ctx) -> Option<ValueBars> {
+        let (track, phrase) = (ctx.cursor().track, ctx.phrase_id()?);
+        let nth = self
+            .parts
+            .iter()
+            .position(|part| part.track == track && part.phrase == phrase)?;
+        let part = &self.parts[nth];
+        let steps = self.base_steps(part);
+        let written = written_from(
+            steps,
+            part.range,
+            part.column,
+            &self.shape_of(nth),
+            self.source_steps(),
+        );
+        let rows = (part.range.first..=part.range.last)
+            .filter_map(|step| {
+                let before = steps.get(step)?;
+                let now = written
+                    .iter()
+                    .find(|(row, _)| *row == step)
+                    .map_or(before, |(_, step)| step);
+                Some(BarRow {
+                    step,
+                    before: part.column.value(before),
+                    now: part.column.value(now),
+                })
+            })
+            .collect();
+        ValueBars::new(ValueBars::label_of(self.column), self.column, rows)
     }
 
     /// The loop of the phrase a `Follow` reads, as the panel opened on it.

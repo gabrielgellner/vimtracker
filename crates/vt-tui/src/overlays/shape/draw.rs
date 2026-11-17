@@ -1,4 +1,5 @@
-//! The shape panel, over the right of the screen so the column it fills stays in view.
+//! The shape panel, over the right of the screen so the column it fills stays in view, and the bars
+//! of that column's values beside it.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -17,6 +18,7 @@ use crate::overlays::shape::ShapePanel;
 use crate::pages::Ctx;
 use crate::widgets::popup;
 use crate::widgets::theme;
+use crate::widgets::value_bars::{Beside, Side};
 
 /// Room for eight notes in a `List`'s values.
 const WIDTH: u16 = 42;
@@ -147,29 +149,95 @@ fn progression(panel: &ShapePanel) -> String {
     }
 }
 
-/// Draw the panel.
-pub fn draw(frame: &mut Frame, area: Rect, ctx: &Ctx, panel: &ShapePanel) {
+/// Where the panel goes in an area: its top right corner, clear of the CPU figure, or its top
+/// left, sized for its rows.
+fn window(area: Rect, panel: &ShapePanel, side: Side) -> Rect {
     let rows = panel.rows();
-    let context = panel.context();
     let below = Rect {
         y: area.y + FROM_TOP.min(area.height),
         height: area.height.saturating_sub(FROM_TOP),
         ..area
     };
-    // Room for the longest label, as `Transpose` is longer than the rest.
-    let labels = rows
-        .iter()
+    // `Weights` takes a second line, for its notes.
+    let lines_more = u16::from(rows.contains(&GenParam::Weights));
+    let width = width(panel, &rows, labels(&rows));
+    let height = rows.len() as u16 + lines_more + AROUND_ROWS;
+    match side {
+        Side::Right => popup::top_right(below, width, height),
+        Side::Left => popup::top_left(below, width, height),
+    }
+}
+
+/// Room for the longest label, as `Transpose` is longer than the rest.
+fn labels(rows: &[GenParam]) -> usize {
+    rows.iter()
         .map(|row| row.name().len() + 1)
         .max()
         .unwrap_or(0)
-        .max(LABEL);
-    // `Weights` takes a second line, for its notes.
-    let lines_more = u16::from(rows.contains(&GenParam::Weights));
-    let window = popup::top_right(
-        below,
-        width(panel, &rows, labels),
-        rows.len() as u16 + lines_more + AROUND_ROWS,
+        .max(LABEL)
+}
+
+/// Draw the panel in its usual place, the area's top right.
+pub fn draw(frame: &mut Frame, area: Rect, ctx: &Ctx, panel: &ShapePanel) {
+    draw_in(frame, window(area, panel, Side::Right), ctx, panel);
+}
+
+/// Draw the panel with the bars of the column it shapes beside the column, when the phrase grid is
+/// what's under it and the column's values are amounts. The bars go right of the column and the
+/// panel top right, or where they'd meet, the bars left of it and the panel top left, so neither
+/// covers the other or the column. Where no way round fits, the bars are drawn over the panel.
+pub(crate) fn draw_with_bars(
+    frame: &mut Frame,
+    area: Rect,
+    ctx: &Ctx,
+    panel: &ShapePanel,
+    beside: Option<&Beside>,
+) {
+    let bars = beside.and_then(|beside| Some((beside, panel.value_bars(ctx)?)));
+    let Some((beside, bars)) = bars else {
+        draw(frame, area, ctx, panel);
+        return;
+    };
+    let clear = |a: Rect, b: Rect| a.intersection(b).is_empty();
+    let column = Rect::new(
+        beside.column.0,
+        area.y,
+        beside.column.1 - beside.column.0,
+        area.height,
     );
+    let ways = [
+        (Side::Right, Side::Right),
+        (Side::Left, Side::Left),
+        (Side::Left, Side::Right),
+        (Side::Right, Side::Left),
+    ];
+    let found = ways.into_iter().find_map(|(bars_side, panel_side)| {
+        let at = beside.place(&bars, bars_side)?;
+        let window = window(area, panel, panel_side);
+        (clear(at, window) && clear(column, window)).then_some((at, window))
+    });
+    match found {
+        Some((at, window)) => {
+            beside.draw(frame.buffer_mut(), &bars, at);
+            draw_in(frame, window, ctx, panel);
+        }
+        None => {
+            draw(frame, area, ctx, panel);
+            let at = beside
+                .place(&bars, Side::Right)
+                .or_else(|| beside.place(&bars, Side::Left));
+            if let Some(at) = at {
+                beside.draw(frame.buffer_mut(), &bars, at);
+            }
+        }
+    }
+}
+
+/// Draw the panel in its window.
+fn draw_in(frame: &mut Frame, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
+    let rows = panel.rows();
+    let context = panel.context();
+    let labels = labels(&rows);
     let name = match panel.column {
         ShapeColumn::Note { .. } => "Note".to_owned(),
         ShapeColumn::Velocity => "Velocity".to_owned(),
@@ -331,4 +399,310 @@ pub fn draw(frame: &mut Frame, area: Rect, ctx: &Ctx, panel: &ShapePanel) {
         .title_style(Style::new().add_modifier(Modifier::BOLD));
     let inside = popup::draw(frame, window, border);
     frame.render_widget(Paragraph::new(lines), inside);
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::time::Instant;
+
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+    use ratatui::buffer::Buffer;
+    use ratatui::crossterm::event::KeyCode;
+    use vt_model::song::{Phrase, Song};
+    use vt_model::step::Step;
+
+    use super::*;
+    use crate::app::App;
+    use crate::widgets::pin::{app_with, assert_drawn, cut, press, special};
+
+    /// An app on one track whose phrase is these steps.
+    fn app_on(steps: &[&str]) -> App {
+        let mut song = Song::new(1);
+        let steps: Vec<Step> = steps.iter().map(|step| step.parse().unwrap()).collect();
+        song.tracks[0]
+            .phrases
+            .insert(0, Arc::new(Phrase::from_steps(steps)));
+        app_with(song).0
+    }
+
+    /// Keys typed, with `<Enter>` and `<Esc>` for those keys.
+    fn keys(app: &mut App, text: &str) {
+        let mut rest = text;
+        while !rest.is_empty() {
+            if let Some(tail) = rest.strip_prefix("<Enter>") {
+                special(app, KeyCode::Enter);
+                rest = tail;
+            } else if let Some(tail) = rest.strip_prefix("<Esc>") {
+                special(app, KeyCode::Esc);
+                rest = tail;
+            } else {
+                let c = rest.chars().next().unwrap();
+                press(app, &c.to_string());
+                rest = &rest[c.len_utf8()..];
+            }
+        }
+    }
+
+    /// The whole screen, this big.
+    fn screen(app: &mut App, width: u16, height: u16) -> Buffer {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+        terminal
+            .draw(|frame| crate::run::draw_screen(frame, app, None, Instant::now()))
+            .unwrap();
+        terminal.backend().buffer().clone()
+    }
+
+    /// A row of the screen as text.
+    fn row(buffer: &Buffer, y: u16) -> String {
+        (0..buffer.area.width)
+            .map(|x| buffer[(x, y)].symbol())
+            .collect()
+    }
+
+    /// Where the panel's top left corner is: the `╭` before its title.
+    fn panel_at(buffer: &Buffer, title: &str) -> (u16, u16) {
+        for y in 0..buffer.area.height {
+            let text = row(buffer, y);
+            if let Some(at) = text.find(title) {
+                let left = text[..at].chars().count() - 1;
+                return (left as u16, y);
+            }
+        }
+        panic!("no panel titled {title}");
+    }
+
+    #[test]
+    fn shaping_velocities_shows_each_rows_bar_now_over_the_one_before() {
+        let mut app = app_on(&["C-3 40 --- --- ---"; 16]);
+        keys(&mut app, "lvjjjjjSKramp<Enter>");
+        let screen = screen(&mut app, 163, 42);
+        // Right of the velocity, over the rest of the row, the panel staying top right.
+        assert_drawn(
+            &cut(&screen, Rect::new(15, 0, 20, 9)),
+            &[
+                " VEL 00 ─ 7F        ",
+                "abbbccccccccaaaaaaaa",
+                " 00─7F avg 40 ±6    ",
+                "acccccccccccccccccca",
+                " █████████▏         ",
+                "addddddddddaaaaaaaaa",
+                " ███▌█████▏         ",
+                "aeeefddddddaaaaaaaaa",
+                " ███████▎█▏         ",
+                "aeeeeeeefddaaaaaaaaa",
+                " ██████████▊        ",
+                "aeeeeeeeeeeeaaaaaaaa",
+                " ██████████████▌    ",
+                "aeeeeeeeeeeeeeeeaaaa",
+                " ██████████████████ ",
+                "aeeeeeeeeeeeeeeeeeea",
+                "     ···· ·· ···   ·",
+                "ggggghhhhghhgiiiiiii",
+                "a fg TEXT bg MANTLE",
+                "b fg TEXT bg MANTLE +BOLD",
+                "c fg OVERLAY2 bg MANTLE",
+                "d fg #75638e bg MANTLE",
+                "e fg MAUVE bg MANTLE",
+                "f fg MAUVE bg #75638e",
+                "g fg TEXT bg BASE",
+                "h fg OVERLAY0 bg BASE",
+                "i fg OVERLAY0 bg MANTLE",
+            ],
+        );
+        assert_eq!(panel_at(&screen, " Reshape "), (108, 2));
+    }
+
+    #[test]
+    fn the_bars_scroll_with_the_grid_and_only_rows_in_the_span_have_one() {
+        let mut app = app_on(&["C-3 40 --- --- ---"; 64]);
+        keys(&mut app, "lGvkkkkSKramp<Enter>");
+        let screen = screen(&mut app, 163, 42);
+        assert_drawn(
+            &cut(&screen, Rect::new(0, 0, 35, 2)),
+            &[
+                "\u{f147d} Track 01  Chain 00  00           ",
+                "aabbbbbbbbbbbbbbbbbbbbccddddddddddd",
+                "        ╭Note ───────────── FX 1 ──",
+                "ddddddddeaaaaaeeeeeeeeeeeeeaaaaaaee",
+                "a fg OVERLAY2 bg BASE",
+                "b fg TEXT bg BASE +BOLD",
+                "c fg ROSEWATER bg BASE +BOLD",
+                "d fg TEXT bg BASE",
+                "e fg SURFACE1 bg BASE",
+            ],
+        );
+        assert_drawn(
+            &cut(&screen, Rect::new(0, 35, 35, 5)),
+            &[
+                " 3  38  │C-3 40     ···· ·· ···   ·",
+                "aaabbbccdeeeeeeeeeeeaaaaeaaefffffff",
+                " 2  39  │C-3 40 VEL 00 ─ 7F        ",
+                "aaagggccdeeeeeehiiijjjjjjjjhhhhhhhh",
+                " 1  3A  │C-3 40 00─7F avg 40 ±4    ",
+                "aaagggccdeeeeeehjjjjjjjjjjjjjjjjjjh",
+                "    3B  │C-3 00 █████████▏         ",
+                "aaagggccdkkkkllhmmmmmmmmmmhhhhhhhhh",
+                "        ╰──────────────────────────",
+                "ddddddddddddddddddddddddddddddddddd",
+                "a fg OVERLAY0 bg BASE",
+                "b fg YELLOW bg BASE",
+                "c fg GREEN bg BASE",
+                "d fg SURFACE1 bg BASE",
+                "e fg TEXT bg BASE",
+                "f fg OVERLAY0 bg MANTLE",
+                "g fg SUBTEXT1 bg BASE",
+                "h fg TEXT bg MANTLE",
+                "i fg TEXT bg MANTLE +BOLD",
+                "j fg OVERLAY2 bg MANTLE",
+                "k fg TEXT bg BASE ul SURFACE1 +UNDERLINED",
+                "l fg BASE bg ROSEWATER ul SURFACE1 +UNDERLINED",
+                "m fg #75638e bg MANTLE",
+            ],
+        );
+    }
+
+    #[test]
+    fn a_note_column_is_a_contour_a_mark_a_row_over_the_scales_roots() {
+        let mut app = app_on(&[
+            "C-3 40 --- --- ---",
+            "E-3 40 --- --- ---",
+            "G-3 40 --- --- ---",
+            "C-4 40 --- --- ---",
+            "--- -- --- --- ---",
+            "A-2 40 --- --- ---",
+        ]);
+        keys(&mut app, "vGSKreverse<Enter>");
+        let screen = screen(&mut app, 163, 42);
+        assert_drawn(
+            &cut(&screen, Rect::new(12, 0, 20, 9)),
+            &[
+                " NOTE A-2 ─ C-4     ",
+                "abbbbccccccccccaaaaa",
+                " A-2─C-4 avg E-3 ±4 ",
+                "acccccccccccccccccca",
+                "  ●  ●           ┊  ",
+                "aadaaeaaaaaaaaaaafaa",
+                "     ┊   ●       ●  ",
+                "aaaaafaaaeaaaaaaadaa",
+                "     ┊      ●    ┊  ",
+                "aaaaafaaaaaadaaaafaa",
+                "     ┊   ●       ●  ",
+                "aaaaafaaadaaaaaaaeaa",
+                "     ┊           ┊  ",
+                "aaaaafaaaaaaaaaaafaa",
+                "  ●  ●           ┊  ",
+                "aaeaadaaaaaaaaaaafaa",
+                "────────────────────",
+                "gggggggggggggggggggg",
+                "a fg TEXT bg MANTLE",
+                "b fg TEXT bg MANTLE +BOLD",
+                "c fg OVERLAY2 bg MANTLE",
+                "d fg MAUVE bg MANTLE",
+                "e fg #75638e bg MANTLE",
+                "f fg OVERLAY0 bg MANTLE",
+                "g fg SURFACE1 bg BASE",
+            ],
+        );
+    }
+
+    #[test]
+    fn an_fx_columns_bars_are_on_its_commands_own_range() {
+        let mut app = app_on(&["C-3 40 res:40 --- ---"; 8]);
+        keys(&mut app, "llllllvjjjSKramp<Enter>");
+        let screen = screen(&mut app, 163, 42);
+        for y in 0..10 {
+            println!("{}", row(&screen, y));
+        }
+        assert_drawn(
+            &cut(&screen, Rect::new(38, 0, 20, 7)),
+            &[
+                " RES 00 ─ FF        ",
+                "abbbccccccccaaaaaaaa",
+                " 00─FF avg 80 ±4    ",
+                "acccccccccccccccccca",
+                " ████▌              ",
+                "adddddaaaaaaaaaaaaaa",
+                " ██████             ",
+                "aeeeeeeaaaaaaaaaaaaa",
+                " ████████████       ",
+                "aeeeeeeeeeeeeaaaaaaa",
+                " ██████████████████ ",
+                "aeeeeeeeeeeeeeeeeeea",
+                " \u{f033e} ···   ··     ··· ",
+                "acaffffffffffffaffff",
+                "a fg TEXT bg MANTLE",
+                "b fg TEXT bg MANTLE +BOLD",
+                "c fg OVERLAY2 bg MANTLE",
+                "d fg #75638e bg MANTLE",
+                "e fg MAUVE bg MANTLE",
+                "f fg OVERLAY0 bg MANTLE",
+            ],
+        );
+    }
+
+    #[test]
+    fn a_column_whose_values_arent_amounts_has_no_bars() {
+        let mut app = app_on(&["C-3 40 arp:37 --- ---"; 8]);
+        keys(&mut app, "llllllvjjjSKramp<Enter>");
+        assert!(app.overlays.shape.is_some());
+        let screen = screen(&mut app, 163, 42);
+        assert!(row(&screen, 0).contains("Chain 00"), "the title as it was");
+        assert!(row(&screen, 2).contains("ARP"));
+    }
+
+    #[test]
+    fn near_the_right_edge_the_panel_goes_left_so_the_bars_and_the_column_stay_clear() {
+        let mut app = app_on(&["C-3 40 --- --- cut:40"; 16]);
+        keys(&mut app, "$vjjjjjSKramp<Enter>");
+        let screen = screen(&mut app, 110, 20);
+        for y in 0..20 {
+            println!("{}", row(&screen, y));
+        }
+        assert_eq!(panel_at(&screen, " Reshape "), (0, 2));
+        assert_drawn(
+            &cut(&screen, Rect::new(64, 0, 20, 9)),
+            &[
+                " CUT 00 ─ FF        ",
+                "abbbccccccccaaaaaaaa",
+                " 00─FF avg 80 ±6    ",
+                "acccccccccccccccccca",
+                " ████▌              ",
+                "adddddaaaaaaaaaaaaaa",
+                " ███▋▌              ",
+                "aeeefdaaaaaaaaaaaaaa",
+                " ███████▎           ",
+                "aeeeeeeeeaaaaaaaaaaa",
+                " ██████████▊        ",
+                "aeeeeeeeeeeeaaaaaaaa",
+                " ██████████████▍    ",
+                "aeeeeeeeeeeeeeeeaaaa",
+                " ██████████████████ ",
+                "aeeeeeeeeeeeeeeeeeea",
+                " \u{f033e}│  C-3            ",
+                "acghiiiihhhhhhhhhhhh",
+                "a fg TEXT bg MANTLE",
+                "b fg TEXT bg MANTLE +BOLD",
+                "c fg OVERLAY2 bg MANTLE",
+                "d fg #75638e bg MANTLE",
+                "e fg MAUVE bg MANTLE",
+                "f fg MAUVE bg #75638e",
+                "g fg SURFACE1 bg BASE",
+                "h fg TEXT bg BASE",
+                "i fg OVERLAY2 bg BASE",
+            ],
+        );
+    }
+
+    #[test]
+    fn with_the_macro_panel_and_the_description_open_the_bars_and_the_panel_still_clear() {
+        let mut app = app_on(&["C-3 40 --- --- ---"; 64]);
+        keys(&mut app, " tlvGSKramp<Enter> d");
+        let screen = screen(&mut app, 163, 42);
+        for y in 0..42 {
+            println!("{}", row(&screen, y));
+        }
+        assert_eq!(panel_at(&screen, " Reshape "), (108, 2));
+    }
 }
