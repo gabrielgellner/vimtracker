@@ -699,6 +699,11 @@ impl<'a> Ctx<'a> {
         self.services.dealer(track)
     }
 
+    /// The row a playing track's `Jump` played in place of the one walked to, if it jumped.
+    pub(crate) fn jumped_row(&self, track: usize) -> Option<usize> {
+        self.services.jumped_row(track)
+    }
+
     /// A track's faders as they're heard.
     pub fn faders(&self, track: usize) -> Faders {
         self.services.faders(track)

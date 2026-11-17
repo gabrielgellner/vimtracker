@@ -235,6 +235,10 @@ pub struct Track {
     /// The nudges written stay as they are.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub quantise: u8,
+    /// Where held `JMP` starts: the chance each step plays any row of its phrase instead of the one
+    /// its order walks to, from none at `00` to every step at `FF` (decision 391).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub jump: u8,
     /// The choke group it's in, if any, from 1 to `CHOKE_GROUPS`: a note on it cuts off what's
     /// sounding on the other tracks in the group, as a closed hat cuts an open one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -467,6 +471,7 @@ impl Track {
             TrackControl::Pitch => self.pitch,
             TrackControl::VelocityDelta => self.velocity_delta,
             TrackControl::Quantise => self.quantise,
+            TrackControl::Jump => self.jump,
         }
     }
 
@@ -486,6 +491,7 @@ impl Track {
             TrackControl::Pitch => &mut self.pitch,
             TrackControl::VelocityDelta => &mut self.velocity_delta,
             TrackControl::Quantise => &mut self.quantise,
+            TrackControl::Jump => &mut self.jump,
         };
         *held = match control {
             TrackControl::SendA | TrackControl::SendB => value.min(MAX_LEVEL),
@@ -697,6 +703,7 @@ impl Default for Track {
             pitch: centre(),
             velocity_delta: centre(),
             quantise: 0,
+            jump: 0,
             choke: None,
             group: None,
             gate_length: None,

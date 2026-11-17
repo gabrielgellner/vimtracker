@@ -1076,6 +1076,23 @@ plays from that row's step, with the walk wherever it is there. Changing the
 order while it plays keeps the row that was next, where the new walk plays it
 in the same pass, or stays put if that pass doesn't play it.
 
+**Jump** scrambles an order by degrees: it's the chance each step plays any row
+of the phrase instead of the one the order walks to, and then the walk carries
+on where it was. `0 %` plays the order as it is and `100 %` any row each step,
+as `random` does, so turning it up takes any order from as written to scrambled,
+as Marbles' Déjà vu knob does past noon. It's a track's setting, `Jump` in the
+title of the Sound page's Play device, so it scrambles whatever phrase the track
+plays, and its chain stays as it is: a jump never leaves the phrase. The row
+jumped to plays whole, its note, velocity, gate and FX, as if the order had
+walked there, its locks too, for as long as the row walked to would have
+lasted. A row that takes no time is never jumped to. `JMP` on a row sets the
+chance for the step that walks to it, a lane of it reaches the steps it's at, a
+mod slot or a macro can move it, and the Roto has it on the Play device's
+second page. Lanes keep their own loops, and a `HLD` on the row jumped to ties
+into the note before it, whichever row that was. Jumps are rolled from the
+`:seed` and the pass, so a render repeats, and the playhead shows the row
+jumped to.
+
 ## Lanes
 
 An FX column can loop on its own, apart from the notes: a lane. It keeps

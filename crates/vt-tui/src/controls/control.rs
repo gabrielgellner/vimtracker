@@ -156,6 +156,7 @@ impl Control {
             Self::Base(TrackControl::Pitch) => "Pitch",
             Self::Base(TrackControl::VelocityDelta) => "Velocity",
             Self::Base(TrackControl::Quantise) => "Quantise",
+            Self::Base(TrackControl::Jump) => "Jump",
             Self::Choke => "Choke",
             Self::Group => "Group",
             Self::Role => "Role",
@@ -357,7 +358,10 @@ impl Control {
                 track.is_sound() || track.is_group()
             }
             Self::Base(
-                TrackControl::Pitch | TrackControl::VelocityDelta | TrackControl::Quantise,
+                TrackControl::Pitch
+                | TrackControl::VelocityDelta
+                | TrackControl::Quantise
+                | TrackControl::Jump,
             )
             | Self::Choke
             | Self::Group

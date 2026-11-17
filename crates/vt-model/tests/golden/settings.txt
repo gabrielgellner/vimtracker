@@ -1228,3 +1228,4 @@
 1227 voicemode
 1228 keytrack
 1229 glidemode
+1230 jump

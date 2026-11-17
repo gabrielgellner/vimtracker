@@ -40,8 +40,8 @@ pub use pending::NotePitch;
 
 pub(crate) use mods::SongTime;
 pub(crate) use pending::{
-    Accumulating, Accumulators, Arpeggiating, Clock, Decided, DelayedNote, Epoch, PENDING_PARTS,
-    Part, PendingStep, Retrigger, RowKey, Worked,
+    Accumulating, Accumulators, Arpeggiating, Clock, Decided, DelayedNote, Epoch, JumpAt,
+    PENDING_PARTS, Part, PendingStep, Retrigger, RowKey, Worked,
 };
 pub(crate) use shaping::{MasterRest, RunContext, ShapedFrame};
 #[cfg(test)]
@@ -88,6 +88,8 @@ pub(crate) struct TrackState {
     /// The note the row playing was heard at, before its chain's transpose, when an accumulator
     /// or an `RND` moved it.
     pub accumulated: Option<u8>,
+    /// What its `Jump` decided for the visit it's on, which its later pulses keep.
+    pub(crate) jump: Option<JumpAt>,
     /// The rolls a `Random` accumulator takes, apart from `rng` so `CHA` rolls as it did.
     pub accumulator_rng: Pcg32,
     /// What's added to the count for each FX column's lane, so a lane changed while playing stays
@@ -325,6 +327,7 @@ impl TrackState {
             realign_waiting: false,
             accumulators: Accumulators::default(),
             accumulated: None,
+            jump: None,
             accumulator_rng: accumulator_rng(seed, index),
             voice: Voice::default(),
             tail: Voice::default(),
@@ -571,6 +574,7 @@ impl TrackState {
         self.arp = None;
         self.last_note = None;
         self.chain_pass = 0;
+        self.jump = None;
         for (at, run) in self.slots.iter_mut().enumerate() {
             run.restart(LfoStart { tick: 0.0, clock });
             run.notes = 0;
@@ -693,6 +697,11 @@ impl TrackState {
         let moved =
             self.held_velocity_delta + self.offsets[SettingId::VELOCITY_DELTA.index()] * 255.0;
         moved_velocity(own, moved)
+    }
+
+    /// What modulation adds to the track's `Jump` now, on the `00` to `FF` scale.
+    pub(crate) fn jump_moved(&self) -> f32 {
+        self.offsets[SettingId::JUMP.index()] * 255.0
     }
 
     /// A row's nudge as it plays, in ticks, from the nudge written and the `QNT` the row chose

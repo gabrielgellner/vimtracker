@@ -47,6 +47,7 @@ mod note_clicks;
 mod nudge;
 mod pedals;
 mod phase;
+mod phrase_jump;
 mod play_order;
 mod play_start;
 mod quantise;

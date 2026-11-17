@@ -807,8 +807,8 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
-        39,
-        "what a sample track has, its Sample, Slice, Start and Length, its lanes' six, Pitch in scale, none, Mod 6's three and its Rate, the accumulator's and arpeggio's four, and the eight macros"
+        40,
+        "what a sample track has, its Sample, Slice, Start and Length, its lanes' six, Pitch in scale, Jump, none, Mod 6's three and its Rate, the accumulator's and arpeggio's four, and the eight macros"
     );
     assert!(
         picker
@@ -1158,7 +1158,7 @@ fn a_synths_play_device_has_its_phase_and_modes_and_a_samplers_its_modes() {
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
-    press(&mut app, " 5}2}$");
+    press(&mut app, " 5}2}j$");
     assert_eq!(app.track_control().label(), "Phase");
     assert_eq!(value_shown(&app).as_deref(), Some("Free"));
     press(&mut app, "=");
@@ -1794,7 +1794,7 @@ fn the_track_page_shows_its_settings_in_columns() {
             26,
             "│  Pan       8000 ▕    │    ▏   Group     Off               ",
         ),
-        (29, "╭─ Play ─"),
+        (29, "╭─ Play  Jump 00 ─"),
         (
             31,
             "│  Pitch     8000 ▕    │    ▏   Speed     1/16               Choke     Off ",
@@ -3192,7 +3192,7 @@ fn the_track_page_sets_how_long_a_tie_glides() {
         Machine::Plaits(SynthVoice::Acid)
     );
     assert!(line(&app).contains("Slide"), "{}", line(&app));
-    press(&mut app, "gg3}j");
+    press(&mut app, "gg3}jj");
     assert_eq!(app.track_control(), Control::Glide);
     assert_eq!(
         value_shown(&app).as_deref(),
