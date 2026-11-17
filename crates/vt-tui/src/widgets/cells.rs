@@ -8,7 +8,6 @@
 
 use std::sync::Arc;
 
-use crate::widgets::device::DEVICE_HEIGHT;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
@@ -793,13 +792,13 @@ fn a_generators_settings() {
         .insert(0, Arc::new(Phrase::from_steps(vec![empty; 8])));
     let (mut app, _realtime) = app_with(song);
     press(&mut app, "vGSjjjjjj===L");
-    press(&mut app, " 5LLL}}");
+    press(&mut app, " 5LLL}");
     assert!(matches!(
         app.track_page.control_here(&app.ctx()),
         Control::Gen { .. }
     ));
     assert_drawn(
-        &cut(&page(&app), Rect::new(0, 11 + DEVICE_HEIGHT, 110, 8)),
+        &cut(&page(&app), Rect::new(0, 11, 110, 8)),
         &[
             "╭─ Ramp  Euclid · Note 00–07 ─────────────────────────────────────────────────────────────────────────────────",
             "aabccccbbccccccbbbbbbbbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
