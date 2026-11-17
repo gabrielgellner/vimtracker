@@ -161,6 +161,7 @@ impl Control {
             Self::Base(TrackControl::Reverse) => "Reverse",
             Self::Base(TrackControl::OrderX) => "Order X",
             Self::Base(TrackControl::OrderY) => "Order Y",
+            Self::Base(TrackControl::ChanceDelta) => "Chance",
             Self::Choke => "Choke",
             Self::Group => "Group",
             Self::Role => "Role",
@@ -373,7 +374,8 @@ impl Control {
                 | TrackControl::Order
                 | TrackControl::Reverse
                 | TrackControl::OrderX
-                | TrackControl::OrderY,
+                | TrackControl::OrderY
+                | TrackControl::ChanceDelta,
             )
             | Self::Choke
             | Self::Group

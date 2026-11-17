@@ -290,7 +290,10 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
             ParamView {
                 centred: matches!(
                     which,
-                    TrackControl::Pan | TrackControl::Pitch | TrackControl::VelocityDelta
+                    TrackControl::Pan
+                        | TrackControl::Pitch
+                        | TrackControl::VelocityDelta
+                        | TrackControl::ChanceDelta
                 ),
                 ..of.hex(value, 0xFF, fresh.control(which))
             }

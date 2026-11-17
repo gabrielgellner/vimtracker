@@ -252,6 +252,10 @@ pub struct Track {
     /// Where held `ORDY` starts: the second of the order's numbers, `00` for its phrases' own.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub order_y: u8,
+    /// Where held `CDLT` starts: how far every row's chance to play is moved up or down, by
+    /// [`moved_chance`](crate::settings::moved_chance), with `80` as none (decision 405).
+    #[serde(default = "centre", skip_serializing_if = "is_centre")]
+    pub chance_delta: u8,
     /// The choke group it's in, if any, from 1 to `CHOKE_GROUPS`: a note on it cuts off what's
     /// sounding on the other tracks in the group, as a closed hat cuts an open one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -489,6 +493,7 @@ impl Track {
             TrackControl::Reverse => self.reverse,
             TrackControl::OrderX => self.order_x,
             TrackControl::OrderY => self.order_y,
+            TrackControl::ChanceDelta => self.chance_delta,
         }
     }
 
@@ -513,6 +518,7 @@ impl Track {
             TrackControl::Reverse => &mut self.reverse,
             TrackControl::OrderX => &mut self.order_x,
             TrackControl::OrderY => &mut self.order_y,
+            TrackControl::ChanceDelta => &mut self.chance_delta,
         };
         *held = match control {
             TrackControl::SendA | TrackControl::SendB => value.min(MAX_LEVEL),
@@ -749,6 +755,7 @@ impl Default for Track {
             reverse: 0,
             order_x: 0,
             order_y: 0,
+            chance_delta: centre(),
             choke: None,
             group: None,
             gate_length: None,

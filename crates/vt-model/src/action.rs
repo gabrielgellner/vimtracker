@@ -609,11 +609,12 @@ pub enum TrackControl {
     Reverse,
     OrderX,
     OrderY,
+    ChanceDelta,
 }
 
 impl TrackControl {
     /// Every one, in the order they're declared.
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 18] = [
         Self::Cutoff,
         Self::Resonance,
         Self::Pan,
@@ -631,6 +632,7 @@ impl TrackControl {
         Self::Reverse,
         Self::OrderX,
         Self::OrderY,
+        Self::ChanceDelta,
     ];
 
     /// The setting this is the base of, if steps can set it too.
@@ -653,6 +655,7 @@ impl TrackControl {
             Self::Reverse => Some(SettingId::REVERSE),
             Self::OrderX => Some(SettingId::ORDER_X),
             Self::OrderY => Some(SettingId::ORDER_Y),
+            Self::ChanceDelta => Some(SettingId::CHANCE_DELTA),
         }
     }
 }

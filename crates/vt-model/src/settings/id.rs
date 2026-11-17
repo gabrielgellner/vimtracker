@@ -204,6 +204,9 @@ impl SettingId {
     pub const ORDER_X: Self = Self(LATER_TRACK_START as u16 + 13);
     /// The second of the order's numbers, `00` for the phrase's own.
     pub const ORDER_Y: Self = Self(LATER_TRACK_START as u16 + 14);
+    /// How far every row's chance to play is moved up or down, `80` none, `00` never and `FF`
+    /// always, as [`moved_chance`](super::moved_chance) gives it (decision 405).
+    pub const CHANCE_DELTA: Self = Self(LATER_TRACK_START as u16 + 15);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.

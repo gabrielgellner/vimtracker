@@ -57,6 +57,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             TrackControl::Reverse => "reverse",
             TrackControl::OrderX => "orderx",
             TrackControl::OrderY => "ordery",
+            TrackControl::ChanceDelta => "chance",
         },
         Control::Level => "level",
         Control::Trim => "trim",
