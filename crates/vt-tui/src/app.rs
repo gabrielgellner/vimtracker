@@ -182,6 +182,9 @@ pub struct App {
     /// When the loader or the analyst started on what they're doing, while they are, for the
     /// spinner on the status line.
     pub(crate) work_since: Option<Instant>,
+    /// The song as it was when the selection on the phrase view started, while there's one, for
+    /// the bars beside a selected column to show what its values were.
+    pub(crate) selected_from: Option<Arc<Song>>,
 }
 
 /// The keys that play while the track page's keyboard is on, from C to F. The rest stay the
@@ -236,6 +239,7 @@ impl App {
             table: Table::default(),
             grammar: Grammar::default(),
             work_since: None,
+            selected_from: None,
         };
         app.services.live_song = Some(Arc::clone(app.song()));
         app.send_live();
