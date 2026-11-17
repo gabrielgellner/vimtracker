@@ -31,7 +31,8 @@ pub use units::{
     ACID_SHORTEST_DECAY, BAND_DB, Kind, LEAST_Q, LONGEST_GLIDE_MS, MOST_Q, SHORTEST_GATE,
     SHORTEST_GLIDE_MS, Units, acid_cutoff_hz, acid_cutoff_position, acid_decay_ms, acid_drive_db,
     band_db, band_q, gate_delta, gate_percent, gate_share, gate_value, glide_ms, glide_value,
-    moved_velocity, orders_text, quantised_nudge, rows_text, slide_ms, velocity_delta,
+    moved_chance, moved_velocity, orders_text, quantised_nudge, rows_text, slide_ms,
+    velocity_delta,
 };
 pub use voices::{
     FOUR_OP_ALGORITHMS, FOUR_OP_EACH, FOUR_OP_SHARED, MAX_MACHINE_SETTINGS, voice_entries,
@@ -388,7 +389,7 @@ const TRACK_GROUPS: [&str; 16] = [
 
 /// The track's own settings added since places were fixed, at the end of the table so none moves
 /// (#718): the track's own after [`TRACK`]'s, in the order they came.
-const LATER_TRACK: [Entry; 18] = [
+const LATER_TRACK: [Entry; 19] = [
     // Whether a synth's oscillators run on from note to note or start again on each, read as a
     // note starts, so a lock on its row sets it for that note (decision 370).
     Entry {
@@ -580,6 +581,11 @@ const LATER_TRACK: [Entry; 18] = [
         default: 0,
         place: Place::Own,
     },
+    // As the Metropolix's Probability and Elektron's track `PROB`: every row's chance moved up or
+    // down, read as the row decides whether it plays, so a lock on its row sets it for that row,
+    // `80` none (decision 405).
+    centred("chancedelta", "Chance up or down", "CDLT")
+        .means("moves every row's chance to play up or down, a density fader"),
     // Whether a turn of the window or a lane's length, rate or start waits for its loop to come
     // round, as Kria's Division Cueing does (decision 402).
     Entry {
@@ -596,10 +602,10 @@ const LATER_TRACK: [Entry; 18] = [
     },
 ];
 /// What each of [`LATER_TRACK`] is listed with.
-const LATER_TRACK_GROUPS: [&str; 18] = [
+const LATER_TRACK_GROUPS: [&str; 19] = [
     "Machine", "Machine", "Filter", "Machine", "Machine", "Filter", "Filter", "Filter", "Filter",
     "Filter", "Filter", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
-    "Machine",
+    "Machine", "Machine",
 ];
 
 /// What `ORDX` and `ORDY` choose: the phrase's own number, or one from 1 to 16.

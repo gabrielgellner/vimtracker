@@ -211,9 +211,12 @@ impl SettingId {
     pub const PHRASE_LENGTH: Self = Self(LATER_TRACK_START as u16 + 15);
     /// The row the window a phrase's order walks over starts on, rows on from its loop's first.
     pub const PHRASE_START: Self = Self(LATER_TRACK_START as u16 + 16);
+    /// How far every row's chance to play is moved up or down, `80` none, `00` never and `FF`
+    /// always, as [`moved_chance`](super::moved_chance) gives it (decision 405).
+    pub const CHANCE_DELTA: Self = Self(LATER_TRACK_START as u16 + 17);
     /// Whether a turn of the phrase's window or a lane's `Length`, `Rate` or `Start` waits for
     /// its loop to come round (decision 402).
-    pub const CUE: Self = Self(LATER_TRACK_START as u16 + 17);
+    pub const CUE: Self = Self(LATER_TRACK_START as u16 + 18);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.

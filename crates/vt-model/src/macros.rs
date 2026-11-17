@@ -564,6 +564,7 @@ impl Track {
             SettingId::ORDER_Y => self.order_y,
             SettingId::PHRASE_LENGTH => self.phrase_length,
             SettingId::PHRASE_START => self.phrase_start,
+            SettingId::CHANCE_DELTA => self.chance_delta,
             SettingId::CUE => self.cue,
             SettingId::FILTER_MODE => self.filter_mode.index(),
             SettingId::GATE_LENGTH => self.gate_length(),
@@ -691,6 +692,7 @@ impl Track {
                     SettingId::ORDER_Y => self.order_y = coarse.min(MOST_ORDER_NUMBER),
                     SettingId::PHRASE_LENGTH => self.phrase_length = coarse,
                     SettingId::PHRASE_START => self.phrase_start = coarse,
+                    SettingId::CHANCE_DELTA => self.chance_delta = coarse,
                     SettingId::CUE => self.cue = coarse.min(1),
                     SettingId::FILTER_MODE => {
                         self.filter_mode =

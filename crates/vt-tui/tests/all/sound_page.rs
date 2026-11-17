@@ -109,7 +109,7 @@ fn the_four_devices_fill_the_page_and_the_keys_box_at_163_by_42() {
             assert_eq!(found[0].1, title, "{machine:?}");
             assert_eq!(found[1].1, "Filter  LP  12 dB");
             assert_eq!(found[2].1, "Output");
-            assert_eq!(found[3].1, "Play  Jump 00");
+            assert_eq!(found[3].1, "Play  Jump 00  Chance 80");
             let bottom = top + 35;
             let line = lines[bottom].trim_start_matches(frame);
             assert!(line.starts_with('╰'), "{machine:?} {mode:?}: {lines:#?}");
@@ -217,12 +217,13 @@ fn braces_go_between_devices_keeping_the_row_and_column() {
     // The Output's title is empty, so the cursor lands on its first settings.
     press(&mut app, "}");
     assert_eq!(app.track_control().label(), "Send A");
-    // The Play device's title has `Jump`, so the title's row lands on it.
+    // The Play device's title has `Jump` and `Chance`, so the title's row lands on the second,
+    // under `Send A`'s column.
     press(&mut app, "}");
-    assert_eq!(app.track_control().label(), "Jump");
+    assert_eq!(app.track_control().label(), "Chance");
     // It stops at the last, and comes back the way it went.
     press(&mut app, "}");
-    assert_eq!(app.track_control().label(), "Jump");
+    assert_eq!(app.track_control().label(), "Chance");
     press(&mut app, "3{");
     assert_eq!(column_name(&app), "Wave");
     // A count and the same row: the second settings row of the machine, then the Output's.
@@ -891,6 +892,34 @@ fn the_play_devices_title_has_the_tracks_jump() {
     press(&mut app, "M1");
     let held = app.song().tracks[0]
         .macro_holding(vt_model::macros::MacroTarget::Setting(SettingId::JUMP))
+        .map(|(at, _)| at);
+    assert_eq!(held, Some(0));
+}
+
+/// The track's `Chance up or down` is in the Play device's title after `Jump`: turned, described
+/// and mapped to a macro as any setting is (decision 405).
+#[test]
+fn the_play_devices_title_has_the_tracks_chance() {
+    let (mut app, _realtime) = playing(Machine::Plaits(SynthVoice::Acid));
+    // Past `Jump`'s fine digits.
+    press(&mut app, "3}ll");
+    assert_eq!(
+        app.track_control(),
+        Control::Base(vt_model::action::TrackControl::ChanceDelta)
+    );
+    press(&mut app, "-");
+    assert_eq!(app.song().tracks[0].chance_delta, 0x7F);
+    press(&mut app, "x");
+    assert_eq!(app.song().tracks[0].chance_delta, 0x80);
+    press(&mut app, " d");
+    let said = vt_tui::screen::describe::text(&app).expect("a line");
+    assert!(said.contains("density fader"), "{said}");
+    press(&mut app, " d");
+    press(&mut app, "M1");
+    let held = app.song().tracks[0]
+        .macro_holding(vt_model::macros::MacroTarget::Setting(
+            SettingId::CHANCE_DELTA,
+        ))
         .map(|(at, _)| at);
     assert_eq!(held, Some(0));
 }

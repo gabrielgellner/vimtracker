@@ -259,6 +259,10 @@ pub struct Track {
     /// Where held `PSTA` starts: the row the window its phrases' orders walk over starts on.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub phrase_start: u8,
+    /// Where held `CDLT` starts: how far every row's chance to play is moved up or down, by
+    /// [`moved_chance`](crate::settings::moved_chance), with `80` as none (decision 405).
+    #[serde(default = "centre", skip_serializing_if = "is_centre")]
+    pub chance_delta: u8,
     /// Where held `CUE` starts: whether a turn of the window or a lane's `Length`, `Rate` or
     /// `Start` waits for its loop to come round, `01` for on (decision 402).
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -502,6 +506,7 @@ impl Track {
             TrackControl::OrderY => self.order_y,
             TrackControl::PhraseLength => self.phrase_length,
             TrackControl::PhraseStart => self.phrase_start,
+            TrackControl::ChanceDelta => self.chance_delta,
             TrackControl::Cue => self.cue,
         }
     }
@@ -529,6 +534,7 @@ impl Track {
             TrackControl::OrderY => &mut self.order_y,
             TrackControl::PhraseLength => &mut self.phrase_length,
             TrackControl::PhraseStart => &mut self.phrase_start,
+            TrackControl::ChanceDelta => &mut self.chance_delta,
             TrackControl::Cue => &mut self.cue,
         };
         *held = match control {
@@ -770,6 +776,7 @@ impl Default for Track {
             order_y: 0,
             phrase_length: centre(),
             phrase_start: 0,
+            chance_delta: centre(),
             cue: 0,
             choke: None,
             group: None,
