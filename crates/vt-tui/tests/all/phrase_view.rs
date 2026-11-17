@@ -94,7 +94,7 @@ fn other_tracks_light_the_step_they_are_playing() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     // The first track's column in the overview, its marker's cell and then its note's, on a step
     // two rows below the title.
     let color = |app: &App, x: u16, row: u16| screen(app)[(x, row + 2)].fg;
@@ -207,7 +207,7 @@ fn the_row_playing_lights_what_is_written_and_sets_back_what_is_empty() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     on_the_row_being_edited(&mut app);
     app.services.reported.transport = Transport::Playing;
     let (green, set_back) = (
@@ -278,7 +278,7 @@ fn other_tracks_are_blank_above_row_00_and_keep_going_past_this_loop() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     command(&mut app, "len 4");
     press(&mut app, "]L");
     app.phrase_view.top = 0;
@@ -321,7 +321,7 @@ fn the_overview_shows_empty_notes_faint_and_written_ones_dim() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
-    let app = App::new(song, None, samples, handle, 48_000);
+    let app = crate::common::new_app(song, None, samples, handle, 48_000);
     let buffer = screen(&app);
     assert_eq!(
         beside(&buffer, 0, 0),
@@ -410,7 +410,7 @@ fn the_title_shows_the_chain_with_this_phrase_in_the_cursors_colour_cut_to_its_r
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     press(&mut app, "]p");
     assert_eq!(app.services.cursor.slot, 1);
     let buffer = screen_wide(&app);
@@ -460,7 +460,7 @@ fn inspected(tracks: usize) -> App {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
-    App::new(song, None, samples, handle, 48_000)
+    crate::common::new_app(song, None, samples, handle, 48_000)
 }
 
 #[test]
@@ -575,7 +575,7 @@ fn a_column_shows_the_phrase_its_chain_is_on() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     assert_eq!(beside(&screen(&app), 0, 0).0, " C-3");
 
     // Stopped, it follows the cursor, as that's where playing would start.
@@ -806,7 +806,7 @@ fn a_gate_cell_shows_its_own_length_dim_and_the_tracks_as_faint_dots() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     let buffer = screen(&app);
     let row = |y: u16| -> String { (9..40).map(|x| buffer[(x, y)].symbol()).collect() };
     assert!(
@@ -855,7 +855,7 @@ fn a_nudge_shows_dim_by_the_velocity_only_on_a_row_that_has_one() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     let buffer = screen(&app);
     let row = |y: u16| -> String { (9..40).map(|x| buffer[(x, y)].symbol()).collect() };
     assert!(
@@ -1044,7 +1044,7 @@ fn a_track_at_an_eighth_has_its_own_playhead() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     on_the_row_being_edited(&mut app);
     app.services.reported.transport = Transport::Playing;
     app.set_playhead(6);

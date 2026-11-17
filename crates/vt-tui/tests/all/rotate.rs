@@ -174,7 +174,7 @@ fn rotating_back_before_the_row_lands_takes_the_rate_round_again() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, mut rt) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     let mut at = play_from_the_top(&mut app, &mut rt);
     press(&mut app, " r");
     play_to(&mut app, &mut rt, &mut at, 1.5);

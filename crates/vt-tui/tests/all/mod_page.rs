@@ -2547,7 +2547,10 @@ fn melody(steps: Steps, depth: i16, in_scale: bool) -> (App, Realtime) {
         std::sync::Arc::clone(&samples),
     ));
     let (handle, realtime) = connect(Engine::new(48_000, version));
-    (App::new(song, None, samples, handle, 48_000), realtime)
+    (
+        crate::common::new_app(song, None, samples, handle, 48_000),
+        realtime,
+    )
 }
 
 /// Play from the top for this many frames, the app reading each report.
@@ -2704,7 +2707,10 @@ fn varied_melody() -> (App, Realtime) {
         std::sync::Arc::clone(&samples),
     ));
     let (handle, realtime) = connect(Engine::new(48_000, version));
-    (App::new(song, None, samples, handle, 48_000), realtime)
+    (
+        crate::common::new_app(song, None, samples, handle, 48_000),
+        realtime,
+    )
 }
 
 #[test]
@@ -2849,7 +2855,7 @@ fn the_tutorials_lorenz_on_the_turing_machines_tune_is_set_by_its_keys() {
     ));
     let (handle, _realtime) =
         vt_engine::link::connect(vt_engine::engine::Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     // 1. The Steps slot switched out.
     press(&mut app, " 6$lb");
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Type));
