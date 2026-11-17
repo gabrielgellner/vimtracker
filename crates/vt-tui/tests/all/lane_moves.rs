@@ -157,7 +157,7 @@ fn m_maps_a_lanes_length_and_gd_goes_to_its_macro() {
     );
     keys(&mut app, "gd");
     assert_eq!(app.track_control(), Control::Macro(0));
-    assert_eq!(app.modes.mode, Mode::Mapping);
+    assert_eq!(app.modes.mode, Mode::Normal);
 }
 
 #[test]
