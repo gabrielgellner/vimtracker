@@ -67,7 +67,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `ORDY` | The order's second number: `00` the phrase's own, `01` to `10` |
 | `PLEN` | Rows the order walks, up or down from the loop's: `80` is none |
 | `PSTA` | The row the order's window starts on, rows on from the first |
-| `CDLT` | Every row's chance to play, up or down: `80` none, `40` half, `00` none play |
+| `CDLT` | Every row's chance up or down: `80` none, `40` half, `00` none play |
 | `GLD` | How long a tie glides into the next note: `00` off, `80` about 60 ms |
 | `OSC` | A synth's `Phase` for the row's note: `00` Free, `01` Reset |
 | `VMOD` | The track's `Mode` for the row's note: `00` Mono, `01` Legato |
