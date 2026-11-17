@@ -615,6 +615,7 @@ pub enum TrackControl {
     PhraseStart,
     ChanceDelta,
     ChanceTarget,
+    Cue,
     DiceLoop,
     DiceMutate,
     DiceJump,
@@ -622,7 +623,7 @@ pub enum TrackControl {
 
 impl TrackControl {
     /// Every one, in the order they're declared.
-    pub const ALL: [Self; 24] = [
+    pub const ALL: [Self; 25] = [
         Self::Cutoff,
         Self::Resonance,
         Self::Pan,
@@ -644,6 +645,7 @@ impl TrackControl {
         Self::PhraseStart,
         Self::ChanceDelta,
         Self::ChanceTarget,
+        Self::Cue,
         Self::DiceLoop,
         Self::DiceMutate,
         Self::DiceJump,
@@ -673,6 +675,7 @@ impl TrackControl {
             Self::PhraseStart => Some(SettingId::PHRASE_START),
             Self::ChanceDelta => Some(SettingId::CHANCE_DELTA),
             Self::ChanceTarget => Some(SettingId::CHANCE_TARGET),
+            Self::Cue => Some(SettingId::CUE),
             Self::DiceLoop => Some(SettingId::DICE_LOOP),
             Self::DiceMutate => Some(SettingId::DICE_MUTATE),
             Self::DiceJump => Some(SettingId::DICE_JUMP),

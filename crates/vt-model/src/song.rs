@@ -267,6 +267,10 @@ pub struct Track {
     /// its pulses and ratchets, `01` (decision 406).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub chance_target: u8,
+    /// Where held `CUE` starts: whether a turn of the window or a lane's `Length`, `Rate` or
+    /// `Start` waits for its loop to come round, `01` for on (decision 402).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub cue: u8,
     /// Where held `DLP` starts: how many steps its dice loop over, `00` off, as
     /// [`crate::dice::DICE_LOOP_LENGTHS`] has them (decision 410).
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -519,6 +523,7 @@ impl Track {
             TrackControl::PhraseStart => self.phrase_start,
             TrackControl::ChanceDelta => self.chance_delta,
             TrackControl::ChanceTarget => self.chance_target,
+            TrackControl::Cue => self.cue,
             TrackControl::DiceLoop => self.dice_loop,
             TrackControl::DiceMutate => self.dice_mutate,
             TrackControl::DiceJump => self.dice_jump,
@@ -550,6 +555,7 @@ impl Track {
             TrackControl::PhraseStart => &mut self.phrase_start,
             TrackControl::ChanceDelta => &mut self.chance_delta,
             TrackControl::ChanceTarget => &mut self.chance_target,
+            TrackControl::Cue => &mut self.cue,
             TrackControl::DiceLoop => &mut self.dice_loop,
             TrackControl::DiceMutate => &mut self.dice_mutate,
             TrackControl::DiceJump => &mut self.dice_jump,
@@ -794,6 +800,7 @@ impl Default for Track {
             phrase_start: 0,
             chance_delta: centre(),
             chance_target: 0,
+            cue: 0,
             dice_loop: 0,
             dice_mutate: 0,
             dice_jump: 0,

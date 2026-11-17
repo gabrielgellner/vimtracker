@@ -1309,9 +1309,10 @@
 1308 phrasestart
 1309 chancedelta
 1310 chancetarget
-1311 diceloop
-1312 dicemutate
-1313 dicejump
-1314 lane1.start
-1315 lane2.start
-1316 lane3.start
+1311 cue
+1312 diceloop
+1313 dicemutate
+1314 dicejump
+1315 lane1.start
+1316 lane2.start
+1317 lane3.start
