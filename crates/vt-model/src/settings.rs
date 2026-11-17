@@ -389,7 +389,7 @@ const TRACK_GROUPS: [&str; 16] = [
 
 /// The track's own settings added since places were fixed, at the end of the table so none moves
 /// (#718): the track's own after [`TRACK`]'s, in the order they came.
-const LATER_TRACK: [Entry; 19] = [
+const LATER_TRACK: [Entry; 20] = [
     // Whether a synth's oscillators run on from note to note or start again on each, read as a
     // note starts, so a lock on its row sets it for that note (decision 370).
     Entry {
@@ -600,12 +600,26 @@ const LATER_TRACK: [Entry; 19] = [
         default: 0,
         place: Place::Own,
     },
+    // Whether a turn of the window or a lane's length, rate or start waits for its loop to come
+    // round, as Kria's Division Cueing does (decision 402).
+    Entry {
+        meaning: "whether a new length, start or lane rate waits for its loop to come round",
+        key: "cue",
+        name: "Cue",
+        label: Some("CUE"),
+        kind: Kind::Stepped {
+            choices: &OFF_ON,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
 ];
 /// What each of [`LATER_TRACK`] is listed with.
-const LATER_TRACK_GROUPS: [&str; 19] = [
+const LATER_TRACK_GROUPS: [&str; 20] = [
     "Machine", "Machine", "Filter", "Machine", "Machine", "Filter", "Filter", "Filter", "Filter",
     "Filter", "Filter", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
-    "Machine", "Machine",
+    "Machine", "Machine", "Machine",
 ];
 
 /// What a row's chance decides, `CTGT`'s choices: the whole row, or each of its pulses and

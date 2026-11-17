@@ -167,6 +167,7 @@ impl Control {
             Self::Base(TrackControl::PhraseStart) => "Start",
             Self::Base(TrackControl::ChanceDelta) => "Chance",
             Self::Base(TrackControl::ChanceTarget) => "Target",
+            Self::Base(TrackControl::Cue) => "Cue",
             Self::Choke => "Choke",
             Self::Group => "Group",
             Self::Role => "Role",
@@ -387,7 +388,8 @@ impl Control {
                 | TrackControl::PhraseLength
                 | TrackControl::PhraseStart
                 | TrackControl::ChanceDelta
-                | TrackControl::ChanceTarget,
+                | TrackControl::ChanceTarget
+                | TrackControl::Cue,
             )
             | Self::Choke
             | Self::Group
@@ -438,7 +440,8 @@ impl Control {
             | TrackControl::OrderY
             | TrackControl::PhraseLength
             | TrackControl::PhraseStart
-            | TrackControl::ChanceTarget,
+            | TrackControl::ChanceTarget
+            | TrackControl::Cue,
         ) = self
         {
             return false;
@@ -500,6 +503,7 @@ impl Control {
                         | TrackControl::OrderX
                         | TrackControl::OrderY
                         | TrackControl::ChanceTarget
+                        | TrackControl::Cue
                 )
         )
     }
