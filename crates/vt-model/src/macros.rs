@@ -64,6 +64,90 @@ pub struct MacroMap {
     pub curve: i8,
     #[serde(default, skip_serializing_if = "is_straight")]
     pub s: i8,
+    /// The part of the macro's turn it acts over, `00` to `FF` by default: below the zone it holds
+    /// its setting at `min`, above it at `max`, and across it runs from one to the other.
+    #[serde(default, skip_serializing_if = "Zone::is_whole")]
+    pub zone: Zone,
+}
+
+/// The part of a macro's turn a mapping acts over, from `start` to `end` on the macro's `00` to
+/// `FF` scale, so one macro can be a bipolar knob, one mapping on its left half and another on its
+/// right (decision 392). `start` is always below `end`: a zone that turns a setting the other way
+/// is a range with `min` above `max`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "ZoneFile")]
+pub struct Zone {
+    pub start: u8,
+    pub end: u8,
+}
+
+/// A zone as a file has it, refused unless it starts below its end.
+#[derive(Deserialize)]
+struct ZoneFile {
+    start: u8,
+    end: u8,
+}
+
+impl TryFrom<ZoneFile> for Zone {
+    type Error = String;
+
+    fn try_from(file: ZoneFile) -> Result<Self, Self::Error> {
+        Self::new(file.start, file.end).ok_or_else(|| {
+            format!(
+                "a macro's zone starts below its end, and this one is {:02X} to {:02X}",
+                file.start, file.end
+            )
+        })
+    }
+}
+
+impl Default for Zone {
+    fn default() -> Self {
+        Self::WHOLE
+    }
+}
+
+impl Zone {
+    /// The whole turn, as a new mapping acts over.
+    pub const WHOLE: Self = Self {
+        start: 0x00,
+        end: 0xFF,
+    };
+
+    /// A zone from `start` to `end`, or none if `start` isn't below `end`.
+    pub fn new(start: u8, end: u8) -> Option<Self> {
+        (start < end).then_some(Self { start, end })
+    }
+
+    /// Whether it's the whole turn.
+    pub fn is_whole(&self) -> bool {
+        *self == Self::WHOLE
+    }
+
+    /// How far across it the macro is at `value`, on the `00` to `FF` scale with any fine part as
+    /// the fraction, from 0 at its start to 1 at its end, and held at 0 below it and 1 above. The
+    /// whole turn's is `value / 255` as it always was, to the bit.
+    pub fn along(self, value: f32) -> f32 {
+        if self.is_whole() {
+            return (value / 255.0).clamp(0.0, 1.0);
+        }
+        let (start, end) = (f32::from(self.start), f32::from(self.end));
+        ((value - start) / (end - start)).clamp(0.0, 1.0)
+    }
+
+    /// Where the macro is, on the `0000` to `FF00` scale, this far across it, from 0 to 1.
+    pub fn turn_at(self, along: f32) -> u16 {
+        if self.is_whole() {
+            return (along * f32::from(0xFF00_u16)).round() as u16;
+        }
+        let (start, end) = (f32::from(self.start), f32::from(self.end));
+        ((start + (end - start) * along) * 256.0).round() as u16
+    }
+
+    /// It as the view writes it, `00–7F`.
+    pub fn text(self) -> String {
+        format!("{:02X}–{:02X}", self.start, self.end)
+    }
 }
 
 /// What a mapping reaches. Keyed by what it is rather than where, so a mapping saved with a sound
@@ -220,6 +304,7 @@ impl MacroMap {
             max: top,
             curve: 0,
             s: 0,
+            zone: Zone::WHOLE,
         }
     }
 
@@ -232,7 +317,14 @@ impl MacroMap {
             max: end(high),
             curve: 0,
             s: 0,
+            zone: Zone::WHOLE,
         }
+    }
+
+    /// The same acting over this zone of its macro's turn.
+    #[must_use]
+    pub fn zoned(self, zone: Zone) -> Self {
+        Self { zone, ..self }
     }
 
     /// Whether its response is a straight line, as a new mapping's is.
@@ -275,16 +367,18 @@ impl MacroMap {
         let bends = [self.curve, self.s]
             .iter()
             .all(|bend| bend.unsigned_abs() <= MAX_BEND.unsigned_abs());
-        self.target.mappable() && fits && bends
+        let zoned = self.zone.start < self.zone.end;
+        self.target.mappable() && fits && bends && zoned
     }
 
     /// What it puts its setting at with its macro at `value`, on the `00` to `FF` scale with any
-    /// fine part as the fraction: from `min` at `00` to `max` at `FF`, along its
+    /// fine part as the fraction: from `min` at its zone's start to `max` at its end, held at
+    /// `min` below the zone and `max` above it, along its
     /// [response](MacroMap::response), and to a whole step for a setting with no fine part, as a
     /// list's or the level scale's. A generator's is its number set off by [`GEN_ZERO`], to the
     /// nearest whole one.
     pub fn at(&self, value: f32) -> u16 {
-        let along = self.response((value / 255.0).clamp(0.0, 1.0));
+        let along = self.response(self.zone.along(value));
         let (min, max) = (f32::from(self.min), f32::from(self.max));
         let to = min + (max - min) * along;
         let Some(id) = self.target.setting() else {
@@ -306,15 +400,15 @@ impl MacroMap {
 
     /// Where a macro would put its setting at this value, inverted: the macro's value, on the
     /// `0000` to `FF00` scale, that puts the setting nearest `value`, for a first mapping that
-    /// turns its macro to where the setting is so nothing jumps.
+    /// turns its macro to where the setting is so nothing jumps. It's within the mapping's zone.
     pub fn macro_for(&self, value: u16) -> u16 {
         if self.min == self.max {
-            return 0;
+            return self.zone.turn_at(0.0);
         }
         let (min, max) = (f32::from(self.min), f32::from(self.max));
         let wanted = ((f32::from(value) - min) / (max - min)).clamp(0.0, 1.0);
         if self.is_straight() {
-            return (wanted * f32::from(0xFF00_u16)).round() as u16;
+            return self.zone.turn_at(wanted);
         }
         // However it's bent, the response only rises, so halving finds where it reaches what's
         // wanted.
@@ -327,7 +421,7 @@ impl MacroMap {
                 high = middle;
             }
         }
-        ((low + high) / 2.0 * f32::from(0xFF00_u16)).round() as u16
+        self.zone.turn_at((low + high) / 2.0)
     }
 }
 
@@ -760,6 +854,7 @@ mod tests {
             max: 0xA000,
             curve: 0,
             s: 0,
+            zone: Default::default(),
         };
         assert_eq!(map.at(0.0), 0x3000);
         assert_eq!(map.at(255.0), 0xA000);
@@ -784,6 +879,119 @@ mod tests {
         }
     }
 
+    /// Mutate on the left half, coming down from its top to 0, and Smooth on the right, going up
+    /// from 0 to its top, on one macro, as Marbles' Déjà vu with Jump.
+    fn deja_vu() -> (MacroMap, MacroMap) {
+        let own = |field: usize| MacroTarget::Setting(SettingId::mod_own(0, field).unwrap());
+        let mutate = MacroMap::whole(own(7));
+        let mutate = MacroMap {
+            min: mutate.max,
+            max: mutate.min,
+            ..mutate
+        }
+        .zoned(Zone::new(0x00, 0x7F).unwrap());
+        let smooth = MacroMap::whole(own(8)).zoned(Zone::new(0x80, 0xFF).unwrap());
+        (mutate, smooth)
+    }
+
+    #[test]
+    fn the_whole_turn_is_the_zone_a_map_had_before_zones_to_the_bit() {
+        let map = MacroMap::whole(MacroTarget::Setting(SettingId::CUT));
+        assert_eq!(map.zone, Zone::WHOLE);
+        for (curve, s) in [(0, 0), (60, 0), (-40, 70)] {
+            let map = map.bent(curve, s);
+            for step in 0..=1020 {
+                let value = step as f32 / 4.0;
+                let along = map.response((value / 255.0).clamp(0.0, 1.0));
+                let before = (f32::from(map.max) * along).round() as u16;
+                assert_eq!(map.at(value), before, "{curve} {s} {value}");
+            }
+            for value in [0, 0x1234, 0x8000, 0xFF00] {
+                let turned = map.macro_for(value);
+                let back = map.at(f32::from(turned) / 256.0);
+                assert!(back.abs_diff(value) <= 0x100, "{value:04X}: {back:04X}");
+            }
+        }
+        // Whole, it isn't written; a part is.
+        let text = ron::to_string(&map).unwrap();
+        assert!(!text.contains("zone"), "{text}");
+        let zoned = map.zoned(Zone::new(0x80, 0xFF).unwrap());
+        let text = ron::to_string(&zoned).unwrap();
+        assert!(text.contains("zone:(start:128,end:255)"), "{text}");
+        assert_eq!(ron::from_str::<MacroMap>(&text).unwrap(), zoned);
+    }
+
+    #[test]
+    fn a_left_half_and_a_right_half_make_one_macro_the_deja_vu_knob() {
+        let (mutate, smooth) = deja_vu();
+        let (top, smooth_top) = (mutate.min, smooth.max);
+        assert!(top > 0 && smooth_top > 0);
+        // At 00 Mutate is at its top and Smooth at 0; both are 0 at the middle; Smooth is at its
+        // top at FF.
+        assert_eq!((mutate.at(0.0), smooth.at(0.0)), (top, 0));
+        assert_eq!((mutate.at(127.0), smooth.at(127.0)), (0, 0));
+        assert_eq!((mutate.at(128.0), smooth.at(128.0)), (0, 0));
+        assert_eq!((mutate.at(255.0), smooth.at(255.0)), (0, smooth_top));
+        // Halfway across each half, each is halfway along its range.
+        let half = |top: u16| f32::from(top) / 2.0;
+        assert!((f32::from(mutate.at(63.5)) - half(top)).abs() <= 256.0);
+        assert!((f32::from(smooth.at(191.5)) - half(smooth_top)).abs() <= 256.0);
+    }
+
+    #[test]
+    fn outside_its_zone_a_map_holds_at_the_nearer_end() {
+        let map = MacroMap {
+            target: MacroTarget::Setting(SettingId::CUT),
+            min: 0x3000,
+            max: 0xA000,
+            curve: 40,
+            s: 0,
+            zone: Zone::new(0x40, 0xC0).unwrap(),
+        };
+        for value in [0.0, 20.0, 63.9, 64.0] {
+            assert_eq!(map.at(value), 0x3000, "below, at Min: {value}");
+        }
+        for value in [192.0, 200.0, 255.0] {
+            assert_eq!(map.at(value), 0xA000, "above, at Max: {value}");
+        }
+        let middle = map.at(128.0);
+        assert!(middle > 0x6800, "bent early across the zone: {middle:04X}");
+        // Turned to where a setting is, a macro lands inside the zone.
+        let turned = map.macro_for(0x6800);
+        assert!((0x4000..=0xC000).contains(&turned), "{turned:04X}");
+        assert_eq!(map.at(f32::from(turned) / 256.0) >> 8, 0x68);
+        assert_eq!(
+            map.macro_for(0x1000),
+            0x4000,
+            "below its range, the zone's start"
+        );
+    }
+
+    #[test]
+    fn a_zone_starts_below_its_end_or_is_refused() {
+        assert_eq!(Zone::new(0x80, 0x80), None);
+        assert_eq!(Zone::new(0x90, 0x80), None);
+        assert_eq!(
+            Zone::new(0x7F, 0x80).map(Zone::text).as_deref(),
+            Some("7F–80")
+        );
+        let map = MacroMap::whole(MacroTarget::Setting(SettingId::CUT));
+        let empty = MacroMap {
+            zone: Zone {
+                start: 0x80,
+                end: 0x80,
+            },
+            ..map
+        };
+        assert!(!empty.in_range(), "an action refuses it");
+        let text = format!(
+            "(target:Setting(\"{}\"),min:0,max:65280,zone:(start:200,end:100))",
+            SettingId::CUT.key()
+        );
+        let error = ron::from_str::<MacroMap>(&text).unwrap_err().to_string();
+        assert!(error.contains("C8 to 64"), "{error}");
+    }
+
     #[test]
     fn a_macro_turned_to_where_its_setting_is_puts_it_there() {
         let map = MacroMap {
@@ -792,6 +1000,7 @@ mod tests {
             max: 0xE000,
             curve: 0,
             s: 0,
+            zone: Default::default(),
         };
         let turned = map.macro_for(0x8000);
         assert_eq!(map.at(f32::from(turned) / 256.0), 0x8000);
@@ -860,6 +1069,7 @@ mod tests {
             max: 0x6000,
             curve: 0,
             s: 0,
+            zone: Default::default(),
         });
         assert_eq!(track.with_macros().cutoff, 0x60);
         assert_eq!(track.cutoff, 0xFF, "the track keeps its own");

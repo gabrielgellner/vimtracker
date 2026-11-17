@@ -233,6 +233,7 @@ fn macros_and_lanes(dump: &mut Dump) {
             max: 0xF000,
             curve: 0,
             s: 0,
+            zone: Default::default(),
         });
     });
     dump.page("macros", &mapped, Page::Gen);

@@ -688,6 +688,7 @@ mod tests {
                 // Bent, so a sound's mapping is seen to keep its curve.
                 curve: 40,
                 s: -20,
+                zone: Default::default(),
             }],
         };
         track

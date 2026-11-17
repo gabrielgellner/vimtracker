@@ -191,6 +191,7 @@ fn knob(song: &mut Song, at: usize, name: &str, key: &str, ends: (u16, u16), val
         max: ends.1,
         curve: 0,
         s: 0,
+        zone: Default::default(),
     });
 }
 
@@ -2045,6 +2046,7 @@ fn panel_knob(track: &mut Track, at: usize, name: &str, key: &str, ends: (u16, u
         max: ends.1,
         curve: 0,
         s: 0,
+        zone: Default::default(),
     };
     let value = map.macro_for(track.value_of(id));
     let held = &mut track.macros[at];

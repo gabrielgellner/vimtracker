@@ -25,6 +25,7 @@ fn map(target: SettingId, min: u16, max: u16) -> MacroMap {
         max,
         curve: 0,
         s: 0,
+        zone: Default::default(),
     }
 }
 
@@ -203,4 +204,37 @@ fn a_song_with_macros_holding_nothing_is_as_one_without() {
     with.tracks[0].macros[5].name = Some("Nothing".to_owned());
     let render = |song: &Song| vt_engine::render::render_frames(version(song), RATE, STEP * 2);
     assert_eq!(render(&song), render(&with));
+}
+
+#[test]
+fn zones_make_one_macro_a_bipolar_knob_turned_by_hand_or_by_a_lock() {
+    use vt_model::macros::Zone;
+    // As Marbles' Déjà vu: `Cut` comes down from A0 to 30 over the left half, `Res` goes up from
+    // 20 to C0 over the right, and the delay's `Feedback` takes the whole turn (decision 392).
+    let mut song = song(&["C-3 -- macro1:40 --- ---", "C-3 -- macro1:C0 --- ---"]);
+    let maps = &mut song.tracks[0].macros[0].maps;
+    maps[0] = map(SettingId::CUT, 0xA000, 0x3000).zoned(Zone::new(0x00, 0x7F).unwrap());
+    maps[1] = map(SettingId::RES, 0x2000, 0xC000).zoned(Zone::new(0x80, 0xFF).unwrap());
+    let mut engine = Engine::new(RATE, version(&song));
+    for (value, expected) in [
+        (0x0000, (0xA0, 0x20, 0x10)),
+        (0x7F00, (0x30, 0x20, 0x50)),
+        (0x8000, (0x30, 0x20, 0x50)),
+        (0xFF00, (0x30, 0xC0, 0x90)),
+    ] {
+        song.tracks[0].macros[0].value = value;
+        engine.swap(version(&song));
+        assert_eq!(heard(&mut engine, 64), expected, "at {value:04X}");
+    }
+    // A `MAC` lock reaches each setting through its zone too.
+    song.tracks[0].macros[0].value = 0;
+    engine.swap(version(&song));
+    engine.play_from(0);
+    let maps = song.tracks[0].macros[0].maps.clone();
+    let coarse = |at: usize, value: f32| ((u32::from(maps[at].at(value)) + 0x80) >> 8) as u8;
+    let (cut, res, _) = heard(&mut engine, STEP);
+    assert_eq!((cut, res), (coarse(0, 64.0), 0x20), "at 40, Res is held");
+    let (cut, res, _) = heard(&mut engine, STEP);
+    assert_eq!((cut, res), (0x30, coarse(1, 192.0)), "at C0, Cut is held");
+    assert_eq!((coarse(0, 64.0), coarse(1, 192.0)), (0x68, 0x71));
 }

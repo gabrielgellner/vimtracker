@@ -15,7 +15,7 @@ use vt_model::attractor::{Attractor, System, view};
 use vt_model::envelope::Envelope;
 use vt_model::insert::{Compressor, Distort, Equaliser, threshold_db};
 use vt_model::lfo::{self, Lfo, LfoMode, deformed_wave};
-use vt_model::macros::{MacroMap, response};
+use vt_model::macros::{MacroMap, Zone, response};
 use vt_model::modulation::{ModSlot, Polarity};
 use vt_model::song::{FilterType, Track};
 use vt_model::tracking::{Bounds, Source};
@@ -861,15 +861,16 @@ pub(crate) fn track_map(drawing: TrackDrawing, (width, height): (usize, usize)) 
     plot
 }
 
-/// What a macro mapping's response draws: its `Curve` and `S`, which way it turns its setting, and
-/// where the macro is turned, from 0 to 1, so it's drawn again only when one of those changes,
-/// never for how far apart its ends are.
+/// What a macro mapping's response draws: its `Curve` and `S`, which way it turns its setting, its
+/// zone, and where the macro is turned, from 0 to 1, so it's drawn again only when one of those
+/// changes, never for how far apart its ends are.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct MappingDrawing {
     pub curve: i8,
     pub s: i8,
     /// Which way its ends go: `Less` for a setting it turns up, `Greater` down.
     pub way: Ordering,
+    pub zone: Zone,
     pub turned: f32,
 }
 
@@ -880,6 +881,7 @@ impl MappingDrawing {
             curve: map.curve,
             s: map.s,
             way: map.min.cmp(&map.max),
+            zone: map.zone,
             turned: f32::from(value) / f32::from(0xFF00_u16),
         }
     }
@@ -895,22 +897,42 @@ impl MappingDrawing {
         }
     }
 
-    /// Where its setting is up the picture with the macro `along` its turn.
+    /// Where its zone starts and ends across the picture, from 0 to 1.
+    fn zone_across(self) -> (f32, f32) {
+        (
+            f32::from(self.zone.start) / 255.0,
+            f32::from(self.zone.end) / 255.0,
+        )
+    }
+
+    /// Where its setting is up the picture with the macro `along` its turn: flat at its min
+    /// before its zone and at its max after it.
     pub(crate) fn level_at(self, along: f32) -> f32 {
+        let along = if self.zone.is_whole() {
+            along
+        } else {
+            self.zone.along(along * 255.0)
+        };
         self.level_of(response(along, self.curve, self.s))
     }
 }
 
 /// A macro mapping's response: the macro's turn across, from `00` at the left to `FF` at the
-/// right, and its setting up, along its curve, over the straight line it bends, dotted, as the
-/// compressor's 1:1 is, with a fainter line down where the macro is turned.
+/// right, and its setting up, along its curve, over the straight line it bends across its zone,
+/// dotted, as the compressor's 1:1 is, with a fainter line down where the macro is turned.
 pub(crate) fn mapping(drawing: MappingDrawing, (width, height): (usize, usize)) -> Plot {
     let mut plot = Plot::new(width, height);
     let line = |along: f32| drawing.level_of(along);
-    plot.dotted((0.0, line(0.0)), (1.0, line(1.0)), Mark::Grid);
+    let (start, end) = drawing.zone_across();
+    plot.dotted((start, line(0.0)), (end, line(1.0)), Mark::Grid);
     plot.down(drawing.turned, Mark::Fainter);
     let level = |along: f32| drawing.level_at(along);
-    plot.curve(level, level(0.0), &[]);
+    let corners: &[f32] = if drawing.zone.is_whole() {
+        &[]
+    } else {
+        &[start, end]
+    };
+    plot.curve(level, level(0.0), corners);
     plot
 }
 
@@ -1751,8 +1773,12 @@ mod tests {
         use vt_model::settings::SettingId;
         let size = (195, 195);
         let whole = MacroMap::whole(MacroTarget::Setting(SettingId::CUT));
-        for (curve, s) in [(0, 0), (60, 0), (-60, 40), (30, 100)] {
-            for inverted in [false, true] {
+        let zones = [Zone::WHOLE, Zone::new(0x40, 0xC0).unwrap()];
+        let each = [(0, 0), (60, 0), (-60, 40), (30, 100)]
+            .into_iter()
+            .flat_map(|bend| [false, true].map(|inverted| (bend, inverted)));
+        for ((curve, s), inverted) in each {
+            for zone in zones {
                 let map = if inverted {
                     MacroMap {
                         min: whole.max,
@@ -1762,7 +1788,8 @@ mod tests {
                 } else {
                     whole
                 }
-                .bent(curve, s);
+                .bent(curve, s)
+                .zoned(zone);
                 let drawing = MappingDrawing::of(&map, 0x4000);
                 let plot = mapping(drawing, size);
                 // Where the setting is between its lower and its higher end, as `at` puts it.
@@ -1776,7 +1803,7 @@ mod tests {
                     let found = middle(&plot, x).unwrap();
                     assert!(
                         (found - expected).abs() < 1.0,
-                        "{curve} {s} {inverted} {x}: {found} against {expected}"
+                        "{curve} {s} {inverted} {zone:?} {x}: {found} against {expected}"
                     );
                 }
                 assert!(plot.png([255; 3]).len() < 3000);
@@ -1801,5 +1828,7 @@ mod tests {
             ..whole
         };
         assert_ne!(MappingDrawing::of(&down, 0x4000), drawn);
+        let zoned = whole.zoned(Zone::new(0x80, 0xFF).unwrap());
+        assert_ne!(MappingDrawing::of(&zoned, 0x4000), drawn, "a zone is drawn");
     }
 }
