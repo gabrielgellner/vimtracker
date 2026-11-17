@@ -224,6 +224,9 @@ impl SettingId {
     pub const SAMPLE_LENGTH: Self = Self(SAMPLER_START as u16 + 3);
     /// How a sampler's note plays: a place in [`PLAY_CHOICES`](super::PLAY_CHOICES).
     pub const PLAY: Self = Self(SAMPLER_START as u16 + 4);
+    /// Whether a sampler's note plays its part of the sample the other way from the sample's own:
+    /// `0` as the sample plays, `1` turned round (decision 412).
+    pub const SAMPLE_REVERSE: Self = Self(SAMPLER_START as u16 + 5);
 
     /// How many settings there are.
     pub const COUNT: usize = LATER_LANE_START + FX_SLOTS * (LANE.len() - EARLY_LANE);

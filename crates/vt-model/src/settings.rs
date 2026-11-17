@@ -912,7 +912,7 @@ mod tests {
         }
         let mut seen = HashSet::new();
         let sampler = labels((0..SAMPLER.len()).filter_map(SettingId::sampler));
-        assert_eq!(sampler, ["SMP", "SLI", "STA", "SLEN", "PLY"]);
+        assert_eq!(sampler, ["SMP", "SLI", "STA", "SLEN", "PLY", "SREV"]);
         for label in track_and_events().chain(sampler) {
             assert!(seen.insert(label.clone()), "{label} twice on the sampler");
         }

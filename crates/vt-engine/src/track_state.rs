@@ -839,15 +839,19 @@ impl TrackState {
         moved.clamp(0.0, 255.0).round() as u8
     }
 
-    /// What the sampler's `STA`, `SLEN` and `PLY` make of the span a note starting now plays:
-    /// where in it the note starts and how much of it plays, as shares, and how. Modulation moves
-    /// the start and the length, and the play mode is chosen.
+    /// What the sampler's `STA`, `SLEN`, `PLY` and `SREV` make of the span a note starting now
+    /// plays: where in it the note starts and how much of it plays, as shares, how, and whether
+    /// it's turned round. Modulation moves the start and the length, and turns it round as it
+    /// takes `SREV` past half way, as `REV` turns a walk (decision 412); the play mode is chosen.
     pub(crate) fn sample_cut(&self) -> Cut {
         let share = |id| f64::from(self.sampler_value(id)) / 255.0;
+        let turned = self.held_sampler[SettingId::SAMPLE_REVERSE.owner().1]
+            + self.moved_by(SettingId::SAMPLE_REVERSE);
         Cut {
             start: share(SettingId::SAMPLE_START),
             length: share(SettingId::SAMPLE_LENGTH),
             mode: PlayMode::from_index(self.held_sampler[SettingId::PLAY.owner().1].round() as u8),
+            turned: turned.round() >= 1.0,
         }
     }
 

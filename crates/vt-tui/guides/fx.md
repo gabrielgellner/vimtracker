@@ -51,7 +51,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `PNCH` | A voice's setting, by its own label, like Punch on `Kick` |
 | `ACC` | A voice's Accent, how hard it's struck |
 | `SMP` | A sampler's sample, by its number in the bank. `00` is none |
-| `SLI` | A sampler's slice. `STA`, `SLEN` and `PLY` too |
+| `SLI` | A sampler's slice. `STA`, `SLEN`, `PLY` and `SREV` too |
 | `2FDBK` | A slot's setting, by the slot's digit and its label, below |
 | `PTCH` | Pitch: `80` as played, a semitone a step, cents in the fine part |
 | `LEN` | Gate, for rows with no length of their own. `80` is half |
@@ -153,7 +153,7 @@ a slot's title, the `Type` of a `Distort`, `Chorus` or `Comp` and the `Mode` of 
 `LPG` or `Comb`, isn't set from a step, as choosing it chooses a sound, and nor is a
 `Source`.
 
-`ACC`, `SMP`, `SLI`, `STA`, `SLEN` and `PLY` are in **Sounds, samples and kits**.
+`ACC`, `SMP`, `SLI`, `STA`, `SLEN`, `PLY` and `SREV` are in **Sounds, samples and kits**.
 `LEV`, `VOL`, `SNA` and `SNB` are on the level scale in **Phrases and chains**.
 The others start from the values on the track page, `Space 5`, each time playback
 starts from the top. An LFO on that page keeps moving a value around wherever

@@ -390,9 +390,9 @@ impl PartialEq for Thumbnail {
 
 impl Thumbnail {
     /// The thumbnail of what a sampler track plays of a bank entry, from its `Slice`, `Play`,
-    /// `Start` and `Length` as they're set, cut as the engine cuts a note's span: `Start` and
-    /// `Length` are shares of the slice from where it starts in play order, and `Thru` plays on
-    /// past the slice to the entry's end.
+    /// `Start`, `Length` and `Reverse` as they're set, cut as the engine cuts a note's span:
+    /// `Start` and `Length` are shares of the slice from where it starts in play order, `Reverse`
+    /// plays that part from its other end, and `Thru` plays on past the slice to the entry's end.
     pub(crate) fn of(
         entry: &BankEntry,
         analysis: Arc<Analysis>,
@@ -407,7 +407,11 @@ impl Thumbnail {
             Some(own) => own.over.over(entry.edit.play),
             None => entry.edit.play,
         };
-        let reverse = play.reverse;
+        // `Reverse` turns the note round: the shares are counted the way the slice plays, and the
+        // part they choose plays from its other end (decision 412).
+        let own = play.reverse;
+        let turned = track.setting(SettingId::SAMPLE_REVERSE) >= 1;
+        let reverse = own != turned;
         let whole_entry = points.slice_frames(0, length).start..points.end_in(length);
         let slice = match PlayMode::from_index(track.setting(SettingId::PLAY)) {
             PlayMode::Thru if reverse => whole_entry.start..slice.end,
@@ -421,13 +425,14 @@ impl Thumbnail {
         let whole = (slice.end - slice.start) as f64;
         let into = (whole * share(SettingId::SAMPLE_START)).round() as u64;
         let playing = (whole * share(SettingId::SAMPLE_LENGTH)).round() as u64;
-        let (start, end) = if reverse {
+        let (start, end) = if own {
             let start = slice.end - into;
             (start, start.saturating_sub(playing).max(slice.start))
         } else {
             let start = slice.start + into;
             (start, (start + playing).min(slice.end))
         };
+        let (start, end) = if turned { (end, start) } else { (start, end) };
         Self {
             analysis,
             frames,
@@ -783,5 +788,14 @@ mod tests {
                 .iter()
                 .all(|pixel| *pixel == START)
         );
+        // The track's `Reverse` turns it round: the same part, from its other end, and on
+        // through, back to the entry's start.
+        entry.edit.play.reverse = false;
+        let turned = [slice[0], slice[1], (SettingId::SAMPLE_REVERSE, 1)];
+        let (shown, _) = thumbnail(&entry, &turned);
+        assert_eq!((shown.start, shown.end), (24_047, 12_000));
+        let (shown, _) = thumbnail(&entry, &[turned[0], turned[2], (SettingId::PLAY, 3)]);
+        assert_eq!(shown.slice, 0..36_000);
+        assert_eq!((shown.start, shown.end), (36_000, 0));
     }
 }
