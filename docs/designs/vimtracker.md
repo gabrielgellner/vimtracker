@@ -432,7 +432,8 @@ an LFO is in its wave, or where a Track slot's last note is on its map (`LiveVal
 and a value each, which `TrackState::modulate` keeps as it works the slots out, and none while
 stopped), for the Mod page's dots, and which step each
 running as Steps plays (`LiveValues::steps`), which its panel lights, and what each one's `Mutate`
-has drawn (`LiveValues::drawn`), which `Space g a` keeps as its values (decision 269), and, for
+has drawn (`LiveValues::drawn`), which its panel draws and `Space g a` keeps as its values
+(decisions 269 and 384), and, for
 the FX page's zoom, the note the slots follow (`LiveValues::note`) and how far each low-pass gate is
 open (`LiveValues::openings`), which the filter effects' curves are drawn at (decision 333). `Handle::latest` merges every
 report since the last frame, so a meter doesn't miss a peak. The scope's sound comes through a ring of its own, which drops what doesn't
@@ -570,7 +571,9 @@ Song                               song.ron, refused unless format_version is FO
     `fire_track` sets as a step lands), each way its `Loop` says; which step plays is worked out from
     the time or count, as an LFO's place is, and its start is the slot's phase. Its `Mutate`
     (decision 204) is the one part kept as it plays: the values drawn again, in the slot's run, from
-    a seeded stream of its own, reset when playing starts from the top. Track (`tracking.rs`,
+    a seeded stream of its own, kept at `0%`, which locks the loop, forgotten for a step whose
+    written value a new version changes, and reset when playing starts from the top (decision
+    384). Track (`tracking.rs`,
     decision 223) maps the last note's pitch, velocity or a roll from `Low` to `High` onto its
     depth, each source with its own map: `modulate` reads it from `TrackState::last_note` (a
     `NoteOn` carries its velocity), and every slot rolls at each note from a stream of its own after

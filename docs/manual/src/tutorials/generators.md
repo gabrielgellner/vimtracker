@@ -122,10 +122,10 @@ The song has a loop already kept, and `Change` at `20%`, so it wanders away from
 6.  Its `Depth`, the third row on its left, `i` `0C` `Enter`, so a drawn value moves the note
     by up to an octave either way.
 7.  Its `Mutate`, beside `Length`: `+` three times, for `30%`.
-8.  `Tab`. The line starts on C and drifts. When you like where it's got to, press `Space g a`
-    on the slot to keep it: what it drew is written in as its values. Then `x` on `Mutate`
-    puts it back to `0%`, and the loop you heard plays every time. That's the Turing Machine's
-    lock.
+8.  `Tab`. The line starts on C and drifts, and the box shows each value drawn in place of its
+    bar, shaded. When you like where it's got to, `x` on `Mutate` puts it back to `0%`: the loop
+    you hear is locked and plays every time, as the module's knob fully right locks it. The draws
+    aren't saved, so `Space g a` on the slot keeps it in the song, written in as its values.
 
 Then the drums: on track 2, `/kick` for a `Kick`, and a `C-1` on each beat (with `Option-2`
 twice for a grid of a beat, `i`, `z` to octave 1, `a a a a`); on track 3, `/hat` for a `Hat`
@@ -159,8 +159,8 @@ instead, or `gm` for its range. The song's macros are what these keys make.
 `Length`, `i` types two hex digits, and `x` takes one to `00`. To put it as the song has it,
 `Length` `i` `6D` for 8 steps and `Range` `i` `7F` for `+0C`.
 
-*   `Change` up, `i` `40`, and the line drifts. When it's somewhere you like, `Space 6` and
-    `Space g a` on the slot keeps it, then `Space 8` and `x` on `Change` locks it there.
+*   `Change` up, `i` `40`, and the line drifts. When it's somewhere you like, `x` on `Change`
+    locks it there, and `Space 6` and `Space g a` on the slot keeps it in the song.
 *   `Length` up to 16 steps for a line longer than the bar. A step past the eighth has no value
     of its own yet, so it plays C until `Change` draws one.
 *   `Range` to `00` and every note is the written `C-2`, the rhythm alone; turned up, the line
@@ -180,8 +180,8 @@ it has a `Rate` to map, for a register that steps in time rather than with the n
     `8 bars` `Enter`. `k` `k` to its type in the title and `l` `l` `l` to its `Dest`, then `K`
     `change` `Enter`, for `Macro 1 Change`. `Space 8`, and on `Change`, `i` `20`. `Tab`: `Change`
     swings from below `00` to `60` and back every 8 bars, the band showing where it's heard with
-    a mark where you set it. At `00` the slot plays its values as written, so for two bars in
-    eight the line is the loop you kept; then it wanders off a new way, and comes home again.
+    a mark where you set it. At `00` the loop is locked, so for two bars in eight the line holds
+    where it had drifted to; then it wanders on from there.
 *   `Length` 3 or 7 against the ten notes in the bar, and the loop no longer lines up with it,
     so a short register makes a long melody.
 *   Another scale: `:scale` and choose one. The register stays; every note moves into the new
@@ -267,12 +267,13 @@ Turn the knob from left to right like this:
 |---|---|
 | Fully left: every note new | `Mutate` `100%`, `:order forward` |
 | Toward noon: new notes now and then | `Mutate` low, as `12%` |
-| Noon: the loop locked | `Space g a` on the Steps slot to keep what it drew, then `Mutate` `0%` |
+| Noon: the loop locked | `Mutate` `0%`, then `Space g a` on the Steps slot to keep it |
 | Past noon: the loop out of order | `:order shuffle`, every note once a pass |
 | Fully right: any of the loop's notes each step | `:order random` |
 
-`Space g a` comes first at noon, as `Mutate` at `0%` plays the values as written and forgets
-what it drew; Marbles locks the loop it drifted to, and `Space g a` is that lock. The song has a
+`Mutate` at `0%` locks the loop it drifted to, as Marbles does at noon. The draws aren't saved,
+and a play from the top starts again from the values as written, so `Space g a` keeps the locked
+loop in the song. The song has a
 little of both halves at once, `Mutate` `12%` and `:order random`, which Marbles' one knob can't
 do: the phrase's notes jump around while the slot brings a new one in now and then.
 

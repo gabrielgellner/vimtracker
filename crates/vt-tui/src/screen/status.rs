@@ -12,6 +12,7 @@ use vt_model::condition::Condition;
 use vt_model::constants::TICKS_PER_STEP;
 use vt_model::lfo::{Rate, note_rates};
 use vt_model::macros::{GenColumn, MacroTarget};
+use vt_model::modulation::ModField;
 use vt_model::selection::Field;
 use vt_model::settings::SettingId;
 use vt_model::song::Track;
@@ -19,7 +20,7 @@ use vt_model::step::{FxCommand, Note};
 use vt_model::variation::{self, Varies};
 
 use crate::app::App;
-use crate::controls::{Control, view};
+use crate::controls::{Control, ParamView, view};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::overlays::mapping::held_text;
@@ -115,6 +116,18 @@ pub fn value_shown(app: &App) -> Option<String> {
                         Some(held) => format!("{text}: {held}"),
                         None => text,
                     })
+                }
+                // A step `Mutate` has drawn plays the value drawn, so it says so, with what's
+                // written beside it, as its bar is drawn at the value drawn (decision 384).
+                Control::Mod(slot, ModField::Step(step))
+                    if let Some(drawn) = app.services.drawn(slot).value(usize::from(step)) =>
+                {
+                    let written = view(track)?.cell;
+                    let described = track.mods[slot].described(slot, ModField::Step(step));
+                    let drawn = ParamView::of(control, track)
+                        .described(described, i32::from(drawn))
+                        .cell;
+                    Some(format!("{drawn} drawn; {written} written"))
                 }
                 _ => (!text.is_empty()).then_some(text),
             };

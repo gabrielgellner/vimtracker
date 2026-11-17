@@ -241,7 +241,7 @@ fn a_depth_scales_the_values_and_a_negative_one_turns_them_over() {
 }
 
 #[test]
-fn mutate_draws_values_again_from_the_seed_and_none_plays_them_as_written() {
+fn mutate_draws_values_again_from_the_seed_and_none_from_the_top_plays_them_as_written() {
     let written = Steps {
         values: values(&[0x10, 0x20, 0x30, 0x40]),
         length: 4,
@@ -267,6 +267,58 @@ fn mutate_draws_values_again_from_the_seed_and_none_plays_them_as_written() {
         half.iter().any(|cut| !as_written.contains(cut)),
         "{half:02X?}"
     );
+}
+
+/// Turning `Mutate` down to 0% locks the loop as it was last drawn, as the Turing Machine's knob
+/// fully right does; a step written again is heard as written at once; and a play from the top
+/// forgets the drift and draws it again the same from the seed (decision 384).
+#[test]
+fn mutate_at_none_locks_the_loop_an_edit_wins_and_the_top_forgets() {
+    let written = Steps {
+        values: values(&[0x10, 0x20, 0x30, 0x40]),
+        length: 4,
+        mutate: 100,
+        ..Steps::default()
+    };
+    let drifting = song(&["C-3 -- --- --- ---"], written);
+    let version = |song: &Song| Arc::new(Published::new(Arc::new(song.clone()), flat()));
+    let mut engine = Engine::new(RATE, version(&drifting));
+    let mut out = vec![0.0; STEP * 2];
+    let mut steps = |engine: &mut Engine, count: usize| -> Vec<u8> {
+        (0..count)
+            .map(|_| {
+                engine.process(&mut out);
+                engine.live(0).cutoff
+            })
+            .collect()
+    };
+    engine.play_from(0);
+    let first = steps(&mut engine, 8);
+    // At 100% each lap is drawn afresh; the last one drawn is what's locked.
+    assert_ne!(first[..4], first[4..]);
+    let mut locked = drifting.clone();
+    locked.tracks[0].mods[2].steps.mutate = 0;
+    engine.swap(version(&locked));
+    let held = steps(&mut engine, 8);
+    assert_eq!(held[..4], first[4..], "the lap drawn last plays on");
+    assert_eq!(held[4..], first[4..], "and again");
+    let drawn = engine.live(0).drawn[2];
+    assert_eq!(drawn.which, 0b1111, "kept and reported at 0%: {drawn:?}");
+    // The second step written again is heard as written at once, and the rest stay as drawn.
+    let mut edited = locked.clone();
+    edited.tracks[0].mods[2].steps.values[1] = 0x70;
+    engine.swap(version(&edited));
+    let after = steps(&mut engine, 4);
+    assert_eq!(after[1], 0xF0, "{after:02X?}");
+    assert_eq!([after[0], after[2], after[3]], [held[4], held[6], held[7]]);
+    assert_eq!(engine.live(0).drawn[2].which, 0b1101);
+    // From the top, nothing is drawn: at 0% it plays as written, and back at 100% the same drift
+    // is drawn again from the seed.
+    engine.play_from(0);
+    assert_eq!(steps(&mut engine, 4), [0x90, 0xF0, 0xB0, 0xC0]);
+    engine.swap(version(&drifting));
+    engine.play_from(0);
+    assert_eq!(steps(&mut engine, 8), first, "a play from the top repeats");
 }
 
 #[test]
