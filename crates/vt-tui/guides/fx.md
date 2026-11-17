@@ -294,6 +294,7 @@ them again, and `=` and `-` step through them.
 | `03` `04` | `PRE` `!PRE` | When this track's last condition passed, or not |
 | `05` `06` | `NEI` `!NEI` | Likewise for the track to the left |
 | `07` `08` | `1ST` `!1ST` | The first time round only, or every time after |
+| `09` `0A` | `LST` `!LST` | The last time round before moving on, or not |
 | `92` to `9F` | `>2` to `>15` | From pass `n` on, so a part joins and stays |
 | `A2` to `AF` | `<2` to `<15` | Only before pass `n`, so a part drops out |
 | `B0` to `BF` | `>16` to `>31` | From pass 16 to 31 on |
@@ -309,6 +310,19 @@ a section's reset, `:reset` and the track's `Reset`, and a section with `Rpt 8`
 builds across its repeats unless its Start is `reset`. `PRE` and `NEI` chain
 other rows to a built one. In the list, `K`, they're under **From**
 and **Until**.
+
+`LST` plays its row on the last pass of its phrase before the track moves on to
+another phrase or chain, and `!LST` on every pass but that one, so a fill can
+lead into what comes next. The track moves on when its chain's next place has
+another phrase, when the section ends and the next gives the track another
+chain, and when something queued lands by the pass's end: a chain launched on
+the track, or a stop, and a loop of sections waiting for its line. What's
+queued counts as it's queued, as on Elektron's machines, so a launch in the
+middle of a pass makes it the last. A chain of one phrase that loops in its
+section, or a section looping on its own, has no last pass, and `LST` stays
+quiet until something is queued. Launching the chain playing starts it again,
+which isn't moving on, and nor is a reset, a realign, or a window waiting for
+the next pass under `Cue`.
 
 `D0` to `FF` are chances, Elektron's `X%`, under **Chance** in the list: `D0`
 is 1%, `DE` 25%, `E8` 50%, `F2` 75% and `FF` 99%, in finer steps toward either

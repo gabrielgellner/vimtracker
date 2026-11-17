@@ -416,6 +416,13 @@ plays from the fifth pass on and `<3` only on the first two, and both start agai
 with the section, a reset or a realign. A `CND` in a lane counts the lane's loops
 instead, its count divided by the lane's length.
 
+`LST` is the one condition that looks ahead rather than back: as its row lands,
+it works out where the pass ends, on the track's grid, and asks what the track
+plays then. A chain launched on the track or a loop of sections waiting, if it
+lands by then, the next section's chain if the section ends by then, and
+otherwise the chain's next place: the pass is the last if that's another
+phrase or chain.
+
 A `CND` chance, `D0` to `FF`, is rolled instead, from the `:seed`, the track and
 its count, as an `RND` is below, so each pulse of its row reads the same die. A
 failed condition skips its row's note, events and own locks, while columns with

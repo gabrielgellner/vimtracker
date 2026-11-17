@@ -101,6 +101,28 @@ impl Engine {
         (self.section_place % (length as u64).max(1)).is_multiple_of(steps.max(1))
     }
 
+    /// Where on the grid the next line of a grid this many steps apart falls, from the song's step
+    /// about to fire on: that step itself if it's one. A repeat of the section starts the grid
+    /// again, as [`Engine::on_grid_line`] counts it, and the section's end is a line too.
+    pub(super) fn next_line(&self, steps: u64) -> u64 {
+        let length = self
+            .playing_section()
+            .map_or(1, |s| self.current.song.section_length(s) as u64)
+            .max(1);
+        let within = self.section_place % length;
+        let steps = steps.max(1);
+        let to_line = (steps - within % steps) % steps;
+        (self.next_step + to_line.min(length - within)) * TICKS_PER_STEP
+    }
+
+    /// Where on the grid the section playing ends, with its repeats, and the next starts.
+    pub(super) fn section_end(&self) -> u64 {
+        let plays = self
+            .playing_section()
+            .map_or(0, |s| self.current.song.section_plays(s) as u64);
+        (self.next_step + plays.saturating_sub(self.section_place)) * TICKS_PER_STEP
+    }
+
     /// Send every track back to its start at this place on the grid, counting its steps again
     /// from there.
     fn realign_at(&mut self, at: u64) {
@@ -589,7 +611,7 @@ impl Engine {
 
 /// The next row with a length after this one, in order, and whether that went past the last. If no
 /// other has one, it's this row.
-fn next_row(song: &Song, from: usize) -> (usize, bool) {
+pub(super) fn next_row(song: &Song, from: usize) -> (usize, bool) {
     let count = song.sections.len();
     let mut wrapped = false;
     for ahead in 1..=count {

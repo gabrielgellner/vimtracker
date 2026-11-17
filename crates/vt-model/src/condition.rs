@@ -16,6 +16,9 @@ pub enum Condition {
     /// Only the first time the track plays the row after its chain starts, or with `false`, every
     /// time but the first.
     First(bool),
+    /// Only on the last pass of its phrase before the track moves on to another phrase or chain,
+    /// or with `false`, on every pass but that one, as Elektron's `LST`.
+    Last(bool),
     /// On pass `pass` of every `of`, counting from 1, so `1:2` is every other pass and `4:4` the
     /// last of four.
     Passes { pass: u8, of: u8 },
@@ -62,8 +65,8 @@ pub fn percent_comes_up(seed: u64, track: usize, count: i64, column: usize, chan
     ((roll >> 40) as f32 / (1u64 << 24) as f32) < chance
 }
 
-/// The named conditions, in Elektron's order, whose values are `01` to `08`.
-const NAMED: [Condition; 8] = [
+/// The named conditions, in Elektron's order, whose values are `01` to `0A`.
+const NAMED: [Condition; 10] = [
     Condition::Fill(true),
     Condition::Fill(false),
     Condition::Previous(true),
@@ -72,6 +75,8 @@ const NAMED: [Condition; 8] = [
     Condition::Neighbour(false),
     Condition::First(true),
     Condition::First(false),
+    Condition::Last(true),
+    Condition::Last(false),
 ];
 
 /// What a condition is decided on, as a row's first pulse lands.
@@ -86,6 +91,8 @@ pub struct Situation {
     pub previous: bool,
     /// Whether the last condition decided on the track to the left passed.
     pub neighbour: bool,
+    /// Whether this is the last pass of the row's phrase before the track moves on.
+    pub last: bool,
     /// Whether the row's die for a `%` came up under its chance, as the engine rolls it.
     pub rolled: bool,
 }
@@ -106,7 +113,7 @@ impl Condition {
             .chain(PERCENTS.into_iter().map(Self::Percent))
     }
 
-    /// The condition a `CND` value holds, if it's one: `01` to `08` for the named ones, two
+    /// The condition a `CND` value holds, if it's one: `01` to `0A` for the named ones, two
     /// digits `xy` for pass `x` of every `y`, so `12` is `1:2`, `9n` from pass `n` on and `An`
     /// before it, so `95` is `>5` and `A3` is `<3`, `Bn` and `Cn` the same from pass 16, so
     /// `B4` is `>20`, and `D0` to `FF` the chances in [`PERCENTS`], so `E8` is `50%`.
@@ -161,6 +168,7 @@ impl Condition {
             Self::Previous(holds) => named("PRE", holds),
             Self::Neighbour(holds) => named("NEI", holds),
             Self::First(holds) => named("1ST", holds),
+            Self::Last(holds) => named("LST", holds),
             Self::Passes { pass, of } => format!("{pass}:{of}"),
             Self::From(pass) => format!(">{pass}"),
             Self::Until(pass) => format!("<{pass}"),
@@ -179,6 +187,8 @@ impl Condition {
             Self::Neighbour(false) => "When the left track's last condition failed".to_owned(),
             Self::First(true) => "The first time round only".to_owned(),
             Self::First(false) => "Every time round but the first".to_owned(),
+            Self::Last(true) => "The last time round before moving on".to_owned(),
+            Self::Last(false) => "Every time round but the last before moving on".to_owned(),
             Self::Passes { pass, of } => format!("Pass {pass} of every {of}"),
             Self::From(pass) => format!("From pass {pass} on"),
             Self::Until(pass) => format!("Before pass {pass} only"),
@@ -193,6 +203,7 @@ impl Condition {
             Self::Previous(_) => "Previous",
             Self::Neighbour(_) => "Neighbour",
             Self::First(_) => "First",
+            Self::Last(_) => "Last",
             Self::Passes { .. } => "Passes",
             Self::From(_) => "From",
             Self::Until(_) => "Until",
@@ -207,6 +218,7 @@ impl Condition {
             Self::Previous(holds) => at.previous == holds,
             Self::Neighbour(holds) => at.neighbour == holds,
             Self::First(holds) => (at.pass == 0) == holds,
+            Self::Last(holds) => at.last == holds,
             Self::Passes { pass, of } => at.pass.rem_euclid(i64::from(of)) == i64::from(pass) - 1,
             // `at.pass` counts from 0, and the build's pass from 1.
             Self::From(pass) => at.pass + 1 >= i64::from(pass),
@@ -265,7 +277,7 @@ mod tests {
     #[test]
     fn every_condition_has_one_value_and_reads_back() {
         let all: Vec<Condition> = Condition::all().collect();
-        assert_eq!(all.len(), 8 + (2..=8).sum::<usize>() + 2 * 30 + 48);
+        assert_eq!(all.len(), 10 + (2..=8).sum::<usize>() + 2 * 30 + 48);
         for condition in &all {
             assert_eq!(Condition::from_value(condition.value()), Some(*condition));
         }
@@ -276,6 +288,8 @@ mod tests {
             Some(Condition::Passes { pass: 1, of: 2 })
         );
         assert_eq!(Condition::from_value(0x07), Some(Condition::First(true)));
+        assert_eq!(Condition::from_value(0x09), Some(Condition::Last(true)));
+        assert_eq!(Condition::from_value(0x0A), Some(Condition::Last(false)));
         assert_eq!(Condition::from_value(0x95), Some(Condition::From(5)));
         assert_eq!(Condition::from_value(0xA3), Some(Condition::Until(3)));
         assert_eq!(Condition::from_value(0xB0), Some(Condition::From(16)));
@@ -286,18 +300,19 @@ mod tests {
         assert_eq!(Condition::from_value(0xF2), Some(Condition::Percent(75)));
         assert_eq!(Condition::from_value(0xFF), Some(Condition::Percent(99)));
         assert_eq!(Condition::Percent(50).label(), "50%");
-        for value in [0x00, 0x09, 0x11, 0x21, 0x19, 0x90, 0x91, 0xA0, 0xA1] {
+        for value in [0x00, 0x0B, 0x11, 0x21, 0x19, 0x90, 0x91, 0xA0, 0xA1] {
             assert_eq!(Condition::from_value(value), None, "{value:02X}");
         }
     }
 
     #[test]
     fn labels_are_elektrons() {
-        let labels: Vec<String> = Condition::all().take(10).map(Condition::label).collect();
+        let labels: Vec<String> = Condition::all().take(12).map(Condition::label).collect();
         assert_eq!(
             labels,
             [
-                "FILL", "!FILL", "PRE", "!PRE", "NEI", "!NEI", "1ST", "!1ST", "1:2", "2:2"
+                "FILL", "!FILL", "PRE", "!PRE", "NEI", "!NEI", "1ST", "!1ST", "LST", "!LST", "1:2",
+                "2:2"
             ]
         );
     }
@@ -359,6 +374,18 @@ mod tests {
     }
 
     #[test]
+    fn last_holds_on_the_last_pass_or_on_every_other() {
+        let at = |last| Situation {
+            last,
+            ..Situation::default()
+        };
+        assert!(Condition::Last(true).holds(at(true)));
+        assert!(!Condition::Last(true).holds(at(false)));
+        assert!(Condition::Last(false).holds(at(false)));
+        assert!(!Condition::Last(false).holds(at(true)));
+    }
+
+    #[test]
     fn a_percent_holds_as_its_die_says_and_its_chance_is_its_share() {
         let at = |rolled| Situation {
             rolled,
@@ -379,7 +406,11 @@ mod tests {
     #[test]
     fn moving_goes_through_the_list_and_a_large_step_changes_the_cycle() {
         let one_of_two = Condition::Passes { pass: 1, of: 2 };
-        assert_eq!(Condition::First(false).moved(1, false), one_of_two);
+        assert_eq!(Condition::Last(false).moved(1, false), one_of_two);
+        assert_eq!(
+            Condition::First(false).moved(1, false),
+            Condition::Last(true)
+        );
         assert_eq!(
             Condition::Fill(true).moved(-1, false),
             Condition::Fill(true)
