@@ -64,6 +64,9 @@ pub enum Mode {
     Shape,
     /// A macro's mapping view is open, its settings and their ranges.
     Mapping,
+    /// The keys are in the macro panel at the bottom of the screen, turning the cursor's track's
+    /// macros.
+    Macros,
     /// Searching the track page for a setting to jump to.
     Jump,
     /// Reading a guide.
@@ -105,6 +108,7 @@ impl Mode {
             Self::Help => "HELP",
             Self::Shape => "SHAPE",
             Self::Mapping => "MAP",
+            Self::Macros => "MACROS",
             Self::Jump => "JUMP",
             Self::Guide => "GUIDE",
             Self::Picker => "PICK",

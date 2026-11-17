@@ -30,6 +30,7 @@ mod kit_dialog;
 mod kits;
 mod lane_moves;
 mod launch;
+mod macro_panel;
 mod macros;
 mod marbles_rhythms;
 mod mixer;

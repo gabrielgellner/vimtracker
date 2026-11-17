@@ -14,6 +14,7 @@ use crate::overlays::command::{CommandKey, CommandLine};
 use crate::overlays::field_jump::{FieldJump, JumpKey};
 use crate::overlays::guides::{GuideKey, GuideView};
 use crate::overlays::help::{Help, HelpKey};
+use crate::overlays::macro_panel::{MacroKey, MacroPanel};
 use crate::overlays::mapping::{MappingKey, MappingView};
 use crate::overlays::picker::{Picker, PickerKey};
 use crate::overlays::shape::{ShapeKey, ShapePanel};
@@ -218,6 +219,12 @@ pub enum Cmd {
     InMapping(MappingKey),
     /// A key of the shape panel.
     InShape(ShapeKey),
+    /// Show the macro panel at the bottom of the screen, or hide it.
+    ToggleMacroPanel,
+    /// Put the keys in the macro panel, showing it if it's hidden.
+    FocusMacroPanel,
+    /// A key of the macro panel, while the keys are in it.
+    InMacros(MacroKey),
 }
 
 /// One row of the table.
@@ -339,6 +346,16 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("Space f b", Cmd::TrackPicker, "Open the track picker"),
     ("Space ?", Cmd::Guides, "Open a guide"),
     ("Space k", Cmd::Help, "Show every key"),
+    (
+        "Space t",
+        Cmd::ToggleMacroPanel,
+        "Show or hide the macro panel: this track's macros, at the bottom",
+    ),
+    (
+        "Space T",
+        Cmd::FocusMacroPanel,
+        "Into the macro panel, showing it, to turn the macros",
+    ),
     ("C-o", Cmd::JumpBack, "Jump back"),
     ("C-i", Cmd::JumpForward, "Jump forward"),
     ("W", Cmd::NextTrack, "Next track"),
@@ -449,6 +466,7 @@ pub fn bindings() -> Vec<Binding> {
     add(FieldJump::MODE, FieldJump::KEYS);
     add(MappingView::MODE, MappingView::KEYS);
     add(ShapePanel::MODE, ShapePanel::KEYS);
+    add(MacroPanel::MODE, MacroPanel::KEYS);
     with_cmd_adjusts(rows)
 }
 

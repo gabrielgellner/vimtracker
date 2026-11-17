@@ -64,6 +64,8 @@ if a row shows `10`, then `10j` or `10k` lands on it.
 | `Space 0` | Sample page: this track's sample, big |
 | `Space Space`, `Space ff` | Pick a view. `Enter` flips back to the last one |
 | `Space fb` | Pick a track by number or name, like a buffer |
+| `Space t` | Show or hide the macro panel, this track's macros |
+| `Space T` | Into the macro panel, to turn the macros; `Esc` comes back |
 | `C-o` `C-i` | Jump back or forward, as in Vim's jump list |
 
 `Space 5` to `Space 8` open the track page on one of its four pages, each where you

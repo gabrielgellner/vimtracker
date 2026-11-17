@@ -33,6 +33,7 @@ use crate::input::mode::{Mode, View};
 use crate::input::wheel;
 use crate::overlays::Overlay as _;
 use crate::overlays::command::history::CommandHistory;
+use crate::overlays::macro_panel::STRIP_HEIGHT;
 use crate::overlays::picker::places::RecentPlaces;
 use crate::pages::Page;
 use crate::pages::sample::draw::WaveOnScreen;
@@ -680,8 +681,18 @@ pub fn draw_screen(
     now: Instant,
 ) {
     frame.render_widget(Block::new().style(theme::screen()), frame.area());
-    let [body, status] =
-        Layout::vertical([Constraint::Min(1), Constraint::Length(2)]).areas(frame.area());
+    // The macro panel, while it shows, takes its rows from the page, above the status line.
+    let strip = if app.overlays.macro_panel.open {
+        STRIP_HEIGHT
+    } else {
+        0
+    };
+    let [body, panel, status] = Layout::vertical([
+        Constraint::Min(1),
+        Constraint::Length(strip),
+        Constraint::Length(2),
+    ])
+    .areas(frame.area());
     app.follow_cursor(usize::from(
         body.height
             .saturating_sub(crate::pages::phrase::draw::ROWS_AROUND_STEPS),
@@ -725,6 +736,11 @@ pub fn draw_screen(
         crate::screen::meter::draw(frame, meter, &app.services.meter, app.song().limiter);
     }
     crate::screen::status::draw(frame, status, app);
+    if app.overlays.macro_panel.open {
+        let mut macros = std::mem::take(&mut app.overlays.macro_panel);
+        macros.draw(frame, panel, &app.ctx());
+        app.overlays.macro_panel = macros;
+    }
     // An overlay may keep something of how it was drawn, so each is lent apart from the rest.
     // A guide keeps how many of its rows fit, which its keys go by, open or not.
     let mut guide = app.overlays.guide;

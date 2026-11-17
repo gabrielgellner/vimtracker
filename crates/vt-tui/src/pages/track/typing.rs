@@ -71,7 +71,7 @@ fn commit_typed(services: &mut Services, view: View, control: Control, text: &st
 
 /// Write what was typed into one of the track's settings, as its view reads it, saying on the
 /// status line why where it doesn't.
-fn commit_control(services: &mut Services, control: Control, text: &str) {
+pub(crate) fn commit_control(services: &mut Services, control: Control, text: &str) {
     let track = services.page_track();
     match control {
         // A generator's are typed into its shape, by `commit_typed`.

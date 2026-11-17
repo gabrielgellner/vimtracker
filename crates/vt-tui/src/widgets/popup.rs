@@ -258,7 +258,7 @@ mod tests {
             .rev()
             .find(|y| shown[*y][162] == '╯')
             .unwrap();
-        assert_eq!(window_ending(&shown, 162, bottom), Rect::new(88, 3, 75, 37));
+        assert_eq!(window_ending(&shown, 162, bottom), Rect::new(88, 1, 75, 39));
     }
 
     #[test]

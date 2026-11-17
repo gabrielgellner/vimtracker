@@ -54,7 +54,7 @@ column as a line through its values. While the phrase plays, a dot rides it on
 the row playing, or on a lane, where the lane is reading. It's drawn from the
 phrase as it is, so it changes as you turn a setting or edit a row.
 <!-- ANCHOR_END: before-gen -->
-<!-- ANCHOR: before-mapping -->
+<!-- ANCHOR: before-panel -->
 
 | Keys | Does |
 |---|---|
@@ -138,6 +138,31 @@ you name it.
 | `gd` | Go to this setting's macro, or this macro's mapping |
 | `:macro Name` | Name this macro, or this setting's, up to 12 letters |
 | `:macro` | Go back to its first setting's name |
+
+**The macro panel.** `Space t` shows the track's eight macros in a strip at the bottom of any
+page, above the status line, so they're at hand while you work elsewhere, and hides it again. The
+page gives up the strip's three rows while it shows. It follows the cursor's track as it moves,
+and on the project page, which has no track of its own, it shows the track last on. `Space T`
+puts the keys in it, showing it if it's hidden, on the macro they were last on:
+
+| Keys | Does |
+|---|---|
+| `h` `l` | The macro before, or the next |
+| `=` `-` `+` `_` | Turn it a step or a large step |
+| `i` | Type it, in two hex digits |
+| `x` | Take it to `00` |
+| `u` `C-r` | Take the last change back, or do it again |
+| `W` `B` | The next or previous track |
+| `Tab` | Play, or pause |
+| `Esc` | Back to the page, its cursor where it was, the panel showing |
+| `Space t` | Hide it, and back to the page |
+
+A turn in the panel is the band's own, one undo step a press, and the wheel turns it too, a turn
+of it one step, as on any setting. The status line says what the macro holds, as in the band, and
+a macro holding nothing is dim. Whether the panel shows is kept until you quit, and isn't saved
+in the song.
+<!-- ANCHOR_END: before-panel -->
+<!-- ANCHOR: before-mapping -->
 
 **Mapping.** `M` on a setting lists the eight with what each holds; `Enter` or the macro's digit
 maps it, from the setting's bottom to its top. The first setting on a macro holding nothing turns

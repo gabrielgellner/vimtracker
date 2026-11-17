@@ -46,6 +46,10 @@ pub(crate) fn format_bpm(millibpm: u32) -> String {
 
 /// The name of what the cursor is on, for the status line, as the page on screen tells it.
 pub fn column_name(app: &App) -> String {
+    // The keys in the macro panel are on its macro, wherever the page is.
+    if app.modes.mode == Mode::Macros {
+        return crate::overlays::macro_panel::column(&app.overlays.macro_panel, &app.services);
+    }
     let ctx = app.ctx();
     match app.modes.view {
         View::Song => app.song_view.column(&ctx),
@@ -78,14 +82,18 @@ fn page_hint(app: &App) -> Option<String> {
 /// track has: a lock in the grid, or a row of the track page, as its view says it.
 pub fn value_shown(app: &App) -> Option<String> {
     let track = app.services.track_here()?;
-    if app.modes.view == View::Phrase {
-        return heard_shown(app, app.services.cursor.field)
-            .or_else(|| phrase_value(&app.services, app.services.cursor.field));
-    }
-    if !matches!(app.modes.view, View::Track | View::Mixer) {
-        return None;
-    }
-    let control = app.track_control();
+    let control = if app.modes.mode == Mode::Macros {
+        app.overlays.macro_panel.control()
+    } else {
+        if app.modes.view == View::Phrase {
+            return heard_shown(app, app.services.cursor.field)
+                .or_else(|| phrase_value(&app.services, app.services.cursor.field));
+        }
+        if !matches!(app.modes.view, View::Track | View::Mixer) {
+            return None;
+        }
+        app.track_control()
+    };
     let view = |track: &Track| view(control, track, app.song(), app.services.live.scale.on);
     // A fader the steps drive reads where they have it, and says so, as one a hand has taken over
     // from them does.
@@ -411,9 +419,13 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             Mode::VisualField | Mode::VisualStep => theme::MAUVE,
             Mode::Insert => theme::GREEN,
             Mode::Command => theme::PEACH,
-            Mode::Help | Mode::Guide | Mode::Picker | Mode::Shape | Mode::Mapping | Mode::Jump => {
-                theme::TEAL
-            }
+            Mode::Help
+            | Mode::Guide
+            | Mode::Picker
+            | Mode::Shape
+            | Mode::Mapping
+            | Mode::Macros
+            | Mode::Jump => theme::TEAL,
             Mode::Replace | Mode::Restore => theme::RED,
             Mode::Keys => theme::YELLOW,
         }))
@@ -423,7 +435,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let pending = if app.pending().is_empty()
         || matches!(
             app.modes.mode,
-            Mode::Picker | Mode::Command | Mode::Jump | Mode::Mapping | Mode::Shape
+            Mode::Picker | Mode::Command | Mode::Jump | Mode::Mapping | Mode::Shape | Mode::Macros
         ) {
         String::new()
     } else {

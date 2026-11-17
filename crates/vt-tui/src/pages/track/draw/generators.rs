@@ -6,10 +6,12 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Block, Borders, Paragraph};
 use vt_model::generator::{Generator, Span as Spanned};
 use vt_model::grid::GRID_COLUMNS;
+use vt_model::macros::MACROS;
 use vt_model::shape::ShapeColumn;
 use vt_model::song::Track;
 
@@ -22,7 +24,7 @@ use crate::pages::track::TrackPage;
 use crate::services::Services;
 use crate::services::generators::LiveGen;
 use crate::widgets::device::{DEVICE_HEIGHT, Device};
-use crate::widgets::grid::{CellWidths, ROW_STEP, SettingsGrid};
+use crate::widgets::grid::{CellSource, CellWidths, ROW_STEP, SettingsGrid};
 use crate::widgets::image;
 use crate::widgets::panel::GraphicPanel;
 use crate::widgets::setting::{self, Focus};
@@ -77,6 +79,81 @@ fn draw_macros(
             holds(track, at)
         );
         frame.render_widget(Line::styled(line, theme::dim()), take_top(&mut settings, 1));
+    }
+}
+
+/// How many rows the macro panel takes at the bottom of the screen: its rule with the track's
+/// name, the macros' names, and their values and bars.
+pub(crate) const STRIP_HEIGHT: u16 = 3;
+
+/// The macro panel's cells, eight across the screen's width: four digits and the band's bars
+/// under a name, 20 columns a macro with the gap.
+const STRIP_CELLS: CellWidths = CellWidths {
+    name: 16,
+    value: 5,
+    bar_cells: BAR_CELLS,
+    gap: 4,
+};
+
+/// Where the macro panel's first macro starts, in from the screen's edge as a device's settings
+/// are.
+const STRIP_INDENT: u16 = 2;
+
+/// The macro panel (decision 385): the cursor's track's eight macros in a row, each its name over
+/// its value and bar, drawn as the Gen page's band draws them, under a rule that names the track.
+/// `cursor` is the macro the keys are on, while they're in the panel, whose value is in the
+/// cursor's colour and whose rule is brighter.
+pub(crate) fn draw_macro_strip(frame: &mut Frame, area: Rect, ctx: &Ctx, cursor: Option<usize>) {
+    let index = ctx.cursor().track;
+    let Some(track) = ctx.song().tracks.get(index) else {
+        return;
+    };
+    let shown = track.with_macros();
+    let track = shown.as_ref();
+    let name = if track.is_sound() {
+        format!("{} {}", track.title(index), track.name)
+            .trim_end()
+            .to_owned()
+    } else {
+        crate::widgets::group::title(track)
+    };
+    let (rule, title) = match cursor {
+        Some(_) => (theme::OVERLAY2, Style::new().add_modifier(Modifier::BOLD)),
+        None => (theme::SURFACE1, Style::new()),
+    };
+    let heading = Line::from(vec![
+        Span::raw(" "),
+        Span::styled("Macros", theme::dim()),
+        Span::raw("  "),
+        Span::styled(name, title),
+        Span::raw(" "),
+    ]);
+    let block = Block::new()
+        .borders(Borders::TOP)
+        .border_style(Style::new().fg(rule))
+        .title(heading);
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let cells = TrackCells::apart(ctx, track, cursor.map(Control::Macro));
+    let column = STRIP_CELLS.value + STRIP_CELLS.bar() + STRIP_CELLS.gap;
+    for at in 0..MACROS {
+        let x = inner.x + STRIP_INDENT + at as u16 * column;
+        if x >= inner.right() || inner.height < 2 {
+            break;
+        }
+        let parts = cells.cell(Control::Macro(at), STRIP_CELLS);
+        let mut put = |line: Line<'static>, dx: u16, dy: u16, width: u16| {
+            let left = x + dx;
+            if left < inner.right() {
+                let width = width.min(inner.right() - left);
+                frame.render_widget(line, Rect::new(left, inner.y + dy, width, 1));
+            }
+        };
+        put(parts.name, 0, 0, STRIP_CELLS.name);
+        put(parts.value, 0, 1, STRIP_CELLS.value);
+        if let Some(bar) = parts.bar {
+            put(Line::from(bar), STRIP_CELLS.value, 1, STRIP_CELLS.bar());
+        }
     }
 }
 

@@ -1,9 +1,10 @@
-//! What's drawn over a page and takes its keys while it's open: the picker and the explorer, the `:` line, the which-key popup and the guides, the shape panel, a macro's mapping view and `/`'s field jump.
+//! What's drawn over a page and takes its keys while it's open: the picker and the explorer, the `:` line, the which-key popup and the guides, the shape panel, a macro's mapping view, `/`'s field jump and the macro panel.
 
 pub mod command;
 pub(crate) mod field_jump;
 pub(crate) mod guides;
 pub mod help;
+pub mod macro_panel;
 pub mod mapping;
 pub mod picker;
 pub mod shape;
@@ -25,6 +26,7 @@ use command::CommandLine;
 use field_jump::FieldJump;
 use guides::GuideView;
 use help::Help;
+use macro_panel::MacroPanel;
 use mapping::MappingView;
 use picker::Picker;
 use picker::exploring::Explorer;
@@ -186,6 +188,8 @@ pub struct Overlays {
     pub(crate) shape_command: Option<(Selection, Field)>,
     /// The search for a setting under way, `/` on the track page or the mixer.
     pub field_jump: Option<FieldJump>,
+    /// The macro panel at the bottom of the screen, whether it shows, and where its cursor is.
+    pub macro_panel: MacroPanel,
 }
 
 impl Overlays {
@@ -201,6 +205,7 @@ impl Overlays {
             mapping: None,
             shape_command: None,
             field_jump: None,
+            macro_panel: MacroPanel::default(),
         }
     }
 }

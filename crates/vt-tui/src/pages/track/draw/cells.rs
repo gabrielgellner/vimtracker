@@ -43,7 +43,10 @@ const TO: &str = "→ ";
 
 /// The track page's cells, read from the track as the page draws it.
 pub(super) struct TrackCells<'a> {
-    page: &'a TrackPage,
+    /// The setting the cursor is on, which is drawn in the cursor's colour, if it's on one here.
+    here: Option<Control>,
+    /// Whether the cursor is on its setting's fine digits.
+    fine: bool,
     ctx: &'a Ctx<'a>,
     /// The track with what its macros give its settings, and on the Sound page its faders where
     /// the steps have them while they drive them.
@@ -56,7 +59,20 @@ pub(super) struct TrackCells<'a> {
 impl<'a> TrackCells<'a> {
     pub(super) fn new(page: &'a TrackPage, ctx: &'a Ctx<'a>, track: &'a Track) -> Self {
         Self {
-            page,
+            here: Some(page.control_here(ctx)),
+            fine: page.fine,
+            ctx,
+            track,
+            generator: None,
+        }
+    }
+
+    /// The cells of a track drawn away from the track page, as the macro panel draws its macros,
+    /// with the cursor on this setting, or on none.
+    pub(super) fn apart(ctx: &'a Ctx<'a>, track: &'a Track, here: Option<Control>) -> Self {
+        Self {
+            here,
+            fine: false,
             ctx,
             track,
             generator: None,
@@ -82,14 +98,14 @@ impl<'a> TrackCells<'a> {
     /// A setting's cell, from its view.
     fn param(&self, control: Control) -> ParamCell<'a> {
         let ctx = self.ctx;
-        let here = control == self.page.control_here(ctx);
+        let here = Some(control) == self.here;
         let view = self.view(control);
         let place = view.bar.map(|set| Place {
             set,
             centred: view.centred,
         });
         let face = face(&view);
-        let fine = matches!(face, Face::HexFine { .. }) && self.page.fine;
+        let fine = matches!(face, Face::HexFine { .. }) && self.fine;
         let state = ParamState {
             heard: place.map_or(0, |place| self.heard(control, place.set)),
             fader: fader_of(control).is_some(),
@@ -115,7 +131,6 @@ impl<'a> TrackCells<'a> {
 
     /// A device's title controls, each in its own style, the cursor's colour on the one it's on.
     pub(super) fn titles(&self, device: &DeviceSpec) -> Vec<Line<'static>> {
-        let current = self.page.control_here(self.ctx);
         device
             .title
             .iter()
@@ -123,7 +138,7 @@ impl<'a> TrackCells<'a> {
             .map(|&control| {
                 let look = self
                     .ctx
-                    .look_on(control, Focus::at(control == current, false));
+                    .look_on(control, Focus::at(Some(control) == self.here, false));
                 self.title(control, look)
             })
             .collect()

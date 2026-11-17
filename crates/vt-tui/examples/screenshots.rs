@@ -273,6 +273,17 @@ const SHOTS: &[Shot] = &[
         size: FULL,
         ..PLAIN
     },
+    // The same macros from the phrase view, in the macro panel at the bottom: the keys in it on
+    // macro 2, `Dense`, turned down, and playing.
+    Shot {
+        name: "macro-panel",
+        rows: &[],
+        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8}kj$M2:macro Dense<Enter>k$M2 3 Tl__<Tab>",
+        play: 6,
+        voice: Some(SynthVoice::Acid),
+        size: FULL,
+        ..PLAIN
+    },
     // A band of seven tracks, the drums folded into their group, `z a` from the kick, playing.
     Shot {
         name: "mixer-folded",

@@ -958,7 +958,12 @@ page's still. The shape panel (`ShapePanel`) previews, keeps and puts back the s
 the services itself, answers `Open` with a row's choices, `Do` for `Tab` and `Shift-Tab`, which
 play even while a value is typed, and `Close` once it's kept or put back; `App::shape_key`
 remembers a kept shape for `.`, the one thing of `App`'s it needs. Opening it, `gl` and `.`'s
-shaping again are the grammar's and stay on `App`. The explorer is the picker's tree with
+shaping again are the grammar's and stay on `App`. The macro panel (`MacroPanel`, decision 385) is the
+one overlay drawn beside the page rather than over it: while it shows, `draw_screen` takes its
+three rows from the page's body above the status line, and `Space T` gives it the keys in
+`Mode::Macros`. It turns the cursor's track's macros through the track page's own edits and
+answers `Do` for undo, redo, play and the next or previous track, and `Close` back to the mode
+the keys came from. The explorer is the picker's tree with
 `Explorer` beside it in `Overlays`: what it keeps between openings (the kit in use, the
 reader, recent places, tags) and what it does while open, its preview, playing the file under
 its cursor and tagging, each given the picker and the services. `App::picker_key` gives the
