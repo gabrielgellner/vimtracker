@@ -1651,3 +1651,35 @@ fn the_project_page_shows_and_switches_read_only() {
         "x puts it back off, as a new project has it"
     );
 }
+
+#[test]
+fn new_projects_draw_seeds_of_their_own_which_saving_keeps() {
+    let (mut app, _realtime) = app();
+    let first = folder();
+    let second = folder();
+    command(&mut app, &format!("new {}", first.display()));
+    let seed = app.song().seed;
+    command(&mut app, &format!("new {}", second.display()));
+    assert_ne!(app.song().seed, seed, "each new project has its own seed");
+
+    command(&mut app, "seed 42");
+    command(&mut app, &format!("w {}", second.display()));
+    let (mut other, _rt2) = self::app();
+    command(&mut other, &format!("e {}", second.display()));
+    assert_eq!(other.song().seed, 42, "the seed is saved with the song");
+    std::fs::remove_dir_all(&first).unwrap();
+    std::fs::remove_dir_all(&second).unwrap();
+}
+
+#[test]
+fn seed_with_no_number_rolls_one_as_an_undo_step() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "seed 42");
+    assert_eq!(app.song().seed, 42);
+    command(&mut app, "seed");
+    let rolled = app.song().seed;
+    assert_ne!(rolled, 42);
+    assert_eq!(app.services.status, format!("Seed {rolled:X}"));
+    press(&mut app, "u");
+    assert_eq!(app.song().seed, 42, "undo puts the old seed back");
+}

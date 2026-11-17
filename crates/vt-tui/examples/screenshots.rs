@@ -634,6 +634,8 @@ fn app_on(song: Song, pool: SamplePool) -> (App, Realtime) {
     // The output as a laptop plays it, for the project page's audio row.
     app.audio_page.audio.device = "MacBook Pro Speakers".to_owned();
     app.audio_page.audio.running = true;
+    // The shape panel draws as in a first session, so each run matches.
+    app.services.shape_seed = 0;
     (app, realtime)
 }
 
