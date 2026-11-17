@@ -11,6 +11,7 @@ pub mod bank;
 pub mod bloom;
 pub mod condition;
 pub mod constants;
+pub mod dice;
 pub mod envelope;
 pub mod filter;
 pub mod generator;

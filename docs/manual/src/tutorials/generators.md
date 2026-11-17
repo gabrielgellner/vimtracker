@@ -286,6 +286,10 @@ octaves either way.
 *   `:order shuffle` on track 1's phrase with the Play device's `Jump` at `00`: the rows of a
     written loop once a pass each, in a new order each pass.
 *   `r` in the shape panel deals the hats' chances again: `gv` `S` on FX 1, `r`, `Enter`.
+*   Marbles' T with its own Déjà vu, on the hats: track 3's Play device, `Dice` `8`, `Mutate`
+    `00`, and the hats' chances come round every 8 steps as a locked loop. For the whole knob,
+    track 3's Macro 1, `Deja vu`: `Dice mutate` from `FF` to `00`, `Zone 00–7F`, and
+    `Dice jump` from `00` to `FF`, `Zone 80–FF`, turned to `C0` as track 1's is.
 *   `:seed 7`, or any number, for another roll of every chance, draw and jump.
 
 ## Euclidean rhythms

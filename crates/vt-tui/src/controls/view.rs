@@ -16,6 +16,7 @@ use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Re
 use vt_model::action::{Action, TrackControl};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES, octaves_text, retrig_meaning};
 use vt_model::constants::{BAR_STEPS, MAX_GROUPS, MAX_TRACK_RESET};
+use vt_model::dice::dice_loop_length;
 use vt_model::generator::Generator;
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
@@ -306,6 +307,7 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
             )
             .text(meanings[at].to_owned())
         }
+        Control::Base(TrackControl::DiceLoop) => dice_loop_view(of, track),
         Control::Base(which) => {
             let value = track.control(which);
             ParamView {
@@ -950,6 +952,25 @@ fn walk_view(of: ParamView, track: &Track, which: TrackControl) -> ParamView {
             .text(shown)
         }
     }
+}
+
+/// The track's `Dice loop`, from its list: off, or how many steps its dice loop over (decision
+/// 410).
+fn dice_loop_view(of: ParamView, track: &Track) -> ParamView {
+    let choices = SettingId::DICE_LOOP.entry().choices();
+    let at = usize::from(track.dice_loop).min(choices.len() - 1);
+    let shown = match dice_loop_length(track.dice_loop) {
+        0 => "Off: every step rolls fresh dice for its CHA and RND".to_owned(),
+        1 => "1: every step rolls the dice of the one before, as Dice mutate lets it".to_owned(),
+        steps => format!("{steps}: the dice of the last {steps} steps come round again"),
+    };
+    of.listed(
+        choices.iter().map(|choice| Choice::named(*choice)),
+        at,
+        0,
+        false,
+    )
+    .text(shown)
 }
 
 /// One of an FX column's lane's settings: `Length` in rows either side of none, centred as
