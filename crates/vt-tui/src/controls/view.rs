@@ -24,6 +24,7 @@ use vt_model::lane::{LANE_RATES, LaneMove, RATE_AS_WRITTEN, length_rows};
 use vt_model::listed::Listed;
 use vt_model::modulation::{MOD_SLOTS, ModField, ModKind, default_mod, note_shape_slot};
 use vt_model::param::{Descriptor, HEX_JUMP, NUMBER, PERCENT, Reading, kept};
+use vt_model::settings::meanings as own;
 use vt_model::settings::{
     Kind, LONGEST_GLIDE_MS, SettingId, Units, gate_percent, gate_value, glide_ms, rows_text,
 };
@@ -80,6 +81,7 @@ impl ParamView {
             why_not: Cow::Borrowed(""),
             units: None,
             engaged: true,
+            meaning: Cow::Borrowed(""),
         }
     }
 
@@ -508,6 +510,10 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
             .units
             .or_else(|| registry(control, track).and_then(|(id, _)| units(id))),
         engaged: view.engaged && !at_default(control, track) && !untuned(song, track, control),
+        meaning: match view.meaning.is_empty() {
+            true => Cow::Borrowed(meaning(control, track)),
+            false => view.meaning,
+        },
         ..view
     };
     // A switch that's off or on, whatever it's built from.
@@ -524,6 +530,43 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
         (true, Some((id, value))) => view.text(id.entry().kind.shown(value)),
         _ => view,
     })
+}
+
+/// What a setting does that no descriptor of the model has said: the registry's entry for it
+/// where it has one, and otherwise the model's words for the track's own settings.
+fn meaning(control: Control, track: &Track) -> &'static str {
+    if let Some(id) = control.setting_for_macro(track) {
+        return id.entry().meaning;
+    }
+    match control {
+        Control::Machine => own::MACHINE,
+        Control::Groove => SettingId::GROOVE.entry().meaning,
+        Control::Base(TrackControl::Drive) => own::DRIVE,
+        Control::Base(TrackControl::Punch) => own::PUNCH,
+        Control::Base(TrackControl::LowCut) => own::LOW_CUT,
+        Control::Base(TrackControl::HighCut) => own::HIGH_CUT,
+        Control::Sample => own::SAMPLE,
+        Control::Tune => own::TUNE,
+        Control::Cents => own::CENTS,
+        Control::FilterType => own::FILTER_TYPE,
+        Control::FilterMode => own::FILTER_MODE,
+        Control::Safe => own::SAFE,
+        Control::Trim => own::TRIM,
+        Control::Role => own::ROLE,
+        Control::Choke => own::CHOKE,
+        Control::Group => own::GROUP,
+        Control::Reset => own::RESET,
+        Control::Limiter => own::LIMITER,
+        Control::Insert(_) => own::EFFECT,
+        Control::NewGenerator(_) => own::NEW_GENERATOR,
+        Control::Accumulator(AccumulatorField::Moves) => own::ACCUMULATOR_MOVES,
+        Control::Accumulator(AccumulatorField::AtLimit) => own::ACCUMULATOR_AT_LIMIT,
+        Control::Accumulator(AccumulatorField::Adds) => own::ACCUMULATOR_ADDS,
+        Control::Accumulator(AccumulatorField::Reset) => own::ACCUMULATOR_RESET,
+        Control::Arpeggio(ArpField::Mode) => own::ARPEGGIO_MODE,
+        Control::Arpeggio(ArpField::Retrig) => own::ARPEGGIO_RETRIG,
+        _ => "",
+    }
 }
 
 /// The registry's setting a control is on this track and its value there, where the track has

@@ -189,6 +189,7 @@ pub const MAX_PARAMS: usize = 14;
 pub const MAX_KEPT_PARAMS: usize = 17;
 
 const MIX_PARAM: Entry = Entry {
+    meaning: "how much of the effect is heard against the sound going in",
     name: "Mix",
     key: "mix",
     label: Some("MIX"),
@@ -201,6 +202,7 @@ const MIX_PARAM: Entry = Entry {
     place: Place::Output,
 };
 const GAIN_PARAM: Entry = Entry {
+    meaning: "turns what comes out of the effect up or down",
     name: "Gain",
     key: "gain",
     label: Some("GAIN"),
@@ -213,6 +215,7 @@ const GAIN_PARAM: Entry = Entry {
     place: Place::Output,
 };
 const AMOUNT_PARAM: Entry = Entry {
+    meaning: "how hard it drives the sound",
     name: "Amount",
     key: "amount",
     label: Some("AMNT"),
@@ -238,6 +241,7 @@ const fn hex_param(
     default: u8,
 ) -> Entry {
     Entry {
+        meaning: "",
         name,
         key,
         label: Some(label),

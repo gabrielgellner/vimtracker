@@ -31,6 +31,7 @@ macro_rules! gen_params {
 gen_params! {
     /// What goes in the rows, which decides the rest.
     Fill => GenParamSpec {
+        meaning: "what goes in the rows, which decides the other settings",
         key: "fill",
         name: "Fill",
         units: Reading::Listed,
@@ -44,6 +45,7 @@ gen_params! {
     },
     /// The two values a fill goes between.
     From => GenParamSpec {
+        meaning: "one end of what the fill writes, where a ramp starts",
         key: "from",
         name: "From",
         units: Reading::Column,
@@ -56,6 +58,7 @@ gen_params! {
         set: |shape, _, number| shape.from = number as u8,
     },
     To => GenParamSpec {
+        meaning: "the other end of what the fill writes, where a ramp ends",
         key: "to",
         name: "To",
         units: Reading::Column,
@@ -69,6 +72,7 @@ gen_params! {
     },
     /// An `Acid` fill's own: how many notes its riff has.
     Notes => GenParamSpec {
+        meaning: "how many notes the riff has, its root among them",
         key: "notes",
         name: "Notes",
         units: Reading::Number,
@@ -83,6 +87,7 @@ gen_params! {
     /// A `Random` fill's own, after Marbles: how widely its values spread and which way they
     /// lean. `Spread` and `Bias` also lean the notes an `Acid` riff's set holds.
     Spread => GenParamSpec {
+        meaning: "how far the values stray, from one value to the two ends",
         key: "spread",
         name: "Spread",
         units: Reading::Percent,
@@ -95,6 +100,7 @@ gen_params! {
         set: |shape, _, number| shape.random.spread = number as u8,
     },
     Bias => GenParamSpec {
+        meaning: "which way the values lean, low or high",
         key: "bias",
         name: "Bias",
         units: Reading::Bend,
@@ -110,6 +116,7 @@ gen_params! {
     /// An `Acid` fill's own, after its notes: the chances of an octave, of a row playing on an
     /// empty column, of an accent and of a slide; and whether a roll keeps the pitches.
     Octave => GenParamSpec {
+        meaning: "each note has a {} chance of going an octave up or down",
         key: "octave",
         name: "Octave",
         units: Reading::Percent,
@@ -122,6 +129,7 @@ gen_params! {
         set: |shape, _, number| shape.acid.octave = number as u8,
     },
     Density => GenParamSpec {
+        meaning: "about {} of the rows play, the beats most of all",
         key: "density",
         name: "Density",
         units: Reading::Percent,
@@ -134,6 +142,7 @@ gen_params! {
         set: |shape, _, number| shape.acid.density = number as u8,
     },
     Accent => GenParamSpec {
+        meaning: "each note has a {} chance of an accent",
         key: "accent",
         name: "Accent",
         units: Reading::Percent,
@@ -146,6 +155,7 @@ gen_params! {
         set: |shape, _, number| shape.acid.accent = number as u8,
     },
     Slide => GenParamSpec {
+        meaning: "each note has a {} chance of sliding into the next",
         key: "slide",
         name: "Slide",
         units: Reading::Percent,
@@ -159,6 +169,7 @@ gen_params! {
     },
     // `1` to keep the pitches.,
     Pitches => GenParamSpec {
+        meaning: "Roll gives new notes on each r, Keep keeps them",
         key: "pitches",
         name: "Pitches",
         units: Reading::Listed,
@@ -173,6 +184,7 @@ gen_params! {
     /// How many rows each part of an `Acid` line loops on, after Kria: its rhythm on an empty
     /// column, its notes, octaves, accents and slides; none for a part drawn afresh each row.
     TrigLoop => GenParamSpec {
+        meaning: "how many rows the rhythm loops on; Off draws it fresh each row",
         key: "trigloop",
         name: "Trig loop",
         units: Reading::Number,
@@ -185,6 +197,7 @@ gen_params! {
         set: |shape, _, number| shape.acid.loops.trigs = number as u8,
     },
     NoteLoop => GenParamSpec {
+        meaning: "how many rows the riff's notes loop on; Off draws them fresh",
         key: "noteloop",
         name: "Note loop",
         units: Reading::Number,
@@ -197,6 +210,7 @@ gen_params! {
         set: |shape, _, number| shape.acid.loops.notes = number as u8,
     },
     OctaveLoop => GenParamSpec {
+        meaning: "how many rows the octaves loop on; Off draws them fresh",
         key: "octloop",
         name: "Oct loop",
         units: Reading::Number,
@@ -209,6 +223,7 @@ gen_params! {
         set: |shape, _, number| shape.acid.loops.octaves = number as u8,
     },
     AccentLoop => GenParamSpec {
+        meaning: "how many rows the accents loop on; Off draws them fresh",
         key: "accloop",
         name: "Acc loop",
         units: Reading::Number,
@@ -221,6 +236,7 @@ gen_params! {
         set: |shape, _, number| shape.acid.loops.accents = number as u8,
     },
     SlideLoop => GenParamSpec {
+        meaning: "how many rows the slides loop on; Off draws them fresh",
         key: "slideloop",
         name: "Sld loop",
         units: Reading::Number,
@@ -235,6 +251,7 @@ gen_params! {
     /// A `Follow` fill's own: the phrase it follows, the canon's moves on the way (transposed,
     /// inverted about a note, backwards and late), and whether it copies the FX columns too.
     Source => GenParamSpec {
+        meaning: "the phrase whose notes it copies",
         key: "source",
         name: "Source",
         units: Reading::Listed,
@@ -247,6 +264,7 @@ gen_params! {
         set: |shape, context, at| GenParam::Source.choose(shape, context, at),
     },
     Transpose => GenParamSpec {
+        meaning: "how far the copy moves up or down, in degrees or semitones",
         key: "transpose",
         name: "Transpose",
         units: Reading::Interval,
@@ -263,6 +281,7 @@ gen_params! {
         set: |shape, _, number| shape.follow.transpose = number as i8,
     },
     Invert => GenParamSpec {
+        meaning: "turns the copy's notes upside down",
         key: "invert",
         name: "Invert",
         units: Reading::Listed,
@@ -276,6 +295,7 @@ gen_params! {
     },
     // The note it turns about: the first note of the source until it's set.,
     Axis => GenParamSpec {
+        meaning: "the note Invert turns about: the source's first, or one chosen",
         key: "axis",
         name: "About",
         units: Reading::Column,
@@ -291,6 +311,7 @@ gen_params! {
         set: |shape, _, number| shape.follow.axis = Some(number as u8),
     },
     Reverse => GenParamSpec {
+        meaning: "plays the source backwards, its last row first",
         key: "reverse",
         name: "Reverse",
         units: Reading::Listed,
@@ -304,6 +325,7 @@ gen_params! {
     },
     // How many rows late it is, round the source's loop.,
     Late => GenParamSpec {
+        meaning: "how many rows late the copy comes in, going round the source",
         key: "late",
         name: "Rotate",
         units: Reading::Rows,
@@ -316,6 +338,7 @@ gen_params! {
         set: |shape, _, number| shape.follow.rotate = number as u16,
     },
     CopyFx => GenParamSpec {
+        meaning: "copies the source's FX columns too",
         key: "fx",
         name: "FX",
         units: Reading::Listed,
@@ -331,6 +354,7 @@ gen_params! {
     /// copies, and which kinds it may make (a note moved in the scale, the line shifted, a span
     /// backwards, a ratchet, a note dropped or added).
     Mutation => GenParamSpec {
+        meaning: "how many changes it makes to what it copies",
         key: "mutation",
         name: "Mutation",
         units: Reading::Number,
@@ -343,6 +367,7 @@ gen_params! {
         set: |shape, _, number| shape.follow.mutation = number as u8,
     },
     Repitch => GenParamSpec {
+        meaning: "lets a change move a note a degree or two",
         key: "repitch",
         name: "Repitch",
         units: Reading::Listed,
@@ -355,6 +380,7 @@ gen_params! {
         set: |shape, _, number| shape.follow.mutate.repitch = number != 0,
     },
     Shift => GenParamSpec {
+        meaning: "lets a change move every note together, one to four degrees",
         key: "shift",
         name: "Shift",
         units: Reading::Listed,
@@ -367,6 +393,7 @@ gen_params! {
         set: |shape, _, number| shape.follow.mutate.shift = number != 0,
     },
     Retro => GenParamSpec {
+        meaning: "lets a change play two to four rows backwards",
         key: "retro",
         name: "Retro",
         units: Reading::Listed,
@@ -379,6 +406,7 @@ gen_params! {
         set: |shape, _, number| shape.follow.mutate.retro = number != 0,
     },
     Ratchet => GenParamSpec {
+        meaning: "lets a change repeat a note within its row",
         key: "ratchet",
         name: "Ratchet",
         units: Reading::Listed,
@@ -391,6 +419,7 @@ gen_params! {
         set: |shape, _, number| shape.follow.mutate.ratchet = number != 0,
     },
     DropAdd => GenParamSpec {
+        meaning: "lets a change take a note away or add one on an empty row",
         key: "drop",
         name: "Drop/add",
         units: Reading::Listed,
@@ -405,6 +434,7 @@ gen_params! {
     // In hex on a column whose values are, and as a number on notes and nudges.,
     /// A `Walk`'s largest move and what it does at the ends, and how many values a `1/f` sums.
     Step => GenParamSpec {
+        meaning: "the largest move from one row to the next, up or down",
         key: "step",
         name: "Step",
         units: Reading::Walk,
@@ -422,6 +452,7 @@ gen_params! {
     },
     // `1` to wrap.,
     Edge => GenParamSpec {
+        meaning: "at an end, Reflect bounces back and Wrap comes round the other side",
         key: "edge",
         name: "Edge",
         units: Reading::Listed,
@@ -440,6 +471,7 @@ gen_params! {
         },
     },
     Depth => GenParamSpec {
+        meaning: "how many random values it sums; more gives longer shapes",
         key: "depth",
         name: "Depth",
         units: Reading::Number,
@@ -454,6 +486,7 @@ gen_params! {
     /// A `Random` fill's own on notes: how many degrees it lets through, the most important
     /// first, and how often each comes.
     Steps => GenParamSpec {
+        meaning: "how many degrees it plays, the most important first",
         key: "steps",
         name: "Steps",
         units: Reading::Number,
@@ -476,6 +509,7 @@ gen_params! {
         },
     },
     Weights => GenParamSpec {
+        meaning: "how often each degree comes, a hex digit each from the root",
         key: "weights",
         name: "Weights",
         units: Reading::Weights,
@@ -489,6 +523,7 @@ gen_params! {
     },
     /// What `Multiply` multiplies the rhythm by, and whether factors 2 and 3 mask it first.
     Factor => GenParamSpec {
+        meaning: "what the rhythm, read as a number, is multiplied by",
         key: "factor",
         name: "Factor",
         units: Reading::Number,
@@ -501,6 +536,7 @@ gen_params! {
         set: |shape, _, number| shape.bits.factor = number as u8,
     },
     Masks => GenParamSpec {
+        meaning: "thins the rhythm before 2 and 3 multiply it, as the module does",
         key: "masks",
         name: "Masks",
         units: Reading::Listed,
@@ -517,6 +553,7 @@ gen_params! {
     /// place on the map, each part's density, how far chaos raises each step, and whether a row
     /// is a 32nd.
     Part => GenParamSpec {
+        meaning: "which drum part this track plays: BD, SD or HH",
         key: "part",
         name: "Part",
         units: Reading::Listed,
@@ -530,6 +567,7 @@ gen_params! {
     },
     // The note a `Grids` or `Divisions` writes on an empty column, its `From`.,
     Pitch => GenParamSpec {
+        meaning: "the note it writes on an empty column",
         key: "note",
         name: "Note",
         units: Reading::Column,
@@ -542,6 +580,7 @@ gen_params! {
         set: |shape, _, number| shape.from = number as u8,
     },
     MapX => GenParamSpec {
+        meaning: "the place across Grids' map of drum patterns",
         key: "x",
         name: "X",
         units: Reading::Hex,
@@ -554,6 +593,7 @@ gen_params! {
         set: |shape, _, number| shape.grids.x = number as u8,
     },
     MapY => GenParamSpec {
+        meaning: "the place up Grids' map of drum patterns",
         key: "y",
         name: "Y",
         units: Reading::Hex,
@@ -566,6 +606,7 @@ gen_params! {
         set: |shape, _, number| shape.grids.y = number as u8,
     },
     KickDensity => GenParamSpec {
+        meaning: "how many of the kick's hits play, the most important first",
         key: "bd",
         name: "BD fill",
         units: Reading::Hex,
@@ -578,6 +619,7 @@ gen_params! {
         set: |shape, _, number| shape.grids.density[DrumPart::Kick.index()] = number as u8,
     },
     SnareDensity => GenParamSpec {
+        meaning: "how many of the snare's hits play, the most important first",
         key: "sd",
         name: "SD fill",
         units: Reading::Hex,
@@ -590,6 +632,7 @@ gen_params! {
         set: |shape, _, number| shape.grids.density[DrumPart::Snare.index()] = number as u8,
     },
     HatDensity => GenParamSpec {
+        meaning: "how many of the hats' hits play, the most important first",
         key: "hh",
         name: "HH fill",
         units: Reading::Hex,
@@ -602,6 +645,7 @@ gen_params! {
         set: |shape, _, number| shape.grids.density[DrumPart::Hats.index()] = number as u8,
     },
     Chaos => GenParamSpec {
+        meaning: "how far each step's level is raised at random",
         key: "chaos",
         name: "Chaos",
         units: Reading::Hex,
@@ -615,6 +659,7 @@ gen_params! {
     },
     // `1` for a row of a 32nd.,
     Rows => GenParamSpec {
+        meaning: "whether a row is a 16th or a 32nd",
         key: "rows",
         name: "Rows",
         units: Reading::Listed,
@@ -631,6 +676,7 @@ gen_params! {
     /// how long a row is, and each division's chance, its own channel's (or `A`'s) and then `B`'s,
     /// which only `A+B` plays.
     Channel => GenParamSpec {
+        meaning: "which channel this track plays: A, B or A+B, both",
         key: "channel",
         name: "Channel",
         units: Reading::Listed,
@@ -643,6 +689,7 @@ gen_params! {
         set: |shape, _, at| shape.divisions.channel = Some(Channel::ALL[at as usize]),
     },
     Bar => GenParamSpec {
+        meaning: "a bar of 4/4 or 3/4, in 16ths or 32nds",
         key: "bar",
         name: "Bar",
         units: Reading::Listed,
@@ -655,6 +702,7 @@ gen_params! {
         set: |shape, _, at| shape.divisions = shape.divisions.with_bar(Bar::ALL[at as usize]),
     },
     Quarters => GenParamSpec {
+        meaning: "each quarter has a {} chance of striking",
         key: "d4",
         name: "1/4",
         units: Reading::Percent,
@@ -667,6 +715,7 @@ gen_params! {
         set: |shape, _, number| set_division_chance(shape, 0, Division::Quarter, number),
     },
     Eighths => GenParamSpec {
+        meaning: "each eighth has a {} chance of striking",
         key: "d8",
         name: "1/8",
         units: Reading::Percent,
@@ -679,6 +728,7 @@ gen_params! {
         set: |shape, _, number| set_division_chance(shape, 0, Division::Eighth, number),
     },
     Sixteenths => GenParamSpec {
+        meaning: "each sixteenth has a {} chance of striking",
         key: "d16",
         name: "1/16",
         units: Reading::Percent,
@@ -691,6 +741,7 @@ gen_params! {
         set: |shape, _, number| set_division_chance(shape, 0, Division::Sixteenth, number),
     },
     QuarterTriplets => GenParamSpec {
+        meaning: "each quarter triplet has a {} chance of striking",
         key: "d4t",
         name: "1/4T",
         units: Reading::Percent,
@@ -703,6 +754,7 @@ gen_params! {
         set: |shape, _, number| set_division_chance(shape, 0, Division::QuarterTriplet, number),
     },
     EighthTriplets => GenParamSpec {
+        meaning: "each eighth triplet has a {} chance of striking",
         key: "d8t",
         name: "1/8T",
         units: Reading::Percent,
@@ -715,6 +767,7 @@ gen_params! {
         set: |shape, _, number| set_division_chance(shape, 0, Division::EighthTriplet, number),
     },
     SixteenthTriplets => GenParamSpec {
+        meaning: "each sixteenth triplet has a {} chance of striking",
         key: "d16t",
         name: "1/16T",
         units: Reading::Percent,
@@ -727,6 +780,7 @@ gen_params! {
         set: |shape, _, number| set_division_chance(shape, 0, Division::SixteenthTriplet, number),
     },
     QuartersB => GenParamSpec {
+        meaning: "each of channel B's quarters has a {} chance of striking",
         key: "b4",
         name: "B 1/4",
         units: Reading::Percent,
@@ -739,6 +793,7 @@ gen_params! {
         set: |shape, _, number| set_division_chance(shape, 1, Division::Quarter, number),
     },
     EighthsB => GenParamSpec {
+        meaning: "each of channel B's eighths has a {} chance of striking",
         key: "b8",
         name: "B 1/8",
         units: Reading::Percent,
@@ -751,6 +806,7 @@ gen_params! {
         set: |shape, _, number| set_division_chance(shape, 1, Division::Eighth, number),
     },
     SixteenthsB => GenParamSpec {
+        meaning: "each of channel B's sixteenths has a {} chance of striking",
         key: "b16",
         name: "B 1/16",
         units: Reading::Percent,
@@ -763,6 +819,7 @@ gen_params! {
         set: |shape, _, number| set_division_chance(shape, 1, Division::Sixteenth, number),
     },
     QuarterTripletsB => GenParamSpec {
+        meaning: "each of channel B's quarter triplets has a {} chance of striking",
         key: "b4t",
         name: "B 1/4T",
         units: Reading::Percent,
@@ -775,6 +832,7 @@ gen_params! {
         set: |shape, _, number| set_division_chance(shape, 1, Division::QuarterTriplet, number),
     },
     EighthTripletsB => GenParamSpec {
+        meaning: "each of channel B's eighth triplets has a {} chance of striking",
         key: "b8t",
         name: "B 1/8T",
         units: Reading::Percent,
@@ -787,6 +845,7 @@ gen_params! {
         set: |shape, _, number| set_division_chance(shape, 1, Division::EighthTriplet, number),
     },
     SixteenthTripletsB => GenParamSpec {
+        meaning: "each of channel B's sixteenth triplets has a {} chance of striking",
         key: "b16t",
         name: "B 1/16T",
         units: Reading::Percent,
@@ -801,6 +860,7 @@ gen_params! {
     /// A `Ring` fill's own: how likely a bit coming round is replaced, how likely a new bit is a
     /// 1, and how many bits go round.
     Change => GenParamSpec {
+        meaning: "each bit coming round has a {} chance of being replaced",
         key: "change",
         name: "Change",
         units: Reading::Percent,
@@ -813,6 +873,7 @@ gen_params! {
         set: |shape, _, number| shape.ring.change = number as u8,
     },
     Ones => GenParamSpec {
+        meaning: "each new bit has a {} chance of being a 1, a row that plays",
         key: "ones",
         name: "Chance",
         units: Reading::Percent,
@@ -825,6 +886,7 @@ gen_params! {
         set: |shape, _, number| shape.ring.chance = number as u8,
     },
     RingLength => GenParamSpec {
+        meaning: "how many bits go round, so how many rows before it repeats",
         key: "length",
         name: "Length",
         units: Reading::Number,
@@ -841,6 +903,7 @@ gen_params! {
     /// chords, where its moves come from, the list of them, each move's weight, the loop's length,
     /// and whether it keeps to the scale.
     Triad => GenParamSpec {
+        meaning: "whether the first chord is major or minor",
         key: "triad",
         name: "Triad",
         units: Reading::Listed,
@@ -859,6 +922,7 @@ gen_params! {
         },
     },
     Voice => GenParamSpec {
+        meaning: "what this track writes: the chord, its root or one voice of it",
         key: "voice",
         name: "Voice",
         units: Reading::Listed,
@@ -871,6 +935,7 @@ gen_params! {
         set: |shape, _, at| shape.tonnetz.voice = Some(TonnetzVoice::ALL[at as usize]),
     },
     Moves => GenParamSpec {
+        meaning: "where the moves come from: the list, drawn by weight, or a loop",
         key: "moves",
         name: "Moves",
         units: Reading::Listed,
@@ -883,6 +948,7 @@ gen_params! {
         set: |shape, _, at| shape.tonnetz.moves = Moves::ALL[at as usize],
     },
     MoveList => GenParamSpec {
+        meaning: "the moves from chord to chord, typed as P, L and R",
         key: "list",
         name: "List",
         units: Reading::Listed,
@@ -895,6 +961,7 @@ gen_params! {
         set: |_, _, _| {},
     },
     PWeight => GenParamSpec {
+        meaning: "how often a P move comes, major to minor and back",
         key: "p",
         name: "P",
         units: Reading::Number,
@@ -907,6 +974,7 @@ gen_params! {
         set: |shape, _, number| shape.tonnetz.weights[0] = number as u8,
     },
     LWeight => GenParamSpec {
+        meaning: "how often an L move comes, the leading-tone move",
         key: "l",
         name: "L",
         units: Reading::Number,
@@ -919,6 +987,7 @@ gen_params! {
         set: |shape, _, number| shape.tonnetz.weights[1] = number as u8,
     },
     RWeight => GenParamSpec {
+        meaning: "how often an R move comes, to the relative chord",
         key: "r",
         name: "R",
         units: Reading::Number,
@@ -931,6 +1000,7 @@ gen_params! {
         set: |shape, _, number| shape.tonnetz.weights[2] = number as u8,
     },
     LoopLength => GenParamSpec {
+        meaning: "a Loop draws {} before it goes round",
         key: "loop",
         name: "Length",
         units: Reading::Number,
@@ -943,6 +1013,7 @@ gen_params! {
         set: |shape, _, number| shape.tonnetz.length = number as u8,
     },
     InScale => GenParamSpec {
+        meaning: "In scale takes only moves that keep to the song's scale",
         key: "inscale",
         name: "Scale",
         units: Reading::Listed,
@@ -957,6 +1028,7 @@ gen_params! {
     /// A `Variation`'s own: how many rows before each row its next hangs on, and how far from
     /// the likeliest it may stray.
     Order => GenParamSpec {
+        meaning: "how many rows before each row it looks at, from 1 to 3",
         key: "order",
         name: "Order",
         units: Reading::Number,
@@ -969,6 +1041,7 @@ gen_params! {
         set: |shape, _, number| shape.variation.order = number as u8,
     },
     Temperature => GenParamSpec {
+        meaning: "how far from the likeliest row it strays",
         key: "temperature",
         name: "Temp",
         units: Reading::Percent,
@@ -982,6 +1055,7 @@ gen_params! {
     },
     /// The bits `Invert bits` flips and `Mask bits` keeps, and how far `Rotate bits` turns them.
     Flip => GenParamSpec {
+        meaning: "which bits of each value it flips, FF for all of them",
         key: "flip",
         name: "Flip",
         units: Reading::Bits,
@@ -994,6 +1068,7 @@ gen_params! {
         set: |shape, _, number| shape.bits.flip = number as u8,
     },
     Keep => GenParamSpec {
+        meaning: "which bits of each value it keeps",
         key: "keep",
         name: "Keep",
         units: Reading::Bits,
@@ -1006,6 +1081,7 @@ gen_params! {
         set: |shape, _, number| shape.bits.keep = number as u8,
     },
     Turn => GenParamSpec {
+        meaning: "turns each value's bits round by {}, the highest back as the lowest",
         key: "turn",
         name: "Turn",
         units: Reading::Number,
@@ -1019,6 +1095,7 @@ gen_params! {
     },
     /// How a ramp bends, early or late, and how it eases at both ends.
     Curve => GenParamSpec {
+        meaning: "bends the values: above 0 they move early, below 0 late",
         key: "curve",
         name: "Curve",
         units: Reading::Bend,
@@ -1031,6 +1108,7 @@ gen_params! {
         set: |shape, _, number| shape.curve = number as i8,
     },
     S => GenParamSpec {
+        meaning: "eases both ends: above 0 an S, below 0 the reverse",
         key: "s",
         name: "S",
         units: Reading::Bend,
@@ -1044,6 +1122,7 @@ gen_params! {
     },
     /// A `Wave`'s shape, the length of its cycle, and where in it the first row falls.
     Wave => GenParamSpec {
+        meaning: "the wave's shape, as on an LFO",
         key: "wave",
         name: "Shape",
         units: Reading::Listed,
@@ -1056,6 +1135,7 @@ gen_params! {
         set: |shape, context, at| GenParam::Wave.choose(shape, context, at),
     },
     Rate => GenParamSpec {
+        meaning: "how long one swing of the wave takes",
         key: "rate",
         name: "Rate",
         units: Reading::Listed,
@@ -1068,6 +1148,7 @@ gen_params! {
         set: |shape, context, at| GenParam::Rate.choose(shape, context, at),
     },
     Phase => GenParamSpec {
+        meaning: "the first row falls {} into the swing",
         key: "phase",
         name: "Phase",
         units: Reading::Degrees { axes: false },
@@ -1081,6 +1162,7 @@ gen_params! {
     },
     /// A `List`'s values, in place of `From` and `To`.
     Values => GenParamSpec {
+        meaning: "the values it goes round, in place of From and To",
         key: "values",
         name: "Values",
         units: Reading::Column,
@@ -1094,6 +1176,7 @@ gen_params! {
     },
     /// How many rows in a row take each value.
     Run => GenParamSpec {
+        meaning: "how many rows in a row take each value",
         key: "run",
         name: "Run",
         units: Reading::Number,
@@ -1108,6 +1191,7 @@ gen_params! {
     /// Which rows get a value, and its amount: an `Every`'s step, a `Chance`'s percent, or
     /// Euclid's hits and rotation, or a `Cells`' rule and the row it starts from.
     Where => GenParamSpec {
+        meaning: "which rows the fill changes",
         key: "where",
         name: "Where",
         units: Reading::Listed,
@@ -1121,6 +1205,7 @@ gen_params! {
     },
     // The amount of the `Where` it's named for, as each below is, and none while it has another.,
     Every => GenParamSpec {
+        meaning: "how often a row is changed: one in every so many",
         key: "every",
         name: "Amount",
         units: Reading::Rows,
@@ -1140,6 +1225,7 @@ gen_params! {
         },
     },
     Chance => GenParamSpec {
+        meaning: "each row has a {} chance of changing",
         key: "chance",
         name: "Amount",
         units: Reading::Percent,
@@ -1160,6 +1246,7 @@ gen_params! {
     },
     // Of the rows the column could change, so no more than them.,
     Hits => GenParamSpec {
+        meaning: "hits {} rows, spread as evenly as they go",
         key: "hits",
         name: "Hits",
         units: Reading::OfRows,
@@ -1179,6 +1266,7 @@ gen_params! {
         },
     },
     Rotate => GenParamSpec {
+        meaning: "how many rows later the hits fall, going round",
         key: "rotate",
         name: "Rotate",
         units: Reading::Number,
@@ -1201,6 +1289,7 @@ gen_params! {
     /// of `3 states`, and the first track's share of `Complementary`'s rows, then which side of
     /// its coin this track is.
     Clusters => GenParamSpec {
+        meaning: "plays about {} of the rows, in runs of two to four",
         key: "clusters",
         name: "Amount",
         units: Reading::Percent,
@@ -1220,6 +1309,7 @@ gen_params! {
         },
     },
     Markov => GenParamSpec {
+        meaning: "high leans toward repeating the rows eight before, low away",
         key: "markov",
         name: "Amount",
         units: Reading::Percent,
@@ -1239,6 +1329,7 @@ gen_params! {
         },
     },
     States => GenParamSpec {
+        meaning: "low gives mostly gates, the middle rests and high ties",
         key: "states",
         name: "Amount",
         units: Reading::Percent,
@@ -1258,6 +1349,7 @@ gen_params! {
         },
     },
     Share => GenParamSpec {
+        meaning: "the first track gets {} of the rows, the second the rest",
         key: "share",
         name: "Amount",
         units: Reading::Percent,
@@ -1278,6 +1370,7 @@ gen_params! {
     },
     // `1` for the second side of the coin.,
     Side => GenParamSpec {
+        meaning: "which side of the two tracks' shared coin this track takes",
         key: "side",
         name: "Side",
         units: Reading::Listed,
@@ -1299,6 +1392,7 @@ gen_params! {
     /// A named rhythm's settings: which rhythm, which of its parts this track plays, and
     /// `Child`, the chance each of the part's hits plays.
     Rhythm => GenParamSpec {
+        meaning: "the traditional pattern the rows play",
         key: "rhythm",
         name: "Rhythm",
         units: Reading::Listed,
@@ -1314,6 +1408,7 @@ gen_params! {
         set: |shape, _, at| Choice::World(World::ALL[at as usize]).apply(shape),
     },
     Role => GenParamSpec {
+        meaning: "which of the rhythm's three parts this track plays",
         key: "role",
         name: "Part",
         units: Reading::Listed,
@@ -1329,6 +1424,7 @@ gen_params! {
         set: |shape, _, at| Choice::Role(Role::ALL[at as usize]).apply(shape),
     },
     Child => GenParamSpec {
+        meaning: "each of the part's hits has a {} chance of playing",
         key: "child",
         name: "Child",
         units: Reading::Percent,
@@ -1348,6 +1444,7 @@ gen_params! {
         },
     },
     Rule => GenParamSpec {
+        meaning: "which of Wolfram's 256 rules makes each next generation",
         key: "rule",
         name: "Rule",
         units: Reading::Number,
@@ -1367,6 +1464,7 @@ gen_params! {
         },
     },
     CellStart => GenParamSpec {
+        meaning: "the cells it starts from: drawn, one in the middle, or the notes",
         key: "start",
         name: "Start",
         units: Reading::Listed,
@@ -1389,6 +1487,7 @@ gen_params! {
     /// How many passes each of its variations lasts, a new seed each time, for a shape that
     /// draws from its seed: none, each pass, or every two, four or eight.
     Vary => GenParamSpec {
+        meaning: "how many passes each variation plays before a new one",
         key: "vary",
         name: "Vary",
         units: Reading::Listed,

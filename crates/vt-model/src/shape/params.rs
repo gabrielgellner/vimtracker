@@ -256,6 +256,11 @@ pub struct GenParamSpec {
     pub get: fn(&Shape, &Context) -> Option<i32>,
     /// Set it to a number already within its bounds.
     pub set: fn(&mut Shape, &Context, i32),
+    /// What it does, in a few plain words starting in lower case, for the line that describes the
+    /// setting under the cursor ([`Descriptor::meaning`]).
+    ///
+    /// [`Descriptor::meaning`]: crate::param::Descriptor::meaning
+    pub meaning: &'static str,
 }
 
 /// The lowest and highest a setting takes as a number.

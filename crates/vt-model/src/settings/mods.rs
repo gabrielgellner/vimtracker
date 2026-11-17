@@ -11,6 +11,7 @@ use crate::steps::{MAX_MUTATE, STEPS};
 /// LFO's phase and deform, in [`MOD_LOCKED_FIELDS`](crate::modulation::MOD_LOCKED_FIELDS)' order.
 pub(super) const MOD: [Entry; 4] = [
     Entry {
+        meaning: "how far it moves its setting at most, a minus turning it over",
         key: "depth",
         name: "Depth",
         // With the slot's number after it, as `DEP1`.
@@ -24,6 +25,7 @@ pub(super) const MOD: [Entry; 4] = [
         place: Place::Own,
     },
     Entry {
+        meaning: "where in its cycle a note starts it",
         key: "phase",
         name: "Phase",
         label: Some("PHS"),
@@ -36,6 +38,7 @@ pub(super) const MOD: [Entry; 4] = [
         place: Place::Own,
     },
     Entry {
+        meaning: "whether it moves what it reaches one way or both ways",
         key: "polarity",
         name: "Polarity",
         label: Some("POL"),
@@ -48,6 +51,7 @@ pub(super) const MOD: [Entry; 4] = [
         place: Place::Own,
     },
     Entry {
+        meaning: "how its wave bends away from its plain shape",
         key: "deform",
         name: "Deform",
         label: Some("DFM"),
@@ -72,6 +76,7 @@ pub const PLAYED_SETTINGS: usize = ACCUMULATION.len() + ARPEGGIO.len();
 /// A macro, the same entry for all eight but its name: where it's turned, from `00` to `FF` with a
 /// fine part, as a cutoff is. With its number after it, as `MAC1`.
 pub(super) const MACRO: Entry = Entry {
+    meaning: "where the macro is turned, moving every setting it holds",
     key: "macro",
     name: "Macro",
     label: Some("MAC"),
@@ -98,6 +103,7 @@ const COUNTS: [&str; MOST_DEGREES as usize] = [
 /// An envelope's time, unlabelled, so only modulation and macros move it.
 const fn time(key: &'static str, name: &'static str) -> Entry {
     Entry {
+        meaning: "",
         key,
         name,
         label: None,
@@ -114,6 +120,7 @@ const fn time(key: &'static str, name: &'static str) -> Entry {
 /// A percentage from none to all, unlabelled, as an envelope's sustain is.
 const fn percentage(key: &'static str, name: &'static str) -> Entry {
     Entry {
+        meaning: "",
         key,
         name,
         label: None,
@@ -132,12 +139,13 @@ const fn percentage(key: &'static str, name: &'static str) -> Entry {
 /// the slot only while its type has it. They're in
 /// [`MOD_OWN_FIELDS`](crate::modulation::MOD_OWN_FIELDS)' order, which names them.
 pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
-    time("attack", "Attack"),
-    time("decay", "Decay"),
-    percentage("sustain", "Sustain"),
-    time("release", "Release"),
-    percentage("body", "Body"),
+    time("attack", "Attack").means("how long it takes to rise to full, or the gate to open"),
+    time("decay", "Decay").means("how long it takes to fall back"),
+    percentage("sustain", "Sustain").means("the level it holds at while the note does"),
+    time("release", "Release").means("how long it takes to fall away once the note ends"),
+    percentage("body", "Body").means("the level the strike falls to before it decays"),
     Entry {
+        meaning: "how far the gate's fall closes the filter as well as the level",
         key: "colour",
         name: "Colour",
         label: None,
@@ -150,6 +158,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
         place: Place::Own,
     },
     Entry {
+        meaning: "how many of its values it plays",
         key: "length",
         name: "Length",
         label: None,
@@ -161,6 +170,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
         place: Place::Own,
     },
     Entry {
+        meaning: "the chance each value is drawn again as it comes round",
         key: "mutate",
         name: "Mutate",
         label: None,
@@ -173,6 +183,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
         place: Place::Own,
     },
     Entry {
+        meaning: "how it goes from one value to the next, gliding or jumping",
         key: "smooth",
         name: "Smooth",
         label: None,
@@ -187,6 +198,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
     // An LFO's and Steps' `Rate`, faster up the scale, through its own kind of rate; the default is
     // a new LFO's `1/4`.
     Entry {
+        meaning: "how fast it cycles, or how long each value lasts",
         key: "rate",
         name: "Rate",
         label: None,
@@ -203,6 +215,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
 /// The accumulator's settings a macro or modulation can move: how far up and down it goes.
 pub(super) const ACCUMULATION: [Entry; 2] = [
     Entry {
+        meaning: "how far above the note as written the accumulator can go",
         key: "up",
         name: "Up",
         label: None,
@@ -214,6 +227,7 @@ pub(super) const ACCUMULATION: [Entry; 2] = [
         place: Place::Own,
     },
     Entry {
+        meaning: "how far below the note as written the accumulator can go",
         key: "down",
         name: "Down",
         label: None,
@@ -240,6 +254,7 @@ const ARP_RATE_NAMES: [&str; ArpRate::ALL.len()] = {
 /// The arpeggio's settings a macro or modulation can move: how fast and over how many octaves.
 pub(super) const ARPEGGIO: [Entry; 2] = [
     Entry {
+        meaning: "how fast the arpeggio plays its notes",
         key: "rate",
         name: "Rate",
         label: None,
@@ -251,6 +266,7 @@ pub(super) const ARPEGGIO: [Entry; 2] = [
         place: Place::Own,
     },
     Entry {
+        meaning: "how many octaves the arpeggio climbs before it starts again",
         key: "octaves",
         name: "Octaves",
         label: None,

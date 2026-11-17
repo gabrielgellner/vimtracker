@@ -13,6 +13,7 @@ use super::{
 /// A delay's, in the order the page shows them.
 pub(crate) const DELAY_PARAMS: [Entry; 11] = [
     Entry {
+        meaning: "how long each repeat takes to come round",
         name: "Time",
         key: "time",
         label: Some("TIME"),
@@ -23,8 +24,10 @@ pub(crate) const DELAY_PARAMS: [Entry; 11] = [
         default: Delay::DEFAULT.time,
         place: Place::Own,
     },
-    hex_param("Feedback", "feedback", "FDBK", Delay::DEFAULT.feedback),
+    hex_param("Feedback", "feedback", "FDBK", Delay::DEFAULT.feedback)
+        .means("how much of each repeat comes round again; FF keeps going"),
     Entry {
+        meaning: "whether the repeats go from side to side or stay put",
         name: "Ping-pong",
         key: "pingpong",
         label: Some("PING"),
@@ -35,11 +38,16 @@ pub(crate) const DELAY_PARAMS: [Entry; 11] = [
         default: Delay::DEFAULT.ping_pong,
         place: Place::Own,
     },
-    hex_param("Width", "width", "WDTH", Delay::DEFAULT.width),
-    hex_param("Low cut", "lowcut", "LCUT", Delay::DEFAULT.low_cut),
-    hex_param("High cut", "highcut", "HCUT", Delay::DEFAULT.high_cut),
-    hex_param("Drive", "drive", "DRIV", Delay::DEFAULT.drive),
+    hex_param("Width", "width", "WDTH", Delay::DEFAULT.width)
+        .means("how far apart the sides are, from together at 00"),
+    hex_param("Low cut", "lowcut", "LCUT", Delay::DEFAULT.low_cut)
+        .means("takes lows from each repeat, off at 00"),
+    hex_param("High cut", "highcut", "HCUT", Delay::DEFAULT.high_cut)
+        .means("takes highs from each repeat, off at FF"),
+    hex_param("Drive", "drive", "DRIV", Delay::DEFAULT.drive)
+        .means("how hard each repeat is saturated as it comes round"),
     Entry {
+        meaning: "how a new Time comes in: gliding, which bends the pitch, or jumping",
         name: "Retime",
         key: "retime",
         label: Some("RTIM"),
@@ -50,7 +58,8 @@ pub(crate) const DELAY_PARAMS: [Entry; 11] = [
         default: Delay::DEFAULT.retime,
         place: Place::Own,
     },
-    hex_param("Wow", "wow", "WOW", Delay::DEFAULT.wow),
+    hex_param("Wow", "wow", "WOW", Delay::DEFAULT.wow)
+        .means("a slow wobble in the repeats' pitch, as worn tape has"),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -227,6 +236,7 @@ pub(crate) fn echo_shelf_db(value: f32, (_, most_db, power): (f32, f32, f32)) ->
 /// echo's level, the mix and the gain.
 pub(crate) const ECHO_PARAMS: [Entry; 13] = [
     Entry {
+        meaning: "which playback heads play, and whether the spring reverb does",
         name: "Mode",
         key: "mode",
         label: Some("MODE"),
@@ -237,8 +247,11 @@ pub(crate) const ECHO_PARAMS: [Entry; 13] = [
         default: Echo::DEFAULT.mode,
         place: Place::Type,
     },
-    hex_param("Rate", "rate", "RATE", Echo::DEFAULT.rate).units(Units::EchoRate),
+    hex_param("Rate", "rate", "RATE", Echo::DEFAULT.rate)
+        .units(Units::EchoRate)
+        .means("the tape's speed, as the first head's delay; moving it bends the repeats"),
     Entry {
+        meaning: "a note division the first head keeps to, or Free for Rate to set it",
         name: "Sync",
         key: "sync",
         label: Some("SYNC"),
@@ -249,20 +262,26 @@ pub(crate) const ECHO_PARAMS: [Entry; 13] = [
         default: Echo::DEFAULT.sync,
         place: Place::Own,
     },
-    hex_param("Inertia", "inertia", "INRT", Echo::DEFAULT.inertia),
-    hex_param("Intensity", "intensity", "INTS", Echo::DEFAULT.intensity),
+    hex_param("Inertia", "inertia", "INRT", Echo::DEFAULT.inertia)
+        .means("how slowly the motor gets to a new speed"),
+    hex_param("Intensity", "intensity", "INTS", Echo::DEFAULT.intensity)
+        .means("how much goes round again; from about DC it runs away"),
     hex_param("Input", "input", "INPT", Echo::DEFAULT.input)
         .units(Units::EchoInput)
-        .centred(),
-    hex_param("Wow", "wow", "WOW", Echo::DEFAULT.wow),
+        .centred()
+        .means("how hard what goes in drives the tape, as it comes at 80"),
+    hex_param("Wow", "wow", "WOW", Echo::DEFAULT.wow).means("how far the tape's speed wavers"),
     hex_param("Bass", "bass", "BASS", Echo::DEFAULT.bass)
         .units(Units::EchoBass)
-        .centred(),
+        .centred()
+        .means("lifts or cuts the lows of what comes out"),
     hex_param("Treble", "treble", "TREB", Echo::DEFAULT.treble)
         .units(Units::EchoTreble)
-        .centred(),
-    hex_param("Reverb", "reverb", "VERB", Echo::DEFAULT.reverb),
-    hex_param("Echo", "echo", "ECHO", Echo::DEFAULT.echo),
+        .centred()
+        .means("lifts or cuts the highs of what comes out"),
+    hex_param("Reverb", "reverb", "VERB", Echo::DEFAULT.reverb)
+        .means("how much of the spring reverb is heard, in the modes that have it"),
+    hex_param("Echo", "echo", "ECHO", Echo::DEFAULT.echo).means("how loud the repeats are"),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -355,11 +374,15 @@ impl Echo {
 
 /// A reverb's, in the order the page shows them.
 pub(crate) const REVERB_PARAMS: [Entry; 7] = [
-    hex_param("Pre", "pre", "PRE", Reverb::DEFAULT.pre),
-    hex_param("Decay", "decay", "DCAY", Reverb::DEFAULT.decay),
-    hex_param("Damp", "damp", "DAMP", Reverb::DEFAULT.damp),
-    hex_param("Low cut", "lowcut", "LCUT", Reverb::DEFAULT.low_cut),
-    hex_param("High cut", "highcut", "HCUT", Reverb::DEFAULT.high_cut),
+    hex_param("Pre", "pre", "PRE", Reverb::DEFAULT.pre)
+        .means("how long before it comes in, up to a quarter of a second"),
+    hex_param("Decay", "decay", "DCAY", Reverb::DEFAULT.decay).means("how long it rings"),
+    hex_param("Damp", "damp", "DAMP", Reverb::DEFAULT.damp)
+        .means("how quickly its highs fall away as it rings"),
+    hex_param("Low cut", "lowcut", "LCUT", Reverb::DEFAULT.low_cut)
+        .means("takes lows from what goes in, off at 00"),
+    hex_param("High cut", "highcut", "HCUT", Reverb::DEFAULT.high_cut)
+        .means("takes highs from what goes in, off at FF"),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -414,12 +437,19 @@ impl Reverb {
 
 /// A plate's, in the order the page shows them. Those it shares with the reverb are named as its.
 pub(crate) const PLATE_PARAMS: [Entry; 8] = [
-    hex_param("Pre", "pre", "PRE", Plate::DEFAULT.pre),
-    hex_param("Decay", "decay", "DCAY", Plate::DEFAULT.decay),
-    hex_param("Damp", "damp", "DAMP", Plate::DEFAULT.damp),
-    hex_param("High cut", "highcut", "HCUT", Plate::DEFAULT.high_cut),
-    hex_param("Size", "size", "SIZE", Plate::DEFAULT.size).units(Units::PlateSize),
-    hex_param("Mod", "mod", "MOD", Plate::DEFAULT.excursion),
+    hex_param("Pre", "pre", "PRE", Plate::DEFAULT.pre)
+        .means("how long before it comes in, up to a quarter of a second"),
+    hex_param("Decay", "decay", "DCAY", Plate::DEFAULT.decay)
+        .means("how long it rings, up to about a minute"),
+    hex_param("Damp", "damp", "DAMP", Plate::DEFAULT.damp)
+        .means("how quickly its highs fall away as it rings"),
+    hex_param("High cut", "highcut", "HCUT", Plate::DEFAULT.high_cut)
+        .means("takes highs from what goes in, off at FF"),
+    hex_param("Size", "size", "SIZE", Plate::DEFAULT.size)
+        .units(Units::PlateSize)
+        .means("how big the plate is, against Dattorro's"),
+    hex_param("Mod", "mod", "MOD", Plate::DEFAULT.excursion)
+        .means("how much its tail wobbles, which keeps it from ringing metallic"),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -487,13 +517,19 @@ pub fn plate_size(value: f32) -> f32 {
 /// its springs are and how dark; then its chirp and its reflections; then its wander and its
 /// knock; then the mix and gain. Those it shares with the reverb are named as its.
 pub(crate) const SPRING_PARAMS: [Entry; 9] = [
-    hex_param("Decay", "decay", "DCAY", Spring::DEFAULT.decay),
-    hex_param("Size", "size", "SIZE", Spring::DEFAULT.size),
-    hex_param("Damp", "damp", "DAMP", Spring::DEFAULT.damp),
-    hex_param("Spin", "spin", "SPIN", Spring::DEFAULT.spin),
-    hex_param("Reflect", "reflect", "REFL", Spring::DEFAULT.reflect),
-    hex_param("Chaos", "chaos", "CHAO", Spring::DEFAULT.chaos),
+    hex_param("Decay", "decay", "DCAY", Spring::DEFAULT.decay)
+        .means("how long it rings, from a tenth of a second to about four"),
+    hex_param("Size", "size", "SIZE", Spring::DEFAULT.size)
+        .means("how long the springs are: how far apart the drips come round"),
+    hex_param("Damp", "damp", "DAMP", Spring::DEFAULT.damp).means("how dark it is"),
+    hex_param("Spin", "spin", "SPIN", Spring::DEFAULT.spin)
+        .means("how much each drip is smeared into a chirp, most at 00"),
+    hex_param("Reflect", "reflect", "REFL", Spring::DEFAULT.reflect)
+        .means("how much comes back from the ends of the springs, which thickens it"),
+    hex_param("Chaos", "chaos", "CHAO", Spring::DEFAULT.chaos)
+        .means("how much the springs' length wanders, as a tank that's moving"),
     Entry {
+        meaning: "switched on, knocks the tank once, as when it's kicked",
         name: "Knock",
         key: "knock",
         label: Some("KNCK"),
@@ -576,10 +612,14 @@ impl Spring {
 /// A space's, in the order the page shows them: how long it rings, how big and how dark it is,
 /// then its wobble, then the mix and gain. Those it shares with the reverbs are named as theirs.
 pub(crate) const SPACE_PARAMS: [Entry; 6] = [
-    hex_param("Decay", "decay", "DCAY", Space::DEFAULT.decay),
-    hex_param("Size", "size", "SIZE", Space::DEFAULT.size),
-    hex_param("Damp", "damp", "DAMP", Space::DEFAULT.damp),
-    hex_param("Mod", "mod", "MOD", Space::DEFAULT.excursion),
+    hex_param("Decay", "decay", "DCAY", Space::DEFAULT.decay)
+        .means("how long it rings, on and on towards FF"),
+    hex_param("Size", "size", "SIZE", Space::DEFAULT.size)
+        .means("how big its tank is, small and metallic at 00"),
+    hex_param("Damp", "damp", "DAMP", Space::DEFAULT.damp)
+        .means("how dark what goes in and what comes out are"),
+    hex_param("Mod", "mod", "MOD", Space::DEFAULT.excursion)
+        .means("how fast and far what goes in wobbles in pitch"),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -663,6 +703,7 @@ pub fn repeat_decay_db(value: f32) -> f32 {
 /// it repeats, how many times and how it fades; then the mix and gain.
 pub(crate) const STUTTER_PARAMS: [Entry; 6] = [
     Entry {
+        meaning: "switched on, repeats the next piece of what comes in",
         name: "Trig",
         key: "trig",
         label: Some("TRIG"),
@@ -674,6 +715,7 @@ pub(crate) const STUTTER_PARAMS: [Entry; 6] = [
         place: Place::Own,
     },
     Entry {
+        meaning: "how long a piece it repeats",
         name: "Length",
         key: "length",
         label: Some("LEN"),
@@ -685,6 +727,7 @@ pub(crate) const STUTTER_PARAMS: [Entry; 6] = [
         place: Place::Own,
     },
     Entry {
+        meaning: "how many times it plays the piece again; Hold while Trig is on",
         name: "Repeats",
         key: "repeats",
         label: Some("RPTS"),
@@ -695,8 +738,11 @@ pub(crate) const STUTTER_PARAMS: [Entry; 6] = [
         default: Stutter::DEFAULT.repeats,
         place: Place::Own,
     },
-    hex_param("Decay", "decay", "DCAY", Stutter::DEFAULT.decay).units(Units::RepeatDecay),
+    hex_param("Decay", "decay", "DCAY", Stutter::DEFAULT.decay)
+        .units(Units::RepeatDecay)
+        .means("how much quieter each repeat is than the one before"),
     Entry {
+        meaning: "how much the repeats take the place of the sound",
         default: 0xFF,
         ..MIX_PARAM
     },

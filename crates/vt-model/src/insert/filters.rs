@@ -19,32 +19,40 @@ pub(crate) const EQ_PARAMS: [Entry; 8] = [
         "LFRQ",
         Equaliser::DEFAULT.low_frequency,
     )
-    .units(Units::Hertz),
+    .units(Units::Hertz)
+    .means("where the low shelf sits"),
     hex_param("Low", "low", "LOW", Equaliser::DEFAULT.low)
         .units(Units::Boost)
-        .centred(),
+        .centred()
+        .means("how far the low shelf boosts or cuts"),
     hex_param(
         "Mid freq",
         "midfreq",
         "MFRQ",
         Equaliser::DEFAULT.mid_frequency,
     )
-    .units(Units::Hertz),
+    .units(Units::Hertz)
+    .means("where the middle band sits"),
     hex_param("Mid", "mid", "MID", Equaliser::DEFAULT.mid)
         .units(Units::Boost)
-        .centred(),
+        .centred()
+        .means("how far the middle band boosts or cuts"),
     hex_param(
         "High freq",
         "highfreq",
         "HFRQ",
         Equaliser::DEFAULT.high_frequency,
     )
-    .units(Units::Hertz),
+    .units(Units::Hertz)
+    .means("where the high shelf sits"),
     hex_param("High", "high", "HIGH", Equaliser::DEFAULT.high)
         .units(Units::Boost)
-        .centred(),
+        .centred()
+        .means("how far the high shelf boosts or cuts"),
     // After the bands, so the page shows each band's frequency over its boost.
-    hex_param("Mid Q", "midq", "MIDQ", Equaliser::DEFAULT.mid_q).units(Units::Q),
+    hex_param("Mid Q", "midq", "MIDQ", Equaliser::DEFAULT.mid_q)
+        .units(Units::Q)
+        .means("how narrow the middle band is, from wide to sharp"),
     GAIN_PARAM,
 ];
 
@@ -128,6 +136,7 @@ const GATE_MODE_NAMES: [&str; 3] = ["Gate", "Filter", "VCA"];
 /// far, where it rests and its resonance, then how slowly it responds and what it hears.
 pub(crate) const LPG_PARAMS: [Entry; 8] = [
     Entry {
+        meaning: "what the follower opens: level and cutoff together, cutoff alone, or level",
         name: "Mode",
         key: "mode",
         // Choosing a mode chooses a sound, so steps don't lock it.
@@ -141,17 +150,22 @@ pub(crate) const LPG_PARAMS: [Entry; 8] = [
     },
     Entry {
         default: LowPassGate::DEFAULT.amount,
+        meaning: "how far what it hears opens it, from Base to all the way",
         ..AMOUNT_PARAM
     },
-    hex_param("Base", "base", "BASE", LowPassGate::DEFAULT.base),
-    hex_param("Res", "res", "RESO", LowPassGate::DEFAULT.resonance),
+    hex_param("Base", "base", "BASE", LowPassGate::DEFAULT.base)
+        .means("where it rests when closed: its cutoff, or its level as a VCA"),
+    hex_param("Res", "res", "RESO", LowPassGate::DEFAULT.resonance)
+        .means("how much its filter rings at the cutoff"),
     hex_param(
         "Response",
         "response",
         "RESP",
         LowPassGate::DEFAULT.response,
-    ),
+    )
+    .means("how slowly it opens and closes"),
     Entry {
+        meaning: "what it listens to: its own sound, or another track's",
         name: "Source",
         key: "source",
         // What it hears is part of how it's set up, so steps don't change it.
@@ -165,6 +179,7 @@ pub(crate) const LPG_PARAMS: [Entry; 8] = [
     },
     Entry {
         default: 0xFF,
+        meaning: "how much goes through the gate against the sound going in",
         ..MIX_PARAM
     },
     GAIN_PARAM,
@@ -238,13 +253,19 @@ pub(crate) const RESO_PARAMS: [Entry; 8] = [
         key: "tune",
         label: Some("TUNE"),
         default: Resonator::DEFAULT.tune,
+        meaning: "its pitch, in semitones from the track's note",
         ..PITCH_PARAMS[0]
     },
-    hex_param("Material", "material", "MATL", Resonator::DEFAULT.material),
-    hex_param("Bright", "bright", "BRT", Resonator::DEFAULT.bright),
-    hex_param("Decay", "decay", "DCAY", Resonator::DEFAULT.decay),
-    hex_param("Position", "position", "POS", Resonator::DEFAULT.position),
-    hex_param("Width", "width", "WDTH", Resonator::DEFAULT.width),
+    hex_param("Material", "material", "MATL", Resonator::DEFAULT.material)
+        .means("how its partials spread: bunched low, in tune, then wide as a bell's"),
+    hex_param("Bright", "bright", "BRT", Resonator::DEFAULT.bright)
+        .means("how long the high partials ring against the lowest"),
+    hex_param("Decay", "decay", "DCAY", Resonator::DEFAULT.decay)
+        .means("how long it rings, from a thud to well over a minute"),
+    hex_param("Position", "position", "POS", Resonator::DEFAULT.position)
+        .means("where it's struck and heard, from its end to its middle"),
+    hex_param("Width", "width", "WDTH", Resonator::DEFAULT.width)
+        .means("how far a second, wandering pickup spreads it across the sides"),
     Entry {
         default: 0xFF,
         ..MIX_PARAM
@@ -332,6 +353,7 @@ const COMB_MODE_NAMES: [&str; 2] = ["Comb", "Flange"];
 /// long it rings and how bright, then how wide a band it keeps and the mix, then its gain.
 pub(crate) const COMB_PARAMS: [Entry; 7] = [
     Entry {
+        meaning: "Comb rings on the note; Flange adds the sound, notched between harmonics",
         name: "Mode",
         key: "mode",
         // Choosing a mode chooses a sound, so steps don't lock it.
@@ -348,11 +370,16 @@ pub(crate) const COMB_PARAMS: [Entry; 7] = [
         key: "tune",
         label: Some("TUNE"),
         default: Comb::DEFAULT.tune,
+        meaning: "its pitch, in semitones from the track's note",
         ..PITCH_PARAMS[0]
     },
-    hex_param("Feedback", "feedback", "FDBK", Comb::DEFAULT.feedback).centred(),
-    hex_param("Tone", "tone", "TONE", Comb::DEFAULT.tone),
-    hex_param("Spread", "spread", "SPRD", Comb::DEFAULT.spread),
+    hex_param("Feedback", "feedback", "FDBK", Comb::DEFAULT.feedback)
+        .centred()
+        .means("how long it rings; turned below the middle, on odd harmonics only"),
+    hex_param("Tone", "tone", "TONE", Comb::DEFAULT.tone)
+        .means("how bright it rings, from the note alone to every harmonic"),
+    hex_param("Spread", "spread", "SPRD", Comb::DEFAULT.spread)
+        .means("how far under Tone it reaches, from a narrow band to everything"),
     Entry {
         default: 0xFF,
         ..MIX_PARAM
@@ -434,10 +461,15 @@ pub fn vowel_blend(value: f32) -> (usize, usize, f32) {
 /// A vowel filter's, in the order the page shows them, as columns of two: which vowel and how big
 /// a voice, how sharp its formants are and how far they follow the note, then the mix and gain.
 pub(crate) const VOWEL_PARAMS: [Entry; 6] = [
-    hex_param("Vowel", "vowel", "VOWL", Vowel::DEFAULT.vowel).units(Units::Vowel),
-    hex_param("Size", "size", "SIZE", Vowel::DEFAULT.size),
-    hex_param("Res", "res", "RESO", Vowel::DEFAULT.resonance),
-    hex_param("Track", "track", "TRK", Vowel::DEFAULT.track),
+    hex_param("Vowel", "vowel", "VOWL", Vowel::DEFAULT.vowel)
+        .units(Units::Vowel)
+        .means("which vowel it says, blending from one to the next"),
+    hex_param("Size", "size", "SIZE", Vowel::DEFAULT.size)
+        .means("how big a voice, from a child's to a deep one"),
+    hex_param("Res", "res", "RESO", Vowel::DEFAULT.resonance)
+        .means("how sharp its formants are, from broad to ringing"),
+    hex_param("Track", "track", "TRK", Vowel::DEFAULT.track)
+        .means("how far its formants follow the note"),
     Entry {
         default: 0xFF,
         ..MIX_PARAM

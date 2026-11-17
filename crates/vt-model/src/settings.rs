@@ -6,11 +6,14 @@
 use crate::constants::{MAX_LEVEL, UNITY_LEVEL};
 use crate::groove::GROOVE_CHOICES;
 use crate::lane::{LANE_RATES, LENGTH_AS_WRITTEN, RATE_AS_WRITTEN};
+use std::borrow::Cow;
+
 use crate::param::{Choice, Descriptor, Reading, Typing};
 use crate::song::{FILTER_MODE_NAMES, FULL_GATE, GLIDE_MODE_NAMES, PHASE_NAMES, VOICE_MODE_NAMES};
 use crate::speed::{SPEED_NAMES, Speed};
 
 mod id;
+pub mod meanings;
 mod mods;
 mod sampler;
 mod units;
@@ -65,6 +68,9 @@ pub struct Entry {
     /// What it is to its owner: an effect's own, its type, beside its type or what comes out.
     /// Everything that isn't an effect's is its owner's own.
     pub place: Place,
+    /// What it does, in a few plain words starting in lower case, for the line that describes the
+    /// setting under the cursor ([`Descriptor::meaning`]). Every entry has one.
+    pub meaning: &'static str,
 }
 
 /// Where a setting sits in its owner. Only an effect's are anything but [`Place::Own`].
@@ -96,6 +102,11 @@ impl Entry {
     #[cfg(test)]
     pub(crate) const fn wraps(&self) -> bool {
         matches!(self.kind, Kind::Stepped { wraps: true, .. })
+    }
+
+    /// The same, saying what it does ([`Entry::meaning`]).
+    pub(crate) const fn means(self, meaning: &'static str) -> Self {
+        Self { meaning, ..self }
     }
 
     /// Whether it's off or on and nothing else, which the pages show as a toggle.
@@ -165,6 +176,7 @@ impl Entry {
         };
         Descriptor {
             label: self.label,
+            meaning: Cow::Borrowed(self.meaning),
             ..described
         }
     }
@@ -172,6 +184,7 @@ impl Entry {
 
 const fn level(key: &'static str, name: &'static str, label: &'static str, default: u8) -> Entry {
     Entry {
+        meaning: "",
         key,
         name,
         label: Some(label),
@@ -187,6 +200,7 @@ const fn level(key: &'static str, name: &'static str, label: &'static str, defau
 
 const fn centred(key: &'static str, name: &'static str, label: &'static str) -> Entry {
     Entry {
+        meaning: "",
         key,
         name,
         label: Some(label),
@@ -221,14 +235,15 @@ const ON_LEVEL_SCALE: Kind = Kind::Continuous {
 
 /// The track's own, in the order the table keeps them.
 const TRACK: [Entry; 16] = [
-    on_level_scale("vol", "Vol", "VOL", UNITY_LEVEL),
+    on_level_scale("vol", "Vol", "VOL", UNITY_LEVEL)
+        .means("gain on top of the fader, which steps and modulation move"),
     Entry {
         kind: Kind::Continuous {
             top: 0xFF,
             middle: true,
             units: Units::Pan,
         },
-        ..centred("pan", "Pan", "PAN")
+        ..centred("pan", "Pan", "PAN").means("where the track sits between left and right")
     },
     Entry {
         kind: Kind::Continuous {
@@ -236,12 +251,13 @@ const TRACK: [Entry; 16] = [
             middle: false,
             units: Units::Hertz,
         },
-        ..level("cut", "Cut", "CUT", 0xFF)
+        ..level("cut", "Cut", "CUT", 0xFF).means("where the filter starts to take away the sound")
     },
-    level("res", "Res", "RES", 0x00),
-    on_level_scale("sna", "Send A", "SNA", 0x00),
-    on_level_scale("snb", "Send B", "SNB", 0x00),
+    level("res", "Res", "RES", 0x00).means("how much the filter rings at its cutoff"),
+    on_level_scale("sna", "Send A", "SNA", 0x00).means("how much of the track goes to return A"),
+    on_level_scale("snb", "Send B", "SNB", 0x00).means("how much of the track goes to return B"),
     Entry {
+        meaning: "moves every note on the track up or down, a semitone a step",
         key: "pitch",
         name: "Pitch",
         label: Some("PTCH"),
@@ -254,6 +270,7 @@ const TRACK: [Entry; 16] = [
         place: Place::Own,
     },
     Entry {
+        meaning: "how the filter's type responds: its slope, or what it lets through",
         key: "mode",
         name: "Mode",
         label: Some("MODE"),
@@ -265,6 +282,7 @@ const TRACK: [Entry; 16] = [
         place: Place::Own,
     },
     Entry {
+        meaning: "how much of its last pulse each note lasts before it's let go",
         key: "gate",
         name: "Gate",
         label: Some("LEN"),
@@ -279,6 +297,7 @@ const TRACK: [Entry; 16] = [
     // Its value is never heard alone: it's added to each note's length as it starts, so a lane
     // of it moves notes' lengths against their own.
     Entry {
+        meaning: "moves each note's length up or down from its own as it starts",
         key: "gatedelta",
         name: "Gate up or down",
         label: Some("LDLT"),
@@ -293,6 +312,7 @@ const TRACK: [Entry; 16] = [
     // A step's own groove, read before the step is played, as it says when the step lands. `00`
     // is the project's, and a track with its own holds that.
     Entry {
+        meaning: "the groove the track's steps are played with, or the project's",
         key: "groove",
         name: "Groove",
         label: Some("GRV"),
@@ -305,6 +325,7 @@ const TRACK: [Entry; 16] = [
     },
     // How long a step is, read before the step is played, as it says when the next one comes.
     Entry {
+        meaning: "how long each of the track's steps is",
         key: "speed",
         name: "Speed",
         label: Some("RATE"),
@@ -318,6 +339,7 @@ const TRACK: [Entry; 16] = [
     // How long a tie glides into the next note, read as the tie comes, so a lock on either row
     // sets it.
     Entry {
+        meaning: "how long a tie takes to glide into the next note",
         key: "glide",
         name: "Glide",
         label: Some("GLD"),
@@ -332,6 +354,7 @@ const TRACK: [Entry; 16] = [
     // As `LDLT` is to a note's length: added to each note's velocity as it starts, so a lane of it
     // is an accent pattern and a glide of it a crescendo, and the note keeps its own.
     Entry {
+        meaning: "moves each note's velocity up or down from its own as it starts",
         key: "velocitydelta",
         name: "Velocity up or down",
         label: Some("VDLT"),
@@ -346,10 +369,12 @@ const TRACK: [Entry; 16] = [
     // The fader, which a step can set as it sets `PAN`, with `VOL` a stage on top of it (decision
     // 174). Its base is the track's `level`, and modulation can't reach it, as `VOL` is where
     // modulation moves the volume.
-    on_level_scale("level", "Level", "LEV", UNITY_LEVEL),
+    on_level_scale("level", "Level", "LEV", UNITY_LEVEL)
+        .means("the track's fader: how loud the whole track is"),
     // How far its rows' nudges are brought toward the grid as they play, read before a row plays,
     // as `GRV` is, so a take can be tightened live, or loosened again, and keeps what was played.
-    level("quantise", "Quantise", "QNT", 0x00),
+    level("quantise", "Quantise", "QNT", 0x00)
+        .means("how far each row's nudge is brought toward the grid as it plays"),
 ];
 /// What each of the track's is listed with.
 const TRACK_GROUPS: [&str; 16] = [
@@ -363,6 +388,7 @@ const LATER_TRACK: [Entry; 4] = [
     // Whether a synth's oscillators run on from note to note or start again on each, read as a
     // note starts, so a lock on its row sets it for that note (decision 370).
     Entry {
+        meaning: "whether the oscillators run on from note to note or start again",
         key: "phase",
         name: "Phase",
         label: Some("OSC"),
@@ -376,6 +402,7 @@ const LATER_TRACK: [Entry; 4] = [
     // Whether a note ties into one whose gate is still open, read as a note starts, so a lock on
     // its row sets it for that note (decision 380).
     Entry {
+        meaning: "how notes join: each struck, or tied while the gate is still open",
         key: "voicemode",
         name: "Mode",
         label: Some("VMOD"),
@@ -389,6 +416,7 @@ const LATER_TRACK: [Entry; 4] = [
     // Whether the filter's cutoff follows the note's pitch, an octave for an octave from `C-3`,
     // read every frame, so a lock on a row sets it for that row (decision 381).
     Entry {
+        meaning: "whether the filter's cutoff follows the note, an octave for an octave",
         key: "keytrack",
         name: "Key track",
         label: Some("KTRK"),
@@ -402,6 +430,7 @@ const LATER_TRACK: [Entry; 4] = [
     // Whether `Glide` slides only ties or every note from the one sounding, read as a note
     // starts, so a lock on its row sets it for that note (decision 382).
     Entry {
+        meaning: "which notes Glide slides into: only ties, or every note",
         key: "glidemode",
         name: "Glide mode",
         label: Some("GMOD"),
@@ -420,6 +449,7 @@ const TRACK_SETTINGS: usize = TRACK.len() + LATER_TRACK.len();
 
 /// A slot's own, whatever effect is in it.
 const SLOT_OWN: [Entry; 1] = [Entry {
+    meaning: "whether the effect in the slot is heard or switched out",
     key: "bypass",
     name: "Bypass",
     // With the slot's digit before it, as `1BYP`.
@@ -437,6 +467,7 @@ const SLOT_OWN: [Entry; 1] = [Entry {
 /// With the column's number after each, as `LLEN1`.
 const LANE: [Entry; 2] = [
     Entry {
+        meaning: "how many rows this column's lanes are heard for, more or fewer",
         key: "length",
         name: "Length",
         label: Some("LLEN"),
@@ -449,6 +480,7 @@ const LANE: [Entry; 2] = [
         place: Place::Own,
     },
     Entry {
+        meaning: "how much slower or faster this column's lanes go than written",
         key: "rate",
         name: "Rate",
         label: Some("LRAT"),
@@ -505,6 +537,71 @@ mod tests {
             assert_eq!(id.is_mod_own(), mod_own, "{}", id.key());
         }
         assert_eq!(SettingId::all().count(), SettingId::COUNT);
+    }
+
+    /// Every setting says what it does, for the line that describes the one under the cursor
+    /// (#969): each of the registry's, each generator setting and each mod slot's under every
+    /// type that has it. A new setting without its words fails here.
+    #[test]
+    fn every_setting_says_what_it_does() {
+        use crate::modulation::{ModField, ModKind};
+        use crate::shape::GenParam;
+        let said = |meaning: &str| !meaning.is_empty() && !meaning.ends_with('.');
+        let mut missing: Vec<String> = SettingId::all()
+            .filter(|id| !said(id.entry().meaning))
+            .map(|id| id.key())
+            .collect();
+        missing.extend(
+            GenParam::ALL
+                .into_iter()
+                .filter(|param| !said(param.meaning()))
+                .map(|param| format!("gen {}", param.key())),
+        );
+        let fields = [
+            ModField::Type,
+            ModField::Mode,
+            ModField::Polarity,
+            ModField::Destination,
+            ModField::Depth,
+            ModField::Attack,
+            ModField::Decay,
+            ModField::Sustain,
+            ModField::Release,
+            ModField::Reset,
+            ModField::Hold,
+            ModField::Peak,
+            ModField::Body,
+            ModField::Ratchet,
+            ModField::Colour,
+            ModField::Shape,
+            ModField::Rate,
+            ModField::Phase,
+            ModField::Deform,
+            ModField::Fade,
+            ModField::Length,
+            ModField::Start,
+            ModField::Loop,
+            ModField::Mutate,
+            ModField::Smooth,
+            ModField::Step(0),
+            ModField::Low,
+            ModField::High,
+        ];
+        for kind in ModKind::ALL {
+            missing.extend(
+                fields
+                    .into_iter()
+                    .filter(|field| field.on(kind) && !said(field.meaning(kind)))
+                    .map(|field| format!("{kind:?} {field:?}")),
+            );
+        }
+        missing.dedup();
+        assert!(
+            missing.is_empty(),
+            "{} settings say nothing of what they do, or end in a full stop: {}",
+            missing.len(),
+            missing.join(", ")
+        );
     }
 
     #[test]

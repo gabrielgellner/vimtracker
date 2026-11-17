@@ -146,6 +146,56 @@ impl ModField {
         }
     }
 
+    /// What it does under a slot's type, in a few plain words starting in lower case, for the line
+    /// that describes the setting under the cursor ([`Descriptor::meaning`]).
+    #[allow(
+        clippy::match_same_arms,
+        reason = "a meaning for each setting, in the slot's order"
+    )]
+    pub fn meaning(self, kind: ModKind) -> &'static str {
+        let envelope = kind.is_envelope();
+        match self {
+            Self::Type => "what kind of modulator the slot is",
+            Self::Mode if envelope => "how the envelope's rise and fall bend",
+            Self::Mode if kind == ModKind::Lfo => "how notes start the cycle, or leave it running",
+            Self::Mode if kind == ModKind::Steps => {
+                "whether its values go by in time or one a note"
+            }
+            Self::Mode => "what of each note it follows",
+            Self::Polarity => "whether it moves what it reaches one way or both ways",
+            Self::Destination => "the setting it moves",
+            Self::Depth => "how far it moves its setting at most, a minus turning it over",
+            Self::Attack if kind == ModKind::Lpg => "how long the gate takes to open",
+            Self::Attack => "how long it takes to rise to full",
+            Self::Decay if kind == ModKind::Drum => "how long its body takes to die away",
+            Self::Decay if kind == ModKind::Lpg => "how long the gate takes to close again",
+            Self::Decay if kind == ModKind::Adsr => "how long it takes to fall to its sustain",
+            Self::Decay => "how long it takes to fall back once it's held",
+            Self::Sustain => "the level it holds at while the note does",
+            Self::Release => "how long it takes to fall away once the note ends",
+            Self::Reset => "whether each note starts it from nothing rather than where it is",
+            Self::Hold => "how long it stays at full, or for as long as the note",
+            Self::Peak => "how long its first strike lasts before the body",
+            Self::Body => "the level the strike falls to before it decays",
+            Self::Ratchet => "how many times it strikes on each note",
+            Self::Colour => "how far the gate's fall closes the filter as well as the level",
+            Self::Shape => "the wave it cycles through",
+            Self::Rate if kind == ModKind::Steps => "how long each value lasts",
+            Self::Rate => "how fast it cycles",
+            Self::Phase => "where in its cycle a note starts it",
+            Self::Deform => "how its wave bends away from its plain shape",
+            Self::Fade => "how it fades in or out after each note starts it",
+            Self::Length => "how many of its values it plays",
+            Self::Start => "the value each note starts it on",
+            Self::Loop => "what it does once it reaches its last value",
+            Self::Mutate => "the chance each value is drawn again as it comes round",
+            Self::Smooth => "how it goes from one value to the next, gliding or jumping",
+            Self::Step(_) => "this value, how far it moves its setting while it plays",
+            Self::Low => "where its map starts, in what it follows",
+            Self::High => "where its map ends, in what it follows",
+        }
+    }
+
     /// Its place among a slot's type's own settings in the registry, if macros and modulation
     /// move it: an index of [`MOD_OWN_FIELDS`].
     pub fn own(self) -> Option<usize> {
@@ -626,6 +676,7 @@ impl ModSlot {
                 .collect(),
             typing: Typing::Whole { signed: false },
             reads: Reads::No,
+            meaning: Cow::Borrowed(field.meaning(self.kind)),
             ..Descriptor::whole(name, name, (low, high), 0)
         };
         // A signed amount in hex, as a depth is.

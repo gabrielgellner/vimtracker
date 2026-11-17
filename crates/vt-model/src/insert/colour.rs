@@ -65,6 +65,7 @@ const DISTORT_TYPE_NAMES: [&str; 8] = [
     "Distortion",
 ];
 pub(super) const TYPE_PARAM: Entry = Entry {
+    meaning: "how it bends the sound: clipping, folding, crushing or a guitar pedal",
     name: "Type",
     key: "type",
     // Choosing a mode chooses a sound, so steps don't lock it.
@@ -79,6 +80,7 @@ pub(super) const TYPE_PARAM: Entry = Entry {
 
 /// `Crush`'s bit depth, as a place among the depths it chooses between.
 const BITS_PARAM: Entry = Entry {
+    meaning: "how many bits each sample keeps: fewer is grittier and gates quiet sounds",
     name: "Bits",
     key: "bits",
     label: Some("BITS"),
@@ -91,6 +93,7 @@ const BITS_PARAM: Entry = Entry {
     place: Place::Own,
 };
 const RATE_PARAM: Entry = Entry {
+    meaning: "how long each sample is held, lowering the sample rate",
     name: "Rate",
     key: "rate",
     label: Some("RATE"),
@@ -105,6 +108,7 @@ const RATE_PARAM: Entry = Entry {
 /// Whether `Crush` squeezes the sound by its log before it rounds and opens it out after, so
 /// quiet sounds keep finer steps, as an 8-bit sampler's mu-law does.
 const MU_LAW_PARAM: Entry = Entry {
+    meaning: "squeezes the sound before rounding it, so quiet sounds keep finer steps",
     name: "Mu-law",
     key: "mulaw",
     label: Some("MULW"),
@@ -118,6 +122,7 @@ const MU_LAW_PARAM: Entry = Entry {
 /// Whether `Down` holds at a whole number of times the note's frequency, so what it folds back
 /// lands on the note's harmonics.
 const FOLLOW_PARAM: Entry = Entry {
+    meaning: "holds in step with the note, so what folds back stays in tune",
     name: "Track",
     key: "track",
     label: Some("TRCK"),
@@ -130,6 +135,7 @@ const FOLLOW_PARAM: Entry = Entry {
 };
 /// A pedal's tone control: from dark at `00` to bright at `FF`.
 const PEDAL_TONE_PARAM: Entry = Entry {
+    meaning: "the pedal's tone control, from dark to bright",
     name: "Tone",
     key: "tone",
     label: Some("TONE"),
@@ -286,14 +292,23 @@ pub fn tape_drive_db(value: f32) -> f32 {
 pub(crate) const TAPE_PARAMS: [Entry; 8] = [
     hex_param("Drive", "drive", "DRIV", Tape::DEFAULT.drive)
         .units(Units::TapeDrive)
-        .centred(),
-    hex_param("Tone", "tone", "TONE", Tape::DEFAULT.tone).centred(),
-    hex_param("Bias", "bias", "BIAS", Tape::DEFAULT.bias).centred(),
-    hex_param("Bump", "bump", "BUMP", Tape::DEFAULT.bump),
-    hex_param("Wow", "wow", "WOW", Tape::DEFAULT.wow),
-    hex_param("Flutter", "flutter", "FLUT", Tape::DEFAULT.flutter),
+        .centred()
+        .means("how hard it hits the tape, which warms and thickens what's loud"),
+    hex_param("Tone", "tone", "TONE", Tape::DEFAULT.tone)
+        .centred()
+        .means("tilts the tone: brighter turned up, darker turned down"),
+    hex_param("Bias", "bias", "BIAS", Tape::DEFAULT.bias)
+        .centred()
+        .means("turned up it softens fast edges; turned down, quiet detail crackles"),
+    hex_param("Bump", "bump", "BUMP", Tape::DEFAULT.bump)
+        .means("how much the heads lift the lows, around 69 Hz"),
+    hex_param("Wow", "wow", "WOW", Tape::DEFAULT.wow)
+        .means("a slow wobble in pitch, as worn tape has"),
+    hex_param("Flutter", "flutter", "FLUT", Tape::DEFAULT.flutter)
+        .means("a faster, steady wobble in pitch, about twice a second"),
     Entry {
         default: 0xFF,
+        meaning: "how much goes through the tape; below FF it blends in a faint chorus",
         ..MIX_PARAM
     },
     GAIN_PARAM,
@@ -384,11 +399,18 @@ pub fn exciter_release_ms(value: f32) -> f32 {
 /// highs it drives start; then how its detector rises and falls; then how much is added, and the
 /// gain.
 pub(crate) const EXCITER_PARAMS: [Entry; 6] = [
-    hex_param("Drive", "drive", "DRIV", Exciter::DEFAULT.drive),
-    hex_param("Tone", "tone", "TONE", Exciter::DEFAULT.tone).units(Units::ExciterTone),
-    hex_param("Attack", "attack", "ATK", Exciter::DEFAULT.attack).units(Units::ExciterAttack),
-    hex_param("Release", "release", "REL", Exciter::DEFAULT.release).units(Units::ExciterRelease),
-    WET_MIX_PARAM,
+    hex_param("Drive", "drive", "DRIV", Exciter::DEFAULT.drive)
+        .means("how hard the highs are driven, so how much it makes"),
+    hex_param("Tone", "tone", "TONE", Exciter::DEFAULT.tone)
+        .units(Units::ExciterTone)
+        .means("where the highs it excites start"),
+    hex_param("Attack", "attack", "ATK", Exciter::DEFAULT.attack)
+        .units(Units::ExciterAttack)
+        .means("how fast its level detector rises as the highs get louder"),
+    hex_param("Release", "release", "REL", Exciter::DEFAULT.release)
+        .units(Units::ExciterRelease)
+        .means("how fast its level detector falls as the highs fade"),
+    WET_MIX_PARAM.means("how much of what it makes is added to the sound"),
     GAIN_PARAM,
 ];
 

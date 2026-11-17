@@ -48,6 +48,7 @@ const CHORUS_TYPE_NAMES: [&str; 5] = ["Chorus", "Ensemble", "Juno I", "Juno II",
 /// A chorus's, in the order the page shows them.
 pub(crate) const CHORUS_PARAMS: [Entry; 5] = [
     Entry {
+        meaning: "how its copies move: Rings' chorus or ensemble, or a Juno's",
         name: "Type",
         key: "type",
         // Choosing a mode chooses a sound, so steps don't lock it.
@@ -59,8 +60,9 @@ pub(crate) const CHORUS_PARAMS: [Entry; 5] = [
         default: 0,
         place: Place::Type,
     },
-    hex_param("Rate", "rate", "RATE", Chorus::DEFAULT.rate),
-    hex_param("Depth", "depth", "DPTH", Chorus::DEFAULT.depth),
+    hex_param("Rate", "rate", "RATE", Chorus::DEFAULT.rate).means("how fast the copies drift"),
+    hex_param("Depth", "depth", "DPTH", Chorus::DEFAULT.depth)
+        .means("how far the copies drift; none leaves fixed copies"),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -128,6 +130,7 @@ pub(crate) const STAGE_NAMES: [&str; 3] = ["4", "8", "12"];
 /// The `Rate` of a phaser or flanger: how long its sweep takes, in note lengths.
 const fn sweep_param(default: u8) -> Entry {
     Entry {
+        meaning: "one sweep up and down takes {}",
         name: "Rate",
         key: "rate",
         label: Some("RATE"),
@@ -143,10 +146,15 @@ const fn sweep_param(default: u8) -> Entry {
 /// A phaser's, in the order the page shows them.
 pub(crate) const PHASER_PARAMS: [Entry; 7] = [
     sweep_param(Phaser::DEFAULT.rate),
-    hex_param("Depth", "depth", "DPTH", Phaser::DEFAULT.depth),
-    hex_param("Centre", "centre", "CNTR", Phaser::DEFAULT.centre).units(Units::Hertz),
-    hex_param("Feedback", "feedback", "FDBK", Phaser::DEFAULT.feedback),
+    hex_param("Depth", "depth", "DPTH", Phaser::DEFAULT.depth)
+        .means("how far it sweeps either way of its centre"),
+    hex_param("Centre", "centre", "CNTR", Phaser::DEFAULT.centre)
+        .units(Units::Hertz)
+        .means("the frequency it sweeps around"),
+    hex_param("Feedback", "feedback", "FDBK", Phaser::DEFAULT.feedback)
+        .means("how much goes round again, sharpening the notches into peaks"),
     Entry {
+        meaning: "how many all-passes: each four make two more notches",
         name: "Stages",
         key: "stages",
         label: Some("STGS"),
@@ -213,9 +221,13 @@ impl Phaser {
 /// A flanger's, in the order the page shows them.
 pub(crate) const FLANGER_PARAMS: [Entry; 6] = [
     sweep_param(Flanger::DEFAULT.rate),
-    hex_param("Depth", "depth", "DPTH", Flanger::DEFAULT.depth),
-    hex_param("Delay", "delay", "DLAY", Flanger::DEFAULT.delay).units(Units::FlangerDelay),
-    hex_param("Feedback", "feedback", "FDBK", Flanger::DEFAULT.feedback).centred(),
+    hex_param("Depth", "depth", "DPTH", Flanger::DEFAULT.depth).means("how far the delay sweeps"),
+    hex_param("Delay", "delay", "DLAY", Flanger::DEFAULT.delay)
+        .units(Units::FlangerDelay)
+        .means("how late the copy is at the middle of the sweep"),
+    hex_param("Feedback", "feedback", "FDBK", Flanger::DEFAULT.feedback)
+        .centred()
+        .means("how much goes round again: brighter turned up, hollower turned down"),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -274,6 +286,7 @@ pub const FAST_SPEED: u8 = 1;
 /// and the width; then the mix and gain.
 pub(crate) const ROTARY_PARAMS: [Entry; 8] = [
     Entry {
+        meaning: "spins the rotors fast; off, they spin slow",
         name: "Fast",
         key: "fast",
         label: Some("FAST"),
@@ -284,11 +297,16 @@ pub(crate) const ROTARY_PARAMS: [Entry; 8] = [
         default: Rotary::DEFAULT.fast,
         place: Place::Own,
     },
-    hex_param("Inertia", "inertia", "INRT", Rotary::DEFAULT.inertia),
-    hex_param("Doppler", "doppler", "DOPL", Rotary::DEFAULT.doppler),
-    hex_param("Tremolo", "tremolo", "TREM", Rotary::DEFAULT.tremolo),
-    hex_param("Drive", "drive", "DRIV", Rotary::DEFAULT.drive),
-    hex_param("Width", "width", "WDTH", Rotary::DEFAULT.width),
+    hex_param("Inertia", "inertia", "INRT", Rotary::DEFAULT.inertia)
+        .means("how long the rotors take to get to a new speed"),
+    hex_param("Doppler", "doppler", "DOPL", Rotary::DEFAULT.doppler)
+        .means("how far the horn's pitch wavers as it comes and goes"),
+    hex_param("Tremolo", "tremolo", "TREM", Rotary::DEFAULT.tremolo)
+        .means("how far the loudness swells as the rotors turn"),
+    hex_param("Drive", "drive", "DRIV", Rotary::DEFAULT.drive)
+        .means("how hard its amplifier is driven, from clean"),
+    hex_param("Width", "width", "WDTH", Rotary::DEFAULT.width)
+        .means("how far apart its microphones are heard, from mono"),
     Entry {
         default: 0xFF,
         ..MIX_PARAM
@@ -415,9 +433,13 @@ pub(crate) fn algorithm_blend(value: f32) -> (usize, usize, f32) {
 /// Warps', in the order the page shows them, as columns of two: the algorithm and its setting,
 /// the modulator and how hard it's driven, then the oscillator's pitch and waveform.
 pub(crate) const WARPS_PARAMS: [Entry; 8] = [
-    hex_param("Algo", "algo", "ALGO", Warps::DEFAULT.algorithm).units(Units::Algorithm),
-    hex_param("Timbre", "timbre", "TMBR", Warps::DEFAULT.timbre),
+    hex_param("Algo", "algo", "ALGO", Warps::DEFAULT.algorithm)
+        .units(Units::Algorithm)
+        .means("which way it crosses the sounds, blending from each into the next"),
+    hex_param("Timbre", "timbre", "TMBR", Warps::DEFAULT.timbre)
+        .means("what the algorithm does with it, as Warps' timbre knob"),
     Entry {
+        meaning: "the modulator: its own oscillator, or another track's sound",
         name: "Source",
         key: "source",
         // What it hears is part of how it's set up, so steps don't change it.
@@ -429,12 +451,15 @@ pub(crate) const WARPS_PARAMS: [Entry; 8] = [
         default: Warps::DEFAULT.source,
         place: Place::Own,
     },
-    hex_param("Level", "level", "LEVL", Warps::DEFAULT.level),
+    hex_param("Level", "level", "LEVL", Warps::DEFAULT.level)
+        .means("how hard the modulator is driven; it clips past about A0"),
     Entry {
         default: Warps::DEFAULT.pitch,
+        meaning: "the oscillator's pitch, in semitones from the track's note",
         ..PITCH_PARAMS[0]
     },
     Entry {
+        meaning: "the oscillator's wave",
         name: "Shape",
         key: "shape",
         label: Some("SHAP"),

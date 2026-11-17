@@ -43,6 +43,8 @@ struct Dump {
     view_numbers: HashMap<String, usize>,
     choices: Vec<String>,
     choice_numbers: HashMap<String, usize>,
+    /// The settings whose view says nothing of what they do, by control and name, once each.
+    silent: Vec<String>,
 }
 
 /// The number of a text among those seen, a new one for one not seen before.
@@ -80,6 +82,12 @@ impl Dump {
         let track = &song.tracks[0];
         let plain = view(control, track, song, false);
         let scaled = view(control, track, song, true);
+        if let Some(silent) = plain.as_ref().filter(|plain| plain.meaning.is_empty()) {
+            let named = format!("{control:?} {}", silent.name);
+            if !self.silent.contains(&named) {
+                self.silent.push(named);
+            }
+        }
         let mut line = format!("{tag} {control:?} = {}", self.seen(plain.clone()));
         if scaled != plain {
             let _ = write!(line, " scale {}", self.seen(scaled));
@@ -375,15 +383,33 @@ fn generated(
     Some((shape, generates))
 }
 
-#[test]
-fn every_settings_view_is_as_it_was() {
+/// Every setting on every page, as the dump goes through them.
+fn dumped() -> Dump {
     let mut dump = Dump::default();
     sound(&mut dump);
     effects(&mut dump);
     mods(&mut dump);
     macros_and_lanes(&mut dump);
     generators(&mut dump);
-    let text = dump.text();
+    dump
+}
+
+/// Every setting the Track page's pages reach says what it does, for the line that describes the
+/// one under the cursor (#969), so a new setting comes with its words.
+#[test]
+fn every_setting_on_the_pages_says_what_it_does() {
+    let silent = dumped().silent;
+    assert!(
+        silent.is_empty(),
+        "{} settings say nothing of what they do: {}",
+        silent.len(),
+        silent.join(", ")
+    );
+}
+
+#[test]
+fn every_settings_view_is_as_it_was() {
+    let text = dumped().text();
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/views.txt");
     if std::env::var_os("VT_BLESS").is_some() {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();

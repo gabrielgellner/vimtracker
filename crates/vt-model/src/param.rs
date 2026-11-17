@@ -406,6 +406,10 @@ pub struct Descriptor {
     pub why_not: Cow<'static, str>,
     /// Whether it has a bar beside its value.
     pub barred: bool,
+    /// What it does, in a few plain words starting in lower case, for the line that describes the
+    /// setting under the cursor ([`description`]). A `{}` in it stands for the value's text, where
+    /// the value reads better inside the words than before them.
+    pub meaning: Cow<'static, str>,
 }
 
 impl Descriptor {
@@ -428,6 +432,7 @@ impl Descriptor {
             reads: Reads::No,
             why_not: Cow::Borrowed(""),
             barred: false,
+            meaning: Cow::Borrowed(""),
         }
     }
 
@@ -576,6 +581,28 @@ impl Descriptor {
     }
 }
 
+/// The line that describes a setting at its value (#969): its name, what it does and what its
+/// value means now, in a sentence or two. `value` is its text as the status line says it, and
+/// `chosen` what a list's choice does, where it says. With a `{}` in its meaning the value goes
+/// there, `Rotate: shifts the pattern round by 3 steps`; a choice that says what it does follows
+/// what the setting does, `Filter type: which filter the sound goes through. Ladder: Saturating
+/// ladder`; and otherwise the value follows the name, `Res 50 %: how much the filter rings`.
+pub fn description(name: &str, value: &str, meaning: &str, chosen: &str) -> String {
+    let line = match (meaning.contains("{}"), chosen.is_empty()) {
+        (true, _) => format!("{name}: {}", meaning.replacen("{}", value, 1)),
+        (false, false) => format!(
+            "{name}: {}. {value}: {chosen}",
+            meaning.trim_end_matches('.')
+        ),
+        (false, true) if value.is_empty() => format!("{name}: {meaning}"),
+        (false, true) => format!("{name} {value}: {meaning}"),
+    };
+    match line.ends_with(['.', '!', '?']) {
+        true => line,
+        false => line + ".",
+    }
+}
+
 /// Where a number is in its bounds, on a bar's 0 to 255.
 pub fn share(number: i32, (low, high): (i32, i32)) -> u8 {
     let share = f64::from(number - low) / f64::from((high - low).max(1));
@@ -672,6 +699,27 @@ mod tests {
             Err("Group is a group from 1 to 4, or off".to_owned())
         );
         assert_eq!(whole.shown(3, None).cell, "3");
+    }
+
+    #[test]
+    fn a_description_says_the_value_where_it_reads_best() {
+        assert_eq!(
+            description("Res", "50 %", "how much the filter rings at its cutoff", ""),
+            "Res 50 %: how much the filter rings at its cutoff."
+        );
+        assert_eq!(
+            description("Rotate", "3", "shifts the pattern round by {} steps", ""),
+            "Rotate: shifts the pattern round by 3 steps."
+        );
+        assert_eq!(
+            description(
+                "Filter",
+                "Ladder",
+                "which filter the sound goes through",
+                "Saturating ladder"
+            ),
+            "Filter: which filter the sound goes through. Ladder: Saturating ladder."
+        );
     }
 
     #[test]

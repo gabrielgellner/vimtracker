@@ -29,6 +29,11 @@ impl GenParam {
         self.spec().name
     }
 
+    /// What it does, for the line that describes it ([`GenParamSpec::meaning`]).
+    pub const fn meaning(self) -> &'static str {
+        self.spec().meaning
+    }
+
     /// How its values read.
     pub const fn reading(self) -> Reading {
         self.spec().units
@@ -625,7 +630,8 @@ impl GenParam {
     /// from its row's [`Stepping`], a list's choices, which go round, and how it's typed. A value
     /// with bounds has a bar, unless it's a list; a bend and an interval draw it from the middle.
     /// Nothing puts a generator's setting back to a default of its own, so its default is where
-    /// it is. Its text is the setting's to say, by the shape ([`GenParam::shown`]).
+    /// it is. Its text is the setting's to say, by the shape ([`GenParam::shown`]). A list's choices
+    /// say what they do where they do, as the shape panel's `K` says it.
     pub fn described(self, shape: &Shape, context: &Context) -> Descriptor {
         let spec = self.spec();
         let value = self.value(shape, context);
@@ -648,13 +654,16 @@ impl GenParam {
             choices: choices
                 .unwrap_or_default()
                 .into_iter()
-                .map(|choice| ParamChoice::named(choice.name()))
+                .map(|choice| {
+                    ParamChoice::named(choice.name()).meaning(choice.description().unwrap_or(""))
+                })
                 .collect(),
             typing: self.typing(context.column),
             reads: Reads::No,
             barred: spec.units != Reading::Listed
                 && bounds.is_some()
                 && self.number(shape, context).is_some(),
+            meaning: std::borrow::Cow::Borrowed(spec.meaning),
             ..Descriptor::whole(spec.key, spec.name, (0, 0), 0)
         }
     }
