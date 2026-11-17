@@ -585,13 +585,13 @@ type has it:
 | `EREL2` | An envelope's release | the same times |
 | `BODY2` | A drum's body | `00` none to `64` all |
 | `CLR2` | A gate's colour | `00` none to `FF`, in `Cut`'s steps |
-| `RATE4` | An LFO's or Steps' rate | faster up the scale, in its kind of rate |
+| `RATE4` | An LFO's or Steps' rate | faster up the scale |
 | `LEN3` | Steps' length | `00` one step to `0F` sixteen |
 | `MUT3` | Steps' mutate | `00` none to `64` every value |
-| `SMTH3` | Steps' smooth | `80` steps, above it glides, below it plucks |
+| `SMTH3` | Steps' smooth | `80` steps, up glides |
 | `JMP3` | Steps' jump | `00` none to `64` every step |
-| `SPR3` | Steps' spread | `00` the bias alone, `32` even, `64` the ends |
-| `BIAS3` | Steps' bias | `80` none, below low, above high |
+| `SPR3` | Steps' spread | `32` even, `64` the ends |
+| `BIAS3` | Steps' bias | `80` none, up high |
 
 An envelope's are `E` before Elektron's names, as `4-op`'s operators have `ATK1` to
 `REL4` of their own. A lock on a note's row is that note's from its first frame: `EDEC1

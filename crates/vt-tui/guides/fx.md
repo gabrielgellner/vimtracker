@@ -85,8 +85,8 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `HOLD2` | An AHD's hold: `00` none, up to 2 s at `FE`, and the note at `FF` |
 | `PEAK2` | A drum envelope's peak, on its times' scale, as a macro turns it |
 | `RTCH2` | A drum envelope's strikes: `00` one, `07` eight |
-| `EATK2` | An envelope's attack: `00` none, `01` 1 ms to `FF` 8 s. `EATK1` too |
-| `EDEC2` | An envelope's decay, on the same times. `EDEC1` the notes' own |
+| `EATK2` | An envelope's attack: `00` none, `01` 1 ms to `FF` 8 s. `EATK1` `EATK3` too |
+| `EDEC2` | An envelope's decay, on the same times. `EDEC1` the notes', `EDEC3` too |
 | `ESUS2` | An envelope's sustain: `00` none, `64` all. `ESUS1` `ESUS3` too |
 | `EREL2` | An envelope's release, on the same times. `EREL1` `EREL3` too |
 | `BODY2` | A drum envelope's body: `00` none, `64` all |
