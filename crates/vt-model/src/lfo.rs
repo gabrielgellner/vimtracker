@@ -392,7 +392,7 @@ impl Shape {
     }
 
     /// The name on screen.
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Sine => "Sine",
             Self::Tri => "Tri",
@@ -517,7 +517,7 @@ impl LfoMode {
     pub const ALL: [Self; 5] = [Self::Free, Self::Trig, Self::Hold, Self::One, Self::Half];
 
     /// The name in the title.
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Free => "Free",
             Self::Trig => "Trig",

@@ -112,8 +112,8 @@ pub enum Owner {
     Sampler,
     /// One of the track's eight macros, by its place.
     Macro(usize),
-    /// One of a mod slot's type's own settings, by the slot's place, which only macros and
-    /// modulation move.
+    /// One of a mod slot's type's own settings, by the slot's place, which macros and modulation
+    /// move, and steps lock where it's labelled.
     ModOwn(usize),
     /// The accumulator's and the arpeggio's, which only macros and modulation move.
     Accumulation,
@@ -460,7 +460,7 @@ impl SettingId {
         let label = self.entry().label?;
         Some(match self.owner().0 {
             Owner::Slot { slot, .. } | Owner::Bypass(slot) => format!("{}{label}", slot + 1),
-            Owner::Mod(slot) | Owner::Macro(slot) | Owner::Lane(slot) => {
+            Owner::Mod(slot) | Owner::ModOwn(slot) | Owner::Macro(slot) | Owner::Lane(slot) => {
                 format!("{label}{}", slot + 1)
             }
             _ => label.to_owned(),

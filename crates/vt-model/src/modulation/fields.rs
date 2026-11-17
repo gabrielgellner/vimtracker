@@ -77,8 +77,10 @@ pub enum ModField {
 }
 
 /// A slot's type's own settings that macros and modulation move, in the registry's order
-/// ([`SettingId::mod_own`]): an ADSR's, an AHD's and an LPG's `Attack` are one. This is the only
-/// place that order is written; the registry's entries follow it.
+/// ([`SettingId::mod_own`]): an ADSR's, an AHD's and an LPG's `Attack` are one. A mode is three,
+/// an envelope's curve, an LFO's mode and Steps' mode, as each is a list of its own
+/// ([`ModField::own`]). This is the only place that order is written; the registry's entries
+/// follow it.
 pub const MOD_OWN_FIELDS: [ModField; MOD_OWN_SETTINGS] = [
     ModField::Attack,
     ModField::Decay,
@@ -91,7 +93,21 @@ pub const MOD_OWN_FIELDS: [ModField; MOD_OWN_SETTINGS] = [
     ModField::Smooth,
     ModField::Rate,
     ModField::Jump,
+    ModField::Shape,
+    ModField::Loop,
+    ModField::Mode,
+    ModField::Mode,
+    ModField::Mode,
+    ModField::Hold,
+    ModField::Peak,
+    ModField::Fade,
+    ModField::Ratchet,
 ];
+
+/// Where an envelope's curve, an LFO's mode and Steps' mode are among [`MOD_OWN_FIELDS`].
+const CURVE_OWN: usize = 13;
+const LFO_MODE_OWN: usize = 14;
+const STEPS_MODE_OWN: usize = 15;
 
 /// A slot's settings that steps can lock, whatever its type, in the registry's order
 /// ([`SettingId::modulator`]).
@@ -201,9 +217,16 @@ impl ModField {
     }
 
     /// Its place among a slot's type's own settings in the registry, if macros and modulation
-    /// move it: an index of [`MOD_OWN_FIELDS`].
-    pub fn own(self) -> Option<usize> {
-        MOD_OWN_FIELDS.iter().position(|field| *field == self)
+    /// move it, under a slot's type: an index of [`MOD_OWN_FIELDS`]. A mode is its type's own, an
+    /// envelope's curve, an LFO's mode or Steps' mode; Track's source and a gate have none.
+    pub fn own(self, kind: ModKind) -> Option<usize> {
+        match (self, kind) {
+            (Self::Mode, ModKind::Adsr | ModKind::Ahd | ModKind::Drum) => Some(CURVE_OWN),
+            (Self::Mode, ModKind::Lfo) => Some(LFO_MODE_OWN),
+            (Self::Mode, ModKind::Steps) => Some(STEPS_MODE_OWN),
+            (Self::Mode, _) => None,
+            (field, _) => MOD_OWN_FIELDS.iter().position(|own| *own == field),
+        }
     }
 
     /// Its place among a slot's settings that steps can lock, if it's one: an index of
@@ -213,9 +236,10 @@ impl ModField {
     }
 
     /// The registry's setting for it on a slot, if it has one, whose entry describes it on the
-    /// `00` to `FF` scale. A type's own is on the slot only while its type has it.
-    pub fn setting(self, slot: usize) -> Option<SettingId> {
-        match (self.locked(), self.own()) {
+    /// `00` to `FF` scale, under the slot's type. A type's own is on the slot only while its type
+    /// has it.
+    pub fn setting(self, slot: usize, kind: ModKind) -> Option<SettingId> {
+        match (self.locked(), self.own(kind)) {
             (Some(at), _) => SettingId::modulator(slot, at),
             (None, Some(at)) => SettingId::mod_own(slot, at),
             (None, None) => None,

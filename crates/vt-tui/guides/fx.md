@@ -72,6 +72,15 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `DFM4` | An LFO's deform, or its chaos: `80` is none. `DFM5` `DFM6` too |
 | `POL4` | Mod 4's polarity: `00` one way, `01` both. `POL5` `POL6` too |
 | `POL2` | An envelope's polarity. `POL3` too, but not the notes' shape |
+| `SHP4` | An LFO's shape: `00` Sine, `01` Tri, `04` Square. `SHP5` `SHP6` too |
+| `LMOD4` | An LFO's mode: `00` Free, `01` Trig, `02` Hold. `LMOD5` `LMOD6` too |
+| `FADE4` | An LFO's fade: `16` Off, below out, above in. `FADE5` `FADE6` too |
+| `SMOD3` | A Steps slot's mode: `00` Trig, `01` Free, `02` Note |
+| `LOOP3` | A Steps slot's loop: `00` Once, `01` from 1, `11` Bounce, `12` Shuffle |
+| `CRV2` | An envelope's curve: `00` Exp, `01` Lin, `02` Snap. `CRV1` `CRV3` too |
+| `HOLD2` | An AHD's hold: `00` none, up to 2 s at `FE`, and the note at `FF` |
+| `PEAK2` | A drum envelope's peak, on its times' scale, as a macro turns it |
+| `RTCH2` | A drum envelope's strikes: `00` one, `07` eight |
 | `MAC1` | Macro 1, and every setting it turns, each along its range |
 | `MAC2` | Macro 2. `MAC3` `MAC4` `MAC5` `MAC6` `MAC7` `MAC8` the others |
 | `LLEN1` | FX 1's lanes' length, rows up or down: `80` is none. `LLEN2` `LLEN3` too |
@@ -81,6 +90,14 @@ Each voice has its own settings, and the track keeps every voice's values, so
 changing voice and back loses nothing. A lock for a voice the track isn't
 playing, or an effect no longer in its slot, is drawn faint and does nothing
 until its voice or effect is back.
+
+A mod slot's lists, its shape, mode, loop or curve, and its odd times, an AHD's
+hold, a drum's peak and strikes and an LFO's fade, end in the slot's number, as
+`SHP4` is Mod 4's shape, and `K` lists each under its slot while the slot's type
+has it. A lock on another type, as `SHP4` once Mod 4 is an envelope, is drawn
+faint and does nothing. Each is heard from its row to the track's next note, as
+any lock is, and a swapped wave or mode carries on from where the slot is: see
+the Mod page's guide.
 
 `LDLT` is for lanes. A note's length is its row's own, in its gate cell, or the
 track's `Gate`, and `LDLT` adds to it as the note starts, as an LFO adds to what

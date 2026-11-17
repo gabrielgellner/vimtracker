@@ -896,7 +896,10 @@ mod tests {
     fn deja_vu() -> (MacroMap, MacroMap) {
         use crate::modulation::ModField;
         let own = |field: ModField| {
-            MacroTarget::Setting(SettingId::mod_own(0, field.own().unwrap()).unwrap())
+            MacroTarget::Setting(
+                SettingId::mod_own(0, field.own(crate::modulation::ModKind::Steps).unwrap())
+                    .unwrap(),
+            )
         };
         let mutate = MacroMap::whole(own(ModField::Mutate));
         let mutate = MacroMap {
