@@ -89,7 +89,7 @@ plays, `Acid`'s `Wave`, `Supersaw`'s `Stack`, 6-op's `Patch`, and the chord of `
 and `Chip`. Other synths have none. `K` lists whatever's under the cursor in a title, as
 on a setting, and `g d` on the sample opens the sample page, as `g d` on a setting a macro
 holds goes to the macro (see **Macros** in **The Gen page, macros and presets**).
-Each machine places its own settings: most go down the columns in order, the sampler has `Slice` and `Play` in
+Each machine places its own settings: most go down the columns in order, the sampler has `Slice`, `Play` and `Reverse` in
 one column, `Start` and `Length` in the next, and its sample's own `Tune` and `Cents`
 in the third, which tune the sample rather than the track (see **Tuning a sample** in
 **Sounds, samples and kits**), `Acid`'s are in pairs as a
@@ -110,7 +110,8 @@ keeping the column, and pass the Output's and Play's titles by, as there's nothi
 in them. `{` and `}` keep the row and column: from `Cut`, `}` goes to `Trim` and
 `2}` to `Pitch`. The device with the cursor has the brighter frame. A sampler's
 Machine shows the slice it plays in a box on its right, with a teal line where `Start`
-puts a note's start and a red one where `Length` ends it.
+puts a note's start and a red one where `Length` ends it, so with `Reverse` on the teal
+line is the later one.
 
 The Output's box is a meter of the track right after `Trim`, before the filter, so
 `Trim` can be set by eye: `L` and `R` bars from -60 dB to +6 dB, each side's peak,
@@ -350,6 +351,17 @@ moves around it, and on the Roto it's on the Play device's second page after
 `Row`, or each of a row's pulses and ratchet hits on its own, `Pulse`, as the
 Metropolix's probability can; it's where held `CTGT` starts.
 See **Moving every chance** in **FX commands**.
+
+`Dice`, `Mutate` and `Dice jump`, after `Target` in the Play device's title, are
+the track's dice loop, as Marbles' Déjà vu and Length are. `Dice`, the loop's
+length, is `Off`, or 1 to 16 steps, then 32 or 64: with it on, the `CHA`s and
+`RND`s of each step roll the dice of a place in a loop of that many steps,
+rather than fresh ones. `Mutate` is the chance a place rolls afresh as it comes
+round, from `0 %`, a locked loop, to `100 %`, fresh dice every step, and
+`Dice jump` the chance a step takes the dice of another place, so a locked loop
+plays out of order. They're where held `DLP`, `DMU` and `DJMP` start, a macro or
+an LFO moves them, and the Roto has them on the Play device's third page. See
+**Looping the dice** in **FX commands**.
 
 `Phase`, in a fourth column of a synth's Play device, is whether its oscillators run
 on from note to note or start again on each. A synth that holds its notes plays the

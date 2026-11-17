@@ -104,7 +104,10 @@ fn app() -> (App, Realtime) {
     let samples = Arc::new(pool);
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, realtime) = connect(Engine::new(RATE, version));
-    (App::new(song, None, samples, handle, RATE), realtime)
+    (
+        crate::common::new_app(song, None, samples, handle, RATE),
+        realtime,
+    )
 }
 
 /// Press keys by their names, as the binding table writes them.
@@ -944,7 +947,7 @@ fn a_track_with_no_sample_says_so() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(RATE, version));
-    let mut app = App::new(song, None, samples, handle, RATE);
+    let mut app = crate::common::new_app(song, None, samples, handle, RATE);
     keys(&mut app, "Space 0 l");
     assert_eq!(app.modes.view, View::Sample);
     assert!(
@@ -971,7 +974,7 @@ fn k_on_a_track_with_no_sample_lists_the_bank_to_choose_one() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(RATE, version));
-    let mut app = App::new(song, None, samples, handle, RATE);
+    let mut app = crate::common::new_app(song, None, samples, handle, RATE);
     keys(&mut app, "Space 0");
     assert!(
         app.services.status.contains("plays no sample"),
@@ -2423,7 +2426,7 @@ fn semicolon_and_space_c_are_heard_from_a_file_loaded_at_another_rate() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, mut realtime) = connect(Engine::new(RATE, version));
-    let mut app = App::new(song, None, samples, handle, RATE);
+    let mut app = crate::common::new_app(song, None, samples, handle, RATE);
     command(&mut app, &format!("sample {}", file.display()));
     // The page shows it once it's analysed, on a thread of its own.
     app.services.finish_analysis();

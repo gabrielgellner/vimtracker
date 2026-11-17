@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{FX_SLOTS, UNITY_LEVEL};
+use crate::dice::MOST_DICE_LOOP;
 use crate::generator::Generator;
 use crate::insert::INSERTS;
 use crate::lfo::phase_value;
@@ -677,6 +678,9 @@ impl Track {
             SettingId::CHANCE_DELTA => self.chance_delta,
             SettingId::CHANCE_TARGET => self.chance_target,
             SettingId::CUE => self.cue,
+            SettingId::DICE_LOOP => self.dice_loop,
+            SettingId::DICE_MUTATE => self.dice_mutate,
+            SettingId::DICE_JUMP => self.dice_jump,
             SettingId::FILTER_MODE => self.filter_mode.index(),
             SettingId::GATE_LENGTH => self.gate_length(),
             SettingId::GROOVE => self
@@ -806,6 +810,9 @@ impl Track {
                     SettingId::CHANCE_DELTA => self.chance_delta = coarse,
                     SettingId::CHANCE_TARGET => self.chance_target = coarse.min(1),
                     SettingId::CUE => self.cue = coarse.min(1),
+                    SettingId::DICE_LOOP => self.dice_loop = coarse.min(MOST_DICE_LOOP),
+                    SettingId::DICE_MUTATE => self.dice_mutate = coarse,
+                    SettingId::DICE_JUMP => self.dice_jump = coarse,
                     SettingId::FILTER_MODE => {
                         self.filter_mode =
                             FilterMode::ALL[usize::from(coarse).min(FilterMode::ALL.len() - 1)];

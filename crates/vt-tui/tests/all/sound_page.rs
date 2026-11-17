@@ -109,7 +109,10 @@ fn the_four_devices_fill_the_page_and_the_keys_box_at_163_by_42() {
             assert_eq!(found[0].1, title, "{machine:?}");
             assert_eq!(found[1].1, "Filter  LP  12 dB");
             assert_eq!(found[2].1, "Output");
-            assert_eq!(found[3].1, "Play  Jump 00  Chance 80  Row");
+            assert_eq!(
+                found[3].1,
+                "Play  Jump 00  Chance 80  Row  Dice Off  Mutate 00  Dice jump 00"
+            );
             let bottom = top + 35;
             let line = lines[bottom].trim_start_matches(frame);
             assert!(line.starts_with('╰'), "{machine:?} {mode:?}: {lines:#?}");
@@ -475,7 +478,7 @@ fn the_output_meter_reads_the_cursors_track_after_its_trim_as_it_plays() {
         let samples = Arc::new(SamplePool::default());
         let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
         let (handle, mut realtime) = connect(Engine::new(48_000, version));
-        let mut app = App::new(song, None, samples, handle, 48_000);
+        let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
         press(&mut app, " 5");
         app.services
             .handle
@@ -523,7 +526,7 @@ fn the_filter_curve_under_an_lfo_on_cut_is_sent_at_most_every_other_frame() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, mut realtime) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     press(&mut app, " 5");
     app.services
         .handle
@@ -766,7 +769,7 @@ fn ramp_song(rows: &[&str]) -> (Song, Arc<SamplePool>) {
 fn on_sound_page(song: Song, samples: Arc<SamplePool>) -> (App, Realtime) {
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, realtime) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     press(&mut app, " 5");
     (app, realtime)
 }
@@ -873,6 +876,32 @@ fn a_note_plays_relative_to_the_tune_the_sound_page_gives_its_sample() {
 
 /// The track's `Jump` is in the Play device's title: turned, described and mapped to a macro as
 /// any setting is (decision 391).
+#[test]
+fn the_play_devices_title_has_the_tracks_dice_loop_after_its_chance() {
+    use vt_model::action::TrackControl;
+    let (mut app, _realtime) = playing(Machine::Plaits(SynthVoice::Acid));
+    // `Jump` and `Chance` have fine digits, which `l` goes onto first, and `Target` is next.
+    press(&mut app, "3}lllll");
+    assert_eq!(app.track_control(), Control::Base(TrackControl::DiceLoop));
+    press(&mut app, "====");
+    assert_eq!(app.song().tracks[0].dice_loop, 4);
+    press(&mut app, " d");
+    let said = vt_tui::screen::describe::text(&app).expect("a line");
+    assert!(said.contains("dice"), "{said}");
+    press(&mut app, " d");
+    press(&mut app, "l");
+    assert_eq!(app.track_control(), Control::Base(TrackControl::DiceMutate));
+    press(&mut app, "=");
+    assert_eq!(app.song().tracks[0].dice_mutate, 1);
+    press(&mut app, "ll");
+    assert_eq!(app.track_control(), Control::Base(TrackControl::DiceJump));
+    press(&mut app, "M1");
+    let held = app.song().tracks[0]
+        .macro_holding(vt_model::macros::MacroTarget::Setting(SettingId::DICE_JUMP))
+        .map(|(at, _)| at);
+    assert_eq!(held, Some(0));
+}
+
 #[test]
 fn the_play_devices_title_has_the_tracks_jump() {
     let (mut app, _realtime) = playing(Machine::Plaits(SynthVoice::Acid));

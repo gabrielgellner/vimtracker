@@ -173,7 +173,7 @@ const SAMPLER: DeviceLayout = live(
             s("sample"),
             s("slice"),
             s("play"),
-            GAP,
+            s("reverse"),
             s("start"),
             s("length"),
             s("tune"),
@@ -780,7 +780,8 @@ const MASTER_OUTPUT: DeviceLayout = stored(
 /// its rows' nudges play, `Quantise`, past eight knobs, is on a second page, a live timing knob,
 /// with how its notes join, `Mode`, which of them glide, `Glide mode`, how often its steps
 /// jump to any row, `Jump`, how far its rows' chances to play are moved, `Chance`, and whether
-/// they decide rows or pulses, `Target`.
+/// they decide rows or pulses, `Target`,
+/// and its dice loop on a page of its own, `Dice`.
 const PLAY: DeviceLayout = live(
     "play",
     &[
@@ -798,6 +799,23 @@ const PLAY: DeviceLayout = live(
                 __,
             ],
         ),
+        DICE_PAGE,
+    ],
+);
+
+/// The Play device's third page, the track's dice loop: how many steps' dice repeat, how often
+/// they roll again and how often a step takes another's (decisions 410 and 411).
+const DICE_PAGE: Page<Setting> = knobs(
+    "Dice",
+    [
+        s("diceloop"),
+        s("dicemutate"),
+        s("dicejump"),
+        __,
+        __,
+        __,
+        __,
+        __,
     ],
 );
 
@@ -817,7 +835,8 @@ const PLAY_PAGE: Page<Setting> = knobs(
 );
 
 /// A synth's: the sampler's, with whether its oscillators start again on each note between
-/// `Quantise` and `Mode`, and `Glide mode`, `Jump`, `Chance` and `Target` after.
+/// `Quantise` and `Mode`, and `Glide mode`, `Jump`, `Chance` and `Target` after,
+/// and the dice loop's page.
 const SYNTH_PLAY: DeviceLayout = live(
     "synthplay",
     &[
@@ -835,6 +854,7 @@ const SYNTH_PLAY: DeviceLayout = live(
                 __,
             ],
         ),
+        DICE_PAGE,
     ],
 );
 

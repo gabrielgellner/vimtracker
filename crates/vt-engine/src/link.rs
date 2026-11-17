@@ -830,6 +830,46 @@ mod tests {
         assert_eq!(violations, 0);
     }
 
+    /// Each track's dice loop turned every block, its length through every choice and past them,
+    /// its mutate and jump with it, over rows that roll `CHA` and `RND` and lock `DLP` and `DJMP`,
+    /// so its ring fills, drifts and jumps as it plays (decisions 410 and 411).
+    #[test]
+    fn the_dice_loop_moving_every_block_never_allocates_in_the_callback() {
+        let rows = [
+            "C-3 -- cha:80 rnd:F3 ---",
+            "D-3 -- rnd:F7 diceloop:04 ---",
+            "E-3 -- cha:40 dicejump:C0 ---",
+            "--- -- --- --- ---",
+        ];
+        let dice = || {
+            let mut song = song(8, 16);
+            for track in song.tracks.iter_mut().take(8) {
+                let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+                for step in 0..16 {
+                    *phrase.step_mut(step).unwrap() = rows[step % rows.len()].parse().unwrap();
+                }
+            }
+            song
+        };
+        let pool = samples();
+        let engine = Engine::new(48_000, published(dice(), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 0..200 {
+            let mut next = dice();
+            for (at, track) in next.tracks.iter_mut().take(8).enumerate() {
+                track.dice_loop = ((round + at) % 24) as u8;
+                track.dice_mutate = ((round * 37 + at * 11) % 256) as u8;
+                track.dice_jump = ((round * 53 + at * 7) % 256) as u8;
+            }
+            handle.publish(published(next, &pool));
+            violations += blocks(&mut rt, 1);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
     /// Tracks in `Legato`, tying and striking, on synths and samples alike (decision 380).
     #[test]
     fn legato_never_allocates_in_the_callback() {
@@ -927,6 +967,50 @@ mod tests {
             }
         }
         let engine = Engine::new(48_000, published(locking, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        assert_eq!(blocks(&mut rt, 200), 0);
+    }
+
+    /// Sampler tracks whose steps turn their notes round every other row, through each play mode
+    /// and cut, on through included, with an LFO on `SREV` and a macro holding it
+    /// (decision 412).
+    #[test]
+    fn turning_a_samplers_notes_round_never_allocates_in_the_callback() {
+        use vt_model::macros::{MacroMap, MacroTarget};
+        use vt_model::settings::SettingId;
+        let pool = samples();
+        let mut turning = song(8, 16);
+        for (index, track) in turning.tracks.iter_mut().take(8).enumerate() {
+            track.mods[3] = vt_model::modulation::ModSlot::lfo(
+                Some(SettingId::SAMPLE_REVERSE),
+                vt_model::lfo::Lfo::default(),
+            )
+            .with_depth(0xFF);
+            if index % 2 == 0 {
+                track.macros[0].maps = vec![MacroMap {
+                    target: MacroTarget::Setting(SettingId::SAMPLE_REVERSE),
+                    min: 0,
+                    max: 0x0100,
+                    curve: 0,
+                    s: 0,
+                    zone: Default::default(),
+                    member: None,
+                }];
+                track.macros[0].value = 0xFF00;
+            }
+            let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+            for step in 0..16 {
+                let text = format!(
+                    "C-3 64 sampler.reverse:{:02X} sampler.play:{:02X} sampler.start:{:02X}",
+                    (step + index) % 2,
+                    step % 5,
+                    step * 8,
+                );
+                *phrase.step_mut(step).unwrap() = text.parse().unwrap();
+            }
+        }
+        let engine = Engine::new(48_000, published(turning, &pool));
         let (mut handle, mut rt) = connect(engine);
         assert!(handle.send(Command::PlayFrom { step: 0 }));
         assert_eq!(blocks(&mut rt, 200), 0);

@@ -51,7 +51,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `PNCH` | A voice's setting, by its own label, like Punch on `Kick` |
 | `ACC` | A voice's Accent, how hard it's struck |
 | `SMP` | A sampler's sample, by its number in the bank. `00` is none |
-| `SLI` | A sampler's slice. `STA`, `SLEN` and `PLY` too |
+| `SLI` | A sampler's slice. `STA`, `SLEN`, `PLY` and `SREV` too |
 | `2FDBK` | A slot's setting, by the slot's digit and its label, below |
 | `PTCH` | Pitch: `80` as played, a semitone a step, cents in the fine part |
 | `LEN` | Gate, for rows with no length of their own. `80` is half |
@@ -61,6 +61,9 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `RATE` | The step's speed: `00` 1/32, `02` 1/16, `04` 1/8, `06` 1/4 |
 | `QNT` | Nudges brought to the grid: `00` none, `80` half, `FF` all |
 | `JMP` | The chance this step plays any row of the phrase: `00` none, `FF` every |
+| `DLP` | Dice loop: `00` off, `01` to `10` steps, `11` 32, `12` 64 |
+| `DMU` | Dice mutate: `00` a locked loop, `FF` fresh dice |
+| `DJMP` | Dice jump: the chance of another step's dice in the loop |
 | `ORD` | The order, places on in the list from the phrase's own: `80` its own |
 | `REV` | The walk the other way up, `01`, or as written, `00` |
 | `ORDX` | The order's first number: `00` the phrase's own, `01` to `10` |
@@ -164,7 +167,7 @@ title: a change while a sound plays fades through, so it doesn't click (see **Th
 page and its effects**). The `Type` of a `Comp`, the `Mode` of an `LPG` or `Comb` and
 a `Source` aren't set from a step.
 
-`ACC`, `SMP`, `SLI`, `STA`, `SLEN` and `PLY` are in **Sounds, samples and kits**.
+`ACC`, `SMP`, `SLI`, `STA`, `SLEN`, `PLY` and `SREV` are in **Sounds, samples and kits**.
 `LEV`, `VOL`, `SNA` and `SNB` are on the level scale in **Phrases and chains**.
 The others start from the values on the track page, `Space 5`, each time playback
 starts from the top. An LFO on that page keeps moving a value around wherever
@@ -233,7 +236,7 @@ These have no mark.
 | `DEL` | Delay this step by `xx` units |
 | `KIL` | Cut the note after `xx` units |
 | `OFF` | Start the envelopes' release after `xx` units |
-| `RET` | Retrigger: `xy` repeats every `y` units, and `y` of `0` does nothing |
+| `RET` | Retrigger every `y` units, `x` fading or swelling each: see below |
 | `CHA` | Play the note with a chance of `xx` out of `FF` |
 | `CND` | Play the row only when condition `xx` holds: see **Conditions** |
 | `ACU` | Move the row's note on each time it plays: see **Accumulators** |
@@ -245,8 +248,12 @@ track's own, so on a track at `1/8` it's half an eighth. They count from where
 the note starts, after the groove and the row's nudge, and so does `CHA`, which
 goes with the note whichever column it's in.
 
-For `RET`, `x` from `0` to `7` gets quieter on each repeat and `8` to `F`
-gets louder, except on an `Acid`, whose hits all play at the note's own level.
+A `RET` with `y` of `0` doesn't retrigger. Its `x` is its fade or swell: `0`
+keeps every repeat at the note's level; `1` to `7` fade, each repeat `0.9` down
+to `0.3` times as loud as the one before; and `8` to `F` swell, each `1.1` up to
+`1.8` times as loud, never past full. So `x` builds on itself from hit to hit,
+an even step in dB. It moves the level of each hit, not its velocity, and an
+`Acid` ignores it: its hits all play at the note's own level.
 Use `:seed 3A9F12C4` to choose which results `CHA` and `RND` give, or `:seed` alone
 for a new one at random, as one undo step. The seed is hex, as the project page
 shows it, in either case, so `:seed 42` is `0x42`.
@@ -513,6 +520,33 @@ vary as written ones do. While playing, the row under the playhead shows the
 note heard, and the status line says it on the Note column. `Space g A` in
 the phrase view writes the notes as last heard into the phrase, or the
 selection, and takes their `RND`s out, so the pass you liked stays.
+
+### Looping the dice
+
+A track's dice can go round in a loop, as Marbles' Déjà vu does: with its
+`Dice loop` on, in the title of the Sound page's Play device, each step's `CHA`s
+and `RND`s, and the rows `CDLT` thins, roll the dice of a place in a loop of that many steps rather than
+fresh ones, so a run of chances you like comes round again. It's `Off`, as
+every track starts, then 1 to 16 steps, as Marbles' `Length` goes, then 32 and
+64 for two and four bars of sixteenths. The places keep to the track's own count
+of steps, so a loop of 16 keeps to the bar, and the loop is the track's, kept
+across its notes, phrases and chains.
+
+`Dice mutate` is the chance a place rolls afresh as it comes round: `00` locks
+the loop, so the same steps play and the same notes vary the same way every
+time round, `FF` rolls fresh dice every step, as with no loop, and between them
+the loop slowly changes. `Dice jump` is the chance a step takes the dice of any
+place of the loop instead of its own, so a locked loop plays the same dice out
+of order, as Marbles' knob does past noon. A Steps slot's `Mutate` and `Jump` do
+the same for its values, so one macro over both, zoned, is the whole of Déjà vu
+for a track's events and values. See **Steps** in **The Mod page**.
+
+The loop fills from the steps that play once playing starts, so playing from
+the top again, or from any step, fills it afresh. Everything it rolls comes from
+the `:seed`, the track and the step, so a render repeats. `DLP`, `DMU` and
+`DJMP` on a row set them for the step that plays it, read before it lands, as
+`JMP` is, and a lane, a mod slot or a macro moves them too. With `Dice mutate`
+at `FF` an `RND` rolls just as it does with the loop off.
 
 ## Groove
 

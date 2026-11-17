@@ -216,7 +216,7 @@ impl Engine {
                     playable.sample,
                     Some(number),
                     slice,
-                    Some(playable.span(slice, cut.mode == PlayMode::Thru)),
+                    Some(playable.span(slice, cut.mode == PlayMode::Thru, cut.turned)),
                     cut,
                     None,
                 )

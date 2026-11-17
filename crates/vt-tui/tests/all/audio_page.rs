@@ -238,7 +238,7 @@ fn the_scope_sends_a_picture_only_when_it_changes_and_draws_above_the_meter() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, mut realtime) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     let mut graphics = Graphics::new();
     let sync = |app: &mut App, graphics: &mut Graphics| {
         let mut out = Vec::new();

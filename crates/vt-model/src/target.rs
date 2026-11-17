@@ -31,7 +31,7 @@ const TRACK_MEANINGS: [&str; 16] = [
 
 /// The track's own settings in the order lists show them: the filter, then output, then pitch,
 /// velocity, gate, time and glide.
-const TRACK_ORDER: [SettingId; 36] = [
+const TRACK_ORDER: [SettingId; 39] = [
     SettingId::CUT,
     SettingId::RES,
     SettingId::FILTER_TYPE,
@@ -57,6 +57,9 @@ const TRACK_ORDER: [SettingId; 36] = [
     SettingId::JUMP,
     SettingId::CHANCE_DELTA,
     SettingId::CHANCE_TARGET,
+    SettingId::DICE_LOOP,
+    SettingId::DICE_MUTATE,
+    SettingId::DICE_JUMP,
     SettingId::ORDER,
     SettingId::REVERSE,
     SettingId::ORDER_X,
@@ -221,9 +224,10 @@ impl SettingId {
             (Owner::Sampler, 1) => "Which of the sample's slices plays".to_owned(),
             (Owner::Sampler, 2) => "Where in the slice a note starts".to_owned(),
             (Owner::Sampler, 3) => "How much of the slice a note plays".to_owned(),
-            (Owner::Sampler, _) => {
+            (Owner::Sampler, 4) => {
                 "Once through, round its loop, ping-pong, or on through the slices after".to_owned()
             }
+            (Owner::Sampler, _) => "Play the slice the other way from the sample's own".to_owned(),
         }
     }
 

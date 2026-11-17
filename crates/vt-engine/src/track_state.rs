@@ -1,6 +1,7 @@
 //! Fixed-size per-track playback state, made ahead of time so the callback never allocates.
 
 use vt_model::constants::{FX_SLOTS, UNITY_LEVEL};
+use vt_model::dice::{DiceLoop, DiceSettings};
 use vt_model::insert::{EffectKind, INSERTS, Insert, MAX_KEPT_PARAMS};
 use vt_model::macros::MACROS;
 use vt_model::modulation::MOD_SLOTS;
@@ -98,6 +99,8 @@ pub(crate) struct TrackState {
     /// which the pass keeps; none until a pass takes one, and after its chain starts again
     /// (decision 402).
     pub(crate) window: Option<(u8, u8)>,
+    /// Its dice loop: the step whose dice each place holds, filled as it plays (decision 410).
+    pub(crate) dice: DiceLoop,
     /// The rolls a `Random` accumulator takes, apart from `rng` so `CHA` rolls as it did.
     pub accumulator_rng: Pcg32,
     /// What's added to the count for each FX column's lane, so a lane changed while playing stays
@@ -361,6 +364,7 @@ impl TrackState {
             jump: None,
             walk: WalkMove::default(),
             window: None,
+            dice: DiceLoop::default(),
             accumulator_rng: accumulator_rng(seed, index),
             voice: Voice::default(),
             tail: Voice::default(),
@@ -618,6 +622,7 @@ impl TrackState {
         self.last_note = None;
         self.chain_pass = 0;
         self.jump = None;
+        self.dice.clear();
         for (at, run) in self.slots.iter_mut().enumerate() {
             run.restart(LfoStart { tick: 0.0, clock });
             run.notes = 0;
@@ -814,6 +819,23 @@ impl TrackState {
         }
     }
 
+    /// Its dice loop's settings with no lock read on the row: what it holds, with what modulation
+    /// adds (decision 410).
+    pub(crate) fn held_dice(&self) -> DiceSettings {
+        self.dice_of(|id| self.held_choice(id, false))
+    }
+
+    /// Its dice loop's settings, from what's chosen of each before a row plays, with what
+    /// modulation adds, as the walk's are.
+    pub(crate) fn dice_of(&self, mut chosen: impl FnMut(SettingId) -> u8) -> DiceSettings {
+        let mut value = |id: SettingId| self.walk_value(id, chosen(id));
+        DiceSettings {
+            length: value(SettingId::DICE_LOOP),
+            mutate: value(SettingId::DICE_MUTATE),
+            jump: value(SettingId::DICE_JUMP),
+        }
+    }
+
     /// A row's nudge as it plays, in ticks, from the nudge written and the `QNT` the row chose
     /// before it played, moved by what modulation adds.
     pub(crate) fn quantised(&self, written: i64, chosen: u8) -> i64 {
@@ -859,15 +881,19 @@ impl TrackState {
         moved.clamp(0.0, 255.0).round() as u8
     }
 
-    /// What the sampler's `STA`, `SLEN` and `PLY` make of the span a note starting now plays:
-    /// where in it the note starts and how much of it plays, as shares, and how. Modulation moves
-    /// the start and the length, and the play mode is chosen.
+    /// What the sampler's `STA`, `SLEN`, `PLY` and `SREV` make of the span a note starting now
+    /// plays: where in it the note starts and how much of it plays, as shares, how, and whether
+    /// it's turned round. Modulation moves the start and the length, and turns it round as it
+    /// takes `SREV` past half way, as `REV` turns a walk (decision 412); the play mode is chosen.
     pub(crate) fn sample_cut(&self) -> Cut {
         let share = |id| f64::from(self.sampler_value(id)) / 255.0;
+        let turned = self.held_sampler[SettingId::SAMPLE_REVERSE.owner().1]
+            + self.moved_by(SettingId::SAMPLE_REVERSE);
         Cut {
             start: share(SettingId::SAMPLE_START),
             length: share(SettingId::SAMPLE_LENGTH),
             mode: PlayMode::from_index(self.held_sampler[SettingId::PLAY.owner().1].round() as u8),
+            turned: turned.round() >= 1.0,
         }
     }
 

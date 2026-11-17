@@ -172,9 +172,9 @@ fn no_inserts(inserts: &[Insert; INSERTS]) -> bool {
 
 /// The settings that are the track's place in the song rather than its sound: its fader, pan and
 /// sends, its groove, how long its steps are, how near the grid they're brought and how often
-/// they jump, the order and window its phrases walk in, whether the window waits for its loop, and
-/// how often its rows and pulses play.
-const PLACE: [SettingId; 18] = [
+/// they jump, the order and window its phrases walk in, whether the window waits for its loop, how
+/// often its rows and pulses play and how its dice loop.
+const PLACE: [SettingId; 21] = [
     SettingId::VOL,
     SettingId::LEVEL,
     SettingId::PAN,
@@ -184,6 +184,9 @@ const PLACE: [SettingId; 18] = [
     SettingId::SPEED,
     SettingId::QUANTISE,
     SettingId::JUMP,
+    SettingId::DICE_LOOP,
+    SettingId::DICE_MUTATE,
+    SettingId::DICE_JUMP,
     SettingId::ORDER,
     SettingId::REVERSE,
     SettingId::ORDER_X,

@@ -1363,8 +1363,8 @@ fn k_chooses_an_fx_command_and_an_empty_slot_waits_for_its_value() {
     assert_eq!(app.modes.mode, Mode::Picker);
     assert_eq!(
         app.overlays.picker.as_ref().unwrap().items().len(),
-        110,
-        "on a sample track with nothing in its slots: empty, its own 35, SMP, SLI, STA, SLEN and PLY, the lanes' 9, the mod slots' 16, their 12 lists and 15 times and rates, the 8 macros and 9 events"
+        114,
+        "on a sample track with nothing in its slots: empty, its own 38, SMP, SLI, STA, SLEN, PLY and SREV, the lanes' 9, the mod slots' 16, their 12 lists and 15 times and rates, the 8 macros and 9 events"
     );
     keys(&mut app, "cut<Enter>");
     assert_eq!(app.modes.mode, Mode::Replace);
@@ -2841,7 +2841,7 @@ fn rows_count_from_each_phrases_own_loop_start() {
     let samples = Arc::clone(&app.services.samples);
     let version = Arc::new(Published::new(Arc::new(slid.clone()), Arc::clone(&samples)));
     let (handle, _rt2) = connect(Engine::new(48_000, version));
-    app = App::new(slid, None, samples, handle, 48_000);
+    app = crate::common::new_app(slid, None, samples, handle, 48_000);
     keys(&mut app, "VW>");
     assert_eq!(track_steps(&app, 0)[0], "C#3 40 cut:20 --- ---");
     assert_eq!(
@@ -3234,7 +3234,7 @@ fn at_speed(speed: Speed, start: &[&str], typed: &str) -> (Vec<String>, String) 
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _rt) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     keys(&mut app, typed);
     (steps(&app), app.services.status.clone())
 }

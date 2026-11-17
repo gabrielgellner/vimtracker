@@ -661,13 +661,23 @@ can lock any of them:
 | `Start` | `STA` | Where a note starts: `80` is half way in |
 | `Length` | `SLEN` | How much plays from there. `FF` is all of it |
 | `Play` | `PLY` | `One-shot`, round its `Loop`, `Ping-pong`, `Thru`, or `Tempo` |
+| `Reverse` | `SREV` | `On` plays the note the other way from the sample's own |
 
 `Loop` and `Ping-pong` go round the sample's own loop, or round all that plays if it
 has none, until the note ends. `Thru` plays once from the slice on to the sample's
 end. `Start` and `Length` are shares of the slice, or of the whole, counted
 from where the sample starts playing, so on a reversed sample they count back from
 its end. An LFO or an envelope can move them, read as each note starts, as an
-Elektron's sample start is. A sample's fade out is for a one-shot, as a looping note
+Elektron's sample start is.
+
+`Reverse` turns a note round, whatever `Play` says. The part that `Start` and `Length`
+choose stays the same, and the note plays it from its other end, so a chop locked
+`SREV 01` on one row is the same hit backwards. The sample's own fades turn with it.
+A loop goes round backwards, a `Ping-pong` starts going down, and `Thru` plays back
+past the slice's start to the sample's. On a sample or slice that's already reversed
+on the sample page, `On` plays it forwards. A lock turns only its row's note, and a
+macro or an LFO can turn it too, read as each note starts. When a note's start cuts
+into the sound, it fades in over the same millisecond either way round. A sample's fade out is for a one-shot, as a looping note
 never reaches its end. `Tempo` loops in time with the song: see **Loop to tempo**.
 The Machine's last column, `Tune` and `Cents`, is the sample's own: see **Tuning a
 sample**.
