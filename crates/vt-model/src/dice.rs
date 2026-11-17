@@ -222,7 +222,7 @@ mod tests {
             .collect();
         assert!(heard.iter().all(|from| (0..4).contains(from)), "{heard:?}");
         assert_ne!(heard, [0, 1, 2, 3].repeat(9), "out of order");
-        let mut seen = heard.clone();
+        let mut seen = heard;
         seen.sort_unstable();
         seen.dedup();
         assert_eq!(seen, [0, 1, 2, 3], "the same dice, every one of them");
