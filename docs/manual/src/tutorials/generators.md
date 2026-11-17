@@ -394,6 +394,11 @@ the notes, and `Follow` writes it again whenever the theme changes. The follower
     dotted quarter, three eighths a row, so its notes fall across the beats and meet the bar again
     every three bars.
 *   `Space g a` on a voice freezes it: it keeps its notes as plain ones, and stops following.
+*   On `V2`'s Gen page, `Phrase` `Order` `+1`: `up-down-inc`, the answer playing its ends
+    twice, with `:order` left as it is. A macro mapped to `Order`, `Min` `-2` and `Max` `+8`,
+    turns `V2` from `forward` to `converge` while the theme plays.
+*   `Phrase` `Length` `-4` on `V3`: the slow voice plays the theme's first four notes, twice in
+    its four bars, and `Start` `4` gives it the last four.
 
 ## Kria
 
@@ -512,6 +517,12 @@ their `Lane` devices. Track 2 is the shipped patch `Acid loops`, its five loops 
     bar for three bars. Or every loop at `16`, and it's an ordinary 16-row `Acid` line again.
 *   `Space g a` on track 2's Gen page keeps the pass just heard as the one written, and the
     loops go on from there.
+*   On track 1's Gen page, `Phrase` `Cue` `On`, then `FX1 Lane` `Length` `+2` while it plays:
+    the length loop plays out its four rows before it takes six, as Kria's division cueing waits
+    for a loop to start again. `Rate` and `Start` on `FX2 Lane` wait the same way.
+*   `Phrase` `Length` `-4` on track 1: the trigger loop walks its first 12 rows in each pass of
+    16, so it drifts against the bar too. With `Cue` `On`, an LFO on `PLEN` changes it a bar at
+    a time.
 
 ## Metropolix
 
@@ -572,6 +583,12 @@ Track 1                       Track 2, at 1/8
 *   `Reset` every 4 loops, so the line climbs for four bars and starts again.
 *   Track 2's `ARP` to `13` or `35` for other shapes, `Mode` `Random`, or `Oct` 3.
 *   Track 1 at `1/8`, the clock divided, under the same arpeggio.
+*   A macro mapped to track 1's `Phrase` `Order`, `Min` `+0` and `Max` `+12`: turned up, it
+    steps from `up-down` through the list to `pedal`, heard on the next stage, as the
+    Metropolix's Play Order destination does.
+*   `Phrase` `Length` `-3`: the pendulum walks the first five stages, the Metropolix's Stages
+    Len, and `Start` `3` starts them on the fourth, its Stage Offset. With `Cue` `On`, a turn of
+    either waits for the bar to end.
 
 ## Eloquencer
 
@@ -1356,6 +1373,10 @@ Track 1, a grid of 4×4                    Track 2, a grid of 4×2
     the rest.
 *   `:order` alone lists every order, each snake and Cartesian with what it plays in a phrase of
     16.
+*   On track 1's Gen page, `Phrase` `Order Y` `4`: the grid plays forward, as `cartesian 1 4`
+    does, with `:order` left as it is. A macro mapped to `Order Y`, `Min` `1` and `Max` `4`,
+    sweeps from the diagonal to the lines while it plays, and one on `Order X` moves X's rate.
+*   `Phrase` `Reverse` `On`: the grid the other way up, C7's last note first.
 
 ## Bloom
 

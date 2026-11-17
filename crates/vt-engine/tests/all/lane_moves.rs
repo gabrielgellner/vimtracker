@@ -347,3 +347,52 @@ fn modulation_and_a_macro_reach_a_lanes_length() {
     step(&mut engine);
     assert_eq!(engine.track_heard(0).lanes[0].unwrap().heard.length, 16);
 }
+
+/// The song with the track's `Cue` on (decision 402).
+fn cued(mut song: Song) -> Song {
+    song.tracks[0].cue = 1;
+    song
+}
+
+#[test]
+fn with_cue_on_a_lanes_new_length_rate_or_start_waits_for_it_to_come_round() {
+    let original = cued(song(vec![four(1)]));
+    // Two rows, turned on its second: it plays out its four first.
+    let mut engine = engine(&original);
+    assert_eq!(sends(&mut engine, 2), [0x10, 0x20]);
+    engine.swap(version(&moved(original.clone(), 0x7E, 15)));
+    assert_eq!(
+        sends(&mut engine, 8),
+        [0x30, 0x40, 0x10, 0x20, 0x10, 0x20, 0x10, 0x20]
+    );
+    // With cue off, the same turn is heard at its next row.
+    let mut at_once = self::engine(&song(vec![four(1)]));
+    assert_eq!(sends(&mut at_once, 2), [0x10, 0x20]);
+    at_once.swap(version(&moved(song(vec![four(1)]), 0x7E, 15)));
+    assert_eq!(sends(&mut at_once, 4), [0x10, 0x20, 0x10, 0x20]);
+    // `÷2` from its first row on.
+    let mut engine = self::engine(&original);
+    assert_eq!(sends(&mut engine, 1), [0x10]);
+    engine.swap(version(&moved(original.clone(), 0x80, 14)));
+    assert_eq!(
+        sends(&mut engine, 7),
+        [0x20, 0x30, 0x40, 0x10, 0x10, 0x20, 0x20]
+    );
+    // A start of one row on.
+    let mut engine = self::engine(&original);
+    assert_eq!(sends(&mut engine, 1), [0x10]);
+    let mut started = original.clone();
+    started.tracks[0].lanes[0].start = 1;
+    engine.swap(version(&started));
+    assert_eq!(
+        sends(&mut engine, 7),
+        [0x20, 0x30, 0x40, 0x20, 0x30, 0x40, 0x10]
+    );
+}
+
+#[test]
+fn cue_leaves_a_lane_as_it_was_until_something_turns() {
+    let original = moved(song(vec![four(2)]), 0x81, 14);
+    let at_once = sends(&mut engine(&original), 40);
+    assert_eq!(at_once, sends(&mut engine(&cued(original)), 40));
+}

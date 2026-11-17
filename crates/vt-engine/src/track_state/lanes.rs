@@ -1,6 +1,8 @@
 //! Each FX column's lane as it plays: counted along, a row at a time, so a turn of the track's
 //! `Length` or `Rate` for it takes effect at its next row rather than moving it, as an LFO's
-//! `Rate` carries on from where it is (the lanes study's §5).
+//! `Rate` carries on from where it is (the lanes study's §5). With the track's `Cue` on, a turn of
+//! its `Length`, `Rate` or `Start` waits for the lane to come round to its first row, as Kria's
+//! Division Cueing does (decision 402).
 
 use vt_model::lane::{Heard, LANE_RATES, Lane, LaneMove};
 use vt_model::settings::{LANE_SETTINGS, SettingId};
@@ -29,6 +31,9 @@ pub(crate) struct LaneRun {
     laps: i64,
     /// What it read last, at a count in an entry, for a step that reads it again.
     last: Option<(i64, Entry, LaneRead)>,
+    /// With the track's `Cue` on, how it's heard and the start it took as it was placed or last
+    /// came round to its first row, which it keeps until it comes round again (decision 402).
+    cued: Option<(Heard, usize)>,
 }
 
 /// What a lane read at one of the track's steps: the stored row, how many times it had come
@@ -49,7 +54,7 @@ impl LaneRead {
     /// out from the count, as playing from the top with nothing turned on the way places it: for
     /// drawing a playhead without playing.
     pub fn placed(lane: Lane, heard: Heard, count: i64) -> Self {
-        LaneRun::default().read(lane, count, (0, 0), 0, heard, 0)
+        LaneRun::default().read(lane, count, (0, 0), 0, (heard, 0), false)
     }
 }
 
@@ -71,6 +76,7 @@ impl LaneRun {
             },
             laps: rows.div_euclid(length),
             last: None,
+            cued: None,
         }
     }
 
@@ -85,30 +91,40 @@ impl LaneRun {
 
     /// Read the lane at the step `count` in `entry`: its row there, starting it if it starts
     /// there, past the length heard now going round to the first, with the division heard now.
-    /// It then waits for the step after.
+    /// With `cue`, the length, division and start are those it took as it was placed or last came
+    /// round, and what's heard `now` is taken as it comes round again. It then waits for the step
+    /// after.
     fn read(
         &mut self,
         lane: Lane,
         count: i64,
         entry: Entry,
         offset: i64,
-        heard: Heard,
-        start: usize,
+        now: (Heard, usize),
+        cue: bool,
     ) -> LaneRead {
         if let Some((at, was, read)) = self.last
             && (at, was) == (count, entry)
         {
             return read;
         }
-        *self = self.at(count, entry, offset, heard);
+        *self = self.at(count, entry, offset, now.0);
+        let (mut heard, mut start) = match self.cued {
+            Some(cued) if cue => cued,
+            _ => now,
+        };
         let first = self.left == 0;
         if first {
             if self.row >= heard.length {
                 self.row = 0;
                 self.laps += 1;
             }
+            if self.row == 0 {
+                (heard, start) = now;
+            }
             self.left = heard.division.max(1);
         }
+        self.cued = cue.then_some((heard, start));
         let read = LaneRead {
             row: lane.stored_from(self.row, start),
             laps: self.laps,
@@ -127,8 +143,12 @@ impl LaneRun {
 
     /// Where it is at the step `count` in `entry`, without reading it: its row in the length heard
     /// and how many steps of it are left, none if it starts there.
-    fn ahead(self, count: i64, entry: Entry, offset: i64, heard: Heard) -> LaneAhead {
+    fn ahead(self, count: i64, entry: Entry, offset: i64, heard: Heard, cue: bool) -> LaneAhead {
         let run = self.at(count, entry, offset, heard);
+        let heard = match run.cued {
+            Some((cued, _)) if cue => cued,
+            _ => heard,
+        };
         let round = run.left == 0 && run.row >= heard.length;
         LaneAhead {
             row: if round { 0 } else { run.row },
@@ -160,10 +180,10 @@ impl TrackState {
         entry: Entry,
         count: i64,
     ) -> LaneRead {
-        let heard = self.heard_lane(slot, lane);
-        let start = self.lane_start(slot, lane);
+        let now = (self.heard_lane(slot, lane), self.lane_start(slot, lane));
         let offset = self.lane_offsets[slot];
-        self.lane_runs[slot].read(lane, count, entry, offset, heard, start)
+        let cue = self.cues();
+        self.lane_runs[slot].read(lane, count, entry, offset, now, cue)
     }
 
     /// Where an FX column's lane was going to read at the step `count` in `entry`, as it's heard
@@ -176,11 +196,12 @@ impl TrackState {
         count: i64,
     ) -> LaneAhead {
         let heard = self.heard_lane(slot, lane);
-        self.lane_runs[slot].ahead(count, entry, self.lane_offsets[slot], heard)
+        let cue = self.cues();
+        self.lane_runs[slot].ahead(count, entry, self.lane_offsets[slot], heard, cue)
     }
 
     /// Have an FX column's lane go on from `at` at the step `count` in `entry`, as an edit keeps it
-    /// on the row it was going to read.
+    /// on the row it was going to read, with what it took for its cue.
     pub(crate) fn put_lane(&mut self, slot: usize, entry: Entry, count: i64, at: LaneAhead) {
         self.lane_runs[slot] = LaneRun {
             next: Some((count, entry)),
@@ -188,6 +209,7 @@ impl TrackState {
             left: at.left,
             laps: at.laps,
             last: None,
+            cued: self.lane_runs[slot].cued,
         };
     }
 

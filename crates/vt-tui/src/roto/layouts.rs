@@ -1831,7 +1831,7 @@ const GEN_LANE: DeviceLayout = live(
     )],
 );
 /// The track's settings that move its phrases' walks, its own device as on the Gen page
-/// (decision 400).
+/// (decisions 400 to 402).
 const GEN_PHRASE: DeviceLayout = live(
     "gen/phrase",
     &[knobs(
@@ -1843,7 +1843,7 @@ const GEN_PHRASE: DeviceLayout = live(
             s("ordery"),
             s("phraselength"),
             s("phrasestart"),
-            GAP,
+            s("cue"),
             GAP,
         ],
     )],

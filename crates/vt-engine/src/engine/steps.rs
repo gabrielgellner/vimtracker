@@ -186,7 +186,9 @@ impl Engine {
     /// row plays, as `JMP` is (decision 400): an `ORD`, `REV`, `ORDX` or `ORDY` on the row the
     /// walk held goes to, or in a lane at it, or what the track holds, each with what modulation
     /// adds. With no lock on that row, none held and no lane, it's what's held, and at rest every
-    /// phrase walks as it's written. It's kept for the step's lookups, and rides with the step.
+    /// phrase walks as it's written. With `Cue` on, the window's `length` and `start` are those its
+    /// pass took at its first step (decision 402). It's kept for the step's lookups, and rides
+    /// with the step.
     fn walk_ahead(
         &mut self,
         index: usize,
@@ -195,6 +197,44 @@ impl Engine {
         lanes: &LaneReads,
     ) -> WalkMove {
         let held = self.tracks[index].held_walk();
+        if !self.tracks[index].cues() {
+            self.tracks[index].window = None;
+            return self.walk_chosen(index, place, running, lanes, held);
+        }
+        // A pass takes the window at its first step, or at the first it plays since it started.
+        let first = place.is_some_and(|(chain, place)| {
+            let current = Arc::clone(&self.current);
+            current.song.tracks.get(index).is_some_and(|owner| {
+                owner
+                    .chain_position(chain, place, self.dealer(index), held)
+                    .is_some_and(|position| position.time == 0)
+            })
+        });
+        let window = self.tracks[index].window.filter(|_| !first);
+        let cued = |walk: WalkMove| match window {
+            Some((length, start)) => WalkMove {
+                length,
+                start,
+                ..walk
+            },
+            None => walk,
+        };
+        let walk = cued(self.walk_chosen(index, place, running, lanes, cued(held)));
+        self.tracks[index].window = Some((walk.length, walk.start));
+        self.tracks[index].walk = walk;
+        walk
+    }
+
+    /// How a track's settings move its phrase's walk at the step it's working out, from `held`,
+    /// what it holds with what modulation adds, and any lock read before the row plays.
+    fn walk_chosen(
+        &mut self,
+        index: usize,
+        place: Option<(u32, usize)>,
+        running: i64,
+        lanes: &LaneReads,
+        held: WalkMove,
+    ) -> WalkMove {
         self.tracks[index].walk = held;
         let Some((chain, place)) = place else {
             return held;

@@ -94,6 +94,10 @@ pub(crate) struct TrackState {
     /// How its settings move its phrase's walk at the step it last worked out, or is working out
     /// (decision 400).
     pub(crate) walk: WalkMove,
+    /// With `Cue` on, the window's `length` and `start` its phrase's pass took at its first step,
+    /// which the pass keeps; none until a pass takes one, and after its chain starts again
+    /// (decision 402).
+    pub(crate) window: Option<(u8, u8)>,
     /// The rolls a `Random` accumulator takes, apart from `rng` so `CHA` rolls as it did.
     pub accumulator_rng: Pcg32,
     /// What's added to the count for each FX column's lane, so a lane changed while playing stays
@@ -351,6 +355,7 @@ impl TrackState {
             accumulated: None,
             jump: None,
             walk: WalkMove::default(),
+            window: None,
             accumulator_rng: accumulator_rng(seed, index),
             voice: Voice::default(),
             tail: Voice::default(),
@@ -502,6 +507,7 @@ impl TrackState {
         self.started = started;
         self.lane_offsets = [0; FX_SLOTS];
         self.unplace_lanes();
+        self.window = None;
         self.tied = false;
         self.chain_starts += 1;
     }
@@ -751,6 +757,12 @@ impl TrackState {
     /// Whether a step's lock holds a setting now, over what the track holds.
     pub(crate) fn locked(&self, id: SettingId) -> bool {
         self.values[id.index()].lock.is_some()
+    }
+
+    /// Whether its `Cue` is on: a turn of its phrase's window, or of a lane's `Length`, `Rate` or
+    /// `Start`, waits for its loop to come round (decision 402).
+    pub(crate) fn cues(&self) -> bool {
+        self.walk_value(SettingId::CUE, self.held_choice(SettingId::CUE, false)) >= 1
     }
 
     /// How its settings move its phrase's walk with no lock read on the row: what it holds, with
