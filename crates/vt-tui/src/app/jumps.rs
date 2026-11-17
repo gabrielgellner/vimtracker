@@ -255,8 +255,8 @@ impl App {
     }
 
     /// `gd` on the track page or the mixer: on a macro, its mapping view; on a setting or a
-    /// fader a macro holds, that macro in the Gen page's band with its mapping view open on the
-    /// setting's row, as a jump `C-o` comes back from; and on one more than one macro holds, a
+    /// fader a macro holds, that macro in the Gen page's band, ready to turn, as a jump `C-o`
+    /// comes back from (`gm` there opens its mapping); and on one more than one macro holds, a
     /// list of them to go to. Whether the cursor was on a macro or a setting one holds. It's
     /// `App`'s, as going to a macro is a jump.
     pub(crate) fn open_macro_here(&mut self) -> bool {
@@ -281,16 +281,10 @@ impl App {
         }
     }
 
-    /// Go to a macro in the Gen page's band, as a jump, and open its mapping view on the row of
-    /// the setting the cursor was on, on the track page or the mixer.
+    /// Go to a macro in the Gen page's band, as a jump, with no overlay open, so the next `=`
+    /// turns it.
     pub(crate) fn go_to_macro(&mut self, at: usize) {
         let track = self.services.page_track();
-        let control = self.track_control();
-        let row = self
-            .services
-            .macro_target(control)
-            .and_then(|target| track.macros[at].map_of(target))
-            .unwrap_or(0);
         self.record_jump();
         self.track_page.show(Page::Gen);
         self.track_page.phrase = self.services.phrase_id();
@@ -306,7 +300,5 @@ impl App {
                 .move_to(self.services.track_here(), row, field);
         }
         self.show_view(View::Track);
-        let outcome = MappingView::open(at, row, &mut self.services);
-        self.settled(outcome, false);
     }
 }
