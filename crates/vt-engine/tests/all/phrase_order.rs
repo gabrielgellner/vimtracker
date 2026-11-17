@@ -511,12 +511,20 @@ fn with_cue_on_a_new_window_waits_for_the_next_pass() {
         let rows: Vec<usize> = played.iter().map(|(row, _)| *row).collect();
         if on {
             // The pass plays out its eight rows, and the next takes the four.
-            assert_eq!(rows, manual("1 2 3 4 5 6 7 8 1 2 3 4 1 2 3 4"), "{played:?}");
+            assert_eq!(
+                rows,
+                manual("1 2 3 4 5 6 7 8 1 2 3 4 1 2 3 4"),
+                "{played:?}"
+            );
             assert!(played[..8].iter().all(|(_, length)| *length == 0x80));
             assert!(played[8..].iter().all(|(_, length)| *length == 0x7C));
         } else {
             // At once: the fourth row, then round the four.
-            assert_eq!(rows, manual("1 2 3 4 1 2 3 4 1 2 3 4 1 2 3 4"), "{played:?}");
+            assert_eq!(
+                rows,
+                manual("1 2 3 4 1 2 3 4 1 2 3 4 1 2 3 4"),
+                "{played:?}"
+            );
         }
     }
     // `PSTA` waits as `PLEN` does.
@@ -565,5 +573,9 @@ fn with_cue_on_an_lfo_on_the_window_moves_it_a_pass_at_a_time() {
         assert!(pass.iter().all(|length| *length == pass[0]), "{lengths:?}");
     }
     assert!(lengths.iter().any(|length| *length != 0x80), "{lengths:?}");
-    assert_eq!(rows_heard(&lfo, 32), rows_heard(&lfo, 32), "a render repeats");
+    assert_eq!(
+        rows_heard(&lfo, 32),
+        rows_heard(&lfo, 32),
+        "a render repeats"
+    );
 }
