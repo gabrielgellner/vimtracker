@@ -99,7 +99,10 @@ fn refs(texts: &[String; 16]) -> [&str; 16] {
 
 /// The first frame two renders differ at, if they do.
 fn first_difference(a: &[f32], b: &[f32]) -> Option<usize> {
-    a.iter().zip(b).position(|(a, b)| a != b).map(|at| at / 2)
+    a.iter()
+        .zip(b)
+        .position(|(a, b)| a.to_bits() != b.to_bits())
+        .map(|at| at / 2)
 }
 
 /// A lock of one of Mod `slot`'s own settings on the first of two notes eight rows apart is heard
