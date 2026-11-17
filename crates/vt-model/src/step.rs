@@ -79,6 +79,10 @@ pub enum FxCommand {
     /// Gives what's to its left on the row, its note, a lock or a `RET`, a chance `x` of varying
     /// by up to `y` each time the row plays, after the Eloquencer's controlled chance.
     Rnd,
+    /// Slides the row's locks of continuous settings, and the next note's, over the time to
+    /// where each next changes, as the Analog Four's parameter slide does: `01` slides, `00`
+    /// jumps.
+    Sld,
     /// Sets a setting, by its id, so it belongs to its owner: the track, a voice, or an effect in
     /// a slot.
     Set(SettingId),
@@ -91,7 +95,7 @@ impl FxCommand {
     pub(crate) const RES: Self = Self::Set(SettingId::RES);
 
     /// Every event, in the order a list shows them.
-    pub const EVENTS: [Self; 9] = [
+    pub const EVENTS: [Self; 10] = [
         Self::Del,
         Self::Kil,
         Self::Off,
@@ -101,6 +105,7 @@ impl FxCommand {
         Self::Acu,
         Self::Arp,
         Self::Rnd,
+        Self::Sld,
     ];
 
     /// What it does, for a list to show.
@@ -115,6 +120,7 @@ impl FxCommand {
             Self::Acu => "Move the note on xx scale degrees each time it plays".to_owned(),
             Self::Arp => "Arpeggio: the note, x up and y up".to_owned(),
             Self::Rnd => "Chance x of F to vary the note or lock left, by y".to_owned(),
+            Self::Sld => "Slide the row's locks to the next note's values".to_owned(),
             Self::Set(id) => format!("{}: {}", id.group(), id.name()),
         }
     }
@@ -123,6 +129,7 @@ impl FxCommand {
     pub fn highest(self) -> u8 {
         match self {
             Self::Set(id) => id.entry().kind.top(),
+            Self::Sld => 0x01,
             _ => 0xFF,
         }
     }
@@ -139,6 +146,7 @@ impl FxCommand {
             Self::Acu => "ACU".to_owned(),
             Self::Arp => "ARP".to_owned(),
             Self::Rnd => "RND".to_owned(),
+            Self::Sld => "SLD".to_owned(),
             Self::Set(id) => id.label().unwrap_or_else(|| id.key()),
         }
     }
@@ -180,7 +188,7 @@ impl FxCommand {
         match self {
             Self::Set(id) => matches!(id.entry().kind, Kind::Continuous { .. }),
             Self::Del | Self::Kil | Self::Off | Self::Cha | Self::Acu => true,
-            Self::Cnd | Self::Ret | Self::Arp | Self::Rnd => false,
+            Self::Cnd | Self::Ret | Self::Arp | Self::Rnd | Self::Sld => false,
         }
     }
 
@@ -191,7 +199,7 @@ impl FxCommand {
 
     /// Whether its value can glide to the next: a continuous setting's can, the level scale's
     /// with no fine part too, and a list's jumps.
-    pub(crate) fn glides(self) -> bool {
+    pub fn glides(self) -> bool {
         matches!(
             self,
             Self::Set(id) if matches!(id.entry().kind, Kind::Continuous { .. })
