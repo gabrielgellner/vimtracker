@@ -305,6 +305,17 @@ impl Insert {
             .map_or("Nothing here", |kind| kind.spec().meaning)
     }
 
+    /// The heading a list shows it under, or none for an empty slot, at the top.
+    pub fn category(self) -> &'static str {
+        self.kind().map_or("", EffectKind::category)
+    }
+
+    /// The places in [`Insert::ALL`] in the order a list shows them: `Empty` first, then each
+    /// effect by [`EffectKind::LISTED`]. A list item still sets its place in `ALL`.
+    pub fn listed_order() -> impl Iterator<Item = usize> {
+        std::iter::once(0).chain(EffectKind::LISTED.iter().map(|kind| *kind as usize + 1))
+    }
+
     /// The mode its type is in, for an effect that shows each type's own settings.
     fn mode(self) -> Option<&'static Mode> {
         let Shown::ByType { type_at, modes } = self.kind()?.spec().shown else {

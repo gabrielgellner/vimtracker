@@ -57,8 +57,10 @@ in its row and its Roto layout in `layouts.rs`, and neither is worked out from t
 2. **`insert.rs`**: one line at the end of `effects!`, `Variant(Settings)`. The macro writes the
    `Insert` variant, which is the save format, the `EffectKind` variant, both `ALL`s, `kind`, and
    `read` and `write`'s forwarding to its `effect_settings!`.
-3. **`insert/kind.rs`**: its `EFFECTS` row (key, name, meaning, params, shown, grid), at the end
-   too, and the import of its `*_PARAMS`. The compiler asks for the row, as `EFFECTS` has one for
+3. **`insert/kind.rs`**: its `EFFECTS` row (key, name, meaning, group, params, shown, grid), at
+   the end too, and the import of its `*_PARAMS`. The `group` is the `EffectGroup` the `K` list
+   heads it under, and it goes into `EffectKind::LISTED` among its group's, where the list shows
+   it; `every_effect_is_listed_once_under_its_group` fails until it's there (decision 386). The compiler asks for the row, as `EFFECTS` has one for
    each `EffectKind`; `each_effect_kind_is_its_insert_and_its_row` checks they're in step.
 4. **Its DSP**, in `vt-engine/src/dsp/effects/<name>.rs`, or `filters/` or `dynamics/` by what it
    does, with a `pub(crate) mod` line in the folder's `.rs`. Implement `SlotEffect`, with the
