@@ -180,6 +180,9 @@ impl SettingId {
     /// Which notes `Glide` slides into: a place in
     /// [`GlideMode::ALL`](crate::song::GlideMode::ALL).
     pub const GLIDE_MODE: Self = Self(LATER_TRACK_START as u16 + 3);
+    /// The chance each step plays any row of its phrase instead of the one its order walks to, from
+    /// none at `00` to every step at `FF`.
+    pub const JUMP: Self = Self(LATER_TRACK_START as u16 + 4);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.

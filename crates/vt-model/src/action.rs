@@ -604,11 +604,12 @@ pub enum TrackControl {
     Pitch,
     VelocityDelta,
     Quantise,
+    Jump,
 }
 
 impl TrackControl {
     /// Every one, in the order they're declared.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::Cutoff,
         Self::Resonance,
         Self::Pan,
@@ -621,6 +622,7 @@ impl TrackControl {
         Self::Pitch,
         Self::VelocityDelta,
         Self::Quantise,
+        Self::Jump,
     ];
 
     /// The setting this is the base of, if steps can set it too.
@@ -634,6 +636,7 @@ impl TrackControl {
             Self::Pitch => Some(SettingId::PITCH),
             Self::VelocityDelta => Some(SettingId::VELOCITY_DELTA),
             Self::Quantise => Some(SettingId::QUANTISE),
+            Self::Jump => Some(SettingId::JUMP),
             Self::Drive | Self::Punch | Self::LowCut | Self::HighCut => None,
         }
     }

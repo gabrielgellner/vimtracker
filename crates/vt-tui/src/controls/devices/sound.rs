@@ -44,7 +44,7 @@ pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
         match track.machine {
             Machine::Sampler => device(
                 "Play",
-                [],
+                PLAY_TITLE,
                 &[
                     PLAY[0],
                     PLAY[1],
@@ -54,7 +54,7 @@ pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
             ),
             Machine::Plaits(_) => device(
                 "Play",
-                [],
+                PLAY_TITLE,
                 &[
                     PLAY[0],
                     PLAY[1],
@@ -105,6 +105,10 @@ const RETURN_OUTPUT: [&[Control]; 1] = [&[Control::Trim, Control::Level, base(Tr
 /// The master's: its gain and fader, with a hole where `Pan` is, then the song's limiter. Down the
 /// columns it reads as the master plays: `Trim`, its slots, `Level`, then the limiter.
 const MASTER_OUTPUT: [&[Control]; 2] = [&[Control::Trim, Control::Level], &[Control::Limiter]];
+
+/// The Play device's title: how often its steps jump to any row of their phrase, which is how
+/// the rows are walked, as the phrase's order is (decision 391).
+const PLAY_TITLE: [Option<Control>; 1] = [Some(base(TrackControl::Jump))];
 
 /// How it plays its notes: their pitch and how they join and end, then the steps' timing, then
 /// what cuts them off, and how much louder or softer and how much nearer the grid than written

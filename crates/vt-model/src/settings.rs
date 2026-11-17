@@ -384,7 +384,7 @@ const TRACK_GROUPS: [&str; 16] = [
 
 /// The track's own settings added since places were fixed, at the end of the table so none moves
 /// (#718): the track's own after [`TRACK`]'s, in the order they came.
-const LATER_TRACK: [Entry; 4] = [
+const LATER_TRACK: [Entry; 5] = [
     // Whether a synth's oscillators run on from note to note or start again on each, read as a
     // note starts, so a lock on its row sets it for that note (decision 370).
     Entry {
@@ -441,9 +441,14 @@ const LATER_TRACK: [Entry; 4] = [
         default: 0,
         place: Place::Own,
     },
+    // The chance each step plays any row of its phrase rather than the next its order walks to,
+    // read before a row plays, as `QNT` is, so a lock on the row walked to sets it for that step
+    // (decision 391).
+    level("jump", "Jump", "JMP", 0x00)
+        .means("the chance each step plays any row of the phrase instead of the next"),
 ];
 /// What each of [`LATER_TRACK`] is listed with.
-const LATER_TRACK_GROUPS: [&str; 4] = ["Machine", "Machine", "Filter", "Machine"];
+const LATER_TRACK_GROUPS: [&str; 5] = ["Machine", "Machine", "Filter", "Machine", "Machine"];
 /// How many of the track's own there are, [`TRACK`]'s and [`LATER_TRACK`]'s.
 const TRACK_SETTINGS: usize = TRACK.len() + LATER_TRACK.len();
 

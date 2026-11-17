@@ -462,6 +462,7 @@ impl Track {
             SettingId::PITCH => self.pitch,
             SettingId::VELOCITY_DELTA => self.velocity_delta,
             SettingId::QUANTISE => self.quantise,
+            SettingId::JUMP => self.jump,
             SettingId::FILTER_MODE => self.filter_mode.index(),
             SettingId::GATE_LENGTH => self.gate_length(),
             SettingId::GROOVE => self
@@ -575,6 +576,7 @@ impl Track {
                     SettingId::PITCH => self.pitch = coarse,
                     SettingId::VELOCITY_DELTA => self.velocity_delta = coarse,
                     SettingId::QUANTISE => self.quantise = coarse,
+                    SettingId::JUMP => self.jump = coarse,
                     SettingId::FILTER_MODE => {
                         self.filter_mode =
                             FilterMode::ALL[usize::from(coarse).min(FilterMode::ALL.len() - 1)];

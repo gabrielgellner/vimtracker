@@ -52,6 +52,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             TrackControl::Pitch => "pitch",
             TrackControl::VelocityDelta => "velocity",
             TrackControl::Quantise => "quantise",
+            TrackControl::Jump => "jump",
         },
         Control::Level => "level",
         Control::Trim => "trim",
