@@ -479,6 +479,11 @@ where a track's are, and under it Tracks, the tracks in it, in its colour, each 
 its own mute or solo. Its `Trim` is at its input, so it sets how hard the sum of its
 tracks hits its slots. The rest is as on a return.
 
+A group's macros can hold settings on its tracks as well as its own, so one knob turns the
+cutoff on every drum, or `Hits` on each of their generators: `M` on a track's setting lists
+the group's macros after the track's own. The Gen page's guide has the details, under
+Group macros.
+
 Each group has a colour: its icon, its strip on the mixer and the `G1` under each of its
 tracks' strips share it, as does a track's `Group` on its Sound page. Its tracks are
 named in it wherever tracks are listed: the song view's columns, the phrase view's

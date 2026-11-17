@@ -303,7 +303,7 @@ fn a_group_macro_holds_a_generators_settings_on_each_of_its_tracks() {
         assert!(engine.generators_heard(track).all(|run| run.renders == 0));
     }
     // Moved by an LFO on the group's macro, each track's generator renders again, its own way.
-    let mut moving = song.clone();
+    let mut moving = song;
     moving.tracks[group].mods[3] = ModSlot::lfo(
         SettingId::macro_at(0),
         Lfo {
