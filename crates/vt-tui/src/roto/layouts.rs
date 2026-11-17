@@ -966,8 +966,8 @@ const LFO: DeviceLayout = stored(
 /// A Steps slot's: how fast, how many and how far, then where each note starts it, what it does at
 /// its end and its mode, musical lists that leave the layout as it is, then how it drifts and how
 /// it goes from step to step; then its values, eight to a page, each with a centre notch, a small
-/// step sequencer under the hand; then how often it jumps, a page of its own as Steps' first is
-/// full; and where it goes last (decided in the study's §12, question 3).
+/// step sequencer under the hand; then how often it jumps and how `Mutate`'s draws spread and
+/// lean, a page of its own as Steps' first is full (decision 403); and where it goes last (decided in the study's §12, question 3).
 /// It has no off/on settings, so it's live.
 const STEPS_LAYOUT: DeviceLayout = live(
     "steps",
@@ -1011,7 +1011,10 @@ const STEPS_LAYOUT: DeviceLayout = live(
                 s("step16"),
             ],
         ),
-        knobs("Jump", [s("jump"), __, __, __, __, __, __, __]),
+        knobs(
+            "Random",
+            [s("jump"), s("spread"), s("bias"), __, __, __, __, __],
+        ),
         DEST_PAGE,
     ],
 );

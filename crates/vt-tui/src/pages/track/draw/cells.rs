@@ -42,6 +42,9 @@ const TUNE_WIDTH: usize = 8;
 const TO: &str = "→ ";
 /// What a Steps slot's `Jump`, or the Play device's, is called in its title, before its chance.
 const JUMP: &str = "Jump ";
+/// What a Steps slot's `Spread` and `Bias` are called in its title, before their amounts.
+const SPREAD: &str = "Spread ";
+const BIAS: &str = "Bias ";
 
 /// The track page's cells, read from the track as the page draws it.
 pub(super) struct TrackCells<'a> {
@@ -169,10 +172,13 @@ impl<'a> TrackCells<'a> {
             look,
         };
         let mut line = cell.value();
-        // A destination follows an arrow, and Steps' `Jump`, a number among words, its name.
+        // A destination follows an arrow, and Steps' `Jump`, `Spread` and `Bias`, numbers among
+        // words, their names.
         let before = match control {
             Control::Mod(_, ModField::Destination) => Some(TO),
             Control::Mod(_, ModField::Jump) | Control::Base(TrackControl::Jump) => Some(JUMP),
+            Control::Mod(_, ModField::Spread) => Some(SPREAD),
+            Control::Mod(_, ModField::Bias) => Some(BIAS),
             _ => None,
         };
         if let Some(before) = before {

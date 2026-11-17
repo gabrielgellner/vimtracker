@@ -520,7 +520,9 @@ impl Descriptor {
                 .and_then(|at| self.choices.get(at))
                 .map_or_else(String::new, |choice| choice.name.clone().into_owned()),
             Reading::Switch => if value != 0 { "on" } else { "off" }.to_owned(),
-            Reading::Number => value.to_string(),
+            // A bend has its sign, as Steps' `Bias` shows it.
+            Reading::Bend if value > 0 => format!("+{value}"),
+            Reading::Number | Reading::Bend => value.to_string(),
             Reading::Hold if value < 0 => "Note".to_owned(),
             Reading::Time | Reading::Hold => format!("{value} ms"),
             Reading::Percent => format!("{value}%"),
@@ -541,7 +543,6 @@ impl Descriptor {
             // shape.
             Reading::Rate
             | Reading::Column
-            | Reading::Bend
             | Reading::Interval
             | Reading::Rows
             | Reading::OfRows

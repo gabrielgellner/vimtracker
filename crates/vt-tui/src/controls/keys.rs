@@ -98,6 +98,8 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             ModField::Loop => "loop",
             ModField::Mutate => "mutate",
             ModField::Jump => "jump",
+            ModField::Spread => "spread",
+            ModField::Bias => "bias",
             ModField::Smooth => "smooth",
             ModField::Step(at) => STEP_KEYS[usize::from(at).min(STEPS - 1)],
             ModField::Low => "low",

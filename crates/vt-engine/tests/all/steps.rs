@@ -575,3 +575,143 @@ fn mutate_in_trig_draws_again_for_each_note_that_restarts_the_slot() {
     assert!(moved.len() > 4, "{note:02X?}");
     assert_eq!(note, run(StepsMode::Note), "a render repeats");
 }
+
+/// `Mutate`'s draws over four steps written `+10` to `+40`, sixteen steps from the top at 100%,
+/// spread and leaned by `spread` and `bias`.
+fn mutated_laps(spread: u8, bias: i8) -> Vec<u8> {
+    let steps = Steps {
+        values: values(&[0x10, 0x20, 0x30, 0x40]),
+        length: 4,
+        mutate: 100,
+        spread,
+        bias,
+        ..Steps::default()
+    };
+    cutoffs(&song(&["C-3 -- --- --- ---"], steps), STEP, 16)
+}
+
+/// At an even `Spread` and no `Bias`, `Mutate` draws what it always drew, evenly over `-FF` to
+/// `+FF`, the same numbers as before there were either (decision 403).
+#[test]
+fn mutate_at_an_even_spread_and_no_bias_draws_as_it_always_did() {
+    assert_eq!(
+        mutated_laps(50, 0),
+        [
+            0xFF, 0x13, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x04, 0x12, 0x02, 0x6A, 0xFF, 0xC5, 0xF5,
+            0xB1, 0xFF
+        ],
+    );
+}
+
+/// A narrow `Spread` draws round the middle, a wide one out at the ends, and `Bias` leans them,
+/// each render the same (decision 403).
+#[test]
+fn spread_and_bias_shape_what_mutate_draws_and_a_render_repeats() {
+    let narrow = mutated_laps(10, 0);
+    assert!(
+        narrow.iter().all(|cut| cut.abs_diff(0x80) < 0x40),
+        "{narrow:02X?}"
+    );
+    assert_eq!(mutated_laps(0, 0), [0x80; 16], "the bias point alone");
+    let ends = mutated_laps(100, 0);
+    assert!(
+        ends.iter().all(|cut| *cut == 0x00 || *cut == 0xFF),
+        "{ends:02X?}"
+    );
+    assert_eq!(mutated_laps(100, 100), [0xFF; 16], "the high end alone");
+    // Leaned high, they sit above the middle, and a narrow bell sits on the bias point.
+    let high = mutated_laps(50, 80);
+    let mean = high.iter().map(|cut| f64::from(*cut)).sum::<f64>() / 16.0;
+    assert!(mean > 0xB0 as f64, "{high:02X?}");
+    let leaned = mutated_laps(5, -25);
+    assert!(
+        leaned.iter().all(|cut| cut.abs_diff(0x40) < 0x20),
+        "a quarter of the way down: {leaned:02X?}"
+    );
+    for (spread, bias) in [(10, 0), (35, -20), (80, 40)] {
+        assert_eq!(
+            mutated_laps(spread, bias),
+            mutated_laps(spread, bias),
+            "a render repeats"
+        );
+    }
+}
+
+/// A loop drifted at a narrow `Spread`, then locked with `Mutate` at none, stays as narrow as
+/// it was drawn, lap after lap.
+#[test]
+fn a_loop_locked_after_drifting_narrow_stays_narrow() {
+    let narrow = Steps {
+        values: values(&[0x10, 0x20, 0x30, 0x40]),
+        length: 4,
+        mutate: 100,
+        spread: 10,
+        ..Steps::default()
+    };
+    let drifting = song(&["C-3 -- --- --- ---"], narrow);
+    let version = |song: &Song| Arc::new(Published::new(Arc::new(song.clone()), flat()));
+    let mut engine = Engine::new(RATE, version(&drifting));
+    let mut out = vec![0.0; STEP * 2];
+    let mut steps = |engine: &mut Engine, count: usize| -> Vec<u8> {
+        (0..count)
+            .map(|_| {
+                engine.process(&mut out);
+                engine.live(0).cutoff
+            })
+            .collect()
+    };
+    engine.play_from(0);
+    let first = steps(&mut engine, 8);
+    let mut locked = drifting;
+    locked.tracks[0].mods[2].steps.mutate = 0;
+    engine.swap(version(&locked));
+    let held = steps(&mut engine, 16);
+    assert!(
+        held.iter().all(|cut| cut.abs_diff(0x80) < 0x40),
+        "{held:02X?}"
+    );
+    assert!(
+        held.iter()
+            .all(|cut| ![0x90, 0xA0, 0xB0, 0xC0].contains(cut)),
+        "drawn, not as written: {held:02X?}"
+    );
+    for lap in held.chunks(4) {
+        assert_eq!(lap, &first[4..], "the lap drawn last plays on");
+    }
+}
+
+/// Macros hold a Steps slot's `Spread` and `Bias`, as they do `Mutate`.
+#[test]
+fn macros_turn_spread_and_bias() {
+    use vt_model::macros::{MacroMap, MacroTarget, Zone};
+    use vt_model::modulation::ModField;
+    let steps = Steps {
+        values: values(&[0x10, 0x20, 0x30, 0x40]),
+        length: 4,
+        mutate: 100,
+        ..Steps::default()
+    };
+    let mut song = song(&["C-3 -- --- --- ---"], steps);
+    let map = |field: ModField, min: u16, max: u16| MacroMap {
+        target: MacroTarget::Setting(SettingId::mod_own(2, field.own().unwrap()).unwrap()),
+        min,
+        max,
+        curve: 0,
+        s: 0,
+        zone: Zone::default(),
+    };
+    // The first macro takes `Spread` from 0% to 100%, the second `Bias` from none to +100.
+    song.tracks[0].macros[0].maps = vec![map(ModField::Spread, 0, 0x6400)];
+    song.tracks[0].macros[1].maps = vec![map(ModField::Bias, 0x8000, 0xFF00)];
+    let laps = |song: &Song| cutoffs(song, STEP, 16);
+    assert_eq!(laps(&song), [0x80; 16], "Spread 0%: the middle alone");
+    song.tracks[0].macros[0].value = 0xFF00;
+    let ends = laps(&song);
+    assert!(
+        ends.iter().all(|cut| *cut == 0x00 || *cut == 0xFF),
+        "{ends:02X?}"
+    );
+    assert_eq!(ends, laps(&song), "a render repeats");
+    song.tracks[0].macros[1].value = 0xFF00;
+    assert_eq!(laps(&song), [0xFF; 16], "Bias +100: the high end alone");
+}

@@ -5,6 +5,7 @@ use super::{Entry, Kind, Place, Units};
 use crate::accumulator::MOST_DEGREES;
 use crate::arpeggio::{ArpRate, MOST_OCTAVES};
 use crate::macros::MACROS;
+use crate::shape::{EVEN_SPREAD, MAX_SPREAD};
 use crate::steps::{MAX_JUMP, MAX_MUTATE, STEPS};
 
 /// A mod slot's settings that steps can lock: its depth and polarity, whatever its type, and an
@@ -70,7 +71,7 @@ const POLARITY_NAMES: [&str; 2] = ["Uni", "Bi"];
 
 /// How many of a mod slot's type's own settings the registry holds, and of the accumulator's and
 /// the arpeggio's together.
-pub const MOD_OWN_SETTINGS: usize = 11;
+pub const MOD_OWN_SETTINGS: usize = 13;
 pub const PLAYED_SETTINGS: usize = ACCUMULATION.len() + ARPEGGIO.len();
 
 /// A macro, the same entry for all eight but its name: where it's turned, from `00` to `FF` with a
@@ -221,6 +222,33 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
             units: Units::Percent,
         },
         default: 0,
+        place: Place::Own,
+    },
+    Entry {
+        meaning: "how far the values Mutate draws stray, from one value to the two ends",
+        key: "spread",
+        name: "Spread",
+        label: None,
+        kind: Kind::Continuous {
+            top: MAX_SPREAD,
+            middle: false,
+            units: Units::Percent,
+        },
+        default: EVEN_SPREAD,
+        place: Place::Own,
+    },
+    // `Bias`, from -100 to +100, either side of `80`.
+    Entry {
+        meaning: "which way the values Mutate draws lean, low or high",
+        key: "bias",
+        name: "Bias",
+        label: None,
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: true,
+            units: Units::Percent,
+        },
+        default: 0x80,
         place: Place::Own,
     },
 ];

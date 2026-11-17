@@ -407,6 +407,8 @@ so its values are heard as written.
 | Mode | In the title: `Trig`, `Free` or `Note`, below |
 | Loop | In the title: what it does at its end, below |
 | Jump | In the title: the chance each step is any step, `0%` to `100%` |
+| Spread | In the title: how far `Mutate`'s draws stray, `0%` to `100%`, below |
+| Bias | In the title: which way they lean, `-100` to `+100` |
 | Dest | In the title: what it moves, such as `Pitch`, or `---` |
 | Rate | How long each step lasts: `Tick`, `1/64` to `1 bar`, or `Pass` |
 | Length | How many steps it plays, from 1 to 16 |
@@ -469,6 +471,17 @@ the loop says and `100%` plays a step at random every time, in any mode. A jump
 plays the step as it's heard, so with `Mutate` locked at `0%` it replays the drawn
 values out of order. The step it jumps to is lit in the box. It's rolled from the
 project's seed, so a render repeats, and like `Mutate` a macro or a patch holds it.
+
+**Spread** and **Bias** shape what `Mutate` draws, as Marbles' X section's knobs
+shape its random voltages. `Spread` at `50%`, where a new slot starts, draws every
+value as likely, as `Mutate` always has. Below it the draws gather in a bell round
+the middle, narrower as it goes down, until `0%` draws the middle alone; above it
+they spread out to the ends, until `100%` draws only `-FF` and `+FF`. `Bias` leans
+them: `+50` puts the bell's middle three quarters of the way up, and at `100%` the
+high end comes up three times in four. They're a `Random` fill's `Spread` and
+`Bias`, the same curve. With `Mutate` locked, the drawn loop keeps the shape it was
+drawn with, so drift a loop narrow, lock it, and it stays narrow. Like `Mutate`, a
+macro or a patch holds them.
 
 **Smooth** at `00` steps. Up to `+80` each step glides in from the one before over
 its first part, all of it at `+80`, and on to `+FF` the glide becomes a curve

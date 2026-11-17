@@ -1805,12 +1805,13 @@ fn a_slot_made_steps_with_no_depth_is_given_ff_and_its_title_has_its_mode_and_lo
     press(&mut app, "K/steps");
     special(&mut app, KeyCode::Enter);
     assert_eq!(slot(&app).kind, ModKind::Steps);
-    // Its title is its type, its mode, its loop and its jump, then where it goes: no polarity.
+    // Its title is its type, its mode, its loop, its jump, its spread and its bias, then where it
+    // goes: no polarity.
     assert!(
         device_title(&app, "Mod 4").starts_with(&modulator_title(
             "Mod 4",
             true,
-            "Steps  Trig  from 1  Jump 0%  → --- ─"
+            "Steps  Trig  from 1  Jump 0%  Spread 50%  Bias 0  → --- ─"
         )),
         "{}",
         device_title(&app, "Mod 4")
@@ -2923,7 +2924,7 @@ fn a_steps_slots_lists_find_a_name_before_a_meaning_and_each_word_on_its_own() {
     assert_eq!(slot(&app).steps.mode, StepsMode::Note);
     // Its destination: `pitch in` takes `Pitch in scale` rather than `Pitch`, whose meaning has
     // an `in`, and so do each word on its own and the whole name.
-    press(&mut app, "lll");
+    press(&mut app, "$");
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Destination));
     for search in ["pitch in", "pi sc", "pitch in scale"] {
         press(&mut app, &format!("K{search}"));
@@ -2945,7 +2946,7 @@ fn a_steps_jump_is_in_its_title_after_its_loop_and_turns_as_any_setting() {
     press(&mut app, "lll");
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Jump));
     assert!(
-        device_title(&app, "Mod 4").contains("from 1  Jump 0%  → Cut"),
+        device_title(&app, "Mod 4").contains("from 1  Jump 0%  Spread 50%"),
         "{}",
         device_title(&app, "Mod 4")
     );
@@ -2967,9 +2968,66 @@ fn a_steps_jump_is_in_its_title_after_its_loop_and_turns_as_any_setting() {
     let jump = SettingId::mod_own(3, ModField::Jump.own().unwrap()).unwrap();
     let held = app.song().tracks[0].macro_holding(vt_model::macros::MacroTarget::Setting(jump));
     assert_eq!(held.map(|(at, _)| at), Some(0));
-    // `l` goes on to where it goes, and `h` back.
+    // `l` goes on to its spread, and `h` back.
     press(&mut app, "l");
-    assert_eq!(app.track_control(), Control::Mod(3, ModField::Destination));
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Spread));
     press(&mut app, "h");
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Jump));
+}
+
+/// Steps' `Spread` and `Bias` are in its title after its jump, as `Spread 50%  Bias 0`, stops `h`
+/// and `l` go through there: turned, typed, described and mapped to a macro as the grid's
+/// settings are (decision 403).
+#[test]
+fn a_steps_spread_and_bias_are_in_its_title_after_its_jump_and_turn_as_any_setting() {
+    let (mut app, _realtime) = with_steps();
+    let slot = |app: &App| app.song().tracks[0].mods[3];
+    let title = |app: &App| device_title(app, "Mod 4");
+    assert!(
+        title(&app).contains("Jump 0%  Spread 50%  Bias 0  → Cut"),
+        "{}",
+        title(&app)
+    );
+    press(&mut app, "llll");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Spread));
+    press(&mut app, "5-");
+    assert_eq!(slot(&app).steps.spread, 45);
+    press(&mut app, "i10");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).steps.spread, 10);
+    assert!(title(&app).contains("Spread 10%"), "{}", title(&app));
+    press(&mut app, "x");
+    assert_eq!(slot(&app).steps.spread, 50, "back to an even draw");
+    press(&mut app, " d");
+    let said = vt_tui::screen::describe::text(&app).expect("a line");
+    assert!(said.contains("Spread"), "{said}");
+    assert!(said.contains("stray"), "{said}");
+    press(&mut app, " d");
+    press(&mut app, "M1");
+    let spread = SettingId::mod_own(3, ModField::Spread.own().unwrap()).unwrap();
+    let held = app.song().tracks[0].macro_holding(vt_model::macros::MacroTarget::Setting(spread));
+    assert_eq!(held.map(|(at, _)| at), Some(0));
+    // `Bias` steps from its middle, with its sign, and is typed signed.
+    press(&mut app, "l");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Bias));
+    press(&mut app, "=");
+    assert_eq!(slot(&app).steps.bias, 5);
+    assert!(title(&app).contains("Bias +5  → Cut"), "{}", title(&app));
+    press(&mut app, "i-40");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).steps.bias, -40);
+    assert!(title(&app).contains("Bias -40"), "{}", title(&app));
+    press(&mut app, "x");
+    assert_eq!(slot(&app).steps.bias, 0);
+    press(&mut app, " d");
+    let said = vt_tui::screen::describe::text(&app).expect("a line");
+    assert!(said.contains("Bias"), "{said}");
+    assert!(said.contains("lean"), "{said}");
+    press(&mut app, " d");
+    press(&mut app, "M2");
+    let bias = SettingId::mod_own(3, ModField::Bias.own().unwrap()).unwrap();
+    let held = app.song().tracks[0].macro_holding(vt_model::macros::MacroTarget::Setting(bias));
+    assert_eq!(held.map(|(at, _)| at), Some(1));
+    press(&mut app, "l");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Destination));
 }

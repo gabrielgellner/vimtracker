@@ -1008,6 +1008,14 @@ requests, Drum then LPG:
   `Shuffle` stay what they are between jumps. Marbles walks on from the step it jumped to; ours
   can't, as which step plays is worked out from the count.
 
+**As built for #1000 (decision 403):**
+
+* **`Spread` and `Bias`** shape `Mutate`'s draws through `Random`'s distribution
+  (`shape/random.rs`, `Steps::mutated`): `50%` and `0`, a new slot's, draw evenly as before, bit
+  for bit. They sit in the title after `Jump`, `Spread 50%  Bias 0`, which now takes three places
+  more than a grid has columns (`TITLE_PLACES`); on the Roto they share `Jump`'s page, renamed
+  `Random`.
+
 **As built for #569 (decision 270):**
 
 * **Writing a slot into the notes:** `Space g A` in the phrase view writes what the track's Steps
