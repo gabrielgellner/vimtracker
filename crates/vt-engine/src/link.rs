@@ -1853,6 +1853,15 @@ mod tests {
                 ..drifting
             },
         );
+        // And one drawn through a bent `Spread` and `Bias`, which allocates nothing either.
+        one.tracks[0].mods[5] = ModSlot::steps(
+            Some(SettingId::RES),
+            Steps {
+                spread: 20,
+                bias: 30,
+                ..drifting
+            },
+        );
         let engine = Engine::new(48_000, published(one, &pool));
         let (mut handle, mut rt) = connect(engine);
         handle.send(Command::PlayFrom { step: 0 });
@@ -1863,6 +1872,7 @@ mod tests {
         assert_eq!(drawn[3].which, 0b11, "{drawn:?}");
         assert!(drawn[3].value(0).is_some() && drawn[3].value(2).is_none());
         assert_eq!(drawn[4], Drawn::default());
+        assert_eq!(drawn[5].which, 0b11, "{drawn:?}");
     }
 
     #[test]

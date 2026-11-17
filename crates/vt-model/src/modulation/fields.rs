@@ -11,6 +11,7 @@ use crate::lfo::{Fade, LfoMode, MAX_DEFORM, Shape};
 use crate::listed::Listed;
 use crate::param::{Choice, Descriptor, HEX_JUMP, NUMBER, PERCENT, Pace, Reading, Reads, Typing};
 use crate::settings::{MOD_OWN_SETTINGS, SettingId};
+use crate::shape::{BEND_JUMP, BEND_NUDGE, MAX_BIAS, MAX_SPREAD};
 use crate::steps::{Loop, MAX_JUMP, MAX_MUTATE, MAX_STEP, STEPS, StepsMode};
 use crate::tracking::Source;
 
@@ -68,6 +69,10 @@ pub enum ModField {
     /// moves on to is one at random, and how it goes from one to the next.
     Mutate,
     Jump,
+    /// Steps': how widely the values `Mutate` draws spread and which way they lean, as Marbles'
+    /// X section's (decision 403).
+    Spread,
+    Bias,
     Smooth,
     /// One of Steps' values, by its place, counted from 0: what the cursor is on in its panel.
     Step(u8),
@@ -102,6 +107,8 @@ pub const MOD_OWN_FIELDS: [ModField; MOD_OWN_SETTINGS] = [
     ModField::Peak,
     ModField::Fade,
     ModField::Ratchet,
+    ModField::Spread,
+    ModField::Bias,
 ];
 
 /// Where an envelope's curve, an LFO's mode and Steps' mode are among [`MOD_OWN_FIELDS`].
@@ -158,6 +165,8 @@ impl ModField {
             Self::Loop => "Loop",
             Self::Mutate => "Mutate",
             Self::Jump => "Jump",
+            Self::Spread => "Spread",
+            Self::Bias => "Bias",
             Self::Smooth => "Smooth",
             Self::Step(_) => "Step",
             Self::Low => "Low",
@@ -209,6 +218,8 @@ impl ModField {
             Self::Loop => "what it does once it reaches its last value",
             Self::Mutate => "the chance each value is drawn again as it comes round",
             Self::Jump => "the chance each step goes to one of its values at random",
+            Self::Spread => "how far the values Mutate draws stray, from one value to the two ends",
+            Self::Bias => "which way the values Mutate draws lean, low or high",
             Self::Smooth => "how it goes from one value to the next, gliding or jumping",
             Self::Step(_) => "this value, how far it moves its setting while it plays",
             Self::Low => "where its map starts, in what it follows",
@@ -399,6 +410,8 @@ pub const MOD_SPECS: [ModSpec; ModKind::ALL.len()] = [
             ModField::Mode,
             ModField::Loop,
             ModField::Jump,
+            ModField::Spread,
+            ModField::Bias,
             ModField::Destination,
         ],
         fields: &[
@@ -499,6 +512,8 @@ impl ModSlot {
             ModField::Loop => list(Loop::ALL.len()),
             ModField::Mutate => (0, i32::from(MAX_MUTATE)),
             ModField::Jump => (0, i32::from(MAX_JUMP)),
+            ModField::Spread => (0, i32::from(MAX_SPREAD)),
+            ModField::Bias => (-i32::from(MAX_BIAS), i32::from(MAX_BIAS)),
             ModField::Smooth => signed(MAX_STEP),
             ModField::Step(at) if usize::from(at) < STEPS => signed(MAX_STEP),
             ModField::Low | ModField::High => {
@@ -575,6 +590,8 @@ impl ModSlot {
             ModField::Loop => place(&Loop::ALL, &steps.looping)?,
             ModField::Mutate => i32::from(steps.mutate),
             ModField::Jump => i32::from(steps.jump),
+            ModField::Spread => i32::from(steps.spread),
+            ModField::Bias => i32::from(steps.bias),
             ModField::Smooth => i32::from(steps.smooth),
             ModField::Step(at) => i32::from(steps.values[usize::from(at)]),
             ModField::Low => i32::from(self.track.bounds().low),
@@ -659,9 +676,12 @@ impl ModSlot {
                 Reading::Time
             }
             ModField::Hold => Reading::Hold,
-            ModField::Sustain | ModField::Body | ModField::Mutate | ModField::Jump => {
-                Reading::Percent
-            }
+            ModField::Sustain
+            | ModField::Body
+            | ModField::Mutate
+            | ModField::Jump
+            | ModField::Spread => Reading::Percent,
+            ModField::Bias => Reading::Bend,
             ModField::Ratchet => Reading::Count {
                 what: "how many strikes",
                 from_one: false,
@@ -788,6 +808,16 @@ impl ModSlot {
                 why_not: why(format!("{name} is degrees from {low} to {high}")),
                 ..of
             },
+            // Steps' `Bias` steps as a `Random` fill's does, from its middle.
+            Reading::Bend => Descriptor {
+                nudge: BEND_NUDGE,
+                jump: BEND_JUMP,
+                centred: true,
+                typing: Typing::Whole { signed: true },
+                reads: NUMBER,
+                why_not: why(format!("{name} is a number from {low} to {high}")),
+                ..of
+            },
             // These step through their own kinds.
             Reading::Rate => Descriptor {
                 nudge: 0,
@@ -890,6 +920,8 @@ impl ModSlot {
             ModField::Loop => self.steps.looping = Loop::ALL[at],
             ModField::Mutate => self.steps.mutate = byte,
             ModField::Jump => self.steps.jump = byte,
+            ModField::Spread => self.steps.spread = byte,
+            ModField::Bias => self.steps.bias = value as i8,
             ModField::Smooth => self.steps.smooth = signed,
             ModField::Step(step) => self.steps.values[usize::from(step)] = signed,
             ModField::Low => self.track.bounds_mut().low = byte,

@@ -575,7 +575,8 @@ Song                               song.ron, refused unless format_version is FO
     written value a new version changes, and reset when playing starts from the top (decision
     384). Its `Jump` (decision 390) plays any step in place of the one walked to, with its chance,
     rolled once a count from a stream of the slot's own and kept for the few counts `Smooth`
-    reads. Track (`tracking.rs`,
+    reads. Its `Spread` and `Bias` (decision 403) bend `Mutate`'s draws through a `Random` fill's
+    distribution, the same number drawn from the stream, so at `50%` and `0` they're as before. Track (`tracking.rs`,
     decision 223) maps the last note's pitch, velocity or a roll from `Low` to `High` onto its
     depth, each source with its own map: `modulate` reads it from `TrackState::last_note` (a
     `NoteOn` carries its velocity), and every slot rolls at each note from a stream of its own after
