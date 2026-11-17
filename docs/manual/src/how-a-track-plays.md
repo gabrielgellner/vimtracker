@@ -423,7 +423,9 @@ lands by then, the next section's chain if the section ends by then, and
 otherwise the chain's next place: the pass is the last if that's another
 phrase or chain.
 
-A failed condition skips its row's note, events and own locks, while columns with
+A `CND` chance, `D0` to `FF`, is rolled instead, from the `:seed`, the track and
+its count, as an `RND` is below, so each pulse of its row reads the same die. A
+failed condition skips its row's note, events and own locks, while columns with
 lanes keep to theirs. A step's `GRV` and `RATE` still time it, as they're chosen
 before it lands. `PRE` and `NEI` read what the last condition on this track, or on
 the track to the left, decided, as each row lands.

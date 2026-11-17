@@ -394,3 +394,98 @@ fn renders_with_conditions_repeat() {
         render_frames(version(&song, hits_pool()), RATE, 32 * STEP)
     });
 }
+
+/// How many of `count` passes of a four-row phrase's first row play.
+fn played(song: &Song, count: usize) -> usize {
+    passes(song, count)
+        .chars()
+        .filter(|hit| *hit == 'x')
+        .count()
+}
+
+#[test]
+fn a_percent_plays_its_share_of_passes() {
+    // `D0` is 1%, `DE` 25%, `E8` 50% and `FF` 99%, over 256 bars.
+    for (value, low, high) in [
+        ("D0", 0, 10),
+        ("DE", 40, 90),
+        ("E8", 100, 156),
+        ("FF", 245, 256),
+    ] {
+        let mut song = first_row(&format!("cnd:{value}"));
+        song.seed = 7;
+        let heard = played(&song, 256);
+        assert!((low..=high).contains(&heard), "{value}: {heard}");
+    }
+}
+
+#[test]
+fn a_failed_percent_skips_its_rows_locks_too() {
+    let level = |song: &Song, step: usize| {
+        let out = render_frames(version(song, flat_pool()), RATE, (step + 1) * STEP);
+        out[(step * STEP + STEP / 2) * 2].abs()
+    };
+    // Each pass, the second row's `VOL` silences the note only when its 50% comes up.
+    let mut locks = song(&[&["C-3 -- ---", "--- -- cnd:E8 vol:00"]]);
+    locks.seed = 3;
+    let silenced: Vec<bool> = (0..16)
+        .map(|pass| level(&locks, pass * 2 + 1) < 0.001)
+        .collect();
+    assert!(
+        silenced.contains(&true) && silenced.contains(&false),
+        "{silenced:?}"
+    );
+    // A `CHA` that fails still locks it.
+    let mut chance = song(&[&["C-3 -- ---", "--- -- cha:80 vol:00"]]);
+    chance.seed = 3;
+    assert!((0..16).all(|pass| level(&chance, pass * 2 + 1) < 0.001));
+}
+
+#[test]
+fn previous_follows_a_percent() {
+    let rows = ["C-3 -- cnd:E8", "C-3 -- cnd:03", "C-3 -- cnd:04", "--- --"];
+    let mut song = song(&[&rows]);
+    song.seed = 11;
+    let heard = hits(&song, 64, 0);
+    let mut played = 0;
+    for pass in 0..16 {
+        let chance = heard.contains(&(pass * 4));
+        played += usize::from(chance);
+        assert_eq!(heard.contains(&(pass * 4 + 1)), chance, "pass {pass}");
+        assert_eq!(heard.contains(&(pass * 4 + 2)), !chance, "pass {pass}");
+    }
+    assert!(played > 0 && played < 16, "the chance went both ways");
+}
+
+#[test]
+fn chance_up_or_down_moves_a_percent() {
+    let at = |delta: u8| {
+        let mut song = first_row("cnd:E8");
+        song.seed = 7;
+        song.tracks[0].chance_delta = delta;
+        passes(&song, 128)
+    };
+    let (half, none, all, more) = (at(0x80), at(0x00), at(0xFF), at(0xC0));
+    assert!(!none.contains('x'), "{none}");
+    assert!(!all.contains('.'), "{all}");
+    // Turning it up only adds passes.
+    let count = |text: &str| text.chars().filter(|hit| *hit == 'x').count();
+    assert!(count(&more) > count(&half), "{half}\n{more}");
+    for (was, now) in half.chars().zip(more.chars()) {
+        assert!(was == '.' || now == 'x');
+    }
+}
+
+#[test]
+fn renders_with_percents_repeat() {
+    let rows = [
+        "C-3 -- cnd:E8 vol:40",
+        "C-3 -- cnd:03",
+        "C-3 -- cnd:DA",
+        "C-3 -- cnd:F4",
+    ];
+    let song = song(&[&rows, &["C-3 -- cnd:05", "C-3 -- cnd:E0"]]);
+    support::repeats("percents", || {
+        render_frames(version(&song, hits_pool()), RATE, 32 * STEP)
+    });
+}

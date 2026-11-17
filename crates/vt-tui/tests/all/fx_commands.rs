@@ -936,6 +936,21 @@ fn k_chooses_cnd_then_its_condition_from_a_list() {
     assert_eq!(slot(&app).coarse(), 0x99);
     press(&mut app, "rA3");
     assert_eq!(value_shown(&app).as_deref(), Some("<3, before pass 3 only"));
+
+    // So is a chance, and `+` moves it four places.
+    press(&mut app, "K50%");
+    let picker = app.overlays.picker.as_ref().unwrap();
+    assert_eq!(picker.current().unwrap().label, "50%");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).coarse(), 0xE8);
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("50%, 50 times in 100, locks and all")
+    );
+    press(&mut app, "+");
+    assert_eq!(slot(&app).coarse(), 0xEC);
+    press(&mut app, "rFF");
+    assert_eq!(slot(&app).coarse(), 0xFF, "99%");
 }
 
 #[test]

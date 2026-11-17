@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use vt_model::accumulator::{Adds, MOST_DEGREES, Reset, amount, moved_note};
 use vt_model::arpeggio::{ArpMode, Cycle};
-use vt_model::condition::{Condition, Situation};
+use vt_model::condition::{Condition, Situation, percent_comes_up};
 use vt_model::constants::{FX_SLOTS, NUDGE_TICKS, TICKS_PER_STEP};
 use vt_model::dice::{DiceStep, looped_chance};
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
@@ -1050,7 +1050,7 @@ impl Engine {
             let rolls = pending.dice.map_or(pending.count, |dice| dice.count);
             decided.note &= thin_keeps(seed, index, rolls, moved);
         }
-        let holds = self.conditions_hold(index, fx, pending, position, chance);
+        let holds = self.conditions_hold(index, fx, pending, position, chance, moved);
         if !holds {
             decided = Decided {
                 note: false,
@@ -1364,7 +1364,8 @@ impl Engine {
     /// Decide a row's conditions, left to right, as its first pulse lands, and keep what they and
     /// its `CHA` came to for `PRE` here and `NEI` on the track to the right to read next. The row
     /// plays only if every one holds. A value that isn't a condition is left out, as if it wasn't
-    /// there.
+    /// there. A `%` rolls the dice of the step the dice loop holds, if it's on, with its chance
+    /// moved by `moved`, the row's `CDLT`, as a `CHA`'s is.
     fn conditions_hold(
         &mut self,
         index: usize,
@@ -1372,7 +1373,10 @@ impl Engine {
         pending: &PendingStep,
         position: ChainPosition,
         chance: Option<bool>,
+        moved: f32,
     ) -> bool {
+        let seed = self.current.song.seed;
+        let rolls = pending.dice.map_or(pending.count, |dice| dice.count);
         let previous = self.tracks[index].passed;
         let neighbour = index
             .checked_sub(1)
@@ -1392,12 +1396,17 @@ impl Engine {
             };
             let last =
                 matches!(condition, Condition::Last(_)) && self.last_pass(index, pending, position);
+            let rolled = condition.chance().is_some_and(|chance| {
+                let chance = moved_chance(chance, 1.0, moved);
+                percent_comes_up(seed, index, rolls, number, chance)
+            });
             let result = condition.holds(Situation {
                 pass,
                 fill: self.fill,
                 previous,
                 neighbour,
                 last,
+                rolled,
             });
             holds &= result;
             if !condition.reads_last() {
