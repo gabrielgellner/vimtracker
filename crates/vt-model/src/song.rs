@@ -271,6 +271,17 @@ pub struct Track {
     /// `Start` waits for its loop to come round, `01` for on (decision 402).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub cue: u8,
+    /// Where held `DLP` starts: how many steps its dice loop over, `00` off, as
+    /// [`crate::dice::DICE_LOOP_LENGTHS`] has them (decision 410).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub dice_loop: u8,
+    /// Where held `DMU` starts: the chance a step of its dice loop rolls afresh as it comes round.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub dice_mutate: u8,
+    /// Where held `DJMP` starts: the chance a step takes the dice of any step of the loop
+    /// (decision 411).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub dice_jump: u8,
     /// The choke group it's in, if any, from 1 to `CHOKE_GROUPS`: a note on it cuts off what's
     /// sounding on the other tracks in the group, as a closed hat cuts an open one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -513,6 +524,9 @@ impl Track {
             TrackControl::ChanceDelta => self.chance_delta,
             TrackControl::ChanceTarget => self.chance_target,
             TrackControl::Cue => self.cue,
+            TrackControl::DiceLoop => self.dice_loop,
+            TrackControl::DiceMutate => self.dice_mutate,
+            TrackControl::DiceJump => self.dice_jump,
         }
     }
 
@@ -542,6 +556,9 @@ impl Track {
             TrackControl::ChanceDelta => &mut self.chance_delta,
             TrackControl::ChanceTarget => &mut self.chance_target,
             TrackControl::Cue => &mut self.cue,
+            TrackControl::DiceLoop => &mut self.dice_loop,
+            TrackControl::DiceMutate => &mut self.dice_mutate,
+            TrackControl::DiceJump => &mut self.dice_jump,
         };
         *held = match control {
             TrackControl::SendA | TrackControl::SendB => value.min(MAX_LEVEL),
@@ -784,6 +801,9 @@ impl Default for Track {
             chance_delta: centre(),
             chance_target: 0,
             cue: 0,
+            dice_loop: 0,
+            dice_mutate: 0,
+            dice_jump: 0,
             choke: None,
             group: None,
             gate_length: None,

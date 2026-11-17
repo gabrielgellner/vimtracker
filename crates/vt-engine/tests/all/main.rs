@@ -16,6 +16,7 @@ mod choke;
 mod clouds;
 mod compressors;
 mod conditions;
+mod dice_loop;
 mod echo;
 mod engine;
 mod envelope;

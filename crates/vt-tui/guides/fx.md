@@ -61,6 +61,9 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `RATE` | The step's speed: `00` 1/32, `02` 1/16, `04` 1/8, `06` 1/4 |
 | `QNT` | Nudges brought to the grid: `00` none, `80` half, `FF` all |
 | `JMP` | The chance this step plays any row of the phrase: `00` none, `FF` every |
+| `DLP` | Dice loop: `00` off, `01` to `10` steps, `11` 32, `12` 64 |
+| `DMU` | Dice mutate: `00` a locked loop, `FF` fresh dice |
+| `DJMP` | Dice jump: the chance of another step's dice in the loop |
 | `ORD` | The order, places on in the list from the phrase's own: `80` its own |
 | `REV` | The walk the other way up, `01`, or as written, `00` |
 | `ORDX` | The order's first number: `00` the phrase's own, `01` to `10` |
@@ -512,6 +515,33 @@ vary as written ones do. While playing, the row under the playhead shows the
 note heard, and the status line says it on the Note column. `Space g A` in
 the phrase view writes the notes as last heard into the phrase, or the
 selection, and takes their `RND`s out, so the pass you liked stays.
+
+### Looping the dice
+
+A track's dice can go round in a loop, as Marbles' Déjà vu does: with its
+`Dice loop` on, in the title of the Sound page's Play device, each step's `CHA`s
+and `RND`s, and the rows `CDLT` thins, roll the dice of a place in a loop of that many steps rather than
+fresh ones, so a run of chances you like comes round again. It's `Off`, as
+every track starts, then 1 to 16 steps, as Marbles' `Length` goes, then 32 and
+64 for two and four bars of sixteenths. The places keep to the track's own count
+of steps, so a loop of 16 keeps to the bar, and the loop is the track's, kept
+across its notes, phrases and chains.
+
+`Dice mutate` is the chance a place rolls afresh as it comes round: `00` locks
+the loop, so the same steps play and the same notes vary the same way every
+time round, `FF` rolls fresh dice every step, as with no loop, and between them
+the loop slowly changes. `Dice jump` is the chance a step takes the dice of any
+place of the loop instead of its own, so a locked loop plays the same dice out
+of order, as Marbles' knob does past noon. A Steps slot's `Mutate` and `Jump` do
+the same for its values, so one macro over both, zoned, is the whole of Déjà vu
+for a track's events and values. See **Steps** in **The Mod page**.
+
+The loop fills from the steps that play once playing starts, so playing from
+the top again, or from any step, fills it afresh. Everything it rolls comes from
+the `:seed`, the track and the step, so a render repeats. `DLP`, `DMU` and
+`DJMP` on a row set them for the step that plays it, read before it lands, as
+`JMP` is, and a lane, a mod slot or a macro moves them too. With `Dice mutate`
+at `FF` an `RND` rolls just as it does with the loop off.
 
 ## Groove
 

@@ -168,6 +168,9 @@ impl Control {
             Self::Base(TrackControl::ChanceDelta) => "Chance",
             Self::Base(TrackControl::ChanceTarget) => "Target",
             Self::Base(TrackControl::Cue) => "Cue",
+            Self::Base(TrackControl::DiceLoop) => "Dice loop",
+            Self::Base(TrackControl::DiceMutate) => "Dice mutate",
+            Self::Base(TrackControl::DiceJump) => "Dice jump",
             Self::Choke => "Choke",
             Self::Group => "Group",
             Self::Role => "Role",
@@ -389,7 +392,10 @@ impl Control {
                 | TrackControl::PhraseStart
                 | TrackControl::ChanceDelta
                 | TrackControl::ChanceTarget
-                | TrackControl::Cue,
+                | TrackControl::Cue
+                | TrackControl::DiceLoop
+                | TrackControl::DiceMutate
+                | TrackControl::DiceJump,
             )
             | Self::Choke
             | Self::Group
@@ -441,7 +447,8 @@ impl Control {
             | TrackControl::PhraseLength
             | TrackControl::PhraseStart
             | TrackControl::ChanceTarget
-            | TrackControl::Cue,
+            | TrackControl::Cue
+            | TrackControl::DiceLoop,
         ) = self
         {
             return false;
@@ -504,6 +511,7 @@ impl Control {
                         | TrackControl::OrderY
                         | TrackControl::ChanceTarget
                         | TrackControl::Cue
+                        | TrackControl::DiceLoop
                 )
         )
     }
