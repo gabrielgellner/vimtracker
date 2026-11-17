@@ -8,7 +8,7 @@ use vt_model::action::TrackControl;
 use vt_model::grid::GRID_ROWS;
 use vt_model::song::{Machine, Track, TrackKind};
 
-use super::{DEVICE_COLUMNS, DeviceSpec, DeviceWidth};
+use super::{DEVICE_COLUMNS, DeviceSpec, DeviceWidth, TITLE_PLACES};
 use crate::controls::{Control, base};
 
 /// The Sound page's devices, top to bottom: on a sound track its machine, its filter, its output
@@ -29,7 +29,7 @@ pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
     let mut devices = vec![machine(track.machine)];
     devices.extend(
         track.machine.operators().into_iter().map(|(name, grid)| {
-            DeviceSpec::new(name, [None; DEVICE_COLUMNS], grid, Control::Setting)
+            DeviceSpec::new(name, [None; TITLE_PLACES], grid, Control::Setting)
         }),
     );
     devices.extend([
@@ -135,7 +135,7 @@ fn machine(machine: Machine) -> DeviceSpec {
     };
     let mut device = DeviceSpec::new(
         "Machine",
-        [Some(Control::Machine), kind, None, None],
+        [Some(Control::Machine), kind, None, None, None],
         machine.grid(),
         Control::Setting,
     );

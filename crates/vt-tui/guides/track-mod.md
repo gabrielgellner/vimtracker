@@ -406,6 +406,7 @@ so its values are heard as written.
 |---|---|
 | Mode | In the title: `Trig`, `Free` or `Note`, below |
 | Loop | In the title: what it does at its end, below |
+| Jump | In the title: the chance each step is any of its steps instead, `0%` to `100%` |
 | Dest | In the title: what it moves, such as `Pitch`, or `---` |
 | Rate | How long each step lasts: `Tick`, `1/64` to `1 bar`, or `Pass` |
 | Length | How many steps it plays, from 1 to 16 |
@@ -458,6 +459,14 @@ it. Mutate up, listen, Mutate down to lock, `Space g a` to keep. `u` gives back 
 values as they were, though not the lock: the draws aren't in the song, so you hear
 the values as written until `Mutate` draws again. Steps it hasn't drawn keep their
 own, and so do those past the `Length`.
+
+**Jump** is the other half of Marbles' Déjà vu knob, past noon: each time it moves
+on, it goes to any of its `Length` steps with that chance, rather than the next one
+its `Loop` walks to, and then walks on from where it would have been. `0%` walks as
+the loop says and `100%` plays a step at random every time, in any mode. A jump
+plays the step as it's heard, so with `Mutate` locked at `0%` it replays the drawn
+values out of order. The step it jumps to is lit in the box. It's rolled from the
+project's seed, so a render repeats, and like `Mutate` a macro or a patch holds it.
 
 **Smooth** at `00` steps. Up to `+80` each step glides in from the one before over
 its first part, all of it at `+80`, and on to `+FF` the glide becomes a curve

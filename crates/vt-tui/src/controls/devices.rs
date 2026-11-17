@@ -78,6 +78,10 @@ impl Page {
 /// How many columns of settings a device has, its grid's.
 pub(crate) const DEVICE_COLUMNS: usize = GRID_COLUMNS;
 
+/// How many controls a device's title holds at most: one more than its grid's columns, as a Steps
+/// slot's has its type, mode, loop, jump and destination.
+pub(crate) const TITLE_PLACES: usize = DEVICE_COLUMNS + 1;
+
 /// How many rows the cursor goes through in a device: its title, then its grid's.
 pub(crate) const DEVICE_ROWS: usize = 1 + GRID_ROWS;
 
@@ -104,7 +108,7 @@ pub struct DeviceSpec {
     /// How much of the rack's width it takes. Two half-width devices in a row share a band of the
     /// rack, the first on the left.
     pub width: DeviceWidth,
-    pub title: [Option<Control>; DEVICE_COLUMNS],
+    pub title: [Option<Control>; TITLE_PLACES],
     pub grid: [[Option<Control>; DEVICE_COLUMNS]; GRID_ROWS],
 }
 
@@ -114,7 +118,7 @@ impl DeviceSpec {
     /// switch until it's given one, and takes the rack's whole width.
     pub fn new(
         identity: impl Into<String>,
-        title: [Option<Control>; DEVICE_COLUMNS],
+        title: [Option<Control>; TITLE_PLACES],
         grid: Grid,
         control: impl Fn(usize) -> Control,
     ) -> Self {
@@ -137,7 +141,7 @@ impl DeviceSpec {
     }
 
     /// Its rows as the cursor goes through them: its title, then its grid's.
-    pub fn rows(&self) -> impl Iterator<Item = [Option<Control>; DEVICE_COLUMNS]> + '_ {
-        std::iter::once(self.title).chain(self.grid.iter().copied())
+    pub fn rows(&self) -> impl Iterator<Item = Vec<Option<Control>>> + '_ {
+        std::iter::once(self.title.to_vec()).chain(self.grid.iter().map(|row| row.to_vec()))
     }
 }

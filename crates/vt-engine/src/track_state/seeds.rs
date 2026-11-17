@@ -52,3 +52,16 @@ pub(super) fn effect_rng(seed: u64, index: usize, slot: usize) -> Pcg32 {
         (4 * MAX_TRACKS + 2 * MAX_TRACKS * MOD_SLOTS + MAX_TRACKS + index * INSERTS + slot) as u64,
     )
 }
+
+/// The generator for a Steps slot's `Jump`, on streams after every track's slots' effects.
+pub(super) fn jump_rng(seed: u64, index: usize, slot: usize) -> Pcg32 {
+    Pcg32::new(
+        seed,
+        (4 * MAX_TRACKS
+            + 2 * MAX_TRACKS * MOD_SLOTS
+            + MAX_TRACKS
+            + MAX_TRACKS * INSERTS
+            + index * MOD_SLOTS
+            + slot) as u64,
+    )
+}
