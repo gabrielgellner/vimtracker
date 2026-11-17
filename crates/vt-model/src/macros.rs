@@ -17,7 +17,7 @@ use crate::modulation::{MOD_SLOTS, ModKind, Polarity, depth_of, depth_value};
 use crate::order::MOST_ORDER_NUMBER;
 use crate::settings::{Kind, Owner, SettingId, SettingSet};
 use crate::shape::{GenParam, MAX_BEND, Shape, ShapeColumn, curved};
-use crate::song::{FilterMode, FilterType, GlideMode, Phase, Track, VoiceMode};
+use crate::song::{FilterMode, FilterType, GlideMode, Phase, Song, Track, VoiceMode};
 use crate::speed::Speed;
 use crate::step::Step;
 
@@ -69,6 +69,11 @@ pub struct MacroMap {
     /// its setting at `min`, above it at `max`, and across it runs from one to the other.
     #[serde(default, skip_serializing_if = "Zone::is_whole")]
     pub zone: Zone,
+    /// On a group track, the track of the group it reaches, by its place among the group's tracks
+    /// from 0, so a group's patch reaches the same places wherever it's loaded (decision 408). None
+    /// is the macro's own track, as every sound track's mappings are.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub member: Option<u8>,
 }
 
 /// The part of a macro's turn a mapping acts over, from `start` to `end` on the macro's `00` to
@@ -306,6 +311,7 @@ impl MacroMap {
             curve: 0,
             s: 0,
             zone: Zone::WHOLE,
+            member: None,
         }
     }
 
@@ -319,6 +325,7 @@ impl MacroMap {
             curve: 0,
             s: 0,
             zone: Zone::WHOLE,
+            member: None,
         }
     }
 
@@ -439,9 +446,22 @@ impl Macro {
             .or_else(|| self.maps.first().map(|map| map.target.name()))
     }
 
-    /// The place among its maps of the one reaching this.
+    /// The place among its maps of the one reaching this on its own track.
     pub fn map_of(&self, target: MacroTarget) -> Option<usize> {
-        self.maps.iter().position(|map| map.target == target)
+        self.map_on(None, target)
+    }
+
+    /// The place among its maps of the one reaching this on a track of its group, by the track's
+    /// place there, or on its own track with none.
+    pub fn map_on(&self, member: Option<u8>, target: MacroTarget) -> Option<usize> {
+        self.maps
+            .iter()
+            .position(|map| map.member == member && map.target == target)
+    }
+
+    /// Its maps on its own track, leaving out a group's on its tracks.
+    pub fn own_maps(&self) -> impl Iterator<Item = &MacroMap> {
+        self.maps.iter().filter(|map| map.member.is_none())
     }
 }
 
@@ -455,36 +475,100 @@ pub fn valid_name(name: &str) -> bool {
 }
 
 impl Track {
-    /// Whether any of its macros holds a generator's setting.
-    pub(crate) fn has_gen_maps(&self) -> bool {
+    /// Whether any of its macros holds a setting on a track of its group.
+    pub fn has_member_maps(&self) -> bool {
         self.macros
             .iter()
             .flat_map(|held| &held.maps)
-            .any(|map| matches!(map.target, MacroTarget::Gen { .. }))
+            .any(|map| map.member.is_some())
     }
 
-    /// The shape a live generator of one of its phrases is heard with by hand: its own, with each
-    /// setting a macro holds on its column put where the macro's turn puts it, kept to the
-    /// setting's bounds in that phrase. None if no macro holds any of its settings, or only ones
-    /// its shape hasn't. `steps` are the phrase's, and `source` the loop a `Follow` reads.
+    /// Each of its mappings on its own track, with where its macro is turned by hand, on the `00`
+    /// to `FF` scale.
+    fn own_holds(&self) -> impl Iterator<Item = (f32, &MacroMap)> {
+        self.macros.iter().flat_map(|held| {
+            let value = f32::from(held.value) / 256.0;
+            held.own_maps().map(move |map| (value, map))
+        })
+    }
+}
+
+impl Song {
+    /// A sound track's group track and its place among the group's tracks, from 0, if it's in a
+    /// group: the place a group's mapping names it by.
+    pub fn group_place(&self, track: usize) -> Option<(usize, u8)> {
+        let group = self.group_track_of(track)?;
+        let place = self.group_members(group).position(|at| at == track)?;
+        Some((group, u8::try_from(place).ok()?))
+    }
+
+    /// The sound track at a place in a group, as a group's mapping names it.
+    pub fn group_member(&self, group: usize, place: u8) -> Option<usize> {
+        self.group_members(group).nth(usize::from(place))
+    }
+
+    /// Each of its group's macros' mappings on a sound track, with the macro's place, in the
+    /// macros' order: none for a track in no group, or whose group's macros hold nothing of it.
+    pub fn group_maps_on(&self, track: usize) -> impl Iterator<Item = (usize, &MacroMap)> + '_ {
+        self.group_place(track)
+            .into_iter()
+            .flat_map(move |(group, place)| {
+                self.tracks[group]
+                    .macros
+                    .iter()
+                    .enumerate()
+                    .flat_map(move |(at, held)| {
+                        held.maps
+                            .iter()
+                            .filter(move |map| map.member == Some(place))
+                            .map(move |map| (at, map))
+                    })
+            })
+    }
+
+    /// Which of its group's macros holds a setting on a sound track, and its mapping there, if
+    /// one does.
+    pub fn group_holding(&self, track: usize, target: MacroTarget) -> Option<(usize, &MacroMap)> {
+        self.group_maps_on(track)
+            .find(|(_, map)| map.target == target)
+    }
+
+    /// Each mapping on a track, its own macros' and its group's, with where its macro is turned
+    /// by hand, on the `00` to `FF` scale: its own first, so its group's has the last word, as
+    /// the engine puts them.
+    fn holds_on(&self, track: usize) -> impl Iterator<Item = (f32, &MacroMap)> + '_ {
+        let group = self.group_place(track).map(|(group, _)| &self.tracks[group]);
+        let own = self.tracks.get(track).into_iter().flat_map(Track::own_holds);
+        let from_group = self.group_maps_on(track).filter_map(move |(at, map)| {
+            Some((f32::from(group?.macros[at].value) / 256.0, map))
+        });
+        own.chain(from_group)
+    }
+
+    /// Whether any macro holds a generator's setting on a track: one of its own, or its group's.
+    pub(crate) fn has_gen_maps(&self, track: usize) -> bool {
+        self.holds_on(track)
+            .any(|(_, map)| matches!(map.target, MacroTarget::Gen { .. }))
+    }
+
+    /// The shape a live generator of one of a track's phrases is heard with by hand: its own, with
+    /// each setting a macro holds on its column, the track's own or its group's, put where the
+    /// macro's turn puts it, kept to the setting's bounds in that phrase. None if no macro holds
+    /// any of its settings, or only ones its shape hasn't. `steps` are the phrase's, and `source`
+    /// the loop a `Follow` reads.
     pub(crate) fn held_shape(
         &self,
+        track: usize,
         generator: &Generator,
         steps: &[Step],
         source: Option<&[Step]>,
     ) -> Option<Shape> {
         let column = GenColumn::of(generator.column);
         let held: Vec<(f32, &MacroMap, GenParam)> = self
-            .macros
-            .iter()
-            .flat_map(|held| {
-                let value = f32::from(held.value) / 256.0;
-                held.maps.iter().filter_map(move |map| match map.target {
-                    MacroTarget::Gen { column: on, param } if on == column => {
-                        Some((value, map, param))
-                    }
-                    _ => None,
-                })
+            .holds_on(track)
+            .filter_map(|(value, map)| match map.target {
+                MacroTarget::Gen { column: on, param } if on == column => Some((value, map, param)),
+                _ => None,
             })
             .collect();
         if held.is_empty() {
@@ -502,6 +586,27 @@ impl Track {
         }
         any.then_some(shape)
     }
+
+    /// A track as its macros have it, by hand, its own and its group's: each setting a macro holds
+    /// put where the macro's turn puts it, for the pages to show. One no macro holds anything of
+    /// is the track itself.
+    pub fn track_with_macros(&self, track: usize) -> Cow<'_, Track> {
+        let own = self.tracks[track].with_macros();
+        if self.group_maps_on(track).next().is_none() {
+            return own;
+        }
+        let mut heard = own.into_owned();
+        for (at, map) in self.group_maps_on(track) {
+            if let (Some(id), Some((group, _))) = (map.target.setting(), self.group_place(track)) {
+                let value = f32::from(self.tracks[group].macros[at].value) / 256.0;
+                heard.set_value_of(id, map.at(value));
+            }
+        }
+        Cow::Owned(heard)
+    }
+}
+
+impl Track {
 
     /// Where a setting is on this track before any step sets it, with a coarse byte and a fine
     /// one, whoever owns it: a voice keeps its own, an effect's setting is what's in its slot, or
@@ -715,16 +820,13 @@ impl Track {
     /// The track as its macros have it, by hand: each setting a macro holds put where the macro's
     /// turn puts it, for the pages to show. One whose macros hold nothing is the track itself.
     pub fn with_macros(&self) -> Cow<'_, Track> {
-        if !self.has_macro_maps() {
+        if self.own_holds().next().is_none() {
             return Cow::Borrowed(self);
         }
         let mut heard = self.clone();
-        for held in &self.macros {
-            let value = f32::from(held.value) / 256.0;
-            for map in &held.maps {
-                if let Some(id) = map.target.setting() {
-                    heard.set_value_of(id, map.at(value));
-                }
+        for (value, map) in self.own_holds() {
+            if let Some(id) = map.target.setting() {
+                heard.set_value_of(id, map.at(value));
             }
         }
         Cow::Owned(heard)
@@ -876,6 +978,7 @@ mod tests {
             curve: 0,
             s: 0,
             zone: Default::default(),
+            member: None,
         };
         assert_eq!(map.at(0.0), 0x3000);
         assert_eq!(map.at(255.0), 0xA000);
@@ -974,6 +1077,7 @@ mod tests {
             curve: 40,
             s: 0,
             zone: Zone::new(0x40, 0xC0).unwrap(),
+            member: None,
         };
         for value in [0.0, 20.0, 63.9, 64.0] {
             assert_eq!(map.at(value), 0x3000, "below, at Min: {value}");
@@ -1028,6 +1132,7 @@ mod tests {
             curve: 0,
             s: 0,
             zone: Default::default(),
+            member: None,
         };
         let turned = map.macro_for(0x8000);
         assert_eq!(map.at(f32::from(turned) / 256.0), 0x8000);
@@ -1097,6 +1202,7 @@ mod tests {
             curve: 0,
             s: 0,
             zone: Default::default(),
+            member: None,
         });
         assert_eq!(track.with_macros().cutoff, 0x60);
         assert_eq!(track.cutoff, 0xFF, "the track keeps its own");

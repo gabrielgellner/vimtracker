@@ -260,10 +260,12 @@ pub enum Action {
         at: usize,
         map: MacroMap,
     },
-    /// Take a setting off whichever of a track's macros holds it.
+    /// Take a setting off whichever of a track's macros holds it: on the track itself, or with
+    /// `member` on the track at that place in a group track's group.
     UnmapMacro {
         track: usize,
         target: MacroTarget,
+        member: Option<u8>,
     },
     /// Name one of a track's macros, or give it back its first mapping's name with `None`.
     NameMacro {

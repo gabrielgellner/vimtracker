@@ -409,6 +409,7 @@ impl Services {
                 self.apply(&Action::UnmapMacro {
                     track: index,
                     target,
+                    member: None,
                 });
                 self.status = format!("{name} is off macro {}, and back to its own", at + 1);
             }
@@ -1015,6 +1016,7 @@ impl MappingView {
         services.apply(&Action::UnmapMacro {
             track: services.cursor.track,
             target: map.target,
+            member: map.member,
         });
         if self.keep_open(services) {
             services.status = format!("{name} is off the macro: u brings it back");

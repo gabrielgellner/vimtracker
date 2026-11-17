@@ -192,6 +192,7 @@ fn knob(song: &mut Song, at: usize, name: &str, key: &str, ends: (u16, u16), val
         curve: 0,
         s: 0,
         zone: Default::default(),
+        member: None,
     });
 }
 
@@ -2058,6 +2059,7 @@ fn panel_knob(track: &mut Track, at: usize, name: &str, key: &str, ends: (u16, u
         curve: 0,
         s: 0,
         zone: Default::default(),
+        member: None,
     };
     let value = map.macro_for(track.value_of(id));
     let held = &mut track.macros[at];
@@ -2152,6 +2154,7 @@ fn deja_vu_knob(track: &mut Track, value: u16) {
         curve: 0,
         s: 0,
         zone: Zone::new(zone.0, zone.1).unwrap(),
+        member: None,
     };
     let held = &mut track.macros[0];
     held.name = Some("Deja vu".to_owned());

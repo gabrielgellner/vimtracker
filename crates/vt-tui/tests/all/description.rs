@@ -159,6 +159,7 @@ fn it_says_what_a_macro_moves_in_the_macro_panel() {
         curve: 0,
         s: 0,
         zone: Default::default(),
+        member: None,
     });
     held.maps.push(MacroMap {
         target: MacroTarget::Setting(SettingId::RES),
@@ -168,6 +169,7 @@ fn it_says_what_a_macro_moves_in_the_macro_panel() {
         s: 0,
         // Over the right half alone, which the line says (decision 392).
         zone: Zone::new(0x80, 0xFF).unwrap(),
+        member: None,
     });
     let (mut app, _realtime) = app_for(song);
     press(&mut app, " T d");

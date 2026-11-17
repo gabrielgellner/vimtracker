@@ -553,6 +553,8 @@ impl Engine {
             }
         }
         self.used = tracks.len().min(MAX_TRACKS);
+        // Each group's macros put what they hold on its tracks again.
+        self.put_group_macros();
     }
 
     /// Stop sequencing but let everything sounding finish on its own, for a render's tail.

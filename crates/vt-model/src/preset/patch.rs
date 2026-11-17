@@ -23,7 +23,7 @@ use super::{PRESET_FORMAT, Patch, Preset, PresetKind};
 use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS};
 use crate::generator::{Generator, Span};
 use crate::lane::LaneMove;
-use crate::macros::{GenColumn, MACROS, Macro, MacroTarget};
+use crate::macros::{GenColumn, MACROS, Macro, MacroMap, MacroTarget};
 use crate::modulation::MOD_SLOTS;
 use crate::settings::{Owner, SettingId};
 use crate::shape::{FillKind, Shape, ShapeColumn};
@@ -203,7 +203,7 @@ impl Parts {
         loop {
             let mut grew = false;
             for at in parts.macros.clone() {
-                for map in &track.macros[at].maps {
+                for map in track.macros[at].own_maps() {
                     if let Some(id) = map.target.setting() {
                         grew |= parts.reach(id);
                     }
@@ -273,7 +273,7 @@ impl Patch {
         let columns: BTreeSet<GenColumn> = track
             .macros
             .iter()
-            .flat_map(|held| &held.maps)
+            .flat_map(Macro::own_maps)
             .filter_map(|map| match map.target {
                 MacroTarget::Gen { column, .. } => Some(column),
                 MacroTarget::Setting(_) => None,
@@ -310,7 +310,7 @@ impl Patch {
             .iter()
             .map(|at| {
                 let mut held = track.macros[*at].clone();
-                for map in &mut held.maps {
+                for map in held.maps.iter_mut().filter(|map| map.member.is_none()) {
                     if let MacroTarget::Setting(id) = map.target
                         && let Some(id) = renumbered(id)
                     {
@@ -355,7 +355,7 @@ impl Patch {
         let maps = self
             .macros
             .iter()
-            .flat_map(|held| &held.maps)
+            .flat_map(Macro::own_maps)
             .filter_map(|map| map.target.setting());
         let locks = self
             .generators
@@ -392,7 +392,7 @@ impl Patch {
                 track
                     .macros
                     .iter()
-                    .flat_map(|held| &held.maps)
+                    .flat_map(Macro::own_maps)
                     .filter_map(|map| map.target.setting()),
             )
             .collect();
@@ -442,16 +442,23 @@ impl Patch {
             Owner::Macro(at) => placement.macros.contains(&at),
             _ => false,
         };
-        let targets: Vec<MacroTarget> = self
+        // A group's patch reaches the tracks of the group a group track has, by their places, and
+        // a sound track has none.
+        let group = track.is_group();
+        let kept = |map: &MacroMap| group || map.member.is_none();
+        let targets: Vec<(Option<u8>, MacroTarget)> = self
             .macros
             .iter()
             .flat_map(|held| &held.maps)
-            .map(|map| self.target_on(map.target, placement))
+            .filter(|map| kept(map))
+            .map(|map| (map.member, self.target_on(*map, placement)))
             .collect();
         for (at, held) in track.macros.iter_mut().enumerate() {
             if !placement.macros.contains(&at) {
                 held.maps.retain(|map| {
-                    !map.target.setting().is_some_and(replaced) && !targets.contains(&map.target)
+                    let own = map.member.is_none();
+                    !(own && map.target.setting().is_some_and(replaced))
+                        && !targets.contains(&(map.member, map.target))
                 });
             }
         }
@@ -467,8 +474,9 @@ impl Patch {
         }
         for (held, at) in self.macros.iter().zip(&placement.macros) {
             let mut held = held.clone();
+            held.maps.retain(|map| kept(map));
             for map in &mut held.maps {
-                map.target = self.target_on(map.target, placement);
+                map.target = self.target_on(*map, placement);
             }
             track.macros[*at] = held;
         }
@@ -484,9 +492,13 @@ impl Patch {
     }
 
     /// What a map of its reaches on a track, placed: a slot's or macro's setting renumbered, and
-    /// an FX generator's column where its generator was put.
-    fn target_on(&self, target: MacroTarget, placement: &Placement) -> MacroTarget {
-        match target {
+    /// an FX generator's column where its generator was put. A group's map on one of its tracks
+    /// reaches that track's own, which the patch doesn't carry, and is left as it is.
+    fn target_on(&self, map: MacroMap, placement: &Placement) -> MacroTarget {
+        if map.member.is_some() {
+            return map.target;
+        }
+        match map.target {
             MacroTarget::Setting(id) => MacroTarget::Setting(placement.setting(id)),
             MacroTarget::Gen {
                 column: GenColumn::Fx(slot),
@@ -922,5 +934,51 @@ mod tests {
         let error = load::<PatchPreset>(&path).unwrap_err().to_string();
         assert!(error.contains("mod2.depth"), "{error}");
         fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_groups_patch_reaches_its_tracks_by_their_places_wherever_its_loaded() {
+        use crate::song::TrackKind;
+        // Group 1's macro 1 holds `Cut` on its first track and the depth of the second's mod slot
+        // 2, which are theirs and not the patch's, and is moved by the group's own LFO in slot 4.
+        let song = Song::new(2);
+        let group = song.fixed_track(TrackKind::Group(1)).unwrap();
+        let mut track = song.tracks[group].clone();
+        let depth = SettingId::modulator(1, 0).unwrap();
+        let on = |member: u8, target: SettingId| MacroMap {
+            member: Some(member),
+            ..MacroMap::whole(MacroTarget::Setting(target))
+        };
+        track.macros[0] = Macro {
+            name: Some("Kit".to_owned()),
+            value: 0x4000,
+            maps: vec![on(0, SettingId::CUT), on(1, depth)],
+        };
+        track.mods[3].destination = SettingId::macro_at(0);
+        let patch = Patch::of_track(&track, None).unwrap();
+        assert_eq!(patch.needs(), "1 slot, 1 macro", "its tracks' slots aren't its own");
+        assert_eq!(patch.check_alone(), Ok(()));
+        let text = ron::to_string(&patch).unwrap();
+        assert!(text.contains("member:Some(1)"), "{text}");
+        let loaded: Patch = ron::from_str(&text).unwrap();
+        assert_eq!(loaded, patch);
+        // On another song's group, with its first macro and slot taken, it reaches the same places.
+        let mut other = Song::new(3).tracks[group + 1].clone();
+        other.macros[0].maps = vec![MacroMap::whole(MacroTarget::Setting(SettingId::PAN))];
+        other.mods[0].destination = Some(SettingId::PAN);
+        let placement = loaded.place(&other, false).unwrap();
+        loaded.add_to(&mut other, &placement);
+        let at = placement.macros[0];
+        assert_eq!(other.macros[at].maps, [on(0, SettingId::CUT), on(1, depth)]);
+        assert_eq!(
+            other.mods[placement.mods[0]].destination,
+            SettingId::macro_at(at),
+            "the group's LFO follows its macro"
+        );
+        // A sound track has no tracks of its own, so it takes the macro without them.
+        let mut sound = Song::new(1).tracks[0].clone();
+        let placement = loaded.place(&sound, false).unwrap();
+        loaded.add_to(&mut sound, &placement);
+        assert!(sound.macros[placement.macros[0]].maps.is_empty());
     }
 }

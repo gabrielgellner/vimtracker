@@ -521,7 +521,12 @@ impl Engine {
         // A `MAC` lock on the row reaches what its macro holds of the generators on the row itself,
         // as it reaches any other setting: the macros are put now, and the row read again if that
         // moved a generator, so its note is heard with it.
-        let (step, gate, event) = if row && first && self.tracks[index].put_macros_now(owner) {
+        // A group's go onto its tracks at once too, which read their rows after it (decision 408).
+        let reread = row && first && self.tracks[index].put_macros_now(owner);
+        if row && first && self.current.group_macros.leads(index) {
+            self.put_group_macros();
+        }
+        let (step, gate, event) = if reread {
             let step = self.view_row(index, read, row_at, written, played);
             let gate = step.gate_kind();
             (step, gate, event_of(step.note, gate, first))

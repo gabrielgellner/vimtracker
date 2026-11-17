@@ -693,6 +693,7 @@ mod tests {
                 curve: 40,
                 s: -20,
                 zone: Default::default(),
+                member: None,
             }],
         };
         track

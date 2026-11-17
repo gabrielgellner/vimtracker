@@ -532,6 +532,7 @@ fn a_macro_turns_jump() {
         curve: 0,
         s: 0,
         zone: Zone::default(),
+        member: None,
     }];
     let walk = [0, 1, 2, 3, 4, 5, 6, 7].repeat(2);
     assert_eq!(played(&song, 16), walk);
@@ -707,6 +708,7 @@ fn macros_turn_spread_and_bias() {
         curve: 0,
         s: 0,
         zone: Zone::default(),
+        member: None,
     };
     // The first macro takes `Spread` from 0% to 100%, the second `Bias` from none to +100.
     song.tracks[0].macros[0].maps = vec![map(ModField::Spread, 0, 0x6400)];

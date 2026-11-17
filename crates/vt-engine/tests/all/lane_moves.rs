@@ -336,6 +336,7 @@ fn modulation_and_a_macro_reach_a_lanes_length() {
             curve: 0,
             s: 0,
             zone: Default::default(),
+            member: None,
         });
     song.tracks[0].macros[0].value = 0xFF00;
     let mut engine = engine(&song);
