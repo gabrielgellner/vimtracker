@@ -6,7 +6,7 @@
 use crate::constants::{MAX_LEVEL, UNITY_LEVEL};
 use crate::groove::GROOVE_CHOICES;
 use crate::lane::{LANE_RATES, LENGTH_AS_WRITTEN, RATE_AS_WRITTEN};
-use crate::order::{MOST_ORDER_NUMBER, ORDER_AS_WRITTEN};
+use crate::order::{MOST_ORDER_NUMBER, ORDER_AS_WRITTEN, WINDOW_AS_WRITTEN};
 use std::borrow::Cow;
 
 use crate::param::{Choice, Descriptor, Reading, Typing};
@@ -389,7 +389,7 @@ const TRACK_GROUPS: [&str; 16] = [
 
 /// The track's own settings added since places were fixed, at the end of the table so none moves
 /// (#718): the track's own after [`TRACK`]'s, in the order they came.
-const LATER_TRACK: [Entry; 16] = [
+const LATER_TRACK: [Entry; 18] = [
     // Whether a synth's oscillators run on from note to note or start again on each, read as a
     // note starts, so a lock on its row sets it for that note (decision 370).
     Entry {
@@ -553,6 +553,34 @@ const LATER_TRACK: [Entry; 16] = [
         default: 0,
         place: Place::Own,
     },
+    // The window of the phrase's rows its order walks over, read before a row plays, as `ORD` is
+    // (decision 401): how many rows, a row a step either side of `80`, and the first.
+    Entry {
+        meaning: "how many of the phrase's rows its order walks over, more or fewer",
+        key: "phraselength",
+        name: "Length",
+        label: Some("PLEN"),
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: true,
+            units: Units::Rows,
+        },
+        default: WINDOW_AS_WRITTEN,
+        place: Place::Own,
+    },
+    Entry {
+        meaning: "which of the phrase's rows the walk's window starts on, rows on from its first",
+        key: "phrasestart",
+        name: "Start",
+        label: Some("PSTA"),
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units: Units::Rows,
+        },
+        default: 0,
+        place: Place::Own,
+    },
     // As the Metropolix's Probability and Elektron's track `PROB`: every row's chance moved up or
     // down, read as the row decides whether it plays, so a lock on its row sets it for that row,
     // `80` none (decision 405).
@@ -560,9 +588,10 @@ const LATER_TRACK: [Entry; 16] = [
         .means("moves every row's chance to play up or down, a density fader"),
 ];
 /// What each of [`LATER_TRACK`] is listed with.
-const LATER_TRACK_GROUPS: [&str; 16] = [
+const LATER_TRACK_GROUPS: [&str; 18] = [
     "Machine", "Machine", "Filter", "Machine", "Machine", "Filter", "Filter", "Filter", "Filter",
-    "Filter", "Filter", "Machine", "Machine", "Machine", "Machine", "Machine",
+    "Filter", "Filter", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
+    "Machine",
 ];
 
 /// What `ORDX` and `ORDY` choose: the phrase's own number, or one from 1 to 16.
@@ -590,7 +619,7 @@ const SLOT_OWN: [Entry; 1] = [Entry {
 /// Each FX column's lane's, which move every phrase's lane on that column from its own: how many
 /// rows it's heard for, one a step either side of `80`, and how much slower or faster its rows go.
 /// With the column's number after each, as `LLEN1`.
-const LANE: [Entry; 2] = [
+const LANE: [Entry; 3] = [
     Entry {
         meaning: "how many rows this column's lanes are heard for, more or fewer",
         key: "length",
@@ -616,7 +645,25 @@ const LANE: [Entry; 2] = [
         default: RATE_AS_WRITTEN,
         place: Place::Own,
     },
+    // Added later, so its places come after the track's own (decision 401).
+    Entry {
+        meaning: "which of this column's lanes' rows each starts on, rows on from its first",
+        key: "start",
+        name: "Start",
+        label: Some("LSTA"),
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units: Units::Rows,
+        },
+        default: 0,
+        place: Place::Own,
+    },
 ];
+
+/// How many of a lane's settings have their places before the track's own added later: those
+/// that came first, `Length` and `Rate`.
+pub(crate) const EARLY_LANE: usize = 2;
 
 /// How many settings each FX column's lane has.
 pub const LANE_SETTINGS: usize = LANE.len();

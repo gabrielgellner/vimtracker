@@ -785,6 +785,8 @@ impl TrackState {
             reverse: value(SettingId::REVERSE) >= 1,
             x: value(SettingId::ORDER_X).min(MOST_ORDER_NUMBER),
             y: value(SettingId::ORDER_Y).min(MOST_ORDER_NUMBER),
+            length: value(SettingId::PHRASE_LENGTH),
+            start: value(SettingId::PHRASE_START),
         }
     }
 

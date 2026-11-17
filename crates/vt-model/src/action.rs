@@ -609,12 +609,14 @@ pub enum TrackControl {
     Reverse,
     OrderX,
     OrderY,
+    PhraseLength,
+    PhraseStart,
     ChanceDelta,
 }
 
 impl TrackControl {
     /// Every one, in the order they're declared.
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 20] = [
         Self::Cutoff,
         Self::Resonance,
         Self::Pan,
@@ -632,6 +634,8 @@ impl TrackControl {
         Self::Reverse,
         Self::OrderX,
         Self::OrderY,
+        Self::PhraseLength,
+        Self::PhraseStart,
         Self::ChanceDelta,
     ];
 
@@ -655,6 +659,8 @@ impl TrackControl {
             Self::Reverse => Some(SettingId::REVERSE),
             Self::OrderX => Some(SettingId::ORDER_X),
             Self::OrderY => Some(SettingId::ORDER_Y),
+            Self::PhraseLength => Some(SettingId::PHRASE_LENGTH),
+            Self::PhraseStart => Some(SettingId::PHRASE_START),
             Self::ChanceDelta => Some(SettingId::CHANCE_DELTA),
         }
     }

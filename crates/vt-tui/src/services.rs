@@ -776,12 +776,23 @@ pub(crate) fn new_song(tracks: usize) -> vt_model::song::Song {
     }
 }
 
-/// The order a phrase plays in as a track's walk moves it, `Reverse` after it, if that isn't the
-/// phrase's own (decision 400).
+/// The order a phrase plays in as a track's walk moves it, `Reverse` after it and the window of
+/// rows it walks, if that isn't the phrase's own (decisions 400 and 401).
 pub(crate) fn walked_order(phrase: &Phrase, walk: WalkMove) -> Option<String> {
     let order = phrase.order_walked(walk);
-    (order != phrase.order() || walk.reverse).then(|| {
+    (order != phrase.order() || walk.reverse || walk.moves_window()).then(|| {
         let reverse = if walk.reverse { " reversed" } else { "" };
-        format!("{order}{reverse}")
+        // The window, from its first row counted from 1 (decision 401).
+        let rows = phrase.len();
+        let window = if walk.moves_window() {
+            format!(
+                ", {} rows from {}",
+                walk.heard_length(rows),
+                walk.heard_start(rows) + 1
+            )
+        } else {
+            String::new()
+        };
+        format!("{order}{reverse}{window}")
     })
 }

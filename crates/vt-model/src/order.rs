@@ -31,6 +31,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use crate::constants::MAX_PHRASE_STEPS;
 use crate::random::splitmix64;
 use crate::step::Step;
 
@@ -414,6 +415,9 @@ impl Order {
     }
 }
 
+/// Where `PLEN` is at rest: the loop's own rows.
+pub const WINDOW_AS_WRITTEN: u8 = 0x80;
+
 /// Where `ORD` is at rest: each phrase's own order.
 pub const ORDER_AS_WRITTEN: u8 = 0x80;
 
@@ -424,13 +428,18 @@ pub const MOST_ORDER_NUMBER: u8 = 16;
 /// about to play (decision 400): `order` goes so many places on through [`Order::ALL`] from the
 /// phrase's own `:order`, `80` for none, as the Metropolix's order CV does; `reverse` turns its
 /// rows the other way up, as its Direction does; and `x` and `y` are numbers in place of the
-/// order's own, `00` for its own. At rest every phrase walks as it's written.
+/// order's own, `00` for its own. `length` and `start` are the window of rows the order walks
+/// (decision 401): `length` so many rows more or fewer than the loop's, `80` for none, its rows
+/// past the loop's end its own again from the first, and `start` so many rows on from the loop's
+/// first, going round. At rest every phrase walks as it's written.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WalkMove {
     pub order: u8,
     pub reverse: bool,
     pub x: u8,
     pub y: u8,
+    pub length: u8,
+    pub start: u8,
 }
 
 impl Default for WalkMove {
@@ -440,6 +449,8 @@ impl Default for WalkMove {
             reverse: false,
             x: 0,
             y: 0,
+            length: WINDOW_AS_WRITTEN,
+            start: 0,
         }
     }
 }
@@ -448,6 +459,33 @@ impl WalkMove {
     /// Whether it leaves every phrase walking as it's written.
     pub fn is_own(self) -> bool {
         self == Self::default()
+    }
+
+    /// How many rows the order walks over in a loop of `rows`: its own moved by `length`, from 1
+    /// to [`MAX_PHRASE_STEPS`].
+    pub fn heard_length(self, rows: usize) -> usize {
+        let by = i64::from(self.length) - i64::from(WINDOW_AS_WRITTEN);
+        (rows.max(1) as i64 + by).clamp(1, MAX_PHRASE_STEPS as i64) as usize
+    }
+
+    /// The loop's row the window starts on, in a loop of `rows`.
+    pub fn heard_start(self, rows: usize) -> usize {
+        usize::from(self.start) % rows.max(1)
+    }
+
+    /// Whether it moves the window of rows from the loop's own.
+    pub fn moves_window(self) -> bool {
+        self.length != WINDOW_AS_WRITTEN || self.start != 0
+    }
+
+    /// The rows of a loop the order walks over, as this moves them.
+    pub fn rows(self, steps: &[Step]) -> Rows<'_> {
+        Rows {
+            steps,
+            start: self.heard_start(steps.len()),
+            length: self.heard_length(steps.len()),
+            reverse: self.reverse,
+        }
     }
 
     /// The order a phrase whose own is `own` plays in: so many places on through the list, kept
@@ -466,37 +504,51 @@ impl WalkMove {
     }
 }
 
-/// The rows a walk goes over: a phrase's loop, the other way up for a track's `Reverse`, so its
-/// first place is the last row. An order walks its places, and each place is a row of the loop.
+/// The rows a walk goes over: a window of a phrase's loop, `length` rows from `start`, going round
+/// it, so a window longer than the loop plays its rows again from the first, as a lane heard
+/// longer does (decision 401); and the other way up for a track's `Reverse`, so its first place is
+/// the window's last row. An order walks its places, and each place is a row of the loop.
 #[derive(Debug, Clone, Copy)]
 pub struct Rows<'a> {
     steps: &'a [Step],
+    start: usize,
+    length: usize,
     reverse: bool,
 }
 
 impl<'a> Rows<'a> {
     /// A loop's rows, the other way up if `reverse`.
     pub fn new(steps: &'a [Step], reverse: bool) -> Self {
-        Self { steps, reverse }
+        Self {
+            steps,
+            start: 0,
+            length: steps.len(),
+            reverse,
+        }
     }
 
     /// How many there are.
     pub fn len(self) -> usize {
-        self.steps.len()
+        if self.steps.is_empty() {
+            0
+        } else {
+            self.length
+        }
     }
 
     /// Whether there are none.
     pub fn is_empty(self) -> bool {
-        self.steps.is_empty()
+        self.len() == 0
     }
 
     /// The row of the loop at a place among them.
     pub fn row(self, at: usize) -> usize {
-        if self.reverse {
-            self.steps.len() - 1 - at
+        let at = if self.reverse {
+            self.length - 1 - at
         } else {
             at
-        }
+        };
+        (self.start + at) % self.steps.len()
     }
 
     /// The step at a place among them.

@@ -283,7 +283,9 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
             which @ (TrackControl::Order
             | TrackControl::Reverse
             | TrackControl::OrderX
-            | TrackControl::OrderY),
+            | TrackControl::OrderY
+            | TrackControl::PhraseLength
+            | TrackControl::PhraseStart),
         ) => walk_view(of, track, which),
         Control::Base(which) => {
             let value = track.control(which);
@@ -850,6 +852,40 @@ fn walk_view(of: ParamView, track: &Track, which: TrackControl) -> ParamView {
             .reads(NUMBER, "Order is a number of places from -128 to +127")
             .text(shown)
         }
+        TrackControl::PhraseLength => {
+            let rows = length_rows(value);
+            let shown = match rows {
+                0 => "+0 rows: each phrase's order walks over its own rows".to_owned(),
+                1.. => format!(
+                    "{}: each phrase's order walks over {rows} more, its own again",
+                    rows_text(rows)
+                ),
+                _ => format!(
+                    "{}: each phrase's order walks over {} fewer of its rows",
+                    rows_text(rows),
+                    -rows
+                ),
+            };
+            ParamView {
+                centred: true,
+                bar: Some(value),
+                ..of.whole(rows, (-128, 127), 0, format!("{rows:+}"))
+            }
+            .steps(Steps::even(1), Steps::even(HEX_JUMP))
+            .reads(NUMBER, "Length is a number of rows from -128 to +127")
+            .text(shown)
+        }
+        TrackControl::PhraseStart => {
+            let rows = i32::from(value);
+            let shown = match rows {
+                0 => "0: each phrase's order starts on its first row".to_owned(),
+                rows => format!("{rows}: each phrase's order starts {rows} rows on, going round"),
+            };
+            of.whole(rows, (0, 255), 0, rows.to_string())
+                .steps(Steps::even(1), Steps::even(HEX_JUMP))
+                .reads(NUMBER, "Start is a number of rows from 0 to 255")
+                .text(shown)
+        }
         TrackControl::Reverse => {
             let on = value != 0;
             let shown = if on {
@@ -901,6 +937,12 @@ fn lane_view(of: ParamView, moved: LaneMove, slot: usize, field: LaneField) -> P
             .steps(Steps::even(1), Steps::even(HEX_JUMP))
             .reads(NUMBER, "Length is a number of rows from -128 to +127")
         }
+        LaneField::Start => {
+            let rows = i32::from(moved.start);
+            of.whole(rows, (0, 255), 0, rows.to_string())
+                .steps(Steps::even(1), Steps::even(HEX_JUMP))
+                .reads(NUMBER, "Start is a number of rows from 0 to 255")
+        }
         LaneField::Rate => of.listed(
             LANE_RATES.iter().map(|rate| Choice::named(*rate)),
             usize::from(moved.rate),
@@ -929,6 +971,12 @@ fn lane_shown(slot: usize, field: LaneField, moved: LaneMove) -> String {
                 ),
             }
         }
+        LaneField::Start => match moved.start {
+            0 => format!("0: each phrase's lane on {column} starts on its first row"),
+            rows => {
+                format!("{rows}: each phrase's lane on {column} starts {rows} rows on, going round")
+            }
+        },
         LaneField::Rate => {
             let rate = LANE_RATES[usize::from(moved.rate).min(LANE_RATES.len() - 1)];
             match moved.rate.cmp(&RATE_AS_WRITTEN) {
@@ -1049,10 +1097,17 @@ pub fn set(
             setting: control.setting_on(track)?,
             value: byte,
         }),
-        Control::Base(TrackControl::Order) => Action::SetTrackBase {
+        Control::Base(which @ (TrackControl::Order | TrackControl::PhraseLength)) => {
+            Action::SetTrackBase {
+                track: at,
+                control: which,
+                value: (value + i32::from(ORDER_AS_WRITTEN)).clamp(0, 255) as u8,
+            }
+        }
+        Control::Base(TrackControl::PhraseStart) => Action::SetTrackBase {
             track: at,
-            control: TrackControl::Order,
-            value: (value + i32::from(ORDER_AS_WRITTEN)).clamp(0, 255) as u8,
+            control: TrackControl::PhraseStart,
+            value: byte,
         },
         Control::Base(which) => with_fine(Action::SetTrackBase {
             track: at,
@@ -1189,6 +1244,7 @@ pub fn set(
             match field {
                 LaneField::Length => moved.length = (value + 128).clamp(0, 255) as u8,
                 LaneField::Rate => moved.rate = byte,
+                LaneField::Start => moved.start = byte,
             }
             Action::SetLaneMove {
                 track: at,

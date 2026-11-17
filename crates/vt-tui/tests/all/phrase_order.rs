@@ -116,3 +116,38 @@ fn the_phrase_title_and_playhead_follow_the_walk_the_track_plays() {
         .unwrap_or_else(|| panic!("no playhead on the seventh row:\n{}", lines.join("\n")));
     assert!(playing.contains("06"), "{playing}");
 }
+
+#[test]
+fn length_and_start_set_the_window_and_the_titles_say_it() {
+    let (mut app, _realtime) = on_phrase_device();
+    keys(&mut app, "j");
+    assert_eq!(
+        app.track_control(),
+        Control::Base(TrackControl::PhraseLength)
+    );
+    keys(&mut app, "i-4<Enter>");
+    assert_eq!(app.song().tracks[0].phrase_length, 0x7C, "typed in rows");
+    let line = status_line(&app);
+    assert!(
+        line.contains("-4 rows: each phrase's order walks over 4 fewer of its rows"),
+        "{line}"
+    );
+    keys(&mut app, "l");
+    assert_eq!(
+        app.track_control(),
+        Control::Base(TrackControl::PhraseStart)
+    );
+    keys(&mut app, "==");
+    assert_eq!(app.song().tracks[0].phrase_start, 2);
+    let text = fx_page_text(&app).join("\n");
+    assert!(
+        text.contains("· here Forward, 4 rows from 3, its own Forward"),
+        "{text}"
+    );
+    on_the_row_being_edited(&mut app);
+    assert!(
+        title(&app).contains("Forward, 4 rows from 3 (Forward)"),
+        "{}",
+        title(&app)
+    );
+}

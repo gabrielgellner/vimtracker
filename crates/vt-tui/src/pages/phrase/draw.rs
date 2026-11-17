@@ -866,7 +866,11 @@ fn lane_text(length: usize, division: usize, with_division: bool) -> String {
 /// What the title says of a phrase's lanes: each one's length and division, `FX1:4/2`, and while
 /// the track's `Length` or `Rate` moves one, what's heard first and its own after, dim, as
 /// `FX1:6/4 (4/2)`.
-fn lane_details(phrase: &Phrase, heard: &[Option<Heard>; FX_SLOTS]) -> Vec<Span<'static>> {
+fn lane_details(
+    phrase: &Phrase,
+    heard: &[Option<Heard>; FX_SLOTS],
+    starts: [usize; FX_SLOTS],
+) -> Vec<Span<'static>> {
     let mut spans = vec![];
     for slot in 0..FX_SLOTS {
         let Some(lane) = phrase.lane(slot) else {
@@ -877,9 +881,14 @@ fn lane_details(phrase: &Phrase, heard: &[Option<Heard>; FX_SLOTS]) -> Vec<Span<
         } = lane;
         let own = lane_text(length, division, false);
         let gap = if spans.is_empty() { "  " } else { " " };
-        match heard[slot].filter(|heard| (heard.length, heard.division) != (length, division)) {
+        let start = starts[slot];
+        let moved = |heard: &Heard| (heard.length, heard.division, start) != (length, division, 0);
+        match heard[slot].filter(moved) {
             Some(heard) => {
-                let shown = lane_text(heard.length, heard.division, division > 1);
+                let mut shown = lane_text(heard.length, heard.division, division > 1);
+                if start > 0 {
+                    shown.push_str(&format!(" from {}", start + 1));
+                }
                 spans.push(Span::raw(format!("{gap}FX{}:{shown}", slot + 1)));
                 spans.push(Span::styled(format!(" ({own})"), theme::dim()));
             }
@@ -905,7 +914,15 @@ fn title_details(ctx: &Ctx, phrase: &Phrase) -> Vec<Span<'static>> {
         None if !phrase.order().is_forward() => details.push(phrase.order().to_string()),
         None => {}
     }
-    let lanes = lane_details(phrase, &ctx.heard_lanes(phrase));
+    // Where each lane starts, as the track's `Start` for its column has it (decision 401).
+    let starts = std::array::from_fn(|slot| {
+        let held = ctx.song().tracks.get(ctx.cursor().track);
+        match (phrase.lane(slot), held) {
+            (Some(lane), Some(track)) => lane.heard_start(track.lanes[slot]),
+            _ => 0,
+        }
+    });
+    let lanes = lane_details(phrase, &ctx.heard_lanes(phrase), starts);
     // Its live columns are named, in the shape panel's colour, as their cells are drawn, each with
     // `~` after it where what was heard of it isn't what's written.
     let mut live_names: Vec<String> = phrase
