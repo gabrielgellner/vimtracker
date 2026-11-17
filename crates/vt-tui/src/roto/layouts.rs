@@ -778,7 +778,8 @@ const MASTER_OUTPUT: DeviceLayout = stored(
 /// A note's pitch and how it joins and ends, what cuts it off, then the steps' timing, and last
 /// how much louder or softer than written its notes play, a live dynamics knob. How near the grid
 /// its rows' nudges play, `Quantise`, past eight knobs, is on a second page, a live timing knob,
-/// with how its notes join, `Mode`, and which of them glide, `Glide mode`.
+/// with how its notes join, `Mode`, which of them glide, `Glide mode`, and how often its steps
+/// jump to any row, `Jump`.
 const PLAY: DeviceLayout = live(
     "play",
     &[
@@ -789,7 +790,7 @@ const PLAY: DeviceLayout = live(
                 s("quantise"),
                 s("voicemode"),
                 s("glidemode"),
-                __,
+                s("jump"),
                 __,
                 __,
                 __,
@@ -815,7 +816,7 @@ const PLAY_PAGE: Page<Setting> = knobs(
 );
 
 /// A synth's: the sampler's, with whether its oscillators start again on each note between
-/// `Quantise` and `Mode`, and `Glide mode` after.
+/// `Quantise` and `Mode`, and `Glide mode` and `Jump` after.
 const SYNTH_PLAY: DeviceLayout = live(
     "synthplay",
     &[
@@ -827,7 +828,7 @@ const SYNTH_PLAY: DeviceLayout = live(
                 s("phase"),
                 s("voicemode"),
                 s("glidemode"),
-                __,
+                s("jump"),
                 __,
                 __,
                 __,
@@ -2308,8 +2309,9 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
         }
         Some(Control::Insert(slot)) => effect_layout(track.inserts[slot]),
         Some(Control::FilterType) => &FILTER,
-        Some(Control::Base(TrackControl::Pitch)) if track.voice().is_some() => &SYNTH_PLAY,
-        Some(Control::Base(TrackControl::Pitch)) => &PLAY,
+        // The Play device, by its title's `Jump`.
+        Some(Control::Base(TrackControl::Jump)) if track.voice().is_some() => &SYNTH_PLAY,
+        Some(Control::Base(TrackControl::Jump)) => &PLAY,
         Some(Control::Mod(slot, _)) => BY_MOD[track.mods[slot].kind as usize],
         Some(Control::Accumulator(_)) => &ACCUMULATOR,
         Some(Control::Arpeggio(_)) => &ARPEGGIO,

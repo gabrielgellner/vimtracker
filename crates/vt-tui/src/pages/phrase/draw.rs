@@ -466,7 +466,10 @@ fn column<'a>(ctx: &Ctx<'a>, track: usize) -> Option<Column<'a>> {
     let moving = ctx.playing_place(track, chain);
     let place =
         moving.unwrap_or_else(|| ctx.step_on(track, ctx.cursor().track, ctx.section_step()));
-    let position = owner.chain_position(chain, place, ctx.dealer(track))?;
+    let mut position = owner.chain_position(chain, place, ctx.dealer(track))?;
+    if let Some(row) = moving.and_then(|_| ctx.jumped_row(track)) {
+        position.step = row;
+    }
     let held = owner.phrases.get(&position.phrase)?;
     let steps = held.loop_steps();
     let heard = moving

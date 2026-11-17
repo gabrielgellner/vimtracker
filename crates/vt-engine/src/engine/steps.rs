@@ -8,6 +8,7 @@ use vt_model::arpeggio::{ArpMode, Cycle};
 use vt_model::condition::{Condition, Situation};
 use vt_model::constants::{FX_SLOTS, NUDGE_TICKS, TICKS_PER_STEP};
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
+use vt_model::order::jumped;
 use vt_model::phrase::Phrase;
 use vt_model::settings::SettingId;
 use vt_model::shape::RowView;
@@ -20,7 +21,7 @@ use vt_model::variation::{Roll, Variation, Varies, varied_lock, varied_ratchet, 
 
 use crate::gens::{Passes, Played, RowAt};
 use crate::track_state::{
-    Accumulating, Arpeggiating, Decided, DelayedNote, Epoch, LaneRead, Part, PendingStep,
+    Accumulating, Arpeggiating, Decided, DelayedNote, Epoch, JumpAt, LaneRead, Part, PendingStep,
     Retrigger, RowKey, Worked,
 };
 use crate::voice::NoteOn;
@@ -44,6 +45,9 @@ impl Engine {
         let count = running - self.tracks[index].started;
         // Each lane is read once a step, here, in order, so it counts along.
         let lanes = self.read_lanes(index, place, count);
+        // Whether it jumps to another row is decided before anything looks at the row, so its
+        // groove, speed and nudge are the row's it plays.
+        let jumped = self.jump_at(index, place, running, &lanes);
         // The groove counts the track's own steps from the start or the last reset, not its
         // loop, so an odd length stays on the beat, and a track at an eighth swings its eighths.
         let (groove, speed) = self.step_choices(index, running, &lanes);
@@ -62,6 +66,7 @@ impl Engine {
             place,
             count,
             lanes,
+            jumped,
             plays: None,
             start: self.tracks[index].chain_starts,
         };
@@ -103,6 +108,7 @@ impl Engine {
             ticks: next - grid,
             speed,
             lanes,
+            jumped,
         });
         state.clock.advance(ticks);
         for part in parts.into_iter().flatten() {
@@ -113,6 +119,51 @@ impl Engine {
         while let Some(part) = self.tracks[index].take_due(self.clock) {
             self.fire_track(index, part);
         }
+    }
+
+    /// Whether the step a track is working out plays another row of its phrase than the one its
+    /// order walks to, and which, as its `Jump` decides: once for each visit of a row, on the
+    /// step it starts, or the first worked out of it, which its later pulses keep. The chance is
+    /// read before the row plays, as `QNT` is: a `JMP` on the row walked to, or in a lane at it,
+    /// or what the track holds, with what modulation adds. With none of those it rolls nothing,
+    /// and the walk plays as it did before there was a `Jump` (decision 391).
+    fn jump_at(
+        &mut self,
+        index: usize,
+        place: Option<(u32, usize)>,
+        running: i64,
+        lanes: &LaneReads,
+    ) -> Option<usize> {
+        let (chain, place) = place?;
+        let current = Arc::clone(&self.current);
+        let owner = current.song.tracks.get(index)?;
+        let position = owner.chain_position(chain, place, self.dealer(index))?;
+        let start = place - position.pulse;
+        let kept = self.tracks[index].jump;
+        if let Some(kept) = kept.filter(|kept| kept.chain == chain && kept.start == start) {
+            return kept.row;
+        }
+        // The chance is the walked row's, so nothing is jumped while it's read.
+        self.tracks[index].jump = None;
+        let state = &self.tracks[index];
+        let moved = state.jump_moved();
+        let written = owner.step_at(position)?;
+        let locked = written
+            .fx
+            .iter()
+            .any(|slot| slot.command == Some(FxCommand::Set(SettingId::JUMP)));
+        let held = state.held_choice(SettingId::JUMP, false);
+        let row = if held == 0 && moved <= 0.0 && !locked && lanes.iter().all(Option::is_none) {
+            None
+        } else {
+            let walked = self.row_ahead(index, running, lanes);
+            let chosen = self.chosen_ahead(index, running, walked, SettingId::JUMP, lanes);
+            let chance = ((f32::from(chosen) + moved) / 255.0).clamp(0.0, 1.0);
+            let phrase = owner.phrases.get(&position.phrase)?;
+            jumped(phrase.loop_steps(), position.deal, position.visit, chance)
+        };
+        self.tracks[index].jump = Some(JumpAt { chain, start, row });
+        row
     }
 
     /// How far a row's nudge moves its note part, in ticks: as far as it's written, kept to just
@@ -170,7 +221,14 @@ impl Engine {
         let (chain, place) = self.track_place(index, running)?;
         let current = Arc::clone(&self.current);
         let owner = current.song.tracks.get(index)?;
-        let position = owner.chain_position(chain, place, self.dealer(index))?;
+        let mut position = owner.chain_position(chain, place, self.dealer(index))?;
+        if let Some(row) = self.tracks[index]
+            .jump
+            .filter(|jump| jump.chain == chain && jump.start == place - position.pulse)
+            .and_then(|jump| jump.row)
+        {
+            position.step = row;
+        }
         let phrase = owner.phrases.get(&position.phrase)?;
         let step = owner.step_at(position)?;
         let count = running - self.tracks[index].started;
@@ -310,9 +368,12 @@ impl Engine {
             self.tracks[index].chain_pass = place as i64 / owner.chain_steps(chain).max(1) as i64;
             self.tracks[index].wake();
         }
-        let Some(position) = owner.chain_position(chain, place, self.dealer(index)) else {
+        let Some(mut position) = owner.chain_position(chain, place, self.dealer(index)) else {
             return;
         };
+        if let Some(row) = pending.jumped {
+            position.step = row;
+        }
         let Some(written) = owner.step_at(position) else {
             return;
         };

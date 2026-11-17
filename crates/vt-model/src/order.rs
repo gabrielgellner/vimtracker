@@ -488,6 +488,31 @@ fn picked(deal: Deal, rows: usize, visit: usize, attempt: u64) -> usize {
     below(roll(deal, visit, attempt), rows)
 }
 
+/// Keeps `Jump`'s rolls apart from an order's own.
+const JUMP_STREAM: u64 = 0x6a75_6d70_0000_0000;
+
+/// The row a `Jump` plays at a visit in place of the one the order walks to, with its chance
+/// from 0 to 1, or none to play the walk's: any of the rows that take time, picked from the
+/// pass's deal, so a render, or playing from anywhere, jumps the same (decision 391). The
+/// rows' times are left to the walk, as the row jumped to plays for as long as the visit lasts.
+pub fn jumped(steps: &[Step], deal: Deal, visit: usize, chance: f32) -> Option<usize> {
+    if chance <= 0.0 {
+        return None;
+    }
+    let roll = splitmix64(deal.0 ^ splitmix64(JUMP_STREAM ^ visit as u64));
+    if (roll >> 40) as f32 / (1u64 << 24) as f32 >= chance {
+        return None;
+    }
+    let timed = steps.iter().filter(|step| step.pulses() > 0).count();
+    let nth = below(splitmix64(roll), timed);
+    steps
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| step.pulses() > 0)
+        .nth(nth)
+        .map(|(row, _)| row)
+}
+
 /// A pass's roll of the dice for a visit, on a try at it.
 fn roll(deal: Deal, visit: usize, attempt: u64) -> u64 {
     splitmix64(deal.0 ^ splitmix64((visit as u64) << 8 | attempt))

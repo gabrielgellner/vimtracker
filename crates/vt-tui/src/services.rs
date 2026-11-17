@@ -387,6 +387,12 @@ impl Services {
         }
     }
 
+    /// The row of its phrase's loop a playing track's `Jump` played in place of the one its order
+    /// walked to, as the engine reports it, which the place alone doesn't give (decision 391).
+    pub(crate) fn jumped_row(&self, track: usize) -> Option<usize> {
+        self.reported.places.get(track)?.jumped
+    }
+
     /// How far a track is through this chain, if it's playing it, counting every time round it
     /// since it started, as the engine does to deal a dealt order, for finding the row playing.
     pub(crate) fn playing_place(&self, track: usize, chain: u32) -> Option<usize> {
@@ -415,7 +421,10 @@ impl Services {
         let owner = self.track_here()?;
         let chain = (*self.section_here()?.chains.get(self.cursor.track)?)?;
         let playhead = self.playing_place(self.cursor.track, chain)?;
-        let position = owner.chain_position(chain, playhead, self.dealer(self.cursor.track))?;
+        let mut position = owner.chain_position(chain, playhead, self.dealer(self.cursor.track))?;
+        if let Some(row) = self.jumped_row(self.cursor.track) {
+            position.step = row;
+        }
         let start = owner.phrases.get(&position.phrase)?.start();
         (position.slot == self.cursor.slot && Some(position.phrase) == self.phrase_id())
             .then_some((start + position.step, position.pulse))
