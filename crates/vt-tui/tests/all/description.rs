@@ -6,7 +6,7 @@
 use std::time::Instant;
 
 use ratatui::buffer::Buffer;
-use vt_model::macros::{MacroMap, MacroTarget};
+use vt_model::macros::{MacroMap, MacroTarget, Zone};
 use vt_model::settings::SettingId;
 use vt_model::song::Song;
 use vt_tui::app::App;
@@ -158,6 +158,7 @@ fn it_says_what_a_macro_moves_in_the_macro_panel() {
         max: 0xF000,
         curve: 0,
         s: 0,
+        zone: Default::default(),
     });
     held.maps.push(MacroMap {
         target: MacroTarget::Setting(SettingId::RES),
@@ -165,6 +166,8 @@ fn it_says_what_a_macro_moves_in_the_macro_panel() {
         max: 0x6000,
         curve: 0,
         s: 0,
+        // Over the right half alone, which the line says (decision 392).
+        zone: Zone::new(0x80, 0xFF).unwrap(),
     });
     let (mut app, _realtime) = app_for(song);
     press(&mut app, " T d");
@@ -173,6 +176,6 @@ fn it_says_what_a_macro_moves_in_the_macro_panel() {
     press(&mut app, "l");
     assert_eq!(
         line(&app),
-        "Macro 2 Bright: moves Cut 31 Hz to 13.3 kHz and Res 13 % to 38 %, now at 40."
+        "Macro 2 Bright: moves Cut 31 Hz to 13.3 kHz and Res 13 % to 38 % over 80–FF, now at 40."
     );
 }

@@ -976,23 +976,24 @@ Mapping	j	InMapping(Down)	The next setting
 Mapping	Down	InMapping(Down)	The next setting
 Mapping	k	InMapping(Up)	The setting before
 Mapping	Up	InMapping(Up)	The setting before
-Mapping	h	InMapping(Left)	Left, across Min, Max, Curve and S
-Mapping	Left	InMapping(Left)	Left, across Min, Max, Curve and S
-Mapping	l	InMapping(Right)	Right, across Min, Max, Curve and S
-Mapping	Right	InMapping(Right)	Right, across Min, Max, Curve and S
-Mapping	=	InMapping(Increase)	Up a step, an end's coarse step or a bend's 5
-Mapping	D-l	InMapping(Increase)	Up a step, an end's coarse step or a bend's 5
-Mapping	-	InMapping(Decrease)	Down a step, an end's coarse step or a bend's 5
-Mapping	D-h	InMapping(Decrease)	Down a step, an end's coarse step or a bend's 5
-Mapping	+	InMapping(IncreaseLarge)	Up a large step, 10 coarse steps or a bend's 25
-Mapping	D-k	InMapping(IncreaseLarge)	Up a large step, 10 coarse steps or a bend's 25
-Mapping	_	InMapping(DecreaseLarge)	Down a large step, 10 coarse steps or a bend's 25
-Mapping	D-j	InMapping(DecreaseLarge)	Down a large step, 10 coarse steps or a bend's 25
-Mapping	x	InMapping(Straighten)	On Curve or S: back to straight
+Mapping	h	InMapping(Left)	Left, across Min, Max, Curve, S and Zone
+Mapping	Left	InMapping(Left)	Left, across Min, Max, Curve, S and Zone
+Mapping	l	InMapping(Right)	Right, across Min, Max, Curve, S and Zone
+Mapping	Right	InMapping(Right)	Right, across Min, Max, Curve, S and Zone
+Mapping	=	InMapping(Increase)	Up a step, an end's coarse step, a bend's 5 or a zone's 01
+Mapping	D-l	InMapping(Increase)	Up a step, an end's coarse step, a bend's 5 or a zone's 01
+Mapping	-	InMapping(Decrease)	Down a step, an end's coarse step, a bend's 5 or a zone's 01
+Mapping	D-h	InMapping(Decrease)	Down a step, an end's coarse step, a bend's 5 or a zone's 01
+Mapping	+	InMapping(IncreaseLarge)	Up a large step, 10 coarse steps, a bend's 25 or a zone's 10
+Mapping	D-k	InMapping(IncreaseLarge)	Up a large step, 10 coarse steps, a bend's 25 or a zone's 10
+Mapping	_	InMapping(DecreaseLarge)	Down a large step, 10 coarse steps, a bend's 25 or a zone's 10
+Mapping	D-j	InMapping(DecreaseLarge)	Down a large step, 10 coarse steps, a bend's 25 or a zone's 10
+Mapping	x	InMapping(Straighten)	On Curve or S: back to straight; on Zone: the whole turn
 Mapping	~	InMapping(Swap)	Swap the range's ends
-Mapping	i	InMapping(Type)	Type it, an end in hex and a bend from -100 to 100
+Mapping	i	InMapping(Type)	Type it, an end or a zone's in hex and a bend from -100 to 100
 Mapping	d	InMapping(Delete)	Twice: take the setting off the macro
 Mapping	u	InMapping(Undo)	Undo
+Mapping	Space d	InMapping(Describe)	Describe the setting under the cursor, or stop
 Shape	Esc	InShape(Cancel)	Close, putting back what was there
 Shape	Enter	InShape(Keep)	Keep it, as plain values
 Shape	L	InShape(KeepLive)	Keep it live, as a generator

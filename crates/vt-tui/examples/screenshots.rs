@@ -263,12 +263,12 @@ const SHOTS: &[Shot] = &[
         size: FULL,
         ..PLAIN
     },
-    // The same, then macro 1's mapping from its place in the band: `Res` kept below `A0`, and
-    // `Cut`'s response bent to come early.
+    // The same, then macro 1's mapping from its place in the band: `Cut`'s response bent to come
+    // early, and `Res` kept below `A0` and over the macro's right half, its zone `80–FF`.
     Shot {
         name: "mapping",
         rows: &[],
-        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8}kj$M2:macro Dense<Enter>gg0gmjliA0kl++",
+        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8}kj$M2:macro Dense<Enter>gg0gmjliA0kl++jlli80",
         voice: Some(SynthVoice::Acid),
         size: FULL,
         ..PLAIN

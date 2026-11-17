@@ -281,7 +281,7 @@ mod tests {
         press(&mut app, " 5}jM1gm");
         assert!(app.overlays.mapping.is_some());
         let shown = screen(&mut app, Instant::now());
-        assert_eq!(window(&shown, " Macro 1"), Rect::new(34, 14, 82, 11));
+        assert_eq!(window(&shown, " Macro 1"), Rect::new(31, 14, 88, 11));
     }
 
     #[test]

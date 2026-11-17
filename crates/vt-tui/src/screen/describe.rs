@@ -20,7 +20,7 @@ use vt_model::song::Track;
 use crate::app::App;
 use crate::controls::{Control, ParamView, view};
 use crate::input::mode::{Mode, View};
-use crate::overlays::mapping::moves;
+use crate::overlays::mapping::{MappingView, mapping_line, moves};
 use crate::overlays::shape::ShapePanel;
 
 /// The rows the line takes while it shows: one for most settings, and room for a second where
@@ -37,16 +37,22 @@ pub fn rows(app: &App) -> u16 {
 }
 
 /// What the line describes now, if anything: the macro panel's macro while the keys are in it,
-/// the shape panel's setting while it's open, or the Track page's.
-enum Subject {
+/// the mapping view's mapping, the shape panel's setting while it's open, or the Track page's.
+enum Subject<'a> {
     Macro(usize),
+    Mapping(&'a MappingView),
     Shape,
     Page(Control),
 }
 
-fn subject(app: &App) -> Option<Subject> {
+fn subject(app: &App) -> Option<Subject<'_>> {
     if app.modes.mode == Mode::Macros {
         return Some(Subject::Macro(app.overlays.macro_panel.at));
+    }
+    if app.modes.mode == Mode::Mapping
+        && let Some(view) = &app.overlays.mapping
+    {
+        return Some(Subject::Mapping(view));
     }
     if app.overlays.shape.is_some() {
         return Some(Subject::Shape);
@@ -63,6 +69,7 @@ pub fn text(app: &App) -> Option<String> {
     let track = app.services.track_here()?;
     Some(match subject {
         Subject::Macro(at) | Subject::Page(Control::Macro(at)) => macro_line(track, at),
+        Subject::Mapping(view) => mapping_line(track, view)?,
         // As it's heard, as the status line says it: where the steps' faders and the macros
         // have it.
         Subject::Page(control) => {

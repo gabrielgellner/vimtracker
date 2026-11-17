@@ -37,6 +37,7 @@ fn map(at: usize, target: MacroTarget, min: u16, max: u16) -> Action {
             max,
             curve: 0,
             s: 0,
+            zone: Default::default(),
         },
     }
 }

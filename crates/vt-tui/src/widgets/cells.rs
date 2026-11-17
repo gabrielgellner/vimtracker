@@ -315,6 +315,7 @@ fn a_macro_holding_a_setting_draws_its_range_behind_the_fill() {
         max: 0xC000,
         curve: 0,
         s: 0,
+        zone: Default::default(),
     });
     let (mut app, _realtime) = app_with(song);
     press(&mut app, " 5");

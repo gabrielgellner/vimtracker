@@ -126,7 +126,9 @@ lengths are free.
 Each track has eight macros, after Ableton Live's Rack macros: a macro is one knob that turns
 any number of the track's settings at once, each between a `Min` and a `Max` of its own. It's
 absolute, so at `00` every setting it holds is at its `Min` and at `FF` at its `Max`, and a `Min`
-above its `Max` turns that setting the other way. A setting is on one macro at most.
+above its `Max` turns that setting the other way. A mapping can act over part of the turn alone,
+its zone, so one macro can be a knob with a different job on each side of its middle. A setting
+is on one macro at most.
 
 The `Macros` band, first on the Gen page, has the eight in two rows of four, each with its name,
 its value in four digits and a bar. `=` `-` `+` `_` turn one, `i` types it, `x` takes it to `00`,
@@ -183,20 +185,21 @@ turn its macro, or open its range with `gm`. `gd` on it goes to its macro in the
 `Macros` band, ready to turn, and `C-o` comes back to it; `gm` there opens its mapping. So does
 `gd` on a fader on the mixer a macro holds, and `C-o` comes back to the mixer.
 
-**The mapping view**, `gm`, lists each setting the macro holds with its `Min`, its `Max`, and
-the `Curve` and `S` of its response, with a drawing of the response of the one under the cursor
-beside them:
+**The mapping view**, `gm`, lists each setting the macro holds with its `Min`, its `Max`, the
+`Curve` and `S` of its response and its `Zone`, with a drawing of the response of the one under
+the cursor beside them:
 
 | Keys | Does |
 |---|---|
 | `j` `k` | The next or previous setting |
-| `h` `l` | Across its `Min`, `Max`, `Curve` and `S` |
+| `h` `l` | Across its `Min`, `Max`, `Curve`, `S` and the two ends of its `Zone` |
 | `=` `-` `+` `_` | Move an end a step or `10`, a bend `5` or `25` |
 | `i` | Type it: an end in two hex digits, a bend `-100` to `100` and `Enter` |
-| `x` | Put `Curve` or `S` back to straight, `0` |
+| `x` | Put `Curve` or `S` back to straight, `0`, or `Zone` to `00–FF` |
 | `~` | Swap `Min` and `Max`, so the setting goes the other way |
 | `dd` | Take the setting off the macro |
 | `u` | Take the last change back |
+| `Space d` | Say what's under the cursor, or stop |
 | `Esc` | Close it |
 
 **Each setting its own way.** A setting's `Min` and `Max` are its own, so one macro can turn one
@@ -213,6 +216,31 @@ straight line, and are shown dim while they are. The drawing has the macro's tur
 setting up, the straight line dotted behind the curve and a faint line where the macro is turned;
 the range on a mapped setting's bar is still its `Min` to its `Max`. A sound preset or a patch
 keeps each mapping's curve.
+
+**Each setting its own part of the turn.** A mapping's `Zone` is the part of the macro's turn it
+acts over, from a start to an end on the macro's `00` to `FF`, the whole turn, `00–FF`, to start
+with, shown dim while it is. Its ends move as a range's do, `=` `-` a step and `+` `_` `10`, and
+`i` types one in two hex digits. Across the zone the setting goes from its `Min` at the zone's
+start to its `Max` at its end, along its `Curve` and `S`; below the zone it stays at its `Min`, and
+above it at its `Max`. A zone always starts below its end: to go the other way, swap `Min` and
+`Max` with `~`. The drawing has the setting flat outside the zone, and the status line and the line
+`Space d` shows say the zone, as `Res 0 % to 63 % over 80–FF`. Moving a zone moves what's heard at
+once, as a held setting outside it goes to its end. Locks and modulation of the macro reach each
+setting through its zone, and a sound preset or a patch keeps it.
+
+**Recipe: a bipolar knob.** Marbles' Déjà vu is one knob with two jobs: from the left to the
+middle it takes the random sequence from new each time to looped, and from the middle to the
+right it loops it with jumps. Do the same with a Steps slot and a macro:
+
+1. `M1` on Steps' `Mutate`, then on the setting for the other side, say `Smooth`.
+2. `gm`. On `Mutate`, `~` so it comes down, from its top at `00` to `0`, then `lllll` to
+   the zone's end and `i7F`: `Zone 00–7F`.
+3. `j` to the second setting, on its zone's end, `h` to its start and `i80`: `Zone 80–FF`.
+
+Now at `00` `Mutate` is at its top and the other at `0`; at the middle, `7F` to `80`, both are
+`0`, the loop held; and toward `FF` only the other comes in. The same goes for any crossfade
+between two things: a dry-to-wet on one side and a drive on the other, two sends, or two
+filters.
 <!-- ANCHOR_END: before-mapping -->
 <!-- ANCHOR: before-presets -->
 
