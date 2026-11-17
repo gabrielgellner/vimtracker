@@ -437,16 +437,27 @@ lengthening it finds them again.
 
 **Mutate** is the Turing Machine's knob: each time a step comes round, it's drawn
 again with that chance, anywhere within the slot's `Depth`, and keeps what it drew
-until it's drawn again. `0%` plays the values as written, `100%` a new one each
-time, and between them the loop drifts. It draws from the project's seed, so a
-render repeats, and back at `0%` the values are as written again.
+until it's drawn again. `100%` draws a new one each time, and below that the loop
+drifts. The box shows what's heard: a step drawn is drawn at its drawn value, in
+the colour of a fader the steps drive, and on it the status line reads, say,
+`+3A drawn; +10 written`. It draws from the project's seed, so a render repeats.
 
-**Keeping a drift.** When the loop drifts somewhere you like, `Space g a` on the
-slot keeps it: the values it drew are written in as its values, in one undo step,
-and the box shows them. Turn `Mutate` down after, and the loop you heard plays as
-written, every time round and in a render. Mutate up, listen, `Space g a`, Mutate
-down: the Turing Machine's lock. `u` gives back the values as they were. Steps it
-hasn't drawn keep their own.
+**Locking.** At `0%` the loop is locked, as the module's knob fully right locks
+it: nothing is drawn again, and what was drawn plays on, every time round. From the top, nothing is
+drawn, so `0%` from a stop plays the values as written, and with `Mutate` up a
+play from the top draws the same drift again. `x` on `Mutate` is `0%`, so it locks
+too.
+
+**An edit wins.** Changing a drawn step's value with `=`, `-`, `+`, `_`, `i` or `x`
+is heard at once as written, and it drifts again only if `Mutate` draws it again.
+
+**Keeping a drift.** A lock lasts until the song plays from the top. To keep the
+loop in the song, `Space g a` on the slot writes the values it drew in as its
+values, in one undo step, so it plays the same in a render; nothing's drawn after
+it. Mutate up, listen, Mutate down to lock, `Space g a` to keep. `u` gives back the
+values as they were, though not the lock: the draws aren't in the song, so you hear
+the values as written until `Mutate` draws again. Steps it hasn't drawn keep their
+own, and so do those past the `Length`.
 
 **Smooth** at `00` steps. Up to `+80` each step glides in from the one before over
 its first part, all of it at `+80`, and on to `+FF` the glide becomes a curve

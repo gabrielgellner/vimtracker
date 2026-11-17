@@ -228,7 +228,9 @@ pub(super) struct SlotRun {
     pub(super) playing: Option<u8>,
     /// The values Steps' `Mutate` has drawn again in place of the written ones, by step, and which
     /// of them are drawn, a bit a step: kept while it plays, so a loop drifts rather than
-    /// starting afresh each time round, and forgotten when `Mutate` goes back to none.
+    /// starting afresh each time round, and kept at `Mutate` 0%, which locks the loop as the
+    /// Turing Machine's knob fully right does. A step's is forgotten when its written value is
+    /// changed, so an edit is heard at once, and all are at a play from the top (decision 384).
     pub(super) drift: [i16; STEPS],
     pub(super) drawn: u16,
     /// Where it was counted to when `Mutate` last rolled, so each step coming round rolls once.
@@ -302,10 +304,9 @@ impl SlotRun {
 
     /// Draw the value of the step that's come round again, with `Mutate`'s chance, once each time
     /// it comes round, within the full `-FF` to `+FF`, which the slot's depth then scales. With no
-    /// `Mutate`, the values are as written and what was drawn is forgotten.
+    /// `Mutate`, nothing is drawn again, and what was drawn is kept: the loop is locked.
     fn mutate(&mut self, steps: &Steps, step: usize, count: i64) {
         if steps.mutate == 0 {
-            self.drawn = 0;
             self.counted = None;
             return;
         }
@@ -319,15 +320,34 @@ impl SlotRun {
         }
     }
 
-    /// A step's value as it's heard, from -1 to 1: drawn again by `Mutate` while it's on, or as
+    /// A step's value as it's heard, from -1 to 1: as `Mutate` last drew it, if it has, or as
     /// written.
     fn heard(&self, steps: &Steps, step: usize) -> f32 {
-        let value = if steps.mutate > 0 && self.drawn & (1 << step) != 0 {
+        let value = if self.drawn & (1 << step) != 0 {
             self.drift[step]
         } else {
             steps.values[step]
         };
         f32::from(value) / f32::from(MAX_STEP)
+    }
+
+    /// Follow a new version of its slot, `now`, from `was`: a step whose written value has changed,
+    /// or now is what was drawn, isn't drawn any more, so an edit is heard at once, and nothing is
+    /// once the slot isn't Steps. It allocates nothing, for the audio thread.
+    pub(super) fn follow_written(&mut self, was: &ModSlot, now: &ModSlot) {
+        if self.drawn == 0 {
+            return;
+        }
+        if now.kind != ModKind::Steps || was.kind != ModKind::Steps {
+            self.drawn = 0;
+            return;
+        }
+        for step in 0..STEPS {
+            let value = now.steps.values[step];
+            if value != was.steps.values[step] || value == self.drift[step] {
+                self.drawn &= !(1 << step);
+            }
+        }
     }
 
     /// Which way it moves what it reaches: as a step or the page last set it, or the slot's own.
@@ -641,6 +661,14 @@ impl TrackState {
             self.offsets[index]
         })
         .unwrap_or(*slot)
+    }
+
+    /// Follow a new version of the track, `now`, from `was`: each Steps slot's drawn values for the
+    /// steps an edit wrote are forgotten, so what was written is heard ([`SlotRun::follow_written`]).
+    pub(crate) fn follow_written_steps(&mut self, was: &Track, now: &Track) {
+        for ((run, was), now) in self.slots.iter_mut().zip(&was.mods).zip(&now.mods) {
+            run.follow_written(was, now);
+        }
     }
 
     /// Count every slot's cycles from the top of the song, as playing starts there, keeping the

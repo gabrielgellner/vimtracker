@@ -7,6 +7,7 @@
 
 use std::sync::Arc;
 
+use vt_engine::track_state::Drawn;
 use vt_model::action::Action;
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot};
 use vt_model::selection::StepRange;
@@ -22,9 +23,11 @@ use crate::controls::Control;
 
 impl Services {
     /// `Space g a` on a Steps slot: keep what its `Mutate` has drawn as its values, as one undo
-    /// step, so the loop heard stays when `Mutate` goes back to none. The engine reports the draws,
-    /// as it hears them, and this makes the edit, so the song says what was heard and a render
-    /// plays it again. Only steps drawn change, so a value written since keeps its own.
+    /// step, so the song has the loop heard, which `Mutate` 0% only locks until a play from the
+    /// top. The engine reports the draws, as it hears them, and this makes the edit, so the song
+    /// says what was heard and a render plays it again; each step written is then heard as
+    /// written, so nothing's drawn after it. Only steps drawn change, and a value written since
+    /// isn't drawn any more.
     pub(crate) fn keep_drift(&mut self, control: Control) {
         let Control::Mod(slot, _) = control else {
             self.status = "Space g a keeps a Steps slot's drift: this isn't a mod slot".to_owned();
@@ -39,17 +42,7 @@ impl Services {
             );
             return;
         }
-        // The draws were worked out from the version the latest report is of, a frame or so
-        // behind the song while it's being changed, and are kept only from a Steps slot there.
-        let reported = self
-            .reported_track()
-            .is_some_and(|track| track.mods[slot].kind == ModKind::Steps);
-        let drawn = self
-            .reported
-            .live
-            .filter(|_| reported)
-            .map(|live| live.drawn[slot])
-            .unwrap_or_default();
+        let drawn = self.drawn(slot);
         let steps = &mut modulator.steps;
         let mut kept = 0;
         for step in 0..usize::from(steps.length).min(STEPS) {
@@ -64,7 +57,26 @@ impl Services {
         }
         set_mod(self, slot, modulator);
         let values = if kept == 1 { "value" } else { "values" };
-        self.status = format!("Kept the {kept} {values} {name} drew: Mutate 0% now plays them");
+        self.status = format!("Kept the {kept} {values} {name} drew as written: the song has them");
+    }
+
+    /// What a Steps slot on the cursor's track has drawn with `Mutate` in place of its written
+    /// values, as the engine last reported it, which is what's heard: at `Mutate` 0% too, which
+    /// locks it (decision 384). The draws were worked out from the version the latest report is
+    /// of, a frame or so behind the song while it's being changed, so they're taken only from a
+    /// Steps slot there.
+    pub fn drawn(&self, slot: usize) -> Drawn {
+        let reported = self.reported_track().is_some_and(|track| {
+            track
+                .mods
+                .get(slot)
+                .is_some_and(|slot| slot.kind == ModKind::Steps)
+        });
+        self.reported
+            .live
+            .filter(|_| reported)
+            .map(|live| live.drawn[slot])
+            .unwrap_or_default()
     }
 
     /// `Space g A`: make the phrase here what was last heard, as one undo step: write into its

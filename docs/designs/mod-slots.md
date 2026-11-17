@@ -991,6 +991,14 @@ requests, Drum then LPG:
   one undo step. The engine reports the draws for the track watched (`LiveValues::drawn`), and
   the app makes the edit, so what was left open in decision 204 is now the Turing Machine's lock.
 
+**As built for #961 (decision 384):**
+
+* **`0%` locks:** what `Mutate` drew is kept and heard at `0%`, as the module's knob fully right
+  locks the register, until a play from the top. The Mod page draws each drawn step at its drawn
+  value, in `theme::automated()`, and the status line says `drawn` on one. A step whose written
+  value changes isn't drawn any more (`SlotRun::follow_written`, as the engine takes a version),
+  so an edit is heard at once. `Space g a` writes the draws in, so it keeps a lock in the song.
+
 **As built for #569 (decision 270):**
 
 * **Writing a slot into the notes:** `Space g A` in the phrase view writes what the track's Steps

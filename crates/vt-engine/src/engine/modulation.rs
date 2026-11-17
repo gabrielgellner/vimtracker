@@ -146,10 +146,10 @@ impl Engine {
                 if self.transport == Transport::Stopped {
                     live.mods = Default::default();
                 }
-                // What `Mutate` drew is heard only from a Steps slot with it up, so only that's
-                // reported, and kept.
+                // What `Mutate` drew is heard only from a Steps slot, so only that's reported, and
+                // kept: at `Mutate` 0% too, which locks it.
                 for (drawn, slot) in live.drawn.iter_mut().zip(&track.mods) {
-                    if slot.kind != ModKind::Steps || slot.steps.mutate == 0 {
+                    if slot.kind != ModKind::Steps {
                         *drawn = Drawn::default();
                     }
                 }

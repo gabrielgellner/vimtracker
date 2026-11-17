@@ -73,6 +73,7 @@ impl Engine {
             .used
             .max(self.current.song.tracks.len().min(MAX_TRACKS));
         self.keep_fixed_tracks(old.song.sound_tracks());
+        self.forget_rewritten_steps(&old.song);
         self.line_up_new_tracks(old.song.sound_tracks());
         self.keep_places(&old.song);
         self.follow_base(&old);
@@ -188,6 +189,28 @@ impl Engine {
             moved.rotate_right(now - was);
         } else {
             moved.rotate_left(was - now);
+        }
+    }
+
+    /// A Steps step whose written value an edit changed is heard as written at once, not as
+    /// `Mutate` drew it (decision 384). A track the version shares with the last is passed over by
+    /// its pointer, and a new one has nothing drawn to compare.
+    fn forget_rewritten_steps(&mut self, old: &Song) {
+        let (now, was) = (self.sounds(), old.sound_tracks());
+        for index in 0..self.current.song.tracks.len().min(MAX_TRACKS) {
+            let then = match index {
+                _ if index >= now => index - now + was,
+                _ if index < was => index,
+                _ => continue,
+            };
+            if self.current.song.tracks.same(index, &old.tracks, then) {
+                continue;
+            }
+            if let (Some(before), Some(after)) =
+                (old.tracks.get(then), self.current.song.tracks.get(index))
+            {
+                self.tracks[index].follow_written_steps(before, after);
+            }
         }
     }
 
