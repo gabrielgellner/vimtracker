@@ -686,6 +686,18 @@ const JUMP_STREAM: u64 = 0x6a75_6d70_0000_0000;
 /// pass's deal, so a render, or playing from anywhere, jumps the same (decision 391). The
 /// rows' times are left to the walk, as the row jumped to plays for as long as the visit lasts.
 pub fn jumped(steps: &[Step], deal: Deal, visit: usize, chance: f32) -> Option<usize> {
+    let timed = steps.iter().filter(|step| step.pulses() > 0).count();
+    let nth = jump_roll(deal, visit, chance, timed)?;
+    steps
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| step.pulses() > 0)
+        .nth(nth)
+        .map(|(row, _)| row)
+}
+
+/// Whether a visit jumps, with its chance from 0 to 1, and to which of `rows` if it does.
+fn jump_roll(deal: Deal, visit: usize, chance: f32, rows: usize) -> Option<usize> {
     if chance <= 0.0 {
         return None;
     }
@@ -693,14 +705,26 @@ pub fn jumped(steps: &[Step], deal: Deal, visit: usize, chance: f32) -> Option<u
     if (roll >> 40) as f32 / (1u64 << 24) as f32 >= chance {
         return None;
     }
-    let timed = steps.iter().filter(|step| step.pulses() > 0).count();
-    let nth = below(splitmix64(roll), timed);
-    steps
-        .iter()
-        .enumerate()
-        .filter(|(_, step)| step.pulses() > 0)
-        .nth(nth)
-        .map(|(row, _)| row)
+    Some(below(splitmix64(roll), rows))
+}
+
+/// Keeps a lane's deals apart from its track's chain's.
+const LANE_STREAM: u64 = 0x6c61_6e65_0000_0000;
+
+/// The row of its own a lane's `Jump` plays in place of the one it counts to, with its chance from
+/// 0 to 1, or none to play the count's: any of its `rows`, rolled as `Jump` rolls a phrase's, from
+/// the track's dealer, the lane's column, how many times it has come round and its row in that
+/// lap, so a render, or playing from anywhere, jumps the same (decision 415).
+pub fn lane_jumped(
+    dealer: Dealer,
+    column: usize,
+    lap: i64,
+    row: usize,
+    rows: usize,
+    chance: f32,
+) -> Option<usize> {
+    let deal = dealer.deal(lap, column);
+    jump_roll(Deal(splitmix64(deal.0 ^ LANE_STREAM)), row, chance, rows)
 }
 
 /// A pass's roll of the dice for a visit, on a try at it.

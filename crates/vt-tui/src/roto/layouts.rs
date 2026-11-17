@@ -1848,7 +1848,16 @@ const GEN_LANE: DeviceLayout = live(
     "gen/lane",
     &[knobs(
         "Lane",
-        [s("length"), s("rate"), s("start"), GAP, GAP, GAP, GAP, GAP],
+        [
+            s("length"),
+            s("rate"),
+            s("start"),
+            s("jump"),
+            GAP,
+            GAP,
+            GAP,
+            GAP,
+        ],
     )],
 );
 /// The track's settings that move its phrases' walks, its own device as on the Gen page

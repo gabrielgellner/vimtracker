@@ -137,6 +137,10 @@ pub struct LaneMove {
     /// So many of its own rows on that each lane starts, going round them (decision 401).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub start: u8,
+    /// The chance, `00` to `FF`, that each of a lane's rows plays any of its own rows instead of
+    /// the next, as `JMP` is a phrase's (decision 415).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub jump: u8,
 }
 
 fn is_zero(value: &u8) -> bool {
@@ -157,6 +161,7 @@ impl Default for LaneMove {
             length: LENGTH_AS_WRITTEN,
             rate: RATE_AS_WRITTEN,
             start: 0,
+            jump: 0,
         }
     }
 }
@@ -167,12 +172,13 @@ impl LaneMove {
         self == Self::default()
     }
 
-    /// One of its values, by its place: 0 is `Length`, 1 is `Rate`, 2 is `Start`.
+    /// One of its values, by its place: 0 is `Length`, 1 is `Rate`, 2 is `Start`, 3 is `Jump`.
     pub fn value(self, at: usize) -> u8 {
         match at {
             0 => self.length,
             1 => self.rate,
-            _ => self.start,
+            2 => self.start,
+            _ => self.jump,
         }
     }
 
@@ -181,7 +187,8 @@ impl LaneMove {
         match at {
             0 => self.length = value,
             1 => self.rate = value.min(LANE_RATES.len() as u8 - 1),
-            _ => self.start = value,
+            2 => self.start = value,
+            _ => self.jump = value,
         }
     }
 }
@@ -237,6 +244,7 @@ mod tests {
             length: 0x82,
             rate: 14,
             start: 0,
+            jump: 0,
         };
         assert_eq!(
             lane.heard(moved),

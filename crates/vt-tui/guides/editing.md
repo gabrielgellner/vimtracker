@@ -1205,9 +1205,13 @@ lane are dim. A turn takes effect at the lane's next row, which counts along
 from where it is rather than jumping; playing from a step works its place out
 again there. A column without a lane isn't touched. `Start` moves the row each
 lane starts on, so many of its own rows on, going round them: at `1`, `a b c d`
-plays `b c d a`, and the title adds it, `FX1:4 from 2 (4)`. A step locks them
-with `LLEN1`, `LRAT1` and `LSTA1`, `2` and `3` for the other columns, and a mod
-slot, a macro and the Roto turn them too.
+plays `b c d a`, and the title adds it, `FX1:4 from 2 (4)`. `Jump` is the
+chance each of the lane's rows plays any of its own rows instead of the next, as
+`Jump` is the phrase's: `00` never, `FF` every row. A jump takes one row's place,
+for all its steps, and the lane carries on counting from where it was; it picks
+from all the lane's own rows, whatever its `Length` and `Start`, and the playhead
+follows it. A step locks them with `LLEN1`, `LRAT1`, `LSTA1` and `LJMP1`, `2` and
+`3` for the other columns, and a mod slot, a macro and the Roto turn them too.
 
 `gg`, `G`, `{`, `}`, `ib`, `ic` and `ip` go by the loop. `5G` means row `04`.
 `j` and `k` carry on past its edges. `Space c` on a dim row plays from `00`, and
