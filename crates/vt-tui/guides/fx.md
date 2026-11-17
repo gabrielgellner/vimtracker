@@ -293,7 +293,7 @@ them again, and `=` and `-` step through them.
 | `03` `04` | `PRE` `!PRE` | When this track's last condition passed, or not |
 | `05` `06` | `NEI` `!NEI` | Likewise for the track to the left |
 | `07` `08` | `1ST` `!1ST` | The first time round only, or every time after |
-| `09` `0A` | `LST` `!LST` | The last time round before moving on, or every time but |
+| `09` `0A` | `LST` `!LST` | The last time round before moving on, or not |
 | `92` to `9F` | `>2` to `>15` | From pass `n` on, so a part joins and stays |
 | `A2` to `AF` | `<2` to `<15` | Only before pass `n`, so a part drops out |
 | `B0` to `BF` | `>16` to `>31` | From pass 16 to 31 on |
