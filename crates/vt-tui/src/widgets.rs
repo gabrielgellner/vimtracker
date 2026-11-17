@@ -28,6 +28,7 @@ pub mod setting;
 pub(crate) mod table;
 pub mod theme;
 pub mod toggle;
+pub(crate) mod value_bars;
 
 /// A window's border, all round, with rounded corners: `╭`, `╮`, `╰` and `╯`, U+256D to U+2570,
 /// which kitty and Ghostty draw themselves, so they join the lines cleanly. Every window has one:

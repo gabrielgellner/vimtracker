@@ -175,6 +175,17 @@ impl FxCommand {
         matches!(self, Self::Set(id) if id.entry().kind.has_fine())
     }
 
+    /// Whether its value is an amount: a continuous setting's position or level, or an event's
+    /// units, chance or degrees. A list's choice, a condition and a value of two digits that mean
+    /// different things, `RET`'s, `ARP`'s and `RND`'s, aren't.
+    pub fn measured(self) -> bool {
+        match self {
+            Self::Set(id) => matches!(id.entry().kind, Kind::Continuous { .. }),
+            Self::Del | Self::Kil | Self::Off | Self::Cha | Self::Acu => true,
+            Self::Cnd | Self::Ret | Self::Arp | Self::Rnd => false,
+        }
+    }
+
     /// The highest value this takes with its fine part, which is `00` at the top.
     pub(crate) fn highest_value(self) -> u16 {
         u16::from(self.highest()) << 8

@@ -40,6 +40,7 @@ use crate::pages::sample::draw::WaveOnScreen;
 use crate::services::audio::{self, AudioChoice, AudioError, AudioStats, Input, Output};
 use crate::services::config::Settings;
 use crate::widgets::theme;
+use crate::widgets::value_bars::Beside;
 
 /// Why the program stopped with an error.
 #[derive(Debug, Error)]
@@ -751,8 +752,15 @@ pub fn draw_screen(
     let mut guide = app.overlays.guide;
     guide.draw(frame, body, &app.ctx());
     app.overlays.guide = guide;
-    if let Some(mut panel) = app.overlays.shape.take() {
-        panel.draw(frame, view, &app.ctx());
+    if let Some(panel) = app.overlays.shape.take() {
+        // On the phrase grid, the bars of the column it shapes go beside the column.
+        let ctx = app.ctx();
+        let beside = (app.modes.view == View::Phrase).then(|| Beside {
+            area: view,
+            column: crate::pages::phrase::draw::column_cells(panel.column),
+            lines: crate::pages::phrase::draw::rows_on_screen(&ctx, &app.phrase_view, view),
+        });
+        crate::overlays::shape::draw::draw_with_bars(frame, view, &ctx, &panel, beside.as_ref());
         app.overlays.shape = Some(panel);
     }
     if let Some(mut mapping) = app.overlays.mapping.take() {

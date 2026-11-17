@@ -1,4 +1,4 @@
-<!-- ANCHOR: before-weights -->
+<!-- ANCHOR: before-bars -->
 # Selecting and editing
 
 Editing follows Vim's grammar: an operator, then what it covers.
@@ -84,6 +84,21 @@ other tracks with `W` shapes the same column on each of them with the same
 settings, and each picks its own random values. Each track goes by its own
 column, so an empty one generates while the others reshape, and a track with
 nothing to shape there, like a velocity with no notes, is left alone.
+
+While the panel is open on the phrase view, the column's values show as bars beside it, one a row,
+over the FX lanes and the tracks beside, which can't be edited while you shape. Each row's value
+now is solid, and what it was when the panel opened is a fainter bar behind it, so you see what
+a fill or a transform moves. Above them, the column's name and its range, `VEL 00 ─ 7F` or an FX
+command's own, and a line with the lowest, the highest and the average now, and after `±` how
+many rows changed: `20─7F avg 4C ±6`. Only the rows you shape have a bar, and they scroll with
+the grid. On the Note column it's a contour, a mark a row placed by pitch across the notes there,
+over faint lines on each of the scale's roots, and on its other notes while there's room. A
+column whose values aren't amounts, such as a list setting's lock or `CND`, has no bars. They go
+right of the column, and the panel stays top right; where that would cover them, the panel moves
+to the top left, and where the right has no room, the bars go left of the column. They go when the
+panel closes.
+<!-- ANCHOR_END: before-bars -->
+<!-- ANCHOR: after-bars -->
 
 | Row | Does |
 |---|---|
@@ -363,7 +378,7 @@ them afresh, the degrees after those typed keeping theirs, while `Backspace` edi
 end. Spread and Bias still shape the notes let through, so a narrow Spread stays in the middle of
 the range, and one value on a degree left out lands on the nearest one let through, the lower of
 two as near.
-<!-- ANCHOR_END: before-weights -->
+<!-- ANCHOR_END: after-bars -->
 <!-- ANCHOR: after-weights -->
 
 
