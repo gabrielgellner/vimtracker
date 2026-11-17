@@ -381,7 +381,7 @@ fn with_cue_on_a_lanes_new_length_rate_or_start_waits_for_it_to_come_round() {
     // A start of one row on.
     let mut engine = self::engine(&original);
     assert_eq!(sends(&mut engine, 1), [0x10]);
-    let mut started = original.clone();
+    let mut started = original;
     started.tracks[0].lanes[0].start = 1;
     engine.swap(version(&started));
     assert_eq!(
