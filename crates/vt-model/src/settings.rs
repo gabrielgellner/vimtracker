@@ -582,6 +582,7 @@ mod tests {
             ModField::Start,
             ModField::Loop,
             ModField::Mutate,
+            ModField::Jump,
             ModField::Smooth,
             ModField::Step(0),
             ModField::Low,

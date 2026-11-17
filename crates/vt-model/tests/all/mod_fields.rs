@@ -168,7 +168,7 @@ fn each_types_title_is_in_order_and_its_grid_places_each_setting() {
     use ModField::*;
     for kind in ModKind::ALL {
         let spec = kind.spec();
-        let title: Vec<ModField> = [Type, Mode, Loop, Polarity, Destination]
+        let title: Vec<ModField> = [Type, Mode, Loop, Jump, Polarity, Destination]
             .into_iter()
             .filter(|field| spec.title.contains(field))
             .collect();

@@ -52,7 +52,9 @@ use lanes::{LaneRun, lanes_at_rest};
 use live::FaderRun;
 use mods::{EnvelopeRun, LfoStart, MOVED, Rest, SlotRun};
 use pending::WORKED_KEPT;
-use seeds::{accumulator_rng, arp_rng, drift_rng, effect_rng, groove_rng, mutate_rng, roll_rng};
+use seeds::{
+    accumulator_rng, arp_rng, drift_rng, effect_rng, groove_rng, jump_rng, mutate_rng, roll_rng,
+};
 use shaping::pan_gains;
 use values::{ValueLayers, played_id, scaled};
 
@@ -574,6 +576,7 @@ impl TrackState {
             run.notes = 0;
             run.dice = mutate_rng(seed, index, at);
             run.rolls = roll_rng(seed, index, at);
+            run.jumps = jump_rng(seed, index, at);
             run.roll = 0;
             run.drawn = 0;
             run.counted = None;

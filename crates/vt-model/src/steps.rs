@@ -19,6 +19,8 @@ pub const STEPS: usize = 16;
 pub const MAX_STEP: i16 = 0xFF;
 /// The most `Mutate` goes, in percent.
 pub(crate) const MAX_MUTATE: u8 = 100;
+/// The most `Jump` goes, in percent.
+pub(crate) const MAX_JUMP: u8 = 100;
 /// How many of a track's steps a `Tick` is a sixth of, as `DEL` counts.
 pub(crate) const TICKS_PER_STEP_SHARE: u64 = 6;
 
@@ -277,6 +279,11 @@ pub struct Steps {
     /// Turing Machine's knob does. Drawn from the project's seed, so a render repeats.
     #[serde(skip_serializing_if = "is_default")]
     pub mutate: u8,
+    /// The chance each step it moves on to is any of its `Length` instead, in percent, as
+    /// Marbles' Déjà vu past noon replays its loop out of order: `0` walks as `Loop` says, `100`
+    /// is a step at random every time. Drawn from the project's seed, so a render repeats.
+    #[serde(skip_serializing_if = "is_default")]
+    pub jump: u8,
     /// How it goes from step to step, `-FF` to `+FF`, after Surge's step sequencer's deform: none
     /// steps; up to `+80` glides from the step before over the first part of each step, then on
     /// to a curve through the steps by `+FF`; down to `-80` falls to nothing over the last part of
@@ -302,6 +309,7 @@ impl Default for Steps {
             rate: StepRate::default(),
             looping: Loop::default(),
             mutate: 0,
+            jump: 0,
             smooth: 0,
         }
     }
@@ -315,6 +323,7 @@ impl Steps {
             && usize::from(self.start) < STEPS
             && self.rate.in_range()
             && self.mutate <= MAX_MUTATE
+            && self.jump <= MAX_JUMP
             && self.smooth.abs() <= MAX_STEP
             && match self.looping {
                 Loop::From(step) => usize::from(step) < STEPS,
@@ -551,15 +560,23 @@ mod tests {
         assert!(!steps.in_range());
         let drifting = Steps {
             mutate: 30,
+            jump: 20,
             smooth: -0x40,
             ..Steps::default()
         };
         let text = ron::to_string(&drifting).unwrap();
-        assert_eq!(text, "(mutate:30,smooth:-64)");
+        assert_eq!(text, "(mutate:30,jump:20,smooth:-64)");
         assert_eq!(ron::from_str::<Steps>(&text).unwrap(), drifting);
         assert!(
             !Steps {
                 mutate: 101,
+                ..drifting
+            }
+            .in_range()
+        );
+        assert!(
+            !Steps {
+                jump: 101,
                 ..drifting
             }
             .in_range()

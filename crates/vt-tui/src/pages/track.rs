@@ -178,7 +178,6 @@ impl TrackPage {
         self.devices(track)
             .iter()
             .flat_map(DeviceSpec::rows)
-            .map(Vec::from)
             .collect()
     }
 

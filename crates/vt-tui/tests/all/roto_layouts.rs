@@ -932,7 +932,8 @@ fn steps_are_a_live_step_sequencer_with_their_values_before_dest() {
         ]
     );
     let pages: Vec<&str> = steps.layout.pages.iter().map(|page| page.name).collect();
-    assert_eq!(pages, ["Steps", "Steps 1-8", "Steps 9-16", "Dest"]);
+    assert_eq!(pages, ["Steps", "Steps 1-8", "Steps 9-16", "Jump", "Dest"]);
+    assert_eq!(first_knobs_of(&steps.layout.pages[3])[0], "jump");
     assert_eq!(first_knobs_of(&steps.layout.pages[2])[0], "step9");
     let mut song = Song::new(1);
     song.tracks[0].mods[1].kind = ModKind::Steps;

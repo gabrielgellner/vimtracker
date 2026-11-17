@@ -396,3 +396,140 @@ fn pitch_in_scale_follows_a_scale_changed_by_command() {
     assert_eq!(pitch_moved(&song_in(off), Some(major)), 2.0);
     assert_eq!(pitch_moved(&song_in(major), Some(off)), 3.0);
 }
+
+/// The steps a slot plays, a step at a time from the top: what the Mod page shows playing.
+fn played(song: &Song, times: usize) -> Vec<u8> {
+    heard(song, STEP, times)
+        .into_iter()
+        .map(|(_, step)| step.unwrap())
+        .collect()
+}
+
+/// `Jump` at 0% walks as `Loop` says, as before there was one; at 100% each step is any of its
+/// `Length`, in every mode, and a render jumps the same (decision 390).
+#[test]
+fn jump_at_none_walks_the_loop_and_at_full_plays_any_step() {
+    let bouncing = Steps {
+        values: values(&[0x10, 0x20, 0x30, 0x40, 0x50, 0x60]),
+        length: 6,
+        looping: Loop::Bounce,
+        mode: StepsMode::Free,
+        ..Steps::default()
+    };
+    let walked = played(&song(&[], bouncing), 12);
+    assert_eq!(walked, [0, 1, 2, 3, 4, 5, 4, 3, 2, 1, 0, 1]);
+    for mode in StepsMode::ALL {
+        let notes = ["C-3 -- --- --- ---"; 16];
+        let jumping = Steps {
+            jump: 100,
+            mode,
+            ..bouncing
+        };
+        let song = song(&notes, jumping);
+        let jumped = played(&song, 16);
+        assert!(jumped.iter().all(|step| *step < 6), "{mode:?} {jumped:?}");
+        let mut seen = jumped.clone();
+        seen.sort_unstable();
+        seen.dedup();
+        assert!(
+            seen.len() >= 4,
+            "{mode:?} visits steps at random: {jumped:?}"
+        );
+        assert!(
+            jumped.windows(2).any(|pair| pair[1].abs_diff(pair[0]) > 1),
+            "{mode:?} jumps rather than walks: {jumped:?}"
+        );
+        assert_eq!(jumped, played(&song, 16), "{mode:?}: a render repeats");
+        // What's heard is the value of the step played.
+        let cut = cutoffs(&song, STEP, 16);
+        for (cut, step) in cut.iter().zip(&jumped) {
+            assert_eq!(*cut, 0x90 + 0x10 * step, "{mode:?}");
+        }
+    }
+    // Between, some steps walk on and some jump.
+    let walked = played(&song(&[], bouncing), 24);
+    let half = played(
+        &song(
+            &[],
+            Steps {
+                jump: 50,
+                ..bouncing
+            },
+        ),
+        24,
+    );
+    assert_ne!(half, walked);
+    let walks = half.iter().zip(&walked).filter(|(a, b)| a == b).count();
+    assert!(walks > 6, "{half:?}");
+}
+
+/// With `Mutate` locked at 0% after drifting, a jump replays the values it drew, as Marbles past
+/// noon plays its locked loop's values out of order (decision 390).
+#[test]
+fn a_jump_replays_the_values_mutate_locked() {
+    let written = Steps {
+        values: values(&[0x10, 0x20, 0x30, 0x40]),
+        length: 4,
+        mode: StepsMode::Free,
+        mutate: 100,
+        ..Steps::default()
+    };
+    let drifting = song(&[], written);
+    let version = |song: &Song| Arc::new(Published::new(Arc::new(song.clone()), flat()));
+    let mut engine = Engine::new(RATE, version(&drifting));
+    let mut out = vec![0.0; STEP * 2];
+    let mut steps = |engine: &mut Engine, count: usize| -> Vec<(u8, u8)> {
+        (0..count)
+            .map(|_| {
+                engine.process(&mut out);
+                let live = engine.live(0);
+                (live.cutoff, live.steps[2].unwrap())
+            })
+            .collect()
+    };
+    engine.play_from(0);
+    let lap = steps(&mut engine, 4);
+    let mut drawn = [0; 4];
+    for (cut, step) in &lap {
+        drawn[usize::from(*step)] = *cut;
+    }
+    let mut locked = drifting;
+    locked.tracks[0].mods[2].steps.mutate = 0;
+    locked.tracks[0].mods[2].steps.jump = 100;
+    engine.swap(version(&locked));
+    let jumped = steps(&mut engine, 16);
+    for (cut, step) in &jumped {
+        assert_eq!(
+            *cut,
+            drawn[usize::from(*step)],
+            "{jumped:02X?} {drawn:02X?}"
+        );
+    }
+}
+
+/// A macro holding a Steps slot's `Jump` turns it, as it does `Mutate`.
+#[test]
+fn a_macro_turns_jump() {
+    use vt_model::macros::{MacroMap, MacroTarget};
+    use vt_model::modulation::ModField;
+    let walking = Steps {
+        values: values(&[0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x08]),
+        mode: StepsMode::Free,
+        ..Steps::default()
+    };
+    let mut song = song(&[], walking);
+    let jump = SettingId::mod_own(2, ModField::Jump.own().unwrap()).unwrap();
+    song.tracks[0].macros[0].maps = vec![MacroMap {
+        target: MacroTarget::Setting(jump),
+        min: 0,
+        max: 0x6400,
+        curve: 0,
+        s: 0,
+    }];
+    let walk = [0, 1, 2, 3, 4, 5, 6, 7].repeat(2);
+    assert_eq!(played(&song, 16), walk);
+    song.tracks[0].macros[0].value = 0xFF00;
+    let jumped = played(&song, 16);
+    assert_ne!(jumped, walk, "{jumped:?}");
+    assert_eq!(jumped, played(&song, 16), "a render repeats");
+}

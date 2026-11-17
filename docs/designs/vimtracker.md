@@ -573,7 +573,9 @@ Song                               song.ron, refused unless format_version is FO
     (decision 204) is the one part kept as it plays: the values drawn again, in the slot's run, from
     a seeded stream of its own, kept at `0%`, which locks the loop, forgotten for a step whose
     written value a new version changes, and reset when playing starts from the top (decision
-    384). Track (`tracking.rs`,
+    384). Its `Jump` (decision 390) plays any step in place of the one walked to, with its chance,
+    rolled once a count from a stream of the slot's own and kept for the few counts `Smooth`
+    reads. Track (`tracking.rs`,
     decision 223) maps the last note's pitch, velocity or a roll from `Low` to `High` onto its
     depth, each source with its own map: `modulate` reads it from `TrackState::last_note` (a
     `NoteOn` carries its velocity), and every slot rolls at each note from a stream of its own after

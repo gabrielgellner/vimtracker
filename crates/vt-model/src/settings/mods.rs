@@ -5,7 +5,7 @@ use super::{Entry, Kind, Place, Units};
 use crate::accumulator::MOST_DEGREES;
 use crate::arpeggio::{ArpRate, MOST_OCTAVES};
 use crate::macros::MACROS;
-use crate::steps::{MAX_MUTATE, STEPS};
+use crate::steps::{MAX_JUMP, MAX_MUTATE, STEPS};
 
 /// A mod slot's settings that steps can lock: its depth and polarity, whatever its type, and an
 /// LFO's phase and deform, in [`MOD_LOCKED_FIELDS`](crate::modulation::MOD_LOCKED_FIELDS)' order.
@@ -70,7 +70,7 @@ const POLARITY_NAMES: [&str; 2] = ["Uni", "Bi"];
 
 /// How many of a mod slot's type's own settings the registry holds, and of the accumulator's and
 /// the arpeggio's together.
-pub const MOD_OWN_SETTINGS: usize = 10;
+pub const MOD_OWN_SETTINGS: usize = 11;
 pub const PLAYED_SETTINGS: usize = ACCUMULATION.len() + ARPEGGIO.len();
 
 /// A macro, the same entry for all eight but its name: where it's turned, from `00` to `FF` with a
@@ -208,6 +208,19 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
             units: Units::Percent,
         },
         default: 0x7A,
+        place: Place::Own,
+    },
+    Entry {
+        meaning: "the chance each step goes to one of its values at random",
+        key: "jump",
+        name: "Jump",
+        label: None,
+        kind: Kind::Continuous {
+            top: MAX_JUMP,
+            middle: false,
+            units: Units::Percent,
+        },
+        default: 0,
         place: Place::Own,
     },
 ];

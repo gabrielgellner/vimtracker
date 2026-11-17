@@ -999,6 +999,15 @@ requests, Drum then LPG:
   value changes isn't drawn any more (`SlotRun::follow_written`, as the engine takes a version),
   so an edit is heard at once. `Space g a` writes the draws in, so it keeps a lock in the song.
 
+**As built for #981 (decision 390):**
+
+* **`Jump`,** 0% to 100%, is in the title after the loop, `Jump 30%`, as the grid is full and
+  both decide the walk. The title takes one place more than a grid has columns
+  (`TITLE_PLACES`). On the Roto it's a page of its own before `Dest`.
+* **A jump replaces one step:** the walk carries on from the count, so `Bounce`, `Once` and
+  `Shuffle` stay what they are between jumps. Marbles walks on from the step it jumped to; ours
+  can't, as which step plays is worked out from the count.
+
 **As built for #569 (decision 270):**
 
 * **Writing a slot into the notes:** `Space g A` in the phrase view writes what the track's Steps

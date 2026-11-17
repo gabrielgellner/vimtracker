@@ -10,7 +10,7 @@ use vt_model::shape::{GenParam, ShapeColumn, is_empty};
 use vt_model::song::Track;
 use vt_model::step::FxCommand;
 
-use super::{DEVICE_COLUMNS, DeviceSpec, DeviceWidth};
+use super::{DEVICE_COLUMNS, DeviceSpec, DeviceWidth, TITLE_PLACES};
 use crate::controls::{Control, LaneField};
 
 /// Where a column comes in the phrase view, which the page's devices follow: Note, Velocity,
@@ -50,7 +50,7 @@ const MACROS_GRID: [[Option<usize>; 2]; 4] = [
 pub(crate) fn macros_device() -> DeviceSpec {
     DeviceSpec::new(
         "Macros",
-        [None; DEVICE_COLUMNS],
+        [None; TITLE_PLACES],
         Grid::from_columns(&MACROS_GRID),
         Control::Macro,
     )
@@ -91,7 +91,7 @@ pub(super) fn devices(track: &Track, phrase: Option<u32>) -> Vec<DeviceSpec> {
         placed.insert(at, (column, DeviceSpec::lane(slot)));
     }
     let mut devices: Vec<DeviceSpec> = placed.into_iter().map(|(_, device)| device).collect();
-    let mut title = [None; DEVICE_COLUMNS];
+    let mut title = [None; TITLE_PLACES];
     title[0] = Some(Control::NewGenerator(id));
     devices.push(DeviceSpec {
         identity: String::new(),
@@ -114,7 +114,7 @@ impl DeviceSpec {
             })
         };
         let shape = &generator.shape;
-        let mut title = [None; DEVICE_COLUMNS];
+        let mut title = [None; TITLE_PLACES];
         for (place, param) in GenParam::title(shape).into_iter().enumerate() {
             title[place] = control(param);
         }
@@ -150,7 +150,7 @@ impl DeviceSpec {
             identity: LOOPS.to_owned(),
             switchable: false,
             width: DeviceWidth::Full,
-            title: [None; DEVICE_COLUMNS],
+            title: [None; TITLE_PLACES],
             grid,
         })
     }
@@ -165,7 +165,7 @@ impl DeviceSpec {
             identity: format!("FX{} {LANE}", slot + 1),
             switchable: false,
             width: DeviceWidth::Full,
-            title: [None; DEVICE_COLUMNS],
+            title: [None; TITLE_PLACES],
             grid,
         }
     }

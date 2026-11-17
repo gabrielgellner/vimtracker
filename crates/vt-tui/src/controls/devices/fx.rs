@@ -3,7 +3,7 @@
 use vt_model::insert::Insert;
 use vt_model::song::Track;
 
-use super::{DEVICE_COLUMNS, DeviceSpec};
+use super::{DeviceSpec, TITLE_PLACES};
 use crate::controls::Control;
 
 /// The FX page's devices: a slot each, top to bottom.
@@ -21,7 +21,7 @@ impl DeviceSpec {
     /// and, for Beads, its quality over the third, then its effect's grid. An empty slot has only
     /// its effect.
     pub fn slot(slot: usize, insert: Insert) -> Self {
-        let mut title = [None; DEVICE_COLUMNS];
+        let mut title = [None; TITLE_PLACES];
         title[0] = Some(Control::Insert(slot));
         title[1] = insert.type_param().map(|at| Control::InsertParam(slot, at));
         title[2] = insert
