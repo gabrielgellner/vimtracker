@@ -113,7 +113,15 @@ pub enum Units {
     EnvelopeTime,
     /// Rows either side of `80`, one a step, as a lane's `Length` moves its lane.
     Rows,
+    /// The track's utility high-pass and low-pass, in Hz as [`Units::Hertz`] reads, but off at
+    /// the end where each stands aside: the bottom for the high-pass, the top for the low-pass.
+    LowCut,
+    HighCut,
 }
+
+/// How close to an end the utility filter's cuts count as off, as a share of their range: the
+/// engine's `TRIM_OPEN`.
+const CUT_OFF: f64 = 0.001;
 
 /// The acid voice's cutoff at either end of its range, in Hz, where its filter resonates.
 pub const ACID_LOWEST_CUTOFF: f32 = 170.0;
@@ -284,6 +292,9 @@ impl Kind {
                 .map_or_else(String::new, |choice| (*choice).to_owned()),
             Self::Continuous { units, middle, top } => match units {
                 Units::Hertz => hertz(20.0 * 1000_f64.powf(coarse / 255.0)),
+                Units::LowCut if coarse / 255.0 <= CUT_OFF => "Off".to_owned(),
+                Units::HighCut if coarse / 255.0 >= 1.0 - CUT_OFF => "Off".to_owned(),
+                Units::LowCut | Units::HighCut => hertz(20.0 * 1000_f64.powf(coarse / 255.0)),
                 Units::Decibels if value == 0 => "-inf dB".to_owned(),
                 Units::Decibels => format!(
                     "{:+.1} dB",
