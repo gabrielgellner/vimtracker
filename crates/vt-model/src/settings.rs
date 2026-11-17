@@ -687,7 +687,7 @@ mod tests {
                     &label[1..]
                 }
                 // A lane's end in its FX column's number, as a mod slot's end in the slot's.
-                Owner::Mod(slot) | Owner::Macro(slot) | Owner::Lane(slot) => {
+                Owner::Mod(slot) | Owner::ModOwn(slot) | Owner::Macro(slot) | Owner::Lane(slot) => {
                     assert!(label.ends_with(&(slot + 1).to_string()), "{label}");
                     &label[..label.len() - 1]
                 }
@@ -724,6 +724,9 @@ mod tests {
                 .into_iter()
                 .chain(labels((0..MOD_SLOTS).flat_map(|slot| {
                     (0..MOD.len()).filter_map(move |at| SettingId::modulator(slot, at))
+                })))
+                .chain(labels((0..MOD_SLOTS).flat_map(|slot| {
+                    (0..MOD_OWN_SETTINGS).filter_map(move |at| SettingId::mod_own(slot, at))
                 })))
                 .chain(labels(SettingId::macros()))
                 .chain(labels(SettingId::lanes()))

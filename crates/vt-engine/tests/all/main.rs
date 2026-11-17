@@ -35,6 +35,7 @@ mod lane_moves;
 mod lanes;
 mod lfo;
 mod live_lengths;
+mod lockable_lists;
 mod macro_generators;
 mod macro_voices;
 mod macros;

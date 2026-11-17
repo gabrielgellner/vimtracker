@@ -28,6 +28,33 @@ pub(crate) fn time_value(ms: u16) -> u16 {
     ((1.0 + along * 254.0) * 256.0).round() as u16
 }
 
+/// An AHD's hold for a value on the registry's `00` to `FF` scale, its own: none at `00`, then
+/// from 1 ms at `01` to [`MAX_HOLD_MS`] at `FE`, evenly in ratio, and the note at `FF`, the longest
+/// hold of all, so a macro turned up holds longer and longer and then for the note.
+pub(crate) fn hold_at(value: f32) -> Hold {
+    if value >= 255.0 {
+        return Hold::Note;
+    }
+    if value < 1.0 {
+        return Hold::Ms(0);
+    }
+    let along = (value.min(254.0) - 1.0) / 253.0;
+    Hold::Ms(f32::from(MAX_HOLD_MS).powf(along).round() as u16)
+}
+
+/// Where a hold is on the registry's scale, with a coarse byte and a fine one, nearest to what
+/// [`hold_at`] gives back.
+pub(crate) fn hold_value(hold: Hold) -> u16 {
+    match hold {
+        Hold::Note => 0xFF00,
+        Hold::Ms(0) => 0,
+        Hold::Ms(ms) => {
+            let along = f32::from(ms.min(MAX_HOLD_MS)).ln() / f32::from(MAX_HOLD_MS).ln();
+            ((1.0 + along * 253.0) * 256.0).round() as u16
+        }
+    }
+}
+
 /// How far `Exp`'s decays and releases bend: the same as Mutable Instruments' Peaks.
 const FALL_RATE: f32 = 4.0;
 /// How far `Snap`'s bend, twice as far, so they fall about twice as fast and then have a longer
@@ -69,7 +96,7 @@ impl Curve {
     pub const ALL: [Self; 4] = [Self::Exp, Self::Lin, Self::Snap, Self::Analog];
 
     /// The name in the slot's title.
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Exp => "Exp",
             Self::Lin => "Lin",

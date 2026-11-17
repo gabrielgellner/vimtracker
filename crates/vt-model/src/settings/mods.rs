@@ -4,8 +4,10 @@
 use super::{Entry, Kind, Place, Units};
 use crate::accumulator::MOST_DEGREES;
 use crate::arpeggio::{ArpRate, MOST_OCTAVES};
+use crate::envelope::{Curve, MAX_RATCHET};
+use crate::lfo::{LfoMode, Shape};
 use crate::macros::MACROS;
-use crate::steps::{MAX_JUMP, MAX_MUTATE, STEPS};
+use crate::steps::{MAX_JUMP, MAX_MUTATE, STEPS, StepsMode};
 
 /// A mod slot's settings that steps can lock: its depth and polarity, whatever its type, and an
 /// LFO's phase and deform, in [`MOD_LOCKED_FIELDS`](crate::modulation::MOD_LOCKED_FIELDS)' order.
@@ -70,7 +72,7 @@ const POLARITY_NAMES: [&str; 2] = ["Uni", "Bi"];
 
 /// How many of a mod slot's type's own settings the registry holds, and of the accumulator's and
 /// the arpeggio's together.
-pub const MOD_OWN_SETTINGS: usize = 11;
+pub const MOD_OWN_SETTINGS: usize = 20;
 pub const PLAYED_SETTINGS: usize = ACCUMULATION.len() + ARPEGGIO.len();
 
 /// A macro, the same entry for all eight but its name: where it's turned, from `00` to `FF` with a
@@ -135,9 +137,11 @@ const fn percentage(key: &'static str, name: &'static str) -> Entry {
 }
 
 /// A mod slot's type's own settings that a macro or modulation can move, by what they are, so an
-/// ADSR's, an AHD's and an LPG's `Attack` are one: unlabelled, as steps can't lock them. Each is on
-/// the slot only while its type has it. They're in
-/// [`MOD_OWN_FIELDS`](crate::modulation::MOD_OWN_FIELDS)' order, which names them.
+/// ADSR's, an AHD's and an LPG's `Attack` are one. The times, levels and amounts first are
+/// unlabelled, as a step's lock of one would be heard only from the next note; the lists, the
+/// hold, the peak, the fade and the ratchet after them are labelled, so steps lock them too, with
+/// the slot's number after the label, as `SHP4`. Each is on the slot only while its type has it.
+/// They're in [`MOD_OWN_FIELDS`](crate::modulation::MOD_OWN_FIELDS)' order, which names them.
 pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
     time("attack", "Attack").means("how long it takes to rise to full, or the gate to open"),
     time("decay", "Decay").means("how long it takes to fall back"),
@@ -223,6 +227,115 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
         default: 0,
         place: Place::Own,
     },
+    // An LFO's wave, swapped where it is in its cycle; the default is a new LFO's `Tri`.
+    listed("shape", "Shape", "SHP", &SHAPE_NAMES, 1).means("the wave the LFO cycles through"),
+    // Steps' end, from where it's counted to; the default is a new slot's `from 1`.
+    listed("loop", "Loop", "LOOP", &LOOP_NAMES, 1)
+        .means("what Steps does once it reaches its last value"),
+    // An envelope's mode, an ADSR's, an AHD's and a drum's alike.
+    listed("curve", "Curve", "CRV", &CURVE_NAMES, 0).means("how the envelope's rise and fall bend"),
+    // An LFO's and Steps' modes, each a list of its own, as they mean different things.
+    listed("lfomode", "Mode", "LMOD", &LFO_MODE_NAMES, 0)
+        .means("how notes start the LFO's cycle, or leave it running"),
+    listed("stepsmode", "Mode", "SMOD", &STEPS_MODE_NAMES, 0)
+        .means("whether Steps' values go by in time or one a note"),
+    // An AHD's hold, on a scale of its own (`hold_at`); the default is a new AHD's 30 ms.
+    Entry {
+        meaning: "how long the AHD stays at full, or, at the top, for as long as the note",
+        key: "hold",
+        name: "Hold",
+        label: Some("HOLD"),
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units: Units::HoldTime,
+        },
+        default: 0x72,
+        place: Place::Own,
+    },
+    // A drum's peak, on the envelopes' time scale; the default is a new drum's 10 ms.
+    Entry {
+        label: Some("PEAK"),
+        default: 0x42,
+        ..time("peak", "Peak").means("how long the drum's first strike lasts before its body")
+    },
+    // An LFO's fade, from the longest out through none to the longest in, as `+` goes; the
+    // default is none.
+    listed(
+        "fade",
+        "Fade",
+        "FADE",
+        &FADE_NAMES,
+        FADE_NAMES.len() as u8 / 2,
+    )
+    .means("how the LFO fades in or out after each note starts it"),
+    // How many times a drum strikes, from 1.
+    listed(
+        "ratchet",
+        "Ratchet",
+        "RTCH",
+        COUNTS.split_at(MAX_RATCHET as usize).0,
+        0,
+    )
+    .means("how many times the drum strikes on each note"),
+];
+
+/// A list of a mod slot's type's own that a step can lock, by its names.
+const fn listed(
+    key: &'static str,
+    name: &'static str,
+    label: &'static str,
+    choices: &'static [&'static str],
+    default: u8,
+) -> Entry {
+    Entry {
+        meaning: "",
+        key,
+        name,
+        label: Some(label),
+        kind: Kind::Stepped {
+            choices,
+            wraps: false,
+        },
+        default,
+        place: Place::Own,
+    }
+}
+
+/// The names of every one of a type that has a list of them, in its order, made as the program is
+/// built.
+macro_rules! names {
+    ($ty:ty) => {{
+        let mut names = [""; <$ty>::ALL.len()];
+        let mut at = 0;
+        while at < names.len() {
+            names[at] = <$ty>::ALL[at].name();
+            at += 1;
+        }
+        names
+    }};
+}
+
+const SHAPE_NAMES: [&str; Shape::ALL.len()] = names!(Shape);
+const CURVE_NAMES: [&str; Curve::ALL.len()] = names!(Curve);
+const LFO_MODE_NAMES: [&str; LfoMode::ALL.len()] = names!(LfoMode);
+const STEPS_MODE_NAMES: [&str; StepsMode::ALL.len()] = names!(StepsMode);
+
+/// Steps' ends, in [`Loop::ALL`](crate::steps::Loop::ALL)'s order, as they show.
+pub(crate) const LOOP_NAMES: [&str; STEPS + 3] = [
+    "Once", "from 1", "from 2", "from 3", "from 4", "from 5", "from 6", "from 7", "from 8",
+    "from 9", "from 10", "from 11", "from 12", "from 13", "from 14", "from 15", "from 16",
+    "Bounce", "Shuffle",
+];
+
+/// An LFO's fades, in [`Fade::ALL`](crate::lfo::Fade::ALL)'s order, as they show: out over the
+/// longest to the shortest, none, then in over the shortest to the longest.
+pub(crate) const FADE_NAMES: [&str; 45] = [
+    "-16 bars", "-8 bars", "-4 bars", "-2 bars", "-1 bar", "-1/2d", "-1/2", "-1/4d", "-1/2t",
+    "-1/4", "-1/8d", "-1/4t", "-1/8", "-1/16d", "-1/8t", "-1/16", "-1/32d", "-1/16t", "-1/32",
+    "-1/64d", "-1/32t", "-1/64", "Off", "+1/64", "+1/32t", "+1/64d", "+1/32", "+1/16t", "+1/32d",
+    "+1/16", "+1/8t", "+1/16d", "+1/8", "+1/4t", "+1/8d", "+1/4", "+1/2t", "+1/4d", "+1/2",
+    "+1/2d", "+1 bar", "+2 bars", "+4 bars", "+8 bars", "+16 bars",
 ];
 
 /// The accumulator's settings a macro or modulation can move: how far up and down it goes.

@@ -459,21 +459,129 @@ fn an_ahds_hold_for_the_note_is_below_no_time() {
 fn the_registrys_own_settings_and_locked_ones_are_in_the_fields_order() {
     for (at, field) in MOD_OWN_FIELDS.into_iter().enumerate() {
         let id = SettingId::mod_own(2, at).unwrap();
-        assert_eq!(id.entry().name, field.name(), "{at}");
-        assert_eq!(field.own(), Some(at));
-        assert_eq!(field.setting(2), Some(id));
+        // A mode is each type's own, named as its type names it.
+        let kinds: Vec<ModKind> = ModKind::ALL
+            .into_iter()
+            .filter(|kind| field.on(*kind) && field.own(*kind) == Some(at))
+            .collect();
+        assert!(!kinds.is_empty(), "{at} is no type's");
+        for kind in kinds {
+            let name = match field {
+                ModField::Mode => kind.mode_label(),
+                _ => field.name(),
+            };
+            assert_eq!(id.entry().name, name, "{at}");
+            assert_eq!(field.setting(2, kind), Some(id));
+        }
     }
     assert_eq!(SettingId::mod_own(0, MOD_OWN_SETTINGS), None);
     for (at, field) in MOD_LOCKED_FIELDS.into_iter().enumerate() {
         let id = SettingId::modulator(4, at).unwrap();
         assert_eq!(id.entry().name, field.name(), "{at}");
         assert_eq!(field.locked(), Some(at));
-        assert_eq!(field.setting(4), Some(id));
+        assert_eq!(field.setting(4, ModKind::Lfo), Some(id));
     }
     assert_eq!(SettingId::modulator(0, MOD_LOCKED_FIELDS.len()), None);
-    // An AHD's hold isn't on the `00` to `FF` scale, as `Note` is below no time.
-    assert_eq!(ModField::Hold.own(), None);
-    assert_eq!(ModField::Hold.setting(0), None);
+    // Track's source and a gate's want no list of their own.
+    assert_eq!(ModField::Mode.own(ModKind::Track), None);
+    assert_eq!(ModField::Mode.setting(0, ModKind::Lpg), None);
+    assert_eq!(ModField::Start.setting(0, ModKind::Steps), None);
+}
+
+/// A type's own lists, its hold, peak, fade and ratchet are on the registry's scale and steps lock
+/// them, each by a label with the slot's number after it; they go there and back exactly, and
+/// each setting's default is a new slot's (decision 399).
+#[test]
+fn the_lists_and_odd_times_are_lockable_own_settings_that_go_there_and_back() {
+    let own = |kind: ModKind, field: ModField| SettingId::mod_own(3, field.own(kind).unwrap());
+    let labels = [
+        (ModKind::Lfo, ModField::Shape, "SHP4"),
+        (ModKind::Steps, ModField::Loop, "LOOP4"),
+        (ModKind::Adsr, ModField::Mode, "CRV4"),
+        (ModKind::Ahd, ModField::Mode, "CRV4"),
+        (ModKind::Drum, ModField::Mode, "CRV4"),
+        (ModKind::Lfo, ModField::Mode, "LMOD4"),
+        (ModKind::Steps, ModField::Mode, "SMOD4"),
+        (ModKind::Ahd, ModField::Hold, "HOLD4"),
+        (ModKind::Drum, ModField::Peak, "PEAK4"),
+        (ModKind::Lfo, ModField::Fade, "FADE4"),
+        (ModKind::Drum, ModField::Ratchet, "RTCH4"),
+    ];
+    for (kind, field, label) in labels {
+        let id = own(kind, field).unwrap();
+        assert_eq!(id.label().as_deref(), Some(label), "{kind:?} {field:?}");
+        assert!(id.lockable());
+        // Every value of the setting goes to the scale and comes back as it was.
+        let slot = distinct(kind);
+        let at = field.own(kind).unwrap();
+        let (low, high) = slot.bounds(field).unwrap();
+        // An envelope's time comes back exactly up to a second (decision 283).
+        let high = if field == ModField::Peak { 1000 } else { high };
+        for value in low..=high {
+            let mut set = slot;
+            set.set_field(field, value);
+            let mut back = slot;
+            back.set_own(at, f32::from(set.own_value(at).unwrap()) / 256.0);
+            assert_eq!(back.field(field), Some(value), "{kind:?} {field:?} {value}");
+        }
+        // A new slot of the type is where the entry starts.
+        let fresh = ModSlot {
+            kind,
+            ..vt_model::modulation::default_mod(3)
+        };
+        assert_eq!(
+            fresh.own_value(at).map(|value| (value + 0x80) >> 8),
+            Some(u16::from(id.entry().default)),
+            "{kind:?} {field:?}"
+        );
+    }
+    // Each list's names are its own, in its order.
+    let shown = |kind: ModKind, field: ModField, value: u16| {
+        own(kind, field).unwrap().entry().kind.shown(value)
+    };
+    assert_eq!(shown(ModKind::Lfo, ModField::Shape, 0x0400), "Square");
+    assert_eq!(shown(ModKind::Steps, ModField::Loop, 0x1100), "Bounce");
+    assert_eq!(shown(ModKind::Lfo, ModField::Fade, 0x1600), "Off");
+    assert_eq!(shown(ModKind::Lfo, ModField::Fade, 0x2300), "+1/4");
+    assert_eq!(shown(ModKind::Ahd, ModField::Hold, 0xFF00), "Note");
+    assert_eq!(shown(ModKind::Ahd, ModField::Hold, 0xFE00), "2000 ms");
+    assert_eq!(shown(ModKind::Ahd, ModField::Hold, 0x0000), "0 ms");
+    assert_eq!(shown(ModKind::Drum, ModField::Ratchet, 0x0300), "4");
+    let choices = |field: ModField, kind: ModKind| -> Vec<String> {
+        distinct(kind)
+            .choices(field)
+            .into_iter()
+            .map(|(name, _)| name.into_owned())
+            .collect()
+    };
+    for (kind, field) in [
+        (ModKind::Lfo, ModField::Shape),
+        (ModKind::Steps, ModField::Loop),
+        (ModKind::Adsr, ModField::Mode),
+        (ModKind::Lfo, ModField::Mode),
+        (ModKind::Steps, ModField::Mode),
+    ] {
+        assert_eq!(
+            own(kind, field).unwrap().entry().choices(),
+            choices(field, kind),
+            "{kind:?} {field:?}"
+        );
+    }
+    let fades: Vec<String> = vt_model::lfo::Fade::ALL
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(
+        own(ModKind::Lfo, ModField::Fade).unwrap().entry().choices(),
+        fades
+    );
+    // One type's mode isn't another's: an LFO has no curve, and an envelope no LFO mode.
+    let lfo = distinct(ModKind::Lfo);
+    let curve = ModField::Mode.own(ModKind::Adsr).unwrap();
+    assert_eq!(lfo.own_value(curve), None);
+    let mut moved = lfo;
+    moved.set_own(curve, 3.0);
+    assert_eq!(moved, lfo);
 }
 
 /// Modulation sets a slot's own settings from past either end of the `00` to `FF` scale, as it

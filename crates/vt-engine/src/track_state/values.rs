@@ -234,6 +234,7 @@ impl TrackState {
     /// a hand has taken over keeps it underneath, unheard, for when it's given back.
     pub(crate) fn set_value(&mut self, id: SettingId, value: u16, mark: Mark) {
         self.wake();
+        self.own_stepped |= id.is_mod_own();
         if let Some(fader) = id.fader() {
             let run = &mut self.faders[fader];
             run.automated = true;
