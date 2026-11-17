@@ -44,22 +44,28 @@ and step, the snake by its number, and Cartesian's X and Y rates. At the end of
 its title, dim, it says the order this phrase plays in: `· here Hopscotch, its
 own Jump 3`, or `· here Jump 3, as written`. `=` `-` `+` `_`, `i`, `K`, `x`, `M`
 and `gd` work on them as on any of the track's settings, a step's `ORD`, `REV`,
-`ORDX` and `ORDY` lock them, and a mod slot or an LFO can go to them. The Roto
-has them on knobs 1 to 4.
+`ORDX` and `ORDY` lock them, and a mod slot or an LFO can go to them. Under them,
+`Length` and `Start` are the window of rows the order walks: `Length` rows up or
+down from the loop's, `+0` as written, its own rows again past its last, and
+`Start` the row it starts on, rows on from the first, going round; the title adds
+it, `· here Forward, 4 rows from 3, its own Forward`. A pass keeps the loop's
+steps, so the chain keeps time; a step's `PLEN` and `PSTA` lock them. The Roto
+has the six on knobs 1 to 6.
 
-**A lane's Length and Rate.** Each FX column with a lane in the phrase has a
+**A lane's Length, Rate and Start.** Each FX column with a lane in the phrase has a
 device of its own, `FX1 Lane`, under that column's generator if it has one, as
-`Loops` sits under `Acid`, and where its column comes if not. Its two settings are
+`Loops` sits under `Acid`, and where its column comes if not. Its settings are
 the track's, not the phrase's: they move every phrase's lane on that column from
 its own (see **Lanes** in the editing guide). `Length` is rows up or down, `+0` as
 written, centred as `Pitch` is; at `+2` a lane of 4 plays 6 rows, its own again
 from the first, and at `-3` 1 row. `Rate` is a list from `÷16` to `×16`, `×1` as
 written, slower below it and faster above, as a clock divider's: at `÷2` each of
 its rows lasts twice its own steps, and `×2` halves a division of 8 to 4; it's
-rounded to a step, from 1 to 16, so a lane of a step a row goes no faster. At the end of its title, dim, it says how this phrase's lane
+rounded to a step, from 1 to 16, so a lane of a step a row goes no faster. `Start`
+is the row each lane starts on, so many of its own rows on, going round them. At the end of its title, dim, it says how this phrase's lane
 is heard against its own: `· here 6 rows, its own 4 rows`. `=` `-` `+` `_`, `i`,
 `K` on `Rate`, `x`, `M` and `gd` work on them as on any of the track's settings,
-a step's `LLEN1` and `LRAT1` lock them, and a mod slot can go to them. A column
+a step's `LLEN1`, `LRAT1` and `LSTA1` lock them, and a mod slot can go to them. A column
 without a lane has no device, and the settings keep their values: a macro mapped
 there does nothing until a phrase gives that column a lane.
 

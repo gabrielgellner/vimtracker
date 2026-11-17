@@ -1233,3 +1233,8 @@
 1232 reverse
 1233 orderx
 1234 ordery
+1235 phraselength
+1236 phrasestart
+1237 lane1.start
+1238 lane2.start
+1239 lane3.start

@@ -1824,7 +1824,7 @@ const GEN_LANE: DeviceLayout = live(
     "gen/lane",
     &[knobs(
         "Lane",
-        [s("length"), s("rate"), GAP, GAP, GAP, GAP, GAP, GAP],
+        [s("length"), s("rate"), s("start"), GAP, GAP, GAP, GAP, GAP],
     )],
 );
 /// The track's settings that move its phrases' walks, its own device as on the Gen page
@@ -1838,8 +1838,8 @@ const GEN_PHRASE: DeviceLayout = live(
             s("reverse"),
             s("orderx"),
             s("ordery"),
-            GAP,
-            GAP,
+            s("phraselength"),
+            s("phrasestart"),
             GAP,
             GAP,
         ],

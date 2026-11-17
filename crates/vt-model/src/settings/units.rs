@@ -366,7 +366,8 @@ impl Kind {
                     glide_ms(coarse as f32).map_or_else(|| "Off".to_owned(), milliseconds)
                 }
                 Units::EnvelopeTime => format!("{} ms", time_at(coarse as f32)),
-                Units::Rows => rows_text((coarse.round() as i32 - 128).clamp(-128, 127)),
+                Units::Rows if middle => rows_text((coarse.round() as i32 - 128).clamp(-128, 127)),
+                Units::Rows => rows_text(coarse.round() as i32),
                 Units::Orders => orders_text((coarse.round() as i32 - 128).clamp(-128, 127)),
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {

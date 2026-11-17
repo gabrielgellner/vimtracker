@@ -106,7 +106,7 @@ impl LaneRun {
             self.left = heard.division.max(1);
         }
         let read = LaneRead {
-            row: lane.stored(self.row),
+            row: lane.stored_from(self.row, heard.start),
             laps: self.laps,
             first,
             heard,
@@ -208,6 +208,7 @@ impl TrackState {
         let moved = LaneMove {
             length: value(0),
             rate: value(1).min(LANE_RATES.len() as u8 - 1),
+            start: value(2),
         };
         lane.heard(moved)
     }
@@ -216,5 +217,9 @@ impl TrackState {
 /// What each FX column's `Length` and `Rate` hold at rest, on the `00` to `FF` scale.
 pub(super) fn lanes_at_rest() -> [f32; LANE_SETTINGS] {
     let rest = LaneMove::default();
-    [f32::from(rest.length), f32::from(rest.rate)]
+    [
+        f32::from(rest.length),
+        f32::from(rest.rate),
+        f32::from(rest.start),
+    ]
 }

@@ -50,6 +50,8 @@ fn is_one(division: &usize) -> bool {
 pub struct Heard {
     pub length: usize,
     pub division: usize,
+    /// How many of its own rows on from its first it starts, within its own length.
+    pub start: usize,
 }
 
 impl Lane {
@@ -73,6 +75,12 @@ impl Lane {
         self.start + row % self.length.max(1)
     }
 
+    /// The stored step it reads at a row of the length it's heard at, heard starting so many of
+    /// its own rows on, going round them (decision 401).
+    pub fn stored_from(self, row: usize, start: usize) -> usize {
+        self.stored(row + start)
+    }
+
     /// How it's heard with a track's `Length` and `Rate` for its column at these values: its own
     /// length moved by that many rows, from 1 to [`MAX_PHRASE_STEPS`], and its own division slowed
     /// or sped up by the rate, rounded to the nearest step, from 1 to [`MOST_DIVISION`].
@@ -80,6 +88,7 @@ impl Lane {
         Heard {
             length: self.heard_length(length_rows(moved.length)),
             division: rate_division(self.division, usize::from(moved.rate)),
+            start: usize::from(moved.start) % self.length.max(1),
         }
     }
 
@@ -122,6 +131,13 @@ pub struct LaneMove {
     pub length: u8,
     #[serde(default = "rate_as_written")]
     pub rate: u8,
+    /// So many of its own rows on that each lane starts, going round them (decision 401).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub start: u8,
+}
+
+fn is_zero(value: &u8) -> bool {
+    *value == 0
 }
 
 fn length_as_written() -> u8 {
@@ -137,6 +153,7 @@ impl Default for LaneMove {
         Self {
             length: LENGTH_AS_WRITTEN,
             rate: RATE_AS_WRITTEN,
+            start: 0,
         }
     }
 }
@@ -147,19 +164,21 @@ impl LaneMove {
         self == Self::default()
     }
 
-    /// One of its two values, by its place: 0 is `Length`, 1 is `Rate`.
+    /// One of its values, by its place: 0 is `Length`, 1 is `Rate`, 2 is `Start`.
     pub fn value(self, at: usize) -> u8 {
         match at {
             0 => self.length,
-            _ => self.rate,
+            1 => self.rate,
+            _ => self.start,
         }
     }
 
-    /// Set one of its two values, by its place, `Rate` kept to its list.
+    /// Set one of its values, by its place, `Rate` kept to its list.
     pub(crate) fn set(&mut self, at: usize, value: u8) {
         match at {
             0 => self.length = value,
-            _ => self.rate = value.min(LANE_RATES.len() as u8 - 1),
+            1 => self.rate = value.min(LANE_RATES.len() as u8 - 1),
+            _ => self.start = value,
         }
     }
 }
@@ -214,12 +233,14 @@ mod tests {
         let moved = LaneMove {
             length: 0x82,
             rate: 14,
+            start: 0,
         };
         assert_eq!(
             lane.heard(moved),
             Heard {
                 length: 9,
-                division: 6
+                division: 6,
+                start: 0,
             },
             "÷2"
         );

@@ -111,6 +111,8 @@ fn numbered(x: u8, y: u8) -> WalkMove {
 /// The song with the track holding this walk.
 fn holding(mut song: Song, walk: WalkMove) -> Song {
     let track = &mut song.tracks[0];
+    track.phrase_length = walk.length;
+    track.phrase_start = walk.start;
     track.order = walk.order;
     track.reverse = u8::from(walk.reverse);
     track.order_x = walk.x;
@@ -318,5 +320,151 @@ fn the_engine_reports_the_walk_it_read_so_the_playhead_follows_it() {
             )
             .unwrap();
         assert_eq!(position.step, 7 - place.count as usize, "reverse's row");
+    }
+}
+
+/// The window of rows the order walks over (decision 401): `PLEN` rows more or fewer than the
+/// loop's, from `PSTA`'s row.
+fn windowed(length: u8, start: u8) -> WalkMove {
+    WalkMove {
+        length,
+        start,
+        ..WalkMove::default()
+    }
+}
+
+#[test]
+fn a_shorter_window_repeats_its_rows_and_the_pass_keeps_its_length() {
+    let own = song(8, Order::Forward);
+    let short = holding(own.clone(), windowed(0x7C, 0));
+    assert_eq!(
+        rows_heard(&short, 16),
+        manual("1 2 3 4 1 2 3 4 1 2 3 4 1 2 3 4")
+    );
+    assert_eq!(rows_heard(&short, 16), walked(&own, 16, windowed(0x7C, 0)));
+    // In a chain of two, the second phrase still comes in on its own step: the first's pass is
+    // its eight steps whatever the window.
+    let mut chained = holding(own, windowed(0x7E, 0));
+    let track = &mut chained.tracks[0];
+    let high: Vec<_> = NOTES[12..16]
+        .iter()
+        .map(|text| text.parse().unwrap())
+        .collect();
+    track.phrases.insert(1, Arc::new(Phrase::from_steps(high)));
+    track.chains.insert(
+        0,
+        Arc::new(vt_model::song::Chain {
+            entries: vec![
+                vt_model::song::ChainEntry {
+                    phrase: 0,
+                    transpose: 0,
+                },
+                vt_model::song::ChainEntry {
+                    phrase: 1,
+                    transpose: 0,
+                },
+            ],
+            label: String::new(),
+        }),
+    );
+    // Six of the first's rows walked for its pass of eight, then two of the second's four for
+    // its pass of four; the first's walk carries on into its next pass, as any walk does.
+    assert_eq!(
+        rows_heard(&chained, 24),
+        manual("1 2 3 4 5 6 1 2 13 14 13 14 3 4 5 6 1 2 3 4 13 14 13 14")
+    );
+}
+
+#[test]
+fn a_longer_window_plays_its_rows_again_from_the_first_and_drifts() {
+    let own = song(8, Order::Forward);
+    let long = holding(own.clone(), windowed(0x82, 0));
+    // Ten rows walked over passes of eight: the walk carries on into the next pass.
+    assert_eq!(
+        rows_heard(&long, 16),
+        manual("1 2 3 4 5 6 7 8 1 2 1 2 3 4 5 6")
+    );
+    assert_eq!(rows_heard(&long, 40), walked(&own, 40, windowed(0x82, 0)));
+    assert_eq!(
+        rows_heard(&long, 40),
+        rows_heard(&long, 40),
+        "a render repeats"
+    );
+}
+
+#[test]
+fn the_start_moves_the_window_round_the_loop() {
+    let own = song(8, Order::Forward);
+    assert_eq!(
+        rows_heard(&holding(own.clone(), windowed(0x80, 3)), 8),
+        manual("4 5 6 7 8 1 2 3")
+    );
+    assert_eq!(
+        rows_heard(&holding(own.clone(), windowed(0x7C, 2)), 8),
+        manual("3 4 5 6 3 4 5 6")
+    );
+    // Reversed, the window's last row comes first, and any order walks the window.
+    let reversed = WalkMove {
+        reverse: true,
+        ..windowed(0x7C, 2)
+    };
+    assert_eq!(
+        rows_heard(&holding(own.clone(), reversed), 8),
+        manual("6 5 4 3 6 5 4 3")
+    );
+    let up_down = song(8, Order::UpDown);
+    assert_eq!(
+        rows_heard(&holding(up_down, windowed(0x7C, 2)), 8),
+        manual("3 4 5 6 5 4 3 4")
+    );
+    // A start past the loop goes round it.
+    assert_eq!(
+        rows_heard(&holding(own, windowed(0x80, 9)), 8),
+        manual("2 3 4 5 6 7 8 1")
+    );
+}
+
+#[test]
+fn a_lanes_start_moves_where_it_reads_and_the_report_follows() {
+    use vt_model::lane::{Lane, LaneMove};
+    let mut song = song(16, Order::Forward);
+    let track = &mut song.tracks[0];
+    let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+    phrase.set_lane(0, Some(Lane::new(0, 4)));
+    track.lanes[0] = LaneMove {
+        start: 1,
+        ..LaneMove::default()
+    };
+    let mut engine = Engine::new(RATE, crate::support::no_samples::version(&song));
+    engine.play_from(0);
+    let mut out = vec![0.0; STEP * 2];
+    let read: Vec<usize> = (0..8)
+        .map(|_| {
+            engine.process(&mut out);
+            engine.track_heard(0).lanes[0].unwrap().row
+        })
+        .collect();
+    assert_eq!(read, [1, 2, 3, 0, 1, 2, 3, 0]);
+}
+
+#[test]
+fn the_playhead_follows_the_window() {
+    let moved = holding(song(8, Order::Forward), windowed(0x7E, 4));
+    let mut engine = Engine::new(RATE, crate::support::no_samples::version(&moved));
+    engine.play_from(0);
+    let mut out = vec![0.0; STEP * 2];
+    for step in 0..8 {
+        engine.process(&mut out);
+        let place = engine.track_heard(0);
+        assert_eq!(place.walk, windowed(0x7E, 4));
+        let position = moved.tracks[0]
+            .chain_position(
+                0,
+                place.count as usize,
+                Dealer::new(moved.seed, 0),
+                place.walk,
+            )
+            .unwrap();
+        assert_eq!(position.step, (4 + step % 6) % 8, "six rows from the fifth");
     }
 }

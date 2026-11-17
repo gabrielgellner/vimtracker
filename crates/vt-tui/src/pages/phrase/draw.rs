@@ -867,9 +867,14 @@ fn lane_details(phrase: &Phrase, heard: &[Option<Heard>; FX_SLOTS]) -> Vec<Span<
         } = lane;
         let own = lane_text(length, division, false);
         let gap = if spans.is_empty() { "  " } else { " " };
-        match heard[slot].filter(|heard| (heard.length, heard.division) != (length, division)) {
+        let moved =
+            |heard: &Heard| (heard.length, heard.division, heard.start) != (length, division, 0);
+        match heard[slot].filter(moved) {
             Some(heard) => {
-                let shown = lane_text(heard.length, heard.division, division > 1);
+                let mut shown = lane_text(heard.length, heard.division, division > 1);
+                if heard.start > 0 {
+                    shown.push_str(&format!(" from {}", heard.start + 1));
+                }
                 spans.push(Span::raw(format!("{gap}FX{}:{shown}", slot + 1)));
                 spans.push(Span::styled(format!(" ({own})"), theme::dim()));
             }

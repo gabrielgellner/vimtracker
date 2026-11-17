@@ -86,7 +86,11 @@ fn sends(engine: &mut Engine, steps: usize) -> Vec<u8> {
 
 /// A song whose track's `Length` and `Rate` for FX 1 are these.
 fn moved(mut song: Song, length: u8, rate: u8) -> Song {
-    song.tracks[0].lanes[0] = LaneMove { length, rate };
+    song.tracks[0].lanes[0] = LaneMove {
+        length,
+        rate,
+        start: 0,
+    };
     song
 }
 

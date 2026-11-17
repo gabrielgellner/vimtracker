@@ -57,6 +57,8 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             TrackControl::Reverse => "reverse",
             TrackControl::OrderX => "orderx",
             TrackControl::OrderY => "ordery",
+            TrackControl::PhraseLength => "phraselength",
+            TrackControl::PhraseStart => "phrasestart",
         },
         Control::Level => "level",
         Control::Trim => "trim",
@@ -123,5 +125,6 @@ pub fn key(control: Control, track: &Track) -> &'static str {
         },
         Control::Lane(_, LaneField::Length) => "length",
         Control::Lane(_, LaneField::Rate) => "rate",
+        Control::Lane(_, LaneField::Start) => "start",
     }
 }
