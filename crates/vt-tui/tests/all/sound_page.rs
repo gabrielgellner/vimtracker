@@ -478,7 +478,7 @@ fn the_output_meter_reads_the_cursors_track_after_its_trim_as_it_plays() {
         let samples = Arc::new(SamplePool::default());
         let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
         let (handle, mut realtime) = connect(Engine::new(48_000, version));
-        let mut app = App::new(song, None, samples, handle, 48_000);
+        let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
         press(&mut app, " 5");
         app.services
             .handle
@@ -526,7 +526,7 @@ fn the_filter_curve_under_an_lfo_on_cut_is_sent_at_most_every_other_frame() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, mut realtime) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     press(&mut app, " 5");
     app.services
         .handle
@@ -769,7 +769,7 @@ fn ramp_song(rows: &[&str]) -> (Song, Arc<SamplePool>) {
 fn on_sound_page(song: Song, samples: Arc<SamplePool>) -> (App, Realtime) {
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, realtime) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     press(&mut app, " 5");
     (app, realtime)
 }

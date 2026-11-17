@@ -86,7 +86,7 @@ fn heard_to_row_8() -> (App, Realtime) {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, mut realtime) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     block(&mut realtime, &mut app);
     app.services.handle.send(Command::PlayFrom { step: 0 });
     for _ in 0..(STEP * 17 / 2) / 256 {

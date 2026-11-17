@@ -1124,7 +1124,7 @@ fn the_track_page_quantises_the_nudges_from_under_velocity_and_leaves_them_writt
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     press(&mut app, " 5}j");
     let quantise = |app: &App| app.song().tracks[0].quantise;
     let line = from_name(&app, "Quantise");
@@ -1157,7 +1157,7 @@ fn a_synths_play_device_has_its_phase_and_modes_and_a_samplers_its_modes() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     press(&mut app, " 5}2}j$");
     assert_eq!(app.track_control().label(), "Phase");
     assert_eq!(value_shown(&app).as_deref(), Some("Free"));
@@ -2572,7 +2572,10 @@ fn app_with_samples() -> (App, Realtime) {
     let samples = Arc::new(pool);
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, realtime) = connect(Engine::new(48_000, version));
-    (App::new(song, None, samples, handle, 48_000), realtime)
+    (
+        crate::common::new_app(song, None, samples, handle, 48_000),
+        realtime,
+    )
 }
 
 #[test]
@@ -3521,7 +3524,7 @@ fn every_slot_envelope_and_lfo_fits_on_the_authors_screen() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     press(&mut app, " 5LL");
     let fx = full_screen_text(&mut app);
     let names = ["Distort", "Delay", "Reverb", "Comp"];

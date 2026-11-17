@@ -2841,7 +2841,7 @@ fn rows_count_from_each_phrases_own_loop_start() {
     let samples = Arc::clone(&app.services.samples);
     let version = Arc::new(Published::new(Arc::new(slid.clone()), Arc::clone(&samples)));
     let (handle, _rt2) = connect(Engine::new(48_000, version));
-    app = App::new(slid, None, samples, handle, 48_000);
+    app = crate::common::new_app(slid, None, samples, handle, 48_000);
     keys(&mut app, "VW>");
     assert_eq!(track_steps(&app, 0)[0], "C#3 40 cut:20 --- ---");
     assert_eq!(
@@ -3234,7 +3234,7 @@ fn at_speed(speed: Speed, start: &[&str], typed: &str) -> (Vec<String>, String) 
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _rt) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     keys(&mut app, typed);
     (steps(&app), app.services.status.clone())
 }
