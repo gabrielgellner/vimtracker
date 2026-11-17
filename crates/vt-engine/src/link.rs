@@ -789,6 +789,7 @@ mod tests {
                         length: (0x7C + (round * 5 + slot) % 9) as u8,
                         rate: ((round * 7 + slot) % vt_model::lane::LANE_RATES.len()) as u8,
                         start: ((round * 11 + slot) % 9) as u8,
+                        jump: ((round * 13 + slot) % 3 * 0x40) as u8,
                     };
                 }
             }

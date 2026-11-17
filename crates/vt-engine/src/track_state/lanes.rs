@@ -2,9 +2,11 @@
 //! `Length` or `Rate` for it takes effect at its next row rather than moving it, as an LFO's
 //! `Rate` carries on from where it is (the lanes study's §5). With the track's `Cue` on, a turn of
 //! its `Length`, `Rate` or `Start` waits for the lane to come round to its first row, as Kria's
-//! Division Cueing does (decision 402).
+//! Division Cueing does (decision 402). Its `Jump` has a row play any of the lane's rows instead
+//! of the next, which no cue holds back, as a walk's choice isn't a loop's bounds (decision 415).
 
 use vt_model::lane::{Heard, LANE_RATES, Lane, LaneMove};
+use vt_model::order::{Dealer, lane_jumped};
 use vt_model::settings::{LANE_SETTINGS, SettingId};
 
 use super::TrackState;
@@ -34,6 +36,30 @@ pub(crate) struct LaneRun {
     /// With the track's `Cue` on, how it's heard and the start it took as it was placed or last
     /// came round to its first row, which it keeps until it comes round again (decision 402).
     cued: Option<(Heard, usize)>,
+    /// Which of the lane's own rows the row it's on plays instead, as its `Jump` decided as the
+    /// row started, or as it was first read after being placed: none until decided, then none
+    /// again for the row counted to (decision 415).
+    jumped: Option<Option<usize>>,
+}
+
+/// What a lane's `Jump` rolls with: the track's dealer, the lane's column and its chance now,
+/// `00` to `FF`.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct LaneJump {
+    pub dealer: Dealer,
+    pub column: usize,
+    pub chance: u8,
+}
+
+impl LaneJump {
+    /// None: every row is the one counted to.
+    fn none() -> Self {
+        Self {
+            dealer: Dealer::default(),
+            column: 0,
+            chance: 0,
+        }
+    }
 }
 
 /// What a lane read at one of the track's steps: the stored row, how many times it had come
@@ -52,9 +78,9 @@ pub struct LaneRead {
 impl LaneRead {
     /// What a lane heard so reads at a count of its track's steps since its chain started, worked
     /// out from the count, as playing from the top with nothing turned on the way places it: for
-    /// drawing a playhead without playing.
+    /// drawing a playhead without playing, so with no `Jump`.
     pub fn placed(lane: Lane, heard: Heard, count: i64) -> Self {
-        LaneRun::default().read(lane, count, (0, 0), 0, (heard, 0), false)
+        LaneRun::default().read(lane, count, (0, 0), 0, (heard, 0), false, LaneJump::none())
     }
 }
 
@@ -77,6 +103,7 @@ impl LaneRun {
             laps: rows.div_euclid(length),
             last: None,
             cued: None,
+            jumped: None,
         }
     }
 
@@ -92,8 +119,9 @@ impl LaneRun {
     /// Read the lane at the step `count` in `entry`: its row there, starting it if it starts
     /// there, past the length heard now going round to the first, with the division heard now.
     /// With `cue`, the length, division and start are those it took as it was placed or last came
-    /// round, and what's heard `now` is taken as it comes round again. It then waits for the step
-    /// after.
+    /// round, and what's heard `now` is taken as it comes round again. Its `jump` is read as each
+    /// row starts, whatever the cue. It then waits for the step after.
+    #[allow(clippy::too_many_arguments)]
     fn read(
         &mut self,
         lane: Lane,
@@ -102,6 +130,7 @@ impl LaneRun {
         offset: i64,
         now: (Heard, usize),
         cue: bool,
+        jump: LaneJump,
     ) -> LaneRead {
         if let Some((at, was, read)) = self.last
             && (at, was) == (count, entry)
@@ -123,10 +152,17 @@ impl LaneRun {
                 (heard, start) = now;
             }
             self.left = heard.division.max(1);
+            self.jumped = None;
         }
         self.cued = cue.then_some((heard, start));
+        // Whether the row jumps is decided once, for all its steps, as a phrase's visit is.
+        let jumped = *self.jumped.get_or_insert_with(|| {
+            let chance = f32::from(jump.chance) / 255.0;
+            let rows = lane.length.max(1);
+            lane_jumped(jump.dealer, jump.column, self.laps, self.row, rows, chance)
+        });
         let read = LaneRead {
-            row: lane.stored_from(self.row, start),
+            row: jumped.map_or_else(|| lane.stored_from(self.row, start), |own| lane.stored(own)),
             laps: self.laps,
             first,
             start: start as u16,
@@ -172,18 +208,24 @@ impl TrackState {
     /// in an entry of its chain, and how it's heard there: the one place every lane is read from
     /// as the track plays. Read once a step, as the step is worked out, in order, it counts along;
     /// a step it wasn't waiting for, as after playing starts, a seek, a reset or a new entry of the
-    /// chain, places it again from the count.
+    /// chain, places it again from the count. Its `Jump` rolls from the track's `dealer`.
     pub(crate) fn lane_row(
         &mut self,
         slot: usize,
         lane: Lane,
         entry: Entry,
         count: i64,
+        dealer: Dealer,
     ) -> LaneRead {
         let now = (self.heard_lane(slot, lane), self.lane_start(slot, lane));
         let offset = self.lane_offsets[slot];
         let cue = self.cues();
-        self.lane_runs[slot].read(lane, count, entry, offset, now, cue)
+        let jump = LaneJump {
+            dealer,
+            column: slot,
+            chance: self.lane_moved(slot).jump,
+        };
+        self.lane_runs[slot].read(lane, count, entry, offset, now, cue, jump)
     }
 
     /// Where an FX column's lane was going to read at the step `count` in `entry`, as it's heard
@@ -210,6 +252,7 @@ impl TrackState {
             laps: at.laps,
             last: None,
             cued: self.lane_runs[slot].cued,
+            jumped: None,
         };
     }
 
@@ -236,7 +279,7 @@ impl TrackState {
         lane.heard_start(self.lane_moved(slot))
     }
 
-    /// An FX column's `Length`, `Rate` and `Start` as held, with what modulation adds.
+    /// An FX column's `Length`, `Rate`, `Start` and `Jump` as held, with what modulation adds.
     fn lane_moved(&self, slot: usize) -> LaneMove {
         let value = |at: usize| {
             let by = SettingId::lane(slot, at).map_or(0.0, |id| self.offsets[id.index()]);
@@ -248,16 +291,18 @@ impl TrackState {
             length: value(0),
             rate: value(1).min(LANE_RATES.len() as u8 - 1),
             start: value(2),
+            jump: value(3),
         }
     }
 }
 
-/// What each FX column's `Length` and `Rate` hold at rest, on the `00` to `FF` scale.
+/// What each FX column's `Length`, `Rate`, `Start` and `Jump` hold at rest, on the `00` to `FF` scale.
 pub(super) fn lanes_at_rest() -> [f32; LANE_SETTINGS] {
     let rest = LaneMove::default();
     [
         f32::from(rest.length),
         f32::from(rest.rate),
         f32::from(rest.start),
+        f32::from(rest.jump),
     ]
 }

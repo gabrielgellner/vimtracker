@@ -92,6 +92,9 @@
 <rect x="378" y="247" width="18" height="19" fill="#f2d5cf"/>
 <text x="378" y="261" fill="#303446" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">÷2</text>
 <text x="549" y="261" fill="#949cbb" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Start     0</text>
+<text x="810" y="261" fill="#949cbb" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Jump      00</text>
+<text x="945" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
+<text x="1035" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
 <text x="1341" y="261" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│     </text>
 <rect x="1395" y="247" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="247" width="18" height="19" fill="#292c3c"/>

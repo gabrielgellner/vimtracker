@@ -157,13 +157,15 @@ impl DeviceSpec {
         })
     }
 
-    /// An FX column's lane's `Length` and `Rate`, the track's, which move every phrase's lane on
+    /// An FX column's lane's `Length`, `Rate`, `Start` and `Jump`, the track's, which move every phrase's lane on
     /// the column, as a device of its own, `Lane`, named for its column.
     pub(crate) fn lane(slot: usize) -> Self {
         let mut grid = [[None; DEVICE_COLUMNS]; GRID_ROWS];
         grid[0][0] = Some(Control::Lane(slot, LaneField::Length));
         grid[0][1] = Some(Control::Lane(slot, LaneField::Rate));
         grid[0][2] = Some(Control::Lane(slot, LaneField::Start));
+        // How often a row plays any of the lane's rows instead, beside where it starts.
+        grid[0][3] = Some(Control::Lane(slot, LaneField::Jump));
         Self {
             identity: format!("FX{} {LANE}", slot + 1),
             switchable: false,

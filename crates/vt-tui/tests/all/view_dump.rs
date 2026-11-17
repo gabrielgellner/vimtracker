@@ -246,6 +246,7 @@ fn macros_and_lanes(dump: &mut Dump) {
                 length: 3,
                 rate: 9,
                 start: 2,
+                jump: 0,
             },
         ),
     ] {
