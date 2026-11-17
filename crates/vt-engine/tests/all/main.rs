@@ -36,6 +36,7 @@ mod groove;
 mod group_macros;
 mod groups;
 mod key_track;
+mod lane_jump;
 mod lane_moves;
 mod lanes;
 mod lfo;
