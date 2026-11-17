@@ -221,7 +221,7 @@ fn points_in_a_44k_files_frames_land_on_the_same_sound_at_48k() {
     let mut entry = BankEntry::of_file("loop.wav", ContentHash::UNKNOWN);
     entry.edit.points.start = 4410;
     entry.edit.points.end = Some(22_050);
-    let span = Playable::of(&entry, &pool).unwrap().span(0, false);
+    let span = Playable::of(&entry, &pool).unwrap().span(0, false, false);
     assert_eq!((span.start, span.end), (4800, 24_000));
     assert!(span.frames.abs_diff(48_000) <= 2, "{}", span.frames);
 }

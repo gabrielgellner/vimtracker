@@ -898,9 +898,9 @@ impl Voice {
         (sounding && self.synth.is_none()).then(|| self.reader.frame())
     }
 
-    /// The slice of its entry it's playing, and whether on past its end.
-    pub(crate) fn slice(&self) -> (u8, bool) {
-        (self.slice, self.reader.thru())
+    /// The slice of its entry it's playing, whether on past its end, and whether turned round.
+    pub(crate) fn slice(&self) -> (u8, bool, bool) {
+        (self.slice, self.reader.thru(), self.reader.turned())
     }
 
     /// The next stereo frame, with reads bounds-checked. A voice past its sample's end stops.

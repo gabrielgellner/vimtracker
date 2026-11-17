@@ -252,11 +252,17 @@ impl Playable {
         self.marks[mark_index(letter)?]
     }
 
-    /// The span a note plays: its slice's, by number, clamped to the last, or with `Thru`, on
-    /// past the slice's end to the entry's, the way it plays, so a reversed one carries on back
-    /// to the entry's start. It's only looked up, as the callback asks for it.
-    pub fn span(&self, slice: u8, thru: bool) -> Span {
-        let span = self.spans[usize::from(slice).min(self.spans.len() - 1)];
+    /// The span a note plays: its slice's, by number, clamped to the last, turned round if
+    /// `turned`, as the track's `SREV` turns it (decision 412), or with `Thru`, on past the
+    /// slice's end to the entry's, the way it then plays, so a reversed one carries on back to
+    /// the entry's start. It's only looked up, as the callback asks for it.
+    pub fn span(&self, slice: u8, thru: bool, turned: bool) -> Span {
+        let mut span = self.spans[usize::from(slice).min(self.spans.len() - 1)];
+        // Turned round, its fades go with the sound they shape, so it plays the mirror of itself.
+        if turned {
+            span.reverse = !span.reverse;
+            std::mem::swap(&mut span.fade_in, &mut span.fade_out);
+        }
         match (thru, span.reverse) {
             (false, _) => span,
             (true, false) => Span {
@@ -315,7 +321,7 @@ mod tests {
         let mut entry = BankEntry::of_file("recording", ContentHash::UNKNOWN);
         entry.edit.points.start = 100;
         let playable = Playable::of(&entry, &pool).unwrap();
-        let span = playable.span(0, false);
+        let span = playable.span(0, false, false);
         assert_eq!((span.frames, span.start, span.end), (1024, 100, 1024));
         assert!(playable.sound.same(&Sound::Growing(growing)));
     }
@@ -324,7 +330,7 @@ mod tests {
     fn a_file_alone_plays_whole() {
         let entry = BankEntry::of_file("file", ContentHash::UNKNOWN);
         let playable = Playable::of(&entry, &pool(Rates::SAME)).unwrap();
-        assert_eq!(playable.span(0, false), Span::whole(48_000));
+        assert_eq!(playable.span(0, false, false), Span::whole(48_000));
         let elsewhere = BankEntry::of_file("missing", ContentHash::UNKNOWN);
         assert!(Playable::of(&elsewhere, &pool(Rates::SAME)).is_none());
     }
@@ -348,7 +354,9 @@ mod tests {
             file: 44_100,
             loaded: 48_000,
         };
-        let span = Playable::of(&entry, &pool(rates)).unwrap().span(0, false);
+        let span = Playable::of(&entry, &pool(rates))
+            .unwrap()
+            .span(0, false, false);
         assert_eq!((span.start, span.end), (4800, 24_000));
         assert_eq!(
             span.loop_,
@@ -373,7 +381,7 @@ mod tests {
         });
         let span = Playable::of(&entry, &pool(Rates::SAME))
             .unwrap()
-            .span(0, false);
+            .span(0, false, false);
         assert_eq!((span.start, span.end), (48_000, 48_000));
         assert_eq!(span.loop_.map(|found| found.crossfade), Some(100));
     }
@@ -394,7 +402,7 @@ mod tests {
         let playable = Playable::of(&sliced(), &pool(Rates::SAME)).unwrap();
         assert_eq!(playable.spans.len(), 4);
         let ends = |slice| {
-            let span = playable.span(slice, false);
+            let span = playable.span(slice, false, false);
             (span.start, span.end)
         };
         assert_eq!(ends(0), (4800, 14_400));
@@ -404,8 +412,17 @@ mod tests {
             "the last ends at the entry's end"
         );
         assert_eq!(ends(9), ends(3), "one past the last plays the last");
-        let thru = playable.span(1, true);
+        let thru = playable.span(1, true, false);
         assert_eq!((thru.start, thru.end), (14_400, 43_200));
+        // Turned round, a slice keeps its frames and plays them back, and on through it carries
+        // on back to the entry's start.
+        let turned = playable.span(1, false, true);
+        assert_eq!(
+            (turned.start, turned.end, turned.reverse),
+            (14_400, 24_000, true)
+        );
+        let back = playable.span(1, true, true);
+        assert_eq!((back.start, back.end, back.reverse), (4800, 24_000, true));
     }
 
     #[test]
@@ -427,7 +444,7 @@ mod tests {
             fade_out: Some(480),
         };
         let playable = Playable::of(&entry, &pool(Rates::SAME)).unwrap();
-        let own = playable.span(2, false);
+        let own = playable.span(2, false, false);
         assert_eq!(own.gain, 1.0);
         assert_eq!(
             own.speed,
@@ -441,14 +458,14 @@ mod tests {
         assert!(own.reverse);
         assert_eq!((own.fade_in, own.fade_out), (0, 480));
         assert!((own.pan[0] - std::f32::consts::SQRT_2).abs() < 1e-6 && own.pan[1].abs() < 1e-6);
-        let other = playable.span(1, false);
+        let other = playable.span(1, false, false);
         assert!((other.gain - entry.edit.play.gain()).abs() < 1e-6);
         assert_eq!(other.speed, entry.edit.play.speed());
         assert!(!other.reverse);
         assert_eq!((other.fade_in, other.fade_out), (48, 0));
         assert_eq!(other.pan, [1.0, 1.0]);
         // Reversed, on through plays back to the entry's start.
-        let thru = playable.span(2, true);
+        let thru = playable.span(2, true, false);
         assert_eq!((thru.start, thru.end), (4800, 33_600));
     }
 
@@ -461,10 +478,10 @@ mod tests {
             crossfade: 0,
         });
         let playable = Playable::of(&entry, &pool(Rates::SAME)).unwrap();
-        assert!(playable.span(1, false).loop_.is_some());
-        assert!(playable.span(0, false).loop_.is_none());
+        assert!(playable.span(1, false, false).loop_.is_some());
+        assert!(playable.span(0, false, false).loop_.is_none());
         assert!(
-            playable.span(1, true).loop_.is_none(),
+            playable.span(1, true, false).loop_.is_none(),
             "on through never loops"
         );
     }
@@ -490,7 +507,7 @@ mod tests {
         let close = |found: Option<f64>| found.is_some_and(|found| (found - step).abs() < 1.0);
         assert!(close(playable.whole.step_frames));
         assert!(
-            close(playable.span(2, false).step_frames),
+            close(playable.span(2, false, false).step_frames),
             "every slice keeps the entry's"
         );
     }
@@ -523,7 +540,7 @@ mod tests {
             (14_400.0, 24_000.0)
         );
         // Within a slice's span, only its own.
-        let slice = playable.span(1, false);
+        let slice = playable.span(1, false, false);
         assert_eq!(playable.beat_around(&slice, 20_000.0), (14_400.0, 24_000.0));
     }
 }

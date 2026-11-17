@@ -194,9 +194,9 @@ fn stepping_dest_goes_through_a_slots_settings() {
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "=H");
     press(&mut app, &format!("{}$", to_lfo(0)));
-    // Past the twenty-nine a sample track has, and `Pitch` in scale beside `Pitch`, as a synth's
+    // Past the thirty a sample track has, and `Pitch` in scale beside `Pitch`, as a synth's
     // settings aren't on it.
-    for _ in 0..31 {
+    for _ in 0..32 {
         press(&mut app, "=");
     }
     assert_eq!(
