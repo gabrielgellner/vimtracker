@@ -457,6 +457,11 @@ impl App {
                     self.overlays.mapping = None;
                     self.modes.mode = Mode::Normal;
                 }
+                Mode::Macros => {
+                    let panel = &mut self.overlays.macro_panel;
+                    panel.typing = None;
+                    self.modes.mode = panel.back;
+                }
                 Mode::Shape => {
                     self.overlays.shape = None;
                     self.modes.mode = Mode::Normal;

@@ -363,6 +363,7 @@ impl App {
             Mode::Picker => self.picker_key(key, now),
             Mode::Shape => self.shape_key(key, now),
             Mode::Mapping => self.mapping_key(key, now),
+            Mode::Macros => self.macro_panel_key(key, now),
             Mode::Jump => {
                 let page = self.jump_page();
                 let Some(jump) = self.overlays.field_jump.as_mut() else {
@@ -680,6 +681,8 @@ impl App {
                 self.modes.mode = Mode::Help;
             }
             Cmd::Guides => self.show_picker(guides::picker(self.guide_here())),
+            Cmd::ToggleMacroPanel => self.toggle_macro_panel(),
+            Cmd::FocusMacroPanel => self.focus_macro_panel(),
             Cmd::Shape => self.open_shape(),
             // The sample page's marks: `'` and `m` wait for a letter, as an operator waits for a
             // motion, and `]'` and `['` are jumps, the jump list's.

@@ -85,7 +85,7 @@ impl CellWidths {
     };
 
     /// The bar with its ends, or nothing in a compact cell, which has none.
-    fn bar(self) -> u16 {
+    pub(crate) fn bar(self) -> u16 {
         match self.bar_cells {
             0 => 0,
             cells => cells as u16 + BAR_ENDS,

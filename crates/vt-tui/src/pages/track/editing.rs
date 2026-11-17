@@ -79,7 +79,7 @@ fn step_kinds(modulator: &mut ModSlot, field: ModField, up: bool, large: bool) {
     clippy::match_same_arms,
     reason = "an arm for each control, in the page's order"
 )]
-pub(super) fn adjust_control(
+pub(crate) fn adjust_control(
     services: &mut Services,
     control: Control,
     up: bool,
@@ -241,7 +241,7 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
     clippy::match_same_arms,
     reason = "an arm for each control, in the page's order"
 )]
-pub(super) fn reset_control(services: &mut Services, control: Control) {
+pub(crate) fn reset_control(services: &mut Services, control: Control) {
     let track = services.page_track();
     match control {
         Control::Gen { .. } | Control::NewGenerator(_) => {}

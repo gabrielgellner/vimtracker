@@ -26,7 +26,7 @@ mod pickers;
 mod pictures;
 pub(crate) mod presets;
 pub(crate) mod tuning;
-mod typing;
+pub(crate) mod typing;
 
 pub use device::DeviceCursor;
 pub(crate) use device::rack_places;

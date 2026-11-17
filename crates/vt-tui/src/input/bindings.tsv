@@ -109,6 +109,8 @@ Normal	Space f f	Picker	Open the view picker
 Normal	Space f b	TrackPicker	Open the track picker
 Normal	Space ?	Guides	Open a guide
 Normal	Space k	Help	Show every key
+Normal	Space t	ToggleMacroPanel	Show or hide the macro panel: this track's macros, at the bottom
+Normal	Space T	FocusMacroPanel	Into the macro panel, showing it, to turn the macros
 Normal	C-o	JumpBack	Jump back
 Normal	C-i	JumpForward	Jump forward
 Normal	W	NextTrack	Next track
@@ -190,6 +192,8 @@ Chain	Space f f	Picker	Open the view picker
 Chain	Space f b	TrackPicker	Open the track picker
 Chain	Space ?	Guides	Open a guide
 Chain	Space k	Help	Show every key
+Chain	Space t	ToggleMacroPanel	Show or hide the macro panel: this track's macros, at the bottom
+Chain	Space T	FocusMacroPanel	Into the macro panel, showing it, to turn the macros
 Chain	C-o	JumpBack	Jump back
 Chain	C-i	JumpForward	Jump forward
 Chain	W	NextTrack	Next track
@@ -274,6 +278,8 @@ Track	Space f f	Picker	Open the view picker
 Track	Space f b	TrackPicker	Open the track picker
 Track	Space ?	Guides	Open a guide
 Track	Space k	Help	Show every key
+Track	Space t	ToggleMacroPanel	Show or hide the macro panel: this track's macros, at the bottom
+Track	Space T	FocusMacroPanel	Into the macro panel, showing it, to turn the macros
 Track	C-o	JumpBack	Jump back
 Track	C-i	JumpForward	Jump forward
 Track	W	NextTrack	Next track
@@ -350,6 +356,8 @@ Song	Space f f	Picker	Open the view picker
 Song	Space f b	TrackPicker	Open the track picker
 Song	Space ?	Guides	Open a guide
 Song	Space k	Help	Show every key
+Song	Space t	ToggleMacroPanel	Show or hide the macro panel: this track's macros, at the bottom
+Song	Space T	FocusMacroPanel	Into the macro panel, showing it, to turn the macros
 Song	C-o	JumpBack	Jump back
 Song	C-i	JumpForward	Jump forward
 Song	W	NextTrack	Next track
@@ -420,6 +428,8 @@ Mixer	Space f f	Picker	Open the view picker
 Mixer	Space f b	TrackPicker	Open the track picker
 Mixer	Space ?	Guides	Open a guide
 Mixer	Space k	Help	Show every key
+Mixer	Space t	ToggleMacroPanel	Show or hide the macro panel: this track's macros, at the bottom
+Mixer	Space T	FocusMacroPanel	Into the macro panel, showing it, to turn the macros
 Mixer	C-o	JumpBack	Jump back
 Mixer	C-i	JumpForward	Jump forward
 Mixer	W	NextTrack	Next track
@@ -478,6 +488,8 @@ Audio	Space f f	Picker	Open the view picker
 Audio	Space f b	TrackPicker	Open the track picker
 Audio	Space ?	Guides	Open a guide
 Audio	Space k	Help	Show every key
+Audio	Space t	ToggleMacroPanel	Show or hide the macro panel: this track's macros, at the bottom
+Audio	Space T	FocusMacroPanel	Into the macro panel, showing it, to turn the macros
 Audio	C-o	JumpBack	Jump back
 Audio	C-i	JumpForward	Jump forward
 Audio	W	NextTrack	Next track
@@ -545,6 +557,8 @@ Project	Space f f	Picker	Open the view picker
 Project	Space f b	TrackPicker	Open the track picker
 Project	Space ?	Guides	Open a guide
 Project	Space k	Help	Show every key
+Project	Space t	ToggleMacroPanel	Show or hide the macro panel: this track's macros, at the bottom
+Project	Space T	FocusMacroPanel	Into the macro panel, showing it, to turn the macros
 Project	C-o	JumpBack	Jump back
 Project	C-i	JumpForward	Jump forward
 Project	W	NextTrack	Next track
@@ -651,6 +665,8 @@ Sample	Space f f	Picker	Open the view picker
 Sample	Space f b	TrackPicker	Open the track picker
 Sample	Space ?	Guides	Open a guide
 Sample	Space k	Help	Show every key
+Sample	Space t	ToggleMacroPanel	Show or hide the macro panel: this track's macros, at the bottom
+Sample	Space T	FocusMacroPanel	Into the macro panel, showing it, to turn the macros
 Sample	C-o	JumpBack	Jump back
 Sample	C-i	JumpForward	Jump forward
 Sample	W	NextTrack	Next track
@@ -758,6 +774,8 @@ SampleVisual	Space f f	Picker	Open the view picker
 SampleVisual	Space f b	TrackPicker	Open the track picker
 SampleVisual	Space ?	Guides	Open a guide
 SampleVisual	Space k	Help	Show every key
+SampleVisual	Space t	ToggleMacroPanel	Show or hide the macro panel: this track's macros, at the bottom
+SampleVisual	Space T	FocusMacroPanel	Into the macro panel, showing it, to turn the macros
 SampleVisual	C-o	JumpBack	Jump back
 SampleVisual	C-i	JumpForward	Jump forward
 SampleVisual	W	NextTrack	Next track
@@ -988,3 +1006,26 @@ Shape	K	InShape(Choose)	Choose from a list
 Shape	i	InShape(Type)	Type the setting
 Shape	Tab	InShape(Play)	Play, or pause in place
 Shape	S-Tab	InShape(PlayFromStart)	Play from the start
+Macros	Esc	InMacros(Leave)	Back to the page, the panel showing
+Macros	q	InMacros(Leave)	Back to the page, the panel showing
+Macros	Space t	InMacros(Hide)	Hide the panel, and back to the page
+Macros	Space T	InMacros(Leave)	Back to the page, the panel showing
+Macros	h	InMacros(Left)	The macro before
+Macros	Left	InMacros(Left)	The macro before
+Macros	l	InMacros(Right)	The next macro
+Macros	Right	InMacros(Right)	The next macro
+Macros	=	InMacros(Increase)	Turn it up
+Macros	D-l	InMacros(Increase)	Turn it up
+Macros	-	InMacros(Decrease)	Turn it down
+Macros	D-h	InMacros(Decrease)	Turn it down
+Macros	+	InMacros(IncreaseLarge)	Turn it up, a large step
+Macros	D-k	InMacros(IncreaseLarge)	Turn it up, a large step
+Macros	_	InMacros(DecreaseLarge)	Turn it down, a large step
+Macros	D-j	InMacros(DecreaseLarge)	Turn it down, a large step
+Macros	x	InMacros(Reset)	Back to where it starts
+Macros	i	InMacros(Type)	Type it, two hex digits
+Macros	u	InMacros(Undo)	Undo
+Macros	C-r	InMacros(Redo)	Redo
+Macros	Tab	InMacros(Play)	Play, or pause in place
+Macros	W	InMacros(NextTrack)	Next track
+Macros	B	InMacros(PreviousTrack)	Previous track
