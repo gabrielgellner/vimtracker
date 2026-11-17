@@ -702,6 +702,8 @@ mod tests {
             ModField::Loop,
             ModField::Mutate,
             ModField::Jump,
+            ModField::Spread,
+            ModField::Bias,
             ModField::Smooth,
             ModField::Step(0),
             ModField::Low,

@@ -385,8 +385,9 @@ impl SlotRun {
     }
 
     /// Draw the value of the step that's come round again, with `Mutate`'s chance, once each time
-    /// it comes round, within the full `-FF` to `+FF`, which the slot's depth then scales. With no
-    /// `Mutate`, nothing is drawn again, and what was drawn is kept: the loop is locked.
+    /// it comes round, within the full `-FF` to `+FF`, which the slot's depth then scales, spread
+    /// and leaned as `Spread` and `Bias` say (decision 403). With no `Mutate`, nothing is drawn
+    /// again, and what was drawn is kept: the loop is locked.
     fn mutate(&mut self, steps: &Steps, step: usize, count: i64) {
         if steps.mutate == 0 {
             self.counted = None;
@@ -397,7 +398,7 @@ impl SlotRun {
         }
         self.counted = Some(count);
         if self.dice.next_u32() % 100 < u32::from(steps.mutate) {
-            self.drift[step] = (self.dice.next_u32() % (2 * MAX_STEP as u32 + 1)) as i16 - MAX_STEP;
+            self.drift[step] = steps.mutated(self.dice.next_u32());
             self.drawn |= 1 << step;
         }
     }

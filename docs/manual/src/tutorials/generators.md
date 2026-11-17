@@ -279,6 +279,10 @@ octaves either way.
 *   `Deja vu` to `30`, listen to the notes drift, then to `7F` to lock them, and on up past `80`
     to hear the locked loop jump about.
 *   `Spread` up for a wider loop, or down to `00` for the pulse alone.
+*   Marbles' X on the drifting loop: `Deja vu` to `30`, then along `Mod 4`'s title to its own
+    `Spread`, not the patch's macro of that name, and `i15`. The new notes now gather round
+    `D-3`. `Bias` `+50` moves them halfway up the octave, `Spread` `100%` draws only the `D`s
+    an octave either side, and `Deja vu` to `7F` locks the loop as narrow as it drifted.
 *   `:order shuffle` on track 1's phrase with the Play device's `Jump` at `00`: the rows of a
     written loop once a pass each, in a new order each pass.
 *   `r` in the shape panel deals the hats' chances again: `gv` `S` on FX 1, `r`, `Enter`.

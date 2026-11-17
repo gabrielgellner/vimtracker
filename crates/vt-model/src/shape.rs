@@ -46,6 +46,7 @@ pub(crate) use follow::copy_fx;
 pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
 pub use grids::{ACCENT_LEVEL, DrumPart, GRIDS_STEPS, Grids, parts as drum_parts};
 pub use mutation::{MAX_MUTATION, Mutations};
+pub(crate) use params::{BEND_JUMP, BEND_NUDGE};
 pub use params::{Context, GenParam, Starts};
 pub use random::{
     Degrees, EVEN_SPREAD, MAX_BIAS, MAX_SPREAD, MAX_WEIGHT, Random, WEIGHTS, degree_count,
