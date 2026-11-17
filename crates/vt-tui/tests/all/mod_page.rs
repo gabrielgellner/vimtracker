@@ -3004,7 +3004,13 @@ fn a_steps_spread_and_bias_are_in_its_title_after_its_jump_and_turn_as_any_setti
     assert!(said.contains("stray"), "{said}");
     press(&mut app, " d");
     press(&mut app, "M1");
-    let spread = SettingId::mod_own(3, ModField::Spread.own().unwrap()).unwrap();
+    let spread = SettingId::mod_own(
+        3,
+        ModField::Spread
+            .own(vt_model::modulation::ModKind::Steps)
+            .unwrap(),
+    )
+    .unwrap();
     let held = app.song().tracks[0].macro_holding(vt_model::macros::MacroTarget::Setting(spread));
     assert_eq!(held.map(|(at, _)| at), Some(0));
     // `Bias` steps from its middle, with its sign, and is typed signed.
@@ -3025,7 +3031,13 @@ fn a_steps_spread_and_bias_are_in_its_title_after_its_jump_and_turn_as_any_setti
     assert!(said.contains("lean"), "{said}");
     press(&mut app, " d");
     press(&mut app, "M2");
-    let bias = SettingId::mod_own(3, ModField::Bias.own().unwrap()).unwrap();
+    let bias = SettingId::mod_own(
+        3,
+        ModField::Bias
+            .own(vt_model::modulation::ModKind::Steps)
+            .unwrap(),
+    )
+    .unwrap();
     let held = app.song().tracks[0].macro_holding(vt_model::macros::MacroTarget::Setting(bias));
     assert_eq!(held.map(|(at, _)| at), Some(1));
     press(&mut app, "l");

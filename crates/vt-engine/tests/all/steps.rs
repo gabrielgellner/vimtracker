@@ -690,7 +690,7 @@ fn a_loop_locked_after_drifting_narrow_stays_narrow() {
 #[test]
 fn macros_turn_spread_and_bias() {
     use vt_model::macros::{MacroMap, MacroTarget, Zone};
-    use vt_model::modulation::ModField;
+    use vt_model::modulation::{ModField, ModKind};
     let steps = Steps {
         values: values(&[0x10, 0x20, 0x30, 0x40]),
         length: 4,
@@ -699,7 +699,9 @@ fn macros_turn_spread_and_bias() {
     };
     let mut song = song(&["C-3 -- --- --- ---"], steps);
     let map = |field: ModField, min: u16, max: u16| MacroMap {
-        target: MacroTarget::Setting(SettingId::mod_own(2, field.own().unwrap()).unwrap()),
+        target: MacroTarget::Setting(
+            SettingId::mod_own(2, field.own(ModKind::Steps).unwrap()).unwrap(),
+        ),
         min,
         max,
         curve: 0,
