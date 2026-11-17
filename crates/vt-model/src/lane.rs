@@ -50,8 +50,6 @@ fn is_one(division: &usize) -> bool {
 pub struct Heard {
     pub length: usize,
     pub division: usize,
-    /// How many of its own rows on from its first it starts, within its own length.
-    pub start: usize,
 }
 
 impl Lane {
@@ -88,8 +86,13 @@ impl Lane {
         Heard {
             length: self.heard_length(length_rows(moved.length)),
             division: rate_division(self.division, usize::from(moved.rate)),
-            start: usize::from(moved.start) % self.length.max(1),
         }
+    }
+
+    /// How many of its own rows on from its first it starts with a track's `Start` for its column
+    /// at this value, going round them (decision 401).
+    pub fn heard_start(self, moved: LaneMove) -> usize {
+        usize::from(moved.start) % self.length.max(1)
     }
 
     /// Its own length moved by this many rows, from 1 to [`MAX_PHRASE_STEPS`].
@@ -239,8 +242,7 @@ mod tests {
             lane.heard(moved),
             Heard {
                 length: 9,
-                division: 6,
-                start: 0,
+                division: 6
             },
             "÷2"
         );

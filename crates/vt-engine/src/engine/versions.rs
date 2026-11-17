@@ -325,9 +325,7 @@ impl Engine {
                 let ahead =
                     old_lane.map(|old| (old, state.lane_ahead(slot, old, was_entry, count)));
                 let was_reading = match ahead {
-                    Some((old, ahead)) => {
-                        old.stored_from(ahead.row, state.heard_lane(slot, old).start)
-                    }
+                    Some((old, ahead)) => old.stored_from(ahead.row, state.lane_start(slot, old)),
                     None => old_phrase.start() + was_at.step,
                 };
                 let kept = same && lane.contains(was_reading);
