@@ -63,8 +63,8 @@
                 depth: 12,
                 in_scale: true,
                 steps: (
+                    values: (0, 64, 149, 213, 255, 149, 106, 213, 0, 0, 0, 0, 0, 0, 0, 0),
                     mode: Note,
-                    mutate: 12,
                 ),
             ), (
                 kind: Lfo,
@@ -75,6 +75,30 @@
                 destination: None,
                 depth: 0,
             )),
+            macros: ((
+                name: Some("Deja vu"),
+                value: 49152,
+                maps: [
+                    (
+                        target: Setting("mod4.mutate"),
+                        min: 25600,
+                        max: 0,
+                        zone: (
+                            start: 0,
+                            end: 127,
+                        ),
+                    ),
+                    (
+                        target: Setting("mod4.jump"),
+                        min: 0,
+                        max: 25600,
+                        zone: (
+                            start: 128,
+                            end: 255,
+                        ),
+                    ),
+                ],
+            ), (), (), (), (), (), (), ()),
             chains: {
                 0: (
                     entries: [
@@ -90,18 +114,17 @@
                 0: (
                     steps: [
                         "D-3 64 --- --- ---",
-                        "F-3 50 --- --- ---",
-                        "A-3 64 --- --- ---",
-                        "C-4 50 --- --- ---",
-                        "E-4 64 --- --- ---",
-                        "A-3 50 --- --- ---",
-                        "G-3 64 --- --- ---",
-                        "D-4 50 --- --- ---",
+                        "D-3 50 --- --- ---",
+                        "D-3 64 --- --- ---",
+                        "D-3 50 --- --- ---",
+                        "D-3 64 --- --- ---",
+                        "D-3 50 --- --- ---",
+                        "D-3 64 --- --- ---",
+                        "D-3 50 --- --- ---",
                     ],
                     start: 0,
                     length: Some(8),
                     lanes: (None, None, None),
-                    order: Random,
                 ),
             },
         ),
