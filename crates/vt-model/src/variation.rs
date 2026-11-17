@@ -129,14 +129,25 @@ impl Roll {
 const THIN_STREAM: u64 = 0x6364_6c74_0000_0000;
 
 /// Whether a row with no `CHA` of its own still plays under a `CDLT` value below `80`, where it
-/// counts as a `CHA FF` moved down (decision 405). It's a hash of the project's seed, the track
-/// and its count since its chain started, as an `RND`'s roll is, rather than a draw from the
-/// track's generator, so every `CHA` rolls as it did, a render repeats, playing from a step hears
-/// what playing up to it would, and turning `CDLT` down only drops more of the rows.
+/// counts as a `CHA FF` moved down (decision 405). It's [`kept`] with that chance.
 pub fn thin_keeps(seed: u64, track: usize, count: i64, moved: f32) -> bool {
+    kept(seed, track, count, 0, moved_chance(1.0, 1.0, moved))
+}
+
+/// Whether a note kept with a chance of `share`, from 0 to 1, plays: a row's with no `CHA`
+/// under `CDLT` below `80` (decision 405), or one pulse or ratchet `hit` of a row when `CDLT`
+/// targets pulses, `0` the pulse's own note and from `1` its ratchet's hits (decision 406). It's a
+/// hash of the project's seed, the track, its count since its chain started and the hit, as an
+/// `RND`'s roll is, rather than a draw from the track's generator, so every `CHA` rolls as it
+/// did, a render repeats, playing from a step hears what playing up to it would, and turning
+/// `CDLT` down only drops more of them.
+pub fn kept(seed: u64, track: usize, count: i64, hit: u64, share: f32) -> bool {
     let track = splitmix64(splitmix64(seed) ^ splitmix64(THIN_STREAM.wrapping_add(track as u64)));
-    let roll = splitmix64(track ^ count as u64);
-    ((roll >> 40) as f32 / (1u64 << 24) as f32) < moved_chance(1.0, 1.0, moved)
+    let mut roll = splitmix64(track ^ count as u64);
+    if hit > 0 {
+        roll = splitmix64(roll ^ hit);
+    }
+    ((roll >> 40) as f32 / (1u64 << 24) as f32) < share
 }
 
 /// How far one step of an `RND`'s range moves a lock of this setting: a choice on a list, a

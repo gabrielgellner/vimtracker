@@ -166,6 +166,7 @@ impl Control {
             Self::Base(TrackControl::PhraseLength) => "Length",
             Self::Base(TrackControl::PhraseStart) => "Start",
             Self::Base(TrackControl::ChanceDelta) => "Chance",
+            Self::Base(TrackControl::ChanceTarget) => "Target",
             Self::Choke => "Choke",
             Self::Group => "Group",
             Self::Role => "Role",
@@ -385,7 +386,8 @@ impl Control {
                 | TrackControl::OrderY
                 | TrackControl::PhraseLength
                 | TrackControl::PhraseStart
-                | TrackControl::ChanceDelta,
+                | TrackControl::ChanceDelta
+                | TrackControl::ChanceTarget,
             )
             | Self::Choke
             | Self::Group
@@ -435,7 +437,8 @@ impl Control {
             | TrackControl::OrderX
             | TrackControl::OrderY
             | TrackControl::PhraseLength
-            | TrackControl::PhraseStart,
+            | TrackControl::PhraseStart
+            | TrackControl::ChanceTarget,
         ) = self
         {
             return false;
@@ -492,7 +495,12 @@ impl Control {
                 )
                 | Self::Arpeggio(ArpField::Rate | ArpField::Mode | ArpField::Retrig)
                 | Self::Lane(_, LaneField::Rate)
-                | Self::Base(TrackControl::Reverse | TrackControl::OrderX | TrackControl::OrderY)
+                | Self::Base(
+                    TrackControl::Reverse
+                        | TrackControl::OrderX
+                        | TrackControl::OrderY
+                        | TrackControl::ChanceTarget
+                )
         )
     }
 }
