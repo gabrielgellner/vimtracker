@@ -972,6 +972,7 @@ fn lane_view(of: ParamView, moved: LaneMove, slot: usize, field: LaneField) -> P
                 .steps(Steps::even(1), Steps::even(HEX_JUMP))
                 .reads(NUMBER, "Start is a number of rows from 0 to 255")
         }
+        LaneField::Jump => of.hex(moved.jump, 0xFF, 0),
         LaneField::Rate => of.listed(
             LANE_RATES.iter().map(|rate| Choice::named(*rate)),
             usize::from(moved.rate),
@@ -1005,6 +1006,14 @@ fn lane_shown(slot: usize, field: LaneField, moved: LaneMove) -> String {
             rows => {
                 format!("{rows}: each phrase's lane on {column} starts {rows} rows on, going round")
             }
+        },
+        LaneField::Jump => match moved.jump {
+            0 => format!("00: each row of a lane on {column} plays the next of its rows"),
+            0xFF => format!("FF: each row of a lane on {column} plays any of its rows"),
+            chance => format!(
+                "{chance:02X}: each row of a lane on {column} plays any of its rows {}% of the time",
+                (u32::from(chance) * 100 + 127) / 255
+            ),
         },
         LaneField::Rate => {
             let rate = LANE_RATES[usize::from(moved.rate).min(LANE_RATES.len() - 1)];
@@ -1274,6 +1283,7 @@ pub fn set(
                 LaneField::Length => moved.length = (value + 128).clamp(0, 255) as u8,
                 LaneField::Rate => moved.rate = byte,
                 LaneField::Start => moved.start = byte,
+                LaneField::Jump => moved.jump = byte,
             }
             Action::SetLaneMove {
                 track: at,

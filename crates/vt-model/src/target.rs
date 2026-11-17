@@ -213,8 +213,12 @@ impl SettingId {
                 "How long each row of FX{}'s lane lasts, times its own",
                 slot + 1
             ),
-            (Owner::Lane(slot), _) => format!(
+            (Owner::Lane(slot), 2) => format!(
                 "Which row FX{}'s lane starts on, rows on from its own first",
+                slot + 1
+            ),
+            (Owner::Lane(slot), _) => format!(
+                "The chance each row of FX{}'s lane plays any of its rows instead",
                 slot + 1
             ),
             (Owner::Sampler, 0) => "Which of the bank's samples plays".to_owned(),
@@ -423,7 +427,7 @@ mod tests {
         let own = TRACK_ORDER.len();
         assert_eq!(offered[..own], TRACK_ORDER);
         let lanes = SettingId::lanes().count();
-        assert_eq!(lanes, 9, "Length, Rate and Start for each FX column");
+        assert_eq!(lanes, 12, "Length, Rate, Start and Jump for each FX column");
         assert_eq!(offered.len(), own + 4 + lanes);
         assert_eq!(
             offered[own],

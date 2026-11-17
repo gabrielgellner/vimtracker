@@ -523,6 +523,8 @@ their `Lane` devices. Track 2 is the shipped patch `Acid loops`, its five loops 
 *   `Phrase` `Length` `-4` on track 1: the trigger loop walks its first 12 rows in each pass of
     16, so it drifts against the bar too. With `Cue` `On`, an LFO on `PLEN` changes it a bar at
     a time.
+*   `FX1 Lane` `Jump` `FF` on track 1: each length is any of the lane's four, as Kria's random
+    direction on one part. At `80` about half are, and the rest count on.
 
 ## Metropolix
 

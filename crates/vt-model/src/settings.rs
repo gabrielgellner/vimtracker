@@ -651,7 +651,7 @@ const SLOT_OWN: [Entry; 1] = [Entry {
 /// Each FX column's lane's, which move every phrase's lane on that column from its own: how many
 /// rows it's heard for, one a step either side of `80`, and how much slower or faster its rows go.
 /// With the column's number after each, as `LLEN1`.
-const LANE: [Entry; 3] = [
+const LANE: [Entry; 4] = [
     Entry {
         meaning: "how many rows this column's lanes are heard for, more or fewer",
         key: "length",
@@ -691,11 +691,20 @@ const LANE: [Entry; 3] = [
         default: 0,
         place: Place::Own,
     },
+    // Added after the sampler's `Reverse`, so its places come at the table's end (decision 415):
+    // the chance each of the lane's rows plays any of its rows instead of the next, as `JMP` is
+    // the phrase's.
+    level("jump", "Jump", "LJMP", 0x00)
+        .means("the chance each of this column's lanes' rows plays any of its rows instead"),
 ];
 
 /// How many of a lane's settings have their places before the track's own added later: those
 /// that came first, `Length` and `Rate`.
 pub(crate) const EARLY_LANE: usize = 2;
+
+/// How many of a lane's settings have their places after the track's own added later, before
+/// the sampler's: `Start`. Those after them, `Jump`, sit at the table's end.
+pub(crate) const LATER_LANE: usize = 1;
 
 /// How many settings each FX column's lane has.
 pub const LANE_SETTINGS: usize = LANE.len();

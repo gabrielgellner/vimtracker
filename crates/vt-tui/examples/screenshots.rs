@@ -440,6 +440,7 @@ fn lane_moved(song: &mut Song) {
         length: 0x82,
         rate: 14,
         start: 0,
+        jump: 0,
     };
 }
 

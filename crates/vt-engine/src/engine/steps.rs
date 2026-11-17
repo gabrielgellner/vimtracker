@@ -314,9 +314,10 @@ impl Engine {
             return lanes;
         };
         let entry = (position.phrase, position.slot);
+        let dealer = self.dealer(index);
         for (slot, read) in lanes.iter_mut().enumerate() {
             if let Some(lane) = phrase.lane(slot) {
-                *read = Some(self.tracks[index].lane_row(slot, lane, entry, count));
+                *read = Some(self.tracks[index].lane_row(slot, lane, entry, count, dealer));
             }
         }
         lanes
