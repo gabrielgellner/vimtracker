@@ -54,7 +54,7 @@ fn project(folder: &Path) -> (App, Realtime) {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, realtime) = connect(Engine::new(RATE, version));
-    let app = App::new(song, Some(folder.to_path_buf()), samples, handle, RATE);
+    let app = crate::common::new_app(song, Some(folder.to_path_buf()), samples, handle, RATE);
     (app, realtime)
 }
 

@@ -25,6 +25,24 @@ pub use recording::*;
 pub use roto::*;
 pub use shape::*;
 
+/// The shape seed every test's app starts from. The app draws a new one each session, so a
+/// test that reads a fill's contents would pass or fail with the draw (#1032).
+pub const SHAPE_SEED: u64 = 0;
+
+/// `App::new` with the session's shape seed pinned to `SHAPE_SEED`. Every test builds its app
+/// through this, never `App::new` itself.
+pub fn new_app(
+    song: Song,
+    folder: Option<PathBuf>,
+    samples: Arc<SamplePool>,
+    handle: vt_engine::link::Handle,
+    rate: u32,
+) -> App {
+    let mut app = App::new(song, folder, samples, handle, rate);
+    app.services.shape_seed = SHAPE_SEED;
+    app
+}
+
 pub fn app() -> (App, Realtime) {
     app_for(Song::new(2))
 }
@@ -34,7 +52,7 @@ pub fn app_for(song: Song) -> (App, Realtime) {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, realtime) = connect(Engine::new(48_000, version));
-    (App::new(song, None, samples, handle, 48_000), realtime)
+    (new_app(song, None, samples, handle, 48_000), realtime)
 }
 
 /// One track, its phrase these steps.
@@ -260,7 +278,7 @@ pub fn tracks_of_different_lengths() -> (App, Realtime) {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, realtime) = connect(Engine::new(48_000, version));
-    (App::new(song, None, samples, handle, 48_000), realtime)
+    (new_app(song, None, samples, handle, 48_000), realtime)
 }
 
 /// From anywhere in `Mod 1`'s title, at the top of the Mod page, to the type of one of the LFOs

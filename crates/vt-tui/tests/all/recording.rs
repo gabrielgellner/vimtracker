@@ -9,7 +9,6 @@ use vt_engine::published::Published;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Phrase, Song};
 use vt_model::step::{Note, Step};
-use vt_tui::app::App;
 use vt_tui::input::keys::Key;
 
 use crate::common::*;
@@ -302,7 +301,7 @@ fn a_recorded_note_goes_on_the_row_of_its_tracks_own_speed() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, mut rt) = connect(Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     press(&mut app, "W");
     let mut at = play_from_the_top(&mut app, &mut rt);
     press_at(&mut app, at, " r");

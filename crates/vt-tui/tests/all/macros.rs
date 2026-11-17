@@ -366,7 +366,7 @@ fn on_hits() -> (App, vt_engine::link::Realtime) {
     ));
     let (handle, realtime) =
         vt_engine::link::connect(vt_engine::engine::Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     press(&mut app, "vGSjjjjjj===");
     special(&mut app, KeyCode::Char('L'));
     press(&mut app, " 8}kjj$");
@@ -631,7 +631,7 @@ fn gd_on_a_setting_two_macros_hold_lists_them_to_go_to() {
     ));
     let (handle, _realtime) =
         vt_engine::link::connect(vt_engine::engine::Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     press(&mut app, " 5}j");
     assert_eq!(
         app.track_control(),

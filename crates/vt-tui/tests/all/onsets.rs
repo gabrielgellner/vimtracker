@@ -74,7 +74,7 @@ fn app() -> (App, Realtime) {
     let samples = Arc::new(pool);
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, realtime) = connect(Engine::new(RATE, version));
-    let mut app = App::new(song, None, samples, handle, RATE);
+    let mut app = crate::common::new_app(song, None, samples, handle, RATE);
     keys(&mut app, "Space 0");
     assert_eq!(app.modes.view, View::Sample);
     (app, realtime)
