@@ -84,7 +84,7 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
     let samples = Arc::new(SamplePool::default());
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
-    let app = App::new(song, None, samples, handle, 48_000);
+    let app = crate::common::new_app(song, None, samples, handle, 48_000);
     let buffer = screen(&app);
     let row = |y: u16| -> String { (0..80).map(|x| buffer[(x, y)].symbol()).collect() };
     assert!(

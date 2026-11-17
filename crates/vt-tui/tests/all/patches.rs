@@ -28,7 +28,7 @@ fn app_on(song: Song) -> (App, vt_engine::link::Realtime, PathBuf) {
     ));
     let (handle, realtime) =
         vt_engine::link::connect(vt_engine::engine::Engine::new(48_000, version));
-    let mut app = App::new(song, None, samples, handle, 48_000);
+    let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     let presets = folder().join("presets");
     app.services.settings = Settings {
         presets: presets.display().to_string(),
