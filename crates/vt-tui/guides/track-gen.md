@@ -232,13 +232,14 @@ setting through its zone, and a sound preset or a patch keeps it.
 middle it takes the random sequence from new each time to looped, and from the middle to the
 right it loops it with jumps. Do the same with a Steps slot and a macro:
 
-1. `M1` on Steps' `Mutate`, then on the setting for the other side, say `Smooth`.
+1. `M1` on Steps' `Mutate`, then on its `Jump`, in the slot's title.
 2. `gm`. On `Mutate`, `~` so it comes down, from its top at `00` to `0`, then `lllll` to
    the zone's end and `i7F`: `Zone 00–7F`.
-3. `j` to the second setting, on its zone's end, `h` to its start and `i80`: `Zone 80–FF`.
+3. `j` to `Jump`, on its zone's end, `h` to its start and `i80`: `Zone 80–FF`.
 
-Now at `00` `Mutate` is at its top and the other at `0`; at the middle, `7F` to `80`, both are
-`0`, the loop held; and toward `FF` only the other comes in. The same goes for any crossfade
+Now at `00` `Mutate` is at its top and `Jump` at `0%`; at the middle, `7F` to `80`, both are
+`0%`, the loop held; and toward `FF` the loop's steps play out of order, more often as it turns,
+every step at `FF`. The shipped patch `Deja vu` is this knob. The same goes for any crossfade
 between two things: a dry-to-wet on one side and a drive on the other, two sends, or two
 filters.
 <!-- ANCHOR_END: before-mapping -->
@@ -345,9 +346,9 @@ finds `Euclid`, `Acid loops` and `Noise Ring`.
 | `Variations` | `variations` | `Order`, `Temperature` |
 
 Each is the part of that song's track that plays it, with its macros turned to where the song
-has them; the generators tutorial has a section on each. `Deja vu` is the Turing Machine with
-the left half of Marbles' knob, up for more memory; the right half, the loop played out of
-order, is the phrase's `:order random`, which a patch doesn't hold. `Kria`'s length, ratchet
+has them; the generators tutorial has a section on each. `Deja vu` holds Marbles' whole knob on
+one macro: its left half turns `Mutate` down to a locked loop, and its right half turns `Jump`
+up, the loop played out of order. `Kria`'s length, ratchet
 and probability loops come with their lanes, of 4, 3 and 7 on FX 1 to 3, a row a step, as a
 patch carries a lane's length but not its division.
 

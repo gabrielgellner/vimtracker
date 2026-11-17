@@ -22,6 +22,7 @@ use vt_model::constants::BEAT_STEPS;
 use vt_model::selection::{
     Extent, FIRST_FX_ORDER, FX_GROUP, Field, Motion, Scope, StepRange, Target,
 };
+use vt_model::shape::ShapeColumn;
 use vt_model::step::FxCommand;
 
 use crate::app::{Selection, TrackSpan};
@@ -30,6 +31,7 @@ use crate::input::mode::{Mode, View};
 use crate::pages::{Ctx, CtxMut, Outcome, Page};
 use crate::services::Cursor;
 use crate::services::Services;
+use crate::widgets::value_bars::{BarRow, ValueBars};
 
 /// One beat, as a slide.
 const BEAT: isize = BEAT_STEPS as isize;
@@ -639,5 +641,169 @@ fn fx_name(ctx: &Ctx, slot: usize) -> String {
             format!("FX{} value", slot + 1)
         }
         (None, _) => format!("FX{} command", slot + 1),
+    }
+}
+
+impl crate::app::App {
+    /// The bars of the column selected in a Visual mode on the phrase view, with what its values
+    /// were when the selection started behind them: a note, a velocity, a nudge, a gate's length
+    /// or an FX value that's an amount, one column on the cursor's track. None for anything else,
+    /// such as a type of gate, an FX command's name or a selection across columns.
+    pub(crate) fn selection_bars(&self) -> Option<ValueBars> {
+        if self.modes.view != View::Phrase || !self.modes.mode.is_visual() {
+            return None;
+        }
+        let selection = self.current_selection();
+        let cursor = self.services.cursor;
+        if selection.scope.first != selection.scope.last
+            || selection.scope.first != cursor.field.group()
+        {
+            return None;
+        }
+        let song = self.services.song();
+        let track = song.tracks.get(cursor.track)?;
+        let phrase = self.services.phrase_id()?;
+        let steps = track.phrases.get(&phrase)?.steps();
+        let before = self
+            .selected_from
+            .as_ref()
+            .and_then(|from| from.tracks.get(cursor.track)?.phrases.get(&phrase))
+            .map_or(steps, |phrase| phrase.steps());
+        let range = selection.range;
+        let column = match cursor.field {
+            Field::Note => ShapeColumn::Note {
+                scale: self.services.live.scale,
+                writes: None,
+            },
+            Field::Velocity => ShapeColumn::Velocity,
+            Field::Nudge => ShapeColumn::Nudge {
+                most: track.speed.most_nudge(),
+            },
+            Field::GateLength => ShapeColumn::Length,
+            Field::FxValue(slot) | Field::FxFine(slot) => {
+                let command = (range.first..=range.last)
+                    .filter_map(|row| steps.get(row))
+                    .find_map(|step| step.fx.get(slot).and_then(|fx| fx.command))?;
+                ShapeColumn::Fx { slot, command }
+            }
+            Field::Gate | Field::FxCommand(_) => return None,
+        };
+        let rows = (range.first..=range.last)
+            .filter_map(|step| {
+                let now = steps.get(step)?;
+                Some(BarRow {
+                    step,
+                    before: before.get(step).and_then(|was| column.value(was)),
+                    now: column.value(now),
+                })
+            })
+            .collect();
+        ValueBars::new(ValueBars::label_of(column), column, rows)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ratatui::layout::Rect;
+
+    use crate::widgets::pin::{app_on, assert_drawn, cut, keys, screen};
+
+    /// A row of the screen as text.
+    fn row(buffer: &ratatui::buffer::Buffer, y: u16) -> String {
+        (0..buffer.area.width)
+            .map(|x| buffer[(x, y)].symbol())
+            .collect()
+    }
+
+    #[test]
+    fn nudging_selected_velocities_shows_them_over_what_they_were_until_the_selection_ends() {
+        let mut app = app_on(&["C-3 40 --- --- ---"; 8]);
+        keys(&mut app, "lvjjj_");
+        let shown = screen(&mut app, 163, 42);
+        assert_drawn(
+            &cut(&shown, Rect::new(15, 0, 20, 7)),
+            &[
+                " VEL 00 ─ 7F        ",
+                "abbbccccccccaaaaaaaa",
+                " 30─30 avg 30 ±4    ",
+                "acccccccccccccccccca",
+                " ██████▊██▏         ",
+                "addddddefffaaaaaaaaa",
+                " ██████▊██▏         ",
+                "addddddefffaaaaaaaaa",
+                " ██████▊██▏         ",
+                "addddddefffaaaaaaaaa",
+                " ██████▊██▏         ",
+                "addddddefffaaaaaaaaa",
+                "     ···· ·· ···   ·",
+                "ggggghhhhghhgiiiiiii",
+                "a fg TEXT bg MANTLE",
+                "b fg TEXT bg MANTLE +BOLD",
+                "c fg OVERLAY2 bg MANTLE",
+                "d fg MAUVE bg MANTLE",
+                "e fg MAUVE bg #75638e",
+                "f fg #75638e bg MANTLE",
+                "g fg TEXT bg BASE",
+                "h fg OVERLAY0 bg BASE",
+                "i fg OVERLAY0 bg MANTLE",
+            ],
+        );
+        keys(&mut app, "<Esc>");
+        let shown = screen(&mut app, 163, 42);
+        assert!(
+            row(&shown, 0).contains("Chain 00"),
+            "gone with the selection"
+        );
+        assert!(!row(&shown, 2).contains('█'));
+    }
+
+    #[test]
+    fn a_selected_fx_value_has_bars_and_its_command_or_a_gates_type_has_none() {
+        let mut app = app_on(&["C-3 40 cut:40 --- ---"; 8]);
+        keys(&mut app, "llllllvjjj");
+        assert!(app.selection_bars().is_some(), "on CUT's value");
+        keys(&mut app, "<Esc>hvjjj");
+        assert!(app.selection_bars().is_none(), "on CUT's name");
+        keys(&mut app, "<Esc>hhvjjj");
+        assert!(app.selection_bars().is_none(), "on the gate's type");
+    }
+
+    #[test]
+    fn a_selection_across_columns_has_no_bars() {
+        let mut app = app_on(&["C-3 40 --- --- ---"; 8]);
+        keys(&mut app, "vjjjl");
+        assert!(app.selection_bars().is_none());
+    }
+
+    #[test]
+    fn transposing_selected_notes_shows_the_contour_moving() {
+        let mut app = app_on(&[
+            "C-3 40 --- --- ---",
+            "E-3 40 --- --- ---",
+            "G-3 40 --- --- ---",
+        ]);
+        keys(&mut app, "vjj==");
+        let shown = screen(&mut app, 163, 42);
+        assert_drawn(
+            &cut(&shown, Rect::new(12, 0, 20, 5)),
+            &[
+                " NOTE B-2 ─ B-3     ",
+                "abbbbccccccccccaaaaa",
+                " D-3─A-3 avg F#3 ±3 ",
+                "acccccccccccccccccca",
+                "    ● ●             ",
+                "aaaadaeaaaaaaaaaaaaa",
+                "    ┊   ● ●         ",
+                "aaaafaaadaeaaaaaaaaa",
+                "    ┊      ● ●      ",
+                "aaaafaaaaaadaeaaaaaa",
+                "a fg TEXT bg MANTLE",
+                "b fg TEXT bg MANTLE +BOLD",
+                "c fg OVERLAY2 bg MANTLE",
+                "d fg #75638e bg MANTLE",
+                "e fg MAUVE bg MANTLE",
+                "f fg OVERLAY0 bg MANTLE",
+            ],
+        );
     }
 }

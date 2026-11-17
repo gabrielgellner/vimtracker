@@ -8,7 +8,7 @@ there are no samples to find.
 | Song | After | The trick |
 |---|---|---|
 | `turing-machine` | Music Thing's Turing Machine | A Steps slot's `Mutate` on `Pitch in scale`, played from three macros |
-| `deja-vu` | Mutable Instruments' Marbles | `Mutate` for new notes, `:order random` to replay old ones |
+| `deja-vu` | Mutable Instruments' Marbles | One zoned macro: `Mutate` down its left half, `Jump` up its right |
 | `euclid` | Euclidean rhythms | `S`'s `Euclid`, kept live, with `Rotate` |
 | `fugue` | Fugue Machine | One theme and three tracks following it live with `Follow`, each at its own `Speed` |
 | `kria` | monome's Kria | Triggers, pitches, octaves, lengths, ratchets and chances on loops of different lengths and divisions, and an `Acid` fill's own loops |
@@ -217,30 +217,30 @@ where it's listed under `Factory`, on any track, without saving one of your own 
 [Mutable Instruments' Marbles](https://pichenettes.github.io/mutable-instruments-documentation/modules/marbles/)
 makes random gates and random voltages. Its Déjà vu knob decides how much it remembers: fully
 left, everything is new; turned up toward noon, it replays what it played, until the output is
-a locked loop of so many steps; past noon, it plays that loop's values in a random order. Its
-T section makes random gates, each with its own chance.
+a locked loop of so many steps; past noon, it plays that loop's values in a random order, more
+often as it turns, every step at random fully right. Its T section makes random gates, each with
+its own chance.
 
-**How the song does it.** Track 1, a `String`, plays an eight-note loop in D dorian, with
-`:order random`, so each step plays any of its rows: the loop's own notes, jumping around
-inside it, as Déjà vu does past noon. A `Steps` slot with a little `Mutate` on `Pitch in scale`
-brings in new notes now and then, the left side of the knob. Under it, track 2 is a drone with
-a `Smooth` LFO wandering on its filter, as Marbles' Y output wanders, and track 3 is a hat on
-every step, each with a `CHA` of its own, Marbles' T. [`song.ron`](songs/deja-vu/song.ron)
+**How the song does it.** Track 1, a `String`, plays a pulse of `D-3`s, and a `Steps` slot in
+`Note` mode, on `Pitch in scale`, is the loop: its eight values, D F A C D A G C up from `D-3`,
+are the notes, and it moves on one with each note. One macro, `Deja vu`, is the whole knob, in
+two zones: across its left half it turns `Mutate` from `100%`, every note new, down to `0%`, the
+loop locked; across its right half it turns `Jump` from `0%` up to `100%`, the loop's notes out
+of order, more often as it turns. It's turned to `C0`, so half the steps jump. Under it, track 2
+is a drone with a `Smooth` LFO wandering on its filter, as Marbles' Y output wanders, and track 3
+is a hat on every step, each with a `CHA` of its own, Marbles' T.
+[`song.ron`](songs/deja-vu/song.ron)
 
-```text
-00  D-3 64        04  E-4 64
-01  F-3 50        05  A-3 50
-02  A-3 64        06  G-3 64
-03  C-4 50        07  D-4 50
-```
-
-**Build it.**
+**Build it.** See **Macros** in **The Gen page, macros and presets** for how macros and their
+zones are set.
 
 *   **Song:** D dorian, 100 BPM.
 *   **Track 1, `X1`:** `String`, `Decay` `B0`, `Bright` `50`; `Level` `C8`, `Send A` `B0`,
-    `Send B` `B8`. Phrase: 8 rows, the notes above, order `random`. The phrase's title says
-    `Random`, and the playhead jumps.
-*   **Mod 4:** `Steps`, mode `Note`, `Dest` `Pitch in scale`, `Depth` `0C`, `Mutate` `12%`.
+    `Send B` `B8`. Phrase: 8 rows of `D-3`, velocity `64` and `50` in turn.
+*   **Mod 4:** `Steps`, mode `Note`, `Dest` `Pitch in scale`, `Depth` `0C`, `Length` 8, values
+    `00 40 95 D5 FF 95 6A D5`. At a `Depth` of `0C`, `FF` is an octave up.
+*   **Macro 1, `Deja vu`:** `Mod 4`'s `Mutate` from `100%` to `0%`, `Zone 00–7F`, and its `Jump`
+    from `0%` to `100%`, `Zone 80–FF`; turned to `C0`.
 *   **Track 2, `Y1`:** `VA`, `Cut` `60`, `Res` `40`; `Level` `D0`. Phrase: 2 rows, `D-1 50`
     and `A-1 40`, each with a gate of `SGL8`.
 *   **Track 2, Mod 4:** the `LFO` it starts with, `Dest` `Cut`, `Shape` `Smooth`, `Rate`
@@ -249,37 +249,40 @@ every step, each with a `CHA` of its own, Marbles' T. [`song.ron`](songs/deja-vu
     Shape, applied rather than kept live: FX 1, all 16 rows, command `CHA`, `Fill` `Random`,
     `From` `50`, `To` `F0`. Each hat now has its own chance.
 
-**One knob, two settings.** Marbles' knob has two halves, and here each is a setting of its
-own, as they act on different things: `Mutate` draws the Steps slot's values again, the notes
-that come in new, and `:order` is the order the phrase plays its rows, the loop's own notes.
-Turn the knob from left to right like this:
+**One knob.** Turn `Deja vu` from left to right as you would Marbles':
 
-| Déjà vu | Here |
-|---|---|
-| Fully left: every note new | `Mutate` `100%`, `:order forward` |
-| Toward noon: new notes now and then | `Mutate` low, as `12%` |
-| Noon: the loop locked | `Mutate` `0%`, then `Space g a` on the Steps slot to keep it |
-| Past noon: the loop out of order | `:order shuffle`, every note once a pass |
-| Fully right: any of the loop's notes each step | `:order random` |
+| Déjà vu | `Deja vu` | Here |
+|---|---|---|
+| Fully left: every note new | `00` | `Mutate` `100%` |
+| Toward noon: new notes now and then | `60` | `Mutate` about `25%` |
+| Noon: the loop locked | `7F` to `80` | `Mutate` `0%`, `Jump` `0%` |
+| Past noon: the loop out of order now and then | `A0` | `Jump` about `25%` |
+| Fully right: any of the loop's notes each step | `FF` | `Jump` `100%` |
 
-`Mutate` at `0%` locks the loop it drifted to, as Marbles does at noon. The draws aren't saved,
-and a play from the top starts again from the values as written, so `Space g a` keeps the locked
-loop in the song. The song has a
-little of both halves at once, `Mutate` `12%` and `:order random`, which Marbles' one knob can't
-do: the phrase's notes jump around while the slot brings a new one in now and then.
+`Mutate` at `0%` locks the loop it drifted to, as Marbles does at noon, and `Jump` then plays
+those drawn notes out of order. The draws aren't saved, and a play from the top starts again from
+the values as written, so `Space g a` on the Steps slot keeps a locked loop in the song.
 
-**As a patch.** Track 1's Steps slot is the shipped patch `Deja vu`; add it with `:patch`. Its
-`Deja vu` macro is the knob's left half, turning `Mutate` from all new at `00` to none at `FF`,
-and `Spread` turns its `Depth`. The right half is the phrase's `:order`, which a macro can't turn
-and a patch doesn't hold, so give the phrase that yourself.
+**The tracker's own Déjà vu.** The knob scrambles the Steps slot's loop. A phrase's written rows
+can be scrambled the same way: the Play device's `Jump`, in its title on the Sound page, is the
+chance each step plays any row of the phrase instead of the next its `:order` walks to. Write the
+eight notes into track 1's rows, set `Mod 4`'s `Depth` to `00`, and turn the Play device's
+`Jump` up, or lock `JMP` on the rows that should jump. A macro, an LFO or the Roto can turn it
+too.
+
+**As a patch.** Track 1's Steps slot is the shipped patch `Deja vu`; add it with `:patch`. It
+holds the whole knob, `Deja vu`, and `Spread`, which turns the slot's `Depth` from none to two
+octaves either way.
 
 **Try next.**
 
-*   Turn `Mutate` up for more new notes, and to `0%` for a loop that only ever replays itself.
-*   `:order shuffle` in place of `random`: every note once a pass, in a new order each pass.
-*   `:order forward`: Déjà vu back at noon, the locked loop as written.
+*   `Deja vu` to `30`, listen to the notes drift, then to `7F` to lock them, and on up past `80`
+    to hear the locked loop jump about.
+*   `Spread` up for a wider loop, or down to `00` for the pulse alone.
+*   `:order shuffle` on track 1's phrase with the Play device's `Jump` at `00`: the rows of a
+    written loop once a pass each, in a new order each pass.
 *   `r` in the shape panel deals the hats' chances again: `gv` `S` on FX 1, `r`, `Enter`.
-*   `:seed 7`, or any number, for another roll of every chance and draw.
+*   `:seed 7`, or any number, for another roll of every chance, draw and jump.
 
 ## Euclidean rhythms
 

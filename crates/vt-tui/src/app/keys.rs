@@ -309,6 +309,12 @@ impl App {
             self.held.octave_moved = None;
         }
         self.settle_sample_page();
+        // A selection keeps the song from when it started, and lets it go when it ends.
+        if !self.modes.mode.is_visual() {
+            self.selected_from = None;
+        } else if self.selected_from.is_none() {
+            self.selected_from = Some(Arc::clone(self.services.song()));
+        }
     }
 
     fn handle_key(&mut self, key: Key, now: Instant) {

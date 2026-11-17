@@ -23,7 +23,7 @@ use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio};
 use vt_model::bloom::{Bloom, Path};
 use vt_model::generator::Span;
 use vt_model::lfo::Shape as Wave;
-use vt_model::macros::{GEN_ZERO, GenColumn, MacroMap, MacroTarget};
+use vt_model::macros::{GEN_ZERO, GenColumn, MacroMap, MacroTarget, Zone};
 use vt_model::modulation::ModKind;
 use vt_model::order::{Cartesian, Order, Snake};
 use vt_model::preset::{FACTORY_PATCHES, PatchGen, PatchPreset};
@@ -325,6 +325,7 @@ fn turing_machine() -> Song {
 fn deja_vu() -> Song {
     let mut song = song("deja-vu", 100, 2, ScaleKind::Dorian, 3);
     song.seed = 0xD7;
+    // A pulse of `D-3`s, accented every other step, whose pitches are the Steps slot's loop.
     voice(
         &mut song,
         0,
@@ -332,24 +333,34 @@ fn deja_vu() -> Song {
         SynthVoice::String,
         &[
             "D-3 64 --- --- ---",
-            "F-3 50 --- --- ---",
-            "A-3 64 --- --- ---",
-            "C-4 50 --- --- ---",
-            "E-4 64 --- --- ---",
-            "A-3 50 --- --- ---",
-            "G-3 64 --- --- ---",
-            "D-4 50 --- --- ---",
+            "D-3 50 --- --- ---",
+            "D-3 64 --- --- ---",
+            "D-3 50 --- --- ---",
+            "D-3 64 --- --- ---",
+            "D-3 50 --- --- ---",
+            "D-3 64 --- --- ---",
+            "D-3 50 --- --- ---",
         ],
     );
-    let mut phrase = (*song.tracks[0].phrases[&0]).clone();
-    phrase.set_order(Order::Random);
-    song.tracks[0].phrases.insert(0, Arc::new(phrase));
     set(&mut song, 0, "string.decay", 0xB0);
     set(&mut song, 0, "string.bright", 0x50);
     song.tracks[0].level = 0xC8;
     song.tracks[0].send_a = 0xB0;
     song.tracks[0].send_b = 0xB8;
-    steps_on_pitch(&mut song, 0, 3, StepsMode::Note, true, 0x0C, &[0; 8], 12);
+    // The loop: D F A C D A G C up from `D-3`, at a depth of `0C`, so `FF` is an octave.
+    steps_on_pitch(
+        &mut song,
+        0,
+        3,
+        StepsMode::Note,
+        true,
+        0x0C,
+        &[0, 0x40, 0x95, 0xD5, 0xFF, 0x95, 0x6A, 0xD5],
+        0,
+    );
+    // The knob: `Mutate` from all new to none on its left half, `Jump` from none to every step on
+    // its right, turned to three quarters, so the written loop plays out of order half the time.
+    deja_vu_knob(&mut song.tracks[0], 0xC000);
     // A drone under it, its filter wandering, as Marbles' Y does.
     voice(
         &mut song,
@@ -2121,15 +2132,34 @@ fn turing_machine_patch() -> PatchPreset {
     patch_of(&turing_machine().tracks[0])
 }
 
-/// Déjà vu: the song's Steps slot, with `Deja vu` turning its `Mutate` from all new to locked,
-/// so up is more memory, as the module's knob is from its left to noon; and `Spread` its
-/// `Depth`, how far a new note goes, from none to two octaves either way. The song's
-/// `:order random` is its phrase's, which a patch doesn't carry.
+/// Déjà vu: the song's Steps slot with its whole knob, `Deja vu`, as the song has it; and
+/// `Spread` its `Depth`, how far a note goes, from none to two octaves either way.
 fn deja_vu_patch() -> PatchPreset {
     let mut track = deja_vu().tracks[0].clone();
-    panel_knob(&mut track, 0, "Deja vu", "mod4.mutate", (0x6400, 0x0000));
     panel_knob(&mut track, 1, "Spread", "mod4.depth", (0x8000, 0x8C00));
     patch_of(&track)
+}
+
+/// Marbles' Déjà vu knob on macro 1 of a track whose `Mod 4` is Steps, turned to `value`: its
+/// left half, `00` to `7F`, turns `Mutate` from `100%` down to `0%`, new values to a locked loop,
+/// and its right half, `80` to `FF`, turns `Jump` from `0%` up to `100%`, the loop played out of
+/// order, more often as it turns, every step at full.
+fn deja_vu_knob(track: &mut Track, value: u16) {
+    let map = |key: &str, ends: (u16, u16), zone: (u8, u8)| MacroMap {
+        target: MacroTarget::Setting(SettingId::from_key(key).unwrap()),
+        min: ends.0,
+        max: ends.1,
+        curve: 0,
+        s: 0,
+        zone: Zone::new(zone.0, zone.1).unwrap(),
+    };
+    let held = &mut track.macros[0];
+    held.name = Some("Deja vu".to_owned());
+    held.value = value;
+    held.maps = vec![
+        map("mod4.mutate", (0x6400, 0x0000), (0x00, 0x7F)),
+        map("mod4.jump", (0x0000, 0x6400), (0x80, 0xFF)),
+    ];
 }
 
 /// Kria: the pitch loop and the octave loop, `Steps` slots in `Free`, each with its loop's

@@ -64,6 +64,14 @@ note, an FX value only on steps with a command, and `.` repeats it. The
 selection comes back afterwards, so another `r` picks again, and `Esc` at its
 prompt comes back to it too. The running total starts again after a fill.
 
+With rows of one column selected with `v`, a note, a velocity, a nudge, a gate's length or an FX
+value that's an amount, its values show as bars beside it, as the shape panel shows them (see
+**Shaping a column**): each row's value now solid, and what it was when the selection started
+behind it, so a run of `+ + -` or a fill with `r` shows how far it has moved things. Above them
+are the column's name and range and the lowest, highest and average now, with after `±` how many
+rows changed. A gate's type, an FX command's name or a selection over several columns has none.
+They go when the selection does.
+
 ## Across tracks
 
 In `v` or `V`, `W` and `B` reach other tracks, so `VGWWW` covers a whole drum

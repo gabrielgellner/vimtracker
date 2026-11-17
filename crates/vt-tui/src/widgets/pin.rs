@@ -182,3 +182,41 @@ pub(crate) fn press(app: &mut App, keys: &str) {
 pub(crate) fn special(app: &mut App, code: KeyCode) {
     app.key(Key::new(code), Instant::now());
 }
+
+/// An app on one track whose phrase is these steps, as the steps write them.
+pub(crate) fn app_on(steps: &[&str]) -> App {
+    let mut song = Song::new(1);
+    let steps: Vec<vt_model::step::Step> = steps.iter().map(|step| step.parse().unwrap()).collect();
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(vt_model::song::Phrase::from_steps(steps)));
+    app_with(song).0
+}
+
+/// Keys typed, a space being the leader, with `<Enter>` and `<Esc>` for those keys.
+pub(crate) fn keys(app: &mut App, text: &str) {
+    let mut rest = text;
+    while !rest.is_empty() {
+        if let Some(tail) = rest.strip_prefix("<Enter>") {
+            special(app, KeyCode::Enter);
+            rest = tail;
+        } else if let Some(tail) = rest.strip_prefix("<Esc>") {
+            special(app, KeyCode::Esc);
+            rest = tail;
+        } else {
+            let c = rest.chars().next().unwrap();
+            press(app, &c.to_string());
+            rest = &rest[c.len_utf8()..];
+        }
+    }
+}
+
+/// The whole screen as it's drawn, this big.
+pub(crate) fn screen(app: &mut App, width: u16, height: u16) -> Buffer {
+    let mut terminal =
+        ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|frame| crate::run::draw_screen(frame, app, None, Instant::now()))
+        .unwrap();
+    terminal.backend().buffer().clone()
+}

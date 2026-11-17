@@ -40,7 +40,7 @@ use crate::pages::sample::draw::WaveOnScreen;
 use crate::services::audio::{self, AudioChoice, AudioError, AudioStats, Input, Output};
 use crate::services::config::Settings;
 use crate::widgets::theme;
-use crate::widgets::value_bars::Beside;
+use crate::widgets::value_bars::{Beside, Side};
 
 /// Why the program stopped with an error.
 #[derive(Debug, Error)]
@@ -746,6 +746,21 @@ pub fn draw_screen(
         let mut macros = std::mem::take(&mut app.overlays.macro_panel);
         macros.draw(frame, panel, &app.ctx());
         app.overlays.macro_panel = macros;
+    }
+    // A column selected in a Visual mode has its bars beside it, as the shape panel's has.
+    if let Some(bars) = app.selection_bars() {
+        let ctx = app.ctx();
+        let beside = Beside {
+            area: view,
+            column: crate::pages::phrase::draw::column_cells(bars.column),
+            lines: crate::pages::phrase::draw::rows_on_screen(&ctx, &app.phrase_view, view),
+        };
+        let at = beside
+            .place(&bars, Side::Right)
+            .or_else(|| beside.place(&bars, Side::Left));
+        if let Some(at) = at {
+            beside.draw(frame.buffer_mut(), &bars, at);
+        }
     }
     // An overlay may keep something of how it was drawn, so each is lent apart from the rest.
     // A guide keeps how many of its rows fit, which its keys go by, open or not.
