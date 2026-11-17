@@ -1071,3 +1071,76 @@ fn the_keys_of_the_shape_panel_are_in_the_binding_table() {
         assert!(rows.iter().any(|line| line.contains(row)), "{row}");
     }
 }
+
+/// The gutter's mark column on each of the 16 rows: `·` where `Left` or `Right` lands.
+fn grid_marks(app: &App) -> String {
+    let buffer = screen(app);
+    (0..16)
+        .map(|step| match buffer[(7, step + 2)].symbol() {
+            "·" => '·',
+            _ => '-',
+        })
+        .collect()
+}
+
+#[test]
+fn insert_marks_the_rows_a_grid_step_away_forward_and_back_and_where_the_ends_stop() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "set skip=4");
+    press(&mut app, "6j");
+    assert_eq!(grid_marks(&app), "----------------", "nothing outside Insert");
+    press(&mut app, "i");
+    // From 06: 02 back, 0A and 0E on, and 00 and 0F, where the cursor stops at the ends.
+    assert_eq!(grid_marks(&app), "·-·-------·---··");
+    let buffer = screen(&app);
+    assert_eq!(
+        buffer[(7, 4)].fg,
+        vt_tui::widgets::theme::dimmed(vt_tui::widgets::theme::GREEN)
+    );
+    assert_eq!(
+        buffer[(4, 4)].fg,
+        vt_tui::widgets::theme::SUBTEXT1,
+        "the row number keeps its colour"
+    );
+    // Each mark is where `Right` goes, and they follow the cursor.
+    special(&mut app, KeyCode::Right);
+    assert_eq!(app.services.cursor.step, 0xA);
+    assert_eq!(grid_marks(&app), "·-·---·-------··");
+    special(&mut app, KeyCode::Right);
+    special(&mut app, KeyCode::Right);
+    assert_eq!(app.services.cursor.step, 0xF, "stopped at the last row");
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(grid_marks(&app), "----------------");
+}
+
+#[test]
+fn a_grid_of_a_step_marks_nothing_and_an_odd_grid_marks_its_own_rows() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "set skip=1");
+    press(&mut app, "5ji");
+    assert_eq!(
+        grid_marks(&app),
+        "----------------",
+        "every row would be, so none is"
+    );
+    special(&mut app, KeyCode::Esc);
+    // Three steps, which doesn't divide the 16 rows.
+    command(&mut app, "set skip=3");
+    press(&mut app, "i");
+    assert_eq!(grid_marks(&app), "·-·-----·--·--··");
+}
+
+#[test]
+fn the_marks_follow_the_grid_as_it_changes() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "set skip=4");
+    press(&mut app, "2ji");
+    assert_eq!(grid_marks(&app), "·-----·---·---··");
+    alt(&mut app, "M-2");
+    assert_eq!(app.song().skip, 8);
+    assert_eq!(grid_marks(&app), "·---------·----·");
+    alt(&mut app, "M-1");
+    alt(&mut app, "M-1");
+    assert_eq!(app.song().skip, 2);
+    assert_eq!(grid_marks(&app), "·---·-·-·-·-·-··");
+}
