@@ -631,6 +631,19 @@ impl App {
     }
 
     /// The guide for the page or view showing, which `Space ?` opens the list of guides on.
+    /// Open the guide at the shape panel's fill, coming back to the panel when it closes. A fill
+    /// without a section of its own opens at **Shaping a column**, and the status line says so.
+    fn show_fill_guide(&mut self, fill: vt_model::shape::FillKind) {
+        let (guide, heading, own) = guides::for_fill(fill.name());
+        self.overlays.guide.show_at(guide, heading);
+        self.services.status = if own {
+            String::new()
+        } else {
+            format!("{} has no section of its own: {heading}", fill.name())
+        };
+        self.modes.mode = Mode::Guide;
+    }
+
     fn guide_here(&self) -> guides::Guide {
         guides::for_view(self.modes.view, self.track_page.page)
     }
@@ -680,7 +693,10 @@ impl App {
                 self.overlays.help = Help::over(self.help_rows());
                 self.modes.mode = Mode::Help;
             }
-            Cmd::Guides => self.show_picker(guides::picker(self.guide_here())),
+            Cmd::Guides => match &self.overlays.shape {
+                Some(panel) => self.show_fill_guide(panel.shape.kind),
+                None => self.show_picker(guides::picker(self.guide_here())),
+            },
             Cmd::ToggleMacroPanel => self.toggle_macro_panel(),
             Cmd::FocusMacroPanel => self.focus_macro_panel(),
             Cmd::ToggleDescription => self.overlays.describing = !self.overlays.describing,

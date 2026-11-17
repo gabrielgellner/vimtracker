@@ -61,6 +61,20 @@ impl GuideView {
         self.open = Some(guide);
         self.scroll = 0;
     }
+
+    /// Open a guide at a heading, or at its top if it has none by that title. Whether it had one.
+    pub(crate) fn show_at(&mut self, guide: Guide, heading: &str) -> bool {
+        self.show(guide);
+        let lines = guide.lines(self.width);
+        let Some(at) = lines.iter().position(|line| {
+            line.style == self::heading(theme::BLUE)
+                && line.spans.iter().map(|span| &*span.content).eq([heading])
+        }) else {
+            return false;
+        };
+        self.scroll = at.min(lines.len().saturating_sub(self.page));
+        true
+    }
 }
 
 impl Overlay for GuideView {
@@ -222,6 +236,16 @@ pub(crate) fn picker(on: Guide) -> Picker {
     Picker::new("Guides", items).revealing(GUIDES.iter().position(|guide| *guide == on))
 }
 
+/// The guide for the shape panel's fill, and the heading to open it at: the fill's own section
+/// in **Generators in depth**, or for a fill without one **Shaping a column**. Whether it had one.
+pub(crate) fn for_fill(fill: &str) -> (Guide, &str, bool) {
+    if GENERATORS.has_heading(fill) {
+        (GENERATORS, fill, true)
+    } else {
+        (EDITING, "Shaping a column", false)
+    }
+}
+
 /// The guide for where the program is: the track page's own for each of its pages, the one
 /// with the mixer, the project page or the sample page in it, and on the phrase view the moves.
 pub(crate) fn for_view(view: View, page: Page) -> Guide {
@@ -242,6 +266,15 @@ pub(crate) fn for_view(view: View, page: Page) -> Guide {
 }
 
 impl Guide {
+    /// Whether a `##` or `###` heading has this title.
+    fn has_heading(self, title: &str) -> bool {
+        self.source.lines().any(|line| {
+            line.strip_prefix("## ")
+                .or_else(|| line.strip_prefix("### "))
+                .is_some_and(|heading| heading == title)
+        })
+    }
+
     /// The first heading.
     pub fn title(self) -> &'static str {
         self.source

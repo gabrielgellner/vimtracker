@@ -446,7 +446,8 @@ impl App {
                 }
                 Mode::Guide => {
                     self.overlays.guide.open = None;
-                    self.modes.mode = Mode::Normal;
+                    // Back to the shape panel, if it opened the guide or the list.
+                    self.modes.mode = self.mode_after_picker();
                 }
                 Mode::Command => self.modes.mode = Mode::Normal,
                 Mode::Jump => {

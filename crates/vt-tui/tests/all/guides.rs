@@ -181,9 +181,74 @@ fn the_space_popup_is_wide_enough_for_every_description() {
 fn the_keys_of_help_and_of_a_guide_are_in_the_binding_table() {
     let (app, _realtime) = app();
     let help = app.help_rows();
-    for (mode, row) in [("Help", "Scroll down"), ("Guide", "The list of guides")] {
+    for (mode, row) in [
+        ("Help", "Scroll down"),
+        ("Guide", "The list of guides"),
+        ("Shape", "The guide, at the fill's section"),
+    ] {
         let at = help.iter().position(|line| line == mode).unwrap();
         let rows = help[at + 1..].iter().take_while(|line| !line.is_empty());
         assert!(rows.clone().any(|line| line.contains(row)), "{mode}");
     }
+}
+
+/// The heading at the top of the open guide.
+fn guide_top(app: &vt_tui::app::App) -> String {
+    let view = &app.overlays.guide;
+    let line = &view.open.unwrap().lines(view.width)[view.scroll];
+    line.spans.iter().map(|span| &*span.content).collect()
+}
+
+#[test]
+fn space_question_in_the_shape_panel_opens_at_the_fills_section() {
+    for fill in ["Random", "Grids", "Acid", "Tonnetz"] {
+        let (mut app, _realtime) = app_with(&["--- -- --- --- ---"; 8]);
+        keys(&mut app, &format!("vGSK/{}<Enter>", fill.to_lowercase()));
+        let kind = app.overlays.shape.as_ref().unwrap().shape.kind;
+        assert_eq!(kind.name(), fill);
+        keys(&mut app, " ?");
+        assert_eq!(app.modes.mode, Mode::Guide);
+        assert_eq!(
+            app.overlays.guide.open.map(|g| g.title()),
+            Some("Generators in depth")
+        );
+        assert_eq!(guide_top(&app), fill);
+        assert_eq!(app.services.status, "");
+    }
+}
+
+#[test]
+fn a_fill_without_a_section_opens_at_shaping_a_column() {
+    let (mut app, _realtime) = app_with(&["--- -- --- --- ---"; 8]);
+    keys(&mut app, "vGS");
+    let kind = app.overlays.shape.as_ref().unwrap().shape.kind;
+    assert_eq!(kind.name(), "Ramp");
+    keys(&mut app, " ?");
+    assert_eq!(
+        app.overlays.guide.open.map(|g| g.title()),
+        Some("Selecting and editing")
+    );
+    assert_eq!(guide_top(&app), "Shaping a column");
+    assert_eq!(
+        app.services.status,
+        "Ramp has no section of its own: Shaping a column"
+    );
+}
+
+#[test]
+fn closing_the_fills_guide_comes_back_to_the_shape_panel_as_it_was() {
+    let (mut app, _realtime) = app_with(&["--- -- --- --- ---"; 8]);
+    keys(&mut app, "vGSK/random<Enter>jj=r");
+    let panel = format!("{:?}", app.overlays.shape);
+    let drawn = shape_panel(&app, 52, 16);
+    let song = app.services.history.current().clone();
+    keys(&mut app, " ?jj<Esc>");
+    assert_eq!(app.modes.mode, Mode::Shape);
+    assert_eq!(format!("{:?}", app.overlays.shape), panel);
+    assert_eq!(shape_panel(&app, 52, 16), drawn);
+    assert_eq!(app.services.history.current(), &song, "the preview stays");
+    // `?` in the guide, then `Esc` from the list, comes back to it too.
+    keys(&mut app, " ??<Esc>");
+    assert_eq!(app.modes.mode, Mode::Shape);
+    assert_eq!(format!("{:?}", app.overlays.shape), panel);
 }
