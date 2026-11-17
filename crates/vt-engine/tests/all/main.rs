@@ -18,6 +18,7 @@ mod compressors;
 mod conditions;
 mod dice_loop;
 mod echo;
+mod effect_types;
 mod engine;
 mod envelope;
 mod exciter;

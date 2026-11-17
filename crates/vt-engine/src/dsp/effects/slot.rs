@@ -6,7 +6,7 @@
 //! description in the model, so an effect with a long buffer that the slot rings needs nothing
 //! here.
 
-use vt_model::constants::{MAX_TRACKS, UNITY_LEVEL};
+use vt_model::constants::{CUT_FADE_FRAMES, MAX_TRACKS, UNITY_LEVEL};
 use vt_model::insert::{Distort, DistortType, EffectKind, Insert, Place, Shown, Warps};
 use vt_model::settings::Entry;
 use vt_model::song::level_gain;
@@ -494,6 +494,30 @@ pub struct InsertState {
     /// The generator an effect that draws random numbers starts from, from the track's seed, so
     /// a song renders the same each time: Clouds' and Beads' grains.
     rng: Pcg32,
+    /// A distortion of the type it was in, fading out under the new one's start, while a sound
+    /// goes through it (decision 414).
+    leaving: Option<Leaving>,
+}
+
+/// A distortion fading out as the slot's changes type: what it kept, how it was set, how hard it
+/// drove, and how many frames of its fade are left. The new type starts afresh, so its filters'
+/// and oversampling's empty start and the jump from one shape to the other are under the fade.
+#[derive(Debug, Clone, Copy)]
+struct Leaving {
+    distortion: Distortion,
+    settings: Distort,
+    amount: f32,
+    left: u32,
+}
+
+impl Leaving {
+    /// How much of the old type is heard, as far into the fade as it is: half a cosine over
+    /// [`CUT_FADE_FRAMES`], flat at both ends, the new type rising as it falls, so the two always
+    /// add to the whole of what they share.
+    fn share(&self) -> f32 {
+        let into = 1.0 - self.left as f32 / CUT_FADE_FRAMES as f32;
+        0.5 * (1.0 + (std::f32::consts::PI * into).cos())
+    }
 }
 
 impl Default for InsertState {
@@ -509,6 +533,7 @@ impl Default for InsertState {
             on: Smoothed::at(1.0),
             note: DEFAULT_NOTE,
             rng: Pcg32::new(0, 0),
+            leaving: None,
         }
     }
 }
@@ -630,8 +655,21 @@ impl InsertState {
             level_gain(f32::from(gain)),
         );
         if fresh {
+            // A distortion changing type as it works fades the old type out under the new.
+            let leaving = match (&self.kept, self.insert, insert) {
+                (Kept::Distort(distortion), Insert::Distort(settings), Insert::Distort(_)) => {
+                    Some(Leaving {
+                        distortion: *distortion,
+                        settings,
+                        amount: self.amount.value,
+                        left: CUT_FADE_FRAMES,
+                    })
+                }
+                _ => None,
+            };
             let (on, note, rng) = (self.on, self.note, self.rng);
             *self = Self::default();
+            self.leaving = leaving;
             self.on = on;
             self.note = note;
             self.rng = rng;
@@ -711,7 +749,11 @@ impl InsertState {
             );
         let buffer_working =
             Memory::kept_by(self.insert) && (input != [0.0, 0.0] || self.ringing(rate));
-        if !self.on.value.same_bits(&self.on.target) || moves_by_itself || buffer_working {
+        if !self.on.value.same_bits(&self.on.target)
+            || moves_by_itself
+            || buffer_working
+            || self.leaving.is_some()
+        {
             return None;
         }
         // An empty slot keeps nothing, so there's nothing to try.
@@ -738,6 +780,7 @@ impl InsertState {
             on,
             note,
             rng,
+            leaving,
         } = self;
         Self {
             memory: None,
@@ -750,6 +793,7 @@ impl InsertState {
             on: *on,
             note: *note,
             rng: *rng,
+            leaving: *leaving,
         }
     }
 
@@ -909,6 +953,7 @@ impl InsertState {
     /// step. An effect in the pool jumps all of its `settle` too as it's taken from the pool,
     /// with its buffer empty, and a resonator, comb or frequency shifter as it wakes.
     pub fn settle(&mut self) {
+        self.leaving = None;
         self.on.settle();
         self.amount.settle();
         self.mix.settle();
@@ -1094,8 +1139,25 @@ impl InsertState {
                     return input;
                 };
                 let amount = self.amount.next(smoothing);
-                let wet =
+                let mut wet =
                     distort.process(input, same, settings, amount, self.note, smoothing, rate);
+                if let Some(leaving) = &mut self.leaving {
+                    let old = leaving.distortion.process(
+                        input,
+                        same,
+                        leaving.settings,
+                        leaving.amount,
+                        self.note,
+                        smoothing,
+                        rate,
+                    );
+                    leaving.left -= 1;
+                    let share = leaving.share();
+                    wet = [0, 1].map(|side| wet[side] + (old[side] - wet[side]) * share);
+                    if leaving.left == 0 {
+                        self.leaving = None;
+                    }
+                }
                 (wet, input)
             }
         };
