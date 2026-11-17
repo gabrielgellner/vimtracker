@@ -493,7 +493,7 @@ fn a_jump_replays_the_values_mutate_locked() {
     for (cut, step) in &lap {
         drawn[usize::from(*step)] = *cut;
     }
-    let mut locked = drifting.clone();
+    let mut locked = drifting;
     locked.tracks[0].mods[2].steps.mutate = 0;
     locked.tracks[0].mods[2].steps.jump = 100;
     engine.swap(version(&locked));

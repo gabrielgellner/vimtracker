@@ -406,7 +406,7 @@ so its values are heard as written.
 |---|---|
 | Mode | In the title: `Trig`, `Free` or `Note`, below |
 | Loop | In the title: what it does at its end, below |
-| Jump | In the title: the chance each step is any of its steps instead, `0%` to `100%` |
+| Jump | In the title: the chance each step is any step, `0%` to `100%` |
 | Dest | In the title: what it moves, such as `Pitch`, or `---` |
 | Rate | How long each step lasts: `Tick`, `1/64` to `1 bar`, or `Pass` |
 | Length | How many steps it plays, from 1 to 16 |
