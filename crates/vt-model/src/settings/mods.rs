@@ -2,8 +2,8 @@
 //! macro's, the accumulator's and the arpeggio's.
 
 use super::{Entry, Kind, Place, Units};
-use crate::accumulator::MOST_DEGREES;
-use crate::arpeggio::{ArpRate, MOST_OCTAVES};
+use crate::accumulator::{Adds, AtLimit, MOST_DEGREES, Reset};
+use crate::arpeggio::{ArpMode, ArpRate, MOST_OCTAVES};
 use crate::envelope::{Curve, MAX_RATCHET};
 use crate::lfo::{LfoMode, Shape};
 use crate::macros::MACROS;
@@ -309,7 +309,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
     },
 ];
 
-/// A list of a mod slot's type's own that a step can lock, by its names.
+/// A list a step can lock, by its names: a mod slot's type's own, or the accumulator's or arpeggio's.
 const fn listed(
     key: &'static str,
     name: &'static str,
@@ -368,7 +368,7 @@ pub(crate) const FADE_NAMES: [&str; 45] = [
 ];
 
 /// The accumulator's settings a macro or modulation can move: how far up and down it goes.
-pub(super) const ACCUMULATION: [Entry; 2] = [
+pub(super) const ACCUMULATION: [Entry; 5] = [
     Entry {
         meaning: "how far above the note as written the accumulator can go",
         key: "up",
@@ -393,6 +393,24 @@ pub(super) const ACCUMULATION: [Entry; 2] = [
         default: 0,
         place: Place::Own,
     },
+    // Its lists, which a step can lock as well (decision 413).
+    listed("atlimit", "Limit", "ALIM", &AT_LIMIT_NAMES, 0)
+        .means("what the accumulator does at one of its limits"),
+    listed("adds", "Adds", "AADD", &ADDS_NAMES, 0)
+        .means("when an ACU adds: each time its row plays, each pulse or each hit"),
+    listed("reset", "Reset", "ARST", &RESET_NAMES, 0)
+        .means("when the track's accumulators go back to the notes as written"),
+];
+
+const AT_LIMIT_NAMES: [&str; AtLimit::ALL.len()] = names!(AtLimit);
+const ADDS_NAMES: [&str; Adds::ALL.len()] = names!(Adds);
+const ARP_MODE_NAMES: [&str; ArpMode::ALL.len()] = names!(ArpMode);
+
+/// The accumulator's resets, in [`Reset::all`](crate::accumulator::Reset::all)'s order.
+const RESET_NAMES: [&str; Reset::COUNT] = [
+    "Chain", "Play", "1 loop", "2 loops", "3 loops", "4 loops", "5 loops", "6 loops", "7 loops",
+    "8 loops", "9 loops", "10 loops", "11 loops", "12 loops", "13 loops", "14 loops", "15 loops",
+    "16 loops",
 ];
 
 /// The arpeggio's rates' names, in [`ArpRate::ALL`]'s order.
@@ -407,7 +425,7 @@ const ARP_RATE_NAMES: [&str; ArpRate::ALL.len()] = {
 };
 
 /// The arpeggio's settings a macro or modulation can move: how fast and over how many octaves.
-pub(super) const ARPEGGIO: [Entry; 2] = [
+pub(super) const ARPEGGIO: [Entry; 3] = [
     Entry {
         meaning: "how fast the arpeggio plays its notes",
         key: "rate",
@@ -432,4 +450,5 @@ pub(super) const ARPEGGIO: [Entry; 2] = [
         default: 0,
         place: Place::Own,
     },
+    listed("mode", "Mode", "AMOD", &ARP_MODE_NAMES, 0).means(super::meanings::ARPEGGIO_MODE),
 ];

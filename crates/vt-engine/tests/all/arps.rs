@@ -244,6 +244,26 @@ fn the_modes_go_round_in_their_orders() {
     );
 }
 
+/// `Mode` locked on a row goes round in that order on that row only (decision 413), and a render
+/// with it locked to `Random` repeats.
+#[test]
+fn a_mode_lock_is_heard_on_its_row_only() {
+    let rows = ["C-3 -- arp:47 arp.mode:01", "C-3 -- arp:47"];
+    let song = song(&rows, with(ArpRate::Tick, ArpMode::Up, 1));
+    assert_eq!(notes(&song, TICK, 12), named("G E C G E C  C E G C E G"));
+    let random = song_random();
+    support::repeats("random lock", || {
+        render_frames(version(&random), RATE, 8 * STEP)
+    });
+}
+
+fn song_random() -> Song {
+    song(
+        &["C-3 -- arp:47 arp.mode:04", "E-3 -- arp:37"],
+        with(ArpRate::Tick, ArpMode::Up, 2),
+    )
+}
+
 #[test]
 fn random_plays_any_of_its_notes_and_a_render_repeats() {
     let song = song(

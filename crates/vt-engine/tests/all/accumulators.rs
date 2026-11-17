@@ -8,7 +8,9 @@ use std::sync::Arc;
 use vt_engine::engine::Engine;
 use vt_engine::render::render_frames;
 use vt_model::accumulator::{Accumulation, Adds, AtLimit, Moves, Reset};
+use vt_model::macros::{MacroMap, MacroTarget};
 use vt_model::scale::{Scale, ScaleKind};
+use vt_model::settings::SettingId;
 use vt_model::song::{Chain, ChainEntry, Phrase, Song};
 
 use crate::support;
@@ -482,4 +484,72 @@ fn renders_with_accumulators_repeat() {
             }
         }
     }
+}
+
+/// `At limit` locked on a row is heard on that row's walk only (decision 413): the locked row
+/// holds at the limit while the row after it, written to wrap, carries on wrapping.
+#[test]
+fn an_at_limit_lock_holds_its_row_only() {
+    let rows = ["C-3 -- acu:01 acu.atlimit:04", "C-3 -- acu:01"];
+    let song = song(&rows, with(Moves::Row, AtLimit::Wrap, 1, 7));
+    assert_eq!(notes(&song, 8), named("C C D D D C D D"));
+}
+
+/// `Adds` locked to `Pulse` adds on each pulse of its row's `MLT`, and the next row, written to
+/// add once a row, does.
+#[test]
+fn an_adds_lock_adds_each_pulse_on_its_row_only() {
+    let rows = ["C-3 -- MLT4 acu:01 acu.adds:01", "C-3 -- MLT4 acu:01"];
+    let song = song(&rows, Accumulation::default());
+    assert_eq!(
+        notes(&song, 16),
+        named("C D E F  C C C C  G A B C4  D D D D")
+    );
+}
+
+/// `Reset` locked on a row is heard as the track written that way.
+#[test]
+fn a_reset_lock_is_heard_as_the_setting_written() {
+    let mut locked = song(&["C-3 -- acu:01 acu.reset:01"], Accumulation::default());
+    locked.sections[0].reset = Some(3);
+    assert_eq!(notes(&locked, 7), named("C D E F G A B"));
+    let two = song(
+        &["C-3 -- acu:01 acu.reset:03", "--- --"],
+        Accumulation::default(),
+    );
+    assert_eq!(notes(&two, 10), named("C . D . C . D . C ."));
+}
+
+/// A macro on `At limit` steps through its choices, a zone each, as it's turned, and a row that
+/// turns it to `Hold` holds at the limit.
+#[test]
+fn a_macro_sweeps_through_the_choices() {
+    let at_limit = SettingId::accumulation(2).unwrap();
+    let map = MacroMap::whole(MacroTarget::Setting(at_limit));
+    let mut placed: Vec<AtLimit> = (0..=255u8)
+        .map(|turn| {
+            let mut heard = Accumulation::default();
+            heard.set_own(2, f32::from(map.at(f32::from(turn))) / 256.0);
+            heard.at_limit
+        })
+        .collect();
+    placed.dedup();
+    assert_eq!(placed, AtLimit::ALL);
+    let mut song = song(
+        &["C-3 -- acu:01 macro1:A0"],
+        with(Moves::Row, AtLimit::Wrap, 1, 7),
+    );
+    song.tracks[0].macros[0].maps.push(map);
+    assert_eq!(notes(&song, 5), named("C D D D D"));
+}
+
+#[test]
+fn renders_with_locked_lists_repeat() {
+    let rows = [
+        "C-3 -- acu:01 acu.atlimit:06",
+        "E-3 -- MLT2 acu:FE acu.adds:02",
+        "G-3 -- acu:03 acu.reset:04",
+    ];
+    let song = song(&rows, Accumulation::default());
+    support::repeats("locked", || render_frames(version(&song), RATE, 12 * STEP));
 }
