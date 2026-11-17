@@ -72,6 +72,7 @@ mod sampler_reverse;
 mod section_loops;
 mod sections;
 mod slices;
+mod slides;
 mod slowdown;
 mod spans;
 mod speed;

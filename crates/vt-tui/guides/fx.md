@@ -242,6 +242,7 @@ These have no mark.
 | `ACU` | Move the row's note on each time it plays: see **Accumulators** |
 | `ARP` | Go round the note, `x` up and `y` up: see **Arpeggios** |
 | `RND` | Vary the note, or the lock to its left, by chance: see **Variations** |
+| `SLD` | Slide the row's locks to the next note's values: see **Slides** |
 
 A unit is a sixth of a step, so `DEL03` delays by half a step. The step is the
 track's own, so on a track at `1/8` it's half an eighth. They count from where
@@ -257,6 +258,31 @@ an even step in dB. It moves the level of each hit, not its velocity, and an
 Use `:seed 3A9F12C4` to choose which results `CHA` and `RND` give, or `:seed` alone
 for a new one at random, as one undo step. The seed is hex, as the project page
 shows it, in either case, so `:seed 42` is `0x42`.
+
+## Slides
+
+`SLD 01` makes its row's locks slide rather than jump, as the Analog Four's
+parameter slide does. Each one starts at its value as the row plays and arrives at
+the value the next note will have just as that note starts. So `CUT 40 SLD 01` on
+one note and `CUT C0` four rows on sweeps the filter up over the four rows. `SLD 00`
+is off.
+
+Where the next note has no lock of a setting, the slide goes back to the track's
+own value, where a lock would return. Where the next note locks a setting this row
+doesn't, it slides in from where it is now, so `SLD 01` alone on a row glides into
+the next note's locks. A row with no note on the way that locks the setting is where
+that setting's slide ends, as its lock is the next change.
+
+Only settings that sweep slide: a list or a switch, like `FTYP` or `KTRK`, jumps as
+it would. A value marked hold or glide keeps its own mark. A thinned or failed `CHA`
+row still slides, as its locks still run; a failed `CND` skips them, and its `SLD`
+with them. The slide reads ahead through the phrase as it's playing, wrapping round
+its loop, and lands where it was aimed if the next note is skipped or a window turns
+under it. With `Cue` on, a turned window waits for the loop, so the rows it reads
+ahead are the rows that play. A column with a lane of its own isn't read ahead, and
+its value jumps as its row plays.
+
+A `MAC` lock slides too, and moves what its macro holds along with it.
 
 ## Conditions
 

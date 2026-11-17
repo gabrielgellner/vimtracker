@@ -17,11 +17,13 @@ use super::TrackState;
 use super::mods::SongTime;
 use super::shaping::pan_position;
 
-/// A value moving in a straight line, by song position, so it keeps up with tempo changes.
+/// A value moving in a straight line, by song position, so it keeps up with tempo changes: to a
+/// step's value, or, for a slide to a note with no lock of its own, to the base, wherever that is
+/// as it moves (decision 417).
 #[derive(Debug, Clone, Copy)]
 struct Glide {
     from: u16,
-    to: FxSlot,
+    to: Option<FxSlot>,
     start_tick: f64,
     ticks: f64,
 }
@@ -377,12 +379,56 @@ impl TrackState {
             layers.lock = None;
             layers.glide = Some(Glide {
                 from: value,
-                to,
+                to: Some(to),
                 start_tick: now.tick,
                 ticks,
             });
             self.gliding += 1;
         }
+    }
+
+    /// Slide a value over `ticks` from `from` to `to`, or to the base with none, as a row's
+    /// `SLD` slides it to where it next changes (decision 417). With `lock`, `from` is the row's
+    /// own lock, run as one first; without, the value slides from where it's heard, toward the
+    /// next note's lock, and one gliding already is left to its glide.
+    pub(crate) fn start_slide(
+        &mut self,
+        id: SettingId,
+        from: Option<u16>,
+        to: Option<FxSlot>,
+        ticks: f64,
+        now: SongTime,
+    ) {
+        let from = match from {
+            Some(value) => {
+                self.set_value(id, value, Mark::Lock);
+                value
+            }
+            None => {
+                let layers = self.values[id.index()];
+                if layers.glide.is_some() {
+                    return;
+                }
+                self.wake();
+                self.own_stepped |= id.is_mod_own();
+                if let Some(fader) = id.fader() {
+                    self.faders[fader].automated = true;
+                }
+                layers.lock.unwrap_or(layers.base)
+            }
+        };
+        if ticks <= 0.0 {
+            return;
+        }
+        let layers = &mut self.values[id.index()];
+        layers.lock = None;
+        layers.glide = Some(Glide {
+            from,
+            to,
+            start_tick: now.tick,
+            ticks,
+        });
+        self.gliding += 1;
     }
 
     /// A note has started, so the locks it would have outlived are over. Glides carry on.
@@ -434,16 +480,23 @@ impl TrackState {
                 continue;
             };
             let progress = (now.tick - glide.start_tick) / glide.ticks;
+            let base = self.values[id.index()].base;
             if progress < 1.0 {
-                let (from, to) = (scaled(glide.from), scaled(glide.to.value));
+                let to = glide.to.map_or(base, |to| to.value);
+                let (from, to) = (scaled(glide.from), scaled(to));
                 self.hear(id, from + (to - from) * progress.max(0.0) as f32);
-            } else {
+            } else if let Some(to) = glide.to {
                 // Its row hasn't run, as a chain moved on, so this takes that row's place.
-                let mark = match glide.to.mark {
+                let mark = match to.mark {
                     Mark::Hold => Mark::Hold,
                     Mark::Lock | Mark::Glide => Mark::Lock,
                 };
-                self.set_value(id, glide.to.value, mark);
+                self.set_value(id, to.value, mark);
+            } else {
+                // A slide back to the base has arrived, as the note it slid to ends the lock.
+                self.values[id.index()].glide = None;
+                self.gliding -= 1;
+                self.hear(id, scaled(base));
             }
         }
     }
