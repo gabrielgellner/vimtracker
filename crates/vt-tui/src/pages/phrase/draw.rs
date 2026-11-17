@@ -684,7 +684,7 @@ fn grid_reaches(cursor: usize, skip: usize, rows: usize, index: usize) -> bool {
     if skip <= 1 || index == cursor || index >= rows {
         return false;
     }
-    index.abs_diff(cursor) % skip == 0 || index == 0 || index == rows - 1
+    index.abs_diff(cursor).is_multiple_of(skip) || index == 0 || index == rows - 1
 }
 
 /// A row's number. Row `00` is the loop's first step, and rows above it are negative.
