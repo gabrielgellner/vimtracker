@@ -779,7 +779,8 @@ const MASTER_OUTPUT: DeviceLayout = stored(
 /// how much louder or softer than written its notes play, a live dynamics knob. How near the grid
 /// its rows' nudges play, `Quantise`, past eight knobs, is on a second page, a live timing knob,
 /// with how its notes join, `Mode`, which of them glide, `Glide mode`, how often its steps
-/// jump to any row, `Jump`, how far its rows' chances to play are moved, `Chance`,
+/// jump to any row, `Jump`, how far its rows' chances to play are moved, `Chance`, and whether
+/// they decide rows or pulses, `Target`,
 /// and its dice loop on a page of its own, `Dice`.
 const PLAY: DeviceLayout = live(
     "play",
@@ -793,7 +794,7 @@ const PLAY: DeviceLayout = live(
                 s("glidemode"),
                 s("jump"),
                 s("chance"),
-                __,
+                s("chancetarget"),
                 __,
                 __,
             ],
@@ -834,7 +835,7 @@ const PLAY_PAGE: Page<Setting> = knobs(
 );
 
 /// A synth's: the sampler's, with whether its oscillators start again on each note between
-/// `Quantise` and `Mode`, and `Glide mode`, `Jump` and `Chance` after,
+/// `Quantise` and `Mode`, and `Glide mode`, `Jump`, `Chance` and `Target` after,
 /// and the dice loop's page.
 const SYNTH_PLAY: DeviceLayout = live(
     "synthplay",
@@ -849,7 +850,7 @@ const SYNTH_PLAY: DeviceLayout = live(
                 s("glidemode"),
                 s("jump"),
                 s("chance"),
-                __,
+                s("chancetarget"),
                 __,
             ],
         ),

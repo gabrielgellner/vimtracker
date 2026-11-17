@@ -214,13 +214,16 @@ impl SettingId {
     /// How far every row's chance to play is moved up or down, `80` none, `00` never and `FF`
     /// always, as [`moved_chance`](super::moved_chance) gives it (decision 405).
     pub const CHANCE_DELTA: Self = Self(LATER_TRACK_START as u16 + 17);
+    /// What a row's chance decides: `0` the whole row, `1` each of its pulses and ratchets
+    /// (decision 406).
+    pub const CHANCE_TARGET: Self = Self(LATER_TRACK_START as u16 + 18);
     /// How many steps a track's dice loop over, `00` off, as [`crate::dice::DICE_LOOP_LENGTHS`]
     /// has them (decision 410).
-    pub const DICE_LOOP: Self = Self(LATER_TRACK_START as u16 + 18);
+    pub const DICE_LOOP: Self = Self(LATER_TRACK_START as u16 + 19);
     /// The chance a step of a track's dice loop rolls afresh as it comes round, `00` locked.
-    pub const DICE_MUTATE: Self = Self(LATER_TRACK_START as u16 + 19);
+    pub const DICE_MUTATE: Self = Self(LATER_TRACK_START as u16 + 20);
     /// The chance a step takes the dice of any step of its track's dice loop (decision 411).
-    pub const DICE_JUMP: Self = Self(LATER_TRACK_START as u16 + 20);
+    pub const DICE_JUMP: Self = Self(LATER_TRACK_START as u16 + 21);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.

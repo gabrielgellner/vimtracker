@@ -346,8 +346,12 @@ scales every chance down, rows with no `CHA` too, so `40` plays about half the
 notes; above it, it brings in the rows each `CHA` drops. It's where held
 `CDLT` starts, so a step's `CDLT` or a lane's replaces it and an LFO on `CDLT`
 moves around it, and on the Roto it's on the Play device's second page after
-`Jump`. See **Moving every chance** in **FX commands**.
-`Dice`, `Mutate` and `Dice jump`, after `Chance` in the Play device's title, are
+`Jump`. `Target`, after it, is whether that chance decides each row whole,
+`Row`, or each of a row's pulses and ratchet hits on its own, `Pulse`, as the
+Metropolix's probability can; it's where held `CTGT` starts.
+See **Moving every chance** in **FX commands**.
+
+`Dice`, `Mutate` and `Dice jump`, after `Target` in the Play device's title, are
 the track's dice loop, as Marbles' Déjà vu and Length are. `Dice`, the loop's
 length, is `Off`, or 1 to 16 steps, then 32 or 64: with it on, the `CHA`s and
 `RND`s of each step roll the dice of a place in a loop of that many steps,

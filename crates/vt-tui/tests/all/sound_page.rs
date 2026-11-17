@@ -111,7 +111,7 @@ fn the_four_devices_fill_the_page_and_the_keys_box_at_163_by_42() {
             assert_eq!(found[2].1, "Output");
             assert_eq!(
                 found[3].1,
-                "Play  Jump 00  Chance 80  Dice Off  Mutate 00  Dice jump 00"
+                "Play  Jump 00  Chance 80  Row  Dice Off  Mutate 00  Dice jump 00"
             );
             let bottom = top + 35;
             let line = lines[bottom].trim_start_matches(frame);
@@ -877,11 +877,11 @@ fn a_note_plays_relative_to_the_tune_the_sound_page_gives_its_sample() {
 /// The track's `Jump` is in the Play device's title: turned, described and mapped to a macro as
 /// any setting is (decision 391).
 #[test]
-fn the_play_devices_title_has_the_tracks_dice_loop_after_chance() {
+fn the_play_devices_title_has_the_tracks_dice_loop_after_its_chance() {
     use vt_model::action::TrackControl;
     let (mut app, _realtime) = playing(Machine::Plaits(SynthVoice::Acid));
-    // `Jump` and `Chance` have fine digits, which `l` goes onto first.
-    press(&mut app, "3}llll");
+    // `Jump` and `Chance` have fine digits, which `l` goes onto first, and `Target` is next.
+    press(&mut app, "3}lllll");
     assert_eq!(app.track_control(), Control::Base(TrackControl::DiceLoop));
     press(&mut app, "====");
     assert_eq!(app.song().tracks[0].dice_loop, 4);
@@ -948,6 +948,34 @@ fn the_play_devices_title_has_the_tracks_chance() {
     let held = app.song().tracks[0]
         .macro_holding(vt_model::macros::MacroTarget::Setting(
             SettingId::CHANCE_DELTA,
+        ))
+        .map(|(at, _)| at);
+    assert_eq!(held, Some(0));
+}
+
+/// The track's `Chance target` is in the Play device's title after `Chance`: a list of `Row` and
+/// `Pulse`, described and mapped to a macro as any setting is (decision 406).
+#[test]
+fn the_play_devices_title_has_the_tracks_chance_target() {
+    let (mut app, _realtime) = playing(Machine::Plaits(SynthVoice::Acid));
+    // Past `Jump`'s and `Chance`'s fine digits.
+    press(&mut app, "3}llll");
+    assert_eq!(
+        app.track_control(),
+        Control::Base(vt_model::action::TrackControl::ChanceTarget)
+    );
+    press(&mut app, "=");
+    assert_eq!(app.song().tracks[0].chance_target, 1);
+    press(&mut app, " d");
+    let said = vt_tui::screen::describe::text(&app).expect("a line");
+    assert!(said.contains("each of its pulses"), "{said}");
+    press(&mut app, " d");
+    press(&mut app, "-");
+    assert_eq!(app.song().tracks[0].chance_target, 0);
+    press(&mut app, "M1");
+    let held = app.song().tracks[0]
+        .macro_holding(vt_model::macros::MacroTarget::Setting(
+            SettingId::CHANCE_TARGET,
         ))
         .map(|(at, _)| at);
     assert_eq!(held, Some(0));

@@ -755,6 +755,14 @@ impl TrackState {
         own.unwrap_or(held) + self.moved_by(SettingId::CHANCE_DELTA)
     }
 
+    /// What a row's chance decides, as a place in `Chance target`'s choices: `own`, a lock of it
+    /// on the row, or what the track holds, under any lock a note on the row would end, with what
+    /// modulation adds (decision 406).
+    pub(crate) fn chance_target(&self, own: Option<f32>, locks_end: bool) -> f32 {
+        let held = f32::from(self.held_choice(SettingId::CHANCE_TARGET, locks_end));
+        own.unwrap_or(held) + self.moved_by(SettingId::CHANCE_TARGET)
+    }
+
     /// What modulation adds to the track's `Jump` now, on the `00` to `FF` scale.
     pub(crate) fn jump_moved(&self) -> f32 {
         self.offsets[SettingId::JUMP.index()] * 255.0

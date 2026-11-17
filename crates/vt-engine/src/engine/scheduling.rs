@@ -5,6 +5,7 @@ use vt_model::arpeggio::ArpMode;
 use vt_model::constants::{GROOVE_UNIT_TICKS, MAX_TRACKS, TICKS_PER_QUARTER, TICKS_PER_STEP};
 use vt_model::song::SynthVoice;
 use vt_model::step::{MAX_NOTE, MIN_NOTE};
+use vt_model::variation::kept;
 
 use crate::track_state::{Arpeggiating, PendingStep, Retrigger};
 use crate::voice::NoteOn;
@@ -220,7 +221,13 @@ impl Engine {
 
     fn fire_retrigger(&mut self, index: usize, retrigger: Retrigger) {
         let rate = self.rate;
-        let audible = self.plays(index);
+        let hits = retrigger.hits + 1;
+        // With `Chance target` on `Pulse`, each hit plays with its row's chance (decision 406).
+        let seed = self.current.song.seed;
+        let audible = self.plays(index)
+            && retrigger
+                .keep
+                .is_none_or(|(count, share)| kept(seed, index, count, hits, share));
         if self.tracks[index].last_note.is_some() {
             self.start_modulation(index);
         }
@@ -267,6 +274,7 @@ impl Engine {
         track.wake();
         track.retrigger = Some(Retrigger {
             next_at: retrigger.next_at + retrigger.interval,
+            hits,
             ..retrigger
         });
     }

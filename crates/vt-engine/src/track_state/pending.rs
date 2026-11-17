@@ -201,6 +201,11 @@ pub(crate) struct Retrigger {
     pub factor: f32,
     /// The row's accumulator, where each hit moves its note on.
     pub accumulates: Option<Accumulating>,
+    /// With `Chance target` on `Pulse`, the count its row played at and the share of the time
+    /// each hit plays (decision 406).
+    pub keep: Option<(i64, f32)>,
+    /// How many hits it's had.
+    pub hits: u64,
 }
 
 /// A note's arpeggio, going round its notes at its rate for as long as the note lasts.

@@ -263,6 +263,10 @@ pub struct Track {
     /// [`moved_chance`](crate::settings::moved_chance), with `80` as none (decision 405).
     #[serde(default = "centre", skip_serializing_if = "is_centre")]
     pub chance_delta: u8,
+    /// Where held `CTGT` starts: whether a row's chance decides the whole row, `00`, or each of
+    /// its pulses and ratchets, `01` (decision 406).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub chance_target: u8,
     /// Where held `DLP` starts: how many steps its dice loop over, `00` off, as
     /// [`crate::dice::DICE_LOOP_LENGTHS`] has them (decision 410).
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -514,6 +518,7 @@ impl Track {
             TrackControl::PhraseLength => self.phrase_length,
             TrackControl::PhraseStart => self.phrase_start,
             TrackControl::ChanceDelta => self.chance_delta,
+            TrackControl::ChanceTarget => self.chance_target,
             TrackControl::DiceLoop => self.dice_loop,
             TrackControl::DiceMutate => self.dice_mutate,
             TrackControl::DiceJump => self.dice_jump,
@@ -544,6 +549,7 @@ impl Track {
             TrackControl::PhraseLength => &mut self.phrase_length,
             TrackControl::PhraseStart => &mut self.phrase_start,
             TrackControl::ChanceDelta => &mut self.chance_delta,
+            TrackControl::ChanceTarget => &mut self.chance_target,
             TrackControl::DiceLoop => &mut self.dice_loop,
             TrackControl::DiceMutate => &mut self.dice_mutate,
             TrackControl::DiceJump => &mut self.dice_jump,
@@ -787,6 +793,7 @@ impl Default for Track {
             phrase_length: centre(),
             phrase_start: 0,
             chance_delta: centre(),
+            chance_target: 0,
             dice_loop: 0,
             dice_mutate: 0,
             dice_jump: 0,
