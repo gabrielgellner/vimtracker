@@ -54,6 +54,75 @@ fn spans(panel: &ShapePanel, context: &Context, row: GenParam) -> Vec<Span<'stat
     spans
 }
 
+/// The room each of `Weights`' digits takes, so the note under it fits, `C#` and a space.
+const WEIGHT_CELL: usize = 3;
+
+/// `Weights` in two lines, each digit over the note it's for: `F  0  8` over `C  D  E`. The
+/// cursor in them is on its digit, and its note is in full; on the row but not in them, the
+/// digits are lit together; and while they're typed, the text so far and a `_` after it.
+fn weight_lines(panel: &ShapePanel, current: bool, label: usize) -> [Line<'static>; 2] {
+    let notes = panel.weight_notes();
+    let typed = current.then_some(panel.typing.as_ref()).flatten();
+    let digits: Vec<String> = match typed {
+        Some(typed) => typed
+            .chars()
+            .map(String::from)
+            .chain(std::iter::once("_".to_owned()))
+            .collect(),
+        None => panel.shape.random.weights[..notes.len()]
+            .iter()
+            .map(|weight| format!("{weight:X}"))
+            .collect(),
+    };
+    let lit = theme::cursor(if typed.is_some() {
+        Mode::Insert
+    } else {
+        Mode::Normal
+    });
+    let mut top = vec![Span::raw(format!("{:<label$}", GenParam::Weights.name()))];
+    let mut under = vec![Span::raw(" ".repeat(label))];
+    // The cursor: on a digit in them, or while they're typed, where the next goes.
+    let at = match typed {
+        Some(_) => Some(digits.len() - 1),
+        None => panel.weight.filter(|_| current),
+    };
+    let gap = " ".repeat(WEIGHT_CELL - 1);
+    if current && at.is_none() && typed.is_none() {
+        // Lit as one value, the gaps and all, as a value on its row is.
+        top.push(Span::styled(digits.join(&gap), lit));
+    } else {
+        for (nth, digit) in digits.iter().enumerate() {
+            let shown = match at {
+                Some(at) if at == nth => Span::styled(digit.clone(), lit),
+                _ => Span::raw(digit.clone()),
+            };
+            if nth > 0 {
+                top.push(Span::raw(gap.clone()));
+            }
+            top.push(shown);
+        }
+    }
+    for (nth, note) in notes.iter().enumerate() {
+        let style = match panel.weight.filter(|_| current) {
+            Some(at) if at == nth => Style::new().add_modifier(Modifier::BOLD),
+            _ => theme::dim(),
+        };
+        under.push(Span::styled(format!("{note:<WEIGHT_CELL$}"), style));
+    }
+    [Line::from(top), Line::from(under)]
+}
+
+/// How wide the panel is: room for eight notes in a `List`'s values, or for each of `Weights`'
+/// digits over its note.
+fn width(panel: &ShapePanel, rows: &[GenParam], label: usize) -> u16 {
+    if !rows.contains(&GenParam::Weights) {
+        return WIDTH;
+    }
+    // The last note needs only its own room, and the border is either side.
+    let weights = (panel.weight_notes().len() * WEIGHT_CELL).saturating_sub(1);
+    WIDTH.max((label + weights + 2) as u16)
+}
+
 /// A `Tonnetz`' first chords as the panel names them, `C Cm G# Fm`, and across tracks that each
 /// plays a voice of them.
 fn progression(panel: &ShapePanel) -> String {
@@ -87,7 +156,20 @@ pub fn draw(frame: &mut Frame, area: Rect, ctx: &Ctx, panel: &ShapePanel) {
         height: area.height.saturating_sub(FROM_TOP),
         ..area
     };
-    let window = popup::top_right(below, WIDTH, rows.len() as u16 + AROUND_ROWS);
+    // Room for the longest label, as `Transpose` is longer than the rest.
+    let labels = rows
+        .iter()
+        .map(|row| row.name().len() + 1)
+        .max()
+        .unwrap_or(0)
+        .max(LABEL);
+    // `Weights` takes a second line, for its notes.
+    let lines_more = u16::from(rows.contains(&GenParam::Weights));
+    let window = popup::top_right(
+        below,
+        width(panel, &rows, labels),
+        rows.len() as u16 + lines_more + AROUND_ROWS,
+    );
     let name = match panel.column {
         ShapeColumn::Note { .. } => "Note".to_owned(),
         ShapeColumn::Velocity => "Velocity".to_owned(),
@@ -145,15 +227,12 @@ pub fn draw(frame: &mut Frame, area: Rect, ctx: &Ctx, panel: &ShapePanel) {
         format!("{name}{tracks}{live}: {filled} of {rows_shaped} rows"),
         theme::dim(),
     )];
-    // Room for the longest label, as `Transpose` is longer than the rest.
-    let labels = rows
-        .iter()
-        .map(|row| row.name().len() + 1)
-        .max()
-        .unwrap_or(0)
-        .max(LABEL);
     for row in rows {
         let current = row == panel.row;
+        if row == GenParam::Weights {
+            lines.extend(weight_lines(panel, current, labels));
+            continue;
+        }
         let typing = current.then_some(panel.typing.as_ref()).flatten();
         let mut line = vec![Span::raw(format!("{:<labels$}", row.name()))];
         if current {
@@ -183,6 +262,7 @@ pub fn draw(frame: &mut Frame, area: Rect, ctx: &Ctx, panel: &ShapePanel) {
         String::new()
     };
     let hint = match panel.shape.kind {
+        _ if panel.weight.is_some() => "h l move  = - change  0-F types  Esc out",
         // Each pair of tracks shares one coin.
         _ if pairs && panel.shape.kind.has_where() => "Each row goes to one track or the other",
         // A named rhythm's parts go to the tracks in turn, and a 12/8 one's pulses are a bar's

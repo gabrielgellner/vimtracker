@@ -1,3 +1,4 @@
+<!-- ANCHOR: before-weights -->
 # Selecting and editing
 
 Editing follows Vim's grammar: an operator, then what it covers.
@@ -334,12 +335,32 @@ minor pentatonic it's the root, the fifth, the minor third, the seventh and the 
 the scale off it goes through the twelve semitones by how consonant each is with the root: C, G,
 F, A, E, D#, G#, A#, D, B, C# and F#.
 
-`Weights` is Vermona's meloDICER's row of faders, one for each degree. `i`, a hex digit for each
-from the root, and `Enter`: in C major, `F08F` keeps the second out and gives the third about
-half the root's chances, and the degrees after the digits typed keep theirs. With the scale off
-there's a digit for each semitone from the root. Spread and Bias still shape the notes let
-through, so a narrow Spread stays in the middle of the range, and one value on a degree left out
-lands on the nearest one let through, the lower of two as near.
+`Weights` is Vermona's meloDICER's row of faders, one for each degree: a hex digit each from the
+root, with the note it's for under it, `C  D# F  G  A#` in C minor pentatonic, and with the scale
+off a digit for each of the twelve semitones. `l` goes into the digits, on the first, and the
+status line names the one under the cursor, `Weight of G: F`. Each change is heard as it's made,
+and `Enter` on the panel keeps them all as one undo.
+
+| Keys | Does |
+|---|---|
+| `h` `l` | Across the digits. `h` from the first goes back to the rows |
+| `^` `$` | The first or last digit |
+| `=` `-` | Up or down by one |
+| `+` `_` | Up or down by 4 |
+| `0` to `F` | Sets the digit, and moves on to the next |
+| `x` | Back to `F` |
+| `Esc` `Enter` | Back to the rows |
+
+`0` types a 0 here, as each hex digit types itself, so `^` goes to the first. In C major `F08F`
+typed from the first keeps the second out and gives the third about half the root's chances.
+`i` types them all at once: it starts from the digits there, and the first digit typed starts
+them afresh, the degrees after those typed keeping theirs, while `Backspace` edits them from the
+end. Spread and Bias still shape the notes let through, so a narrow Spread stays in the middle of
+the range, and one value on a degree left out lands on the nearest one let through, the lower of
+two as near.
+<!-- ANCHOR_END: before-weights -->
+<!-- ANCHOR: after-weights -->
+
 
 `Snap`, on the Note column only, moves each note to the nearest one in the
 scale, the lower of two as near, for a take played without it. It's the only
@@ -1102,3 +1123,4 @@ macro and the Roto turn them too.
 `j` and `k` carry on past its edges. `Space c` on a dim row plays from `00`, and
 `;` there plays just that row's note.
 
+<!-- ANCHOR_END: after-weights -->

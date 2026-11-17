@@ -20,9 +20,9 @@ use vt_model::generator::Span;
 use vt_model::selection::{Field, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
-    Channel, Context, DrumPart, FillKind, GenParam, Grids, Shape, ShapeColumn, Source, Starts,
-    TonnetzVoice, Walk, Where, default_ends, default_step, divisions_seed, drum_parts, is_empty,
-    on_track, open_rows, track_seed, variation_notes,
+    Channel, Context, DrumPart, FillKind, GenParam, Grids, MAX_WEIGHT, Shape, ShapeColumn, Source,
+    Starts, TonnetzVoice, Walk, Where, default_ends, default_step, degree_count, degree_name,
+    divisions_seed, drum_parts, is_empty, on_track, open_rows, track_seed, variation_notes,
 };
 use vt_model::song::{Machine, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
@@ -82,6 +82,12 @@ pub struct ShapePanel {
     pub row: GenParam,
     /// What's being typed into the current row.
     pub typing: Option<TypedValue>,
+    /// On `Weights`, the digit the cursor is on, by its degree from the root, while `l` has gone
+    /// into them.
+    pub weight: Option<usize>,
+    /// Whether what `i` started from is as it was, so the first character typed replaces it, as
+    /// a field whose text is selected does, and `Backspace` edits it instead.
+    started: bool,
     /// The live generator it was opened on with `gl`, by its place in its phrase's list, which
     /// it reshapes rather than shaping the rows once.
     pub live: Option<usize>,
@@ -741,6 +747,8 @@ impl ShapePanel {
             shape,
             row: GenParam::Fill,
             typing: None,
+            weight: None,
+            started: false,
             live: None,
             base,
             under: None,
@@ -838,6 +846,13 @@ pub enum ShapeKey {
     PlayFromStart,
     /// `Space d`: describe the setting under the cursor, or stop, as on the pages.
     Describe,
+    /// `l`: into `Weights`' digits, or the next of them.
+    Right,
+    /// `h`: the digit before, or out of them from the first.
+    Left,
+    /// `^` and `$`: the first or the last digit.
+    First,
+    Last,
 }
 
 impl Overlay for ShapePanel {
@@ -907,6 +922,18 @@ impl Overlay for ShapePanel {
             "Play from the start",
         ),
         ("Space d", Cmd::InShape(ShapeKey::Describe), DESCRIBE),
+        (
+            "l",
+            Cmd::InShape(ShapeKey::Right),
+            "Into the weights, or the next digit",
+        ),
+        (
+            "h",
+            Cmd::InShape(ShapeKey::Left),
+            "The digit before, or out of the weights",
+        ),
+        ("^", Cmd::InShape(ShapeKey::First), "The first digit"),
+        ("$", Cmd::InShape(ShapeKey::Last), "The last digit"),
     ];
 
     fn key(&mut self, cmd: Cmd, ctx: &mut CtxMut) -> Outcome {
@@ -914,6 +941,9 @@ impl Overlay for ShapePanel {
             return Outcome::Passed;
         };
         let services = &mut *ctx.services;
+        if self.weight_key(key, services) {
+            return Outcome::Done;
+        }
         match key {
             ShapeKey::Play => return Outcome::Do(Cmd::PauseOrResume),
             ShapeKey::PlayFromStart => return Outcome::Do(Cmd::PlayFromStart),
@@ -950,6 +980,8 @@ impl Overlay for ShapePanel {
             }
             ShapeKey::Choose => return self.choices(services),
             ShapeKey::Type => return self.start_typing(services),
+            ShapeKey::Right => self.enter_weights(services),
+            ShapeKey::Left | ShapeKey::First | ShapeKey::Last => {}
         }
         Outcome::Done
     }
@@ -978,6 +1010,7 @@ impl Overlay for ShapePanel {
             KeyCode::BackTab => return Outcome::Do(Cmd::PlayFromStart),
             _ if key.command => {}
             code if self.typing.is_some() => self.typed(code, ctx.services),
+            KeyCode::Char(c) if self.weight.is_some() => self.type_weight(c, ctx.services),
             _ => {}
         }
         Outcome::Done
@@ -1077,6 +1110,11 @@ impl ShapePanel {
     }
 
     fn adjust(&mut self, sign: i16, large: bool, services: &mut Services) {
+        if self.row == GenParam::Weights {
+            services.status =
+                "l goes into the weights, a digit a note; i types them all".to_owned();
+            return;
+        }
         let mut shape = self.shape;
         if let Err(reason) = self.row.step(&mut shape, &self.context(), sign, large) {
             services.status = reason.to_owned();
@@ -1158,6 +1196,15 @@ impl ShapePanel {
         match self.row.typing(self.column) {
             Typing::Listed => return self.choices(services),
             Typing::Toggled => self.adjust(1, false, services),
+            // The weights start from the digits there, so one can be changed without the rest
+            // typed again.
+            Typing::Weights => {
+                self.weight = None;
+                self.started = true;
+                self.typing = Some(TypedValue::from(
+                    self.row.shown(&self.shape, &self.context()),
+                ));
+            }
             _ => self.typing = Some(TypedValue::default()),
         }
         Outcome::Done
@@ -1168,6 +1215,9 @@ impl ShapePanel {
         let Some(text) = &mut self.typing else {
             return;
         };
+        if std::mem::take(&mut self.started) && matches!(code, KeyCode::Char(_)) {
+            text.clear();
+        }
         // `Enter` keeps a single hex digit too, here.
         let typed = match code {
             KeyCode::Enter => Typed::Commit(text.take()),
@@ -1195,6 +1245,111 @@ impl ShapePanel {
         );
         if let Some(reason) = refused {
             services.status = reason.to_owned();
+        }
+    }
+}
+
+/// How far `+` and `_` move a weight, a quarter of its range.
+const WEIGHT_JUMP: u8 = 4;
+
+impl ShapePanel {
+    /// The notes `Weights`' digits are for, from the root, as the grid spells them: the scale's
+    /// degrees while it's on, and the twelve semitones while it's off. None off the Note column.
+    pub fn weight_notes(&self) -> Vec<&'static str> {
+        let ShapeColumn::Note { scale, .. } = self.column else {
+            return Vec::new();
+        };
+        (0..degree_count(scale))
+            .map(|degree| degree_name(scale, degree))
+            .collect()
+    }
+
+    /// The digit the cursor is on in `Weights`, if it's in them: its place, its note and its
+    /// weight.
+    pub fn weight_here(&self) -> Option<(usize, &'static str, u8)> {
+        let at = self.weight?;
+        let note = *self.weight_notes().get(at)?;
+        Some((at, note, self.shape.random.weights[at]))
+    }
+
+    /// `l` on `Weights`: into its digits, on the first.
+    fn enter_weights(&mut self, services: &mut Services) {
+        if self.row != GenParam::Weights || self.weight_notes().is_empty() {
+            return;
+        }
+        self.weight = Some(0);
+        self.say_weight(services);
+    }
+
+    /// A key while the cursor is in `Weights`' digits, or false where it isn't, or for a key that
+    /// means what it does on the rows, which leaves the digits first.
+    fn weight_key(&mut self, key: ShapeKey, services: &mut Services) -> bool {
+        let Some(at) = self.weight else {
+            return false;
+        };
+        let last = self.weight_notes().len().saturating_sub(1);
+        match key {
+            ShapeKey::Left if at == 0 => self.weight = None,
+            ShapeKey::Left => self.weight = Some(at - 1),
+            ShapeKey::Right => self.weight = Some((at + 1).min(last)),
+            ShapeKey::First => self.weight = Some(0),
+            ShapeKey::Last => self.weight = Some(last),
+            ShapeKey::Increase => self.set_weight(|weight| weight.saturating_add(1), services),
+            ShapeKey::Decrease => self.set_weight(|weight| weight.saturating_sub(1), services),
+            ShapeKey::IncreaseLarge => {
+                self.set_weight(|weight| weight.saturating_add(WEIGHT_JUMP), services);
+            }
+            ShapeKey::DecreaseLarge => {
+                self.set_weight(|weight| weight.saturating_sub(WEIGHT_JUMP), services);
+            }
+            ShapeKey::Reset => self.set_weight(|_| MAX_WEIGHT, services),
+            // `Esc` and `Enter` leave the digits, and the panel stays open.
+            ShapeKey::Cancel | ShapeKey::Keep => self.weight = None,
+            // Playing, rolling and the line describing the digit leave the cursor on it.
+            ShapeKey::Play | ShapeKey::PlayFromStart | ShapeKey::Describe | ShapeKey::Roll => {
+                return false;
+            }
+            _ => {
+                self.weight = None;
+                return false;
+            }
+        }
+        match self.weight {
+            Some(_) => self.say_weight(services),
+            None => services.status.clear(),
+        }
+        true
+    }
+
+    /// A hex digit typed on a weight sets it, and the cursor moves on to the next.
+    fn type_weight(&mut self, c: char, services: &mut Services) {
+        let (Some(at), Some(digit)) = (self.weight, c.to_digit(16)) else {
+            return;
+        };
+        self.set_weight(|_| digit as u8, services);
+        let last = self.weight_notes().len().saturating_sub(1);
+        self.weight = Some((at + 1).min(last));
+        self.say_weight(services);
+    }
+
+    /// Change the weight under the cursor, kept from 0 to `F`, and show the result.
+    fn set_weight(&mut self, to: impl FnOnce(u8) -> u8, services: &mut Services) {
+        let Some(at) = self.weight else {
+            return;
+        };
+        self.change(
+            |panel| {
+                let weight = &mut panel.shape.random.weights[at];
+                *weight = to(*weight).min(MAX_WEIGHT);
+            },
+            services,
+        );
+    }
+
+    /// The status line names the cursor's note and its weight: `Weight of G: F`.
+    fn say_weight(&self, services: &mut Services) {
+        if let Some((_, note, weight)) = self.weight_here() {
+            services.status = format!("Weight of {note}: {weight:X}");
         }
     }
 }
