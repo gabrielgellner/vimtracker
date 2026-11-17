@@ -191,8 +191,9 @@ goes with the note whichever column it's in.
 
 For `RET`, `x` from `0` to `7` gets quieter on each repeat and `8` to `F`
 gets louder, except on an `Acid`, whose hits all play at the note's own level.
-Use `:seed 7` to choose which results `CHA` and `RND` give, or `:seed` alone for a
-new one at random, as one undo step.
+Use `:seed 3A9F12C4` to choose which results `CHA` and `RND` give, or `:seed` alone
+for a new one at random, as one undo step. The seed is hex, as the project page
+shows it, in either case, so `:seed 42` is `0x42`.
 
 ## Conditions
 

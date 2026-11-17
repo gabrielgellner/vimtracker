@@ -145,7 +145,7 @@ These run in any terminal, with no sound device unless asked:
 
 | Command | What it does |
 |---|---|
-| `vimtracker render <project> <out.wav> [--rate n] [--rows n] [--seed n] [--tail] [--stems] [--split]` | Render a saved project, as `:render` does |
+| `vimtracker render <project> <out.wav> [--rate n] [--rows n] [--seed hex] [--tail] [--stems] [--split]` | Render a saved project, as `:render` does |
 | `vimtracker bench <project> [--rate n] [--block n] [--seconds n]` | How much of a core a project takes, stopped and playing. `--tracks` adds each track's, slot's, group's, return's and the master's share, and `--device` plays silently through the output device to time its callback as the status line does |
 | `vimtracker probe <spec.toml> <out.wav> [--case name]` | Play one voice or effect with no song, from a spec that [tools/compare](tools/compare/README.md) also renders through reference plugins and Ableton Live's devices, to compare the two |
 | `vimtracker notes <project> <out.toml> [--track name] [--machine key]` | Write one track's notes from a song as a probe spec's, for tools/compare. The project is only read |

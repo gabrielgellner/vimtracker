@@ -209,7 +209,7 @@ project's folder.
 | `vimtracker kits import-ableton` | Make a kit of each of Live's racks |
 
 `render` takes the same `--rows`, `--tail`, `--stems` and `--split` as `:render`,
-and `--seed` for another seed. It stops if a sample is missing.
+and `--seed` for another seed, in hex as `:seed` takes it. It stops if a sample is missing.
 
 `bench` plays the project as fast as it can, stopped and then playing, and says
 how much of a core it took. The CPU figure on the status line reads higher for

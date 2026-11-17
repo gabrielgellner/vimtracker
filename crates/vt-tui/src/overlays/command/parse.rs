@@ -617,7 +617,7 @@ pub enum LineError {
     Chain,
     #[error(":render takes a path, --rows n, --tail, --stems and --split")]
     Render,
-    #[error(":seed takes a number, or nothing for a new one at random")]
+    #[error(":seed takes a hex number, so 42 is 0x42, or nothing for a new one at random")]
     Seed,
     #[error(":groove takes a groove's name, such as swing-66, or nothing to choose from a list")]
     Groove,
@@ -1411,14 +1411,13 @@ pub(crate) const COMMANDS: [Command; 49] = [
     },
     Command {
         name: "seed",
-        meaning: "The seed chance FX play from, or a new one at random",
+        meaning: "The seed chance FX play from, in hex, or a new one at random",
         takes: Takes::Nothing,
         parse: |argument| {
             if argument.is_empty() {
                 return Ok(Line::RollSeed);
             }
-            argument
-                .parse()
+            parse_seed(argument)
                 .map(Line::Seed)
                 .map_err(|_| LineError::Seed)
         },
@@ -1452,6 +1451,11 @@ pub fn parse(text: &str) -> Result<Line, LineError> {
         (Line::Slice(change, _), range) => Ok(Line::Slice(change, range)),
         _ => Err(LineError::NoRange(name.to_owned())),
     }
+}
+
+/// A seed as typed, in hex as the program shows it, either case: `42` is `0x42`.
+pub(crate) fn parse_seed(text: &str) -> Result<u64, std::num::ParseIntError> {
+    u64::from_str_radix(text, 16)
 }
 
 #[cfg(test)]
@@ -1574,7 +1578,9 @@ mod tests {
             ("w!", Ok(write(None, true))),
             ("q!", Ok(Line::Quit { force: true })),
             ("len 32", Ok(Line::Len(32))),
-            ("seed 42", Ok(Line::Seed(42))),
+            ("seed 42", Ok(Line::Seed(0x42))),
+            ("seed 3A9F12C4", Ok(Line::Seed(0x3A9F_12C4))),
+            ("seed 3a9f12c4", Ok(Line::Seed(0x3A9F_12C4))),
             ("seed", Ok(Line::RollSeed)),
             (
                 "render a b.wav --rows 8 --tail",
@@ -1704,6 +1710,7 @@ mod tests {
         for wrong in [
             "render a.wav --rows 0",
             "seed x",
+            "seed 3G",
             // A groove replaces it.
             "tswing 60",
             "reset 0",

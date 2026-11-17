@@ -76,7 +76,7 @@ fn value(ctx: &Ctx, page: &ProjectPage, control: ProjectControl) -> String {
             Some(steps) => format!("{steps} steps"),
             None => "off".to_owned(),
         },
-        ProjectControl::Seed => song.seed.to_string(),
+        ProjectControl::Seed => format!("{:08X}", song.seed),
         ProjectControl::Scale if ctx.scale().on => ctx.scale().kind.name().to_owned(),
         ProjectControl::Scale => "off".to_owned(),
         ProjectControl::Root => ctx.scale().root_name().to_owned(),

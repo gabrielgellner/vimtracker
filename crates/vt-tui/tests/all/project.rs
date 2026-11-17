@@ -912,11 +912,11 @@ fn the_project_page_edits_the_values_its_commands_set() {
     project_cursor_on(&mut app, ProjectControl::Seed);
     tap(&mut app, "i42");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.song().seed, 42);
+    assert_eq!(app.song().seed, 0x42, "hex, as :seed reads it");
     tap(&mut app, "+");
-    assert_eq!(app.song().seed, 52);
+    assert_eq!(app.song().seed, 0x52);
     tap(&mut app, "u");
-    assert_eq!(app.song().seed, 42);
+    assert_eq!(app.song().seed, 0x42);
 
     // The limiter is on the master's Sound page now, not here.
     assert!(
@@ -1666,7 +1666,7 @@ fn new_projects_draw_seeds_of_their_own_which_saving_keeps() {
     command(&mut app, &format!("w {}", second.display()));
     let (mut other, _rt2) = self::app();
     command(&mut other, &format!("e {}", second.display()));
-    assert_eq!(other.song().seed, 42, "the seed is saved with the song");
+    assert_eq!(other.song().seed, 0x42, "the seed is saved with the song");
     std::fs::remove_dir_all(&first).unwrap();
     std::fs::remove_dir_all(&second).unwrap();
 }
@@ -1675,11 +1675,29 @@ fn new_projects_draw_seeds_of_their_own_which_saving_keeps() {
 fn seed_with_no_number_rolls_one_as_an_undo_step() {
     let (mut app, _realtime) = app();
     command(&mut app, "seed 42");
-    assert_eq!(app.song().seed, 42);
+    assert_eq!(app.song().seed, 0x42);
     command(&mut app, "seed");
     let rolled = app.song().seed;
-    assert_ne!(rolled, 42);
-    assert_eq!(app.services.status, format!("Seed {rolled:X}"));
+    assert_ne!(rolled, 0x42);
+    assert_eq!(app.services.status, format!("Seed {rolled:08X}"));
     press(&mut app, "u");
-    assert_eq!(app.song().seed, 42, "undo puts the old seed back");
+    assert_eq!(app.song().seed, 0x42, "undo puts the old seed back");
+}
+
+#[test]
+fn the_project_page_shows_the_seed_as_eight_hex_digits() {
+    let (mut app, _realtime) = on_the_project_page();
+    command(&mut app, "seed 3a9f12c4");
+    assert_eq!(app.song().seed, 0x3A9F_12C4, "either case is hex");
+    let lines = project_page_lines(&app);
+    assert!(
+        lines.iter().any(|line| line.contains("3A9F12C4")),
+        "{lines:#?}"
+    );
+    command(&mut app, "seed 42");
+    let lines = project_page_lines(&app);
+    assert!(
+        lines.iter().any(|line| line.contains("00000042")),
+        "{lines:#?}"
+    );
 }
