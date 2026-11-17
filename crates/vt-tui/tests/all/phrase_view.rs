@@ -1088,7 +1088,11 @@ fn insert_marks_the_rows_a_grid_step_away_forward_and_back_and_where_the_ends_st
     let (mut app, _realtime) = app();
     command(&mut app, "set skip=4");
     press(&mut app, "6j");
-    assert_eq!(grid_marks(&app), "----------------", "nothing outside Insert");
+    assert_eq!(
+        grid_marks(&app),
+        "----------------",
+        "nothing outside Insert"
+    );
     press(&mut app, "i");
     // From 06: 02 back, 0A and 0E on, and 00 and 0F, where the cursor stops at the ends.
     assert_eq!(grid_marks(&app), "·-·-------·---··");

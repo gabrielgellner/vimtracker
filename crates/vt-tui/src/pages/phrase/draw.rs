@@ -1148,7 +1148,12 @@ impl<'a> Grid<'a> {
         let marker = self.marker(line);
         if marker == " "
             && ctx.mode() == Mode::Insert
-            && grid_reaches(ctx.cursor().step, ctx.song().skip as usize, self.stored, line.index)
+            && grid_reaches(
+                ctx.cursor().step,
+                ctx.song().skip as usize,
+                self.stored,
+                line.index,
+            )
         {
             return Span::styled(" ·", Style::new().fg(theme::dimmed(theme::GREEN)));
         }
