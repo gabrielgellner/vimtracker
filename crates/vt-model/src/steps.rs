@@ -12,6 +12,7 @@ use thiserror::Error;
 
 use crate::lfo::{DIVISION_NAMES, DIVISION_TICKS};
 use crate::random::{GOLDEN_GAMMA, splitmix64};
+use crate::shape::{EVEN_SPREAD, MAX_BIAS, MAX_SPREAD, Random};
 
 /// How many values a slot keeps.
 pub const STEPS: usize = 16;
@@ -284,12 +285,25 @@ pub struct Steps {
     /// is a step at random every time. Drawn from the project's seed, so a render repeats.
     #[serde(skip_serializing_if = "is_default")]
     pub jump: u8,
+    /// How `Mutate` spreads the values it draws, as Marbles' X `Spread` and a `Random` fill's do:
+    /// from 0, the bias point alone, through a bell, to `50`, every value as likely, as it always
+    /// drew, and on through a bowl to `100`, the two ends alone (decision 403).
+    #[serde(skip_serializing_if = "is_even_spread")]
+    pub spread: u8,
+    /// Which way the values `Mutate` draws lean, from `-100`, the low end, to `+100`, the high, as
+    /// Marbles' X `Bias` and a `Random` fill's do.
+    #[serde(skip_serializing_if = "is_default")]
+    pub bias: i8,
     /// How it goes from step to step, `-FF` to `+FF`, after Surge's step sequencer's deform: none
     /// steps; up to `+80` glides from the step before over the first part of each step, then on
     /// to a curve through the steps by `+FF`; down to `-80` falls to nothing over the last part of
     /// each, a pluck a step, sharper toward `-FF`.
     #[serde(skip_serializing_if = "is_default")]
     pub smooth: i16,
+}
+
+fn is_even_spread(spread: &u8) -> bool {
+    *spread == EVEN_SPREAD
 }
 
 fn is_eighth(length: &u8) -> bool {
@@ -310,6 +324,8 @@ impl Default for Steps {
             looping: Loop::default(),
             mutate: 0,
             jump: 0,
+            spread: EVEN_SPREAD,
+            bias: 0,
             smooth: 0,
         }
     }
@@ -324,11 +340,31 @@ impl Steps {
             && self.rate.in_range()
             && self.mutate <= MAX_MUTATE
             && self.jump <= MAX_JUMP
+            && self.spread <= MAX_SPREAD
+            && self.bias.unsigned_abs() <= MAX_BIAS.unsigned_abs()
             && self.smooth.abs() <= MAX_STEP
             && match self.looping {
                 Loop::From(step) => usize::from(step) < STEPS,
                 _ => true,
             }
+    }
+
+    /// The value `Mutate` draws from `draw`, the next number of its stream, `-FF` to `+FF`: at an
+    /// even `Spread` and no `Bias`, `draw` over the values evenly, as it always was, and otherwise
+    /// through `Random`'s bent distribution, so one shape serves both. It allocates nothing, for
+    /// the audio thread.
+    pub fn mutated(&self, draw: u32) -> i16 {
+        let span = 2 * MAX_STEP as u32 + 1;
+        let shape = Random {
+            spread: self.spread,
+            bias: self.bias,
+            ..Random::default()
+        };
+        if !shape.shaped() {
+            return (draw % span) as i16 - MAX_STEP;
+        }
+        let even = f64::from(draw) / (f64::from(u32::MAX) + 1.0);
+        shape.pick(even, span as usize) as i16 - MAX_STEP
     }
 
     /// How many steps it plays, from 1 to 16.
@@ -561,11 +597,13 @@ mod tests {
         let drifting = Steps {
             mutate: 30,
             jump: 20,
+            spread: 20,
+            bias: -40,
             smooth: -0x40,
             ..Steps::default()
         };
         let text = ron::to_string(&drifting).unwrap();
-        assert_eq!(text, "(mutate:30,jump:20,smooth:-64)");
+        assert_eq!(text, "(mutate:30,jump:20,spread:20,bias:-40,smooth:-64)");
         assert_eq!(ron::from_str::<Steps>(&text).unwrap(), drifting);
         assert!(
             !Steps {
@@ -581,6 +619,97 @@ mod tests {
             }
             .in_range()
         );
+        for (spread, bias) in [(101, 0), (50, 101), (50, -101)] {
+            assert!(
+                !Steps {
+                    spread,
+                    bias,
+                    ..drifting
+                }
+                .in_range()
+            );
+        }
+    }
+
+    /// The values `Mutate` draws from an even stream of numbers, `count` of them.
+    fn drawn(steps: &Steps, count: u32) -> Vec<i16> {
+        let mut state = 7u64;
+        (0..count)
+            .map(|_| {
+                state = splitmix64(state.wrapping_add(GOLDEN_GAMMA));
+                steps.mutated((state >> 32) as u32)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn mutate_draws_evenly_as_it_always_did_at_an_even_spread_and_no_bias() {
+        let steps = Steps::default();
+        for draw in [0, 1, 254, 255, 510, 511, 12_345, u32::MAX - 1, u32::MAX] {
+            assert_eq!(
+                steps.mutated(draw),
+                (draw % 511) as i16 - MAX_STEP,
+                "{draw}"
+            );
+        }
+    }
+
+    #[test]
+    fn spread_narrows_to_a_bell_widens_to_the_ends_and_bias_leans_them() {
+        const DRAWS: u32 = 20_000;
+        let shaped = |spread: u8, bias: i8| Steps {
+            spread,
+            bias,
+            ..Steps::default()
+        };
+        // How many draws fall within a quarter of the middle, and in the outer eighth each side.
+        let shares = |values: &[i16]| {
+            let near = values.iter().filter(|value| value.abs() < 64).count();
+            let far = values.iter().filter(|value| value.abs() > 224).count();
+            let mean =
+                values.iter().map(|value| f64::from(*value)).sum::<f64>() / values.len() as f64;
+            (
+                near as f64 / values.len() as f64,
+                far as f64 / values.len() as f64,
+                mean,
+            )
+        };
+        let (even_near, even_far, even_mean) = shares(&drawn(&shaped(50, 0), DRAWS));
+        assert!((even_near - 0.25).abs() < 0.02, "{even_near}");
+        assert!((even_far - 0.12).abs() < 0.02, "{even_far}");
+        assert!(even_mean.abs() < 6.0, "{even_mean}");
+        // Low: a bell round the middle, nothing out at the ends.
+        let (near, far, mean) = shares(&drawn(&shaped(10, 0), DRAWS));
+        assert!(near > 0.9 && far < 0.01, "{near} {far}");
+        assert!(mean.abs() < 3.0, "{mean}");
+        assert!(drawn(&shaped(0, 0), 100).iter().all(|value| *value == 0));
+        // Mid-low: still a bell, wider.
+        let (near, far, _) = shares(&drawn(&shaped(35, 0), DRAWS));
+        assert!(near > even_near + 0.1 && far < even_far, "{near} {far}");
+        // High: a bowl, most of them out at the ends, and only the ends at 100.
+        let (near, far, mean) = shares(&drawn(&shaped(90, 0), DRAWS));
+        assert!(far > 4.0 * even_far && near < 0.1, "{near} {far}");
+        assert!(mean.abs() < 10.0, "{mean}");
+        let ends = drawn(&shaped(100, 0), DRAWS);
+        assert!(ends.iter().all(|value| value.abs() == MAX_STEP));
+        let high = ends.iter().filter(|value| **value > 0).count() as f64 / f64::from(DRAWS);
+        assert!((high - 0.5).abs() < 0.02, "{high}");
+        // Bias leans them: an even draw toward the high end, a bell centred on the bias point, and
+        // the two ends the high one as often as the bias point is high.
+        let (_, _, mean) = shares(&drawn(&shaped(50, 60), DRAWS));
+        assert!(mean > 80.0, "{mean}");
+        let (_, _, mean) = shares(&drawn(&shaped(50, -60), DRAWS));
+        assert!(mean < -80.0, "{mean}");
+        let mut bell = drawn(&shaped(10, -50), DRAWS);
+        bell.sort_unstable();
+        let middle = bell[bell.len() / 2];
+        assert!(
+            (middle + 128).abs() < 8,
+            "the bias point, a quarter up: {middle}"
+        );
+        let ends = drawn(&shaped(100, 60), DRAWS);
+        let high = ends.iter().filter(|value| **value > 0).count() as f64 / f64::from(DRAWS);
+        assert!((high - 0.8).abs() < 0.02, "{high}");
     }
 
     #[test]

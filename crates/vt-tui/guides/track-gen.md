@@ -269,9 +269,9 @@ filters.
 
 **What a macro reaches:** the track's own settings, its machine's, its effects', its mod slots'
 depths, phases and deforms, and their types' own: an envelope's `Attack`, `Decay`, `Sustain` and
-`Release`, a drum's `Body`, a gate's `Colour`, Steps' `Length`, `Mutate`, `Jump` and `Smooth`, and an
-LFO's and Steps' `Rate`, so a Turing Machine is a Steps slot with `Mutate`, `Length` and `Depth`
-on three macros. It reaches the accumulator's `Up` and `Down` and the arpeggio's `Rate` and
+`Release`, a drum's `Body`, a gate's `Colour`, Steps' `Length`, `Mutate`, `Jump`, `Spread`,
+`Bias` and `Smooth`, and an LFO's and Steps' `Rate`, so a Turing Machine is a Steps slot with
+`Mutate`, `Length` and `Depth` on three macros. It reaches the accumulator's `Up` and `Down` and the arpeggio's `Rate` and
 `Octaves` too, but never another macro.
 
 **A live generator's settings,** `M` on one on the Gen page, as `Hits`: the macro holds that

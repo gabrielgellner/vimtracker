@@ -362,6 +362,7 @@ impl ModSlot {
             }
             ModField::Length | ModField::Ratchet => whole(self.field(field)? - 1),
             ModField::Smooth => depth_value(self.field(field)? as i16),
+            ModField::Bias => bias_value(self.field(field)?),
             ModField::Rate => match self.kind {
                 ModKind::Lfo => self.lfo.rate.place(),
                 ModKind::Steps => self.steps.rate.place()?,
@@ -402,6 +403,7 @@ impl ModSlot {
             // `00` is one step, or one strike, as the registry lists them from 1.
             ModField::Length | ModField::Ratchet => self.set_field(field, whole.saturating_add(1)),
             ModField::Smooth => self.set_field(field, depth_of(value).round() as i32),
+            ModField::Bias => self.set_field(field, bias_of(value).round() as i32),
             ModField::Rate => match self.kind {
                 ModKind::Lfo => self.lfo.rate = self.lfo.rate.placed(value),
                 ModKind::Steps => self.steps.rate = self.steps.rate.placed(value),
@@ -410,6 +412,20 @@ impl ModSlot {
             _ => self.set_field(field, whole),
         }
     }
+}
+
+/// Steps' `Bias`, from -100 to +100, on the `00` to `FF` scale with a fine byte, either side of
+/// `80` as a centred setting reads: 128 values below the middle and 127 above.
+fn bias_value(bias: i32) -> u16 {
+    let side = if bias < 0 { 128.0 } else { 127.0 };
+    let coarse = 128.0 + f64::from(bias) / 100.0 * side;
+    (coarse * 256.0).round().clamp(0.0, f64::from(u16::MAX)) as u16
+}
+
+/// Steps' `Bias` at a value on the `00` to `FF` scale, `bias_value` undone.
+fn bias_of(value: f32) -> f32 {
+    let from_middle = value - 128.0;
+    from_middle / if from_middle < 0.0 { 128.0 } else { 127.0 } * 100.0
 }
 
 /// What a new track's slots start as, today's three envelopes and three LFOs: the first envelope

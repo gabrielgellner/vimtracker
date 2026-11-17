@@ -139,7 +139,7 @@ fn machine(machine: Machine) -> DeviceSpec {
     };
     let mut device = DeviceSpec::new(
         "Machine",
-        [Some(Control::Machine), kind, None, None, None],
+        [Some(Control::Machine), kind, None, None, None, None, None],
         machine.grid(),
         Control::Setting,
     );
