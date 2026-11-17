@@ -687,8 +687,12 @@ pub fn draw_screen(
     } else {
         0
     };
-    let [body, panel, status] = Layout::vertical([
+    // The line describing the setting under the cursor, while it's on and there's one, takes its
+    // rows from the page too, above the macro panel.
+    let described = crate::screen::describe::rows(app);
+    let [body, describing, panel, status] = Layout::vertical([
         Constraint::Min(1),
+        Constraint::Length(described),
         Constraint::Length(strip),
         Constraint::Length(2),
     ])
@@ -736,6 +740,7 @@ pub fn draw_screen(
         crate::screen::meter::draw(frame, meter, &app.services.meter, app.song().limiter);
     }
     crate::screen::status::draw(frame, status, app);
+    crate::screen::describe::draw(frame, describing, app);
     if app.overlays.macro_panel.open {
         let mut macros = std::mem::take(&mut app.overlays.macro_panel);
         macros.draw(frame, panel, &app.ctx());

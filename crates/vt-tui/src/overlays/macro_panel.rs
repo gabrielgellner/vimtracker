@@ -17,7 +17,7 @@ use vt_model::macros::MACROS;
 
 use crate::app::App;
 use crate::controls::Control;
-use crate::input::bindings::{Cmd, adjusting_key};
+use crate::input::bindings::{Cmd, DESCRIBE, adjusting_key};
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
 use crate::input::typed::{HEX, Typed, TypedValue};
@@ -77,6 +77,8 @@ pub enum MacroKey {
     Play,
     NextTrack,
     PreviousTrack,
+    /// `Space d`: describe the macro under the cursor, or stop, as on the pages.
+    Describe,
 }
 
 impl MacroPanel {
@@ -168,6 +170,7 @@ impl Overlay for MacroPanel {
             Cmd::InMacros(MacroKey::PreviousTrack),
             "Previous track",
         ),
+        ("Space d", Cmd::InMacros(MacroKey::Describe), DESCRIBE),
     ];
 
     /// A turn is the Gen page band's own edit of the macro, one undo step a press. The wheel's
@@ -201,6 +204,7 @@ impl Overlay for MacroPanel {
             MacroKey::Play => return Outcome::Do(Cmd::PauseOrResume),
             MacroKey::NextTrack => return Outcome::Do(Cmd::NextTrack),
             MacroKey::PreviousTrack => return Outcome::Do(Cmd::PreviousTrack),
+            MacroKey::Describe => return Outcome::Do(Cmd::ToggleDescription),
         }
         Outcome::Done
     }

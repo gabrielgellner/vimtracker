@@ -284,6 +284,16 @@ const SHOTS: &[Shot] = &[
         size: FULL,
         ..PLAIN
     },
+    // The same acid's Sound page with the macro panel showing, and `Space d`'s line above it
+    // describing `Res`, the cursor's setting, which macro 1 holds.
+    Shot {
+        name: "description",
+        rows: &[],
+        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> t d",
+        voice: Some(SynthVoice::Acid),
+        size: FULL,
+        ..PLAIN
+    },
     // A band of seven tracks, the drums folded into their group, `z a` from the kick, playing.
     Shot {
         name: "mixer-folded",

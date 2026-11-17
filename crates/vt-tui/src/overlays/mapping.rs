@@ -167,6 +167,28 @@ pub fn holds(track: &Track, at: usize) -> String {
         .join(", ")
 }
 
+/// What a macro moves, for the line that describes it: each setting by name, from where to where
+/// in its units, as `Cut 40 to C0 and Res 20 to 60`, or none while it holds nothing.
+pub(crate) fn moves(track: &Track, at: usize) -> Option<String> {
+    let each: Vec<String> = track.macros[at]
+        .maps
+        .iter()
+        .map(|map| {
+            format!(
+                "{} {} to {}",
+                map.target.name_on(track),
+                end_shown(track, map.target, map.min),
+                end_shown(track, map.target, map.max)
+            )
+        })
+        .collect();
+    match each.split_last() {
+        None => None,
+        Some((last, [])) => Some(last.clone()),
+        Some((last, rest)) => Some(format!("{} and {last}", rest.join(", "))),
+    }
+}
+
 /// What the status line says of a setting a macro holds: its macro, and where the macro takes it,
 /// in its units, and for a generator's `Wave` or `Rate`, that it's by hand.
 pub(crate) fn held_text(track: &Track, target: MacroTarget) -> Option<String> {

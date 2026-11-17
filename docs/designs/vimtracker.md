@@ -966,7 +966,10 @@ one overlay drawn beside the page rather than over it: while it shows, `draw_scr
 three rows from the page's body above the status line, and `Space T` gives it the keys in
 `Mode::Macros`. It turns the cursor's track's macros through the track page's own edits and
 answers `Do` for undo, redo, play and the next or previous track, and `Close` back to the mode
-the keys came from. The explorer is the picker's tree with
+the keys came from. The line describing the setting under the cursor (`screen/describe.rs`,
+decision 387) takes its two rows from the body the same way, above the macro panel, only while
+`Space d` has it on and the macro panel's keys, the shape panel or the track page have a setting
+under the cursor. The explorer is the picker's tree with
 `Explorer` beside it in `Overlays`: what it keeps between openings (the kit in use, the
 reader, recent places, tags) and what it does while open, its preview, playing the file under
 its cursor and tagging, each given the picker and the services. `App::picker_key` gives the
@@ -1164,7 +1167,10 @@ entry, and `generators.rs`, which works through the live generators' sources and
     and `Pace`, whether it wraps or is centred, its `Choice`s, its `Typing` and `Reads`, and a
     `Reading` that says how a value shows; `ParamView::described` fills a view from one at a
     value, and the page's small builders (`hex`, `listed`, `switch`, `whole`) are its
-    constructors.
+    constructors. Its `meaning` is what the setting does, written once in the model beside its
+    family's description (an `Entry`'s, a `GenParamSpec`'s, `ModField::meaning`, and
+    `settings::meanings` for the track's own the registry doesn't hold), which
+    `param::description` puts with the value into the line `Space d` shows (decision 387).
 *   **Each setting edited one way** (`widgets/param/edit.rs`, the UI plan's U8, #739). Pure
     functions over the `ParamView` say where a key takes a value: `stepped` for `=` `-` `+` `_`
     and a count, by the view's `pace` where a step depends on the value, so a count moves a list

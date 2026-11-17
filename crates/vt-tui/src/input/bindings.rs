@@ -223,6 +223,8 @@ pub enum Cmd {
     ToggleMacroPanel,
     /// Put the keys in the macro panel, showing it if it's hidden.
     FocusMacroPanel,
+    /// Show the line that describes the setting under the cursor, or hide it.
+    ToggleDescription,
     /// A key of the macro panel, while the keys are in it.
     InMacros(MacroKey),
 }
@@ -356,6 +358,7 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
         Cmd::FocusMacroPanel,
         "Into the macro panel, showing it, to turn the macros",
     ),
+    ("Space d", Cmd::ToggleDescription, DESCRIBE),
     ("C-o", Cmd::JumpBack, "Jump back"),
     ("C-i", Cmd::JumpForward, "Jump forward"),
     ("W", Cmd::NextTrack, "Next track"),
@@ -369,6 +372,10 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
         "Previous group, folded or open",
     ),
 ];
+
+/// What `Space d` does, wherever it's bound: on the pages, in the shape panel and in the macro
+/// panel.
+pub(crate) const DESCRIBE: &str = "Describe the setting under the cursor, or stop";
 
 /// Cmd with the movement keys means the key that changes a value, like holding Edit on the M8,
 /// so the hand that moves can nudge without leaving the home row: left and right a small step, up

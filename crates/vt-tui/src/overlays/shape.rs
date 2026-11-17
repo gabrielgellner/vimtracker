@@ -29,7 +29,7 @@ use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, Note, Step};
 
 use crate::app::{App, Selection, TrackSpan};
-use crate::input::bindings::{Cmd, adjusting_key};
+use crate::input::bindings::{Cmd, DESCRIBE, adjusting_key};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::typed::{Typed, TypedValue};
@@ -836,6 +836,8 @@ pub enum ShapeKey {
     /// `Tab` and `Shift-Tab` play as they do in Normal.
     Play,
     PlayFromStart,
+    /// `Space d`: describe the setting under the cursor, or stop, as on the pages.
+    Describe,
 }
 
 impl Overlay for ShapePanel {
@@ -904,6 +906,7 @@ impl Overlay for ShapePanel {
             Cmd::InShape(ShapeKey::PlayFromStart),
             "Play from the start",
         ),
+        ("Space d", Cmd::InShape(ShapeKey::Describe), DESCRIBE),
     ];
 
     fn key(&mut self, cmd: Cmd, ctx: &mut CtxMut) -> Outcome {
@@ -914,6 +917,7 @@ impl Overlay for ShapePanel {
         match key {
             ShapeKey::Play => return Outcome::Do(Cmd::PauseOrResume),
             ShapeKey::PlayFromStart => return Outcome::Do(Cmd::PlayFromStart),
+            ShapeKey::Describe => return Outcome::Do(Cmd::ToggleDescription),
             ShapeKey::Cancel => {
                 services.history.replace_current(Arc::clone(&self.base));
                 services.publish();
