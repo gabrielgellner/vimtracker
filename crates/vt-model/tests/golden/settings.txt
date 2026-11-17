@@ -1321,3 +1321,6 @@
 1320 lane2.start
 1321 lane3.start
 1322 sampler.reverse
+1323 lane1.jump
+1324 lane2.jump
+1325 lane3.jump

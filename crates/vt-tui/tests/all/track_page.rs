@@ -807,8 +807,8 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
-        67,
-        "what a sample track has, its Sample, Slice, Start, Length and Reverse, its lanes' nine, Pitch in scale, Jump, Chance up or down, Chance target, the dice loop's three, the filter's Drive, Punch, Low cut and High cut, the seven that move the walk, none, Mod 6's three, its Rate, Shape, Mode and Fade, the accumulator's five and arpeggio's three, and the eight macros"
+        70,
+        "what a sample track has, its Sample, Slice, Start, Length and Reverse, its lanes' twelve, Pitch in scale, Jump, Chance up or down, Chance target, the dice loop's three, the filter's Drive, Punch, Low cut and High cut, the seven that move the walk, none, Mod 6's three, its Rate, Shape, Mode and Fade, the accumulator's five and arpeggio's three, and the eight macros"
     );
     assert!(
         picker
