@@ -269,3 +269,17 @@ fn a_locked_loop_holds_what_chance_up_or_down_thins_and_what_it_moves() {
     raised.tracks[0].chance_delta = 0xFF;
     assert_eq!(hits(&raised, 16), "x".repeat(16));
 }
+
+#[test]
+fn a_locked_loop_repeats_a_percent_and_full_mutate_rolls_as_with_none() {
+    // A `CND` at 50%, `E8`.
+    let rows = ["C-3 -- cnd:E8"];
+    let locked = hits(&song(&rows, EIGHT, 0, 0), 64);
+    let pattern: Vec<char> = locked.chars().collect();
+    assert!(repeats(&pattern, 8), "{locked}");
+    assert!(locked.contains('x') && locked.contains('.'), "{locked}");
+    let fresh = hits(&song(&rows, 0, 0, 0), 64);
+    assert!(!repeats(&fresh.chars().collect::<Vec<_>>(), 8), "{fresh}");
+    assert_eq!(locked[..8], fresh[..8], "the loop holds the first eight");
+    assert_eq!(hits(&song(&rows, EIGHT, 0xFF, 0), 64), fresh);
+}

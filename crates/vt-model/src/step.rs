@@ -123,8 +123,6 @@ impl FxCommand {
     pub fn highest(self) -> u8 {
         match self {
             Self::Set(id) => id.entry().kind.top(),
-            // The last condition, `<31`.
-            Self::Cnd => 0xCF,
             _ => 0xFF,
         }
     }
