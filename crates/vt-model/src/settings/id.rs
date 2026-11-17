@@ -3,8 +3,8 @@
 use super::mods::{ACCUMULATION, ARPEGGIO, MACRO, MACRO_NAMES, MOD, MOD_OWN};
 use super::sampler::{EARLY_SAMPLER, SAMPLER};
 use super::{
-    EARLY_LANE, Entry, LANE, LATER_LANE, LATER_TRACK, LATER_TRACK_GROUPS, SLOT_OWN, TRACK, TRACK_GROUPS,
-    TRACK_SETTINGS, voice_entries, voice_key,
+    EARLY_LANE, Entry, LANE, LATER_LANE, LATER_TRACK, LATER_TRACK_GROUPS, SLOT_OWN, TRACK,
+    TRACK_GROUPS, TRACK_SETTINGS, voice_entries, voice_key,
 };
 use crate::constants::FX_SLOTS;
 use crate::insert::{EFFECTS, EffectKind, INSERTS};
