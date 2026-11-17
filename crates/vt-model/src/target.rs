@@ -145,7 +145,11 @@ impl SettingId {
     /// What it does, for a list to choose from.
     pub fn meaning(self) -> String {
         match self.owner() {
-            (Owner::Track, at) => TRACK_MEANINGS[at].to_owned(),
+            // Those added at the table's end say what they do in their own entries.
+            (Owner::Track, at) => TRACK_MEANINGS.get(at).map_or_else(
+                || format!("{}: {}", self.name(), self.entry().meaning),
+                |meaning| (*meaning).to_owned(),
+            ),
             (Owner::Voice(voice), _) => format!("A setting of {}", voice.name()),
             (Owner::Slot { slot, effect }, _) => format!("{} in slot {}", effect.name(), slot + 1),
             (Owner::Mod(slot), 0) => format!("How far Mod {} moves", slot + 1),

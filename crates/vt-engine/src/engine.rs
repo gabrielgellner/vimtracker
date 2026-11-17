@@ -50,6 +50,9 @@ pub struct TrackPlace {
     /// the phrase view's title: with a track's `Length` or `Rate` moving it, the row can't be
     /// worked out from the count (decision 348).
     pub lanes: [Option<LaneRead>; FX_SLOTS],
+    /// The row of its phrase's loop heard at that step when its `Jump` played it in place of the
+    /// one walked to, which the count alone doesn't give (decision 391).
+    pub jumped: Option<usize>,
 }
 
 /// How many voices of one track the sample page can show a playhead for: the track's note and
@@ -378,6 +381,7 @@ impl Engine {
             skipped: false,
             accumulated: None,
             lanes: [None; FX_SLOTS],
+            jumped: None,
         };
         let moved = self.transport != Transport::Stopped && self.frames_since_origin > 0;
         if !moved {
@@ -393,6 +397,7 @@ impl Engine {
             skipped: !state.row.note,
             accumulated: state.accumulated,
             lanes: worked.lanes,
+            jumped: worked.jumped,
         })
     }
 

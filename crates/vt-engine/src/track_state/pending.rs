@@ -122,6 +122,9 @@ pub(crate) struct Worked {
     pub ticks: u64,
     pub speed: Speed,
     pub lanes: [Option<LaneRead>; FX_SLOTS],
+    /// The row of its phrase's loop the track's `Jump` played in place of the one walked to, if
+    /// it jumped (decision 391).
+    pub jumped: Option<usize>,
 }
 
 /// A step, or one part of it, worked out but not yet played, as its groove or nudge lands it later
@@ -152,6 +155,9 @@ pub(crate) struct PendingStep {
     /// Where each FX column's lane read, as the step was worked out, so a part landing after the
     /// next step is worked out reads what it read.
     pub lanes: [Option<LaneRead>; FX_SLOTS],
+    /// The row of its phrase's loop its `Jump` plays in place of the one walked to, if it jumped,
+    /// decided as it was worked out (decision 391).
+    pub jumped: Option<usize>,
     /// What its row's `CHA` and `CND` decided, once the step's first part has decided them.
     pub plays: Option<Decided>,
     /// Which of its track's chain starts it was worked out after, which its accumulators count
@@ -447,4 +453,14 @@ impl TrackState {
         self.find_soonest();
         self.forget_worked(from);
     }
+}
+
+/// What a track's `Jump` decided for the visit of a row it's on: the chain, the place in it where
+/// the visit started, and the row of the loop it jumped to, if it did, kept so the visit's later
+/// pulses play the same row (decision 391).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct JumpAt {
+    pub chain: u32,
+    pub start: usize,
+    pub row: Option<usize>,
 }
