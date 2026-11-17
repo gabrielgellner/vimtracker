@@ -26,6 +26,7 @@ fn map(target: SettingId, min: u16, max: u16) -> MacroMap {
         curve: 0,
         s: 0,
         zone: Default::default(),
+        member: None,
     }
 }
 

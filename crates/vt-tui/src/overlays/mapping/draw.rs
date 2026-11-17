@@ -12,7 +12,7 @@ use ratatui::widgets::Paragraph;
 
 use crate::controls::macro_name;
 use crate::graphics::PanelKey;
-use crate::overlays::mapping::{MapField, MappingView, bend_text, end_text};
+use crate::overlays::mapping::{MapField, MappingView, bend_text, end_text, map_name};
 use crate::pages::Ctx;
 use crate::widgets::theme;
 use crate::widgets::{image, popup};
@@ -92,8 +92,7 @@ pub fn draw(frame: &mut Frame, area: Rect, ctx: &Ctx, view: &MappingView) {
         let target = map.target;
         let here = row == view.row;
         let marker = if here { "›" } else { " " };
-        let name: String = target
-            .name_on(track)
+        let name: String = map_name(ctx.song(), ctx.cursor().track, map)
             .chars()
             .take(SETTING_WIDTH - 1)
             .collect();

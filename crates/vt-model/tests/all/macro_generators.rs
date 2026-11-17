@@ -117,6 +117,7 @@ fn a_macro_on_a_generators_hits_writes_every_phrases_column_again_as_it_turns() 
         &Action::UnmapMacro {
             track: 0,
             target: hits_target(),
+            member: None,
         },
     )
     .unwrap();

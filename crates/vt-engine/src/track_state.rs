@@ -321,6 +321,9 @@ pub(crate) struct TrackState {
     /// Where each macro last put the settings it holds, with modulation, or none to put them
     /// there again, as after a new version, whose maps may differ.
     macro_heard: [Option<f32>; MACROS],
+    /// On a track in a group, where each of the group's macros last put the settings it holds on
+    /// this track, with modulation, or none to put them there again (decision 408).
+    group_macro_heard: [Option<f32>; MACROS],
     /// The held values of each mod slot's type's own settings, and of the accumulator's and the
     /// arpeggio's, which a macro sets as a hand does, and a step's lock or hold of a labelled one.
     /// What's heard is read through a copy with them put in, [`heard_slot`](mods::heard_slot),
@@ -482,6 +485,7 @@ impl TrackState {
             slot_times: SlotTimes::default(),
             macro_held: [0.0; MACROS],
             macro_heard: [None; MACROS],
+            group_macro_heard: [None; MACROS],
             own_held: std::array::from_fn(|slot| {
                 std::array::from_fn(|at| {
                     SettingId::mod_own(slot, at).map_or(0.0, |id| f32::from(id.entry().default))

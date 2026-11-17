@@ -192,6 +192,7 @@ fn a_macro_turns_jump() {
         curve: 0,
         s: 0,
         zone: Zone::default(),
+        member: None,
     }];
     assert_eq!(notes(&turned, 16), WALKED.repeat(2));
     turned.tracks[0].macros[0].value = 0xFF00;
