@@ -137,6 +137,11 @@ sound going in, from `00` dry to `FF` wet. `Gain` turns down what comes out, as 
 make it much louder, on the level scale, where `E0` leaves it as it is and every `10` is 4 dB.
 Every effect but `Comp` has one; a `Comp` has `Makeup`.
 
+`Type` locks from a step, as `1TYPE` in slot 1, and a macro, a lane or a mod slot can move
+it, a zone of its range for each type. A change while a sound plays crossfades from the old
+type to the new over 2.7 ms, as a note cut off fades, so the new type's filters and
+oversampling, which start afresh, don't click.
+
 A mod slot can move the ones after it: `Mod 4`'s `Dest` has `M5 Depth`, `M5 Phase`, `M6 Depth` and
 `M6 Phase`, and `Mod 2`'s has every later slot's, so an envelope can bring in an LFO's depth with
 each note. It only goes one way, so `Mod 6` can't reach any other. See **LFOs** in **The Mod
@@ -251,6 +256,11 @@ sweep rounded to a sine and both sides moving together, so it doesn't widen the 
 the other two do. `Depth` at `80` is the
 Juno's own sweep, `FF` twice as long, and `Rate` goes two octaves either way. Each copy
 loses a little of its top, as the Juno's bucket brigade does, but doesn't dull as it moves.
+
+`Type` locks from a step, as `1TYPE` in slot 1, and a macro, a lane or a mod slot can move
+it, a zone of its range for each type. Each type reads its copies from elsewhere in the line,
+so a change while a sound plays fades the copies out over 2.7 ms and the new type's in over
+2.7 more, the dry sound carrying on under them.
 
 `EQ3` shapes the tone with three bands: a shelf at the bottom, a bell in the middle and a
 shelf at the top. Each band's boost or cut is centred on `80`, where it leaves the sound
@@ -539,8 +549,13 @@ smears them into a wash.
 `Quality` sets how long the recording is, as the module's does: about 1
 second in `Stereo 16`, 2 in `Mono 16`, 4 in `Stereo 8` and 7.4 in `Mono 8`.
 The 8-bit ones record at half the rate, through mu-law, so they're duller and
-grittier. Changing it starts a new recording, so steps don't lock it, nor
-`Mode`.
+grittier. Changing it starts a new recording.
+
+`Mode` and `Quality` lock from a step, as `1MODE` and `1QUAL` in slot 1, and a
+macro, a lane or a mod slot can move them, a zone of its range for each. A
+change while a sound plays fades what's playing out over 10 ms and the new mode
+or recording in over 10 more, so the filters, pitch shifter and diffuser it
+starts afresh don't click. Its reverb rings on through it.
 
 Frozen, with `Feedback` up, the feedback fades out and the reverb comes up in
 its place, as on the module, for a long wash of what's held. `Blend` is the
@@ -646,7 +661,14 @@ Each also feeds back its own way, from a clean limit at `Hi-fi` to a tape's
 saturation at the others, and the dirtier ones' reverb is darker and rings
 longer, as the module's does. `Scorched cassette` codes the dry sound too,
 and its wow and flutter move all of it. Changing `Quality` starts a new
-recording, so steps don't lock it, nor `Mode`.
+recording.
+
+`Mode` and `Quality` lock from a step, as `1MODE` and `1QUAL` in slot 1, and a
+macro, a lane or a mod slot can move them, a zone of its range for each. A mode
+locked on one row starts the module's crossfade there. A quality changed while a
+sound plays dips all of Beads, the sound going through it too, to nothing and
+back over about 5 ms, and starts the recording, the reverb and the cassette
+empty, so nothing clicks.
 
 `Beads`, `Grains` and `Tape` are related: `Grains` is Beads' granular mode
 on its own, with a `Spread` of its own, and `Tape` has Beads' wow and

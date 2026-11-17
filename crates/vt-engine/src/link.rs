@@ -2047,6 +2047,59 @@ mod tests {
         assert_eq!(violations, 0);
     }
 
+    /// Clouds' and Beads' modes and qualities, Distort's type and the Chorus's locked to another
+    /// on every row (decision 414): each switch fades, starts a new recording or a new type, and
+    /// none of it allocates.
+    #[test]
+    fn effect_types_locked_every_row_never_allocate_in_the_callback() {
+        use vt_model::insert::{Beads, Chorus, Clouds, Distort, EffectKind};
+
+        let pool = samples();
+        let mut song = song(2, 16);
+        for track in song.tracks.iter_mut().take(2) {
+            track.inserts = [
+                Insert::Distort(Distort::DEFAULT),
+                Insert::Chorus(Chorus::DEFAULT),
+                Insert::Clouds(Clouds::DEFAULT),
+                Insert::Beads(Beads::DEFAULT),
+            ];
+            let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+            let key = |slot: usize, kind: EffectKind, key: &str| {
+                let at = kind
+                    .params()
+                    .iter()
+                    .position(|param| param.key == key)
+                    .unwrap();
+                SettingId::slot(slot, kind, at).unwrap().key()
+            };
+            for step in 0..16u8 {
+                let [first, second, third] = if step % 2 == 0 {
+                    [
+                        (key(0, EffectKind::Distort, "type"), step % 8),
+                        (key(2, EffectKind::Clouds, "mode"), step % 4),
+                        (key(3, EffectKind::Beads, "quality"), (step / 2) % 4),
+                    ]
+                } else {
+                    [
+                        (key(1, EffectKind::Chorus, "type"), step % 5),
+                        (key(2, EffectKind::Clouds, "quality"), step % 4),
+                        (key(3, EffectKind::Beads, "mode"), step % 2),
+                    ]
+                };
+                let text = format!(
+                    "C-3 -- {}:{:02X} {}:{:02X} {}:{:02X}",
+                    first.0, first.1, second.0, second.1, third.0, third.1
+                );
+                *phrase.step_mut(usize::from(step)).unwrap() = text.parse().unwrap();
+            }
+        }
+        let engine = Engine::new(48_000, published(song, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        // Sixteen 16ths, at 6000 frames each.
+        assert_eq!(blocks(&mut rt, 400), 0);
+    }
+
     #[test]
     fn a_silent_track_count_of_one_eight_and_sixty_four_all_run() {
         let pool = samples();

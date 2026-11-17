@@ -42,7 +42,7 @@
 
 use std::f32::consts::TAU;
 
-use vt_model::constants::TICKS_PER_STEP;
+use vt_model::constants::{CUT_FADE_FRAMES, TICKS_PER_STEP};
 use vt_model::insert::{Beads as Settings, BeadsMode, grain_length, shift_semitones};
 
 use crate::dsp::blocks::clip::soft_clip;
@@ -1509,6 +1509,13 @@ impl Cassette {
 pub(crate) struct Beads {
     recording: Recording,
     quality: u8,
+    /// The quality it's going to, once what comes out has dipped to nothing, and how far back up
+    /// from that dip it is: a new quality starts a new recording, so it dips over
+    /// [`CUT_FADE_FRAMES`] each way rather than cut (decision 414).
+    next_quality: u8,
+    restarted: f32,
+    /// Whether anything has come in since it was emptied, so it may hold something to play.
+    heard: bool,
     target_mode: BeadsMode,
     /// How far between its modes it is, from `-1.5` seconds, granular, to `+1.5`, the delay.
     transition: f32,
@@ -1575,6 +1582,9 @@ impl Beads {
         let mut beads = Self {
             recording: Recording::new(most, tail),
             quality: 0,
+            next_quality: 0,
+            restarted: 1.0,
+            heard: false,
             target_mode: BeadsMode::Granular,
             transition: -MODE_TRANSITION,
             frozen: false,
@@ -1642,6 +1652,9 @@ impl Beads {
     }
 
     pub(crate) fn clear(&mut self) {
+        self.heard = false;
+        self.switch_quality();
+        self.restarted = 1.0;
         self.start_recording(self.quality);
         self.reverb.clear();
         self.cassette.clear();
@@ -1694,9 +1707,7 @@ impl Beads {
     /// to where they are this many frames in.
     pub(crate) fn follow(&mut self, settings: Settings, song: SongPlace, frames: u64) {
         self.keep_time(frames, song);
-        if settings.quality.min(3) != self.quality {
-            self.start_recording(settings.quality);
-        }
+        self.next_quality = settings.quality.min(3);
         self.target_mode = settings.mode;
         self.frozen = settings.freeze != 0;
         self.clocked = settings.clock != 0;
@@ -1710,8 +1721,13 @@ impl Beads {
         let blend = f32::from(settings.blend) / 255.0;
         self.dry.target = (1.0 - blend) * (1.0 + blend) * DRY_GAIN;
         self.wet.target = blend * (2.0 - blend) * WET_GAIN;
-        let reverb = f32::from(settings.reverb) / 255.0;
-        self.reverb_amount = reverb;
+        self.reverb_amount = f32::from(settings.reverb) / 255.0;
+        self.tune_reverb();
+    }
+
+    /// Set its reverb as the module does for its `Reverb` knob, in its quality.
+    fn tune_reverb(&mut self) {
+        let reverb = self.reverb_amount;
         let digital = self.quality == 0;
         let time = reverb * reverb * reverb;
         self.reverb.set(
@@ -1739,6 +1755,8 @@ impl Beads {
 
     /// Jump to what's set, as it's only just started.
     pub(crate) fn settle(&mut self) {
+        self.switch_quality();
+        self.restarted = 1.0;
         for setting in [
             &mut self.time,
             &mut self.size,
@@ -1757,6 +1775,35 @@ impl Beads {
             BeadsMode::Delay => MODE_TRANSITION,
         };
         self.reverb.settle();
+    }
+
+    /// Start a new recording in the quality it's going to, if that's another, with its reverb
+    /// set for it.
+    fn switch_quality(&mut self) {
+        if self.next_quality != self.quality {
+            self.start_recording(self.next_quality);
+            self.tune_reverb();
+        }
+    }
+
+    /// Move a frame through a change of quality: down to nothing, the new recording, then back.
+    #[inline]
+    fn restart(&mut self) {
+        let by = 1.0 / CUT_FADE_FRAMES as f32;
+        if self.next_quality == self.quality {
+            self.restarted = (self.restarted + by).min(1.0);
+        } else {
+            self.restarted = (self.restarted - by).max(0.0);
+            if self.restarted == 0.0 {
+                // The reverb's lines are laid out again for the new quality's rate, and the
+                // cassette plays nothing of the last time it ran, so both start empty.
+                self.reverb.clear();
+                if self.next_quality == 3 {
+                    self.cassette.clear();
+                }
+                self.switch_quality();
+            }
+        }
     }
 
     fn delay_mode(&self) -> bool {
@@ -2001,7 +2048,13 @@ impl Beads {
 
     /// Feed one frame in and get what comes out, the sound blended with what Beads makes of it.
     #[inline]
+    #[allow(clippy::float_cmp, reason = "its dip lands on its ends exactly")]
     pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.heard |= input != [0.0, 0.0];
+        let restarting = self.next_quality != self.quality || self.restarted != 1.0;
+        if restarting {
+            self.restart();
+        }
         let toward = match self.target_mode {
             BeadsMode::Granular => -1.0,
             BeadsMode::Delay => 1.0,
@@ -2010,11 +2063,22 @@ impl Beads {
             (self.transition + toward / self.rate as f32).clamp(-MODE_TRANSITION, MODE_TRANSITION);
         let wet_fade = smooth_step((self.transition.abs() / MODE_FADE).min(1.0));
 
-        let played = self.through_core(input);
+        // Through a change of quality what's recorded dips too, and so does what goes into the
+        // cassette and the reverb, so the new recording and what they hold rise from nothing
+        // rather than start on a step.
+        let restarted = smooth_step(self.restarted);
+        let played = if restarting {
+            self.through_core(input.map(|side| side * restarted))
+        } else {
+            self.through_core(input)
+        };
         let dry_sound = self.dry_sound(input);
         let dry = self.dry.next(self.smoothing);
         let wet = self.wet.next(self.smoothing) * wet_fade;
         let mut out = [0, 1].map(|side| dry * dry_sound[side] + wet * played[side]);
+        if restarting {
+            out = out.map(|side| side * restarted);
+        }
         if self.quality == 3 {
             out = self.cassette.process(out);
         }
@@ -2022,7 +2086,11 @@ impl Beads {
         out = self.reverb.process(out);
         out = self.output.process(out);
         // The codec's full scale, then back up from the module's dry level.
-        out.map(|side| side.clamp(-1.0, 1.0) / DRY_GAIN)
+        let out = out.map(|side| side.clamp(-1.0, 1.0) / DRY_GAIN);
+        if restarting {
+            return out.map(|side| side * restarted);
+        }
+        out
     }
 }
 
@@ -2058,10 +2126,24 @@ impl SlotEffect for Beads {
         self.settle();
     }
 
-    /// Nothing: with `Blend` all dry, what it feeds back and its reverb go on with none of them
-    /// coming out, so the quiet its slot hears doesn't show it holds nothing, and a jump of a
-    /// mode or a level could step what's still in it. It jumps only as it's taken from the pool.
-    fn settle_quiet(&mut self) {}
+    /// Its mode and quality, while nothing has come in since it was emptied, so a lock on a
+    /// song's first row is heard from its first frame; nothing else. With `Blend` all dry, what
+    /// it feeds back and its reverb go on with none of them coming out, so the quiet its slot
+    /// hears doesn't show it holds nothing, and a jump of a mode or a level could step what's
+    /// still in it. It jumps all it has only as it's taken from the pool.
+    fn settle_quiet(&mut self) {
+        if !self.heard {
+            if self.next_quality != self.quality {
+                self.switch_quality();
+                self.reverb.settle();
+            }
+            self.restarted = 1.0;
+            self.transition = match self.target_mode {
+                BeadsMode::Granular => -MODE_TRANSITION,
+                BeadsMode::Delay => MODE_TRANSITION,
+            };
+        }
+    }
 
     fn clear(&mut self) {
         self.clear();

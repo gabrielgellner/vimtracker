@@ -17,6 +17,7 @@ mod clouds;
 mod compressors;
 mod conditions;
 mod echo;
+mod effect_types;
 mod engine;
 mod envelope;
 mod exciter;

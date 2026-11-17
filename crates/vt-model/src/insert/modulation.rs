@@ -51,8 +51,7 @@ pub(crate) const CHORUS_PARAMS: [Entry; 5] = [
         meaning: "how its copies move: Rings' chorus or ensemble, or a Juno's",
         name: "Type",
         key: "type",
-        // Choosing a mode chooses a sound, so steps don't lock it.
-        label: None,
+        label: Some("TYPE"),
         kind: Kind::Stepped {
             choices: &CHORUS_TYPE_NAMES,
             wraps: true,
