@@ -38,6 +38,7 @@ mod groups;
 mod key_track;
 mod lane_moves;
 mod lanes;
+mod last_pass;
 mod lfo;
 mod live_lengths;
 mod lockable_lists;
