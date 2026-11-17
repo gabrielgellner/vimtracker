@@ -11,6 +11,7 @@ mod bank;
 mod beads;
 mod bypassed_amp;
 mod chance_delta;
+mod chance_target;
 mod choke;
 mod clouds;
 mod compressors;

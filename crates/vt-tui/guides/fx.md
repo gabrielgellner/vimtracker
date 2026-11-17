@@ -68,6 +68,8 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `PLEN` | Rows the order walks, up or down from the loop's: `80` is none |
 | `PSTA` | The row the order's window starts on, rows on from the first |
 | `CDLT` | Every row's chance up or down: `80` none, `40` half, `00` none play |
+| `CTGT` | What a row's chance decides: `00` the whole row, `01` each pulse |
+| `CUE` | A new window or lane waits for its loop, `01`, or moves at once, `00` |
 | `GLD` | How long a tie glides into the next note: `00` off, `80` about 60 ms |
 | `OSC` | A synth's `Phase` for the row's note: `00` Free, `01` Reset |
 | `VMOD` | The track's `Mode` for the row's note: `00` Mono, `01` Legato |
@@ -324,6 +326,18 @@ run, as `QNT` is, and a note there ends the last row's lock of it first. A lane
 of it is a density pattern of its own, a mod slot or a macro can move it, and
 the Roto has it on the Play device's second page.
 
+The track's `Target`, after `Chance` in the title, `CTGT` on a step, is what a
+row's chance decides, as the Metropolix's probability targets a stage or a
+pulse. On `Row`, as a track starts, it decides the whole row: a `MLT` row's
+pulses and a `RET`'s hits play together or not at all. On `Pulse`, each pulse
+of a `MLT` row and each hit of a ratchet after the note rolls on its own, with
+the row's chance, its `CHA`s moved by `CDLT`, or with no `CHA` what `CDLT`
+keeps below `80`. So a `MLT4` row at `CDLT 40` loses some of its four notes
+rather than all of them, and a `RET` stutters with gaps. The row's first pulse
+decides as on `Row`, and feeds `PRE` as it would; a condition still decides the
+whole row. The pulses and hits after it are rolled from the `:seed`, so a
+render repeats and every `CHA` keeps the results it had.
+
 `Space l` turns fill on or off, and held, it's on until you let go. The status
 line says `FILL` while it's on.
 
@@ -547,7 +561,8 @@ the list of orders from the phrase's own, `80` as written; `REV` turns the walk
 the other way up; `ORDX` and `ORDY` are the order's numbers, `00` its own.
 `PLEN` and `PSTA` are the window of rows the order walks, read the same way:
 `PLEN` rows more or fewer than the loop's, `80` as written, and `PSTA` the row it
-starts on. See **Order** in **Editing**.
+starts on. `CUE` `01` has a new window, and a lane's new length, rate or start,
+wait for their loop to come round. See **Order** in **Editing**.
 
 ## Speed
 

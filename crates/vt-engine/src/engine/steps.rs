@@ -10,7 +10,7 @@ use vt_model::constants::{FX_SLOTS, NUDGE_TICKS, TICKS_PER_STEP};
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
 use vt_model::order::{WalkMove, jumped};
 use vt_model::phrase::Phrase;
-use vt_model::settings::SettingId;
+use vt_model::settings::{SettingId, moved_chance};
 use vt_model::shape::RowView;
 use vt_model::song::{ChainPosition, Song, Track};
 use vt_model::speed::Speed;
@@ -18,7 +18,7 @@ use vt_model::step::{
     FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step, most_nudge,
 };
 use vt_model::variation::{
-    Roll, Variation, Varies, thin_keeps, varied_lock, varied_ratchet, varies_at,
+    Roll, Variation, Varies, kept, thin_keeps, varied_lock, varied_ratchet, varies_at,
 };
 
 use crate::gens::{Passes, Played, RowAt};
@@ -188,7 +188,9 @@ impl Engine {
     /// row plays, as `JMP` is (decision 400): an `ORD`, `REV`, `ORDX` or `ORDY` on the row the
     /// walk held goes to, or in a lane at it, or what the track holds, each with what modulation
     /// adds. With no lock on that row, none held and no lane, it's what's held, and at rest every
-    /// phrase walks as it's written. It's kept for the step's lookups, and rides with the step.
+    /// phrase walks as it's written. With `Cue` on, the window's `length` and `start` are those its
+    /// pass took at its first step (decision 402). It's kept for the step's lookups, and rides
+    /// with the step.
     fn walk_ahead(
         &mut self,
         index: usize,
@@ -197,6 +199,44 @@ impl Engine {
         lanes: &LaneReads,
     ) -> WalkMove {
         let held = self.tracks[index].held_walk();
+        if !self.tracks[index].cues() {
+            self.tracks[index].window = None;
+            return self.walk_chosen(index, place, running, lanes, held);
+        }
+        // A pass takes the window at its first step, or at the first it plays since it started.
+        let first = place.is_some_and(|(chain, place)| {
+            let current = Arc::clone(&self.current);
+            current.song.tracks.get(index).is_some_and(|owner| {
+                owner
+                    .chain_position(chain, place, self.dealer(index), held)
+                    .is_some_and(|position| position.time == 0)
+            })
+        });
+        let window = self.tracks[index].window.filter(|_| !first);
+        let cued = |walk: WalkMove| match window {
+            Some((length, start)) => WalkMove {
+                length,
+                start,
+                ..walk
+            },
+            None => walk,
+        };
+        let walk = cued(self.walk_chosen(index, place, running, lanes, cued(held)));
+        self.tracks[index].window = Some((walk.length, walk.start));
+        self.tracks[index].walk = walk;
+        walk
+    }
+
+    /// How a track's settings move its phrase's walk at the step it's working out, from `held`,
+    /// what it holds with what modulation adds, and any lock read before the row plays.
+    fn walk_chosen(
+        &mut self,
+        index: usize,
+        place: Option<(u32, usize)>,
+        running: i64,
+        lanes: &LaneReads,
+        held: WalkMove,
+    ) -> WalkMove {
         self.tracks[index].walk = held;
         let Some((chain, place)) = place else {
             return held;
@@ -474,11 +514,16 @@ impl Engine {
         // `CHA` and `CND` go first, as whether the note plays decides whether locks end, with
         // the chances moved by the `CDLT` the row reads before its locks run.
         let moved = self.row_chance_delta(index, &fx.fx, &step, first);
+        // With `Chance target` on `Pulse`, the share each of the row's pulses and ratchet hits
+        // plays with (decision 406).
+        let share = self
+            .chance_by_pulse(index, &fx.fx, &step, first)
+            .then(|| pulse_share(&fx.read, moved));
         let decided = match pending.plays {
             Some(decided) => decided,
             None => {
                 let strikes = matches!(step.note, Note::On(_));
-                self.decide_row(index, &fx.fx, &pending, position, strikes, moved)
+                self.decide_row(index, &fx.fx, &pending, position, strikes, moved, share)
             }
         };
         let plays = decided.note;
@@ -643,7 +688,8 @@ impl Engine {
                 .gate_frames(index, pulses, step.length(), &pending)
                 .map(|frames| start_at + frames);
         }
-        self.time_note(index, &fx, start_at, pending.ticks, accumulating);
+        let keep = share.map(|share| (count, share));
+        self.time_note(index, &fx, start_at, pending.ticks, accumulating, keep);
     }
 
     /// The note a row starts, from the note as written: moved on by the track's accumulators, its
@@ -832,13 +878,40 @@ impl Engine {
         self.tracks[index].chance_delta(own, note)
     }
 
+    /// Whether a row's chance decides each of its pulses and ratchet hits rather than the whole
+    /// row: `Chance target` on `Pulse`, a lock of it among the row's FX, or what the track holds,
+    /// under any lock a note on the row's first pulse would end, with what modulation adds
+    /// (decision 406).
+    fn chance_by_pulse(
+        &self,
+        index: usize,
+        fx: &[FxSlot; FX_SLOTS],
+        step: &RowView,
+        first: bool,
+    ) -> bool {
+        let own = fx
+            .iter()
+            .rev()
+            .find(|slot| slot.command == Some(FxCommand::Set(SettingId::CHANCE_TARGET)))
+            .map(|slot| f32::from(slot.coarse()));
+        let note = first && matches!(step.note, Note::On(_)) && step.gate_kind() != GateKind::Rest;
+        self.tracks[index].chance_target(own, note) >= 0.5
+    }
+
     /// Decide a row's `CHA`s and `CND`s. A row's own are decided once, on its first pulse, by the
     /// step's first part to land, and later pulses keep what that decided. Every `CHA` is rolled
     /// whatever the conditions say, so its rolls are the same with or without them. Each `CHA`'s
     /// chance is moved by `moved`, the row's `CDLT`, and below `80` a row that `strikes` a note
     /// with no `CHA` and no condition counts as a `CHA FF` and thins too, rolled apart from the
     /// `CHA`s so theirs stay as they were; what that decides isn't a condition, so `PRE` and `NEI`
-    /// don't read it (decision 405).
+    /// don't read it (decision 405). With a `share`, `Chance target` on `Pulse`, the row's first
+    /// pulse is decided so, and each later one that strikes is rolled with that share of its own,
+    /// so a pulse dropped leaves the rest of the row; only its conditions decide the whole row
+    /// (decision 406).
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the row as it's read, and what moves its chances"
+    )]
     fn decide_row(
         &mut self,
         index: usize,
@@ -847,6 +920,7 @@ impl Engine {
         position: ChainPosition,
         strikes: bool,
         moved: f32,
+        share: Option<f32>,
     ) -> Decided {
         let first = position.pulse == 0;
         let mut decided = if first {
@@ -870,14 +944,27 @@ impl Engine {
             let seed = self.current.song.seed;
             decided.note &= thin_keeps(seed, index, pending.count, moved);
         }
-        if !self.conditions_hold(index, fx, pending, position, chance) {
+        let holds = self.conditions_hold(index, fx, pending, position, chance);
+        if !holds {
             decided = Decided {
                 note: false,
                 fx: false,
             };
         }
         if first {
-            self.tracks[index].row = decided;
+            // On pulses, the row's later pulses roll their own, so only its conditions carry on.
+            self.tracks[index].row = match share {
+                Some(_) => Decided {
+                    note: holds,
+                    fx: holds,
+                },
+                None => decided,
+            };
+        } else if let Some(share) = share
+            && strikes
+        {
+            let seed = self.current.song.seed;
+            decided.note &= kept(seed, index, pending.count, 0, share);
         }
         if pending.part != Part::Whole {
             self.tracks[index].decide(pending.step, decided);
@@ -932,6 +1019,7 @@ impl Engine {
         start_at: u64,
         ticks: u64,
         accumulates: Option<Accumulating>,
+        keep: Option<(i64, f32)>,
     ) {
         if let Some(units) = fx.kill {
             self.tracks[index].kill_at = Some(start_at + self.groove_units(units, ticks));
@@ -948,6 +1036,8 @@ impl Engine {
                     interval,
                     factor: retrigger_factor(value >> 4),
                     accumulates,
+                    keep,
+                    hits: 0,
                 });
             }
         }
@@ -1232,6 +1322,29 @@ struct NoteVariation {
     own: i16,
     /// Whether one in the row's own columns rolled for its note, so what it did is reported.
     rolled: bool,
+}
+
+/// The share of the time each pulse and ratchet hit of a row plays when `Chance target` is on
+/// `Pulse` (decision 406): its `CHA`s' chances, each moved by `moved`, the row's `CDLT`, together;
+/// or with none, under `CDLT` below `80`, the share a row with no `CHA` keeps, unless a condition
+/// decides it; or every time.
+fn pulse_share(read: &[FxSlot; FX_SLOTS], moved: f32) -> f32 {
+    let mut chances = read
+        .iter()
+        .filter(|slot| slot.command == Some(FxCommand::Cha))
+        .peekable();
+    if chances.peek().is_none() {
+        let conditioned = read.iter().any(|slot| {
+            slot.command == Some(FxCommand::Cnd) && Condition::from_value(slot.coarse()).is_some()
+        });
+        return match conditioned || moved >= 128.0 {
+            true => 1.0,
+            false => moved_chance(1.0, 1.0, moved),
+        };
+    }
+    chances
+        .map(|slot| moved_chance(f32::from(slot.coarse()), 255.0, moved) / 255.0)
+        .product()
 }
 
 /// How much `RET`'s first digit changes the level on each retrigger. `0` is no change, 1-7 are

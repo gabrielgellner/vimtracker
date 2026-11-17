@@ -237,6 +237,7 @@ pub(crate) fn toggle_on(control: Control, track: &Track, song: &Song) -> Option<
         Control::Mod(slot, ModField::Reset) => Some(track.mods[slot].envelope().reset()),
         Control::Arpeggio(ArpField::Retrig) => Some(track.arpeggio.retrig),
         Control::Base(TrackControl::Reverse) => Some(track.reverse != 0),
+        Control::Base(TrackControl::Cue) => Some(track.cue != 0),
         _ => None,
     }
 }
@@ -285,8 +286,26 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
             | TrackControl::OrderX
             | TrackControl::OrderY
             | TrackControl::PhraseLength
-            | TrackControl::PhraseStart),
+            | TrackControl::PhraseStart
+            | TrackControl::Cue),
         ) => walk_view(of, track, which),
+        Control::Base(TrackControl::ChanceTarget) => {
+            let at = usize::from(track.chance_target).min(vt_model::settings::CHANCE_TARGETS.len() - 1);
+            let meanings = [
+                "Row: a row's chance decides the whole row, its pulses and ratchets together",
+                "Pulse: a row's chance decides each of its pulses and ratchet hits on its own",
+            ];
+            of.listed(
+                vt_model::settings::CHANCE_TARGETS
+                    .iter()
+                    .zip(meanings)
+                    .map(|(name, meaning)| Choice::named(*name).meaning(meaning)),
+                at,
+                0,
+                false,
+            )
+            .text(meanings[at].to_owned())
+        }
         Control::Base(which) => {
             let value = track.control(which);
             ParamView {
@@ -824,7 +843,8 @@ fn arpeggio_view(of: ParamView, arpeggio: Arpeggio, field: ArpField) -> ParamVie
 
 /// One of the settings that move a track's phrases' walks (decision 400): `Order` in places on
 /// through the list either side of the phrase's own, centred as a lane's `Length` is, `Reverse`
-/// a switch, and `Order X` and `Order Y` from `Own` to 16.
+/// a switch, and `Order X` and `Order Y` from `Own` to 16; and the window's (decision 401) and
+/// its `Cue`, a switch (decision 402).
 fn walk_view(of: ParamView, track: &Track, which: TrackControl) -> ParamView {
     let value = track.control(which);
     match which {
@@ -892,6 +912,15 @@ fn walk_view(of: ParamView, track: &Track, which: TrackControl) -> ParamView {
                 "On: each phrase walks its rows the other way up, from its last"
             } else {
                 "Off: each phrase walks its rows the way up they're written"
+            };
+            of.switch(on, false).text(shown.to_owned())
+        }
+        TrackControl::Cue => {
+            let on = value != 0;
+            let shown = if on {
+                "On: a new length, start or lane rate waits for its loop to come round"
+            } else {
+                "Off: a new length, start or lane rate is heard at once"
             };
             of.switch(on, false).text(shown.to_owned())
         }

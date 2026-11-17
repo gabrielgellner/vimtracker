@@ -108,10 +108,12 @@ const MASTER_OUTPUT: [&[Control]; 2] = [&[Control::Trim, Control::Level], &[Cont
 
 /// The Play device's title: how often its steps jump to any row of their phrase, which is how
 /// the rows are walked, as the phrase's order is (decision 391), then how far every row's chance
-/// to play is moved, which is whether they're played (decision 405).
-const PLAY_TITLE: [Option<Control>; 2] = [
+/// to play is moved, which is whether they're played (decision 405), and whether that chance
+/// decides each row or each pulse (decision 406).
+const PLAY_TITLE: [Option<Control>; 3] = [
     Some(base(TrackControl::Jump)),
     Some(base(TrackControl::ChanceDelta)),
+    Some(base(TrackControl::ChanceTarget)),
 ];
 
 /// How it plays its notes: their pitch and how they join and end, then the steps' timing, then
