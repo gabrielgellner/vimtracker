@@ -98,6 +98,10 @@ nothing to shape there, like a velocity with no notes, is left alone.
 `00 00 10 10 20 20 30 30`, and a random fill holds each pick for that many rows.
 It counts the rows it changes, so on Velocity it's that many notes.
 
+The fills with the most settings, `Random`, `Acid`, `Grids`, `Divisions`, `Ring`
+and `Tonnetz`, have a section each in **Generators in depth**: how their settings
+work together, and recipes to start from.
+
 `Random` has two more rows, after Mutable Instruments' Marbles, for where its values fall
 between the ends:
 

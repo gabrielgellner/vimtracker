@@ -53,6 +53,9 @@ velocities and lengths as bars, and nudges up or down from the middle; and an FX
 column as a line through its values. While the phrase plays, a dot rides it on
 the row playing, or on a lane, where the lane is reading. It's drawn from the
 phrase as it is, so it changes as you turn a setting or edit a row.
+
+What a fill's settings do together, and recipes for the ones with the most, are in
+**Generators in depth**.
 <!-- ANCHOR_END: before-gen -->
 <!-- ANCHOR: before-panel -->
 

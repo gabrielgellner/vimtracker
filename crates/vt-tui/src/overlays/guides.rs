@@ -184,6 +184,9 @@ const TRACK_FX: Guide = Guide {
 const TRACK_GEN: Guide = Guide {
     source: include_str!("../../guides/track-gen.md"),
 };
+const GENERATORS: Guide = Guide {
+    source: include_str!("../../guides/generators.md"),
+};
 const SAVING: Guide = Guide {
     source: include_str!("../../guides/saving.md"),
 };
@@ -192,7 +195,7 @@ const METER: Guide = Guide {
 };
 
 /// Every guide, in the order to learn them.
-pub(crate) const GUIDES: [Guide; 14] = [
+pub(crate) const GUIDES: [Guide; 15] = [
     FIRST_LOOP,
     NAVIGATION,
     NOTE_ENTRY,
@@ -205,6 +208,7 @@ pub(crate) const GUIDES: [Guide; 14] = [
     TRACK_MOD,
     TRACK_FX,
     TRACK_GEN,
+    GENERATORS,
     SAVING,
     METER,
 ];
