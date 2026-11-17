@@ -10,6 +10,7 @@ mod arps;
 mod bank;
 mod beads;
 mod bypassed_amp;
+mod chance_delta;
 mod choke;
 mod clouds;
 mod compressors;

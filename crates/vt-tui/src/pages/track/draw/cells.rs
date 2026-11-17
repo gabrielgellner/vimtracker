@@ -42,6 +42,8 @@ const TUNE_WIDTH: usize = 8;
 const TO: &str = "→ ";
 /// What a Steps slot's `Jump`, or the Play device's, is called in its title, before its chance.
 const JUMP: &str = "Jump ";
+/// What the Play device's `CDLT` is called in its title, before its value.
+const CHANCE: &str = "Chance ";
 /// What a Steps slot's `Spread` and `Bias` are called in its title, before their amounts.
 const SPREAD: &str = "Spread ";
 const BIAS: &str = "Bias ";
@@ -177,6 +179,7 @@ impl<'a> TrackCells<'a> {
         let before = match control {
             Control::Mod(_, ModField::Destination) => Some(TO),
             Control::Mod(_, ModField::Jump) | Control::Base(TrackControl::Jump) => Some(JUMP),
+            Control::Base(TrackControl::ChanceDelta) => Some(CHANCE),
             Control::Mod(_, ModField::Spread) => Some(SPREAD),
             Control::Mod(_, ModField::Bias) => Some(BIAS),
             _ => None,

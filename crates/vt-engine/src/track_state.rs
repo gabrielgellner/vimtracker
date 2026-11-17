@@ -287,6 +287,8 @@ pub(crate) struct TrackState {
     held_gate_delta: f32,
     /// Held `VDLT`, which moves each note's velocity up or down from its own, with `80` as none.
     held_velocity_delta: f32,
+    /// Held `CDLT`, which moves every row's chance to play up or down, with `80` as none.
+    held_chance_delta: f32,
     /// Held `GLD`, how long a tie glides into the next note, on the `00` to `FF` scale.
     held_glide: f32,
     /// What `Phase` holds, as a place in `Phase::ALL`.
@@ -467,6 +469,7 @@ impl TrackState {
             held_gate: f32::from(SettingId::GATE_LENGTH.entry().default),
             held_gate_delta: f32::from(SettingId::GATE_DELTA.entry().default),
             held_velocity_delta: f32::from(SettingId::VELOCITY_DELTA.entry().default),
+            held_chance_delta: f32::from(SettingId::CHANCE_DELTA.entry().default),
             held_glide: f32::from(SettingId::GLIDE.entry().default),
             held_phase: f32::from(SettingId::PHASE.entry().default),
             held_voice_mode: f32::from(SettingId::VOICE_MODE.entry().default),
@@ -731,6 +734,20 @@ impl TrackState {
         let moved =
             self.held_velocity_delta + self.offsets[SettingId::VELOCITY_DELTA.index()] * 255.0;
         moved_velocity(own, moved)
+    }
+
+    /// The `CDLT` a row decides its chances by, on the `00` to `FF` scale: `own`, a lock of it on
+    /// the row, or what the track holds, a step's lock, hold or glide, or a macro's turn, with what
+    /// modulation adds (decision 405). A row whose note `locks_end`, as playing it would end the
+    /// last note's locks, reads what's under a lock, as `QNT` does, so a lock is heard on its own
+    /// row and a row it thins doesn't keep it for the rows after.
+    pub(crate) fn chance_delta(&self, own: Option<f32>, locks_end: bool) -> f32 {
+        let layers = &self.values[SettingId::CHANCE_DELTA.index()];
+        let held = match layers.lock {
+            Some(_) if locks_end => scaled(layers.base),
+            _ => self.held_chance_delta,
+        };
+        own.unwrap_or(held) + self.moved_by(SettingId::CHANCE_DELTA)
     }
 
     /// What modulation adds to the track's `Jump` now, on the `00` to `FF` scale.

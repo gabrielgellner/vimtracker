@@ -339,6 +339,15 @@ order as it is, to `100 %`, any row every step. It's where held `JMP` starts, so
 a step's `JMP` or a lane's replaces it and an LFO on `JMP` moves around it, and
 on the Roto it's on the Play device's second page. See **Order** in **Editing**.
 
+`Chance`, after `Jump` in the title, moves every row's chance to play up or
+down, a density fader for the track, from `00`, nothing plays, through `80`,
+everything as written, to `FF`, every row plays, a `CHA 00` too. Below `80` it
+scales every chance down, rows with no `CHA` too, so `40` plays about half the
+notes; above it, it brings in the rows each `CHA` drops. It's where held
+`CDLT` starts, so a step's `CDLT` or a lane's replaces it and an LFO on `CDLT`
+moves around it, and on the Roto it's on the Play device's second page after
+`Jump`. See **Moving every chance** in **FX commands**.
+
 `Phase`, in a fourth column of a synth's Play device, is whether its oscillators run
 on from note to note or start again on each. A synth that holds its notes plays the
 next one on the voice already sounding (see **Envelopes** in **The Mod page**). At

@@ -233,6 +233,20 @@ pub fn moved_velocity(velocity: u8, value: f32) -> u8 {
         .clamp(0.0, f32::from(MAX_VELOCITY)) as u8
 }
 
+/// A chance of `chance` out of `top` moved by a `CDLT` value, out of the same `top` (decision
+/// 405). Below `80` every chance is scaled down toward never, so `40` halves each and `00` plays
+/// nothing; above it the rest of the way to always is closed, so `C0` brings in half of what each
+/// was missing and `FF` plays every one. `80` leaves it as it is, to the bit. Either way a row's
+/// chances keep their order, and the fader's turn is the share of rows heard.
+pub fn moved_chance(chance: f32, top: f32, value: f32) -> f32 {
+    let side = side(f64::from(value.clamp(0.0, 255.0))) as f32;
+    if side < 0.0 {
+        chance * (1.0 + side)
+    } else {
+        chance + (top - chance) * side
+    }
+}
+
 /// A row's nudge, in ticks, as it plays under a `QNT` value: brought that far toward the grid, so
 /// `00` plays it as written, `80` halves it and `FF` plays it on the grid.
 pub fn quantised_nudge(ticks: i64, value: f32) -> i64 {

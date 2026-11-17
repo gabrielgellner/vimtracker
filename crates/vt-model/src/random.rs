@@ -182,6 +182,16 @@ impl<const MULTIPLIER: u64> Pcg<MULTIPLIER> {
     pub fn chance(&mut self, value: u8) -> bool {
         (self.next_u32() % 255) < u32::from(value)
     }
+
+    /// Whether a chance of `value` out of 255 comes up with it moved by a `CDLT` value, as
+    /// [`moved_chance`](crate::settings::moved_chance) moves it (decision 405). It takes one draw,
+    /// as [`Pcg32::chance`] does, and at `80` is the same to the bit; however far it's moved the
+    /// draw is compared with the moved chance, so turning `CDLT` up only adds to what comes up.
+    #[inline]
+    pub fn chance_moved(&mut self, value: u8, moved: f32) -> bool {
+        let chance = crate::settings::moved_chance(f32::from(value), 255.0, moved);
+        ((self.next_u32() % 255) as f32) < chance
+    }
 }
 
 /// Marsaglia's xorshift32, by shifts of 13, 17 and 5 ("Xorshift RNGs", *Journal of Statistical
