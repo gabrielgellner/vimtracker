@@ -5,6 +5,7 @@
 use std::path::Path;
 
 mod common;
+mod description;
 
 mod ableton;
 mod analysis;
