@@ -228,7 +228,7 @@ These have no mark.
 | `DEL` | Delay this step by `xx` units |
 | `KIL` | Cut the note after `xx` units |
 | `OFF` | Start the envelopes' release after `xx` units |
-| `RET` | Retrigger: `xy` repeats every `y` units, and `y` of `0` does nothing; `x` fades or swells each repeat, as below |
+| `RET` | Retrigger every `y` units, `x` fading or swelling each: see below |
 | `CHA` | Play the note with a chance of `xx` out of `FF` |
 | `CND` | Play the row only when condition `xx` holds: see **Conditions** |
 | `ACU` | Move the row's note on each time it plays: see **Accumulators** |
@@ -240,7 +240,7 @@ track's own, so on a track at `1/8` it's half an eighth. They count from where
 the note starts, after the groove and the row's nudge, and so does `CHA`, which
 goes with the note whichever column it's in.
 
-For `RET`, `x` is its fade or swell. `0` keeps every repeat at the note's level;
+A `RET` with `y` of `0` doesn't retrigger. Its `x` is its fade or swell: `0` keeps every repeat at the note's level;
 `1` to `7` fade, each repeat `0.9` down to `0.3` times as loud as the one before;
 and `8` to `F` swell, each `1.1` up to `1.8` times as loud, never past full. So
 `x` builds on itself from hit to hit, an even step in dB. It moves the level of
