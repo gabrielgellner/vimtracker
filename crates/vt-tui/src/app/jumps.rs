@@ -266,6 +266,14 @@ impl App {
             self.settled(outcome, false);
             return true;
         }
+        // A setting its group's macro holds goes to that macro, on the group's track (decision 408),
+        // as it's the one heard.
+        if let Some((_, at, _)) = self.services.group_macro_here(control)
+            && let Some((group, _)) = self.song().group_place(self.services.cursor.track)
+        {
+            self.go_to_macro_on(Some(group), at);
+            return true;
+        }
         let held = self.services.macros_holding(control);
         match held.as_slice() {
             [] => false,
@@ -284,8 +292,16 @@ impl App {
     /// Go to a macro in the Gen page's band, as a jump, with no overlay open, so the next `=`
     /// turns it.
     pub(crate) fn go_to_macro(&mut self, at: usize) {
-        let track = self.services.page_track();
+        self.go_to_macro_on(None, at);
+    }
+
+    /// Go to a macro, as [`App::go_to_macro`] does, of another track first if one's given.
+    fn go_to_macro_on(&mut self, track: Option<usize>, at: usize) {
         self.record_jump();
+        if let Some(track) = track {
+            self.services.go_to_track_at(track, self.modes.view);
+        }
+        let track = self.services.page_track();
         self.track_page.show(Page::Gen);
         self.track_page.phrase = self.services.phrase_id();
         let rows = self.track_page.rows(Some(&track));

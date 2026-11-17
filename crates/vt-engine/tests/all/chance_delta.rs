@@ -215,6 +215,7 @@ fn a_macro_turns_it() {
         curve: 0,
         s: 0,
         zone: Default::default(),
+        member: None,
     }];
     turned.tracks[0].macros[0].value = 0x0000;
     assert!(

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use vt_model::constants::{NUDGE_TICKS, TICKS_PER_STEP};
+use vt_model::constants::{MAX_GROUPS, MAX_SOUND_TRACKS, NUDGE_TICKS, TICKS_PER_STEP};
 use vt_model::groove::GrooveId;
 pub use vt_model::playable::Span;
 use vt_model::playable::{Playable, normalize_peak, onset_analysis};
@@ -58,6 +58,8 @@ pub struct Published {
     pub has_steps: bool,
     /// The steps under each live generator, which the engine renders a moving one from.
     pub(crate) unders: Unders,
+    /// Which tracks each group's macros reach, so the engine puts them before it works those out.
+    pub(crate) group_macros: GroupMacros,
     /// What each track's rows ask of the version, in the song's order, which the next version
     /// keeps for each track it shares with this one.
     rows: Vec<Arc<TrackRows>>,
@@ -98,6 +100,51 @@ impl Handover {
     pub fn new(version: Arc<Published>) -> Self {
         let scratch = GenScratch::for_song(&version.song);
         Self { version, scratch }
+    }
+}
+
+/// The group tracks whose macros hold settings on the tracks of their group, and those tracks,
+/// worked out with each version on the edit thread (decision 408). The engine works such a group's
+/// modulation out first, and its steps, and puts its macros on its tracks before theirs.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct GroupMacros {
+    /// The group tracks whose macros reach their tracks, in order.
+    pub(crate) leaders: [Option<usize>; MAX_GROUPS],
+    /// Each sound track in such a group, with its group track and its place among the group's
+    /// tracks.
+    pub(crate) members: [Option<(usize, u8)>; MAX_SOUND_TRACKS],
+}
+
+impl GroupMacros {
+    fn of(song: &Song) -> Self {
+        let mut found = Self {
+            leaders: [None; MAX_GROUPS],
+            members: [None; MAX_SOUND_TRACKS],
+        };
+        let sounds = song.sound_tracks().min(MAX_SOUND_TRACKS);
+        let groups = (sounds..song.tracks.len()).filter(|&at| {
+            let track = &song.tracks[at];
+            track.is_group() && track.has_member_maps()
+        });
+        for (leader, group) in found.leaders.iter_mut().zip(groups) {
+            *leader = Some(group);
+        }
+        for track in 0..sounds {
+            found.members[track] = song
+                .group_place(track)
+                .filter(|(group, _)| found.leads(*group));
+        }
+        found
+    }
+
+    /// Whether any group's macros reach its tracks.
+    pub(crate) fn any(&self) -> bool {
+        self.leaders[0].is_some()
+    }
+
+    /// Whether a track is a group whose macros reach its tracks.
+    pub(crate) fn leads(&self, track: usize) -> bool {
+        self.leaders.contains(&Some(track))
     }
 }
 
@@ -144,6 +191,7 @@ impl Published {
                     .any(|track| track.speed != Speed::Sixteenth),
             has_steps: song.sections.iter().any(|s| song.section_length(s) > 0),
             unders: Unders::of(&song, last.map(|last| (&*last.song, &last.unders))),
+            group_macros: GroupMacros::of(&song),
             rows,
             song,
             samples,

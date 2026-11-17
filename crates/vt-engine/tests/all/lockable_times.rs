@@ -248,6 +248,7 @@ fn a_macro_lock_on_a_decay_is_its_own_notes() {
         curve: 0,
         s: 0,
         zone: Default::default(),
+        member: None,
     };
     assert_eq!(map.at(255.0), 0xC000);
     let with_macro = |row: &str| {

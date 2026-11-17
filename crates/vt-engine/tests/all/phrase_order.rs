@@ -274,6 +274,7 @@ fn a_macro_turns_the_order() {
         curve: 0,
         s: 0,
         zone: Zone::default(),
+        member: None,
     }];
     assert_eq!(rows_heard(&turned, 8), manual("1 2 3 4 5 6 7 8"));
     turned.tracks[0].macros[0].value = 0xFF00;

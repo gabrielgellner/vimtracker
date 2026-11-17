@@ -19,7 +19,7 @@ use vt_model::macros::{
 };
 use vt_model::settings::{Kind, Owner};
 use vt_model::shape::params::{BEND_JUMP, BEND_NUDGE, Typing};
-use vt_model::song::Track;
+use vt_model::song::{Song, Track};
 
 use crate::app::App;
 use crate::controls::Control;
@@ -174,15 +174,46 @@ fn end_shown(track: &Track, target: MacroTarget, value: u16) -> String {
     .unwrap_or_else(|| id.entry().kind.shown(value))
 }
 
-/// What a macro holds, for the picker and the status line: its settings by name on this track,
-/// or that it holds nothing yet.
-pub fn holds(track: &Track, at: usize) -> String {
-    let maps = &track.macros[at].maps;
+/// The track a mapping of a macro on the track at `index` reaches: a group's on one of its tracks
+/// that track (decision 408), and any other the macro's own. None for a group's on a place its
+/// group has no track at.
+pub(crate) fn reached<'a>(song: &'a Song, index: usize, map: &MacroMap) -> Option<&'a Track> {
+    match map.member {
+        None => song.tracks.get(index),
+        Some(place) => song.tracks.get(song.group_member(index, place)?),
+    }
+}
+
+/// A mapping's setting by name on the track it reaches, a group's on one of its tracks after
+/// that track's name, as `Kick Cut`, or its place in the group while it has no track there.
+pub(crate) fn map_name(song: &Song, index: usize, map: &MacroMap) -> String {
+    match (map.member, reached(song, index, map)) {
+        (None, Some(track)) => map.target.name_on(track),
+        (Some(place), Some(track)) => {
+            let member = song.group_member(index, place).unwrap_or_default();
+            format!("{} {}", track.label(member), map.target.name_on(track))
+        }
+        (Some(place), None) => format!("Place {} {}", place + 1, map.target.name()),
+        (None, None) => map.target.name(),
+    }
+}
+
+/// An end of a mapping in its setting's units on the track it reaches.
+fn end_on(song: &Song, index: usize, map: &MacroMap, value: u16) -> String {
+    let fresh = Track::default();
+    let track = reached(song, index, map).unwrap_or(&fresh);
+    end_shown(track, map.target, value)
+}
+
+/// What a macro of the track at `index` holds, for the picker and the status line: its settings
+/// by name, a group's on its tracks after the track's name, or that it holds nothing yet.
+pub fn holds(song: &Song, index: usize, at: usize) -> String {
+    let maps = &song.tracks[index].macros[at].maps;
     if maps.is_empty() {
         return "nothing yet".to_owned();
     }
     maps.iter()
-        .map(|map| map.target.name_on(track))
+        .map(|map| map_name(song, index, map))
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -200,16 +231,16 @@ fn over(map: &MacroMap) -> String {
 /// What a macro moves, for the line that describes it: each setting by name, from where to where
 /// in its units, and over what part of the turn if not all of it, as `Cut 40 to C0 and Res 20 to
 /// 60 over 80–FF`, or none while it holds nothing.
-pub(crate) fn moves(track: &Track, at: usize) -> Option<String> {
-    let each: Vec<String> = track.macros[at]
+pub(crate) fn moves(song: &Song, index: usize, at: usize) -> Option<String> {
+    let each: Vec<String> = song.tracks[index].macros[at]
         .maps
         .iter()
         .map(|map| {
             format!(
                 "{} {} to {}{}",
-                map.target.name_on(track),
-                end_shown(track, map.target, map.min),
-                end_shown(track, map.target, map.max),
+                map_name(song, index, map),
+                end_on(song, index, map, map.min),
+                end_on(song, index, map, map.max),
                 over(map)
             )
         })
@@ -223,13 +254,38 @@ pub(crate) fn moves(track: &Track, at: usize) -> Option<String> {
 
 /// What the status line says of a setting a macro holds: its macro, and where the macro takes it,
 /// in its units, and for a generator's `Wave` or `Rate`, that it's by hand.
-pub(crate) fn held_text(track: &Track, target: MacroTarget) -> Option<String> {
-    let (at, map) = track.macro_holding(target)?;
+/// The macro holding a setting on the track at `index`, as the status line names it, `macro 2`
+/// or a group's, `G1's macro 2`, with the macro's place and its mapping there: its group's, if
+/// one holds it, as that's the one heard (decision 408), or its own.
+pub(crate) fn holder(
+    song: &Song,
+    index: usize,
+    target: MacroTarget,
+) -> Option<(String, usize, &MacroMap)> {
+    if let Some((at, map)) = song.group_holding(index, target) {
+        let group = song.group_place(index)?.0;
+        let on = format!("{}'s macro", song.tracks[group].label(group));
+        return Some((on, at, map));
+    }
+    let (at, map) = song.tracks.get(index)?.macro_holding(target)?;
+    Some(("macro".to_owned(), at, map))
+}
+
+/// What the status line says of a setting a macro holds on the track at `index`: its macro, and
+/// where the macro takes it, in its units, and for a generator's `Wave` or `Rate`, that it's by
+/// hand.
+pub(crate) fn held_text(song: &Song, index: usize, target: MacroTarget) -> Option<String> {
+    let track = song.tracks.get(index)?;
     let by_hand = if target.by_hand() { ", by hand" } else { "" };
+    let (on, at, map) = holder(song, index, target)?;
+    let macros = match map.member {
+        Some(_) => &song.tracks[song.group_place(index)?.0].macros,
+        None => &track.macros,
+    };
     Some(format!(
-        "on macro {} {}, {} to {}{}{by_hand}",
+        "on {on} {} {}, {} to {}{}{by_hand}",
         at + 1,
-        macro_name(&track.macros[at], at),
+        macro_name(&macros[at], at),
         end_shown(track, target, map.min),
         end_shown(track, target, map.max),
         over(map)
@@ -237,15 +293,15 @@ pub(crate) fn held_text(track: &Track, target: MacroTarget) -> Option<String> {
 }
 
 /// The line describing what's under the mapping view's cursor, `Space d`: an end of the range, a
-/// bend or the zone, and what it means for the setting the mapping turns.
-pub(crate) fn mapping_line(track: &Track, view: &MappingView) -> Option<String> {
-    let maps = &track.macros[view.at].maps;
+/// bend or the zone, and what it means for the setting the mapping turns. `index` is the track
+/// whose macro it is.
+pub(crate) fn mapping_line(song: &Song, index: usize, view: &MappingView) -> Option<String> {
+    let maps = &song.tracks.get(index)?.macros[view.at].maps;
     let map = maps.get(view.row.min(maps.len().checked_sub(1)?))?;
-    let target = map.target;
-    let name = target.name_on(track);
+    let name = map_name(song, index, map);
     let (min, max) = (
-        end_shown(track, target, map.min),
-        end_shown(track, target, map.max),
+        end_on(song, index, map, map.min),
+        end_on(song, index, map, map.max),
     );
     let zone = map.zone;
     let (start, end) = (format!("{:02X}", zone.start), format!("{:02X}", zone.end));
@@ -350,7 +406,17 @@ impl Services {
                 | Cmd::PickValue
                 | Cmd::EnterInsert
         );
-        let Some((target, at, _)) = self.macro_here(control).filter(|_| turns) else {
+        if !turns {
+            return false;
+        }
+        if let Some((target, at, _)) = self.group_macro_here(control) {
+            let name = target.name_on(&self.page_track());
+            let song = self.song();
+            let (on, ..) = holder(song, self.cursor.track, target).expect("a group's holds it");
+            self.status = format!("{name} is on {on} {}: turn it there, gd goes to it", at + 1);
+            return true;
+        }
+        let Some((target, at, _)) = self.macro_here(control) else {
             return false;
         };
         let name = target.name_on(&self.page_track());
@@ -359,6 +425,17 @@ impl Services {
             at + 1
         );
         true
+    }
+
+    /// The macro of its group's track holding the setting under the cursor on a track in a group,
+    /// and its mapping there, if one does (decision 408).
+    pub(crate) fn group_macro_here(
+        &self,
+        control: Control,
+    ) -> Option<(MacroTarget, usize, MacroMap)> {
+        let target = self.macro_target(control)?;
+        let (at, map) = self.song().group_holding(self.cursor.track, target)?;
+        Some((target, at, *map))
     }
 
     /// `M`: list the eight macros, each with what it holds, to put the setting under the cursor
@@ -373,21 +450,38 @@ impl Services {
             };
             return Outcome::Done;
         };
-        let track = self.page_track();
-        let on = track.macro_holding(target).map(|(at, _)| at);
-        let items = (0..MACROS)
+        let index = self.cursor.track;
+        let song = self.song();
+        let track = &song.tracks[index];
+        let item = |owner: usize, at: usize, label: String, pick: Pick, on: bool| {
+            let mut meaning = holds(song, owner, at);
+            if on {
+                meaning = format!("{meaning}; Enter takes it off");
+            }
+            Item::new(label, pick).meaning(meaning)
+        };
+        let own = track.macro_holding(target).map(|(at, _)| at);
+        let mut items: Vec<Item> = (0..MACROS)
             .map(|at| {
                 let label = format!("{} {}", at + 1, macro_name(&track.macros[at], at));
-                let mut meaning = holds(&track, at);
-                if on == Some(at) {
-                    meaning = format!("{meaning}; Enter takes it off");
-                }
-                Item::new(label, Pick::Macro(at)).meaning(meaning)
+                item(index, at, label, Pick::Macro(at), own == Some(at))
             })
             .collect();
+        // On a track in a group, its group's macros come after its own (decision 408).
+        let mut on = own;
+        if let Some((group, _)) = song.group_place(index) {
+            let held = song.group_holding(index, target).map(|(at, _)| at);
+            let macros = &song.tracks[group].macros;
+            let name = song.tracks[group].label(group);
+            items.extend((0..MACROS).map(|at| {
+                let label = format!("{name} {} {}", at + 1, macro_name(&macros[at], at));
+                item(group, at, label, Pick::GroupMacro(at), held == Some(at))
+            }));
+            on = held.map(|at| MACROS + at).or(on);
+        }
         self.status = format!(
             "Enter maps {} to the macro chosen, from bottom to top to start with; a digit chooses at once",
-            target.name_on(&track)
+            target.name_on(track)
         );
         Outcome::Open(Box::new(Picker::new(MACRO_PICKER, items).opened_on(on)))
     }
@@ -397,35 +491,79 @@ impl Services {
     /// mapping of a macro holding nothing turns the macro to where the setting is, so nothing
     /// jumps. `control` is the setting under the cursor, and `view` the view on screen.
     pub(crate) fn map_to_macro(&mut self, at: usize, control: Control, view: View) {
+        self.put_on_macro(false, at, control, view);
+    }
+
+    /// Put the setting under the cursor, on a track in a group, on a macro of the group's track,
+    /// or take it off, or move it there, as [`Services::map_to_macro`] does with the track's own
+    /// (decision 408).
+    pub(crate) fn map_to_group_macro(&mut self, at: usize, control: Control, view: View) {
+        self.put_on_macro(true, at, control, view);
+    }
+
+    /// Put the setting under the cursor on a macro of its own track's, or with `group` of its
+    /// group's track's, by the track's place in the group, or take it off that macro, or move it
+    /// there from wherever it is, its own track's or its group's, with its range.
+    fn put_on_macro(&mut self, group: bool, at: usize, control: Control, view: View) {
         let Some(target) = self.macro_target(control) else {
             return;
         };
-        let track = self.page_track();
-        let name = target.name_on(&track);
         let index = self.cursor.track;
-        let held = &track.macros[at];
-        match track.macro_holding(target) {
-            Some((on, _)) if on == at => {
-                self.apply(&Action::UnmapMacro {
-                    track: index,
-                    target,
-                });
-                self.status = format!("{name} is off macro {}, and back to its own", at + 1);
+        let song = self.song().clone();
+        let track = &song.tracks[index];
+        let name = target.name_on(track);
+        let place = song.group_place(index);
+        let (owner, member) = match (group, place) {
+            (false, _) => (index, None),
+            (true, Some((owner, place))) => (owner, Some(place)),
+            (true, None) => return,
+        };
+        let held = &song.tracks[owner].macros[at];
+        // Where it is now: on the track's own macros, or its group's, which have the last word.
+        let own = track
+            .macro_holding(target)
+            .map(|(on, map)| (None, on, *map));
+        let grouped = place.and_then(|(_, place)| {
+            let (on, map) = song.group_holding(index, target)?;
+            Some((Some(place), on, *map))
+        });
+        let label = |member: Option<u8>, at: usize| match member {
+            Some(_) => format!("{}'s macro {}", song.tracks[owner].label(owner), at + 1),
+            None => format!("macro {}", at + 1),
+        };
+        let owner_of = |member: Option<u8>| if member.is_some() { owner } else { index };
+        let unmap = |member: Option<u8>| Action::UnmapMacro {
+            track: owner_of(member),
+            target,
+            member,
+        };
+        let this = if group { grouped } else { own };
+        let other = if group { own } else { grouped };
+        match (this, other) {
+            (Some((_, on, _)), _) if on == at => {
+                self.apply(&unmap(member));
+                self.status = format!("{name} is off {}, and back to its own", label(member, at));
             }
-            Some((on, map)) => {
-                self.apply(&Action::MapMacro {
-                    track: index,
+            (Some((from, on, map)), _) | (None, Some((from, on, map))) => {
+                let mut actions = Vec::new();
+                if from != member {
+                    actions.push(unmap(from));
+                }
+                actions.push(Action::MapMacro {
+                    track: owner,
                     at,
-                    map: *map,
+                    map: MacroMap { member, ..map },
                 });
+                self.apply(&Action::Batch(actions));
+                let now = &self.song().tracks[owner].macros[at];
                 self.status = format!(
-                    "{name} moved from macro {} to macro {}, {}",
-                    on + 1,
-                    at + 1,
-                    macro_name(&self.page_track().macros[at], at)
+                    "{name} moved from {} to {}, {}",
+                    label(from, on),
+                    label(member, at),
+                    macro_name(now, at)
                 );
             }
-            None => {
+            (None, None) => {
                 let (map, now) = match target.setting() {
                     Some(id) => (MacroMap::whole(target), track.value_of(id)),
                     None => {
@@ -436,32 +574,32 @@ impl Services {
                         (MacroMap::numbers(target, bounds), now)
                     }
                 };
+                let map = MacroMap { member, ..map };
                 let mut actions = vec![Action::MapMacro {
-                    track: index,
+                    track: owner,
                     at,
                     map,
                 }];
-                if held.maps.is_empty() {
+                let first = held.maps.is_empty();
+                if first {
                     actions.push(Action::SetMacro {
-                        track: index,
+                        track: owner,
                         at,
                         value: map.macro_for(now),
                     });
                 }
-                let first = held.maps.is_empty();
                 self.apply(&Action::Batch(actions));
-                let now = self.page_track();
+                let now = &self.song().tracks[owner].macros[at];
+                let on = label(member, at);
                 self.status = if first {
                     format!(
-                        "{name} is on macro {}, {}, from its bottom to its top: gm for its range",
-                        at + 1,
-                        macro_name(&now.macros[at], at)
+                        "{name} is on {on}, {}, from its bottom to its top: gm for its range",
+                        macro_name(now, at)
                     )
                 } else {
                     format!(
-                        "{name} is on macro {}, {}, and jumps to where the macro is: gm for its range",
-                        at + 1,
-                        macro_name(&now.macros[at], at)
+                        "{name} is on {on}, {}, and jumps to where the macro is: gm for its range",
+                        macro_name(now, at)
                     )
                 };
             }
@@ -476,6 +614,16 @@ impl Services {
             Control::Macro(at) => (at, 0),
             _ => match self.macro_here(control) {
                 Some((target, at, _)) => (at, track.macros[at].map_of(target).unwrap_or(0)),
+                None if let Some((target, at, _)) = self.group_macro_here(control) => {
+                    let song = self.song();
+                    let (on, ..) = holder(song, self.cursor.track, target).expect("it's held");
+                    self.status = format!(
+                        "{} is on {on} {}: gd goes there, and gm there opens its mapping",
+                        target.name_on(&track),
+                        at + 1
+                    );
+                    return Outcome::Done;
+                }
                 None => {
                     self.status =
                         "This isn't on a macro: M maps it to one, and gm on a macro opens it"
@@ -1015,6 +1163,7 @@ impl MappingView {
         services.apply(&Action::UnmapMacro {
             track: services.cursor.track,
             target: map.target,
+            member: map.member,
         });
         if self.keep_open(services) {
             services.status = format!("{name} is off the macro: u brings it back");
