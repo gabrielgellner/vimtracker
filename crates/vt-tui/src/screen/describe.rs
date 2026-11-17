@@ -96,6 +96,12 @@ fn chosen(found: &ParamView) -> &str {
 
 /// The shape panel's setting under its cursor, as the panel shows its value.
 pub(crate) fn shape_line(panel: &ShapePanel) -> String {
+    // In `Weights`' digits, the one under the cursor.
+    if let Some((_, note, weight)) = panel.weight_here() {
+        return format!(
+            "Weight of {note}: {weight:X}, how often {note} is chosen, from 0, never, to F, the most."
+        );
+    }
     let context = panel.context();
     let row = panel.row;
     let described = row.described(&panel.shape, &context);
