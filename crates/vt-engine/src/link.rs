@@ -882,6 +882,52 @@ mod tests {
         assert_eq!(blocks(&mut rt, 200), 0);
     }
 
+    /// Tracks whose steps lock the filter's type, drive, punch, cuts and `Safe`, a type on every
+    /// row so each fades from the one before, with an LFO on `Drive` and a macro on `Low cut`
+    /// (decision 398).
+    #[test]
+    fn locks_of_the_filters_settings_never_allocate_in_the_callback() {
+        use vt_model::macros::{MacroMap, MacroTarget};
+        use vt_model::settings::SettingId;
+        let pool = samples();
+        let mut locking = song(8, 16);
+        for (index, track) in locking.tracks.iter_mut().take(8).enumerate() {
+            track.resonance = 0xC0;
+            if index % 2 == 0 {
+                track.machine =
+                    vt_model::song::Machine::Plaits(vt_model::song::SynthVoice::VirtualAnalog);
+            }
+            track.mods[3] = vt_model::modulation::ModSlot::lfo(
+                Some(SettingId::DRIVE),
+                vt_model::lfo::Lfo::default(),
+            )
+            .with_depth(0x40);
+            track.macros[0].maps = vec![MacroMap {
+                target: MacroTarget::Setting(SettingId::LOW_CUT),
+                min: 0,
+                max: 0x8000,
+                curve: 0,
+                s: 0,
+                zone: Default::default(),
+            }];
+            track.macros[0].value = 0x4000;
+            let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+            for step in 0..16 {
+                let kind = (step + index) % 10;
+                let text = format!(
+                    "C-3 64 type:{kind:02X} drive:{:02X} punch:80 safe:{:02X} highcut:A0",
+                    step * 16,
+                    step % 2
+                );
+                *phrase.step_mut(step).unwrap() = text.parse().unwrap();
+            }
+        }
+        let engine = Engine::new(48_000, published(locking, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        assert_eq!(blocks(&mut rt, 200), 0);
+    }
+
     /// Tracks gliding every note at `Always`, struck, carried and tied (decision 382).
     #[test]
     fn glide_mode_always_never_allocates_in_the_callback() {

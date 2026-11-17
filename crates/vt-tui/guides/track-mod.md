@@ -134,7 +134,7 @@ Halfway through a decay to nothing, `Lin` is 6 dB down, `Exp` 18, `Analog` 30 an
 through its attack it's nearly two thirds of the way up, so a long one swells in
 rather than fading up from nothing, and its falls are true RC curves. The picture draws the curve it
 plays. `=` and `-` on it go through the four, `K` lists them, and `x` puts back
-`Exp`. A step can't lock it.
+`Exp`. A step locks it with `CRV`, as `CRV2 01` for `Lin`.
 
 **Without a reset,** a note starts the attack from where the envelope is, at the
 point its curve reaches that level, so the attack keeps its shape and takes only
@@ -556,6 +556,53 @@ to the `Depth` for the hardest notes.
 `10`. `i` types a note, such as `C-3`, or hex. `x` puts back the source's own. On
 the Roto, `Low`, `High`, `Depth` and `Source` are the first four knobs, with the
 polarity on the button under `Depth`, and `Dest` on the next page.
+
+## Locking a slot's lists
+
+A step locks a slot's lists and its odd times, as an Elektron box locks its LFO's
+`WAVE`, `MODE` and `FADE`. Each label ends in the slot's number, and `K` lists each
+under its slot while the slot's type has it:
+
+| Lock | Sets | Values |
+|---|---|---|
+| `SHP4` | An LFO's shape | `00` Sine, `01` Tri ... `07` Lorenz, `08` Rössler |
+| `LMOD4` | An LFO's mode | `00` Free, `01` Trig, `02` Hold, `03` One, `04` Half |
+| `FADE4` | An LFO's fade | `16` Off, `00` out over 16 bars, `2C` in over 16 |
+| `SMOD3` | Steps' mode | `00` Trig, `01` Free, `02` Note |
+| `LOOP3` | Steps' loop | `00` Once, `01` from 1, `11` Bounce, `12` Shuffle |
+| `CRV2` | An envelope's curve | `00` Exp, `01` Lin, `02` Snap, `03` Analog |
+| `HOLD2` | An AHD's hold | `00` none, `01` 1 ms to `FE` 2 s, `FF` the note |
+| `PEAK2` | A drum's peak | `00` none, `01` 1 ms to `FF` 8 s, as a time |
+| `RTCH2` | A drum's strikes | `00` one up to `07` eight |
+
+A lock is heard from its row to the track's next note, as any lock is, so one on a
+note's row is that note's, and on an empty row it changes the slot from there.
+
+**What a swap keeps.** The slot carries on from where it is, and only what it plays
+changes:
+
+*   A shape swaps the wave at the place in its cycle the LFO has reached, as its
+    phase runs on whatever its wave, so `SHP4 04` halfway through a bar of `Ramp` is
+    a square from its second half.
+*   An LFO's mode changes how the next note starts it: `Trig` on a note's row
+    starts the cycle there, and `Free` after it runs on from where that left it.
+    `Hold` holds where it was at the last note, and `One` and `Half` stop at their
+    end if it's past it.
+*   Steps' mode is the same: `Trig` on a note's row starts them at `Start`, `Free`
+    runs on from the step they're on rather than jumping to where the song is, and
+    `Note` goes to the step its count of notes gives.
+*   A loop takes the count where it is on through its new end, so `Bounce` locked at
+    the tenth step of eight turns back from the fifth.
+*   A curve, a hold, a peak and a ratchet reshape the envelope from where it is in
+    its note. On the slot shaping the notes, they're each note's own from its start.
+
+Whatever jumps, what the slot adds glides there over 5 ms, as a change of type
+does, so a swap doesn't click.
+
+**Macros and other slots.** `M` on any of them puts it on a macro, which turns
+through the list from end to end, and a later slot's `Dest` lists them, as
+`M4 Shape`, so `Mod 2` can move `Mod 3`'s loop or `Mod 4`'s wave. On a list the
+depth is in places: `+10` moves `from 1` up sixteen to `Bounce`.
 
 ## Pitch in scale
 

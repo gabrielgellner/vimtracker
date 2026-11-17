@@ -29,7 +29,7 @@ use crate::speed::Speed;
 use crate::step::{FxCommand, FxSlot, Step};
 use crate::view::ViewState;
 
-pub use crate::filter::{FILTER_MODE_NAMES, FilterMode, FilterType};
+pub use crate::filter::{FILTER_MODE_NAMES, FILTER_TYPE_NAMES, FilterMode, FilterType};
 pub use crate::machine::{
     ACID_GATE, DEFAULT_ACCENT, FULL_GATE, GLIDE_MODE_NAMES, GlideMode, Machine, PHASE_NAMES, Phase,
     Role, SIX_OP_PATCHES, SynthVoice, VOICE_MODE_NAMES, VoiceMode,
@@ -1580,6 +1580,66 @@ mod tests {
         assert!(loaded.key_track);
         assert_eq!(track.value_of(SettingId::KEY_TRACK) >> 8, 1);
         assert_eq!(Track::default().value_of(SettingId::KEY_TRACK), 0);
+    }
+
+    /// The filter's settings that became the registry's are read from the fields songs already
+    /// save, under the names they save them by, so a song saved before loads with its values and
+    /// saves the same (decision 398).
+    #[test]
+    fn a_saved_filter_loads_into_its_registry_settings_unchanged() {
+        let saved = "(mute: false, solo: false, filter: Ladder, drive: 64, punch: 32, \
+                     safe: true, low_cut: 16, high_cut: 200)";
+        let track: Track = ron::from_str(saved).unwrap();
+        let coarse = |id: SettingId| track.value_of(id) >> 8;
+        assert_eq!(coarse(SettingId::DRIVE), 64);
+        assert_eq!(coarse(SettingId::PUNCH), 32);
+        assert_eq!(coarse(SettingId::LOW_CUT), 16);
+        assert_eq!(coarse(SettingId::HIGH_CUT), 200);
+        assert_eq!(
+            coarse(SettingId::FILTER_TYPE),
+            u16::from(FilterType::Ladder.index())
+        );
+        assert_eq!(coarse(SettingId::SAFE), 1);
+        let text = ron::to_string(&track).unwrap();
+        for field in [
+            "filter:Ladder",
+            "drive:64",
+            "punch:32",
+            "safe:true",
+            "low_cut:16",
+            "high_cut:200",
+        ] {
+            assert!(text.contains(field), "{field} in {text}");
+        }
+        // A song from before any of them were set has each at its default, as the registry has.
+        let fresh: Track = ron::from_str("(mute: false, solo: false)").unwrap();
+        for id in [
+            SettingId::DRIVE,
+            SettingId::PUNCH,
+            SettingId::LOW_CUT,
+            SettingId::HIGH_CUT,
+            SettingId::FILTER_TYPE,
+            SettingId::SAFE,
+        ] {
+            assert_eq!(
+                fresh.value_of(id),
+                u16::from(id.entry().default) << 8,
+                "{}",
+                id.key()
+            );
+        }
+        // And a macro or the pages put each back where the song keeps it.
+        let mut moved = Track::default();
+        moved.set_value_of(
+            SettingId::FILTER_TYPE,
+            u16::from(FilterType::ObX.index()) << 8,
+        );
+        moved.set_value_of(SettingId::HIGH_CUT, 0x4000);
+        moved.set_value_of(SettingId::SAFE, 0x0100);
+        assert_eq!(
+            (moved.filter, moved.high_cut, moved.safe),
+            (FilterType::ObX, 0x40, true)
+        );
     }
 
     #[test]

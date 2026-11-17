@@ -807,8 +807,8 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
-        49,
-        "what a sample track has, its Sample, Slice, Start and Length, its lanes' nine, Pitch in scale, Jump, the six that move the walk, none, Mod 6's three and its Rate, the accumulator's and arpeggio's four, and the eight macros"
+        56,
+        "what a sample track has, its Sample, Slice, Start and Length, its lanes' nine, Pitch in scale, Jump, the filter's Drive, Punch, Low cut and High cut, the six that move the walk, none, Mod 6's three, its Rate, Shape, Mode and Fade, the accumulator's and arpeggio's four, and the eight macros"
     );
     assert!(
         picker
@@ -863,7 +863,7 @@ fn typed_rate_on_second_lfo(app: &mut App) {
 fn the_track_page_sets_the_filters_punch_beside_cut() {
     let (mut app, _realtime) = on_track_page();
     // Between the filter's own and the utility filter's.
-    press(&mut app, "$h");
+    press(&mut app, "$hh");
     assert_eq!(app.track_control().label(), "Punch");
     press(&mut app, "i60");
     assert_eq!(app.song().tracks[0].punch, 0x60);
@@ -1309,8 +1309,8 @@ fn the_track_page_sets_the_utility_filter() {
     let track = |app: &App| app.song().tracks[0].clone();
     assert_eq!((track(&app).low_cut, track(&app).high_cut), (0, 0xFF));
     // Beside the filter's own, in the Filter.
-    assert!(from_name(&app, "Cut").contains("   Low cut   00   ▕"));
-    assert!(from_name(&app, "Res").contains("   High cut  FF   ▕"));
+    assert!(from_name(&app, "Cut").contains("   Low cut   0000 ▕"));
+    assert!(from_name(&app, "Res").contains("   High cut  FF00 ▕"));
 
     press(&mut app, "$");
     press(&mut app, "i40");
@@ -1773,13 +1773,13 @@ fn the_track_page_shows_its_settings_in_columns() {
         (11, "╭─ Filter  LP  12 dB ─"),
         (
             13,
-            "│  Cut       FF00 ▕█████████▏   Punch     00   ▕         ▏   Low cut   00   ▕         ▏   ",
+            "│  Cut       FF00 ▕█████████▏   Punch     0000 ▕         ▏   Low cut   0000 ▕         ▏   ",
         ),
         (
             15,
-            "│  Res       0000 ▕         ▏   Safe      \u{f204}                  High cut  FF   ▕█████████▏   ",
+            "│  Res       0000 ▕         ▏   Safe      \u{f204}                  High cut  FF00 ▕█████████▏   ",
         ),
-        (17, "│  Drive     00   ▕         ▏   "),
+        (17, "│  Drive     0000 ▕         ▏   "),
         (20, "╭─ Output ─"),
         // The trim is at the top of the output, at 0 dB in the middle of its bar.
         (
@@ -2313,8 +2313,8 @@ fn a_jumps_labels_also_follow_the_names_being_searched() {
     let line = from_name;
     // Over the letter after what's typed, in the same columns as without a label.
     assert!(line(&app, "Cuf").starts_with("Cuf       fF00 ▕"));
-    assert!(line(&app, "Low cuj").starts_with("Low cuj   j0   ▕"));
-    assert!(line(&app, "High cul").starts_with("High cul  lF   ▕"));
+    assert!(line(&app, "Low cuj").starts_with("Low cuj   j000 ▕"));
+    assert!(line(&app, "High cul").starts_with("High cul  lF00 ▕"));
     assert!(line(&app, "Res").starts_with("Res       0000 ▕"));
     // It moves along as you type, and past the end of a name it sits just after it.
     press(&mut app, "t");
@@ -2457,10 +2457,10 @@ fn the_sound_page_stops_on_a_values_fine_digits() {
     assert_eq!(cut(&app), (0xFE, 0xF0));
     press(&mut app, "=");
     assert_eq!(cut(&app), (0xFF, 0), "none at the top");
-    // Drive is whole, so it has no fine digits to stop on.
-    press(&mut app, "/dri");
+    // Trim is whole, so it has no fine digits to stop on.
+    press(&mut app, "/tri");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(column_name(&app), "Drive");
+    assert_eq!(column_name(&app), "Trim");
     press(&mut app, "l");
     assert!(!app.track_page.fine);
 }

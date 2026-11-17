@@ -2,8 +2,8 @@
 //! started and released with the track's notes, and left resting while they'd change nothing.
 
 use vt_model::attractor::{Attractor, System, view};
-use vt_model::envelope::{Envelope, Lpg};
-use vt_model::lfo::{LfoMode, MAX_DEFORM, Rate, deformed_wave, phase_of};
+use vt_model::envelope::{Curve, Envelope, Lpg};
+use vt_model::lfo::{LfoMode, MAX_DEFORM, Rate, Shape, deformed_wave, phase_of};
 use vt_model::macros::MACROS;
 use vt_model::modulation::{
     MAX_DEPTH, MOD_SLOTS, ModKind, ModSlot, Polarity, depth_of, note_shape_slot,
@@ -11,11 +11,10 @@ use vt_model::modulation::{
 use vt_model::scale::Scale;
 use vt_model::settings::{MOD_OWN_SETTINGS, SettingId};
 use vt_model::song::Track;
-use vt_model::steps::{MAX_STEP, STEPS, StepRate, Steps, StepsMode, smoothed};
+use vt_model::steps::{Loop, MAX_STEP, STEPS, StepRate, Steps, StepsMode, smoothed};
 
 use crate::dsp::effects::memory::{MemoryPool, SongPlace};
 use crate::dsp::effects::slot::{BYPASS_FADE_MS, InsertState};
-use crate::dsp::filters::filter::Channel;
 use crate::rng::Pcg32;
 use crate::voice::NoteOn;
 
@@ -183,13 +182,45 @@ impl EnvelopeRun {
     }
 }
 
+/// What a slot runs as: its type, and the lists that choose what it plays, an LFO's wave and mode,
+/// Steps' mode and end and an envelope's curve. A change of any is heard at once, from where the
+/// slot is, its phase or its count kept, and what it adds glides there from what it added, as a
+/// change of type's does, so a lock that swaps one doesn't jump (decision 399).
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Form {
+    kind: ModKind,
+    shape: Shape,
+    lfo_mode: LfoMode,
+    steps_mode: StepsMode,
+    looping: Loop,
+    curve: Curve,
+}
+
+impl Form {
+    fn of(slot: &ModSlot) -> Self {
+        Self {
+            kind: slot.kind,
+            shape: slot.lfo.shape,
+            lfo_mode: slot.lfo.mode,
+            steps_mode: slot.steps.mode,
+            looping: slot.steps.looping,
+            curve: match slot.kind {
+                ModKind::Ahd => slot.ahd.curve,
+                ModKind::Drum => slot.drum.curve,
+                _ => slot.adsr.curve,
+            },
+        }
+    }
+}
+
 /// One mod slot as it runs, whatever its type: every type's state is kept going underneath, so a
 /// slot whose type changes picks the new one up where it would be had it always been there, and
-/// what it adds glides from the old type's to the new one's rather than jumping.
+/// what it adds glides from the old type's to the new one's rather than jumping, as it does when
+/// its wave, its mode, its curve or its end changes.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct SlotRun {
-    /// The type it last ran as, to notice a change: none until it first runs.
-    seen: Option<ModKind>,
+    /// What it last ran as, to notice a change: none until it first runs.
+    seen: Option<Form>,
     /// Where its envelope has got to, which each note starts and ends.
     pub(super) envelope: EnvelopeRun,
     /// Where its cycles count from: a note's start, or the top of the song.
@@ -411,13 +442,15 @@ impl SlotRun {
     }
 
     /// What it adds this time, `out` with what's left of a type change's glide, kept as what it
-    /// added. A type it's just changed to starts its glide from what the old one last added.
-    fn add(&mut self, kind: ModKind, out: f32) -> f32 {
-        if self.seen.is_some_and(|seen| seen != kind) {
+    /// added. A type, a wave, a mode, a curve or an end it's just changed to starts its glide from
+    /// what it last added.
+    fn add(&mut self, slot: &ModSlot, out: f32) -> f32 {
+        let form = Form::of(slot);
+        if self.seen.is_some_and(|seen| seen != form) {
             self.glide = self.out - out;
             self.glide_left = 1.0;
         }
-        self.seen = Some(kind);
+        self.seen = Some(form);
         let added = if self.glide_left > 0.0 {
             out + self.glide * self.glide_left
         } else {
@@ -428,8 +461,8 @@ impl SlotRun {
     }
 
     /// Add nothing this time, as it moves nothing, which ends any glide.
-    fn rest(&mut self, kind: ModKind) {
-        self.seen = Some(kind);
+    fn rest(&mut self, slot: &ModSlot) {
+        self.seen = Some(Form::of(slot));
         self.out = 0.0;
         self.glide_left = 0.0;
     }
@@ -670,10 +703,11 @@ pub(super) struct Rest {
 }
 
 /// Whether a track's mod slots' own settings may be heard other than as the song has them: a
-/// macro holds something, or a slot goes to one of them. Otherwise the slots are read as they
-/// are, with no copy.
-fn reshapes(track: &Track) -> bool {
-    track.has_macro_maps()
+/// macro holds something, a slot goes to one of them, or a step has `stepped` one. Otherwise the
+/// slots are read as they are, with no copy.
+fn reshapes(track: &Track, stepped: bool) -> bool {
+    stepped
+        || track.has_macro_maps()
         || track
             .mods
             .iter()
@@ -713,9 +747,13 @@ impl TrackState {
     /// them, for what reads a slot outside its working out, a note's start and end and its shape.
     pub(crate) fn heard_mod(&self, track: &Track, at: usize) -> ModSlot {
         let slot = &track.mods[at];
-        heard_slot(slot, at, reshapes(track), &self.own_held[at], |index| {
-            self.offsets[index]
-        })
+        heard_slot(
+            slot,
+            at,
+            reshapes(track, self.own_stepped),
+            &self.own_held[at],
+            |index| self.offsets[index],
+        )
         .unwrap_or(*slot)
     }
 
@@ -783,7 +821,7 @@ impl TrackState {
             .map(|played| f32::from(played.note) + self.held_pitch - 128.0);
         // Whether any slot's own settings may be moved from the song's, so each is read through
         // a copy with them put in, from what the slots before it have added this time.
-        let reshaped = reshapes(track);
+        let reshaped = reshapes(track, self.own_stepped);
         let own_held = &self.own_held;
         for (at, (slot, run)) in track.mods.iter().zip(&mut self.slots).enumerate() {
             let heard = heard_slot(slot, at, reshaped, &own_held[at], |index| {
@@ -797,7 +835,7 @@ impl TrackState {
             run.lfo_lap.keep(slot.lfo.rate, now);
             run.steps_lap.keep(slot.steps.rate, now, step_ticks);
             let Some(destination) = slot.destination else {
-                run.rest(slot.kind);
+                run.rest(slot);
                 continue;
             };
             // A low-pass gate's fall closes the track's filter too, by its `Colour`, wherever it
@@ -835,12 +873,12 @@ impl TrackState {
                 || shaping == Some(at)
                 || !destination.reached_from(at, track)
             {
-                run.rest(slot.kind);
+                run.rest(slot);
                 continue;
             }
             filter_moving |= matches!(destination, SettingId::CUT | SettingId::RES);
             if stopped {
-                run.rest(slot.kind);
+                run.rest(slot);
                 continue;
             }
             working = true;
@@ -871,12 +909,12 @@ impl TrackState {
                 ModKind::Track => match run.run_track(slot, last_note) {
                     Some(level) => level,
                     None => {
-                        run.rest(slot.kind);
+                        run.rest(slot);
                         continue;
                     }
                 },
             };
-            let added = run.add(slot.kind, tuned(level * depth / 255.0) * share);
+            let added = run.add(slot, tuned(level * depth / 255.0) * share);
             if slot.kind == ModKind::Lfo {
                 // What an LFO moves goes straight into the offsets, through the slow smoothers.
                 offsets[destination.index()] += added;
@@ -889,17 +927,7 @@ impl TrackState {
         }
         self.filter_moving = filter_moving;
         self.report_pitch(track);
-        // A different filter starts from silence rather than from another's state.
-        if self.filter_type != track.filter {
-            self.filter_type = track.filter;
-            self.filter = [Channel::default(); 2];
-            self.coefficients = None;
-        }
-        self.drive.target = f32::from(track.drive) / 255.0;
-        self.punch.target = f32::from(track.punch) / 255.0;
-        self.safe.target = f32::from(u8::from(track.safe));
-        self.low_cut.target = f32::from(track.low_cut) / 255.0;
-        self.high_cut.target = f32::from(track.high_cut) / 255.0;
+        self.move_filter_settings();
         self.cut_offset.target = self.offsets[SettingId::CUT.index()];
         self.res_offset.target = self.offsets[SettingId::RES.index()];
         self.pan_offset.target = self.offsets[SettingId::PAN.index()];
@@ -1062,12 +1090,13 @@ impl TrackState {
         }
     }
 
-    /// Put each mod slot's share where its switch is, and take each one's type as it is, with no
-    /// glide, for a song that starts playing with some switched out.
+    /// Put each mod slot's share where its switch is, and take each one's type as it's first
+    /// heard, with no glide, for a song that starts playing with some switched out, or with a lock
+    /// of a wave or a mode on its first row.
     pub(super) fn settle_shares(&mut self, track: &Track) {
         for (run, slot) in self.slots.iter_mut().zip(&track.mods) {
             run.share = if slot.bypassed { 0.0 } else { 1.0 };
-            run.seen = Some(slot.kind);
+            run.seen = None;
             run.glide_left = 0.0;
         }
     }
@@ -1077,7 +1106,7 @@ impl TrackState {
     /// it had always been it.
     pub(crate) fn trigger_mods(&mut self, track: &Track, now: SongTime) {
         self.wake();
-        let reshaped = reshapes(track);
+        let reshaped = reshapes(track, self.own_stepped);
         let (own_held, offsets) = (&self.own_held, &self.offsets);
         for (at, (slot, run)) in track.mods.iter().zip(&mut self.slots).enumerate() {
             let slot = heard_slot(slot, at, reshaped, &own_held[at], |index| offsets[index])
@@ -1094,7 +1123,7 @@ impl TrackState {
     /// through whatever the note's length.
     pub(crate) fn release_mods(&mut self, track: &Track, now: SongTime) {
         self.wake();
-        let reshaped = reshapes(track);
+        let reshaped = reshapes(track, self.own_stepped);
         let (own_held, offsets) = (&self.own_held, &self.offsets);
         for (at, (slot, run)) in track.mods.iter().zip(&mut self.slots).enumerate() {
             let slot = heard_slot(slot, at, reshaped, &own_held[at], |index| offsets[index])

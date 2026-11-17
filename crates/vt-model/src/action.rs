@@ -649,13 +649,16 @@ impl TrackControl {
             Self::VelocityDelta => Some(SettingId::VELOCITY_DELTA),
             Self::Quantise => Some(SettingId::QUANTISE),
             Self::Jump => Some(SettingId::JUMP),
+            Self::Drive => Some(SettingId::DRIVE),
+            Self::Punch => Some(SettingId::PUNCH),
+            Self::LowCut => Some(SettingId::LOW_CUT),
+            Self::HighCut => Some(SettingId::HIGH_CUT),
             Self::Order => Some(SettingId::ORDER),
             Self::Reverse => Some(SettingId::REVERSE),
             Self::OrderX => Some(SettingId::ORDER_X),
             Self::OrderY => Some(SettingId::ORDER_Y),
             Self::PhraseLength => Some(SettingId::PHRASE_LENGTH),
             Self::PhraseStart => Some(SettingId::PHRASE_START),
-            Self::Drive | Self::Punch | Self::LowCut | Self::HighCut => None,
         }
     }
 }

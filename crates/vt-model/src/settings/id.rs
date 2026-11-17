@@ -114,8 +114,8 @@ pub enum Owner {
     Sampler,
     /// One of the track's eight macros, by its place.
     Macro(usize),
-    /// One of a mod slot's type's own settings, by the slot's place, which only macros and
-    /// modulation move.
+    /// One of a mod slot's type's own settings, by the slot's place, which macros and modulation
+    /// move, and steps lock where it's labelled.
     ModOwn(usize),
     /// The accumulator's and the arpeggio's, which only macros and modulation move.
     Accumulation,
@@ -185,20 +185,32 @@ impl SettingId {
     /// The chance each step plays any row of its phrase instead of the one its order walks to, from
     /// none at `00` to every step at `FF`.
     pub const JUMP: Self = Self(LATER_TRACK_START as u16 + 4);
+    /// How hard the sound is pushed into the filter.
+    pub const DRIVE: Self = Self(LATER_TRACK_START as u16 + 5);
+    /// How far a clean filter's ringing peak starts higher and falls in pitch.
+    pub const PUNCH: Self = Self(LATER_TRACK_START as u16 + 6);
+    /// The utility high-pass after the filter, off at `00`.
+    pub const LOW_CUT: Self = Self(LATER_TRACK_START as u16 + 7);
+    /// The utility low-pass after the filter, off at `FF`.
+    pub const HIGH_CUT: Self = Self(LATER_TRACK_START as u16 + 8);
+    /// The filter's type: a place in [`FilterType::ALL`](crate::song::FilterType::ALL).
+    pub const FILTER_TYPE: Self = Self(LATER_TRACK_START as u16 + 9);
+    /// Whether the filter's `Res` stops short of ringing by itself: `0` off, `1` on.
+    pub const SAFE: Self = Self(LATER_TRACK_START as u16 + 10);
     /// How far through the list of orders from its phrase's own a track's phrases play in, `80`
     /// as written (decision 400).
-    pub const ORDER: Self = Self(LATER_TRACK_START as u16 + 5);
+    pub const ORDER: Self = Self(LATER_TRACK_START as u16 + 11);
     /// Whether a track's phrases' walks go the other way up.
-    pub const REVERSE: Self = Self(LATER_TRACK_START as u16 + 6);
+    pub const REVERSE: Self = Self(LATER_TRACK_START as u16 + 12);
     /// The first of the order's numbers, `00` for the phrase's own.
-    pub const ORDER_X: Self = Self(LATER_TRACK_START as u16 + 7);
+    pub const ORDER_X: Self = Self(LATER_TRACK_START as u16 + 13);
     /// The second of the order's numbers, `00` for the phrase's own.
-    pub const ORDER_Y: Self = Self(LATER_TRACK_START as u16 + 8);
+    pub const ORDER_Y: Self = Self(LATER_TRACK_START as u16 + 14);
     /// How many rows more or fewer than its loop's a phrase's order walks over, `80` for none
     /// (decision 401).
-    pub const PHRASE_LENGTH: Self = Self(LATER_TRACK_START as u16 + 9);
+    pub const PHRASE_LENGTH: Self = Self(LATER_TRACK_START as u16 + 15);
     /// The row the window a phrase's order walks over starts on, rows on from its loop's first.
-    pub const PHRASE_START: Self = Self(LATER_TRACK_START as u16 + 10);
+    pub const PHRASE_START: Self = Self(LATER_TRACK_START as u16 + 16);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.
@@ -474,7 +486,7 @@ impl SettingId {
         let label = self.entry().label?;
         Some(match self.owner().0 {
             Owner::Slot { slot, .. } | Owner::Bypass(slot) => format!("{}{label}", slot + 1),
-            Owner::Mod(slot) | Owner::Macro(slot) | Owner::Lane(slot) => {
+            Owner::Mod(slot) | Owner::ModOwn(slot) | Owner::Macro(slot) | Owner::Lane(slot) => {
                 format!("{label}{}", slot + 1)
             }
             _ => label.to_owned(),

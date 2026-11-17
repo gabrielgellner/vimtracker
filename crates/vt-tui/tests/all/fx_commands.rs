@@ -194,9 +194,9 @@ fn stepping_dest_goes_through_a_slots_settings() {
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "=H");
     press(&mut app, &format!("{}$", to_lfo(0)));
-    // Past the twenty-two a sample track has, and `Pitch` in scale beside `Pitch`, as a synth's
+    // Past the twenty-six a sample track has, and `Pitch` in scale beside `Pitch`, as a synth's
     // settings aren't on it.
-    for _ in 0..24 {
+    for _ in 0..28 {
         press(&mut app, "=");
     }
     assert_eq!(
@@ -538,7 +538,7 @@ fn dests_window_draws_categories_as_dim_headings_with_counts() {
         "{text}"
     );
     assert!(text.contains("│• ---"), "the chosen one is marked: {text}");
-    assert!(text.contains("│▾ Filter  3"), "{text}");
+    assert!(text.contains("│▾ Filter  7"), "{text}");
     assert!(
         text.lines()
             .any(|line| line.contains("│    Cut ") && line.contains(" Filter cutoff")),
