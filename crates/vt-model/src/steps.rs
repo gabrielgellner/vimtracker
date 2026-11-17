@@ -41,7 +41,7 @@ impl StepsMode {
     pub const ALL: [Self; 3] = [Self::Trig, Self::Free, Self::Note];
 
     /// The name in the title.
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Trig => "Trig",
             Self::Free => "Free",

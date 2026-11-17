@@ -261,7 +261,7 @@ impl Control {
                     ModField::Deform => depth_value(modulator.lfo.deform),
                     _ => u16::from(modulator.polarity().index()) << 8,
                 };
-                Some((field.setting(slot)?, value))
+                Some((field.setting(slot, modulator.kind)?, value))
             }
             Self::Level => base(SettingId::LEVEL, track.level),
             Self::Base(which) => base(which.setting()?, track.control(which)),
@@ -310,7 +310,7 @@ impl Control {
         }
         match self {
             Self::Mod(slot, field) => {
-                let id = SettingId::mod_own(slot, field.own()?)?;
+                let id = SettingId::mod_own(slot, field.own(track.mods[slot].kind)?)?;
                 id.exists_on(track).then_some(id)
             }
             Self::Accumulator(field) => {

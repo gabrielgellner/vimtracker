@@ -320,10 +320,15 @@ pub(crate) struct TrackState {
     /// there again, as after a new version, whose maps may differ.
     macro_heard: [Option<f32>; MACROS],
     /// The held values of each mod slot's type's own settings, and of the accumulator's and the
-    /// arpeggio's, which a macro sets as a hand does. What's heard is read through a copy with
-    /// them put in, [`heard_slot`](mods::heard_slot), wherever they differ from the song's.
+    /// arpeggio's, which a macro sets as a hand does, and a step's lock or hold of a labelled one.
+    /// What's heard is read through a copy with them put in, [`heard_slot`](mods::heard_slot),
+    /// wherever they differ from the song's.
     own_held: [[f32; MOD_OWN_SETTINGS]; MOD_SLOTS],
     played_held: [f32; PLAYED_SETTINGS],
+    /// Whether a step has set one of the mod slots' own settings since the track was made, so its
+    /// slots are read through a copy from then on; a song that never locks one reads them as
+    /// they are, as before (decision 399).
+    own_stepped: bool,
 }
 
 impl TrackState {
@@ -482,6 +487,7 @@ impl TrackState {
             played_held: std::array::from_fn(|at| {
                 played_id(at).map_or(0.0, |id| f32::from(id.entry().default))
             }),
+            own_stepped: false,
         }
     }
 

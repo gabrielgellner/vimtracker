@@ -2,7 +2,7 @@
 //! engine shares with the status line.
 
 use crate::constants::{DB_PER_LEVEL, UNITY_LEVEL};
-use crate::envelope::time_at;
+use crate::envelope::{Hold, hold_at, time_at};
 use crate::insert::{
     ALGORITHM_NAMES, ECHO_BASS, ECHO_TREBLE, Triggering, VOWEL_NAMES, algorithm_blend, attack_ms,
     ceiling_db, echo_head_seconds, echo_input_db, echo_shelf_db, exciter_attack_ms,
@@ -111,6 +111,8 @@ pub enum Units {
     Glide,
     /// An envelope's time, as [`time_at`] gives it.
     EnvelopeTime,
+    /// An AHD's hold, as [`hold_at`] gives it: a time, or the note at the top.
+    HoldTime,
     /// Rows either side of `80`, one a step, as a lane's `Length` moves its lane.
     Rows,
     /// The track's utility high-pass and low-pass, in Hz as [`Units::Hertz`] reads, but off at
@@ -378,6 +380,10 @@ impl Kind {
                     glide_ms(coarse as f32).map_or_else(|| "Off".to_owned(), milliseconds)
                 }
                 Units::EnvelopeTime => format!("{} ms", time_at(coarse as f32)),
+                Units::HoldTime => match hold_at(coarse as f32) {
+                    Hold::Note => "Note".to_owned(),
+                    Hold::Ms(ms) => format!("{ms} ms"),
+                },
                 Units::Rows => rows_text((coarse.round() as i32 - 128).clamp(-128, 127)),
                 Units::Orders => orders_text((coarse.round() as i32 - 128).clamp(-128, 127)),
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
