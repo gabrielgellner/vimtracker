@@ -61,7 +61,7 @@ thread_local! {
 }
 
 /// How many of the played settings are the accumulator's, before the arpeggio's.
-const ACCUMULATION_SETTINGS: usize = 2;
+const ACCUMULATION_SETTINGS: usize = 5;
 
 /// The accumulator's or arpeggio's setting at a place among both.
 pub(super) fn played_id(place: usize) -> Option<SettingId> {
