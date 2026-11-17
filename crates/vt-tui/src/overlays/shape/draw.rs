@@ -403,56 +403,10 @@ fn draw_in(frame: &mut Frame, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-    use std::time::Instant;
-
-    use ratatui::Terminal;
-    use ratatui::backend::TestBackend;
     use ratatui::buffer::Buffer;
-    use ratatui::crossterm::event::KeyCode;
-    use vt_model::song::{Phrase, Song};
-    use vt_model::step::Step;
 
     use super::*;
-    use crate::app::App;
-    use crate::widgets::pin::{app_with, assert_drawn, cut, press, special};
-
-    /// An app on one track whose phrase is these steps.
-    fn app_on(steps: &[&str]) -> App {
-        let mut song = Song::new(1);
-        let steps: Vec<Step> = steps.iter().map(|step| step.parse().unwrap()).collect();
-        song.tracks[0]
-            .phrases
-            .insert(0, Arc::new(Phrase::from_steps(steps)));
-        app_with(song).0
-    }
-
-    /// Keys typed, with `<Enter>` and `<Esc>` for those keys.
-    fn keys(app: &mut App, text: &str) {
-        let mut rest = text;
-        while !rest.is_empty() {
-            if let Some(tail) = rest.strip_prefix("<Enter>") {
-                special(app, KeyCode::Enter);
-                rest = tail;
-            } else if let Some(tail) = rest.strip_prefix("<Esc>") {
-                special(app, KeyCode::Esc);
-                rest = tail;
-            } else {
-                let c = rest.chars().next().unwrap();
-                press(app, &c.to_string());
-                rest = &rest[c.len_utf8()..];
-            }
-        }
-    }
-
-    /// The whole screen, this big.
-    fn screen(app: &mut App, width: u16, height: u16) -> Buffer {
-        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-        terminal
-            .draw(|frame| crate::run::draw_screen(frame, app, None, Instant::now()))
-            .unwrap();
-        terminal.backend().buffer().clone()
-    }
+    use crate::widgets::pin::{app_on, assert_drawn, cut, keys, screen};
 
     /// A row of the screen as text.
     fn row(buffer: &Buffer, y: u16) -> String {
