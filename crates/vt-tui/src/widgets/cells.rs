@@ -183,8 +183,8 @@ fn a_centred_bar_keeps_its_middle_and_a_value_with_no_fine_part_its_room() {
     assert_drawn(
         &cell(&app, "Drive", 29),
         &[
-            "Drive     00   ▕         ▏   ",
-            "aaaaaaaaaa.....bcccccccccb...",
+            "Drive     0000 ▕         ▏   ",
+            "aaaaaaaaaa..aa.bcccccccccb...",
             "a fg OVERLAY2",
             "b fg OVERLAY0",
             "c fg MAUVE",
@@ -217,8 +217,8 @@ fn a_jump_labels_the_names_it_finds_and_their_values() {
     assert_drawn(
         &row(&app, 13, 1, 90),
         &[
-            "  Cuf       fF00 ▕█████████▏   Punch     00   ▕         ▏   Low cuj   j0   ▕         ▏    ",
-            "..aab.......b.aa.cdddddddddc...aaaaaaaaaa.....cdddddddddc...aaaaaab...b....cdddddddddc....",
+            "  Cuf       fF00 ▕█████████▏   Punch     0000 ▕         ▏   Low cuj   j000 ▕         ▏    ",
+            "..aab.......b.aa.cdddddddddc...aaaaaaaaaa..aa.cdddddddddc...aaaaaab...b.aa.cdddddddddc....",
             "a fg OVERLAY2",
             "b fg BASE bg PEACH +BOLD",
             "c fg OVERLAY0",
@@ -400,8 +400,8 @@ fn a_setting_left_alone_or_doing_nothing_here_is_dim() {
     assert_drawn(
         &cell(&app, "Punch", 29),
         &[
-            "Punch     00   ▕         ▏   ",
-            "aaaaaaaaaa.....bcccccccccb...",
+            "Punch     0000 ▕         ▏   ",
+            "aaaaaaaaaa..aa.bcccccccccb...",
             "a fg OVERLAY2",
             "b fg OVERLAY0",
             "c fg MAUVE",
