@@ -35,9 +35,92 @@ impl EffectKind {
     pub const fn name(self) -> &'static str {
         self.spec().name
     }
+
+    /// The heading a list shows it under.
+    pub const fn category(self) -> &'static str {
+        self.spec().group.name()
+    }
+
+    /// Every effect in the order a list shows them: by group, in [`EffectGroup::ALL`]'s order,
+    /// and within a group roughly as the sound would go through them. Only what's shown follows
+    /// it; [`EffectKind::ALL`]'s order, which values and saves keep, never changes.
+    pub const LISTED: [Self; Self::COUNT] = [
+        Self::Compressor,
+        Self::Limit,
+        Self::Eq,
+        Self::Distort,
+        Self::Tape,
+        Self::Exciter,
+        Self::Lpg,
+        Self::Vowel,
+        Self::Chorus,
+        Self::Phaser,
+        Self::Flanger,
+        Self::Rotary,
+        Self::Pitch,
+        Self::FreqShift,
+        Self::Warps,
+        Self::Reso,
+        Self::Comb,
+        Self::Delay,
+        Self::Echo,
+        Self::Stutter,
+        Self::Reverb,
+        Self::Plate,
+        Self::Spring,
+        Self::Space,
+        Self::Grains,
+        Self::Clouds,
+        Self::Beads,
+    ];
 }
 
-crate::listed::listed!(EffectKind: key);
+/// The kinds of effect a list groups them under, roughly in the order a sound goes through them
+/// (decision 386).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum EffectGroup {
+    Dynamics,
+    ToneDrive,
+    Filter,
+    Modulation,
+    PitchSpectral,
+    Resonators,
+    Delay,
+    Reverb,
+    Granular,
+}
+
+impl EffectGroup {
+    /// Every group, in the order a list shows them.
+    pub const ALL: [Self; 9] = [
+        Self::Dynamics,
+        Self::ToneDrive,
+        Self::Filter,
+        Self::Modulation,
+        Self::PitchSpectral,
+        Self::Resonators,
+        Self::Delay,
+        Self::Reverb,
+        Self::Granular,
+    ];
+
+    /// Its heading.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Dynamics => "Dynamics",
+            Self::ToneDrive => "Tone & drive",
+            Self::Filter => "Filter",
+            Self::Modulation => "Modulation",
+            Self::PitchSpectral => "Pitch & spectral",
+            Self::Resonators => "Resonators",
+            Self::Delay => "Delay",
+            Self::Reverb => "Reverb",
+            Self::Granular => "Granular",
+        }
+    }
+}
+
+crate::listed::listed!(EffectKind: key, category);
 
 /// One effect, described once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +131,8 @@ pub struct EffectSpec {
     pub name: &'static str,
     /// What it does, for a list to choose from.
     pub meaning: &'static str,
+    /// The kind of effect a list shows it under. Every effect names one.
+    pub group: EffectGroup,
     /// Every setting it keeps, in any mode, in the order its slot keeps them.
     pub params: &'static [Entry],
     /// Which of them it shows: all of them, or those of the mode its type is in.
@@ -230,6 +315,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "distort",
         name: "Distort",
         meaning: "Clips, folds or crushes the sound, or drives it as a pedal",
+        group: EffectGroup::ToneDrive,
         params: &DISTORT_PARAMS,
         shown: DISTORT_SHOWN,
         grid: None,
@@ -238,6 +324,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "delay",
         name: "Delay",
         meaning: "Repeats the sound, bouncing side to side",
+        group: EffectGroup::Delay,
         params: &DELAY_PARAMS,
         shown: Shown::All,
         grid: Some(DELAY_GRID),
@@ -246,6 +333,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "reverb",
         name: "Reverb",
         meaning: "Puts the sound in a room",
+        group: EffectGroup::Reverb,
         params: &REVERB_PARAMS,
         shown: Shown::All,
         grid: None,
@@ -254,6 +342,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "chorus",
         name: "Chorus",
         meaning: "Thickens it with drifting copies, an ensemble or a Juno's",
+        group: EffectGroup::Modulation,
         params: &CHORUS_PARAMS,
         shown: Shown::All,
         grid: None,
@@ -262,6 +351,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "eq3",
         name: "EQ3",
         meaning: "Shapes its tone: a low and a high shelf, and a middle band",
+        group: EffectGroup::ToneDrive,
         params: &EQ_PARAMS,
         shown: Shown::All,
         grid: Some(EQ_GRID),
@@ -270,6 +360,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "comp",
         name: "Comp",
         meaning: "Evens out its level, or ducks it under another track",
+        group: EffectGroup::Dynamics,
         params: &COMPRESSOR_PARAMS,
         shown: COMPRESSOR_SHOWN,
         grid: None,
@@ -278,6 +369,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "limit",
         name: "Limit",
         meaning: "Keeps its peaks under a ceiling, looking 2 ms ahead",
+        group: EffectGroup::Dynamics,
         params: &LIMIT_PARAMS,
         shown: Shown::All,
         grid: None,
@@ -286,6 +378,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "phaser",
         name: "Phaser",
         meaning: "Sweeps notches through it with all-passes",
+        group: EffectGroup::Modulation,
         params: &PHASER_PARAMS,
         shown: Shown::All,
         grid: None,
@@ -294,6 +387,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "flanger",
         name: "Flanger",
         meaning: "Sweeps a comb through it with a short delay",
+        group: EffectGroup::Modulation,
         params: &FLANGER_PARAMS,
         shown: Shown::All,
         grid: None,
@@ -302,6 +396,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "tape",
         name: "Tape",
         meaning: "Saturates, warms and wobbles it as tape does",
+        group: EffectGroup::ToneDrive,
         params: &TAPE_PARAMS,
         shown: Shown::All,
         grid: None,
@@ -310,6 +405,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "plate",
         name: "Plate",
         meaning: "Puts the sound on a bright, dense plate",
+        group: EffectGroup::Reverb,
         params: &PLATE_PARAMS,
         shown: Shown::All,
         grid: None,
@@ -318,6 +414,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "pitch",
         name: "Pitch",
         meaning: "Shifts its pitch up or down, keeping its time",
+        group: EffectGroup::PitchSpectral,
         params: &PITCH_PARAMS,
         shown: Shown::All,
         grid: None,
@@ -326,6 +423,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "grains",
         name: "Grains",
         meaning: "Records it and plays it back as a cloud of grains",
+        group: EffectGroup::Granular,
         params: &GRAINS_PARAMS,
         shown: Shown::All,
         grid: None,
@@ -334,6 +432,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "warps",
         name: "Warps",
         meaning: "Ring mods, folds or vocodes it with another track",
+        group: EffectGroup::PitchSpectral,
         params: &WARPS_PARAMS,
         shown: Shown::All,
         grid: None,
@@ -342,6 +441,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "lpg",
         name: "LPG",
         meaning: "Gates or filters it by its level, or another track's",
+        group: EffectGroup::Filter,
         params: &LPG_PARAMS,
         shown: Shown::All,
         grid: None,
@@ -350,6 +450,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "reso",
         name: "Reso",
         meaning: "Rings it like a bell or bar tuned to the note",
+        group: EffectGroup::Resonators,
         params: &RESO_PARAMS,
         shown: Shown::All,
         grid: None,
@@ -358,6 +459,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "comb",
         name: "Comb",
         meaning: "Rings it through a comb or flanger tuned to the note",
+        group: EffectGroup::Resonators,
         params: &COMB_PARAMS,
         shown: Shown::All,
         grid: None,
@@ -366,6 +468,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "vowel",
         name: "Vowel",
         meaning: "Makes it say a vowel, morphing from A to U",
+        group: EffectGroup::Filter,
         params: &VOWEL_PARAMS,
         shown: Shown::All,
         grid: None,
@@ -374,6 +477,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "freqshift",
         name: "Freq Shift",
         meaning: "Moves every frequency by the same Hz: bells and spirals",
+        group: EffectGroup::PitchSpectral,
         params: &FREQ_SHIFT_PARAMS,
         shown: Shown::All,
         grid: None,
@@ -382,6 +486,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "spring",
         name: "Spring",
         meaning: "Puts the sound in a spring tank, as a guitar amp has: drips and boings",
+        group: EffectGroup::Reverb,
         params: &SPRING_PARAMS,
         shown: Shown::All,
         grid: Some(SPRING_GRID),
@@ -390,6 +495,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "space",
         name: "Space",
         meaning: "Washes the sound into a huge, nearly endless pad",
+        group: EffectGroup::Reverb,
         params: &SPACE_PARAMS,
         shown: Shown::All,
         grid: None,
@@ -398,6 +504,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "rotary",
         name: "Rotary",
         meaning: "Spins it in a Leslie's cabinet, slow or fast, for organs and more",
+        group: EffectGroup::Modulation,
         params: &ROTARY_PARAMS,
         shown: Shown::All,
         grid: Some(ROTARY_GRID),
@@ -406,6 +513,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "exciter",
         name: "Exciter",
         meaning: "Adds air: harmonics made from the highs, more as they get louder",
+        group: EffectGroup::ToneDrive,
         params: &EXCITER_PARAMS,
         shown: Shown::All,
         grid: Some(EXCITER_GRID),
@@ -414,6 +522,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "stutter",
         name: "Stutter",
         meaning: "Repeats a piece of the sound when a step says: rolls and glitches",
+        group: EffectGroup::Delay,
         params: &STUTTER_PARAMS,
         shown: Shown::All,
         grid: Some(STUTTER_GRID),
@@ -422,6 +531,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "clouds",
         name: "Clouds",
         meaning: "Mutable's Clouds: grains, stretching or a looping delay, with reverb",
+        group: EffectGroup::Granular,
         params: &CLOUDS_PARAMS,
         shown: Shown::All,
         grid: Some(CLOUDS_GRID),
@@ -430,6 +540,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "beads",
         name: "Beads",
         meaning: "Mutable's Beads: grains or a delay on tape or digital, with reverb",
+        group: EffectGroup::Granular,
         params: &BEADS_PARAMS,
         shown: Shown::All,
         grid: Some(BEADS_GRID),
@@ -438,6 +549,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         key: "echo",
         name: "Space Echo",
         meaning: "A Roland RE-201's tape loop: three heads, wow, darkening repeats, springs",
+        group: EffectGroup::Delay,
         params: &ECHO_PARAMS,
         shown: Shown::All,
         grid: Some(ECHO_GRID),

@@ -6,6 +6,7 @@
 use ratatui::style::Style;
 use vt_model::accumulator::MOST_DEGREES;
 use vt_model::arpeggio::MOST_OCTAVES;
+use vt_model::insert::Insert;
 use vt_model::lfo::{Fade, Lfo, note_rates};
 use vt_model::modulation::{MOD_SLOTS, ModField, ModKind, ModSlot};
 use vt_model::preset::PresetKind;
@@ -121,13 +122,28 @@ pub(crate) fn choice_picker(track: usize, control: Control, list: ChoiceList) ->
             _ => item,
         }
     });
-    let items = items.collect();
+    let mut items: Vec<Item> = items.collect();
+    let mut at = list.at;
+    // The effects show under their groups, though each still sets its place in `Insert::ALL`
+    // (decision 386). The groups are the list's alone, so the setting's view keeps none.
+    if matches!(control, Control::Insert(_)) && items.len() == Insert::ALL.len() {
+        let order: Vec<usize> = Insert::listed_order().collect();
+        at = at.and_then(|was| order.iter().position(|place| *place == was));
+        let mut by_place: Vec<Option<Item>> = items.into_iter().map(Some).collect();
+        items = order
+            .iter()
+            .filter_map(|place| {
+                let item = by_place[*place].take()?;
+                Some(item.category(Insert::ALL[*place].category()))
+            })
+            .collect();
+    }
     let items = match control {
         Control::Machine => with_presets(items, PresetKind::Sound),
         Control::Insert(_) => with_presets(items, PresetKind::Effect),
         _ => items,
     };
-    Picker::new(list.title, items).opened_on(list.at)
+    Picker::new(list.title, items).opened_on(at)
 }
 
 /// What the status line says for `K` on a setting that isn't a list.

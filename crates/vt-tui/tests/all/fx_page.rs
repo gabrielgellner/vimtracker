@@ -49,6 +49,73 @@ fn l_reaches_the_fx_page_and_then_the_gen_page() {
 }
 
 #[test]
+fn the_effects_list_shows_them_by_group_and_each_sets_its_own() {
+    use vt_model::insert::{EffectGroup, EffectKind, Insert};
+    use vt_tui::overlays::picker::Pick;
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "K");
+    let picker = app.overlays.picker.as_ref().unwrap();
+    let items = picker.items();
+    // Empty first, out of any group, then the groups in order, then the presets.
+    assert_eq!(items[0].label, "---");
+    assert_eq!(items[0].category, "");
+    let grouped: Vec<(&str, Vec<&str>)> = EffectGroup::ALL
+        .iter()
+        .map(|group| {
+            let names = items
+                .iter()
+                .filter(|item| item.category == group.name())
+                .map(|item| item.label.as_str())
+                .collect();
+            (group.name(), names)
+        })
+        .collect();
+    let expected: Vec<(&str, Vec<&str>)> = vec![
+        ("Dynamics", vec!["Comp", "Limit"]),
+        ("Tone & drive", vec!["EQ3", "Distort", "Tape", "Exciter"]),
+        ("Filter", vec!["LPG", "Vowel"]),
+        ("Modulation", vec!["Chorus", "Phaser", "Flanger", "Rotary"]),
+        ("Pitch & spectral", vec!["Pitch", "Freq Shift", "Warps"]),
+        ("Resonators", vec!["Reso", "Comb"]),
+        ("Delay", vec!["Delay", "Space Echo", "Stutter"]),
+        ("Reverb", vec!["Reverb", "Plate", "Spring", "Space"]),
+        ("Granular", vec!["Grains", "Clouds", "Beads"]),
+    ];
+    assert_eq!(grouped, expected);
+    let listed: Vec<&str> = items[1..=EffectKind::COUNT]
+        .iter()
+        .map(|item| item.label.as_str())
+        .collect();
+    let flat: Vec<&str> = expected
+        .iter()
+        .flat_map(|(_, names)| names.clone())
+        .collect();
+    assert_eq!(listed, flat, "the groups are together and in order");
+    assert_eq!(items[EffectKind::COUNT + 1].category, "Presets");
+    // Each item still sets its own effect by its place in `Insert::ALL`.
+    for item in &items[..=EffectKind::COUNT] {
+        let Pick::Param { value, .. } = item.pick else {
+            panic!("{item:?}")
+        };
+        assert_eq!(Insert::ALL[value as usize].name(), item.label);
+    }
+    special(&mut app, KeyCode::Esc);
+
+    // Picking one from each group puts it in the slot, and the list opens on it again.
+    for (_, names) in &expected {
+        let name = names[0];
+        press(&mut app, "K");
+        press(&mut app, name);
+        special(&mut app, KeyCode::Enter);
+        assert_eq!(app.song().tracks[0].inserts[0].name(), name);
+        press(&mut app, "K");
+        let picker = app.overlays.picker.as_ref().unwrap();
+        assert_eq!(picker.current().unwrap().label, name, "opens on it");
+        special(&mut app, KeyCode::Esc);
+    }
+}
+
+#[test]
 fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
     use vt_model::insert::Insert;
     use vt_tui::screen::status::column_name;

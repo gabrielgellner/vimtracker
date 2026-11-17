@@ -27,6 +27,24 @@ with the cursor has the brighter frame. An empty slot keeps its frame, says `Emp
 | `b` | Bypass this slot, to hear without it, or bring it back |
 | `z i` `z o` | Zoom in on this slot, or back out to every slot |
 
+`K` on the effect lists them by kind, roughly in the order a sound goes through them, with
+`---` for an empty slot first and loading or saving an effect preset last:
+
+| Group | Effects |
+|---|---|
+| Dynamics | `Comp`, `Limit` |
+| Tone & drive | `EQ3`, `Distort`, `Tape`, `Exciter` |
+| Filter | `LPG`, `Vowel` |
+| Modulation | `Chorus`, `Phaser`, `Flanger`, `Rotary` |
+| Pitch & spectral | `Pitch`, `Freq Shift`, `Warps` |
+| Resonators | `Reso`, `Comb` |
+| Delay | `Delay`, `Space Echo`, `Stutter` |
+| Reverb | `Reverb`, `Plate`, `Spring`, `Space` |
+| Granular | `Grains`, `Clouds`, `Beads` |
+
+`=` and `-` on the effect still step through them in the order they were added, as the Roto's
+knob does.
+
 Each effect places its own settings: what comes out, `Mix` and `Gain`, is in its last column, a
 `Comp`'s detector, times and output each have a column, an `EQ3`'s bands are its columns, and a
 `Delay`'s repeats, their tone and what comes out are its. A row can have gaps, which `h` and `l`

@@ -8,7 +8,7 @@ use vt_model::accumulator::{Adds, AtLimit, Moves};
 use vt_model::arpeggio::{ArpMode, ArpRate};
 use vt_model::bank::Warp;
 use vt_model::envelope::Curve;
-use vt_model::insert::{DistortType, EffectKind, Insert};
+use vt_model::insert::{DistortType, EffectGroup, EffectKind, Insert};
 use vt_model::lfo::{LfoMode, Shape};
 use vt_model::listed::{Listed, choices_of};
 use vt_model::modulation::{ModKind, Polarity};
@@ -102,4 +102,31 @@ fn a_list_says_what_its_type_says() {
         assert_eq!(Listed::meaning(shape), "");
         assert_eq!(Listed::key(shape), "");
     }
+}
+
+/// Every effect is in a group and listed once, the groups together and in their order, so a new
+/// effect that isn't put in `EffectKind::LISTED` fails here (decision 386).
+#[test]
+fn every_effect_is_listed_once_under_its_group() {
+    let mut listed = EffectKind::LISTED.to_vec();
+    listed.sort();
+    assert_eq!(listed, EffectKind::ALL.to_vec());
+    let places: Vec<usize> = EffectKind::LISTED
+        .iter()
+        .map(|kind| {
+            EffectGroup::ALL
+                .iter()
+                .position(|group| group.name() == kind.category())
+                .unwrap_or_else(|| panic!("{kind:?} has no group"))
+        })
+        .collect();
+    assert!(places.is_sorted(), "{:?}", EffectKind::LISTED);
+    for group in EffectGroup::ALL {
+        assert!(
+            EffectKind::ALL
+                .iter()
+                .any(|kind| kind.category() == group.name())
+        );
+    }
+    assert_eq!(Insert::Empty.category(), "");
 }
