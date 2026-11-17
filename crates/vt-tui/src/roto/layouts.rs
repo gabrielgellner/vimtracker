@@ -173,7 +173,7 @@ const SAMPLER: DeviceLayout = live(
             s("sample"),
             s("slice"),
             s("play"),
-            GAP,
+            s("reverse"),
             s("start"),
             s("length"),
             s("tune"),

@@ -21,12 +21,15 @@ use vt_model::settings::PlayMode;
 const DECLICK: f64 = DECLICK_FRAMES as f64;
 
 /// What a track's settings make of a span as a note starts: how far into it the note starts and
-/// how much of it plays, as shares of the whole, and how it plays.
+/// how much of it plays, as shares of the whole, how it plays, and whether `SREV` turned it round
+/// from the way its sample plays, so the span is already turned and the shares are counted the
+/// way it would have played.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Cut {
     pub start: f64,
     pub length: f64,
     pub mode: PlayMode,
+    pub turned: bool,
 }
 
 impl Default for Cut {
@@ -35,6 +38,7 @@ impl Default for Cut {
             start: 0.0,
             length: 1.0,
             mode: PlayMode::OneShot,
+            turned: false,
         }
     }
 }
@@ -91,8 +95,9 @@ impl Region {
     };
 
     /// What a cut makes of a span. `Start` and `Length` are shares of the span from where it starts
-    /// in play order, so a reversed sample's start is its end. The loop is the span's own, cut to
-    /// what plays, or all that plays if it has none, or none is left of it.
+    /// in play order, so a reversed sample's start is its end. A span `SREV` turned round plays
+    /// the part they'd have chosen unturned, from its other end (decision 412). The loop is the
+    /// span's own, cut to what plays, or all that plays if it has none, or none is left of it.
     fn new(span: Span, cut: Cut) -> Self {
         let frames = span.frames as f64;
         let (first, last) = if span.reverse {
@@ -101,8 +106,15 @@ impl Region {
             (span.start as f64, span.end as f64)
         };
         let whole = last - first;
-        let start = first + whole * cut.start.clamp(0.0, 1.0);
-        let end = (start + whole * cut.length.clamp(0.0, 1.0)).min(last);
+        let into = whole * cut.start.clamp(0.0, 1.0);
+        let length = whole * cut.length.clamp(0.0, 1.0);
+        let (start, end) = if cut.turned {
+            let until = (into + length).min(whole);
+            (first + (whole - until), first + (whole - into))
+        } else {
+            let start = first + into;
+            (start, (start + length).min(last))
+        };
         // An edge where the file has more sound is a cut into it.
         let fade_in = f64::from(span.fade_in);
         let fade_out = f64::from(span.fade_out);
@@ -285,6 +297,11 @@ impl Reader {
     /// Whether it plays on past its slice's end, so the span it follows is the one that does.
     pub(crate) fn thru(&self) -> bool {
         self.cut.mode == PlayMode::Thru
+    }
+
+    /// Whether `SREV` turned it round, so the span it follows is turned too.
+    pub(crate) fn turned(&self) -> bool {
+        self.cut.turned
     }
 
     /// Carry on with a span that's changed, as moving a point does, from the same frame. A note
@@ -622,7 +639,7 @@ mod tests {
         let cut = Cut {
             start: 0.25,
             length: 0.5,
-            mode: PlayMode::OneShot,
+            ..Cut::default()
         };
         let out = read(Reader::new(Some(span(200, 600)), cut), &data, 2000);
         assert_eq!(out.len(), 201, "from 300 to 500");
@@ -639,6 +656,129 @@ mod tests {
         let out = read(Reader::new(Some(reversed), Cut::default()), &data, 2000);
         assert_eq!(out.len(), 401);
         assert!((out[100] - 499.0).abs() < 1e-3);
+    }
+
+    /// A span turned round by `SREV`, as [`Playable::span`](vt_model::playable::Playable::span)
+    /// gives it, and a cut that says so.
+    fn turned(span: Span, cut: Cut) -> Reader {
+        let span = Span {
+            reverse: !span.reverse,
+            ..span
+        };
+        Reader::new(
+            Some(span),
+            Cut {
+                turned: true,
+                ..cut
+            },
+        )
+    }
+
+    #[test]
+    fn turned_round_a_one_shot_is_its_mirror() {
+        let data = SampleData {
+            frames: wobble(1000),
+        };
+        // The whole sample cuts into nothing, so the mirror is exact, frame for frame.
+        let whole = Span::whole(1000);
+        let forward = read_both(
+            Reader::new(Some(whole), Cut::default()),
+            (&data).into(),
+            1.0,
+        );
+        let mut back = read_both(turned(whole, Cut::default()), (&data).into(), 1.0);
+        back.reverse();
+        assert_eq!(forward.len(), 1000);
+        assert_eq!(forward, back);
+        // So is a sample its entry already reverses, turned forward again.
+        let reversed = Span {
+            reverse: true,
+            ..whole
+        };
+        let mut again = read_both(turned(reversed, Cut::default()), (&data).into(), 1.0);
+        again.reverse();
+        assert_eq!(
+            read_both(
+                Reader::new(Some(reversed), Cut::default()),
+                (&data).into(),
+                1.0
+            ),
+            again
+        );
+    }
+
+    #[test]
+    fn turned_round_start_and_length_play_the_same_part_back() {
+        let data = ramp(1000);
+        let cut = Cut {
+            start: 0.25,
+            length: 0.5,
+            ..Cut::default()
+        };
+        let forward = read(Reader::new(Some(span(200, 600)), cut), &data, 2000);
+        let back = read(turned(span(200, 600), cut), &data, 2000);
+        assert_eq!(back.len(), forward.len(), "from 499 back to 300");
+        // Both cut into the sound at each end, so each fades in and out over a declick; between,
+        // they're the same frames the other way round.
+        let edge = DECLICK as usize + 1;
+        for at in edge..forward.len() - edge {
+            assert_eq!(back[at], forward[forward.len() - 2 - at], "{at}");
+        }
+        assert_eq!(
+            back[0], 0.0,
+            "the turned start is a cut too, so it fades in"
+        );
+        assert!((back[100] - 399.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn turned_round_a_loop_goes_round_backwards_and_a_ping_pong_starts_down() {
+        let data = ramp(1000);
+        let looping = Cut {
+            mode: PlayMode::Loop,
+            ..Cut::default()
+        };
+        // With no loop of its own, it goes round all that plays, from its end down.
+        let out = read(turned(span(200, 600), looping), &data, 2000);
+        assert_eq!(out.len(), 2000);
+        for at in [1000, 1100, 1300] {
+            assert!((out[at] - out[at + 400]).abs() < 1e-3, "{at}");
+            assert!(out[at + 1] < out[at], "it's going down at {at}");
+        }
+        // Its own loop is gone round backwards too, once the note has come down to it.
+        let own = Span {
+            loop_: Some(LoopSpan {
+                start: 300,
+                end: 400,
+                crossfade: 0,
+            }),
+            ..span(200, 600)
+        };
+        let out = read(turned(own, looping), &data, 2000);
+        assert!((out[100] - 499.0).abs() < 1e-3, "{}", out[100]);
+        for at in [1000, 1020, 1040] {
+            assert!((out[at] - out[at + 100]).abs() < 1e-3, "{at}");
+            assert!((300.0..400.0).contains(&out[at]), "{}", out[at]);
+            assert!(out[at + 1] < out[at], "it's going down at {at}");
+        }
+        // A ping-pong starts down from the end, turns at the start and comes back up.
+        let ping_pong = Cut {
+            mode: PlayMode::PingPong,
+            ..Cut::default()
+        };
+        let out = read(turned(span(200, 300), ping_pong), &data, 400);
+        assert_eq!(out.len(), 400);
+        assert_eq!(out[0], 0.0, "its start cuts into the sound, so it fades in");
+        assert!((out[80] - 219.0).abs() < 1e-3, "{}", out[80]);
+        let bottom = out[80..]
+            .iter()
+            .fold(f32::MAX, |bottom, value| bottom.min(*value));
+        assert!((bottom - 200.0).abs() < 1e-3, "{bottom}");
+        assert!(
+            out[150] > 240.0 && out[150] < 260.0,
+            "and up again: {}",
+            out[150]
+        );
     }
 
     #[test]

@@ -89,7 +89,7 @@ plays, `Acid`'s `Wave`, `Supersaw`'s `Stack`, 6-op's `Patch`, and the chord of `
 and `Chip`. Other synths have none. `K` lists whatever's under the cursor in a title, as
 on a setting, and `g d` on the sample opens the sample page, as `g d` on a setting a macro
 holds goes to the macro (see **Macros** in **The Gen page, macros and presets**).
-Each machine places its own settings: most go down the columns in order, the sampler has `Slice` and `Play` in
+Each machine places its own settings: most go down the columns in order, the sampler has `Slice`, `Play` and `Reverse` in
 one column, `Start` and `Length` in the next, and its sample's own `Tune` and `Cents`
 in the third, which tune the sample rather than the track (see **Tuning a sample** in
 **Sounds, samples and kits**), `Acid`'s are in pairs as a
@@ -110,7 +110,8 @@ keeping the column, and pass the Output's and Play's titles by, as there's nothi
 in them. `{` and `}` keep the row and column: from `Cut`, `}` goes to `Trim` and
 `2}` to `Pitch`. The device with the cursor has the brighter frame. A sampler's
 Machine shows the slice it plays in a box on its right, with a teal line where `Start`
-puts a note's start and a red one where `Length` ends it.
+puts a note's start and a red one where `Length` ends it, so with `Reverse` on the teal
+line is the later one.
 
 The Output's box is a meter of the track right after `Trim`, before the filter, so
 `Trim` can be set by eye: `L` and `R` bars from -60 dB to +6 dB, each side's peak,

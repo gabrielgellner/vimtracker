@@ -1,7 +1,7 @@
 //! Where each setting sits in the table, and whose it is.
 
 use super::mods::{ACCUMULATION, ARPEGGIO, MACRO, MACRO_NAMES, MOD, MOD_OWN};
-use super::sampler::SAMPLER;
+use super::sampler::{EARLY_SAMPLER, SAMPLER};
 use super::{
     EARLY_LANE, Entry, LANE, LATER_TRACK, LATER_TRACK_GROUPS, SLOT_OWN, TRACK, TRACK_GROUPS,
     TRACK_SETTINGS, voice_entries, voice_key,
@@ -88,7 +88,7 @@ const SLOT_SIZE: usize = {
 const MODS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 const BYPASS_START: usize = MODS_START + MOD_SLOTS * MOD.len();
 const SAMPLER_START: usize = BYPASS_START + INSERTS * SLOT_OWN.len();
-const MACROS_START: usize = SAMPLER_START + SAMPLER.len();
+const MACROS_START: usize = SAMPLER_START + EARLY_SAMPLER;
 const MOD_OWN_START: usize = MACROS_START + MACROS;
 const ACCUMULATION_START: usize = MOD_OWN_START + MOD_SLOTS * MOD_OWN.len();
 const ARPEGGIO_START: usize = ACCUMULATION_START + ACCUMULATION.len();
@@ -96,6 +96,8 @@ const LANES_START: usize = ARPEGGIO_START + ARPEGGIO.len();
 const LATER_TRACK_START: usize = LANES_START + FX_SLOTS * EARLY_LANE;
 /// Each FX column's lane's settings added after the track's own, `Start` (decision 401).
 const LATER_LANE_START: usize = LATER_TRACK_START + LATER_TRACK.len();
+/// The sampler's settings added after the lanes', `Reverse` (decision 412), so none moves.
+const LATER_SAMPLER_START: usize = LATER_LANE_START + FX_SLOTS * (LANE.len() - EARLY_LANE);
 
 /// What a setting belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -230,9 +232,12 @@ impl SettingId {
     pub const SAMPLE_LENGTH: Self = Self(SAMPLER_START as u16 + 3);
     /// How a sampler's note plays: a place in [`PLAY_CHOICES`](super::PLAY_CHOICES).
     pub const PLAY: Self = Self(SAMPLER_START as u16 + 4);
+    /// Whether a sampler's note plays its part of the sample the other way from the sample's own:
+    /// `0` as the sample plays, `1` turned round (decision 412).
+    pub const SAMPLE_REVERSE: Self = Self(LATER_SAMPLER_START as u16);
 
     /// How many settings there are.
-    pub const COUNT: usize = LATER_LANE_START + FX_SLOTS * (LANE.len() - EARLY_LANE);
+    pub const COUNT: usize = LATER_SAMPLER_START + SAMPLER.len() - EARLY_SAMPLER;
 
     /// Every setting, in the table's order.
     pub fn all() -> impl Iterator<Item = Self> {
@@ -299,8 +304,10 @@ impl SettingId {
 
     /// One of the sampler's settings, by its place among them: 0 is `Sample`.
     pub const fn sampler(setting: usize) -> Option<Self> {
-        if setting < SAMPLER.len() {
+        if setting < EARLY_SAMPLER {
             Some(Self((SAMPLER_START + setting) as u16))
+        } else if setting < SAMPLER.len() {
+            Some(Self((LATER_SAMPLER_START + setting - EARLY_SAMPLER) as u16))
         } else {
             None
         }
@@ -386,6 +393,9 @@ impl SettingId {
     /// What it belongs to, and its place among that owner's settings.
     pub fn owner(self) -> (Owner, usize) {
         let at = self.index();
+        if at >= LATER_SAMPLER_START {
+            return (Owner::Sampler, EARLY_SAMPLER + at - LATER_SAMPLER_START);
+        }
         if at >= LATER_LANE_START {
             let (within, later) = (at - LATER_LANE_START, LANE.len() - EARLY_LANE);
             return (Owner::Lane(within / later), EARLY_LANE + within % later);
