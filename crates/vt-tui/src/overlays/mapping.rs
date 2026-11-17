@@ -14,7 +14,9 @@ use ratatui::layout::Rect;
 
 use crate::controls::macro_name;
 use vt_model::action::Action;
-use vt_model::macros::{GEN_ZERO, GenColumn, MACROS, MacroMap, MacroTarget, top_value, valid_name};
+use vt_model::macros::{
+    GEN_ZERO, GenColumn, MACROS, MacroMap, MacroTarget, Zone, top_value, valid_name,
+};
 use vt_model::settings::{Kind, Owner};
 use vt_model::shape::params::{BEND_JUMP, BEND_NUDGE, Typing};
 use vt_model::song::Track;
@@ -23,7 +25,7 @@ use crate::app::App;
 use crate::controls::Control;
 use crate::graphics::plot::{MappingDrawing, Shade};
 use crate::graphics::{PanelIds, PanelKey, PanelWant, Shape};
-use crate::input::bindings::{Cmd, adjusting_key};
+use crate::input::bindings::{Cmd, DESCRIBE, adjusting_key};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::typed::{Typed, TypedValue};
@@ -42,7 +44,8 @@ pub(crate) const HOLDING_PICKER: &str = "Go to a macro";
 const RANGE_JUMP: i32 = 0x10;
 
 /// What of a mapping the view's cursor is on, across its row: the ends of its range, then its
-/// response's `Curve` and `S`.
+/// response's `Curve` and `S`, then the start and the end of its zone, the part of the macro's
+/// turn it acts over.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MapField {
     #[default]
@@ -50,25 +53,41 @@ pub enum MapField {
     Max,
     Curve,
     S,
+    ZoneStart,
+    ZoneEnd,
 }
 
 impl MapField {
     /// Left to right, as `h` and `l` go.
-    pub const ALL: [Self; 4] = [Self::Min, Self::Max, Self::Curve, Self::S];
+    pub const ALL: [Self; 6] = [
+        Self::Min,
+        Self::Max,
+        Self::Curve,
+        Self::S,
+        Self::ZoneStart,
+        Self::ZoneEnd,
+    ];
 
-    /// Its heading in the view.
+    /// Its heading in the view: the zone's two ends share one, `Zone`.
     pub fn name(self) -> &'static str {
         match self {
             Self::Min => "Min",
             Self::Max => "Max",
             Self::Curve => "Curve",
             Self::S => "S",
+            Self::ZoneStart => "Zone",
+            Self::ZoneEnd => "",
         }
     }
 
     /// Whether it bends the response rather than being an end of the range.
     pub fn bends(self) -> bool {
         matches!(self, Self::Curve | Self::S)
+    }
+
+    /// Whether it's an end of the zone.
+    pub fn zones(self) -> bool {
+        matches!(self, Self::ZoneStart | Self::ZoneEnd)
     }
 
     /// The one beside it, `by` places to the right, kept to the row.
@@ -167,18 +186,30 @@ pub fn holds(track: &Track, at: usize) -> String {
         .join(", ")
 }
 
+/// A mapping's zone as the lines that describe it add it: ` over 00–7F`, or nothing for the whole
+/// turn.
+fn over(map: &MacroMap) -> String {
+    if map.zone.is_whole() {
+        String::new()
+    } else {
+        format!(" over {}", map.zone.text())
+    }
+}
+
 /// What a macro moves, for the line that describes it: each setting by name, from where to where
-/// in its units, as `Cut 40 to C0 and Res 20 to 60`, or none while it holds nothing.
+/// in its units, and over what part of the turn if not all of it, as `Cut 40 to C0 and Res 20 to
+/// 60 over 80–FF`, or none while it holds nothing.
 pub(crate) fn moves(track: &Track, at: usize) -> Option<String> {
     let each: Vec<String> = track.macros[at]
         .maps
         .iter()
         .map(|map| {
             format!(
-                "{} {} to {}",
+                "{} {} to {}{}",
                 map.target.name_on(track),
                 end_shown(track, map.target, map.min),
-                end_shown(track, map.target, map.max)
+                end_shown(track, map.target, map.max),
+                over(map)
             )
         })
         .collect();
@@ -195,12 +226,52 @@ pub(crate) fn held_text(track: &Track, target: MacroTarget) -> Option<String> {
     let (at, map) = track.macro_holding(target)?;
     let by_hand = if target.by_hand() { ", by hand" } else { "" };
     Some(format!(
-        "on macro {} {}, {} to {}{by_hand}",
+        "on macro {} {}, {} to {}{}{by_hand}",
         at + 1,
         macro_name(&track.macros[at], at),
         end_shown(track, target, map.min),
-        end_shown(track, target, map.max)
+        end_shown(track, target, map.max),
+        over(map)
     ))
+}
+
+/// The line describing what's under the mapping view's cursor, `Space d`: an end of the range, a
+/// bend or the zone, and what it means for the setting the mapping turns.
+pub(crate) fn mapping_line(track: &Track, view: &MappingView) -> Option<String> {
+    let maps = &track.macros[view.at].maps;
+    let map = maps.get(view.row.min(maps.len().checked_sub(1)?))?;
+    let target = map.target;
+    let name = target.name_on(track);
+    let (min, max) = (
+        end_shown(track, target, map.min),
+        end_shown(track, target, map.max),
+    );
+    let zone = map.zone;
+    let (start, end) = (format!("{:02X}", zone.start), format!("{:02X}", zone.end));
+    Some(match view.field {
+        MapField::Min => format!(
+            "Min {min}: where the macro puts {name} at {start}, the start of its zone, and below it."
+        ),
+        MapField::Max => format!(
+            "Max {max}: where the macro puts {name} at {end}, the end of its zone, and above it."
+        ),
+        MapField::Curve => format!(
+            "Curve {}: bends {name}'s way from Min to Max, early above 0 and late below; 0 is straight.",
+            bend_text(map.curve)
+        ),
+        MapField::S => format!(
+            "S {}: eases both ends of {name}'s way, an S above 0 and the reverse below; 0 is straight.",
+            bend_text(map.s)
+        ),
+        MapField::ZoneStart | MapField::ZoneEnd if zone.is_whole() => format!(
+            "Zone {}: the part of the macro's turn that moves {name}, here all of it. A part, as 00–7F, holds {name} at Min below it and at Max above, so one macro can turn two settings in turn.",
+            zone.text()
+        ),
+        MapField::ZoneStart | MapField::ZoneEnd => format!(
+            "Zone {}: the part of the macro's turn that moves {name}, from {min} at {start} to {max} at {end}; below {start} it holds at {min}, above {end} at {max}.",
+            zone.text()
+        ),
+    })
 }
 
 /// What a macro would hold of a control on a track: the registry's setting it is, or a live
@@ -466,9 +537,10 @@ impl Services {
             .map(|(at, map)| {
                 let label = format!("{} {}", at + 1, macro_name(&track.macros[*at], *at));
                 let range = format!(
-                    "{} to {}",
+                    "{} to {}{}",
                     end_shown(&track, map.target, map.min),
-                    end_shown(&track, map.target, map.max)
+                    end_shown(&track, map.target, map.max),
+                    over(map)
                 );
                 Item::new(label, Pick::MacroHolding(*at)).meaning(range)
             })
@@ -506,7 +578,7 @@ pub enum MappingKey {
     Decrease,
     IncreaseLarge,
     DecreaseLarge,
-    /// `x`: a bend back to straight.
+    /// `x`: a bend back to straight, or a zone back to the whole turn.
     Straighten,
     /// `~`: swap the ends of the range.
     Swap,
@@ -515,6 +587,8 @@ pub enum MappingKey {
     /// `d`, twice: take the setting off the macro.
     Delete,
     Undo,
+    /// `Space d`: describe the mapping under the cursor, or stop, as on the pages.
+    Describe,
 }
 
 impl Overlay for MappingView {
@@ -530,47 +604,47 @@ impl Overlay for MappingView {
         (
             "h",
             Cmd::InMapping(MappingKey::Left),
-            "Left, across Min, Max, Curve and S",
+            "Left, across Min, Max, Curve, S and Zone",
         ),
         (
             "Left",
             Cmd::InMapping(MappingKey::Left),
-            "Left, across Min, Max, Curve and S",
+            "Left, across Min, Max, Curve, S and Zone",
         ),
         (
             "l",
             Cmd::InMapping(MappingKey::Right),
-            "Right, across Min, Max, Curve and S",
+            "Right, across Min, Max, Curve, S and Zone",
         ),
         (
             "Right",
             Cmd::InMapping(MappingKey::Right),
-            "Right, across Min, Max, Curve and S",
+            "Right, across Min, Max, Curve, S and Zone",
         ),
         (
             "=",
             Cmd::InMapping(MappingKey::Increase),
-            "Up a step, an end's coarse step or a bend's 5",
+            "Up a step, an end's coarse step, a bend's 5 or a zone's 01",
         ),
         (
             "-",
             Cmd::InMapping(MappingKey::Decrease),
-            "Down a step, an end's coarse step or a bend's 5",
+            "Down a step, an end's coarse step, a bend's 5 or a zone's 01",
         ),
         (
             "+",
             Cmd::InMapping(MappingKey::IncreaseLarge),
-            "Up a large step, 10 coarse steps or a bend's 25",
+            "Up a large step, 10 coarse steps, a bend's 25 or a zone's 10",
         ),
         (
             "_",
             Cmd::InMapping(MappingKey::DecreaseLarge),
-            "Down a large step, 10 coarse steps or a bend's 25",
+            "Down a large step, 10 coarse steps, a bend's 25 or a zone's 10",
         ),
         (
             "x",
             Cmd::InMapping(MappingKey::Straighten),
-            "On Curve or S: back to straight",
+            "On Curve or S: back to straight; on Zone: the whole turn",
         ),
         (
             "~",
@@ -580,7 +654,7 @@ impl Overlay for MappingView {
         (
             "i",
             Cmd::InMapping(MappingKey::Type),
-            "Type it, an end in hex and a bend from -100 to 100",
+            "Type it, an end or a zone's in hex and a bend from -100 to 100",
         ),
         (
             "d",
@@ -588,6 +662,7 @@ impl Overlay for MappingView {
             "Twice: take the setting off the macro",
         ),
         ("u", Cmd::InMapping(MappingKey::Undo), "Undo"),
+        ("Space d", Cmd::InMapping(MappingKey::Describe), DESCRIBE),
     ];
 
     fn key(&mut self, cmd: Cmd, ctx: &mut CtxMut) -> Outcome {
@@ -611,6 +686,11 @@ impl Overlay for MappingView {
             MappingKey::IncreaseLarge => self.nudge(true, true, services),
             MappingKey::DecreaseLarge => self.nudge(false, true, services),
             MappingKey::Straighten if self.field.bends() => self.set_bend(0, services),
+            MappingKey::Straighten if self.field.zones() => {
+                if let Some((_, map)) = self.row_here(services) {
+                    self.set_range(map.zoned(Zone::WHOLE), services);
+                }
+            }
             MappingKey::Straighten => {}
             MappingKey::Swap => {
                 if let Some((_, map)) = self.row_here(services) {
@@ -628,6 +708,8 @@ impl Overlay for MappingView {
                 self.typing = Some(TypedValue::default());
                 services.status = if self.field.bends() {
                     "From -100 to 100, then Enter".to_owned()
+                } else if self.field.zones() {
+                    "Two hex digits for this end of the zone, 00 to FF".to_owned()
                 } else {
                     "Two hex digits for this end".to_owned()
                 };
@@ -636,6 +718,7 @@ impl Overlay for MappingView {
             MappingKey::Delete => self.deleting = true,
             // `App` undoes, and then keeps the view open on a mapping, if one is left.
             MappingKey::Undo => return Outcome::Do(Cmd::Undo),
+            MappingKey::Describe => return Outcome::Do(Cmd::ToggleDescription),
         }
         Outcome::Done
     }
@@ -686,11 +769,29 @@ impl MappingView {
         let target = map.target;
         let held = &track.macros[self.at];
         let now = map.at(f32::from(held.value) / 256.0);
+        let zone = map.zone;
         let by_hand = if target.by_hand() {
             ", by hand: a turn writes it in, but locks and modulation don't reach a list setting"
         } else {
             ""
         };
+        if self.field.zones() {
+            services.status = format!(
+                "Zone {}: the macro turns {} from {} at {:02X} to {} at {:02X}, and holds it at {} below and {} above; it's at {:02X}, so {} is {}{by_hand}",
+                zone.text(),
+                target.name(),
+                end_shown(&track, target, map.min),
+                zone.start,
+                end_shown(&track, target, map.max),
+                zone.end,
+                end_shown(&track, target, map.min),
+                end_shown(&track, target, map.max),
+                held.value >> 8,
+                target.name(),
+                end_shown(&track, target, now)
+            );
+            return;
+        }
         if self.field.bends() {
             services.status = format!(
                 "Curve {} bends {} from Min to Max, early above 0 and late below; S {} shapes both ends, an S above 0 and the reverse below",
@@ -709,10 +810,17 @@ impl MappingView {
                 bend_text(map.s)
             )
         };
+        let outside = if zone.is_whole() {
+            ""
+        } else {
+            ", held there outside"
+        };
         services.status = format!(
-            "At 00 the macro sets {} to {}, at FF to {}{along}; it's at {:02X}, so {} is {}{by_hand}",
+            "At {:02X} the macro sets {} to {}, at {:02X} to {}{along}{outside}; it's at {:02X}, so {} is {}{by_hand}",
+            zone.start,
             target.name_on(&track),
             end_shown(&track, target, map.min),
+            zone.end,
             end_shown(&track, target, map.max),
             held.value >> 8,
             target.name(),
@@ -734,7 +842,9 @@ impl MappingView {
     /// an end by a coarse step or `10` of them, and a bend by 5 or 25, as the shape panel's are.
     fn nudge(&self, up: bool, large: bool, services: &mut Services) {
         let sign = if up { 1 } else { -1 };
-        if self.field.bends() {
+        if self.field.zones() {
+            self.move_zone(sign * if large { RANGE_JUMP } else { 1 }, services);
+        } else if self.field.bends() {
             self.move_bend(sign * if large { BEND_JUMP } else { BEND_NUDGE }, services);
         } else {
             self.move_end(sign * if large { RANGE_JUMP } else { 1 }, services);
@@ -767,6 +877,36 @@ impl MappingView {
             map.s
         };
         self.set_bend(i32::from(now) + by, services);
+    }
+
+    /// Put the end of the zone under the cursor at a value, kept below its end or above its start,
+    /// as a zone is never empty.
+    fn set_zone(&self, to: i32, services: &mut Services) {
+        let Some((_, map)) = self.row_here(services) else {
+            return;
+        };
+        let Zone { start, end } = map.zone;
+        let zone = if self.field == MapField::ZoneStart {
+            Zone::new(to.clamp(0, i32::from(end) - 1) as u8, end)
+        } else {
+            Zone::new(start, to.clamp(i32::from(start) + 1, 0xFF) as u8)
+        };
+        if let Some(zone) = zone {
+            self.set_range(map.zoned(zone), services);
+        }
+    }
+
+    /// Move the end of the zone under the cursor by so much.
+    fn move_zone(&self, by: i32, services: &mut Services) {
+        let Some((_, map)) = self.row_here(services) else {
+            return;
+        };
+        let now = if self.field == MapField::ZoneStart {
+            map.zone.start
+        } else {
+            map.zone.end
+        };
+        self.set_zone(i32::from(now) + by, services);
     }
 
     /// Move the end of the range under the cursor by so many coarse steps.
@@ -825,6 +965,10 @@ impl MappingView {
                     Ok(value) => self.set_bend(value, services),
                     Err(_) => services.status = "Curve and S run from -100 to 100".to_owned(),
                 }
+            }
+            Typed::Commit(typed) if self.field.zones() => {
+                self.typing = None;
+                self.set_zone(i32::from_str_radix(&typed, 16).unwrap_or(0), services);
             }
             Typed::Commit(typed) => {
                 self.typing = None;
@@ -918,7 +1062,7 @@ impl App {
             key,
             now,
         );
-        let undid = matches!(outcome, Outcome::Do(_));
+        let undid = matches!(outcome, Outcome::Do(Cmd::Undo));
         self.settled(outcome, false);
         if undid && let Some(view) = self.overlays.mapping.as_mut() {
             if view.keep_open(&self.services) {

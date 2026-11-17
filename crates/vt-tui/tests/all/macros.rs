@@ -192,8 +192,8 @@ fn gm_bends_a_mappings_response_with_curve_and_s_as_the_shape_panel_does() {
     press(&mut app, "i250");
     special(&mut app, KeyCode::Enter);
     assert_eq!(map(&app).s, 100);
-    press(&mut app, "lx");
-    assert_eq!(map(&app).s, 0, "l stays on S, the row's last");
+    press(&mut app, "x");
+    assert_eq!(map(&app).s, 0, "x straightens it");
     press(&mut app, "u");
     assert_eq!(map(&app).s, 100, "each change is an undo step");
     assert_eq!(app.modes.mode, Mode::Mapping);
@@ -649,6 +649,95 @@ fn gd_on_a_setting_two_macros_hold_lists_them_to_go_to() {
     assert_eq!(app.track_control(), Control::Macro(2));
     assert_eq!(app.modes.mode, Mode::Normal);
     assert!(app.overlays.mapping.is_none());
+}
+
+#[test]
+fn gm_sets_a_mappings_zone_holding_it_at_its_ends_outside_and_undoes_each_change() {
+    use vt_model::macros::Zone;
+    let (mut app, _realtime) = on_cut();
+    press(&mut app, "i40M1gm");
+    let map = |app: &App| *app.song().tracks[0].macro_holding(cut()).unwrap().1;
+    assert_eq!(map(&app).zone, Zone::WHOLE, "the whole turn to start with");
+    // Past Min, Max, Curve and S to the zone's start, typed; then its end, down a step and a
+    // large one.
+    press(&mut app, "llll");
+    assert!(
+        app.services
+            .status
+            .starts_with("Zone 00–FF: the macro turns Cut"),
+        "{}",
+        app.services.status
+    );
+    press(&mut app, "i80");
+    assert_eq!(
+        map(&app).zone,
+        Zone {
+            start: 0x80,
+            end: 0xFF
+        }
+    );
+    press(&mut app, "l-_");
+    assert_eq!(
+        map(&app).zone,
+        Zone {
+            start: 0x80,
+            end: 0xEE
+        }
+    );
+    assert!(
+        app.services
+            .status
+            .contains("holds it at 20 Hz below and 20.0 kHz above"),
+        "{}",
+        app.services.status
+    );
+    // The start is kept below the end, however far it's typed.
+    press(&mut app, "hiFF");
+    assert_eq!(
+        map(&app).zone,
+        Zone {
+            start: 0xED,
+            end: 0xEE
+        }
+    );
+    press(&mut app, "u");
+    assert_eq!(
+        map(&app).zone,
+        Zone {
+            start: 0x80,
+            end: 0xEE
+        }
+    );
+    assert_eq!(app.modes.mode, Mode::Mapping);
+    // The row reads `80–EE`, and below 80 the macro holds Cut at its Min.
+    let rows = screen_rows(&mut app);
+    let cut_row = rows.iter().find(|row| row.contains("›Cut")).unwrap();
+    assert!(
+        cut_row.contains("00     FF     0     0     80–EE"),
+        "{cut_row}"
+    );
+    assert!(rows.iter().any(|row| row.contains("Zone")));
+    assert_eq!(map(&app).at(f32::from(0x40_u8)), 0);
+    assert_eq!(map(&app).at(f32::from(0xF0_u8)), 0xFF00);
+    // Space d says what the zone does.
+    press(&mut app, " d");
+    assert_eq!(app.modes.mode, Mode::Mapping);
+    let line = vt_tui::screen::describe::text(&app).expect("a line");
+    assert!(
+        line.starts_with("Zone 80–EE: the part of the macro's turn that moves Cut"),
+        "{line}"
+    );
+    // x gives it the whole turn again, and u takes that back.
+    press(&mut app, "x");
+    assert_eq!(map(&app).zone, Zone::WHOLE);
+    press(&mut app, "u");
+    assert_eq!(
+        map(&app).zone,
+        Zone {
+            start: 0x80,
+            end: 0xEE
+        }
+    );
 }
 
 #[test]

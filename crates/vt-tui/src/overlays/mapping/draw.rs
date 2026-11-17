@@ -1,7 +1,8 @@
 //! A macro's mapping view, after Live's mapping browser: a window over the track page listing each
-//! setting the macro holds, with the ends of its range, `Min` at the macro's `00` and `Max` at its
-//! `FF`, and its response's `Curve` and `S`, the cursor on one of them, and beside them the
-//! response of the mapping under the cursor, drawn.
+//! setting the macro holds, with the ends of its range, `Min` at the start of its zone and `Max`
+//! at its end, its response's `Curve` and `S`, and its `Zone`, the part of the macro's turn it
+//! acts over, `00–FF` for all of it, the cursor on one of them, and beside them the response of
+//! the mapping under the cursor, drawn.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -20,6 +21,8 @@ use crate::widgets::{image, popup};
 const SETTING_WIDTH: usize = 26;
 const END_WIDTH: usize = 7;
 const BEND_WIDTH: usize = 6;
+/// Each end of the zone, two hex digits and the dash or the space after it.
+const ZONE_END_WIDTH: usize = 3;
 /// Room after the bends for `by hand`.
 const BY_HAND_WIDTH: usize = 8;
 /// The response's drawing, in characters, inside its box: square at the author's 15 by 39
@@ -29,11 +32,17 @@ pub(crate) const RESPONSE_HEIGHT: usize = 5;
 /// The room between the table and the drawing's box.
 const RESPONSE_GAP: usize = 2;
 /// The keys it takes, along its bottom.
-const KEYS: &str = " = - move  i types  x straight  ~ swaps  dd unmaps  Esc ";
+const KEYS: &str = " = - move  i types  x straight or whole  ~ swaps  dd unmaps  Esc ";
 
 /// How wide each column of a mapping's row is, by what's in it.
 fn width_of(field: MapField) -> usize {
-    if field.bends() { BEND_WIDTH } else { END_WIDTH }
+    if field.zones() {
+        ZONE_END_WIDTH
+    } else if field.bends() {
+        BEND_WIDTH
+    } else {
+        END_WIDTH
+    }
 }
 
 /// Draw the mapping view in the middle of an area.
@@ -42,7 +51,8 @@ pub fn draw(frame: &mut Frame, area: Rect, ctx: &Ctx, view: &MappingView) {
         return;
     };
     let held = &track.macros[view.at];
-    let table = 2 + SETTING_WIDTH + 2 * END_WIDTH + 2 * BEND_WIDTH + BY_HAND_WIDTH;
+    let table =
+        2 + SETTING_WIDTH + 2 * END_WIDTH + 2 * BEND_WIDTH + 2 * ZONE_END_WIDTH + BY_HAND_WIDTH;
     let boxed = RESPONSE_WIDTH + 2;
     let width = (2 + table + RESPONSE_GAP + boxed + 1).max(KEYS.len() + 4) as u16;
     // A line above the drawing's box and one below it.
@@ -65,11 +75,13 @@ pub fn draw(frame: &mut Frame, area: Rect, ctx: &Ctx, view: &MappingView) {
     let inner = popup::draw(frame, window, border);
     let mut heading = format!("  {:<SETTING_WIDTH$}", "Setting");
     for field in MapField::ALL {
-        heading.push_str(&format!(
-            "{:<width$}",
-            field.name(),
-            width = width_of(field)
-        ));
+        // The zone's two ends share a heading.
+        let width = match field {
+            MapField::ZoneStart => 2 * ZONE_END_WIDTH,
+            MapField::ZoneEnd => continue,
+            _ => width_of(field),
+        };
+        heading.push_str(&format!("{:<width$}", field.name()));
     }
     let mut lines = vec![
         Line::raw(""),
@@ -96,18 +108,30 @@ pub fn draw(frame: &mut Frame, area: Rect, ctx: &Ctx, view: &MappingView) {
                     MapField::Max => end_text(target, map.max),
                     MapField::Curve => bend_text(map.curve),
                     MapField::S => bend_text(map.s),
+                    MapField::ZoneStart => format!("{:02X}", map.zone.start),
+                    MapField::ZoneEnd => format!("{:02X}", map.zone.end),
                 },
             };
             let style = if on {
                 theme::cursor(ctx.mode())
-            } else if by_hand || (field.bends() && map.is_straight()) {
-                // A straight response is dim, so a bent one stands out.
+            } else if by_hand
+                || (field.bends() && map.is_straight())
+                || (field.zones() && map.zone.is_whole())
+            {
+                // A straight response and the whole turn are dim, so a bent one or a zone
+                // stands out.
                 theme::dim()
             } else {
                 Style::new()
             };
             let padded = format!("{text:<width$}", width = width_of(field) - 1);
-            [Span::styled(padded, style), Span::raw(" ")]
+            // The zone reads as one, `00–7F`.
+            let after = if field == MapField::ZoneStart {
+                Span::styled("–", theme::dim())
+            } else {
+                Span::raw(" ")
+            };
+            [Span::styled(padded, style), after]
         };
         let name_style = if by_hand { theme::dim() } else { Style::new() };
         let mut spans = vec![

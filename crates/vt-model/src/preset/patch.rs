@@ -890,9 +890,12 @@ mod tests {
         let root = std::env::temp_dir().join(format!("vt-patch-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let path = preset_path(&root, PresetKind::Patch, "Turing").unwrap();
-        // `Range` bent, so its curve is seen to come along, added and renumbered.
+        // `Range` bent and zoned, so its curve and its zone are seen to come along, added and
+        // renumbered.
         let mut bent = turing();
-        bent.macros[2].maps[0] = bent.macros[2].maps[0].bent(-60, 30);
+        bent.macros[2].maps[0] = bent.macros[2].maps[0]
+            .bent(-60, 30)
+            .zoned(crate::macros::Zone::new(0x80, 0xFF).unwrap());
         let preset = PatchPreset::of(&bent, None).unwrap();
         save(&path, &preset, false).unwrap();
         let loaded: PatchPreset = load(&path).unwrap();
@@ -900,6 +903,7 @@ mod tests {
         let text = fs::read_to_string(&path).unwrap();
         assert!(!text.contains("cutoff"), "{text}");
         assert!(text.contains("curve: -60"), "{text}");
+        assert!(text.contains("zone: ("), "{text}");
         assert_eq!(loaded.fixed_tags(), ["patch"]);
         set_tags::<PatchPreset>(&path, vec!["pitch".into()]).unwrap();
         assert_eq!(load::<PatchPreset>(&path).unwrap().tags, ["pitch"]);
@@ -909,6 +913,7 @@ mod tests {
         let range = track.macros[2].maps[0];
         assert_eq!(key_of(range.target), "mod3.depth");
         assert_eq!((range.curve, range.s), (-60, 30));
+        assert_eq!(range.zone.text(), "80–FF");
         fs::write(
             &path,
             r#"(format: 1, patch: (macros: [(maps: [(target: Setting("mod2.depth"), min: 0, max: 1)])]))"#,
