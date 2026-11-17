@@ -118,6 +118,7 @@ fn a_track_at_rest_reads_its_lanes_as_the_count_did_over_a_long_chain_with_an_ed
                 0,
                 count as usize,
                 vt_model::order::Dealer::new(song.seed, 0),
+                vt_model::order::WalkMove::default(),
             )
             .unwrap();
         let phrase = &song.tracks[0].phrases[&position.phrase];

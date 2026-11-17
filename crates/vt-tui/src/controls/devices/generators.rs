@@ -1,8 +1,9 @@
 //! The Gen page's devices: the track's macros, a device for each live generator of a phrase in the
 //! phrase view's column order, an `Acid`'s `Loops` and an FX column's `Lane` under theirs, then
-//! `Empty` (the generators study, `docs/designs/generators-page.md`, §3). A device's title and
+//! `Phrase`, the track's settings that move its phrases' walks (decision 400), and `Empty` (the generators study, `docs/designs/generators-page.md`, §3). A device's title and
 //! grid are its fill's, from the declared table, [`GenParam`].
 
+use vt_model::action::TrackControl;
 use vt_model::constants::FX_SLOTS;
 use vt_model::generator::Generator;
 use vt_model::grid::{GRID_ROWS, Grid};
@@ -58,7 +59,7 @@ pub(crate) fn macros_device() -> DeviceSpec {
 
 /// The Gen page's devices for a phrase of a track: the track's macros first, then a device each
 /// for its live generators, an `Acid`'s with its `Loops` under it, and for each FX column with a
-/// lane, its `Lane`, under its column's generator if it has one, then `Empty`. With no phrase
+/// lane, its `Lane`, under its column's generator if it has one, then `Phrase` and `Empty`. With no phrase
 /// there are only the macros.
 pub(super) fn devices(track: &Track, phrase: Option<u32>) -> Vec<DeviceSpec> {
     let Some((id, found)) = phrase.and_then(|id| Some((id, track.phrases.get(&id)?))) else {
@@ -91,6 +92,7 @@ pub(super) fn devices(track: &Track, phrase: Option<u32>) -> Vec<DeviceSpec> {
         placed.insert(at, (column, DeviceSpec::lane(slot)));
     }
     let mut devices: Vec<DeviceSpec> = placed.into_iter().map(|(_, device)| device).collect();
+    devices.push(DeviceSpec::phrase());
     let mut title = [None; TITLE_PLACES];
     title[0] = Some(Control::NewGenerator(id));
     devices.push(DeviceSpec {
@@ -170,6 +172,27 @@ impl DeviceSpec {
         }
     }
 
+    /// The track's settings that move the walk of its phrases' rows, `Order`, `Reverse`,
+    /// `Order X` and `Order Y`, as a device of their own, `Phrase` (decision 400).
+    pub(crate) fn phrase() -> Self {
+        let mut grid = [[None; DEVICE_COLUMNS]; GRID_ROWS];
+        for (column, control) in WALK_CONTROLS.into_iter().enumerate() {
+            grid[0][column] = Some(Control::Base(control));
+        }
+        Self {
+            identity: PHRASE.to_owned(),
+            switchable: false,
+            width: DeviceWidth::Full,
+            title: [None; TITLE_PLACES],
+            grid,
+        }
+    }
+
+    /// Whether it's `Phrase`.
+    pub(crate) fn is_phrase(&self) -> bool {
+        self.grid[0][0] == Some(Control::Base(TrackControl::Order))
+    }
+
     /// The FX column whose lane it is, if it's a `Lane`.
     pub(crate) fn lane_slot(&self) -> Option<usize> {
         match self.grid[0][0] {
@@ -192,6 +215,17 @@ impl DeviceSpec {
 
 /// What an `Acid`'s loops' device is called.
 pub(crate) const LOOPS: &str = "Loops";
+
+/// What the device of the settings that move a track's phrases' walks is called.
+pub(crate) const PHRASE: &str = "Phrase";
+
+/// The settings on `Phrase`, in its grid's order.
+const WALK_CONTROLS: [TrackControl; 4] = [
+    TrackControl::Order,
+    TrackControl::Reverse,
+    TrackControl::OrderX,
+    TrackControl::OrderY,
+];
 
 /// What an FX column's lane's device is called, after its column.
 pub(crate) const LANE: &str = "Lane";

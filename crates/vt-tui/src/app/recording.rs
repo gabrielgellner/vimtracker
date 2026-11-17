@@ -317,8 +317,8 @@ impl App {
         let from = (now - jam.started as f64).max(0.0);
         let into = from.rem_euclid(length as f64) as usize;
         let lap = from.div_euclid(length as f64) as usize;
-        let dealer = self.services.dealer(track);
-        let at = |place: usize| owner.chain_position(chain, lap * length + place, dealer);
+        let (dealer, walk) = (self.services.dealer(track), self.services.walk(track));
+        let at = |place: usize| owner.chain_position(chain, lap * length + place, dealer, walk);
         let position = at(into)?;
         let next = into.saturating_sub(position.pulse) + owner.step_at(position)?.pulses();
         let position = at(next)?;
@@ -439,8 +439,9 @@ impl App {
         let into = (now - jam.started as f64).rem_euclid(length as f64);
         // Every time round the chain counts, as which one deals a dealt order.
         let lap = ((now - jam.started as f64).div_euclid(length as f64)).max(0.0) as usize;
-        let dealer = self.services.dealer(track);
-        let at = |place: f64| owner.chain_position(chain, lap * length + place as usize, dealer);
+        let (dealer, walk) = (self.services.dealer(track), self.services.walk(track));
+        let at =
+            |place: f64| owner.chain_position(chain, lap * length + place as usize, dealer, walk);
         let position = at(into)?;
         let start = (into as usize).saturating_sub(position.pulse) as f64;
         let end = start + owner.step_at(position)?.pulses() as f64;

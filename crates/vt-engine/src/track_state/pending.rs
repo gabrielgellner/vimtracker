@@ -6,6 +6,7 @@ use vt_model::arpeggio::{ArpMode, Cycle};
 use vt_model::constants::FX_SLOTS;
 use vt_model::groove::Groove;
 use vt_model::modulation::MOD_SLOTS;
+use vt_model::order::WalkMove;
 use vt_model::speed::Speed;
 
 use crate::rng::Pcg32;
@@ -125,6 +126,8 @@ pub(crate) struct Worked {
     /// The row of its phrase's loop the track's `Jump` played in place of the one walked to, if
     /// it jumped (decision 391).
     pub jumped: Option<usize>,
+    /// How its settings moved its phrase's walk (decision 400).
+    pub walk: WalkMove,
 }
 
 /// A step, or one part of it, worked out but not yet played, as its groove or nudge lands it later
@@ -158,6 +161,9 @@ pub(crate) struct PendingStep {
     /// The row of its phrase's loop its `Jump` plays in place of the one walked to, if it jumped,
     /// decided as it was worked out (decision 391).
     pub jumped: Option<usize>,
+    /// How its settings moved its phrase's walk, read as it was worked out, so a part landing
+    /// after the next step is worked out plays the row it walked to (decision 400).
+    pub walk: WalkMove,
     /// What its row's `CHA` and `CND` decided, once the step's first part has decided them.
     pub plays: Option<Decided>,
     /// Which of its track's chain starts it was worked out after, which its accumulators count

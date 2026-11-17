@@ -31,7 +31,7 @@ const TRACK_MEANINGS: [&str; 16] = [
 
 /// The track's own settings in the order lists show them: the filter, then output, then pitch,
 /// velocity, gate, time and glide.
-const TRACK_ORDER: [SettingId; 27] = [
+const TRACK_ORDER: [SettingId; 31] = [
     SettingId::CUT,
     SettingId::RES,
     SettingId::FILTER_TYPE,
@@ -55,6 +55,10 @@ const TRACK_ORDER: [SettingId; 27] = [
     SettingId::SPEED,
     SettingId::QUANTISE,
     SettingId::JUMP,
+    SettingId::ORDER,
+    SettingId::REVERSE,
+    SettingId::ORDER_X,
+    SettingId::ORDER_Y,
     SettingId::GLIDE,
     SettingId::GLIDE_MODE,
     SettingId::PHASE,

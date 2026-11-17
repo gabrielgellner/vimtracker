@@ -82,7 +82,10 @@ fn the_gen_page_shows_a_lane_device_only_for_a_column_with_a_lane() {
     let (app, _realtime) = on_gen_page(false);
     let text = fx_page_text(&app).join("\n");
     assert!(!text.contains("FX1 Lane"), "{text}");
-    assert!(matches!(app.track_control(), Control::NewGenerator(_)));
+    assert_eq!(
+        app.track_control(),
+        Control::Base(vt_model::action::TrackControl::Order)
+    );
     let (app, _realtime) = on_gen_page(true);
     let text = fx_page_text(&app).join("\n");
     assert!(text.contains("FX1 Lane"), "{text}");

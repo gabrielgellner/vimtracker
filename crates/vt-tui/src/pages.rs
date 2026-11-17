@@ -38,7 +38,7 @@ use vt_engine::link::JamState;
 use vt_engine::track_state::{Drawn, Faders, LiveValues};
 use vt_model::constants::FX_SLOTS;
 use vt_model::generator::Generator;
-use vt_model::order::Dealer;
+use vt_model::order::{Dealer, WalkMove};
 use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
 use vt_model::selection::{Extent, Field};
@@ -697,6 +697,11 @@ impl<'a> Ctx<'a> {
     /// What a track's dealt orders are dealt from, as the engine deals them.
     pub(crate) fn dealer(&self, track: usize) -> Dealer {
         self.services.dealer(track)
+    }
+
+    /// How a track's settings move its phrases' walks, as the engine last read them while it plays.
+    pub(crate) fn walk(&self, track: usize) -> WalkMove {
+        self.services.walk(track)
     }
 
     /// The row a playing track's `Jump` played in place of the one walked to, if it jumped.

@@ -40,6 +40,7 @@ mod notes;
 mod onsets;
 mod patches;
 mod phrase;
+mod phrase_order;
 mod phrase_view;
 mod pickers;
 mod presets;

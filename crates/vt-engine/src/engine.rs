@@ -5,6 +5,7 @@ use std::sync::Arc;
 use vt_model::constants::{
     FX_SLOTS, MAX_GROUPS, MAX_MILLIBPM, MAX_TRACKS, MIN_MILLIBPM, TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
+use vt_model::order::WalkMove;
 use vt_model::scale::Scale;
 use vt_model::song::{Song, trim_gain};
 use vt_model::speed::Speed;
@@ -53,6 +54,9 @@ pub struct TrackPlace {
     /// The row of its phrase's loop heard at that step when its `Jump` played it in place of the
     /// one walked to, which the count alone doesn't give (decision 391).
     pub jumped: Option<usize>,
+    /// How its settings moved its phrase's walk at that step: its `ORD`, `REV`, `ORDX` and `ORDY`
+    /// as the row read them before it played, which the count alone doesn't give (decision 400).
+    pub walk: WalkMove,
 }
 
 /// How many voices of one track the sample page can show a playhead for: the track's note and
@@ -382,6 +386,7 @@ impl Engine {
             accumulated: None,
             lanes: [None; FX_SLOTS],
             jumped: None,
+            walk: WalkMove::default(),
         };
         let moved = self.transport != Transport::Stopped && self.frames_since_origin > 0;
         if !moved {
@@ -398,6 +403,7 @@ impl Engine {
             accumulated: state.accumulated,
             lanes: worked.lanes,
             jumped: worked.jumped,
+            walk: worked.walk,
         })
     }
 
