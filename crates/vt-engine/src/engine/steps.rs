@@ -13,7 +13,7 @@ use vt_model::order::{WalkMove, jumped};
 use vt_model::phrase::Phrase;
 use vt_model::settings::{SettingId, moved_chance};
 use vt_model::shape::RowView;
-use vt_model::song::{ChainPosition, Song, Track};
+use vt_model::song::{ChainPosition, Launch, Song, Track};
 use vt_model::speed::Speed;
 use vt_model::step::{
     FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step, most_nudge,
@@ -51,6 +51,7 @@ const DICE_SETTINGS: [SettingId; 3] = [
 pub(super) type LaneReads = [Option<LaneRead>; FX_SLOTS];
 
 use super::Engine;
+use super::transport::next_row;
 
 impl Engine {
     /// Work out a track's next step, and play it now or when its groove lands it. A row with a
@@ -1394,6 +1395,8 @@ impl Engine {
                 Some(lane) => lane.laps,
                 None => self.row_pass(index, pending, position),
             };
+            let last =
+                matches!(condition, Condition::Last(_)) && self.last_pass(index, pending, position);
             let rolled = condition.chance().is_some_and(|chance| {
                 let chance = moved_chance(chance, 1.0, moved);
                 percent_comes_up(seed, index, rolls, number, chance)
@@ -1403,6 +1406,7 @@ impl Engine {
                 fill: self.fill,
                 previous,
                 neighbour,
+                last,
                 rolled,
             });
             holds &= result;
@@ -1427,6 +1431,81 @@ impl Engine {
             return 0;
         };
         phrase_pass(owner, chain, pending.count, position)
+    }
+
+    /// Whether this pass of a row's phrase is the last before the track moves on, for `LST`
+    /// (decision 419): before it plays another phrase, another chain or none, at the end of the
+    /// pass or partway through it. What's queued counts, as on Elektron's machines a queued
+    /// pattern change makes the pattern's pass its last: a chain launched on the track that lands
+    /// by the pass's end, and a loop of sections waiting for its line. Then the section's end, if
+    /// it comes by then, and the chain's next phrase. A chain started again, by a reset or a
+    /// realign, isn't moving on, and nor is a window waiting for the pass under `Cue`.
+    fn last_pass(&self, index: usize, pending: &PendingStep, position: ChainPosition) -> bool {
+        let Some((chain, place)) = pending.place else {
+            return false;
+        };
+        let song = Arc::clone(&self.current.song);
+        let Some(owner) = song.tracks.get(index) else {
+            return false;
+        };
+        let Some(phrase) = owner.phrases.get(&position.phrase) else {
+            return false;
+        };
+        // The pass ends where its last step does, on the track's grid.
+        let left = phrase.time().saturating_sub(position.time) as u64;
+        let end = pending.step + left * pending.ticks;
+        let state = &self.tracks[index];
+        // A launch of the chain playing starts it again, which isn't moving on.
+        let launch = state.cued.filter(|cued| *cued != Some(chain));
+        if launch.is_some() {
+            let lands = match song.launch {
+                Launch::Every(steps) => self.next_line(u64::from(steps.get())),
+                Launch::ChainEnd => {
+                    let length = owner.chain_steps(chain).max(1);
+                    pending.step + (length - place % length) as u64 * pending.ticks
+                }
+            };
+            if lands <= end {
+                return true;
+            }
+        }
+        let count = song.sections.len();
+        if count == 0 {
+            return false;
+        }
+        let from = self.section.min(count - 1);
+        let ends = self.section_end();
+        // A loop of sections waiting lands at its line, or at the section's end.
+        let (next, at) = match self.loop_cued {
+            Some(sections) if !sections.holds(from) => {
+                let line = self.next_line(self.realign_grid()).min(ends);
+                (sections.first.min(count - 1), line)
+            }
+            looping => {
+                let next = match looping.or(self.looping) {
+                    Some(sections) if sections.first < count => sections.next(&song, from).0,
+                    _ => next_row(&song, from).0,
+                };
+                (next, ends)
+            }
+        };
+        if next != from && at <= end {
+            let chain_next = match launch {
+                Some(launched) => launched,
+                None => song.sections[next].chains.get(index).copied().flatten(),
+            };
+            if chain_next != Some(chain) {
+                return true;
+            }
+        }
+        // The chain carries on, to the phrase in its next place.
+        let Some(entries) = owner.chains.get(&chain).map(|chain| &chain.entries) else {
+            return false;
+        };
+        let after = (1..=entries.len())
+            .map(|ahead| entries[(position.slot + ahead) % entries.len()])
+            .find(|entry| owner.phrases.contains_key(&entry.phrase));
+        after.is_some_and(|entry| entry.phrase != position.phrase)
     }
 }
 
