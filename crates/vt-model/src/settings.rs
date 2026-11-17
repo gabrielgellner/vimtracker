@@ -10,7 +10,10 @@ use crate::order::{MOST_ORDER_NUMBER, ORDER_AS_WRITTEN};
 use std::borrow::Cow;
 
 use crate::param::{Choice, Descriptor, Reading, Typing};
-use crate::song::{FILTER_MODE_NAMES, FULL_GATE, GLIDE_MODE_NAMES, PHASE_NAMES, VOICE_MODE_NAMES};
+use crate::song::{
+    FILTER_MODE_NAMES, FILTER_TYPE_NAMES, FULL_GATE, GLIDE_MODE_NAMES, PHASE_NAMES,
+    VOICE_MODE_NAMES,
+};
 use crate::speed::{SPEED_NAMES, Speed};
 
 mod id;
@@ -385,7 +388,7 @@ const TRACK_GROUPS: [&str; 16] = [
 
 /// The track's own settings added since places were fixed, at the end of the table so none moves
 /// (#718): the track's own after [`TRACK`]'s, in the order they came.
-const LATER_TRACK: [Entry; 9] = [
+const LATER_TRACK: [Entry; 15] = [
     // Whether a synth's oscillators run on from note to note or start again on each, read as a
     // note starts, so a lock on its row sets it for that note (decision 370).
     Entry {
@@ -447,6 +450,54 @@ const LATER_TRACK: [Entry; 9] = [
     // (decision 391).
     level("jump", "Jump", "JMP", 0x00)
         .means("the chance each step plays any row of the phrase instead of the next"),
+    // The filter's settings that were the track's alone, so steps, macros and modulation reach
+    // them as they reach `CUT` (decision 398). Each is read every frame, smoothed as `CUT` is,
+    // and a step's lock of `FTYP` crossfades from the type it leaves.
+    level("drive", "Drive", "FDRV", 0x00).means("how hard the sound is pushed into the filter"),
+    level("punch", "Punch", "FPCH", 0x00)
+        .means("how far a ringing peak starts higher and falls in pitch as it dies away, 00 off"),
+    Entry {
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units: Units::LowCut,
+        },
+        ..level("lowcut", "Low cut", "LCUT", 0x00)
+            .means("a high-pass after the filter, to thin the low end; 00 is off")
+    },
+    Entry {
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units: Units::HighCut,
+        },
+        ..level("highcut", "High cut", "HCUT", 0xFF)
+            .means("a low-pass after the filter, to soften the top; FF is off")
+    },
+    Entry {
+        meaning: "which filter the sound goes through",
+        key: "type",
+        name: "Type",
+        label: Some("FTYP"),
+        kind: Kind::Stepped {
+            choices: &FILTER_TYPE_NAMES,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
+    Entry {
+        meaning: "whether Res stops just short of where the filter rings by itself",
+        key: "safe",
+        name: "Safe",
+        label: Some("SAFE"),
+        kind: Kind::Stepped {
+            choices: &OFF_ON,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
     // The order the phrases' rows play in, as places on from each phrase's own `:order` in the
     // list of orders, read before a row plays, as `JMP` is (decision 400).
     Entry {
@@ -503,9 +554,9 @@ const LATER_TRACK: [Entry; 9] = [
     },
 ];
 /// What each of [`LATER_TRACK`] is listed with.
-const LATER_TRACK_GROUPS: [&str; 9] = [
-    "Machine", "Machine", "Filter", "Machine", "Machine", "Machine", "Machine", "Machine",
-    "Machine",
+const LATER_TRACK_GROUPS: [&str; 15] = [
+    "Machine", "Machine", "Filter", "Machine", "Machine", "Filter", "Filter", "Filter", "Filter",
+    "Filter", "Filter", "Machine", "Machine", "Machine", "Machine",
 ];
 
 /// What `ORDX` and `ORDY` choose: the phrase's own number, or one from 1 to 16.

@@ -17,7 +17,7 @@ use crate::modulation::{MOD_SLOTS, ModKind, Polarity, depth_of, depth_value};
 use crate::order::MOST_ORDER_NUMBER;
 use crate::settings::{Kind, Owner, SettingId, SettingSet};
 use crate::shape::{GenParam, MAX_BEND, Shape, ShapeColumn, curved};
-use crate::song::{FilterMode, GlideMode, Phase, Track, VoiceMode};
+use crate::song::{FilterMode, FilterType, GlideMode, Phase, Track, VoiceMode};
 use crate::speed::Speed;
 use crate::step::Step;
 
@@ -573,6 +573,12 @@ impl Track {
             SettingId::VOICE_MODE => self.voice_mode.index(),
             SettingId::KEY_TRACK => u8::from(self.key_track),
             SettingId::GLIDE_MODE => self.glide_mode.index(),
+            SettingId::DRIVE => self.drive,
+            SettingId::PUNCH => self.punch,
+            SettingId::LOW_CUT => self.low_cut,
+            SettingId::HIGH_CUT => self.high_cut,
+            SettingId::FILTER_TYPE => self.filter.index(),
+            SettingId::SAFE => u8::from(self.safe),
             _ => id.entry().default,
         }
     }
@@ -693,6 +699,12 @@ impl Track {
                     SettingId::VOICE_MODE => self.voice_mode = VoiceMode::from_index(coarse),
                     SettingId::KEY_TRACK => self.key_track = coarse != 0,
                     SettingId::GLIDE_MODE => self.glide_mode = GlideMode::from_index(coarse),
+                    SettingId::DRIVE => self.drive = coarse,
+                    SettingId::PUNCH => self.punch = coarse,
+                    SettingId::LOW_CUT => self.low_cut = coarse,
+                    SettingId::HIGH_CUT => self.high_cut = coarse,
+                    SettingId::FILTER_TYPE => self.filter = FilterType::at(coarse),
+                    SettingId::SAFE => self.safe = coarse != 0,
                     _ => return,
                 }
                 self.set_fine(id, fine);

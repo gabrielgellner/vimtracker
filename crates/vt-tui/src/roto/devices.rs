@@ -162,6 +162,8 @@ impl Family {
             | Units::Ceiling
             | Units::VelocityDelta => Self::Level,
             Units::Hertz
+            | Units::LowCut
+            | Units::HighCut
             | Units::Boost
             | Units::Q
             | Units::AcidCutoff

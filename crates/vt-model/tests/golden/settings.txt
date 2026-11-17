@@ -1229,7 +1229,13 @@
 1228 keytrack
 1229 glidemode
 1230 jump
-1231 order
-1232 reverse
-1233 orderx
-1234 ordery
+1231 drive
+1232 punch
+1233 lowcut
+1234 highcut
+1235 type
+1236 safe
+1237 order
+1238 reverse
+1239 orderx
+1240 ordery
