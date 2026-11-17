@@ -1805,12 +1805,12 @@ fn a_slot_made_steps_with_no_depth_is_given_ff_and_its_title_has_its_mode_and_lo
     press(&mut app, "K/steps");
     special(&mut app, KeyCode::Enter);
     assert_eq!(slot(&app).kind, ModKind::Steps);
-    // Its title is its type, its mode and its loop, then where it goes: no polarity.
+    // Its title is its type, its mode, its loop and its jump, then where it goes: no polarity.
     assert!(
         device_title(&app, "Mod 4").starts_with(&modulator_title(
             "Mod 4",
             true,
-            "Steps  Trig  from 1  → --- ─"
+            "Steps  Trig  from 1  Jump 0%  → --- ─"
         )),
         "{}",
         device_title(&app, "Mod 4")
@@ -2923,7 +2923,7 @@ fn a_steps_slots_lists_find_a_name_before_a_meaning_and_each_word_on_its_own() {
     assert_eq!(slot(&app).steps.mode, StepsMode::Note);
     // Its destination: `pitch in` takes `Pitch in scale` rather than `Pitch`, whose meaning has
     // an `in`, and so do each word on its own and the whole name.
-    press(&mut app, "ll");
+    press(&mut app, "lll");
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Destination));
     for search in ["pitch in", "pi sc", "pitch in scale"] {
         press(&mut app, &format!("K{search}"));
@@ -2933,4 +2933,43 @@ fn a_steps_slots_lists_find_a_name_before_a_meaning_and_each_word_on_its_own() {
         press(&mut app, "-");
         assert!(!slot(&app).in_scale, "{search}");
     }
+}
+
+/// Steps' `Jump` is in its title after its loop, as `Jump 0%`, a stop `h` and `l` go through
+/// there: turned, typed, described and mapped to a macro as the grid's settings are (decision
+/// 390).
+#[test]
+fn a_steps_jump_is_in_its_title_after_its_loop_and_turns_as_any_setting() {
+    let (mut app, _realtime) = with_steps();
+    let slot = |app: &App| app.song().tracks[0].mods[3];
+    press(&mut app, "lll");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Jump));
+    assert!(
+        device_title(&app, "Mod 4").contains("from 1  Jump 0%  → Cut"),
+        "{}",
+        device_title(&app, "Mod 4")
+    );
+    press(&mut app, "5=");
+    assert_eq!(slot(&app).steps.jump, 5);
+    press(&mut app, "i40");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).steps.jump, 40);
+    assert!(device_title(&app, "Mod 4").contains("Jump 40%"));
+    press(&mut app, "x");
+    assert_eq!(slot(&app).steps.jump, 0);
+    press(&mut app, " d");
+    let said = vt_tui::screen::describe::text(&app).expect("a line");
+    assert!(said.contains("Jump"), "{said}");
+    assert!(said.contains("at random"), "{said}");
+    press(&mut app, " d");
+    // `M` and a digit map it to a macro.
+    press(&mut app, "M1");
+    let jump = SettingId::mod_own(3, ModField::Jump.own().unwrap()).unwrap();
+    let held = app.song().tracks[0].macro_holding(vt_model::macros::MacroTarget::Setting(jump));
+    assert_eq!(held.map(|(at, _)| at), Some(0));
+    // `l` goes on to where it goes, and `h` back.
+    press(&mut app, "l");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Destination));
+    press(&mut app, "h");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Jump));
 }

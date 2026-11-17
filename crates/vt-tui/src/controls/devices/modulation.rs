@@ -6,7 +6,7 @@ use vt_model::grid::Grid;
 use vt_model::modulation::{MOD_SLOTS, ModSlot};
 use vt_model::song::Track;
 
-use super::{DEVICE_COLUMNS, DeviceSpec};
+use super::{DeviceSpec, TITLE_PLACES};
 use crate::controls::{AccumulatorField, ArpField, Control};
 
 /// The accumulator's settings: how far it goes down the left, and what it does there and when
@@ -38,7 +38,7 @@ const ARPEGGIO_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), None], [Some(
 /// and `l`.
 fn mod_device(slot: usize, modulator: &ModSlot) -> DeviceSpec {
     let spec = modulator.kind.spec();
-    let mut title = [None; DEVICE_COLUMNS];
+    let mut title = [None; TITLE_PLACES];
     for (place, field) in title.iter_mut().zip(spec.title) {
         *place = Some(Control::Mod(slot, *field));
     }
@@ -54,7 +54,7 @@ fn mod_device(slot: usize, modulator: &ModSlot) -> DeviceSpec {
 /// The accumulator as a half-width device, with nothing in its title.
 fn accumulator_device() -> DeviceSpec {
     let grid = Grid::from_columns(&ACCUMULATOR_GRID);
-    DeviceSpec::new("Accumulator", [None; DEVICE_COLUMNS], grid, |at| {
+    DeviceSpec::new("Accumulator", [None; TITLE_PLACES], grid, |at| {
         Control::Accumulator(ACCUMULATOR_SETTINGS[at])
     })
     .half()
@@ -63,7 +63,7 @@ fn accumulator_device() -> DeviceSpec {
 /// The arpeggio as a half-width device, with nothing in its title.
 fn arpeggio_device() -> DeviceSpec {
     let grid = Grid::from_columns(&ARPEGGIO_GRID);
-    DeviceSpec::new("Arpeggio", [None; DEVICE_COLUMNS], grid, |at| {
+    DeviceSpec::new("Arpeggio", [None; TITLE_PLACES], grid, |at| {
         Control::Arpeggio(ARPEGGIO_SETTINGS[at])
     })
     .half()

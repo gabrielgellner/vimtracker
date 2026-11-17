@@ -11,7 +11,7 @@ use crate::lfo::{Fade, LfoMode, MAX_DEFORM, Shape};
 use crate::listed::Listed;
 use crate::param::{Choice, Descriptor, HEX_JUMP, NUMBER, PERCENT, Pace, Reading, Reads, Typing};
 use crate::settings::{MOD_OWN_SETTINGS, SettingId};
-use crate::steps::{Loop, MAX_MUTATE, MAX_STEP, STEPS, StepsMode};
+use crate::steps::{Loop, MAX_JUMP, MAX_MUTATE, MAX_STEP, STEPS, StepsMode};
 use crate::tracking::Source;
 
 use super::{MAX_DEPTH, ModKind, ModSlot, Polarity, default_mod, depth_text};
@@ -64,9 +64,10 @@ pub enum ModField {
     Length,
     Start,
     Loop,
-    /// Steps': the chance each value is drawn again as it comes round, and how it goes from one
-    /// to the next.
+    /// Steps': the chance each value is drawn again as it comes round, the chance each step it
+    /// moves on to is one at random, and how it goes from one to the next.
     Mutate,
+    Jump,
     Smooth,
     /// One of Steps' values, by its place, counted from 0: what the cursor is on in its panel.
     Step(u8),
@@ -89,6 +90,7 @@ pub const MOD_OWN_FIELDS: [ModField; MOD_OWN_SETTINGS] = [
     ModField::Mutate,
     ModField::Smooth,
     ModField::Rate,
+    ModField::Jump,
 ];
 
 /// A slot's settings that steps can lock, whatever its type, in the registry's order
@@ -139,6 +141,7 @@ impl ModField {
             Self::Start => "Start",
             Self::Loop => "Loop",
             Self::Mutate => "Mutate",
+            Self::Jump => "Jump",
             Self::Smooth => "Smooth",
             Self::Step(_) => "Step",
             Self::Low => "Low",
@@ -189,6 +192,7 @@ impl ModField {
             Self::Start => "the value each note starts it on",
             Self::Loop => "what it does once it reaches its last value",
             Self::Mutate => "the chance each value is drawn again as it comes round",
+            Self::Jump => "the chance each step goes to one of its values at random",
             Self::Smooth => "how it goes from one value to the next, gliding or jumping",
             Self::Step(_) => "this value, how far it moves its setting while it plays",
             Self::Low => "where its map starts, in what it follows",
@@ -370,6 +374,7 @@ pub const MOD_SPECS: [ModSpec; ModKind::ALL.len()] = [
             ModField::Type,
             ModField::Mode,
             ModField::Loop,
+            ModField::Jump,
             ModField::Destination,
         ],
         fields: &[
@@ -469,6 +474,7 @@ impl ModSlot {
             ModField::Start => list(STEPS),
             ModField::Loop => list(Loop::ALL.len()),
             ModField::Mutate => (0, i32::from(MAX_MUTATE)),
+            ModField::Jump => (0, i32::from(MAX_JUMP)),
             ModField::Smooth => signed(MAX_STEP),
             ModField::Step(at) if usize::from(at) < STEPS => signed(MAX_STEP),
             ModField::Low | ModField::High => {
@@ -544,6 +550,7 @@ impl ModSlot {
             ModField::Start => i32::from(steps.start),
             ModField::Loop => place(&Loop::ALL, &steps.looping)?,
             ModField::Mutate => i32::from(steps.mutate),
+            ModField::Jump => i32::from(steps.jump),
             ModField::Smooth => i32::from(steps.smooth),
             ModField::Step(at) => i32::from(steps.values[usize::from(at)]),
             ModField::Low => i32::from(self.track.bounds().low),
@@ -628,7 +635,9 @@ impl ModSlot {
                 Reading::Time
             }
             ModField::Hold => Reading::Hold,
-            ModField::Sustain | ModField::Body | ModField::Mutate => Reading::Percent,
+            ModField::Sustain | ModField::Body | ModField::Mutate | ModField::Jump => {
+                Reading::Percent
+            }
             ModField::Ratchet => Reading::Count {
                 what: "how many strikes",
                 from_one: false,
@@ -856,6 +865,7 @@ impl ModSlot {
             ModField::Start => self.steps.start = byte,
             ModField::Loop => self.steps.looping = Loop::ALL[at],
             ModField::Mutate => self.steps.mutate = byte,
+            ModField::Jump => self.steps.jump = byte,
             ModField::Smooth => self.steps.smooth = signed,
             ModField::Step(step) => self.steps.values[usize::from(step)] = signed,
             ModField::Low => self.track.bounds_mut().low = byte,

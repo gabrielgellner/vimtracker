@@ -40,6 +40,8 @@ const TUNE_WIDTH: usize = 8;
 /// What comes before a mod slot's destination in its title, so `LFO  Trig  → Cut` doesn't read
 /// as "Trig Cut".
 const TO: &str = "→ ";
+/// What a Steps slot's `Jump` is called in its title, before its chance.
+const JUMP: &str = "Jump ";
 
 /// The track page's cells, read from the track as the page draws it.
 pub(super) struct TrackCells<'a> {
@@ -167,9 +169,15 @@ impl<'a> TrackCells<'a> {
             look,
         };
         let mut line = cell.value();
-        if matches!(control, Control::Mod(_, ModField::Destination)) {
-            let arrow = setting::resting(!view.engaged);
-            line.spans.insert(0, Span::styled(TO, arrow));
+        // A destination follows an arrow, and Steps' `Jump`, a number among words, its name.
+        let before = match control {
+            Control::Mod(_, ModField::Destination) => Some(TO),
+            Control::Mod(_, ModField::Jump) => Some(JUMP),
+            _ => None,
+        };
+        if let Some(before) = before {
+            line.spans
+                .insert(0, Span::styled(before, setting::resting(!view.engaged)));
         }
         line
     }

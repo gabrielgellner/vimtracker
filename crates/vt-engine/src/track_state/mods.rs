@@ -243,7 +243,20 @@ pub(super) struct SlotRun {
     /// type, so one that becomes Track has a roll for the note sounding.
     pub(super) roll: u8,
     pub(super) rolls: Pcg32,
+    /// The steps Steps' `Jump` played in place of those its `Loop` walks to, by the count each was
+    /// played at, the last few kept so `Smooth` glides from what was heard and toward what will
+    /// be; and the stream of the slot's own it rolls from, after every slot's effects' (decision
+    /// 390).
+    jumped: [(i64, u8); JUMPS_KEPT],
+    pub(super) jumps: Pcg32,
 }
+
+/// How many counts' steps Steps' `Jump` keeps: two before the one playing and one after, as
+/// `Smooth` reads.
+const JUMPS_KEPT: usize = 4;
+
+/// A count no step is played at, so a kept jump there is none.
+const NO_COUNT: i64 = i64::MIN;
 
 impl Default for SlotRun {
     fn default() -> Self {
@@ -270,6 +283,8 @@ impl Default for SlotRun {
             dice: Pcg32::new(0, 0),
             roll: 0,
             rolls: Pcg32::new(0, 0),
+            jumped: [(NO_COUNT, 0); JUMPS_KEPT],
+            jumps: Pcg32::new(0, 0),
         }
     }
 }
@@ -283,6 +298,39 @@ impl SlotRun {
         self.lfo_lap.start(start);
         self.steps_lap.start(start);
         self.chaos = None;
+        self.jumped = [(NO_COUNT, 0); JUMPS_KEPT];
+    }
+
+    /// The step it plays at `count` from `start`: the one its `Loop` walks to, or, with `Jump`'s
+    /// chance, any of its `Length`, rolled once for each count as it's first reached, or looked
+    /// ahead to, and kept. A count before its start, which `Smooth` reads back to, plays as
+    /// walked. With no `Jump` it rolls nothing and walks as written, the same as before there was
+    /// one (decision 390).
+    fn step_played(&mut self, steps: &Steps, start: usize, count: i64, key: u64) -> usize {
+        let walked = steps.step_at(start, count, key);
+        if steps.jump == 0 || count < 0 {
+            return walked;
+        }
+        let kept = &mut self.jumped[count.rem_euclid(JUMPS_KEPT as i64) as usize];
+        if kept.0 == count {
+            return usize::from(kept.1);
+        }
+        let step = if self.jumps.next_u32() % 100 < u32::from(steps.jump) {
+            (self.jumps.next_u32() % steps.played_count() as u32) as usize
+        } else {
+            walked
+        };
+        *kept = (count, step as u8);
+        step
+    }
+
+    /// The step it played at `count`, if it's kept, or else the one its `Loop` walks to: for
+    /// `Smooth`'s look back, which rolls nothing.
+    fn step_kept(&self, steps: &Steps, start: usize, count: i64, key: u64) -> usize {
+        match self.jumped[count.rem_euclid(JUMPS_KEPT as i64) as usize] {
+            (at, step) if at == count && steps.jump > 0 => usize::from(step),
+            _ => steps.step_at(start, count, key),
+        }
     }
 
     /// Where its LFO's attractor is `cycles` into its count, each axis from -1 to 1, stepped on
@@ -437,23 +485,28 @@ impl SlotRun {
         let Some((count, through)) = steps_count(slot, self, now, step_ticks, pass) else {
             return 0.0;
         };
-        let step = steps.step_at(start, count, key);
+        let step = self.step_played(steps, start, count, key);
         self.playing = Some(step as u8);
         self.mutate(steps, step, count);
-        let heard = |count: i64| self.heard(steps, steps.step_at(start, count, key));
         let smooth = f32::from(steps.smooth) / f32::from(MAX_STEP);
         match through {
-            Some(through) if smooth != 0.0 => smoothed(
-                [
-                    heard(count - 2),
-                    heard(count - 1),
-                    heard(count),
-                    heard(count + 1),
-                ],
-                through,
-                smooth,
-            ),
-            _ => heard(count),
+            Some(through) if smooth != 0.0 => {
+                // The step after is rolled as it's looked ahead to, and kept for when it plays.
+                let after = self.step_played(steps, start, count + 1, key);
+                let heard =
+                    |count: i64| self.heard(steps, self.step_kept(steps, start, count, key));
+                smoothed(
+                    [
+                        heard(count - 2),
+                        heard(count - 1),
+                        self.heard(steps, step),
+                        self.heard(steps, after),
+                    ],
+                    through,
+                    smooth,
+                )
+            }
+            _ => self.heard(steps, step),
         }
     }
 
