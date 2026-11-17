@@ -807,8 +807,8 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
-        57,
-        "what a sample track has, its Sample, Slice, Start and Length, its lanes' nine, Pitch in scale, Jump, Chance up or down, the filter's Drive, Punch, Low cut and High cut, the six that move the walk, none, Mod 6's three, its Rate, Shape, Mode and Fade, the accumulator's and arpeggio's four, and the eight macros"
+        58,
+        "what a sample track has, its Sample, Slice, Start and Length, its lanes' nine, Pitch in scale, Jump, Chance up or down, Chance target, the filter's Drive, Punch, Low cut and High cut, the six that move the walk, none, Mod 6's three, its Rate, Shape, Mode and Fade, the accumulator's and arpeggio's four, and the eight macros"
     );
     assert!(
         picker
@@ -1794,7 +1794,7 @@ fn the_track_page_shows_its_settings_in_columns() {
             26,
             "│  Pan       8000 ▕    │    ▏   Group     Off               ",
         ),
-        (29, "╭─ Play  Jump 00  Chance 80 ─"),
+        (29, "╭─ Play  Jump 00  Chance 80  Row ─"),
         (
             31,
             "│  Pitch     8000 ▕    │    ▏   Speed     1/16               Choke     Off ",
