@@ -510,7 +510,7 @@ fn a_jump_replays_the_values_mutate_locked() {
 /// A macro holding a Steps slot's `Jump` turns it, as it does `Mutate`.
 #[test]
 fn a_macro_turns_jump() {
-    use vt_model::macros::{MacroMap, MacroTarget};
+    use vt_model::macros::{MacroMap, MacroTarget, Zone};
     use vt_model::modulation::ModField;
     let walking = Steps {
         values: values(&[0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x08]),
@@ -525,6 +525,7 @@ fn a_macro_turns_jump() {
         max: 0x6400,
         curve: 0,
         s: 0,
+        zone: Zone::default(),
     }];
     let walk = [0, 1, 2, 3, 4, 5, 6, 7].repeat(2);
     assert_eq!(played(&song, 16), walk);
