@@ -1,3 +1,4 @@
+<!-- ANCHOR: before-grid -->
 # Note entry
 
 Put the cursor on the Note column, as the status line shows, and press `i`.
@@ -116,6 +117,16 @@ The distance is the grid, shown as `Grid` on the status line. As in Ableton,
 `o` do the same, past the keyboard's end: `o` is above `l`, so up is wider.
 `:set skip=8` sets it to any number of steps. Anything half typed in another
 column is dropped when you move.
+
+In Insert, a faint green dot in the gutter, left of the frame, marks each row
+`Left` and `Right` reach from the cursor, forward and back, so you see where
+the next hit goes before you move. With the cursor on `02` and the grid at a
+beat, the dots are on `06`, `0A` and `0E`. The arrows stop at the phrase's first
+and last rows rather than wrapping, so those are marked too. The dots follow the
+cursor and the grid as they change. At `1/16` every row would have one, so none
+does.
+<!-- ANCHOR_END: before-grid -->
+<!-- ANCHOR: after-grid -->
 
 ## Recording while it plays
 
@@ -365,3 +376,4 @@ too, as an LFO moves any setting around where a step put it, and it stays from
 `HLD` ignores all of them. `LDLT` is made for lanes: in an FX column with a lane of
 its own, it drifts against the notes, so a row plays short one pass and long the
 next. See **FX commands**.
+<!-- ANCHOR_END: after-grid -->

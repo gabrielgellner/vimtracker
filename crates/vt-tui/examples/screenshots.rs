@@ -144,6 +144,13 @@ const SHOTS: &[Shot] = &[
         keys: "lll",
         ..PLAIN
     },
+    // Insert with the grid at a beat: the rows `Left` and `Right` reach from 06 are marked.
+    Shot {
+        name: "insert-grid",
+        rows: ACCENTS,
+        keys: ":set skip=4<Enter>6ji",
+        ..PLAIN
+    },
     Shot {
         name: "gate-list",
         keys: "lllK",

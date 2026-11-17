@@ -677,6 +677,16 @@ fn relative_number(index: usize, cursor: usize) -> String {
     }
 }
 
+/// Whether pressing `Left` or `Right` over and over from the cursor lands on a row: a grid step at a
+/// time, then the phrase's first or last row, where the cursor stops. A grid of one step would mark
+/// every row, so it marks none.
+fn grid_reaches(cursor: usize, skip: usize, rows: usize, index: usize) -> bool {
+    if skip <= 1 || index == cursor || index >= rows {
+        return false;
+    }
+    index.abs_diff(cursor).is_multiple_of(skip) || index == 0 || index == rows - 1
+}
+
 /// A row's number. Row `00` is the loop's first step, and rows above it are negative.
 fn row_number(row: isize) -> String {
     let sign = if row < 0 { '-' } else { ' ' };
@@ -1149,6 +1159,24 @@ impl<'a> Grid<'a> {
         }
     }
 
+    /// The gutter's mark before a row's own line: the playhead's, or in Insert a dot on each row
+    /// `Left` and `Right` reach from the cursor, in Insert's green set back.
+    fn marker_span(&self, ctx: &Ctx, line: &TimeLine) -> Span<'static> {
+        let marker = self.marker(line);
+        if marker == " "
+            && ctx.mode() == Mode::Insert
+            && grid_reaches(
+                ctx.cursor().step,
+                ctx.song().skip as usize,
+                self.stored,
+                line.index,
+            )
+        {
+            return Span::styled(" ·", Style::new().fg(theme::dimmed(theme::GREEN)));
+        }
+        Span::styled(format!(" {marker}"), theme::active())
+    }
+
     /// The headings row: the frame's top edge with the grid's parts in it, and each other track's
     /// label over its column's note, as `Note` is over the notes.
     fn headings(&self, ctx: &Ctx) -> Line<'static> {
@@ -1296,7 +1324,7 @@ impl<'a> Grid<'a> {
         let mut spans = vec![
             Span::styled(relative_number(index, ctx.cursor().step), theme::faint()),
             Span::styled(row_number(row), number),
-            Span::styled(format!(" {}", self.marker(line)), theme::active()),
+            self.marker_span(ctx, line),
             Span::styled(SIDE, self.edge),
         ];
         // A row its `CHA` or `CND` skipped this time is faint under the playhead, so the logic
