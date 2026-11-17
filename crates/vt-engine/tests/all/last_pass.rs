@@ -154,7 +154,7 @@ fn the_last_pass_before_the_section_moves_to_another_chain() {
     let same = song(&[&[LAST]], &[(0, Some(16)), (0, Some(4))]);
     assert_eq!(hits(&same, 40), Vec::<usize>::new());
     // A section's repeats play before it moves on.
-    let mut repeated = sections.clone();
+    let mut repeated = sections;
     repeated.sections[0].repeat = Repeat::new(2);
     assert_eq!(hits(&repeated, 40), [28]);
 }

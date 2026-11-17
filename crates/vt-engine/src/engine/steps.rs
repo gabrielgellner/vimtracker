@@ -1469,17 +1469,17 @@ impl Engine {
         let (next, at) = match self.loop_cued {
             Some(sections) if !sections.holds(from) => {
                 let line = self.next_line(self.realign_grid()).min(ends);
-                (Some(sections.first.min(count - 1)), line)
+                (sections.first.min(count - 1), line)
             }
             looping => {
                 let next = match looping.or(self.looping) {
                     Some(sections) if sections.first < count => sections.next(&song, from).0,
                     _ => next_row(&song, from).0,
                 };
-                (Some(next), ends)
+                (next, ends)
             }
         };
-        if let Some(next) = next.filter(|next| *next != from && at <= end) {
+        if next != from && at <= end {
             let chain_next = match launch {
                 Some(launched) => launched,
                 None => song.sections[next].chains.get(index).copied().flatten(),
