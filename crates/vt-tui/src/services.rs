@@ -155,7 +155,7 @@ pub struct Services {
     /// Each track's level, for the mixer.
     pub track_meters: Vec<Meter>,
     /// Changes each time random values are wanted anew: a shape's seed, a roll, a bloom's.
-    pub(crate) shape_seed: u64,
+    pub shape_seed: u64,
 }
 
 /// The mirror of the engine's last report: where it's playing and what it's playing with, for
@@ -308,7 +308,7 @@ impl Services {
             meter: Meter::default(),
             scope: crate::services::scope::Scope::new(rate),
             track_meters: vec![Meter::default(); MAX_TRACKS],
-            shape_seed: 0,
+            shape_seed: random_seed(),
         }
     }
 
@@ -725,4 +725,24 @@ pub(crate) fn live_from(song: &Song) -> Vec<TrackLive> {
             solo: t.saved_solo,
         })
         .collect()
+}
+
+/// A seed nobody chose, for a new song or a session's shape panel: the standard library's
+/// per-process hash keys mixed with the clock, kept to 32 bits so it reads as eight hex digits.
+/// Not for the audio thread, and not for secrets.
+pub(crate) fn random_seed() -> u64 {
+    use std::hash::{BuildHasher, Hasher};
+    let mut hasher = std::hash::RandomState::new().build_hasher();
+    if let Ok(now) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        hasher.write_u128(now.as_nanos());
+    }
+    hasher.finish() >> 32
+}
+
+/// A new song as the app starts one, with a seed of its own so no two projects draw the same.
+pub(crate) fn new_song(tracks: usize) -> vt_model::song::Song {
+    vt_model::song::Song {
+        seed: random_seed(),
+        ..vt_model::song::Song::new(tracks)
+    }
 }

@@ -184,9 +184,9 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
         Some(folder) if folder.join("song.ron").exists() => project::load_song(folder)?,
         Some(folder) => {
             status = format!("New project: {} is created on :w", folder.display());
-            Song::new(DEFAULT_TRACKS)
+            crate::services::new_song(DEFAULT_TRACKS)
         }
-        None => Song::new(DEFAULT_TRACKS),
+        None => crate::services::new_song(DEFAULT_TRACKS),
     };
     if let Some(first) = project::find_sources(path.as_deref(), &mut song).first() {
         status = first.clone();

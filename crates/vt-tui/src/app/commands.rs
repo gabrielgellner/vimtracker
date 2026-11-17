@@ -189,6 +189,11 @@ impl App {
             Line::SetLimiter(on) => set_limiter(&mut self.services, on),
             Line::ReadOnly(on) => self.set_read_only(on),
             Line::Seed(seed) => self.services.apply(&Action::SetSeed(seed)),
+            Line::RollSeed => {
+                let seed = crate::services::random_seed();
+                self.services.apply(&Action::SetSeed(seed));
+                self.services.status = format!("Seed {seed:X}");
+            }
             Line::Groove(groove) => {
                 self.services.apply(&Action::SetGroove(groove));
                 self.services.status = format!("The project plays with {groove}");
@@ -399,7 +404,7 @@ impl App {
         }
         let song = Song {
             name: folder_name(path),
-            ..Song::new(DEFAULT_TRACKS)
+            ..crate::services::new_song(DEFAULT_TRACKS)
         };
         match project::create_project(path, &song) {
             Ok(()) => {

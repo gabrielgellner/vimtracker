@@ -192,6 +192,8 @@ pub enum Line {
     /// Move this phrase's notes to the nearest in the scale.
     FitToScale,
     Seed(u64),
+    /// A new seed at random.
+    RollSeed,
     /// The groove every track plays with unless it has its own.
     Groove(GrooveId),
     /// Choose the project's groove from a list, or the track's.
@@ -615,7 +617,7 @@ pub enum LineError {
     Chain,
     #[error(":render takes a path, --rows n, --tail, --stems and --split")]
     Render,
-    #[error(":seed takes a number")]
+    #[error(":seed takes a number, or nothing for a new one at random")]
     Seed,
     #[error(":groove takes a groove's name, such as swing-66, or nothing to choose from a list")]
     Groove,
@@ -1409,9 +1411,12 @@ pub(crate) const COMMANDS: [Command; 49] = [
     },
     Command {
         name: "seed",
-        meaning: "The seed chance FX play from",
+        meaning: "The seed chance FX play from, or a new one at random",
         takes: Takes::Nothing,
         parse: |argument| {
+            if argument.is_empty() {
+                return Ok(Line::RollSeed);
+            }
             argument
                 .parse()
                 .map(Line::Seed)
@@ -1570,6 +1575,7 @@ mod tests {
             ("q!", Ok(Line::Quit { force: true })),
             ("len 32", Ok(Line::Len(32))),
             ("seed 42", Ok(Line::Seed(42))),
+            ("seed", Ok(Line::RollSeed)),
             (
                 "render a b.wav --rows 8 --tail",
                 Ok(render(Some("a b.wav"), Some(8), true, false, false)),

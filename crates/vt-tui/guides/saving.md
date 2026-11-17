@@ -102,7 +102,9 @@ The Song page's rows:
 | Push, Velocity | Each step's push and velocity | |
 | Audio | The device and rate | `Space 9`, `L` |
 
-`i` on Name edits it, and `C-r` there rolls a new one. `l` on BPM goes onto its fine
+A new project starts with a seed of its own, drawn at random and saved with the
+song, so no two projects play the same chances; `:seed` alone rolls another, and
+`:seed 42` sets one. `i` on Name edits it, and `C-r` there rolls a new one. `l` on BPM goes onto its fine
 part, the digits after the point. `Enter` on Audio opens the Audio page. The limiter
 isn't here: it's on the master's Sound page, after its `Level`, and `:set limiter`
 switches it too.
