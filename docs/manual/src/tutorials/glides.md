@@ -8,7 +8,10 @@ tracker command it stands in for. A table at the end puts them side by side.
 
 The parts are the gate, `Mode`, `HLD`, `Glide` and `Glide mode`. What each does, and how they fit
 together, is [How a note plays](../how-a-track-plays.md#how-a-note-plays-gate-mode-slides-glide-and-retrigger)
-in **How a track plays**; this chapter only uses them.
+in **How a track plays**; this chapter only uses them. Its recipes say what goes in each field,
+as the generators chapter's do, not the keys that get there:
+[Navigation](../guides/navigation.md#moving-between-things) says how to reach a setting, and
+[Selecting and editing](../guides/editing.md#values-and-small-edits) how to change a value.
 
 | Song | Stands in for | The trick |
 |---|---|---|
@@ -98,13 +101,12 @@ within about a third of its length, and the fast one is nearly a jump with a sme
 
 **Build it.**
 
-1.  `:set scale=minor`, `:bpm 120`. Track 1's machine: `Space 5`, `K` on the machine, `va`,
-    `Enter`.
-2.  The pluck: `Space 6`, `Mod 1`'s `Decay` `250` and `Sustain` `40`.
-3.  `Space 5`, and on the Play device `Mode`, under `Phase`: `K`, `legato`, `Enter`.
-4.  `Space 3`, and the notes, each with `SGL2` in the gate column.
-5.  On row `00`'s FX column, `K` and `GLD`, then `C0`, and `~` once for the hold mark. The same
-    on `08` with `80` and on `10` with `40`.
+*   **Song:** C minor, 120 BPM.
+*   **Track 1, `LD`:** `VA`; `Mod 1` `Decay` `250 ms`, `Sustain` `40%`; on the Play device,
+    `Mode` `Legato`.
+*   **Phrase:** 24 rows, the melody `C-3 G-3 D#3 F-3 G-3 A#3 C-4 G-3` three times, each note
+    with a gate of `SGL2`. `GLD C0` on row `00`, `GLD 80` on `08` and `GLD 40` on `10`, each with
+    the hold mark, `h`.
 
 **Try next.** Lower the track's `Gate` on the Play device to `50%`: every note is let go halfway,
 the next is struck, and nothing slides, however long `GLD` is. That's the gate deciding.
@@ -139,9 +141,14 @@ than a swoop.
 On the row slid into, it's where `3xx` would be. With no `GLD`, the track's `Glide` times it,
 and with that `Off` too, the tie jumps to the note with no attack, which is a slide at `3FF`.
 
-**Build it.** As above without step 3, then the notes. On row `03`, in Insert on the Note column,
-`/` after the note writes `HLD1` on its row, as a 303's slide is written; or `K` on the gate
-column and `HLD`. Then `GLD 90` on `04` and the same on `0A` and `0B`.
+**Build it.**
+
+*   **Song:** C minor, 120 BPM.
+*   **Track 1, `LD`:** `VA`; `Mod 1` `Decay` `250 ms`, `Sustain` `40%`. `Mode` stays `Mono` and
+    `Glide` `Off`.
+*   **Phrase:** 16 rows, `C-2 C-2 C-3 C-2 G-2 C-2 A#2 C-2 C-2 C-2 C-3 D#3 C-2 G-2 A#2 G-2`.
+    `HLD1` on rows `03` and `0A`, `GLD 90` on `04` and `GLD 60` on `0B`. In Insert, `/` after a
+    note writes its `HLD1`, as a 303's slide is written.
 
 ## A slide that carries on
 
@@ -175,9 +182,13 @@ small steps climbed, each move the same share of the way 20 ms in, a glide's tim
 time the small steps land quickly and the octave takes four times as long to fall, sliding as a
 tracker does, at one speed.
 
-**Build it.** The notes, `HLD2` in the gate column on each but the last (`K`, `HLD`, then `=` for
-two pulses) and `SGL6` on the last. For the first pass, `Glide` on the Play device: `/glide`,
-`Enter`, `i`, `60`, `Enter`. For the second, `GLD` on each row slid into.
+**Build it.**
+
+*   **Song:** C minor, 120 BPM.
+*   **Track 1, `LD`:** `VA`; `Mod 1` `Decay` `250 ms`, `Sustain` `40%`; on the Play device,
+    `Glide` `60 ms`.
+*   **Phrase:** 12 rows, the notes and gates above: `HLD2` on each row but the last of each
+    run, `SGL6` on the last. In the second run, `GLD` on each row slid into, as above.
 
 **Try next.** A speed of your own: at 10 ms a semitone, twice as fast, a minor third is 30 ms,
 `GLD 65`, and the octave 120 ms, `GLD 98`.
@@ -211,8 +222,15 @@ full length slide into the next. [`song.ron`](songs/legato-slides/song.ron)
 an attack, then a short note and silence before the next strike. It's the same rule as a 303's,
 which slides only where its gate is held into the next step.
 
-**Build it.** `Mode` `Legato` and `Glide` `80`, the notes, and `LEN 80` from `K` on the FX
-column. A row's own length does the same, `SGL1 80` in the gate column, as does the track's
+**Build it.**
+
+*   **Song:** C minor, 120 BPM.
+*   **Track 1, `LD`:** `VA`; `Mod 1` `Decay` `250 ms`, `Sustain` `40%`; on the Play device,
+    `Mode` `Legato` and `Glide` `80`.
+*   **Phrase:** 16 rows, `C-2 C-2 C-3 D#3 C-2 G-2 C-2 A#2 C-3 G-2 C-2 C-2 D#2 F-2 G-2 A#2`,
+    with `LEN 80` on rows `00`, `01`, `03`, `05`, `06`, `09`, `0A`, `0C`, `0D` and `0F`.
+
+A row's own length does the same as `LEN`, `SGL1 80` in the gate column, as does the track's
 `Gate` lowered with `FF` on the rows to hold: see **How a note plays**.
 
 **Try next.** `Glide` `Off`: the slides now jump to their note, still with no new attack, a
@@ -247,8 +265,12 @@ to glide from and starts at its own pitch. [`song.ron`](songs/glide-always/song.
 **Listen for** a pluck on every note, each with a swoop in its front. Against `legato-slides`,
 the attacks are all there and only the pitch slides.
 
-**Build it.** `Glide` `90`, and `Glide mode`, shown as `Glides` under `Mode` on the Play device:
-`/glides`, `Enter`, `K`, `always`, `Enter`.
+**Build it.**
+
+*   **Song:** C minor, 120 BPM.
+*   **Track 1, `LD`:** `VA`; `Mod 1` `Decay` `250 ms`, `Sustain` `40%`; on the Play device,
+    `Glide` `90` and `Glide mode`, shown as `Glides` under `Mode`, `Always`.
+*   **Phrase:** 16 rows, `C-3 G-3 D#3 C-4 G-3 OFF --- C-3 C-3 G-3 D#3 A#3 G-3 F-3 D#3 OFF`.
 
 ## One glide on one row: `GMOD`
 
@@ -277,8 +299,12 @@ nearest thing to `3xx` there, a slide with no attack and the command where a tra
 only slides if the note before is still held, so give that one the full length. `GMOD 01` keeps
 the attack. Either sits on one row, where a `HLD` sits on the row before.
 
-**Build it.** `Glide` `90` and the notes, then `K` on row `03`'s FX column, `GMOD`, `01`, and on
-row `0B`, `VMOD`, `01`.
+**Build it.**
+
+*   **Song:** C minor, 120 BPM.
+*   **Track 1, `LD`:** `VA`; `Mod 1` `Decay` `250 ms`, `Sustain` `40%`; on the Play device,
+    `Glide` `90`, and `Glide mode` left at `Ties`.
+*   **Phrase:** `glide-always`' 16 rows, with `GMOD 01` on row `03` and `VMOD 01` on row `0B`.
 
 ## `Acid`'s own slide
 
@@ -312,8 +338,13 @@ How it differs from the rest:
     lets every note go: so `HLD` is how it slides, as on a 303.
 *   `Slide` goes from 60 ms to the Devil Fish's 360 ms, where `Glide` goes from 2 ms to 2 s.
 
-**Build it.** As **Acid lines** in **Generative sequencers, recreated** builds its voice, then
-the notes, with `/` after each note that slides away in Insert, which writes its `HLD`.
+**Build it.**
+
+*   **Song:** C minor, 120 BPM.
+*   **Track 1, `LD`:** `Acid`, `Cutoff` `50`, `Resonance` `C0`, `Env mod` `A0`, `Decay` `58`.
+*   **Phrase:** `legato-slides`' 16 notes, `7F` on rows `00`, `04`, `08` and `0C`, and `HLD1` on
+    each row that slides away, the ones `legato-slides` holds at the full length: `02`, `04`,
+    `07`, `08`, `0B` and `0E`.
 
 ## Side by side
 
