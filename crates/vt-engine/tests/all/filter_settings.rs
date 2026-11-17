@@ -62,11 +62,13 @@ fn apart_db(one: &[f32], other: &[f32], step: usize) -> f32 {
     20.0 * (rms(&difference) / rms(&other[range])).log10()
 }
 
+/// A change made to the track.
+type Change = fn(&mut Track);
+
 /// Each setting, its key on a step, what's set on the track to hear it and the value a lock
 /// sets, with the track as each is heard on: `Safe` on a ringing ladder, `Punch` on a ringing
 /// clean filter.
-#[allow(clippy::type_complexity)]
-fn settings() -> Vec<(&'static str, fn(&mut Track), fn(&mut Track), &'static str)> {
+fn settings() -> Vec<(&'static str, Change, Change, &'static str)> {
     vec![
         ("drive", |_| {}, |track| track.drive = 0xC0, "C0"),
         (
@@ -214,7 +216,7 @@ fn an_lfo_moves_drive_and_low_cut() {
         rate: Rate::Hertz(100),
         ..Lfo::default()
     };
-    let pairs: [(SettingId, fn(&mut Track)); 2] = [
+    let pairs: [(SettingId, Change); 2] = [
         (SettingId::LOW_CUT, |track: &mut Track| track.low_cut = 0x80),
         (SettingId::DRIVE, |track: &mut Track| track.drive = 0x80),
     ];

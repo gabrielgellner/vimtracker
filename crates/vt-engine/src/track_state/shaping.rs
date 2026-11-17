@@ -220,7 +220,7 @@ impl TrackState {
             return;
         }
         let was = std::mem::replace(&mut self.filter_type, kind);
-        let channels = std::mem::replace(&mut self.filter, [Channel::default(); 2]);
+        let channels = std::mem::take(&mut self.filter);
         let coefficients = self.coefficients.take().map(|ramp| *ramp.now());
         self.leaving = (!self.filter_quiet).then_some(LeavingFilter {
             kind: was,
@@ -288,7 +288,7 @@ impl TrackState {
             + self.pan_offset.next(run.fast)
             + self.pan_envelope.next(run.fast))
         .clamp(0.0, 1.0);
-        if self.filter_quiet && input != [0.0; 2] {
+        if self.filter_quiet && (input[0] != 0.0 || input[1] != 0.0) {
             self.filter_quiet = false;
         }
         let drive = self.drive.next(self.smoother_for(SettingId::DRIVE, run));

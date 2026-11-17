@@ -291,10 +291,11 @@ impl Kind {
                 .get(usize::from(value >> 8))
                 .map_or_else(String::new, |choice| (*choice).to_owned()),
             Self::Continuous { units, middle, top } => match units {
-                Units::Hertz => hertz(20.0 * 1000_f64.powf(coarse / 255.0)),
                 Units::LowCut if coarse / 255.0 <= CUT_OFF => "Off".to_owned(),
                 Units::HighCut if coarse / 255.0 >= 1.0 - CUT_OFF => "Off".to_owned(),
-                Units::LowCut | Units::HighCut => hertz(20.0 * 1000_f64.powf(coarse / 255.0)),
+                Units::Hertz | Units::LowCut | Units::HighCut => {
+                    hertz(20.0 * 1000_f64.powf(coarse / 255.0))
+                }
                 Units::Decibels if value == 0 => "-inf dB".to_owned(),
                 Units::Decibels => format!(
                     "{:+.1} dB",
