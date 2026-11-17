@@ -86,6 +86,7 @@ impl PlayMode {
 /// A share of a sample, as `Start` and `Length` take it: `00` none of it and `FF` all of it.
 const fn share(key: &'static str, name: &'static str, label: &'static str, default: u8) -> Entry {
     Entry {
+        meaning: "",
         key,
         name,
         label: Some(label),
@@ -105,6 +106,7 @@ pub const SAMPLER_SETTINGS: usize = SAMPLER.len();
 /// The sampler's own, which it keeps whatever it plays. `Length` isn't `LEN`, which is `Gate`'s.
 pub(super) const SAMPLER: [Entry; 5] = [
     Entry {
+        meaning: "which of the bank's samples plays",
         key: "sample",
         name: "Sample",
         label: Some("SMP"),
@@ -116,6 +118,7 @@ pub(super) const SAMPLER: [Entry; 5] = [
         place: Place::Own,
     },
     Entry {
+        meaning: "which slice of the sample a note plays",
         key: "slice",
         name: "Slice",
         label: Some("SLI"),
@@ -126,9 +129,11 @@ pub(super) const SAMPLER: [Entry; 5] = [
         default: 0,
         place: Place::Own,
     },
-    share("start", "Start", "STA", 0),
-    share("length", "Length", "SLEN", 0xFF),
+    share("start", "Start", "STA", 0).means("where a note starts in the sample or slice"),
+    share("length", "Length", "SLEN", 0xFF)
+        .means("how much of the sample or slice plays from Start"),
     Entry {
+        meaning: "how a note plays it: once, round its loop, back and forth, on or to tempo",
         key: "play",
         name: "Play",
         label: Some("PLY"),

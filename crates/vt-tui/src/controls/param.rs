@@ -67,6 +67,9 @@ pub struct ParamView {
     pub units: Option<Units>,
     /// Not dim: away from its default, or doing something on this track.
     pub(crate) engaged: bool,
+    /// What it does, as the model says it, for the line that describes the setting under the
+    /// cursor ([`Descriptor::meaning`]).
+    pub meaning: Cow<'static, str>,
 }
 
 impl ParamView {
@@ -94,6 +97,10 @@ impl ParamView {
             typing: described.typing,
             reads: described.reads,
             why_not: described.why_not,
+            meaning: match described.meaning.is_empty() {
+                true => self.meaning,
+                false => described.meaning,
+            },
             ..self
         }
     }

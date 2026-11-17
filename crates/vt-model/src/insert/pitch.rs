@@ -48,6 +48,7 @@ pub fn grain_ms(value: f32) -> f32 {
 /// A pitch shifter's, in the order the page shows them.
 pub(crate) const PITCH_PARAMS: [Entry; 6] = [
     Entry {
+        meaning: "shifts the sound by {}, without changing its length",
         name: "Pitch",
         key: "pitch",
         label: Some("PTCH"),
@@ -60,9 +61,13 @@ pub(crate) const PITCH_PARAMS: [Entry; 6] = [
     },
     hex_param("Fine", "fine", "FINE", Pitch::DEFAULT.fine)
         .units(Units::Cents)
-        .centred(),
-    hex_param("Size", "size", "SIZE", Pitch::DEFAULT.size).units(Units::Grain),
-    hex_param("Feedback", "feedback", "FDBK", Pitch::DEFAULT.feedback),
+        .centred()
+        .means("a finer shift on top, up to 50 cents either way"),
+    hex_param("Size", "size", "SIZE", Pitch::DEFAULT.size)
+        .units(Units::Grain)
+        .means("how long each grain is: short suits drums, long suits pads"),
+    hex_param("Feedback", "feedback", "FDBK", Pitch::DEFAULT.feedback)
+        .means("how much goes round again, shifted once more each time"),
     Entry {
         default: 0xFF,
         ..MIX_PARAM
@@ -119,11 +124,19 @@ impl Pitch {
 /// how often and how wide, freezing and straying, then pitch and envelope, whose short names fit
 /// the narrow fourth column.
 pub(crate) const GRAINS_PARAMS: [Entry; 10] = [
-    hex_param("Time", "time", "TIME", Grains::DEFAULT.time).units(Units::GrainTime),
-    hex_param("Size", "size", "SIZE", Grains::DEFAULT.size).units(Units::GrainLength),
-    hex_param("Density", "density", "DENS", Grains::DEFAULT.density).units(Units::Density),
-    hex_param("Spread", "spread", "SPRD", Grains::DEFAULT.spread),
+    hex_param("Time", "time", "TIME", Grains::DEFAULT.time)
+        .units(Units::GrainTime)
+        .means("how far back in the last four seconds the grains read"),
+    hex_param("Size", "size", "SIZE", Grains::DEFAULT.size)
+        .units(Units::GrainLength)
+        .means("how long each grain is; at rev it plays backwards"),
+    hex_param("Density", "density", "DENS", Grains::DEFAULT.density)
+        .units(Units::Density)
+        .means("how often grains start: evenly below 80, at random above"),
+    hex_param("Spread", "spread", "SPRD", Grains::DEFAULT.spread)
+        .means("how far the grains spread across the sides"),
     Entry {
+        meaning: "stops recording, so the grains keep playing what's held",
         name: "Freeze",
         key: "freeze",
         label: Some("FRZ"),
@@ -134,12 +147,15 @@ pub(crate) const GRAINS_PARAMS: [Entry; 10] = [
         default: Grains::DEFAULT.freeze,
         place: Place::Own,
     },
-    hex_param("Random", "random", "RAND", Grains::DEFAULT.random),
+    hex_param("Random", "random", "RAND", Grains::DEFAULT.random)
+        .means("how far each grain's time, size and shape stray at random"),
     Entry {
+        meaning: "how far each grain is shifted, in semitones",
         default: Grains::DEFAULT.pitch,
         ..PITCH_PARAMS[0]
     },
-    hex_param("Shape", "shape", "SHAP", Grains::DEFAULT.shape),
+    hex_param("Shape", "shape", "SHAP", Grains::DEFAULT.shape)
+        .means("each grain's envelope: a square, a decay, a bell, a reversed decay"),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -292,6 +308,7 @@ pub const QUALITY_NAMES: [&str; 4] = ["Stereo 16", "Mono 16", "Stereo 8", "Mono 
 /// gain every slot has.
 pub(crate) const CLOUDS_PARAMS: [Entry; 13] = [
     Entry {
+        meaning: "what Clouds does with what it records",
         name: "Mode",
         key: "mode",
         // Choosing a mode chooses a sound, so steps don't lock it.
@@ -303,25 +320,35 @@ pub(crate) const CLOUDS_PARAMS: [Entry; 13] = [
         default: 0,
         place: Place::Type,
     },
-    hex_param("Position", "position", "POS", Clouds::DEFAULT.position),
-    hex_param("Size", "size", "SIZE", Clouds::DEFAULT.size),
+    hex_param("Position", "position", "POS", Clouds::DEFAULT.position)
+        .means("where in the recording it reads; in Looping, how long its delay is"),
+    hex_param("Size", "size", "SIZE", Clouds::DEFAULT.size)
+        .means("how long its grains, windows or loop are; in Spectral, its warp"),
     Entry {
+        meaning: "how far it shifts, in semitones",
         default: Clouds::DEFAULT.pitch,
         ..PITCH_PARAMS[0]
     },
-    hex_param("Density", "density", "DENS", Clouds::DEFAULT.density),
-    hex_param("Texture", "texture", "TEXT", Clouds::DEFAULT.texture),
+    hex_param("Density", "density", "DENS", Clouds::DEFAULT.density)
+        .means("in Granular, how many grains overlap; in other modes, smear or updates"),
+    hex_param("Texture", "texture", "TEXT", Clouds::DEFAULT.texture)
+        .means("the grains' envelope; a low or high-pass in Stretch and Looping"),
     Entry {
+        meaning: "how much of Clouds is heard against the dry sound",
         name: "Blend",
         key: "blend",
         label: Some("BLND"),
         default: Clouds::DEFAULT.blend,
         ..MIX_PARAM
     },
-    hex_param("Spread", "spread", "SPRD", Clouds::DEFAULT.spread),
-    hex_param("Feedback", "feedback", "FDBK", Clouds::DEFAULT.feedback),
-    hex_param("Reverb", "reverb", "VERB", Clouds::DEFAULT.reverb),
+    hex_param("Spread", "spread", "SPRD", Clouds::DEFAULT.spread)
+        .means("how far the grains spread across the sides"),
+    hex_param("Feedback", "feedback", "FDBK", Clouds::DEFAULT.feedback)
+        .means("how much of what comes out is recorded again"),
+    hex_param("Reverb", "reverb", "VERB", Clouds::DEFAULT.reverb)
+        .means("how much of Clouds' own reverb is on what comes out"),
     Entry {
+        meaning: "stops recording, so it keeps playing what it holds",
         name: "Freeze",
         key: "freeze",
         label: Some("FRZ"),
@@ -333,6 +360,7 @@ pub(crate) const CLOUDS_PARAMS: [Entry; 13] = [
         place: Place::Own,
     },
     Entry {
+        meaning: "stereo or mono, 16 or 8 bits: each lower one holds a longer recording",
         name: "Quality",
         key: "quality",
         // A new quality starts a new recording, so steps don't lock it.
@@ -474,6 +502,7 @@ pub const BEADS_QUALITY_NAMES: [&str; 4] =
 /// shows too, then the gain every slot has.
 pub(crate) const BEADS_PARAMS: [Entry; 14] = [
     Entry {
+        meaning: "grains, or a delay whose taps play the recording back",
         name: "Mode",
         key: "mode",
         // Choosing a mode chooses a sound, so steps don't lock it.
@@ -485,15 +514,22 @@ pub(crate) const BEADS_PARAMS: [Entry; 14] = [
         default: 0,
         place: Place::Type,
     },
-    hex_param("Time", "time", "TIME", Beads::DEFAULT.time),
-    hex_param("Size", "size", "SIZE", Beads::DEFAULT.size).units(Units::GrainLength),
-    hex_param("Shape", "shape", "SHAP", Beads::DEFAULT.shape),
+    hex_param("Time", "time", "TIME", Beads::DEFAULT.time)
+        .means("where in the recording grains start; in Delay, a multiple of its time"),
+    hex_param("Size", "size", "SIZE", Beads::DEFAULT.size)
+        .units(Units::GrainLength)
+        .means("how long each grain is, rev backwards; in Delay, the repeats' tone"),
+    hex_param("Shape", "shape", "SHAP", Beads::DEFAULT.shape)
+        .means("each grain's envelope; in Delay, an envelope on each repeat"),
     Entry {
+        meaning: "how far it shifts, in semitones",
         default: Beads::DEFAULT.pitch,
         ..PITCH_PARAMS[0]
     },
-    hex_param("Density", "density", "DENS", Beads::DEFAULT.density),
+    hex_param("Density", "density", "DENS", Beads::DEFAULT.density)
+        .means("how often grains start: evenly below 80, at random above; in Delay, its time"),
     Entry {
+        meaning: "whether Density goes by itself or follows the song's steps",
         name: "Clock",
         key: "clock",
         label: Some("CLK"),
@@ -504,8 +540,10 @@ pub(crate) const BEADS_PARAMS: [Entry; 14] = [
         default: Beads::DEFAULT.clock,
         place: Place::Own,
     },
-    hex_param("Random", "random", "RAND", Beads::DEFAULT.random),
+    hex_param("Random", "random", "RAND", Beads::DEFAULT.random)
+        .means("how far each grain's time, size and shape stray at random"),
     Entry {
+        meaning: "stops recording, so it keeps playing what it holds",
         name: "Freeze",
         key: "freeze",
         label: Some("FRZ"),
@@ -516,16 +554,20 @@ pub(crate) const BEADS_PARAMS: [Entry; 14] = [
         default: Beads::DEFAULT.freeze,
         place: Place::Own,
     },
-    hex_param("Feedback", "feedback", "FDBK", Beads::DEFAULT.feedback),
+    hex_param("Feedback", "feedback", "FDBK", Beads::DEFAULT.feedback)
+        .means("how much of what comes out is recorded again"),
     Entry {
+        meaning: "how much of Beads is heard against the dry sound",
         name: "Blend",
         key: "blend",
         label: Some("BLND"),
         default: Beads::DEFAULT.blend,
         ..MIX_PARAM
     },
-    hex_param("Reverb", "reverb", "VERB", Beads::DEFAULT.reverb),
+    hex_param("Reverb", "reverb", "VERB", Beads::DEFAULT.reverb)
+        .means("how much of Beads' own reverb is on what comes out"),
     Entry {
+        meaning: "how clean its recording is: each dirtier one holds a longer recording",
         name: "Quality",
         key: "quality",
         // A new quality starts a new recording, so steps don't lock it.
@@ -666,11 +708,18 @@ pub fn shift_delay_ms(value: f32) -> f32 {
 pub(crate) const FREQ_SHIFT_PARAMS: [Entry; 7] = [
     hex_param("Shift", "shift", "SHFT", FreqShift::DEFAULT.shift)
         .units(Units::ShiftHertz)
-        .centred(),
-    hex_param("Spread", "spread", "SPRD", FreqShift::DEFAULT.spread).units(Units::SpreadHertz),
-    hex_param("Track", "track", "TRK", FreqShift::DEFAULT.track),
-    hex_param("Time", "time", "TIME", FreqShift::DEFAULT.time).units(Units::LoopTime),
-    hex_param("Feedback", "feedback", "FDBK", FreqShift::DEFAULT.feedback),
+        .centred()
+        .means("moves every frequency in the sound by {}"),
+    hex_param("Spread", "spread", "SPRD", FreqShift::DEFAULT.spread)
+        .units(Units::SpreadHertz)
+        .means("how far apart the sides are shifted, the left up and the right down"),
+    hex_param("Track", "track", "TRK", FreqShift::DEFAULT.track)
+        .means("how far the shift follows the track's note from middle C"),
+    hex_param("Time", "time", "TIME", FreqShift::DEFAULT.time)
+        .units(Units::LoopTime)
+        .means("the delay in its loop, which spirals with Feedback"),
+    hex_param("Feedback", "feedback", "FDBK", FreqShift::DEFAULT.feedback)
+        .means("how much goes round again, shifted again each time"),
     Entry {
         default: 0xFF,
         ..MIX_PARAM

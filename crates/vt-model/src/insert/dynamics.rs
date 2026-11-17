@@ -89,6 +89,7 @@ pub fn release_ms(value: f32) -> f32 {
 }
 
 const COMPRESSOR_TYPE_PARAM: Entry = Entry {
+    meaning: "its character: transparent, an SSL console's, or Live's Glue",
     name: "Type",
     key: "type",
     // Choosing a type chooses a sound, so steps don't lock it.
@@ -101,6 +102,7 @@ const COMPRESSOR_TYPE_PARAM: Entry = Entry {
     place: Place::Type,
 };
 const SOURCE_PARAM: Entry = Entry {
+    meaning: "what it listens to: its own sound, or another track to duck under",
     name: "Source",
     key: "source",
     // What it hears is part of how it's set up, so steps don't change it.
@@ -118,14 +120,19 @@ const THRESHOLD_PARAM: Entry = hex_param(
     "THRS",
     Compressor::DEFAULT.threshold,
 )
-.units(Units::Threshold);
-const RATIO_PARAM: Entry =
-    hex_param("Ratio", "ratio", "RTIO", Compressor::DEFAULT.ratio).units(Units::Ratio);
-const ATTACK_PARAM: Entry =
-    hex_param("Attack", "attack", "ATK", Compressor::DEFAULT.attack).units(Units::Attack);
-const RELEASE_PARAM: Entry =
-    hex_param("Release", "release", "REL", Compressor::DEFAULT.release).units(Units::Release);
+.units(Units::Threshold)
+.means("the level where it starts turning down");
+const RATIO_PARAM: Entry = hex_param("Ratio", "ratio", "RTIO", Compressor::DEFAULT.ratio)
+    .units(Units::Ratio)
+    .means("how much it turns down what goes over the threshold");
+const ATTACK_PARAM: Entry = hex_param("Attack", "attack", "ATK", Compressor::DEFAULT.attack)
+    .units(Units::Attack)
+    .means("how fast it turns down once the sound goes over");
+const RELEASE_PARAM: Entry = hex_param("Release", "release", "REL", Compressor::DEFAULT.release)
+    .units(Units::Release)
+    .means("how fast it lets go once the sound falls back");
 const AUTO_GAIN_PARAM: Entry = Entry {
+    meaning: "makes up what it turns down, so it comes out as loud as it went in",
     name: "Auto",
     key: "auto",
     label: Some("AUTO"),
@@ -138,11 +145,13 @@ const AUTO_GAIN_PARAM: Entry = Entry {
 };
 /// Every type's makeup, from 0 dB at `00` to [`MOST_MAKEUP_DB`] at `FF`, on top of what `Auto`
 /// gives back.
-const MAKEUP_PARAM: Entry =
-    hex_param("Makeup", "makeup", "MKUP", Compressor::DEFAULT.makeup).units(Units::Makeup);
+const MAKEUP_PARAM: Entry = hex_param("Makeup", "makeup", "MKUP", Compressor::DEFAULT.makeup)
+    .units(Units::Makeup)
+    .means("turns up what it's turned down, on top of Auto");
 /// The bus type's switches, shown by the same names as the clean type's knobs. Their labels are
 /// their own, as a slot's labels name one setting each.
 const CONSOLE_RATIO_PARAM: Entry = Entry {
+    meaning: "how much it turns down what goes over the threshold",
     name: "Ratio",
     key: "consoleratio",
     label: Some("CRTO"),
@@ -154,6 +163,7 @@ const CONSOLE_RATIO_PARAM: Entry = Entry {
     place: Place::Own,
 };
 const CONSOLE_ATTACK_PARAM: Entry = Entry {
+    meaning: "how fast it turns down once the sound goes over",
     name: "Attack",
     key: "consoleattack",
     label: Some("CATK"),
@@ -165,6 +175,7 @@ const CONSOLE_ATTACK_PARAM: Entry = Entry {
     place: Place::Own,
 };
 const CONSOLE_RELEASE_PARAM: Entry = Entry {
+    meaning: "how fast it lets go; Auto lets go of short peaks fast, long ones slowly",
     name: "Release",
     key: "consolerelease",
     label: Some("CREL"),
@@ -177,6 +188,7 @@ const CONSOLE_RELEASE_PARAM: Entry = Entry {
 };
 /// Glue's switches, shown by the same names again, with labels of their own.
 const GLUE_RATIO_PARAM: Entry = Entry {
+    meaning: "how much it turns down what goes over the threshold",
     name: "Ratio",
     key: "glueratio",
     label: Some("GRTO"),
@@ -188,6 +200,7 @@ const GLUE_RATIO_PARAM: Entry = Entry {
     place: Place::Own,
 };
 const GLUE_ATTACK_PARAM: Entry = Entry {
+    meaning: "how fast it turns down once the sound goes over",
     name: "Attack",
     key: "glueattack",
     label: Some("GATK"),
@@ -199,6 +212,7 @@ const GLUE_ATTACK_PARAM: Entry = Entry {
     place: Place::Own,
 };
 const GLUE_RELEASE_PARAM: Entry = Entry {
+    meaning: "how fast it lets go; Auto lets go of short peaks fast, long ones slowly",
     name: "Release",
     key: "gluerelease",
     label: Some("GREL"),
@@ -210,11 +224,13 @@ const GLUE_RELEASE_PARAM: Entry = Entry {
     place: Place::Own,
 };
 /// Glue's `Range`, the most it turns down, from none at `00` to [`MOST_RANGE_DB`] at `FF`.
-const RANGE_PARAM: Entry =
-    hex_param("Range", "range", "RNGE", Compressor::DEFAULT.range).units(Units::Range);
+const RANGE_PARAM: Entry = hex_param("Range", "range", "RNGE", Compressor::DEFAULT.range)
+    .units(Units::Range)
+    .means("the most it turns down");
 /// Glue's soft clip at the very end, after its makeup and its mix, as Live's `Peak Clip In` is:
 /// off, as Live loads it, or on.
 const PEAK_CLIP_PARAM: Entry = Entry {
+    meaning: "soft clips what comes out, last, so it stays under -0.5 dB",
     name: "Peak Clip",
     key: "peakclip",
     label: Some("PCLP"),
@@ -228,6 +244,7 @@ const PEAK_CLIP_PARAM: Entry = Entry {
 /// A compressor's whole mix, which it starts at, for compressing in parallel when turned down.
 const COMPRESSOR_MIX_PARAM: Entry = Entry {
     default: 0xFF,
+    meaning: "how much is compressed; below FF the dry sound blends in, in parallel",
     ..MIX_PARAM
 };
 /// Every setting a compressor has in any of its types, in the order songs number them. Each type
@@ -458,14 +475,21 @@ pub fn limit_release_ms(value: f32) -> f32 {
 
 /// A limiter's, in the order the page shows them.
 pub(crate) const LIMIT_PARAMS: [Entry; 5] = [
-    hex_param("Input", "input", "INPT", Limiter::DEFAULT.input).units(Units::Input),
-    hex_param("Ceiling", "ceiling", "CEIL", Limiter::DEFAULT.ceiling).units(Units::Ceiling),
-    hex_param("Release", "release", "REL", Limiter::DEFAULT.release).units(Units::LimitRelease),
+    hex_param("Input", "input", "INPT", Limiter::DEFAULT.input)
+        .units(Units::Input)
+        .means("turns up what goes in, to push it harder and louder"),
+    hex_param("Ceiling", "ceiling", "CEIL", Limiter::DEFAULT.ceiling)
+        .units(Units::Ceiling)
+        .means("the most that comes out"),
+    hex_param("Release", "release", "REL", Limiter::DEFAULT.release)
+        .units(Units::LimitRelease)
+        .means("how fast it lets go once a peak has passed"),
     Entry {
         default: 0xFF,
+        meaning: "how much is limited; below FF the dry sound, as late, blends in",
         ..MIX_PARAM
     },
-    GAIN_PARAM,
+    GAIN_PARAM.means("turns what comes out up or down, after the ceiling, so it can go over"),
 ];
 
 /// A look-ahead limiter's settings. One a file doesn't have starts as new.
