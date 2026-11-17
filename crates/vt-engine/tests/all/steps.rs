@@ -518,7 +518,13 @@ fn a_macro_turns_jump() {
         ..Steps::default()
     };
     let mut song = song(&[], walking);
-    let jump = SettingId::mod_own(2, ModField::Jump.own().unwrap()).unwrap();
+    let jump = SettingId::mod_own(
+        2,
+        ModField::Jump
+            .own(vt_model::modulation::ModKind::Steps)
+            .unwrap(),
+    )
+    .unwrap();
     song.tracks[0].macros[0].maps = vec![MacroMap {
         target: MacroTarget::Setting(jump),
         min: 0,

@@ -55,7 +55,7 @@ use pending::WORKED_KEPT;
 use seeds::{
     accumulator_rng, arp_rng, drift_rng, effect_rng, groove_rng, jump_rng, mutate_rng, roll_rng,
 };
-use shaping::pan_gains;
+use shaping::{LeavingFilter, pan_gains};
 use values::{ValueLayers, played_id, scaled};
 
 /// One track's voices, held FX values and pending events.
@@ -179,11 +179,24 @@ pub(crate) struct TrackState {
     send_a_gain: Smoothed,
     send_b_gain: Smoothed,
     filter: [Channel; 2],
+    /// Held `FTYP`.
     filter_type: FilterType,
+    /// The filter a change of type left, heard fading out under the new one, so a lock of
+    /// `FTYP` doesn't click (decision 398).
+    leaving: Option<LeavingFilter>,
+    /// Whether nothing has gone into the filter since it last settled, so a new type can take
+    /// over at once, with nothing to fade from.
+    filter_quiet: bool,
     /// Held `MODE`, a place in the list of modes, which the filter's type may not offer.
     filter_mode: f32,
+    /// Held `FDRV`, `FPCH`, `LCUT` and `HCUT`, on `0..=1`, which what modulation adds goes on
+    /// top of in their smoothers' targets.
+    held_drive: f32,
+    held_punch: f32,
+    held_low_cut: f32,
+    held_high_cut: f32,
     drive: Smoothed,
-    /// Held `Punch`, which only the clean types hear.
+    /// `Punch` as it's heard, which only the clean types hear.
     punch: Smoothed,
     /// Held `Safe`, 1 for on, which glides so switching it doesn't jump `Res`.
     safe: Smoothed,
@@ -303,10 +316,15 @@ pub(crate) struct TrackState {
     /// there again, as after a new version, whose maps may differ.
     macro_heard: [Option<f32>; MACROS],
     /// The held values of each mod slot's type's own settings, and of the accumulator's and the
-    /// arpeggio's, which a macro sets as a hand does. What's heard is read through a copy with
-    /// them put in, [`heard_slot`](mods::heard_slot), wherever they differ from the song's.
+    /// arpeggio's, which a macro sets as a hand does, and a step's lock or hold of a labelled one.
+    /// What's heard is read through a copy with them put in, [`heard_slot`](mods::heard_slot),
+    /// wherever they differ from the song's.
     own_held: [[f32; MOD_OWN_SETTINGS]; MOD_SLOTS],
     played_held: [f32; PLAYED_SETTINGS],
+    /// Whether a step has set one of the mod slots' own settings since the track was made, so its
+    /// slots are read through a copy from then on; a song that never locks one reads them as
+    /// they are, as before (decision 399).
+    own_stepped: bool,
 }
 
 impl TrackState {
@@ -380,7 +398,13 @@ impl TrackState {
             send_b_gain: Smoothed::at(0.0),
             filter: [Channel::default(); 2],
             filter_type: FilterType::LowPass,
+            leaving: None,
+            filter_quiet: true,
             filter_mode: 0.0,
+            held_drive: 0.0,
+            held_punch: 0.0,
+            held_low_cut: 0.0,
+            held_high_cut: 1.0,
             drive: Smoothed::at(0.0),
             punch: Smoothed::at(0.0),
             safe: Smoothed::at(0.0),
@@ -458,6 +482,7 @@ impl TrackState {
             played_held: std::array::from_fn(|at| {
                 played_id(at).map_or(0.0, |id| f32::from(id.entry().default))
             }),
+            own_stepped: false,
         }
     }
 
@@ -840,6 +865,8 @@ impl TrackState {
         self.low_cut.settle();
         self.high_cut.settle();
         self.filter.iter_mut().for_each(Channel::settle);
+        self.leaving = None;
+        self.filter_quiet = true;
         self.coefficients = None;
         self.filter_countdown = 0;
         if self.ringing(rate) {

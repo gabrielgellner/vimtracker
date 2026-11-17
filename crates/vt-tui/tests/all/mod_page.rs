@@ -2965,7 +2965,7 @@ fn a_steps_jump_is_in_its_title_after_its_loop_and_turns_as_any_setting() {
     press(&mut app, " d");
     // `M` and a digit map it to a macro.
     press(&mut app, "M1");
-    let jump = SettingId::mod_own(3, ModField::Jump.own().unwrap()).unwrap();
+    let jump = SettingId::mod_own(3, ModField::Jump.own(ModKind::Steps).unwrap()).unwrap();
     let held = app.song().tracks[0].macro_holding(vt_model::macros::MacroTarget::Setting(jump));
     assert_eq!(held.map(|(at, _)| at), Some(0));
     // `l` goes on to its spread, and `h` back.

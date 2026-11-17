@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::envelope::{Adsr, Ahd, Drum, Envelope, Lpg, time_at, time_value};
+use crate::envelope::{Adsr, Ahd, Drum, Envelope, Lpg, hold_at, hold_value, time_at, time_value};
 use crate::lfo::Lfo;
 use crate::settings::SettingId;
 use crate::steps::Steps;
@@ -346,13 +346,21 @@ impl ModSlot {
     /// and a fine one, or none if its type hasn't that setting.
     pub fn own_value(&self, at: usize) -> Option<u16> {
         let field = *MOD_OWN_FIELDS.get(at)?;
+        // A mode is the type's own list, which only its type has.
+        if field.own(self.kind) != Some(at) {
+            return None;
+        }
         // Each of these is a byte, kept within its bounds.
         let whole = |value: i32| (value.max(0) as u16) << 8;
         Some(match field {
-            ModField::Attack | ModField::Decay | ModField::Release => {
+            ModField::Attack | ModField::Decay | ModField::Release | ModField::Peak => {
                 time_value(self.field(field)? as u16)
             }
-            ModField::Length => whole(self.field(field)? - 1),
+            ModField::Hold => {
+                self.field(field)?;
+                hold_value(self.ahd.hold)
+            }
+            ModField::Length | ModField::Ratchet => whole(self.field(field)? - 1),
             ModField::Smooth => depth_value(self.field(field)? as i16),
             ModField::Bias => bias_value(self.field(field)?),
             ModField::Rate => match self.kind {
@@ -383,13 +391,17 @@ impl ModSlot {
         let Some(&field) = MOD_OWN_FIELDS.get(at) else {
             return;
         };
+        if field.own(self.kind) != Some(at) {
+            return;
+        }
         let whole = value.round() as i32;
         match field {
-            ModField::Attack | ModField::Decay | ModField::Release => {
+            ModField::Attack | ModField::Decay | ModField::Release | ModField::Peak => {
                 self.set_field(field, i32::from(time_at(value)));
             }
-            // `00` is one step, as the registry lists them from 1.
-            ModField::Length => self.set_field(field, whole.saturating_add(1)),
+            ModField::Hold if field.on(self.kind) => self.ahd.hold = hold_at(value),
+            // `00` is one step, or one strike, as the registry lists them from 1.
+            ModField::Length | ModField::Ratchet => self.set_field(field, whole.saturating_add(1)),
             ModField::Smooth => self.set_field(field, depth_of(value).round() as i32),
             ModField::Bias => self.set_field(field, bias_of(value).round() as i32),
             ModField::Rate => match self.kind {

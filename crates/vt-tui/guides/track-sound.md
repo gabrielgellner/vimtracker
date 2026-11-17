@@ -145,7 +145,8 @@ shows what it plays.
 | Mode | How the type responds: `--` where it has none |
 | Low cut, High cut | The utility filter: `00` and `FF` are off |
 
-Drive keeps the level about even. `Punch` is Mutable Instruments' Braids' trick
+Drive keeps the level about even. A step can lock it, `FDRV`, and macros and
+modulators move it, as they do `Cut`. `Punch` is Mutable Instruments' Braids' trick
 for an 808 kick: as the filter's low-pass swings, its cutoff rises with it, so a
 loud ring starts higher and falls in pitch to `Cut` as it dies away, and a loud
 peak is reined in a little. Strike `LP` or `BP` with something short at a low
@@ -153,8 +154,8 @@ peak is reined in a little. Strike `LP` or `BP` with something short at a low
 It's added in Hz, so it moves a low cutoff much more than a high one, and a quiet
 sound hears the filter as it is, so the curve doesn't show it. Only `LP`, `HP`,
 `BP` and `Notch` have it; on the other types it's dim and does nothing, and it
-does less with `Drive`, whose clipping holds the ring down. Steps and modulators
-don't move it.
+does less with `Drive`, whose clipping holds the ring down. A step can lock it,
+`FPCH`, and macros and modulators move it.
 
 `Safe`, beside `Res`, is the switch of that name on Cytomic's The Drop. On, the
 whole of `Res`'s turn reaches only as far as the loudest peak that still dies
@@ -162,8 +163,9 @@ away, a few steps short of where the type starts to sing by itself, so `FF`
 rings on after a strike and fades, and never keeps going alone, at any `Cut`,
 `Mode` or `Drive`. Its steps are closer together for it: `FF` is about where
 `D7` was, and `80` where `6C` was. The curve shows the peak it leaves. `K`
-switches it, `=` puts it on and `-` takes it off. Steps and modulators don't
-move it, as with `Drive`, but a `RES` lock or an LFO on `Res` stops short too.
+switches it, `=` puts it on and `-` takes it off, and a step can lock it, `SAFE`
+`01` on and `00` off, for its row. A macro can switch it, and modulators don't,
+as it's a switch. A `RES` lock or an LFO on `Res` stops short too.
 The clean types never ring by themselves, so on `LP`, `HP`, `BP` and `Notch`
 it's dim and does nothing.
 
@@ -185,7 +187,8 @@ but not a sample's own tune. A new note's cutoff moves there as a change of
 filter after the main one, for thinning out a sound without giving up the main
 filter's character. They run from 20 Hz at `00` to 20 kHz at `FF`, at 12 dB with
 no resonance. `Low cut 00` and `High cut FF` are off, and off costs nothing.
-Unlike `Cut`, steps and modulators don't move them.
+As with `Cut`, steps lock them, `LCUT` and `HCUT`, and macros and modulators
+move them, each with a fine part.
 
 `K` on `Filter` lists the types. `LP` is the clean default. `HP` needs `Cut` lowered to let anything through, as
 it starts at `FF`. `Ladder` is fatter and steeper, its bass thins as resonance
@@ -208,6 +211,13 @@ louder, so its resonance holds itself in with no clipper, and loud notes tame
 it, the OB's squelch. From about `D9` it sings by itself at `Cut`, in tune, so
 it plays as an oscillator. These six cost more than the others, which matters
 only for tracks using them.
+
+A step can lock the type, `FTYP`, by its place in the list: `00` `LP`, `01`
+`HP`, `02` `BP`, `03` `Notch`, `04` `Ladder`, `05` `Diode`, `06` `MS20 LP`,
+`07` `MS20 HP`, `08` `Dirty`, `09` `OB-X`. A new type starts from silence, so
+while something's playing through the filter the one it leaves carries on and
+fades out under it over about 10 ms, and a lock doesn't click. A macro can choose
+the type too; modulators don't, as types are chosen rather than moved through.
 
 `Mode` gives a type its other responses, made from what it already has, and `K`
 on it lists the ones the type offers:

@@ -239,7 +239,7 @@ impl Control {
     }
 
     /// The setting this is on this track, and its value there, for the status line to show in
-    /// its units. The filters' drive and cuts aren't settings yet.
+    /// its units.
     pub(crate) fn value_on(self, track: &Track) -> Option<(SettingId, u16)> {
         let base = |id: SettingId, value: u8| {
             Some((id, u16::from(value) << 8 | u16::from(track.fine(id))))
@@ -257,7 +257,7 @@ impl Control {
                     ModField::Deform => depth_value(modulator.lfo.deform),
                     _ => u16::from(modulator.polarity().index()) << 8,
                 };
-                Some((field.setting(slot)?, value))
+                Some((field.setting(slot, modulator.kind)?, value))
             }
             Self::Level => base(SettingId::LEVEL, track.level),
             Self::Base(which) => base(which.setting()?, track.control(which)),
@@ -270,6 +270,10 @@ impl Control {
                 u16::from(track.voice_mode.index()) << 8,
             )),
             Self::KeyTrack => Some((SettingId::KEY_TRACK, u16::from(track.key_track) << 8)),
+            Self::Safe => Some((SettingId::SAFE, u16::from(track.safe) << 8)),
+            Self::FilterType => {
+                Some((SettingId::FILTER_TYPE, u16::from(track.filter.index()) << 8))
+            }
             Self::GlideMode => Some((
                 SettingId::GLIDE_MODE,
                 u16::from(track.glide_mode.index()) << 8,
@@ -302,7 +306,7 @@ impl Control {
         }
         match self {
             Self::Mod(slot, field) => {
-                let id = SettingId::mod_own(slot, field.own()?)?;
+                let id = SettingId::mod_own(slot, field.own(track.mods[slot].kind)?)?;
                 id.exists_on(track).then_some(id)
             }
             Self::Accumulator(field) => {

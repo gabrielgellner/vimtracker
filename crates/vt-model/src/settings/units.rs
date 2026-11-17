@@ -2,7 +2,7 @@
 //! engine shares with the status line.
 
 use crate::constants::{DB_PER_LEVEL, UNITY_LEVEL};
-use crate::envelope::time_at;
+use crate::envelope::{Hold, hold_at, time_at};
 use crate::insert::{
     ALGORITHM_NAMES, ECHO_BASS, ECHO_TREBLE, Triggering, VOWEL_NAMES, algorithm_blend, attack_ms,
     ceiling_db, echo_head_seconds, echo_input_db, echo_shelf_db, exciter_attack_ms,
@@ -111,9 +111,19 @@ pub enum Units {
     Glide,
     /// An envelope's time, as [`time_at`] gives it.
     EnvelopeTime,
+    /// An AHD's hold, as [`hold_at`] gives it: a time, or the note at the top.
+    HoldTime,
     /// Rows either side of `80`, one a step, as a lane's `Length` moves its lane.
     Rows,
+    /// The track's utility high-pass and low-pass, in Hz as [`Units::Hertz`] reads, but off at
+    /// the end where each stands aside: the bottom for the high-pass, the top for the low-pass.
+    LowCut,
+    HighCut,
 }
+
+/// How close to an end the utility filter's cuts count as off, as a share of their range: the
+/// engine's `TRIM_OPEN`.
+const CUT_OFF: f64 = 0.001;
 
 /// The acid voice's cutoff at either end of its range, in Hz, where its filter resonates.
 pub const ACID_LOWEST_CUTOFF: f32 = 170.0;
@@ -283,7 +293,11 @@ impl Kind {
                 .get(usize::from(value >> 8))
                 .map_or_else(String::new, |choice| (*choice).to_owned()),
             Self::Continuous { units, middle, top } => match units {
-                Units::Hertz => hertz(20.0 * 1000_f64.powf(coarse / 255.0)),
+                Units::LowCut if coarse / 255.0 <= CUT_OFF => "Off".to_owned(),
+                Units::HighCut if coarse / 255.0 >= 1.0 - CUT_OFF => "Off".to_owned(),
+                Units::Hertz | Units::LowCut | Units::HighCut => {
+                    hertz(20.0 * 1000_f64.powf(coarse / 255.0))
+                }
                 Units::Decibels if value == 0 => "-inf dB".to_owned(),
                 Units::Decibels => format!(
                     "{:+.1} dB",
@@ -364,6 +378,10 @@ impl Kind {
                     glide_ms(coarse as f32).map_or_else(|| "Off".to_owned(), milliseconds)
                 }
                 Units::EnvelopeTime => format!("{} ms", time_at(coarse as f32)),
+                Units::HoldTime => match hold_at(coarse as f32) {
+                    Hold::Note => "Note".to_owned(),
+                    Hold::Ms(ms) => format!("{ms} ms"),
+                },
                 Units::Rows => rows_text((coarse.round() as i32 - 128).clamp(-128, 127)),
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {

@@ -9,7 +9,10 @@ use crate::lane::{LANE_RATES, LENGTH_AS_WRITTEN, RATE_AS_WRITTEN};
 use std::borrow::Cow;
 
 use crate::param::{Choice, Descriptor, Reading, Typing};
-use crate::song::{FILTER_MODE_NAMES, FULL_GATE, GLIDE_MODE_NAMES, PHASE_NAMES, VOICE_MODE_NAMES};
+use crate::song::{
+    FILTER_MODE_NAMES, FILTER_TYPE_NAMES, FULL_GATE, GLIDE_MODE_NAMES, PHASE_NAMES,
+    VOICE_MODE_NAMES,
+};
 use crate::speed::{SPEED_NAMES, Speed};
 
 mod id;
@@ -384,7 +387,7 @@ const TRACK_GROUPS: [&str; 16] = [
 
 /// The track's own settings added since places were fixed, at the end of the table so none moves
 /// (#718): the track's own after [`TRACK`]'s, in the order they came.
-const LATER_TRACK: [Entry; 5] = [
+const LATER_TRACK: [Entry; 11] = [
     // Whether a synth's oscillators run on from note to note or start again on each, read as a
     // note starts, so a lock on its row sets it for that note (decision 370).
     Entry {
@@ -446,9 +449,60 @@ const LATER_TRACK: [Entry; 5] = [
     // (decision 391).
     level("jump", "Jump", "JMP", 0x00)
         .means("the chance each step plays any row of the phrase instead of the next"),
+    // The filter's settings that were the track's alone, so steps, macros and modulation reach
+    // them as they reach `CUT` (decision 398). Each is read every frame, smoothed as `CUT` is,
+    // and a step's lock of `FTYP` crossfades from the type it leaves.
+    level("drive", "Drive", "FDRV", 0x00).means("how hard the sound is pushed into the filter"),
+    level("punch", "Punch", "FPCH", 0x00)
+        .means("how far a ringing peak starts higher and falls in pitch as it dies away, 00 off"),
+    Entry {
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units: Units::LowCut,
+        },
+        ..level("lowcut", "Low cut", "LCUT", 0x00)
+            .means("a high-pass after the filter, to thin the low end; 00 is off")
+    },
+    Entry {
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units: Units::HighCut,
+        },
+        ..level("highcut", "High cut", "HCUT", 0xFF)
+            .means("a low-pass after the filter, to soften the top; FF is off")
+    },
+    Entry {
+        meaning: "which filter the sound goes through",
+        key: "type",
+        name: "Type",
+        label: Some("FTYP"),
+        kind: Kind::Stepped {
+            choices: &FILTER_TYPE_NAMES,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
+    Entry {
+        meaning: "whether Res stops just short of where the filter rings by itself",
+        key: "safe",
+        name: "Safe",
+        label: Some("SAFE"),
+        kind: Kind::Stepped {
+            choices: &OFF_ON,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
 ];
 /// What each of [`LATER_TRACK`] is listed with.
-const LATER_TRACK_GROUPS: [&str; 5] = ["Machine", "Machine", "Filter", "Machine", "Machine"];
+const LATER_TRACK_GROUPS: [&str; 11] = [
+    "Machine", "Machine", "Filter", "Machine", "Machine", "Filter", "Filter", "Filter", "Filter",
+    "Filter", "Filter",
+];
 /// How many of the track's own there are, [`TRACK`]'s and [`LATER_TRACK`]'s.
 const TRACK_SETTINGS: usize = TRACK.len() + LATER_TRACK.len();
 
@@ -689,7 +743,7 @@ mod tests {
                     &label[1..]
                 }
                 // A lane's end in its FX column's number, as a mod slot's end in the slot's.
-                Owner::Mod(slot) | Owner::Macro(slot) | Owner::Lane(slot) => {
+                Owner::Mod(slot) | Owner::ModOwn(slot) | Owner::Macro(slot) | Owner::Lane(slot) => {
                     assert!(label.ends_with(&(slot + 1).to_string()), "{label}");
                     &label[..label.len() - 1]
                 }
@@ -726,6 +780,9 @@ mod tests {
                 .into_iter()
                 .chain(labels((0..MOD_SLOTS).flat_map(|slot| {
                     (0..MOD.len()).filter_map(move |at| SettingId::modulator(slot, at))
+                })))
+                .chain(labels((0..MOD_SLOTS).flat_map(|slot| {
+                    (0..MOD_OWN_SETTINGS).filter_map(move |at| SettingId::mod_own(slot, at))
                 })))
                 .chain(labels(SettingId::macros()))
                 .chain(labels(SettingId::lanes()))

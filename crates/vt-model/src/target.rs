@@ -31,11 +31,17 @@ const TRACK_MEANINGS: [&str; 16] = [
 
 /// The track's own settings in the order lists show them: the filter, then output, then pitch,
 /// velocity, gate, time and glide.
-const TRACK_ORDER: [SettingId; 21] = [
+const TRACK_ORDER: [SettingId; 27] = [
     SettingId::CUT,
     SettingId::RES,
+    SettingId::FILTER_TYPE,
     SettingId::FILTER_MODE,
+    SettingId::DRIVE,
+    SettingId::PUNCH,
+    SettingId::SAFE,
     SettingId::KEY_TRACK,
+    SettingId::LOW_CUT,
+    SettingId::HIGH_CUT,
     SettingId::PAN,
     SettingId::LEVEL,
     SettingId::VOL,
@@ -169,7 +175,17 @@ impl SettingId {
                         6 => ", how many Steps play",
                         7 => ", the chance a Steps value is drawn again",
                         8 => ", how Steps go from one to the next",
-                        _ => ", how fast an LFO or Steps go",
+                        9 => ", how fast an LFO or Steps go",
+                        10 => ", the chance a Steps step is one at random",
+                        11 => ", an LFO's wave",
+                        12 => ", what Steps do at their end",
+                        13 => ", how an envelope bends",
+                        14 => ", how notes start an LFO",
+                        15 => ", how Steps go by, in time or by note",
+                        16 => ", how long an AHD holds, or the note",
+                        17 => ", how long a drum's strike lasts",
+                        18 => ", how an LFO fades after a note",
+                        _ => ", how many times a drum strikes",
                     }
             }
             (Owner::Accumulation, 0) => "How far above its note an accumulator goes".to_owned(),
@@ -293,8 +309,8 @@ impl SettingId {
     /// moves the volume, on top of the fader. `LDLT` is too, as moving it would only move
     /// `Gate`, which modulation already moves up or down from each note's own length, and so are
     /// `GRV`, `RATE`, `PLY` and a slot's bypass, as a groove, a speed, a way of playing and whether
-    /// a slot's in are chosen rather than moved through, as is whether `KTRK` is on, and `GLD`,
-    /// which is read only as a tie comes.
+    /// a slot's in are chosen rather than moved through, as are the filter's type and whether
+    /// `KTRK` and `SAFE` are on, and `GLD`, which is read only as a tie comes.
     fn to_modulate(track: &Track) -> Vec<Self> {
         let mut settings = Self::on_track(track);
         settings.retain(|id| {
@@ -307,6 +323,8 @@ impl SettingId {
                 Self::PHASE,
                 Self::VOICE_MODE,
                 Self::KEY_TRACK,
+                Self::FILTER_TYPE,
+                Self::SAFE,
                 Self::GLIDE_MODE,
                 Self::PLAY,
             ]
@@ -324,13 +342,18 @@ fn mod_settings() -> impl Iterator<Item = SettingId> {
 
 impl FxCommand {
     /// The commands a step on this track can hold: what it can lock, its mod slots' settings that
-    /// do something with their types, then the events. A track with no sound has no note for an
-    /// event to act on.
+    /// do something with their types, each slot's after its depth, phase, polarity and deform,
+    /// then the events. A track with no sound has no note for an event to act on.
     pub fn on_track(track: &Track) -> Vec<Self> {
         let events = Self::EVENTS.into_iter().filter(|_| track.is_sound());
+        let mods = (0..MOD_SLOTS).flat_map(|slot| {
+            (0..)
+                .map_while(move |at| SettingId::modulator(slot, at))
+                .chain((0..).map_while(move |at| SettingId::mod_own(slot, at)))
+        });
         SettingId::on_track(track)
             .into_iter()
-            .chain(mod_settings().filter(|id| id.exists_on(track)))
+            .chain(mods.filter(|id| id.exists_on(track)))
             .chain(SettingId::macros())
             .filter(|id| id.lockable())
             .map(Self::Set)
