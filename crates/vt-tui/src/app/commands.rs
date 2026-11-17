@@ -192,7 +192,7 @@ impl App {
             Line::RollSeed => {
                 let seed = crate::services::random_seed();
                 self.services.apply(&Action::SetSeed(seed));
-                self.services.status = format!("Seed {seed:X}");
+                self.services.status = format!("Seed {seed:08X}");
             }
             Line::Groove(groove) => {
                 self.services.apply(&Action::SetGroove(groove));

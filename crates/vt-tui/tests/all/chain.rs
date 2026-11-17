@@ -234,6 +234,8 @@ fn x_in_a_chain_only_resets_transpose() {
 #[test]
 fn bloom_grows_branches_from_this_phrase_and_writes_their_path_into_the_chain() {
     let (mut app, _realtime) = app();
+    // The session's own seed is random; this test counts on the branches one seed draws.
+    app.services.shape_seed = 0;
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     press(&mut app, "jjjjid");
