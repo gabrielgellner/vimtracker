@@ -244,11 +244,12 @@ Press `Space` or another prefix and wait: a popup lists what can come next.
 
 `Space d` puts a line above the status line, and above the macro panel if it shows,
 that says what the setting under the cursor does and what its value means now, as
-`Res 38 %: how much the filter rings at its cutoff`, or for a list, what the setting
-does and then what its choice does, `Filter: which filter the sound goes through. LP:
-Low-pass, clean, 12 or 24 dB`. It follows the cursor on the Track page's four pages,
-in the shape panel and in the macro panel, the same key in each, and stays on until
-`Space d` again, for as long as the program runs. Elsewhere it takes no room.
+`Res 38 %: how much the filter rings at its cutoff`. On a list it says what the
+setting does and then what its choice does: `Filter: which filter the sound goes
+through`, then `LP: Low-pass, clean, 12 or 24 dB`. It follows the cursor on the Track
+page's four pages, in the shape panel and in the macro panel, the same key in each,
+and stays on until `Space d` again, for as long as the program runs. Elsewhere it
+takes no room.
 
 `Space k` lists every key, and `Space ?` opens these guides, on the one for the page
 you're on: the mixer's is the Sound page's, and the phrase view's this one. In a guide,
