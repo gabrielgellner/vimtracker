@@ -103,6 +103,10 @@ const fn share(key: &'static str, name: &'static str, label: &'static str, defau
 /// How many settings the sampler has.
 pub const SAMPLER_SETTINGS: usize = SAMPLER.len();
 
+/// How many of them sit before the macros in the table; those added since, `Reverse`, sit at its
+/// end, so no setting's place moves.
+pub(super) const EARLY_SAMPLER: usize = 5;
+
 /// The sampler's own, which it keeps whatever it plays. `Length` isn't `LEN`, which is `Gate`'s.
 pub(super) const SAMPLER: [Entry; 6] = [
     Entry {
