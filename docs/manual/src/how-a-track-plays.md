@@ -416,7 +416,9 @@ plays from the fifth pass on and `<3` only on the first two, and both start agai
 with the section, a reset or a realign. A `CND` in a lane counts the lane's loops
 instead, its count divided by the lane's length.
 
-A failed condition skips its row's note, events and own locks, while columns with
+A `CND` chance, `D0` to `FF`, is rolled instead, from the `:seed`, the track and
+its count, as an `RND` is below, so each pulse of its row reads the same die. A
+failed condition skips its row's note, events and own locks, while columns with
 lanes keep to theirs. A step's `GRV` and `RATE` still time it, as they're chosen
 before it lands. `PRE` and `NEI` read what the last condition on this track, or on
 the track to the left, decided, as each row lands.
