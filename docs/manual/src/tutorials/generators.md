@@ -33,9 +33,12 @@ there are no samples to find.
 | `tonnetz` | Ornament & Crime's Harrington 1200 and Automatonnetz | `S`'s `Tonnetz`: chords by P, L and R, on the `Chord` voice and a voice a track |
 | `turing-machine`, again | Nonlinear Circuits' Sloth, Ornament & Crime's Low-rents | A `Lorenz` LFO on `Pitch in scale`: a tune that drifts and never goes round |
 
-Each section says what the original does, how the song does it, how to build it yourself from an
-empty song, and which knob to turn next. The steps name the keys; **Selecting and editing**,
-the track pages' chapters and **FX commands** have the rest.
+Each section says what the original does, how the song does it, what to set to build it yourself
+from an empty song, and which knob to turn next. The recipes say what goes in each field, not the
+keys that get there: [Navigation](../guides/navigation.md#moving-between-things) says how to reach
+a page, a device and a setting, [Selecting and editing](../guides/editing.md#values-and-small-edits)
+how to change a value, and [Shaping a column](../guides/editing.md#shaping-a-column) how the shape
+panel's settings are set and kept live.
 
 ## Opening the songs
 
@@ -63,17 +66,29 @@ play.
 ## Building from an empty song
 
 Start the program with no project, `just run`. Its eight tracks each play a sampler, with a
-phrase `00` of 16 rows in chain `00`. Three things come up in every song:
+phrase `00` of 16 rows in chain `00`. Each recipe is a list, a line for the song and one for each
+track, mod slot or shape:
 
-*   **A synth voice.** `Space 5` opens the track page on its Sound page. With the cursor on the machine, in the Machine device's title, `K` lists
-    the machines: type part of a name, such as `acid`, and `Enter`. A name that starts with a
-    key the list moves with, such as `kick` or `hat`, needs `/` first: `K` `/kick` `Enter`.
-*   **A name.** `:name BD` names the track, so the overview says what's what.
-*   **A setting on the track page.** `/` and part of its name, then `Enter`, jumps to it, so
-    `/speed` `Enter` lands on `Speed`, ready for `=` and `-`, or `i` to type a value.
+*   **Song:** its scale and tempo.
+*   **Track:** its number and name, its machine on the Sound page, then the settings it changes
+    from where a new track has them. `Speed` is on the Sound page's Play device, `Send A` goes to
+    the delay and `Send B` to the reverb, and `Mod 1` is the envelope on the note's volume.
+*   **Phrase:** its length, its order and its FX lanes, as `:len`, `:order` and `:lane` take
+    them, and its notes, as the grid shows them or as a pattern where `x` is a note, `X` an
+    accented one, at `7F`, and `.` a rest. A lane of `3/3` is 3 rows, each lasting three steps.
+*   **Shape:** what the shape panel works on, then its `Fill`, `Where` and the settings under
+    them. Each is kept live unless the recipe says otherwise.
+*   **Mod 4** and the like: a slot on the Mod page, its type, mode and `Dest`, then its
+    settings.
 
-`W` and `B` go to the next and previous track in any view. In the phrase view, `0` puts the
-cursor back on the Note column before you type notes.
+A setting a recipe doesn't name stays as it starts, and a note's velocity is `64` unless it
+says otherwise. Most songs keep time with the same two drums, which a recipe calls **the kick**
+and **the hats**:
+
+*   **The kick:** `BD`, a `Kick`, `Decay` `70`, `Level` `F0`, a `C-1` on each beat,
+    `x...x...x...x...`.
+*   **The hats:** `HH`, a `Hat`, `Decay` `30`, `Level` `C8`, a `C-4` on each off-beat,
+    `..x...x...x...x.`.
 
 ## Turing Machine
 
@@ -108,56 +123,43 @@ The song has a loop already kept, and `Change` at `20%`, so it wanders away from
 
 **Build it.**
 
-1.  `:set scale=minor` and `:bpm 118`. The root is C unless you choose another.
-2.  Track 1's machine: `Space 5`, `K`, `acid`, `Enter`. Then `:name TM`.
-3.  The rhythm: `Space 3`, then `Option-1` twice for a grid of a sixteenth. `i` for Insert,
-    `;` for auto-jump and `z` for octave 2, then type
-    `a Down a a Down a Down a a Down a a Down a a Down` and `Esc`. Each `a` writes a `C-2` and
-    moves on; each `Down` leaves a rest.
-4.  The register: `Space 6` for the Mod page. Put the cursor on `Mod 4`'s type, in the
-    title of the device at the top right, `LFO` (`l` goes along a title and on into the device
-    beside it), and press `K`, `steps`, `Enter`.
-5.  Still in its title: `l` to its mode, `Trig`, and `K`, `note`, `Enter`. `l` `l` to its
-    `Dest`, `---`, and `K`, `scale`, `Enter` for `Pitch in scale`.
-6.  Its `Depth`, the third row on its left, `i` `0C` `Enter`, so a drawn value moves the note
-    by up to an octave either way.
-7.  Its `Mutate`, beside `Length`: `+` three times, for `30%`.
-8.  `Tab`. The line starts on C and drifts, and the box shows each value drawn in place of its
-    bar, shaded. When you like where it's got to, `x` on `Mutate` puts it back to `0%`: the loop
-    you hear is locked and plays every time, as the module's knob fully right locks it. The draws
-    aren't saved, so `Space g a` on the slot keeps it in the song, written in as its values.
+*   **Song:** C minor, 118 BPM.
+*   **Track 1, `TM`:** `Acid`, `Cutoff` `58`, `Resonance` `B0`, `Env mod` `A0`, `Decay` `60`;
+    `Level` `C4`, `Send A` `A0`. Phrase: the rhythm above, a `C-2` on each written row, with
+    accents on `00` and `08` and a slide from `07` into `08`, its `HLD1`.
+*   **Mod 4:** `Steps`, mode `Note`, `Dest` `Pitch in scale`, `Depth` `0C`, so a drawn value
+    moves the note by up to an octave either way, and `Mutate` `20%`.
+*   **Track 2:** the kick. **Track 3:** the hats.
 
-Then the drums: on track 2, `/kick` for a `Kick`, and a `C-1` on each beat (with `Option-2`
-twice for a grid of a beat, `i`, `z` to octave 1, `a a a a`); on track 3, `/hat` for a `Hat`
-with `C-4`s on the off-beats, rows `02`, `06`, `0A` and `0E`. The finished song also accents
-rows `00` and `08` (`'` after the note, in Insert), slides from `07` into `08` (`/`), and sets
-`Acid`'s `Cutoff` `58`, `Resonance` `B0`, `Env mod` `A0` and `Decay` `60`, `Send A` `A0` for
-some delay, a shorter hat (`Decay` `30`), and the tracks' `Level`s.
+`Tab`. The line starts on C and drifts, and the box shows each value drawn in place of its bar,
+shaded. When you like where it's got to, turn `Mutate` to `0%`: the loop you hear is locked and
+plays every time, as the module's knob fully right locks it. The draws aren't saved, so
+`Space g a` on the slot keeps it in the song, written in as its values. The song's eight values
+are a loop kept that way.
 
 **Give it knobs.** A macro is one knob that turns any of the track's settings, each between a
-`Min` and a `Max` of its own (see **Macros** in **The Gen page, macros and presets**). Three make the slot a panel,
-all on track 1's Mod page, `Space 6`:
+`Min` and a `Max` of its own (see **Macros** in **The Gen page, macros and presets**). Three
+make the slot a panel, each mapped to a setting of `Mod 4`:
 
-1.  `/mutate` `Enter` puts the cursor on `Mod 4`'s `Mutate`. `M` lists the track's eight
-    macros, and `1` maps `Mutate` to the first, from its bottom to its top: `0%` to `100%`, all
-    `Change` needs. The first setting on a macro turns the macro to where the setting is, so
-    nothing jumps. `:macro Change` names it.
-2.  `h` to `Length`, `M` `2`, and `:macro Length`. `gm` opens its mapping, `Min` `1` and `Max`
-    `16`, on `Min`: `=` makes it `2`, as a loop of one step plays one note. The macro stays
-    where it was, so the slot now plays 9 steps. `Esc`.
-3.  `j` to `Depth`, `M` `3`, and `:macro Range`. `gm`, then `i` `80` for its `Min` and `l` `i`
-    `8C` for its `Max`. A depth's ends are typed on its own scale, where `80` is none and `8C`
-    is `+18`, two octaves either way, as the status line says. `Esc`.
+| Macro | Turns | `Min` | `Max` | The song has it at |
+|---|---|---|---|---|
+| 1, `Change` | `Mutate` | `0%` | `100%` | `33`, `20%` |
+| 2, `Length` | `Length` | `2` | `16` | `6D`, 8 steps |
+| 3, `Range` | `Depth` | `80`, none | `8C`, `+18` | `7F`, `+0C` |
+
+A new mapping runs from the setting's bottom to its top, and the macro turns to where the setting
+is, so nothing jumps. `Length`'s `Min` is `2`, as a loop of one step plays one note. A depth's
+ends are on its own scale, where `80` is none and `8C` is `+18`, two octaves either way, as the
+status line says.
 
 Now `Mutate`, `Length` and `Depth` show where their macros put them, each with a faint dot after
-its value to say a macro holds it, and won't turn on their own: `=` on one says to turn its macro
-instead, or `gm` for its range. The song's macros are what these keys make.
+its value to say a macro holds it, and won't turn on their own: turning one says to turn its
+macro instead, or `gm` for its range.
 
 **Play it.** `Space 8` for the Gen page. Its first band is the `Macros`, with `Change`,
 `Length` and `Range` along the top row, each with its value in four digits and a bar. `h` and
 `l` go between them, `=` and `-` turn one a little, `+` and `_` by `10`, about a step of
-`Length`, `i` types two hex digits, and `x` takes one to `00`. To put it as the song has it,
-`Length` `i` `6D` for 8 steps and `Range` `i` `7F` for `+0C`.
+`Length`, `i` types two hex digits, and `x` takes one to `00`.
 
 *   `Change` up, `i` `40`, and the line drifts. When it's somewhere you like, `x` on `Change`
     locks it there, and `Space 6` and `Space g a` on the slot keeps it in the song.
@@ -175,10 +177,8 @@ it has a `Rate` to map, for a register that steps in time rather than with the n
 
 **Try next.**
 
-*   **Let it drift by itself:** a slow LFO on `Change`. On the Mod page, `/mutate` `Enter`, `h`
-    `j` to `Depth`, then `}` down to `Mod 5`'s `Depth`, `i` `40` `Enter`. `k` to its `Rate`, `K`
-    `8 bars` `Enter`. `k` `k` to its type in the title and `l` `l` `l` to its `Dest`, then `K`
-    `change` `Enter`, for `Macro 1 Change`. `Space 8`, and on `Change`, `i` `20`. `Tab`: `Change`
+*   **Let it drift by itself:** a slow LFO on `Change`. `Mod 5`, an `LFO`, with `Dest`
+    `Macro 1 Change`, `Rate` `8 bars` and `Depth` `40`, and `Change` at `20`. `Tab`: `Change`
     swings from below `00` to `60` and back every 8 bars, the band showing where it's heard with
     a mark where you set it. At `00` the loop is locked, so for two bars in eight the line holds
     where it had drifted to; then it wanders on from there.
@@ -236,27 +236,18 @@ every step, each with a `CHA` of its own, Marbles' T. [`song.ron`](songs/deja-vu
 
 **Build it.**
 
-1.  `:set scale=dorian`, `:set root=d` and `:bpm 100`.
-2.  Track 1: `K`, `string`, `Enter` on its machine, and `:name X1`.
-3.  `Space 3`, `:len 8`, and type the eight notes above in Insert.
-4.  `:order random`. The phrase's title says `Random`, and the playhead jumps.
-5.  `Space 6`, and make `Mod 4` a `Steps` slot as in the Turing Machine: `K` `steps`
-    `Enter` on its type, `K` `note` `Enter` on its mode, `Pitch in scale` as its `Dest`,
-    `Depth` `0C`, and `Mutate` `12%` (`+` once, `=` twice).
-6.  The drone: `W`, a `VA` (`K`, `va`, `Enter`), `:name Y1`. In the phrase view, `:len 2`, a
-    `D-1` on row `00` and an `A-1` on row `01`, each with a gate of `SGL8`: in Insert on the gate
-    column, type `SGL8`. On its Mod page, `Mod 4` is an LFO already: give it `Dest` `Cut`,
-    `Shape` `Smooth`, `Rate` `2 bars` (each with `K`) and `Depth` `30`, and on the Sound page
-    bring its filter's `Cut` down to `60` and `Res` up to `40`.
-7.  The T section: `W`, a `Hat` (`K` `/hat` `Enter`), `:name T1`, and a `C-4` on every row
-    (a grid of a sixteenth, `i`, auto-jump on, so the status line shows `Jump`, then `a`
-    sixteen times). Then `l` across to FX 1, `gg`, `vG`
-    and `S`: the column is empty, so the panel first lists the commands. Choose `CHA` (`cha`,
-    `Enter`), then on `Fill` choose `Random` with `K`, set `From` to `50` and `To` to `F0`
-    (`i` and the value), and `Enter`. Each hat now has its own chance.
-
-The finished song also sets the `String`'s `Decay` `B0` and `Bright` `50`, sends it to the delay
-and reverb (`Send A` `B0`, `Send B` `B8`), shortens the hat (`Decay` `28`), and sets the levels.
+*   **Song:** D dorian, 100 BPM.
+*   **Track 1, `X1`:** `String`, `Decay` `B0`, `Bright` `50`; `Level` `C8`, `Send A` `B0`,
+    `Send B` `B8`. Phrase: 8 rows, the notes above, order `random`. The phrase's title says
+    `Random`, and the playhead jumps.
+*   **Mod 4:** `Steps`, mode `Note`, `Dest` `Pitch in scale`, `Depth` `0C`, `Mutate` `12%`.
+*   **Track 2, `Y1`:** `VA`, `Cut` `60`, `Res` `40`; `Level` `D0`. Phrase: 2 rows, `D-1 50`
+    and `A-1 40`, each with a gate of `SGL8`.
+*   **Track 2, Mod 4:** the `LFO` it starts with, `Dest` `Cut`, `Shape` `Smooth`, `Rate`
+    `2 bars`, `Depth` `30`.
+*   **Track 3, `T1`:** `Hat`, `Decay` `28`; `Level` `C0`, `Send A` `90`. A `C-4` on every row.
+    Shape, applied rather than kept live: FX 1, all 16 rows, command `CHA`, `Fill` `Random`,
+    `From` `50`, `To` `F0`. Each hat now has its own chance.
 
 **One knob, two settings.** Marbles' knob has two halves, and here each is a setting of its
 own, as they act on different things: `Mutate` draws the Steps slot's values again, the notes
@@ -306,29 +297,20 @@ by 2, going between `C-2` and `C-3`. The hats are 7 in 12, the West African bell
 track at `1/8T`: twelve triplet eighths a bar against the others' sixteen sixteenths, a true
 polyrhythm. [`song.ron`](songs/euclid/song.ron)
 
-**Build it.**
+**Build it.** Each part is a shape on its track's empty Note column, all its rows, `Where`
+`Euclid`. The panel's title says `Generate`, as there are no notes to reshape, and once a part is
+kept live the phrase's title shows `󰁨 Note` and its notes are drawn in teal.
 
-1.  `:set scale=minor` and `:bpm 124`.
-2.  The kick: track 1, `Space 5`, `K` `/kick` `Enter`, `:name BD`. `Space 3`, then `vG` on the
-    Note column to select all 16 rows, and `S`. The panel's title says `Generate`, as there are
-    no notes to reshape.
-3.  In the panel, `j` to `From` and `i` `c1` `Enter`, then `j` to `To` and `i` `c1` `Enter`, so
-    every hit is a `C-1`. `j` down to `Where`, `K`, `euclid`, `Enter`. `j` to `Hits`, which
-    says `3 of 16`, and `=` twice for 5. The grid follows as you go.
-4.  `L` keeps it live. The phrase's title shows `󰁨 Note`, and its notes are drawn in teal.
-5.  The snare: `W`, on its Sound page `K` `snare` `Enter`, `:name SD`, and in the phrase view
-    the same with `g2` for both ends, `Hits` 2 and `Rotate` (under `Hits`) `=` four times, then
-    `L`.
-6.  The hats: `W`, on its Sound page `K` `/hat` `Enter`, `:name HH`, and `/speed` `Enter` and
-    `=` once for `1/8T`. In the phrase view, `:len 12`, then `vG`, `S`, both ends `c4`,
-    `Euclid` with 7 hits, and `L`.
-7.  The bass: `W`, on its Sound page `K` `acid` `Enter`, `:name BS`. In the phrase view, `vG`,
-    `S`, then on `Fill`, `K`, `alternate`, `Enter`: the ends are now the two notes it goes
-    between, `c2` and `c3`. `Euclid` with 7 hits and `Rotate` 2, and `L`.
-
-The finished song also lengthens the kick (`Decay` `90`), shortens the snare (`Decay` `60`) and
-the hat (`Decay` `38`), sets the `Acid`'s `Cutoff` `50`, `Resonance` `90` and `Env mod` `90`,
-sends the snare to the reverb, and sets the levels.
+*   **Song:** C minor, 124 BPM.
+*   **Track 1, `BD`:** `Kick`, `Decay` `90`; `Level` `F0`. Shape: `From` and `To` `C-1`,
+    `Hits` 5.
+*   **Track 2, `SD`:** `Snare`, `Decay` `60`; `Level` `CC`, `Send B` `98`. Shape: `From` and
+    `To` `G-2`, `Hits` 2, `Rotate` 4.
+*   **Track 3, `HH`:** `Hat`, `Decay` `38`, `Speed` `1/8T`; `Level` `CC`. Phrase: 12 rows.
+    Shape: `From` and `To` `C-4`, `Hits` 7.
+*   **Track 4, `BS`:** `Acid`, `Cutoff` `50`, `Resonance` `90`, `Env mod` `90`; `Level` `D4`.
+    Shape: `Fill` `Alternate`, whose ends are the two notes it goes between, `From` `C-2` and
+    `To` `C-3`, `Hits` 7, `Rotate` 2.
 
 **As a patch.** The bass is the shipped patch `Euclid`, with its `Hits` and `Rotate` on macros;
 add it with `:patch`.
@@ -336,8 +318,8 @@ add it with `:patch`.
 **Try next.** Every part stays live, so `gl` on any of its rows opens its panel again, as it
 was:
 
-*   On the bass, `gl`, `j` down to `Rotate`, and `=` while it plays: the riff slides along the
-    bar, a new groove each time. `L` keeps it.
+*   On the bass, `gl`, and turn `Rotate` up while it plays: the riff slides along the bar, a new
+    groove each time. `L` keeps it.
 *   On the kick, `Hits` 4 is four on the floor, 3 a half-time stomp, 7 a breakbeat.
 *   On the hats, `Hits` 5 is the Cuban cinquillo's cousin, 9 a busy shaker.
 *   `Space g a` on a part turns it back into plain notes, when you want to edit it by hand.
@@ -380,25 +362,19 @@ the notes, and `Follow` writes it again whenever the theme changes. The follower
 
 **Build it.**
 
-1.  `:set scale=harmonic-minor`, `:set root=a` and `:bpm 92`.
-2.  Track 1: `K` `fm` `Enter`, `:name V1`. `Space 3`, `:len 8`, and type the theme.
-3.  Track 2: `W`, `:len 8`, then `0` `gg` `vG` `S` to shape its empty Note column, and `K`
-    `follow` `Enter`. `Source` starts on `T01:00`, the phrase beside it on the track before.
-    `j` `j` to `Transpose`, `i` `4` `Enter`, then `L` to keep it live.
-4.  Track 3: `W`, `:len 8`, `0` `gg` `vG` `S` `K` `follow` `Enter`. `Source` starts on `T01:00`
-    again, as the phrase beside it follows that one. `j` `j` `i` `-7` `Enter` for an octave down,
-    and `j` `=` to turn `Invert` on. `L`.
-5.  Track 4: the same up to `Enter`, then `j` `j` `j` `j` `=` to turn `Reverse` on, and `j` `=`
-    `=` for `Rotate` `2 rows late`. `L`.
-6.  The voices and speeds: on each track, `Space 5`, its machine (`string`, `va`, `modal`), its
-    name, and `/speed` `Enter`, then `=` for each step slower: three times for `1/8` on `V1`,
-    eight times for `1/2` on `V3`, once for `1/8T` on `V4`. `V2` stays at `1/16`.
-7.  The order: in the phrase view, `:order up-down` on track 2.
-
-The finished song also shapes the voices: the `FM`'s `Index` `40`; `String` `Decay` `90`; plucky
-envelopes on `Mod 1` of the `FM` and the `VA` (a `Decay` of `400 ms` and `900 ms`, `Sustain` `40%`
-and `60%`); the `VA`'s `Cut` at `70`; the `Modal`'s `Decay` `90`; `V2` panned left and `V4`
-right, some delay and reverb, and the levels.
+*   **Song:** A harmonic minor, 92 BPM.
+*   **Track 1, `V1`:** `FM`, `Index` `40`, `Speed` `1/8`; `Mod 1` `Decay` `400 ms`, `Sustain`
+    `40%`, `Release` `200 ms`; `Level` `C8`, `Send B` `A0`. Phrase: 8 rows, the theme above.
+*   **Tracks 2 to 4:** each a phrase of 8 rows, and a shape on its empty Note column, `Fill`
+    `Follow`. `Source` starts on `T01:00`, the phrase beside it on the track before, and each
+    follows that one.
+*   **Track 2, `V2`:** `String`, `Decay` `90`, `Speed` `1/16`; `Level` `C0`, `Send A` `A0`,
+    `Pan` `60`, to the left. Phrase order `up-down`. Shape: `Transpose` `4`.
+*   **Track 3, `V3`:** `VA`, `Cut` `70`, `Speed` `1/2`; `Mod 1` `Decay` `900 ms`, `Sustain`
+    `60%`, `Release` `300 ms`; `Level` `D8`. Shape: `Transpose` `-7`, an octave down, and
+    `Invert` `On`.
+*   **Track 4, `V4`:** `Modal`, `Decay` `90`, `Speed` `1/8T`; `Level` `D8`, `Send B` `B0`, `Pan`
+    `A0`, to the right. Shape: `Reverse` `On`, `Rotate` `2 rows late`.
 
 **Try next.**
 
@@ -465,44 +441,37 @@ over 26 bars, and the phrase plays the same pass again only after 105 passes.
 
 **Build it.**
 
-1.  `:set scale=minor-pentatonic`, `:set root=e` and `:bpm 120`.
-2.  Track 1: `K` `va` `Enter`, `:name KR`. In the phrase view, with a grid of a sixteenth, type
-    the trigger loop, an `E-3` (`a` in octave 3) on each `x`.
-3.  The pitch loop: `Space 6`, `Mod 4` a `Steps` slot (`K` `steps` `Enter` on its type).
-    `=` once on its mode for `Free`, and `Pitch in scale` as its `Dest`. Its `Depth` stays `+FF`,
-    so a value is that many semitones before the scale moves it: `03` is a minor third. `Length`
-    `5` (`-` three times). Then `l` from the right-hand column goes into its box, on the first
-    step: `l` to the second, `i` `03` `Enter`, and so on for `07`, `05` and `0A`.
-4.  The octave loop: `Mod 5`, under it, the same, but with plain `Pitch` as its `Dest` (`K`,
-    `pitch`, `Enter`), `Length` `3`, and its third step `0C`, an octave.
-5.  The length loop: `Space 3`, `l` across to FX 1 on row `00`, and `K` `len` `Enter` `20`. On
-    the next three rows the same with `C0`, `08` and `E6`. Back on row `00`, `:lane 4`: FX 1 now
-    loops its first four steps on its own, and the title says `FX1:4`.
-6.  The ratchet loop: `l` to FX 2 on row `00`, `K` `ret` `Enter` `03`, and on row `02` the same
-    with `02`. Back on row `00`, `:lane 3/3`: a lane of 3 rows, each lasting three steps, and the
-    title says `FX2:3/3`.
-7.  The probability loop: `l` to FX 3 on row `00`, `K` `cha` `Enter` `80`, then `40` on row `03`
-    and `80` on row `06`. Back on row `00`, `:lane 7/2`, and the title says `FX3:7/2`.
-8.  `Tab`. The notes are all `E-3` on the grid, but no two bars sound alike.
+*   **Song:** E minor pentatonic, 120 BPM.
+*   **Track 1, `KR`:** `VA`, `Cut` `90`, `Res` `50`; `Mod 1` `Decay` `300 ms`, `Sustain` `50%`,
+    `Release` `80 ms`; `Level` `D0`, `Send A` `A4`. Phrase: the trigger loop, an `E-3` on each
+    `x` of `x.x.xx.x.xx.x.xx`.
+*   **Mod 4, the pitch loop:** `Steps`, mode `Free`, `Dest` `Pitch in scale`, `Depth` `+FF` as it
+    starts, so a value is that many semitones before the scale moves it: `03` is a minor third.
+    `Length` 5, its values `00 03 07 05 0A`.
+*   **Mod 5, the octave loop:** `Steps`, mode `Free`, `Dest` `Pitch`, `Depth` `+FF`, `Length` 3,
+    its values `00 00 0C`, the third an octave.
+*   **FX 1, the length loop:** `LEN 20`, `LEN C0`, `LEN 08` and `LEN E6` on rows `00` to `03`;
+    lane `4`, so FX 1 loops its first four steps on its own, and the title says `FX1:4`.
+*   **FX 2, the ratchet loop:** `RET 03` on row `00` and `RET 02` on row `02`; lane `3/3`, and
+    the title says `FX2:3/3`.
+*   **FX 3, the probability loop:** `CHA 80` on row `00`, `CHA 40` on `03` and `CHA 80` on `06`;
+    lane `7/2`, and the title says `FX3:7/2`.
 
-Track 2, all in one generator:
+`Tab`. The notes are all `E-3` on the grid, but no two bars sound alike.
 
-1.  `K` `acid` `Enter`, `:name BS`. In the phrase view, `vG` on the empty Note column of its 16
-    rows, `S`, and on `Fill`, `K` `acid` `Enter`.
-2.  `From` `e2`, `To` `e3`, `Octave` `30%`, `Density` `60%`, `Accent` `40%` and `Slide` `30%`.
-3.  Under `Pitches`, the loops: `Trig loop` `12`, `Note loop` `7`, `Oct loop` `5`, `Acc loop` `3`
-    and `Sld loop` `4` (`i`, the number, `Enter`). `0` is `Off`, the part drawn afresh on every
-    row of the span, the same each pass, as `Acid` always was.
-4.  `r` until the first bar sounds right, and `L` to keep it live: the loops only run on from
-    pass to pass while it's live, as the engine plays each pass.
+*   **Track 2, `BS`:** `Acid`, `Cutoff` `48`, `Resonance` `A0`; `Level` `D0`. Shape on its empty
+    Note column of 16 rows: `Fill` `Acid`, `From` `E-2`, `To` `E-3`, `Octave` `30%`, `Density`
+    `60%`, `Accent` `40%`, `Slide` `30%`; under `Pitches`, the loops, `Trig loop` 12, `Note
+    loop` 7, `Oct loop` 5, `Acc loop` 3 and `Sld loop` 4. A loop of `0` is `Off`, the part drawn
+    afresh on every row of the span, the same each pass, as `Acid` always was. `r` rolls it
+    again until the first bar sounds right; the loops only run on from pass to pass while it's
+    live, as the engine plays each pass.
+*   **Track 3:** the kick.
+*   **Track 4, `HH`:** `Hat`, `Decay` `30`; `Level` `C4`. Phrase: 3 rows, `C-4`s at velocities
+    `60`, `20` and `38`.
 
-On the Gen page (`Space 8`) the loops are a device of their own, `Loops`, under the `Acid`'s,
-which says how long the whole line takes to come round. Then a `Kick` on every beat, and a
-`Hat` with `:len 3` and three `C-4`s at velocities `60`, `20` and `38`.
-
-The finished song also makes the `VA` a pluck (`Mod 1`'s `Decay` `300 ms` and `Sustain` `50%`),
-sets its `Cut` `90` and `Res` `50`, sends it to the delay, sets the `Acid`'s `Cutoff` `48` and
-`Resonance` `A0`, a shorter hat, and the levels.
+On the Gen page the loops are a device of their own, `Loops`, under the `Acid`'s, which says how
+long the whole line takes to come round.
 
 **As a patch.** Track 1's pitch, octave, length, ratchet and probability loops are the shipped
 patch `Kria`; add it with `:patch`. `Pitch loop` and `Octave loop` are macros turning the two
@@ -569,25 +538,19 @@ Track 1                       Track 2, at 1/8
 
 **Build it.**
 
-1.  `:set scale=minor`, `:set root=a` and `:bpm 126`.
-2.  Track 1: `K` `acid` `Enter`, `:name MX`. `Space 3`, `:len 8`, and type the notes and
-    velocities. On the gate column, `i` and a gate with its pulses, such as `MLT2`, on each row.
-    An empty gate is `SGL1`.
-3.  The accumulators: on row `03`'s FX 1, `K` `acu` `Enter`, and `Enter` again for `+1`. On row
-    `07`'s, the same, then `-` twice on the value for `FF`, one degree down.
-4.  On the Mod page, the `Accumulator` device under `Mod 3`: `Up` and `Down` `4` (`i` `4`
-    `Enter`), and `Limit` `Bounce` (`K`).
-5.  `:order up-down`.
-6.  Track 2: `W`, and on its Sound page `K` `va` `Enter`, `:name AR`, and `/speed` `Enter`
-    and `=` three times for `1/8`. In the phrase view, `:len 4`, the four notes with `SGL4`, and
-    `ARP` on each (`K` `arp` `Enter`, then `24`).
-7.  Its `Arpeggio` device, beside the accumulator: `Rate` `1/32`, which on a track at `1/8` is a
-    sixteenth, `Mode` `Up-down`, `Oct` `2` and `Retrig` `on`.
-
-Then a `Kick` on every beat, and a `Hat` on the off-beats with a `MLT2` on row `0E`, a ratchet.
-The finished song also sets the `Acid`'s `Cutoff` `50`, `Resonance` `C0`, `Env mod` `B0` and
-`Decay` `50`, makes the `VA` a short pluck (`Mod 1`'s `Decay` `120 ms` and `Sustain` `20%`, with
-`Cut` `88`), sends both to the delay, the `VA` to the reverb too, and sets the levels.
+*   **Song:** A minor, 126 BPM.
+*   **Track 1, `MX`:** `Acid`, `Cutoff` `50`, `Resonance` `C0`, `Env mod` `B0`, `Decay` `50`;
+    `Level` `C0`, `Send A` `98`. Phrase: 8 rows, the notes, velocities, gates and `ACU`s above,
+    order `up-down`. An empty gate is `SGL1`; `ACU 01` is a degree up and `ACU FF` one down.
+*   **Track 1, the `Accumulator`,** under `Mod 3` on the Mod page: `Up` and `Down` 4, `Limit`
+    `Bounce`.
+*   **Track 2, `AR`:** `VA`, `Cut` `88`, `Speed` `1/8`; `Mod 1` `Decay` `120 ms`, `Sustain`
+    `20%`, `Release` `60 ms`; `Level` `E0`, `Send A` `B0`, `Send B` `98`. Phrase: 4 rows, the
+    notes above, each `SGL4` and `ARP 24`.
+*   **Track 2, the `Arpeggio`,** beside the accumulator: `Rate` `1/32`, which on a track at `1/8`
+    is a sixteenth, `Mode` `Up-down`, `Oct` 2, `Retrig` `on`.
+*   **Track 3:** the kick.
+*   **Track 4, `HH`:** the hats, at velocity `50`, with `MLT2` on row `0E`, a ratchet.
 
 **Try next.**
 
@@ -652,24 +615,19 @@ it would.
 
 **Build it.**
 
-1.  `:set scale=minor`, `:set root=d` and `:bpm 116`.
-2.  Track 1: `K` `va` `Enter`, `:name EQ`. In the phrase view, type the notes and velocities.
-3.  The chances: on row `00`'s FX 1, `K` `rnd` `Enter` and `31`. The status line says what it
-    does: `20% of the times it plays, moves the note up to 1 scale degree either way`. Then the
-    other rows' `RND`s the same way, each in FX 1, so there's nothing to their left but the note.
-4.  The lengths: on row `00`'s FX 2, `K` `len` `Enter` `60`, and on its FX 3 `K` `rnd` `Enter`
-    `A4`. Beside the `LEN`, the status line says `67% of the times it plays, moves LEN up to 40
-    either way`. The same on rows `04` and `08`, and `LEN 40 RND A6` on row `0C`.
-5.  Track 2: `W`, `K` `/hat` `Enter`, `:name HH`, and `C-4 50` on rows `02`, `06`, `0A` and
-    `0E`, and `C-4 40` on rows `03`, `07`, `0B` and `0F`.
-6.  Its chances: on row `00`'s FX 1 `RET 02` (`K` `ret` `Enter` `02`) and on its FX 2
-    `RND 61`. On rows `01` and `02`, `VDLT 80` (`K` `vdlt` `Enter` `80`), which leaves the
-    velocity as written, and `RND F3` beside it. Back on row `00`, `:lane 3` on FX 1 and again
-    on FX 2: the title says `FX1:3 FX2:3`, and the two columns go round together, a row a step.
-7.  Track 3: a `Kick` on every beat.
-
-The finished song also makes the `VA` a pluck (`Mod 1`'s `Decay` `260 ms` and `Sustain` `45%`),
-sets its `Cut` `90`, sends it to the delay and the reverb, a shorter hat, and the levels.
+*   **Song:** D minor, 116 BPM.
+*   **Track 1, `EQ`:** `VA`, `Cut` `90`; `Mod 1` `Decay` `260 ms`, `Sustain` `45%`, `Release`
+    `80 ms`; `Level` `D0`, `Send A` `A0`, `Send B` `90`. Phrase: the notes, velocities and FX
+    above. An `RND` on a note is in FX 1, so there's nothing to its left but the note; a `LEN` is
+    in FX 2 and its `RND` in FX 3. The status line says what each does: `RND 31` on row `00` is
+    `20% of the times it plays, moves the note up to 1 scale degree either way`, and the `RND A4`
+    beside its `LEN 60` is `67% of the times it plays, moves LEN up to 40 either way`.
+*   **Track 2, `HH`:** `Hat`, `Decay` `30`; `Level` `C8`. `C-4 50` on rows `02`, `06`, `0A`
+    and `0E`, and `C-4 40` on rows `03`, `07`, `0B` and `0F`. FX 1 and FX 2: `RET 02` and `RND 61` on row
+    `00`, and `VDLT 80` and `RND F3` on rows `01` and `02`; `VDLT 80` leaves the velocity as
+    written. Lanes: `3` on FX 1 and on FX 2, so the title says `FX1:3 FX2:3`, and the two columns
+    go round together, a row a step.
+*   **Track 3:** the kick.
 
 **Try next.**
 
@@ -708,22 +666,18 @@ over three bars, under a line that repeats every bar.
 
 **Build it.**
 
-1.  `:set scale=minor`, `:set root=f` and `:bpm 122`.
-2.  Track 1, a `Kick` on every beat. Track 4, a `Snare` (`G-2`) on rows `04` and `0C`.
-3.  The hats, on track 2: `K` `/hat` `Enter`, `:name HH`. In Insert, `c` three times for a
-    velocity of `34`, then a `C-4` on all 16 rows with auto-jump and a grid of a sixteenth.
-4.  `l` to the Velocity column, `gg`, `vG`, `S`. `From` and `To` both `7F` (`i` `7F`), `Where`
-    `Euclid`, `Hits` 5, and `L`. Five hats are accents now.
-5.  The bass, on track 3: `K` `acid` `Enter`, `:name BS`. On the Note column, `vG`, `S`:
-    `Fill` `Random` (`K`), `From` `f1` and `To` `f2` (`i`, the note, `Enter`), `Where` `Euclid`
-    with 9 hits, and `L`. `r` in the panel, before `L`, picks another line.
-6.  Its filter: `l` across to FX 1, `:lane 12/4`, `vG`, `S`, and from the commands `cutoff`
-    `Enter`, which is `Acid`'s `FREQ`. `Fill` `Wave`, `From` `30`, `To` `A0`, `Rate` `x1` (`K`,
-    `x1`, `Enter`), and `L`. It fills the lane's 12 rows, and the title says
-    `FX1:12/4  󰁨 Note,FX1`.
-
-The finished song also sets the `Acid`'s `Resonance` `B0` and `Env mod` `70`, the hat's `Decay`
-`2C`, the delay and reverb sends, and the levels.
+*   **Song:** F minor, 122 BPM.
+*   **Track 1:** the kick.
+*   **Track 2, `HH`:** `Hat`, `Decay` `2C`; `Level` `CC`. A `C-4` at velocity `34` on all 16
+    rows. Shape on the Velocity column, all 16 rows: `From` and `To` `7F`, `Where` `Euclid`,
+    `Hits` 5. Five hats are accents now.
+*   **Track 3, `BS`:** `Acid`, `Resonance` `B0`, `Env mod` `70`; `Level` `C8`, `Send A` `A0`.
+    Shape on the empty Note column: `Fill` `Random`, `From` `F-1`, `To` `F-2`, `Where` `Euclid`,
+    `Hits` 9. `r` in the panel picks another line.
+*   **Track 3, FX 1:** lane `12/4`, then a shape on it: the command `FREQ`, `Acid`'s `Cutoff`,
+    `Fill` `Wave`, `From` `30`, `To` `A0`, `Rate` `x1`. It fills the lane's 12 rows, and the
+    title says `FX1:12/4  󰁨 Note,FX1`.
+*   **Track 4, `SD`:** `Snare`; `Level` `C8`, `Send B` `98`. A `G-2` on rows `04` and `0C`.
 
 **What a hand edit does.** A live column follows the rest of the phrase:
 
@@ -744,15 +698,15 @@ macros; add it with `:patch` to a track with notes to accent.
     wave fills the new lane.
 *   The sweep's speed is the lane's `Rate`, on the Gen page's `FX1 Lane` (`Space 8`): `÷2` takes
     six bars, `×2` a bar and a half, and `×4` a row a step, 12 steps that drift against the bar.
-    `M` on it and `:macro Sweep` puts it on a knob. `Rate`, not `Length`, is the knob for a wave
+    Mapped to a macro named `Sweep`, it's on a knob. `Rate`, not `Length`, is the knob for a wave
     lane: a lane heard longer plays its own rows again from the first, so `Length` `+4` plays the
     whole wave and then its first four rows again, a jump back partway through the sweep.
 *   `Space g a` on any of them when you're done, to keep the values as plain ones.
 *   All three on track 3's bass at once: `Space 8`, the Gen page, where each live
     column of the phrase under the cursor is a device, `Random  Euclid · Note 00–0F` and
-    `Wave  All rows · FX1 FREQ lane 0C`. `jj$` on the note device lands on `Hits`, and `=` and `-` turn it
-    as the line plays, each press its own undo step.
-*   `M1` on `Hits` maps it to macro 1, then on the Mod page an LFO with `Dest` `MAC1`: the hits
+    `Wave  All rows · FX1 FREQ lane 0C`. The note device's `Hits` turns as the line plays, each
+    press its own undo step.
+*   `Hits` on macro 1, and an LFO on the Mod page with `Dest` `MAC1`: the hits
     move under the playhead as it sweeps. The title says `󰁨 Note~`, the row playing shows the
     notes heard, and `Space g a` keeps the pass just heard as plain notes.
 
@@ -773,16 +727,13 @@ kick, a snare and hats. [`song.ron`](songs/acid-lines/song.ron)
 
 **Build it.**
 
-1.  `:set scale=minor` and `:bpm 126`.
-2.  Track 1: `K` `acid` `Enter`, `:name TB`.
-3.  `Space 3`, `vG` on the Note column, and `S`. On `Fill`, `K`, `acid`, `Enter`.
-4.  `From` `c2` and `To` `c3` (`i`, the note, `Enter`). `Notes` is how many notes the riff has,
-    `Density` how many rows play, `Accent` and `Slide` the chance of each.
-5.  `r` until you like it, and `L` to keep it live.
-
-Then a `Kick` on every beat, a `Snare` (`G-2`) on rows `04` and `0C` and a `Hat` on the
-off-beats. The finished song also sets the `Acid`'s `Cutoff` `50`, `Resonance` `C0`, `Env mod`
-`A0` and `Decay` `58`, sends it to the delay, and sets the levels.
+*   **Song:** C minor, 126 BPM.
+*   **Track 1, `TB`:** `Acid`, `Cutoff` `50`, `Resonance` `C0`, `Env mod` `A0`, `Decay` `58`;
+    `Level` `C4`, `Send A` `A0`. Shape on the empty Note column: `Fill` `Acid`, `From` `C-2`,
+    `To` `C-3`. `Notes` is how many notes the riff has, `Density` how many rows play, `Accent`
+    and `Slide` the chance of each. `r` rolls another until you like it.
+*   **Track 2:** the kick. **Track 3:** the hats.
+*   **Track 4, `SD`:** `Snare`; `Level` `C8`, `Send B` `98`. A `G-2` on rows `04` and `0C`.
 
 **As a patch.** The line is the shipped patch `Acid line`, its dice on five macros, `Density`,
 `Notes`, `Octave`, `Accent` and `Slide`; add it with `:patch`.
@@ -801,7 +752,7 @@ off-beats. The finished song also sets the `Acid`'s `Cutoff` `50`, `Resonance` `
 *   Write a line by hand first, then `S` with `Acid` on it: its rhythm stays, and the panel gives
     it new pitches, accents and slides.
 *   `Space g a` keeps the one you like as plain notes, to tweak by hand.
-*   On the Gen page, `Vary` `Each pass` (`K` on it, after `Pitches` in the title): a new line
+*   On the Gen page, `Vary` `Each pass`, after `Pitches` in the device's title: a new line
     every time round, as Endless Acid Banger plays, and the first pass is the one written. `Every
     4 passes` holds each for four bars. When one sticks, `Space g a` keeps it, the line just heard,
     and `Vary` goes back to `Once`.
@@ -830,20 +781,15 @@ drummer's does, rather than jumping about as `Random` would. [`song.ron`](songs/
 
 **Build it.**
 
-1.  `:set scale=minor`, `:set root=a` and `:bpm 96`.
-2.  The tune, on track 1: `Space 5`, `K` `string` `Enter`, `:name LD`. `Space 3`, `:len 32`
-    for two bars, then `vG` on the Note column and `S`. On `Fill`, `K`, `/1/f`, `Enter`: its name
-    starts with a digit, so `/` comes first. `From` `a2` and `To` `a4` (`i`, the note, `Enter`),
-    `Where` `Every` with an `Amount` of 2, and `L`.
-3.  The bass: `W`, on its Sound page `K` `va` `Enter`, `:name BS`, and in the phrase view `vG`,
-    `S`, `Fill` `Walk` (`K` `walk` `Enter`), `From` `a1`, `To` `a2`, `Step` 1, `Where` `Euclid`
-    with 7 hits, and `L`.
-4.  The hats: `W`, on its Sound page `K` `/hat` `Enter`, `:name HH`, and in the phrase view a
-    `C-4` on all 16 rows. `l` to the Velocity column, `gg`, `vG`, `S`, `Fill` `Walk`, `From` `30`
-    and `To` `70` (`i`, two hex digits), leave `Step` at the `10` it starts at, and `L`.
-
-Then a `Kick` on every beat. The finished song also sets the string's `Decay` and `Bright`, the
-bass's filter, the delay and reverb sends, and the levels.
+*   **Song:** A minor, 96 BPM.
+*   **Track 1, `LD`:** `String`, `Decay` `A0`, `Bright` `60`; `Level` `C0`, `Send A` `90`,
+    `Send B` `A8`. Phrase: 32 rows, two bars. Shape on the empty Note column: `Fill` `1/f`,
+    `From` `A-2`, `To` `A-4`, `Where` `Every`, `Amount` 2.
+*   **Track 2, `BS`:** `VA`, `Cut` `58`, `Res` `30`; `Level` `C8`. Shape on the empty Note
+    column: `Fill` `Walk`, `From` `A-1`, `To` `A-2`, `Step` 1, `Where` `Euclid`, `Hits` 7.
+*   **Track 3, `HH`:** `Hat`, `Decay` `2C`; `Level` `CC`. A `C-4` on all 16 rows. Shape on the
+    Velocity column: `Fill` `Walk`, `From` `30`, `To` `70`, `Step` `10`, as it starts there.
+*   **Track 4:** the kick.
 
 **As a patch.** The bass is the shipped patch `Drunk walk`, with `Step` from a degree to seven
 and `Hits` on macros; add it with `:patch`.
@@ -862,12 +808,11 @@ Noise Engineering's Numeric Repetitor reads a 16-step rhythm as a 16-bit number 
 it: one knob turns a single rhythm into a family of related ones, all of them still in step with
 it. Doubling moves the rhythm a step later, and an odd number always keeps the downbeat.
 
-**Try it on the `euclid` song.** Open it, and on the kick's phrase (track 1, `Space 3`):
+**Try it on the `euclid` song.** Open it, and on the kick, track 1:
 
-1.  `Space g a` turns the live `Euclid` into plain notes, `x..x..x..x..x...`.
-2.  `gg` `vG` on the Note column and `S`. On `Fill`, `K`, `multiply`, `Enter`. `Factor` starts
-    at 3: `xx.xx.xx.xx.xx..`, a gallop.
-3.  `L` keeps it live, so `gl` opens it again later.
+*   `Space g a` on its phrase turns the live `Euclid` into plain notes, `x..x..x..x..x...`.
+*   Shape on its Note column, all 16 rows: `Fill` `Multiply`. `Factor` starts at 3:
+    `xx.xx.xx.xx.xx..`, a gallop.
 
 **Try next.** `gl` on the kick and `=` or `-` on `Factor` while it plays:
 
@@ -890,15 +835,13 @@ work on the bits in between: Lipsk inverts any of them, Gera masks them off. Xao
 misusing them, and on a melody or a velocity they give odd folds and quantizations that no
 other knob reaches.
 
-**Try it on the `walks` song.** Open it, and on the tune's phrase (track 1, `Space 3`):
+**Try it on the `walks` song.** Open it, and on the tune, track 1:
 
-1.  `Space g a` turns the live `1/f` into plain notes.
-2.  `gg` `vG` on the Note column and `S`. On `Fill`, `K`, `flipped`, `Enter`, for `Invert
-    bits`. `j` to `Flip`, and `i` `01`: each note swaps with its neighbour degree in A minor, a
-    tune that moves the same way but never on the same notes.
-3.  `i` `03` swaps them in fours, and `04` throws every other group up or down four degrees.
-    Every note is still in the scale.
-4.  `L` keeps it live, so `gl` opens it again.
+*   `Space g a` on its phrase turns the live `1/f` into plain notes.
+*   Shape on its Note column, all 32 rows: `Fill` `Invert bits`, `Flip` `01`. Each note swaps
+    with its neighbour degree in A minor, a tune that moves the same way but never on the same
+    notes. `Flip` `03` swaps them in fours, and `04` throws every other group up or down four
+    degrees. Every note is still in the scale.
 
 **Try next.**
 
@@ -931,18 +874,18 @@ HH  XxX.X.x.X.X.X.x.  X.X.X.x.X.X.X.x.
 
 **Build it.**
 
-1.  `:set scale=minor`, `:set root=a` and `:bpm 118`.
-2.  Tracks 1 to 3: the machines `kick`, `snare` and `hat` (`K` `/kick` `Enter` and so on), named
-    `BD`, `SD` and `HH`. On each, `Space 3`, `:len 32`, and one note on row `00` for its pitch:
-    `C-1`, `G-2` and `C-4`.
-3.  Back on track 1, `gg` `vG` on the Note column, `W` `W` to reach track 3, and `S`. On `Fill`,
-    `K` `/grids` `Enter`. The panel shows `Each track plays its own part`, and the three tracks
-    take the kick's, the snare's and the hats' parts, as their machines say.
-4.  `j` to `X` and `i` `40`, `j` to `Y` and `i` `40`. Then `j` `j` `j` to `HH fill`, the hats'
-    density, and `i` `A0`, and `j` to `Chaos` and `i` `C0`. Two hex digits are kept as they're
-    typed.
-5.  `L` keeps it live, a generator on each track.
-6.  Track 4: `K` `acid` `Enter`, `:name BS`, and `A-1`s on `x..x..x...x.x...`.
+*   **Song:** A minor, 118 BPM.
+*   **Track 1, `BD`:** `Kick`, `Decay` `70`; `Level` `F0`.
+*   **Track 2, `SD`:** `Snare`; `Level` `C8`, `Send B` `90`.
+*   **Track 3, `HH`:** `Hat`, `Decay` `30`; `Level` `C0`.
+*   **Tracks 1 to 3's phrases:** 32 rows each, with one note on row `00` for its pitch: `C-1`,
+    `G-2` and `C-4`.
+*   **One shape across tracks 1 to 3's Note columns,** all 32 rows: `Fill` `Grids`. The panel
+    shows `Each track plays its own part`, and the three tracks take the kick's, the snare's and
+    the hats' parts, as their machines say. `X` `40`, `Y` `40`, `HH fill`, the hats' density,
+    `A0`, and `Chaos` `C0`. Kept live, it's a generator on each track.
+*   **Track 4, `BS`:** `Acid`, `Cutoff` `48`, `Resonance` `90`; `Level` `B8`. `A-1`s on
+    `x..x..x...x.x...`.
 
 A note it plays keeps its pitch and a new one takes the first note's, which is why each track
 starts with one. The snare doesn't play on row `00`, so its `G-2` is gone from the grid, but the
@@ -990,20 +933,26 @@ woodblock's triplets play as triplets against the kick's straight time, in one t
 
 **Build it.**
 
-1.  `:set scale=minor`, `:set root=a` and `:bpm 108`.
-2.  Tracks 1 to 3: the machines `kick`, `modal` and `hat` (`K` `/kick` `Enter` and so on), named `BD`, `WB` and `HH`. On each,
-    `/speed` `Enter` and `-` twice, to `1/32`; then `Space 3`, `:len 32`, and one note on row `00`
-    for its pitch: `C-1`, `E-4` and `C-4`.
-3.  Back on track 1, `gg` `vG` on the Note column, `W` `W` to reach track 3, and `S`. On `Fill`,
-    `K` `/divisions` `Enter`. The panel shows `Each track its own channel: A, B, A+B`, and `Bar`
-    `4/4 32nds`, as the tracks are at `1/32`.
-4.  Channel A's chances: `j` `j` to `1/4` and `i` `90` `Enter`, `j` and `i` `20` `Enter`, `j`
-    and `i` `10` `Enter`, then `j` `j` to `1/8T` and `i` `10` `Enter`. Then B's: `j` `j` `j` to
-    `B 1/8` and `i` `25` `Enter`, `j` `j` to `B 1/4T` and `i` `35` `Enter`, `j` and `i` `40`
-    `Enter`, `j` and `i` `10` `Enter`.
-5.  `r` rolls new dice until you like the bar, and `L` keeps it live, a generator on each track.
-6.  Track 4: `K` `/snare` `Enter`, `:name SD`, and `G-2`s on rows `04` and `0C`. Track 5: `K`
-    `va` `Enter`, `:name BS`, and a line of `A-1`s round the kick, with a `C-2`, `G-1` and `E-1`.
+*   **Song:** A minor, 108 BPM.
+*   **Track 1, `BD`:** `Kick`, `Decay` `68`, `Speed` `1/32`; `Level` `F0`.
+*   **Track 2, `WB`:** `Modal`, `Speed` `1/32`; `Level` `A8`, `Send B` `70`.
+*   **Track 3, `HH`:** `Hat`, `Decay` `28`, `Speed` `1/32`; `Level` `B0`.
+*   **Tracks 1 to 3's phrases:** 32 rows each, with one note on row `00` for its pitch: `C-1`,
+    `E-4` and `C-4`.
+*   **One shape across tracks 1 to 3's Note columns,** all 32 rows: `Fill` `Divisions`. The panel
+    shows `Each track its own channel: A, B, A+B`, and `Bar` `4/4 32nds`, as the tracks are at
+    `1/32`.
+
+    | Channel | `1/4` | `1/8` | `1/16` | `1/4T` | `1/8T` | `1/16T` |
+    |---|---|---|---|---|---|---|
+    | A | `90%` | `20%` | `10%` | `0%` | `10%` | `0%` |
+    | B | `0%` | `25%` | `0%` | `35%` | `40%` | `10%` |
+
+    `r` rolls new dice until you like the bar. Kept live, it's a generator on each track.
+*   **Track 4, `SD`:** `Snare`; `Level` `C0`, `Send B` `90`. A `G-2` on rows `04` and `0C`.
+*   **Track 5, `BS`:** `VA`, `Cut` `48`, `Res` `40`; `Level` `C8`. A line of `A-1`s round the
+    kick: `A-1` on rows `00`, `03` (at `50`) and `0A`, `C-2` on `06`, `G-1` on `0C` and `E-1`
+    (at `50`) on `0E`.
 
 A strike on a note keeps its pitch, and a new one takes the first note's, which is why each
 track starts with one. All three take one seed, as the module's channels come from one module,
@@ -1060,17 +1009,13 @@ at a time.
 
 **Build it.**
 
-1.  `:set scale=dorian`, `:set root=d` and `:bpm 112`.
-2.  Track 1: `K` `modal` `Enter`, `:name NR`.
-3.  `Space 3`, `vG` on the Note column, and `S`. On `Fill`, `K` `/ring` `Enter`. The panel shows
-    `From`, `To`, `Change` `10%`, `Chance` `50%` and `Length` `8`.
-4.  `From` `d3` and `To` `d5` (`i`, the note, `Enter`), `Change` `i` `15` `Enter` and `Chance`
-    `i` `55` `Enter`. `r` rolls a new ring until you like the bar, and `L` keeps it live.
-5.  Track 2: `W`, `K` `va` `Enter`, `:name BS`, then in the phrase view `vG`, `S`, `Fill` `Ring`,
-    `From` `d1`, `To` `d2`, `Change` `0`, `Chance` `60` and `Length` `5`, and `L`.
-
-Then a `Kick` on every beat and a `Hat` on the off-beats. The finished song also sets the bass's
-filter, the bell's delay and reverb sends, and the levels.
+*   **Song:** D dorian, 112 BPM.
+*   **Track 1, `NR`:** `Modal`; `Level` `B8`, `Send A` `80`, `Send B` `A0`. Shape on the empty
+    Note column: `Fill` `Ring`, `From` `D-3`, `To` `D-5`, `Change` `15%`, `Chance` `55%`, and
+    `Length` 8, as it starts. `r` rolls a new ring until you like the bar.
+*   **Track 2, `BS`:** `VA`, `Cut` `50`, `Res` `38`; `Level` `C0`. Shape on the empty Note
+    column: `Fill` `Ring`, `From` `D-1`, `To` `D-2`, `Change` `0%`, `Chance` `60%`, `Length` 5.
+*   **Track 3:** the kick. **Track 4:** the hats.
 
 **Play it.** `Tab`, and `Space 8` on track 1 for the Gen page: the ring's device has `From` and
 `To`, then `Change`, `Chance` and `Length`.
@@ -1115,20 +1060,17 @@ velocities gather toward the top, loud but never the same twice. Then a kick on 
 
 **Build it.**
 
-1.  `:set scale=dorian`, `:set root=d` and `:bpm 112`.
-2.  The tune, on track 1: `Space 5`, `K` `string` `Enter`, `:name X1`. `Space 3`, `:len 32`,
-    then `vG` on the Note column and `S`. On `Fill`, `K` `random` `Enter`. `From` `d3` and `To`
-    `d5` (`i`, the note, `Enter`), `Spread` `40` and `Steps` 4 (`i` and the number, `Enter`),
-    `Where` `Every` with an `Amount` of 2, and `L`. The panel says `4 of 7: D A F C`.
-3.  The bass: `W`, on its Sound page `K` `va` `Enter`, `:name X2`, and in the phrase view `vG`,
-    `S`, `Fill` `Random`, `From` `d1`, `To` `d2`, `Spread` `100`, `Bias` `-40`, `Where` `Euclid`
-    with 7 hits, and `L`.
-4.  The hats: `W`, `K` `/hat` `Enter`, `:name HH`, and a `C-4` on all 16 rows. `l` to the
-    Velocity column, `gg`, `vG`, `S`, `Fill` `Random`, `From` `30`, `To` `7F`, `Spread` `25`,
-    `Bias` `50`, and `L`.
-
-Then a `Kick` on every beat. The finished song also sets the string's `Decay` and `Bright`, the
-bass's filter, the delay and reverb sends, and the levels.
+*   **Song:** D dorian, 112 BPM.
+*   **Track 1, `X1`:** `String`, `Decay` `90`, `Bright` `58`; `Level` `C0`, `Send A` `A0`,
+    `Send B` `A0`. Phrase: 32 rows. Shape on the empty Note column: `Fill` `Random`, `From`
+    `D-3`, `To` `D-5`, `Spread` `40%`, `Steps` 4, `Where` `Every`, `Amount` 2. The panel says
+    `4 of 7: D A F C`.
+*   **Track 2, `X2`:** `VA`, `Cut` `50`, `Res` `38`; `Level` `C8`. Shape on the empty Note
+    column: `Fill` `Random`, `From` `D-1`, `To` `D-2`, `Spread` `100%`, `Bias` `-40`, `Where`
+    `Euclid`, `Hits` 7.
+*   **Track 3, `HH`:** `Hat`, `Decay` `2C`; `Level` `C8`. A `C-4` on all 16 rows. Shape on the
+    Velocity column: `Fill` `Random`, `From` `30`, `To` `7F`, `Spread` `25%`, `Bias` `+50`.
+*   **Track 4:** the kick.
 
 **As a patch.** The tune is the shipped patch `Marbles X`, with the module's `Spread`, `Bias`
 and `Steps` on macros; add it with `:patch`.
@@ -1137,9 +1079,9 @@ and `Steps` on macros; add it with `:patch`.
 
 *   `gl` on the tune and `-` on `Steps`: at 3 it's a D minor arpeggio, at 1 only Ds, an octave
     line. All 7 is dorian again.
-*   `Steps` back to all 7, then `l` into `Weights` and `F4F4F4F`: a hex digit a degree from D,
-    each over its note, so all of dorian plays, but the chord's four notes most of the time, as
-    on the meloDICER.
+*   `Steps` back to all 7, then `Weights` `F4F4F4F`: a hex digit a degree from D, each over
+    its note, so all of dorian plays, but the chord's four notes most of the time, as on the
+    meloDICER.
 *   `Spread` `0%` on the tune: one note, `D-4`, the middle of the range. With `Bias` `+50`, the
     `A-4` three quarters of the way up.
 *   On the Gen page, `Space 8`, `Spread` and `Bias` are cells to turn while it plays, and with
@@ -1184,31 +1126,37 @@ ST  .xxxx..xxx......
 
 **Build it.**
 
-1.  `:set scale=minor`, `:set root=a` and `:bpm 120`.
-2.  Tracks 1 to 5: on each Sound page, `Space 5`, the machines `/hat`, `/modal`, `/kick`, `va` and
-    `string` (`K`, the name, `Enter`), named `HH`, `PC`, `BD`, `BS` and `ST` with `:name`.
-3.  The hat and the percussion: on track 1, `Space 3`, `vG` on the Note column, `W` to reach
-    track 2, and `S`. `From` and `To` `c4` (`i`, the note, `Enter`). `j` down to `Where`, `K`
-    `/compl` `Enter`: the panel says `Each row goes to one track or the other`. `j` to `Amount`,
-    `i` `65` `Enter`, and `L`. Track 1 is the coin's `First` side and track 2 its `Second`.
-4.  On track 2, `gl` on one of its notes reopens its own generator. On `Fill`, `K` `random`
-    `Enter`, `From` `a3`, `To` `a4`, and `L`. Its rows stay the coin's.
-5.  The kick: track 3, `vG`, `S`, both ends `c1`, `Where` `Markov` with an `Amount` of 90, and
-    `L`.
-6.  The bass: track 4, `vG`, `S`, `Fill` `Random`, `From` `a1`, `To` `a2`, `Where` `3 states`
-    with 80, and `L`.
-7.  The string: track 5, `vG`, `S`, `Fill` `Random`, `From` `a3`, `To` `a5`, `Where` `Clusters`
-    with 35, and `L`.
+*   **Song:** A minor, 120 BPM.
+*   **Tracks,** each with an empty phrase of 16 rows:
 
-Each `S` draws a seed of its own, so your rhythms differ from the song's; `r` in the panel draws
-again. The finished song also sets the hat's and the kick's `Decay`, the string's, the bass's
-filter, the sends and the levels.
+    | Track | Machine | Settings |
+    |---|---|---|
+    | 1, `HH` | `Hat` | `Decay` `2C`; `Level` `B8` |
+    | 2, `PC` | `Modal` | `Level` `C0`, `Send B` `70` |
+    | 3, `BD` | `Kick` | `Decay` `70`; `Level` `F0` |
+    | 4, `BS` | `VA` | `Cut` `48`, `Res` `30`; `Level` `C8` |
+    | 5, `ST` | `String` | `Decay` `80`; `Level` `B0`, `Send A` `90`, `Send B` `90` |
+
+*   **One shape across tracks 1 and 2's Note columns:** `From` and `To` `C-4`, `Where`
+    `Complementary`, `Amount` `65%`. The panel says `Each row goes to one track or the other`.
+    Track 1 is the coin's `First` side and track 2 its `Second`.
+*   **Track 2's own generator,** with `gl` on one of its notes: `Fill` `Random`, `From` `A-3`,
+    `To` `A-4`. Its rows stay the coin's.
+*   **Track 3:** shape on the Note column, `From` and `To` `C-1`, `Where` `Markov`, `Amount`
+    `90%`.
+*   **Track 4:** shape on the Note column, `Fill` `Random`, `From` `A-1`, `To` `A-2`, `Where`
+    `3 states`, `Amount` `80%`.
+*   **Track 5:** shape on the Note column, `Fill` `Random`, `From` `A-3`, `To` `A-5`, `Where`
+    `Clusters`, `Amount` `35%`.
+
+Each shape draws a seed of its own, so your rhythms differ from the song's; `r` in the panel
+draws again.
 
 **Try next.**
 
 *   `gl` on the hat and `Amount` `30`, then the same on the percussion: it takes most of the
     rows now. Each generator keeps its own amount, so turn both, or map both to one macro.
-*   `K` on the percussion's `Side` makes it `First`: it plays the hat's rows, together.
+*   The percussion's `Side` at `First`: it plays the hat's rows, together.
 *   On the kick, `Amount` `100%` repeats its eight rows exactly; `33%` is a sparse coin; `0%` is
     busier, and never plays the same eight rows twice.
 *   On the bass, `Amount` `0%` is mostly gates, short notes, and `50%` mostly rests.
@@ -1258,24 +1206,30 @@ BD  x..x..x..x..
 
 **Build it.**
 
-1.  `:set scale=minor`, `:set root=a` and `:bpm 100`.
-2.  Tracks 1 to 5: the machines `modal`, `va`, `modal`, `hat` and `kick` (`K`, the name, `Enter`),
-    named `CL`, `BS`, `CG`, `BL` and `BD` with `:name`. On tracks 4 and 5, `/speed` `Enter` and
-    `+` once, to `1/8T`, then `Space 3` and `:len 12`.
-3.  The son: on track 1, `Space 3`, `vG` on the Note column, `W` `W` to reach track 3, and `S`.
-    `From` and `To` `e5` (`i`, the note, `Enter`). `j` down to `Where`, `K` `/rhythm` `Enter`: it
-    starts on `Son clave`, and the panel says `Each track plays the next part`. `L`.
-4.  On track 2, `gl` on one of its notes reopens its own generator: `Fill` `Alternate`, `From`
-    `a1`, `To` `e2`, and `L`. On track 3, the same with `e3` and `a3`, then `Child` `80` and `L`.
-5.  The bembé: track 4, `vG`, `W`, `S`, `Where` `Rhythm`, then `Rhythm`, `K` `/bemb` `Enter`. On a
-    `1/16` track the panel would say `Its 12 rows make a bar on a 1/8T track`. `From` and `To`
-    `c4`, `L`.
-6.  On track 4, `gl`: `Child` `75` and `Vary` `Each pass`, and `L`. On track 5, `gl`: `From` and
-    `To` `c1`, and `L`.
+*   **Song:** A minor, 100 BPM.
+*   **Tracks:**
+
+    | Track | Machine | Settings | Phrase |
+    |---|---|---|---|
+    | 1, `CL` | `Modal` | `Decay` `30`; `Level` `A8`, `Send B` `60` | 16 rows |
+    | 2, `BS` | `VA` | `Cut` `40`, `Res` `28`; `Level` `D0` | 16 rows |
+    | 3, `CG` | `Modal` | `Level` `C0`, `Send B` `50` | 16 rows |
+    | 4, `BL` | `Hat` | `Decay` `30`, `Speed` `1/8T`; `Level` `98` | 12 rows |
+    | 5, `BD` | `Kick` | `Decay` `60`, `Speed` `1/8T`; `Level` `D8` | 12 rows |
+
+*   **The son, one shape across tracks 1 to 3's Note columns:** `From` and `To` `E-5`, `Where`
+    `Rhythm`, which starts on `Son clave`, and the panel says `Each track plays the next part`.
+*   **Track 2's own generator,** with `gl` on one of its notes: `Fill` `Alternate`, `From`
+    `A-1`, `To` `E-2`.
+*   **Track 3's own generator:** `Fill` `Alternate`, `From` `E-3`, `To` `A-3`, `Child` `80%`.
+*   **The bembé, one shape across tracks 4 and 5's Note columns:** `From` and `To` `C-4`,
+    `Where` `Rhythm`, `Rhythm` `Bembé`. On a `1/16` track the panel would say `Its 12 rows make a
+    bar on a 1/8T track`.
+*   **Track 4's own generator:** `Child` `75%`, `Vary` `Each pass`.
+*   **Track 5's own generator:** `From` and `To` `C-1`.
 
 A child draws from the seed, so yours drop other hits than the song's; `r` in the panel draws
-again. The finished song also sets the voices' decays, the bass's filter, the sends and the
-levels.
+again.
 
 **Try next.**
 
@@ -1313,17 +1267,16 @@ A#1 50   ---      C-2 50   C-3 7F   ---      G-2 HLD  D#2 50   C-2 50
 
 **Build it.**
 
-1.  `:set scale=minor` and `:bpm 124`.
-2.  Track 1: `K` `acid` `Enter`, `:name TB`, and the line above in the phrase view:
-    `'` accents a note and `/` makes it slide.
-3.  `gg` `vG` on the Note column and `S`. On `Fill`, `K`, `/variation`, `Enter`.
-    The panel's heading counts the notes it wrote, and the line changes.
-4.  `r` until you like it, and `L` to keep it live.
-5.  `Space 8` for the Gen page, and on the device's title, `K` on `Vary`, `Every
-    4 passes`.
-
-Then a `Kick` on every beat, `Hat`s on the off-beats and a `Snare` on rows `04`
-and `0C`, as in `acid-lines`.
+*   **Song:** C minor, 124 BPM.
+*   **Track 1, `TB`:** `Acid`, `Cutoff` `58`, `Resonance` `B0`, `Env mod` `90`, `Decay` `60`;
+    `Level` `C4`, `Send A` `90`. Phrase: the line above, its accents at `7F` and its slides a
+    gate of `HLD1`.
+*   **Shape on its Note column,** all 16 rows: `Fill` `Variation`, `Order` 1 and `Temp` `50%`,
+    as it starts. The panel's heading counts the notes it wrote, and the line changes; `r` rolls
+    another until you like it. Then, on the Gen page, `Vary` `Every 4 passes`, in the device's
+    title.
+*   **Track 2:** the kick. **Track 3:** the hats.
+*   **Track 4, `SD`:** `Snare`; `Level` `C8`, `Send B` `98`. A `G-2` on rows `04` and `0C`.
 
 **As a patch.** The `Variation` is the shipped patch `Variations`, with `Order` and
 `Temperature` on macros; add it with `:patch` to a track with a line of at least four notes for
@@ -1373,17 +1326,15 @@ Track 1, a grid of 4×4                    Track 2, a grid of 4×2
 
 **Build it.**
 
-1.  `:set scale=minor`, `:set root=d` and `:bpm 112`.
-2.  Track 1: `K` `va` `Enter`, `:name RN`. In the phrase view, the sixteen notes and
-    velocities, a line of four rows a chord as above.
-3.  `:order cartesian 1 3`. The phrase's title says `Cartesian 1 3`, and the playhead jumps
-    down a line every third step.
-4.  Track 2: `W`, `K` `acid` `Enter`, `:name BS`, `:len 8`, and its eight notes.
-5.  `:order snake columns`, or `:order snake 2`. The title says `Snake columns`.
-
-Then a `Kick` on every beat and a `Hat` on the off-beats. The finished song also makes the `VA` a
-pluck (`Mod 1`'s `Decay` `140 ms` and `Sustain` `20%`, with `Cut` `90`) sent to the delay and
-the reverb, and sets the `Acid`'s `Cutoff` `48`, `Resonance` `A0` and `Env mod` `90`.
+*   **Song:** D minor, 112 BPM.
+*   **Track 1, `RN`:** `VA`, `Cut` `90`; `Mod 1` `Decay` `140 ms`, `Sustain` `20%`, `Release`
+    `80 ms`; `Level` `D0`, `Send A` `B0`, `Send B` `90`. Phrase: the sixteen notes and
+    velocities above, a line of four rows a chord, order `cartesian 1 3`. The phrase's title says
+    `Cartesian 1 3`, and the playhead jumps down a line every third step.
+*   **Track 2, `BS`:** `Acid`, `Cutoff` `48`, `Resonance` `A0`, `Env mod` `90`; `Level` `B8`.
+    Phrase: 8 rows, the notes above, order `snake columns`, or `snake 2`. The title says
+    `Snake columns`.
+*   **Track 3:** the kick. **Track 4:** the hats.
 
 **Try next.**
 
@@ -1434,16 +1385,16 @@ trunk's `Followed by 1`.
 
 **Build it.**
 
-1.  `:set scale=dorian`, `:set root=d` and `:bpm 116`.
-2.  Track 1: `K` `va` `Enter`, `:name BL`, and the trunk above in the phrase view.
-3.  `:bloom 4 2 trunk`: four branches, two changes each, the trunk before each. The status line
-    names the new phrases, and `Space 2`, the chain view, shows the path. Your branches differ
-    from the song's, as each bloom draws its own seed: `u` and `:bloom 4 2 trunk` again for
-    others, until you like them.
-
-Then, on tracks 2 to 4, an `Acid` bass on `D-1` (`X..x..x...x..x..`), a `Kick` on every beat
-and a `Hat` on the off-beats. The finished song also makes the `VA` a pluck (`Mod 1`'s `Decay`
-`220 ms` and `Sustain` `25%`, with `Cut` `88`) sent to the delay and the reverb.
+*   **Song:** D dorian, 116 BPM.
+*   **Track 1, `BL`:** `VA`, `Cut` `88`; `Mod 1` `Decay` `220 ms`, `Sustain` `25%`, `Release`
+    `120 ms`; `Level` `C8`, `Send A` `A8`, `Send B` `90`. Phrase `00`: the trunk above.
+*   **The branches:** `:bloom 4 2 trunk` on the trunk, four branches, two changes each, the trunk
+    before each. The status line names the new phrases, and `Space 2`, the chain view, shows the
+    path. Your branches differ from the song's, as each bloom draws its own seed: `u` and
+    `:bloom 4 2 trunk` again for others, until you like them.
+*   **Track 2, `BS`:** `Acid`, `Cutoff` `40`, `Resonance` `90`, `Env mod` `70`; `Level` `B4`. A
+    `D-1` on each `x` of `X..x..x...x..x..`.
+*   **Track 3:** the kick. **Track 4:** the hats.
 
 **Try next.**
 
@@ -1487,18 +1438,23 @@ Bar 3  .   x   x   x   .   x   x   .   X   x   x   .   X   x   .   x
 
 **Build it.**
 
-1.  `:set scale=minor`, `:set root=a` and `:bpm 118`.
-2.  Track 1: `K` `modal` `Enter`, `:name BL`, and eight rows of a tune, such as
-    `A-4 C-5 E-5 --- G-4 E-5 D-5 ---`, with `:len 8` on the Note column for a phrase of eight.
-3.  Track 2: a `VA`, `:name PL`, eight rows such as `A-3 E-3 C-4 G-3 A-3 D-4 E-3 C-4`, and
-    `/speed` `Enter`, then `K` to choose `1/8` from the list.
-4.  Track 3: a `VA`, `:name BS`, eight rows of bass on `A-1`, `E-1` and `G-1`, at `1/8T`.
-5.  `:group 1 1-3` puts the three in group 1.
-6.  A `Kick` on every beat, and on track 5 a `Hat` on every row. In the hat's phrase, `l` to its
-    first FX column on row `00`, `:lane 7`, then `vG` and `S`, and choose `CHA`. Set `From` and
-    `To` to `00`, `Where` to `Chance` and its `Amount` to `35%`, then `L`. It fills the lane's
-    seven rows; `r` before `L` draws others, and two of seven is about right.
-7.  `Space 8` on the hat, `M` on the generator's `Amount`, and `:macro Skip` to name it.
+*   **Song:** A minor, 118 BPM.
+*   **Track 1, `BL`:** `Modal`, `Decay` `80`, `Speed` `1/16`; `Level` `C0`, `Send B` `A0`, `Pan`
+    `A0`. Phrase: 8 rows, `A-4 C-5 E-5 --- G-4 E-5 D-5 ---`.
+*   **Track 2, `PL`:** `VA`, `Cut` `78`, `Speed` `1/8`; `Mod 1` `Decay` `260 ms`, `Sustain`
+    `20%`, `Release` `120 ms`; `Level` `B8`, `Send A` `90`, `Pan` `60`. Phrase: 8 rows,
+    `A-3 E-3 C-4 G-3 A-3 D-4 E-3 C-4`.
+*   **Track 3, `BS`:** `VA`, `Cut` `48`, `Res` `30`, `Speed` `1/8T`; `Level` `C8`. Phrase: 8
+    rows, `A-1 --- A-2 E-1 --- G-1 A-1 ---`.
+*   **Group:** tracks 1 to 3 in group 1, `:group 1 1-3`.
+*   **Track 4:** the kick.
+*   **Track 5, `HH`:** `Hat`, `Decay` `28`; `Level` `B0`. A `C-4` on every row, accented on each
+    beat, `XxxxXxxxXxxxXxxx`.
+*   **Track 5, FX 1:** lane `7`, then a shape on it: the command `CHA`, `From` and `To` `00`,
+    `Where` `Chance`, `Amount` `35%`. It fills the lane's seven rows; `r` before keeping it draws
+    others, and two of seven is about right.
+*   **Track 5's macro 1, `Skip`:** the generator's `Amount` on the Gen page, from `0%` to
+    `100%`, at `35%`.
 
 **Play it.**
 
@@ -1555,22 +1511,28 @@ first, plays rows `02`, `06`, `07`, `09`, `0B` and `0C`.
 
 **Build it.**
 
-1.  `:set scale=minor`, `:set root=a` and `:bpm 112`.
-2.  The lead, track 1: `Space 5`, `K` `string` `Enter`, `:name LD`. `Space 3`, `vG` on the Note
-    column, and `S`. On `Fill`, `K` `random` `Enter`; `From` `i` `a3` `Enter` and `To` `i` `a5`
-    `Enter`. On `Where`, `K` `cells` `Enter`: the panel says `Each row a cell, stepped on
-    by Vary`. `Rule` `i` `30` `Enter`, `Start` `K` `one` `Enter`, and `Vary` `K`
-    `each` `Enter`. `L` keeps it live.
-3.  The five: on tracks 2 to 6 the machines `hat`, `snare`, `modal`, `dust` and `modal` (`K`
-    `/hat` `Enter` and so on), named `HH`, `RS`, `WB`, `SH` and `LT`.
-4.  On track 2, `Space 3`, `vG` on the Note column, `W` four times to reach track 6, and `S`. The
-    panel says `Each track a cell, a row a generation`. `From` and `To` `c4`, `Where` `Cells`,
-    `Rule` `26`, `Start` `One` and `Vary` `Each pass`, then `L`: a generator on each track, each
-    its own cell.
-5.  Each its own note: on the rimshot's rows, `gl`, `From` and `To` `c3`, and `L`; the same with
-    `e4` for the woodblock, `c5` for the shaker and `a2` for the tom. Its rows stay as they were,
-    as the note doesn't change them.
-6.  Tracks 7 and 8: a `Kick` on every beat, and a `VA` bass on `A-1`, `E-1`, `C-2` and `G-1`.
+*   **Song:** A minor, 112 BPM.
+*   **Track 1, `LD`:** `String`; `Level` `C0`, `Send A` `90`, `Send B` `70`. Shape on the empty
+    Note column: `Fill` `Random`, `From` `A-3`, `To` `A-5`, `Where` `Cells`, and the panel says
+    `Each row a cell, stepped on by Vary`. `Rule` 30, `Start` `One`, `Vary` `Each pass`.
+*   **Tracks 2 to 6,** each with an empty phrase of 16 rows:
+
+    | Track | Machine | Settings | Its note |
+    |---|---|---|---|
+    | 2, `HH` | `Hat` | `Decay` `28`; `Level` `A8` | `C-4` |
+    | 3, `RS` | `Snare` | `Level` `A0` | `C-3` |
+    | 4, `WB` | `Modal` | `Level` `A0`, `Send B` `70` | `E-4` |
+    | 5, `SH` | `Dust` | `Level` `90` | `C-5` |
+    | 6, `LT` | `Modal` | `Level` `B8` | `A-2` |
+
+*   **One shape across tracks 2 to 6's Note columns:** the panel says `Each track a cell, a row a
+    generation`. `From` and `To` `C-4`, `Where` `Cells`, `Rule` 26, `Start` `One`, `Vary` `Each
+    pass`: a generator on each track, each its own cell.
+*   **Each its own note,** on each track's own generator, with `gl` on its rows: `From` and `To`
+    the note in the table. Its rows stay as they were, as the note doesn't change them.
+*   **Track 7:** the kick.
+*   **Track 8, `BS`:** `VA`, `Cut` `50`, `Res` `30`; `Level` `C4`. `A-1` on rows `00`, `03` (at
+    `50`) and `08`, `E-1` on `06`, `C-2` (at `50`) on `0B` and `G-1` on `0D`.
 
 All five start from one row worked out for all of them as `S` shapes them, so they play one
 automaton, and a track's `gl` has `Rule` but no `Start`. `Seed` would draw that row from the
@@ -1646,25 +1608,24 @@ the key's chords, IV, vi, I, iii and V.
 
 **Build it.**
 
-1.  `:set scale=major`, `:set root=g` and `:bpm 92`.
-2.  The pad, track 1: `Space 5`, `K` `chord` `Enter`, `:name CH`, and on the Play device
-    `/speed` `Enter`, `=` up to `1/2`. In the phrase view, `:len 8`, a chord each half note
-    for four bars, then `vG` on the Note column and `S`. On `Fill`, `K` `/tonnetz` `Enter`: on the `Chord` voice its `Voice` is
-    `Chord`, and the last line names the chords, `C Cm G# Fm C# C#m A F#m` for `P L R L`.
-3.  `From` `i` `c3` `Enter`; `List` `i` `lrlrrlrl` `Enter`, and the last line says
-    `C Em G Bm D Bm G Em`; `Scale` `i` for `In scale`. `L` keeps it live.
-4.  The strings: tracks 2 to 4 `K` `string` `Enter`, named `LO`, `MD` and `HI`, each with a
-    phrase of 64 rows, `:len 64` (see **The loop**).
-5.  On track 2, `Space 3`, `vG` on the Note column, `W` twice to reach track 4, and `S`. `Fill`
-    `Tonnetz`: the last line starts `A voice a track`. `From` `c4`, `List` `lrlrrlrl`, `Scale`
-    `In scale`, `Where` `Euclid` with `Hits` `8`, and `L`: each track a generator of its own,
-    `Low`, `Mid` and `High`.
-6.  The arpeggio: on track 3, `gl`, `Rotate` `2`, `L`; on track 4, `Rotate` `4`.
-7.  Track 5, the bass: `K` `va` `Enter`, `:name BS`, `Speed` `1/2` and `:len 8`, then `vG`,
-    `S`, `Tonnetz`, `From` `c1`, the same list and `Scale`, and `L`; its `Voice` is `Root`, as
-    it isn't a `Chord` voice. Then a `Kick` on every beat and a `Hat` on the off-beats.
-
-The finished song also sets the pad's wave, the sends and the levels.
+*   **Song:** G major, 92 BPM.
+*   **Track 1, `CH`:** `Chord`, `Wave` `30`, `Speed` `1/2`; `Level` `A0`, `Send B` `70`.
+    Phrase: 8 rows, a chord each half note for four bars.
+*   **Shape on its empty Note column:** `Fill` `Tonnetz`. On the `Chord` voice its `Voice` is
+    `Chord`, and the last line names the chords, `C Cm G# Fm C# C#m A F#m` for `P L R L`. Then
+    `From` `C-3`, `List` `L R L R R L R L`, and the last line says `C Em G Bm D Bm G Em`, and
+    `Scale` `In scale`.
+*   **Tracks 2 to 4, `LO`, `MD` and `HI`:** `String`; `Level` `98`, `Send A` `60`. Phrase: 64
+    rows (see **The loop**).
+*   **One shape across tracks 2 to 4's Note columns:** `Fill` `Tonnetz`, and the last line starts
+    `A voice a track`. `From` `C-4`, `List` `L R L R R L R L`, `Scale` `In scale`, `Where`
+    `Euclid`, `Hits` 8: each track a generator of its own, `Low`, `Mid` and `High`.
+*   **The arpeggio,** on each track's own generator: `Rotate` 2 on track 3 and `Rotate` 4 on
+    track 4.
+*   **Track 5, `BS`:** `VA`, `Cut` `48`, `Speed` `1/2`; `Level` `B8`. Phrase: 8 rows. Shape on its
+    empty Note column: `Fill` `Tonnetz`, `From` `C-1`, the same `List` and `Scale`. Its `Voice`
+    is `Root`, as it isn't a `Chord` voice.
+*   **Track 6:** the kick. **Track 7:** the hats.
 
 **Try next.** Each track's generator is its own, so a change on one leaves the others on the
 old walk: solo the track to hear it alone, or make the same change on each.
@@ -1696,18 +1657,18 @@ Here they're two LFO shapes, `Lorenz` and `Rössler`. A cycle of `Rate` is about
 **Try it on the `turing-machine` song.** Its tune comes from a Steps slot in `Mod 4` on `Pitch
 in scale`; a `Lorenz` in its place writes a line that drifts without ever going round.
 
-1.  `Space 6` for the Mod page, and `$` `l` to `Mod 4`'s title. `b` switches the Steps slot out.
-2.  `}` down to `Mod 5`, an LFO going nowhere, and `l` `l` `l` to its `Dest`, then `K`
-    `pitch in` `Enter`, for `Pitch in scale`.
-3.  `j` `0` to its `Shape`, `K` `/lorenz` `Enter`. Its picture is the attractor seen side on,
-    its two wings an S, and `Axis` reads `x`.
-4.  `j` to its `Rate`, `K` `1 bar` `Enter`, and `j` to `Depth`, `i` `0C` `Enter`, for an octave
-    either way.
-5.  `Tab`. The tune circles a few notes for a bar or two, then flips to another register, as the
-    point flips from one wing to the other.
+On track 1's Mod page:
 
-The mode in its title is `Free`, so it runs on through the notes. `K` on the mode and `Hold`
-holds where it is at each note instead: one note of the scale each, the rhythm as written.
+*   **Mod 4:** switched out, so its Steps slot no longer moves the notes.
+*   **Mod 5:** the `LFO` it starts as, `Dest` `Pitch in scale`, `Shape` `Lorenz`, `Rate`
+    `1 bar`, `Depth` `0C`, an octave either way. Its picture is the attractor seen side on, its
+    two wings an S, and `Axis` reads `x`.
+
+`Tab`. The tune circles a few notes for a bar or two, then flips to another register, as the
+point flips from one wing to the other.
+
+The mode in its title is `Free`, so it runs on through the notes. Mode `Hold` holds where it is
+at each note instead: one note of the scale each, the rhythm as written.
 
 **Try next.**
 
