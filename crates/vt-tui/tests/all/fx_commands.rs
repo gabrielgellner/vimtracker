@@ -164,7 +164,7 @@ fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
     };
     assert!(!list(&mut app).iter().any(|label| label.starts_with("1 ")));
 
-    press(&mut app, "L="); // Distort in slot 1.
+    press(&mut app, "L4="); // Distort in slot 1.
     press(&mut app, &format!("H{}$", to_lfo(0)));
     let labels = list(&mut app);
     assert!(
@@ -192,7 +192,7 @@ fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
 #[test]
 fn stepping_dest_goes_through_a_slots_settings() {
     let (mut app, _realtime) = on_fx_page();
-    press(&mut app, "=H");
+    press(&mut app, "4=H");
     press(&mut app, &format!("{}$", to_lfo(0)));
     // Past the thirty-six a sample track has, and `Pitch` in scale beside `Pitch`, as a synth's
     // settings aren't on it.
@@ -211,7 +211,7 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
     use vt_model::settings::SettingId;
     use vt_model::step::FxCommand;
     let (mut app, _realtime) = app();
-    press(&mut app, " 5LL= 3");
+    press(&mut app, " 5LL4= 3");
     let command =
         |app: &App, step: usize| app.services.phrase_here().unwrap().steps()[step].fx[0].command;
     let setting = |at| FxCommand::Set(SettingId::slot(0, EffectKind::Distort, at).unwrap());
@@ -280,7 +280,7 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
 #[test]
 fn the_phrase_view_names_a_slots_setting_in_a_wide_column() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 5LL= 3lllllK1amnt");
+    press(&mut app, " 5LL4= 3lllllK1amnt");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "80");
     special(&mut app, KeyCode::Esc);
@@ -432,7 +432,7 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
     use vt_tui::overlays::picker::{Focus, Row};
     let (mut app, _realtime) = app();
     // Distort in slot 1, then Mod 4's Dest.
-    press(&mut app, &format!(" 5LL=H{}$K", to_lfo(0)));
+    press(&mut app, &format!(" 5LL4=H{}$K", to_lfo(0)));
     let current = |app: &App| {
         app.overlays
             .picker
