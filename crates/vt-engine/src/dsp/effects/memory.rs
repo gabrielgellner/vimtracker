@@ -12,6 +12,7 @@ use crate::dsp::dynamics::limiter::Limiter;
 use crate::dsp::effects::beads::Beads;
 use crate::dsp::effects::chorus::Chorus;
 use crate::dsp::effects::clouds::Clouds;
+use crate::dsp::effects::deck::Deck;
 use crate::dsp::effects::delay::Delay;
 use crate::dsp::effects::echo::Echo;
 use crate::dsp::effects::flanger::Flanger;
@@ -195,7 +196,7 @@ macro_rules! memories {
 memories! {
     rung: Delay(Delay), Reverb(Reverb), Chorus(Chorus), Flanger(Flanger), Tape(Tape),
         Plate(Plate), Pitch(PitchShifter), Grains(Granular), Spring(Spring), Space(Space),
-        Rotary(Rotary), Stutter(Stutter), Clouds(Clouds), Beads(Beads), Echo(Echo), Reel(Reel);
+        Rotary(Rotary), Stutter(Stutter), Clouds(Clouds), Beads(Beads), Echo(Echo), Reel(Reel), Deck(Deck);
     played_by_slot: Limit(Limiter), Warps(Warps), Reso(Resonator), Comb(Comb),
         FreqShift(FreqShifter);
 }

@@ -143,7 +143,7 @@ impl Matched {
 
 /// The playback head's losses, worked out for a speed, a gap, a spacing and a thickness.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
-struct Loss {
+pub(super) struct Loss {
     /// How many frames the gap's average is over; one or less is none.
     gap: f32,
     spacing_pair: Matched,
@@ -154,7 +154,13 @@ struct Loss {
 
 impl Loss {
     /// For a speed in inches a second and lengths in µm.
-    fn new(ips: f32, gap_um: f32, spacing_um: f32, thickness_um: f32, rate: f32) -> Self {
+    pub(super) fn new(
+        ips: f32,
+        gap_um: f32,
+        spacing_um: f32,
+        thickness_um: f32,
+        rate: f32,
+    ) -> Self {
         let speed = ips * METRES_AN_INCH;
         // A corner for a length: a share of `v / 2π l`, or none past any rate for no length.
         let corner = |share: f32, um: f32| {
@@ -176,12 +182,9 @@ impl Loss {
     }
 }
 
-/// One side's tape.
+/// One side's playback head, through its [`Loss`]: the reel's and the deck's.
 #[derive(Debug, Clone, Copy)]
-struct Side {
-    oversampler: Oversampler,
-    hysteresis: Hysteresis,
-    dc: f64,
+pub(super) struct Head {
     /// The last frames the gap reads, going round, and where the newest is.
     gap: [f32; GAP_FRAMES],
     at: usize,
@@ -191,12 +194,9 @@ struct Side {
     bump: [f32; 2],
 }
 
-impl Default for Side {
+impl Default for Head {
     fn default() -> Self {
         Self {
-            oversampler: Oversampler::default(),
-            hysteresis: Hysteresis::default(),
-            dc: 0.0,
             gap: [0.0; GAP_FRAMES],
             at: 0,
             spacing_pair: [0.0; 3],
@@ -207,26 +207,10 @@ impl Default for Side {
     }
 }
 
-impl Side {
-    /// Onto the tape: the hysteresis at four times the rate, and what it leaves magnetised taken away.
-    #[inline]
-    fn record(&mut self, x: f32, tape: &Magnetics, period: f64, dc: f64) -> f32 {
-        let Self {
-            oversampler,
-            hysteresis,
-            ..
-        } = self;
-        let magnetised = oversampler.process(x, |h| hysteresis.process(h, period, tape) as f32);
-        // In double precision, as a one-pole this slow in single stops short of what it follows,
-        // and before the makeup, so what the tape holds stays blocked as the settings move.
-        let magnetised = f64::from(magnetised);
-        self.dc += (magnetised - self.dc) * dc;
-        ((magnetised - self.dc) * tape.makeup) as f32
-    }
-
+impl Head {
     /// Off the tape, through the head's losses.
     #[inline]
-    fn play(&mut self, x: f32, loss: &Loss) -> f32 {
+    pub(super) fn play(&mut self, x: f32, loss: &Loss) -> f32 {
         self.at = (self.at + 1) % GAP_FRAMES;
         self.gap[self.at] = x;
         let mut out = x;
@@ -245,6 +229,34 @@ impl Side {
         out = loss.thickness.process(&mut self.thickness, out);
         out = loss.bump.process(&mut self.bump, out);
         within(out, -HEADROOM, HEADROOM)
+    }
+}
+
+/// One side's tape.
+#[derive(Debug, Clone, Copy, Default)]
+struct Side {
+    oversampler: Oversampler,
+    hysteresis: Hysteresis,
+    dc: f64,
+    head: Head,
+}
+
+impl Side {
+    /// Onto the tape: the hysteresis at four times the rate, and what it leaves magnetised taken
+    /// away.
+    #[inline]
+    fn record(&mut self, x: f32, tape: &Magnetics, period: f64, dc: f64) -> f32 {
+        let Self {
+            oversampler,
+            hysteresis,
+            ..
+        } = self;
+        let magnetised = oversampler.process(x, |h| hysteresis.process(h, period, tape) as f32);
+        // In double precision, as a one-pole this slow in single stops short of what it follows,
+        // and before the makeup, so what the tape holds stays blocked as the settings move.
+        let magnetised = f64::from(magnetised);
+        self.dc += (magnetised - self.dc) * dc;
+        ((magnetised - self.dc) * tape.makeup) as f32
     }
 }
 
@@ -395,7 +407,7 @@ impl Reel {
             let recorded = self.sides[side].record(sample, &self.tape, self.period, self.dc);
             self.line.write(side, recorded);
             let wobbled = self.line.hermite(side, whole, between);
-            out[side] = self.sides[side].play(wobbled, &self.loss);
+            out[side] = self.sides[side].head.play(wobbled, &self.loss);
         }
         out
     }

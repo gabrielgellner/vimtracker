@@ -1713,6 +1713,27 @@ const REEL: DeviceLayout = live(
         ),
     ],
 );
+/// How hard the tape is hit and how much it hisses, how it wobbles and how its tape fails, then
+/// on a second page how far its noise reduction mistracks. Its format is chosen in the app.
+const DECK: DeviceLayout = live(
+    "fx/deck",
+    &[
+        knobs(
+            EffectKind::Deck.name(),
+            [
+                s("drive"),
+                s("hiss"),
+                s("wow"),
+                s("flutter"),
+                s("drops"),
+                s("chew"),
+                s("mix"),
+                s("gain"),
+            ],
+        ),
+        knobs("Noise", [s("track"), __, __, __, __, __, __, __]),
+    ],
+);
 /// How long the rotors take to change, the horn's Doppler and swell, the drive and the width,
 /// with the fast and slow switch on the button under the inertia, as an organist's half-moon.
 const ROTARY: DeviceLayout = stored(
@@ -2387,6 +2408,7 @@ const BY_EFFECT: [&[&DeviceLayout]; EffectKind::COUNT] = by_kind([
     (EffectKind::Echo as usize, &[&ECHO]),
     (EffectKind::Colour as usize, &[&COLOUR]),
     (EffectKind::Reel as usize, &[&REEL]),
+    (EffectKind::Deck as usize, &[&DECK]),
 ]);
 
 /// Each mod slot's layout, by its type's [`ModKind`].
