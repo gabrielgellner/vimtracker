@@ -72,6 +72,31 @@ Press `Space 2`. The row past the end, shown as `--`, adds a phrase.
 Typing a phrase number that doesn't exist creates that phrase. Transpose is
 in semitones, up to 48 either way.
 
+### Chain order
+
+A chain plays its rows top to bottom unless its track's `Chain` and `Chain
+jump`, at the foot of the Gen page's `Phrase` device, the second shown there as
+`Jump`, say otherwise. `Chain` is the order its rows play in, from the same list
+as `:order` for a phrase's rows:
+`Forward` as written, then `Reverse`, `Up-down`, `Shuffle` and the rest, so a
+chain of four phrases in `Up-down` plays `1 2 3 4 3 2`, carrying on from where
+it was each time round. `Chain jump` is the chance, `00` to `FF`, that a row
+plays any of the chain's phrases instead, as the Play device's `Jump` does for a
+phrase's rows. Each row keeps its own length, so the chain keeps its time: a
+shorter phrase played in a longer row's place starts again from its top, and a
+longer one is cut short. Each plays with its own row's transpose.
+
+Both are read as the chain moves on to its next row and held until it moves on
+again, whether `Cue` is on or off, so a turn while a phrase plays is heard from
+the next. A step's `CORD` or `CJMP` sets them the same way: a lock still holding
+as the next row starts, on a row at or after the phrase's last note, sets that
+row alone. A macro or a mod slot can go to them too. The dealt orders and the
+jumps are drawn from the project's seed, so a render plays the same chain.
+Sections and launches still choose which chain plays, and `LST` foresees the
+phrase the next row will play, jumps and all, unless `Chain` or `Chain jump`
+changes before it starts. A chain of one phrase plays it whatever they say. The
+Roto has them on the `Phrase` device's second page.
+
 ## Sharing and copying
 
 A link, `󰌷`, after a phrase's or chain's number means it plays in more than

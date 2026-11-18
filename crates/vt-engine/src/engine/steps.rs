@@ -9,7 +9,7 @@ use vt_model::condition::{Condition, Situation, percent_comes_up};
 use vt_model::constants::{FX_SLOTS, NUDGE_TICKS, TICKS_PER_STEP};
 use vt_model::dice::{DiceStep, looped_chance};
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH, swing_ticks};
-use vt_model::order::{Dealer, WalkMove, jumped};
+use vt_model::order::{ChainMove, Dealer, Order, WalkMove, jumped};
 use vt_model::phrase::Phrase;
 use vt_model::scale::Scale;
 use vt_model::settings::{SettingId, moved_chance};
@@ -66,6 +66,9 @@ impl Engine {
         self.tracks[index].playing = self.track_chain(index);
         let place = self.track_place(index, running);
         let count = running - self.tracks[index].started;
+        // Which phrase its chain's turn plays is settled first, as every lookup of the step goes
+        // through it (decisions 423 and 424).
+        self.chain_ahead(index, place);
         // Each lane is read once a step, here, in order, so it counts along.
         let runs = self.tracks[index].lane_runs_now();
         let mut lanes = self.read_lanes(index, place, count);
@@ -421,6 +424,39 @@ impl Engine {
         });
         self.tracks[index].walk = walk;
         walk
+    }
+
+    /// How a track walks its chain in the turn the step it's working out is in (decisions 423 and
+    /// 424): its `CORD` and `CJMP` as the turn starts, what it holds or a lock still holding from
+    /// the phrase before, with what modulation adds, which the turn keeps for its later steps, so
+    /// a turn plays one phrase through and a change is heard from the next turn. The first step
+    /// worked out since its chain started takes them, wherever in a turn it is. At rest it's
+    /// nothing to look up and every chain plays as written.
+    fn chain_ahead(&mut self, index: usize, place: Option<(u32, usize)>) {
+        let state = &self.tracks[index];
+        let value = |id: SettingId| state.walk_value(id, state.held_choice(id, false));
+        let fresh = ChainMove {
+            order: value(SettingId::CHAIN_ORDER).min(Order::ALL.len() as u8 - 1),
+            jump: value(SettingId::CHAIN_JUMP),
+        };
+        let chosen = match state.chain_move {
+            Some(kept) if kept != fresh => {
+                // A turn's length is its own phrase's whatever plays in it, so where turns start
+                // is found with the chain as written.
+                let starts = place.is_some_and(|(chain, place)| {
+                    self.current.song.tracks.get(index).is_some_and(|owner| {
+                        owner
+                            .chain_position(chain, place, self.dealer(index), WalkMove::default())
+                            .is_some_and(|position| position.time == 0)
+                    })
+                });
+                if starts { fresh } else { kept }
+            }
+            _ => fresh,
+        };
+        let state = &mut self.tracks[index];
+        state.chain_move = Some(chosen);
+        state.walk.chain = chosen;
     }
 
     /// How a track's settings move its phrase's walk at the step it's working out, or last worked
@@ -1537,8 +1573,11 @@ impl Engine {
     /// pass or partway through it. What's queued counts, as on Elektron's machines a queued
     /// pattern change makes the pattern's pass its last: a chain launched on the track that lands
     /// by the pass's end, and a loop of sections waiting for its line. Then the section's end, if
-    /// it comes by then, and the chain's next phrase. A chain started again, by a reset or a
-    /// realign, isn't moving on, and nor is a window waiting for the pass under `Cue`.
+    /// it comes by then, and the chain's next phrase, as its order and jump will play it, rolled
+    /// with the die its next turn will roll (decisions 423 and 424). A chain started again, by a
+    /// reset or a realign, isn't moving on, and nor is a window waiting for the pass under `Cue`.
+    /// A pass whose turn of the chain goes on after it, as a turn longer than the phrase plays it
+    /// again, isn't the last, and one cut short by its turn's end ends there.
     fn last_pass(&self, index: usize, pending: &PendingStep, position: ChainPosition) -> bool {
         let Some((chain, place)) = pending.place else {
             return false;
@@ -1550,8 +1589,10 @@ impl Engine {
         let Some(phrase) = owner.phrases.get(&position.phrase) else {
             return false;
         };
-        // The pass ends where its last step does, on the track's grid.
-        let left = phrase.time().saturating_sub(position.time) as u64;
+        // The pass ends where its last step does, on the track's grid, or where its turn of the
+        // chain does if that's sooner.
+        let pass_left = phrase.time().saturating_sub(position.time);
+        let left = pass_left.min(position.turn_left) as u64;
         let end = pending.step + left * pending.ticks;
         let state = &self.tracks[index];
         // A launch of the chain playing starts it again, which isn't moving on.
@@ -1597,14 +1638,20 @@ impl Engine {
                 return true;
             }
         }
-        // The chain carries on, to the phrase in its next place.
-        let Some(entries) = owner.chains.get(&chain).map(|chain| &chain.entries) else {
+        // A turn longer than the phrase plays it again.
+        if pass_left < position.turn_left {
             return false;
-        };
-        let after = (1..=entries.len())
-            .map(|ahead| entries[(position.slot + ahead) % entries.len()])
-            .find(|entry| owner.phrases.contains_key(&entry.phrase));
-        after.is_some_and(|entry| entry.phrase != position.phrase)
+        }
+        // The chain carries on, to the phrase its next turn plays, as the turn's order and jump
+        // have it now.
+        owner
+            .chain_position(
+                chain,
+                place + position.turn_left,
+                self.dealer(index),
+                pending.walk,
+            )
+            .is_some_and(|next| next.phrase != position.phrase)
     }
 }
 

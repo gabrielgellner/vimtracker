@@ -5,7 +5,7 @@ use vt_model::dice::{DiceLoop, DiceSettings, DiceStep, Reseed};
 use vt_model::insert::{EffectKind, INSERTS, Insert, MAX_KEPT_PARAMS};
 use vt_model::macros::MACROS;
 use vt_model::modulation::MOD_SLOTS;
-use vt_model::order::{MOST_ORDER_NUMBER, WalkMove};
+use vt_model::order::{ChainMove, MOST_ORDER_NUMBER, WalkMove};
 use vt_model::playable::Playable;
 use vt_model::settings::{
     FADER_COUNT, FADERS, LANE_SETTINGS, MAX_MACHINE_SETTINGS, MOD_OWN_SETTINGS, PLAYED_SETTINGS,
@@ -99,6 +99,10 @@ pub(crate) struct TrackState {
     /// which the pass keeps; none until a pass takes one, and after its chain starts again
     /// (decision 402).
     pub(crate) window: Option<(u8, u8)>,
+    /// How its chain is walked in the turn it's in, its `CORD` and `CJMP` as the turn took them
+    /// at its first step, which the turn keeps; none until a turn takes them, and after its chain
+    /// starts again (decisions 423 and 424).
+    pub(crate) chain_move: Option<ChainMove>,
     /// Its dice loop: the step whose dice each place holds, filled as it plays (decision 410).
     pub(crate) dice: DiceLoop,
     /// Where its last `SED` reseeded its dice, which they're hashed from after it in place of the
@@ -371,6 +375,7 @@ impl TrackState {
             jump: None,
             walk: WalkMove::default(),
             window: None,
+            chain_move: None,
             dice: DiceLoop::default(),
             reseed: None,
             swing: None,
@@ -528,6 +533,7 @@ impl TrackState {
         self.lane_offsets = [0; FX_SLOTS];
         self.unplace_lanes();
         self.window = None;
+        self.chain_move = None;
         self.tied = false;
         self.chain_starts += 1;
     }
@@ -854,6 +860,7 @@ impl TrackState {
             y: value(SettingId::ORDER_Y).min(MOST_ORDER_NUMBER),
             length: value(SettingId::PHRASE_LENGTH),
             start: value(SettingId::PHRASE_START),
+            chain: self.chain_move.unwrap_or_default(),
         }
     }
 

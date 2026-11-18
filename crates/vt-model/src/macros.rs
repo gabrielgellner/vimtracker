@@ -16,7 +16,7 @@ use crate::groove::MOST_SWING;
 use crate::insert::INSERTS;
 use crate::lfo::phase_value;
 use crate::modulation::{MOD_SLOTS, ModKind, Polarity, depth_of, depth_value};
-use crate::order::MOST_ORDER_NUMBER;
+use crate::order::{MOST_ORDER_NUMBER, Order};
 use crate::settings::{Kind, Owner, SettingId, SettingSet};
 use crate::shape::{GenParam, MAX_BEND, Shape, ShapeColumn, curved};
 use crate::song::{FilterMode, FilterType, GlideMode, Phase, Song, Track, VoiceMode};
@@ -683,6 +683,8 @@ impl Track {
             SettingId::DICE_MUTATE => self.dice_mutate,
             SettingId::DICE_JUMP => self.dice_jump,
             SettingId::SWING => self.swing,
+            SettingId::CHAIN_ORDER => self.chain_order,
+            SettingId::CHAIN_JUMP => self.chain_jump,
             SettingId::FILTER_MODE => self.filter_mode.index(),
             SettingId::GATE_LENGTH => self.gate_length(),
             SettingId::GROOVE => self
@@ -816,6 +818,10 @@ impl Track {
                     SettingId::DICE_MUTATE => self.dice_mutate = coarse,
                     SettingId::DICE_JUMP => self.dice_jump = coarse,
                     SettingId::SWING => self.swing = coarse.min(MOST_SWING),
+                    SettingId::CHAIN_ORDER => {
+                        self.chain_order = coarse.min(Order::ALL.len() as u8 - 1);
+                    }
+                    SettingId::CHAIN_JUMP => self.chain_jump = coarse,
                     SettingId::FILTER_MODE => {
                         self.filter_mode =
                             FilterMode::ALL[usize::from(coarse).min(FilterMode::ALL.len() - 1)];

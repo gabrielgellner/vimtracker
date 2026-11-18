@@ -21,7 +21,7 @@ use crate::insert::{INSERTS, Insert};
 use crate::lane::LaneMove;
 use crate::macros::{MACROS, Macro, MacroMap, MacroTarget};
 use crate::modulation::{MOD_SLOTS, ModSlot, default_mods};
-use crate::order::{Deal, Dealer, WalkMove};
+use crate::order::{ChainMove, Deal, Dealer, Order, WalkMove};
 use crate::scale::Scale;
 use crate::settings::{Owner, SettingId};
 use crate::shape::Source;
@@ -286,6 +286,14 @@ pub struct Track {
     /// groove, from `00`, 50.0%, to `FA`, 75.0%, a tenth of a percent a step (decision 420).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub swing: u8,
+    /// Where held `CORD` starts: the order its chain's turns are walked in, a place in
+    /// [`Order::ALL`](crate::order::Order::ALL), `00` forward as written (decision 423).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub chain_order: u8,
+    /// Where held `CJMP` starts: the chance each turn of its chain plays any of the chain's
+    /// phrases instead (decision 424).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub chain_jump: u8,
     /// The choke group it's in, if any, from 1 to `CHOKE_GROUPS`: a note on it cuts off what's
     /// sounding on the other tracks in the group, as a closed hat cuts an open one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -532,6 +540,8 @@ impl Track {
             TrackControl::DiceMutate => self.dice_mutate,
             TrackControl::DiceJump => self.dice_jump,
             TrackControl::Swing => self.swing,
+            TrackControl::ChainOrder => self.chain_order,
+            TrackControl::ChainJump => self.chain_jump,
         }
     }
 
@@ -565,6 +575,8 @@ impl Track {
             TrackControl::DiceMutate => &mut self.dice_mutate,
             TrackControl::DiceJump => &mut self.dice_jump,
             TrackControl::Swing => &mut self.swing,
+            TrackControl::ChainOrder => &mut self.chain_order,
+            TrackControl::ChainJump => &mut self.chain_jump,
         };
         *held = match control {
             TrackControl::SendA | TrackControl::SendB => value.min(MAX_LEVEL),
@@ -659,7 +671,10 @@ impl Track {
     /// position is past its end. Which time round it is says how far each phrase's order has
     /// walked, as each pass of a phrase carries its walk on from the last, and deals any phrase in
     /// it whose order is dealt, from the track's dealer. `walk` is how the track's settings move
-    /// each phrase's walk as the step is about to play (decision 400).
+    /// each phrase's walk as the step is about to play (decision 400), and which phrase each turn
+    /// of the chain plays (decisions 423 and 424): a turn keeps its own phrase's length, so a
+    /// phrase of another length played in it starts again from its top at the turn's length's
+    /// end or is cut short there.
     pub fn chain_position(
         &self,
         chain: u32,
@@ -673,25 +688,38 @@ impl Track {
         }
         let lap = step / total;
         let mut remaining = step % total;
-        let chain = self.chains.get(&chain)?;
-        for (slot, entry) in chain.entries.iter().enumerate() {
+        let entries = &self.chains.get(&chain)?.entries;
+        for (turn, entry) in entries.iter().enumerate() {
             let Some(phrase) = self.phrases.get(&entry.phrase) else {
                 continue;
             };
             let time = phrase.time();
             if remaining < time {
-                let deal = dealer.deal(lap as i64, slot);
-                let visit = phrase.walk_at(lap, remaining, deal, walk)?;
+                let deal = dealer.deal(lap as i64, turn);
+                let (slot, entry, phrase, pass, at, deal) = if walk.chain.is_own() {
+                    (turn, *entry, phrase.as_ref(), lap, remaining, deal)
+                } else {
+                    let turns = self.timed(entries).count();
+                    let nth = self.timed(entries).position(|(at, ..)| at == turn)?;
+                    let heard = walk.chain.heard(dealer, lap, turns, nth);
+                    let (slot, entry, phrase) = self.timed(entries).nth(heard)?;
+                    let again = remaining / phrase.time();
+                    let at = remaining % phrase.time();
+                    (slot, *entry, phrase, lap + again, at, deal.again(again))
+                };
+                let visit = phrase.walk_at(pass, at, deal, walk)?;
                 return Some(ChainPosition {
                     slot,
                     phrase: entry.phrase,
                     step: visit.row,
                     pulse: visit.pulse,
                     transpose: entry.transpose,
-                    time: remaining,
+                    time: at,
                     visit: visit.visit,
                     deal,
                     walk,
+                    turn,
+                    turn_left: time - remaining,
                 });
             }
             remaining -= time;
@@ -699,9 +727,21 @@ impl Track {
         None
     }
 
+    /// A chain's entries whose phrases take time, the turns its order walks, with where each is.
+    fn timed<'a>(
+        &'a self,
+        entries: &'a [ChainEntry],
+    ) -> impl Iterator<Item = (usize, &'a ChainEntry, &'a Phrase)> + 'a {
+        entries.iter().enumerate().filter_map(|(at, entry)| {
+            let phrase = self.phrases.get(&entry.phrase)?;
+            (phrase.time() > 0).then_some((at, entry, phrase.as_ref()))
+        })
+    }
+
     /// Where a slot and a row of its phrase's loop fall in a chain, if the chain still has them,
     /// on a time round it: where that pass of the phrase's walk plays the row at this pulse,
-    /// nearest to `near` steps into the pass, or `near` itself if the pass doesn't play the row.
+    /// nearest to `near` steps into the pass, or `near` itself if the pass doesn't play the row,
+    /// in the turn it played in, within the turn's length.
     pub fn chain_place(
         &self,
         chain: u32,
@@ -712,19 +752,20 @@ impl Track {
     ) -> Option<usize> {
         let entries = &self.chains.get(&chain)?.entries;
         let phrase = self.phrases.get(&entries.get(at.slot)?.phrase)?;
+        let turn = self.phrases.get(&entries.get(at.turn)?.phrase)?;
         if at.row >= phrase.len() {
             return None;
         }
-        let before: usize = entries[..at.slot]
+        let before: usize = entries[..at.turn]
             .iter()
             .filter_map(|entry| self.phrases.get(&entry.phrase))
             .map(|phrase| phrase.time())
             .sum();
-        let deal = dealer.deal(lap as i64, at.slot);
+        let deal = dealer.deal(lap as i64, at.turn);
         let place = phrase
             .place_in_pass(at.row, at.pulse, lap, at.near, deal, walk)
             .unwrap_or_else(|| at.near.min(phrase.time().saturating_sub(1)));
-        Some(before + place)
+        Some(before + place.min(turn.time().saturating_sub(1)))
     }
 
     /// How its own settings move its phrases' walks, before any step's lock or modulation: its
@@ -737,6 +778,10 @@ impl Track {
             y: self.order_y,
             length: self.phrase_length,
             start: self.phrase_start,
+            chain: ChainMove {
+                order: self.chain_order.min(Order::ALL.len() as u8 - 1),
+                jump: self.chain_jump,
+            },
         }
     }
 
@@ -812,6 +857,8 @@ impl Default for Track {
             dice_mutate: 0,
             dice_jump: 0,
             swing: 0,
+            chain_order: 0,
+            chain_jump: 0,
             choke: None,
             group: None,
             gate_length: None,
@@ -1055,6 +1102,8 @@ pub struct Chain {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RowPlace {
     pub slot: usize,
+    /// The chain's turn it played in, its own slot unless the chain's order or jump moved it.
+    pub turn: usize,
     pub row: usize,
     pub pulse: usize,
     pub near: usize,
@@ -1078,6 +1127,11 @@ pub struct ChainPosition {
     pub deal: Deal,
     /// How the track's settings moved the phrase's walk to find it (decision 400).
     pub walk: WalkMove,
+    /// The chain's turn it's in, the slot whose length it keeps: `slot` unless the chain's order
+    /// or jump plays another slot's phrase in it (decisions 423 and 424).
+    pub turn: usize,
+    /// How many steps the turn has left, this one among them, before the chain moves on.
+    pub turn_left: usize,
 }
 
 impl ChainPosition {
@@ -1085,6 +1139,7 @@ impl ChainPosition {
     pub fn row_place(&self) -> RowPlace {
         RowPlace {
             slot: self.slot,
+            turn: self.turn,
             row: self.step,
             pulse: self.pulse,
             near: self.time,
@@ -1957,6 +2012,7 @@ mod tests {
         let row = lap(1)[3];
         let place = RowPlace {
             slot: 0,
+            turn: 0,
             row,
             pulse: 0,
             near: 0,
@@ -2000,6 +2056,7 @@ mod tests {
         assert_eq!(at(6), (0, 0, 0), "and round again");
         let place = |slot, row| RowPlace {
             slot,
+            turn: slot,
             row,
             pulse: 0,
             near: 0,
@@ -2033,6 +2090,7 @@ mod tests {
         let found = |chain, slot, row| {
             let place = RowPlace {
                 slot,
+                turn: slot,
                 row,
                 pulse: 0,
                 near: 0,
