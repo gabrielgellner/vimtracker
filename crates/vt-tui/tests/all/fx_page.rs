@@ -74,7 +74,9 @@ fn the_effects_list_shows_them_by_group_and_each_sets_its_own() {
         ("Dynamics", vec!["Comp", "Limit"]),
         (
             "Tone & drive",
-            vec!["EQ3", "Distort", "Tape", "Reel", "Exciter", "Colour"],
+            vec![
+                "EQ3", "Distort", "Tape", "Reel", "Deck", "Exciter", "Colour",
+            ],
         ),
         ("Filter", vec!["LPG", "Vowel"]),
         ("Modulation", vec!["Chorus", "Phaser", "Flanger", "Rotary"]),

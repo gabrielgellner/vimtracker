@@ -199,6 +199,18 @@ fn moved(kind: EffectKind) -> Insert {
             mix: 0xE0,
             ..vt_model::insert::Reel::DEFAULT
         }),
+        EffectKind::Deck => Insert::Deck(vt_model::insert::Deck {
+            kind: vt_model::insert::DeckType::Worn,
+            drive: 0xB0,
+            hiss: 0x90,
+            wow: 0xA0,
+            flutter: 0x80,
+            drops: 0x80,
+            chew: 0x60,
+            track: 0x90,
+            mix: 0xE0,
+            ..vt_model::insert::Deck::DEFAULT
+        }),
         _ => panic!("{kind:?} needs its settings moved here, for its golden"),
     }
 }

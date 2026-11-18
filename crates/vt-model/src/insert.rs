@@ -177,6 +177,7 @@ effects! {
     Echo(Echo),
     Colour(Colour),
     Reel(Reel),
+    Deck(Deck),
     Hall(Hall),
 }
 

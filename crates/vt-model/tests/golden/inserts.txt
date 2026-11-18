@@ -28,4 +28,5 @@ Beads | Beads((mode:Granular,time:64,size:168,shape:170,pitch:24,density:204,clo
 Space Echo | Echo((mode:4,rate:105,sync:0,inertia:0,intensity:74,input:128,wow:13,bass:128,treble:128,reverb:64,echo:255,mix:128,gain:224))
 Colour | Colour((kind:Warm,drive:64,even:64,hard:0,emph:128,iron:64,mix:255,gain:224))
 Reel | Reel((drive:128,sat:128,bias:128,speed:2,gap:64,space:48,thick:48,wow:64,flutter:64,mix:255,gain:224))
+Deck | Deck((kind:Cassette,drive:128,hiss:64,wow:64,flutter:64,drops:0,chew:0,track:32,mix:255,gain:224))
 Hall | Hall((pre:8,decay:96,lows:152,damp:64,size:128,early:128,excursion:128,low_cut:0,high_cut:255,width:255,mix:128,gain:224))
