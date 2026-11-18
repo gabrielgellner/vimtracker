@@ -765,6 +765,51 @@ mod tests {
         total
     }
 
+    /// Each track's chain of five phrases, one of them shorter, walked through every order with
+    /// its jump turned every block, from step 0 so turns start often (decisions 423 and 424).
+    #[test]
+    fn the_chain_walk_moving_every_block_never_allocates_in_the_callback() {
+        use vt_model::song::{Chain, ChainEntry};
+        let chained = || {
+            let mut song = song(8, 4);
+            for track in song.tracks.iter_mut().take(8) {
+                let mut short = (**track.phrases.get(&0).unwrap()).clone();
+                short.set_len(2);
+                track.phrases.insert(1, Arc::new(short));
+                let entries = [0, 1, 0, 0, 1]
+                    .map(|phrase| ChainEntry {
+                        phrase,
+                        transpose: 0,
+                    })
+                    .to_vec();
+                track.chains.insert(
+                    0,
+                    Arc::new(Chain {
+                        entries,
+                        label: String::new(),
+                    }),
+                );
+            }
+            song
+        };
+        let pool = samples();
+        let engine = Engine::new(48_000, published(chained(), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 0..200 {
+            let mut next = chained();
+            for (at, track) in next.tracks.iter_mut().take(8).enumerate() {
+                track.chain_order = ((round + at) % 30) as u8;
+                track.chain_jump = ((round * 37 + at * 11) % 256) as u8;
+            }
+            handle.publish(published(next, &pool));
+            violations += blocks(&mut rt, 1);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
     /// Lanes changing, their divisions too, and each track's `Length` and `Rate` for every FX
     /// column turned every block, with `Cue` on for half the tracks (decision 402).
     #[test]

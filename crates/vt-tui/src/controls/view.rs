@@ -24,7 +24,7 @@ use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lane::{LANE_RATES, LaneMove, RATE_AS_WRITTEN, length_rows};
 use vt_model::listed::Listed;
 use vt_model::modulation::{MOD_SLOTS, ModField, ModKind, default_mod, note_shape_slot};
-use vt_model::order::ORDER_AS_WRITTEN;
+use vt_model::order::{CHAIN_ORDER_NAMES, ORDER_AS_WRITTEN, Order};
 use vt_model::param::{Descriptor, HEX_JUMP, NUMBER, PERCENT, Reading, kept};
 use vt_model::settings::meanings as own;
 use vt_model::settings::{
@@ -308,6 +308,7 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
             .text(meanings[at].to_owned())
         }
         Control::Base(TrackControl::DiceLoop) => dice_loop_view(of, track),
+        Control::Base(TrackControl::ChainOrder) => chain_order_view(of, track),
         Control::Base(which) => {
             let value = track.control(which);
             ParamView {
@@ -971,6 +972,37 @@ fn dice_loop_view(of: ParamView, track: &Track) -> ParamView {
         false,
     )
     .text(shown)
+}
+
+/// The track's chain's `Order`, from the list of orders, `Forward` as written (decision 423).
+fn chain_order_view(of: ParamView, track: &Track) -> ParamView {
+    let order = track.walk().chain.order();
+    let at = usize::from(track.chain_order).min(Order::ALL.len() - 1);
+    let shown = match at {
+        0 => "Forward: the chain plays its phrases as written".to_owned(),
+        _ => format!(
+            "{order}: the chain's phrases, {}",
+            lower_first(order.meaning())
+        ),
+    };
+    of.listed(
+        CHAIN_ORDER_NAMES
+            .iter()
+            .zip(Order::ALL)
+            .map(|(name, order)| Choice::named(*name).meaning(order.meaning())),
+        at,
+        0,
+        false,
+    )
+    .text(shown)
+}
+
+/// A sentence with its first letter in lower case, to follow a colon.
+fn lower_first(text: &str) -> String {
+    let mut chars = text.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_lowercase().chain(chars).collect()
+    })
 }
 
 /// One of an FX column's lane's settings: `Length` in rows either side of none, centred as

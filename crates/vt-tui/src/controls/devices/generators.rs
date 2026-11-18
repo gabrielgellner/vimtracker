@@ -180,7 +180,8 @@ impl DeviceSpec {
 
     /// The track's settings that move the walk of its phrases' rows, `Order`, `Reverse`,
     /// `Order X` and `Order Y`, with the window's `Length` and `Start` and its `Cue` under them,
-    /// as a device of their own, `Phrase` (decisions 400 to 402).
+    /// and the chain's `Order` and `Jump` at the foot, as a device of their own, `Phrase`
+    /// (decisions 400 to 402, 423 and 424).
     pub(crate) fn phrase() -> Self {
         let mut grid = [[None; DEVICE_COLUMNS]; GRID_ROWS];
         for (column, control) in WALK_CONTROLS.into_iter().enumerate() {
@@ -191,6 +192,9 @@ impl DeviceSpec {
         grid[1][1] = Some(Control::Base(TrackControl::PhraseStart));
         // Whether a turn of the window, or of a lane's, waits for its loop (decision 402).
         grid[1][2] = Some(Control::Base(TrackControl::Cue));
+        // The walk of the chain's phrases under the walk of their rows (decisions 423 and 424).
+        grid[2][0] = Some(Control::Base(TrackControl::ChainOrder));
+        grid[2][1] = Some(Control::Base(TrackControl::ChainJump));
         Self {
             identity: PHRASE.to_owned(),
             switchable: false,

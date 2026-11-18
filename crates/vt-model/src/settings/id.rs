@@ -241,6 +241,11 @@ impl SettingId {
     /// How late the second step of each pair of a track's lands, on top of its groove, from
     /// 50.0% at `00` to 75.0% at `FA`, as [`crate::groove::swing_tenths`] reads it (decision 420).
     pub const SWING: Self = Self(LATER_TRACK_START as u16 + 23);
+    /// The order a track's chain's turns are walked in, a place in the list of orders, `00`
+    /// forward as written (decision 423).
+    pub const CHAIN_ORDER: Self = Self(LATER_TRACK_START as u16 + 24);
+    /// The chance each turn of a track's chain plays any of its phrases instead (decision 424).
+    pub const CHAIN_JUMP: Self = Self(LATER_TRACK_START as u16 + 25);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.

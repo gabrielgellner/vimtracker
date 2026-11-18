@@ -1448,6 +1448,10 @@ trunk's `Followed by 1`.
     eight bars, so the last branch is always new.
 *   Map a macro to `Mutation` on the Gen page with `M`, and one knob turns every branch at once.
 *   `Space g a` on a branch keeps it as plain notes, to edit by hand; it stops following.
+*   Bloom's `Path` live, track 1's Gen page, `Phrase` device: `Chain` `Shuffle`, the eight bars
+    dealt in a new order each time round; `Chain` `Up-down`, out to branch `04` and back;
+    the `Jump` beside it `40`, now and then a bar plays any of the nine. A macro mapped to `Chain` with
+    `M` turns the path from a knob.
 
 ## Shuffling Clock Multiplier
 
