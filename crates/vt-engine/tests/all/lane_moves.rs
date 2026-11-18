@@ -401,3 +401,32 @@ fn cue_leaves_a_lane_as_it_was_until_something_turns() {
     let at_once = sends(&mut engine(&original), 40);
     assert_eq!(at_once, sends(&mut engine(&cued(original)), 40));
 }
+
+
+#[test]
+fn an_lfo_moves_a_lanes_rate_across_its_list() {
+    // A square LFO of depth `10`, a sixteenth of the way up, on a lane of a row every 8 steps,
+    // moves `Rate` two places either way from `×1` along its 31, to `×3` and `÷3`, rather than
+    // `10` places of `FF`, which went to the list's ends.
+    let mut lfo_song = song(vec![four(8)]);
+    lfo_song.tracks[0].mods[3] = ModSlot::lfo(
+        SettingId::lane(0, 1),
+        Lfo {
+            shape: Shape::Square,
+            rate: Rate::Steps(16),
+            ..Lfo::default()
+        },
+    )
+    .with_depth(0x10);
+    let mut lfo = engine(&lfo_song);
+    let mut heard: Vec<usize> = (0..32)
+        .map(|_| {
+            step(&mut lfo);
+            lfo.track_heard(0).lanes[0].unwrap().heard.division
+        })
+        .collect();
+    heard.sort_unstable();
+    heard.dedup();
+    // `×3` is 8 ÷ 3, rounded, and `÷3` 24, kept to 16.
+    assert_eq!(heard, [3, 16]);
+}
