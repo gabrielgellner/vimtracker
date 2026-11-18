@@ -94,7 +94,10 @@ fn a_row_cdlt_thins_takes_its_kil_off_and_locks_with_it() {
     for row in ["C-3 -- kil:00", "C-3 -- off:00", "C-3 -- vol:00"] {
         // `00` thins every note away; at `80` none is.
         let thinned = format!("{row} chancedelta:00");
-        assert!(level(&song(&thinned, 0x80, 0, 0)) > 0.1, "{row} thinned acted");
+        assert!(
+            level(&song(&thinned, 0x80, 0, 0)) > 0.1,
+            "{row} thinned acted"
+        );
         let kept = format!("{row} chancedelta:80");
         assert!(level(&song(&kept, 0x80, 0, 0)) < 0.001, "{row} kept didn't");
     }
