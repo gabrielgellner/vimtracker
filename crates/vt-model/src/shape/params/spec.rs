@@ -41,8 +41,9 @@ impl GenParam {
 
     /// Whether the engine can hold it as it plays, so a macro's lock or modulation reaches it
     /// (decision 300): not a list setting, whose choices are a `Vec` built as they're asked for,
-    /// nor a `List`'s values or a `Random`'s weights, which have no number. A macro on `Wave` or
-    /// `Rate` writes its column by hand instead.
+    /// nor a `List`'s values or a `Random`'s `Weights` typed at once, which have no number, though
+    /// each weight is a setting of its own (decision 425). A macro on `Wave` or `Rate` writes its
+    /// column by hand instead.
     pub const fn held_in_engine(self) -> bool {
         self.spec().engine
     }
@@ -126,6 +127,26 @@ impl GenParam {
             Self::Steps | Self::Weights => {
                 kind == FillKind::Random && matches!(column, ShapeColumn::Note { .. })
             }
+            Self::Weight1
+            | Self::Weight2
+            | Self::Weight3
+            | Self::Weight4
+            | Self::Weight5
+            | Self::Weight6
+            | Self::Weight7
+            | Self::Weight8
+            | Self::Weight9
+            | Self::Weight10
+            | Self::Weight11
+            | Self::Weight12 => match column {
+                ShapeColumn::Note { scale, .. } => {
+                    kind == FillKind::Random
+                        && self
+                            .weight_degree()
+                            .is_some_and(|at| at < degree_count(scale))
+                }
+                _ => false,
+            },
             Self::Factor | Self::Masks => kind == FillKind::Multiply,
             Self::Part => grids && shape.grids.part.is_some(),
             Self::Pitch => (grids || divisions) && generates,
@@ -342,12 +363,50 @@ impl GenParam {
         }
     }
 
-    /// The settings a shape has on a column, in order.
+    /// The settings a shape has on a column, in order, as the shape panel's rows: each of a
+    /// `Random`'s weights is a digit of its `Weights` row there, not a row of its own.
     pub fn of(shape: &Shape, column: ShapeColumn, generates: bool) -> Vec<Self> {
         Self::ALL
             .into_iter()
+            .filter(|param| param.weight_degree().is_none())
             .filter(|param| param.exists_for(shape, column, generates))
             .collect()
+    }
+
+    /// Each of a `Random`'s weights, by its degree from the root, as settings of their own.
+    pub const WEIGHTS: [Self; WEIGHTS] = [
+        Self::Weight1,
+        Self::Weight2,
+        Self::Weight3,
+        Self::Weight4,
+        Self::Weight5,
+        Self::Weight6,
+        Self::Weight7,
+        Self::Weight8,
+        Self::Weight9,
+        Self::Weight10,
+        Self::Weight11,
+        Self::Weight12,
+    ];
+
+    /// The degree from the root it's the weight of, if it's one of a `Random`'s weights.
+    pub fn weight_degree(self) -> Option<usize> {
+        Self::WEIGHTS.iter().position(|each| *each == self)
+    }
+
+    /// Where a `Random`'s weights sit on the Gen page, on a device of their own under the fill's,
+    /// as its grid is full: a cell each for the degrees its column's scale has, in rows of four
+    /// from the root, so twelve fill it. None for a shape without them.
+    pub fn weights_grid(shape: &Shape, column: ShapeColumn) -> Option<Grid<Self>> {
+        let has = |param: Self| param.exists_for(shape, column, false).then_some(param);
+        if !Self::Weights.exists_for(shape, column, false) {
+            return None;
+        }
+        let mut columns = [[None; GRID_ROWS]; GRID_COLUMNS];
+        for (at, param) in Self::WEIGHTS.into_iter().enumerate() {
+            columns[at % GRID_COLUMNS][at / GRID_COLUMNS] = has(param);
+        }
+        Some(Grid::from_columns(&columns))
     }
 
     /// Its value as the panel shows it: a note's name, `+20` for a bend, `9 of 16` for hits.
@@ -490,6 +549,18 @@ impl GenParam {
                 ShapeColumn::Note { scale, .. } => shape.random.weights_text(scale),
                 _ => String::new(),
             },
+            Self::Weight1
+            | Self::Weight2
+            | Self::Weight3
+            | Self::Weight4
+            | Self::Weight5
+            | Self::Weight6
+            | Self::Weight7
+            | Self::Weight8
+            | Self::Weight9
+            | Self::Weight10
+            | Self::Weight11
+            | Self::Weight12 => format!("{:X}", number().unwrap_or(0)),
             Self::Factor => shape.bits.factor.to_string(),
             Self::Masks => on_off(shape.bits.masks),
             Self::Part => shape
@@ -563,6 +634,9 @@ impl GenParam {
     pub fn brief(self, shape: &Shape, context: &Context) -> String {
         let number = || self.number(shape, context);
         match self.reading() {
+            _ if self.weight_degree().is_some() => {
+                number().map_or_else(String::new, |weight| format!("{weight:X}"))
+            }
             _ if self.is_loop() => match number() {
                 Some(0) | None => "Off".to_owned(),
                 Some(rows) => rows.to_string(),
@@ -849,6 +923,24 @@ impl GenParam {
             Self::Bias => shape.random.bias = Random::default().bias,
             Self::Steps => shape.random.steps = Random::default().steps,
             Self::Weights => shape.random.weights = Random::default().weights,
+            Self::Weight1
+            | Self::Weight2
+            | Self::Weight3
+            | Self::Weight4
+            | Self::Weight5
+            | Self::Weight6
+            | Self::Weight7
+            | Self::Weight8
+            | Self::Weight9
+            | Self::Weight10
+            | Self::Weight11
+            | Self::Weight12 => {
+                let start = Shape {
+                    random: Random::default(),
+                    ..*shape
+                };
+                self.take(shape, context, &start);
+            }
             Self::Factor => shape.bits.factor = Bits::default().factor,
             Self::Masks => shape.bits.masks = Bits::default().masks,
             Self::Part => shape.grids.part = Some(starts.part.unwrap_or_default()),
@@ -1109,6 +1201,21 @@ impl GenParam {
                 }
                 return Ok(());
             }
+            Self::Weight1
+            | Self::Weight2
+            | Self::Weight3
+            | Self::Weight4
+            | Self::Weight5
+            | Self::Weight6
+            | Self::Weight7
+            | Self::Weight8
+            | Self::Weight9
+            | Self::Weight10
+            | Self::Weight11
+            | Self::Weight12 => match u8::from_str_radix(text.trim(), 16) {
+                Ok(weight) if within(weight.into()) => weight.into(),
+                _ => return Err("A weight is a hex digit, from 0, never, to F"),
+            },
             Self::Depth => match text.parse::<u8>() {
                 Ok(depth) if within(depth.into()) => depth.into(),
                 _ => return Err("Depth runs from 2 to 8"),

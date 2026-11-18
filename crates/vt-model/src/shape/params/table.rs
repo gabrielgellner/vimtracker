@@ -28,6 +28,26 @@ macro_rules! gen_params {
     };
 }
 
+/// One of a `Random`'s weights, by its degree from the root: a hex digit from 0, never, to
+/// [`MAX_WEIGHT`], the most, which the engine holds as it plays.
+macro_rules! weight {
+    ($at:literal, $key:literal, $name:literal) => {
+        GenParamSpec {
+            meaning: "how often this degree comes, from 0, never, to F, the most",
+            key: $key,
+            name: $name,
+            units: Reading::Number,
+            typing: Typing::Hex,
+            bounds: Bounds::Fixed(0, MAX_WEIGHT as i32),
+            stepping: stops(1, DIGIT_JUMP),
+            engine: true,
+            app_only: false,
+            get: |shape, _| Some(i32::from(shape.random.weights[$at])),
+            set: |shape, _, number| shape.random.weights[$at] = number as u8,
+        }
+    };
+}
+
 gen_params! {
     /// What goes in the rows, which decides the rest.
     Fill => GenParamSpec {
@@ -521,6 +541,21 @@ gen_params! {
         get: |_, _| None,
         set: |_, _, _| {},
     },
+    /// Each of `Weights`' digits as a setting of its own, by its degree from the root, so a macro,
+    /// its lock and its modulation reach one (decision 425). The panel's row and the Gen page's
+    /// `Weights` type them all at once; the Gen page's `Weights` device has one cell each.
+    Weight1 => weight!(0, "weight1", "Weight 1"),
+    Weight2 => weight!(1, "weight2", "Weight 2"),
+    Weight3 => weight!(2, "weight3", "Weight 3"),
+    Weight4 => weight!(3, "weight4", "Weight 4"),
+    Weight5 => weight!(4, "weight5", "Weight 5"),
+    Weight6 => weight!(5, "weight6", "Weight 6"),
+    Weight7 => weight!(6, "weight7", "Weight 7"),
+    Weight8 => weight!(7, "weight8", "Weight 8"),
+    Weight9 => weight!(8, "weight9", "Weight 9"),
+    Weight10 => weight!(9, "weight10", "Weight 10"),
+    Weight11 => weight!(10, "weight11", "Weight 11"),
+    Weight12 => weight!(11, "weight12", "Weight 12"),
     /// What `Multiply` multiplies the rhythm by, and whether factors 2 and 3 mask it first.
     Factor => GenParamSpec {
         meaning: "what the rhythm, read as a number, is multiplied by",
