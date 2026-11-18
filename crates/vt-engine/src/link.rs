@@ -1712,7 +1712,7 @@ mod tests {
         while handle.freed.pop().is_ok() {
             freed += 1;
         }
-        assert_eq!(freed, 20);
+        assert_eq!(freed, 21);
     }
 
     #[test]
