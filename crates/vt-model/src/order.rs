@@ -853,6 +853,166 @@ pub fn lane_held(dealer: Dealer, column: usize, lap: i64, row: usize, chance: f3
     ((roll >> 40) as f32 / (1u64 << 24) as f32) < chance
 }
 
+/// Keeps a lane's order's deals apart from its jumps and holds.
+const LANE_ORDER_STREAM: u64 = 0x6c6f_7264_0000_0000;
+
+/// How a track walks an FX column's lane's rows, as its settings have it as each of the lane's
+/// rows starts (decision 431): `order` a place in [`Order::ALL`], `00` forward as written, as a
+/// chain's `Order` is, and `reverse` turning the walk the other way up, as `REV` turns a
+/// phrase's. The order walks the rows the lane is heard for, from its `Start`, and the lap stays
+/// the lane's length, so an order whose round is longer drifts across the laps.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LaneOrder {
+    pub order: u8,
+    pub reverse: bool,
+}
+
+/// Where a lane's order last walked to, kept by the lane as it plays so its next row is a step on
+/// from it rather than worked out from the lap's first: what `Brownian` and `Quasi-random` pick
+/// from, and the cell a grid order is on. It's only a shortcut, so it's the same as working the
+/// row out from the top; none after the lane is placed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LaneWalked {
+    order: Order,
+    rows: usize,
+    deal: Deal,
+    /// The visit it walked, among the lap's for a dealt order, among the round's for a grid's.
+    visit: usize,
+    /// The place of the round it was at, a grid's cell.
+    place: usize,
+    /// The row it walked to.
+    row: usize,
+    /// How many of a grid's cells are rows.
+    visits: usize,
+}
+
+impl LaneOrder {
+    /// Whether it walks every lane as it's written.
+    pub fn is_own(self) -> bool {
+        self == Self::default()
+    }
+
+    /// The order its rows are walked in.
+    pub fn order(self) -> Order {
+        Order::ALL[usize::from(self.order).min(Order::ALL.len() - 1)]
+    }
+
+    /// The row, among the `rows` a lane is heard for, from 0, that plays at its row `row`, `lap`
+    /// times round since it was counted from: the order's visit `lap × rows + row`, which carries
+    /// on from one lap to the next as a phrase's walk does, or, for a dealt order, the lap's
+    /// `row`th pick of a deal dealt each lap from the track's `dealer` and the lane's column, so a
+    /// render, or playing from anywhere, walks the same. Then the other way up if it's reversed.
+    /// `last` is where it walked before, which it steps on from when it can and keeps.
+    pub fn walked(
+        self,
+        dealer: Dealer,
+        column: usize,
+        lap: i64,
+        row: usize,
+        rows: usize,
+        last: &mut Option<LaneWalked>,
+    ) -> usize {
+        if self.is_own() || rows <= 1 || row >= rows {
+            return row;
+        }
+        let order = self.order();
+        let walked = match order {
+            Order::Forward => row,
+            _ if order.is_dealt() => {
+                let deal = Deal(splitmix64(dealer.deal(lap, column).0 ^ LANE_ORDER_STREAM));
+                let stepped = match *last {
+                    Some(was)
+                        if order.picks()
+                            && (was.order, was.rows, was.deal) == (order, rows, deal)
+                            && was.visit + 1 == row =>
+                    {
+                        Some(order.pick(deal, rows, row, Some(was.row), 0))
+                    }
+                    _ => None,
+                };
+                let walked = stepped
+                    .or_else(|| order.row(rows, row, deal))
+                    .unwrap_or(row);
+                *last = Some(LaneWalked {
+                    order,
+                    rows,
+                    deal,
+                    visit: row,
+                    place: row,
+                    row: walked,
+                    visits: rows,
+                });
+                walked
+            }
+            Order::Snake(_) | Order::Cartesian(_) => grid_walked(order, lap, row, rows, last),
+            _ => {
+                let places = order.places(rows).max(1) as i64;
+                let visit = (lap.rem_euclid(places) * rows as i64 + row as i64).rem_euclid(places);
+                order
+                    .row(rows, visit as usize, Deal::default())
+                    .unwrap_or(row)
+            }
+        };
+        let walked = walked.min(rows - 1);
+        if self.reverse {
+            rows - 1 - walked
+        } else {
+            walked
+        }
+    }
+}
+
+/// The row a grid order walks a lane's `rows` to at its row `row`, `lap` times round: its cells
+/// past the last row are passed over, so its round is its visits, as a chain's is. A step on from
+/// `last` goes to the next cell that's a row; anywhere else counts the cells from the first.
+fn grid_walked(
+    order: Order,
+    lap: i64,
+    row: usize,
+    rows: usize,
+    last: &mut Option<LaneWalked>,
+) -> usize {
+    let deal = Deal::default();
+    let cells = order.places(rows).max(1);
+    let same = last.filter(|was| (was.order, was.rows) == (order, rows));
+    let visits = same.map_or_else(
+        || {
+            (0..cells)
+                .filter(|place| order.row(rows, *place, deal).is_some())
+                .count()
+                .max(1)
+        },
+        |was| was.visits,
+    );
+    let visit = (lap.rem_euclid(visits as i64) * rows as i64 + row as i64).rem_euclid(visits as i64)
+        as usize;
+    let found = match same {
+        Some(was) if was.visit == visit => Some((was.place, was.row)),
+        Some(was) if (was.visit + 1) % visits == visit => (1..=cells)
+            .map(|on| (was.place + on) % cells)
+            .find_map(|place| order.row(rows, place, deal).map(|row| (place, row))),
+        _ => None,
+    }
+    .or_else(|| {
+        (0..cells)
+            .filter_map(|place| order.row(rows, place, deal).map(|row| (place, row)))
+            .nth(visit)
+    });
+    let Some((place, walked)) = found else {
+        return row;
+    };
+    *last = Some(LaneWalked {
+        order,
+        rows,
+        deal,
+        visit,
+        place,
+        row: walked,
+        visits,
+    });
+    walked
+}
+
 /// A pass's roll of the dice for a visit, on a try at it.
 fn roll(deal: Deal, visit: usize, attempt: u64) -> u64 {
     splitmix64(deal.0 ^ splitmix64((visit as u64) << 8 | attempt))
@@ -1450,5 +1610,55 @@ mod tests {
             4,
             "its fourth place, row 8, is past the last"
         );
+    }
+
+    /// A lane's walk stepped on from where it last walked, as it plays, is the walk worked out
+    /// afresh at each row, for every order, any length and laps either side of the first, so the
+    /// shortcut never changes what's heard (decision 431).
+    #[test]
+    fn a_lanes_walk_stepped_on_is_its_walk_worked_out_afresh() {
+        let dealer = Dealer::new(0x5EED, 2);
+        for at in 0..Order::ALL.len() {
+            for reverse in [false, true] {
+                let walk = LaneOrder {
+                    order: at as u8,
+                    reverse,
+                };
+                for rows in 1..=13 {
+                    let mut last = None;
+                    for lap in -2..6_i64 {
+                        for row in 0..rows {
+                            let stepped = walk.walked(dealer, 1, lap, row, rows, &mut last);
+                            let afresh = walk.walked(dealer, 1, lap, row, rows, &mut None);
+                            assert_eq!(stepped, afresh, "{at} {reverse} {rows} {lap} {row}");
+                            assert!(stepped < rows);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_lanes_walk_goes_round_the_order_across_its_laps() {
+        let walk = |order: Order, reverse: bool, rows: usize, laps: i64| -> Vec<usize> {
+            let walk = LaneOrder {
+                order: Order::ALL.iter().position(|at| *at == order).unwrap() as u8,
+                reverse,
+            };
+            let mut last = None;
+            (0..laps)
+                .flat_map(|lap| (0..rows).map(move |row| (lap, row)))
+                .map(|(lap, row)| walk.walked(Dealer::default(), 0, lap, row, rows, &mut last))
+                .collect()
+        };
+        assert_eq!(walk(Order::Forward, false, 4, 2), [0, 1, 2, 3, 0, 1, 2, 3]);
+        assert_eq!(walk(Order::Forward, true, 4, 1), [3, 2, 1, 0]);
+        assert_eq!(
+            walk(Order::UpDown, false, 4, 3),
+            [0, 1, 2, 3, 2, 1, 0, 1, 2, 3, 2, 1]
+        );
+        assert_eq!(walk(Order::Pedal, false, 3, 2), [0, 1, 0, 2, 0, 1]);
+        assert!(LaneOrder::default().is_own());
     }
 }

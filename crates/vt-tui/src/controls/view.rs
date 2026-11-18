@@ -239,6 +239,7 @@ pub(crate) fn toggle_on(control: Control, track: &Track, song: &Song) -> Option<
         Control::Arpeggio(ArpField::Retrig) => Some(track.arpeggio.retrig),
         Control::Base(TrackControl::Reverse) => Some(track.reverse != 0),
         Control::Base(TrackControl::Cue) => Some(track.cue != 0),
+        Control::Lane(slot, LaneField::Reverse) => Some(track.lanes.get(slot)?.reverse),
         _ => None,
     }
 }
@@ -1029,6 +1030,16 @@ fn lane_view(of: ParamView, moved: LaneMove, slot: usize, field: LaneField) -> P
         }
         LaneField::Jump => of.hex(moved.jump, 0xFF, 0),
         LaneField::Hold => of.hex(moved.hold, 0xFF, 0),
+        LaneField::Order => of.listed(
+            CHAIN_ORDER_NAMES
+                .iter()
+                .zip(Order::ALL)
+                .map(|(name, order)| Choice::named(*name).meaning(order.meaning())),
+            usize::from(moved.order).min(Order::ALL.len() - 1),
+            0,
+            false,
+        ),
+        LaneField::Reverse => of.switch(moved.reverse, false),
         LaneField::Rate => of.listed(
             LANE_RATES.iter().map(|rate| Choice::named(*rate)),
             usize::from(moved.rate),
@@ -1078,6 +1089,19 @@ fn lane_shown(slot: usize, field: LaneField, moved: LaneMove) -> String {
                 "{chance:02X}: each row of a lane on {column} keeps the row before {}% of the time",
                 (u32::from(chance) * 100 + 127) / 255
             ),
+        },
+        LaneField::Order => match moved.walk().order() {
+            Order::Forward => format!("Forward: each lane on {column} plays its rows as written"),
+            order => format!(
+                "{order}: each lane on {column} plays its rows {}",
+                lower_first(order.meaning())
+            ),
+        },
+        LaneField::Reverse => match moved.reverse {
+            true => format!("On: each lane on {column} walks its rows the other way up"),
+            false => {
+                format!("Off: each lane on {column} walks its rows the way up they're written")
+            }
         },
         LaneField::Rate => {
             let rate = LANE_RATES[usize::from(moved.rate).min(LANE_RATES.len() - 1)];
@@ -1359,6 +1383,8 @@ pub fn set(
                 LaneField::Start => moved.start = byte,
                 LaneField::Jump => moved.jump = byte,
                 LaneField::Hold => moved.hold = byte,
+                LaneField::Order => moved.order = byte.min(Order::ALL.len() as u8 - 1),
+                LaneField::Reverse => moved.reverse = value != 0,
             }
             Action::SetLaneMove {
                 track: at,

@@ -44,6 +44,7 @@ mod key_track;
 mod lane_hold;
 mod lane_jump;
 mod lane_moves;
+mod lane_order;
 mod lanes;
 mod last_pass;
 mod lfo;

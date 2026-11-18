@@ -476,7 +476,14 @@ impl Services {
                 self.reported.places.get(track)?.count - self.reported.jam.get(track)?.started;
             Some(std::array::from_fn(|slot| {
                 let lane = phrase.lane(slot)?;
-                Some(LaneRead::placed(lane, lane.heard(owner.lanes[slot]), count))
+                let moved = owner.lanes[slot];
+                Some(LaneRead::placed(
+                    lane,
+                    lane.heard(moved),
+                    count,
+                    moved.walk(),
+                    self.dealer(track),
+                ))
             }))
         };
         found().unwrap_or([None; FX_SLOTS])

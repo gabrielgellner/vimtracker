@@ -5,6 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::constants::MAX_PHRASE_STEPS;
+use crate::order::{LaneOrder, Order};
 
 /// The most of a track's steps a lane's row lasts, as Kria's divisions go.
 pub const MOST_DIVISION: usize = 16;
@@ -145,10 +146,21 @@ pub struct LaneMove {
     /// instead of its own, so its value holds, as Kria's probability does (decision 422).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub hold: u8,
+    /// The order a lane's rows are walked in, a place in [`Order::ALL`](crate::order::Order::ALL),
+    /// `00` `Forward` as written, as a chain's `Order` is (decision 431).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub order: u8,
+    /// Whether a lane's walk is turned the other way up, as `REV` turns a phrase's (decision 431).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub reverse: bool,
 }
 
 fn is_zero(value: &u8) -> bool {
     *value == 0
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 fn length_as_written() -> u8 {
@@ -167,6 +179,8 @@ impl Default for LaneMove {
             start: 0,
             jump: 0,
             hold: 0,
+            order: 0,
+            reverse: false,
         }
     }
 }
@@ -178,25 +192,37 @@ impl LaneMove {
     }
 
     /// One of its values, by its place: 0 is `Length`, 1 is `Rate`, 2 is `Start`, 3 is `Jump`, 4
-    /// is `Hold`.
+    /// is `Hold`, 5 is `Order` and 6 is `Reverse`, `01` when on.
     pub fn value(self, at: usize) -> u8 {
         match at {
             0 => self.length,
             1 => self.rate,
             2 => self.start,
             3 => self.jump,
-            _ => self.hold,
+            4 => self.hold,
+            5 => self.order,
+            _ => u8::from(self.reverse),
         }
     }
 
-    /// Set one of its values, by its place, `Rate` kept to its list.
+    /// Set one of its values, by its place, `Rate` and `Order` kept to their lists.
     pub(crate) fn set(&mut self, at: usize, value: u8) {
         match at {
             0 => self.length = value,
             1 => self.rate = value.min(LANE_RATES.len() as u8 - 1),
             2 => self.start = value,
             3 => self.jump = value,
-            _ => self.hold = value,
+            4 => self.hold = value,
+            5 => self.order = value.min(Order::ALL.len() as u8 - 1),
+            _ => self.reverse = value != 0,
+        }
+    }
+
+    /// How it walks a lane's rows: its `Order` and `Reverse` (decision 431).
+    pub fn walk(self) -> LaneOrder {
+        LaneOrder {
+            order: self.order,
+            reverse: self.reverse,
         }
     }
 }
@@ -251,9 +277,7 @@ mod tests {
         let moved = LaneMove {
             length: 0x82,
             rate: 14,
-            start: 0,
-            jump: 0,
-            hold: 0,
+            ..LaneMove::default()
         };
         assert_eq!(
             lane.heard(moved),
@@ -296,5 +320,31 @@ mod tests {
         let text = ron::to_string(&track).unwrap();
         assert!(text.contains("lanes"), "{text}");
         assert_eq!(ron::from_str::<crate::song::Track>(&text).unwrap(), track);
+    }
+
+    #[test]
+    fn a_lanes_order_and_reverse_are_saved_only_when_moved() {
+        let still = ron::to_string(&LaneMove::default()).unwrap();
+        assert!(
+            !still.contains("order") && !still.contains("reverse"),
+            "{still}"
+        );
+        let moved = LaneMove {
+            order: 2,
+            reverse: true,
+            ..LaneMove::default()
+        };
+        let text = ron::to_string(&moved).unwrap();
+        assert!(
+            text.contains("order:2") && text.contains("reverse:true"),
+            "{text}"
+        );
+        assert_eq!(ron::from_str::<LaneMove>(&text).unwrap(), moved);
+        assert_eq!((moved.value(5), moved.value(6)), (2, 1));
+        let mut set = LaneMove::default();
+        set.set(5, 0xFF);
+        set.set(6, 1);
+        assert_eq!(set.order as usize, Order::ALL.len() - 1, "kept to the list");
+        assert!(set.reverse);
     }
 }

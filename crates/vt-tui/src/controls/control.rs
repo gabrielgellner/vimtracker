@@ -40,6 +40,8 @@ pub enum LaneField {
     Start,
     Jump,
     Hold,
+    Order,
+    Reverse,
 }
 
 impl LaneField {
@@ -53,18 +55,22 @@ impl LaneField {
             Self::Start => 2,
             Self::Jump => 3,
             Self::Hold => 4,
+            Self::Order => 5,
+            Self::Reverse => 6,
         }
     }
 }
 
 /// What the status line calls each FX column's lane's settings.
-const LANE_NAMES: [[&str; 5]; FX_SLOTS] = [
+const LANE_NAMES: [[&str; 7]; FX_SLOTS] = [
     [
         "FX1 Length",
         "FX1 Rate",
         "FX1 Start",
         "FX1 Jump",
         "FX1 Hold",
+        "FX1 Order",
+        "FX1 Reverse",
     ],
     [
         "FX2 Length",
@@ -72,6 +78,8 @@ const LANE_NAMES: [[&str; 5]; FX_SLOTS] = [
         "FX2 Start",
         "FX2 Jump",
         "FX2 Hold",
+        "FX2 Order",
+        "FX2 Reverse",
     ],
     [
         "FX3 Length",
@@ -79,6 +87,8 @@ const LANE_NAMES: [[&str; 5]; FX_SLOTS] = [
         "FX3 Start",
         "FX3 Jump",
         "FX3 Hold",
+        "FX3 Order",
+        "FX3 Reverse",
     ],
 ];
 
@@ -245,6 +255,8 @@ impl Control {
             Self::Lane(_, LaneField::Start) => "Start",
             Self::Lane(_, LaneField::Jump) => "Jump",
             Self::Lane(_, LaneField::Hold) => "Hold",
+            Self::Lane(_, LaneField::Order) => "Order",
+            Self::Lane(_, LaneField::Reverse) => "Reverse",
         }
     }
 

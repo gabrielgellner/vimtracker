@@ -442,6 +442,8 @@ fn lane_moved(song: &mut Song) {
         start: 0,
         jump: 0,
         hold: 0,
+        order: 0,
+        reverse: false,
     };
 }
 

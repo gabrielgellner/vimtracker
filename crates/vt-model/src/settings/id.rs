@@ -98,15 +98,15 @@ const LATER_TRACK_START: usize = LANES_START + FX_SLOTS * EARLY_LANE;
 const LATER_LANE_START: usize = LATER_TRACK_START + LATER_TRACK.len();
 /// The sampler's settings added after the lanes', `Reverse` (decision 412), so none moves.
 const LATER_SAMPLER_START: usize = LATER_LANE_START + FX_SLOTS;
-/// Each FX column's lane's setting added after the sampler's, `Jump` (decision 415).
+/// Each FX column's lane's settings added after the sampler's, a place for each column of one,
+/// then of the next, in the lane's order: `Jump` (decision 415), `Hold` (decision 422), `Order`
+/// and `Reverse` (decision 431).
 const LATEST_LANE_START: usize = LATER_SAMPLER_START + SAMPLER.len() - EARLY_SAMPLER;
-/// A lane's `Start` and `Jump`, each one setting a column at its own place in the table.
+/// A lane's `Start`, and its `Jump`, the first of those added after the sampler's.
 const LANE_START_AT: usize = EARLY_LANE;
 const LANE_JUMP_AT: usize = EARLY_LANE + 1;
-/// Each FX column's lane's setting added after its `Jump`, `Hold` (decision 422).
-const LAST_LANE_START: usize = LATEST_LANE_START + FX_SLOTS;
-const LANE_HOLD_AT: usize = EARLY_LANE + 2;
-const _: () = assert!(LANE.len() == LANE_HOLD_AT + 1);
+/// How many of a lane's settings were added after the sampler's.
+const LATEST_LANE: usize = LANE.len() - LANE_JUMP_AT;
 
 /// What a setting belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -261,7 +261,7 @@ impl SettingId {
     pub const SAMPLE_REVERSE: Self = Self(LATER_SAMPLER_START as u16);
 
     /// How many settings there are.
-    pub const COUNT: usize = LAST_LANE_START + FX_SLOTS;
+    pub const COUNT: usize = LATEST_LANE_START + LATEST_LANE * FX_SLOTS;
 
     /// Every setting, in the table's order.
     pub fn all() -> impl Iterator<Item = Self> {
@@ -376,7 +376,8 @@ impl SettingId {
     }
 
     /// One of an FX column's lane's: 0 is `Length`, 1 is `Rate`, 2 is `Start`, whose places come
-    /// after the track's own added later, and 3 is `Jump`, whose come after the sampler's.
+    /// after the track's own added later, and 3 `Jump`, 4 `Hold`, 5 `Order` and 6 `Reverse`, whose
+    /// come after the sampler's.
     pub const fn lane(slot: usize, setting: usize) -> Option<Self> {
         if slot >= FX_SLOTS || setting >= LANE.len() {
             None
@@ -384,10 +385,10 @@ impl SettingId {
             Some(Self((LANES_START + slot * EARLY_LANE + setting) as u16))
         } else if setting == LANE_START_AT {
             Some(Self((LATER_LANE_START + slot) as u16))
-        } else if setting == LANE_JUMP_AT {
-            Some(Self((LATEST_LANE_START + slot) as u16))
         } else {
-            Some(Self((LAST_LANE_START + slot) as u16))
+            Some(Self(
+                (LATEST_LANE_START + (setting - LANE_JUMP_AT) * FX_SLOTS + slot) as u16,
+            ))
         }
     }
 
@@ -418,11 +419,12 @@ impl SettingId {
     /// What it belongs to, and its place among that owner's settings.
     pub fn owner(self) -> (Owner, usize) {
         let at = self.index();
-        if at >= LAST_LANE_START {
-            return (Owner::Lane(at - LAST_LANE_START), LANE_HOLD_AT);
-        }
         if at >= LATEST_LANE_START {
-            return (Owner::Lane(at - LATEST_LANE_START), LANE_JUMP_AT);
+            let within = at - LATEST_LANE_START;
+            return (
+                Owner::Lane(within % FX_SLOTS),
+                LANE_JUMP_AT + within / FX_SLOTS,
+            );
         }
         if at >= LATER_SAMPLER_START {
             return (Owner::Sampler, EARLY_SAMPLER + at - LATER_SAMPLER_START);

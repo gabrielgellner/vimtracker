@@ -531,6 +531,9 @@ their `Lane` devices. Track 2 is the shipped patch `Acid loops`, its five loops 
     direction on one part. At `80` about half are, and the rest count on.
 *   `FX1 Lane` `Hold` `80` on track 1: about half the lengths keep the one before, as a step whose
     probability fails in Kria keeps its value. At `FF` the first length plays throughout.
+*   `FX1 Lane` `Order` `Up-down` on track 1: the lengths go up and back down, a round of six
+    across laps of four, so they drift against the bar. `Reverse` `On` beside it turns the walk
+    over, and `Order` `Brownian` wanders a length at a time from the first, each lap.
 
 ## Metropolix
 

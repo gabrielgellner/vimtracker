@@ -705,7 +705,7 @@ const SLOT_OWN: [Entry; 1] = [Entry {
 /// Each FX column's lane's, which move every phrase's lane on that column from its own: how many
 /// rows it's heard for, one a step either side of `80`, and how much slower or faster its rows go.
 /// With the column's number after each, as `LLEN1`.
-const LANE: [Entry; 5] = [
+const LANE: [Entry; 7] = [
     Entry {
         meaning: "how many rows this column's lanes are heard for, more or fewer",
         key: "length",
@@ -754,6 +754,33 @@ const LANE: [Entry; 5] = [
     // lane's rows keeps the row before it instead of playing its own, as Kria's probability does.
     level("hold", "Hold", "LHLD", 0x00)
         .means("the chance each of this column's lanes' rows keeps the one before instead"),
+    // Added after `Hold`, so their places come after its (decision 431): the order the lane's rows
+    // are walked in, from the whole list, `00` forward as `CORD` is, and a switch that turns the
+    // walk the other way up, as `REV` beside `ORD`.
+    Entry {
+        meaning: "the order this column's lanes' rows play in, as an order walks a phrase's rows",
+        key: "order",
+        name: "Order",
+        label: Some("LORD"),
+        kind: Kind::Stepped {
+            choices: &CHAIN_ORDER_NAMES,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
+    Entry {
+        meaning: "whether this column's lanes' walk is turned the other way up",
+        key: "reverse",
+        name: "Reverse",
+        label: Some("LREV"),
+        kind: Kind::Stepped {
+            choices: &OFF_ON,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
 ];
 
 /// How many of a lane's settings have their places before the track's own added later: those

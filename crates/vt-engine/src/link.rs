@@ -888,6 +888,8 @@ mod tests {
                         start: ((round * 11 + slot) % 9) as u8,
                         jump: ((round * 13 + slot) % 3 * 0x40) as u8,
                         hold: ((round * 17 + slot) % 3 * 0x50) as u8,
+                        order: ((round * 19 + slot) % vt_model::order::Order::ALL.len()) as u8,
+                        reverse: (round + slot) % 2 == 1,
                     };
                 }
             }
