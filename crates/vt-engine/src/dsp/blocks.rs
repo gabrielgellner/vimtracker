@@ -10,6 +10,7 @@ pub(crate) mod one_pole;
 pub(crate) mod oversampler;
 pub(super) mod plaits_parts;
 pub(crate) mod response;
+pub(crate) mod saturator;
 pub(crate) mod sides;
 pub(super) mod sine_table;
 pub(crate) mod smoother;
