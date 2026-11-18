@@ -402,7 +402,6 @@ fn cue_leaves_a_lane_as_it_was_until_something_turns() {
     assert_eq!(at_once, sends(&mut engine(&cued(original)), 40));
 }
 
-
 #[test]
 fn an_lfo_moves_a_lanes_rate_across_its_list() {
     // A square LFO of depth `10`, a sixteenth of the way up, on a lane of a row every 8 steps,
