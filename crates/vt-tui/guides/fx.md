@@ -261,6 +261,11 @@ to `0.3` times as loud as the one before; and `8` to `F` swell, each `1.1` up to
 `1.8` times as loud, never past full. So `x` builds on itself from hit to hit,
 an even step in dB. It moves the level of each hit, not its velocity, and an
 `Acid` ignores it: its hits all play at the note's own level.
+
+A `RET` goes with its row's note, as a retrig goes with its trig on Elektron's
+machines: when the note doesn't play, because a `CHA` or a `CND` failed or
+`CDLT` thinned it, its hits don't either, so the row is silent. A `RET` on a row
+with no note strikes the note already sounding again.
 Use `:seed 3A9F12C4` to choose which results `CHA` and `RND` give, or `:seed` alone
 for a new one at random, as one undo step. The seed is hex, as the project page
 shows it, in either case, so `:seed 42` is `0x42`.
@@ -359,7 +364,7 @@ faint when its `CND` or `CHA` skipped it.
 themselves, so after a `1:2`, a `PRE` row plays with it and a `!PRE` row plays
 instead of it. Nothing has passed when playing starts. `CHA` is still rolled when a
 condition fails it, so its results stay the same, and a failed `CHA` skips only the
-note, as it always has.
+note, as it always has, with the note's `RET`.
 
 ### Moving every chance
 
@@ -391,7 +396,8 @@ read what a row's `CHA` came to with its chance moved, so a `PRE` row after a
 thinned `CHA` row is thinned with it: a flam stays a flam. A row with no `CHA`
 that `CDLT` thins isn't a condition, and leaves what `PRE` reads as it was, so
 turning the fader never changes which row a `PRE` follows. Like a failed
-`CHA`, a thinned row skips only its note, and its locks still run.
+`CHA`, a thinned row skips only its note and its `RET`, and its locks still
+run.
 
 `CDLT` on a row sets it for that row: `CDLT 00` drops the row's note whatever
 its chance, and `CHA 00 CDLT FF` plays it. It's read before the row's locks
@@ -408,8 +414,10 @@ the row's chance, its `CHA`s moved by `CDLT`, or with no `CHA` what `CDLT`
 keeps below `80`. So a `MLT4` row at `CDLT 40` loses some of its four notes
 rather than all of them, and a `RET` stutters with gaps. The row's first pulse
 decides as on `Row`, and feeds `PRE` as it would; a condition still decides the
-whole row. The pulses and hits after it are rolled from the `:seed`, so a
-render repeats and every `CHA` keeps the results it had.
+whole row. A pulse whose note is dropped takes its `RET`'s hits with it, while
+the row's later pulses still roll their own. The pulses and hits after the
+first are rolled from the `:seed`, so a render repeats and every `CHA` keeps the
+results it had.
 
 `Space l` turns fill on or off, and held, it's on until you let go. The status
 line says `FILL` while it's on.
