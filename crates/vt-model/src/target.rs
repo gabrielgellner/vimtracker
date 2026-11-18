@@ -572,8 +572,13 @@ mod tests {
         assert!(offered.contains(&FxCommand::Set(bits)));
         assert!(!offered.contains(&FxCommand::Set(amount)));
         let kind = SettingId::slot(0, EffectKind::Distort, 0).unwrap();
-        assert!(!kind.lockable(), "a mode isn't locked from a step");
-        assert_eq!(FxCommand::typed("1type", &track), None);
+        // Its type is locked from a step too (decision 414).
+        assert!(kind.lockable());
+        assert!(offered.contains(&FxCommand::Set(kind)));
+        assert_eq!(
+            FxCommand::typed("1type", &track),
+            Some(FxCommand::Set(kind))
+        );
     }
 
     #[test]

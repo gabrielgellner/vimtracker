@@ -639,11 +639,15 @@ struct Control {
 pub(crate) struct Clouds {
     recording: Recording,
     mode: CloudsMode,
-    /// The mode it's going to, once what's playing has faded out, and how far faded in it is.
+    /// The mode and quality it's going to, once what's playing has faded out, and how far faded
+    /// in it is.
     next_mode: CloudsMode,
     fade: f32,
     fade_step: f32,
     quality: u8,
+    next_quality: u8,
+    /// Whether anything has come in since it was emptied, so it may hold something to play.
+    heard: bool,
     frozen: bool,
     grains: [Grain; MOST_GRAINS],
     most_grains: usize,
@@ -741,6 +745,8 @@ impl Clouds {
             fade: 1.0,
             fade_step: 1.0 / (MODE_FADE * rate_f),
             quality: 0,
+            next_quality: 0,
+            heard: false,
             frozen: false,
             grains: [Grain::IDLE; MOST_GRAINS],
             most_grains: GRAINS_OF_QUALITY[0],
@@ -867,7 +873,8 @@ impl Clouds {
     }
 
     pub(crate) fn clear(&mut self) {
-        self.start_recording(self.quality);
+        self.heard = false;
+        self.start_recording(self.next_quality);
         self.switch_mode(self.next_mode);
         self.fade = 1.0;
         self.reverb.clear();
@@ -932,21 +939,11 @@ impl Clouds {
     /// Take what's set now, and move the reverb's wobbles to where they are this many frames in.
     pub(crate) fn follow(&mut self, settings: Settings, frames: u64) {
         self.reverb.keep_time(frames);
-        if settings.quality.min(3) != self.quality {
-            self.start_recording(settings.quality);
-            self.reverb.clear();
-            for side in &mut self.diffuser {
-                for allpass in side {
-                    allpass.line.fill(0.0);
-                }
-            }
-        }
+        // What's playing fades out before a new mode or quality starts, and the next fades in
+        // (decision 414). Between the modes but `Spectral` the module keeps its recording, and
+        // starts its filters and pitch shifter afresh; a quality starts a new recording.
+        self.next_quality = settings.quality.min(3);
         self.next_mode = settings.mode;
-        if self.next_mode != CloudsMode::Spectral && self.mode != CloudsMode::Spectral {
-            // Between these modes the module keeps its recording, and starts its filters and pitch
-            // shifter afresh. To or from `Spectral`, what's playing fades out first.
-            self.switch_mode(self.next_mode);
-        }
         self.frozen = settings.freeze != 0;
         self.position.target = f32::from(settings.position) / 255.0;
         self.size.target = f32::from(settings.size) / 255.0;
@@ -967,6 +964,7 @@ impl Clouds {
         self.mode = mode;
         self.reset_filters();
         self.shifter.clear();
+        self.clear_diffuser();
         if mode == CloudsMode::Spectral {
             self.spectral.reset(
                 if self.mono() { 1 } else { 2 },
@@ -976,15 +974,56 @@ impl Clouds {
         self.work_out_control();
     }
 
-    /// Fade out what's playing before changing to or from `Spectral`, then fade the next in.
+    /// How long the looping delay's pitch shifter's window is, in frames, for its `Size`.
+    fn shifter_window(&self) -> f32 {
+        let size = self.control.size;
+        (128.0 + 1919.0 * size * size * size) * self.scale
+    }
+
+    /// Start a new recording in the quality it's going to, with the diffuser empty, as the module
+    /// starts afresh.
+    fn switch_quality(&mut self) {
+        if self.next_quality == self.quality {
+            return;
+        }
+        self.start_recording(self.next_quality);
+        self.clear_diffuser();
+    }
+
+    fn clear_diffuser(&mut self) {
+        for side in &mut self.diffuser {
+            for allpass in side {
+                allpass.line.fill(0.0);
+            }
+        }
+    }
+
+    /// Whether it's on its way to another mode or quality.
+    fn changing(&self) -> bool {
+        self.next_mode != self.mode || self.next_quality != self.quality
+    }
+
+    /// Fade out what's playing before changing its mode or quality, then fade the next in. Its
+    /// reverb rings on through the change, as what goes in fades.
     #[inline]
     fn fade_modes(&mut self) {
-        if self.next_mode == self.mode {
+        if !self.changing() {
             self.fade = (self.fade + self.fade_step).min(1.0);
         } else {
             self.fade = (self.fade - self.fade_step).max(0.0);
             if self.fade == 0.0 {
+                let looping = self.next_mode == CloudsMode::Looping
+                    && (self.mode != CloudsMode::Looping || self.next_quality != self.quality);
+                self.switch_quality();
                 self.switch_mode(self.next_mode);
+                // The looping delay and its pitch shifter start where they're set rather than
+                // gliding there from wherever they last were, as the switch is under the fade.
+                if looping {
+                    self.delay = self.control.position * self.loop_longest();
+                    self.shifter
+                        .aim(self.control.semitones, self.shifter_window());
+                    self.shifter.settle();
+                }
             }
         }
     }
@@ -996,6 +1035,10 @@ impl Clouds {
 
     /// Jump to what's set, as it's only just started.
     pub(crate) fn settle(&mut self) {
+        if self.next_quality != self.quality {
+            self.switch_quality();
+            self.reverb.clear();
+        }
         for setting in [
             &mut self.position,
             &mut self.size,
@@ -1447,14 +1490,15 @@ impl Clouds {
     /// Feed one frame in and get what comes out, the sound blended with what Clouds makes of it.
     #[inline]
     pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.heard |= input != [0.0, 0.0];
         if self.until_control == 0 {
             self.next_block();
             self.until_control = self.block;
         }
         self.until_control -= 1;
-        // To or from `Spectral`, what's playing fades out, all that comes after its player too, so
-        // the pitch shifter's and filters' tails don't stop short, then the next mode fades in.
-        let fading = self.next_mode != self.mode || self.fade < 1.0;
+        // To another mode or quality, what's playing fades out, all that comes after its player
+        // too, so the pitch shifter's and filters' tails don't stop short, then the next fades in.
+        let fading = self.changing() || self.fade < 1.0;
         if fading {
             self.fade_modes();
         }
@@ -1491,6 +1535,11 @@ impl Clouds {
         } else {
             self.core(sound)
         };
+        // What its player gives fades too, so the diffuser, pitch shifter and filters, started
+        // afresh at the change, fill from nothing rather than from a step.
+        if fading {
+            out = out.map(|side| side * self.fade);
+        }
 
         // The diffuser, which `Texture` or `Density` turns up, and `Spectral` doesn't have.
         if self.mode != CloudsMode::Spectral {
@@ -1503,8 +1552,7 @@ impl Clouds {
             }
         }
         if self.mode == CloudsMode::Looping && !self.frozen {
-            let window = (128.0 + 1919.0 * control.size * control.size * control.size) * self.scale;
-            self.shifter.aim(control.semitones, window);
+            self.shifter.aim(control.semitones, self.shifter_window());
             out = self.shifter.process(out);
         }
         if matches!(self.mode, CloudsMode::Stretch | CloudsMode::Looping) {
@@ -1562,11 +1610,18 @@ impl SlotEffect for Clouds {
         self.settle();
     }
 
-    /// Nothing: with `Blend` all dry, what it feeds back and its reverb go on with none of them
-    /// coming out, so the quiet its slot hears doesn't show it holds nothing, and a jump of its
-    /// loop's place, a mode or a level could step what's still in it. It jumps only as it's
-    /// taken from the pool.
-    fn settle_quiet(&mut self) {}
+    /// Its mode and quality, while nothing has come in since it was emptied, so a lock on a
+    /// song's first row is heard from its first frame; nothing else. With `Blend` all dry, what
+    /// it feeds back and its reverb go on with none of them coming out, so the quiet its slot
+    /// hears doesn't show it holds nothing, and a jump of its loop's place, a mode or a level
+    /// could step what's still in it. It jumps all it has only as it's taken from the pool.
+    fn settle_quiet(&mut self) {
+        if !self.heard {
+            self.switch_quality();
+            self.switch_mode(self.next_mode);
+            self.fade = 1.0;
+        }
+    }
 
     fn clear(&mut self) {
         self.clear();

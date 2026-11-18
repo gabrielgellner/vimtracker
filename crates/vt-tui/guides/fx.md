@@ -78,6 +78,9 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `VMOD` | The track's `Mode` for the row's note: `00` Mono, `01` Legato |
 | `GMOD` | The track's `Glide mode` for the row's note: `00` Ties, `01` Always |
 | `1BYP` | Switch slot 1 out, `01`, or back in, `00`. `2BYP` to `4BYP` the others |
+| `1TYPE` | A `Distort`'s or `Chorus`'s type: `00` Soft or Chorus, by its place |
+| `1MODE` | A mode: `Clouds`' `00` Granular to `03` Spectral, `Beads`' `01` Delay |
+| `1QUAL` | `Clouds`' or `Beads`' quality: `00` the cleanest, `03` the longest |
 | `DEP4` | Mod 4's depth: `80` is none, as on the Mod page. `DEP5` `DEP6` too |
 | `DEP2` | An envelope's depth. `DEP1` `DEP3` too, but not the notes' shape |
 | `PHS4` | An LFO's phase, or its axis: `00` to `FF` is a turn. `PHS5` `PHS6` too |
@@ -159,10 +162,12 @@ or `2FDBK`, and `K` lists them under the effect's group with the names they have
 in an LFO's `Dest`, like `1 Amount`. `Bits` takes its place among the depths,
 from 2 bits at `00`, so `04` is 6 bits. A step's setting belongs to that effect,
 and a mode's to that mode, so a `2FDBK` lock does nothing once slot 2 holds a
-Reverb, a `1BITS` lock waits for `Crush`, and a `1TONE` lock for a pedal. What's in
-a slot's title, the `Type` of a `Distort`, `Chorus` or `Comp` and the `Mode` of an
-`LPG` or `Comb`, isn't set from a step, as choosing it chooses a sound, and nor is a
-`Source`.
+Reverb, a `1BITS` lock waits for `Crush`, and a `1TONE` lock for a pedal. The `Type`
+of a `Distort` or `Chorus` and the `Mode` and `Quality` of `Clouds` or `Beads` are
+set from a step too, as `1TYPE`, `1MODE` and `1QUAL`, though they're in the slot's
+title: a change while a sound plays fades through, so it doesn't click (see **The FX
+page and its effects**). The `Type` of a `Comp`, the `Mode` of an `LPG` or `Comb` and
+a `Source` aren't set from a step.
 
 `ACC`, `SMP`, `SLI`, `STA`, `SLEN`, `PLY` and `SREV` are in **Sounds, samples and kits**.
 `LEV`, `VOL`, `SNA` and `SNB` are on the level scale in **Phrases and chains**.
