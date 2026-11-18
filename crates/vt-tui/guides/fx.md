@@ -242,7 +242,7 @@ These have no mark.
 | `KIL` | Cut the note after `xx` units |
 | `OFF` | Start the envelopes' release after `xx` units |
 | `RET` | Retrigger every `y` units, `x` fading or swelling each: see below |
-| `CHA` | Play the note, with its events and locks, a chance of `xx` out of `FF` |
+| `CHA` | Play the note and its locks with a chance of `xx` out of `FF` |
 | `CND` | Play the row only when condition `xx` holds: see **Conditions** |
 | `ACU` | Move the row's note on each time it plays: see **Accumulators** |
 | `ARP` | Go round the note, `x` up and `y` up: see **Arpeggios** |
@@ -287,8 +287,8 @@ that setting's slide ends, as its lock is the next change.
 
 Only settings that sweep slide: a list or a switch, like `FTYP` or `KTRK`, jumps as
 it would. A value marked hold or glide keeps its own mark. A row whose note a
-`CHA`, a `CND` or `CDLT` drops skips its locks, and its `SLD` with them. The slide reads ahead through the phrase as it's playing, wrapping round
-its loop, and lands where it was aimed if the next note is skipped or a window turns
+`CHA`, a `CND` or `CDLT` drops skips its locks, and its `SLD` with them. The
+slide reads ahead through the phrase as it's playing, wrapping round its loop, and lands where it was aimed if the next note is skipped or a window turns
 under it. With `Cue` on, a turned window waits for the loop, so the rows it reads
 ahead are the rows that play. A column with a lane of its own isn't read ahead, and
 its value jumps as its row plays.
@@ -417,8 +417,8 @@ rather than all of them, and a `RET` stutters with gaps. The row's first pulse
 decides as on `Row`, and feeds `PRE` as it would; a condition still decides the
 whole row. A pulse whose note is dropped takes its `KIL`, `OFF` and `RET`'s
 hits with it, while the row's later pulses still roll their own; the row's locks
-run, as on `Pulse` the chance drops pulses, never the row. The pulses and hits after the
-first are rolled from the `:seed`, so a render repeats and every `CHA` keeps the
+run, as on `Pulse` the chance drops pulses, never the row. The pulses and hits
+after the first are rolled from the `:seed`, so a render repeats and every `CHA` keeps the
 results it had.
 
 `Space l` turns fill on or off, and held, it's on until you let go. The status
