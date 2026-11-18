@@ -1,7 +1,8 @@
 //! `LST` and `!LST`, after Elektron's (decision 419): a row that plays only on the last pass of
 //! its phrase before the track moves on to another phrase or chain, or on every pass but that
 //! one. The chain's next phrase, the section's end, a chain launched and a loop of sections
-//! waiting each move it on; a chain that loops on its own has no last pass.
+//! waiting each move it on; a chain that loops on its own has no last pass. A reset or a realign
+//! moves it on only if the chain's first phrase is another (decision 436).
 
 use std::sync::Arc;
 
@@ -9,7 +10,7 @@ use vt_engine::engine::{Engine, SectionLoop};
 use vt_engine::render::render_frames;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Chain, ChainEntry, Launch, Phrase, Repeat, Section, Song};
+use vt_model::song::{Chain, ChainEntry, Launch, Phrase, Repeat, Section, SectionStart, Song};
 
 use crate::support::{self, version};
 
@@ -207,6 +208,62 @@ fn a_window_waiting_under_cue_isnt_moving_on() {
         engine.swap(version(&turned, hits_pool()));
     });
     assert_eq!(heard, Vec::<usize>::new());
+}
+
+#[test]
+fn a_section_starting_again_sends_the_chain_back_to_its_first_phrase() {
+    // Each repeat of a resetting section of four steps starts the chain again before its quiet
+    // phrase plays, so the first phrase never moves on.
+    let mut reset = song(&[&[LAST, QUIET]], &[(0, Some(4))]);
+    reset.sections[0].repeat = Repeat::new(4);
+    reset.sections[0].start = SectionStart::Reset;
+    assert_eq!(hits(&reset, 16), Vec::<usize>::new());
+    let mut not = song(&[&[NOT_LAST, QUIET]], &[(0, Some(4))]);
+    not.sections[0].repeat = Repeat::new(4);
+    not.sections[0].start = SectionStart::Reset;
+    assert_eq!(hits(&not, 16), [0, 4, 8, 12]);
+    // A song of one such section starts it again each time it comes in.
+    reset.sections[0].repeat = Repeat::new(1);
+    assert_eq!(hits(&reset, 16), Vec::<usize>::new());
+    // Without the reset the chain carries on through the repeats, to its quiet phrase.
+    reset.sections[0].start = SectionStart::default();
+    assert_eq!(hits(&reset, 16), [0, 8]);
+}
+
+#[test]
+fn a_reset_sends_the_chain_back_to_its_first_phrase() {
+    let mut reset = song(&[&[LAST, QUIET]], &[(0, Some(16))]);
+    reset.sections[0].reset = Some(4);
+    assert_eq!(hits(&reset, 16), Vec::<usize>::new());
+    // A reset after the quiet phrase has played leaves the pass before it the last.
+    reset.sections[0].reset = Some(8);
+    assert_eq!(hits(&reset, 16), [0, 8]);
+}
+
+#[test]
+fn the_tracks_own_reset_sends_the_chain_back_to_its_first_phrase() {
+    let mut reset = song(&[&[LAST, QUIET]], &[(0, Some(16))]);
+    reset.tracks[0].reset = Some(4);
+    assert_eq!(hits(&reset, 16), Vec::<usize>::new());
+    // Back to another phrase is moving on, even partway through the pass: the second phrase is
+    // cut short at step 6 by the chain starting again.
+    let mut other = song(&[&[QUIET, LAST]], &[(0, Some(16))]);
+    other.tracks[0].reset = Some(6);
+    assert_eq!(hits(&other, 16), [4, 10]);
+}
+
+#[test]
+fn a_realign_waiting_sends_the_chain_back_to_its_first_phrase() {
+    // The row at the phrase's end, with the realign landing at its pass's end on a grid of four.
+    let mut realigned = song(&[&[LAST_AT_END, QUIET]], &[(0, Some(16))]);
+    realigned.launch = Launch::Every(std::num::NonZeroU32::new(4).unwrap());
+    assert_eq!(playing(&realigned, 16, false, 1, |_| {}), [3, 11]);
+    let every = playing(&realigned, 16, false, 1, Engine::toggle_realign);
+    assert_eq!(every, [7, 15]);
+    let own = playing(&realigned, 16, false, 1, |engine| {
+        engine.toggle_realign_track(0);
+    });
+    assert_eq!(own, [7, 15]);
 }
 
 #[test]
