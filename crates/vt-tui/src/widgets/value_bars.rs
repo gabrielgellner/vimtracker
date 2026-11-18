@@ -18,8 +18,9 @@ use vt_model::shape::ShapeColumn;
 
 use crate::widgets::theme;
 
-/// How many cells the bars take, each split into eighths: 144 steps across a column's range.
-pub(crate) const BARS: u16 = 18;
+/// How many cells the bars take, each split into eighths: 176 steps across a column's range,
+/// wide enough for the summary over them to say how many rows changed in words.
+pub(crate) const BARS: u16 = 22;
 /// The whole box: the bars with a clear cell either side, so they don't touch the column.
 pub(crate) const WIDTH: u16 = BARS + 2;
 /// The rows over the bars: the name and scale, then the summary.
@@ -116,31 +117,27 @@ impl ValueBars {
     }
 
     /// The values now, lowest to highest, their average, and how many rows changed:
-    /// `20─7F avg 4C ±6`.
+    /// `20─7F avg 4C 6 changed`. Where that's too long, the average is `~4C`, and then it's left
+    /// out.
     fn summary(&self) -> String {
         let changed = self.rows.iter().filter(|row| row.before != row.now).count();
+        let changed = format!("{changed} changed");
         let now: Vec<u8> = self.rows.iter().filter_map(|row| row.now).collect();
         let (Some(low), Some(high)) = (now.iter().min(), now.iter().max()) else {
-            return format!("none ±{changed}");
+            return format!("none {changed}");
         };
         let sum: usize = now.iter().map(|value| usize::from(*value)).sum();
         let average = ((sum + now.len() / 2) / now.len()) as u8;
         let show = |value: u8| self.column.show(value);
-        let full = format!(
-            "{}─{} avg {} ±{changed}",
-            show(*low),
-            show(*high),
-            show(average)
-        );
-        if full.chars().count() <= usize::from(BARS) {
-            return full;
-        }
-        format!(
-            "{}─{} ~{} ±{changed}",
-            show(*low),
-            show(*high),
-            show(average)
-        )
+        let range = format!("{}─{}", show(*low), show(*high));
+        let average = show(average);
+        [
+            format!("{range} avg {average} {changed}"),
+            format!("{range} ~{average} {changed}"),
+        ]
+        .into_iter()
+        .find(|line| line.chars().count() <= usize::from(BARS))
+        .unwrap_or_else(|| format!("{range} {changed}"))
     }
 
     /// A row's bar: what's now solid, and what was before set back behind it where it's longer.
@@ -333,18 +330,18 @@ mod tests {
         assert_drawn(
             &drawn(&bars, &beside, Side::Right),
             &[
-                " VEL 00 ─ 7F        ",
-                "abbbccccccccaaaaaaaa",
-                " 10─7F avg 3C ±3    ",
-                "acccccccccccccccccca",
-                " ██████████████████ ",
-                "adddddddddddddddddda",
-                " ████▌████▏         ",
-                "addddefffffaaaaaaaaa",
-                " █████████▏         ",
-                "addddddddddaaaaaaaaa",
-                " ██▎                ",
-                "adddaaaaaaaaaaaaaaaa",
+                " VEL 00 ─ 7F            ",
+                "abbbccccccccaaaaaaaaaaaa",
+                " 10─7F avg 3C 3 changed ",
+                "acccccccccccccccccccccca",
+                " ██████████████████████ ",
+                "adddddddddddddddddddddda",
+                " █████▌█████▏           ",
+                "adddddeffffffaaaaaaaaaaa",
+                " ███████████▏           ",
+                "addddddddddddaaaaaaaaaaa",
+                " ██▊                    ",
+                "adddaaaaaaaaaaaaaaaaaaaa",
                 "a fg TEXT bg MANTLE",
                 "b fg TEXT bg MANTLE +BOLD",
                 "c fg OVERLAY2 bg MANTLE",
@@ -353,6 +350,17 @@ mod tests {
                 "f fg #75638e bg MANTLE",
             ],
         );
+    }
+
+    #[test]
+    fn the_summary_says_how_many_rows_changed_in_words_and_shortens_the_average_to_fit() {
+        assert_eq!(
+            velocity(&[(Some(0x40), Some(0x7F)), (Some(0x20), Some(0x20))]).summary(),
+            "20─7F avg 50 1 changed"
+        );
+        let many = vec![(Some(0x00), Some(0x40)); 100];
+        assert_eq!(velocity(&many).summary(), "40─40 ~40 100 changed");
+        assert_eq!(velocity(&[(Some(0x40), None)]).summary(), "none 1 changed");
     }
 
     #[test]
@@ -374,7 +382,7 @@ mod tests {
         };
         assert_eq!(
             beside.place(&bars, Side::Left),
-            Some(Rect::new(4, 0, 20, 3))
+            Some(Rect::new(0, 0, 24, 3))
         );
         let lower = Beside {
             lines: vec![(5, 0)],
@@ -382,9 +390,9 @@ mod tests {
         };
         assert_eq!(
             lower.place(&bars, Side::Left),
-            Some(Rect::new(4, 3, 20, 3)),
+            Some(Rect::new(0, 3, 24, 3)),
             "from two rows over its first row"
         );
-        assert_eq!(beside.place(&bars, Side::Right), None, "26 + 20 is past 40");
+        assert_eq!(beside.place(&bars, Side::Right), None, "26 + 24 is past 40");
     }
 }
