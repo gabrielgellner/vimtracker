@@ -371,28 +371,22 @@ impl TrackState {
     }
 
     /// An FX column's lane's settings as held, with what modulation adds: across the whole
-    /// `00` to `FF` for the first five, and across its list for `Order` and `Reverse`, as the
-    /// walk's are (decision 431).
+    /// `00` to `FF` for those on a scale, and across its list for `Rate`, `Order` and `Reverse`,
+    /// as the walk's are (decisions 431 and 435).
     fn lane_moved(&self, slot: usize) -> LaneMove {
-        let value = |at: usize, span: bool| {
-            let by = SettingId::lane(slot, at).map_or(0.0, |id| {
-                let by = self.offsets[id.index()];
-                if span {
-                    by * id.entry().span()
-                } else {
-                    by * 255.0
-                }
-            });
+        let value = |at: usize| {
+            let by = SettingId::lane(slot, at)
+                .map_or(0.0, |id| self.offsets[id.index()] * id.entry().span());
             (self.lane_held[slot][at] + by).clamp(0.0, 255.0).round() as u8
         };
         LaneMove {
-            length: value(0, false),
-            rate: value(1, false).min(LANE_RATES.len() as u8 - 1),
-            start: value(2, false),
-            jump: value(3, false),
-            hold: value(4, false),
-            order: value(5, true).min(Order::ALL.len() as u8 - 1),
-            reverse: value(6, true) >= 1,
+            length: value(0),
+            rate: value(1).min(LANE_RATES.len() as u8 - 1),
+            start: value(2),
+            jump: value(3),
+            hold: value(4),
+            order: value(5).min(Order::ALL.len() as u8 - 1),
+            reverse: value(6) >= 1,
         }
     }
 }
