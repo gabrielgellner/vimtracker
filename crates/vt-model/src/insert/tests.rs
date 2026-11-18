@@ -249,8 +249,9 @@ fn a_few_effects_place_their_settings_by_what_they_mean() {
     assert_eq!(names(chorus, 0), ["Rate", "Mix", "", ""]);
     assert_eq!(names(chorus, 1), ["Depth", "Gain", "", ""]);
     let reverb = Insert::Reverb(Reverb::DEFAULT);
-    assert_eq!(names(reverb, 0), ["Pre", "Low cut", "Mix", ""]);
-    assert_eq!(names(reverb, 2), ["Damp", "", "", ""]);
+    assert_eq!(names(reverb, 0), ["Pre", "Damp", "Low cut", "Width"]);
+    assert_eq!(names(reverb, 1), ["Decay", "Low damp", "High cut", "Mix"]);
+    assert_eq!(names(reverb, 2), ["", "", "", "Gain"]);
 }
 
 /// A compressor of a type, as it starts.
@@ -520,10 +521,18 @@ fn a_reverbs_settings_change_alone_and_read_back() {
     let names: Vec<&str> = effect.params().iter().map(|param| param.name).collect();
     assert_eq!(
         names,
-        ["Pre", "Decay", "Damp", "Low cut", "High cut", "Mix", "Gain"]
+        [
+            "Pre", "Decay", "Damp", "Low damp", "Low cut", "High cut", "Width", "Mix", "Gain"
+        ]
     );
-    let mixed = effect.with_value(5, 0x12);
-    assert_eq!((mixed.value(5), mixed.value(6)), (0x12, UNITY_LEVEL));
+    let mixed = effect.with_value(7, 0x12);
+    assert_eq!((mixed.value(7), mixed.value(8)), (0x12, UNITY_LEVEL));
+    // What it didn't have before saves as nothing, so a song without them reads as it was.
+    let text = ron::to_string(&Reverb::DEFAULT).unwrap();
+    assert!(
+        !text.contains("low_damp") && !text.contains("width"),
+        "{text}"
+    );
     assert_eq!(effect.write_key("mix", 300.0).read_key("mix"), Some(0xFF));
     assert_eq!(effect.read_key("amount"), None);
     assert_eq!(effect.read(REVERB_PARAMS.len()), None);
@@ -704,15 +713,17 @@ fn a_plates_settings_share_the_reverbs_names_and_read_back() {
     assert_eq!(
         names,
         [
-            "Pre", "Decay", "Damp", "High cut", "Size", "Mod", "Mix", "Gain"
+            "Pre", "Decay", "Damp", "Low damp", "High cut", "Size", "Mod", "Width", "Mix", "Gain"
         ]
     );
     let reverb_labels: Vec<_> = REVERB_PARAMS.iter().map(|param| param.label).collect();
-    for shared in ["Pre", "Decay", "Damp", "High cut", "Mix", "Gain"] {
+    for shared in [
+        "Pre", "Decay", "Damp", "Low damp", "High cut", "Width", "Mix", "Gain",
+    ] {
         let label = PLATE_PARAMS.iter().find(|param| param.name == shared);
         assert!(reverb_labels.contains(&label.unwrap().label), "{shared}");
     }
-    let bigger = plate.with_value(4, 0xFF);
+    let bigger = plate.with_value(5, 0xFF);
     assert_eq!(bigger.read_key("size"), Some(0xFF));
     assert_eq!(bigger.read_key("lowcut"), None);
     let text = ron::to_string(&bigger).unwrap();

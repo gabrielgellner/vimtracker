@@ -461,5 +461,10 @@ fn is_zero(value: &u8) -> bool {
     *value == 0
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_full(value: &u8) -> bool {
+    *value == 0xFF
+}
+
 #[cfg(test)]
 mod tests;

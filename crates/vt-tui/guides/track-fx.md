@@ -161,9 +161,16 @@ note ends. `Reverb` has these:
 | Setting | Does |
 |---|---|
 | `Pre` | How long before it comes in, up to a quarter second |
-| `Decay` | How long it rings. `FF` goes on for a long time |
+| `Decay` | How long its tail takes to fall 60 dB |
 | `Damp` | How quickly its highs fall away as it rings |
+| `Low damp` | How quickly its lows fall away as it rings, off at `00` |
 | `Low cut`, `High cut` | Shape what goes in |
+| `Width` | From `00`, sides together, to `FF`, as wide as it comes |
+
+`Decay` reads in seconds, from a quarter of one at `00` to a minute at `FF`: `60` is 2 s, and
+each `20` about doubles it. `Low damp` keeps a long tail from going muddy under a kick, where
+`Low cut` only takes the lows from what goes in. `Width` leaves the two sides added together
+as they were, so it sums to mono the same.
 
 `Delay` has these:
 
@@ -381,8 +388,8 @@ of its own, so loud highs on one side don't excite the other.
 
 `Plate` is a second reverb, after Jon Dattorro's plate: brighter and denser
 than `Reverb`, and wide from a single sound. It starts half wet, and its tail
-carries on after a note ends. `Pre`, `Decay`, `Damp` and `High cut` work as
-`Reverb`'s do. `FF` rings for about a minute, but always dies away.
+carries on after a note ends. `Pre`, `Decay`, `Damp`, `Low damp`, `High cut`
+and `Width` work as `Reverb`'s do, and its tail is as long at every `Size`.
 
 | Setting | Does |
 |---|---|
@@ -395,8 +402,8 @@ about a second end to end.
 `Spring` is a spring tank, as a guitar amp or an Octatrack has, after
 ChowDSP's model in Surge: a sound goes in, drips and boings down the springs
 and comes back round. It suits dub chords, snares and techno stabs. It starts
-half wet, and its tail carries on after a note ends. `Decay` and `Damp` work
-as `Reverb`'s do; `Decay` goes from a tenth of a second to about four, and a
+half wet, and its tail carries on after a note ends. `Damp` works as
+`Reverb`'s does; `Decay` goes from a tenth of a second to about four, and a
 small spring rings shorter.
 
 | Setting | Does |
@@ -439,9 +446,9 @@ at different speeds, the sound of a Leslie changing over. `Inertia` at
 `Space` is a huge, bright wash that rings on and on, after Airwindows'
 Galactic: for pads, drones and ambient tails that hang under a whole
 section. It starts half wet with its tank at its biggest, near Galactic's
-own settings. `Decay` and `Damp` work as `Reverb`'s do, but its tail doesn't
-darken as it rings, as theirs do: `Damp` darkens what goes in and what comes
-out.
+own settings. `Decay` rings on and on towards `FF`, and its tail doesn't
+darken as it rings, as the others' do: `Damp` darkens what goes in and what
+comes out.
 
 | Setting | Does |
 |---|---|
