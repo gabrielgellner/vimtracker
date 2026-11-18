@@ -78,8 +78,9 @@ written, slower below it and faster above, as a clock divider's: at `÷2` each o
 its rows lasts twice its own steps, and `×2` halves a division of 8 to 4; it's
 rounded to a step, from 1 to 16, so a lane of a step a row goes no faster. `Start`
 is the row each lane starts on, so many of its own rows on, going round them.
-`Jump` is the chance, `00` to `FF`, that each of its rows plays any of the lane's
-own rows instead of the next, as the Play device's `Jump` is for the phrase's:
+`Jump` is the chance, `00` to `FF`, that each of its rows plays any of the rows
+`Length` and `Start` give instead of the next, as the Play device's `Jump` is for
+the phrase's window:
 the lane counts on from where it was, and a slow row jumps once for all its
 steps. `Hold`, under `Length`, is the chance, `00` to `FF`, that each of its rows
 plays the row the lane played before again instead of its own, so the value

@@ -1,5 +1,6 @@
-//! An FX column's lane's `Jump` (decision 415): the chance each of the lane's rows plays any of its
-//! own rows instead of the next it counts to, as `JMP` is a phrase's (decision 391). It's read as
+//! An FX column's lane's `Jump` (decision 415): the chance each of the lane's rows plays any of the
+//! rows it's heard for instead of the next it counts to, as `JMP` is a phrase's (decision 391),
+//! within its `Length` from its `Start` (decision 437). It's read as
 //! each of the lane's rows starts, as its `Start` is, so a lock, an LFO or a macro moves it; it's
 //! rolled from the seed, so a render repeats; and the track's `Cue` never holds it back.
 
@@ -159,19 +160,36 @@ fn playing_from_a_step_jumps_as_playing_from_the_top() {
 }
 
 #[test]
-fn jumps_stay_within_its_own_rows_whatever_its_start_and_length() {
-    // Started three rows on and heard for four, the count plays rows 3 to 6; a jump any of the
-    // eight, as `JMP` plays any row of a phrase's loop whatever its window.
-    let mut moved = song(1, 0x80);
+fn jumps_stay_within_the_rows_heard_from_its_start() {
+    // Started three rows on and heard for four, the count plays rows 3 to 6, and so do its jumps,
+    // as lane `Order` walks them (decision 437).
+    let mut moved = song(1, 0xFF);
     moved.tracks[0].lanes[0].start = 3;
     moved.tracks[0].lanes[0].length = 0x7C;
     let heard = rows(&moved, 256);
-    assert!(heard.iter().all(|row| *row < ROWS), "{heard:?}");
-    let outside = heard.iter().filter(|row| !(3..7).contains(*row)).count();
-    assert!(outside > 20, "jumps reach its other rows: {heard:?}");
+    assert!(heard.iter().all(|row| (3..7).contains(row)), "{heard:?}");
+    let mut seen = heard.clone();
+    seen.sort_unstable();
+    seen.dedup();
+    assert_eq!(seen, [3, 4, 5, 6], "any of the four: {heard:?}");
+    // A window past the lane's last row goes round to its first.
+    moved.tracks[0].lanes[0].start = 6;
+    let heard = rows(&moved, 256);
+    assert!(
+        heard.iter().all(|row| [6, 7, 0, 1].contains(row)),
+        "{heard:?}"
+    );
+    // Heard longer than its own rows, every row is in reach.
+    moved.tracks[0].lanes[0].start = 0;
+    moved.tracks[0].lanes[0].length = 0x84;
+    let mut seen = rows(&moved, 256);
+    seen.sort_unstable();
+    seen.dedup();
+    assert_eq!(seen.len(), ROWS);
     // At none, the same lane plays its window.
-    let mut still = moved;
-    still.tracks[0].lanes[0].jump = 0;
+    let mut still = song(1, 0);
+    still.tracks[0].lanes[0].start = 3;
+    still.tracks[0].lanes[0].length = 0x7C;
     let window: Vec<usize> = (0..32).map(|step| 3 + step % 4).collect();
     assert_eq!(rows(&still, 32), window);
 }
