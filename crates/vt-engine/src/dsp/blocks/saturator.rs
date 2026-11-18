@@ -23,6 +23,7 @@
 
 use std::sync::LazyLock;
 
+use super::clip::within;
 use super::flush::{Tiny, flush};
 use super::one_pole;
 use super::oversampler::OctupleOversampler;
@@ -53,6 +54,9 @@ const ADAA_CLOSEST: f64 = 1e-4;
 /// The most the asymmetry moves the curve's working point, as a share of the way to its nearer
 /// end.
 const MOST_BIAS: f64 = 0.4;
+
+/// How far what comes in can go, 24 dB over full scale.
+const HEADROOM: f32 = 16.0;
 
 /// Where the emphasis shelves turn, in Hz, and how far they lift or cut the highs at either end of
 /// their range, in dB.
@@ -710,6 +714,8 @@ impl Saturator {
             self.held = held;
             self.seconds = self.last.map(|x| blend.second(x + bias));
         }
+        // Held far past full scale, and a NaN with it, so neither can stay in the filters.
+        let input = within(input, -HEADROOM, HEADROOM);
         let emphasised = tuning.pre.process(&mut self.pre, input);
         let Self {
             oversampler,
@@ -1076,9 +1082,17 @@ mod tests {
             let out = played(colouring(curve, 30.0, 1.0, 0.5), &tuning, &[(50.0, 12.0)]);
             let peak = out.iter().fold(0.0_f32, |most, s| most.max(s.abs()));
             assert!(peak.is_finite() && peak < 4.0, "{curve:?}: {peak}");
+            // A NaN or an infinity is a click, and no more.
             let mut side = Saturator::default();
+            for x in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+                assert!(
+                    side.process(x, colouring(curve, 30.0, 1.0, 0.5), &tuning)
+                        .is_finite()
+                );
+            }
             for _ in 0..1000 {
-                side.process(1.0, colouring(curve, 30.0, 1.0, 0.5), &tuning);
+                let out = side.process(1.0, colouring(curve, 30.0, 1.0, 0.5), &tuning);
+                assert!(out.is_finite(), "{curve:?}");
             }
             let mut last = 1.0;
             for _ in 0..RATE * 5 {
