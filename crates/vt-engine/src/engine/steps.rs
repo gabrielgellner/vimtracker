@@ -911,6 +911,13 @@ impl Engine {
                 .gate_frames(index, pulses, step.length(), &pending)
                 .map(|frames| start_at + frames);
         }
+        // A `RET` belongs to the note it follows, as a retrig does to its trig on Elektron's
+        // machines, so a note written here that doesn't play takes its `RET` with it, on `Pulse`
+        // the note of this pulse. A row with no note strikes the one sounding again (decision
+        // 427).
+        if !plays && matches!(event, Note::On(_)) {
+            fx.retrigger = None;
+        }
         // Each hit rolls the dice of the step the dice loop holds, if it's on.
         let keep = share.map(|share| ((pending.seed, pending.rolls()), share));
         self.time_note(index, &fx, start_at, pending.ticks, accumulating, keep);
