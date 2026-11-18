@@ -172,3 +172,28 @@ fn cue_is_a_switch_beside_the_window() {
     keys(&mut app, "-");
     assert_eq!(app.song().tracks[0].cue, 0);
 }
+
+#[test]
+fn the_chains_order_and_jump_sit_at_the_foot_of_phrase() {
+    let (mut app, _realtime) = on_phrase_device();
+    keys(&mut app, "jj");
+    assert_eq!(
+        app.track_control(),
+        Control::Base(TrackControl::ChainOrder)
+    );
+    let text = fx_page_text(&app).join("\n");
+    assert!(text.contains("Chain"), "{text}");
+    keys(&mut app, "=");
+    assert_eq!(app.song().tracks[0].chain_order, 1);
+    let line = status_line(&app);
+    assert!(line.contains("Reverse: the chain's phrases"), "{line}");
+    // Stepping stops at the list's end.
+    for _ in 0..40 {
+        keys(&mut app, "=");
+    }
+    assert_eq!(app.song().tracks[0].chain_order, 27);
+    keys(&mut app, "l");
+    assert_eq!(app.track_control(), Control::Base(TrackControl::ChainJump));
+    keys(&mut app, "=");
+    assert!(app.song().tracks[0].chain_jump > 0);
+}

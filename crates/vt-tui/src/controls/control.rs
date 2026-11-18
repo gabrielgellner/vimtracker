@@ -175,7 +175,7 @@ impl Control {
             Self::Base(TrackControl::DiceJump) => "Dice jump",
             Self::Base(TrackControl::Swing) => "Swing",
             Self::Base(TrackControl::ChainOrder) => "Chain",
-            Self::Base(TrackControl::ChainJump) => "Chain jump",
+            Self::Base(TrackControl::ChainJump) => "Jump",
             Self::Choke => "Choke",
             Self::Group => "Group",
             Self::Role => "Role",

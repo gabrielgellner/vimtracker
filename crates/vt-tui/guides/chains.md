@@ -75,8 +75,9 @@ in semitones, up to 48 either way.
 ### Chain order
 
 A chain plays its rows top to bottom unless its track's `Chain` and `Chain
-jump`, at the foot of the Gen page's `Phrase` device, say otherwise. `Chain` is
-the order its rows play in, from the same list as `:order` for a phrase's rows:
+jump`, at the foot of the Gen page's `Phrase` device, the second shown there as
+`Jump`, say otherwise. `Chain` is the order its rows play in, from the same list
+as `:order` for a phrase's rows:
 `Forward` as written, then `Reverse`, `Up-down`, `Shuffle` and the rest, so a
 chain of four phrases in `Up-down` plays `1 2 3 4 3 2`, carrying on from where
 it was each time round. `Chain jump` is the chance, `00` to `FF`, that a row
