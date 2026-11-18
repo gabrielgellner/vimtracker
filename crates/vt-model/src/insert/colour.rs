@@ -1,4 +1,4 @@
-//! The effects that colour a sound: a distortion, a tape and an exciter.
+//! The effects that colour a sound: a distortion, a tape, an exciter and an analog colour.
 
 use serde::{Deserialize, Serialize};
 
@@ -456,6 +456,142 @@ impl Exciter {
         tone,
         attack,
         release,
+        mix,
+        gain,
+    }
+}
+
+/// The curve an analog colour bends the sound with, each a circuit's (#262).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ColourType {
+    /// `tanh`, a differential pair's: smooth and symmetric.
+    #[default]
+    Warm,
+    /// A 12AX7 triode stage, by Koren's equations: soft, with a strong second harmonic.
+    Tube,
+    /// A pair of silicon diodes back to back: soft, symmetric, and never quite flat.
+    Diode,
+    /// A transistor stage: cutting off softly one way and saturating hard the other.
+    Transistor,
+}
+
+impl ColourType {
+    /// Every type, in the order `+` goes through them.
+    pub const ALL: [Self; 4] = [Self::Warm, Self::Tube, Self::Diode, Self::Transistor];
+
+    /// The name on screen.
+    pub const fn name(self) -> &'static str {
+        COLOUR_TYPE_NAMES[self as usize]
+    }
+}
+
+crate::listed::listed!(ColourType);
+
+const COLOUR_TYPE_NAMES: [&str; 4] = ["Warm", "Tube", "Diode", "Transistor"];
+
+/// How far a colour's `Drive` turns up what reaches its curve at `FF`, in dB, and how far its
+/// `Emph` lifts or cuts the highs before the curve at either end.
+pub const MOST_COLOUR_DRIVE_DB: f32 = 24.0;
+pub const MOST_COLOUR_EMPHASIS_DB: f32 = 12.0;
+
+/// A colour's drive in dB, for a value on the `00` to `FF` scale: none at `00`.
+pub fn colour_drive_db(value: f32) -> f32 {
+    (value / 255.0).clamp(0.0, 1.0) * MOST_COLOUR_DRIVE_DB
+}
+
+/// How far a colour's emphasis lifts the highs before its curve, in dB, cutting them after by as
+/// much: none at `80`, and cut before below it.
+pub fn colour_emphasis_db(value: f32) -> f32 {
+    from_middle(value) * MOST_COLOUR_EMPHASIS_DB
+}
+
+/// A colour's, in the order songs number them.
+pub(crate) const COLOUR_PARAMS: [Entry; 8] = [
+    Entry {
+        meaning: "the circuit whose curve it bends the sound with: warm, a tube, diodes or a transistor",
+        name: "Type",
+        key: "type",
+        label: Some("TYPE"),
+        kind: Kind::Stepped {
+            choices: &COLOUR_TYPE_NAMES,
+            wraps: true,
+        },
+        default: 0,
+        place: Place::Type,
+    },
+    hex_param("Drive", "drive", "DRIV", Colour::DEFAULT.drive)
+        .units(Units::ColourDrive)
+        .means("how hard it drives the curve: clean at 00 but for what's loud, 24 dB at FF"),
+    hex_param("Even", "even", "EVEN", Colour::DEFAULT.even)
+        .means("tips the curve to one side, for even harmonics: a second that thickens"),
+    hex_param("Hard", "hard", "HARD", Colour::DEFAULT.hard)
+        .means("sharpens the curve's knee toward a hard clip, for brighter odd harmonics"),
+    hex_param("Emph", "emph", "EMPH", Colour::DEFAULT.emph)
+        .units(Units::ColourEmphasis)
+        .centred()
+        .means("above 80 the highs saturate first, as tape and transformers do; below, last"),
+    hex_param("Iron", "iron", "IRON", Colour::DEFAULT.iron)
+        .means("a transformer's lows: loud bass saturates, with a small lift around 60 Hz"),
+    MIX_PARAM,
+    GAIN_PARAM,
+];
+
+/// Where its settings sit on the FX page.
+pub(super) const COLOUR_GRID: Columns = &[
+    &["drive"],
+    &["even", "hard"],
+    &["emph", "iron"],
+    &["mix", "gain"],
+];
+
+/// An analog colour's settings: a circuit's curve between a pre- and a de-emphasis, and a
+/// transformer's lows. One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Colour {
+    pub kind: ColourType,
+    /// How hard the curve is driven, from none at `00` to 24 dB at `FF`.
+    pub drive: u8,
+    /// How far the curve's working point moves toward its nearer end, for even harmonics.
+    pub even: u8,
+    /// How far the curve is blended toward a hard clip at its own ends.
+    pub hard: u8,
+    /// How far the highs are lifted before the curve and cut after, so they saturate first: none
+    /// at `80`, and the other way below.
+    pub emph: u8,
+    /// How much a transformer's core saturates the lows, and lifts them around 60 Hz.
+    pub iron: u8,
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Colour {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Colour {
+    /// As it starts: warm, driven a little, tipped a little, with a little iron.
+    pub const DEFAULT: Self = Self {
+        kind: ColourType::Warm,
+        drive: 0x40,
+        even: 0x40,
+        hard: 0x00,
+        emph: 0x80,
+        iron: 0x40,
+        mix: 0xFF,
+        gain: UNITY_LEVEL,
+    };
+
+    effect_settings! {
+        kind: ColourType,
+        drive,
+        even,
+        hard,
+        emph,
+        iron,
         mix,
         gain,
     }

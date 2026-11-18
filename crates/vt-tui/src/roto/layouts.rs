@@ -1671,6 +1671,24 @@ const EXCITER: DeviceLayout = live(
         ],
     )],
 );
+/// How hard it drives, then the curve's shape, then where the highs and lows saturate. Its curve
+/// is chosen in the app, and every curve has the same settings.
+const COLOUR: DeviceLayout = live(
+    "fx/colour",
+    &[knobs(
+        EffectKind::Colour.name(),
+        [
+            s("drive"),
+            s("even"),
+            s("hard"),
+            s("emph"),
+            s("iron"),
+            GAP,
+            s("mix"),
+            s("gain"),
+        ],
+    )],
+);
 /// How long the rotors take to change, the horn's Doppler and swell, the drive and the width,
 /// with the fast and slow switch on the button under the inertia, as an organist's half-moon.
 const ROTARY: DeviceLayout = stored(
@@ -2343,6 +2361,7 @@ const BY_EFFECT: [&[&DeviceLayout]; EffectKind::COUNT] = by_kind([
     (EffectKind::Clouds as usize, &[&CLOUDS]),
     (EffectKind::Beads as usize, &[&BEADS]),
     (EffectKind::Echo as usize, &[&ECHO]),
+    (EffectKind::Colour as usize, &[&COLOUR]),
 ]);
 
 /// Each mod slot's layout, by its type's [`ModKind`].

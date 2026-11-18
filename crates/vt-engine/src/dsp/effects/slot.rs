@@ -16,6 +16,7 @@ use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::dynamics::compressor::Compressor as Dynamics;
 use crate::dsp::dynamics::eq::ThreeBands;
 use crate::dsp::dynamics::glue::PeakClip;
+use crate::dsp::effects::colour::Saturation;
 use crate::dsp::effects::distort::Distortion;
 use crate::dsp::effects::exciter::Exciter as Excitement;
 use crate::dsp::effects::memory::{BUFFERED_FACTS, Memory, MemoryPool, SILENT, SongPlace};
@@ -346,7 +347,7 @@ macro_rules! kept {
 
 kept! {
     settling: Distort(Distortion), Eq(ThreeBands), Compressor(Squeeze), Lpg(Gate),
-        Exciter(Excitement);
+        Exciter(Excitement), Colour(Saturation);
     moving: Phaser(AllPasses), Vowel(Formants);
 }
 
@@ -1132,6 +1133,7 @@ impl InsertState {
                 (wet, input)
             }
             Kept::Exciter(exciter) => (exciter.process(input, same, smoothing, rate), input),
+            Kept::Colour(colour) => (colour.process(input, same, smoothing, rate), input),
             Kept::Phaser(phaser) => (phaser.process(input, smoothing, rate), input),
             Kept::Eq(eq) => (eq.process(input, same, smoothing, rate), input),
             Kept::Distort(distort) => {
@@ -1240,6 +1242,7 @@ mod tests {
             }),
             Insert::Lpg(LowPassGate::DEFAULT),
             Insert::Exciter(Exciter::DEFAULT),
+            Insert::Colour(vt_model::insert::Colour::DEFAULT),
             Insert::Phaser(Phaser::DEFAULT),
             Insert::Vowel(Vowel::DEFAULT),
         ];

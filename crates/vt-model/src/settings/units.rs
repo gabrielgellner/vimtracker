@@ -6,11 +6,12 @@ use crate::envelope::{Hold, hold_at, time_at};
 use crate::groove::swing_tenths;
 use crate::insert::{
     ALGORITHM_NAMES, ECHO_BASS, ECHO_TREBLE, Triggering, VOWEL_NAMES, algorithm_blend, attack_ms,
-    ceiling_db, echo_head_seconds, echo_input_db, echo_shelf_db, exciter_attack_ms,
-    exciter_release_ms, exciter_tone_hz, fine_cents, flanger_delay_ms, grain_density, grain_length,
-    grain_ms, grain_time_seconds, input_db, limit_release_ms, makeup_db, plate_size, range_db,
-    ratio, release_ms, repeat_decay_db, reverb_decay_seconds, shift_delay_ms, shift_hertz,
-    spread_hertz, tape_drive_db, threshold_db, vowel_blend,
+    ceiling_db, colour_drive_db, colour_emphasis_db, echo_head_seconds, echo_input_db,
+    echo_shelf_db, exciter_attack_ms, exciter_release_ms, exciter_tone_hz, fine_cents,
+    flanger_delay_ms, grain_density, grain_length, grain_ms, grain_time_seconds, input_db,
+    limit_release_ms, makeup_db, plate_size, range_db, ratio, release_ms, repeat_decay_db,
+    reverb_decay_seconds, shift_delay_ms, shift_hertz, spread_hertz, tape_drive_db, threshold_db,
+    vowel_blend,
 };
 use crate::modulation::{depth_of, depth_text};
 use crate::step::MAX_VELOCITY;
@@ -65,6 +66,10 @@ pub enum Units {
     FlangerDelay,
     /// A tape's drive, in dB either way of none.
     TapeDrive,
+    /// An analog colour's drive in dB from none up, and how far its emphasis lifts the highs
+    /// before its curve, in dB either way.
+    ColourDrive,
+    ColourEmphasis,
     /// A Space Echo's first head's delay, its drive and its shelves, in ms and dB.
     EchoRate,
     EchoInput,
@@ -347,6 +352,10 @@ impl Kind {
                 Units::LimitRelease => milliseconds(limit_release_ms(coarse as f32)),
                 Units::FlangerDelay => format!("{:.1} ms", flanger_delay_ms(coarse as f32)),
                 Units::TapeDrive => format!("{:+.1} dB", tape_drive_db(coarse as f32)),
+                Units::ColourDrive => format!("+{:.1} dB", colour_drive_db(coarse as f32)),
+                Units::ColourEmphasis => {
+                    format!("{:+.1} dB", colour_emphasis_db(coarse as f32))
+                }
                 Units::EchoRate => milliseconds(echo_head_seconds(coarse as f32) * 1000.0),
                 Units::EchoInput => format!("{:+.1} dB", echo_input_db(coarse as f32)),
                 Units::EchoBass => format!("{:+.1} dB", echo_shelf_db(coarse as f32, ECHO_BASS)),
