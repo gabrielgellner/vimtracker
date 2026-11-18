@@ -3834,14 +3834,15 @@ fn a_count_steps_the_effect_in_a_slot_that_many_effects() {
     use vt_tui::controls::Control;
     let (mut app, _realtime) = on_fx_page();
     assert_eq!(app.track_control(), Control::Insert(0));
+    // In the order `K` lists them.
     let at = |app: &App| {
         let insert = app.song().tracks[0].inserts[0];
-        Insert::ALL
-            .iter()
-            .position(|each| each.name() == insert.name())
+        Insert::listed_order()
+            .position(|place| Insert::ALL[place].name() == insert.name())
             .unwrap()
     };
     let from = at(&app);
     press(&mut app, "3=");
     assert_eq!(at(&app), (from + 3) % Insert::ALL.len());
+    assert_eq!(app.song().tracks[0].inserts[0].name(), "EQ3");
 }

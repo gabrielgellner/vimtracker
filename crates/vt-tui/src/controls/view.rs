@@ -360,14 +360,20 @@ pub fn view(control: Control, track: &Track, song: &Song, scale: bool) -> Option
             };
             entry_view(of, control, track, described, insert.value(param))
         }
+        // In the order `K` lists them, under their groups, so `=`, `-` and the Roto's knob step
+        // through the list as it's shown, though each still sets its place in `Insert::ALL`.
         Control::Insert(slot) => {
             let insert = track.inserts[slot];
-            let at = Insert::ALL
+            let listed: Vec<Insert> = Insert::listed_order().map(|at| Insert::ALL[at]).collect();
+            let at = listed
                 .iter()
                 .position(|each| each.name() == insert.name())
                 .unwrap_or(0);
-            let empty = Insert::ALL.iter().position(|each| *each == Insert::Empty);
-            let effects = Insert::ALL.iter().map(|each| Choice::of(*each));
+            let empty = listed.iter().position(|each| *each == Insert::Empty);
+            let effects = listed.iter().map(|each| Choice {
+                group: Cow::Borrowed(each.category()),
+                ..Choice::of(*each)
+            });
             ParamView {
                 engaged: insert != Insert::Empty,
                 ..of.listed(effects, at, empty.unwrap_or(0), true)
@@ -1268,11 +1274,12 @@ pub fn set(
             slot,
             insert: track.inserts[slot].with_value(param, byte),
         },
-        // Choosing what's already there keeps its settings.
+        // By its place in the list as `K` shows it. Choosing what's already there keeps its
+        // settings.
         Control::Insert(slot) => Action::SetInsert {
             track: at,
             slot,
-            insert: match Insert::ALL[index] {
+            insert: match Insert::ALL[Insert::listed_order().nth(index)?] {
                 chosen if chosen.name() == track.inserts[slot].name() => track.inserts[slot],
                 chosen => chosen,
             },
