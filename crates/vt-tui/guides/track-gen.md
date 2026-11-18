@@ -114,7 +114,7 @@ What a fill's settings do together, and recipes for the ones with the most, are 
 | `K` | List a setting's choices; switch one that's off or on |
 | `x` | Back to where it starts |
 | `r` | Roll the generator again, from anywhere in it, as in the panel |
-| `Space g a` | Apply it, as plain values; with `Vary` on, keep the pass heard; with `Mutate` below `100%`, apply it as heard |
+| `Space g a` | Apply it, as plain values; with `Vary` on, keep the pass heard |
 | `dd` | To nothing; on `Fill`, take it away, putting back what was under it |
 | `Enter` | Open the shape panel on it, in the phrase view, as `gl` does |
 
