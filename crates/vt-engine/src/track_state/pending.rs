@@ -168,11 +168,24 @@ pub(crate) struct PendingStep {
     /// The step whose dice its `CHA`s and `RND`s roll, if its track's dice loop is on, decided
     /// as it was worked out (decision 410).
     pub dice: Option<DiceStep>,
+    /// The seed its dice are hashed from and its step as they count it, with its dice loop off:
+    /// the song's seed and the step as it is, or, after an `SED`, the seed it gave and the step
+    /// counted from its row, decided as it was worked out (decision 421).
+    pub seed: u64,
+    pub unlooped: DiceStep,
     /// What its row's `CHA` and `CND` decided, once the step's first part has decided them.
     pub plays: Option<Decided>,
     /// Which of its track's chain starts it was worked out after, which its accumulators count
     /// from.
     pub start: u64,
+}
+
+impl PendingStep {
+    /// The count its `RND`s, its `%`s, its thinning and its pulses' shares are hashed at: that of
+    /// the step its dice loop holds, if it's on, or its own as its dice count it.
+    pub(crate) fn rolls(&self) -> i64 {
+        self.dice.unwrap_or(self.unlooped).count
+    }
 }
 
 /// What a row's chance and conditions decided, once, on its first pulse.
@@ -201,9 +214,9 @@ pub(crate) struct Retrigger {
     pub factor: f32,
     /// The row's accumulator, where each hit moves its note on.
     pub accumulates: Option<Accumulating>,
-    /// With `Chance target` on `Pulse`, the count its row played at and the share of the time
-    /// each hit plays (decision 406).
-    pub keep: Option<(i64, f32)>,
+    /// With `Chance target` on `Pulse`, the seed and count its row's dice rolled at and the share
+    /// of the time each hit plays (decisions 406 and 421).
+    pub keep: Option<((u64, i64), f32)>,
     /// How many hits it's had.
     pub hits: u64,
 }

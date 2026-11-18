@@ -915,6 +915,46 @@ mod tests {
         assert_eq!(violations, 0);
     }
 
+    /// Tracks reseeding their dice with `SED`s on rows and in a lane, over rows that roll `CHA`,
+    /// `RND` and `%`, with `Jump`, a lane's `Jump` and the dice loop on, each turned every block
+    /// (decision 421).
+    #[test]
+    fn reseeding_every_block_never_allocates_in_the_callback() {
+        use vt_model::lane::Lane;
+        let rows = [
+            "C-3 -- cha:80 rnd:F3 sed:2A",
+            "D-3 -- rnd:F7 cnd:E8 ---",
+            "E-3 -- sed:07 cha:40 ---",
+            "--- -- --- --- ---",
+        ];
+        let reseeding = |round: usize| {
+            let mut song = song(8, 16);
+            for (at, track) in song.tracks.iter_mut().take(8).enumerate() {
+                track.jump = ((round * 29 + at * 13) % 256) as u8;
+                track.lanes[2].jump = ((round * 31 + at * 5) % 256) as u8;
+                track.dice_loop = ((round + at) % 24) as u8;
+                track.dice_mutate = ((round * 37 + at * 11) % 256) as u8;
+                let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+                for step in 0..16 {
+                    *phrase.step_mut(step).unwrap() = rows[step % rows.len()].parse().unwrap();
+                }
+                phrase.set_lane(2, (at % 2 == 0).then(|| Lane::new(0, 3)));
+            }
+            song
+        };
+        let pool = samples();
+        let engine = Engine::new(48_000, published(reseeding(0), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 0..200 {
+            handle.publish(published(reseeding(round), &pool));
+            violations += blocks(&mut rt, 1);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
     /// Tracks in `Legato`, tying and striking, on synths and samples alike (decision 380).
     #[test]
     fn legato_never_allocates_in_the_callback() {

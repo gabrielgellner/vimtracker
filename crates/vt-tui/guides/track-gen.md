@@ -75,8 +75,9 @@ plays the row the lane played before again instead of its own, so the value
 holds, as a failed roll does in Kria and on the Metropolix: a jumped row kept is
 kept as it jumped, and a lane's first row, as it starts or as playing starts
 from a step, is always its own. It rolls apart from `Jump`, so turning it leaves
-the jumps where they were. `Cue` never holds either back, as they're how the
-loop is walked, not its bounds. At the end of its title, dim, it says how this phrase's lane
+the jumps where they were. After an `SED`, its jumps and holds come out the same
+each time that row plays (see **Reseeding** in the FX guide). `Cue` never holds
+either back, as they're how the loop is walked, not its bounds. At the end of its title, dim, it says how this phrase's lane
 is heard against its own: `· here 6 rows, its own 4 rows`. `=` `-` `+` `_`, `i`,
 `K` on `Rate`, `x`, `M` and `gd` work on them as on any of the track's settings,
 a step's `LLEN1`, `LRAT1`, `LSTA1`, `LJMP1` and `LHLD1` lock them, and a mod slot can go to them. A column

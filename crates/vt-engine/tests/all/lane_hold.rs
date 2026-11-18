@@ -143,3 +143,43 @@ fn cue_never_holds_it_back() {
     cued.tracks[0].cue = 1;
     assert_eq!(rows(&cued, 64), rows(&song(1, 0, 0x80), 64));
 }
+
+/// Whether `pattern` repeats every `period` of its places.
+fn repeats(pattern: &[usize], period: usize) -> bool {
+    pattern
+        .iter()
+        .zip(pattern.iter().skip(period))
+        .all(|(a, b)| a == b)
+}
+
+#[test]
+fn after_sed_a_held_lane_holds_the_same_every_pass() {
+    // A phrase of 16 rows whose FX 1 lane is its first four, holding half the time, with an `SED`
+    // in FX 2 on its first row or not (decision 421).
+    let held = |first: &str| {
+        let mut phrase = Phrase::new(16);
+        for row in 0..4 {
+            let text = format!("--- -- sna:{:02X}h --- ---", (row + 1) * 0x10);
+            *phrase.step_mut(row).unwrap() = text.parse::<Step>().unwrap();
+        }
+        let text = format!("--- -- sna:10h {first} ---");
+        *phrase.step_mut(0).unwrap() = text.parse::<Step>().unwrap();
+        phrase.set_lane(0, Some(Lane::new(0, 4)));
+        let mut song = Song::new(1);
+        song.seed = 0x5EED;
+        song.tracks[0].phrases.insert(0, Arc::new(phrase));
+        song.tracks[0].lanes[0].hold = 0x80;
+        rows(&song, 64)
+    };
+    let reseeded = held("sed:2A");
+    assert!(repeats(&reseeded, 16), "{reseeded:?}");
+    assert!(
+        reseeded[..16]
+            .iter()
+            .zip((0..4).cycle())
+            .any(|(row, counted)| *row != counted),
+        "it holds: {reseeded:?}"
+    );
+    let fresh = held("---");
+    assert!(!repeats(&fresh, 16), "{fresh:?}");
+}

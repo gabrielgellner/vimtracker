@@ -244,6 +244,7 @@ These have no mark.
 | `ACU` | Move the row's note on each time it plays: see **Accumulators** |
 | `ARP` | Go round the note, `x` up and `y` up: see **Arpeggios** |
 | `RND` | Vary the note, or the lock to its left, by chance: see **Variations** |
+| `SED` | Reseed the track's dice with `xx` from this row: see **Reseeding** |
 | `SLD` | Slide the row's locks to the next note's values: see **Slides** |
 
 A unit is a sixth of a step, so `DEL03` delays by half a step. The step is the
@@ -600,6 +601,29 @@ the `:seed`, the track and the step, so a render repeats. `DLP`, `DMU` and
 `DJMP` on a row set them for the step that plays it, read before it lands, as
 `JMP` is, and a lane, a mod slot or a macro moves them too. With `Dice mutate`
 at `FF` an `RND` or a `CND` chance rolls just as it does with the loop off.
+
+### Reseeding
+
+`SED` reseeds the track's dice from its row on, as the M8's `SED` does: its
+value is a seed of its own, so whatever is rolled after it is rolled the same
+way each time the row plays. Put `SED 2A` on a phrase's first row and its `CHA`s,
+`RND`s and `CND` chances play the same every pass, while the same phrase without
+it plays a new run each time. Another value rolls another run, so try a few
+until one sounds right, then keep it. The seed is the value's alone, so the
+passage plays the same in any song, whatever its `:seed`; two tracks with the same
+`SED` still roll apart, as two tracks of one song do.
+
+From the row on, everything is counted from it: each `CHA`, `RND`, `CND`
+chance and row `CDLT` thins, the phrase's `Jump` and each lane's `Jump`, the
+dice loop, which empties and fills again from the reseeded steps, the groove's
+random timing, and an arpeggio's or an accumulator's `Random`. A Steps slot's
+`Mutate` and `Jump`, an LFO's random shapes, a synth's drift and the generators'
+own seeds aren't touched. It holds until the next `SED` on the track, or until
+playing starts again, so playing from a row after it rolls from the `:seed`
+until an `SED` plays. It's read before the row plays, as `JMP` is, from the row
+the walk reaches, so the row's own `Jump` is rolled from the new seed, and a
+failed `CND` doesn't hold it back. In a lane, it reseeds as each of its rows
+with one starts.
 
 ## Groove
 
