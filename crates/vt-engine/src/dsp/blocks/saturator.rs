@@ -85,6 +85,9 @@ pub(crate) struct Table {
     slopes: [f64; KNOTS],
     firsts: [f64; KNOTS],
     seconds: [f64; KNOTS],
+    /// The second integral across each segment as a polynomial in how far along it is, from its
+    /// constant up, for the one lookup every sample at the higher rate makes.
+    second_terms: [[f64; 6]; KNOTS],
     /// The curve's own value at each end, where the hard clip it blends toward holds.
     low: f64,
     high: f64,
@@ -162,6 +165,7 @@ impl Table {
             slopes,
             firsts: [0.0; KNOTS],
             seconds: [0.0; KNOTS],
+            second_terms: [[0.0; 6]; KNOTS],
         };
         // Each integral from nothing, a segment at a time out from the middle either way.
         for knot in MIDDLE + 1..KNOTS {
@@ -171,6 +175,19 @@ impl Table {
         for knot in (0..MIDDLE).rev() {
             table.firsts[knot] = table.firsts[knot + 1] - table.first_within(knot, 1.0);
             table.seconds[knot] = table.seconds[knot + 1] - table.second_within(knot, 1.0);
+        }
+        // `second_within`'s basis, gathered by power.
+        for knot in 0..KNOTS - 1 {
+            let [v0, m0, v1, m1] = table.knots(knot);
+            let squared = STEP * STEP;
+            table.second_terms[knot] = [
+                table.seconds[knot],
+                STEP * table.firsts[knot],
+                squared * 0.5 * v0,
+                squared * m0 / 6.0,
+                squared * (0.25 * (v1 - v0) - m0 / 6.0 - m1 / 12.0),
+                squared * (0.1 * (v0 - v1) + 0.05 * (m0 + m1)),
+            ];
         }
         table
     }
@@ -258,7 +275,10 @@ impl Table {
     #[inline]
     pub(crate) fn second(&self, x: f64) -> f64 {
         match Self::place(x) {
-            Some((knot, t)) => self.seconds[knot] + self.second_within(knot, t),
+            Some((knot, t)) => {
+                let [c0, c1, c2, c3, c4, c5] = self.second_terms[knot];
+                c0 + t * (c1 + t * (c2 + t * (c3 + t * (c4 + t * c5))))
+            }
             None => {
                 let (end, p) = Self::past(x);
                 self.seconds[end]
@@ -460,33 +480,37 @@ impl Blend {
     }
 
     /// The remainder through second-order ADAA, for the newest of three samples and the two
-    /// before it, given the second integrals at those two: the curve's mean over the two intervals
-    /// between them, weighted by a triangle, which belongs to the middle sample. With it, the
-    /// second integral at the newest, for the next.
+    /// before it: the curve's mean over the two intervals between them, weighted by a triangle,
+    /// which belongs to the middle sample. `kept` is the second integral at the middle sample
+    /// and the divided difference between it and the oldest, which it gives back for the newest,
+    /// for the next.
     #[inline]
-    fn antialiased(
-        self,
-        [newest, middle, oldest]: [f64; 3],
-        [at_middle, at_oldest]: [f64; 2],
-    ) -> (f64, f64) {
+    fn antialiased(self, [newest, middle, oldest]: [f64; 3], kept: &mut [f64; 2]) -> f64 {
+        let [at_middle, before] = *kept;
         let at_newest = self.second(newest);
+        let now = self.divided(newest, middle, at_newest, at_middle);
+        *kept = [at_newest, now];
         let ends = newest - oldest;
         if ends.abs() >= ADAA_CLOSEST {
-            let out = 2.0
-                * (self.divided(newest, middle, at_newest, at_middle)
-                    - self.divided(middle, oldest, at_middle, at_oldest))
-                / ends;
-            return (out, at_newest);
+            return 2.0 * (now - before) / ends;
         }
         // The two ends are about the same: the triangle's two halves fold together.
         let mean = 0.5 * (newest + oldest);
         let from_middle = mean - middle;
-        let out = if from_middle.abs() < ADAA_CLOSEST {
+        if from_middle.abs() < ADAA_CLOSEST {
             self.value(0.5 * (mean + middle))
         } else {
             2.0 / from_middle * (self.first(mean) + (at_middle - self.second(mean)) / from_middle)
-        };
-        (out, at_newest)
+        }
+    }
+
+    /// What `antialiased` keeps, worked out afresh for the last two samples.
+    fn kept(self, [middle, oldest]: [f64; 2]) -> [f64; 2] {
+        let [at_middle, at_oldest] = [middle, oldest].map(|x| self.second(x));
+        [
+            at_middle,
+            self.divided(middle, oldest, at_middle, at_oldest),
+        ]
     }
 }
 
@@ -626,12 +650,11 @@ impl Tuning {
 pub(crate) struct Saturator {
     oversampler: OctupleOversampler,
     /// The last two samples at the higher rate, driven, before the working point moved them, and
-    /// the curve's second integrals at them, as moved. These are worked out again when the curve,
-    /// the working point or the hardness has moved since, which `held` keeps, so moving any of
-    /// them can't jump. Nothing at all is right for a fresh state's samples: every curve's
-    /// integrals are nothing at nothing.
+    /// what the ADAA keeps of them, as moved: the second integral at the last, and the divided
+    /// difference between them. These are worked out again when the curve, the working point or
+    /// the hardness has moved since, which `held` keeps, so moving any of them can't jump.
     last: [f64; 2],
-    seconds: [f64; 2],
+    kept: [f64; 2],
     held: [f64; 3],
     pre: f32,
     de: f32,
@@ -648,7 +671,7 @@ impl Tiny for Saturator {
         let Self {
             oversampler,
             last,
-            seconds: _,
+            kept: _,
             held: _,
             pre,
             de,
@@ -669,7 +692,7 @@ impl Tiny for Saturator {
 same_bits_by_fields!(Saturator {
     oversampler,
     last,
-    seconds,
+    kept,
     held,
     pre,
     de,
@@ -712,7 +735,7 @@ impl Saturator {
         let held = [colouring.curve as u8 as f64 + 1.0, bias, hard];
         if !held.same_bits(&self.held) {
             self.held = held;
-            self.seconds = self.last.map(|x| blend.second(x + bias));
+            self.kept = blend.kept(self.last.map(|x| x + bias));
         }
         // Held far past full scale, and a NaN with it, so neither can stay in the filters.
         let input = within(input, -HEADROOM, HEADROOM);
@@ -720,20 +743,19 @@ impl Saturator {
         let Self {
             oversampler,
             last,
-            seconds,
+            kept,
             ..
         } = self;
+        let across = 1.0 / rising;
         let shaped = oversampler.process(emphasised, |x| {
             // The straight line through nothing needs nothing to keep it from aliasing, only the
             // same triangle the rest is weighted by, which centres it on the middle sample too.
             let newest = f64::from(x) * drive;
             let [middle, oldest] = *last;
-            let line = (newest + middle + oldest) / 3.0;
-            let (rest, at_newest) =
-                blend.antialiased([newest + bias, middle + bias, oldest + bias], *seconds);
+            let line = (newest + middle + oldest) * (1.0 / 3.0);
+            let rest = blend.antialiased([newest + bias, middle + bias, oldest + bias], kept);
             *last = [newest, middle];
-            *seconds = [at_newest, seconds[0]];
-            ((line + rest - at_rest) / rising) as f32
+            ((line + rest - at_rest) * across) as f32
         });
         let out = tuning.de.process(&mut self.de, shaped);
 
@@ -1073,6 +1095,12 @@ mod tests {
             total += side.process(x, colouring(Curve::Tube, 12.0, 0.3, 0.3), &tuning);
         }
         eprintln!("a second of one side: {:?} ({total})", started.elapsed());
+        let mut bare = crate::dsp::blocks::oversampler::OctupleOversampler::default();
+        let started = std::time::Instant::now();
+        for &x in &input {
+            total += bare.process(x, |x| x * 1.0001);
+        }
+        eprintln!("the oversampler alone: {:?} ({total})", started.elapsed());
     }
 
     #[test]
