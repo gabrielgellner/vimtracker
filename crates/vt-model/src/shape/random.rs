@@ -150,7 +150,7 @@ impl Random {
     }
 
     /// How many of a scale's degrees `Steps` lets through.
-    pub(crate) fn kept(&self, scale: Scale) -> usize {
+    pub fn kept(&self, scale: Scale) -> usize {
         let degrees = degree_count(scale);
         match usize::from(self.steps) {
             0 => degrees,

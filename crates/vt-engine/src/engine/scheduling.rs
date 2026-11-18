@@ -233,9 +233,10 @@ impl Engine {
         // With the track's `ACU`s adding on each hit, each moves the row's note on.
         let moved = match (retrigger.accumulates, self.tracks[index].last_note) {
             (Some(row), Some(_)) => {
-                let heard =
-                    self.accumulate(index, row.epoch, row.row, row.written, Some(row.amount));
-                let heard = moved_note(heard, row.varied, self.scale);
+                let scale = self.scale_in(row.scale);
+                let amount = Some(row.amount);
+                let heard = self.accumulate(index, row.epoch, row.row, row.written, amount, scale);
+                let heard = moved_note(heard, row.varied, scale);
                 self.tracks[index].accumulated = (heard != row.written).then_some(heard);
                 Some(
                     (i16::from(heard) + i16::from(row.transpose))

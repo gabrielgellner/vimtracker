@@ -544,6 +544,15 @@ impl Services {
         sections.get(self.cursor.section).or(sections.last())
     }
 
+    /// The scale notes are entered, moved and described in: the section under the cursor's own,
+    /// or the song's (decision 426). The song's stays `live.scale`, which the project page and
+    /// `:scale` set and a live generator's notes are written in.
+    pub fn scale_here(&self) -> Scale {
+        let song = self.live.scale;
+        self.section_here()
+            .map_or(song, |section| section.scale_or(song))
+    }
+
     /// The step of its own that one track is at when another is at this one of its own, at their
     /// own speeds: the step playing then.
     pub(crate) fn step_on(&self, track: usize, from: usize, step: usize) -> usize {

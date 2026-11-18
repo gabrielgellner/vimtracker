@@ -208,6 +208,12 @@ so it can't change how a song sounds, unless you run `:scale fit`. Notes outside
 show in a different colour, and the status line shows `Scale D Dor`. It's saved with
 the song, and `u` doesn't undo it.
 
+A section can have a scale of its own, set in the song view's Scale column; see
+**Songs** in **Phrases and chains**. The keyboard, the moves, `:scale fit`, the
+colours and the status line then follow the scale of the section under the
+cursor, the one the phrase view is editing, whatever is playing. `Option-s` and
+`:scale` still set the song's, which the other sections play in.
+
 A chain's `Transpose` plays a phrase higher or lower whatever the scale, so the grid
 judges the notes as written.
 

@@ -8,6 +8,7 @@ use vt_model::dice::DiceStep;
 use vt_model::groove::Groove;
 use vt_model::modulation::MOD_SLOTS;
 use vt_model::order::WalkMove;
+use vt_model::scale::Scale;
 use vt_model::speed::Speed;
 
 use crate::rng::Pcg32;
@@ -178,6 +179,9 @@ pub(crate) struct PendingStep {
     /// Which of its track's chain starts it was worked out after, which its accumulators count
     /// from.
     pub start: u64,
+    /// The scale of its own of the section it was worked out in, if it has one, so a part landing
+    /// after the next section has started plays in its own section's scale (decision 426).
+    pub scale: Option<Scale>,
 }
 
 impl PendingStep {
@@ -256,6 +260,8 @@ pub(crate) struct Accumulating {
     /// Its chain's transpose, added after.
     pub transpose: i8,
     pub epoch: Epoch,
+    /// The scale of its own of the section its row played in, if it has one.
+    pub scale: Option<Scale>,
 }
 
 /// The most rows on a track that keep an accumulator of their own at once. Past it, a row with an

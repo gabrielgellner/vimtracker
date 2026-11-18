@@ -577,3 +577,157 @@ fn a_moving_generator_on_notes_renders_through_the_scale_it_was_given() {
         "{moving:?}"
     );
 }
+
+/// Random notes from C-3 to B-3 on sixteen rows of C-3, the scale off so each of the twelve
+/// semitones has a weight, every weight `1`, a new draw each pass, and macro 1 holding the root's
+/// weight, `Weight 1`, from 0 to `F` (decision 425), turned to `turn`.
+fn weighted_song(turn: u16) -> Song {
+    use vt_model::scale::Scale;
+    let mut song = Song::new(1);
+    song.millibpm = 128_000;
+    song.tracks[0].machine = Machine::Plaits(SynthVoice::VirtualAnalog);
+    let steps: Vec<Step> = vec!["C-3 64 --- --- ---".parse().unwrap(); 16];
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(steps)));
+    let mut random = Shape {
+        from: 60,
+        to: 71,
+        kind: FillKind::Random,
+        place: Where::Notes,
+        seed: 11,
+        vary: 1,
+        ..Shape::default()
+    };
+    random.random.weights = [1; 12];
+    let column = ShapeColumn::Note {
+        scale: Scale {
+            on: false,
+            ..Scale::default()
+        },
+        writes: None,
+    };
+    let song = apply(
+        song,
+        &Action::Generate {
+            track: 0,
+            phrase: 0,
+            column,
+            span: Span::rows(StepRange::between(0, 15)),
+            shape: random,
+        },
+    );
+    let root = MacroTarget::Gen {
+        column: GenColumn::Note,
+        param: GenParam::Weight1,
+    };
+    let song = apply(
+        song,
+        &Action::MapMacro {
+            track: 0,
+            at: 0,
+            map: MacroMap::numbers(root, (0, 15)),
+        },
+    );
+    apply(
+        song,
+        &Action::SetMacro {
+            track: 0,
+            at: 0,
+            value: turn,
+        },
+    )
+}
+
+/// The notes each row played, as the engine reported them, over every pass.
+fn notes_heard(song: &Song, heard: &[GenRow]) -> Vec<u8> {
+    let phrase = &song.tracks[0].phrases[&0];
+    heard
+        .iter()
+        .filter_map(|row| {
+            let step = match row.cell {
+                Some(cell) => phrase.generators()[row.generator]
+                    .heard_row(phrase.steps(), row.row, cell)
+                    .unwrap(),
+                None => phrase.steps()[row.row].clone(),
+            };
+            match step.note {
+                vt_model::step::Note::On(note) => Some(note),
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+/// A macro on one of a `Random`'s weights moves how often its note comes as the engine plays,
+/// over many draws: at `0` the root never plays, and at `F`, against `1` for each of the eleven
+/// others, it plays more than a third of the time, where at the turn each note comes about one
+/// time in twelve.
+#[test]
+fn a_macro_on_one_weight_moves_how_often_its_note_comes() {
+    let share = |turn: u16| {
+        let song = weighted_song(turn);
+        let (_, rows, _) = play(&song, 16 * 16);
+        let notes = notes_heard(&song, &rows);
+        assert_eq!(notes.len(), 16 * 16, "each row of each pass is heard");
+        notes.iter().filter(|note| **note == 60).count() as f64 / notes.len() as f64
+    };
+    // 15 × 0x11 / 0xFF is 1, the weight it's written with.
+    let (never, even, most) = (share(0), share(0x1100), share(0xFF00));
+    assert_eq!(never, 0.0, "a weight of 0 never plays the root");
+    assert!(even > 0.0 && even < 0.2, "about one in twelve: {even}");
+    assert!(most > 0.35, "the root comes most: {most}");
+}
+
+/// An LFO on the macro sweeps the root's weight: the notes heard move from those written, the
+/// generator renders again as it plays, and the rows heard, written in, play the same.
+#[test]
+fn an_lfo_on_a_macro_sweeps_one_weight() {
+    let mut song = weighted_song(0x1100);
+    let shape = song.tracks[0].phrases[&0].generators()[0].shape;
+    song = apply(
+        song,
+        &Action::Reshape {
+            track: 0,
+            phrase: 0,
+            generator: 0,
+            shape: Shape { vary: 0, ..shape },
+        },
+    );
+    song.tracks[0].mods[0] = ModSlot::lfo(
+        SettingId::macro_at(0),
+        Lfo {
+            rate: Rate::Steps(16),
+            ..Lfo::default()
+        },
+    )
+    .with_depth(0x7F);
+    let (out, rows, engine) = play(&song, 16);
+    let heard = as_heard(&song, &rows);
+    assert_ne!(heard, written(&song), "the LFO moved the notes");
+    assert!(engine.generators_heard(0).any(|run| run.renders > 1));
+    let (kept, ..) = play(&plain(&song, heard), 16);
+    assert!(out == kept, "the rows heard, written in, play the same");
+}
+
+/// The engine renders the same weights the same way every time: played again, a song with a
+/// weight on a macro and an LFO plays sample for sample as it did and is heard row for row so,
+/// and so does it saved and read back.
+#[test]
+fn a_weight_on_a_macro_renders_the_same_each_time() {
+    let mut song = weighted_song(0xC000);
+    song.tracks[0].mods[0] = ModSlot::lfo(
+        SettingId::macro_at(0),
+        Lfo {
+            rate: Rate::Steps(8),
+            ..Lfo::default()
+        },
+    )
+    .with_depth(0x40);
+    let (first, first_rows, _) = play(&song, 64);
+    let (again, again_rows, _) = play(&song, 64);
+    assert!(first == again, "it plays the same");
+    assert_eq!(first_rows, again_rows, "each row is heard the same");
+    let (read_back, ..) = play(&loaded(&song, "weights"), 64);
+    assert!(first == read_back, "saved and read back, it plays the same");
+}

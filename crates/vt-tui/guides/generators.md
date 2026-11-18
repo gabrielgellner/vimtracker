@@ -65,7 +65,15 @@ draw for four. `Space g a` on the Gen page keeps the one you hear.
 **What's going on.** As each row keeps its own draw, turning Spread or Bias moves
 the line rather than rolling a new one: the rows keep their order, so the row that
 drew highest still writes the highest value. A macro on Spread opens a line out
-from one note to the whole range, and back.
+from one note to the whole range, and back. Kept live, each of `Weights`' digits is
+a setting of its own as well, a cell on the Gen page's `Weights` device, so a macro,
+a `MAC` lock or an LFO on a macro moves one degree's weight while the line plays: the
+meloDICER's fader for that note, turned for you.
+
+**A fifth that comes and goes.** Note column, live, From `C-2`, To `C-3`, Steps all
+7, Weights `F000000`. On the Gen page, `Weights`' `G` on a macro, `Min` `0`, `Max`
+`F`, and an LFO on the macro. Listen for a bass on the two Cs alone that brings in
+G as the LFO rises, a third of the time at the top, and back to C alone as it falls.
 
 **A bass near the root.** Note column, From `C-2`, To `C-3`, Spread `30%`, Bias
 `-60`, Weights `F4F4F4F`. Listen for a line that stays low: C about a third of the

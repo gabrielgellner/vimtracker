@@ -27,7 +27,13 @@ moves' weights, `P`, `L` and `R`. An `Acid`'s loops
 `Trig loop` and `Note loop` in its first column, `Oct loop`, `Acc loop` and `Sld loop` in
 its second, level with `Octave`, `Accent` and `Slide` above, and at the end of its
 title, dim, when the loops come round together and when the phrase plays the same pass
-again, `in step again every 420 rows, the phrase every 105 passes`. A value with a bar is brief, as `9` for hits,
+again, `in step again every 420 rows, the phrase every 105 passes`. A `Random` on notes has its
+weights on a device of their own under it too, `Weights`: a cell for each degree of the column's
+scale, in rows of four from the root, each named by its note, `C`, `D#`, and at the end of its
+title, dim, how many of them `Steps` lets through, `Steps lets 5 of 5 through`. They're the shape
+panel's `Weights` digits, so a turn of a cell is that digit, and each takes a macro, a `MAC` lock
+or an LFO on its macro as any setting here does, so a weight can move while it plays. The Roto has
+the first eight on one page and the last four on a second. A value with a bar is brief, as `9` for hits,
 as its bar shows how many of how many; the status line says it in full, `Hits, 9
 of the 16 rows`.
 
