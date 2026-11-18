@@ -33,7 +33,7 @@ with the cursor has the brighter frame. An empty slot keeps its frame, says `Emp
 | Group | Effects |
 |---|---|
 | Dynamics | `Comp`, `Limit` |
-| Tone & drive | `EQ3`, `Distort`, `Tape`, `Exciter`, `Colour` |
+| Tone & drive | `EQ3`, `Distort`, `Tape`, `Reel`, `Exciter`, `Colour` |
 | Filter | `LPG`, `Vowel` |
 | Modulation | `Chorus`, `Phaser`, `Flanger`, `Rotary` |
 | Pitch & spectral | `Pitch`, `Freq Shift`, `Warps` |
@@ -368,6 +368,32 @@ more with wow, so `Mix` below `FF` can blend in a faint chorus.
 | `Bump` | How much the heads lift the lows. It starts half way |
 | `Wow` | A slow, drifting wobble in pitch, as a worn transport has |
 | `Flutter` | A faster, steady wobble, about twice a second |
+
+`Reel` is a second tape machine, after ChowTape, built from the physics
+rather than by ear: the tape's magnetism follows the head round a
+hysteresis loop, so it saturates and lags a little behind what it was, and
+the playback head loses the highs to its gap, the tape's spacing from it
+and the depth it's read from, each by how fast the tape runs. A quiet sound
+comes through at about its level at any `Drive` and `Sat`, so turning them
+up saturates it sooner rather than turning it up. It's worked at four times
+the rate, and its wow and flutter are `Tape`'s.
+
+| Setting | Does |
+|---|---|
+| `Drive` | How hard it hits the tape, from -18 dB to +18 dB, 0 dB at `80` |
+| `Sat` | How low the tape saturates: higher squashes sooner and thicker |
+| `Bias` | Higher thins the loop and cleans it; lower smears and crackles |
+| `Speed` | 3.75, 7.5, 15 or 30 ips: slower is darker, its head bump lower |
+| `Gap` | The head's gap, 0.5 to 20 µm: wider loses highs, in notches |
+| `Space` | How far the tape rides off the head, to 20 µm: highs go fast |
+| `Thick` | How deep the coating is read, to 50 µm: highs soften gently |
+| `Wow` | A slow, drifting wobble in pitch, as `Tape`'s |
+| `Flutter` | A faster, steady wobble, as `Tape`'s |
+
+The head bump lifts the lows a few dB around 60 Hz at 15 ips, twice that at
+30 and half at 7.5. `Bias` at `00` leaves the tape barely moved by a quiet
+sound, the crossover crackle of a machine set up wrong. Unlike `Tape` it has
+no ceiling: a loud sound driven hard comes out quieter, as tape squashes it.
 
 `Exciter` adds air, after the Aphex Aural Exciter as ChowDSP models it in
 Surge: it takes the highs of the sound, drives them into a soft clip for

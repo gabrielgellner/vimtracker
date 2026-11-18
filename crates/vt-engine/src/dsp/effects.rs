@@ -19,6 +19,7 @@ pub(crate) mod pedal;
 pub(crate) mod phaser;
 pub(crate) mod pitch_shifter;
 pub(crate) mod plate;
+pub(crate) mod reel;
 pub(crate) mod resonator;
 pub(crate) mod reverb;
 pub(crate) mod rotary;

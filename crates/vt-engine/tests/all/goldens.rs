@@ -186,6 +186,19 @@ fn moved(kind: EffectKind) -> Insert {
             mix: 0xE0,
             ..vt_model::insert::Colour::DEFAULT
         }),
+        EffectKind::Reel => Insert::Reel(vt_model::insert::Reel {
+            drive: 0xC0,
+            sat: 0xA0,
+            bias: 0x60,
+            speed: 1,
+            gap: 0x90,
+            space: 0x60,
+            thick: 0x70,
+            wow: 0x90,
+            flutter: 0x80,
+            mix: 0xE0,
+            ..vt_model::insert::Reel::DEFAULT
+        }),
         _ => panic!("{kind:?} needs its settings moved here, for its golden"),
     }
 }

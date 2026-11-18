@@ -26,4 +26,5 @@ clouds | Clouds
 beads | Beads
 echo | Space Echo
 colour | Colour
+reel | Reel
 hall | Hall

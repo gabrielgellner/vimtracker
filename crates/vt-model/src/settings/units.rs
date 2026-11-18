@@ -9,9 +9,9 @@ use crate::insert::{
     ceiling_db, colour_drive_db, colour_emphasis_db, echo_head_seconds, echo_input_db,
     echo_shelf_db, exciter_attack_ms, exciter_release_ms, exciter_tone_hz, fine_cents,
     flanger_delay_ms, grain_density, grain_length, grain_ms, grain_time_seconds, hall_lows,
-    input_db, limit_release_ms, makeup_db, plate_size, range_db, ratio, release_ms,
-    repeat_decay_db, reverb_decay_seconds, shift_delay_ms, shift_hertz, spread_hertz,
-    tape_drive_db, threshold_db, vowel_blend,
+    input_db, limit_release_ms, makeup_db, plate_size, range_db, ratio, reel_gap_um,
+    reel_spacing_um, reel_thickness_um, release_ms, repeat_decay_db, reverb_decay_seconds,
+    shift_delay_ms, shift_hertz, spread_hertz, tape_drive_db, threshold_db, vowel_blend,
 };
 use crate::modulation::{depth_of, depth_text};
 use crate::step::MAX_VELOCITY;
@@ -70,6 +70,10 @@ pub enum Units {
     /// before its curve, in dB either way.
     ColourDrive,
     ColourEmphasis,
+    /// A reel's playback gap, its tape's spacing from the head and the depth it's read from, in µm.
+    ReelGap,
+    ReelSpacing,
+    ReelThickness,
     /// A Space Echo's first head's delay, its drive and its shelves, in ms and dB.
     EchoRate,
     EchoInput,
@@ -358,6 +362,9 @@ impl Kind {
                 Units::ColourEmphasis => {
                     format!("{:+.1} dB", colour_emphasis_db(coarse as f32))
                 }
+                Units::ReelGap => microns(reel_gap_um(coarse as f32)),
+                Units::ReelSpacing => microns(reel_spacing_um(coarse as f32)),
+                Units::ReelThickness => microns(reel_thickness_um(coarse as f32)),
                 Units::EchoRate => milliseconds(echo_head_seconds(coarse as f32) * 1000.0),
                 Units::EchoInput => format!("{:+.1} dB", echo_input_db(coarse as f32)),
                 Units::EchoBass => format!("{:+.1} dB", echo_shelf_db(coarse as f32, ECHO_BASS)),
@@ -461,6 +468,15 @@ pub fn orders_text(places: i32) -> String {
 }
 
 /// A time as it reads best: `0.25 ms`, `12 ms` or `1.00 s`.
+/// A length in µm: to two places below one, and one above.
+fn microns(um: f32) -> String {
+    if um < 1.0 {
+        format!("{um:.2} µm")
+    } else {
+        format!("{um:.1} µm")
+    }
+}
+
 fn milliseconds(ms: f32) -> String {
     match ms {
         ms if ms < 1.0 => format!("{ms:.2} ms"),

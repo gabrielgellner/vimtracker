@@ -176,6 +176,7 @@ effects! {
     Beads(Beads),
     Echo(Echo),
     Colour(Colour),
+    Reel(Reel),
     Hall(Hall),
 }
 
