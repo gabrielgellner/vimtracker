@@ -61,7 +61,7 @@ const HEADROOM: f32 = 16.0;
 /// Where the emphasis shelves turn, in Hz, and how far they lift or cut the highs at either end of
 /// their range, in dB.
 const EMPHASIS_HZ: f32 = 1_500.0;
-const MOST_EMPHASIS_DB: f32 = 12.0;
+const MOST_EMPHASIS_DB: f32 = vt_model::insert::MOST_COLOUR_EMPHASIS_DB;
 
 /// Where the transformer's flux stops following the sound, in Hz: below it the flux is the
 /// sound's, above it falls an octave at a time, so a low note saturates the core and a high one
@@ -907,7 +907,6 @@ mod tests {
                     .iter()
                     .map(|&level| harmonics(colouring, &tuning, hertz, level).2)
                     .collect();
-                eprintln!("{curve:?} {hertz}: {thd:?}");
                 assert!(thd[0] < -40.0, "{curve:?} at {hertz}: {thd:?}");
                 assert!(
                     thd.windows(2).all(|p| p[1] > p[0] - 1.0),
@@ -928,7 +927,6 @@ mod tests {
                 second - third
             };
             let (none, half, full) = (ratio(0.0), ratio(0.5), ratio(1.0));
-            eprintln!("{curve:?} H2-H3: {none:.1} {half:.1} {full:.1}");
             assert!(
                 none < half && half < full,
                 "{curve:?}: {none} {half} {full}"
@@ -993,7 +991,6 @@ mod tests {
             .2
         };
         let (later, none, first) = (thd(-1.0), thd(0.0), thd(1.0));
-        eprintln!("emphasis THD at 6 kHz: {later:.1} {none:.1} {first:.1}");
         assert!(
             later + 6.0 < none && none + 6.0 < first,
             "{later} {none} {first}"
@@ -1020,7 +1017,6 @@ mod tests {
             harmonics(colouring(Curve::Warm, 0.0, 0.0, 1.0), &tuning, hertz, -1.0).2
         };
         let (low, high) = (thd(40.0), thd(1_000.0));
-        eprintln!("iron THD: 40 Hz {low:.1}, 1 kHz {high:.1}");
         assert!(low > -40.0 && high < low - 30.0, "{low} {high}");
     }
 
@@ -1043,7 +1039,6 @@ mod tests {
                 db(sidebands.sqrt() / carrier)
             };
             let (quiet, loud) = (imd(-30.0), imd(-3.0));
-            eprintln!("{curve:?} IMD: {quiet:.1} {loud:.1}");
             assert!(
                 quiet < -30.0 && loud > quiet + 20.0,
                 "{curve:?}: {quiet} {loud}"
@@ -1073,34 +1068,12 @@ mod tests {
                     .iter()
                     .map(|&alias| db(level_at(&out, alias) / fundamental))
                     .fold(f64::MIN, f64::max);
-                eprintln!("{curve:?} drive {drive} hard {hard} emphasis {emphasis}: {worst:.1} dB");
                 assert!(
                     worst < -80.0,
                     "{curve:?} {drive} {hard} {emphasis}: {worst} dB"
                 );
             }
         }
-    }
-
-    #[test]
-    fn what_it_costs() {
-        let tuning = Tuning::new(0.3, 0.5, RATE);
-        let mut side = Saturator::default();
-        let input: Vec<f32> = (0..RATE as usize)
-            .map(|f| (f as f32 * 0.0577).sin() * 0.7)
-            .collect();
-        let started = std::time::Instant::now();
-        let mut total = 0.0;
-        for &x in &input {
-            total += side.process(x, colouring(Curve::Tube, 12.0, 0.3, 0.3), &tuning);
-        }
-        eprintln!("a second of one side: {:?} ({total})", started.elapsed());
-        let mut bare = crate::dsp::blocks::oversampler::OctupleOversampler::default();
-        let started = std::time::Instant::now();
-        for &x in &input {
-            total += bare.process(x, |x| x * 1.0001);
-        }
-        eprintln!("the oversampler alone: {:?} ({total})", started.elapsed());
     }
 
     #[test]

@@ -1,28 +1,19 @@
-//! Analog colour (#262): the saturator frame of [`crate::dsp::blocks::saturator`] in a slot, its
-//! settings eased so moving them doesn't step.
+//! The `Colour` effect (#262): the saturator frame of [`crate::dsp::blocks::saturator`] in a slot,
+//! its settings eased so moving them doesn't step.
+
+use vt_model::insert::{
+    Colour as Settings, ColourType, MOST_COLOUR_EMPHASIS_DB, colour_drive_db, colour_emphasis_db,
+};
 
 use crate::dsp::blocks::saturator::{Colouring, Curve, Saturator, Tuning};
 use crate::dsp::blocks::sides::{SameBits, Sides, same_bits_by_fields};
 use crate::dsp::blocks::smoother::Smoothed;
-
-/// How far `Drive` turns up what reaches the curve at `FF`, in dB.
-pub(crate) const MOST_DRIVE_DB: f32 = 24.0;
-
-/// What a slot's colour is set to, each from `00` to `FF`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ColourSettings {
-    pub curve: Curve,
-    pub drive: u8,
-    pub even: u8,
-    pub hard: u8,
-    /// Centred: none at `80`.
-    pub emphasis: u8,
-    pub iron: u8,
-}
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::{Mono, SlotEffect};
 
 /// A slot's colour: each side's frame and the settings, eased.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Colour {
+pub(crate) struct Saturation {
     sides: Sides<Saturator>,
     curve: Curve,
     drive: Smoothed,
@@ -36,11 +27,8 @@ pub(crate) struct Colour {
     rate: u32,
 }
 
-impl Default for Colour {
+impl Default for Saturation {
     fn default() -> Self {
-        // The tables are worked out here, off the audio thread, rather than the first time a
-        // slot plays one.
-        Curve::prepare();
         Self {
             sides: Sides::default(),
             curve: Curve::Warm,
@@ -63,7 +51,7 @@ impl SameBits for Curve {
     }
 }
 
-same_bits_by_fields!(Colour {
+same_bits_by_fields!(Saturation {
     sides,
     curve,
     drive,
@@ -76,15 +64,21 @@ same_bits_by_fields!(Colour {
     rate,
 });
 
-impl Colour {
+impl Saturation {
     /// Take what's set.
-    pub(crate) fn follow(&mut self, settings: ColourSettings) {
+    pub(crate) fn follow(&mut self, settings: Settings) {
         let share = |value: u8| f32::from(value) / 255.0;
-        self.curve = settings.curve;
-        self.drive.target = share(settings.drive) * MOST_DRIVE_DB;
+        self.curve = match settings.kind {
+            ColourType::Warm => Curve::Warm,
+            ColourType::Tube => Curve::Tube,
+            ColourType::Diode => Curve::Diode,
+            ColourType::Transistor => Curve::Transistor,
+        };
+        self.drive.target = colour_drive_db(f32::from(settings.drive));
         self.even.target = share(settings.even);
         self.hard.target = share(settings.hard);
-        self.emphasis.target = vt_model::insert::from_middle(f32::from(settings.emphasis));
+        self.emphasis.target =
+            colour_emphasis_db(f32::from(settings.emph)) / MOST_COLOUR_EMPHASIS_DB;
         self.iron.target = share(settings.iron);
     }
 
@@ -130,5 +124,33 @@ impl Colour {
         self.sides.process(input, same, |side, input| {
             side.process(input, colouring, tuning)
         })
+    }
+}
+
+impl SlotEffect for Saturation {
+    type Settings = Settings;
+
+    /// Each side is worked alone, the same way, with nothing between them.
+    const MONO: Mono = Mono::OneSide;
+
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, _frames: u64) {
+        self.follow(settings);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// None: it's worked every frame, so the slot never waits on its tail.
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        0
     }
 }

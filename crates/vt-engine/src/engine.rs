@@ -215,6 +215,9 @@ pub struct Engine {
 impl Engine {
     /// A stopped engine at the top of the section.
     pub fn new(rate: u32, current: Arc<Published>) -> Self {
+        // The colour's curves are worked out here, off the audio thread, rather than the first
+        // time a slot plays one.
+        crate::dsp::blocks::saturator::Curve::prepare();
         let millibpm = current.song.millibpm.clamp(MIN_MILLIBPM, MAX_MILLIBPM);
         let seed = current.song.seed;
         let scale = current.song.saved_scale;

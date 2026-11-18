@@ -175,6 +175,7 @@ effects! {
     Clouds(Clouds),
     Beads(Beads),
     Echo(Echo),
+    Colour(Colour),
 }
 
 /// How a delay goes to a new time: gliding there, which bends the repeats' pitch as tape does, or

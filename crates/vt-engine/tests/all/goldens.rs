@@ -175,6 +175,16 @@ fn moved(kind: EffectKind) -> Insert {
             mix: 0xC0,
             ..FreqShift::DEFAULT
         }),
+        EffectKind::Colour => Insert::Colour(vt_model::insert::Colour {
+            kind: vt_model::insert::ColourType::Tube,
+            drive: 0xA0,
+            even: 0x80,
+            hard: 0x40,
+            emph: 0xB0,
+            iron: 0xC0,
+            mix: 0xE0,
+            ..vt_model::insert::Colour::DEFAULT
+        }),
         _ => panic!("{kind:?} needs its settings moved here, for its golden"),
     }
 }
