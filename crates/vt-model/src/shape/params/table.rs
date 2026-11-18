@@ -1534,4 +1534,19 @@ gen_params! {
         get: |shape, _| Some(VARIES.iter().position(|passes| *passes == shape.vary)? as i32),
         set: |shape, _, at| shape.vary = VARIES[at as usize],
     },
+    /// The share of its rows each new variation draws again, the rest kept as last heard, after
+    /// Marbles' Déjà vu (decision 430).
+    Mutate => GenParamSpec {
+        meaning: "the share of rows each new variation draws again, the rest kept as heard",
+        key: "mutate",
+        name: "Mutate",
+        units: Reading::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, MUTATE_ALL as i32),
+        stepping: PERCENT,
+        engine: true,
+        app_only: false,
+        get: |shape, _| Some(i32::from(shape.mutate)),
+        set: |shape, _, number| shape.mutate = number as u8,
+    },
 }

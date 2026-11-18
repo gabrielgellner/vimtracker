@@ -47,7 +47,7 @@ pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
 pub use grids::{ACCENT_LEVEL, DrumPart, GRIDS_STEPS, Grids, parts as drum_parts};
 pub use mutation::{MAX_MUTATION, Mutations};
 pub(crate) use params::{BEND_JUMP, BEND_NUDGE};
-pub use params::{Context, GenParam, Starts};
+pub use params::{Context, GenParam, Starts, TITLE_PLACES};
 pub use random::{
     Degrees, EVEN_SPREAD, MAX_BIAS, MAX_SPREAD, MAX_WEIGHT, Random, WEIGHTS, degree_count,
     degree_name,
@@ -1149,10 +1149,27 @@ pub struct Shape {
     /// once it's set.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub vary: u8,
+    /// The share of its rows, in percent, each new variation draws again, the rest keeping what
+    /// they were last heard as, after Marbles' Déjà vu (decision 430): `100`, every row, as each
+    /// variation was before; `0`, none, so the first pass heard plays on. Only a shape that
+    /// varies by `Vary` has it. Saved only once it's below `100`.
+    #[serde(default = "every_row", skip_serializing_if = "is_every_row")]
+    pub mutate: u8,
 }
 
 fn is_zero(value: &u8) -> bool {
     *value == 0
+}
+
+/// `Mutate` as it starts: every row drawn again with each variation.
+pub const MUTATE_ALL: u8 = 100;
+
+fn every_row() -> u8 {
+    MUTATE_ALL
+}
+
+fn is_every_row(value: &u8) -> bool {
+    *value >= MUTATE_ALL
 }
 
 /// The choices of `Vary`, as passes each variation lasts: none, then a new one each pass, every
@@ -1161,6 +1178,9 @@ pub(crate) const VARIES: [u8; 5] = [0, 1, 2, 4, 8];
 
 /// Mixed into a pass's seed, so it isn't any track's (`track_seed`).
 const PASS_KEY: u64 = 0x7A55_0000;
+
+/// Mixed into the seed that picks the rows a variation draws again, so they aren't its values.
+const MUTATE_KEY: u64 = 0x0DE7_A000;
 
 /// A ramp from `0` to `0` over every row, with seed `0` and every other setting as it starts: what
 /// a shape built of a few settings, as a test's is, takes the rest from.
@@ -1187,6 +1207,7 @@ impl Default for Shape {
             grids: Grids::default(),
             random: Random::default(),
             vary: 0,
+            mutate: MUTATE_ALL,
             variation: Variation::default(),
             divisions: Divisions::default(),
             ring: Ring::default(),
@@ -1250,6 +1271,31 @@ impl Shape {
         self.vary > 0 && self.can_vary()
             || self.kind == FillKind::Ring
             || self.kind == FillKind::Acid && self.acid.loops()
+    }
+
+    /// Whether a new variation draws only some of its rows again, keeping the rest as last heard:
+    /// its `Vary` is on and its `Mutate` below every row (decision 430).
+    pub fn mutates(&self) -> bool {
+        self.vary > 0 && self.can_vary() && self.mutate < MUTATE_ALL
+    }
+
+    /// Which of its variations a pass of its phrase plays, counted from 0, the written one's:
+    /// each `vary` passes are one. None if it has no `Vary`.
+    pub fn variation_on(&self, pass: i64) -> Option<i64> {
+        (self.vary > 0 && self.can_vary()).then(|| pass.div_euclid(i64::from(self.vary)))
+    }
+
+    /// Whether a variation draws the row `at`, counted from the first of its rows, again, rather
+    /// than keeping it as last heard: `Mutate`'s share of them, picked by a hash of its seed, the
+    /// variation and the row, so which rows are drawn repeats with the seed, and the rows a
+    /// higher `Mutate` draws include a lower one's (decision 430).
+    pub fn draws_again(&self, variation: i64, at: usize) -> bool {
+        if self.mutate >= MUTATE_ALL {
+            return true;
+        }
+        let key = mix(self.seed ^ MUTATE_KEY, variation as usize);
+        let roll = mix(key, at) % u64::from(MUTATE_ALL);
+        roll < u64::from(self.mutate)
     }
 
     /// The shape a pass of its phrase plays, counted from 0: itself unless it [varies], and

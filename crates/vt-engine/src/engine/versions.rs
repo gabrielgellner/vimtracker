@@ -65,6 +65,8 @@ impl Engine {
         } = handover;
         let old = std::mem::replace(&mut self.current, version);
         std::mem::swap(&mut self.gens, &mut scratch);
+        // What each generator was heard as carries on, for `Mutate` (decision 430).
+        self.gens.keep_heard_from(&scratch);
         // What any track plays with may have changed.
         for track in self.tracks.iter_mut() {
             track.wake();

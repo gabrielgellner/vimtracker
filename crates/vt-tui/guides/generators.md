@@ -31,6 +31,7 @@ meloDICER, so a line lands on the root and the fifth more than on the rest.
 | Run | How many of the rows it changes take each value |
 | Where | Which rows it changes, and on an empty Note column the rhythm |
 | Vary | Once, or a new roll each pass or every few |
+| Mutate | While it varies: the share of rows each new roll draws again |
 
 **How a value is chosen.** Each row has a draw of its own, fixed by the seed and
 the row's place. Spread and Bias turn that draw into a place in the range:
@@ -60,7 +61,9 @@ semitones.
 on every row is a new value a beat on a track at `1/16`. `Where` chooses the rows, so `Euclid` or
 `Chance` gives the line its rhythm on an empty column. `Vary` `Each pass` draws
 every row again each time the phrase comes round, and `Every 4 passes` keeps each
-draw for four. `Space g a` on the Gen page keeps the one you hear.
+draw for four. `Mutate` below `100%` draws only that share of the rows again each
+time, keeping the rest as they were heard, so the line drifts, and `0%` holds the
+first one heard, Marbles' Déjà vu. `Space g a` on the Gen page keeps the one you hear.
 
 **What's going on.** As each row keeps its own draw, turning Spread or Bias moves
 the line rather than rolling a new one: the rows keep their order, so the row that

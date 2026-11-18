@@ -1201,6 +1201,9 @@ draws again.
     busier, and never plays the same eight rows twice.
 *   On the bass, `Amount` `0%` is mostly gates, short notes, and `50%` mostly rests.
 *   `Vary` `Each pass` on the string, and every pass bunches its notes anew.
+*   Then the string's `Mutate` `25%`, after `Vary` on the Gen page: each pass keeps about three
+    rows in four as the last pass played them and draws the rest anew, Marbles' Déjà vu on its
+    clusters. `0%` locks the bunch first heard; on the Roto it's on the `Mutate` page.
 *   On the Gen page, `Space 8`, each `Amount` is a cell to turn while it plays, and on the Roto
     knob 7.
 
