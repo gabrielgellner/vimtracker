@@ -1017,6 +1017,105 @@ mod tests {
         assert!(renders > 0, "the weights moved the notes");
     }
 
+    /// Each track's random notes and Clusters of velocities varying every pass with `Mutate` on a
+    /// macro under an LFO, so each new variation keeps some rows and draws the rest, and a new
+    /// version every few blocks carrying what was heard over, with the written `Mutate` moved
+    /// too, and the song played again from the middle now and then (decision 430).
+    #[test]
+    fn mutating_generators_never_allocate_in_the_callback() {
+        use vt_model::action::{Action, edit};
+        use vt_model::generator::Span;
+        use vt_model::lfo::{Lfo, Rate};
+        use vt_model::macros::{GenColumn, MacroMap, MacroTarget};
+        use vt_model::modulation::ModSlot;
+        use vt_model::selection::StepRange;
+        use vt_model::shape::{FillKind, GenParam, Shape, ShapeColumn, Where};
+        let mutating = |round: usize| {
+            let mut next = Arc::new(song(4, 16));
+            for track in 0..4 {
+                let notes = Shape {
+                    from: 48,
+                    to: 84,
+                    kind: FillKind::Random,
+                    place: Where::Notes,
+                    vary: 1,
+                    mutate: ((round * 7 + track * 31) % 101) as u8,
+                    seed: track as u64,
+                    ..Shape::default()
+                };
+                let clusters = Shape {
+                    from: 0x20,
+                    to: 0x7F,
+                    kind: FillKind::Random,
+                    place: Where::Clusters(60),
+                    vary: [1, 2, 4, 8][track],
+                    mutate: ((round * 13 + track * 17) % 101) as u8,
+                    seed: 9 + track as u64,
+                    ..Shape::default()
+                };
+                let column = ShapeColumn::Note {
+                    scale: next.saved_scale,
+                    writes: None,
+                };
+                for (column, shape) in [(column, notes), (ShapeColumn::Velocity, clusters)] {
+                    let generate = Action::Generate {
+                        track,
+                        phrase: 0,
+                        column,
+                        span: Span::rows(StepRange::between(0, 15)),
+                        shape,
+                    };
+                    next = edit(&next, &generate).expect("the edit applies");
+                }
+            }
+            let mut next = Arc::unwrap_or_clone(next);
+            for track in next.tracks.iter_mut().take(4) {
+                for (place, column) in [GenColumn::Note, GenColumn::Velocity]
+                    .into_iter()
+                    .enumerate()
+                {
+                    let target = MacroTarget::Gen {
+                        column,
+                        param: GenParam::Mutate,
+                    };
+                    let held = &mut track.macros[place];
+                    held.maps.push(MacroMap::numbers(target, (0, 100)));
+                    held.value = ((round * 0x0D00 + place * 0x1500) % 0xFF00) as u16;
+                    track.mods[place] = ModSlot::lfo(
+                        SettingId::macro_at(place),
+                        Lfo {
+                            rate: Rate::Steps(1 + place as u32),
+                            ..Lfo::default()
+                        },
+                    )
+                    .with_depth(0x7F);
+                }
+            }
+            next
+        };
+        let pool = samples();
+        let engine = Engine::new(48_000, published(mutating(0), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 0..400 {
+            if round % 16 == 0 {
+                handle.publish(published(mutating(round), &pool));
+            }
+            if round % 100 == 50 {
+                assert!(handle.send(Command::PlayFrom { step: 5 }));
+            }
+            violations += blocks(&mut rt, 2);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+        let renders = (0..4)
+            .flat_map(|track| rt.engine().generators_heard(track))
+            .map(|heard| heard.renders)
+            .sum::<u32>();
+        assert!(renders > 0, "the generators varied");
+    }
+
     /// Each track's `Swing` turned every block through its whole range and past it, under an LFO
     /// on it, over rows that lock `SWG` and choose grooves with `GRV`, so every pair reads it
     /// afresh as it plays (decision 420).

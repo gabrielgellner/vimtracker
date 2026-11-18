@@ -517,6 +517,8 @@ impl Engine {
         if section == 0 && step == 0 {
             self.reset_tracks();
         }
+        // From any step, a generator that mutates starts from a whole variation (decision 430).
+        self.gens.forget_heard();
         self.section = section;
         let within = self.walk_to(section, step);
         self.section_place = within;
@@ -575,6 +577,8 @@ impl Engine {
             }
         }
         self.used = tracks.len().min(MAX_TRACKS);
+        // A generator that mutates starts from a whole variation (decision 430).
+        self.gens.forget_heard();
         // Each group's macros put what they hold on its tracks again.
         self.put_group_macros();
     }

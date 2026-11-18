@@ -31,6 +31,7 @@ mod four_op;
 mod fx;
 mod gate_length;
 mod gates;
+mod generator_mutate;
 mod generators;
 mod glide;
 mod glide_mode;

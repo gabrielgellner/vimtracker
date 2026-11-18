@@ -310,7 +310,8 @@ impl GenEdit<'_> {
     /// `Space g a`: apply the generator, leaving its values as plain ones, as last heard where
     /// something moved it; or, for one that varies, keep the variation last heard, as its seed,
     /// with `Vary` back to `Once`, so it stays live. A `Cells` generation isn't a seed, so one
-    /// that evolves is applied as last heard, as one a macro moves is.
+    /// that evolves is applied as last heard, as one a macro moves is, and so is one whose
+    /// `Mutate` keeps rows from earlier passes (decision 430).
     fn apply(&mut self) {
         let Some((phrase, generator, _)) = self.here() else {
             self.services.status = "Space g a applies a generator: go to one first".to_owned();
@@ -320,6 +321,7 @@ impl GenEdit<'_> {
         if let Some(live) = self.live(phrase, generator)
             && live.generator.heard().varies()
             && !live.generator.heard().evolves()
+            && !live.generator.heard().mutates()
         {
             self.keep_variation(phrase, generator, &name);
             return;

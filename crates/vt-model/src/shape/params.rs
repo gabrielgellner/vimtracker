@@ -23,9 +23,9 @@ use super::{
     Acid, Bar, Bits, CellStart, Channel, DEFAULT_RATE, DEFAULT_RULE, Degrees, Division, Divisions,
     DrumPart, EUCLID_HITS, Edge, FillKind, Follow, Grids, MAX_ACID_NOTES, MAX_BEND, MAX_BIAS,
     MAX_DEPTH, MAX_FACTOR, MAX_LOOP, MAX_MOVE_LOOP, MAX_MOVE_WEIGHT, MAX_MUTATION, MAX_ORDER,
-    MAX_RING, MAX_SPREAD, MAX_TRANSPOSE, MAX_TURN, MAX_WEIGHT, MIN_DEPTH, MoveList, Moves, Pink,
-    Quality, Random, Ring, Shape, ShapeColumn, Source, Tonnetz, TonnetzVoice, VARIES, Values,
-    Variation, WAVES, WEIGHTS, WaveRate, Where, default_step, degree_count, degree_name,
+    MAX_RING, MAX_SPREAD, MAX_TRANSPOSE, MAX_TURN, MAX_WEIGHT, MIN_DEPTH, MUTATE_ALL, MoveList,
+    Moves, Pink, Quality, Random, Ring, Shape, ShapeColumn, Source, Tonnetz, TonnetzVoice, VARIES,
+    Values, Variation, WAVES, WEIGHTS, WaveRate, Where, default_step, degree_count, degree_name,
     first_note,
 };
 use super::{CHILD, CLUSTERS, MARKOV, Role, SHARE, STATES, World};
@@ -35,6 +35,7 @@ mod table;
 
 pub use crate::param::Typing;
 use crate::param::{Choice as ParamChoice, Descriptor, Reading, Reads};
+pub use spec::TITLE_PLACES;
 pub use table::{GEN_PARAMS, GenParam};
 
 /// How far a small and a large step move a curve, here and in a macro mapping's `Curve` and `S`.
@@ -705,9 +706,13 @@ mod tests {
                 Some(GenParam::Fill),
                 Some(GenParam::Where),
                 Some(GenParam::Vary),
+                None,
                 None
             ]
         );
+        // Varying, it has `Mutate` after `Vary`, past the grid's columns where it must be.
+        random.vary = 1;
+        assert_eq!(GenParam::title(&random)[3], Some(GenParam::Mutate));
         let acid = shape(FillKind::Acid);
         assert_eq!(GenParam::title(&acid)[3], Some(GenParam::Vary));
     }
@@ -847,7 +852,7 @@ mod tests {
         assert_eq!(both, [own, theirs].concat());
         assert_eq!(
             GenParam::title(&divisions),
-            [Some(Fill), Some(Channel), Some(Bar), Some(Vary)]
+            [Some(Fill), Some(Channel), Some(Bar), Some(Vary), None]
         );
         let grid = GenParam::grid(&divisions, note(), true);
         assert_eq!(
@@ -888,7 +893,7 @@ mod tests {
             GenParam::of(&ring, note(), true),
             [Fill, From, To, Change, Ones, RingLength]
         );
-        assert_eq!(GenParam::title(&ring), [Some(Fill), None, None, None]);
+        assert_eq!(GenParam::title(&ring), [Some(Fill), None, None, None, None]);
         assert_eq!(
             GenParam::grid(&ring, note(), true).column(1),
             [Some(Change), Some(Ones), Some(RingLength)]
@@ -962,7 +967,7 @@ mod tests {
         );
         assert_eq!(
             GenParam::title(&variation),
-            [Some(GenParam::Fill), Some(GenParam::Vary), None, None]
+            [Some(GenParam::Fill), Some(GenParam::Vary), None, None, None]
         );
         // It learns from the notes there, so a column with none doesn't offer it.
         let generated = Context {

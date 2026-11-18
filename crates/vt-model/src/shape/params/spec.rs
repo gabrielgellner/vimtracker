@@ -6,6 +6,10 @@ use super::*;
 /// How many choices a large step moves a list, as a machine's lists and the track's go.
 const LIST_JUMP: usize = 0x10;
 
+/// How many settings a generator's title on the Gen page holds at most: a place more than its
+/// grid's columns, for `Mutate` after `Vary` (decision 430).
+pub const TITLE_PLACES: usize = GRID_COLUMNS + 1;
+
 impl GenParam {
     /// Its description, which the rest of these read.
     #[inline]
@@ -209,35 +213,41 @@ impl GenParam {
                 rows && matches!(shape.place, Where::Cells(cells) if cells.across.is_none())
             }
             Self::Vary => shape.can_vary(),
+            // Only a shape that varies has variations to keep rows across.
+            Self::Mutate => shape.can_vary() && shape.vary > 0,
         }
     }
 
     /// The settings in a generator's title on the Gen page, the ones that change what it is: its
     /// fill, then its `Where`, or for a `Follow`, the phrase it follows, and for `Acid`, its
     /// `Pitches`, as the second die is a mode of the riff's, `Multiply` its fill alone and `Grids`
-    /// its part, which drum it is, and a `Variation` and a `Ring` their fill alone; and last, for a shape that draws from its seed, `Vary`, what
-    /// it is from pass to pass. It's a row as wide as the grid under it.
-    pub fn title(shape: &Shape) -> [Option<Self>; GRID_COLUMNS] {
-        let mut title = match shape.kind {
-            FillKind::Follow => [Some(Self::Fill), Some(Self::Source), None, None],
+    /// its part, which drum it is, and a `Variation` and a `Ring` their fill alone; and last, for a
+    /// shape that draws from its seed, `Vary`, what it is from pass to pass, with `Mutate` after
+    /// it while it varies, which may take a place past the grid's columns.
+    pub fn title(shape: &Shape) -> [Option<Self>; TITLE_PLACES] {
+        let mut title = [None; TITLE_PLACES];
+        let what = match shape.kind {
+            FillKind::Follow => [Some(Self::Fill), Some(Self::Source), None],
             FillKind::Multiply | FillKind::Variation | FillKind::Ring => {
-                [Some(Self::Fill), None, None, None]
+                [Some(Self::Fill), None, None]
             }
-            FillKind::Grids => [Some(Self::Fill), Some(Self::Part), None, None],
-            FillKind::Divisions => [Some(Self::Fill), Some(Self::Channel), Some(Self::Bar), None],
-            FillKind::Acid => [
-                Some(Self::Fill),
-                Some(Self::Where),
-                Some(Self::Pitches),
-                None,
-            ],
-            _ => [Some(Self::Fill), Some(Self::Where), None, None],
+            FillKind::Grids => [Some(Self::Fill), Some(Self::Part), None],
+            FillKind::Divisions => [Some(Self::Fill), Some(Self::Channel), Some(Self::Bar)],
+            FillKind::Acid => [Some(Self::Fill), Some(Self::Where), Some(Self::Pitches)],
+            _ => [Some(Self::Fill), Some(Self::Where), None],
         };
-        // A shape has `Vary` where it draws from its seed or evolves, whatever its column.
-        if let Some(free) = title.iter_mut().find(|place| place.is_none())
-            && shape.can_vary()
-        {
-            *free = Some(Self::Vary);
+        title[..what.len()].copy_from_slice(&what);
+        // A shape has `Vary` where it draws from its seed or evolves, whatever its column, and
+        // `Mutate` after it while it varies (decision 430).
+        if shape.can_vary() {
+            let free = title
+                .iter()
+                .position(Option::is_none)
+                .unwrap_or(GRID_COLUMNS);
+            title[free] = Some(Self::Vary);
+            if shape.vary > 0 {
+                title[free + 1] = Some(Self::Mutate);
+            }
         }
         title
     }
@@ -624,6 +634,7 @@ impl GenParam {
                 turn => format!("{turn} bits"),
             },
             Self::Vary => vary_name(shape.vary),
+            Self::Mutate => format!("{}%", shape.mutate),
         }
     }
 
@@ -999,6 +1010,7 @@ impl GenParam {
             Self::Keep => shape.bits.keep = Bits::default().keep,
             Self::Turn => shape.bits.turn = Bits::default().turn,
             Self::Vary => shape.vary = 0,
+            Self::Mutate => shape.mutate = MUTATE_ALL,
             Self::Hits => {
                 if let Where::Euclid { rotate, .. } = shape.place {
                     shape.place = Where::Euclid {
@@ -1242,6 +1254,11 @@ impl GenParam {
             Self::Change => text
                 .parse::<u16>()
                 .map_err(|_| "Change runs from 0 to 100")?
+                .into(),
+            Self::Mutate => text
+                .trim_end_matches('%')
+                .parse::<u16>()
+                .map_err(|_| "Mutate runs from 0 to 100")?
                 .into(),
             Self::Ones => text
                 .parse::<u16>()
