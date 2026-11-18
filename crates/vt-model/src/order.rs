@@ -432,6 +432,7 @@ pub const MOST_ORDER_NUMBER: u8 = 16;
 /// (decision 401): `length` so many rows more or fewer than the loop's, `80` for none, its rows
 /// past the loop's end its own again from the first, and `start` so many rows on from the loop's
 /// first, going round. At rest every phrase walks as it's written.
+/// `chain` is how its chain's turns are walked (decisions 423 and 424).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WalkMove {
     pub order: u8,
@@ -440,6 +441,7 @@ pub struct WalkMove {
     pub y: u8,
     pub length: u8,
     pub start: u8,
+    pub chain: ChainMove,
 }
 
 impl Default for WalkMove {
@@ -451,7 +453,95 @@ impl Default for WalkMove {
             y: 0,
             length: WINDOW_AS_WRITTEN,
             start: 0,
+            chain: ChainMove::default(),
         }
+    }
+}
+
+/// The names of the orders a chain's `Order` (`CORD`) chooses from, [`Order::ALL`] as they show,
+/// `Forward` first, at `00` (decision 423).
+pub const CHAIN_ORDER_NAMES: [&str; Order::ALL.len()] = [
+    "Forward",
+    "Reverse",
+    "Up-down",
+    "Up-down-inc",
+    "Down-up",
+    "Down-up-inc",
+    "Odd-even",
+    "Jump 3",
+    "Hopscotch",
+    "Arp 3 1",
+    "Converge",
+    "Diverge",
+    "Growing",
+    "Shrinking",
+    "Pedal",
+    "Brownian",
+    "Shuffle",
+    "Quasi-random",
+    "Random",
+    "Snake zigzag",
+    "Snake columns",
+    "Snake column-zigzag",
+    "Snake diagonal",
+    "Snake diagonal-zigzag",
+    "Snake spiral",
+    "Snake spiral-out",
+    "Snake checker",
+    "Cartesian 1 3",
+];
+
+/// How a track walks its chain's phrases, as its settings have it as a turn of the chain starts:
+/// `order` a place in [`Order::ALL`], `00` forward as written, its turns walked as an order walks
+/// a phrase's rows (decision 423), and `jump` the chance, `00` to `FF`, that a turn plays any of
+/// the chain's phrases instead (decision 424). A turn keeps its written length whatever plays in
+/// it, so the chain keeps its time.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ChainMove {
+    pub order: u8,
+    pub jump: u8,
+}
+
+impl ChainMove {
+    /// Whether it plays every chain as it's written.
+    pub fn is_own(self) -> bool {
+        self == Self::default()
+    }
+
+    /// The order its turns are walked in.
+    pub fn order(self) -> Order {
+        Order::ALL[usize::from(self.order).min(Order::ALL.len() - 1)]
+    }
+
+    /// Which of a chain's `turns` plays at its turn `turn`, both counted among the turns that
+    /// take time, this many times round the chain since it started: where the order walks, which
+    /// carries on from one time round to the next as a phrase's walk does, so an order whose
+    /// round is longer drifts across them, and a dealt one is dealt again each time round; then,
+    /// at `jump`'s chance, any of them, rolled from the same deal, so a render, or playing from
+    /// anywhere, plays the same chain.
+    pub fn heard(self, dealer: Dealer, lap: usize, turns: usize, turn: usize) -> usize {
+        if turns <= 1 {
+            return 0;
+        }
+        let deal = dealer.chain_deal(lap);
+        let order = self.order();
+        let walked = if order.is_dealt() {
+            order.row(turns, turn, deal)
+        } else {
+            let visit = lap.wrapping_mul(turns).wrapping_add(turn);
+            let places = order.places(turns).max(1);
+            if matches!(order, Order::Snake(_) | Order::Cartesian(_)) {
+                // A grid's cells past the last turn are passed over, so its round is its visits.
+                let rows = || (0..places).filter_map(|place| order.row(turns, place, deal));
+                let visits = rows().count().max(1);
+                rows().nth(visit % visits)
+            } else {
+                order.row(turns, visit % places, deal)
+            }
+        };
+        let walked = walked.unwrap_or(turn).min(turns - 1);
+        let chance = f32::from(self.jump) / 255.0;
+        jump_roll(deal, turn, chance, turns).unwrap_or(walked)
     }
 }
 
@@ -634,14 +724,34 @@ impl Dealer {
     pub(crate) fn deal(self, lap: i64, slot: usize) -> Deal {
         Deal(splitmix64(splitmix64(self.0 ^ lap as u64) ^ slot as u64))
     }
+
+    /// The deal for one time round a track's chain of the chain's own order and jump, apart from
+    /// its phrases' (decisions 423 and 424).
+    pub(crate) fn chain_deal(self, lap: usize) -> Deal {
+        Deal(splitmix64(self.deal(lap as i64, 0).0 ^ CHAIN_STREAM))
+    }
 }
 
 /// One pass's deal of a dealt order.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Deal(u64);
 
+impl Deal {
+    /// The deal for a phrase played again within one turn of its chain, a turn longer than it,
+    /// `again` times since the turn started: this one for the first.
+    pub(crate) fn again(self, again: usize) -> Self {
+        match again {
+            0 => self,
+            again => Self(splitmix64(self.0 ^ again as u64)),
+        }
+    }
+}
+
 /// Keeps a dealer's hashes apart from any other the seed is hashed for.
 const ORDER_STREAM: u64 = 0x6f72_6465_7200_0000;
+
+/// Keeps a chain's own deals apart from its phrases'.
+const CHAIN_STREAM: u64 = 0x6368_6169_6e00_0000;
 
 /// A number below `below` from a hash, without the bias a remainder has.
 fn below(hash: u64, below: usize) -> usize {

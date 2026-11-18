@@ -7,7 +7,7 @@ use crate::constants::{MAX_LEVEL, UNITY_LEVEL};
 use crate::dice::DICE_LOOP_NAMES;
 use crate::groove::GROOVE_CHOICES;
 use crate::lane::{LANE_RATES, LENGTH_AS_WRITTEN, RATE_AS_WRITTEN};
-use crate::order::{MOST_ORDER_NUMBER, ORDER_AS_WRITTEN, WINDOW_AS_WRITTEN};
+use crate::order::{CHAIN_ORDER_NAMES, MOST_ORDER_NUMBER, ORDER_AS_WRITTEN, WINDOW_AS_WRITTEN};
 use std::borrow::Cow;
 
 use crate::param::{Choice, Descriptor, Reading, Typing};
@@ -390,7 +390,7 @@ const TRACK_GROUPS: [&str; 16] = [
 
 /// The track's own settings added since places were fixed, at the end of the table so none moves
 /// (#718): the track's own after [`TRACK`]'s, in the order they came.
-const LATER_TRACK: [Entry; 23] = [
+const LATER_TRACK: [Entry; 25] = [
     // Whether a synth's oscillators run on from note to note or start again on each, read as a
     // note starts, so a lock on its row sets it for that note (decision 370).
     Entry {
@@ -635,12 +635,29 @@ const LATER_TRACK: [Entry; 23] = [
     level("dicejump", "Dice jump", "DJMP", 0x00).means(
         "the chance a step takes the dice of any step of the loop, playing them out of order",
     ),
+    // The order the chain's turns are walked in and the chance a turn plays any of its phrases,
+    // read as a turn starts, so a lock still holding then, from the phrase before, sets them for
+    // the turn (decisions 423 and 424).
+    Entry {
+        meaning: "the order the chain's phrases play in, as an order walks a phrase's rows",
+        key: "chainorder",
+        name: "Chain order",
+        label: Some("CORD"),
+        kind: Kind::Stepped {
+            choices: &CHAIN_ORDER_NAMES,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
+    level("chainjump", "Chain jump", "CJMP", 0x00)
+        .means("the chance each turn of the chain plays any of its phrases instead"),
 ];
 /// What each of [`LATER_TRACK`] is listed with.
-const LATER_TRACK_GROUPS: [&str; 23] = [
+const LATER_TRACK_GROUPS: [&str; 25] = [
     "Machine", "Machine", "Filter", "Machine", "Machine", "Filter", "Filter", "Filter", "Filter",
     "Filter", "Filter", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
-    "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
+    "Machine", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
 ];
 
 /// What a row's chance decides, `CTGT`'s choices: the whole row, or each of its pulses and

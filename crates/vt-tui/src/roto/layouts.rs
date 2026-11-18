@@ -1861,22 +1861,37 @@ const GEN_LANE: DeviceLayout = live(
     )],
 );
 /// The track's settings that move its phrases' walks, its own device as on the Gen page
-/// (decisions 400 to 402).
+/// (decisions 400 to 402), and on a second page its chain's (decisions 423 and 424).
 const GEN_PHRASE: DeviceLayout = live(
     "gen/phrase",
-    &[knobs(
-        "Phrase",
-        [
-            s("order"),
-            s("reverse"),
-            s("orderx"),
-            s("ordery"),
-            s("phraselength"),
-            s("phrasestart"),
-            s("cue"),
-            GAP,
-        ],
-    )],
+    &[
+        knobs(
+            "Phrase",
+            [
+                s("order"),
+                s("reverse"),
+                s("orderx"),
+                s("ordery"),
+                s("phraselength"),
+                s("phrasestart"),
+                s("cue"),
+                GAP,
+            ],
+        ),
+        knobs(
+            "Chain",
+            [
+                s("chainorder"),
+                s("chainjump"),
+                GAP,
+                GAP,
+                GAP,
+                GAP,
+                GAP,
+                GAP,
+            ],
+        ),
+    ],
 );
 /// A canon's moves; it writes every row, so it has no `Where`. Then its mutations, a Bloom
 /// branch's, on a page of their own, with `Vary` on knob 6 as elsewhere, as it draws once it

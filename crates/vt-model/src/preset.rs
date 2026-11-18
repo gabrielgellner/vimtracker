@@ -173,8 +173,8 @@ fn no_inserts(inserts: &[Insert; INSERTS]) -> bool {
 /// The settings that are the track's place in the song rather than its sound: its fader, pan and
 /// sends, its groove, how long its steps are, how near the grid they're brought and how often
 /// they jump, the order and window its phrases walk in, whether the window waits for its loop, how
-/// often its rows and pulses play and how its dice loop.
-const PLACE: [SettingId; 21] = [
+/// often its rows and pulses play, how its dice loop, and how its chain walks its phrases.
+const PLACE: [SettingId; 23] = [
     SettingId::VOL,
     SettingId::LEVEL,
     SettingId::PAN,
@@ -196,6 +196,8 @@ const PLACE: [SettingId; 21] = [
     SettingId::CHANCE_DELTA,
     SettingId::CHANCE_TARGET,
     SettingId::CUE,
+    SettingId::CHAIN_ORDER,
+    SettingId::CHAIN_JUMP,
 ];
 
 /// Whether a sound on this machine holds a setting, or its fine part: the machine's own, and not

@@ -12,6 +12,7 @@ mod beads;
 mod bypassed_amp;
 mod chance_delta;
 mod chance_target;
+mod chain_order;
 mod choke;
 mod clouds;
 mod compressors;

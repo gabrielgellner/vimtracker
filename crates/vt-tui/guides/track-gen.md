@@ -53,8 +53,13 @@ steps, so the chain keeps time; a step's `PLEN` and `PSTA` lock them. Beside
 them, `Cue` is a switch, `Off` as it starts: on, a turn of `Length` or `Start`
 waits for the pass to end, and a turn of a lane's `Length`, `Rate` or `Start`
 for the lane to come round to its first row, as Kria's division cueing does.
-The order's four still move at once. `CUE` on a step locks it. The Roto has the
-seven on knobs 1 to 7.
+The order's four still move at once. `CUE` on a step locks it. At the foot,
+`Chain` and `Chain jump` walk the chain's phrases as the rest walk a phrase's
+rows: `Chain` is an order from the same list, `Forward` as written, and `Chain
+jump` the chance each of the chain's rows plays any of its phrases instead. They
+change at the chain's next row, not mid-phrase, and `CORD` and `CJMP` on a step
+lock them (see **Chain order** in **Phrases and chains**). The Roto has the
+first seven on knobs 1 to 7, and the chain's two on a second page.
 
 **A lane's Length, Rate, Start and Jump.** Each FX column with a lane in the phrase has a
 device of its own, `FX1 Lane`, under that column's generator if it has one, as
