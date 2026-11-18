@@ -573,6 +573,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         pan: 0x80,
         cutoff: 0x40,
         resonance: 0,
+        filter: Default::default(),
         send_a: 0,
         send_b: 0,
         machine: {
@@ -2096,6 +2097,15 @@ fn the_filter_curve_moves_with_what_plays() {
         pan: track.pan,
         cutoff,
         resonance,
+        filter: vt_engine::track_state::LiveFilter {
+            kind: track.filter,
+            mode: track.filter.plays(track.filter_mode),
+            drive: track.drive,
+            punch: track.punch,
+            safe: track.safe,
+            low_cut: track.low_cut,
+            high_cut: track.high_cut,
+        },
         send_a: track.send_a,
         send_b: track.send_b,
         machine: std::array::from_fn(|setting| track.machine_value(setting)),
@@ -3834,14 +3844,15 @@ fn a_count_steps_the_effect_in_a_slot_that_many_effects() {
     use vt_tui::controls::Control;
     let (mut app, _realtime) = on_fx_page();
     assert_eq!(app.track_control(), Control::Insert(0));
+    // In the order `K` lists them.
     let at = |app: &App| {
         let insert = app.song().tracks[0].inserts[0];
-        Insert::ALL
-            .iter()
-            .position(|each| each.name() == insert.name())
+        Insert::listed_order()
+            .position(|place| Insert::ALL[place].name() == insert.name())
             .unwrap()
     };
     let from = at(&app);
     press(&mut app, "3=");
     assert_eq!(at(&app), (from + 3) % Insert::ALL.len());
+    assert_eq!(app.song().tracks[0].inserts[0].name(), "EQ3");
 }

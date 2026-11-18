@@ -318,3 +318,69 @@ fn a_lock_of_the_type_fades_from_the_filter_it_leaves_without_a_click() {
         );
     }
 }
+
+/// What the filter is heard with at the middle of each row, as the engine reports it for the
+/// Sound page's curve and bars.
+fn live_filter(song: &Song, rows: usize) -> Vec<vt_engine::track_state::LiveFilter> {
+    let version = Arc::new(Published::new(
+        Arc::new(song.clone()),
+        Arc::new(SamplePool::default()),
+    ));
+    let mut engine = vt_engine::engine::Engine::new(RATE, version);
+    engine.play_from(0);
+    let mut played = 0;
+    (0..rows)
+        .map(|row| {
+            let frame = row * STEP + STEP / 2;
+            let mut out = vec![0.0; (frame - played) * 2];
+            engine.process(&mut out);
+            played = frame;
+            engine.live(0).filter
+        })
+        .collect()
+}
+
+#[test]
+fn the_live_values_report_each_as_its_heard_a_lock_included() {
+    use vt_engine::track_state::LiveFilter;
+    use vt_model::song::FilterMode;
+    let rows = [
+        "C-3 64",
+        "C-4 64 drive:60 punch:40 lowcut:30",
+        "C-3 64 highcut:C0 type:04 safe:01",
+        "C-3 64",
+    ];
+    let heard = live_filter(&song(&rows), 4);
+    let own = LiveFilter {
+        kind: FilterType::LowPass,
+        mode: FilterType::LowPass.plays(FilterMode::default()),
+        drive: 0,
+        punch: 0,
+        safe: false,
+        low_cut: 0,
+        high_cut: 0xFF,
+    };
+    assert_eq!(heard[0], own, "the track's own");
+    assert_eq!(
+        heard[1],
+        LiveFilter {
+            drive: 0x60,
+            punch: 0x40,
+            low_cut: 0x30,
+            ..own
+        },
+        "locked for its row"
+    );
+    assert_eq!(
+        heard[2],
+        LiveFilter {
+            kind: FilterType::Ladder,
+            mode: FilterType::Ladder.plays(FilterMode::default()),
+            safe: true,
+            high_cut: 0xC0,
+            ..own
+        },
+        "the type, Safe and the high cut, with the mode the type plays"
+    );
+    assert_eq!(heard[3], own, "back to the track's own at the next note");
+}

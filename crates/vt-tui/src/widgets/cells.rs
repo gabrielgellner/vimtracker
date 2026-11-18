@@ -826,3 +826,54 @@ fn a_generators_settings() {
         ],
     );
 }
+
+#[test]
+fn the_filter_curve_is_drawn_from_what_plays_a_lock_included() {
+    use vt_engine::track_state::LiveFilter;
+    use vt_model::song::{FilterMode, FilterType};
+
+    use crate::graphics::{PanelKey, Shape};
+    let (mut app, mut realtime) = on_sound();
+    catch_up(&mut app, &mut realtime);
+    let drawn = |app: &App| {
+        app.track_page
+            .pictures(&app.ctx())
+            .into_iter()
+            .find_map(|want| match (want.key, want.shape) {
+                (PanelKey::Filter, Shape::Filter(settings)) => Some(settings),
+                _ => None,
+            })
+            .unwrap()
+    };
+    let track = app.song().tracks[0].clone();
+    assert_eq!(drawn(&app).0, track.filter, "as set while nothing moves it");
+    // A step's lock of the type, its drive, Safe and cuts, as the engine says it hears them.
+    let filter = LiveFilter {
+        kind: FilterType::Ladder,
+        mode: FilterMode::LowPass12,
+        drive: 0x80,
+        punch: 0,
+        safe: true,
+        low_cut: 0x30,
+        high_cut: 0xC0,
+    };
+    app.services.reported.live = Some(LiveValues {
+        cutoff: 0x40,
+        resonance: 0x50,
+        filter,
+        ..live(&app)
+    });
+    assert_eq!(
+        drawn(&app),
+        (
+            FilterType::Ladder,
+            FilterMode::LowPass12,
+            0x40,
+            0x50,
+            0x80,
+            true,
+            0x30,
+            0xC0
+        )
+    );
+}
