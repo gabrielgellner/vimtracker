@@ -182,8 +182,9 @@ impl DeviceSpec {
         })
     }
 
-    /// An FX column's lane's `Length`, `Rate`, `Start`, `Jump` and `Hold`, the track's, which move
-    /// every phrase's lane on the column, as a device of its own, `Lane`, named for its column.
+    /// An FX column's lane's `Length`, `Rate`, `Start`, `Jump`, `Hold`, `Order` and `Reverse`, the
+    /// track's, which move every phrase's lane on the column, as a device of its own, `Lane`,
+    /// named for its column.
     pub(crate) fn lane(slot: usize) -> Self {
         let mut grid = [[None; DEVICE_COLUMNS]; GRID_ROWS];
         grid[0][0] = Some(Control::Lane(slot, LaneField::Length));
@@ -194,6 +195,10 @@ impl DeviceSpec {
         // How often a row keeps the one before, under the row of four, which `Jump` filled
         // (decision 422).
         grid[1][0] = Some(Control::Lane(slot, LaneField::Hold));
+        // The order its rows are walked in, and the switch that turns the walk the other way up,
+        // beside it, as `ORD` and `REV` sit on the `Phrase` device (decision 431).
+        grid[1][1] = Some(Control::Lane(slot, LaneField::Order));
+        grid[1][2] = Some(Control::Lane(slot, LaneField::Reverse));
         Self {
             identity: format!("FX{} {LANE}", slot + 1),
             switchable: false,

@@ -1215,9 +1215,13 @@ from all the lane's own rows, whatever its `Length` and `Start`, and the playhea
 follows it. `Hold` is the chance each of the lane's rows plays the row the lane
 played before again instead of its own, so its value holds, as a failed roll does
 in Kria: `00` never, `FF` the lane's first row throughout. A hold, too, takes one
-row's place for all its steps, and the lane counts on. A step locks them with
-`LLEN1`, `LRAT1`, `LSTA1`, `LJMP1` and `LHLD1`, `2` and
-`3` for the other columns, and a mod slot, a macro and the Roto turn them too.
+row's place for all its steps, and the lane counts on. `Order` walks the lane's
+rows in another order from the same list as the chain's `Order`, `Forward` as
+written, and `Reverse` turns the walk the other way up: `Up-down` on `a b c d`
+plays `a b c d c b a b c d c b`, its round of six drifting across laps of four.
+`Jump` and `Hold` act on top of it. A step locks them with `LLEN1`, `LRAT1`,
+`LSTA1`, `LJMP1`, `LHLD1`, `LORD1` and `LREV1`, `2` and `3` for the other
+columns, and a mod slot, a macro and the Roto turn them too.
 
 `gg`, `G`, `{`, `}`, `ib`, `ic` and `ip` go by the loop. `5G` means row `04`.
 `j` and `k` carry on past its edges. `Space c` on a dim row plays from `00`, and

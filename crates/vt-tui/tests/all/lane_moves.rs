@@ -91,6 +91,23 @@ fn hold_sits_under_length_and_turns_as_the_tracks_own() {
 }
 
 #[test]
+fn order_and_reverse_sit_beside_hold_and_turn_as_the_tracks_own() {
+    let (mut app, _realtime) = on_gen_page(true);
+    keys(&mut app, "jl");
+    assert_eq!(app.track_control(), Control::Lane(0, LaneField::Order));
+    keys(&mut app, "==");
+    assert_eq!(app.song().tracks[0].lanes[0].order, 2, "Up-down");
+    let text = fx_page_text(&app).join("\n");
+    assert!(text.contains("Up-down"), "{text}");
+    keys(&mut app, "l");
+    assert_eq!(app.track_control(), Control::Lane(0, LaneField::Reverse));
+    keys(&mut app, "=");
+    assert!(app.song().tracks[0].lanes[0].reverse);
+    keys(&mut app, "-");
+    assert!(!app.song().tracks[0].lanes[0].reverse);
+}
+
+#[test]
 fn the_gen_page_shows_a_lane_device_only_for_a_column_with_a_lane() {
     let (app, _realtime) = on_gen_page(false);
     let text = fx_page_text(&app).join("\n");
@@ -199,6 +216,8 @@ fn the_title_shows_what_a_lane_is_heard_as_and_its_own_and_the_playhead_the_row_
             start: 0,
             jump: 0,
             hold: 0,
+            order: 0,
+            reverse: false,
         },
     };
     app.services.apply(&moved);
@@ -254,6 +273,8 @@ fn rows_past_a_shortened_lane_are_dim() {
             start: 0,
             jump: 0,
             hold: 0,
+            order: 0,
+            reverse: false,
         },
     });
     // At -2, the lane of 4 plays its first two, and the two past them are dim.

@@ -486,8 +486,9 @@ Song                               song.ron, refused unless format_version is FO
  |   |- pitch, velocity_delta, quantise, choke, gate_length, speed, reset, glide, groove
  |   |- group                      the group a sound track plays through, or none
  |   |- accumulation, arpeggio     how ACU and ARP play on it
- |   |- lanes[3]                   LaneMove: each FX column's Length and Rate, which move every
- |   |                             phrase's lane on it from its own; saved only once one isn't at rest
+ |   |- lanes[3]                   LaneMove: each FX column's Length, Rate, Start, Jump, Hold, Order
+ |   |                             and Reverse, which move every phrase's lane on it from its own;
+ |   |                             saved only once one isn't at rest
  |   |- mods[6]                    ModSlot: kind, destination, depth, bypassed, polarity, in_scale,
  |   |                             each type's own settings (adsr, ahd, drum, lpg, lfo, steps,
  |   |                             track), kept while another type plays

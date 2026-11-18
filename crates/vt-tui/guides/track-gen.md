@@ -67,7 +67,7 @@ change at the chain's next row, not mid-phrase, and `CORD` and `CJMP` on a step
 lock them (see **Chain order** in **Phrases and chains**). The Roto has the
 first seven on knobs 1 to 7, and the chain's two on a second page.
 
-**A lane's Length, Rate, Start, Jump and Hold.** Each FX column with a lane in the phrase has a
+**A lane's Length, Rate, Start, Jump, Hold, Order and Reverse.** Each FX column with a lane in the phrase has a
 device of its own, `FX1 Lane`, under that column's generator if it has one, as
 `Loops` sits under `Acid`, and where its column comes if not. Its settings are
 the track's, not the phrase's: they move every phrase's lane on that column from
@@ -87,11 +87,20 @@ holds, as a failed roll does in Kria and on the Metropolix: a jumped row kept is
 kept as it jumped, and a lane's first row, as it starts or as playing starts
 from a step, is always its own. It rolls apart from `Jump`, so turning it leaves
 the jumps where they were. After an `SED`, its jumps and holds come out the same
-each time that row plays (see **Reseeding** in the FX guide). `Cue` never holds
-either back, as they're how the loop is walked, not its bounds. At the end of its title, dim, it says how this phrase's lane
+each time that row plays (see **Reseeding** in the FX guide). `Order`, beside
+`Hold`, walks the lane's rows in an order from the whole list, as the chain's
+`Order` does, `Forward` as written: it walks the rows the lane is heard for, from
+its `Start`, and the lap stays the lane's length, so `Up-down` on a lane of 4
+plays `1 2 3 4 | 3 2 1 2 | 3 4 3 2`, drifting across its laps, and a dealt order,
+`Shuffle`, `Random`, `Quasi-random` or `Brownian`, is dealt again each lap from
+the seed, `Brownian` from the lane's first row. `Reverse`, beside it, turns the
+walk the other way up, whatever the order, as the `Phrase` device's `Reverse`
+does. `Jump` and `Hold` act on top of the order. After an `SED`, a dealt order
+walks the same each time that row plays. `Cue` never holds any of them back, as
+they're how the loop is walked, not its bounds. At the end of its title, dim, it says how this phrase's lane
 is heard against its own: `· here 6 rows, its own 4 rows`. `=` `-` `+` `_`, `i`,
 `K` on `Rate`, `x`, `M` and `gd` work on them as on any of the track's settings,
-a step's `LLEN1`, `LRAT1`, `LSTA1`, `LJMP1` and `LHLD1` lock them, and a mod slot can go to them. A column
+a step's `LLEN1`, `LRAT1`, `LSTA1`, `LJMP1`, `LHLD1`, `LORD1` and `LREV1` lock them, and a mod slot can go to them. A column
 without a lane has no device, and the settings keep their values: a macro mapped
 there does nothing until a phrase gives that column a lane.
 

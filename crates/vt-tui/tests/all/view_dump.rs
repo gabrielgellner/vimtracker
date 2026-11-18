@@ -248,6 +248,8 @@ fn macros_and_lanes(dump: &mut Dump) {
                 start: 2,
                 jump: 0,
                 hold: 0,
+                order: 0,
+                reverse: false,
             },
         ),
     ] {

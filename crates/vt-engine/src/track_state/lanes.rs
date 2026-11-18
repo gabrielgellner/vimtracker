@@ -3,11 +3,13 @@
 //! `Rate` carries on from where it is (the lanes study's §5). With the track's `Cue` on, a turn of
 //! its `Length`, `Rate` or `Start` waits for the lane to come round to its first row, as Kria's
 //! Division Cueing does (decision 402). Its `Jump` has a row play any of the lane's rows instead
-//! of the next, which no cue holds back, as a walk's choice isn't a loop's bounds (decision 415).
+//! of the next, which no cue holds back, as a walk's choice isn't a loop's bounds (decision 415),
+//! and its `Order` and `Reverse` walk its rows in another order, under its jumps and holds, which
+//! no cue holds back either (decision 431).
 
 use vt_model::constants::FX_SLOTS;
 use vt_model::lane::{Heard, LANE_RATES, Lane, LaneMove};
-use vt_model::order::{Dealer, lane_held, lane_jumped};
+use vt_model::order::{Dealer, LaneOrder, LaneWalked, Order, lane_held, lane_jumped};
 use vt_model::settings::{LANE_SETTINGS, SettingId};
 
 use super::TrackState;
@@ -41,22 +43,29 @@ pub(crate) struct LaneRun {
     /// row started, or as it was first read after being placed: none until decided, then none
     /// again for the row counted to (decision 415).
     jumped: Option<Option<usize>>,
+    /// The row among those heard its `Order` and `Reverse` walk the row it's on to, decided with
+    /// its `Jump`, which plays unless a jump or hold takes its place (decision 431).
+    order_row: usize,
     /// The stored row the row it's on plays because its `Hold` kept the one before, decided with
     /// its `Jump` (decision 422).
     kept: Option<usize>,
     /// The stored row it last played, which a row its `Hold` keeps plays again; none after it's
     /// placed, so a lane's first row is its own.
     played: Option<usize>,
+    /// Where its `Order` last walked to, which the next row steps on from rather than walking
+    /// from the lap's first; none after it's placed (decision 431).
+    walked: Option<LaneWalked>,
 }
 
-/// What a lane's `Jump` and `Hold` roll with: the track's dealer, the lane's column and their
-/// chances now, `00` to `FF`.
+/// What a lane's `Jump`, `Hold` and `Order` roll with: the track's dealer, the lane's column,
+/// their chances now, `00` to `FF`, and the order its rows are walked in now.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LaneJump {
     pub dealer: Dealer,
     pub column: usize,
     pub chance: u8,
     pub hold: u8,
+    pub order: LaneOrder,
     /// After an `SED`, the count of the track's steps since its row, which a row's jump and hold
     /// are rolled at in place of the lane's lap and row, so they come out the same each time the
     /// row plays (decisions 421 and 422).
@@ -71,6 +80,7 @@ impl LaneJump {
             column: 0,
             chance: 0,
             hold: 0,
+            order: LaneOrder::default(),
             since: None,
         }
     }
@@ -92,9 +102,15 @@ pub struct LaneRead {
 impl LaneRead {
     /// What a lane heard so reads at a count of its track's steps since its chain started, worked
     /// out from the count, as playing from the top with nothing turned on the way places it: for
-    /// drawing a playhead without playing, so with no `Jump`.
-    pub fn placed(lane: Lane, heard: Heard, count: i64) -> Self {
-        LaneRun::default().read(lane, count, (0, 0), 0, (heard, 0), false, LaneJump::none())
+    /// drawing a playhead without playing, so with no `Jump`, but walked in its `order`, dealt from
+    /// the track's `dealer` (decision 431).
+    pub fn placed(lane: Lane, heard: Heard, count: i64, order: LaneOrder, dealer: Dealer) -> Self {
+        let jump = LaneJump {
+            dealer,
+            order,
+            ..LaneJump::none()
+        };
+        LaneRun::default().read(lane, count, (0, 0), 0, (heard, 0), false, jump)
     }
 }
 
@@ -118,8 +134,10 @@ impl LaneRun {
             last: None,
             cued: None,
             jumped: None,
+            order_row: 0,
             kept: None,
             played: None,
+            walked: None,
         }
     }
 
@@ -177,6 +195,28 @@ impl LaneRun {
         // row, so they come out the same each time the row plays (decision 421).
         let (lap, row) = jump.since.map_or((self.laps, self.row), |since| (since, 0));
         let deciding = self.jumped.is_none();
+        // Which of the rows heard its order walks to is decided with them, under them. After an
+        // `SED`, a dealt order is dealt from the lane's rows counted since its row, a lap of the
+        // lane's length at a time, so it comes out the same each time the row plays (decision 431).
+        if deciding {
+            let rows = heard.length;
+            let (lap, row) = match jump.since {
+                Some(since) if jump.order.order().is_dealt() => {
+                    let division = heard.division.max(1) as i64;
+                    let into = division - self.left as i64;
+                    let counted = (since - into).div_euclid(division);
+                    let length = rows.max(1) as i64;
+                    (
+                        counted.div_euclid(length),
+                        counted.rem_euclid(length) as usize,
+                    )
+                }
+                _ => (self.laps, self.row),
+            };
+            self.order_row =
+                jump.order
+                    .walked(jump.dealer, jump.column, lap, row, rows, &mut self.walked);
+        }
         let jumped = *self.jumped.get_or_insert_with(|| {
             let chance = f32::from(jump.chance) / 255.0;
             let rows = lane.length.max(1);
@@ -189,7 +229,10 @@ impl LaneRun {
                 .filter(|_| lane_held(jump.dealer, jump.column, lap, row, chance));
         }
         let stored = self.kept.unwrap_or_else(|| {
-            jumped.map_or_else(|| lane.stored_from(self.row, start), |own| lane.stored(own))
+            jumped.map_or_else(
+                || lane.stored_from(self.order_row, start),
+                |own| lane.stored(own),
+            )
         });
         self.played = Some(stored);
         let read = LaneRead {
@@ -256,6 +299,7 @@ impl TrackState {
             column: slot,
             chance: self.lane_moved(slot).jump,
             hold: self.lane_moved(slot).hold,
+            order: self.lane_moved(slot).walk(),
             since: self.reseed.map(|reseed| count - reseed.from.count),
         };
         self.lane_runs[slot].read(lane, count, entry, offset, now, cue, jump)
@@ -286,8 +330,10 @@ impl TrackState {
             last: None,
             cued: self.lane_runs[slot].cued,
             jumped: None,
+            order_row: 0,
             kept: None,
             played: self.lane_runs[slot].played,
+            walked: self.lane_runs[slot].walked,
         };
     }
 
@@ -324,32 +370,35 @@ impl TrackState {
         lane.heard_start(self.lane_moved(slot))
     }
 
-    /// An FX column's `Length`, `Rate`, `Start` and `Jump` as held, with what modulation adds.
+    /// An FX column's lane's settings as held, with what modulation adds: across the whole
+    /// `00` to `FF` for the first five, and across its list for `Order` and `Reverse`, as the
+    /// walk's are (decision 431).
     fn lane_moved(&self, slot: usize) -> LaneMove {
-        let value = |at: usize| {
-            let by = SettingId::lane(slot, at).map_or(0.0, |id| self.offsets[id.index()]);
-            (self.lane_held[slot][at] + by * 255.0)
-                .clamp(0.0, 255.0)
-                .round() as u8
+        let value = |at: usize, span: bool| {
+            let by = SettingId::lane(slot, at).map_or(0.0, |id| {
+                let by = self.offsets[id.index()];
+                if span {
+                    by * id.entry().span()
+                } else {
+                    by * 255.0
+                }
+            });
+            (self.lane_held[slot][at] + by).clamp(0.0, 255.0).round() as u8
         };
         LaneMove {
-            length: value(0),
-            rate: value(1).min(LANE_RATES.len() as u8 - 1),
-            start: value(2),
-            jump: value(3),
-            hold: value(4),
+            length: value(0, false),
+            rate: value(1, false).min(LANE_RATES.len() as u8 - 1),
+            start: value(2, false),
+            jump: value(3, false),
+            hold: value(4, false),
+            order: value(5, true).min(Order::ALL.len() as u8 - 1),
+            reverse: value(6, true) >= 1,
         }
     }
 }
 
-/// What each FX column's `Length`, `Rate`, `Start`, `Jump` and `Hold` hold at rest, on the `00` to `FF` scale.
+/// What each FX column's lane's settings hold at rest, on the `00` to `FF` scale.
 pub(super) fn lanes_at_rest() -> [f32; LANE_SETTINGS] {
     let rest = LaneMove::default();
-    [
-        f32::from(rest.length),
-        f32::from(rest.rate),
-        f32::from(rest.start),
-        f32::from(rest.jump),
-        f32::from(rest.hold),
-    ]
+    std::array::from_fn(|at| f32::from(rest.value(at)))
 }
