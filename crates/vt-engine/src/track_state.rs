@@ -1,7 +1,7 @@
 //! Fixed-size per-track playback state, made ahead of time so the callback never allocates.
 
 use vt_model::constants::{FX_SLOTS, UNITY_LEVEL};
-use vt_model::dice::{DiceLoop, DiceSettings};
+use vt_model::dice::{DiceLoop, DiceSettings, DiceStep, Reseed};
 use vt_model::insert::{EffectKind, INSERTS, Insert, MAX_KEPT_PARAMS};
 use vt_model::macros::MACROS;
 use vt_model::modulation::MOD_SLOTS;
@@ -105,6 +105,9 @@ pub(crate) struct TrackState {
     pub(crate) chain_move: Option<ChainMove>,
     /// Its dice loop: the step whose dice each place holds, filled as it plays (decision 410).
     pub(crate) dice: DiceLoop,
+    /// Where its last `SED` reseeded its dice, which they're hashed from after it in place of the
+    /// song's seed; none until one plays, and again when playing starts (decision 421).
+    pub(crate) reseed: Option<Reseed>,
     /// The pair of steps on its running count its `Swing` was last read for, and how late that
     /// puts the pair's second step, in ticks: read at the pair's first step, so the pair's
     /// lengths agree (decision 420).
@@ -374,6 +377,7 @@ impl TrackState {
             window: None,
             chain_move: None,
             dice: DiceLoop::default(),
+            reseed: None,
             swing: None,
             accumulator_rng: accumulator_rng(seed, index),
             voice: Voice::default(),
@@ -634,6 +638,7 @@ impl TrackState {
         self.chain_pass = 0;
         self.jump = None;
         self.dice.clear();
+        self.reseed = None;
         self.swing = None;
         for (at, run) in self.slots.iter_mut().enumerate() {
             run.restart(LfoStart { tick: 0.0, clock });
@@ -646,6 +651,33 @@ impl TrackState {
             run.counted = None;
         }
         self.noted = None;
+    }
+
+    /// Reseed its dice with an `SED` of `value` on track `index`, on the row at `from` (decision
+    /// 421): its `CHA`s, its humanise, its random arpeggios and accumulators draw from streams
+    /// started again from the seed the value gives, its dice loop empties to fill again from the
+    /// reseeded steps, and every die hashed from the seed is hashed from that one, counted from
+    /// the row. Its drift, its mod slots and its effects' grains keep their streams.
+    pub(crate) fn reseed(&mut self, value: u8, index: usize, from: DiceStep) {
+        let reseed = Reseed::new(value, from);
+        let seed = reseed.seed;
+        self.rng = Pcg32::new(seed, index as u64);
+        self.groove_rng = groove_rng(seed, index);
+        self.arp_rng = arp_rng(seed, index);
+        self.accumulator_rng = accumulator_rng(seed, index);
+        self.dice.clear();
+        self.reseed = Some(reseed);
+    }
+
+    /// The seed its dice are hashed from, the song's until an `SED` reseeds them (decision 421).
+    pub(crate) fn dice_seed(&self, song: u64) -> u64 {
+        self.reseed.map_or(song, |reseed| reseed.seed)
+    }
+
+    /// The step `now` as its dice count it: as it is, or from the row of the `SED` that reseeded
+    /// them (decision 421).
+    pub(crate) fn dice_step(&self, now: DiceStep) -> DiceStep {
+        self.reseed.map_or(now, |reseed| reseed.since(now))
     }
 
     /// Start a new note, cancelling anything pending for the old one.

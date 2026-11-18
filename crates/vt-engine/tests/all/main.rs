@@ -67,6 +67,7 @@ mod rate_modulation;
 mod realign;
 mod recorder;
 mod render;
+mod reseed;
 mod resting;
 mod returns;
 mod reverbs;
