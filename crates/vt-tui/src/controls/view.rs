@@ -32,7 +32,7 @@ use vt_model::settings::{
     rows_text,
 };
 use vt_model::shape::params::Typing;
-use vt_model::shape::{Context, GenParam, Where};
+use vt_model::shape::{Context, GenParam, ShapeColumn, Where, degree_name};
 use vt_model::song::{
     FilterType, GlideMode, Machine, Phase, Role, Song, SynthVoice, Track, VoiceMode, reset_name,
     trim_text,
@@ -1146,12 +1146,22 @@ fn gen_view(of: ParamView, generator: &Generator, context: &Context, param: GenP
         GenParam::Vary => set.vary != 0,
         _ => true,
     };
+    // A weight's cell is named by its note, as the panel's digits are, and the status line
+    // says whose it is: `Weight of G`.
+    let (label, text) = match (param.weight_degree(), context.column) {
+        (Some(degree), ShapeColumn::Note { scale, .. }) => {
+            let note = degree_name(scale, degree);
+            (Cow::Borrowed(note), format!("{text}, the weight of {note}"))
+        }
+        _ => (view.label, text),
+    };
     ParamView {
         nudge,
         jump,
         cell,
         text,
         engaged,
+        label,
         ..view
     }
 }

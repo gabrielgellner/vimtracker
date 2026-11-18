@@ -74,9 +74,11 @@ pub(super) fn devices(track: &Track, phrase: Option<u32>) -> Vec<DeviceSpec> {
             .rows()
             .is_some_and(|rows| is_empty(&generator.under(found.steps()), rows, generator.column));
         let loops = DeviceSpec::loops(id, at, generator, generates);
+        let weights = DeviceSpec::weights(id, at, generator);
         let column = 1 + column_order(generator.column);
         std::iter::once(DeviceSpec::generator(id, at, generator, generates))
             .chain(loops)
+            .chain(weights)
             .map(move |device| (column, device))
     }));
     // A lane's goes after its column's generators, or where its column comes if it has none.
@@ -157,6 +159,29 @@ impl DeviceSpec {
         })
     }
 
+    /// A `Random`'s weights on notes as a device of their own, `Weights`, a cell for each degree
+    /// from the root, so a macro, a lock or an LFO can reach one (decision 425); none for a fill
+    /// without them.
+    fn weights(phrase: u32, at: usize, generator: &Generator) -> Option<Self> {
+        let columns = GenParam::weights_grid(&generator.shape, generator.column)?;
+        let grid = std::array::from_fn(|row| {
+            std::array::from_fn(|column| {
+                columns.at(row, column).map(|param| Control::Gen {
+                    phrase,
+                    generator: at,
+                    param,
+                })
+            })
+        });
+        Some(Self {
+            identity: WEIGHTS.to_owned(),
+            switchable: false,
+            width: DeviceWidth::Full,
+            title: [None; TITLE_PLACES],
+            grid,
+        })
+    }
+
     /// An FX column's lane's `Length`, `Rate`, `Start`, `Jump` and `Hold`, the track's, which move
     /// every phrase's lane on the column, as a device of its own, `Lane`, named for its column.
     pub(crate) fn lane(slot: usize) -> Self {
@@ -227,7 +252,18 @@ impl DeviceSpec {
                 .flatten()
                 .any(|control| matches!(control, Control::Gen { param, .. } if param.is_loop()))
     }
+
+    /// Whether it's a `Random`'s `Weights`.
+    pub(crate) fn is_weights(&self) -> bool {
+        self.identity == WEIGHTS
+            && self.grid.iter().flatten().flatten().any(
+                |control| matches!(control, Control::Gen { param, .. } if param.weight_degree().is_some()),
+            )
+    }
 }
+
+/// What a `Random`'s weights' device is called.
+pub(crate) const WEIGHTS: &str = "Weights";
 
 /// What an `Acid`'s loops' device is called.
 pub(crate) const LOOPS: &str = "Loops";

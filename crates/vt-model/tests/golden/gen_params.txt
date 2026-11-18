@@ -32,6 +32,18 @@ edge | Edge
 depth | Depth
 steps | Steps
 weights | Weights
+weight1 | Weight 1
+weight2 | Weight 2
+weight3 | Weight 3
+weight4 | Weight 4
+weight5 | Weight 5
+weight6 | Weight 6
+weight7 | Weight 7
+weight8 | Weight 8
+weight9 | Weight 9
+weight10 | Weight 10
+weight11 | Weight 11
+weight12 | Weight 12
 factor | Factor
 masks | Masks
 part | Part
