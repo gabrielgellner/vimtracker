@@ -10,6 +10,7 @@ mod arps;
 mod bank;
 mod beads;
 mod bypassed_amp;
+mod chain_order;
 mod chance_delta;
 mod chance_target;
 mod choke;

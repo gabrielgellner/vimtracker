@@ -1363,8 +1363,8 @@ fn k_chooses_an_fx_command_and_an_empty_slot_waits_for_its_value() {
     assert_eq!(app.modes.mode, Mode::Picker);
     assert_eq!(
         app.overlays.picker.as_ref().unwrap().items().len(),
-        120,
-        "on a sample track with nothing in its slots: empty, its own 39, SMP, SLI, STA, SLEN, PLY and SREV, the lanes' 12, the mod slots' 16, their 12 lists and 15 times and rates, the 8 macros and 11 events"
+        122,
+        "on a sample track with nothing in its slots: empty, its own 41, SMP, SLI, STA, SLEN, PLY and SREV, the lanes' 12, the mod slots' 16, their 12 lists and 15 times and rates, the 8 macros and 11 events"
     );
     keys(&mut app, "cut<Enter>");
     assert_eq!(app.modes.mode, Mode::Replace);

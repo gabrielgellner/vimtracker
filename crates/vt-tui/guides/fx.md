@@ -73,6 +73,8 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `CDLT` | Every row's chance up or down: `80` none, `40` half, `00` none play |
 | `CTGT` | What a row's chance decides: `00` the whole row, `01` each pulse |
 | `CUE` | A new window or lane waits for its loop, `01`, or moves at once, `00` |
+| `CORD` | The chain's order from the next phrase on: `00` forward, `01` reverse |
+| `CJMP` | The chance each of the chain's next phrases is any of its phrases |
 | `GLD` | How long a tie glides into the next note: `00` off, `80` about 60 ms |
 | `OSC` | A synth's `Phase` for the row's note: `00` Free, `01` Reset |
 | `VMOD` | The track's `Mode` for the row's note: `00` Mono, `01` Legato |
@@ -708,6 +710,14 @@ the other way up; `ORDX` and `ORDY` are the order's numbers, `00` its own.
 `PLEN` rows more or fewer than the loop's, `80` as written, and `PSTA` the row it
 starts on. `CUE` `01` has a new window, and a lane's new length, rate or start,
 wait for their loop to come round. See **Order** in **Editing**.
+
+`CORD` and `CJMP` move the chain's walk, as the `Phrase` device's `Chain` and
+`Chain jump` do: `CORD` the order its phrases play in, `00` forward as written,
+then the list of orders, and `CJMP` the chance a phrase of the chain plays any of
+its phrases instead. They're read as the chain moves on to its next phrase and
+held for it, so a lock still holding then, from a row at or after the last note
+of the phrase before, sets the next phrase alone. See **Chain order** in
+**Chains**.
 
 ## Speed
 
