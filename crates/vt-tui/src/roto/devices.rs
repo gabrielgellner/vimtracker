@@ -727,6 +727,11 @@ fn identity(
                 format!("vimtracker/gen/{}/loops", lower(&column)),
             )
         }
+        // A `Random`'s weights, as `Note Weights`.
+        Page::Gen if spec.is_weights() => (
+            "Note Weights".to_owned(),
+            "vimtracker/gen/note/weights".to_owned(),
+        ),
         // An FX column's lane, as `FX1 Lane`, and `Phrase`.
         Page::Gen if spec.lane_slot().is_some() || spec.is_phrase() => (
             spec.identity.clone(),

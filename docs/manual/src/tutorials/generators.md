@@ -1115,6 +1115,9 @@ and `Steps` on macros; add it with `:patch`.
 *   `Steps` back to all 7, then `Weights` `F4F4F4F`: a hex digit a degree from D, each over
     its note, so all of dorian plays, but the chord's four notes most of the time, as on the
     meloDICER.
+*   On the Gen page, the tune's `Weights` has a cell for each of dorian's degrees, `D` to `C`.
+    `A`, the fifth, on a macro, `Min` `0`, `Max` `F`, and an LFO on that macro: the fifth comes
+    and goes as it plays, a meloDICER fader pushed up and pulled down by a hand that never tires.
 *   `Spread` `0%` on the tune: one note, `D-4`, the middle of the range. With `Bias` `+50`, the
     `A-4` three quarters of the way up.
 *   On the Gen page, `Space 8`, `Spread` and `Bias` are cells to turn while it plays, and with

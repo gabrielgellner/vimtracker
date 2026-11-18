@@ -23,9 +23,10 @@ use super::{
     Acid, Bar, Bits, CellStart, Channel, DEFAULT_RATE, DEFAULT_RULE, Degrees, Division, Divisions,
     DrumPart, EUCLID_HITS, Edge, FillKind, Follow, Grids, MAX_ACID_NOTES, MAX_BEND, MAX_BIAS,
     MAX_DEPTH, MAX_FACTOR, MAX_LOOP, MAX_MOVE_LOOP, MAX_MOVE_WEIGHT, MAX_MUTATION, MAX_ORDER,
-    MAX_RING, MAX_SPREAD, MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, MoveList, Moves, Pink, Quality,
-    Random, Ring, Shape, ShapeColumn, Source, Tonnetz, TonnetzVoice, VARIES, Values, Variation,
-    WAVES, WaveRate, Where, default_step, degree_count, degree_name, first_note,
+    MAX_RING, MAX_SPREAD, MAX_TRANSPOSE, MAX_TURN, MAX_WEIGHT, MIN_DEPTH, MoveList, Moves, Pink,
+    Quality, Random, Ring, Shape, ShapeColumn, Source, Tonnetz, TonnetzVoice, VARIES, Values,
+    Variation, WAVES, WEIGHTS, WaveRate, Where, default_step, degree_count, degree_name,
+    first_note,
 };
 use super::{CHILD, CLUSTERS, MARKOV, Role, SHARE, STATES, World};
 
@@ -64,6 +65,9 @@ const FACTOR_JUMP: i32 = 4;
 const RULE_JUMP: i32 = 10;
 /// How far a large step moves a `Tonnetz`' weights and its loop.
 const WEIGHT_JUMP: i32 = 3;
+/// How far a large step moves one of a `Random`'s weights, a quarter of its range, as the panel's `+`
+/// does.
+const DIGIT_JUMP: i32 = 4;
 const LOOP_JUMP: i32 = 4;
 
 /// What a generator's settings act on, which what some of them mean hangs on.
@@ -1360,6 +1364,58 @@ mod tests {
             param.reset(&mut random, &notes, Starts::default());
         }
         assert!(random.random.is_default());
+    }
+
+    /// Each of `Weights`' digits is a setting of its own the engine holds (decision 425): one a
+    /// degree the column's scale has, reading and setting that digit, a hex digit from 0 to `F`,
+    /// and none of them a row of the panel's, where `Weights` has them.
+    #[test]
+    fn each_weight_is_a_number_the_engine_holds() {
+        use GenParam::*;
+        let mut random = shape(FillKind::Random);
+        let in_key = ShapeColumn::Note {
+            scale: Scale {
+                on: true,
+                ..Scale::default()
+            },
+            writes: None,
+        };
+        let notes = context(in_key);
+        let had = |shape: &Shape, column| {
+            GenParam::WEIGHTS
+                .into_iter()
+                .filter(|param| param.exists_for(shape, column, false))
+                .count()
+        };
+        assert_eq!(had(&random, in_key), 7, "a major scale's degrees");
+        assert_eq!(had(&random, note()), 12, "the scale off, every semitone");
+        assert_eq!(had(&random, ShapeColumn::Velocity), 0);
+        assert_eq!(had(&shape(FillKind::Ramp), note()), 0);
+        assert!(!GenParam::of(&random, note(), false).contains(&Weight1));
+        for (degree, param) in GenParam::WEIGHTS.into_iter().enumerate() {
+            assert!(param.held_in_engine() && !param.spec().app_only);
+            assert_eq!(param.weight_degree(), Some(degree));
+            assert_eq!(param.bounds(&notes), Some((0, 0xF)));
+        }
+        assert_eq!(Weights.weight_degree(), None);
+        // The panel's digits and the settings are the same numbers.
+        Weights.typed(&mut random, &notes, "F08").unwrap();
+        assert_eq!(Weight2.number(&random, &notes), Some(0));
+        assert_eq!(Weight3.brief(&random, &notes), "8");
+        Weight3.step(&mut random, &notes, 1, true).unwrap();
+        assert_eq!(Weights.shown(&random, &notes), "F0CFFFF");
+        Weight2.typed(&mut random, &notes, "a").unwrap();
+        assert!(Weight2.typed(&mut random, &notes, "10").is_err());
+        assert_eq!(Weights.shown(&random, &notes), "FACFFFF");
+        Weight2.reset(&mut random, &notes, Starts::default());
+        assert_eq!(Weights.shown(&random, &notes), "FFCFFFF");
+        // On the Gen page, a cell each in rows of four from the root.
+        let grid = GenParam::weights_grid(&random, in_key).expect("weights");
+        assert_eq!(grid.at(0, 0), Some(Weight1));
+        assert_eq!(grid.at(0, 3), Some(Weight4));
+        assert_eq!(grid.at(1, 2), Some(Weight7));
+        assert_eq!(grid.at(1, 3), None);
+        assert_eq!(GenParam::weights_grid(&random, ShapeColumn::Velocity), None);
     }
 
     #[test]
