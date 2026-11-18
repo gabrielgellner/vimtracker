@@ -409,6 +409,9 @@ impl App {
             Pick::SectionChain(chain) => self.song_view.pick_chain(chain, &mut self.services),
             Pick::Line(line) => self.line(line),
             Pick::ScaleTo(scale) => self.services.set_scale(scale),
+            Pick::SectionScale(scale) => {
+                crate::pages::song::SongView::set_scale(scale, &mut self.services);
+            }
             Pick::ShowGroove(groove) => self.project_page.groove_shown = Some(groove),
             Pick::Scale(kind) => self.services.set_scale(Scale {
                 on: true,

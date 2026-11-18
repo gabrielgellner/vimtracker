@@ -146,8 +146,8 @@ impl Page for AudioPage {
         // There's no large step through a list of choices, so `+` and `_` aren't bound, but Cmd-k
         // and Cmd-j stepped through it before the one rule for Cmd keys, and still do (decision
         // 148).
-        ("D-k", Cmd::IncreaseLarge, "The next choice, as D-l"),
-        ("D-j", Cmd::DecreaseLarge, "The previous choice, as D-h"),
+        ("D-k", Cmd::IncreaseLarge, "The next choice, as Cmd-l"),
+        ("D-j", Cmd::DecreaseLarge, "The previous choice, as Cmd-h"),
         ("x", Cmd::ClearField, "Back to the system's own choice"),
         ("K", Cmd::PickValue, "List the choices"),
     ];

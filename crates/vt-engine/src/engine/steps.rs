@@ -11,6 +11,7 @@ use vt_model::dice::{DiceStep, looped_chance};
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH, swing_ticks};
 use vt_model::order::{ChainMove, Dealer, Order, WalkMove, jumped};
 use vt_model::phrase::Phrase;
+use vt_model::scale::Scale;
 use vt_model::settings::{SettingId, moved_chance};
 use vt_model::shape::RowView;
 use vt_model::song::{ChainPosition, Launch, Song, Track};
@@ -115,6 +116,7 @@ impl Engine {
             unlooped: self.tracks[index].dice_step(DiceStep { running, count }),
             plays: None,
             start: self.tracks[index].chain_starts,
+            scale: self.own_scale(),
         };
         // Grid, then groove, then nudge. A track's notes play in order, so a row's note part
         // never lands before the last row's. The push is a share of the step and the nudge the
@@ -541,6 +543,7 @@ impl Engine {
             count,
             position,
             lanes: *lanes,
+            scale: self.own_scale(),
         };
         Some((
             position,
@@ -574,6 +577,7 @@ impl Engine {
             step,
             passes,
             played,
+            read.scale,
         )
     }
 
@@ -625,6 +629,7 @@ impl Engine {
             count,
             position,
             lanes: *lanes,
+            scale: self.own_scale(),
         };
         for number in (0..FX_SLOTS).rev() {
             let slot = match (phrase, lanes[number]) {
@@ -703,6 +708,7 @@ impl Engine {
             count,
             position,
             lanes: pending.lanes,
+            scale: pending.scale,
         };
         let row_at = phrase.map_or(0, |phrase| phrase.start()) + position.step;
         let played = if position.pulse == 0 {
@@ -936,10 +942,12 @@ impl Engine {
             ..
         } = start;
         let accumulates = fx.accumulates;
-        let heard = self.accumulate(index, epoch, key, midi, accumulates.filter(|_| start.adds));
+        let scale = self.scale_in(pending.scale);
+        let adds = accumulates.filter(|_| start.adds);
+        let heard = self.accumulate(index, epoch, key, midi, adds, scale);
         // The row's `RND`s move the note from where the accumulators have it, so they don't add to
         // the walk.
-        let moved = moved_note(heard, variation.by, self.scale);
+        let moved = moved_note(heard, variation.by, scale);
         self.tracks[index].accumulated = (moved != midi).then_some(moved);
         let accumulating = accumulates
             .filter(|_| start.retriggers)
@@ -950,8 +958,9 @@ impl Engine {
                 varied: variation.by,
                 transpose,
                 epoch,
+                scale: pending.scale,
             });
-        let own = moved_note(heard, variation.own, self.scale);
+        let own = moved_note(heard, variation.own, scale);
         let varied = (i16::from(own) - i16::from(heard)) as i8;
         let heard = moved;
         let note = (i16::from(heard) + i16::from(transpose))
@@ -1411,7 +1420,8 @@ impl Engine {
         let carried = self.tracks[index].arp.filter(|_| tie);
         let value = value.or(carried.map(|arp| arp.value))?;
         let settings = self.tracks[index].heard_arpeggio(self.current.song.tracks.get(index)?);
-        let cycle = Cycle::new(heard, value, settings.octaves, self.scale, transpose);
+        let scale = self.scale_in(pending.scale);
+        let cycle = Cycle::new(heard, value, settings.octaves, scale, transpose);
         if !cycle.moves() {
             return None;
         }
@@ -1461,7 +1471,7 @@ impl Engine {
 
     /// The note a row plays at, before its chain's transpose: the note as written, moved on by the
     /// track's accumulators. Its own `ACU`, if it adds now, adds first, unless this is its first
-    /// play since they started again.
+    /// play since they started again. They move it through `scale`, the one in force for its row.
     pub(super) fn accumulate(
         &mut self,
         index: usize,
@@ -1469,6 +1479,7 @@ impl Engine {
         key: RowKey,
         written: u8,
         amount: Option<i8>,
+        scale: Scale,
     ) -> u8 {
         let Some(owner) = self.current.song.tracks.get(index) else {
             return written;
@@ -1482,7 +1493,7 @@ impl Engine {
                 .add(key, amount, settings, &mut state.accumulator_rng);
         }
         let offset = state.accumulators.offset(key, settings.moves);
-        let heard = moved_note(written, offset, self.scale);
+        let heard = moved_note(written, offset, scale);
         state.accumulated = (heard != written).then_some(heard);
         heard
     }
@@ -1762,6 +1773,9 @@ pub(super) struct Read {
     pub count: i64,
     pub position: ChainPosition,
     pub lanes: LaneReads,
+    /// The scale of its own of the section it's read in, if it has one, which a live generator's
+    /// notes go through.
+    pub scale: Option<Scale>,
 }
 
 /// How many times a track has played its phrase before, since its chain started, at a count of its

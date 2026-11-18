@@ -871,7 +871,7 @@ starts the line with. `%` is the whole sample. A slice's own setting with a
 range changes every slice starting in it, as `:'a,'b slice gain -3`.
 
 `K` on `Slice`, or on a step's `SLI`, lists the slices with where each starts,
-and `g d` on a step's `SLI` shows that slice on the sample page; `C-o` comes
+and `g d` on a step's `SLI` shows that slice on the sample page; `Ctrl-o` comes
 back.
 
 ## Marks
@@ -906,7 +906,7 @@ number again.
 ## The sample page
 
 `Space 0` shows the current track's sample as a big waveform, to hear it, slice
-it, name its slices and set its points by eye and by ear; `C-o` comes back.
+it, name its slices and set its points by eye and by ear; `Ctrl-o` comes back.
 **The sample editor** has its keys.
 
 ## Names

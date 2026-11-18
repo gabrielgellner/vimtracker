@@ -1067,7 +1067,7 @@ fn the_keys_of_the_shape_panel_are_in_the_binding_table() {
         .iter()
         .take_while(|line| !line.is_empty())
         .collect();
-    for row in ["Keep it live", "Roll it again", "D-l"] {
+    for row in ["Keep it live", "Roll it again", "Cmd-l"] {
         assert!(rows.iter().any(|line| line.contains(row)), "{row}");
     }
 }

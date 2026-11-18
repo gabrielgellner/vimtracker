@@ -309,8 +309,8 @@ Song	_	DecreaseLarge	Decrease the value, a large step
 Song	D-j	DecreaseLarge	Decrease the value, a large step
 Song	C-a	Increase	Increase the value
 Song	C-x	Decrease	Decrease the value
-Song	x	ClearField	Follow the longest chain, new, or no chain
-Song	K	PickValue	Switch new and reset, or choose this cell's chain
+Song	x	ClearField	Follow the longest chain, new, the song's scale, or no chain
+Song	K	PickValue	Switch new and reset, choose a scale or this cell's chain
 Song	g d	OpenItem	Open this chain's phrase, its rows, or add one
 Song	g C	CloneChain	Copy this chain and its phrases
 Song	a	AddSection	Add an empty section after this one
@@ -453,8 +453,8 @@ Audio	=	Increase	The next choice
 Audio	D-l	Increase	The next choice
 Audio	-	Decrease	The previous choice
 Audio	D-h	Decrease	The previous choice
-Audio	D-k	IncreaseLarge	The next choice, as D-l
-Audio	D-j	DecreaseLarge	The previous choice, as D-h
+Audio	D-k	IncreaseLarge	The next choice, as Cmd-l
+Audio	D-j	DecreaseLarge	The previous choice, as Cmd-h
 Audio	x	ClearField	Back to the system's own choice
 Audio	K	PickValue	List the choices
 Audio	u	Undo	Undo

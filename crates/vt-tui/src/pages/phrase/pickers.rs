@@ -160,7 +160,7 @@ impl PhraseView {
                 Item::new(format!("{amount:+}"), Pick::Amount { slot, value })
                     .meaning(format!(
                         "{value:02X}  {}",
-                        capitalised(&amount_text(amount, services.live.scale.on))
+                        capitalised(&amount_text(amount, services.scale_here().on))
                     ))
                     .category(if amount > 0 { "Up" } else { "Down" })
             })

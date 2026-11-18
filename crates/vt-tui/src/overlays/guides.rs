@@ -576,12 +576,9 @@ mod tests {
         let guides = every_guide();
         let mut missing = Vec::new();
         for binding in crate::input::bindings::bindings() {
-            // The guides write `gg` and `Space fb` for `g g` and `Space f b`, and name Option and
-            // Shift in full.
-            let keys = binding
-                .keys
-                .replace("M-", "Option-")
-                .replace("S-Tab", "Shift-Tab");
+            // The guides write `gg` and `Space fb` for `g g` and `Space f b`, and name the
+            // modifiers as they're shown, `Cmd-l` for `D-l`.
+            let keys = crate::input::keys::shown(binding.keys);
             let joined = match keys.split_once(' ') {
                 Some(("Space", rest)) => format!("Space {}", rest.replace(' ', "")),
                 _ => keys.replace(' ', ""),

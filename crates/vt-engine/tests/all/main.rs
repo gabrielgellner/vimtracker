@@ -75,6 +75,7 @@ mod reverbs;
 mod rotary;
 mod sampler_reverse;
 mod section_loops;
+mod section_scale;
 mod sections;
 mod slices;
 mod slides;

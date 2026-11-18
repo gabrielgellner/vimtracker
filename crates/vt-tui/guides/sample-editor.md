@@ -8,7 +8,7 @@ writes a new file.
 ## Opening it
 
 `Space 0` shows the current track's sample, or `g d` on the sample in the Sound
-page's Machine title, or on a step's `SLI` to land on that slice. `C-o` goes back to
+page's Machine title, or on a step's `SLI` to land on that slice. `Ctrl-o` goes back to
 where you came from. `W` and `B` show the next or previous track's sample.
 
 A track that plays no sample shows nothing here: `K` lists the bank, as `:bank`
@@ -42,8 +42,8 @@ a word, and a slice is a line. Every motion takes a count.
 |---|---|
 | `zi` `zo` | Zoom in or out by 2 on the cursor, as `Option-1` `Option-2` do |
 | `zO` `zv` | The whole sample, or the slice filling the view |
-| `C-d` `C-u` | Half a screen later or earlier |
-| `C-e` `C-y` | A column later or earlier |
+| `Ctrl-d` `Ctrl-u` | Half a screen later or earlier |
+| `Ctrl-e` `Ctrl-y` | A column later or earlier |
 | `zz` `zs` `ze` | The cursor in the middle, at the left or at the right |
 | `zc` | The cursor as a thin line, or as its column |
 
@@ -67,7 +67,7 @@ again. `j` and `k` go from slice to slice, `3G` goes to slice
 guide has the rest of `:slice`.
 
 `m` then a letter names the slice under the cursor, as `:mark a` does, and `'`
-then the letter goes to it, as a jump `C-o` comes back from. `]'` and `['` go
+then the letter goes to it, as a jump `Ctrl-o` comes back from. `]'` and `['` go
 to the next or previous named slice. A step can play a named slice as `SLI 'a`.
 
 ## Hearing it
@@ -96,8 +96,8 @@ slices back or on. Every other key works as it does, so `;` still plays.
 | `x` | Take the point under the cursor away |
 | `=` `-` | Nudge the point under the cursor a pixel later or earlier |
 | `+` `_` | Nudge it a column later or earlier |
-| `D-l` `D-h` | Cmd and `l` `h`: nudge it a frame later or earlier, finer than `=` `-` |
-| `D-k` `D-j` | Cmd and `k` `j`: as `+` `_` |
+| `Cmd-l` `Cmd-h` | Nudge it a frame later or earlier, finer than `=` `-` |
+| `Cmd-k` `Cmd-j` | As `+` `_` |
 | `g s` `g e` | Start or end the sample at the cursor |
 | `g l` `g L` | Start or end the loop at the cursor |
 

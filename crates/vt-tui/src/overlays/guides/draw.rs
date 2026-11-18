@@ -33,7 +33,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, guide: Guide, scroll: usize) {
         .collect();
     let border = popup::border()
         .title(format!(" {} ", guide.title()))
-        .title_bottom(" j k scroll  C-d C-u page  g G ends  ? guides  q close ")
+        .title_bottom(" j k scroll  Ctrl-d Ctrl-u page  g G ends  ? guides  q close ")
         .title_style(Style::new().add_modifier(Modifier::BOLD));
     let inside = popup::draw(frame, window, border);
     frame.render_widget(Paragraph::new(lines), inside);

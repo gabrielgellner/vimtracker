@@ -37,6 +37,9 @@ pub(super) fn edit(next: &mut Song, action: &Action) -> Result<(), EditError> {
         Action::SetSectionStart { section, start } => {
             section_mut(next, *section)?.start = *start;
         }
+        Action::SetSectionScale { section, scale } => {
+            section_mut(next, *section)?.scale = *scale;
+        }
         Action::SetSectionChain {
             section,
             track,

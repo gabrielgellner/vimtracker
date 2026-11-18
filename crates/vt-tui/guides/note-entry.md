@@ -200,13 +200,19 @@ are as near, `:scale fit` takes the lower.
 
 While it's on, `=` `-` `>` `<` move a note through the scale, and a count moves that
 many notes along it. From a note outside the scale, a step lands on the next one in.
-`+` and `_` are still an octave, and `C-a` and `C-x` are still a semitone, for a note
+`+` and `_` are still an octave, and `Ctrl-a` and `Ctrl-x` are still a semitone, for a note
 outside the scale on purpose.
 
 A scale is only for entering and moving notes. It changes nothing you've written,
 so it can't change how a song sounds, unless you run `:scale fit`. Notes outside it
 show in a different colour, and the status line shows `Scale D Dor`. It's saved with
 the song, and `u` doesn't undo it.
+
+A section can have a scale of its own, set in the song view's Scale column; see
+**Songs** in **Phrases and chains**. The keyboard, the moves, `:scale fit`, the
+colours and the status line then follow the scale of the section under the
+cursor, the one the phrase view is editing, whatever is playing. `Option-s` and
+`:scale` still set the song's, which the other sections play in.
 
 A chain's `Transpose` plays a phrase higher or lower whatever the scale, so the grid
 judges the notes as written.

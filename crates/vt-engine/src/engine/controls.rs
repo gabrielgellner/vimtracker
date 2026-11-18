@@ -19,9 +19,24 @@ impl Engine {
         self.fill
     }
 
-    /// Set the scale an `ACU` moves notes through, from the next note it moves.
+    /// Set the song's scale, which an `ACU` moves notes through, from the next note it moves.
     pub fn set_scale(&mut self, scale: Scale) {
         self.scale = scale;
+    }
+
+    /// The scale of its own of the section playing, if it has one (decision 426).
+    pub(super) fn own_scale(&self) -> Option<Scale> {
+        self.playing_section().and_then(|section| section.scale)
+    }
+
+    /// The scale in force for a section's own scale, or the song's without one.
+    pub(super) fn scale_in(&self, own: Option<Scale>) -> Scale {
+        own.unwrap_or(self.scale)
+    }
+
+    /// The scale in force now, the section playing's or the song's, for tests and reports.
+    pub fn scale_now(&self) -> Scale {
+        self.scale_in(self.own_scale())
     }
 
     /// A track's faders as they're heard, for the mixer, the Output device and the Roto.

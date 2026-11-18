@@ -61,10 +61,10 @@ Press `Space 2`. The row past the end, shown as `--`, adds a phrase.
 | `gd` | Open this phrase, or add one on the empty row |
 | `i` | Type a phrase number in hex or a transpose, then `Enter` |
 | `=` `-` | Next or previous phrase, or transpose by a semitone |
-| `C-a` `C-x` | The same as `=` `-` |
+| `Ctrl-a` `Ctrl-x` | The same as `=` `-` |
 | `+` `_` | Phrase number by `10` in hex, or transpose by an octave |
-| `D-l` `D-h` | Cmd and `l` `h`: as `=` `-`, without moving |
-| `D-k` `D-j` | Cmd and `k` `j`: as `+` `_`, without moving |
+| `Cmd-l` `Cmd-h` | As `=` `-`, without moving |
+| `Cmd-k` `Cmd-j` | As `+` `_`, without moving |
 | `K` | Choose this row's phrase from a list |
 | `x` | Transpose back to 0 |
 | `dd` `yy` `p` | Remove a row, copy it, or add the copy below |
@@ -176,18 +176,18 @@ the section the cursor is on, and `Sec 2/4` on the status line says which.
 | `gg` `G` | The first or last section |
 | `h` `l` | Previous or next column |
 | `0` `$` | The length column, or the last track's |
-| `=` `-` `+` `_` | Change the value. `C-a` and `C-x` are `=` `-` |
-| `D-l` `D-h` | Cmd and `l` `h`: as `=` `-`, without moving |
-| `D-k` `D-j` | Cmd and `k` `j`: as `+` `_`, without moving |
+| `=` `-` `+` `_` | Change the value. `Ctrl-a` and `Ctrl-x` are `=` `-` |
+| `Cmd-l` `Cmd-h` | As `=` `-`, without moving |
+| `Cmd-k` `Cmd-j` | As `+` `_`, without moving |
 | `i` | Type a length or repeat then `Enter`, or a chain's two hex digits |
-| `x` | Length follows the chains, Rpt is 1, Start is new, or no chain |
-| `K` | On Start, switch new and reset. On a track, choose its chain |
-| `gd` | Open this chain's phrase, or its rows if several, or add a chain |
+| `x` | Back to the default: Rpt 1, new, the song's scale, or no chain |
+| `K` | On Start, switch new and reset. On Scale or a track, choose |
+| `gd` | Open this chain's phrase, its rows if several, or add a chain |
 | `gC` | Copy this chain and its phrases, for this cell alone |
 | `a` | Add an empty section after this one |
 | `gc` | Copy this section after itself, using the same chains |
 | `dd` | Remove this section |
-| `Enter` | While playing, play this chain on its track next, or stop it on `--` |
+| `Enter` | While playing, play this chain next on its track, or stop on `--` |
 | `C` | While playing, add a section of what's playing, and stay on it |
 | `;` | Hear its first row |
 | `V` | Select sections, for `:loop`. `V` again or `Esc` ends it |
@@ -210,6 +210,20 @@ so a part can run across sections. Give the same chain to two sections of 32 ste
 and a 64-step chain plays through once. `reset` sends every track back to its start
 each time the section's length comes round, so each repeat is the same. At the end of the song, every chain
 starts from its top, and a section looping on itself leaves its chains running.
+
+**Scale** gives a section a scale of its own, so a bridge can go to the relative
+minor or a last chorus up a tone. `--` plays in the song's scale, the one the
+project page and `:scale` set. On the column, `=` and `-` move the root a
+semitone, starting from the song's scale, `+` and `_` step through the kinds,
+`K` lists the kinds on the section's root, and `x` goes back to the song's.
+From the section's first step to its last, everything that reads the scale
+reads its own: an `RND`, an `ACU` and an `ARP` on its rows, a mod slot in scale
+on `Pitch`, and a live generator's notes, which play through it while the
+phrase keeps them as written in the song's. Notes you wrote yourself play as
+written, as a scale never changes those. A launched chain plays in the scale of
+the section the song is on. The phrase view enters notes in the scale of the
+section under the cursor, and the status line's `Scale` says which; see
+**Scales** in **Note entry**. It's saved with the song.
 
 `Shift-Tab` plays the song from the top. `Space c` in the song view plays from the
 section, with each track where the song would have it. In a phrase or chain it
