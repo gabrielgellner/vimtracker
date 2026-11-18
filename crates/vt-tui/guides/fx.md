@@ -60,7 +60,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `GRV` | The step's groove: `00` the project's, `01` Straight |
 | `RATE` | The step's speed: `00` 1/32, `02` 1/16, `04` 1/8, `06` 1/4 |
 | `QNT` | Nudges brought to the grid: `00` none, `80` half, `FF` all |
-| `JMP` | The chance this step plays any row of the phrase: `00` none, `FF` every |
+| `JMP` | The chance this step plays any row of the window: `00` none, `FF` every |
 | `DLP` | Dice loop: `00` off, `01` to `10` steps, `11` 32, `12` 64 |
 | `DMU` | Dice mutate: `00` a locked loop, `FF` fresh dice |
 | `DJMP` | Dice jump: the chance of another step's dice in the loop |
@@ -121,7 +121,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `LLEN1` | FX 1's lanes' length, rows up or down: `80` is none. `LLEN2` `LLEN3` too |
 | `LRAT1` | FX 1's lanes' speed: `÷` slower, `×` faster. `LRAT2` `LRAT3` too |
 | `LSTA1` | FX 1's lanes' first row, rows on from their own. `LSTA2` `LSTA3` too |
-| `LJMP1` | FX 1's lanes' chance of any of their rows instead. `LJMP2` `LJMP3` too |
+| `LJMP1` | FX 1's lanes' chance of any row they're heard for. `LJMP2` `LJMP3` too |
 | `LHLD1` | FX 1's lanes' chance of the row before again. `LHLD2` `LHLD3` too |
 | `LORD1` | FX 1's lanes' order, `00` Forward as `CORD`'s list. `LORD2` `LORD3` too |
 | `LREV1` | FX 1's lanes' walk the other way up, `01` On. `LREV2` `LREV3` too |
@@ -715,8 +715,9 @@ a row moves that row's own note, and a lane of it can tighten every other step. 
 mod slot's `Dest` lists it too. It starts from the track's `Quantise`, on the Sound
 page's Play device, which the Roto has as a knob.
 
-`JMP` is the chance the step plays any row of the phrase instead of the row its
-order walks to, from `00`, never, to `FF`, every step. It's read before the row
+`JMP` is the chance the step plays any row of the window the order walks, `PLEN`
+rows from `PSTA`, instead of the row its order walks to, from `00`, never, to
+`FF`, every step. It's read before the row
 lands, as `QNT` is: a lock on a row sets the chance for the step that walks to
 that row, and the row jumped to then plays with all of its own FX. It starts from
 the track's `Jump`, in the Play device's title. See **Order** in **Editing**.

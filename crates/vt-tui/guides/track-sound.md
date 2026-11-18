@@ -336,7 +336,8 @@ it, and on the Roto it's the first knob of the Play device's second page. See
 **Nudging a note off the grid** in **Note entry**.
 
 `Jump`, in the Play device's title, is the chance each step plays any row of
-its phrase instead of the one the phrase's `:order` walks to, from `0 %`, the
+its phrase's window, `Length` rows from `Start` on the Gen page's `Phrase`,
+instead of the one the phrase's `:order` walks to, from `0 %`, the
 order as it is, to `100 %`, any row every step. It's where held `JMP` starts, so
 a step's `JMP` or a lane's replaces it and an LFO on `JMP` moves around it, and
 on the Roto it's on the Play device's second page. See **Order** in **Editing**.

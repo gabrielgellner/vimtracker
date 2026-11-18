@@ -1145,8 +1145,10 @@ round to its first row. The order itself, `Order`, `Reverse`, `Order X` and
 `Order Y`, still moves at once, as the Metropolix's does.
 
 **Jump** scrambles an order by degrees: it's the chance each step plays any row
-of the phrase instead of the one the order walks to, and then the walk carries
-on where it was. `0 %` plays the order as it is and `100 %` any row each step,
+of the window instead of the one the order walks to, and then the walk carries
+on where it was. With the window as written that's any row of the loop; a
+shorter one keeps the jumps to its rows, and under **Cue** to the window the
+pass plays, as Kria's random direction stays within the loop's ends. `0 %` plays the order as it is and `100 %` any row each step,
 as `random` does, so turning it up takes any order from as written to scrambled,
 as Marbles' Déjà vu knob does past noon. It's a track's setting, `Jump` in the
 title of the Sound page's Play device, so it scrambles whatever phrase the track
@@ -1208,11 +1210,11 @@ from where it is rather than jumping; playing from a step works its place out
 again there. A column without a lane isn't touched. `Start` moves the row each
 lane starts on, so many of its own rows on, going round them: at `1`, `a b c d`
 plays `b c d a`, and the title adds it, `FX1:4 from 2 (4)`. `Jump` is the
-chance each of the lane's rows plays any of its own rows instead of the next, as
-`Jump` is the phrase's: `00` never, `FF` every row. A jump takes one row's place,
-for all its steps, and the lane carries on counting from where it was; it picks
-from all the lane's own rows, whatever its `Length` and `Start`, and the playhead
-follows it. `Hold` is the chance each of the lane's rows plays the row the lane
+chance each of the lane's rows plays any of the rows it's heard for instead of
+the next, as `Jump` is the phrase's: `00` never, `FF` every row. A jump takes one
+row's place, for all its steps, and the lane carries on counting from where it
+was; it picks from the rows its `Length` and `Start` give, as `Order` walks them,
+and the playhead follows it. `Hold` is the chance each of the lane's rows plays the row the lane
 played before again instead of its own, so its value holds, as a failed roll does
 in Kria: `00` never, `FF` the lane's first row throughout. A hold, too, takes one
 row's place for all its steps, and the lane counts on. `Order` walks the lane's

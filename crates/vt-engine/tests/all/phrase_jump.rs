@@ -1,10 +1,11 @@
-//! A track's `Jump` (decision 391): the chance each step plays any row of its phrase instead of
-//! the one its order walks to, scrambling the order by degrees, as Marbles' Déjà vu knob does past
+//! A track's `Jump` (decision 391): the chance each step plays any row of its phrase's window
+//! (decision 437) instead of the one its order walks to, scrambling the order by degrees, as Marbles' Déjà vu knob does past
 //! noon. It's read before the row plays, as `QNT` is, so a `JMP` on a row, an LFO or a macro
 //! moves it, and it's rolled from the seed, so a render repeats.
 
 use std::sync::Arc;
 
+use vt_engine::engine::Engine;
 use vt_engine::render::render_frames;
 use vt_model::lfo::{Lfo, Rate, Shape};
 use vt_model::modulation::ModSlot;
@@ -142,6 +143,80 @@ fn it_scrambles_any_order_and_stays_within_the_phrase() {
             assert!([84, 86, 88, 89].contains(note), "{step}: {heard:?}");
         }
     }
+}
+
+/// The row the track jumped to at each of this many steps, if it jumped, swapping in `turned`
+/// after `at` steps.
+fn jumped_turning(song: &Song, turned: &Song, at: usize, steps: usize) -> Vec<Option<usize>> {
+    let mut engine = Engine::new(RATE, version(song, ramp_pool()));
+    engine.play_from(0);
+    let mut out = vec![0.0; STEP * 2];
+    (0..steps)
+        .map(|step| {
+            if step == at {
+                engine.swap(version(turned, ramp_pool()));
+            }
+            engine.process(&mut out);
+            engine.track_heard(0).jumped
+        })
+        .collect()
+}
+
+/// The song with the track's window `PLEN` and `PSTA` (decision 401).
+fn windowed(mut song: Song, length: u8, start: u8) -> Song {
+    song.tracks[0].phrase_length = length;
+    song.tracks[0].phrase_start = start;
+    song
+}
+
+#[test]
+fn jumps_stay_within_the_window_as_the_order_maps_it() {
+    // Four rows from the third: a jump plays only those (decision 437).
+    let short = windowed(song(&SCALE, Order::Forward, 0xFF), 0x7C, 2);
+    let heard = notes(&short, 64);
+    assert!(
+        heard.iter().all(|note| [64, 65, 67, 69].contains(note)),
+        "{heard:?}"
+    );
+    let mut seen = heard.clone();
+    seen.sort_unstable();
+    seen.dedup();
+    assert_eq!(seen.len(), 4, "any of the four: {heard:?}");
+    // From the seventh, the window goes round the loop to its first rows.
+    let round = windowed(song(&SCALE, Order::Forward, 0xFF), 0x7C, 6);
+    let heard = notes(&round, 64);
+    assert!(
+        heard.iter().all(|note| [71, 72, 60, 62].contains(note)),
+        "{heard:?}"
+    );
+    // Longer than the loop, every row is in reach.
+    let long = windowed(song(&SCALE, Order::Forward, 0xFF), 0x84, 0);
+    let mut seen = notes(&long, 64);
+    seen.sort_unstable();
+    seen.dedup();
+    assert_eq!(seen.len(), 8);
+    // As written, the window is the loop, and the jumps are those of a track with no window.
+    let own = song(&SCALE, Order::Forward, 0xFF);
+    assert_eq!(notes(&windowed(own.clone(), 0x80, 0), 64), notes(&own, 64));
+}
+
+#[test]
+fn under_cue_a_jump_keeps_to_the_window_in_force() {
+    // `PLEN` turned to four rows three steps into a pass of eight: with `Cue` on, the pass's jumps
+    // still reach all eight, and the next pass's keep to the four; with it off, the four at once.
+    let mut own = song(&SCALE, Order::Forward, 0xFF);
+    own.tracks[0].cue = 1;
+    let short = windowed(own.clone(), 0x7C, 0);
+    let cued = jumped_turning(&own, &short, 3, 64);
+    assert!(cued[3..8].iter().flatten().any(|row| *row >= 4), "{cued:?}");
+    assert!(cued[8..].iter().flatten().all(|row| *row < 4), "{cued:?}");
+    own.tracks[0].cue = 0;
+    let short = windowed(own.clone(), 0x7C, 0);
+    let at_once = jumped_turning(&own, &short, 3, 64);
+    assert!(
+        at_once[3..].iter().flatten().all(|row| *row < 4),
+        "{at_once:?}"
+    );
 }
 
 #[test]

@@ -217,7 +217,13 @@ impl Engine {
                 }
                 None => (position.deal, position.visit),
             };
-            jumped(phrase.loop_steps(), deal, visit, chance)
+            // Within the window its order walks, as the walk maps it, `Reverse` aside, as it
+            // turns the walk over rather than choosing its rows (decision 437).
+            let window = WalkMove {
+                reverse: false,
+                ..self.walk(index)
+            };
+            jumped(window.rows(phrase.loop_steps()), deal, visit, chance)
         };
         self.tracks[index].jump = Some(JumpAt { chain, start, row });
         row
