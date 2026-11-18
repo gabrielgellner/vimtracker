@@ -994,6 +994,7 @@ fn lane_view(of: ParamView, moved: LaneMove, slot: usize, field: LaneField) -> P
                 .reads(NUMBER, "Start is a number of rows from 0 to 255")
         }
         LaneField::Jump => of.hex(moved.jump, 0xFF, 0),
+        LaneField::Hold => of.hex(moved.hold, 0xFF, 0),
         LaneField::Rate => of.listed(
             LANE_RATES.iter().map(|rate| Choice::named(*rate)),
             usize::from(moved.rate),
@@ -1033,6 +1034,14 @@ fn lane_shown(slot: usize, field: LaneField, moved: LaneMove) -> String {
             0xFF => format!("FF: each row of a lane on {column} plays any of its rows"),
             chance => format!(
                 "{chance:02X}: each row of a lane on {column} plays any of its rows {}% of the time",
+                (u32::from(chance) * 100 + 127) / 255
+            ),
+        },
+        LaneField::Hold => match moved.hold {
+            0 => format!("00: each row of a lane on {column} plays its own"),
+            0xFF => format!("FF: each row of a lane on {column} keeps the row before"),
+            chance => format!(
+                "{chance:02X}: each row of a lane on {column} keeps the row before {}% of the time",
                 (u32::from(chance) * 100 + 127) / 255
             ),
         },
@@ -1305,6 +1314,7 @@ pub fn set(
                 LaneField::Rate => moved.rate = byte,
                 LaneField::Start => moved.start = byte,
                 LaneField::Jump => moved.jump = byte,
+                LaneField::Hold => moved.hold = byte,
             }
             Action::SetLaneMove {
                 track: at,

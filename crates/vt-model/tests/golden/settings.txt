@@ -1324,3 +1324,6 @@
 1323 lane1.jump
 1324 lane2.jump
 1325 lane3.jump
+1326 lane1.hold
+1327 lane2.hold
+1328 lane3.hold

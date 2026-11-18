@@ -6,7 +6,7 @@
 //! of the next, which no cue holds back, as a walk's choice isn't a loop's bounds (decision 415).
 
 use vt_model::lane::{Heard, LANE_RATES, Lane, LaneMove};
-use vt_model::order::{Dealer, lane_jumped};
+use vt_model::order::{Dealer, lane_held, lane_jumped};
 use vt_model::settings::{LANE_SETTINGS, SettingId};
 
 use super::TrackState;
@@ -40,15 +40,22 @@ pub(crate) struct LaneRun {
     /// row started, or as it was first read after being placed: none until decided, then none
     /// again for the row counted to (decision 415).
     jumped: Option<Option<usize>>,
+    /// The stored row the row it's on plays because its `Hold` kept the one before, decided with
+    /// its `Jump` (decision 422).
+    kept: Option<usize>,
+    /// The stored row it last played, which a row its `Hold` keeps plays again; none after it's
+    /// placed, so a lane's first row is its own.
+    played: Option<usize>,
 }
 
-/// What a lane's `Jump` rolls with: the track's dealer, the lane's column and its chance now,
-/// `00` to `FF`.
+/// What a lane's `Jump` and `Hold` roll with: the track's dealer, the lane's column and their
+/// chances now, `00` to `FF`.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct LaneJump {
     pub dealer: Dealer,
     pub column: usize,
     pub chance: u8,
+    pub hold: u8,
 }
 
 impl LaneJump {
@@ -58,6 +65,7 @@ impl LaneJump {
             dealer: Dealer::default(),
             column: 0,
             chance: 0,
+            hold: 0,
         }
     }
 }
@@ -104,6 +112,8 @@ impl LaneRun {
             last: None,
             cued: None,
             jumped: None,
+            kept: None,
+            played: None,
         }
     }
 
@@ -155,14 +165,27 @@ impl LaneRun {
             self.jumped = None;
         }
         self.cued = cue.then_some((heard, start));
-        // Whether the row jumps is decided once, for all its steps, as a phrase's visit is.
+        // Whether the row jumps, and whether it keeps the row before, is decided once, for all its
+        // steps, as a phrase's visit is. A row kept plays the one before again, whatever its jump.
+        let (lap, row) = (self.laps, self.row);
+        let deciding = self.jumped.is_none();
         let jumped = *self.jumped.get_or_insert_with(|| {
             let chance = f32::from(jump.chance) / 255.0;
             let rows = lane.length.max(1);
-            lane_jumped(jump.dealer, jump.column, self.laps, self.row, rows, chance)
+            lane_jumped(jump.dealer, jump.column, lap, row, rows, chance)
         });
+        if deciding {
+            let chance = f32::from(jump.hold) / 255.0;
+            self.kept = self
+                .played
+                .filter(|_| lane_held(jump.dealer, jump.column, lap, row, chance));
+        }
+        let stored = self.kept.unwrap_or_else(|| {
+            jumped.map_or_else(|| lane.stored_from(self.row, start), |own| lane.stored(own))
+        });
+        self.played = Some(stored);
         let read = LaneRead {
-            row: jumped.map_or_else(|| lane.stored_from(self.row, start), |own| lane.stored(own)),
+            row: stored,
             laps: self.laps,
             first,
             start: start as u16,
@@ -224,6 +247,7 @@ impl TrackState {
             dealer,
             column: slot,
             chance: self.lane_moved(slot).jump,
+            hold: self.lane_moved(slot).hold,
         };
         self.lane_runs[slot].read(lane, count, entry, offset, now, cue, jump)
     }
@@ -253,6 +277,8 @@ impl TrackState {
             last: None,
             cued: self.lane_runs[slot].cued,
             jumped: None,
+            kept: None,
+            played: self.lane_runs[slot].played,
         };
     }
 
@@ -292,11 +318,12 @@ impl TrackState {
             rate: value(1).min(LANE_RATES.len() as u8 - 1),
             start: value(2),
             jump: value(3),
+            hold: value(4),
         }
     }
 }
 
-/// What each FX column's `Length`, `Rate`, `Start` and `Jump` hold at rest, on the `00` to `FF` scale.
+/// What each FX column's `Length`, `Rate`, `Start`, `Jump` and `Hold` hold at rest, on the `00` to `FF` scale.
 pub(super) fn lanes_at_rest() -> [f32; LANE_SETTINGS] {
     let rest = LaneMove::default();
     [
@@ -304,5 +331,6 @@ pub(super) fn lanes_at_rest() -> [f32; LANE_SETTINGS] {
         f32::from(rest.rate),
         f32::from(rest.start),
         f32::from(rest.jump),
+        f32::from(rest.hold),
     ]
 }

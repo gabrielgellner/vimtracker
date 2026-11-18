@@ -790,6 +790,7 @@ mod tests {
                         rate: ((round * 7 + slot) % vt_model::lane::LANE_RATES.len()) as u8,
                         start: ((round * 11 + slot) % 9) as u8,
                         jump: ((round * 13 + slot) % 3 * 0x40) as u8,
+                        hold: ((round * 17 + slot) % 3 * 0x50) as u8,
                     };
                 }
             }

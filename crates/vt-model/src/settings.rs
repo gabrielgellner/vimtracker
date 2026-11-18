@@ -672,7 +672,7 @@ const SLOT_OWN: [Entry; 1] = [Entry {
 /// Each FX column's lane's, which move every phrase's lane on that column from its own: how many
 /// rows it's heard for, one a step either side of `80`, and how much slower or faster its rows go.
 /// With the column's number after each, as `LLEN1`.
-const LANE: [Entry; 4] = [
+const LANE: [Entry; 5] = [
     Entry {
         meaning: "how many rows this column's lanes are heard for, more or fewer",
         key: "length",
@@ -717,6 +717,10 @@ const LANE: [Entry; 4] = [
     // the phrase's.
     level("jump", "Jump", "LJMP", 0x00)
         .means("the chance each of this column's lanes' rows plays any of its rows instead"),
+    // Added after `Jump`, so its places come after its (decision 422): the chance each of the
+    // lane's rows keeps the row before it instead of playing its own, as Kria's probability does.
+    level("hold", "Hold", "LHLD", 0x00)
+        .means("the chance each of this column's lanes' rows keeps the one before instead"),
 ];
 
 /// How many of a lane's settings have their places before the track's own added later: those

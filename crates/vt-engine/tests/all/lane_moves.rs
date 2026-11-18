@@ -91,6 +91,7 @@ fn moved(mut song: Song, length: u8, rate: u8) -> Song {
         rate,
         start: 0,
         jump: 0,
+        hold: 0,
     };
     song
 }

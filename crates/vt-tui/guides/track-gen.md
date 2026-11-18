@@ -56,7 +56,7 @@ for the lane to come round to its first row, as Kria's division cueing does.
 The order's four still move at once. `CUE` on a step locks it. The Roto has the
 seven on knobs 1 to 7.
 
-**A lane's Length, Rate, Start and Jump.** Each FX column with a lane in the phrase has a
+**A lane's Length, Rate, Start, Jump and Hold.** Each FX column with a lane in the phrase has a
 device of its own, `FX1 Lane`, under that column's generator if it has one, as
 `Loops` sits under `Acid`, and where its column comes if not. Its settings are
 the track's, not the phrase's: they move every phrase's lane on that column from
@@ -70,11 +70,16 @@ is the row each lane starts on, so many of its own rows on, going round them.
 `Jump` is the chance, `00` to `FF`, that each of its rows plays any of the lane's
 own rows instead of the next, as the Play device's `Jump` is for the phrase's:
 the lane counts on from where it was, and a slow row jumps once for all its
-steps. `Cue` never holds it back, as it's how the loop is walked, not its
-bounds. At the end of its title, dim, it says how this phrase's lane
+steps. `Hold`, under `Length`, is the chance, `00` to `FF`, that each of its rows
+plays the row the lane played before again instead of its own, so the value
+holds, as a failed roll does in Kria and on the Metropolix: a jumped row kept is
+kept as it jumped, and a lane's first row, as it starts or as playing starts
+from a step, is always its own. It rolls apart from `Jump`, so turning it leaves
+the jumps where they were. `Cue` never holds either back, as they're how the
+loop is walked, not its bounds. At the end of its title, dim, it says how this phrase's lane
 is heard against its own: `· here 6 rows, its own 4 rows`. `=` `-` `+` `_`, `i`,
 `K` on `Rate`, `x`, `M` and `gd` work on them as on any of the track's settings,
-a step's `LLEN1`, `LRAT1`, `LSTA1` and `LJMP1` lock them, and a mod slot can go to them. A column
+a step's `LLEN1`, `LRAT1`, `LSTA1`, `LJMP1` and `LHLD1` lock them, and a mod slot can go to them. A column
 without a lane has no device, and the settings keep their values: a macro mapped
 there does nothing until a phrase gives that column a lane.
 

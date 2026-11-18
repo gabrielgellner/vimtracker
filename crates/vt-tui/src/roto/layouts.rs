@@ -1853,7 +1853,7 @@ const GEN_LANE: DeviceLayout = live(
             s("rate"),
             s("start"),
             s("jump"),
-            GAP,
+            s("hold"),
             GAP,
             GAP,
             GAP,

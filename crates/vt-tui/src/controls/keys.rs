@@ -135,5 +135,6 @@ pub fn key(control: Control, track: &Track) -> &'static str {
         Control::Lane(_, LaneField::Rate) => "rate",
         Control::Lane(_, LaneField::Start) => "start",
         Control::Lane(_, LaneField::Jump) => "jump",
+        Control::Lane(_, LaneField::Hold) => "hold",
     }
 }

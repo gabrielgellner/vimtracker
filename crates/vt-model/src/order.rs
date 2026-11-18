@@ -727,6 +727,22 @@ pub fn lane_jumped(
     jump_roll(Deal(splitmix64(deal.0 ^ LANE_STREAM)), row, chance, rows)
 }
 
+/// Keeps a lane's holds apart from its jumps.
+const HOLD_STREAM: u64 = 0x686f_6c64_0000_0000;
+
+/// Whether a lane's row keeps the row it played before instead of its own, with its `Hold`
+/// chance from 0 to 1: rolled from the track's dealer, the lane's column, its lap and its row in
+/// the lap, as its `Jump` is, on a stream of its own, so the two are apart and a render repeats
+/// (decision 422).
+pub fn lane_held(dealer: Dealer, column: usize, lap: i64, row: usize, chance: f32) -> bool {
+    if chance <= 0.0 {
+        return false;
+    }
+    let deal = dealer.deal(lap, column);
+    let roll = splitmix64(splitmix64(deal.0 ^ HOLD_STREAM) ^ row as u64);
+    ((roll >> 40) as f32 / (1u64 << 24) as f32) < chance
+}
+
 /// A pass's roll of the dice for a visit, on a try at it.
 fn roll(deal: Deal, visit: usize, attempt: u64) -> u64 {
     splitmix64(deal.0 ^ splitmix64((visit as u64) << 8 | attempt))
