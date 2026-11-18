@@ -70,8 +70,8 @@ With rows of one column selected with `v`, a note, a velocity, a nudge, a gate's
 value that's an amount, its values show as bars beside it, as the shape panel shows them (see
 **Shaping a column**): each row's value now solid, and what it was when the selection started
 behind it, so a run of `+ + -` or a fill with `r` shows how far it has moved things. Above them
-are the column's name and range and the lowest, highest and average now, with after `±` how many
-rows changed. A gate's type, an FX command's name or a selection over several columns has none.
+are the column's name and range and the lowest, highest and average now, and how many rows
+changed. A gate's type, an FX command's name or a selection over several columns has none.
 They go when the selection does.
 
 ## Across tracks
@@ -99,8 +99,8 @@ While the panel is open on the phrase view, the column's values show as bars bes
 over the FX lanes and the tracks beside, which can't be edited while you shape. Each row's value
 now is solid, and what it was when the panel opened is a fainter bar behind it, so you see what
 a fill or a transform moves. Above them, the column's name and its range, `VEL 00 ─ 7F` or an FX
-command's own, and a line with the lowest, the highest and the average now, and after `±` how
-many rows changed: `20─7F avg 4C ±6`. Only the rows you shape have a bar, and they scroll with
+command's own, and a line with the lowest, the highest and the average now, and how many rows
+changed: `20─7F avg 4C 6 changed`. Only the rows you shape have a bar, and they scroll with
 the grid. On the Note column it's a contour, a mark a row placed by pitch across the notes there,
 over faint lines on each of the scale's roots, and on its other notes while there's room. A
 column whose values aren't amounts, such as a list setting's lock or `CND`, has no bars. They go
