@@ -16,7 +16,7 @@ use vt_model::modulation::ModField;
 use vt_model::selection::Field;
 use vt_model::settings::SettingId;
 use vt_model::song::Track;
-use vt_model::step::{FxCommand, Note};
+use vt_model::step::{FxCommand, Mark, Note};
 use vt_model::variation::{self, Varies};
 
 use crate::app::App;
@@ -257,6 +257,11 @@ pub(crate) fn phrase_value(services: &Services, field: Field) -> Option<String> 
             if cell.command == Some(FxCommand::Set(SettingId::SLICE)) && track.is_sound() {
                 return Some(services.slice_shown(cell));
             }
+            if cell.command == Some(FxCommand::Set(SettingId::SWING))
+                && let Some(late) = off_beat_swing(services, cell.mark)
+            {
+                return Some(format!("{}, {late}", shown(SettingId::SWING, cell.value)));
+            }
             let id = cell.command?.setting()?;
             (id, cell.value)
         }
@@ -269,6 +274,29 @@ pub(crate) fn phrase_value(services: &Services, field: Field) -> Option<String> 
         Field::Velocity | Field::Gate => return None,
     };
     id.exists_on(track).then(|| shown(id, value))
+}
+
+/// What a `SWG` on the cursor's row does if the row is a pair's second step, as it is wherever it
+/// starts an odd number of steps into a pass of even length: the pair's swing was read on its
+/// first step, so a lock comes too late for its own pair, and held it swings the pairs after
+/// (decisions 420 and 438). Nothing for a row on a pair's first step, outside the loop, in a pass
+/// of odd length, whose rows take turns, or for a glide.
+fn off_beat_swing(services: &Services, mark: Mark) -> Option<&'static str> {
+    let phrase = services.phrase_here()?;
+    let row = services.cursor.step.checked_sub(phrase.start())?;
+    let off_beat = row < phrase.len()
+        && phrase.time().is_multiple_of(2)
+        && !phrase.time_to(row).is_multiple_of(2);
+    if !off_beat {
+        return None;
+    }
+    match mark {
+        Mark::Lock => {
+            Some("too late for its pair: held, it sets the pairs after; nudge one late note")
+        }
+        Mark::Hold => Some("sets the pairs after this one, too late for its own"),
+        Mark::Glide => None,
+    }
 }
 
 /// A `CND`'s condition, by Elektron's name and when its row plays.

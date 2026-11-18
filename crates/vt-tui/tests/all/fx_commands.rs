@@ -1459,3 +1459,36 @@ fn a_step_locks_the_glide_by_its_label() {
     assert_eq!(column_name(&app), "Machine: Glide");
     assert_eq!(value_shown(&app).as_deref(), Some("63 ms"));
 }
+
+#[test]
+fn a_swing_lock_on_an_off_beat_row_says_it_comes_too_late_for_its_pair() {
+    use vt_model::selection::Field;
+    use vt_tui::screen::status::value_shown;
+    let rows = [
+        "C-3 -- swing:A0",
+        "C-3 -- swing:A0",
+        "C-3 -- swing:A0",
+        "C-3 -- swing:A0h",
+    ];
+    let at = |app: &mut App, step: usize| {
+        app.services.cursor.field = Field::FxValue(0);
+        app.services.cursor.step = step;
+        value_shown(app).unwrap_or_default()
+    };
+    let (mut app, _realtime) = app_with(&rows);
+    // On a pair's first row it swings that pair, as any lock does.
+    assert_eq!(at(&mut app, 0), "66.0 %");
+    assert_eq!(at(&mut app, 2), "66.0 %");
+    // On its second, the pair's swing was read already (decision 438).
+    assert_eq!(
+        at(&mut app, 1),
+        "66.0 %, too late for its pair: held, it sets the pairs after; nudge one late note"
+    );
+    assert_eq!(
+        at(&mut app, 3),
+        "66.0 %, sets the pairs after this one, too late for its own"
+    );
+    // In a pass of odd length the rows take turns, so nothing is said.
+    let (mut odd, _realtime) = app_with(&rows[..3]);
+    assert_eq!(at(&mut odd, 1), "66.0 %");
+}

@@ -700,7 +700,9 @@ tenth of a percent a step, as an Elektron's swing is in whole percents. `A0`,
 swing adds to its pushes, up to half a step. It's read once a pair, as the pair's
 first step is worked out, so the pair's two steps agree on where the second
 lands: a lock on the pair's first row swings that pair, and one on its second
-row comes too late for it, though held with `h` it swings the pairs after. A
+row comes too late for it, though held with `h` it swings the pairs after, and
+the status line says so on that row. For one late note, nudge it instead: a
+nudge moves its row alone, as an Elektron's micro-timing does. A
 lane of it, a macro or a mod slot moves it too, so an LFO can sway the swing
 from bar to bar. It starts from the track's `Swing`, in the Play device's title,
 which the Roto has as a knob. `:swing` still sets the project's groove.
