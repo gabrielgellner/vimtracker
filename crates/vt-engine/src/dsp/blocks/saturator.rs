@@ -156,7 +156,7 @@ impl Table {
         for knot in 0..KNOTS {
             let x = knot as f64 * STEP - REACH;
             values[knot] = if knot == MIDDLE { 0.0 } else { scaled(x) - x };
-            slopes[knot] = slope_of(&scaled, x) - 1.0;
+            slopes[knot] = slope_of(scaled, x) - 1.0;
         }
         let mut table = Self {
             low: values[0] - REACH,
@@ -886,7 +886,11 @@ mod tests {
                 for hertz in [30.0, 100.0, 1_000.0, 5_000.0, 10_000.0, 18_000.0] {
                     let out = played(colouring, &tuning, &[(hertz, -40.0)]);
                     let change = db(level_at(&out, hertz) / 0.01);
-                    let most = if hertz == 1_000.0 { 0.05 } else { 0.5 };
+                    let most = if hertz < 2_000.0 && hertz > 500.0 {
+                        0.05
+                    } else {
+                        0.5
+                    };
                     assert!(
                         change.abs() < most,
                         "{curve:?} {emphasis} at {hertz} Hz: {change} dB"
