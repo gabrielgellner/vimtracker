@@ -235,6 +235,9 @@ impl SettingId {
     pub const DICE_MUTATE: Self = Self(LATER_TRACK_START as u16 + 21);
     /// The chance a step takes the dice of any step of its track's dice loop (decision 411).
     pub const DICE_JUMP: Self = Self(LATER_TRACK_START as u16 + 22);
+    /// How late the second step of each pair of a track's lands, on top of its groove, from
+    /// 50.0% at `00` to 75.0% at `FA`, as [`crate::groove::swing_tenths`] reads it (decision 420).
+    pub const SWING: Self = Self(LATER_TRACK_START as u16 + 23);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.

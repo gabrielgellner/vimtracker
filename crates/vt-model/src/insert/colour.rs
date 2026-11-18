@@ -68,8 +68,7 @@ pub(super) const TYPE_PARAM: Entry = Entry {
     meaning: "how it bends the sound: clipping, folding, crushing or a guitar pedal",
     name: "Type",
     key: "type",
-    // Choosing a mode chooses a sound, so steps don't lock it.
-    label: None,
+    label: Some("TYPE"),
     kind: Kind::Stepped {
         choices: &DISTORT_TYPE_NAMES,
         wraps: true,

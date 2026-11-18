@@ -104,6 +104,10 @@ pub(crate) struct TrackState {
     /// Where its last `SED` reseeded its dice, which they're hashed from after it in place of the
     /// song's seed; none until one plays, and again when playing starts (decision 421).
     pub(crate) reseed: Option<Reseed>,
+    /// The pair of steps on its running count its `Swing` was last read for, and how late that
+    /// puts the pair's second step, in ticks: read at the pair's first step, so the pair's
+    /// lengths agree (decision 420).
+    pub(crate) swing: Option<(i64, i16)>,
     /// The rolls a `Random` accumulator takes, apart from `rng` so `CHA` rolls as it did.
     pub accumulator_rng: Pcg32,
     /// What's added to the count for each FX column's lane, so a lane changed while playing stays
@@ -369,6 +373,7 @@ impl TrackState {
             window: None,
             dice: DiceLoop::default(),
             reseed: None,
+            swing: None,
             accumulator_rng: accumulator_rng(seed, index),
             voice: Voice::default(),
             tail: Voice::default(),
@@ -628,6 +633,7 @@ impl TrackState {
         self.jump = None;
         self.dice.clear();
         self.reseed = None;
+        self.swing = None;
         for (at, run) in self.slots.iter_mut().enumerate() {
             run.restart(LfoStart { tick: 0.0, clock });
             run.notes = 0;

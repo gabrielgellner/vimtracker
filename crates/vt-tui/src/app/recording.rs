@@ -10,7 +10,7 @@ use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::{TrackPlace, Transport};
 use vt_model::action::Action;
 use vt_model::constants::{FX_SLOTS, NUDGE_TICKS, TICKS_PER_QUARTER, TICKS_PER_STEP};
-use vt_model::groove::Groove;
+use vt_model::groove::{Groove, swing_ticks};
 use vt_model::settings::SettingId;
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
@@ -435,7 +435,9 @@ impl App {
         if length == 0 {
             return None;
         }
-        let groove = song.groove(song.track_groove(track));
+        let groove = song
+            .groove(song.track_groove(track))
+            .swung(swing_ticks(owner.swing));
         let into = (now - jam.started as f64).rem_euclid(length as f64);
         // Every time round the chain counts, as which one deals a dealt order.
         let lap = ((now - jam.started as f64).div_euclid(length as f64)).max(0.0) as usize;
