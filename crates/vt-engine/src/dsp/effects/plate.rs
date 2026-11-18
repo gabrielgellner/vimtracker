@@ -1025,7 +1025,7 @@ mod tests {
             impulse(&mut plate(settings, RATE), RATE as usize)
         };
         let (wide, half, mono) = (out(0xFF), out(0x80), out(0x00));
-        assert!(mono.iter().all(|[l, r]| l == r));
+        assert!(mono.iter().all(|[l, r]| l.to_bits() == r.to_bits()));
         for ((w, h), m) in wide.iter().zip(&half).zip(&mono) {
             let sums = [w, h, m].map(|f| f[0] + f[1]);
             assert!((sums[0] - sums[1]).abs() < 1e-5 && (sums[0] - sums[2]).abs() < 1e-5);

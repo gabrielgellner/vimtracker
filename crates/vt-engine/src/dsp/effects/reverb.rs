@@ -207,7 +207,7 @@ impl LowDamping {
 /// its top.
 #[inline]
 pub(crate) fn widen([left, right]: [f32; 2], width: f32) -> [f32; 2] {
-    if width == 1.0 {
+    if width.to_bits() == 1.0_f32.to_bits() {
         return [left, right];
     }
     let mid = (left + right) * 0.5;
@@ -846,7 +846,7 @@ mod tests {
             burst(&mut reverb(settings, RATE), RATE as usize)
         };
         let (wide, half, mono) = (out(0xFF), out(0x80), out(0x00));
-        assert!(mono.iter().all(|[l, r]| l == r));
+        assert!(mono.iter().all(|[l, r]| l.to_bits() == r.to_bits()));
         assert!(wide.iter().any(|[l, r]| (l - r).abs() > 0.01));
         for ((w, h), m) in wide.iter().zip(&half).zip(&mono) {
             let sums = [w, h, m].map(|f| f[0] + f[1]);
