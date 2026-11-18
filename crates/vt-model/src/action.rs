@@ -619,13 +619,14 @@ pub enum TrackControl {
     DiceLoop,
     DiceMutate,
     DiceJump,
+    Swing,
     ChainOrder,
     ChainJump,
 }
 
 impl TrackControl {
     /// Every one, in the order they're declared.
-    pub const ALL: [Self; 27] = [
+    pub const ALL: [Self; 28] = [
         Self::Cutoff,
         Self::Resonance,
         Self::Pan,
@@ -651,6 +652,7 @@ impl TrackControl {
         Self::DiceLoop,
         Self::DiceMutate,
         Self::DiceJump,
+        Self::Swing,
         Self::ChainOrder,
         Self::ChainJump,
     ];
@@ -683,6 +685,7 @@ impl TrackControl {
             Self::DiceLoop => Some(SettingId::DICE_LOOP),
             Self::DiceMutate => Some(SettingId::DICE_MUTATE),
             Self::DiceJump => Some(SettingId::DICE_JUMP),
+            Self::Swing => Some(SettingId::SWING),
             Self::ChainOrder => Some(SettingId::CHAIN_ORDER),
             Self::ChainJump => Some(SettingId::CHAIN_JUMP),
         }

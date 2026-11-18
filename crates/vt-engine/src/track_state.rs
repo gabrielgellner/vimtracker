@@ -105,6 +105,10 @@ pub(crate) struct TrackState {
     pub(crate) chain_move: Option<ChainMove>,
     /// Its dice loop: the step whose dice each place holds, filled as it plays (decision 410).
     pub(crate) dice: DiceLoop,
+    /// The pair of steps on its running count its `Swing` was last read for, and how late that
+    /// puts the pair's second step, in ticks: read at the pair's first step, so the pair's
+    /// lengths agree (decision 420).
+    pub(crate) swing: Option<(i64, i16)>,
     /// The rolls a `Random` accumulator takes, apart from `rng` so `CHA` rolls as it did.
     pub accumulator_rng: Pcg32,
     /// What's added to the count for each FX column's lane, so a lane changed while playing stays
@@ -370,6 +374,7 @@ impl TrackState {
             window: None,
             chain_move: None,
             dice: DiceLoop::default(),
+            swing: None,
             accumulator_rng: accumulator_rng(seed, index),
             voice: Voice::default(),
             tail: Voice::default(),
@@ -629,6 +634,7 @@ impl TrackState {
         self.chain_pass = 0;
         self.jump = None;
         self.dice.clear();
+        self.swing = None;
         for (at, run) in self.slots.iter_mut().enumerate() {
             run.restart(LfoStart { tick: 0.0, clock });
             run.notes = 0;

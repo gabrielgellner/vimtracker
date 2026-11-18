@@ -31,10 +31,42 @@ pub(crate) const fn swing_push(tenths: u16) -> i16 {
     ((TICKS_PER_STEP * 2 * tenths + 500) / 1000) as i16 - TICKS_PER_STEP as i16
 }
 
+/// The top of a track's `Swing`: 75.0%, as far as a push goes (decision 420).
+pub const MOST_SWING: u8 = 250;
+
+/// The swing in tenths of a percent a track's `Swing` is at: `00` is 50.0%, straight, each step
+/// a tenth of a percent more, up to [`MOST_SWING`]'s 75.0%. Every swing groove's percent is on it,
+/// so `A0`, 66.0%, plays as `Swing 66` does (decision 420).
+pub const fn swing_tenths(value: u8) -> u16 {
+    let value = if value > MOST_SWING {
+        MOST_SWING
+    } else {
+        value
+    };
+    500 + value as u16
+}
+
+/// The `Swing` that plays as a swing groove at a whole percent: `A0` for 66.
+pub const fn swing_value(percent: u16) -> u8 {
+    let tenths = percent.saturating_mul(10).saturating_sub(500);
+    if tenths > MOST_SWING as u16 {
+        MOST_SWING
+    } else {
+        tenths as u8
+    }
+}
+
+/// How late a track's `Swing` puts the second step of each pair, in ticks.
+pub const fn swing_ticks(value: u8) -> i16 {
+    swing_push(swing_tenths(value))
+}
+
 /// A pattern of pushes, from 1 to 16 steps long, counted on each track's own running count of its
 /// steps, from the song's start or the last reset. Each step has a push in ticks, 240 to a step,
 /// so a share of the track's step at its speed, and a velocity in percent, and the whole has a
 /// humanise, how far either way each step may land at random. The first step's push is always 0.
+/// As it plays, a track's `Swing` puts every other step later still, which songs never keep in a
+/// groove: it's the track's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "GrooveFile", into = "GrooveFile")]
 pub struct Groove {
@@ -42,6 +74,7 @@ pub struct Groove {
     pushes: [i16; MAX_GROOVE_STEPS],
     velocities: [u8; MAX_GROOVE_STEPS],
     humanise: u8,
+    swing: i16,
 }
 
 /// A groove as songs keep it, with only its steps, and its velocities and humanise only where
@@ -134,6 +167,7 @@ impl Groove {
             pushes: [0; MAX_GROOVE_STEPS],
             velocities: [FULL_VELOCITY; MAX_GROOVE_STEPS],
             humanise: 0,
+            swing: 0,
         };
         let mut at = 1;
         while at < pushes.len() && at < MAX_GROOVE_STEPS {
@@ -179,9 +213,15 @@ impl Groove {
     }
 
     /// How late a step lands, in ticks, or early if it's below 0. The step is counted from the
-    /// section's start, and the pattern repeats.
+    /// section's start, and the pattern repeats. A swung groove puts the second of each pair of
+    /// steps its swing later, up to half a step.
     pub fn push(&self, step: usize) -> i16 {
-        self.pushes[step % self.steps()]
+        let own = self.pushes[step % self.steps()];
+        if step % 2 == 1 && self.swing != 0 {
+            (own + self.swing).clamp(-MAX_PUSH, MAX_PUSH)
+        } else {
+            own
+        }
     }
 
     /// The velocity a step's note plays at, in percent of its own.
@@ -227,6 +267,13 @@ impl Groove {
             self.velocities[at] = FULL_VELOCITY;
         }
         self.steps = steps as u8;
+        self
+    }
+
+    /// The same, played with a track's `Swing` of this many ticks on top, every other step later
+    /// (decision 420). Its steps' lengths follow, so a swung pair still lasts two steps.
+    pub fn swung(mut self, ticks: i16) -> Self {
+        self.swing = ticks.clamp(0, MAX_PUSH);
         self
     }
 
@@ -458,6 +505,37 @@ mod tests {
         assert_eq!(swing.pushes(), &[0, 77]);
         assert_eq!((swing.push(4), swing.push(5)), (0, 77));
         assert_eq!(swing.length(0) + swing.length(1), 480);
+    }
+
+    #[test]
+    fn every_swing_groove_is_on_the_swing_scale() {
+        for percent in SWING_PERCENTS {
+            let value = swing_value(percent);
+            assert_eq!(swing_tenths(value), percent * 10);
+            let groove = GrooveId::swing(percent).unwrap().preset().unwrap();
+            let own = Groove::default().swung(swing_ticks(value));
+            for step in 0..32 {
+                assert_eq!(groove.push(step), own.push(step), "{percent} {step}");
+                assert_eq!(groove.length(step), own.length(step), "{percent} {step}");
+            }
+        }
+        assert_eq!(swing_value(66), 0xA0);
+        assert_eq!(swing_value(50), 0x00);
+        assert_eq!(swing_value(90), MOST_SWING);
+        assert_eq!(swing_tenths(0xFF), 750);
+    }
+
+    #[test]
+    fn swing_goes_on_top_of_a_groove_up_to_half_a_step() {
+        let pull = GrooveId::named("Pull").unwrap().preset().unwrap();
+        let swung = pull.swung(30);
+        assert_eq!(swung.push(0), 0);
+        assert_eq!(swung.push(1), 38);
+        assert_eq!(swung.push(4), 20, "an on-beat keeps its own");
+        let most = Groove::swing(700).swung(100);
+        assert_eq!(most.push(1), MAX_PUSH);
+        assert_eq!(most.length(0) + most.length(1), 480);
+        assert_eq!(swung.pushes(), pull.pushes(), "the groove's own are kept");
     }
 
     #[test]

@@ -65,6 +65,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             TrackControl::DiceLoop => "diceloop",
             TrackControl::DiceMutate => "dicemutate",
             TrackControl::DiceJump => "dicejump",
+            TrackControl::Swing => "swing",
             TrackControl::ChainOrder => "chainorder",
             TrackControl::ChainJump => "chainjump",
         },

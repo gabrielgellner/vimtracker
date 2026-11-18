@@ -189,7 +189,8 @@ impl Family {
             | Units::LoopTime
             | Units::ExciterAttack
             | Units::ExciterRelease
-            | Units::Rows => Self::Time,
+            | Units::Rows
+            | Units::Swing => Self::Time,
             Units::Depth | Units::Degrees => Self::Modulation,
             _ => Self::Character,
         }

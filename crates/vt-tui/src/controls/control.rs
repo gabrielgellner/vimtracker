@@ -173,6 +173,7 @@ impl Control {
             Self::Base(TrackControl::DiceLoop) => "Dice loop",
             Self::Base(TrackControl::DiceMutate) => "Dice mutate",
             Self::Base(TrackControl::DiceJump) => "Dice jump",
+            Self::Base(TrackControl::Swing) => "Swing",
             Self::Base(TrackControl::ChainOrder) => "Chain",
             Self::Base(TrackControl::ChainJump) => "Chain jump",
             Self::Choke => "Choke",
@@ -401,6 +402,7 @@ impl Control {
                 | TrackControl::DiceLoop
                 | TrackControl::DiceMutate
                 | TrackControl::DiceJump
+                | TrackControl::Swing
                 | TrackControl::ChainOrder
                 | TrackControl::ChainJump,
             )

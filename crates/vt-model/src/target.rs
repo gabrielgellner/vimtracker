@@ -31,7 +31,7 @@ const TRACK_MEANINGS: [&str; 16] = [
 
 /// The track's own settings in the order lists show them: the filter, then output, then pitch,
 /// velocity, gate, time and glide.
-const TRACK_ORDER: [SettingId; 41] = [
+const TRACK_ORDER: [SettingId; 42] = [
     SettingId::CUT,
     SettingId::RES,
     SettingId::FILTER_TYPE,
@@ -52,6 +52,7 @@ const TRACK_ORDER: [SettingId; 41] = [
     SettingId::GATE_LENGTH,
     SettingId::GATE_DELTA,
     SettingId::GROOVE,
+    SettingId::SWING,
     SettingId::SPEED,
     SettingId::QUANTISE,
     SettingId::JUMP,
@@ -567,8 +568,13 @@ mod tests {
         assert!(offered.contains(&FxCommand::Set(bits)));
         assert!(!offered.contains(&FxCommand::Set(amount)));
         let kind = SettingId::slot(0, EffectKind::Distort, 0).unwrap();
-        assert!(!kind.lockable(), "a mode isn't locked from a step");
-        assert_eq!(FxCommand::typed("1type", &track), None);
+        // Its type is locked from a step too (decision 414).
+        assert!(kind.lockable());
+        assert!(offered.contains(&FxCommand::Set(kind)));
+        assert_eq!(
+            FxCommand::typed("1type", &track),
+            Some(FxCommand::Set(kind))
+        );
     }
 
     #[test]

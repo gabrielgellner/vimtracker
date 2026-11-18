@@ -16,7 +16,7 @@ use crate::constants::{
     FIXED_TRACKS, FORMAT_VERSION, FX_SLOTS, MAX_GROUPS, MAX_LEVEL, MAX_TRACK_RESET, UNITY_LEVEL,
     UNITY_TRIM,
 };
-use crate::groove::{Groove, GrooveId};
+use crate::groove::{Groove, GrooveId, MOST_SWING};
 use crate::insert::{INSERTS, Insert};
 use crate::lane::LaneMove;
 use crate::macros::{MACROS, Macro, MacroMap, MacroTarget};
@@ -282,6 +282,10 @@ pub struct Track {
     /// (decision 411).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub dice_jump: u8,
+    /// Where held `SWG` starts: how late the second step of each pair lands, on top of the
+    /// groove, from `00`, 50.0%, to `FA`, 75.0%, a tenth of a percent a step (decision 420).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub swing: u8,
     /// Where held `CORD` starts: the order its chain's turns are walked in, a place in
     /// [`Order::ALL`](crate::order::Order::ALL), `00` forward as written (decision 423).
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -535,6 +539,7 @@ impl Track {
             TrackControl::DiceLoop => self.dice_loop,
             TrackControl::DiceMutate => self.dice_mutate,
             TrackControl::DiceJump => self.dice_jump,
+            TrackControl::Swing => self.swing,
             TrackControl::ChainOrder => self.chain_order,
             TrackControl::ChainJump => self.chain_jump,
         }
@@ -569,11 +574,13 @@ impl Track {
             TrackControl::DiceLoop => &mut self.dice_loop,
             TrackControl::DiceMutate => &mut self.dice_mutate,
             TrackControl::DiceJump => &mut self.dice_jump,
+            TrackControl::Swing => &mut self.swing,
             TrackControl::ChainOrder => &mut self.chain_order,
             TrackControl::ChainJump => &mut self.chain_jump,
         };
         *held = match control {
             TrackControl::SendA | TrackControl::SendB => value.min(MAX_LEVEL),
+            TrackControl::Swing => value.min(MOST_SWING),
             _ => value,
         };
     }
@@ -849,6 +856,7 @@ impl Default for Track {
             dice_loop: 0,
             dice_mutate: 0,
             dice_jump: 0,
+            swing: 0,
             chain_order: 0,
             chain_jump: 0,
             choke: None,
