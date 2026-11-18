@@ -19,6 +19,7 @@ use crate::dsp::effects::freq_shifter::FreqShifter;
 use crate::dsp::effects::granular::Granular;
 use crate::dsp::effects::pitch_shifter::PitchShifter;
 use crate::dsp::effects::plate::Plate;
+use crate::dsp::effects::reel::Reel;
 use crate::dsp::effects::resonator::Resonator;
 use crate::dsp::effects::reverb::Reverb;
 use crate::dsp::effects::rotary::Rotary;
@@ -194,7 +195,7 @@ macro_rules! memories {
 memories! {
     rung: Delay(Delay), Reverb(Reverb), Chorus(Chorus), Flanger(Flanger), Tape(Tape),
         Plate(Plate), Pitch(PitchShifter), Grains(Granular), Spring(Spring), Space(Space),
-        Rotary(Rotary), Stutter(Stutter), Clouds(Clouds), Beads(Beads), Echo(Echo);
+        Rotary(Rotary), Stutter(Stutter), Clouds(Clouds), Beads(Beads), Echo(Echo), Reel(Reel);
     played_by_slot: Limit(Limiter), Warps(Warps), Reso(Resonator), Comb(Comb),
         FreqShift(FreqShifter);
 }

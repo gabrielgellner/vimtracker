@@ -9,9 +9,9 @@ use super::{
     DISTORT_PARAMS, DISTORT_SHOWN, ECHO_GRID, ECHO_PARAMS, EQ_GRID, EQ_PARAMS, EXCITER_GRID,
     EXCITER_PARAMS, EffectKind, Entry, FLANGER_PARAMS, FREQ_SHIFT_PARAMS, GRAINS_PARAMS,
     LIMIT_PARAMS, LPG_PARAMS, MAX_KEPT_PARAMS, PHASER_PARAMS, PITCH_PARAMS, PLATE_GRID,
-    PLATE_PARAMS, RESO_PARAMS, REVERB_GRID, REVERB_PARAMS, ROTARY_GRID, ROTARY_PARAMS,
-    SPACE_PARAMS, SPRING_GRID, SPRING_PARAMS, STUTTER_GRID, STUTTER_PARAMS, TAPE_PARAMS,
-    VOWEL_PARAMS, WARPS_PARAMS,
+    PLATE_PARAMS, REEL_GRID, REEL_PARAMS, RESO_PARAMS, REVERB_GRID, REVERB_PARAMS, ROTARY_GRID,
+    ROTARY_PARAMS, SPACE_PARAMS, SPRING_GRID, SPRING_PARAMS, STUTTER_GRID, STUTTER_PARAMS,
+    TAPE_PARAMS, VOWEL_PARAMS, WARPS_PARAMS,
 };
 use crate::settings::same_key;
 
@@ -51,6 +51,7 @@ impl EffectKind {
         Self::Eq,
         Self::Distort,
         Self::Tape,
+        Self::Reel,
         Self::Exciter,
         Self::Colour,
         Self::Lpg,
@@ -564,5 +565,14 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &COLOUR_PARAMS,
         shown: Shown::All,
         grid: Some(COLOUR_GRID),
+    },
+    EffectSpec {
+        key: "reel",
+        name: "Reel",
+        meaning: "A reel-to-reel's tape: magnetic hysteresis, the head's losses, wow and flutter",
+        group: EffectGroup::ToneDrive,
+        params: &REEL_PARAMS,
+        shown: Shown::All,
+        grid: Some(REEL_GRID),
     },
 ];
