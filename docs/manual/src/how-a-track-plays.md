@@ -420,9 +420,11 @@ instead, its count divided by the lane's length.
 `LST` is the one condition that looks ahead rather than back: as its row lands,
 it works out where the pass ends, on the track's grid, and asks what the track
 plays then. A chain launched on the track or a loop of sections waiting, if it
-lands by then, the next section's chain if the section ends by then, and
-otherwise the chain's next place: the pass is the last if that's another
-phrase or chain.
+lands by then; a reset or a realign, which starts the chain again at its first
+phrase; the next section's chain if the section ends by then; and otherwise the
+chain's next place: the pass is the last if that's another phrase or chain. A
+restart back to the same phrase isn't moving on, so a reset that sends a chain
+of `P` and `Q` back to `P` before `Q` plays leaves `P` no last pass.
 
 A `CND` chance, `D0` to `FF`, is rolled instead, from the `:seed`, the track and
 its count, as an `RND` is below, so each pulse of its row reads the same die. A

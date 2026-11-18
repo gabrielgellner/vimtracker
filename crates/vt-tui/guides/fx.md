@@ -337,9 +337,13 @@ the track, or a stop, and a loop of sections waiting for its line. What's
 queued counts as it's queued, as on Elektron's machines, so a launch in the
 middle of a pass makes it the last. A chain of one phrase that loops in its
 section, or a section looping on its own, has no last pass, and `LST` stays
-quiet until something is queued. Launching the chain playing starts it again,
-which isn't moving on, and nor is a reset, a realign, or a window waiting for
-the next pass under `Cue`.
+quiet until something is queued. A reset or a realign landing by the pass's end
+sends the chain back to its first phrase: the section's Start on `reset`, its
+`:reset`, `Space A` or `Space a` waiting, and the track's `Reset`. That's moving
+on only if the first phrase is another, as playing the same phrase again isn't a
+change, so in a chain of `P` and `Q` reset before `Q` plays, `LST` on `P` stays
+quiet. Launching the chain playing starts it again, which isn't moving on, and
+nor is a window waiting for the next pass under `Cue`.
 
 `D0` to `FF` are chances, Elektron's `X%`, under **Chance** in the list: `D0`
 is 1%, `DE` 25%, `E8` 50%, `F2` 75% and `FF` 99%, in finer steps toward either

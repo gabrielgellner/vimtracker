@@ -14,7 +14,7 @@ use vt_model::phrase::Phrase;
 use vt_model::scale::Scale;
 use vt_model::settings::{SettingId, moved_chance};
 use vt_model::shape::RowView;
-use vt_model::song::{ChainPosition, Launch, Song, Track};
+use vt_model::song::{ChainPosition, Launch, SectionStart, Song, Track};
 use vt_model::speed::Speed;
 use vt_model::step::{
     FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step, most_nudge,
@@ -1592,15 +1592,17 @@ impl Engine {
     }
 
     /// Whether this pass of a row's phrase is the last before the track moves on, for `LST`
-    /// (decision 419): before it plays another phrase, another chain or none, at the end of the
-    /// pass or partway through it. What's queued counts, as on Elektron's machines a queued
-    /// pattern change makes the pattern's pass its last: a chain launched on the track that lands
-    /// by the pass's end, and a loop of sections waiting for its line. Then the section's end, if
-    /// it comes by then, and the chain's next phrase, as its order and jump will play it, rolled
-    /// with the die its next turn will roll (decisions 423 and 424). A chain started again, by a
-    /// reset or a realign, isn't moving on, and nor is a window waiting for the pass under `Cue`.
-    /// A pass whose turn of the chain goes on after it, as a turn longer than the phrase plays it
-    /// again, isn't the last, and one cut short by its turn's end ends there.
+    /// (decisions 419 and 436): before it plays another phrase, another chain or none, at the end
+    /// of the pass or partway through it. What's queued counts, as on Elektron's machines a
+    /// queued pattern change makes the pattern's pass its last: a chain launched on the track that
+    /// lands by the pass's end, and a loop of sections waiting for its line. Then a restart of the
+    /// chain landing by then, a reset or a realign, which plays its first phrase: moving on if
+    /// that's another, and not if it's this one again. Then the section's end, if it comes by
+    /// then and before a restart, or with one, and the chain's next phrase, as its order and jump
+    /// will play it, rolled with the die its next turn will roll (decisions 423 and 424). A window
+    /// waiting for the pass under `Cue` isn't moving on. A pass whose turn of the chain goes on
+    /// after it, as a turn longer than the phrase plays it again, isn't the last, and one cut
+    /// short by its turn's end ends there.
     fn last_pass(&self, index: usize, pending: &PendingStep, position: ChainPosition) -> bool {
         let Some((chain, place)) = pending.place else {
             return false;
@@ -1632,34 +1634,62 @@ impl Engine {
                 return true;
             }
         }
+        // A restart plays the chain's first phrase, as its order and jump give its first turn.
+        let first = || {
+            owner
+                .chain_position(chain, 0, self.dealer(index), pending.walk)
+                .is_some_and(|first| first.phrase != position.phrase)
+        };
+        let restart = self
+            .next_restart(index, pending.step)
+            .filter(|at| *at <= end);
         let count = song.sections.len();
         if count == 0 {
-            return false;
+            return restart.is_some() && first();
         }
         let from = self.section.min(count - 1);
         let ends = self.section_end();
         // A loop of sections waiting lands at its line, or at the section's end.
-        let (next, at) = match self.loop_cued {
+        let (next, wrapped, at) = match self.loop_cued {
             Some(sections) if !sections.holds(from) => {
                 let line = self.next_line(self.realign_grid()).min(ends);
-                (sections.first.min(count - 1), line)
+                (sections.first.min(count - 1), false, line)
             }
             looping => {
-                let next = match looping.or(self.looping) {
-                    Some(sections) if sections.first < count => sections.next(&song, from).0,
-                    _ => next_row(&song, from).0,
+                let (next, wrapped) = match looping.or(self.looping) {
+                    Some(sections) if sections.first < count => sections.next(&song, from),
+                    _ => next_row(&song, from),
                 };
-                (next, ends)
+                (next, wrapped, ends)
             }
         };
-        if next != from && at <= end {
-            let chain_next = match launch {
-                Some(launched) => launched,
-                None => song.sections[next].chains.get(index).copied().flatten(),
-            };
-            if chain_next != Some(chain) {
-                return true;
+        // A restart before the section moves on decides it; one with it leaves it to the section.
+        let enters = at <= end && restart.is_none_or(|restart| at <= restart);
+        if !enters && restart.is_some() {
+            return first();
+        }
+        let mut restarts = restart.is_some();
+        if enters {
+            if next != from {
+                let chain_next = match launch {
+                    Some(launched) => launched,
+                    None => song.sections[next].chains.get(index).copied().flatten(),
+                };
+                if chain_next != Some(chain) {
+                    return true;
+                }
             }
+            // A section coming in with `Start` on `Reset`, or the song going round to its first,
+            // starts the chain again (`enter_section`), and so does its `:reset` if the count has
+            // come round to it by then.
+            let coming = &song.sections[next];
+            let place = self.place + (at / TICKS_PER_STEP).saturating_sub(self.next_step);
+            restarts |= coming.start == SectionStart::Reset
+                || (next != from && wrapped)
+                || coming.reset.is_some_and(|reset| place >= reset as u64);
+        }
+        if restarts {
+            return first();
         }
         // A turn longer than the phrase plays it again.
         if pass_left < position.turn_left {

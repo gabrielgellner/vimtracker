@@ -123,6 +123,57 @@ impl Engine {
         (self.next_step + plays.saturating_sub(self.section_place)) * TICKS_PER_STEP
     }
 
+    /// Where on the grid a track's chain next starts again after this place, within the section
+    /// playing, for `LST` (decision 436): the next repeat of a section whose `Start` is `Reset`,
+    /// the section's `:reset` coming round, a realign of every track or of this one waiting for
+    /// its line, and the track's own `Reset`. Each runs on a schedule known from here, so it's
+    /// worked out rather than waited for. The section's own restarts end with it, and what the
+    /// next section does as it comes in is the section's to say.
+    pub(super) fn next_restart(&self, index: usize, after: u64) -> Option<u64> {
+        let step = TICKS_PER_STEP;
+        // The first of a run of restarts this many steps apart, the first `to` steps from the
+        // song's next, that lands after the place.
+        let after_place = |to: u64, every: u64| {
+            let at = (self.next_step + to) * step;
+            match at <= after {
+                true => at + (after - at) / (every * step) * (every * step) + every * step,
+                false => at,
+            }
+        };
+        let ends = self.section_end();
+        let mut restarts = [None; 4];
+        if let Some(section) = self.playing_section() {
+            let length = (self.current.song.section_length(section) as u64).max(1);
+            if section.start == SectionStart::Reset {
+                let to = (length - self.section_place % length) % length;
+                restarts[0] = Some(after_place(to, length)).filter(|at| *at < ends);
+            }
+            if let Some(reset) = section.reset {
+                let to = (reset as u64).saturating_sub(self.place);
+                restarts[1] = Some(after_place(to, (reset as u64).max(1))).filter(|at| *at < ends);
+            }
+        }
+        let state = &self.tracks[index];
+        if self.realign_waiting || state.realign_waiting {
+            restarts[2] = Some(self.next_line(self.realign_grid())).filter(|at| *at > after);
+        }
+        if let Some(every) = self.reset_ticks(index) {
+            // The first of the song's steps at or after a multiple of the reset's length from
+            // where the chain last started, as `reset_due` finds them.
+            let (every, step, anchor) = (every as i64, step as i64, state.clock.anchor);
+            let floor = (after as i64).div_euclid(step) * step;
+            let times = ((floor - anchor).div_euclid(every) + 1).max(1);
+            let at = (anchor + times * every).div_euclid(step) * step;
+            let at = if at < anchor + times * every {
+                at + step
+            } else {
+                at
+            };
+            restarts[3] = Some(at.max(0) as u64);
+        }
+        restarts.into_iter().flatten().min()
+    }
+
     /// Send every track back to its start at this place on the grid, counting its steps again
     /// from there.
     fn realign_at(&mut self, at: u64) {
