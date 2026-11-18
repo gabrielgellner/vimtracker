@@ -6,6 +6,7 @@ use vt_model::insert::{INSERTS, MAX_PARAMS};
 use vt_model::macros::MACROS;
 use vt_model::modulation::MOD_SLOTS;
 use vt_model::settings::{FADER_COUNT, FADERS, MAX_MACHINE_SETTINGS, SettingId};
+use vt_model::song::{FilterMode, FilterType};
 use vt_model::steps::STEPS;
 
 use super::TrackState;
@@ -19,6 +20,8 @@ pub struct LiveValues {
     pub pan: u8,
     pub cutoff: u8,
     pub resonance: u8,
+    /// The filter's other settings as they're heard, for the Sound page's curve and bars.
+    pub filter: LiveFilter,
     pub send_a: u8,
     pub send_b: u8,
     /// The machine's settings, in its order.
@@ -54,6 +57,33 @@ pub struct LiveValues {
     pub macros: [u16; MACROS],
 }
 
+/// The track filter's settings besides `Cut` and `Res` as they're heard, a lock and modulation
+/// included: its type, the mode it plays, `Drive`, `Punch`, `Safe` and the low and high cuts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LiveFilter {
+    pub kind: FilterType,
+    pub mode: FilterMode,
+    pub drive: u8,
+    pub punch: u8,
+    pub safe: bool,
+    pub low_cut: u8,
+    pub high_cut: u8,
+}
+
+impl Default for LiveFilter {
+    fn default() -> Self {
+        Self {
+            kind: FilterType::LowPass,
+            mode: FilterType::LowPass.plays(FilterMode::default()),
+            drive: 0,
+            punch: 0,
+            safe: false,
+            low_cut: 0,
+            high_cut: 0xFF,
+        }
+    }
+}
+
 /// The values a Steps slot's `Mutate` has drawn in place of the written ones, and which steps they
 /// are, a bit a step: a step drawn is heard at its value here until it's drawn again.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -77,6 +107,7 @@ impl Default for LiveValues {
             pan: 0,
             cutoff: 0,
             resonance: 0,
+            filter: LiveFilter::default(),
             send_a: 0,
             send_b: 0,
             machine: [0; MAX_MACHINE_SETTINGS],
@@ -230,6 +261,15 @@ impl TrackState {
             pan,
             cutoff: moved(self.cutoff.target + self.key_track.value, SettingId::CUT),
             resonance: moved(self.resonance.target, SettingId::RES),
+            filter: LiveFilter {
+                kind: self.filter_type,
+                mode: self.playing_mode(),
+                drive: shown(self.drive.target),
+                punch: shown(self.punch.target),
+                safe: self.safe.target >= 0.5,
+                low_cut: shown(self.low_cut.target),
+                high_cut: shown(self.high_cut.target),
+            },
             send_a,
             send_b,
             machine: match self.loaded_voice {

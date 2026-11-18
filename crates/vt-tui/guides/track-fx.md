@@ -42,8 +42,8 @@ with the cursor has the brighter frame. An empty slot keeps its frame, says `Emp
 | Reverb | `Reverb`, `Plate`, `Spring`, `Space` |
 | Granular | `Grains`, `Clouds`, `Beads` |
 
-`=` and `-` on the effect still step through them in the order they were added, as the Roto's
-knob does.
+`=` and `-` on the effect step through them in this order too, from `---` to `Beads` and round
+again, as the Roto's knob does.
 
 Each effect places its own settings: what comes out, `Mix` and `Gain`, is in its last column, a
 `Comp`'s detector, times and output each have a column, an `EQ3`'s bands are its columns, and a

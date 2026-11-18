@@ -92,12 +92,13 @@ fn the_effects_list_shows_them_by_group_and_each_sets_its_own() {
         .collect();
     assert_eq!(listed, flat, "the groups are together and in order");
     assert_eq!(items[EffectKind::COUNT + 1].category, "Presets");
-    // Each item still sets its own effect by its place in `Insert::ALL`.
+    // Each item sets its own effect by its place in the list, as `=` and `-` step it.
+    let order: Vec<usize> = Insert::listed_order().collect();
     for item in &items[..=EffectKind::COUNT] {
         let Pick::Param { value, .. } = item.pick else {
             panic!("{item:?}")
         };
-        assert_eq!(Insert::ALL[value as usize].name(), item.label);
+        assert_eq!(Insert::ALL[order[value as usize]].name(), item.label);
     }
     special(&mut app, KeyCode::Esc);
 
@@ -126,7 +127,7 @@ fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
     // Nothing but the effect, until there's something in the slot.
     press(&mut app, "$");
     assert_eq!(column_name(&app), "Effect");
-    press(&mut app, "=");
+    press(&mut app, "4=");
     assert_eq!(app.song().tracks[0].inserts[0], Insert::ALL[1]);
     assert_eq!(
         app.services.history.undo_depth(),
@@ -262,7 +263,7 @@ fn a_jump_finds_a_slots_settings_only_where_they_exist() {
         "nothing to find yet"
     );
     special(&mut app, KeyCode::Esc);
-    press(&mut app, "=}=");
+    press(&mut app, "4=}4=");
     press(&mut app, "/amo");
     let jump = app.overlays.field_jump.as_ref().unwrap();
     assert!(jump.label(Control::InsertParam(0, 1)).is_some());
@@ -319,7 +320,7 @@ fn the_cursors_device_has_a_brighter_frame_and_a_bypassed_one_goes_faint() {
     let (mut app, _realtime) = on_fx_page();
     // A Distort in the first slot and a Delay in the second, with the cursor on the Distort's
     // Amount.
-    press(&mut app, "=}K");
+    press(&mut app, "4=}K");
     press(&mut app, "delay");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "{j");
@@ -365,7 +366,7 @@ fn the_cursor_goes_through_each_slots_title_and_grid_over_its_holes() {
     press(&mut app, "l==h}K");
     press(&mut app, "EQ3");
     special(&mut app, KeyCode::Enter);
-    press(&mut app, "}}=gg");
+    press(&mut app, "}}4=gg");
     let name = |app: &App| column_name(app);
     let at = |app: &App| (name(app), app.track_page.row);
     assert_eq!(name(&app), "Effect");
@@ -438,7 +439,7 @@ fn the_cursor_goes_through_each_slots_title_and_grid_over_its_holes() {
 fn braces_go_to_the_same_setting_in_the_next_slot() {
     use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = on_fx_page();
-    press(&mut app, "=}={"); // Slots 1 and 2 hold an effect.
+    press(&mut app, "4=}4={"); // Slots 1 and 2 hold an effect.
     press(&mut app, "j");
     assert_eq!(
         (column_name(&app).as_str(), app.track_page.row),
@@ -496,7 +497,7 @@ fn a_jump_labels_a_slots_effect_once() {
 fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
     use vt_tui::screen::status::column_name;
     let (mut app, _realtime) = on_fx_page();
-    press(&mut app, "=lK");
+    press(&mut app, "4=lK");
     press(&mut app, "crush");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "hj");
@@ -547,13 +548,14 @@ fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
 #[test]
 fn the_fx_pages_bars_follow_what_plays() {
     let (mut app, mut realtime) = on_fx_page();
-    press(&mut app, "=");
+    press(&mut app, "4=");
     catch_up(&mut app, &mut realtime);
     let mut live = vt_engine::track_state::LiveValues {
         level: 0xE0,
         pan: 0x80,
         cutoff: 0xFF,
         resonance: 0,
+        filter: Default::default(),
         send_a: 0,
         send_b: 0,
         machine: {
@@ -588,7 +590,7 @@ fn dd_and_p_move_an_effect_and_swap_two_as_one_undo_step() {
     let soft = Insert::ALL[1];
     let fold = soft.with_value(0, DistortType::Fold as u8);
     // Soft in slot 1, and Fold in slot 2.
-    press(&mut app, "=}=lK");
+    press(&mut app, "4=}4=lK");
     press(&mut app, "fold");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "gg0");
@@ -646,7 +648,7 @@ fn dd_and_p_say_why_when_there_is_nothing_to_move() {
         app.services.status
     );
     // On the other pages they aren't for steps or anything else.
-    press(&mut app, "=dd");
+    press(&mut app, "4=dd");
     press(&mut app, "H");
     press(&mut app, "p");
     assert!(
@@ -670,7 +672,7 @@ fn the_sound_follows_the_new_order() {
     with_a_sound(&mut app);
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
-    press(&mut app, " 5LL=dd}p");
+    press(&mut app, " 5LL4=dd}p");
     block(&mut realtime, &mut app);
     press(&mut app, " 3k;");
     let _ = loudest(&mut realtime, 4000);
