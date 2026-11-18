@@ -81,6 +81,7 @@ mod speed;
 mod steps;
 mod stutter;
 mod supersaw;
+mod swing;
 mod synth;
 mod tails;
 mod tempo;

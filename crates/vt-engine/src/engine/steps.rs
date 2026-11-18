@@ -8,7 +8,7 @@ use vt_model::arpeggio::{ArpMode, Cycle};
 use vt_model::condition::{Condition, Situation, percent_comes_up};
 use vt_model::constants::{FX_SLOTS, NUDGE_TICKS, TICKS_PER_STEP};
 use vt_model::dice::{DiceStep, looped_chance};
-use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
+use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH, swing_ticks};
 use vt_model::order::{WalkMove, jumped};
 use vt_model::phrase::Phrase;
 use vt_model::settings::{SettingId, moved_chance};
@@ -79,6 +79,8 @@ impl Engine {
         // The groove counts the track's own steps from the start or the last reset, not its
         // loop, so an odd length stays on the beat, and a track at an eighth swings its eighths.
         let (groove, speed) = self.step_choices(index, running, &lanes);
+        // The track's `Swing` goes on top, read once a pair of steps (decision 420).
+        let groove = groove.swung(self.swing_at(index, place, running, &lanes));
         let ticks = speed.ticks();
         let humanise = self.tracks[index].humanise(groove.humanise());
         let at = running.max(0) as usize;
@@ -230,6 +232,39 @@ impl Engine {
         self.tracks[index]
             .dice
             .roll(settings, seed, index, DiceStep { running, count })
+    }
+
+    /// How late a track's `Swing` puts the second of each pair of steps on its running count, in
+    /// ticks, read as the pair's first step is worked out, as `GRV` is: a lock on that row, a lane
+    /// at it, or what the track holds, with what modulation adds. The pair's second step keeps it,
+    /// so the first step's length, which reads where the second lands, holds as it plays. A track
+    /// starting on a pair's second step reads it there (decision 420).
+    fn swing_at(
+        &mut self,
+        index: usize,
+        place: Option<(u32, usize)>,
+        running: i64,
+        lanes: &LaneReads,
+    ) -> i16 {
+        let pair = running.div_euclid(2);
+        if running.rem_euclid(2) == 1
+            && let Some((read, ticks)) = self.tracks[index].swing
+            && read == pair
+        {
+            return ticks;
+        }
+        let locked =
+            lanes.iter().any(Option::is_some) || self.plays_lock(index, place, &[SettingId::SWING]);
+        let chosen = if locked {
+            let row = self.row_ahead(index, running, lanes);
+            self.chosen_ahead(index, running, row, SettingId::SWING, lanes)
+        } else {
+            self.tracks[index].held_choice(SettingId::SWING, false)
+        };
+        let value = self.tracks[index].walk_value(SettingId::SWING, chosen);
+        let ticks = swing_ticks(value);
+        self.tracks[index].swing = Some((pair, ticks));
+        ticks
     }
 
     /// Whether the row a track plays at this place in its chain, as written, locks any of these
