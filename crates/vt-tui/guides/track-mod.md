@@ -406,6 +406,7 @@ so its values are heard as written.
 |---|---|
 | Mode | In the title: `Trig`, `Free` or `Note`, below |
 | Loop | In the title: what it does at its end, below |
+| From | In the title, the loop's number: the step it loops from, below |
 | Jump | In the title: the chance each step is any step, `0%` to `100%` |
 | Spread | In the title: how far `Mutate`'s draws stray, `0%` to `100%`, below |
 | Bias | In the title: which way they lean, `-100` to `+100` |
@@ -499,17 +500,28 @@ LFO's: up is faster, through the divisions from `1 bar` to `1/64`, then `Tick`. 
 Steps go on from the step they're on, faster or slower, rather than jumping to
 another. `Pass` isn't a speed, so a slot at `Pass` has no `Rate` to move.
 
-**The loop**, after the mode in the title:
+**The loop**, after the mode in the title, and **From**, its number, the step it goes
+round from, so `Loop 1` loops all its steps and `Bounce 5` bounces down to the fifth.
+`l` from the loop goes on to its number, a stop of its own, which `Space d` calls `From`:
 
 | Loop | Does |
 |---|---|
 | `Once` | Plays to the end and holds the last |
-| `from 1` to `from 16` | Plays once, then loops from that step, as the M8's `HOP` |
-| `Bounce` | Goes back and forth |
-| `Shuffle` | Each step once each time round, in a new order each time |
+| `Loop` | Plays once, then loops from `From`, as the M8's `HOP` |
+| `Bounce` | Plays once, then back and forth between the end and `From` |
+| `Shuffle` | Plays up to `From`, then the rest in a new order each time round |
 
-`from 3` on four steps plays an attack of two, then holds a shape of the last two.
+The steps before `From` are an intro, played once. `Loop` with `From 3` on four
+steps plays an attack of two, then holds a shape of the last two; at `From 1`,
+where a new slot starts, each loops all its steps. `Once` has no use for `From`, so
+its number is dimmed. A `From` past the `Length` goes round from the last step.
 `Shuffle` deals its orders from the project's seed, so a render repeats.
+
+A step locks `From` with `FROM` and the slot's number, `FROM3`, and a macro, a lane
+or another slot can move it. A change waits for the next time round: `Loop` back at
+`From`, `Bounce` back at the end, `Shuffle` at its next deal, so a sweep never cuts
+a lap short. In the intro, which doesn't play it, a change is taken at once, and so
+it is when `Loop` changes, or a note starts `Trig` steps again.
 
 `K` on the mode, the loop or the rate lists them. Some uses:
 
@@ -608,7 +620,8 @@ The lists and the odd times:
 | `LMOD4` | An LFO's mode | `00` Free, `01` Trig, `02` Hold, `03` One, `04` Half |
 | `FADE4` | An LFO's fade | `16` Off, `00` out over 16 bars, `2C` in over 16 |
 | `SMOD3` | Steps' mode | `00` Trig, `01` Free, `02` Note |
-| `LOOP3` | Steps' loop | `00` Once, `01` from 1, `11` Bounce, `12` Shuffle |
+| `LOOP3` | Steps' loop | `00` Once, `01` Loop, `02` Bounce, `03` Shuffle |
+| `FROM3` | Steps' from | `00` from the first step to `0F` the sixteenth |
 | `CRV2` | An envelope's curve | `00` Exp, `01` Lin, `02` Snap, `03` Analog |
 | `HOLD2` | An AHD's hold | `00` none, `01` 1 ms to `FE` 2 s, `FF` the note |
 | `PEAK2` | A drum's peak | `00` none, `01` 1 ms to `FF` 8 s, as a time |
@@ -632,6 +645,8 @@ changes:
     `Note` goes to the step its count of notes gives.
 *   A loop takes the count where it is on through its new end, so `Bounce` locked at
     the tenth step of eight turns back from the fifth.
+*   `From` waits for the next time round, as above, so `FROM3` mid-lap is heard as
+    the loop comes back.
 *   A curve, a hold, a peak and a ratchet reshape the envelope from where it is in
     its note. On the slot shaping the notes, they're each note's own from its start.
 
@@ -641,7 +656,7 @@ does, so a swap doesn't click.
 **Macros and other slots.** `M` on any of them puts it on a macro, which turns
 through the list from end to end, and a later slot's `Dest` lists them, as
 `M4 Shape`, so `Mod 2` can move `Mod 3`'s loop or `Mod 4`'s wave. On a list the
-depth is in places: `+10` moves `from 1` up sixteen to `Bounce`.
+depth is in places: `+02` moves `Loop` up two to `Shuffle`.
 
 ## Pitch in scale
 

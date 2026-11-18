@@ -482,11 +482,8 @@ fn unmoved() -> Song {
             mode: StepsMode::ALL[index % 3],
             length: 5 + index as u8,
             rate: step_rates[index],
-            looping: if index == 3 {
-                Loop::Bounce
-            } else {
-                Loop::From(1)
-            },
+            looping: if index == 3 { Loop::Bounce } else { Loop::Loop },
+            from: if index == 3 { 0 } else { 1 },
             mutate: if index == 4 { 30 } else { 0 },
             smooth: [0, 0x60, 0, -0x90, 0][index],
             ..Steps::default()

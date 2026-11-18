@@ -8,7 +8,7 @@ use crate::envelope::{Curve, MAX_RATCHET};
 use crate::lfo::{LfoMode, Shape};
 use crate::macros::MACROS;
 use crate::shape::{EVEN_SPREAD, MAX_SPREAD};
-use crate::steps::{MAX_JUMP, MAX_MUTATE, STEPS, StepsMode};
+use crate::steps::{Loop, MAX_JUMP, MAX_MUTATE, STEPS, StepsMode};
 
 /// A mod slot's settings that steps can lock: its depth and polarity, whatever its type, and an
 /// LFO's phase and deform, in [`MOD_LOCKED_FIELDS`](crate::modulation::MOD_LOCKED_FIELDS)' order.
@@ -73,7 +73,7 @@ const POLARITY_NAMES: [&str; 2] = ["Uni", "Bi"];
 
 /// How many of a mod slot's type's own settings the registry holds, and of the accumulator's and
 /// the arpeggio's together.
-pub const MOD_OWN_SETTINGS: usize = 22;
+pub const MOD_OWN_SETTINGS: usize = 23;
 pub const PLAYED_SETTINGS: usize = ACCUMULATION.len() + ARPEGGIO.len();
 
 /// A macro, the same entry for all eight but its name: where it's turned, from `00` to `FF` with a
@@ -231,7 +231,7 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
     },
     // An LFO's wave, swapped where it is in its cycle; the default is a new LFO's `Tri`.
     listed("shape", "Shape", "SHP", &SHAPE_NAMES, 1).means("the wave the LFO cycles through"),
-    // Steps' end, from where it's counted to; the default is a new slot's `from 1`.
+    // Steps' end; the default is a new slot's `Loop`.
     listed("loop", "Loop", "LOOP", &LOOP_NAMES, 1)
         .means("what Steps does once it reaches its last value"),
     // An envelope's mode, an ADSR's, an AHD's and a drum's alike.
@@ -307,6 +307,9 @@ pub(super) const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
         default: 0x80,
         place: Place::Own,
     },
+    // Steps' `From`, the step its loop goes round from, from 1 (decision 428).
+    listed("from", "From", "FROM", COUNTS.split_at(STEPS).0, 0)
+        .means("the step Steps goes round from, the ones before it played once"),
 ];
 
 /// A list a step can lock, by its names: a mod slot's type's own, or the accumulator's or arpeggio's.
@@ -350,12 +353,7 @@ const CURVE_NAMES: [&str; Curve::ALL.len()] = names!(Curve);
 const LFO_MODE_NAMES: [&str; LfoMode::ALL.len()] = names!(LfoMode);
 const STEPS_MODE_NAMES: [&str; StepsMode::ALL.len()] = names!(StepsMode);
 
-/// Steps' ends, in [`Loop::ALL`](crate::steps::Loop::ALL)'s order, as they show.
-pub(crate) const LOOP_NAMES: [&str; STEPS + 3] = [
-    "Once", "from 1", "from 2", "from 3", "from 4", "from 5", "from 6", "from 7", "from 8",
-    "from 9", "from 10", "from 11", "from 12", "from 13", "from 14", "from 15", "from 16",
-    "Bounce", "Shuffle",
-];
+const LOOP_NAMES: [&str; Loop::ALL.len()] = names!(Loop);
 
 /// An LFO's fades, in [`Fade::ALL`](crate::lfo::Fade::ALL)'s order, as they show: out over the
 /// longest to the shortest, none, then in over the shortest to the longest.

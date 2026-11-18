@@ -765,6 +765,58 @@ mod tests {
         total
     }
 
+    /// Steps going round each way at `Tick`, an LFO sweeping one's `From` and every slot's `From`
+    /// turned every block, so laps wait for and take up new ones often (decision 428).
+    #[test]
+    fn steps_from_moving_every_block_never_allocates_in_the_callback() {
+        use vt_model::lfo::{Lfo, Rate, Shape};
+        use vt_model::modulation::{ModField, ModKind, ModSlot};
+        use vt_model::steps::{Loop, StepRate, Steps, StepsMode};
+        let walking = |round: usize| {
+            let mut song = song(4, 4);
+            for (at, track) in song.tracks.iter_mut().take(4).enumerate() {
+                for (slot, looping) in Loop::ALL.into_iter().enumerate() {
+                    track.mods[slot] = ModSlot::steps(
+                        Some(SettingId::CUT),
+                        Steps {
+                            values: [0x10; 16],
+                            length: 6 + slot as u8,
+                            looping,
+                            from: ((round + at + slot) % 16) as u8,
+                            mode: StepsMode::Free,
+                            rate: StepRate::Tick,
+                            smooth: 0x60,
+                            jump: 20,
+                            ..Steps::default()
+                        },
+                    );
+                }
+                let from = ModField::From.own(ModKind::Steps).unwrap();
+                track.mods[4] = ModSlot::lfo(
+                    SettingId::mod_own(1, from),
+                    Lfo {
+                        shape: Shape::Ramp,
+                        rate: Rate::Note(240),
+                        ..Lfo::default()
+                    },
+                )
+                .with_depth(0x08);
+            }
+            song
+        };
+        let pool = samples();
+        let engine = Engine::new(48_000, published(walking(0), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 0..200 {
+            handle.publish(published(walking(round), &pool));
+            violations += blocks(&mut rt, 1);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
     /// Each track's chain of five phrases, one of them shorter, walked through every order with
     /// its jump turned every block, from step 0 so turns start often (decisions 423 and 424).
     #[test]

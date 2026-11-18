@@ -11,7 +11,9 @@ use vt_model::modulation::{
 use vt_model::scale::Scale;
 use vt_model::settings::{MOD_OWN_SETTINGS, SettingId};
 use vt_model::song::Track;
-use vt_model::steps::{Loop, MAX_STEP, STEPS, StepRate, Steps, StepsMode, smoothed};
+use vt_model::steps::{
+    Lap as StepsLap, Loop, MAX_STEP, STEPS, StepRate, Steps, StepsMode, smoothed,
+};
 
 use crate::dsp::effects::memory::{MemoryPool, SongPlace};
 use crate::dsp::effects::slot::{BYPASS_FADE_MS, InsertState};
@@ -280,6 +282,28 @@ pub(super) struct SlotRun {
     /// 390).
     jumped: [(i64, u8); JUMPS_KEPT],
     pub(super) jumps: Pcg32,
+    /// The `From` its Steps go round from, taken up as a lap starts (decision 428).
+    walk: Walk,
+}
+
+/// The `From` a Steps slot goes round from as it plays, which a change waits to take up until the
+/// next lap starts: a `Loop` back at its `From`, a `Bounce` back at its end, a `Shuffle`'s next
+/// deal. In the intro, which doesn't play it, and when `Loop` itself changes, a new `From` is
+/// taken at once, as it is when a note or a play restarts the count. While it never changes,
+/// the laps are counted from the intro's end, as they always were.
+#[derive(Debug, Clone, Copy, Default)]
+struct Walk {
+    /// The loop it goes round and the `From` it has taken, none until it first plays after a
+    /// restart.
+    taken: Option<(Loop, u8)>,
+    /// Where its laps are counted from since `From` last changed, or none for the intro's end.
+    lap: Option<StepsLap>,
+    /// The `From` and laps before that, for `Smooth`'s look back across the change.
+    before: Option<(u8, Option<StepsLap>)>,
+    /// Where the next lap starts, while `From` has changed and waits for it.
+    turn: Option<StepsLap>,
+    /// The count it last went round at, so a change found at a lap's first count is taken there.
+    last: Option<i64>,
 }
 
 /// How many counts' steps Steps' `Jump` keeps: two before the one playing and one after, as
@@ -316,6 +340,7 @@ impl Default for SlotRun {
             rolls: Pcg32::new(0, 0),
             jumped: [(NO_COUNT, 0); JUMPS_KEPT],
             jumps: Pcg32::new(0, 0),
+            walk: Walk::default(),
         }
     }
 }
@@ -333,6 +358,7 @@ impl SlotRun {
         self.chaos = None;
         self.counted = None;
         self.jumped = [(NO_COUNT, 0); JUMPS_KEPT];
+        self.walk = Walk::default();
     }
 
     /// The step it plays at `count` from `start`: the one its `Loop` walks to, or, with `Jump`'s
@@ -341,7 +367,7 @@ impl SlotRun {
     /// walked. With no `Jump` it rolls nothing and walks as written, the same as before there was
     /// one (decision 390).
     fn step_played(&mut self, steps: &Steps, start: usize, count: i64, key: u64) -> usize {
-        let walked = steps.step_at(start, count, key);
+        let walked = self.walked(steps, start, count, key);
         if steps.jump == 0 || count < 0 {
             return walked;
         }
@@ -363,7 +389,67 @@ impl SlotRun {
     fn step_kept(&self, steps: &Steps, start: usize, count: i64, key: u64) -> usize {
         match self.jumped[count.rem_euclid(JUMPS_KEPT as i64) as usize] {
             (at, step) if at == count && steps.jump > 0 => usize::from(step),
-            _ => steps.step_at(start, count, key),
+            _ => self.walked(steps, start, count, key),
+        }
+    }
+
+    /// Take up a new `From` as its walk reaches `count`: at once in the intro, after a restart or
+    /// a change of `Loop`, and otherwise as the next lap starts, which is this count if it's a
+    /// lap's first and the walk hasn't been here yet (decision 428). It allocates nothing.
+    fn follow_from(&mut self, steps: &Steps, start: usize, count: i64) {
+        let walk = &mut self.walk;
+        let first_here = walk.last != Some(count);
+        walk.last = Some(count);
+        let from = match walk.taken {
+            Some((looping, from)) if looping == steps.looping => from,
+            _ => {
+                *walk = Walk {
+                    taken: Some((steps.looping, steps.from)),
+                    last: Some(count),
+                    ..Walk::default()
+                };
+                return;
+            }
+        };
+        if steps.from == from {
+            walk.turn = None;
+            return;
+        }
+        if walk.turn.is_none() {
+            let since = if first_here { count - 1 } else { count };
+            match steps.next_lap(start, since, from, walk.lap) {
+                Some(turn) => walk.turn = Some(turn),
+                // In the intro, or `Once`: nothing plays it yet.
+                None => {
+                    walk.taken = Some((steps.looping, steps.from));
+                    return;
+                }
+            }
+        }
+        if let Some(turn) = walk.turn.filter(|turn| count >= turn.at) {
+            walk.before = Some((from, walk.lap));
+            walk.lap = Some(turn);
+            walk.taken = Some((steps.looping, steps.from));
+            walk.turn = None;
+        }
+    }
+
+    /// The step its walk plays at `count` from `start`, going round from the `From` it has taken,
+    /// or the new one from the lap that will take it up, and from the one before for a count
+    /// before its laps were counted again.
+    fn walked(&self, steps: &Steps, start: usize, count: i64, key: u64) -> usize {
+        let walk = &self.walk;
+        let Some((_, from)) = walk.taken.filter(|(looping, _)| *looping == steps.looping) else {
+            return steps.step_at(start, count, key);
+        };
+        match (walk.turn, walk.lap, walk.before) {
+            (Some(turn), ..) if count >= turn.at => {
+                steps.step_on(start, count, key, steps.from, Some(turn))
+            }
+            (_, Some(lap), Some((was, before))) if count < lap.at => {
+                steps.step_on(start, count, key, was, before)
+            }
+            (_, lap, _) => steps.step_on(start, count, key, from, lap),
         }
     }
 
@@ -522,6 +608,7 @@ impl SlotRun {
         let Some((count, through)) = steps_count(slot, self, now, step_ticks, pass) else {
             return 0.0;
         };
+        self.follow_from(steps, start, count);
         let step = self.step_played(steps, start, count, key);
         self.playing = Some(step as u8);
         self.mutate(steps, step, count);

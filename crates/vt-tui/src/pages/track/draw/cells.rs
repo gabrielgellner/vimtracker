@@ -145,17 +145,23 @@ impl<'a> TrackCells<'a> {
 
     /// A device's title controls, each in its own style, the cursor's colour on the one it's on.
     pub(super) fn titles(&self, device: &DeviceSpec) -> Vec<Line<'static>> {
-        device
-            .title
-            .iter()
-            .flatten()
-            .map(|&control| {
-                let look = self
-                    .ctx
-                    .look_on(control, Focus::at(Some(control) == self.here, false));
-                self.title(control, look)
-            })
-            .collect()
+        let mut lines: Vec<Line<'static>> = Vec::new();
+        for &control in device.title.iter().flatten() {
+            let look = self
+                .ctx
+                .look_on(control, Focus::at(Some(control) == self.here, false));
+            let line = self.title(control, look);
+            // Steps' `From` is the loop's number, a space after it, `Loop 1`, as the title has no
+            // room for its name (decision 428).
+            match (control, lines.last_mut()) {
+                (Control::Mod(_, ModField::From), Some(looping)) => {
+                    looping.spans.push(Span::raw(" "));
+                    looping.spans.extend(line.spans);
+                }
+                _ => lines.push(line),
+            }
+        }
+        lines
     }
 
     /// A title control, as the modes show it this way: on a slot, its effect, `Empty` when there's

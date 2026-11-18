@@ -163,13 +163,14 @@ fn a_loop_from_a_step_holds_a_shape_after_its_attack_and_bounce_turns_round() {
     let attack = Steps {
         values: values(&[0x40, 0x30, 0x10, 0x20]),
         length: 4,
-        looping: Loop::From(2),
+        from: 2,
         ..Steps::default()
     };
     let cut = cutoffs(&song(&["C-3 -- --- --- ---"], attack), STEP, 8);
     assert_eq!(cut, [0xC0, 0xB0, 0x90, 0xA0, 0x90, 0xA0, 0x90, 0xA0]);
     let bounce = Steps {
         looping: Loop::Bounce,
+        from: 0,
         ..attack
     };
     let cut = cutoffs(&song(&["C-3 -- --- --- ---"], bounce), STEP, 7);
@@ -193,6 +194,50 @@ fn a_shuffle_plays_each_step_once_a_time_round_and_a_render_repeats() {
     }
     assert_ne!(cut[..4], cut[4..8]);
     assert_eq!(cut, cutoffs(&song, STEP, 12));
+}
+
+/// `Bounce` and `Shuffle` from a later step keep the steps before it as an intro, played once,
+/// and a `From` past the `Length` goes round from the last (decision 428).
+#[test]
+fn bounce_and_shuffle_go_round_from_their_from_after_an_intro() {
+    let six = Steps {
+        values: values(&[0x10, 0x20, 0x30, 0x40, 0x50, 0x60]),
+        length: 6,
+        from: 3,
+        looping: Loop::Bounce,
+        ..Steps::default()
+    };
+    let cut = cutoffs(&song(&["C-3 -- --- --- ---"], six), STEP, 12);
+    assert_eq!(
+        cut,
+        [
+            0x90, 0xA0, 0xB0, 0xC0, 0xD0, 0xE0, 0xD0, 0xC0, 0xD0, 0xE0, 0xD0, 0xC0
+        ]
+    );
+    let shuffled = Steps {
+        looping: Loop::Shuffle,
+        ..six
+    };
+    let song_shuffled = song(&["C-3 -- --- --- ---"], shuffled);
+    let cut = cutoffs(&song_shuffled, STEP, 3 + 3 * 4);
+    assert_eq!(cut[..3], [0x90, 0xA0, 0xB0], "the intro, {cut:02X?}");
+    for lap in cut[3..].chunks(3) {
+        let mut sorted = lap.to_vec();
+        sorted.sort_unstable();
+        assert_eq!(sorted, [0xC0, 0xD0, 0xE0], "{cut:02X?}");
+    }
+    assert_eq!(
+        cut,
+        cutoffs(&song_shuffled, STEP, 3 + 3 * 4),
+        "a render repeats"
+    );
+    let past = Steps {
+        from: 12,
+        looping: Loop::Loop,
+        ..six
+    };
+    let cut = cutoffs(&song(&["C-3 -- --- --- ---"], past), STEP, 8);
+    assert_eq!(cut, [0x90, 0xA0, 0xB0, 0xC0, 0xD0, 0xE0, 0xE0, 0xE0]);
 }
 
 #[test]

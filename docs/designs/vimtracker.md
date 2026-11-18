@@ -568,7 +568,7 @@ Song                               song.ron, refused unless format_version is FO
     form, which also closes the track's `Cut` by its `Colour`. Steps (`steps.rs`, decision 203) are
     up to 16 signed values played in turn, from each note, from the song's position or one a note,
     at a division, a sixth of the track's step or a pass of its chain (`TrackState::chain_pass`, which
-    `fire_track` sets as a step lands), each way its `Loop` says; which step plays is worked out from
+    `fire_track` sets as a step lands), each way its `Loop` says, round from its `From`, a change of which waits for the next lap (`SlotRun::follow_from`, decision 428); which step plays is worked out from
     the time or count, as an LFO's place is, and its start is the slot's phase. Its `Mutate`
     (decision 204) is the one part kept as it plays: the values drawn again, in the slot's run, from
     a seeded stream of its own, kept at `0%`, which locks the loop, forgotten for a step whose

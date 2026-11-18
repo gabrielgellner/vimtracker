@@ -111,6 +111,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             ModField::Length => "length",
             ModField::Start => "start",
             ModField::Loop => "loop",
+            ModField::From => "from",
             ModField::Mutate => "mutate",
             ModField::Jump => "jump",
             ModField::Spread => "spread",
