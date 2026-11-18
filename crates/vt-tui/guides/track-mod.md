@@ -406,7 +406,7 @@ so its values are heard as written.
 |---|---|
 | Mode | In the title: `Trig`, `Free` or `Note`, below |
 | Loop | In the title: what it does at its end, below |
-| From | In the title, the loop's number: the step it goes round from, 1 to 16, below |
+| From | In the title, the loop's number: the step it loops from, below |
 | Jump | In the title: the chance each step is any step, `0%` to `100%` |
 | Spread | In the title: how far `Mutate`'s draws stray, `0%` to `100%`, below |
 | Bias | In the title: which way they lean, `-100` to `+100` |
