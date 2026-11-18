@@ -631,7 +631,11 @@ fn each_mode_has_its_own_setting_beside_mix_and_gain() {
         );
     }
     assert!(!bits.wraps());
-    assert_eq!(TYPE_PARAM.label, None, "a mode isn't locked from a step");
+    assert_eq!(
+        TYPE_PARAM.label,
+        Some("TYPE"),
+        "a step locks its type (decision 414)"
+    );
 }
 
 #[test]

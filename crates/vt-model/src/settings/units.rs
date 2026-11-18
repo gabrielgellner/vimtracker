@@ -3,6 +3,7 @@
 
 use crate::constants::{DB_PER_LEVEL, UNITY_LEVEL};
 use crate::envelope::{Hold, hold_at, time_at};
+use crate::groove::swing_tenths;
 use crate::insert::{
     ALGORITHM_NAMES, ECHO_BASS, ECHO_TREBLE, Triggering, VOWEL_NAMES, algorithm_blend, attack_ms,
     ceiling_db, echo_head_seconds, echo_input_db, echo_shelf_db, exciter_attack_ms,
@@ -121,6 +122,9 @@ pub enum Units {
     HighCut,
     /// Places in the list of orders either side of `80`, one a step, as `ORD` moves a phrase's.
     Orders,
+    /// A track's swing, from 50.0% at `00` up a tenth of a percent a step, as
+    /// [`swing_tenths`](crate::groove::swing_tenths) gives it.
+    Swing,
 }
 
 /// How close to an end the utility filter's cuts count as off, as a share of their range: the
@@ -285,7 +289,7 @@ impl Kind {
     pub fn has_fine(self) -> bool {
         matches!(
             self,
-            Self::Continuous { units, .. } if !matches!(units, Units::Decibels | Units::Rows | Units::Orders)
+            Self::Continuous { units, .. } if !matches!(units, Units::Decibels | Units::Rows | Units::Orders | Units::Swing)
         )
     }
 
@@ -401,6 +405,10 @@ impl Kind {
                 Units::Rows if middle => rows_text((coarse.round() as i32 - 128).clamp(-128, 127)),
                 Units::Rows => rows_text(coarse.round() as i32),
                 Units::Orders => orders_text((coarse.round() as i32 - 128).clamp(-128, 127)),
+                Units::Swing => {
+                    let tenths = swing_tenths(coarse.round().clamp(0.0, 255.0) as u8);
+                    format!("{}.{} %", tenths / 10, tenths % 10)
+                }
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {
                     let cents = ((coarse - 128.0) * 100.0).round() as i32;

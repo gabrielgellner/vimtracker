@@ -111,7 +111,7 @@ fn the_four_devices_fill_the_page_and_the_keys_box_at_163_by_42() {
             assert_eq!(found[2].1, "Output");
             assert_eq!(
                 found[3].1,
-                "Play  Jump 00  Chance 80  Row  Dice Off  Mutate 00  Dice jump 00"
+                "Play  Jump 00  Chance 80  Row  Dice Off  Mutate 00  Dice jump 00  Swing 00"
             );
             let bottom = top + 35;
             let line = lines[bottom].trim_start_matches(frame);

@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::constants::{FX_SLOTS, UNITY_LEVEL};
 use crate::dice::MOST_DICE_LOOP;
 use crate::generator::Generator;
+use crate::groove::MOST_SWING;
 use crate::insert::INSERTS;
 use crate::lfo::phase_value;
 use crate::modulation::{MOD_SLOTS, ModKind, Polarity, depth_of, depth_value};
@@ -681,6 +682,7 @@ impl Track {
             SettingId::DICE_LOOP => self.dice_loop,
             SettingId::DICE_MUTATE => self.dice_mutate,
             SettingId::DICE_JUMP => self.dice_jump,
+            SettingId::SWING => self.swing,
             SettingId::FILTER_MODE => self.filter_mode.index(),
             SettingId::GATE_LENGTH => self.gate_length(),
             SettingId::GROOVE => self
@@ -813,6 +815,7 @@ impl Track {
                     SettingId::DICE_LOOP => self.dice_loop = coarse.min(MOST_DICE_LOOP),
                     SettingId::DICE_MUTATE => self.dice_mutate = coarse,
                     SettingId::DICE_JUMP => self.dice_jump = coarse,
+                    SettingId::SWING => self.swing = coarse.min(MOST_SWING),
                     SettingId::FILTER_MODE => {
                         self.filter_mode =
                             FilterMode::ALL[usize::from(coarse).min(FilterMode::ALL.len() - 1)];

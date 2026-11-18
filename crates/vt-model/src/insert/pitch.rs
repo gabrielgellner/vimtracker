@@ -311,8 +311,7 @@ pub(crate) const CLOUDS_PARAMS: [Entry; 13] = [
         meaning: "what Clouds does with what it records",
         name: "Mode",
         key: "mode",
-        // Choosing a mode chooses a sound, so steps don't lock it.
-        label: None,
+        label: Some("MODE"),
         kind: Kind::Stepped {
             choices: &CLOUDS_MODE_NAMES,
             wraps: true,
@@ -363,8 +362,7 @@ pub(crate) const CLOUDS_PARAMS: [Entry; 13] = [
         meaning: "stereo or mono, 16 or 8 bits: each lower one holds a longer recording",
         name: "Quality",
         key: "quality",
-        // A new quality starts a new recording, so steps don't lock it.
-        label: None,
+        label: Some("QUAL"),
         kind: Kind::Stepped {
             choices: &QUALITY_NAMES,
             wraps: true,
@@ -505,8 +503,7 @@ pub(crate) const BEADS_PARAMS: [Entry; 14] = [
         meaning: "grains, or a delay whose taps play the recording back",
         name: "Mode",
         key: "mode",
-        // Choosing a mode chooses a sound, so steps don't lock it.
-        label: None,
+        label: Some("MODE"),
         kind: Kind::Stepped {
             choices: &BEADS_MODE_NAMES,
             wraps: true,
@@ -570,8 +567,7 @@ pub(crate) const BEADS_PARAMS: [Entry; 14] = [
         meaning: "how clean its recording is: each dirtier one holds a longer recording",
         name: "Quality",
         key: "quality",
-        // A new quality starts a new recording, so steps don't lock it.
-        label: None,
+        label: Some("QUAL"),
         kind: Kind::Stepped {
             choices: &BEADS_QUALITY_NAMES,
             wraps: true,
