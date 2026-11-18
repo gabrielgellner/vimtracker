@@ -205,7 +205,7 @@ impl TrackState {
 
     /// The mode the filter plays: held `MODE` and what modulation adds, as a whole place in the
     /// list, or its type's first if its type doesn't offer that.
-    fn playing_mode(&self) -> FilterMode {
+    pub(super) fn playing_mode(&self) -> FilterMode {
         let moved = self.filter_mode + self.offsets[SettingId::FILTER_MODE.index()] * 255.0;
         let place = moved.round().clamp(0.0, f32::from(u8::MAX)) as u8;
         self.filter_type

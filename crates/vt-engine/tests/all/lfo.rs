@@ -474,6 +474,7 @@ fn live_values_are_the_settings_when_nothing_moves_them() {
         pan: 0x30,
         cutoff: 0x70,
         resonance: 0x20,
+        filter: Default::default(),
         send_a: 0x11,
         send_b: 0x22,
         machine: {

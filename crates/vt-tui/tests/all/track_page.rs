@@ -573,6 +573,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         pan: 0x80,
         cutoff: 0x40,
         resonance: 0,
+        filter: Default::default(),
         send_a: 0,
         send_b: 0,
         machine: {
@@ -2096,6 +2097,15 @@ fn the_filter_curve_moves_with_what_plays() {
         pan: track.pan,
         cutoff,
         resonance,
+        filter: vt_engine::track_state::LiveFilter {
+            kind: track.filter,
+            mode: track.filter.plays(track.filter_mode),
+            drive: track.drive,
+            punch: track.punch,
+            safe: track.safe,
+            low_cut: track.low_cut,
+            high_cut: track.high_cut,
+        },
         send_a: track.send_a,
         send_b: track.send_b,
         machine: std::array::from_fn(|setting| track.machine_value(setting)),

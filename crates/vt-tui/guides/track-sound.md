@@ -267,8 +267,9 @@ names: `00` `12 dB`, `01` `24 dB`, `02` `LP24`, `03` `LP12`, `04` `BP24`, `05`
 A curve in a box at the right of the Filter shows what the filter and utility filter
 let through, from 20 Hz on the left to 20 kHz on the right, in the track's
 `Mode`, over faint lines at 0 dB, 100 Hz, 1 kHz and 10 kHz, with a dashed line up to
-it at `Cut` unless the filter is open. It moves with what's playing `Cut` and `Res`, including step commands,
-LFOs and envelopes, but it doesn't show `Drive`'s saturation. For `Dirty` it shows the resonance `Drive`
+it at `Cut` unless the filter is open. It moves with what's playing, including step commands,
+LFOs and envelopes: `Cut` and `Res`, and a lock of the type, its mode, `Drive`, `Safe` and the cuts, so
+a `FTYP` lock shows the type it switches to for its row. It doesn't show `Drive`'s saturation. For `Dirty` it shows the resonance `Drive`
 adds.
 
 ## Jumping to a setting
