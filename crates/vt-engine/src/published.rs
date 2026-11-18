@@ -81,6 +81,9 @@ struct TrackRows {
     longest: u64,
     /// Whether any of its steps has a `RATE`.
     speed_steps: bool,
+    /// Whether any of its steps has an `SED`, without which its rows needn't be looked on for one
+    /// (decision 421).
+    reseeds: bool,
 }
 
 /// A version on its way to the engine, or back from it to be dropped, with its generators' scratch.
@@ -149,6 +152,11 @@ impl GroupMacros {
 }
 
 impl Published {
+    /// Whether any of a track's steps has an `SED` (decision 421).
+    pub(crate) fn reseeds(&self, index: usize) -> bool {
+        self.rows.get(index).is_some_and(|rows| rows.reseeds)
+    }
+
     /// Build a version, working out each of the bank's entries on this thread, since the callback
     /// can't look up by string.
     pub fn new(song: Arc<Song>, samples: Arc<SamplePool>) -> Self {
@@ -246,6 +254,15 @@ impl TrackRows {
             earliest: track_earliest(track, longest),
             longest,
             speed_steps,
+            reseeds: track
+                .phrases
+                .values()
+                .flat_map(|phrase| phrase.steps())
+                .any(|step| {
+                    step.fx
+                        .iter()
+                        .any(|slot| slot.command == Some(FxCommand::Sed))
+                }),
         }
     }
 }

@@ -223,11 +223,10 @@ impl Engine {
         let rate = self.rate;
         let hits = retrigger.hits + 1;
         // With `Chance target` on `Pulse`, each hit plays with its row's chance (decision 406).
-        let seed = self.current.song.seed;
         let audible = self.plays(index)
             && retrigger
                 .keep
-                .is_none_or(|(count, share)| kept(seed, index, count, hits, share));
+                .is_none_or(|((seed, count), share)| kept(seed, index, count, hits, share));
         if self.tracks[index].last_note.is_some() {
             self.start_modulation(index);
         }
