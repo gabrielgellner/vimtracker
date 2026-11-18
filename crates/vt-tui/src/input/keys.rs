@@ -157,23 +157,23 @@ fn unshift_of(c: char) -> char {
 impl std::fmt::Display for Key {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.alt {
-            f.write_str("M-")?;
+            f.write_str("Option-")?;
         }
         if self.ctrl {
-            f.write_str("C-")?;
+            f.write_str("Ctrl-")?;
         }
         if self.command {
-            f.write_str("D-")?;
+            f.write_str("Cmd-")?;
         }
         if self.shift {
-            f.write_str("S-")?;
+            f.write_str("Shift-")?;
         }
         match self.code {
             KeyCode::Char(' ') => f.write_str("Space"),
             KeyCode::Char(c) => write!(f, "{c}"),
             KeyCode::Enter => f.write_str("Enter"),
             KeyCode::Tab => f.write_str("Tab"),
-            KeyCode::BackTab => f.write_str("S-Tab"),
+            KeyCode::BackTab => f.write_str("Shift-Tab"),
             KeyCode::Backspace => f.write_str("Backspace"),
             KeyCode::Esc => f.write_str("Esc"),
             KeyCode::Up => f.write_str("Up"),
@@ -185,33 +185,71 @@ impl std::fmt::Display for Key {
     }
 }
 
+/// A modifier a key name can carry.
+#[derive(Clone, Copy)]
+enum Modifier {
+    Alt,
+    Ctrl,
+    Command,
+    Shift,
+}
+
+/// Each modifier's prefix, as Vim writes it and as it's shown.
+const MODIFIERS: [(&str, &str, Modifier); 4] = [
+    ("M-", "Option-", Modifier::Alt),
+    ("C-", "Ctrl-", Modifier::Ctrl),
+    ("D-", "Cmd-", Modifier::Command),
+    ("S-", "Shift-", Modifier::Shift),
+];
+
+/// A key sequence as it's shown, such as `Cmd-l` for `D-l`, or the text itself if it isn't one.
+pub fn shown(text: &str) -> String {
+    parse_sequence(text).map_or_else(
+        |_| text.to_owned(),
+        |keys| {
+            keys.iter()
+                .map(Key::to_string)
+                .collect::<Vec<_>>()
+                .join(" ")
+        },
+    )
+}
+
 /// A key name that could not be read.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[error("not a key name: {0:?}")]
 pub struct KeyParseError(pub String);
 
 /// Parse one key, such as `x`, `C-r`, `M-1`, `C-i`, `S-Up` or `Enter`. `D-` is Cmd, as in Vim.
+/// They can also be written as they're shown: `Option-`, `Ctrl-`, `Cmd-` and `Shift-`.
 /// The modifiers can come in any order, and `S-` is only for an arrow, as Shift is in the
 /// character elsewhere: `G`, not `S-g`. `S-Tab` is the key `Shift-Tab` makes.
 pub fn parse(text: &str) -> Result<Key, KeyParseError> {
     let mut key = Key::char(' ');
     let mut name = text;
     loop {
-        if name == "S-Tab" {
+        if name == "S-Tab" || name == "Shift-Tab" {
             break;
         }
-        let flag = match name.get(..2) {
-            Some("M-") => &mut key.alt,
-            Some("C-") => &mut key.ctrl,
-            Some("D-") => &mut key.command,
-            Some("S-") => &mut key.shift,
-            _ => break,
+        let Some((which, prefix)) = MODIFIERS.iter().find_map(|(short, long, which)| {
+            [*short, *long]
+                .into_iter()
+                .find(|prefix| name.starts_with(prefix))
+                .map(|prefix| (*which, prefix.len()))
+        }) else {
+            break;
         };
-        if *flag || name.len() == 2 {
+        let flag = match which {
+            Modifier::Alt => &mut key.alt,
+            Modifier::Ctrl => &mut key.ctrl,
+            Modifier::Command => &mut key.command,
+            Modifier::Shift => &mut key.shift,
+        };
+        if *flag || name.len() == prefix {
             return Err(KeyParseError(text.to_owned()));
         }
         *flag = true;
-        name = &name[2..];
+        name = &name[prefix..];
     }
     let mut chars = name.chars();
     key.code = match (chars.next(), chars.next()) {
@@ -220,7 +258,7 @@ pub fn parse(text: &str) -> Result<Key, KeyParseError> {
             "Space" => KeyCode::Char(' '),
             "Enter" => KeyCode::Enter,
             "Tab" => KeyCode::Tab,
-            "S-Tab" => KeyCode::BackTab,
+            "S-Tab" | "Shift-Tab" => KeyCode::BackTab,
             "Backspace" => KeyCode::Backspace,
             "Esc" => KeyCode::Esc,
             "Up" => KeyCode::Up,
@@ -257,32 +295,42 @@ mod tests {
     use super::*;
 
     #[test]
-    fn names_round_trip() {
-        for name in [
-            "x",
-            "C-r",
-            "Enter",
-            "Space",
-            "Esc",
-            "G",
-            "Tab",
-            "S-Tab",
-            "Backspace",
-            "M-1",
-            "C-i",
-            "C-j",
-            "C-m",
-            "C-1",
-            "C-0",
-            "C-A",
-            "D-1",
-            "M-C-x",
-            "S-Up",
-            "C-S-Left",
-            "M--",
+    fn names_are_shown_in_full_and_read_back() {
+        for (vim, shown) in [
+            ("x", "x"),
+            ("C-r", "Ctrl-r"),
+            ("Enter", "Enter"),
+            ("Space", "Space"),
+            ("Esc", "Esc"),
+            ("G", "G"),
+            ("Tab", "Tab"),
+            ("S-Tab", "Shift-Tab"),
+            ("Backspace", "Backspace"),
+            ("M-1", "Option-1"),
+            ("C-i", "Ctrl-i"),
+            ("C-j", "Ctrl-j"),
+            ("C-m", "Ctrl-m"),
+            ("C-1", "Ctrl-1"),
+            ("C-0", "Ctrl-0"),
+            ("C-A", "Ctrl-A"),
+            ("D-1", "Cmd-1"),
+            ("M-C-x", "Option-Ctrl-x"),
+            ("S-Up", "Shift-Up"),
+            ("C-S-Left", "Ctrl-Shift-Left"),
+            ("M--", "Option--"),
         ] {
-            assert_eq!(parse(name).unwrap().to_string(), name);
+            let key = parse(vim).unwrap();
+            assert_eq!(key.to_string(), shown);
+            assert_eq!(parse(shown).unwrap(), key);
         }
+    }
+
+    #[test]
+    fn a_sequence_is_shown_in_full() {
+        assert_eq!(super::shown("D-l"), "Cmd-l");
+        assert_eq!(super::shown("Space f b"), "Space f b");
+        assert_eq!(super::shown("C-o M-s"), "Ctrl-o Option-s");
+        assert_eq!(super::shown("its key"), "its key");
     }
 
     #[test]
@@ -351,12 +399,13 @@ mod tests {
     }
 
     #[test]
-    fn cmd_is_carried_and_named_as_in_vim() {
+    fn cmd_is_carried_and_shown_as_cmd() {
         let event = KeyEvent::new(KeyCode::Char('1'), KeyModifiers::SUPER);
         let key = Key::from_event(event);
         assert!(key.command);
         assert_ne!(key, Key::char('1'));
-        assert_eq!(key.to_string(), "D-1");
+        assert_eq!(key.to_string(), "Cmd-1");
+        assert_eq!(parse("D-1").unwrap(), key);
     }
 
     #[test]
@@ -376,5 +425,7 @@ mod tests {
         assert!(parse("S-Enter").is_err());
         assert!(parse("C-C-a").is_err());
         assert!(parse("C-").is_err());
+        assert!(parse("Cmd-").is_err());
+        assert!(parse("Ctrl-C-a").is_err());
     }
 }

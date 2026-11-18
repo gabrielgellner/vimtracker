@@ -277,7 +277,7 @@ impl ProjectPage {
             }
             ProjectControl::Name => {
                 services.status =
-                    "i renames the project, and C-r there rolls a new name".to_owned();
+                    "i renames the project, and Ctrl-r there rolls a new name".to_owned();
             }
             ProjectControl::Folder => {
                 services.status = "Save as puts the project in another folder".to_owned();
@@ -361,7 +361,7 @@ impl ProjectPage {
             ProjectControl::ReadOnly if services.live.read_only => Some(Line::ReadOnly(false)),
             ProjectControl::Name => {
                 services.status =
-                    "i renames the project, and C-r there rolls a new name".to_owned();
+                    "i renames the project, and Ctrl-r there rolls a new name".to_owned();
                 None
             }
             _ => None,

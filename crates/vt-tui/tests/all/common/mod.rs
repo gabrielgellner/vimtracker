@@ -663,14 +663,19 @@ pub fn mixer_text_at(app: &App, width: u16) -> Vec<String> {
 }
 
 pub fn song_text(app: &App) -> Vec<String> {
-    let backend = ratatui::backend::TestBackend::new(80, 12);
+    // The target terminal's width, so a song of many tracks fits beside the section's columns.
+    let backend = ratatui::backend::TestBackend::new(163, 12);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
         .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Song))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..12)
-        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+        .map(|y| {
+            (0..163)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+        })
         .collect()
 }
 

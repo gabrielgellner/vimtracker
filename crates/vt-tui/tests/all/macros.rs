@@ -752,7 +752,7 @@ fn the_keys_of_the_mapping_view_are_in_the_binding_table() {
     for row in [
         "Swap the range's ends",
         "take the setting off the macro",
-        "D-l",
+        "Cmd-l",
     ] {
         assert!(rows.iter().any(|line| line.contains(row)), "{row}");
     }

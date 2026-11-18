@@ -204,7 +204,7 @@ puts the keys in it, showing it if it's hidden, on the macro they were last on:
 | `=` `-` `+` `_` | Turn it a step or a large step |
 | `i` | Type it, in two hex digits |
 | `x` | Take it to `00` |
-| `u` `C-r` | Take the last change back, or do it again |
+| `u` `Ctrl-r` | Take the last change back, or do it again |
 | `W` `B` | The next or previous track |
 | `Tab` | Play, or pause |
 | `Esc` | Back to the page, its cursor where it was, the panel showing |
@@ -230,8 +230,8 @@ as `Cut, 1.05 kHz: on macro 1 Bite, 170 Hz to 9.56 kHz`. One with no bar, such a
 page value or a device's title, has a faint dot after its value instead, `1/16 •`, after the dot
 Live puts on a control it automates. Turning it is refused, as Live greys a mapped control out:
 turn its macro, or open its range with `gm`. `gd` on it goes to its macro in the Gen page's
-`Macros` band, ready to turn, and `C-o` comes back to it; `gm` there opens its mapping. So does
-`gd` on a fader on the mixer a macro holds, and `C-o` comes back to the mixer.
+`Macros` band, ready to turn, and `Ctrl-o` comes back to it; `gm` there opens its mapping. So does
+`gd` on a fader on the mixer a macro holds, and `Ctrl-o` comes back to the mixer.
 
 **The mapping view**, `gm`, lists each setting the macro holds with its `Min`, its `Max`, the
 `Curve` and `S` of its response and its `Zone`, with a drawing of the response of the one under

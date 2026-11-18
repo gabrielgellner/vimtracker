@@ -214,7 +214,7 @@ impl App {
             track: self.services.cursor.track,
             chain,
             slot: self.services.cursor.slot,
-            scale: self.services.live.scale,
+            scale: self.services.scale_here(),
             bloom,
         });
         if Arc::ptr_eq(&before, self.song()) {

@@ -2377,8 +2377,8 @@ fn every_point_editing_key_is_listed() {
     let (app, _realtime) = on_page();
     let rows = app.help_rows();
     for keys in [
-        "Enter", "J", "x", "=", "+", "D-l", "g s", "g e", "g l", "g L", "m", "v", "g v", ">", "~",
-        "K",
+        "Enter", "J", "x", "=", "+", "Cmd-l", "g s", "g e", "g l", "g L", "m", "v", "g v", ">",
+        "~", "K",
     ] {
         assert!(
             rows.iter()

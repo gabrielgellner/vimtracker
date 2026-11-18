@@ -35,11 +35,13 @@ Follow one with a motion or a target, or double it for this whole step:
 | `W` `B`, `]b` `[b` | In a selection, reach the next or previous track |
 | `gv` | Select the last selection again |
 | `=` `-` `+` `_` | Move every value a small or large step, and stay selected |
-| `D-l` `D-h` `D-k` `D-j` | Cmd and `l` `h` `k` `j`: as `=` `-` `+` `_` |
+| `Cmd-l` `Cmd-h` | As `=` `-` |
+| `Cmd-k` `Cmd-j` | As `+` `_` |
 | The mouse wheel | As `=` `-`, further the faster it goes, once it's on |
-| `>` `<`, `C-a` `C-x` | Move every value a step, and stay selected |
+| `>` `<` | Move every value a step, and stay selected |
+| `Ctrl-a` `Ctrl-x` | As `>` `<` |
 | `r` | Fill the cursor's column, and stay selected |
-| `u` `C-r` | Undo or redo one change, and stay selected |
+| `u` `Ctrl-r` | Undo or redo one change, and stay selected |
 | `d` `x` `y` `S` `~` | Clear, copy, shape or mark, and stop selecting |
 | `Esc` | Stop selecting |
 
@@ -896,10 +898,10 @@ the values it left.
 | `x` | Clear this field |
 | `r` | Replace this field, as in Vim: no move, and back to Normal |
 | `s` | Clear this field and start Insert there, as in Vim |
-| `=` `-` | Up or down a small step. `C-a` and `C-x` do the same |
+| `=` `-` | Up or down a small step. `Ctrl-a` and `Ctrl-x` do the same |
 | `+` `_` | Up or down a large step: the same keys with Shift |
-| `D-l` `D-h` | Cmd and `l` `h`: as `=` `-`, without moving, here and wherever they work |
-| `D-k` `D-j` | Cmd and `k` `j`: as `+` `_`, without moving, here and wherever they work |
+| `Cmd-l` `Cmd-h` | As `=` `-`, without moving, here and wherever they work |
+| `Cmd-k` `Cmd-j` | As `+` `_`, without moving, here and wherever they work |
 | `K` | On an FX column, choose from a list |
 | `.` | Repeat the last change |
 | `p` | Paste over, from the cursor down. Past the end it stores more |
@@ -908,7 +910,7 @@ the values it left.
 | `gm` | Merge: empty cells in the copy leave what is there alone |
 | `"a` | Use register `a`, before `y`, `d` or `p`. `a` to `z` all work |
 | `"0` | The last thing you copied with `y`, which a cut can't replace |
-| `u` `C-r` | Undo and redo. An edit that changed nothing isn't one to undo |
+| `u` `Ctrl-r` | Undo and redo. An edit that changed nothing isn't one to undo |
 
 A small step is a semitone, or 1 on a value. A large step is an octave, or `10`
 in hex, which changes the left digit. Counts work: `3=`. `RET` is different,

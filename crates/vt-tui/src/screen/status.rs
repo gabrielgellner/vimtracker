@@ -95,7 +95,7 @@ pub fn value_shown(app: &App) -> Option<String> {
         }
         app.track_control()
     };
-    let view = |track: &Track| view(control, track, app.song(), app.services.live.scale.on);
+    let view = |track: &Track| view(control, track, app.song(), app.services.scale_here().on);
     // A fader the steps drive reads where they have it, and says so, as one a hand has taken over
     // from them does.
     let heard = app.services.track_as_heard(app.services.cursor.track)?;
@@ -216,7 +216,7 @@ pub(crate) fn phrase_value(services: &Services, field: Field) -> Option<String> 
                 return Some(arp_shown(
                     cell.coarse(),
                     track.arpeggio,
-                    services.live.scale.on,
+                    services.scale_here().on,
                 ));
             }
             // What an `RND` varies is what's to its left.
@@ -227,7 +227,7 @@ pub(crate) fn phrase_value(services: &Services, field: Field) -> Option<String> 
                 return Some(variation::text(
                     cell.coarse(),
                     Varies::of(left),
-                    services.live.scale.on,
+                    services.scale_here().on,
                 ));
             }
             if cell.command == Some(FxCommand::Sld) {
@@ -248,7 +248,7 @@ pub(crate) fn phrase_value(services: &Services, field: Field) -> Option<String> 
                 return Some(amount_shown(
                     cell.coarse(),
                     track.accumulation,
-                    services.live.scale.on,
+                    services.scale_here().on,
                 ));
             }
             if cell.command == Some(FxCommand::Set(SettingId::SAMPLE)) && track.is_sound() {
@@ -539,12 +539,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     } else {
         String::new()
     };
-    let scale = if app.modes.view == View::Phrase && app.services.live.scale.on {
-        format!(
-            "  Scale {} {}",
-            app.services.live.scale.root_name(),
-            app.services.live.scale.kind.short_name()
-        )
+    // The scale notes are entered in, the section's own if the cursor's has one.
+    let here = app.services.scale_here();
+    let scale = if app.modes.view == View::Phrase && here.on {
+        format!("  Scale {} {}", here.root_name(), here.kind.short_name())
     } else {
         String::new()
     };

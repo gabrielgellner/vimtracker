@@ -12,12 +12,12 @@ on beside it.
 | `j` `k` | Next or previous step |
 | `h` `l` | Previous or next field |
 | `w` `b` | Next or previous part: the note, then each FX slot |
-| `0` `$` | Start or end of the row: the Note column, or the last FX value |
+| `0` `$` | Start or end of the row: Note, or the last FX value |
 | `}` `{` | Next or previous beat, which is 4 steps |
 | `gg` `G` | First or last step of the loop |
 | `H` `M` `L` | Top, middle or bottom of the screen |
-| `C-d` `C-u` | Half a screen down or up |
-| `C-e` `C-y` | Scroll the view without moving the cursor |
+| `Ctrl-d` `Ctrl-u` | Half a screen down or up |
+| `Ctrl-e` `Ctrl-y` | Scroll the view without moving the cursor |
 
 ## Counts
 
@@ -28,9 +28,9 @@ A number before a motion repeats it, as in Vim.
 | `4j` | Down 4 steps |
 | `2}` | Down 2 beats |
 | `8G` | To the 8th step of the loop, counting in decimal |
-| `5C-e` `5C-y` | Scroll the view 5 rows, rather than 3 |
+| `5Ctrl-e` `5Ctrl-y` | Scroll the view 5 rows, rather than 3 |
 | `5H` `3L` | To the 5th row on screen, or the 3rd from the bottom |
-| `8C-d` `8C-u` | Down or up 8 rows, and 8 from then on, as in Vim |
+| `8Ctrl-d` `8Ctrl-u` | Down or up 8 rows, and 8 from then on, as in Vim |
 | `2W` `2B` | In a selection, reach 2 tracks on or back |
 
 A key with no use for a count, such as `M`, drops it, so it never goes on to the
@@ -67,7 +67,7 @@ if a row shows `10`, then `10j` or `10k` lands on it.
 | `Space t` | Show or hide the macro panel, this track's macros |
 | `Space T` | Into the macro panel, to turn them; `Esc` comes back |
 | `Space d` | Describe the setting under the cursor, or stop |
-| `C-o` `C-i` | Jump back or forward, as in Vim's jump list |
+| `Ctrl-o` `Ctrl-i` | Jump back or forward, as in Vim's jump list |
 
 `Space 5` to `Space 8` open the track page on one of its four pages, each where you
 left its cursor, and `H` and `L` still go between them. `Space 9` opens the project
@@ -102,8 +102,8 @@ rest closed. The title shows how many items match, out of how many there are.
 |---|---|
 | `j` `k` | Down or up. A count goes further, as in `3j` |
 | `gg` `G` | The first row or the last. `5G` goes to the fifth |
-| `C-n` `C-p` | Down or up, in the search too |
-| `C-d` `C-u` | Half the list down or up, in the search too |
+| `Ctrl-n` `Ctrl-p` | Down or up, in the search too |
+| `Ctrl-d` `Ctrl-u` | Half the list down or up, in the search too |
 | `zz` `zt` `zb` | Scroll the cursor's row to the middle, top or bottom |
 | `l` `Enter` | Open a category and go into it, or choose |
 | `h` | Close the category, from inside it or on it |
@@ -233,7 +233,7 @@ folder.
 | `Enter` | Take the match from the list, or run the line |
 | `Esc` | Close the list and keep what's typed, or leave the line |
 | `Up` `Down` | Earlier commands, those starting with what is typed |
-| `C-r` | A new random name, on a `:w`, `:new` or `:render` line |
+| `Ctrl-r` | A new random name, on a `:w`, `:new` or `:render` line |
 
 The commands you run are kept for next time in `history.ron`, beside `settings.ron`,
 the last 100, with one run again moved to the end.

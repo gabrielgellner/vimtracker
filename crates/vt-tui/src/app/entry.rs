@@ -153,7 +153,8 @@ impl App {
 
     /// Move this phrase's notes to the nearest in the scale.
     pub(super) fn fit_to_scale(&mut self) {
-        if !self.services.live.scale.on {
+        let scale = self.services.scale_here();
+        if !scale.on {
             self.services.status = "The scale is off".to_owned();
             return;
         }
@@ -161,7 +162,7 @@ impl App {
             self.services.apply(&Action::FitToScale {
                 track: self.services.cursor.track,
                 phrase,
-                scale: self.services.live.scale,
+                scale,
             });
         }
     }
