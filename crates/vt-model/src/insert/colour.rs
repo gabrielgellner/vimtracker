@@ -673,9 +673,8 @@ pub(crate) const REEL_PARAMS: [Entry; 11] = [
 /// Where its settings sit on the FX page.
 pub(super) const REEL_GRID: Columns = &[
     &["drive", "sat", "bias"],
-    &["speed", "gap"],
-    &["space", "thick"],
-    &["wow", "flutter"],
+    &["speed", "wow", "flutter"],
+    &["gap", "space", "thick"],
     &["mix", "gain"],
 ];
 

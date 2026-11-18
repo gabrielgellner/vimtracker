@@ -1689,8 +1689,8 @@ const COLOUR: DeviceLayout = live(
         ],
     )],
 );
-/// How hard the tape is driven round its loop and how it wobbles, then on a second page the
-/// playback head: its speed and its three losses.
+/// How hard the tape is driven round its loop, how fast it runs and how it wobbles, then on a
+/// second page the playback head's three losses.
 const REEL: DeviceLayout = live(
     "fx/reel",
     &[
@@ -1700,7 +1700,7 @@ const REEL: DeviceLayout = live(
                 s("drive"),
                 s("sat"),
                 s("bias"),
-                GAP,
+                s("speed"),
                 s("wow"),
                 s("flutter"),
                 s("mix"),
@@ -1709,7 +1709,7 @@ const REEL: DeviceLayout = live(
         ),
         knobs(
             "Head",
-            [s("speed"), s("gap"), s("space"), s("thick"), __, __, __, __],
+            [s("gap"), s("space"), s("thick"), __, __, __, __, __],
         ),
     ],
 );

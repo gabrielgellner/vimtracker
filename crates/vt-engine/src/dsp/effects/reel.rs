@@ -216,13 +216,12 @@ impl Side {
             hysteresis,
             ..
         } = self;
-        let makeup = tape.makeup;
-        let magnetised =
-            oversampler.process(x, |h| (hysteresis.process(h, period, tape) * makeup) as f32);
-        // In double precision, as a one-pole this slow in single stops short of what it follows.
+        let magnetised = oversampler.process(x, |h| hysteresis.process(h, period, tape) as f32);
+        // In double precision, as a one-pole this slow in single stops short of what it follows,
+        // and before the makeup, so what the tape holds stays blocked as the settings move.
         let magnetised = f64::from(magnetised);
         self.dc += (magnetised - self.dc) * dc;
-        (magnetised - self.dc) as f32
+        ((magnetised - self.dc) * tape.makeup) as f32
     }
 
     /// Off the tape, through the head's losses.

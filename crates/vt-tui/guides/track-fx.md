@@ -379,13 +379,13 @@ the rate, and its wow and flutter are `Tape`'s.
 
 | Setting | Does |
 |---|---|
-| `Drive` | How hard the head drives the tape, from -18 dB to +18 dB, 0 dB at `80` |
+| `Drive` | How hard it hits the tape, from -18 dB to +18 dB, 0 dB at `80` |
 | `Sat` | How low the tape saturates: higher squashes sooner and thicker |
-| `Bias` | Higher thins the loop, cleaner; lower smears, and quiet sounds drop out |
+| `Bias` | Higher thins the loop and cleans it; lower smears and crackles |
 | `Speed` | 3.75, 7.5, 15 or 30 ips: slower is darker, its head bump lower |
-| `Gap` | The head's gap, 0.5 to 20 µm: wider loses highs, with notches when slow |
-| `Space` | How far the tape rides off the head, to 20 µm: the highs go fast |
-| `Thick` | How deep the coating is read from, to 50 µm: the highs soften gently |
+| `Gap` | The head's gap, 0.5 to 20 µm: wider loses highs, in notches |
+| `Space` | How far the tape rides off the head, to 20 µm: highs go fast |
+| `Thick` | How deep the coating is read, to 50 µm: highs soften gently |
 | `Wow` | A slow, drifting wobble in pitch, as `Tape`'s |
 | `Flutter` | A faster, steady wobble, as `Tape`'s |
 
