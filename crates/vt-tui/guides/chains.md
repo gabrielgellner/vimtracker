@@ -61,10 +61,10 @@ Press `Space 2`. The row past the end, shown as `--`, adds a phrase.
 | `gd` | Open this phrase, or add one on the empty row |
 | `i` | Type a phrase number in hex or a transpose, then `Enter` |
 | `=` `-` | Next or previous phrase, or transpose by a semitone |
-| `C-a` `C-x` | The same as `=` `-` |
+| `Ctrl-a` `Ctrl-x` | The same as `=` `-` |
 | `+` `_` | Phrase number by `10` in hex, or transpose by an octave |
-| `D-l` `D-h` | Cmd and `l` `h`: as `=` `-`, without moving |
-| `D-k` `D-j` | Cmd and `k` `j`: as `+` `_`, without moving |
+| `Cmd-l` `Cmd-h` | As `=` `-`, without moving |
+| `Cmd-k` `Cmd-j` | As `+` `_`, without moving |
 | `K` | Choose this row's phrase from a list |
 | `x` | Transpose back to 0 |
 | `dd` `yy` `p` | Remove a row, copy it, or add the copy below |
@@ -176,18 +176,18 @@ the section the cursor is on, and `Sec 2/4` on the status line says which.
 | `gg` `G` | The first or last section |
 | `h` `l` | Previous or next column |
 | `0` `$` | The length column, or the last track's |
-| `=` `-` `+` `_` | Change the value. `C-a` and `C-x` are `=` `-` |
-| `D-l` `D-h` | Cmd and `l` `h`: as `=` `-`, without moving |
-| `D-k` `D-j` | Cmd and `k` `j`: as `+` `_`, without moving |
+| `=` `-` `+` `_` | Change the value. `Ctrl-a` and `Ctrl-x` are `=` `-` |
+| `Cmd-l` `Cmd-h` | As `=` `-`, without moving |
+| `Cmd-k` `Cmd-j` | As `+` `_`, without moving |
 | `i` | Type a length or repeat then `Enter`, or a chain's two hex digits |
 | `x` | Back to the default: Rpt 1, new, the song's scale, or no chain |
 | `K` | On Start, switch new and reset. On Scale or a track, choose |
-| `gd` | Open this chain's phrase, or its rows if several, or add a chain |
+| `gd` | Open this chain's phrase, its rows if several, or add a chain |
 | `gC` | Copy this chain and its phrases, for this cell alone |
 | `a` | Add an empty section after this one |
 | `gc` | Copy this section after itself, using the same chains |
 | `dd` | Remove this section |
-| `Enter` | While playing, play this chain on its track next, or stop it on `--` |
+| `Enter` | While playing, play this chain next on its track, or stop on `--` |
 | `C` | While playing, add a section of what's playing, and stay on it |
 | `;` | Hear its first row |
 | `V` | Select sections, for `:loop`. `V` again or `Esc` ends it |

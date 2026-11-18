@@ -817,7 +817,7 @@ fn help_lists_keys_from_the_table_and_any_key_closes_it() {
     let rows = app.help_rows();
     assert!(
         rows.iter()
-            .any(|r| r.contains("S-Tab") && r.contains("from the start"))
+            .any(|r| r.contains("Shift-Tab") && r.contains("from the start"))
     );
     assert!(rows.iter().any(|r| r.contains("i b")));
     keys(&mut app, "j");

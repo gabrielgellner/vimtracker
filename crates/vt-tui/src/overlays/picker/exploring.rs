@@ -507,7 +507,7 @@ impl App {
         self.overlays.command.line = format!("{} {folder}/{name}{}", naming.command, naming.after);
         self.overlays.command.menu = None;
         self.modes.mode = Mode::Command;
-        self.services.status = "Type a name, or C-r for another, then Enter".to_owned();
+        self.services.status = "Type a name, or Ctrl-r for another, then Enter".to_owned();
     }
 
     /// Remember a folder something was chosen in, for the top of the explorer next time.

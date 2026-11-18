@@ -252,3 +252,50 @@ fn closing_the_fills_guide_comes_back_to_the_shape_panel_as_it_was() {
     assert_eq!(app.modes.mode, Mode::Shape);
     assert_eq!(format!("{:?}", app.overlays.shape), panel);
 }
+
+/// Where `text` writes a key with a modifier as Vim does, `D-l` for `Cmd-l` or `C-o` for
+/// `Ctrl-o`. A note such as `C-3` or `D-1` has a digit after its dash, so it isn't one.
+fn vim_modifiers(text: &str) -> Vec<String> {
+    let chars: Vec<char> = text.chars().collect();
+    (0..chars.len().saturating_sub(2))
+        .filter(|&at| {
+            matches!(chars[at], 'D' | 'C' | 'M' | 'S')
+                && chars[at + 1] == '-'
+                && chars[at + 2].is_ascii_alphabetic()
+                && (at == 0 || !chars[at - 1].is_alphabetic())
+        })
+        .map(|at| {
+            chars[at.saturating_sub(10)..(at + 12).min(chars.len())]
+                .iter()
+                .collect()
+        })
+        .collect()
+}
+
+#[test]
+fn keys_are_shown_as_cmd_ctrl_option_and_shift_never_as_vim_writes_them() {
+    let (app, _realtime) = app();
+    let help = app.help_rows().join("\n");
+    assert_eq!(vim_modifiers(&help), Vec::<String>::new(), "Space k");
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/guides");
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        let guide = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            vim_modifiers(&guide),
+            Vec::<String>::new(),
+            "{}",
+            path.display()
+        );
+    }
+    // The popup, the status line and the view picker show keys as a `Key` writes itself.
+    for binding in vt_tui::input::bindings::bindings() {
+        let shown = vt_tui::input::keys::shown(binding.keys);
+        assert_eq!(
+            vim_modifiers(&shown),
+            Vec::<String>::new(),
+            "{}",
+            binding.keys
+        );
+    }
+}
