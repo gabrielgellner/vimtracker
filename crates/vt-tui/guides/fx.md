@@ -73,6 +73,8 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `CDLT` | Every row's chance up or down: `80` none, `40` half, `00` none play |
 | `CTGT` | What a row's chance decides: `00` the whole row, `01` each pulse |
 | `CUE` | A new window or lane waits for its loop, `01`, or moves at once, `00` |
+| `CORD` | The chain's order from the next phrase on: `00` forward, `01` reverse |
+| `CJMP` | The chance each of the chain's next phrases is any of its phrases |
 | `GLD` | How long a tie glides into the next note: `00` off, `80` about 60 ms |
 | `OSC` | A synth's `Phase` for the row's note: `00` Free, `01` Reset |
 | `VMOD` | The track's `Mode` for the row's note: `00` Mono, `01` Legato |
@@ -119,6 +121,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `LRAT1` | FX 1's lanes' speed: `÷` slower, `×` faster. `LRAT2` `LRAT3` too |
 | `LSTA1` | FX 1's lanes' first row, rows on from their own. `LSTA2` `LSTA3` too |
 | `LJMP1` | FX 1's lanes' chance of any of their rows instead. `LJMP2` `LJMP3` too |
+| `LHLD1` | FX 1's lanes' chance of the row before again. `LHLD2` `LHLD3` too |
 
 Each voice has its own settings, and the track keeps every voice's values, so
 changing voice and back loses nothing. A lock for a voice the track isn't
@@ -243,6 +246,7 @@ These have no mark.
 | `ACU` | Move the row's note on each time it plays: see **Accumulators** |
 | `ARP` | Go round the note, `x` up and `y` up: see **Arpeggios** |
 | `RND` | Vary the note, or the lock to its left, by chance: see **Variations** |
+| `SED` | Reseed the track's dice with `xx` from this row: see **Reseeding** |
 | `SLD` | Slide the row's locks to the next note's values: see **Slides** |
 
 A unit is a sixth of a step, so `DEL03` delays by half a step. The step is the
@@ -600,6 +604,29 @@ the `:seed`, the track and the step, so a render repeats. `DLP`, `DMU` and
 `JMP` is, and a lane, a mod slot or a macro moves them too. With `Dice mutate`
 at `FF` an `RND` or a `CND` chance rolls just as it does with the loop off.
 
+### Reseeding
+
+`SED` reseeds the track's dice from its row on, as the M8's `SED` does: its
+value is a seed of its own, so whatever is rolled after it is rolled the same
+way each time the row plays. Put `SED 2A` on a phrase's first row and its `CHA`s,
+`RND`s and `CND` chances play the same every pass, while the same phrase without
+it plays a new run each time. Another value rolls another run, so try a few
+until one sounds right, then keep it. The seed is the value's alone, so the
+passage plays the same in any song, whatever its `:seed`; two tracks with the same
+`SED` still roll apart, as two tracks of one song do.
+
+From the row on, everything is counted from it: each `CHA`, `RND`, `CND`
+chance and row `CDLT` thins, the phrase's `Jump` and each lane's `Jump`, the
+dice loop, which empties and fills again from the reseeded steps, the groove's
+random timing, and an arpeggio's or an accumulator's `Random`. A Steps slot's
+`Mutate` and `Jump`, an LFO's random shapes, a synth's drift and the generators'
+own seeds aren't touched. It holds until the next `SED` on the track, or until
+playing starts again, so playing from a row after it rolls from the `:seed`
+until an `SED` plays. It's read before the row plays, as `JMP` is, from the row
+the walk reaches, so the row's own `Jump` is rolled from the new seed, and a
+failed `CND` doesn't hold it back. In a lane, it reseeds as each of its rows
+with one starts.
+
 ## Groove
 
 A groove is a track's feel: a short pattern of pushes, how late or early each
@@ -684,6 +711,14 @@ the other way up; `ORDX` and `ORDY` are the order's numbers, `00` its own.
 `PLEN` rows more or fewer than the loop's, `80` as written, and `PSTA` the row it
 starts on. `CUE` `01` has a new window, and a lane's new length, rate or start,
 wait for their loop to come round. See **Order** in **Editing**.
+
+`CORD` and `CJMP` move the chain's walk, as the `Phrase` device's `Chain` and
+`Chain jump` do: `CORD` the order its phrases play in, `00` forward as written,
+then the list of orders, and `CJMP` the chance a phrase of the chain plays any of
+its phrases instead. They're read as the chain moves on to its next phrase and
+held for it, so a lock still holding then, from a row at or after the last note
+of the phrase before, sets the next phrase alone. See **Chain order** in
+**Chains**.
 
 ## Speed
 

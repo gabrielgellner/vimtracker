@@ -66,6 +66,8 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             TrackControl::DiceMutate => "dicemutate",
             TrackControl::DiceJump => "dicejump",
             TrackControl::Swing => "swing",
+            TrackControl::ChainOrder => "chainorder",
+            TrackControl::ChainJump => "chainjump",
         },
         Control::Level => "level",
         Control::Trim => "trim",
@@ -136,5 +138,6 @@ pub fn key(control: Control, track: &Track) -> &'static str {
         Control::Lane(_, LaneField::Rate) => "rate",
         Control::Lane(_, LaneField::Start) => "start",
         Control::Lane(_, LaneField::Jump) => "jump",
+        Control::Lane(_, LaneField::Hold) => "hold",
     }
 }

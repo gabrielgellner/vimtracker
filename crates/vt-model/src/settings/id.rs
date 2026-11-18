@@ -103,7 +103,10 @@ const LATEST_LANE_START: usize = LATER_SAMPLER_START + SAMPLER.len() - EARLY_SAM
 /// A lane's `Start` and `Jump`, each one setting a column at its own place in the table.
 const LANE_START_AT: usize = EARLY_LANE;
 const LANE_JUMP_AT: usize = EARLY_LANE + 1;
-const _: () = assert!(LANE.len() == LANE_JUMP_AT + 1);
+/// Each FX column's lane's setting added after its `Jump`, `Hold` (decision 422).
+const LAST_LANE_START: usize = LATEST_LANE_START + FX_SLOTS;
+const LANE_HOLD_AT: usize = EARLY_LANE + 2;
+const _: () = assert!(LANE.len() == LANE_HOLD_AT + 1);
 
 /// What a setting belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -238,6 +241,11 @@ impl SettingId {
     /// How late the second step of each pair of a track's lands, on top of its groove, from
     /// 50.0% at `00` to 75.0% at `FA`, as [`crate::groove::swing_tenths`] reads it (decision 420).
     pub const SWING: Self = Self(LATER_TRACK_START as u16 + 23);
+    /// The order a track's chain's turns are walked in, a place in the list of orders, `00`
+    /// forward as written (decision 423).
+    pub const CHAIN_ORDER: Self = Self(LATER_TRACK_START as u16 + 24);
+    /// The chance each turn of a track's chain plays any of its phrases instead (decision 424).
+    pub const CHAIN_JUMP: Self = Self(LATER_TRACK_START as u16 + 25);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.
@@ -253,7 +261,7 @@ impl SettingId {
     pub const SAMPLE_REVERSE: Self = Self(LATER_SAMPLER_START as u16);
 
     /// How many settings there are.
-    pub const COUNT: usize = LATEST_LANE_START + FX_SLOTS;
+    pub const COUNT: usize = LAST_LANE_START + FX_SLOTS;
 
     /// Every setting, in the table's order.
     pub fn all() -> impl Iterator<Item = Self> {
@@ -376,8 +384,10 @@ impl SettingId {
             Some(Self((LANES_START + slot * EARLY_LANE + setting) as u16))
         } else if setting == LANE_START_AT {
             Some(Self((LATER_LANE_START + slot) as u16))
-        } else {
+        } else if setting == LANE_JUMP_AT {
             Some(Self((LATEST_LANE_START + slot) as u16))
+        } else {
+            Some(Self((LAST_LANE_START + slot) as u16))
         }
     }
 
@@ -408,6 +418,9 @@ impl SettingId {
     /// What it belongs to, and its place among that owner's settings.
     pub fn owner(self) -> (Owner, usize) {
         let at = self.index();
+        if at >= LAST_LANE_START {
+            return (Owner::Lane(at - LAST_LANE_START), LANE_HOLD_AT);
+        }
         if at >= LATEST_LANE_START {
             return (Owner::Lane(at - LATEST_LANE_START), LANE_JUMP_AT);
         }

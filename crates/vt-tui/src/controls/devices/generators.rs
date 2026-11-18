@@ -182,8 +182,8 @@ impl DeviceSpec {
         })
     }
 
-    /// An FX column's lane's `Length`, `Rate`, `Start` and `Jump`, the track's, which move every phrase's lane on
-    /// the column, as a device of its own, `Lane`, named for its column.
+    /// An FX column's lane's `Length`, `Rate`, `Start`, `Jump` and `Hold`, the track's, which move
+    /// every phrase's lane on the column, as a device of its own, `Lane`, named for its column.
     pub(crate) fn lane(slot: usize) -> Self {
         let mut grid = [[None; DEVICE_COLUMNS]; GRID_ROWS];
         grid[0][0] = Some(Control::Lane(slot, LaneField::Length));
@@ -191,6 +191,9 @@ impl DeviceSpec {
         grid[0][2] = Some(Control::Lane(slot, LaneField::Start));
         // How often a row plays any of the lane's rows instead, beside where it starts.
         grid[0][3] = Some(Control::Lane(slot, LaneField::Jump));
+        // How often a row keeps the one before, under the row of four, which `Jump` filled
+        // (decision 422).
+        grid[1][0] = Some(Control::Lane(slot, LaneField::Hold));
         Self {
             identity: format!("FX{} {LANE}", slot + 1),
             switchable: false,
@@ -202,7 +205,8 @@ impl DeviceSpec {
 
     /// The track's settings that move the walk of its phrases' rows, `Order`, `Reverse`,
     /// `Order X` and `Order Y`, with the window's `Length` and `Start` and its `Cue` under them,
-    /// as a device of their own, `Phrase` (decisions 400 to 402).
+    /// and the chain's `Order` and `Jump` at the foot, as a device of their own, `Phrase`
+    /// (decisions 400 to 402, 423 and 424).
     pub(crate) fn phrase() -> Self {
         let mut grid = [[None; DEVICE_COLUMNS]; GRID_ROWS];
         for (column, control) in WALK_CONTROLS.into_iter().enumerate() {
@@ -213,6 +217,9 @@ impl DeviceSpec {
         grid[1][1] = Some(Control::Base(TrackControl::PhraseStart));
         // Whether a turn of the window, or of a lane's, waits for its loop (decision 402).
         grid[1][2] = Some(Control::Base(TrackControl::Cue));
+        // The walk of the chain's phrases under the walk of their rows (decisions 423 and 424).
+        grid[2][0] = Some(Control::Base(TrackControl::ChainOrder));
+        grid[2][1] = Some(Control::Base(TrackControl::ChainJump));
         Self {
             identity: PHRASE.to_owned(),
             switchable: false,

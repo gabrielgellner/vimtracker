@@ -39,6 +39,7 @@ pub enum LaneField {
     Rate,
     Start,
     Jump,
+    Hold,
 }
 
 impl LaneField {
@@ -51,15 +52,34 @@ impl LaneField {
             Self::Rate => 1,
             Self::Start => 2,
             Self::Jump => 3,
+            Self::Hold => 4,
         }
     }
 }
 
 /// What the status line calls each FX column's lane's settings.
-const LANE_NAMES: [[&str; 4]; FX_SLOTS] = [
-    ["FX1 Length", "FX1 Rate", "FX1 Start", "FX1 Jump"],
-    ["FX2 Length", "FX2 Rate", "FX2 Start", "FX2 Jump"],
-    ["FX3 Length", "FX3 Rate", "FX3 Start", "FX3 Jump"],
+const LANE_NAMES: [[&str; 5]; FX_SLOTS] = [
+    [
+        "FX1 Length",
+        "FX1 Rate",
+        "FX1 Start",
+        "FX1 Jump",
+        "FX1 Hold",
+    ],
+    [
+        "FX2 Length",
+        "FX2 Rate",
+        "FX2 Start",
+        "FX2 Jump",
+        "FX2 Hold",
+    ],
+    [
+        "FX3 Length",
+        "FX3 Rate",
+        "FX3 Start",
+        "FX3 Jump",
+        "FX3 Hold",
+    ],
 ];
 
 /// One setting on the page.
@@ -174,6 +194,8 @@ impl Control {
             Self::Base(TrackControl::DiceMutate) => "Dice mutate",
             Self::Base(TrackControl::DiceJump) => "Dice jump",
             Self::Base(TrackControl::Swing) => "Swing",
+            Self::Base(TrackControl::ChainOrder) => "Chain",
+            Self::Base(TrackControl::ChainJump) => "Jump",
             Self::Choke => "Choke",
             Self::Group => "Group",
             Self::Role => "Role",
@@ -222,6 +244,7 @@ impl Control {
             Self::Lane(_, LaneField::Rate) => "Rate",
             Self::Lane(_, LaneField::Start) => "Start",
             Self::Lane(_, LaneField::Jump) => "Jump",
+            Self::Lane(_, LaneField::Hold) => "Hold",
         }
     }
 
@@ -400,7 +423,9 @@ impl Control {
                 | TrackControl::DiceLoop
                 | TrackControl::DiceMutate
                 | TrackControl::DiceJump
-                | TrackControl::Swing,
+                | TrackControl::Swing
+                | TrackControl::ChainOrder
+                | TrackControl::ChainJump,
             )
             | Self::Choke
             | Self::Group
@@ -453,7 +478,8 @@ impl Control {
             | TrackControl::PhraseStart
             | TrackControl::ChanceTarget
             | TrackControl::Cue
-            | TrackControl::DiceLoop,
+            | TrackControl::DiceLoop
+            | TrackControl::ChainOrder,
         ) = self
         {
             return false;
@@ -517,6 +543,7 @@ impl Control {
                         | TrackControl::ChanceTarget
                         | TrackControl::Cue
                         | TrackControl::DiceLoop
+                        | TrackControl::ChainOrder
                 )
         )
     }

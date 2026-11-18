@@ -765,6 +765,51 @@ mod tests {
         total
     }
 
+    /// Each track's chain of five phrases, one of them shorter, walked through every order with
+    /// its jump turned every block, from step 0 so turns start often (decisions 423 and 424).
+    #[test]
+    fn the_chain_walk_moving_every_block_never_allocates_in_the_callback() {
+        use vt_model::song::{Chain, ChainEntry};
+        let chained = || {
+            let mut song = song(8, 4);
+            for track in song.tracks.iter_mut().take(8) {
+                let mut short = (**track.phrases.get(&0).unwrap()).clone();
+                short.set_len(2);
+                track.phrases.insert(1, Arc::new(short));
+                let entries = [0, 1, 0, 0, 1]
+                    .map(|phrase| ChainEntry {
+                        phrase,
+                        transpose: 0,
+                    })
+                    .to_vec();
+                track.chains.insert(
+                    0,
+                    Arc::new(Chain {
+                        entries,
+                        label: String::new(),
+                    }),
+                );
+            }
+            song
+        };
+        let pool = samples();
+        let engine = Engine::new(48_000, published(chained(), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 0..200 {
+            let mut next = chained();
+            for (at, track) in next.tracks.iter_mut().take(8).enumerate() {
+                track.chain_order = ((round + at) % 30) as u8;
+                track.chain_jump = ((round * 37 + at * 11) % 256) as u8;
+            }
+            handle.publish(published(next, &pool));
+            violations += blocks(&mut rt, 1);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
     /// Lanes changing, their divisions too, and each track's `Length` and `Rate` for every FX
     /// column turned every block, with `Cue` on for half the tracks (decision 402).
     #[test]
@@ -790,6 +835,7 @@ mod tests {
                         rate: ((round * 7 + slot) % vt_model::lane::LANE_RATES.len()) as u8,
                         start: ((round * 11 + slot) % 9) as u8,
                         jump: ((round * 13 + slot) % 3 * 0x40) as u8,
+                        hold: ((round * 17 + slot) % 3 * 0x50) as u8,
                     };
                 }
             }
@@ -994,6 +1040,46 @@ mod tests {
                 track.dice_jump = ((round * 53 + at * 7) % 256) as u8;
             }
             handle.publish(published(next, &pool));
+            violations += blocks(&mut rt, 1);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
+    /// Tracks reseeding their dice with `SED`s on rows and in a lane, over rows that roll `CHA`,
+    /// `RND` and `%`, with `Jump`, a lane's `Jump` and the dice loop on, each turned every block
+    /// (decision 421).
+    #[test]
+    fn reseeding_every_block_never_allocates_in_the_callback() {
+        use vt_model::lane::Lane;
+        let rows = [
+            "C-3 -- cha:80 rnd:F3 sed:2A",
+            "D-3 -- rnd:F7 cnd:E8 ---",
+            "E-3 -- sed:07 cha:40 ---",
+            "--- -- --- --- ---",
+        ];
+        let reseeding = |round: usize| {
+            let mut song = song(8, 16);
+            for (at, track) in song.tracks.iter_mut().take(8).enumerate() {
+                track.jump = ((round * 29 + at * 13) % 256) as u8;
+                track.lanes[2].jump = ((round * 31 + at * 5) % 256) as u8;
+                track.dice_loop = ((round + at) % 24) as u8;
+                track.dice_mutate = ((round * 37 + at * 11) % 256) as u8;
+                let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+                for step in 0..16 {
+                    *phrase.step_mut(step).unwrap() = rows[step % rows.len()].parse().unwrap();
+                }
+                phrase.set_lane(2, (at % 2 == 0).then(|| Lane::new(0, 3)));
+            }
+            song
+        };
+        let pool = samples();
+        let engine = Engine::new(48_000, published(reseeding(0), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 0..200 {
+            handle.publish(published(reseeding(round), &pool));
             violations += blocks(&mut rt, 1);
             handle.pump();
         }

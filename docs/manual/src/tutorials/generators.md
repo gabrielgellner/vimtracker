@@ -529,6 +529,8 @@ their `Lane` devices. Track 2 is the shipped patch `Acid loops`, its five loops 
     a time.
 *   `FX1 Lane` `Jump` `FF` on track 1: each length is any of the lane's four, as Kria's random
     direction on one part. At `80` about half are, and the rest count on.
+*   `FX1 Lane` `Hold` `80` on track 1: about half the lengths keep the one before, as a step whose
+    probability fails in Kria keeps its value. At `FF` the first length plays throughout.
 
 ## Metropolix
 
@@ -1449,6 +1451,10 @@ trunk's `Followed by 1`.
     eight bars, so the last branch is always new.
 *   Map a macro to `Mutation` on the Gen page with `M`, and one knob turns every branch at once.
 *   `Space g a` on a branch keeps it as plain notes, to edit by hand; it stops following.
+*   Bloom's `Path` live, track 1's Gen page, `Phrase` device: `Chain` `Shuffle`, the eight bars
+    dealt in a new order each time round; `Chain` `Up-down`, out to branch `04` and back;
+    the `Jump` beside it `40`, now and then a bar plays any of the nine. A macro mapped to `Chain` with
+    `M` turns the path from a knob.
 
 ## Shuffling Clock Multiplier
 

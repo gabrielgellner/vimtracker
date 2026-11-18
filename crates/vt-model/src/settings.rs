@@ -7,7 +7,7 @@ use crate::constants::{MAX_LEVEL, UNITY_LEVEL};
 use crate::dice::DICE_LOOP_NAMES;
 use crate::groove::{GROOVE_CHOICES, MOST_SWING};
 use crate::lane::{LANE_RATES, LENGTH_AS_WRITTEN, RATE_AS_WRITTEN};
-use crate::order::{MOST_ORDER_NUMBER, ORDER_AS_WRITTEN, WINDOW_AS_WRITTEN};
+use crate::order::{CHAIN_ORDER_NAMES, MOST_ORDER_NUMBER, ORDER_AS_WRITTEN, WINDOW_AS_WRITTEN};
 use std::borrow::Cow;
 
 use crate::param::{Choice, Descriptor, Reading, Typing};
@@ -390,7 +390,7 @@ const TRACK_GROUPS: [&str; 16] = [
 
 /// The track's own settings added since places were fixed, at the end of the table so none moves
 /// (#718): the track's own after [`TRACK`]'s, in the order they came.
-const LATER_TRACK: [Entry; 24] = [
+const LATER_TRACK: [Entry; 26] = [
     // Whether a synth's oscillators run on from note to note or start again on each, read as a
     // note starts, so a lock on its row sets it for that note (decision 370).
     Entry {
@@ -650,12 +650,30 @@ const LATER_TRACK: [Entry; 24] = [
         default: 0,
         place: Place::Own,
     },
+    // The order the chain's turns are walked in and the chance a turn plays any of its phrases,
+    // read as a turn starts, so a lock still holding then, from the phrase before, sets them for
+    // the turn (decisions 423 and 424).
+    Entry {
+        meaning: "the order the chain's phrases play in, as an order walks a phrase's rows",
+        key: "chainorder",
+        name: "Chain order",
+        label: Some("CORD"),
+        kind: Kind::Stepped {
+            choices: &CHAIN_ORDER_NAMES,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Own,
+    },
+    level("chainjump", "Chain jump", "CJMP", 0x00)
+        .means("the chance each turn of the chain plays any of its phrases instead"),
 ];
 /// What each of [`LATER_TRACK`] is listed with.
-const LATER_TRACK_GROUPS: [&str; 24] = [
+const LATER_TRACK_GROUPS: [&str; 26] = [
     "Machine", "Machine", "Filter", "Machine", "Machine", "Filter", "Filter", "Filter", "Filter",
     "Filter", "Filter", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
-    "Machine", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
+    "Machine", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
+    "Machine",
 ];
 
 /// What a row's chance decides, `CTGT`'s choices: the whole row, or each of its pulses and
@@ -687,7 +705,7 @@ const SLOT_OWN: [Entry; 1] = [Entry {
 /// Each FX column's lane's, which move every phrase's lane on that column from its own: how many
 /// rows it's heard for, one a step either side of `80`, and how much slower or faster its rows go.
 /// With the column's number after each, as `LLEN1`.
-const LANE: [Entry; 4] = [
+const LANE: [Entry; 5] = [
     Entry {
         meaning: "how many rows this column's lanes are heard for, more or fewer",
         key: "length",
@@ -732,6 +750,10 @@ const LANE: [Entry; 4] = [
     // the phrase's.
     level("jump", "Jump", "LJMP", 0x00)
         .means("the chance each of this column's lanes' rows plays any of its rows instead"),
+    // Added after `Jump`, so its places come after its (decision 422): the chance each of the
+    // lane's rows keeps the row before it instead of playing its own, as Kria's probability does.
+    level("hold", "Hold", "LHLD", 0x00)
+        .means("the chance each of this column's lanes' rows keeps the one before instead"),
 ];
 
 /// How many of a lane's settings have their places before the track's own added later: those

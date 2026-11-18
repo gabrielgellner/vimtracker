@@ -31,7 +31,7 @@ const TRACK_MEANINGS: [&str; 16] = [
 
 /// The track's own settings in the order lists show them: the filter, then output, then pitch,
 /// velocity, gate, time and glide.
-const TRACK_ORDER: [SettingId; 40] = [
+const TRACK_ORDER: [SettingId; 42] = [
     SettingId::CUT,
     SettingId::RES,
     SettingId::FILTER_TYPE,
@@ -68,6 +68,8 @@ const TRACK_ORDER: [SettingId; 40] = [
     SettingId::PHRASE_LENGTH,
     SettingId::PHRASE_START,
     SettingId::CUE,
+    SettingId::CHAIN_ORDER,
+    SettingId::CHAIN_JUMP,
     SettingId::GLIDE,
     SettingId::GLIDE_MODE,
     SettingId::PHASE,
@@ -221,8 +223,12 @@ impl SettingId {
                 "Which row FX{}'s lane starts on, rows on from its own first",
                 slot + 1
             ),
-            (Owner::Lane(slot), _) => format!(
+            (Owner::Lane(slot), 3) => format!(
                 "The chance each row of FX{}'s lane plays any of its rows instead",
+                slot + 1
+            ),
+            (Owner::Lane(slot), _) => format!(
+                "The chance each row of FX{}'s lane keeps the one before instead",
                 slot + 1
             ),
             (Owner::Sampler, 0) => "Which of the bank's samples plays".to_owned(),
@@ -431,7 +437,10 @@ mod tests {
         let own = TRACK_ORDER.len();
         assert_eq!(offered[..own], TRACK_ORDER);
         let lanes = SettingId::lanes().count();
-        assert_eq!(lanes, 12, "Length, Rate, Start and Jump for each FX column");
+        assert_eq!(
+            lanes, 15,
+            "Length, Rate, Start, Jump and Hold for each FX column"
+        );
         assert_eq!(offered.len(), own + 4 + lanes);
         assert_eq!(
             offered[own],

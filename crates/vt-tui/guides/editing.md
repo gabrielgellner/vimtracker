@@ -1210,7 +1210,11 @@ chance each of the lane's rows plays any of its own rows instead of the next, as
 `Jump` is the phrase's: `00` never, `FF` every row. A jump takes one row's place,
 for all its steps, and the lane carries on counting from where it was; it picks
 from all the lane's own rows, whatever its `Length` and `Start`, and the playhead
-follows it. A step locks them with `LLEN1`, `LRAT1`, `LSTA1` and `LJMP1`, `2` and
+follows it. `Hold` is the chance each of the lane's rows plays the row the lane
+played before again instead of its own, so its value holds, as a failed roll does
+in Kria: `00` never, `FF` the lane's first row throughout. A hold, too, takes one
+row's place for all its steps, and the lane counts on. A step locks them with
+`LLEN1`, `LRAT1`, `LSTA1`, `LJMP1` and `LHLD1`, `2` and
 `3` for the other columns, and a mod slot, a macro and the Roto turn them too.
 
 `gg`, `G`, `{`, `}`, `ib`, `ic` and `ip` go by the loop. `5G` means row `04`.
