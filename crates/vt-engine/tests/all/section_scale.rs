@@ -153,7 +153,7 @@ fn a_section_without_a_scale_plays_in_the_songs() {
         let unset = song_of(None);
         let plain = render(&unset, 2 * ROWS);
         assert_eq!(render(&song_of(Some(C_MAJOR)), 2 * ROWS), plain);
-        let mut one = unset.clone();
+        let mut one = unset;
         one.sections.truncate(1);
         let once = render(&one, ROWS);
         assert_eq!(&plain[..ROWS * STEP], &once[..]);
