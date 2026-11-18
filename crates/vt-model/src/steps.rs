@@ -196,60 +196,68 @@ impl FromStr for StepRate {
     }
 }
 
-/// What a Steps slot does at the end of its `Length`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// What a Steps slot does at the end of its `Length`. All but `Once` go round from its `From`,
+/// the steps before it played once as an intro (decision 428).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Loop {
     /// Plays to the end and holds the last, the Cirklon's `clip`.
     Once,
-    /// Plays once, then loops from this step, counted from 0: the M8's `HOP`, and from the first
-    /// step the Cirklon's `rtz`.
-    From(u8),
-    /// Goes back and forth, the Cirklon's `rvtz`.
+    /// Plays once, then loops from `From`: the M8's `HOP`, and from the first step the Cirklon's
+    /// `rtz`.
+    #[default]
+    Loop,
+    /// Goes back and forth between the end and `From`, the Cirklon's `rvtz`.
     Bounce,
-    /// Plays each time round in a new order, dealt from the project's seed, so a render repeats.
+    /// Plays the steps from `From` on in a new order each time round, dealt from the project's
+    /// seed, so a render repeats.
     Shuffle,
-}
-
-impl Default for Loop {
-    fn default() -> Self {
-        Self::From(0)
-    }
 }
 
 impl Loop {
     /// Every way, in the order `+` goes through them.
-    pub(crate) const ALL: [Self; STEPS + 3] = {
-        let mut all = [Self::Once; STEPS + 3];
-        let mut at = 0;
-        while at < STEPS {
-            all[at + 1] = Self::From(at as u8);
-            at += 1;
+    pub const ALL: [Self; 4] = [Self::Once, Self::Loop, Self::Bounce, Self::Shuffle];
+
+    /// The name in the title.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Once => "Once",
+            Self::Loop => "Loop",
+            Self::Bounce => "Bounce",
+            Self::Shuffle => "Shuffle",
         }
-        all[STEPS + 1] = Self::Bounce;
-        all[STEPS + 2] = Self::Shuffle;
-        all
-    };
+    }
 
     /// What it does, for a list to choose from.
     pub(crate) fn meaning(self) -> &'static str {
         match self {
             Self::Once => "plays to the end and holds the last",
-            Self::From(_) => "plays once, then loops from a step",
-            Self::Bounce => "goes back and forth",
-            Self::Shuffle => "a new order each time round",
+            Self::Loop => "plays once, then loops from its From",
+            Self::Bounce => "goes back and forth, down to its From",
+            Self::Shuffle => "a new order each time round, from its From",
         }
+    }
+
+    /// Whether it goes round from `From`, which `Once` ignores.
+    pub const fn uses_from(self) -> bool {
+        !matches!(self, Self::Once)
     }
 }
 
+crate::listed::listed!(Loop: meaning);
+
 impl fmt::Display for Loop {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Once => f.write_str("Once"),
-            Self::From(step) => write!(f, "from {}", step + 1),
-            Self::Bounce => f.write_str("Bounce"),
-            Self::Shuffle => f.write_str("Shuffle"),
-        }
+        f.write_str(self.name())
     }
+}
+
+/// Where a Steps slot's laps are counted from once its `From` has changed while it went round:
+/// the count a lap starts at, and which lap that is, for a `Shuffle`'s deal. Without one, its laps
+/// are counted from the end of its intro, as they always were (decision 428).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Lap {
+    pub at: i64,
+    pub number: i64,
 }
 
 fn is_default<T: Default + PartialEq>(value: &T) -> bool {
@@ -275,6 +283,11 @@ pub struct Steps {
     pub rate: StepRate,
     #[serde(rename = "loop", skip_serializing_if = "is_default")]
     pub looping: Loop,
+    /// The step `Loop`, `Bounce` and `Shuffle` go round from, counted from 0, the steps before it
+    /// played once as an intro; kept within `Length` as it plays, and ignored by `Once`. A change
+    /// while it goes round is taken up as the next lap starts (decision 428).
+    #[serde(skip_serializing_if = "is_default")]
+    pub from: u8,
     /// The chance each step's value is drawn again as it comes round, in percent: `0` plays the
     /// values as written, `100` a new one each time, and between them a loop that drifts, as the
     /// Turing Machine's knob does. Drawn from the project's seed, so a render repeats.
@@ -322,6 +335,7 @@ impl Default for Steps {
             start: 0,
             rate: StepRate::default(),
             looping: Loop::default(),
+            from: 0,
             mutate: 0,
             jump: 0,
             spread: EVEN_SPREAD,
@@ -343,10 +357,7 @@ impl Steps {
             && self.spread <= MAX_SPREAD
             && self.bias.unsigned_abs() <= MAX_BIAS.unsigned_abs()
             && self.smooth.abs() <= MAX_STEP
-            && match self.looping {
-                Loop::From(step) => usize::from(step) < STEPS,
-                _ => true,
-            }
+            && usize::from(self.from) < STEPS
     }
 
     /// The value `Mutate` draws from `draw`, the next number of its stream, `-FF` to `+FF`: at an
@@ -378,33 +389,105 @@ impl Steps {
     }
 
     /// Which step plays `count` steps after it started at `start`, counted from 0, under its
-    /// `Loop`. `key` deals a `Shuffle`'s orders.
+    /// `Loop` and `From`. `key` deals a `Shuffle`'s orders.
     pub fn step_at(&self, start: usize, count: i64, key: u64) -> usize {
+        self.step_on(start, count, key, self.from, None)
+    }
+
+    /// Which step plays `count` steps after it started at `start` under its `Loop`, going round
+    /// from `from`, counted from 0 and kept within its length, with its laps counted from `lap`
+    /// if `From` has changed as it went round, or else from the end of its intro. The intro plays
+    /// in order from `start`: to the end for `Loop` and `Bounce`, which then come back to `from`,
+    /// and up to `from` for `Shuffle`, which deals the rest. From the first step, each is as it
+    /// always was (decision 428).
+    pub fn step_on(&self, start: usize, count: i64, key: u64, from: u8, lap: Option<Lap>) -> usize {
         let length = self.played_count() as i64;
         let start = (start as i64).min(length - 1);
         let count = count.max(0);
-        let first = length - start;
+        let from = i64::from(from).min(length - 1);
+        let top = length - 1;
+        if self.looping == Loop::Once {
+            return (start + count).min(top) as usize;
+        }
+        let first = self.first_lap(start, from);
+        if lap.is_none() && count < first {
+            return (start + count) as usize;
+        }
+        let Lap { at, number } = lap.unwrap_or(Lap {
+            at: first,
+            number: 0,
+        });
+        let along = count - at;
         match self.looping {
-            Loop::Once => (start + count).min(length - 1) as usize,
-            Loop::From(from) => {
-                let from = i64::from(from).min(length - 1);
-                if count < first {
-                    (start + count) as usize
-                } else {
-                    (from + (count - first) % (length - from)) as usize
-                }
-            }
-            Loop::Bounce if length == 1 => 0,
+            Loop::Once | Loop::Loop => (from + along.rem_euclid(length - from)) as usize,
+            // Each lap starts at the end, goes down to `from` and comes back.
+            Loop::Bounce if top == from => top as usize,
             Loop::Bounce => {
-                let period = 2 * (length - 1);
-                let at = (start + count) % period;
-                (if at < length { at } else { period - at }) as usize
+                let down = top - from;
+                let turn = along.rem_euclid(2 * down);
+                (if turn <= down {
+                    top - turn
+                } else {
+                    turn - down + from
+                }) as usize
             }
             Loop::Shuffle => {
-                let at = start + count;
-                dealt(length as usize, at / length, key)[(at % length) as usize] as usize
+                let count = length - from;
+                let deal = number + along.div_euclid(count);
+                (from
+                    + i64::from(dealt(count as usize, deal, key)[along.rem_euclid(count) as usize]))
+                    as usize
             }
         }
+    }
+
+    /// The count its first lap starts at, from `start` and going round from `from`, both kept
+    /// within its length: the end of the intro. A `Loop`'s starts once the intro has reached the
+    /// end, a `Bounce`'s at the end, and a `Shuffle`'s at `from`, before the count starts if
+    /// `start` is past it, as its first deal is then played from part way in.
+    fn first_lap(&self, start: i64, from: i64) -> i64 {
+        let length = self.played_count() as i64;
+        match self.looping {
+            Loop::Once | Loop::Loop => length - start,
+            Loop::Bounce => length - 1 - start,
+            Loop::Shuffle => from - start,
+        }
+    }
+
+    /// How many counts a lap lasts going round from `from`, kept within its length: at least one.
+    fn lap_length(&self, from: u8) -> i64 {
+        let length = self.played_count() as i64;
+        let from = i64::from(from).min(length - 1);
+        match self.looping {
+            Loop::Bounce => (2 * (length - 1 - from)).max(1),
+            _ => length - from,
+        }
+    }
+
+    /// The lap after the one `count` is in, going round from `from` with laps counted from `lap`
+    /// or the intro's end, where a new `From` is taken up. None for `Once`, or while it's in its
+    /// intro, where `From` is taken at once as the intro doesn't play it.
+    pub fn next_lap(&self, start: usize, count: i64, from: u8, lap: Option<Lap>) -> Option<Lap> {
+        if self.looping == Loop::Once {
+            return None;
+        }
+        let length = self.played_count() as i64;
+        let start = (start as i64).min(length - 1);
+        let first = self.first_lap(start, i64::from(from).min(length - 1));
+        let Lap { at, number } = match lap {
+            Some(lap) => lap,
+            None if count < first => return None,
+            None => Lap {
+                at: first,
+                number: 0,
+            },
+        };
+        let each = self.lap_length(from);
+        let laps = (count.max(0) - at).div_euclid(each) + 1;
+        Some(Lap {
+            at: at + laps * each,
+            number: number + laps,
+        })
     }
 }
 
@@ -499,22 +582,139 @@ mod tests {
         (0..count).map(|at| steps.step_at(start, at, 7)).collect()
     }
 
+    fn from(length: u8, looping: Loop, from: u8) -> Steps {
+        Steps {
+            from,
+            ..steps(length, looping)
+        }
+    }
+
     #[test]
     fn each_loop_goes_through_the_steps_its_way() {
         assert_eq!(walk(&steps(4, Loop::Once), 0, 6), [0, 1, 2, 3, 3, 3]);
-        assert_eq!(walk(&steps(4, Loop::From(0)), 0, 6), [0, 1, 2, 3, 0, 1]);
-        // `from 3` plays once, then loops the last two, as the M8's `HOP` does.
-        assert_eq!(walk(&steps(4, Loop::From(2)), 0, 7), [0, 1, 2, 3, 2, 3, 2]);
+        assert_eq!(walk(&steps(4, Loop::Loop), 0, 6), [0, 1, 2, 3, 0, 1]);
+        // `From 3` plays once, then loops the last two, as the M8's `HOP` does.
+        assert_eq!(walk(&from(4, Loop::Loop, 2), 0, 7), [0, 1, 2, 3, 2, 3, 2]);
         assert_eq!(
             walk(&steps(4, Loop::Bounce), 0, 8),
             [0, 1, 2, 3, 2, 1, 0, 1]
         );
         assert_eq!(walk(&steps(1, Loop::Bounce), 0, 3), [0, 0, 0]);
         // From a later start, the first pass begins there.
-        assert_eq!(walk(&steps(4, Loop::From(0)), 2, 4), [2, 3, 0, 1]);
+        assert_eq!(walk(&steps(4, Loop::Loop), 2, 4), [2, 3, 0, 1]);
         assert_eq!(walk(&steps(4, Loop::Once), 2, 4), [2, 3, 3, 3]);
-        // A start or a loop past the length keeps within it.
-        assert_eq!(walk(&steps(3, Loop::From(9)), 5, 4), [2, 2, 2, 2]);
+        // A start or a `From` past the length keeps within it.
+        assert_eq!(walk(&from(3, Loop::Loop, 9), 5, 4), [2, 2, 2, 2]);
+        assert_eq!(walk(&from(3, Loop::Bounce, 9), 0, 6), [0, 1, 2, 2, 2, 2]);
+        assert_eq!(walk(&from(3, Loop::Shuffle, 9), 0, 6), [0, 1, 2, 2, 2, 2]);
+        // `Once` ignores `From`.
+        assert_eq!(walk(&from(4, Loop::Once, 2), 0, 6), [0, 1, 2, 3, 3, 3]);
+    }
+
+    /// How a step was found before `From` was a setting of its own, `from N` one of the loop's
+    /// list, kept to show each is found as it was.
+    fn as_it_was(looping: Loop, from: i64, length: i64, start: i64, count: i64, key: u64) -> usize {
+        let start = start.min(length - 1);
+        let first = length - start;
+        match looping {
+            Loop::Once => (start + count).min(length - 1) as usize,
+            Loop::Loop => {
+                let from = from.min(length - 1);
+                if count < first {
+                    (start + count) as usize
+                } else {
+                    (from + (count - first) % (length - from)) as usize
+                }
+            }
+            Loop::Bounce if length == 1 => 0,
+            Loop::Bounce => {
+                let period = 2 * (length - 1);
+                let at = (start + count) % period;
+                (if at < length { at } else { period - at }) as usize
+            }
+            Loop::Shuffle => {
+                let at = start + count;
+                dealt(length as usize, at / length, key)[(at % length) as usize] as usize
+            }
+        }
+    }
+
+    #[test]
+    fn each_old_from_and_each_loop_from_the_first_step_walk_as_they_did() {
+        for length in 1..=16_u8 {
+            for start in 0..16 {
+                // Every old `from N` is `Loop` with `From N`.
+                for at in 0..16 {
+                    let steps = from(length, Loop::Loop, at);
+                    for count in 0..80 {
+                        let was = as_it_was(
+                            Loop::Loop,
+                            i64::from(at),
+                            i64::from(length),
+                            start,
+                            count,
+                            9,
+                        );
+                        assert_eq!(steps.step_at(start as usize, count, 9), was);
+                    }
+                }
+                // `Bounce` and `Shuffle` from the first step, their turns and deals as they were.
+                for looping in [Loop::Once, Loop::Bounce, Loop::Shuffle] {
+                    let steps = steps(length, looping);
+                    for count in 0..80 {
+                        let was = as_it_was(looping, 0, i64::from(length), start, count, 9);
+                        assert_eq!(
+                            steps.step_at(start as usize, count, 9),
+                            was,
+                            "{looping} {length} {start} {count}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn bounce_and_shuffle_from_a_later_step_keep_the_ones_before_it_as_an_intro() {
+        // `From 5` on eight: 1 to 4 play once, then it bounces between the end and 5.
+        assert_eq!(
+            walk(&from(8, Loop::Bounce, 4), 0, 14),
+            [0, 1, 2, 3, 4, 5, 6, 7, 6, 5, 4, 5, 6, 7]
+        );
+        let shuffled = from(8, Loop::Shuffle, 4);
+        let walked = walk(&shuffled, 0, 4 + 4 * 6);
+        assert_eq!(walked[..4], [0, 1, 2, 3]);
+        for deal in walked[4..].chunks(4) {
+            let mut sorted = deal.to_vec();
+            sorted.sort_unstable();
+            assert_eq!(sorted, [4, 5, 6, 7], "{walked:?}");
+        }
+        assert_ne!(walked[4..8], walked[8..12], "dealt afresh each time round");
+        // A start past `From` has no intro, its first deal played from part way in.
+        let late = walk(&shuffled, 6, 2 + 4);
+        let mut deal = late[2..].to_vec();
+        deal.sort_unstable();
+        assert_eq!(deal, [4, 5, 6, 7], "{late:?}");
+    }
+
+    #[test]
+    fn laps_counted_from_a_change_of_from_go_round_from_there() {
+        // Looping the last four of eight, then from the third: the lap after count 9 starts at 12.
+        let steps = from(8, Loop::Loop, 4);
+        let lap = steps.next_lap(0, 9, 4, None).unwrap();
+        assert_eq!(lap, Lap { at: 12, number: 1 });
+        let walked: Vec<usize> = (12..20)
+            .map(|count| steps.step_on(0, count, 7, 2, Some(lap)))
+            .collect();
+        assert_eq!(walked, [2, 3, 4, 5, 6, 7, 2, 3]);
+        // In the intro there's no lap to wait for, and `Once` has none.
+        assert_eq!(steps.next_lap(0, 3, 4, None), None);
+        assert_eq!(from(8, Loop::Once, 4).next_lap(0, 30, 4, None), None);
+        // A bounce's lap starts back at the end.
+        let bounce = from(8, Loop::Bounce, 4);
+        let lap = bounce.next_lap(0, 8, 4, None).unwrap();
+        assert_eq!(lap.at, 13);
+        assert_eq!(bounce.step_on(0, lap.at, 7, 0, Some(lap)), 7);
     }
 
     #[test]

@@ -168,10 +168,20 @@ fn each_types_title_is_in_order_and_its_grid_places_each_setting() {
     use ModField::*;
     for kind in ModKind::ALL {
         let spec = kind.spec();
-        let title: Vec<ModField> = [Type, Mode, Loop, Jump, Spread, Bias, Polarity, Destination]
-            .into_iter()
-            .filter(|field| spec.title.contains(field))
-            .collect();
+        let title: Vec<ModField> = [
+            Type,
+            Mode,
+            Loop,
+            From,
+            Jump,
+            Spread,
+            Bias,
+            Polarity,
+            Destination,
+        ]
+        .into_iter()
+        .filter(|field| spec.title.contains(field))
+        .collect();
         assert_eq!(spec.title, title, "{kind:?}");
         assert_eq!(spec.title.first(), Some(&Type), "{kind:?}");
         assert_eq!(spec.title.last(), Some(&Destination), "{kind:?}");
@@ -497,6 +507,7 @@ fn the_lists_and_odd_times_are_lockable_own_settings_that_go_there_and_back() {
     let labels = [
         (ModKind::Lfo, ModField::Shape, "SHP4"),
         (ModKind::Steps, ModField::Loop, "LOOP4"),
+        (ModKind::Steps, ModField::From, "FROM4"),
         (ModKind::Adsr, ModField::Mode, "CRV4"),
         (ModKind::Ahd, ModField::Mode, "CRV4"),
         (ModKind::Drum, ModField::Mode, "CRV4"),
@@ -540,7 +551,8 @@ fn the_lists_and_odd_times_are_lockable_own_settings_that_go_there_and_back() {
         own(kind, field).unwrap().entry().kind.shown(value)
     };
     assert_eq!(shown(ModKind::Lfo, ModField::Shape, 0x0400), "Square");
-    assert_eq!(shown(ModKind::Steps, ModField::Loop, 0x1100), "Bounce");
+    assert_eq!(shown(ModKind::Steps, ModField::Loop, 0x0200), "Bounce");
+    assert_eq!(shown(ModKind::Steps, ModField::From, 0x0400), "5");
     assert_eq!(shown(ModKind::Lfo, ModField::Fade, 0x1600), "Off");
     assert_eq!(shown(ModKind::Lfo, ModField::Fade, 0x2300), "+1/4");
     assert_eq!(shown(ModKind::Ahd, ModField::Hold, 0xFF00), "Note");

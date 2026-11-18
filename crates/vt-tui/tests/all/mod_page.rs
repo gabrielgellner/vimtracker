@@ -1811,7 +1811,7 @@ fn a_slot_made_steps_with_no_depth_is_given_ff_and_its_title_has_its_mode_and_lo
         device_title(&app, "Mod 4").starts_with(&modulator_title(
             "Mod 4",
             true,
-            "Steps  Trig  from 1  Jump 0%  Spread 50%  Bias 0  → --- ─"
+            "Steps  Trig  Loop 1  Jump 0%  Spread 50%  Bias 0  → --- ─"
         )),
         "{}",
         device_title(&app, "Mod 4")
@@ -1820,12 +1820,12 @@ fn a_slot_made_steps_with_no_depth_is_given_ff_and_its_title_has_its_mode_and_lo
     press(&mut app, "gg0ll");
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Loop));
     press(&mut app, "=");
-    assert_eq!(slot(&app).steps.looping, Loop::From(1));
+    assert_eq!(slot(&app).steps.looping, Loop::Bounce);
     press(&mut app, "K");
     assert_eq!(app.overlays.picker.as_ref().unwrap().title, "Steps loop");
-    press(&mut app, "/bounce");
+    press(&mut app, "/shuffle");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(slot(&app).steps.looping, Loop::Bounce);
+    assert_eq!(slot(&app).steps.looping, Loop::Shuffle);
 }
 
 /// The Mod page as the author's screen draws it, a line at a time.
@@ -2949,10 +2949,10 @@ fn a_steps_slots_lists_find_a_name_before_a_meaning_and_each_word_on_its_own() {
 fn a_steps_jump_is_in_its_title_after_its_loop_and_turns_as_any_setting() {
     let (mut app, _realtime) = with_steps();
     let slot = |app: &App| app.song().tracks[0].mods[3];
-    press(&mut app, "lll");
+    press(&mut app, "llll");
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Jump));
     assert!(
-        device_title(&app, "Mod 4").contains("from 1  Jump 0%  Spread 50%"),
+        device_title(&app, "Mod 4").contains("Loop 1  Jump 0%  Spread 50%"),
         "{}",
         device_title(&app, "Mod 4")
     );
@@ -2981,6 +2981,47 @@ fn a_steps_jump_is_in_its_title_after_its_loop_and_turns_as_any_setting() {
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Jump));
 }
 
+/// Steps' `From` is in its title as its loop's number, `Loop 1`, a stop of its own between the
+/// loop and the jump: turned, typed from 1, described and mapped to a macro as any setting, and
+/// kept to the steps there are (decision 428).
+#[test]
+fn a_steps_from_is_the_loops_number_in_its_title_and_turns_as_any_setting() {
+    let (mut app, _realtime) = with_steps();
+    let slot = |app: &App| app.song().tracks[0].mods[3];
+    let title = |app: &App| device_title(app, "Mod 4");
+    press(&mut app, "lll");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::From));
+    press(&mut app, "=");
+    assert_eq!(slot(&app).steps.from, 1);
+    assert!(title(&app).contains("Loop 2  Jump 0%"), "{}", title(&app));
+    press(&mut app, "i5");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).steps.from, 4, "typed from 1");
+    assert!(title(&app).contains("Loop 5  Jump"), "{}", title(&app));
+    press(&mut app, "i20");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).steps.from, 4, "16 steps at most");
+    press(&mut app, " d");
+    let said = vt_tui::screen::describe::text(&app).expect("a line");
+    assert!(said.contains("From"), "{said}");
+    press(&mut app, " d");
+    press(&mut app, "M2");
+    let from = SettingId::mod_own(3, ModField::From.own(ModKind::Steps).unwrap()).unwrap();
+    let held = app.song().tracks[0].macro_holding(vt_model::macros::MacroTarget::Setting(from));
+    assert_eq!(held.map(|(at, _)| at), Some(1));
+    assert_eq!(from.label().as_deref(), Some("FROM4"));
+    // `h` goes back to the loop, whose list is four now, and `l` twice on to the jump.
+    press(&mut app, "h");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Loop));
+    press(&mut app, "K");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().items().len(), 4);
+    press(&mut app, "/once");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).steps.looping, Loop::Once);
+    press(&mut app, "ll");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Jump));
+}
+
 /// Steps' `Spread` and `Bias` are in its title after its jump, as `Spread 50%  Bias 0`, stops `h`
 /// and `l` go through there: turned, typed, described and mapped to a macro as the grid's
 /// settings are (decision 403).
@@ -2994,7 +3035,7 @@ fn a_steps_spread_and_bias_are_in_its_title_after_its_jump_and_turn_as_any_setti
         "{}",
         title(&app)
     );
-    press(&mut app, "llll");
+    press(&mut app, "lllll");
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Spread));
     press(&mut app, "5-");
     assert_eq!(slot(&app).steps.spread, 45);

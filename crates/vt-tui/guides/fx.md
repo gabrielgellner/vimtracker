@@ -93,7 +93,8 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `LMOD4` | An LFO's mode: `00` Free, `01` Trig, `02` Hold. `LMOD5` `LMOD6` too |
 | `FADE4` | An LFO's fade: `16` Off, below out, above in. `FADE5` `FADE6` too |
 | `SMOD3` | A Steps slot's mode: `00` Trig, `01` Free, `02` Note |
-| `LOOP3` | A Steps slot's loop: `00` Once, `01` from 1, `11` Bounce, `12` Shuffle |
+| `LOOP3` | A Steps slot's loop: `00` Once, `01` Loop, `02` Bounce, `03` Shuffle |
+| `FROM3` | The step a Steps slot loops from: `00` the first to `0F` the 16th |
 | `CRV2` | An envelope's curve: `00` Exp, `01` Lin, `02` Snap. `CRV1` `CRV3` too |
 | `HOLD2` | An AHD's hold: `00` none, up to 2 s at `FE`, and the note at `FF` |
 | `PEAK2` | A drum envelope's peak, on its times' scale, as a macro turns it |

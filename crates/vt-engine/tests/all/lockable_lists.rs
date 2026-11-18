@@ -208,8 +208,11 @@ fn a_lock_on_each_is_heard_as_the_slot_written_that_way() {
         ("Fade", free_lfo, ModField::Fade, 0x28, {
             written(free_lfo, |slot| slot.lfo.fade = Fade::ALL[0x28])
         }),
-        ("Loop", steps, ModField::Loop, 0x11, {
+        ("Loop", steps, ModField::Loop, 0x02, {
             written(steps, |slot| slot.steps.looping = Loop::Bounce)
+        }),
+        ("From", steps, ModField::From, 0x03, {
+            written(steps, |slot| slot.steps.from = 3)
         }),
         ("Steps mode", steps, ModField::Mode, 0x02, {
             written(steps, |slot| slot.steps.mode = StepsMode::Note)
@@ -290,7 +293,7 @@ fn a_steps_mode_or_loop_lock_keeps_the_count_it_is_on() {
         "Trig starts it again at its note, and Free runs on from there"
     );
     // A `Loop` of `Bounce` from the eleventh step turns back from the count it's on.
-    let bounce = "--- -- mod3.loop:11 --- ---";
+    let bounce = "--- -- mod3.loop:02 --- ---";
     let mut texts = [""; 16];
     texts[0] = note;
     texts[10] = bounce;
@@ -358,7 +361,7 @@ fn a_macro_turns_an_lfos_shape() {
 }
 
 /// An LFO in Mod 2 moves Mod 3's `Loop` on it: a square a bar long, its top turning the loop up
-/// sixteen places from `from 1` to `Bounce`, and its bottom down to `Once`.
+/// one place from `Loop` to `Bounce`, and its bottom down to `Once`.
 #[test]
 fn an_lfo_moves_another_slots_loop() {
     let mut song = song(&["C-3 -- --- --- ---"]);
@@ -371,7 +374,7 @@ fn an_lfo_moves_another_slots_loop() {
             ..Lfo::default()
         },
     )
-    .with_depth(0x10);
+    .with_depth(0x01);
     track.mods[2] = ModSlot::steps(
         Some(SettingId::CUT),
         Steps {
@@ -446,4 +449,103 @@ fn a_shape_swap_doesnt_click_and_a_render_repeats() {
     assert!(jump > 1.0, "the swap moves the level: {jump}");
     assert!(swap < edge, "swap {swap:e}, edge {edge:e}");
     assert!(swap * 50.0 < jump, "swap {swap:e}, a step of {jump}");
+}
+
+/// Four steps in `Free` at `1/16`, as Mod 3, looping from `From 1` unless a step says.
+fn free_four(song: &mut Song) {
+    song.tracks[0].mods[2] = ModSlot::steps(
+        Some(SettingId::CUT),
+        Steps {
+            values: [0x10; 16],
+            length: 4,
+            mode: StepsMode::Free,
+            rate: StepRate::Note(240),
+            ..Steps::default()
+        },
+    );
+}
+
+/// The steps Mod 3 plays over so many steps of a song.
+fn walked(song: &Song, steps: usize) -> Vec<u8> {
+    let mut playing = Playing::new(song);
+    (0..steps)
+        .map(|step| playing.step_at(step * STEP + STEP / 2))
+        .collect()
+}
+
+/// A lock of Steps' `From` (`FROM3`) waits for the next time round: one part way through a lap
+/// lets it play out, and one on a lap's first step is taken there (decision 428).
+#[test]
+fn a_from_lock_is_taken_up_as_the_next_lap_starts() {
+    let note = "C-3 -- --- --- ---";
+    let lock = "--- -- mod3.from:02 --- ---";
+    let with_lock_at = |row: usize| {
+        let mut texts = [""; 16];
+        texts[0] = note;
+        texts[row] = lock;
+        let mut song = song(&texts);
+        free_four(&mut song);
+        song
+    };
+    // Locked on the second step of the second lap, it plays that lap out.
+    assert_eq!(
+        walked(&with_lock_at(5), 16),
+        [0, 1, 2, 3, 0, 1, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3]
+    );
+    // On a lap's first step, it's heard there.
+    assert_eq!(
+        walked(&with_lock_at(8), 16),
+        [0, 1, 2, 3, 0, 1, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3]
+    );
+    assert_eq!(
+        walked(&with_lock_at(4), 12),
+        [0, 1, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3]
+    );
+    // In the intro it's taken at once, which the intro doesn't play.
+    assert_eq!(walked(&with_lock_at(2), 8), [0, 1, 2, 3, 2, 3, 2, 3]);
+    // A `From` past the `Length` goes round from the last step.
+    let mut texts = [""; 16];
+    texts[0] = note;
+    texts[1] = "--- -- mod3.from:0C --- ---";
+    let mut song = song(&texts);
+    free_four(&mut song);
+    assert_eq!(walked(&song, 8), [0, 1, 2, 3, 3, 3, 3, 3]);
+    // And a render repeats.
+    assert_eq!(walked(&with_lock_at(5), 16), walked(&with_lock_at(5), 16));
+}
+
+/// An LFO in Mod 2 moves Mod 3's `From`: a square a bar long, its top four steps up from
+/// `From 1`, its bottom at `From 1`. The bottom comes as the intro ends, so the eight go round
+/// whole; the top comes as a lap starts, so the last four go round twice; then all eight again
+/// (decision 428).
+#[test]
+fn an_lfo_moves_another_slots_from_a_lap_at_a_time() {
+    let mut song = song(&["C-3 -- --- --- ---"]);
+    let track = &mut song.tracks[0];
+    track.mods[1] = ModSlot::lfo(
+        Some(own(2, ModKind::Steps, ModField::From)),
+        Lfo {
+            shape: Shape::Square,
+            rate: Rate::Note(3840),
+            ..Lfo::default()
+        },
+    )
+    .with_depth(0x04);
+    track.mods[2] = ModSlot::steps(
+        Some(SettingId::CUT),
+        Steps {
+            values: [0x10; 16],
+            length: 8,
+            mode: StepsMode::Free,
+            rate: StepRate::Note(240),
+            ..Steps::default()
+        },
+    );
+    let played = walked(&song, 32);
+    let all: Vec<u8> = (0..8).collect();
+    assert_eq!(played[..8], all, "the intro, {played:?}");
+    assert_eq!(played[8..16], all, "{played:?}");
+    assert_eq!(played[16..24], [4, 5, 6, 7, 4, 5, 6, 7], "{played:?}");
+    assert_eq!(played[24..32], all, "{played:?}");
+    assert_eq!(played, walked(&song, 32), "a render repeats");
 }

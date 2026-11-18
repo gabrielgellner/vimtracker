@@ -204,7 +204,8 @@ other three need two more things:
 | Rate | `Tick` (a sixth of the track's step, as `DEL` counts), or a division from `1/64` to `1 bar`. `--` in `Note` mode. | `1/16` |
 | Length | 1 to 16 | 8 |
 | Start | 1 to 16 | 1 |
-| Loop | `Once` (play to the end and hold the last), `from 1` to `from 16` (play once, then loop from that step, the M8's `HOP`), or `Bounce` | `from 1` |
+| Loop | `Once` (play to the end and hold the last), `Loop` (play once, then loop from `From`, the M8's `HOP`), `Bounce` or `Shuffle` (decision 428) | `Loop` |
+| From | 1 to 16: the step the loop goes round from, the ones before it an intro (decision 428) | 1 |
 | Smooth | off: steps; on: glides across each step's length | off |
 
 **Its output** is the step's value times `Depth / FF`. At `+FF` the values are heard as written:

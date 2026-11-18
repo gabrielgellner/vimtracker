@@ -78,9 +78,10 @@ impl Page {
 /// How many columns of settings a device has, its grid's.
 pub(crate) const DEVICE_COLUMNS: usize = GRID_COLUMNS;
 
-/// How many controls a device's title holds at most: three more than its grid's columns, as a
-/// Steps slot's has its type, mode, loop, jump, spread, bias and destination (decision 403).
-pub(crate) const TITLE_PLACES: usize = DEVICE_COLUMNS + 3;
+/// How many controls a device's title holds at most: four more than its grid's columns, as a
+/// Steps slot's has its type, mode, loop, from, jump, spread, bias and destination (decisions
+/// 403 and 428).
+pub(crate) const TITLE_PLACES: usize = DEVICE_COLUMNS + 4;
 
 /// How many rows the cursor goes through in a device: its title, then its grid's.
 pub(crate) const DEVICE_ROWS: usize = 1 + GRID_ROWS;

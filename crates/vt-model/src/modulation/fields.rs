@@ -60,11 +60,12 @@ pub enum ModField {
     Phase,
     Deform,
     Fade,
-    /// Steps': how many it plays, where each note starts it, and what it does at the end, which
-    /// is in its title.
+    /// Steps': how many it plays, where each note starts it, what it does at the end and the step
+    /// it goes round from, the last two in its title.
     Length,
     Start,
     Loop,
+    From,
     /// Steps': the chance each value is drawn again as it comes round, the chance each step it
     /// moves on to is one at random, and how it goes from one to the next.
     Mutate,
@@ -109,6 +110,7 @@ pub const MOD_OWN_FIELDS: [ModField; MOD_OWN_SETTINGS] = [
     ModField::Ratchet,
     ModField::Spread,
     ModField::Bias,
+    ModField::From,
 ];
 
 /// Where an envelope's curve, an LFO's mode and Steps' mode are among [`MOD_OWN_FIELDS`].
@@ -163,6 +165,7 @@ impl ModField {
             Self::Length => "Length",
             Self::Start => "Start",
             Self::Loop => "Loop",
+            Self::From => "From",
             Self::Mutate => "Mutate",
             Self::Jump => "Jump",
             Self::Spread => "Spread",
@@ -216,6 +219,7 @@ impl ModField {
             Self::Length => "how many of its values it plays",
             Self::Start => "the value each note starts it on",
             Self::Loop => "what it does once it reaches its last value",
+            Self::From => "the step it goes round from, the ones before it played once",
             Self::Mutate => "the chance each value is drawn again as it comes round",
             Self::Jump => "the chance each step goes to one of its values at random",
             Self::Spread => "how far the values Mutate draws stray, from one value to the two ends",
@@ -409,6 +413,7 @@ pub const MOD_SPECS: [ModSpec; ModKind::ALL.len()] = [
             ModField::Type,
             ModField::Mode,
             ModField::Loop,
+            ModField::From,
             ModField::Jump,
             ModField::Spread,
             ModField::Bias,
@@ -509,6 +514,7 @@ impl ModSlot {
             ModField::Fade => list(Fade::ALL.len()),
             ModField::Length => (1, whole(STEPS)),
             ModField::Start => list(STEPS),
+            ModField::From => list(STEPS),
             ModField::Loop => list(Loop::ALL.len()),
             ModField::Mutate => (0, i32::from(MAX_MUTATE)),
             ModField::Jump => (0, i32::from(MAX_JUMP)),
@@ -588,6 +594,7 @@ impl ModSlot {
             ModField::Length => i32::from(steps.length),
             ModField::Start => i32::from(steps.start),
             ModField::Loop => place(&Loop::ALL, &steps.looping)?,
+            ModField::From => i32::from(steps.from),
             ModField::Mutate => i32::from(steps.mutate),
             ModField::Jump => i32::from(steps.jump),
             ModField::Spread => i32::from(steps.spread),
@@ -634,10 +641,7 @@ impl ModSlot {
                     borrowed((shape.name(), meaning))
                 })
                 .collect(),
-            ModField::Loop => Loop::ALL
-                .iter()
-                .map(|each| (Cow::Owned(each.to_string()), each.meaning()))
-                .collect(),
+            ModField::Loop => named::<Loop>().map(borrowed).collect(),
             _ => Vec::new(),
         }
     }
@@ -690,7 +694,7 @@ impl ModSlot {
                 what: "how many steps",
                 from_one: false,
             },
-            ModField::Start => Reading::Count {
+            ModField::Start | ModField::From => Reading::Count {
                 what: "a step",
                 from_one: true,
             },
@@ -918,6 +922,7 @@ impl ModSlot {
             ModField::Length => self.steps.length = byte,
             ModField::Start => self.steps.start = byte,
             ModField::Loop => self.steps.looping = Loop::ALL[at],
+            ModField::From => self.steps.from = byte,
             ModField::Mutate => self.steps.mutate = byte,
             ModField::Jump => self.steps.jump = byte,
             ModField::Spread => self.steps.spread = byte,

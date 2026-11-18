@@ -669,6 +669,8 @@ fn at_default(control: Control, track: &Track) -> bool {
         || control == Control::Safe && !track.filter.has_safe()
         || control == Control::Role && track.role.is_auto()
         || matches!(control, Control::Mod(slot, ModField::Destination) if track.mods[slot].destination.is_none())
+        // Steps' `From` under `Once`, which plays to the end and holds (decision 428).
+        || matches!(control, Control::Mod(slot, ModField::From) if !track.mods[slot].steps.looping.uses_from())
         || matches!(control, Control::Lane(slot, field) if track.lanes.get(slot).is_some_and(|moved| moved.value(field.at()) == LaneMove::default().value(field.at())))
 }
 

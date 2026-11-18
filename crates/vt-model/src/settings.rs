@@ -848,6 +848,7 @@ mod tests {
             ModField::Length,
             ModField::Start,
             ModField::Loop,
+            ModField::From,
             ModField::Mutate,
             ModField::Jump,
             ModField::Spread,
