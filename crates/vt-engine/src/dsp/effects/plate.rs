@@ -5,7 +5,8 @@
 //! comes out is seven taps from all over the tank, as the paper gives them.
 //!
 //! The paper's lengths are for 29761 Hz, and are scaled here to the rate it runs at. `Size` scales
-//! the tank's lengths and taps again, read between samples, and moves no faster than its whole
+//! the tank's lengths and taps again, read between samples, though its all-passes go no shorter
+//! than the paper's (decision 441), and moves no faster than its whole
 //! range in a second, so a change bends the tail's pitch a little rather than clicking. Its lines
 //! share one buffer from the effect pool, long enough for the biggest plate at the pool's rate.
 //!
@@ -94,16 +95,17 @@ fn fall_per_frame(seconds: f32, rate: u32) -> f32 {
     0.001_f32.ln() / (seconds * rate as f32)
 }
 
-/// How much longer a trip round the tank lasts than its lines, as far as its tail goes, as the
-/// reverb's `HELD`: from `tail` at 250 Hz, undamped, within 2% at every `Size` and `Decay` but
-/// the shortest tails of the biggest plate, which are over in a trip or two.
-const HELD: f32 = 1.09;
+/// How much longer a trip through one of the tank's all-passes lasts than its line, as far as
+/// the tail goes, as the reverb's `HELD`: an all-pass holds some frequencies back longer than
+/// others, and those last. From `tail` at 250 Hz, undamped, where the whole tank falls as one
+/// 1.09 times as long as its lines would at the paper's size; its delays hold nothing back.
+const HELD: f32 = 1.33;
 
 /// What `Decay` makes of the tank, falling `fall` a frame with its lines stretched by `stretch`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Keeping {
     /// What each of a half's two decays keeps: half what the whole half keeps, in dB, as a trip
-    /// through it takes as long as its lines, held back by `HELD`.
+    /// through it takes as long as its lines, its all-passes held back by `HELD`.
     kept: [f32; 2],
     /// How much each half's first and second all-passes spread. An all-pass's echoes of itself go
     /// round it whatever the tank keeps, so each spreads no more than the tail keeps over its
@@ -113,13 +115,15 @@ struct Keeping {
 }
 
 impl Keeping {
-    fn new(fall: f32, stretch: f32) -> Self {
-        let kept =
-            TANK_LENGTHS.map(|half| (fall * half.iter().sum::<f32>() * HELD * stretch * 0.5).exp());
+    /// For the tank's lines `frames` long, as [`tank_frames`] gives them.
+    fn new(fall: f32, frames: [[f32; 4]; 2]) -> Self {
+        let kept = frames.map(|[first, before, after_damping, after]| {
+            (fall * ((first + after_damping) * HELD + before + after) * 0.5).exp()
+        });
         let second =
             ((kept[0] + kept[1]) * 0.5 + 0.15).clamp(SECOND_DIFFUSION.0, SECOND_DIFFUSION.1);
-        let most = |length: f32| (fall * length * stretch).exp();
-        let spread = TANK_LENGTHS.map(|[first, _, after_damping, _]| {
+        let most = |length: f32| (fall * length).exp();
+        let spread = frames.map(|[first, _, after_damping, _]| {
             [
                 DECAY_DIFFUSION.min(most(first)),
                 second.min(most(after_damping)),
@@ -129,18 +133,35 @@ impl Keeping {
     }
 }
 
+/// How long each of the tank's lines is, in frames, for `stretch`, `Size` times `scale`, the rate
+/// over the tuning rate. Its delays take `Size` all the way down, but its all-passes no shorter
+/// than the paper's: they're what spreads each trip into many echoes, and halved they left a
+/// small plate's few modes ringing on their own, louder than a tone through it, as the tail grew
+/// as long as a big plate's (decision 441).
+fn tank_frames(stretch: f32, scale: f32) -> [[f32; 4]; 2] {
+    let spread = stretch.max(scale);
+    TANK_LENGTHS.map(|[first, before, after_damping, after]| {
+        [
+            first * spread,
+            before * stretch,
+            after_damping * spread,
+            after * stretch,
+        ]
+    })
+}
+
 /// How a plate's tail dies away at its settings and a rate, for a drawing. Its tank's two halves
 /// are one loop, kept by `Decay` twice in each half, darkened and thinned once, through four
 /// all-passes that keep all of it but hold each frequency back by their own amount, so the tail
 /// is the loop's as `tail::loop_seconds` works it out. The first all-passes' wobble moves them by
 /// a few frames in hundreds, so it's left out.
 pub fn tail(settings: Settings, rate: u32) -> Option<Tail> {
-    let stretch = plate_size(f32::from(settings.size)) * rate as f32 / TUNING_RATE;
+    let scale = rate as f32 / TUNING_RATE;
+    let frames = tank_frames(plate_size(f32::from(settings.size)) * scale, scale);
     let fall = fall_per_frame(reverb_decay_seconds(f32::from(settings.decay)), rate);
-    let keeping = Keeping::new(fall, stretch);
+    let keeping = Keeping::new(fall, frames);
     let damping = f64::from(damping_at(settings.damp, rate));
     let low = f64::from(low_damping_at(settings.low_damp, rate));
-    let stretch = f64::from(stretch);
     let response = |omega: f64| {
         let allpass = |frames: f64, diffusion: f32| {
             let diffusion = f64::from(diffusion);
@@ -155,8 +176,7 @@ pub fn tail(settings: Settings, rate: u32) -> Option<Tail> {
         let damped = one_pole(damping);
         let thinned = Complex::ONE.add(one_pole(low).scale(-1.0));
         (0..2).fold(Complex::ONE, |round, half| {
-            let [first, before, after_damping, after] =
-                TANK_LENGTHS[half].map(|length| f64::from(length) * stretch);
+            let [first, before, after_damping, after] = frames[half].map(f64::from);
             let [first_spread, second_spread] = keeping.spread[half];
             let kept = f64::from(keeping.kept[half]);
             round
@@ -312,7 +332,7 @@ impl Plate {
             pre_frames: Smoothed::at(0.0),
             pre_now: 0.0,
             fall: Smoothed::at(0.0),
-            keeping: Keeping::new(0.0, 1.0),
+            keeping: Keeping::new(0.0, tank_frames(scale, scale)),
             keeping_for: (f32::NAN, f32::NAN),
             damping: Smoothed::at(1.0),
             bandwidth: Smoothed::at(1.0),
@@ -422,8 +442,10 @@ impl Plate {
         let most = SIZE_PER_SECOND / self.rate as f32;
         self.size_now += (wanted - self.size_now).clamp(-most, most);
         let stretch = self.size_now * self.scale;
+        // The tank's all-passes go no shorter than the paper's, as `tank_frames` has them.
+        let spread_stretch = stretch.max(self.scale);
         if (fall, stretch) != self.keeping_for {
-            self.keeping = Keeping::new(fall, stretch);
+            self.keeping = Keeping::new(fall, tank_frames(stretch, self.scale));
             self.keeping_for = (fall, stretch);
         }
         let keeping = self.keeping;
@@ -460,7 +482,7 @@ impl Plate {
             // into the other half.
             let mut sample = diffused + ends[1 - half] * keeping.kept[1 - half];
             let [first_spread, second_spread] = keeping.spread[half];
-            let wobbled = first.length * stretch + excursion * wobbles[half];
+            let wobbled = first.length * spread_stretch + excursion * wobbles[half];
             sample = allpass(lines, first, wobbled, sample, -first_spread);
             lines.write(before.base, 0, sample);
             sample = lines.between(before.base, before.length * stretch);
@@ -473,7 +495,7 @@ impl Plate {
             sample = allpass(
                 lines,
                 second,
-                second.length * stretch,
+                second.length * spread_stretch,
                 sample,
                 second_spread,
             );
@@ -1029,6 +1051,62 @@ mod tests {
         for ((w, h), m) in wide.iter().zip(&half).zip(&mono) {
             let sums = [w, h, m].map(|f| f[0] + f[1]);
             assert!((sums[0] - sums[1]).abs() < 1e-5 && (sums[0] - sums[2]).abs() < 1e-5);
+        }
+    }
+
+    /// How loud a frequency is in a stretch of sound, through a Hann window.
+    fn power_at(sound: &[f32], hertz: f32) -> f64 {
+        let step = std::f64::consts::TAU * f64::from(hertz) / f64::from(RATE);
+        let length = sound.len() as f64;
+        let (mut re, mut im) = (0.0, 0.0);
+        for (at, sample) in sound.iter().enumerate() {
+            let at = at as f64;
+            let hann = 0.5 - 0.5 * (std::f64::consts::TAU * at / length).cos();
+            let x = f64::from(*sample) * hann;
+            re += x * (step * at).cos();
+            im -= x * (step * at).sin();
+        }
+        re * re + im * im
+    }
+
+    #[test]
+    fn a_small_plate_rings_the_tone_and_not_its_own_modes() {
+        // A 220 Hz tone for 2 s, cut off, then two seconds of its tail from a tenth of a second
+        // on: the loudest frequency more than 15 Hz from the tone, against the tone. A small
+        // plate's all-passes halved left a few modes of its own ringing louder than the tone,
+        // +5.5 dB at Size 00 (decision 441). Seen: -17 dB, against -28 at Dattorro's size.
+        for size in [0x00, 0x80] {
+            let mut plate = plate(
+                Settings {
+                    size,
+                    ..Settings::DEFAULT
+                },
+                RATE,
+            );
+            let mut tail = Vec::new();
+            for at in 0..RATE as usize * 5 {
+                let seconds = at as f32 / RATE as f32;
+                let tone = if seconds < 2.0 {
+                    (seconds * 220.0 * std::f32::consts::TAU).sin() * 0.25
+                } else {
+                    0.0
+                };
+                let out = plate.process([tone, tone]);
+                if (2.1..4.1).contains(&seconds) {
+                    tail.push(out[0]);
+                }
+            }
+            let tone = power_at(&tail, 220.0);
+            let mut loudest = 0.0_f64;
+            let mut hertz = 60.0_f32;
+            while hertz < 6000.0 {
+                if (hertz - 220.0).abs() > 15.0 {
+                    loudest = loudest.max(power_at(&tail, hertz));
+                }
+                hertz *= 1.01;
+            }
+            let db = 10.0 * (loudest / tone).log10();
+            assert!(db < -8.0, "{size:02X}: {db} dB");
         }
     }
 }
