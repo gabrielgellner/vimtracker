@@ -131,7 +131,7 @@ fn a_dealt_order_repeats_for_a_seed_and_is_dealt_again_each_lap() {
             !repeats(&heard, 8),
             "{order}: dealt again each lap: {heard:?}"
         );
-        let mut other = dealt.clone();
+        let mut other = dealt;
         other.seed = 0xD1CE;
         assert_ne!(
             rows(&other, 64),
