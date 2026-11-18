@@ -1,4 +1,4 @@
-//! The effects that colour a sound: a distortion, a tape, an exciter and an analog colour.
+//! The effects that colour a sound: a distortion, a tape, an exciter, an analog colour and a reel.
 
 use serde::{Deserialize, Serialize};
 
@@ -592,6 +592,149 @@ impl Colour {
         hard,
         emph,
         iron,
+        mix,
+        gain,
+    }
+}
+
+/// The speeds a reel runs at, in inches a second, and their names.
+pub const REEL_SPEEDS_IPS: [f32; 4] = [3.75, 7.5, 15.0, 30.0];
+const REEL_SPEED_NAMES: [&str; 4] = ["3.75 ips", "7.5 ips", "15 ips", "30 ips"];
+
+/// The most a reel's playback gap, the space between its head and the tape and the depth its
+/// coating is read from can be, in µm, and the least of the gap.
+pub const LEAST_REEL_GAP_UM: f32 = 0.5;
+pub const MOST_REEL_GAP_UM: f32 = 20.0;
+pub const MOST_REEL_SPACING_UM: f32 = 20.0;
+pub const MOST_REEL_THICKNESS_UM: f32 = 50.0;
+
+/// A reel's speed in inches a second, for its place in the list.
+pub fn reel_speed_ips(place: u8) -> f32 {
+    REEL_SPEEDS_IPS[usize::from(place).min(REEL_SPEEDS_IPS.len() - 1)]
+}
+
+/// A reel's playback gap in µm, for a value on the `00` to `FF` scale: from 0.5 µm to 20 µm,
+/// evenly in ratio.
+pub fn reel_gap_um(value: f32) -> f32 {
+    LEAST_REEL_GAP_UM * (MOST_REEL_GAP_UM / LEAST_REEL_GAP_UM).powf((value / 255.0).clamp(0.0, 1.0))
+}
+
+/// How far a reel's tape is from its head, in µm: none at `00`, 20 µm at `FF`, squared so the
+/// first half is fine.
+pub fn reel_spacing_um(value: f32) -> f32 {
+    (value / 255.0).clamp(0.0, 1.0).powi(2) * MOST_REEL_SPACING_UM
+}
+
+/// How deep in its coating a reel's tape is read from, in µm: none at `00`, 50 µm at `FF`,
+/// squared as the spacing is.
+pub fn reel_thickness_um(value: f32) -> f32 {
+    (value / 255.0).clamp(0.0, 1.0).powi(2) * MOST_REEL_THICKNESS_UM
+}
+
+/// A reel's, in the order songs number them.
+pub(crate) const REEL_PARAMS: [Entry; 11] = [
+    hex_param("Drive", "drive", "DRIV", Reel::DEFAULT.drive)
+        .units(Units::TapeDrive)
+        .centred()
+        .means("how hard the head's field drives the tape round its loop, so how far it saturates"),
+    hex_param("Sat", "sat", "SAT", Reel::DEFAULT.sat)
+        .means("how low the tape saturates: turned up, it squashes sooner and comes out thicker"),
+    hex_param("Bias", "bias", "BIAS", Reel::DEFAULT.bias)
+        .means("turned up the loop thins and it's cleaner; turned down it lags and smears"),
+    Entry {
+        meaning: "how fast the tape runs: slower is darker, with its head bump lower",
+        name: "Speed",
+        key: "speed",
+        label: Some("SPD"),
+        kind: Kind::Stepped {
+            choices: &REEL_SPEED_NAMES,
+            wraps: false,
+        },
+        default: Reel::DEFAULT.speed,
+        place: Place::Own,
+    },
+    hex_param("Gap", "gap", "GAP", Reel::DEFAULT.gap)
+        .units(Units::ReelGap)
+        .means("the playback head's gap: wider loses the highs, with notches as tape speed slows"),
+    hex_param("Space", "space", "SPAC", Reel::DEFAULT.space)
+        .units(Units::ReelSpacing)
+        .means("how far the tape rides off the head, which takes the highs away fast"),
+    hex_param("Thick", "thick", "THK", Reel::DEFAULT.thick)
+        .units(Units::ReelThickness)
+        .means("how deep the coating is read from, which softens the highs gently"),
+    hex_param("Wow", "wow", "WOW", Reel::DEFAULT.wow)
+        .means("a slow wobble in pitch, as worn tape has"),
+    hex_param("Flutter", "flutter", "FLUT", Reel::DEFAULT.flutter)
+        .means("a faster, steady wobble in pitch, about twice a second"),
+    MIX_PARAM,
+    GAIN_PARAM,
+];
+
+/// Where its settings sit on the FX page.
+pub(super) const REEL_GRID: Columns = &[
+    &["drive", "sat", "bias"],
+    &["speed", "wow", "flutter"],
+    &["gap", "space", "thick"],
+    &["mix", "gain"],
+];
+
+/// A tape machine's settings, after ChowTape: the tape's magnetic hysteresis, then the playback
+/// head's losses and the transport's wow and flutter (#259). One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Reel {
+    /// How hard the head's field drives the tape, how low it saturates and how much it's biased,
+    /// each from none to all.
+    pub drive: u8,
+    pub sat: u8,
+    pub bias: u8,
+    /// Its speed's place in [`REEL_SPEEDS_IPS`].
+    pub speed: u8,
+    /// The playback head's gap, the tape's spacing from it and the depth it's read from.
+    pub gap: u8,
+    pub space: u8,
+    pub thick: u8,
+    /// The slow wobble in pitch, and the fast one, as `Tape`'s.
+    pub wow: u8,
+    pub flutter: u8,
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Reel {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Reel {
+    /// As it starts: ChowTape's drive, saturation and bias, half way, on a machine at 15 ips
+    /// with a fine gap, a little spacing and a thin coating, and `Tape`'s little wow and flutter.
+    pub const DEFAULT: Self = Self {
+        drive: 0x80,
+        sat: 0x80,
+        bias: 0x80,
+        speed: 2,
+        gap: 0x40,
+        space: 0x30,
+        thick: 0x30,
+        wow: 0x40,
+        flutter: 0x40,
+        mix: 0xFF,
+        gain: UNITY_LEVEL,
+    };
+
+    effect_settings! {
+        drive,
+        sat,
+        bias,
+        speed,
+        gap,
+        space,
+        thick,
+        wow,
+        flutter,
         mix,
         gain,
     }

@@ -1,10 +1,12 @@
 //! The small parts the voices, filters and effects share. Nothing here uses anything else in
 //! `dsp`, so a block can go wherever it's needed.
 
+pub(crate) mod biquad;
 pub(crate) mod clip;
 pub(crate) mod coefficient;
 pub(crate) mod drift;
 pub(crate) mod flush;
+pub(crate) mod hysteresis;
 pub(crate) mod line;
 pub(crate) mod one_pole;
 pub(crate) mod oversampler;

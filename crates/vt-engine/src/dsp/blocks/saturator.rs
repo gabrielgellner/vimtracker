@@ -23,6 +23,7 @@
 
 use std::sync::LazyLock;
 
+use super::biquad::Biquad;
 use super::clip::within;
 use super::flush::{Tiny, flush};
 use super::one_pole;
@@ -545,43 +546,7 @@ impl FirstOrder {
     }
 }
 
-/// A peaking biquad, the RBJ cookbook's, in transposed direct form II.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-struct Peak {
-    b0: f32,
-    b1: f32,
-    b2: f32,
-    a1: f32,
-    a2: f32,
-}
-
-impl Peak {
-    fn new(hertz: f32, q: f32, db: f32, rate: f32) -> Self {
-        let a = 10.0_f32.powf(db / 40.0);
-        let omega = std::f32::consts::TAU * hertz / rate;
-        let alpha = omega.sin() / (2.0 * q);
-        let cos = omega.cos();
-        let a0 = 1.0 + alpha / a;
-        Self {
-            b0: (1.0 + alpha * a) / a0,
-            b1: -2.0 * cos / a0,
-            b2: (1.0 - alpha * a) / a0,
-            a1: -2.0 * cos / a0,
-            a2: (1.0 - alpha / a) / a0,
-        }
-    }
-
-    #[inline]
-    fn process(&self, state: &mut [f32; 2], x: f32) -> f32 {
-        let y = self.b0 * x + state[0];
-        state[0] = self.b1 * x - self.a1 * y + state[1];
-        state[1] = self.b2 * x - self.a2 * y;
-        y
-    }
-}
-
 same_bits_by_fields!(FirstOrder { b0, b1, a1 });
-same_bits_by_fields!(Peak { b0, b1, b2, a1, a2 });
 
 /// The filters round the curve, worked out for the emphasis and the transformer as set: the same
 /// for both sides.
@@ -592,7 +557,7 @@ pub(crate) struct Tuning {
     /// The transformer's flux low-pass, its knee and its bump.
     flux: f32,
     knee: f32,
-    bump: Peak,
+    bump: Biquad,
     /// The DC blocker's low-pass.
     dc: f32,
 }
@@ -639,7 +604,7 @@ impl Tuning {
             de,
             flux: warp(IRON_FLUX_HZ),
             knee: iron * MOST_IRON_KNEE,
-            bump: Peak::new(BUMP_HZ, BUMP_Q, iron * MOST_BUMP_DB, rate),
+            bump: Biquad::peak(BUMP_HZ, BUMP_Q, iron * MOST_BUMP_DB, rate),
             dc: warp(DC_HZ),
         }
     }

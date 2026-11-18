@@ -1689,6 +1689,30 @@ const COLOUR: DeviceLayout = live(
         ],
     )],
 );
+/// How hard the tape is driven round its loop, how fast it runs and how it wobbles, then on a
+/// second page the playback head's three losses.
+const REEL: DeviceLayout = live(
+    "fx/reel",
+    &[
+        knobs(
+            EffectKind::Reel.name(),
+            [
+                s("drive"),
+                s("sat"),
+                s("bias"),
+                s("speed"),
+                s("wow"),
+                s("flutter"),
+                s("mix"),
+                s("gain"),
+            ],
+        ),
+        knobs(
+            "Head",
+            [s("gap"), s("space"), s("thick"), __, __, __, __, __],
+        ),
+    ],
+);
 /// How long the rotors take to change, the horn's Doppler and swell, the drive and the width,
 /// with the fast and slow switch on the button under the inertia, as an organist's half-moon.
 const ROTARY: DeviceLayout = stored(
@@ -2362,6 +2386,7 @@ const BY_EFFECT: [&[&DeviceLayout]; EffectKind::COUNT] = by_kind([
     (EffectKind::Beads as usize, &[&BEADS]),
     (EffectKind::Echo as usize, &[&ECHO]),
     (EffectKind::Colour as usize, &[&COLOUR]),
+    (EffectKind::Reel as usize, &[&REEL]),
 ]);
 
 /// Each mod slot's layout, by its type's [`ModKind`].
