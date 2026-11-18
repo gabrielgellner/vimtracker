@@ -9,6 +9,11 @@
 //! range in a second, so a change bends the tail's pitch a little rather than clicking. Its lines
 //! share one buffer from the effect pool, long enough for the biggest plate at the pool's rate.
 //!
+//! `Decay` sets how long its tail takes to fall 60 dB, and each half of the tank keeps `0.001` to
+//! the power of its own length over that each time round, so neither `Size` nor the rate changes
+//! it. Beside each half's damping a one-pole high-pass takes the lows as it rings, and its sides
+//! are spread or brought together as mid and side on the way out, as the reverb's (decision 439).
+//!
 //! Ported from el-visio's `verb.c` at <https://github.com/el-visio/dattorro-verb>, MIT, and checked
 //! against the paper. That port steps its wobble one sample at a time and adds the last tap of
 //! each side, where the paper takes it away; here the wobble is a sine read between samples, and
@@ -31,12 +36,13 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 //! OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use vt_model::insert::{Plate as Settings, plate_size};
+use vt_model::insert::{Plate as Settings, plate_size, reverb_decay_seconds};
 
 use crate::dsp::blocks::coefficient::of_corner;
 use crate::dsp::blocks::line::SharedLines;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::{REVERB_QUIET_SECONDS, SongPlace};
+use crate::dsp::effects::reverb::{LowDamping, low_damping_at, widen};
 use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::dsp::effects::tail::{self, Complex, TAIL_HZ, Tail};
 
@@ -55,9 +61,6 @@ const TANK_LENGTHS: [[f32; 4]; 2] = [
 const DECAY_DIFFUSION: f32 = 0.7;
 /// The most and least the second all-passes spread, which goes with `Decay`, as the paper has it.
 const SECOND_DIFFUSION: (f32, f32) = (0.25, 0.5);
-/// What each trip through a half of the tank keeps, twice, at the top of `Decay`. Just short of
-/// one, so even the longest tail dies away, in about a minute.
-const MOST_DECAY: f32 = 0.98;
 /// The damping filter's coefficient at the top of `Damp`, at the tuning rate, as the reverb's. At
 /// `00` it's open.
 const MOST_DAMPING: f32 = 0.1;
@@ -85,35 +88,85 @@ const TAP_GAIN: f32 = 0.6;
 /// How loud what comes out is. Tuned so it's near the reverb's at both their defaults.
 const WET: f32 = 0.7;
 
+/// How much a tail that falls 60 dB in `seconds` falls each frame, as the natural log of what it
+/// keeps.
+fn fall_per_frame(seconds: f32, rate: u32) -> f32 {
+    0.001_f32.ln() / (seconds * rate as f32)
+}
+
+/// How much longer a trip round the tank lasts than its lines, as far as its tail goes, as the
+/// reverb's `HELD`: from `tail` at 250 Hz, undamped, within 2% at every `Size` and `Decay` but
+/// the shortest tails of the biggest plate, which are over in a trip or two.
+const HELD: f32 = 1.09;
+
+/// What `Decay` makes of the tank, falling `fall` a frame with its lines stretched by `stretch`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Keeping {
+    /// What each of a half's two decays keeps: half what the whole half keeps, in dB, as a trip
+    /// through it takes as long as its lines, held back by `HELD`.
+    kept: [f32; 2],
+    /// How much each half's first and second all-passes spread. An all-pass's echoes of itself go
+    /// round it whatever the tank keeps, so each spreads no more than the tail keeps over its
+    /// length, and none rings on past the tail. The second's goes with `Decay` as the paper has
+    /// it, from what the halves keep.
+    spread: [[f32; 2]; 2],
+}
+
+impl Keeping {
+    fn new(fall: f32, stretch: f32) -> Self {
+        let kept =
+            TANK_LENGTHS.map(|half| (fall * half.iter().sum::<f32>() * HELD * stretch * 0.5).exp());
+        let second =
+            ((kept[0] + kept[1]) * 0.5 + 0.15).clamp(SECOND_DIFFUSION.0, SECOND_DIFFUSION.1);
+        let most = |length: f32| (fall * length * stretch).exp();
+        let spread = TANK_LENGTHS.map(|[first, _, after_damping, _]| {
+            [
+                DECAY_DIFFUSION.min(most(first)),
+                second.min(most(after_damping)),
+            ]
+        });
+        Self { kept, spread }
+    }
+}
+
 /// How a plate's tail dies away at its settings and a rate, for a drawing. Its tank's two halves
-/// are one loop, kept by `Decay` twice in each half and darkened once, through four all-passes
-/// that keep all of it but hold each frequency back by their own amount, so the tail is the
-/// loop's as `tail::loop_seconds` works it out. The first all-passes' wobble moves them by a
-/// few frames in hundreds, so it's left out.
+/// are one loop, kept by `Decay` twice in each half, darkened and thinned once, through four
+/// all-passes that keep all of it but hold each frequency back by their own amount, so the tail
+/// is the loop's as `tail::loop_seconds` works it out. The first all-passes' wobble moves them by
+/// a few frames in hundreds, so it's left out.
 pub fn tail(settings: Settings, rate: u32) -> Option<Tail> {
-    let stretch = f64::from(plate_size(f32::from(settings.size)) * rate as f32 / TUNING_RATE);
-    let decay = f64::from(f32::from(settings.decay) / 255.0 * MOST_DECAY);
+    let stretch = plate_size(f32::from(settings.size)) * rate as f32 / TUNING_RATE;
+    let fall = fall_per_frame(reverb_decay_seconds(f32::from(settings.decay)), rate);
+    let keeping = Keeping::new(fall, stretch);
     let damping = f64::from(damping_at(settings.damp, rate));
-    let second = (decay + 0.15).clamp(f64::from(SECOND_DIFFUSION.0), f64::from(SECOND_DIFFUSION.1));
+    let low = f64::from(low_damping_at(settings.low_damp, rate));
+    let stretch = f64::from(stretch);
     let response = |omega: f64| {
-        let allpass = |frames: f64, diffusion: f64| {
+        let allpass = |frames: f64, diffusion: f32| {
+            let diffusion = f64::from(diffusion);
             let delayed = Complex::read(omega, frames);
             delayed
                 .add(Complex(diffusion, 0.0))
                 .over(Complex::ONE.add(delayed.scale(diffusion)))
         };
-        let damped = Complex(damping, 0.0)
-            .over(Complex::ONE.add(Complex::delay(omega, 1.0).scale(damping - 1.0)));
-        TANK_LENGTHS.iter().fold(Complex::ONE, |round, half| {
+        let one_pole = |by: f64| {
+            Complex(by, 0.0).over(Complex::ONE.add(Complex::delay(omega, 1.0).scale(by - 1.0)))
+        };
+        let damped = one_pole(damping);
+        let thinned = Complex::ONE.add(one_pole(low).scale(-1.0));
+        (0..2).fold(Complex::ONE, |round, half| {
             let [first, before, after_damping, after] =
-                half.map(|length| f64::from(length) * stretch);
+                TANK_LENGTHS[half].map(|length| f64::from(length) * stretch);
+            let [first_spread, second_spread] = keeping.spread[half];
+            let kept = f64::from(keeping.kept[half]);
             round
-                .times(allpass(first, -f64::from(DECAY_DIFFUSION)))
+                .times(allpass(first, -first_spread))
                 .times(Complex::read(omega, before))
                 .times(Complex::read(omega, after))
                 .times(damped)
-                .times(allpass(after_damping, second))
-                .scale(decay * decay)
+                .times(thinned)
+                .times(allpass(after_damping, second_spread))
+                .scale(kept * kept)
         })
     };
     let seconds = TAIL_HZ
@@ -195,7 +248,12 @@ pub(crate) struct Plate {
     /// How far back the pre-delay is read now, which follows `pre_frames` no faster than it may
     /// move.
     pre_now: f32,
-    decay: Smoothed,
+    /// How much the tail falls each frame, as the natural log of what it keeps.
+    fall: Smoothed,
+    /// What the tank keeps and spreads, and the fall and stretch it was worked out for, as they
+    /// seldom move.
+    keeping: Keeping,
+    keeping_for: (f32, f32),
     damping: Smoothed,
     /// How much of what goes in the band-limiting low-pass lets through each frame.
     bandwidth: Smoothed,
@@ -203,6 +261,8 @@ pub(crate) struct Plate {
     /// The size the lines are read at now, which follows `size` no faster than it may move.
     size_now: f32,
     excursion: Smoothed,
+    low_damping: LowDamping,
+    width: Smoothed,
     smoothing: f32,
     /// This rate over the tuning rate, which every length is scaled by.
     scale: f32,
@@ -251,12 +311,16 @@ impl Plate {
             pre_write: 0,
             pre_frames: Smoothed::at(0.0),
             pre_now: 0.0,
-            decay: Smoothed::at(0.0),
+            fall: Smoothed::at(0.0),
+            keeping: Keeping::new(0.0, 1.0),
+            keeping_for: (f32::NAN, f32::NAN),
             damping: Smoothed::at(1.0),
             bandwidth: Smoothed::at(1.0),
             size: Smoothed::at(1.0),
             size_now: 1.0,
             excursion: Smoothed::at(0.0),
+            low_damping: LowDamping::default(),
+            width: Smoothed::at(1.0),
             smoothing: coefficient(rate),
             scale,
             rate,
@@ -272,6 +336,7 @@ impl Plate {
         self.pre.fill(0.0);
         self.band = 0.0;
         self.damped = [0.0; 2];
+        self.low_damping.clear();
     }
 
     /// How many frames its buffer holds, for the tests.
@@ -286,7 +351,8 @@ impl Plate {
     pub(crate) fn follow(&mut self, settings: Settings, frames: u64) {
         self.keep_time(frames);
         self.pre_frames.target = f32::from(settings.pre) / 255.0 * LONGEST_PRE * self.rate as f32;
-        self.decay.target = f32::from(settings.decay) / 255.0 * MOST_DECAY;
+        self.fall.target =
+            fall_per_frame(reverb_decay_seconds(f32::from(settings.decay)), self.rate);
         self.damping.target = damping_at(settings.damp, self.rate);
         self.bandwidth.target = if settings.high_cut == 0xFF {
             1.0
@@ -296,6 +362,9 @@ impl Plate {
         };
         self.size.target = plate_size(f32::from(settings.size));
         self.excursion.target = f32::from(settings.excursion) / 255.0 * MOST_EXCURSION * self.scale;
+        self.low_damping
+            .set(low_damping_at(settings.low_damp, self.rate));
+        self.width.target = f32::from(settings.width) / 255.0;
     }
 
     /// Move the wobble to where it is this many frames in.
@@ -309,12 +378,14 @@ impl Plate {
     pub(crate) fn settle(&mut self) {
         self.pre_frames.settle();
         self.pre_now = self.pre_frames.value;
-        self.decay.settle();
+        self.fall.settle();
         self.damping.settle();
         self.bandwidth.settle();
         self.size.settle();
         self.size_now = self.size.value;
         self.excursion.settle();
+        self.low_damping.settle();
+        self.width.settle();
     }
 
     /// What goes in: both sides together, through the pre-delay and the band-limiting low-pass.
@@ -344,14 +415,20 @@ impl Plate {
     #[inline]
     pub(crate) fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         let incoming = self.before_lines(input);
-        let decay = self.decay.next(self.smoothing);
+        let fall = self.fall.next(self.smoothing);
         let damping = self.damping.next(self.smoothing);
         let excursion = self.excursion.next(self.smoothing);
         let wanted = self.size.next(self.smoothing);
         let most = SIZE_PER_SECOND / self.rate as f32;
         self.size_now += (wanted - self.size_now).clamp(-most, most);
         let stretch = self.size_now * self.scale;
-        let second_diffusion = (decay + 0.15).clamp(SECOND_DIFFUSION.0, SECOND_DIFFUSION.1);
+        if (fall, stretch) != self.keeping_for {
+            self.keeping = Keeping::new(fall, stretch);
+            self.keeping_for = (fall, stretch);
+        }
+        let keeping = self.keeping;
+        let low_damping = self.low_damping.next(self.smoothing);
+        let width = self.width.next(self.smoothing);
         let (cos, sin) = self.wobble;
         self.wobble = (
             cos * self.turn.0 - sin * self.turn.1,
@@ -379,19 +456,26 @@ impl Plate {
         }
         for half in 0..2 {
             let [first, before, second, after] = self.tank[half];
-            let mut sample = diffused + ends[1 - half] * decay;
+            // Each half keeps its share twice: once after its damping, and once on its way
+            // into the other half.
+            let mut sample = diffused + ends[1 - half] * keeping.kept[1 - half];
+            let [first_spread, second_spread] = keeping.spread[half];
             let wobbled = first.length * stretch + excursion * wobbles[half];
-            sample = allpass(lines, first, wobbled, sample, -DECAY_DIFFUSION);
+            sample = allpass(lines, first, wobbled, sample, -first_spread);
             lines.write(before.base, 0, sample);
             sample = lines.between(before.base, before.length * stretch);
             self.damped[half] += (sample - self.damped[half]) * damping;
-            sample = self.damped[half] * decay;
+            sample = self.damped[half];
+            if let Some(by) = low_damping {
+                sample = self.low_damping.thin(half, sample, by);
+            }
+            sample *= keeping.kept[half];
             sample = allpass(
                 lines,
                 second,
                 second.length * stretch,
                 sample,
-                second_diffusion,
+                second_spread,
             );
             lines.write(after.base, 0, sample);
         }
@@ -407,7 +491,7 @@ impl Plate {
                 * TAP_GAIN
                 * WET;
         }
-        out
+        widen(out, width)
     }
 }
 
@@ -619,7 +703,7 @@ mod tests {
     }
 
     #[test]
-    fn size_makes_the_plate_bigger_and_its_tail_longer() {
+    fn size_makes_the_plate_bigger_and_leaves_its_tail_as_long() {
         let out = |size| {
             let settings = Settings {
                 size,
@@ -635,7 +719,8 @@ mod tests {
             first(&small),
             first(&big)
         );
-        assert!(decay_seconds(&big, RATE) > decay_seconds(&small, RATE) * 2.0);
+        let (short, long) = (decay_seconds(&small, RATE), decay_seconds(&big, RATE));
+        assert!((long / short - 1.0).abs() < 0.25, "{short} {long}");
     }
 
     /// The biggest jump between frames from a tone through it, after a second, with the settings
@@ -707,6 +792,15 @@ mod tests {
                     ..plain
                 },
             ),
+            (
+                "Low damp",
+                plain,
+                Settings {
+                    low_damp: 0xFF,
+                    ..plain
+                },
+            ),
+            ("Width", Settings { width: 0, ..plain }, plain),
             (
                 "all",
                 Settings {
@@ -811,15 +905,15 @@ mod tests {
         // they fall differs a little from the many it's worked out from. Seen: within 11%.
         use crate::dsp::effects::tail::measure;
         let cases = [
-            (0x40, 0x00, 0x80, 48_000),
-            (0x80, 0x00, 0x80, 48_000),
-            (0xC0, 0x00, 0x80, 48_000),
-            (0x80, 0x80, 0x00, 48_000),
-            (0xC0, 0xFF, 0xFF, 48_000),
-            (0xE0, 0x40, 0x80, 48_000),
-            (0x80, 0x40, 0xC0, 44_100),
-            (0x80, 0x40, 0xC0, 48_000),
-            (0x80, 0x40, 0x40, 96_000),
+            (0x57, 0x00, 0x80, 48_000),
+            (0x76, 0x00, 0x80, 48_000),
+            (0x9D, 0x00, 0x80, 48_000),
+            (0x76, 0x80, 0x00, 48_000),
+            (0x9D, 0xFF, 0xFF, 48_000),
+            (0xBD, 0x40, 0x80, 48_000),
+            (0x76, 0x40, 0xC0, 44_100),
+            (0x76, 0x40, 0xC0, 48_000),
+            (0x76, 0x40, 0x40, 96_000),
         ];
         for (decay, damp, size, rate) in cases {
             let settings = Settings {
@@ -860,6 +954,81 @@ mod tests {
                 "{pre:02X}: {heard} against {}",
                 said.pre
             );
+        }
+    }
+
+    #[test]
+    fn decay_is_how_long_its_tail_takes_to_fall_60_db_at_any_size_and_rate() {
+        // Undamped, under its damping. Seen: within 10%.
+        use crate::dsp::effects::tail::measure::click_seconds;
+        for (decay, size, rate) in [
+            (0x00, 0x80, 48_000),
+            (0x20, 0x80, 48_000),
+            (0x40, 0x80, 48_000),
+            (0x60, 0x80, 48_000),
+            (0x80, 0x80, 48_000),
+            (0xA0, 0x80, 48_000),
+            (0x60, 0x00, 48_000),
+            (0x60, 0xFF, 48_000),
+            (0x60, 0x80, 44_100),
+            (0x60, 0x80, 96_000),
+        ] {
+            let settings = Settings {
+                damp: 0,
+                size,
+                ..settings(decay)
+            };
+            let set = reverb_decay_seconds(f32::from(decay));
+            let mut plate = plate(settings, rate);
+            let measured = click_seconds(|x| plate.process(x), set, rate, 250.0);
+            assert!(
+                (measured / set - 1.0).abs() < 0.15,
+                "{decay:02X} {size:02X} at {rate}: {measured} for {set}"
+            );
+        }
+    }
+
+    #[test]
+    fn low_damp_takes_the_lows_from_the_tail_and_leaves_the_rest() {
+        use crate::dsp::effects::tail::measure::{click_seconds, ratios};
+        let open = Settings {
+            damp: 0,
+            ..settings(0x80)
+        };
+        let thin = Settings {
+            low_damp: 0x80,
+            ..open
+        };
+        let at = |settings, hertz| {
+            let mut plate = plate(settings, RATE);
+            click_seconds(|x| plate.process(x), 4.0, RATE, hertz)
+        };
+        let (thin_low, open_low) = (at(thin, 100.0), at(open, 100.0));
+        assert!(thin_low < open_low * 0.7, "{thin_low} {open_low}");
+        assert!(at(thin, 2000.0) > at(open, 2000.0) * 0.85);
+        let said = tail(thin, RATE).unwrap();
+        let mut plate = plate(thin, RATE);
+        let ratios = ratios(said, |x| plate.process([x, x]), RATE);
+        assert!(
+            ratios.iter().all(|ratio| (ratio - 1.0).abs() < 0.15),
+            "{ratios:?}"
+        );
+    }
+
+    #[test]
+    fn width_brings_its_sides_together_and_leaves_their_sum() {
+        let out = |width| {
+            let settings = Settings {
+                width,
+                ..Settings::DEFAULT
+            };
+            impulse(&mut plate(settings, RATE), RATE as usize)
+        };
+        let (wide, half, mono) = (out(0xFF), out(0x80), out(0x00));
+        assert!(mono.iter().all(|[l, r]| l == r));
+        for ((w, h), m) in wide.iter().zip(&half).zip(&mono) {
+            let sums = [w, h, m].map(|f| f[0] + f[1]);
+            assert!((sums[0] - sums[1]).abs() < 1e-5 && (sums[0] - sums[2]).abs() < 1e-5);
         }
     }
 }
