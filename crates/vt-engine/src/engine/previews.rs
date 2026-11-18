@@ -302,6 +302,7 @@ impl Engine {
                 count: place as i64,
                 position,
                 lanes: [None; FX_SLOTS],
+                scale: section.scale,
             };
             let step = self.view_row(index, read, row, step, Played::Ahead);
             let Note::On(midi) = step.note else {

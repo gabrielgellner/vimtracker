@@ -339,6 +339,11 @@ pub enum Action {
         section: usize,
         start: SectionStart,
     },
+    /// Give a section a scale of its own, or none to play in the song's.
+    SetSectionScale {
+        section: usize,
+        scale: Option<Scale>,
+    },
     /// Choose a section's chain for a track, or none.
     SetSectionChain {
         section: usize,
@@ -839,6 +844,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
         | Action::SetSectionLength { .. }
         | Action::SetSectionRepeat { .. }
         | Action::SetSectionStart { .. }
+        | Action::SetSectionScale { .. }
         | Action::SetSectionChain { .. }
         | Action::SetTrackChain { .. } => sections::edit(&mut next, action)?,
         Action::SetChainLabel { .. }

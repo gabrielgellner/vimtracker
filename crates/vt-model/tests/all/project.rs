@@ -76,6 +76,37 @@ fn a_song_round_trips() {
     assert_eq!(load_song(&dir).unwrap(), song);
 }
 
+/// A section's own scale is saved and read back, and one without is written as before (decision
+/// 426).
+#[test]
+fn a_sections_scale_is_saved_and_only_then() {
+    let dir = folder();
+    let mut song = Song::new(1);
+    song.sections.push(song.sections[0].clone());
+    save_song(&dir, &song).unwrap();
+    let plain = fs::read_to_string(dir.join("song.ron")).unwrap();
+    let dorian = Scale {
+        on: true,
+        root: 2,
+        kind: ScaleKind::Dorian,
+    };
+    song.sections[1].scale = Some(dorian);
+    save_song(&dir, &song).unwrap();
+    let text = fs::read_to_string(dir.join("song.ron")).unwrap();
+    assert_eq!(
+        text.matches("scale:").count(),
+        plain.matches("scale:").count() + 1,
+        "{text}"
+    );
+    let loaded = load_song(&dir).unwrap();
+    assert_eq!(loaded.sections[0].scale, None);
+    assert_eq!(loaded.sections[1].scale, Some(dorian));
+    assert_eq!(loaded, song);
+    song.sections[1].scale = None;
+    save_song(&dir, &song).unwrap();
+    assert_eq!(fs::read_to_string(dir.join("song.ron")).unwrap(), plain);
+}
+
 #[test]
 fn a_switched_out_modulator_is_saved_and_only_then() {
     let dir = folder();

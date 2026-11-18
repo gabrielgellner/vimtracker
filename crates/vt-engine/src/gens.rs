@@ -19,6 +19,7 @@ use std::sync::Arc;
 use vt_model::constants::{FX_SLOTS, MAX_PHRASE_STEPS};
 use vt_model::generator::{Span, lay_under};
 use vt_model::macros::GenColumn;
+use vt_model::scale::Scale;
 use vt_model::selection::StepRange;
 use vt_model::shape::{
     Context, FillKind, GenCell, GenParam, Kept, RowView, Shape, ShapeColumn, is_empty, open_rows,
@@ -204,8 +205,9 @@ struct GenRun {
     cells: usize,
     /// How many rows its column could change, which Euclid's `Hits` are counted among.
     open: usize,
-    /// The shape it last rendered, as heard, if it has since the version came.
-    rendered: Option<Shape>,
+    /// The shape it last rendered, as heard, and the column it rendered on, a Note column with
+    /// the scale it went through, if it has since the version came.
+    rendered: Option<(Shape, ShapeColumn)>,
     /// Which pass of its phrase, or of its lane, it was last read on.
     pass: i64,
     /// How many times it has rendered since the version came.
@@ -437,7 +439,9 @@ impl GenScratch {
     /// laid over, each rendered first if what it's heard with has changed since it last was. A
     /// row `played`, not only looked at ahead, reports the pass of each generator on it that
     /// varies, the first time it's heard on that pass, and the row as each generator on it played
-    /// it, or that nothing reaches them now.
+    /// it, or that nothing reaches them now. In a section with a `scale` of its own, a generator
+    /// on the Note column written in another scale is moving too: it renders through the
+    /// section's (decision 426).
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn view(
         &mut self,
@@ -448,19 +452,30 @@ impl GenScratch {
         step: &Step,
         passes: impl FnOnce() -> Passes,
         played: Played,
+        scale: Option<Scale>,
     ) -> RowView {
         let mut view = RowView::of(step);
-        if !holds.any() && !self.varies(at.track) {
+        let phrase_here = || {
+            song.tracks
+                .get(at.track)
+                .and_then(|track| track.phrases.get(&at.phrase))
+        };
+        // Only a scale some Note generator of the phrase isn't written in moves anything.
+        let rescaled = scale.filter(|scale| {
+            phrase_here().is_some_and(|phrase| {
+                phrase
+                    .generators()
+                    .iter()
+                    .any(|generator| generator.scale().is_some_and(|own| own != *scale))
+            })
+        });
+        if rescaled.is_none() && !holds.any() && !self.varies(at.track) {
             if played != Played::Ahead {
                 self.quieten(at);
             }
             return view;
         }
-        let Some(phrase) = song
-            .tracks
-            .get(at.track)
-            .and_then(|track| track.phrases.get(&at.phrase))
-        else {
+        let Some(phrase) = phrase_here() else {
             return view;
         };
         if phrase.generators().is_empty() {
@@ -489,8 +504,15 @@ impl GenScratch {
                 .then(|| song.source_phrase(written.follow.source))
                 .flatten()
                 .map(|phrase| phrase.loop_steps());
+            // A Note column renders through the section's own scale where it has one.
+            let column = match (run.column, rescaled) {
+                (ShapeColumn::Note { writes, .. }, Some(scale)) => {
+                    ShapeColumn::Note { scale, writes }
+                }
+                (column, _) => column,
+            };
             let context = Context {
-                column: run.column,
+                column,
                 open: run.open,
                 generates: run.generates,
                 sources: &[],
@@ -539,7 +561,7 @@ impl GenScratch {
             if plays {
                 self.rooms[at.track].quiet = None;
             }
-            if heard == *written {
+            if heard == *written && column == run.column {
                 run.rendered = None;
                 if plays {
                     tell(&mut self.reports, at.track, GenReport::Row(row));
@@ -548,13 +570,13 @@ impl GenScratch {
             }
             let length = run.rows.len().min(MAX_PHRASE_STEPS);
             let cells = &mut self.cells[run.cells..run.cells + length];
-            if run.rendered != Some(heard) {
+            if run.rendered != Some((heard, column)) {
                 // A `Follow` whose source has gone leaves what it last wrote, as the edit thread's.
                 if heard.kind == FillKind::Follow && source.is_none() {
                     continue;
                 }
-                render_into(under, run.rows, run.column, &heard, source, cells);
-                run.rendered = Some(heard);
+                render_into(under, run.rows, column, &heard, source, cells);
+                run.rendered = Some((heard, column));
                 run.renders = run.renders.wrapping_add(1);
             }
             // What's under it first, as the edit thread's render restores it, then the cell.

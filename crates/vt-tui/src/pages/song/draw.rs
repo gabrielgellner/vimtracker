@@ -1,4 +1,5 @@
-//! The song view: a row per section, with its length, how it starts and each track's chain, and a
+//! The song view: a row per section, with its length, how it starts, its own scale if it has one
+//! and each track's chain, and a
 //! bar down the sections `:loop` keeps playing. A group with no tracks in it is faint, as it plays
 //! nothing. A group and its tracks are named in its colour, and a folded group's tracks are left
 //! out, its name marked, while an empty group is folded away unless it's opened. What each track is
@@ -16,7 +17,7 @@ use vt_model::song::{SectionStart, Song};
 use crate::input::mode::Mode;
 use crate::pages::Ctx;
 use crate::pages::song::{
-    COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, START_COLUMN, SongView,
+    COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, SCALE_COLUMN, START_COLUMN, SongView,
 };
 use crate::widgets::glyphs;
 use crate::widgets::table::centred_run;
@@ -30,6 +31,8 @@ const LOOP_BAR: &str = "\u{2502}";
 const LENGTH_WIDTH: usize = 8;
 const REPEAT_WIDTH: usize = 5;
 const START_WIDTH: usize = 7;
+/// A scale's root and short name, `C# Blues` at the widest, and a gap.
+const SCALE_WIDTH: usize = 9;
 /// A track's column: two hex digits, or a name over them, and a gap.
 const TRACK_WIDTH: usize = 4;
 /// A group's column: its whole name, the mark beside it while it's folded, and a gap.
@@ -58,7 +61,7 @@ fn column_width(song: &Song, track: usize) -> usize {
 pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &SongView, ctx: &Ctx) {
     let bold = Style::new().add_modifier(Modifier::BOLD);
     let song = ctx.song();
-    let before = NUMBER_WIDTH + LENGTH_WIDTH + REPEAT_WIDTH + START_WIDTH;
+    let before = NUMBER_WIDTH + LENGTH_WIDTH + REPEAT_WIDTH + START_WIDTH + SCALE_WIDTH;
     let room = usize::from(area.width).saturating_sub(before);
     // The tracks not folded away, of which as many as fit around the cursor's are drawn, or the
     // cursor's alone if none do.
@@ -77,8 +80,8 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &SongView, ctx: &Ctx) {
     let shown_tracks = tracks[run].to_vec();
 
     let mut heading = vec![Span::raw(format!(
-        "{:<NUMBER_WIDTH$}{:<LENGTH_WIDTH$}{:<REPEAT_WIDTH$}{:<START_WIDTH$}",
-        "", "Length", "Rpt", "Start"
+        "{:<NUMBER_WIDTH$}{:<LENGTH_WIDTH$}{:<REPEAT_WIDTH$}{:<START_WIDTH$}{:<SCALE_WIDTH$}",
+        "", "Length", "Rpt", "Start", "Scale"
     ))];
     for &track in &shown_tracks {
         let label = song.tracks[track].label(track);
@@ -192,6 +195,13 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &SongView, ctx: &Ctx) {
             SectionStart::Reset => "reset",
         };
         cell(start.to_owned(), START_COLUMN, START_WIDTH, None);
+        // `--` while it plays in the song's scale.
+        let scale = section.scale.map_or_else(
+            || "--".to_owned(),
+            |scale| format!("{} {}", scale.root_name(), scale.kind.short_name()),
+        );
+        let follows = section.scale.is_none().then(theme::dim);
+        cell(scale, SCALE_COLUMN, SCALE_WIDTH, follows);
         for &track in &shown_tracks {
             let chain = section.chains.get(track).copied().flatten();
             let jam = ctx.jam().get(track).copied().unwrap_or_default();
