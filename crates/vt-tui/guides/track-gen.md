@@ -100,7 +100,7 @@ walks the same each time that row plays. `Cue` never holds any of them back, as
 they're how the loop is walked, not its bounds. At the end of its title, dim, it says how this phrase's lane
 is heard against its own: `· here 6 rows, its own 4 rows`. `=` `-` `+` `_`, `i`,
 `K` on `Rate`, `x`, `M` and `gd` work on them as on any of the track's settings,
-a step's `LLEN1`, `LRAT1`, `LSTA1`, `LJMP1`, `LHLD1`, `LORD1` and `LREV1` lock them, and a mod slot can go to them. A column
+a step's `LLEN1`, `LRAT1`, `LSTA1`, `LJMP1`, `LHLD1`, `LORD1` and `LREV1` lock them, and a mod slot can go to them, full depth moving `Rate`, `Order` and `Reverse` across their lists. A column
 without a lane has no device, and the settings keep their values: a macro mapped
 there does nothing until a phrase gives that column a lane.
 
