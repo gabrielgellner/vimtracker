@@ -5,6 +5,7 @@
 pub(crate) mod beads;
 pub(crate) mod chorus;
 pub(crate) mod clouds;
+pub(crate) mod colour;
 pub(crate) mod delay;
 pub(crate) mod distort;
 pub(crate) mod echo;

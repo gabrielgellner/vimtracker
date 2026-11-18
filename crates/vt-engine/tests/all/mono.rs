@@ -57,6 +57,17 @@ fn every_effect() -> Vec<Insert> {
         mix: 0xE0,
         ..Vowel::DEFAULT
     }));
+    for kind in vt_model::insert::ColourType::ALL {
+        effects.push(Insert::Colour(vt_model::insert::Colour {
+            kind,
+            drive: 0xC0,
+            even: 0x60,
+            hard: 0x30,
+            emph: 0xC0,
+            iron: 0xA0,
+            ..vt_model::insert::Colour::DEFAULT
+        }));
+    }
     effects.push(Insert::Exciter(Exciter {
         drive: 0xC0,
         tone: 0x40,
@@ -139,8 +150,8 @@ fn every_claim_comes_out_as_working_out_both_does() {
             );
         }
     }
-    // An empty slot, and Distort, EQ3, the compressor, the gate, Vowel and the exciter as they
-    // start, then Distort's eight types, EQ3, the three compressors, the three gates, Vowel and
-    // the exciter as set above.
-    assert_eq!(claims, 24);
+    // An empty slot, and Distort, EQ3, the compressor, the gate, Vowel, the exciter and Colour as
+    // they start, then Distort's eight types, EQ3, the three compressors, the three gates, Vowel,
+    // Colour's four types and the exciter as set above.
+    assert_eq!(claims, 29);
 }

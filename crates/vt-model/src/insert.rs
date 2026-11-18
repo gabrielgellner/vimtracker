@@ -175,6 +175,7 @@ effects! {
     Clouds(Clouds),
     Beads(Beads),
     Echo(Echo),
+    Colour(Colour),
     Hall(Hall),
 }
 

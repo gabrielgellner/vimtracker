@@ -72,7 +72,10 @@ fn the_effects_list_shows_them_by_group_and_each_sets_its_own() {
         .collect();
     let expected: Vec<(&str, Vec<&str>)> = vec![
         ("Dynamics", vec!["Comp", "Limit"]),
-        ("Tone & drive", vec!["EQ3", "Distort", "Tape", "Exciter"]),
+        (
+            "Tone & drive",
+            vec!["EQ3", "Distort", "Tape", "Exciter", "Colour"],
+        ),
         ("Filter", vec!["LPG", "Vowel"]),
         ("Modulation", vec!["Chorus", "Phaser", "Flanger", "Rotary"]),
         ("Pitch & spectral", vec!["Pitch", "Freq Shift", "Warps"]),

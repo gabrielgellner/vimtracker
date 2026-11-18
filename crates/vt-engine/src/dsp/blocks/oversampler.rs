@@ -81,6 +81,23 @@ impl QuadrupleOversampler {
     }
 }
 
+/// Going to eight times the rate and back, as three of the halfbands in a row, for a curve driven
+/// so far that four times the rate still aliases (#262).
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct OctupleOversampler {
+    outer: Oversampler,
+    inner: QuadrupleOversampler,
+}
+
+impl OctupleOversampler {
+    /// One sample at the normal rate, with `step` run eight times at the higher one, in order.
+    #[inline]
+    pub(crate) fn process(&mut self, input: f32, mut step: impl FnMut(f32) -> f32) -> f32 {
+        let Self { outer, inner } = self;
+        outer.process(input, |twice| inner.process(twice, &mut step))
+    }
+}
+
 /// The same with two sounds going up together, for what mixes them before it comes back down.
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct PairOversampler {
@@ -113,6 +130,8 @@ impl PairOversampler {
 
 tiny_by_fields!(Allpass { state });
 tiny_by_fields!(Oversampler { up, down });
+tiny_by_fields!(QuadrupleOversampler { outer, inner });
+tiny_by_fields!(OctupleOversampler { outer, inner });
 
 impl SameBits for Allpass {
     #[inline]
@@ -129,6 +148,13 @@ impl SameBits for Oversampler {
 }
 
 impl SameBits for QuadrupleOversampler {
+    #[inline]
+    fn same_bits(&self, other: &Self) -> bool {
+        self.outer.same_bits(&other.outer) && self.inner.same_bits(&other.inner)
+    }
+}
+
+impl SameBits for OctupleOversampler {
     #[inline]
     fn same_bits(&self, other: &Self) -> bool {
         self.outer.same_bits(&other.outer) && self.inner.same_bits(&other.inner)

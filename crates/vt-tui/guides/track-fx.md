@@ -33,7 +33,7 @@ with the cursor has the brighter frame. An empty slot keeps its frame, says `Emp
 | Group | Effects |
 |---|---|
 | Dynamics | `Comp`, `Limit` |
-| Tone & drive | `EQ3`, `Distort`, `Tape`, `Exciter` |
+| Tone & drive | `EQ3`, `Distort`, `Tape`, `Exciter`, `Colour` |
 | Filter | `LPG`, `Vowel` |
 | Modulation | `Chorus`, `Phaser`, `Flanger`, `Rotary` |
 | Pitch & spectral | `Pitch`, `Freq Shift`, `Warps` |
@@ -386,6 +386,36 @@ quiet ones are barely touched. It suits hats, vocals and a whole mix.
 it is, and it starts at `80`. The higher `Tone` is, the less gets through
 to be driven, so `Drive` gives it more to make up. Each side has a detector
 of its own, so loud highs on one side don't excite the other.
+
+`Colour` is analog saturation, the warmth a console, a tube preamp or a
+pedal's diodes give: a circuit's curve that bends what's loud, between two
+filters that decide whether the highs or the lows bend first, and a
+transformer's lows. Its `Type`, in the title, is the circuit:
+
+| Type | Its curve |
+|---|---|
+| `Warm` | Smooth and even both ways, as a console's |
+| `Tube` | A 12AX7 triode's: soft, lopsided, with a strong second harmonic |
+| `Diode` | Two diodes back to back: soft, and it never quite stops rising |
+| `Transistor` | Cuts off softly one way and saturates hard the other |
+
+| Setting | Does |
+|---|---|
+| `Drive` | How hard it hits the curve, from none at `00` to 24 dB at `FF` |
+| `Even` | Tips the curve to one side, for a second harmonic that thickens |
+| `Hard` | Sharpens the knee toward a hard clip, for brighter odd harmonics |
+| `Emph` | Flat at `80`. Above, the highs bend first, as on tape; below, last |
+| `Iron` | A transformer's lows: loud bass saturates, lifted a little at 60 Hz |
+
+At `Drive` `00` a quiet sound comes out as it went in, whatever the other
+settings: only what's loud is bent, so it starts as gentle colour and turns
+into drive as `Drive` goes up, louder as it does, which `Gain` takes back.
+`Emph` lifts the highs before the curve and cuts them after by the same,
+so it changes what's bent and not the tone of what isn't. `Iron` bends the
+lows more the lower and louder they are, so a kick or a bass thickens while
+the highs stay clean. `Mix` blends it with the sound going in, and it
+starts all wet. It's worked at eight times the rate, so even a hard clip on
+a high note stays clean of tones that don't belong.
 
 `Plate` is a second reverb, after Jon Dattorro's plate: brighter and denser
 than `Reverb`, and wide from a single sound. It starts half wet, and its tail

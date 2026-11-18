@@ -25,4 +25,5 @@ stutter | Stutter
 clouds | Clouds
 beads | Beads
 echo | Space Echo
+colour | Colour
 hall | Hall

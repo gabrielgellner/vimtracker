@@ -23,6 +23,7 @@ const PINS: &[(&str, &str, Option<u64>)] = &[
     ("fx/beads", "111d3b013624760a", Some(0xe9725f77e5007ff9)),
     ("fx/chorus", "156654564f3a0a35", None),
     ("fx/clouds", "235230280f0a5776", Some(0xd8a7d432fd02edd7)),
+    ("fx/colour", "542c5614071f3f29", None),
     ("fx/comb", "492b050300391e34", None),
     ("fx/comp-clean", "1e1e3d16357f3c29", Some(0x7bd858c254d44dd9)),
     ("fx/comp-console", "77550d2d0e14696f", Some(0x42e803274e20a528)),
