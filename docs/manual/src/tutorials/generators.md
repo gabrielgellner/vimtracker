@@ -529,6 +529,8 @@ their `Lane` devices. Track 2 is the shipped patch `Acid loops`, its five loops 
     a time.
 *   `FX1 Lane` `Jump` `FF` on track 1: each length is any of the lane's four, as Kria's random
     direction on one part. At `80` about half are, and the rest count on.
+*   `FX1 Lane` `Hold` `80` on track 1: about half the lengths keep the one before, as a step whose
+    probability fails in Kria keeps its value. At `FF` the first length plays throughout.
 
 ## Metropolix
 
