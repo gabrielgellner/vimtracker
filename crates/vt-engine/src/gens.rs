@@ -218,6 +218,130 @@ struct GenRun {
     /// to be reported: only the latest, so a long block never loses it among the rows.
     told: Option<i64>,
     report: Option<GenPass>,
+    /// Where what it was last heard as is kept across passes, for `Mutate` (decision 430).
+    kept: Option<usize>,
+    /// The variation it last rendered while it mutates, which its cells are.
+    variation: Option<i64>,
+}
+
+/// What a live generator was last heard as, kept across its passes, phrases and versions, so a
+/// new variation can draw only `Mutate`'s share of its rows again and keep the rest as they were
+/// heard (decision 430): the cells of the variation it last rendered, and those of the one before,
+/// which that one kept its rows from. Room for every live generator's rows is made ahead.
+#[derive(Debug, Clone, Copy)]
+struct Heard {
+    /// The track, the phrase and the generator's place in its list.
+    key: (usize, u32, usize),
+    /// Where its cells start in `now` and `was`, and how many there are.
+    cells: usize,
+    length: usize,
+    /// The variation whose cells are in `now`, and the one before it, whose are in `was`.
+    now: Option<i64>,
+    was: Option<i64>,
+}
+
+/// Every live generator's [`Heard`], by key.
+#[derive(Debug, Default)]
+struct Memory {
+    kept: Box<[Heard]>,
+    now: Box<[GenCell]>,
+    was: Box<[GenCell]>,
+}
+
+impl Memory {
+    /// Room for every live generator of every phrase of the song, by key.
+    fn for_song(song: &Song) -> Self {
+        let mut kept = Vec::new();
+        let mut cells = 0;
+        for (track, owner) in song.tracks.iter().enumerate() {
+            for (id, phrase) in &owner.phrases {
+                for (generator, live) in phrase.generators().iter().enumerate() {
+                    let Some(rows) = live.rows() else {
+                        continue;
+                    };
+                    let length = rows.len().min(MAX_PHRASE_STEPS);
+                    kept.push(Heard {
+                        key: (track, *id, generator),
+                        cells,
+                        length,
+                        now: None,
+                        was: None,
+                    });
+                    cells += length;
+                }
+            }
+        }
+        Self {
+            kept: kept.into(),
+            now: vec![GenCell::Under; cells].into(),
+            was: vec![GenCell::Under; cells].into(),
+        }
+    }
+
+    fn find(&self, key: (usize, u32, usize)) -> Option<usize> {
+        self.kept.binary_search_by_key(&key, |kept| kept.key).ok()
+    }
+
+    /// Forget everything heard, as playing starts.
+    fn forget(&mut self) {
+        for kept in &mut self.kept {
+            kept.now = None;
+            kept.was = None;
+        }
+    }
+
+    /// Take what another version's memory heard of each generator both have, with as many rows.
+    fn keep_from(&mut self, old: &Memory) {
+        let mut others = old.kept.iter().filter(|kept| kept.now.is_some()).peekable();
+        for kept in &mut self.kept {
+            while others.next_if(|other| other.key < kept.key).is_some() {}
+            let Some(other) = others.next_if(|other| other.key == kept.key) else {
+                continue;
+            };
+            if other.length != kept.length {
+                continue;
+            }
+            let (to, from) = (kept.cells..kept.cells + kept.length, other.cells);
+            self.now[to.clone()].copy_from_slice(&old.now[from..from + other.length]);
+            self.was[to].copy_from_slice(&old.was[from..from + other.length]);
+            kept.now = other.now;
+            kept.was = other.was;
+        }
+    }
+}
+
+/// Render a variation of a generator that mutates into `cells`: a new variation moves what was
+/// heard of the last one to `was` and draws `Mutate`'s share of its rows again, keeping the rest
+/// from it; the same one again, as a setting moves, renders it again over the same rows kept; and
+/// the one before, read again ahead of its own last rows, is as it was heard.
+fn render_mutating(
+    kept: &mut Heard,
+    now: &mut [GenCell],
+    was: &mut [GenCell],
+    cells: &mut [GenCell],
+    (shape, variation): (&Shape, i64),
+    render: impl FnOnce(&mut [GenCell]),
+) {
+    if kept.now != Some(variation) {
+        if kept.was == Some(variation) {
+            cells.copy_from_slice(was);
+            return;
+        }
+        if kept.now.is_some() {
+            was.copy_from_slice(now);
+        }
+        kept.was = kept.now;
+        kept.now = Some(variation);
+    }
+    render(cells);
+    if kept.was.is_some() {
+        for (at, (cell, last)) in cells.iter_mut().zip(was.iter()).enumerate() {
+            if !shape.draws_again(variation, at) {
+                *cell = *last;
+            }
+        }
+    }
+    now.copy_from_slice(cells);
 }
 
 /// Which pass a generator that varies was heard on, and the seeds it played it with, as its row
@@ -315,6 +439,8 @@ pub(crate) struct GenScratch {
     rooms: Box<[Room]>,
     runs: Box<[Option<GenRun>]>,
     cells: Box<[GenCell]>,
+    /// What each live generator was last heard as, for `Mutate`.
+    memory: Memory,
     /// What's waiting for the callback to take, by track, made ahead with room for
     /// [`REPORTS_PER_RUN`] a run, and never grown.
     reports: Vec<(usize, GenReport)>,
@@ -388,8 +514,25 @@ impl GenScratch {
             rooms: rooms.into(),
             runs: vec![None; runs].into(),
             cells: vec![GenCell::Under; cells].into(),
+            memory: Memory::for_song(song),
             reports: Vec::with_capacity((runs * REPORTS_PER_RUN).max(rooms_len)),
         }
+    }
+
+    /// Forget what every generator was heard as, as playing starts, so a generator that mutates
+    /// starts from a whole variation, as Steps' `Mutate` does.
+    pub(crate) fn forget_heard(&mut self) {
+        self.memory.forget();
+        for run in self.runs.iter_mut().flatten() {
+            run.variation = None;
+            run.rendered = None;
+        }
+    }
+
+    /// Keep what the last version's scratch heard of each generator this one has, so an edit
+    /// doesn't start a generator that mutates again. Copies, allocating nothing.
+    pub(crate) fn keep_heard_from(&mut self, old: &GenScratch) {
+        self.memory.keep_from(&old.memory);
     }
 
     /// Set a track's runs for a phrase, if they aren't for it already, each with nothing rendered.
@@ -424,6 +567,8 @@ impl GenScratch {
                 generates: is_empty(under, rows, generator.column),
                 told: None,
                 report: None,
+                kept: self.memory.find((at.track, at.phrase, index)),
+                variation: None,
             });
             cells += length;
         }
@@ -561,7 +706,11 @@ impl GenScratch {
             if plays {
                 self.rooms[at.track].quiet = None;
             }
-            if heard == *written && column == run.column {
+            // Drawing only some rows again, it's rendered on every variation, the written one too,
+            // so the next has its rows to keep (decision 430).
+            let kept = run.kept.filter(|_| held.mutates());
+            let variation = kept.and_then(|_| held.variation_on(run.pass));
+            if kept.is_none() && heard == *written && column == run.column {
                 run.rendered = None;
                 if plays {
                     tell(&mut self.reports, at.track, GenReport::Row(row));
@@ -570,13 +719,30 @@ impl GenScratch {
             }
             let length = run.rows.len().min(MAX_PHRASE_STEPS);
             let cells = &mut self.cells[run.cells..run.cells + length];
-            if run.rendered != Some((heard, column)) {
+            if run.rendered != Some((heard, column)) || run.variation != variation {
                 // A `Follow` whose source has gone leaves what it last wrote, as the edit thread's.
                 if heard.kind == FillKind::Follow && source.is_none() {
                     continue;
                 }
-                render_into(under, run.rows, column, &heard, source, cells);
+                let render = |cells: &mut [GenCell]| {
+                    render_into(under, run.rows, column, &heard, source, cells);
+                };
+                match (kept.map(|at| &mut self.memory.kept[at]), variation) {
+                    (Some(kept), Some(variation)) if kept.length == length => {
+                        let span = kept.cells..kept.cells + length;
+                        render_mutating(
+                            kept,
+                            &mut self.memory.now[span.clone()],
+                            &mut self.memory.was[span],
+                            cells,
+                            (&held, variation),
+                            render,
+                        );
+                    }
+                    _ => render(cells),
+                }
                 run.rendered = Some((heard, column));
+                run.variation = variation;
                 run.renders = run.renders.wrapping_add(1);
             }
             // What's under it first, as the edit thread's render restores it, then the cell.

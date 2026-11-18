@@ -12,7 +12,7 @@ Length, then the FX columns. Its title is its fill and its `Where`, as `K` choos
 them, `Acid`'s `Pitches` after them and a `Follow`'s source in place of the
 `Where`, a `Variation`'s and a `Ring`'s fill alone, as each makes its rows with
 its notes, and a `Divisions`' channel and bar, as it makes its own rhythm;
-then `Vary` on a fill that draws, then where it acts, dim: `Ramp  Euclid ·
+then `Vary` on a fill that draws, and `Mutate` after it while it varies, then where it acts, dim: `Ramp  Euclid ·
 Note 00–0F`, or `FX1 CUT lane 0C` for a lane. A `Where` that's its column's own is
 dim too, and so is a `Vary` of `Once`. Its settings are the
 shape panel's, laid out by what they do: the fill's down the first two columns,
@@ -114,7 +114,7 @@ What a fill's settings do together, and recipes for the ones with the most, are 
 | `K` | List a setting's choices; switch one that's off or on |
 | `x` | Back to where it starts |
 | `r` | Roll the generator again, from anywhere in it, as in the panel |
-| `Space g a` | Apply it, as plain values; with `Vary` on, keep the pass heard |
+| `Space g a` | Apply it, as plain values; with `Vary` on, keep the pass heard; with `Mutate` below `100%`, apply it as heard |
 | `dd` | To nothing; on `Fill`, take it away, putting back what was under it |
 | `Enter` | Open the shape panel on it, in the phrase view, as `gl` does |
 
@@ -142,6 +142,21 @@ from and which pass it is, so playing from bar 33 hears what playing to it
 would, and it starts again from that row after 256 passes on one column, and
 after 4096 generations across tracks, 256 passes of a 16-row phrase. `Space g a`
 applies it as last heard, as plain values, as a generation isn't a seed to keep.
+
+**Déjà vu.** While it varies, `Mutate`, after `Vary` in the title, is the share of its rows each
+new variation draws again, after Marbles' Déjà vu and the Turing Machine's big knob: `100%`, as
+it starts, draws every row again, as above; `0%` draws none, so the first pass heard plays on
+every pass, locked; between, each new variation draws about that share of the rows again and
+keeps the rest as the last pass played them, so the line drifts. Which rows it draws comes from
+the generator's seed and which variation it is, so a render plays the same again, and a higher
+`Mutate` draws every row a lower one does and more. It works on a `Clusters`, `Markov` or other
+rhythm's rows as on the values, so a rhythm can drift a hit at a time. What's kept is each row as
+it was heard, so turning `Spread` on a locked line changes only the rows drawn again after.
+Playing from anywhere starts from that pass's whole variation, as Steps' `Mutate` does, and
+keeps rows from there; an edit while it plays keeps what was heard. A macro, a `MAC` lock and an
+LFO on a macro reach it as any setting here, and on the Roto it's beside `Vary`, or on a page
+of its own, `Mutate`, where the fill's are full. `Space g a` on a generator that mutates applies it as last
+heard, as plain values, as rows kept from earlier passes aren't a seed to keep.
 
 When you hear one you like, `Space g a` keeps it: the pass just heard becomes the
 generator's seed and `Vary` goes back to `Once`, so that variation plays every pass
