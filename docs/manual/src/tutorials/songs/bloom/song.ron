@@ -1046,7 +1046,7 @@
             high_cut: 255,
             inserts: (Reverb((
                 pre: 0,
-                decay: 80,
+                decay: 96,
                 damp: 85,
                 low_cut: 0,
                 high_cut: 255,

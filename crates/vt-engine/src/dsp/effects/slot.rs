@@ -1757,11 +1757,11 @@ mod tests {
                 ..Delay::DEFAULT
             }),
             Insert::Reverb(Reverb {
-                decay: 0xE0,
+                decay: 0xBD,
                 ..Reverb::DEFAULT
             }),
             Insert::Plate(Plate {
-                decay: 0xE0,
+                decay: 0xBD,
                 ..Plate::DEFAULT
             }),
             Insert::Spring(Spring {

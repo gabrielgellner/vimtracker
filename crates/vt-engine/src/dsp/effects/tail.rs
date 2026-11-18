@@ -218,6 +218,23 @@ pub(crate) mod measure {
         (-60.0 / slope) as f32
     }
 
+    /// How long a click through a reverb takes to fall 60 dB around a frequency, its two sides
+    /// added, for a tail of about `about` seconds.
+    pub(crate) fn click_seconds(
+        mut click: impl FnMut([f32; 2]) -> [f32; 2],
+        about: f32,
+        rate: u32,
+        hertz: f32,
+    ) -> f32 {
+        let response: Vec<f32> = (0..((about * 1.3 + 0.5) * rate as f32) as usize)
+            .map(|at| {
+                let out = click([if at == 0 { 1.0 } else { 0.0 }; 2]);
+                out[0] + out[1]
+            })
+            .collect();
+        seconds(&response, rate, hertz, 35.0)
+    }
+
     /// How a tail's seconds compare with what's measured of a click through the reverb, its two
     /// sides added, at each of `TAIL_HZ`: what's measured over what's said.
     pub(crate) fn ratios(

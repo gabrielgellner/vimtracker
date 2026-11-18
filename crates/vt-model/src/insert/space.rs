@@ -7,7 +7,7 @@ use crate::lfo::DIVISION_NAMES;
 
 use super::{
     Columns, Entry, GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Place, RETIMES, Units, WET_MIX_PARAM,
-    from_middle, hex_param, is_zero,
+    from_middle, hex_param, is_full, is_zero,
 };
 
 /// A delay's, in the order the page shows them.
@@ -372,19 +372,72 @@ impl Echo {
     }
 }
 
+/// The shortest and longest a reverb's `Decay` sets its tail, in seconds, to fall 60 dB.
+pub const REVERB_DECAY_SECONDS: (f32, f32) = (0.25, 64.0);
+
+/// How long a reverb's tail takes to fall 60 dB, in seconds, for a `Decay` on the `00` to `FF`
+/// scale: from a quarter of a second at `00`, about doubling each `20`, through 2 s at `60`, to 64
+/// s at `FF`, evenly in ratio. Each of its loops keeps `0.001` to the power of its length over this
+/// each time round, so its size and the rate leave the tail as long (decision 439).
+pub fn reverb_decay_seconds(value: f32) -> f32 {
+    let (shortest, longest) = REVERB_DECAY_SECONDS;
+    shortest * (longest / shortest).powf((value / 255.0).clamp(0.0, 1.0))
+}
+
+/// The lowest and highest corner of a reverb's `Low damp`, the high-pass in its loops, in Hz.
+pub const LOW_DAMP_HZ: (f32, f32) = (20.0, 1000.0);
+
+/// The corner of a reverb's `Low damp` in Hz, for a value on the `00` to `FF` scale, or nothing
+/// at `00`, where it's off: from 20 Hz at `01` to 1 kHz at `FF`, evenly in ratio, about 140 Hz at
+/// `80`.
+pub fn low_damp_hz(value: u8) -> Option<f32> {
+    let (lowest, highest) = LOW_DAMP_HZ;
+    (value > 0).then(|| lowest * (highest / lowest).powf(f32::from(value - 1) / 254.0))
+}
+
+/// A reverb's `Decay`, which its plate shares.
+const fn decay_param(default: u8) -> Entry {
+    hex_param("Decay", "decay", "DCAY", default)
+        .units(Units::ReverbDecay)
+        .means("how long its tail takes to fall 60 dB, from a quarter of a second to a minute")
+}
+
+/// A reverb's `Low damp`, which its plate shares.
+const fn low_damp_param(default: u8) -> Entry {
+    hex_param("Low damp", "lowdamp", "LDMP", default)
+        .means("how quickly its lows fall away as it rings, off at 00")
+}
+
+/// A reverb's `Width`, which its plate shares.
+const fn width_param(default: u8) -> Entry {
+    hex_param("Width", "width", "WDTH", default)
+        .means("how far apart its sides are, from together at 00")
+}
+
 /// A reverb's, in the order the page shows them.
-pub(crate) const REVERB_PARAMS: [Entry; 7] = [
+pub(crate) const REVERB_PARAMS: [Entry; 9] = [
     hex_param("Pre", "pre", "PRE", Reverb::DEFAULT.pre)
         .means("how long before it comes in, up to a quarter of a second"),
-    hex_param("Decay", "decay", "DCAY", Reverb::DEFAULT.decay).means("how long it rings"),
+    decay_param(Reverb::DEFAULT.decay),
     hex_param("Damp", "damp", "DAMP", Reverb::DEFAULT.damp)
         .means("how quickly its highs fall away as it rings"),
+    low_damp_param(Reverb::DEFAULT.low_damp),
     hex_param("Low cut", "lowcut", "LCUT", Reverb::DEFAULT.low_cut)
         .means("takes lows from what goes in, off at 00"),
     hex_param("High cut", "highcut", "HCUT", Reverb::DEFAULT.high_cut)
         .means("takes highs from what goes in, off at FF"),
+    width_param(Reverb::DEFAULT.width),
     WET_MIX_PARAM,
     GAIN_PARAM,
+];
+
+/// Where its settings sit on the FX page: its pre-delay and tail, how the tail darkens and thins,
+/// what goes in, then what comes out.
+pub(super) const REVERB_GRID: Columns = &[
+    &["pre", "decay"],
+    &["damp", "lowdamp"],
+    &["lowcut", "highcut"],
+    &["width", "mix", "gain"],
 ];
 
 /// A reverb's settings. One a file doesn't have starts as new.
@@ -393,14 +446,21 @@ pub(crate) const REVERB_PARAMS: [Entry; 7] = [
 pub struct Reverb {
     /// How long before anything comes out, up to a quarter of a second.
     pub pre: u8,
-    /// How long it rings.
+    /// How long its tail takes to fall 60 dB, as [`reverb_decay_seconds`] gives it.
     pub decay: u8,
     /// How quickly its highs fall away as it rings.
     pub damp: u8,
+    /// How quickly its lows fall away as it rings: a high-pass in its loops, its corner as
+    /// [`low_damp_hz`] gives it, off at `00`.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub low_damp: u8,
     /// A high-pass on what goes in, which `00` turns off.
     pub low_cut: u8,
     /// A low-pass on what goes in, which `FF` turns off.
     pub high_cut: u8,
+    /// From `00`, both sides together, to `FF`, as wide as they come out.
+    #[serde(skip_serializing_if = "is_full")]
+    pub width: u8,
     /// From `00`, all dry, to `FF`, all wet.
     pub mix: u8,
     pub gain: u8,
@@ -413,13 +473,15 @@ impl Default for Reverb {
 }
 
 impl Reverb {
-    /// As it starts.
+    /// As it starts: a tail of about 2 s.
     pub const DEFAULT: Self = Self {
         pre: 0,
-        decay: 0x50,
+        decay: 0x60,
         damp: 0x55,
+        low_damp: 0,
         low_cut: 0,
         high_cut: 0xFF,
+        width: 0xFF,
         mix: 0x80,
         gain: UNITY_LEVEL,
     };
@@ -428,30 +490,42 @@ impl Reverb {
         pre,
         decay,
         damp,
+        low_damp,
         low_cut,
         high_cut,
+        width,
         mix,
         gain,
     }
 }
 
 /// A plate's, in the order the page shows them. Those it shares with the reverb are named as its.
-pub(crate) const PLATE_PARAMS: [Entry; 8] = [
+pub(crate) const PLATE_PARAMS: [Entry; 10] = [
     hex_param("Pre", "pre", "PRE", Plate::DEFAULT.pre)
         .means("how long before it comes in, up to a quarter of a second"),
-    hex_param("Decay", "decay", "DCAY", Plate::DEFAULT.decay)
-        .means("how long it rings, up to about a minute"),
+    decay_param(Plate::DEFAULT.decay),
     hex_param("Damp", "damp", "DAMP", Plate::DEFAULT.damp)
         .means("how quickly its highs fall away as it rings"),
+    low_damp_param(Plate::DEFAULT.low_damp),
     hex_param("High cut", "highcut", "HCUT", Plate::DEFAULT.high_cut)
         .means("takes highs from what goes in, off at FF"),
     hex_param("Size", "size", "SIZE", Plate::DEFAULT.size)
         .units(Units::PlateSize)
-        .means("how big the plate is, against Dattorro's"),
+        .means("how big the plate is, against Dattorro's; its tail stays as long"),
     hex_param("Mod", "mod", "MOD", Plate::DEFAULT.excursion)
         .means("how much its tail wobbles, which keeps it from ringing metallic"),
+    width_param(Plate::DEFAULT.width),
     WET_MIX_PARAM,
     GAIN_PARAM,
+];
+
+/// Where its settings sit on the FX page: its pre-delay, tail and size, how the tail darkens and
+/// thins, what goes in and the wobble, then what comes out.
+pub(super) const PLATE_GRID: Columns = &[
+    &["pre", "decay", "size"],
+    &["damp", "lowdamp"],
+    &["highcut", "mod"],
+    &["width", "mix", "gain"],
 ];
 
 /// A plate's settings, after Dattorro's. One a file doesn't have starts as new.
@@ -460,10 +534,13 @@ pub(crate) const PLATE_PARAMS: [Entry; 8] = [
 pub struct Plate {
     /// How long before anything comes out, up to a quarter of a second.
     pub pre: u8,
-    /// How long it rings: from barely at all to about a minute, never for ever.
+    /// How long its tail takes to fall 60 dB, as [`reverb_decay_seconds`] gives it, at any size.
     pub decay: u8,
     /// How quickly its highs fall away as it rings.
     pub damp: u8,
+    /// How quickly its lows fall away as it rings, as the reverb's.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub low_damp: u8,
     /// A low-pass on what goes in, which `FF` turns off.
     pub high_cut: u8,
     /// How big the plate is, from half to twice Dattorro's, evenly in ratio, with his at `80`.
@@ -471,6 +548,9 @@ pub struct Plate {
     /// How far its tank's all-passes wobble, which keeps the tail from ringing metallic. Dattorro's
     /// is at `80`.
     pub excursion: u8,
+    /// From `00`, both sides together, to `FF`, as wide as they come out.
+    #[serde(skip_serializing_if = "is_full")]
+    pub width: u8,
     /// From `00`, all dry, to `FF`, all wet.
     pub mix: u8,
     pub gain: u8,
@@ -483,14 +563,17 @@ impl Default for Plate {
 }
 
 impl Plate {
-    /// As it starts: Dattorro's decay, size and wobble, a little damping, and half wet.
+    /// As it starts: a tail of about 2 s, Dattorro's size and wobble, a little damping, and half
+    /// wet.
     pub const DEFAULT: Self = Self {
         pre: 0,
-        decay: 0x80,
+        decay: 0x60,
         damp: 0x20,
+        low_damp: 0,
         high_cut: 0xFF,
         size: 0x80,
         excursion: 0x80,
+        width: 0xFF,
         mix: 0x80,
         gain: UNITY_LEVEL,
     };
@@ -499,9 +582,11 @@ impl Plate {
         pre,
         decay,
         damp,
+        low_damp,
         high_cut,
         size,
         excursion,
+        width,
         mix,
         gain,
     }

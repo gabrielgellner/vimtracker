@@ -1185,21 +1185,26 @@ const DELAY: DeviceLayout = stored(
         knobs("Time", [s("retime"), s("wow"), __, __, __, __, __, __]),
     ],
 );
+/// Its tail and how it darkens and thins, then what goes in. `Width`, past eight knobs, is on a
+/// second page, under `Mix`.
 const REVERB: DeviceLayout = live(
     "fx/reverb",
-    &[knobs(
-        EffectKind::Reverb.name(),
-        [
-            s("decay"),
-            s("pre"),
-            s("damp"),
-            GAP,
-            s("lowcut"),
-            s("highcut"),
-            s("mix"),
-            s("gain"),
-        ],
-    )],
+    &[
+        knobs(
+            EffectKind::Reverb.name(),
+            [
+                s("decay"),
+                s("pre"),
+                s("damp"),
+                s("lowdamp"),
+                s("lowcut"),
+                s("highcut"),
+                s("mix"),
+                s("gain"),
+            ],
+        ),
+        knobs("Width", [GAP, GAP, GAP, GAP, GAP, GAP, s("width"), __]),
+    ],
 );
 const CHORUS: DeviceLayout = live(
     "fx/chorus",
@@ -1356,21 +1361,29 @@ const TAPE: DeviceLayout = live(
         ],
     )],
 );
+/// Its tail, size and darkening, what goes in and its wobble. `Low damp` and `Width`, past eight
+/// knobs, are on a second page, under `Damp` and `Mix`.
 const PLATE: DeviceLayout = live(
     "fx/plate",
-    &[knobs(
-        EffectKind::Plate.name(),
-        [
-            s("decay"),
-            s("size"),
-            s("pre"),
-            s("damp"),
-            s("highcut"),
-            s("mod"),
-            s("mix"),
-            s("gain"),
-        ],
-    )],
+    &[
+        knobs(
+            EffectKind::Plate.name(),
+            [
+                s("decay"),
+                s("size"),
+                s("pre"),
+                s("damp"),
+                s("highcut"),
+                s("mod"),
+                s("mix"),
+                s("gain"),
+            ],
+        ),
+        knobs(
+            "Tail",
+            [GAP, GAP, GAP, s("lowdamp"), GAP, GAP, s("width"), __],
+        ),
+    ],
 );
 const PITCH: DeviceLayout = live(
     "fx/pitch",
