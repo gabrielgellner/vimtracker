@@ -721,8 +721,9 @@ impl Engine {
         let first = position.pulse == 0;
         let gate = step.gate_kind();
         let mut fx = self.read_row_fx(index, phrase, read, &step);
-        // `CHA` and `CND` go first, as whether the note plays decides whether locks end, with
-        // the chances moved by the `CDLT` the row reads before its locks run.
+        // `CHA` and `CND` go first, as whether the note plays decides whether locks end and
+        // whether the row's run, with the chances moved by the `CDLT` the row reads before its
+        // locks run.
         let moved = self.row_chance_delta(index, &fx.fx, &step, first);
         // With `Chance target` on `Pulse`, the share each of the row's pulses and ratchet hits
         // plays with (decision 406).
@@ -773,7 +774,7 @@ impl Engine {
             _ => row && decided.fx,
         };
         // An `SLD` slides the row's locks of continuous settings, and the next note's, rather
-        // than having them jump (decision 417). A thinned row's locks run, so it slides too.
+        // than having them jump (decision 417). A dropped row's locks don't run, so it doesn't.
         let slides = first
             && fx.fx.iter().enumerate().any(|(number, slot)| {
                 slot.command == Some(FxCommand::Sld) && slot.coarse() > 0 && runs(number, slot)
@@ -917,11 +918,13 @@ impl Engine {
                 .gate_frames(index, pulses, step.length(), &pending)
                 .map(|frames| start_at + frames);
         }
-        // A `RET` belongs to the note it follows, as a retrig does to its trig on Elektron's
-        // machines, so a note written here that doesn't play takes its `RET` with it, on `Pulse`
-        // the note of this pulse. A row with no note strikes the one sounding again (decision
-        // 427).
+        // A note's timing belongs to it, as a retrig does to its trig on Elektron's machines, so
+        // a note written here that doesn't play takes its `KIL`, `OFF` and `RET` with it, on
+        // `Pulse` the note of this pulse. A row with no note cuts, releases and strikes the one
+        // sounding (decisions 427 and 429).
         if !plays && matches!(event, Note::On(_)) {
+            fx.kill = None;
+            fx.off = None;
             fx.retrigger = None;
         }
         // Each hit rolls the dice of the step the dice loop holds, if it's on.
@@ -1194,6 +1197,13 @@ impl Engine {
         if first && strikes && moved < 128.0 && chance.is_none() && !conditioned() {
             // Thinned by the dice of the step the dice loop holds, if it's on.
             decided.note &= thin_keeps(seed, index, pending.rolls(), moved);
+        }
+        // On `Row`, a note its `CHA` or `CDLT` drops takes the row's trig with it, its own FX
+        // with its locks, as a failed `CND` does and as an Elektron trig's chance does. A row with
+        // no note has no trig to drop, so its FX run. On `Pulse` the chance never drops the row,
+        // only its pulses, each with its note's timing (decision 429).
+        if first && strikes && share.is_none() && !decided.note {
+            decided.fx = false;
         }
         let holds = self.conditions_hold(index, fx, pending, position, chance, moved);
         if !holds {

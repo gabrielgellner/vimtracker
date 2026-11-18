@@ -197,7 +197,8 @@ impl PendingStep {
 pub(crate) struct Decided {
     /// Whether its note plays, past its `CHA` and `CND`.
     pub note: bool,
-    /// Whether its own FX run, past its `CND`. A failed `CHA` skips only the note.
+    /// Whether its own FX run, past its `CND`, and on `Row` past a `CHA` or `CDLT` that drops its
+    /// note (decision 429). A row with no note runs them whatever its `CHA` says.
     pub fx: bool,
 }
 
