@@ -885,3 +885,123 @@ impl Stutter {
         gain,
     }
 }
+
+/// How long a hall's lows ring against its `Decay`, as so many times, for a value on the `00` to
+/// `FF` scale: from a quarter at `00`, through as long at `80`, to four times at `FF`, evenly in
+/// ratio.
+pub fn hall_lows(value: f32) -> f32 {
+    (from_middle(value) * 2.0).exp2()
+}
+
+/// How big a hall is, as so many times its lines' lengths, for a value on the `00` to `FF` scale:
+/// from half at `00`, a big room, through its own at `80`, to twice at `FF`, evenly in ratio.
+pub fn hall_size(value: f32) -> f32 {
+    from_middle(value).exp2()
+}
+
+/// A hall's, in the order the page shows them. Those it shares with the reverbs are named as
+/// theirs.
+pub(crate) const HALL_PARAMS: [Entry; 12] = [
+    hex_param("Pre", "pre", "PRE", Hall::DEFAULT.pre)
+        .means("how long before it comes in, up to a quarter of a second"),
+    decay_param(Hall::DEFAULT.decay),
+    hex_param("Lows", "lows", "LOWS", Hall::DEFAULT.lows)
+        .units(Units::LowDecay)
+        .centred()
+        .means("how long its lows ring against Decay, as long at 80"),
+    hex_param("Damp", "damp", "DAMP", Hall::DEFAULT.damp)
+        .means("how quickly its highs fall away as it rings"),
+    hex_param("Size", "size", "SIZE", Hall::DEFAULT.size)
+        .units(Units::PlateSize)
+        .means("how big the hall is, from a big room to twice its own; its tail stays as long"),
+    hex_param("Early", "early", "ERLY", Hall::DEFAULT.early)
+        .means("how loud its first reflections are, off at 00"),
+    hex_param("Mod", "mod", "MOD", Hall::DEFAULT.excursion)
+        .means("how much its lines wobble, which keeps the tail from ringing"),
+    hex_param("Low cut", "lowcut", "LCUT", Hall::DEFAULT.low_cut)
+        .means("takes lows from what goes in, off at 00"),
+    hex_param("High cut", "highcut", "HCUT", Hall::DEFAULT.high_cut)
+        .means("takes highs from what goes in, off at FF"),
+    width_param(Hall::DEFAULT.width),
+    WET_MIX_PARAM,
+    GAIN_PARAM,
+];
+
+/// Where its settings sit on the FX page: its pre-delay, reflections and size; its tail in three
+/// bands; what goes in and the wobble; then what comes out.
+pub(super) const HALL_GRID: Columns = &[
+    &["pre", "early", "size"],
+    &["decay", "lows", "damp"],
+    &["lowcut", "highcut", "mod"],
+    &["width", "mix", "gain"],
+];
+
+/// A hall's settings: a feedback delay network of eight lines, after Jot's and zita-rev1. One a
+/// file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Hall {
+    /// How long before anything comes out, up to a quarter of a second.
+    pub pre: u8,
+    /// How long its middle takes to fall 60 dB, as [`reverb_decay_seconds`] gives it, at any size.
+    pub decay: u8,
+    /// How long its lows ring against that, as [`hall_lows`] gives it.
+    pub lows: u8,
+    /// How quickly its highs fall away: as long as the middle at `00`, a tenth as long at `FF`.
+    pub damp: u8,
+    /// How big it is, as [`hall_size`] gives it.
+    pub size: u8,
+    /// How loud its early reflections are, off at `00`.
+    pub early: u8,
+    /// How far its lines' reads wobble, from not at all at `00`.
+    pub excursion: u8,
+    /// A high-pass on what goes in, which `00` turns off.
+    pub low_cut: u8,
+    /// A low-pass on what goes in, which `FF` turns off.
+    pub high_cut: u8,
+    /// From `00`, both sides together, to `FF`, as wide as they come out.
+    pub width: u8,
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Hall {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Hall {
+    /// As it starts: a tail of about 2 s, its lows a little longer and its highs a little
+    /// shorter, its own size, some early reflections, and half wet.
+    pub const DEFAULT: Self = Self {
+        pre: 0x08,
+        decay: 0x60,
+        lows: 0x98,
+        damp: 0x40,
+        size: 0x80,
+        early: 0x80,
+        excursion: 0x80,
+        low_cut: 0,
+        high_cut: 0xFF,
+        width: 0xFF,
+        mix: 0x80,
+        gain: UNITY_LEVEL,
+    };
+
+    effect_settings! {
+        pre,
+        decay,
+        lows,
+        damp,
+        size,
+        early,
+        excursion,
+        low_cut,
+        high_cut,
+        width,
+        mix,
+        gain,
+    }
+}

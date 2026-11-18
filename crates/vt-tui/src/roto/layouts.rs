@@ -1385,6 +1385,40 @@ const PLATE: DeviceLayout = live(
         ),
     ],
 );
+/// Its tail in three bands, its size and pre-delay, and its early reflections, as the plate has
+/// them. What goes in, the wobble and `Width`, past eight knobs, are on a second page: the cuts
+/// under the bands they shape, the wobble under `Early` and `Width` under `Mix`.
+const HALL: DeviceLayout = live(
+    "fx/hall",
+    &[
+        knobs(
+            EffectKind::Hall.name(),
+            [
+                s("decay"),
+                s("size"),
+                s("pre"),
+                s("lows"),
+                s("damp"),
+                s("early"),
+                s("mix"),
+                s("gain"),
+            ],
+        ),
+        knobs(
+            "Tone",
+            [
+                GAP,
+                GAP,
+                GAP,
+                s("lowcut"),
+                s("highcut"),
+                s("mod"),
+                s("width"),
+                __,
+            ],
+        ),
+    ],
+);
 const PITCH: DeviceLayout = live(
     "fx/pitch",
     &[knobs(
@@ -2343,6 +2377,7 @@ const BY_EFFECT: [&[&DeviceLayout]; EffectKind::COUNT] = by_kind([
     (EffectKind::Clouds as usize, &[&CLOUDS]),
     (EffectKind::Beads as usize, &[&BEADS]),
     (EffectKind::Echo as usize, &[&ECHO]),
+    (EffectKind::Hall as usize, &[&HALL]),
 ]);
 
 /// Each mod slot's layout, by its type's [`ModKind`].

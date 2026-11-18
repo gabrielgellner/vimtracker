@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_frames, render_loop};
-use vt_model::insert::{Insert, Plate, Reverb, Space, Spring};
+use vt_model::insert::{Hall, Insert, Plate, Reverb, Space, Spring};
 use vt_model::song::Song;
 
 use crate::support::golden;
@@ -64,6 +64,7 @@ fn golden_reverbs_stay_the_same() {
         "reverb-space",
         &looped(Insert::Space(Space::DEFAULT), &NOTES),
     );
+    golden("reverb-hall", &looped(Insert::Hall(Hall::DEFAULT), &NOTES));
     // Its chaos and knock take random numbers, which a render repeats.
     let mut knocked = NOTES.to_vec();
     knocked[2] = "--- -- 1.spring.knock:01 --- ---";

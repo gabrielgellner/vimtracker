@@ -8,9 +8,9 @@ use crate::insert::{
     ALGORITHM_NAMES, ECHO_BASS, ECHO_TREBLE, Triggering, VOWEL_NAMES, algorithm_blend, attack_ms,
     ceiling_db, echo_head_seconds, echo_input_db, echo_shelf_db, exciter_attack_ms,
     exciter_release_ms, exciter_tone_hz, fine_cents, flanger_delay_ms, grain_density, grain_length,
-    grain_ms, grain_time_seconds, input_db, limit_release_ms, makeup_db, plate_size, range_db,
-    ratio, release_ms, repeat_decay_db, reverb_decay_seconds, shift_delay_ms, shift_hertz,
-    spread_hertz, tape_drive_db, threshold_db, vowel_blend,
+    grain_ms, grain_time_seconds, hall_lows, input_db, limit_release_ms, makeup_db, plate_size,
+    range_db, ratio, release_ms, repeat_decay_db, reverb_decay_seconds, shift_delay_ms,
+    shift_hertz, spread_hertz, tape_drive_db, threshold_db, vowel_blend,
 };
 use crate::modulation::{depth_of, depth_text};
 use crate::step::MAX_VELOCITY;
@@ -72,6 +72,8 @@ pub enum Units {
     EchoTreble,
     /// A reverb's tail, as how long it takes to fall 60 dB.
     ReverbDecay,
+    /// How long a hall's lows ring against its `Decay`, as so many times.
+    LowDecay,
     /// A plate's size, as so many times Dattorro's.
     PlateSize,
     /// A pitch shifter's fine shift in cents, and its grains' length in ms.
@@ -354,6 +356,7 @@ impl Kind {
                     format!("{:+.1} dB", echo_shelf_db(coarse as f32, ECHO_TREBLE))
                 }
                 Units::ReverbDecay => milliseconds(reverb_decay_seconds(coarse as f32) * 1000.0),
+                Units::LowDecay => format!("{:.2}x", hall_lows(coarse as f32)),
                 Units::PlateSize => format!("{:.2}x", plate_size(coarse as f32)),
                 Units::Cents => format!("{:+.0} ct", fine_cents(coarse as f32)),
                 Units::Grain => milliseconds(grain_ms(coarse as f32)),

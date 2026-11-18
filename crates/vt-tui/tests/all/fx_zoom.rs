@@ -371,7 +371,7 @@ fn a_delay_has_its_repeats_and_each_reverb_its_tail_with_their_time_scales() {
             vt_tui::screenshot::sent_images(&out)
         };
     let (mut app, _realtime) = on_fx_page();
-    for effect in ["Delay", "Reverb", "Plate", "Spring"] {
+    for effect in ["Delay", "Reverb", "Hall", "Spring"] {
         press(&mut app, "K");
         press(&mut app, effect);
         special(&mut app, KeyCode::Enter);
