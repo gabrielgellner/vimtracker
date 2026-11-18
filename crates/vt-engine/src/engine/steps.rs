@@ -1581,7 +1581,12 @@ impl Engine {
         // The chain carries on, to the phrase its next turn plays, as the turn's order and jump
         // have it now.
         owner
-            .chain_position(chain, place + position.turn_left, self.dealer(index), pending.walk)
+            .chain_position(
+                chain,
+                place + position.turn_left,
+                self.dealer(index),
+                pending.walk,
+            )
             .is_some_and(|next| next.phrase != position.phrase)
     }
 }

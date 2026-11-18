@@ -177,10 +177,7 @@ fn cue_is_a_switch_beside_the_window() {
 fn the_chains_order_and_jump_sit_at_the_foot_of_phrase() {
     let (mut app, _realtime) = on_phrase_device();
     keys(&mut app, "jj");
-    assert_eq!(
-        app.track_control(),
-        Control::Base(TrackControl::ChainOrder)
-    );
+    assert_eq!(app.track_control(), Control::Base(TrackControl::ChainOrder));
     let text = fx_page_text(&app).join("\n");
     assert!(text.contains("Chain"), "{text}");
     keys(&mut app, "=");

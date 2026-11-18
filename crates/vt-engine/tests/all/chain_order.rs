@@ -223,7 +223,11 @@ fn lst_foresees_the_next_phrase_through_the_order() {
 
 #[test]
 fn lst_rolls_ahead_with_the_die_the_next_turn_rolls() {
-    let song = ordered(song_of(&[LAST, LAST, LAST, [QUIET; 4]]), Order::Forward, 0x80);
+    let song = ordered(
+        song_of(&[LAST, LAST, LAST, [QUIET; 4]]),
+        Order::Forward,
+        0x80,
+    );
     let walk = WalkMove {
         chain: ChainMove {
             order: 0,
@@ -245,7 +249,11 @@ fn lst_rolls_ahead_with_the_die_the_next_turn_rolls() {
         .filter(|turn| played[*turn] != 3 && played[*turn] != played[turn + 1])
         .map(|turn| turn * 4)
         .collect();
-    assert!(played.windows(2).any(|pair| pair[0] == pair[1] && pair[0] != 3));
+    assert!(
+        played
+            .windows(2)
+            .any(|pair| pair[0] == pair[1] && pair[0] != 3)
+    );
     assert!(!expected.is_empty());
     assert_eq!(hits(&song, turns * 4), expected);
 }

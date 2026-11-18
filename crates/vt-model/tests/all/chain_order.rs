@@ -17,9 +17,7 @@ fn chained(lengths: &[usize]) -> Track {
         .enumerate()
         .map(|(at, length)| {
             let phrase = 10 + at as u32;
-            track
-                .phrases
-                .insert(phrase, Arc::new(Phrase::new(*length)));
+            track.phrases.insert(phrase, Arc::new(Phrase::new(*length)));
             ChainEntry {
                 phrase,
                 transpose: at as i8,
@@ -84,7 +82,11 @@ fn the_dealt_orders_are_dealt_again_each_time_round() {
     for lap in shuffled.chunks(4) {
         let mut sorted = lap.to_vec();
         sorted.sort_unstable();
-        assert_eq!(sorted, [0, 1, 2, 3], "each phrase once a time round: {lap:?}");
+        assert_eq!(
+            sorted,
+            [0, 1, 2, 3],
+            "each phrase once a time round: {lap:?}"
+        );
         differ |= lap != &shuffled[..4];
     }
     assert!(differ, "dealt again each time round");
@@ -148,15 +150,31 @@ fn a_turn_keeps_its_own_length_whatever_plays_in_it() {
     let walk = moved(1, 0);
     let heard: Vec<(usize, usize, usize, usize)> = (0..14)
         .map(|step| {
-            let position = track.chain_position(0, step, Dealer::new(7, 0), walk).unwrap();
-            (position.slot, position.step, position.turn, position.turn_left)
+            let position = track
+                .chain_position(0, step, Dealer::new(7, 0), walk)
+                .unwrap();
+            (
+                position.slot,
+                position.step,
+                position.turn,
+                position.turn_left,
+            )
         })
         .collect();
     assert_eq!(&heard[..2], &[(2, 0, 0, 2), (2, 1, 0, 1)]);
     assert_eq!(heard[2..6].iter().map(|h| h.0).collect::<Vec<_>>(), [1; 4]);
     assert_eq!(
         heard[6..].iter().map(|h| (h.0, h.1)).collect::<Vec<_>>(),
-        [(0, 0), (0, 1), (0, 0), (0, 1), (0, 0), (0, 1), (0, 0), (0, 1)]
+        [
+            (0, 0),
+            (0, 1),
+            (0, 0),
+            (0, 1),
+            (0, 0),
+            (0, 1),
+            (0, 0),
+            (0, 1)
+        ]
     );
     assert_eq!(heard[13].3, 1);
     // The heard slot's transpose comes with it.
@@ -169,7 +187,9 @@ fn at_rest_a_chain_plays_as_written() {
     let track = chained(&[2, 4, 8]);
     let dealer = Dealer::new(7, 0);
     for step in 0..40 {
-        let position = track.chain_position(0, step, dealer, WalkMove::default()).unwrap();
+        let position = track
+            .chain_position(0, step, dealer, WalkMove::default())
+            .unwrap();
         assert_eq!(position.slot, position.turn);
         let own = track.walk();
         assert_eq!(own.chain, ChainMove::default());

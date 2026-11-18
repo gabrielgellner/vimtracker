@@ -980,7 +980,10 @@ fn chain_order_view(of: ParamView, track: &Track) -> ParamView {
     let at = usize::from(track.chain_order).min(Order::ALL.len() - 1);
     let shown = match at {
         0 => "Forward: the chain plays its phrases as written".to_owned(),
-        _ => format!("{order}: the chain's phrases, {}", lower_first(order.meaning())),
+        _ => format!(
+            "{order}: the chain's phrases, {}",
+            lower_first(order.meaning())
+        ),
     };
     of.listed(
         CHAIN_ORDER_NAMES
