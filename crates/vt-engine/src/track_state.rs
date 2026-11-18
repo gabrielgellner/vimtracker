@@ -37,7 +37,7 @@ mod values;
 mod tests;
 
 pub use lanes::LaneRead;
-pub use live::{Drawn, Faders, LfoNow, LiveValues};
+pub use live::{Drawn, Faders, LfoNow, LiveFilter, LiveValues};
 pub use pending::NotePitch;
 
 pub(crate) use mods::SongTime;

@@ -554,6 +554,7 @@ fn the_fx_pages_bars_follow_what_plays() {
         pan: 0x80,
         cutoff: 0xFF,
         resonance: 0,
+        filter: Default::default(),
         send_a: 0,
         send_b: 0,
         machine: {

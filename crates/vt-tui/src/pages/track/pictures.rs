@@ -73,18 +73,32 @@ impl TrackPage {
     /// analysed: the slice its `Slice` is on, with its `Start` and `Length` as the sample page's
     /// start and end lines.
     fn sound_panels(&self, ctx: &Ctx, track: &Track) -> Vec<PanelWant> {
-        let (cutoff, resonance) = ctx.live().map_or((track.cutoff, track.resonance), |live| {
-            (live.cutoff, live.resonance)
-        });
-        let settings = (
-            track.filter,
-            track.filter.plays(track.filter_mode),
-            cutoff,
-            resonance,
-            track.drive,
-            track.safe,
-            track.low_cut,
-            track.high_cut,
+        // As the engine hears them, a step's lock and modulation included, or as they're set
+        // before it has said.
+        let settings = ctx.live().map_or(
+            (
+                track.filter,
+                track.filter.plays(track.filter_mode),
+                track.cutoff,
+                track.resonance,
+                track.drive,
+                track.safe,
+                track.low_cut,
+                track.high_cut,
+            ),
+            |live| {
+                let filter = live.filter;
+                (
+                    filter.kind,
+                    filter.mode,
+                    live.cutoff,
+                    live.resonance,
+                    filter.drive,
+                    filter.safe,
+                    filter.low_cut,
+                    filter.high_cut,
+                )
+            },
         );
         let mut wants = vec![PanelWant {
             key: PanelKey::Filter,
