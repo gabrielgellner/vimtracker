@@ -219,7 +219,9 @@ impl LaneRun {
         }
         let jumped = *self.jumped.get_or_insert_with(|| {
             let chance = f32::from(jump.chance) / 255.0;
-            let rows = lane.length.max(1);
+            // Within the rows it's heard for, from its `Start`, as its order walks them
+            // (decision 437).
+            let rows = heard.length.max(1);
             lane_jumped(jump.dealer, jump.column, lap, row, rows, chance)
         });
         if deciding {
@@ -231,7 +233,7 @@ impl LaneRun {
         let stored = self.kept.unwrap_or_else(|| {
             jumped.map_or_else(
                 || lane.stored_from(self.order_row, start),
-                |own| lane.stored(own),
+                |own| lane.stored_from(own, start),
             )
         });
         self.played = Some(stored);

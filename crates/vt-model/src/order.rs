@@ -792,18 +792,19 @@ fn picked(deal: Deal, rows: usize, visit: usize, attempt: u64) -> usize {
 const JUMP_STREAM: u64 = 0x6a75_6d70_0000_0000;
 
 /// The row a `Jump` plays at a visit in place of the one the order walks to, with its chance
-/// from 0 to 1, or none to play the walk's: any of the rows that take time, picked from the
-/// pass's deal, so a render, or playing from anywhere, jumps the same (decision 391). The
-/// rows' times are left to the walk, as the row jumped to plays for as long as the visit lasts.
-pub fn jumped(steps: &[Step], deal: Deal, visit: usize, chance: f32) -> Option<usize> {
-    let timed = steps.iter().filter(|step| step.pulses() > 0).count();
-    let nth = jump_roll(deal, visit, chance, timed)?;
-    steps
-        .iter()
-        .enumerate()
-        .filter(|(_, step)| step.pulses() > 0)
-        .nth(nth)
-        .map(|(row, _)| row)
+/// from 0 to 1, or none to play the walk's: any of the window's places whose rows take time, as
+/// the order walks them, picked from the pass's deal, so a render, or playing from anywhere,
+/// jumps the same (decisions 391 and 437). The rows' times are left to the walk, as the row
+/// jumped to plays for as long as the visit lasts. With the window as written, its places are the
+/// loop's rows.
+pub fn jumped(rows: Rows<'_>, deal: Deal, visit: usize, chance: f32) -> Option<usize> {
+    let timed = || {
+        (0..rows.len())
+            .map(move |at| rows.row(at))
+            .filter(move |row| rows.steps[*row].pulses() > 0)
+    };
+    let nth = jump_roll(deal, visit, chance, timed().count())?;
+    timed().nth(nth)
 }
 
 /// Whether a visit jumps, with its chance from 0 to 1, and to which of `rows` if it does.
@@ -821,10 +822,11 @@ fn jump_roll(deal: Deal, visit: usize, chance: f32, rows: usize) -> Option<usize
 /// Keeps a lane's deals apart from its track's chain's.
 const LANE_STREAM: u64 = 0x6c61_6e65_0000_0000;
 
-/// The row of its own a lane's `Jump` plays in place of the one it counts to, with its chance from
-/// 0 to 1, or none to play the count's: any of its `rows`, rolled as `Jump` rolls a phrase's, from
-/// the track's dealer, the lane's column, how many times it has come round and its row in that
-/// lap, so a render, or playing from anywhere, jumps the same (decision 415).
+/// The row a lane's `Jump` plays in place of the one it counts to, with its chance from 0 to 1, or
+/// none to play the count's: any of the `rows` it's heard for, from its `Start`, as its order
+/// walks them (decisions 415 and 437), rolled as `Jump` rolls a phrase's, from the track's
+/// dealer, the lane's column, how many times it has come round and its row in that lap, so a
+/// render, or playing from anywhere, jumps the same.
 pub fn lane_jumped(
     dealer: Dealer,
     column: usize,
