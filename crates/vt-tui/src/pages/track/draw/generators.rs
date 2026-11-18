@@ -12,7 +12,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use vt_model::generator::{Generator, Span as Spanned};
 use vt_model::grid::GRID_COLUMNS;
 use vt_model::macros::MACROS;
-use vt_model::shape::ShapeColumn;
+use vt_model::shape::{ShapeColumn, degree_count};
 use vt_model::song::Track;
 
 use crate::controls::macro_name;
@@ -298,6 +298,46 @@ fn draw_loops(
     frame.render_widget(grid, Device::settings_area(area));
 }
 
+/// A `Random`'s `Weights` on notes: a cell for each degree, named by its note, and at the end of
+/// its title, dim, how many of them `Steps` lets through.
+fn draw_weights(
+    frame: &mut Frame,
+    area: Rect,
+    page: &TrackPage,
+    ctx: &Ctx,
+    track: &Track,
+    device: &DeviceSpec,
+    focused: bool,
+) {
+    let Some(Control::Gen {
+        phrase, generator, ..
+    }) = device.grid.iter().flatten().flatten().next().copied()
+    else {
+        return;
+    };
+    let Some(live) = ctx.live_generator(ctx.cursor().track, phrase, generator) else {
+        return;
+    };
+    let after = match live.generator.column {
+        ShapeColumn::Note { scale, .. } => {
+            let kept = live.generator.heard().random.kept(scale);
+            format!(
+                "· from the root, Steps lets {kept} of {} through",
+                degree_count(scale)
+            )
+        }
+        _ => String::new(),
+    };
+    let widget = Device::new(device.identity.clone())
+        .after(Line::styled(after, theme::dim()))
+        .focused(focused);
+    frame.render_widget(widget, area);
+    let cells = TrackCells::new(page, ctx, track).of_generator(&live);
+    let rows = device.grid.iter().copied().map(Vec::from).collect();
+    let grid = SettingsGrid::new(&cells, rows, GEN_CELLS);
+    frame.render_widget(grid, Device::settings_area(area));
+}
+
 /// A lane's length and division in words, as `4 rows` or `4 rows of 2 steps`.
 fn lane_words(length: usize, division: usize) -> String {
     let rows = if length == 1 { "row" } else { "rows" };
@@ -437,6 +477,9 @@ pub(super) fn draw(
             }
             _ if device.is_loops() => {
                 draw_loops(frame, area, page, ctx, track, device, at == cursor);
+            }
+            _ if device.is_weights() => {
+                draw_weights(frame, area, page, ctx, track, device, at == cursor);
             }
             (_, Some(Control::Lane(..))) => {
                 draw_lane(frame, area, page, ctx, track, device, at == cursor);

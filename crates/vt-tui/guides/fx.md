@@ -121,6 +121,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `LRAT1` | FX 1's lanes' speed: `÷` slower, `×` faster. `LRAT2` `LRAT3` too |
 | `LSTA1` | FX 1's lanes' first row, rows on from their own. `LSTA2` `LSTA3` too |
 | `LJMP1` | FX 1's lanes' chance of any of their rows instead. `LJMP2` `LJMP3` too |
+| `LHLD1` | FX 1's lanes' chance of the row before again. `LHLD2` `LHLD3` too |
 
 Each voice has its own settings, and the track keeps every voice's values, so
 changing voice and back loses nothing. A lock for a voice the track isn't

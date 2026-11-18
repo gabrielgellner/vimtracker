@@ -1327,3 +1327,6 @@
 1326 lane1.jump
 1327 lane2.jump
 1328 lane3.jump
+1329 lane1.hold
+1330 lane2.hold
+1331 lane3.hold

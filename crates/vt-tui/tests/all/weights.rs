@@ -1,13 +1,19 @@
 //! A random fill's `Weights` in the shape panel, digit by digit (decision 388, #972): `l` goes into
 //! them on the first, `h` and `l` go across, `=` `-` `+` `_` and a hex digit change the one under
-//! the cursor, each heard as it changes, and each digit has its note under it.
+//! the cursor, each heard as it changes, and each digit has its note under it. Kept live, each
+//! digit is also a setting of its own on the Gen page's `Weights` device, which a macro can hold
+//! (decision 425).
 
+use vt_model::macros::{GenColumn, MacroTarget};
 use vt_model::shape::{FillKind, GenParam};
 use vt_model::step::Note;
 use vt_tui::app::App;
+use vt_tui::controls::Page;
 use vt_tui::screen::describe;
 
-use crate::common::{app_with, command, down_to, keys, press, shape_panel};
+use crate::common::{
+    app_with, command, down_to, fx_page_text, here, keys, press, shape_panel, status_line,
+};
 
 const E: &str = "--- -- --- --- ---";
 
@@ -155,4 +161,63 @@ fn the_digits_changed_are_kept_or_put_back_as_one_undo() {
     assert_eq!(app.services.history.undo_depth(), depth + 1);
     keys(&mut app, "u");
     assert!(pitches(&app).is_empty(), "the column is empty again");
+}
+
+/// Kept live, the panel's digits and the Gen page's `Weights` device edit the same weights: a
+/// digit changed in the panel is the cell's value, a turn of the cell is the digit, and `M` maps
+/// a macro to one weight alone.
+#[test]
+fn the_gen_pages_weights_are_the_panels_digits_and_take_a_macro_each() {
+    let mut app = on_weights("minor-pentatonic");
+    keys(&mut app, "l-<Esc>L");
+    assert!(app.overlays.shape.is_none(), "kept live");
+    let live = |app: &App| app.song().tracks[0].phrases[&0].generators()[0].shape;
+    assert_eq!(live(&app).random.weights[..5], [0xE, 0xF, 0xF, 0xF, 0xF]);
+    keys(&mut app, " 5LLL");
+    assert_eq!(app.track_page.page, Page::Gen);
+    for _ in 0..12 {
+        if here(&app) == Some(GenParam::Weight1) {
+            break;
+        }
+        keys(&mut app, "j");
+    }
+    assert_eq!(here(&app), Some(GenParam::Weight1), "down into Weights");
+    let text = fx_page_text(&app).join("\n");
+    assert!(
+        text.contains("Weights · from the root, Steps lets 5 of 5 through"),
+        "{text}"
+    );
+    assert!(
+        status_line(&app).contains("the weight of C"),
+        "{}",
+        status_line(&app)
+    );
+    // A turn of the cell is the panel's digit.
+    keys(&mut app, "=");
+    assert_eq!(live(&app).random.weights[0], 0xF);
+    keys(&mut app, "l__");
+    assert_eq!(here(&app), Some(GenParam::Weight2));
+    assert!(
+        status_line(&app).contains("the weight of D#"),
+        "{}",
+        status_line(&app)
+    );
+    assert_eq!(live(&app).random.weights[..2], [0xF, 0x7]);
+    // `M` maps a macro to that weight alone.
+    press(&mut app, "M2");
+    let on = |param| MacroTarget::Gen {
+        column: GenColumn::Note,
+        param,
+    };
+    let track = &app.song().tracks[0];
+    assert_eq!(
+        track.macro_holding(on(GenParam::Weight2)).map(|(at, _)| at),
+        Some(1)
+    );
+    assert!(track.macro_holding(on(GenParam::Weight1)).is_none());
+    // Only the scale's five degrees have a cell: C, D#, F and G, then A# under them.
+    keys(&mut app, "j");
+    assert_eq!(here(&app), Some(GenParam::Weight5));
+    keys(&mut app, "l");
+    assert_eq!(here(&app), Some(GenParam::Weight5), "no sixth degree");
 }

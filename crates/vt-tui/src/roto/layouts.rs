@@ -1718,7 +1718,8 @@ const GEN_RAMP: DeviceLayout = live(
     )],
 );
 /// `Random`'s ends, then its spread and bias, as Marbles' X section has them, and on the Note
-/// column its `Steps` on a second page, as the first is full; its `Weights` are typed.
+/// column its `Steps` on a second page, as the first is full; its `Weights` are typed, and each
+/// weight is a knob on `Weights`' own device.
 const GEN_RANDOM: DeviceLayout = live(
     "gen/random",
     &[
@@ -1843,6 +1844,39 @@ const GEN_ACID_LOOPS: DeviceLayout = live(
         ],
     )],
 );
+/// A `Random`'s weights on notes, its own device as on the Gen page: a knob for each degree from
+/// the root, the first eight on one page and the last four on a second.
+const GEN_WEIGHTS: DeviceLayout = live(
+    "gen/weights",
+    &[
+        knobs(
+            "Weights 1-8",
+            [
+                s("weight1"),
+                s("weight2"),
+                s("weight3"),
+                s("weight4"),
+                s("weight5"),
+                s("weight6"),
+                s("weight7"),
+                s("weight8"),
+            ],
+        ),
+        knobs(
+            "Weights 9-12",
+            [
+                s("weight9"),
+                s("weight10"),
+                s("weight11"),
+                s("weight12"),
+                GAP,
+                GAP,
+                GAP,
+                GAP,
+            ],
+        ),
+    ],
+);
 /// An FX column's lane's `Length` and `Rate`, its own device as on the Gen page.
 const GEN_LANE: DeviceLayout = live(
     "gen/lane",
@@ -1853,7 +1887,7 @@ const GEN_LANE: DeviceLayout = live(
             s("rate"),
             s("start"),
             s("jump"),
-            GAP,
+            s("hold"),
             GAP,
             GAP,
             GAP,
@@ -2322,7 +2356,7 @@ pub static GENERATORS: LazyLock<Vec<&'static DeviceLayout>> = LazyLock::new(|| {
     each_once(
         BY_FILL
             .into_iter()
-            .chain([&GEN_ACID_LOOPS, &GEN_LANE, &GEN_PHRASE]),
+            .chain([&GEN_ACID_LOOPS, &GEN_WEIGHTS, &GEN_LANE, &GEN_PHRASE]),
     )
 });
 
@@ -2390,6 +2424,7 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
         Some(Control::Macro(_)) => &MACROS,
         // An `Acid`'s loops, on a device of their own, and an FX column's lane.
         Some(Control::Gen { param, .. }) if param.is_loop() => &GEN_ACID_LOOPS,
+        Some(Control::Gen { param, .. }) if param.weight_degree().is_some() => &GEN_WEIGHTS,
         Some(Control::Lane(..)) => &GEN_LANE,
         Some(control @ Control::Gen { .. }) => generator_layout(
             generator_of(control, track).map_or(FillKind::Ramp, |found| found.shape.kind),
