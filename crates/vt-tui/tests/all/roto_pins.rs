@@ -28,6 +28,7 @@ const PINS: &[(&str, &str, Option<u64>)] = &[
     ("fx/comp-clean", "1e1e3d16357f3c29", Some(0x7bd858c254d44dd9)),
     ("fx/comp-console", "77550d2d0e14696f", Some(0x42e803274e20a528)),
     ("fx/comp-glue", "016b22070018166e", Some(0xd2438a9bf72ecaef)),
+    ("fx/deck", "1951411f64271454", None),
     ("fx/delay", "0f235234370c1841", Some(0x7b8223a3d178f438)),
     ("fx/distort-crush", "1758007d187b3a71", Some(0xbed4c99ed7e1fcf5)),
     ("fx/distort-down", "3f425b13386a286d", Some(0x2789f528c438ef5c)),

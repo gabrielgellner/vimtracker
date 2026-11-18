@@ -1,4 +1,5 @@
-//! The effects that colour a sound: a distortion, a tape, an exciter, an analog colour and a reel.
+//! The effects that colour a sound: a distortion, a tape, an exciter, an analog colour, a reel and
+//! a deck.
 
 use serde::{Deserialize, Serialize};
 
@@ -735,6 +736,133 @@ impl Reel {
         thick,
         wow,
         flutter,
+        mix,
+        gain,
+    }
+}
+
+/// The format a deck is, each a machine's speed, head, lows, hiss, wobble and stereo (#259).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DeckType {
+    /// A cassette at 1⅞ ips: highs to about 14 kHz, a little hiss, a gentle wow.
+    #[default]
+    Cassette,
+    /// A VCR's linear audio track at SP: softer highs, thin lows, and its stereo narrowed by
+    /// crosstalk.
+    Vhs,
+    /// A worn cassette: dull, loose and dropping out by itself.
+    Worn,
+}
+
+impl DeckType {
+    /// Every type, in the order `+` goes through them.
+    pub const ALL: [Self; 3] = [Self::Cassette, Self::Vhs, Self::Worn];
+
+    /// The name on screen.
+    pub const fn name(self) -> &'static str {
+        DECK_TYPE_NAMES[self as usize]
+    }
+}
+
+crate::listed::listed!(DeckType);
+
+const DECK_TYPE_NAMES: [&str; 3] = ["Cassette", "VHS", "Worn"];
+
+/// A deck's, in the order songs number them.
+pub(crate) const DECK_PARAMS: [Entry; 10] = [
+    Entry {
+        meaning: "the format: a cassette, a VCR's linear audio track, or a worn cassette",
+        name: "Type",
+        key: "type",
+        label: Some("TYPE"),
+        kind: Kind::Stepped {
+            choices: &DECK_TYPE_NAMES,
+            wraps: true,
+        },
+        default: 0,
+        place: Place::Type,
+    },
+    hex_param("Drive", "drive", "DRIV", Deck::DEFAULT.drive)
+        .units(Units::TapeDrive)
+        .centred()
+        .means("how hard it hits the tape, which saturates the highs first"),
+    hex_param("Hiss", "hiss", "HISS", Deck::DEFAULT.hiss)
+        .means("the tape's hiss, from none at 00 to about -40 dB at FF"),
+    hex_param("Wow", "wow", "WOW", Deck::DEFAULT.wow).means("a slow, wandering wobble in pitch"),
+    hex_param("Flutter", "flutter", "FLUT", Deck::DEFAULT.flutter)
+        .means("a fast wobble in pitch, from the capstan"),
+    hex_param("Drops", "drops", "DROP", Deck::DEFAULT.drops)
+        .means("how often and how deep the sound drops out, dulled, for a moment"),
+    hex_param("Chew", "chew", "CHEW", Deck::DEFAULT.chew)
+        .means("now and then a stretch of crinkled tape, bent and dulled"),
+    hex_param("Track", "track", "TRAK", Deck::DEFAULT.track)
+        .means("noise reduction, mistracking more as it's turned up: dull, breathing highs"),
+    MIX_PARAM,
+    GAIN_PARAM,
+];
+
+/// Where its settings sit on the FX page.
+pub(super) const DECK_GRID: Columns = &[
+    &["drive", "hiss", "track"],
+    &["wow", "flutter"],
+    &["drops", "chew"],
+    &["mix", "gain"],
+];
+
+/// A lo-fi tape deck's settings: its format, and how much of each of its faults. One a file
+/// doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Deck {
+    pub kind: DeckType,
+    /// How hard it's driven onto the tape, from -18 dB to +18 dB, with none at `80`.
+    pub drive: u8,
+    /// How much hiss, from none at `00`.
+    pub hiss: u8,
+    /// The slow wobble in pitch and the fast one, from none at `00`.
+    pub wow: u8,
+    pub flutter: u8,
+    /// How often and how deep it drops out, and how often it chews, from none at `00`.
+    pub drops: u8,
+    pub chew: u8,
+    /// How far its noise reduction mistracks; none at `00` is no noise reduction.
+    pub track: u8,
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Deck {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Deck {
+    /// As it starts: a cassette at 0 dB, a little hiss, wow and flutter, no faults, and its
+    /// noise reduction in and nearly tracking.
+    pub const DEFAULT: Self = Self {
+        kind: DeckType::Cassette,
+        drive: 0x80,
+        hiss: 0x40,
+        wow: 0x40,
+        flutter: 0x40,
+        drops: 0x00,
+        chew: 0x00,
+        track: 0x20,
+        mix: 0xFF,
+        gain: UNITY_LEVEL,
+    };
+
+    effect_settings! {
+        kind: DeckType,
+        drive,
+        hiss,
+        wow,
+        flutter,
+        drops,
+        chew,
+        track,
         mix,
         gain,
     }

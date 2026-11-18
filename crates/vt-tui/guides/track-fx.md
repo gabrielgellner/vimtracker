@@ -33,7 +33,7 @@ with the cursor has the brighter frame. An empty slot keeps its frame, says `Emp
 | Group | Effects |
 |---|---|
 | Dynamics | `Comp`, `Limit` |
-| Tone & drive | `EQ3`, `Distort`, `Tape`, `Reel`, `Exciter`, `Colour` |
+| Tone & drive | `EQ3`, `Distort`, `Tape`, `Reel`, `Deck`, `Exciter`, `Colour` |
 | Filter | `LPG`, `Vowel` |
 | Modulation | `Chorus`, `Phaser`, `Flanger`, `Rotary` |
 | Pitch & spectral | `Pitch`, `Freq Shift`, `Warps` |
@@ -393,6 +393,34 @@ The head bump lifts the lows a few dB around 60 Hz at 15 ips, twice that at
 30 and half at 7.5. `Bias` at `00` leaves the tape barely moved by a quiet
 sound, the crossover crackle of a machine set up wrong. Unlike `Tape` it has
 no ceiling: a loud sound driven hard comes out quieter, as tape squashes it.
+
+`Deck` is lo-fi tape: a cassette, a VCR's linear audio track, or a worn
+cassette, with everything that goes wrong with them. Its `Type`, in the
+title, is the format, which sets its highs and lows, its hiss, how fast it
+wobbles and how wide its stereo is:
+
+| Type | Its sound |
+|---|---|
+| `Cassette` | Highs to about 12 kHz, a gentle wow at about 0.6 Hz |
+| `VHS` | Softer highs, thin lows, and its stereo narrowed by crosstalk |
+| `Worn` | Dull and loose, and it drops out now and then by itself |
+
+| Setting | Does |
+|---|---|
+| `Drive` | How hard it hits the tape, from -18 dB to +18 dB, 0 dB at `80` |
+| `Hiss` | The tape's hiss, from none at `00` to about -40 dB at `FF` |
+| `Wow` | A slow, wandering wobble in pitch, never quite the same twice |
+| `Flutter` | A fast wobble in pitch, from the capstan |
+| `Drops` | How often and how deep the sound dips, dulled, for a moment |
+| `Chew` | Now and then a stretch of crinkled tape, bent and dulled |
+| `Track` | Noise reduction, mistracking more as it goes up |
+
+`Drive` saturates the highs first, as tape's pre-emphasis does. `Track` at
+`00` is no noise reduction at all; just above, it's a Dolby that nearly
+tracks, and higher up it reads the tape low, so the highs come back dull and
+breathe with the level. The hiss stops a few seconds after the sound does,
+so a quiet track falls silent. The wobble, dropouts and chews are drawn from
+the track's own dice, so a song plays the same each time.
 
 `Exciter` adds air, after the Aphex Aural Exciter as ChowDSP models it in
 Surge: it takes the highs of the sound, drives them into a soft clip for

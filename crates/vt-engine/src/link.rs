@@ -720,6 +720,7 @@ mod tests {
     /// A Space Echo, which takes its tape and spring from the pool.
     const ECHO: Insert = Insert::Echo(vt_model::insert::Echo::DEFAULT);
     const REEL: Insert = Insert::Reel(vt_model::insert::Reel::DEFAULT);
+    const DECK: Insert = Insert::Deck(vt_model::insert::Deck::DEFAULT);
 
     const BLOCK: usize = 256;
 
@@ -1687,7 +1688,7 @@ mod tests {
             Insert::Empty,
         ];
         more.tracks[1].inserts = [LIMIT, FLANGER, TAPE, REEL];
-        more.tracks[2].inserts = [PLATE, ROTARY, CLOUDS, Insert::Empty];
+        more.tracks[2].inserts = [PLATE, ROTARY, CLOUDS, DECK];
         more.tracks[3].inserts = [Insert::Empty, PITCH, SPRING, SPACE];
         more.tracks[4].inserts = [Insert::Empty, BEADS, STUTTER, GRAINS];
         more.tracks[5].inserts = [WARPS, COMB, RESO, SHIFT];
@@ -1712,7 +1713,7 @@ mod tests {
         while handle.freed.pop().is_ok() {
             freed += 1;
         }
-        assert_eq!(freed, 21);
+        assert_eq!(freed, 22);
     }
 
     #[test]
