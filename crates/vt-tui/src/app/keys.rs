@@ -433,13 +433,9 @@ impl App {
     /// The note a key plays in the current octave. With a scale, the home row goes up through it
     /// from the root, and the row above is silent, so every key is in key.
     pub(super) fn played_key(&self, c: char) -> Option<u8> {
-        if self.services.live.scale.on {
-            degree_key(c).map(|degree| {
-                self.services
-                    .live
-                    .scale
-                    .degree(degree, self.services.live.octave)
-            })
+        let scale = self.services.scale_here();
+        if scale.on {
+            degree_key(c).map(|degree| scale.degree(degree, self.services.live.octave))
         } else {
             note_key(c).map(|semitones| {
                 let midi = octave_start(self.services.live.octave) + i16::from(semitones);

@@ -641,7 +641,7 @@ impl<'a> Ctx<'a> {
     /// One of the track page's settings on a track of the song, as a widget draws it, with an
     /// accumulator's limits counted as the scale lock has them.
     pub(crate) fn param_view(&self, control: Control, track: &Track) -> Option<ParamView> {
-        crate::controls::view(control, track, self.song(), self.services.live.scale.on)
+        crate::controls::view(control, track, self.song(), self.services.scale_here().on)
     }
 
     /// Whether the song plays, as the engine last said.
@@ -787,9 +787,9 @@ impl<'a> Ctx<'a> {
         self.services.section_here()
     }
 
-    /// The scale notes are entered in.
+    /// The scale notes are entered in, the section under the cursor's or the song's.
     pub fn scale(&self) -> Scale {
-        self.services.live.scale
+        self.services.scale_here()
     }
 
     /// Whether entering in Insert moves on by the grid.

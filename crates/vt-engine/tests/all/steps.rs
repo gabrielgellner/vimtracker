@@ -397,6 +397,38 @@ fn pitch_in_scale_follows_a_scale_changed_by_command() {
     assert_eq!(pitch_moved(&song_in(major), Some(off)), 3.0);
 }
 
+/// A slot's `Pitch in scale` follows the scale of the section playing where it has its own, over
+/// the song's (decision 426).
+#[test]
+fn pitch_in_scale_follows_the_sections_scale() {
+    let up_three = Steps {
+        values: values(&[3]),
+        length: 1,
+        mode: StepsMode::Note,
+        ..Steps::default()
+    };
+    let major = Scale {
+        on: true,
+        root: 0,
+        kind: ScaleKind::Major,
+    };
+    let off = Scale { on: false, ..major };
+    let song_in = |scale, own: Option<Scale>| {
+        let mut song = song(&["C-3 64 --- --- ---"], Steps::default());
+        song.saved_scale = scale;
+        song.sections[0].scale = own;
+        song.tracks[0].mods[3] = ModSlot {
+            in_scale: true,
+            ..ModSlot::steps(Some(SettingId::PITCH), up_three)
+        };
+        song
+    };
+    assert_eq!(pitch_moved(&song_in(off, Some(major)), None), 2.0);
+    assert_eq!(pitch_moved(&song_in(major, Some(off)), None), 3.0);
+    // The song's set by command doesn't reach past the section's own.
+    assert_eq!(pitch_moved(&song_in(major, Some(off)), Some(major)), 3.0);
+}
+
 /// The steps a slot plays, a step at a time from the top: what the Mod page shows playing.
 fn played(song: &Song, times: usize) -> Vec<u8> {
     heard(song, STEP, times)

@@ -20,6 +20,7 @@ use vt_engine::engine::{SectionLoop, Transport};
 use vt_engine::link::Command;
 use vt_model::action::Action;
 use vt_model::constants::BAR_STEPS;
+use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::Motion;
 use vt_model::song::{Repeat, SectionStart, lowest_unused};
 
@@ -32,11 +33,12 @@ use crate::pages::{Ctx, CtxMut, Outcome, Page};
 use crate::services::Momentary;
 use crate::services::Services;
 
-/// The columns before the tracks': Length, Rpt and Start.
+/// The columns before the tracks': Length, Rpt, Start and Scale.
 pub(crate) const LENGTH_COLUMN: usize = 0;
 pub(crate) const REPEAT_COLUMN: usize = 1;
 pub(crate) const START_COLUMN: usize = 2;
-pub(crate) const COLUMNS_BEFORE_TRACKS: usize = 3;
+pub(crate) const SCALE_COLUMN: usize = 3;
+pub(crate) const COLUMNS_BEFORE_TRACKS: usize = 4;
 /// How far a large step moves a repeat count.
 const LARGE_REPEAT: i64 = 4;
 /// How far a large step moves a chain ID: its top digit.
@@ -46,14 +48,14 @@ const LARGE_CHAIN: i64 = 0x10;
 /// and where a selection of sections started. Which section it's on is the program's cursor.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SongView {
-    /// Length, Rpt and Start, then a column for each track, by its index after them.
+    /// Length, Rpt, Start and Scale, then a column for each track, by its index after them.
     pub column: usize,
     /// Where a selection of sections started, while `V` selects them.
     pub anchor: Option<usize>,
 }
 
 impl SongView {
-    /// The columns shown: Length, Rpt and Start, then each track's that isn't folded away.
+    /// The columns shown: Length, Rpt, Start and Scale, then each track's that isn't folded away.
     fn columns(services: &Services) -> Vec<usize> {
         let tracks = services.folds.shown(services.song());
         (0..COLUMNS_BEFORE_TRACKS)
@@ -109,6 +111,9 @@ impl SongView {
             Cmd::ClearField => self.clear(services),
             Cmd::PickValue | Cmd::EnterInsert if self.column == START_COLUMN => {
                 Self::switch_start(services);
+            }
+            Cmd::PickValue | Cmd::EnterInsert if self.column == SCALE_COLUMN => {
+                return Outcome::Open(Box::new(Self::scale_picker(services)));
             }
             Cmd::Launch => return self.launch(services),
             Cmd::VisualStep => {
@@ -281,6 +286,10 @@ impl SongView {
                     repeat: Repeat::new(i64::from(here.repeat.get()) + by * size),
                 });
             }
+            None if self.column == SCALE_COLUMN => {
+                let scale = moved_scale(here.scale_or(services.live.scale), by, large);
+                Self::set_scale(Some(scale), services);
+            }
             None => Self::switch_start(services),
             Some(track) => {
                 let size = if large { LARGE_CHAIN } else { 1 };
@@ -311,8 +320,50 @@ impl SongView {
         });
     }
 
-    /// Back to following the longest chain, playing once, new, or no chain. Nothing changes if it's
-    /// there.
+    /// `K` on the Scale column: the song's, then each kind of scale on the section's root.
+    fn scale_picker(services: &Services) -> Picker {
+        let here = services.section_here().and_then(|section| section.scale);
+        let root = here.unwrap_or(services.live.scale).root;
+        let mut choices = vec![None];
+        choices.extend(ScaleKind::ALL.map(|kind| {
+            Some(Scale {
+                on: true,
+                root,
+                kind,
+            })
+        }));
+        let items = choices
+            .iter()
+            .map(|scale| {
+                let name = scale.map_or_else(
+                    || "-- the song's".to_owned(),
+                    |scale| format!("{} {}", scale.root_name(), scale.kind.name()),
+                );
+                Item::new(name, Pick::SectionScale(*scale))
+            })
+            .collect();
+        let at = choices.iter().position(|scale| *scale == here);
+        Picker::new("Section scale. = - move the root", items).opened_on(at)
+    }
+
+    /// Give the section under the cursor a scale of its own, or none to play in the song's, and
+    /// say what it plays in.
+    pub(crate) fn set_scale(scale: Option<Scale>, services: &mut Services) {
+        let section = services.cursor.section;
+        services.apply(&Action::SetSectionScale { section, scale });
+        services.status = match scale {
+            Some(scale) => format!(
+                "Section {:02} plays in {} {}",
+                section + 1,
+                scale.root_name(),
+                scale.kind.name()
+            ),
+            None => format!("Section {:02} plays in the song's scale", section + 1),
+        };
+    }
+
+    /// Back to following the longest chain, playing once, new, the song's scale, or no chain.
+    /// Nothing changes if it's there.
     fn clear(&self, services: &mut Services) {
         let section = services.cursor.section;
         let Some(here) = services.section_here().cloned() else {
@@ -327,6 +378,11 @@ impl SongView {
                 section,
                 repeat: Repeat::default(),
             }),
+            None if self.column == SCALE_COLUMN => {
+                if here.scale.is_some() {
+                    Self::set_scale(None, services);
+                }
+            }
             None => {
                 if here.start != SectionStart::New {
                     Self::switch_start(services);
@@ -395,12 +451,12 @@ impl Page for SongView {
         (
             "x",
             Cmd::ClearField,
-            "Follow the longest chain, new, or no chain",
+            "Follow the longest chain, new, the song's scale, or no chain",
         ),
         (
             "K",
             Cmd::PickValue,
-            "Switch new and reset, or choose this cell's chain",
+            "Switch new and reset, choose a scale or this cell's chain",
         ),
         (
             "g d",
@@ -447,6 +503,7 @@ impl Page for SongView {
             LENGTH_COLUMN => "Length".to_owned(),
             REPEAT_COLUMN => "Rpt".to_owned(),
             START_COLUMN => "Start".to_owned(),
+            SCALE_COLUMN => "Scale".to_owned(),
             column => {
                 let index = column - COLUMNS_BEFORE_TRACKS;
                 let name = ctx.song().tracks.get(index).map_or_else(
@@ -474,6 +531,21 @@ impl SongView {
             })
             .map_or("", |chain| chain.label.as_str())
     }
+}
+
+/// A scale moved by `=` and `-`, its root a semitone round the octave, or by `+` and `_`, the next
+/// or last kind of scale. It's always on: a section's own scale is one to play in.
+fn moved_scale(scale: Scale, by: i64, large: bool) -> Scale {
+    let mut moved = Scale { on: true, ..scale };
+    if large {
+        let kinds = ScaleKind::ALL.len() as i64;
+        let at = ScaleKind::ALL.iter().position(|kind| *kind == scale.kind);
+        let next = (at.unwrap_or(0) as i64 + by).rem_euclid(kinds);
+        moved.kind = ScaleKind::ALL[next as usize];
+    } else {
+        moved.root = (i64::from(scale.root) + by).rem_euclid(12) as u8;
+    }
+    moved
 }
 
 /// Edit another section, at its start, so the phrase view starts afresh there.
@@ -512,11 +584,12 @@ fn capture(services: &mut Services) -> Outcome {
     let at = services.reported.playing_section + 1;
     // Playing on with the source's settings keeps its timing and realigning as they were.
     let length = song.section_length(playing);
-    let (start, reset) = (playing.start, playing.reset);
+    let (start, reset, scale) = (playing.start, playing.reset, playing.scale);
     let mut actions = vec![
         Action::AddSection { at },
         Action::SetSectionStart { section: at, start },
         Action::SetReset { section: at, reset },
+        Action::SetSectionScale { section: at, scale },
     ];
     if length > 0 {
         actions.push(Action::SetSectionLength {

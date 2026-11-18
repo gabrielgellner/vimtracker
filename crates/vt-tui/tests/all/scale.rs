@@ -190,6 +190,47 @@ fn scale_fit_moves_a_phrases_notes_and_can_be_undone() {
     assert_eq!(written_notes(&app), before);
 }
 
+/// In a section with a scale of its own, notes are entered, moved and shown in it, as the
+/// section under the cursor has it, and the song's other sections stay in the song's (decision
+/// 426).
+#[test]
+fn notes_are_entered_in_the_scale_of_the_section_under_the_cursor() {
+    let status = |app: &App| {
+        let backend = ratatui::backend::TestBackend::new(100, 2);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::screen::status::draw(frame, frame.area(), app))
+            .unwrap();
+        (0..100)
+            .map(|x| terminal.backend().buffer()[(x, 0)].symbol().to_owned())
+            .collect::<String>()
+    };
+    let (mut app, _realtime) = app();
+    command(&mut app, "set scale=major");
+    // The second section, playing the same chain, in D Dorian.
+    press(&mut app, " 1gclll==++ 3");
+    assert_eq!(app.services.cursor.section, 1);
+    let d_dorian = Scale {
+        on: true,
+        root: 2,
+        kind: ScaleKind::Dorian,
+    };
+    assert_eq!(app.song().sections[1].scale, Some(d_dorian));
+    assert_eq!(app.services.live.scale, C_MAJOR, "the song's is as it was");
+    assert!(status(&app).contains("Scale D Dor"), "{}", status(&app));
+    entering_steps_down(&mut app);
+    tap(&mut app, "iasd");
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(written_notes(&app), [62, 64, 65].map(Note::On));
+    // In the first section, the same phrase takes the song's C major.
+    press(&mut app, " 1k 3");
+    assert_eq!(app.services.cursor.section, 0);
+    assert!(status(&app).contains("Scale C Maj"), "{}", status(&app));
+    tap(&mut app, "Gia");
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(written_notes(&app), [62, 64, 65, 60].map(Note::On));
+}
+
 #[test]
 fn the_scale_list_sets_the_kind_and_turns_it_on() {
     let (mut app, _realtime) = app();

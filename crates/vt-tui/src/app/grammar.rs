@@ -294,7 +294,7 @@ impl App {
 
     /// A move on the selection, counted in its unit.
     fn moved(&self, kind: Shift, by: i32, scope: Scope) -> Adjustment {
-        let (unit, size) = Unit::of(kind, scope, self.services.live.scale.on);
+        let (unit, size) = Unit::of(kind, scope, self.services.scale_here().on);
         Adjustment::Moved(unit, by.saturating_mul(size))
     }
 
@@ -659,12 +659,7 @@ impl App {
             Op::Copy => self.copy_block(range, scope, tracks, true),
             Op::ShiftUp | Op::ShiftDown => {
                 let by = if op == Op::ShiftUp { 1 } else { -1 };
-                let scale = self
-                    .services
-                    .live
-                    .scale
-                    .on
-                    .then_some(self.services.live.scale);
+                let scale = Some(self.services.scale_here()).filter(|scale| scale.on);
                 self.edit_across(range, tracks, |track, phrase, range| Action::Shift {
                     track,
                     phrase,
@@ -960,12 +955,7 @@ impl App {
         tracks: TrackSpan,
         kind: Shift,
     ) {
-        let scale = self
-            .services
-            .live
-            .scale
-            .on
-            .then_some(self.services.live.scale);
+        let scale = Some(self.services.scale_here()).filter(|scale| scale.on);
         self.edit_across(range, tracks, |track, phrase, range| Action::Shift {
             track,
             phrase,

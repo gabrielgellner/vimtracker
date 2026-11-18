@@ -77,7 +77,7 @@ pub fn text(app: &App) -> Option<String> {
         Subject::Page(control) => {
             let heard = app.services.track_as_heard(app.services.cursor.track)?;
             let heard = heard.with_macros();
-            let found = view(control, &heard, app.song(), app.services.live.scale.on)?;
+            let found = view(control, &heard, app.song(), app.services.scale_here().on)?;
             control_line(control.name_on(track), &found)
         }
         Subject::Shape => return None,

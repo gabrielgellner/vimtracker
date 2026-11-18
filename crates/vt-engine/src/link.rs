@@ -1006,6 +1006,78 @@ mod tests {
         assert_eq!(violations, 0);
     }
 
+    /// Sections with scales of their own, changed every block, over a live generator on each
+    /// track's notes and rows that `RND`, `ACU` and `ARP` them, with the song's scale set by
+    /// command too: the generators render again through each section's scale in the scratch made
+    /// ahead (decision 426).
+    #[test]
+    fn section_scales_changing_every_block_never_allocate_in_the_callback() {
+        use vt_model::scale::{Scale, ScaleKind};
+        use vt_model::shape::{Shape, ShapeColumn};
+        let rows = ["C-3 -- rnd:F7", "D-3 -- acu:01", "E-3 -- arp:37", "--- --"];
+        let scaled = |round: usize| {
+            let mut song = song(8, 16);
+            song.saved_scale.on = true;
+            for track in song.tracks.iter_mut().take(8) {
+                let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+                for step in 0..16 {
+                    *phrase.step_mut(step).unwrap() = rows[step % rows.len()].parse().unwrap();
+                }
+            }
+            let mut song = Arc::new(song);
+            for track in 0..8 {
+                let generate = vt_model::action::Action::Generate {
+                    track,
+                    phrase: 0,
+                    column: ShapeColumn::Note {
+                        scale: song.saved_scale,
+                        writes: Some(0x64),
+                    },
+                    span: vt_model::generator::Span::rows(vt_model::selection::StepRange::between(
+                        0, 7,
+                    )),
+                    shape: Shape {
+                        from: 60,
+                        to: 72,
+                        seed: track as u64,
+                        ..Shape::default()
+                    },
+                };
+                song = vt_model::action::edit(&song, &generate).unwrap();
+            }
+            let mut song = Arc::unwrap_or_clone(song);
+            song.sections[0].length = Some(2);
+            let mut second = song.sections[0].clone();
+            second.scale = Some(Scale {
+                on: true,
+                root: (round % 12) as u8,
+                kind: ScaleKind::ALL[round % ScaleKind::ALL.len()],
+            });
+            song.sections.push(second);
+            song
+        };
+        let pool = samples();
+        let engine = Engine::new(48_000, published(scaled(0), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 0..200 {
+            handle.publish(published(scaled(round), &pool));
+            if round % 7 == 0 {
+                let kind = ScaleKind::ALL[round % ScaleKind::ALL.len()];
+                let scale = Scale {
+                    on: round % 2 == 0,
+                    root: 0,
+                    kind,
+                };
+                assert!(handle.send(Command::SetScale { scale }));
+            }
+            violations += blocks(&mut rt, 2);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
     /// Each track's dice loop turned every block, its length through every choice and past them,
     /// its mutate and jump with it, over rows that roll `CHA` and `RND` and lock `DLP` and `DJMP`,
     /// so its ring fills, drifts and jumps as it plays (decisions 410 and 411).

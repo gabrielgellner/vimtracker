@@ -216,6 +216,8 @@ pub enum Pick {
     Line(Line),
     /// The scale as a whole: its root, its kind and whether it's on.
     ScaleTo(Scale),
+    /// The section under the cursor's own scale, or none to play in the song's.
+    SectionScale(Option<Scale>),
     /// The groove the project page draws and changes.
     ShowGroove(GrooveId),
 }

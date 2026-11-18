@@ -1067,6 +1067,18 @@ pub struct Section {
     /// Send every track back to its start after this many steps. Without it, each loops on its own.
     #[serde(default)]
     pub reset: Option<usize>,
+    /// Its own scale, which everything that reads the scale reads while it plays, from its first
+    /// step: the notes entered in it, an `RND`, an `ACU`, an `ARP`, a slot in scale and a live
+    /// generator's notes. None plays in the song's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scale: Option<Scale>,
+}
+
+impl Section {
+    /// The scale in force while it plays: its own, or the song's.
+    pub fn scale_or(&self, song: Scale) -> Scale {
+        self.scale.unwrap_or(song)
+    }
 }
 
 /// One phrase in a chain.
