@@ -23,14 +23,14 @@ each machine.
 | `]g` `[g` | Next or previous group, folded or open |
 | `j` `k` | Next or previous row, back in the column they left |
 | `gg` `G` | The top or bottom of this column of devices |
-| `{` `}` | Previous or next device, on the same row and column. `2}` goes two |
+| `{` `}` | Previous or next device, same row and column. `2}` goes two |
 | `h` `l` | Previous or next setting. `0` and `$` go to the line's ends |
 | `/` | Jump to a setting by its name |
 | `=` `-` | Up or down a small step. A count goes further, as in `10=` |
-| `C-a` `C-x` | The same as `=` `-` |
+| `Ctrl-a` `Ctrl-x` | The same as `=` `-` |
 | `+` `_` | Up or down a large step: the same keys with Shift |
-| `D-l` `D-h` | Cmd and `l` `h`: as `=` `-`, without moving |
-| `D-k` `D-j` | Cmd and `k` `j`: as `+` `_`, without moving |
+| `Cmd-l` `Cmd-h` | As `=` `-`, without moving |
+| `Cmd-k` `Cmd-j` | As `+` `_`, without moving |
 | `i` | Type a value. Hex levels enter themselves, others take `Enter` |
 | `K` | On a setting with choices, like Machine or Dest, list them |
 | `x` | Back to its default: centre pan, 0 dB and so on |
@@ -275,7 +275,7 @@ adds.
 
 Press `/` and type part of a setting's name, like `cu`, and each match on this page
 gets a label over its value, and again in its name, just after what you've typed. Press a label to land on
-that value, ready for `=` and `-`. `Enter` goes to the nearest match, `Esc` stays where you were, and `C-o`
+that value, ready for `=` and `-`. `Enter` goes to the nearest match, `Esc` stays where you were, and `Ctrl-o`
 comes back after a jump.
 
 A label is never a letter that could carry on your search, so you can keep typing to
@@ -609,11 +609,11 @@ with `L` and `R` bars, a fader beside them showing its `Level`, then its `Trim`,
 with `0` marked, and show the track after its level and pan. `h` and `l` move between
 tracks, `0` and `$` to the first or last, `j` and `k` up and down the strip, and `gg` and
 `G` to its top or bottom. Values edit as they do on the track page, with `=` `-` `+` `_`,
-`C-a` `C-x`, or Cmd with `l` `h` `k` `j`, `x` puts one back to its default and `dd` to
+`Ctrl-a` `Ctrl-x`, or Cmd with `l` `h` `k` `j`, `x` puts one back to its default and `dd` to
 nothing: a fader down, a pan to the middle, mute and solo off. On mute
 and solo, `=` switches on, `-` switches off, and `K` or `i` changes it. `/` jumps to a setting by its name, as
 it does on the track page, staying on the cursor's track. `gd` on a fader a macro holds goes
-to that macro on the Gen page, and `C-o` comes back; with more than one holding it, a list
+to that macro on the Gen page, and `Ctrl-o` comes back; with more than one holding it, a list
 of them to choose from.
 
 While a step's `LEV`, `PAN`, `SNA` or `SNB` drives a fader, the strip shows the

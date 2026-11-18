@@ -10,7 +10,7 @@ use vt_model::step::{HIGHEST_OCTAVE, LOWEST_OCTAVE, MAX_NOTE, MIN_NOTE, octave_s
 
 use crate::controls::Page;
 use crate::input::bindings::{Binding, Cmd, Resolved, adjusting_key, degree_key, note_key};
-use crate::input::keys::Key;
+use crate::input::keys::{Key, shown};
 use crate::input::mode::{Mode, View};
 use crate::overlays;
 use crate::overlays::guides;
@@ -531,7 +531,7 @@ impl App {
             self.table
                 .rows()
                 .find(|binding| binding.mode == Mode::Normal && binding.cmd == cmd)
-                .map_or("", |binding| binding.keys)
+                .map_or_else(String::new, |binding| shown(binding.keys))
         };
         let shown = self.track_page.page;
         let page_item = |page: Page| {
@@ -580,7 +580,11 @@ impl App {
                 rows.push(format!("{:?}", binding.mode));
                 last = Some(binding.mode);
             }
-            rows.push(format!("  {:<12} {}", binding.keys, binding.description));
+            rows.push(format!(
+                "  {:<12} {}",
+                shown(binding.keys),
+                binding.description
+            ));
         }
         rows
     }

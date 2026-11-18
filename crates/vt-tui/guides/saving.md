@@ -38,8 +38,8 @@ keeps, and the window's title shows. Saving it somewhere new starts with that na
 and the project is then named after the folder it went into, so the two agree unless
 you type another. If the folder has that name already, it gets a number, as
 `dusty-breakdown-2`. `:new` starts with a fresh random name, and one already in the
-folder is never offered. Type over the name, or press `C-r` on the command line for
-another, as many times as you like. `C-r` works on any `:w`, `:new` or `:render` line,
+folder is never offered. Type over the name, or press `Ctrl-r` on the command line for
+another, as many times as you like. `Ctrl-r` works on any `:w`, `:new` or `:render` line,
 keeping the folder, a `.wav` and any options.
 
 Renaming a project on the project page keeps its folder: `:w` still saves there, and
@@ -104,14 +104,14 @@ The Song page's rows:
 
 A new project starts with a seed of its own, drawn at random and saved with the
 song, so no two projects play the same chances; `:seed` alone rolls another, and
-`:seed 42` sets one. `i` on Name edits it, and `C-r` there rolls a new one. `l` on BPM goes onto its fine
+`:seed 42` sets one. `i` on Name edits it, and `Ctrl-r` there rolls a new one. `l` on BPM goes onto its fine
 part, the digits after the point. `Enter` on Audio opens the Audio page. The limiter
 isn't here: it's on the master's Sound page, after its `Level`, and `:set limiter`
 switches it too.
 
 It moves as the track page does: `j` `k` go between rows and keep their column,
 `gg` `G` to the first or last row, or row n with a count, `h` `l` between settings
-and `0` `$` to the first or last. `=` `-` `+` `_` change a value, as do `C-a` `C-x`
+and `0` `$` to the first or last. `=` `-` `+` `_` change a value, as do `Ctrl-a` `Ctrl-x`
 and Cmd with `l` `h` `k` `j`, `i` types one, as its command takes it, `K` lists the choices on Groove, Edit, Launch, Scale, Root and Grid,
 and switches Auto-jump and Read-only, and `x` puts one back as a new project has it.
 
@@ -173,7 +173,7 @@ end, and gives a synth that would otherwise hold its note a short blip.
 is on screen now, including mutes, and the screen waits until it finishes.
 `:render` with no path lists folders, starting with the project's: `Enter` chooses
 one, and the command line is filled in with the project's name, which you can change
-or roll with `C-r`, and any options you gave. If that file is there already, the name
+or roll with `Ctrl-r`, and any options you gave. If that file is there already, the name
 gets a number, as `dusty-breakdown-2.wav`, so an earlier render isn't written over.
 
 | Option | Does |

@@ -200,7 +200,7 @@ are as near, `:scale fit` takes the lower.
 
 While it's on, `=` `-` `>` `<` move a note through the scale, and a count moves that
 many notes along it. From a note outside the scale, a step lands on the next one in.
-`+` and `_` are still an octave, and `C-a` and `C-x` are still a semitone, for a note
+`+` and `_` are still an octave, and `Ctrl-a` and `Ctrl-x` are still a semitone, for a note
 outside the scale on purpose.
 
 A scale is only for entering and moving notes. It changes nothing you've written,
