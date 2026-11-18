@@ -74,6 +74,7 @@ const PINS: &[(&str, &str, Option<u64>)] = &[
     ("gen/variation", "332d027b783b5b1b", None),
     ("gen/walk", "66120641077f1e35", None),
     ("gen/wave", "3a101e4e5a43276c", None),
+    ("gen/weights", "4d0741790451267b", None),
     ("lfo", "176065263d512027", Some(0xfa005b05a8218b3b)),
     ("lpg", "48225825727e3928", Some(0xa2b2e5b7bd766315)),
     ("machine/4op", "0819466672703213", None),

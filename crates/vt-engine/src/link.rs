@@ -877,6 +877,92 @@ mod tests {
         assert_eq!(violations, 0);
     }
 
+    /// Each track's random notes with every one of their twelve weights on a macro, an LFO on
+    /// four of the macros moving them every block, and new turns of all eight in a new version
+    /// every few, so the engine holds new weights and renders the notes again as it plays
+    /// (decision 425).
+    #[test]
+    fn weights_on_macros_moving_every_block_never_allocate_in_the_callback() {
+        use vt_model::action::{Action, edit};
+        use vt_model::generator::Span;
+        use vt_model::lfo::{Lfo, Rate};
+        use vt_model::macros::{GenColumn, MacroMap, MacroTarget};
+        use vt_model::modulation::ModSlot;
+        use vt_model::scale::Scale;
+        use vt_model::selection::StepRange;
+        use vt_model::shape::{FillKind, GenParam, Shape, ShapeColumn, Where};
+        let weighted = |round: usize| {
+            let mut next = Arc::new(song(4, 16));
+            for track in 0..4 {
+                let random = Shape {
+                    from: 48,
+                    to: 84,
+                    kind: FillKind::Random,
+                    place: Where::Notes,
+                    vary: 1,
+                    ..Shape::default()
+                };
+                let column = ShapeColumn::Note {
+                    scale: Scale {
+                        on: track % 2 == 0,
+                        ..Scale::default()
+                    },
+                    writes: None,
+                };
+                let generate = Action::Generate {
+                    track,
+                    phrase: 0,
+                    column,
+                    span: Span::rows(StepRange::between(0, 15)),
+                    shape: random,
+                };
+                next = edit(&next, &generate).expect("the edit applies");
+            }
+            let mut next = Arc::unwrap_or_clone(next);
+            for (at, track) in next.tracks.iter_mut().take(4).enumerate() {
+                for (place, param) in GenParam::WEIGHTS.into_iter().enumerate() {
+                    let target = MacroTarget::Gen {
+                        column: GenColumn::Note,
+                        param,
+                    };
+                    let held = &mut track.macros[place % 8];
+                    held.maps.push(MacroMap::numbers(target, (0, 15)));
+                    held.value = ((round * 0x0D00 + place * 0x1500 + at) % 0xFF00) as u16;
+                }
+                for (slot, held) in track.mods.iter_mut().take(4).enumerate() {
+                    *held = ModSlot::lfo(
+                        SettingId::macro_at(slot),
+                        Lfo {
+                            rate: Rate::Steps(1 + slot as u32),
+                            ..Lfo::default()
+                        },
+                    )
+                    .with_depth(0x7F);
+                }
+            }
+            next
+        };
+        let pool = samples();
+        let engine = Engine::new(48_000, published(weighted(0), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 0..400 {
+            if round % 16 == 0 {
+                handle.publish(published(weighted(round), &pool));
+            }
+            violations += blocks(&mut rt, 2);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+        // Since the last version came, as each comes with its own scratch.
+        let renders = (0..4)
+            .flat_map(|track| rt.engine().generators_heard(track))
+            .map(|heard| heard.renders)
+            .sum::<u32>();
+        assert!(renders > 0, "the weights moved the notes");
+    }
+
     /// Each track's `Swing` turned every block through its whole range and past it, under an LFO
     /// on it, over rows that lock `SWG` and choose grooves with `GRV`, so every pair reads it
     /// afresh as it plays (decision 420).
