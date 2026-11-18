@@ -883,8 +883,8 @@ mod tests {
                     held.maps.push(MacroMap::numbers(target, (0, 15)));
                     held.value = ((round * 0x0D00 + place * 0x1500 + at) % 0xFF00) as u16;
                 }
-                for slot in 0..4 {
-                    track.mods[slot] = ModSlot::lfo(
+                for (slot, held) in track.mods.iter_mut().take(4).enumerate() {
+                    *held = ModSlot::lfo(
                         SettingId::macro_at(slot),
                         Lfo {
                             rate: Rate::Steps(1 + slot as u32),
