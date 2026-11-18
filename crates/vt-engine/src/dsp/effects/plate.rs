@@ -6,9 +6,9 @@
 //!
 //! The paper's lengths are for 29761 Hz, and are scaled here to the rate it runs at. `Size` scales
 //! the tank's lengths and taps again, read between samples, though its all-passes go no shorter
-//! than the paper's (decision 441), and moves no faster than its whole
-//! range in a second, so a change bends the tail's pitch a little rather than clicking. Its lines
-//! share one buffer from the effect pool, long enough for the biggest plate at the pool's rate.
+//! than the paper's (decision 441), and moves no faster than its whole range in a second, so a
+//! change bends the tail's pitch a little rather than clicking. Its lines share one buffer from
+//! the effect pool, long enough for the biggest plate at the pool's rate.
 //!
 //! `Decay` sets how long its tail takes to fall 60 dB, and each half of the tank keeps `0.001` to
 //! the power of its own length over that each time round, so neither `Size` nor the rate changes
