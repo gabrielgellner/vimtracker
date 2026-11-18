@@ -780,8 +780,8 @@ const MASTER_OUTPUT: DeviceLayout = stored(
 /// its rows' nudges play, `Quantise`, past eight knobs, is on a second page, a live timing knob,
 /// with how its notes join, `Mode`, which of them glide, `Glide mode`, how often its steps
 /// jump to any row, `Jump`, how far its rows' chances to play are moved, `Chance`, and whether
-/// they decide rows or pulses, `Target`,
-/// and its dice loop on a page of its own, `Dice`.
+/// they decide rows or pulses, `Target`, how late every other step lands, `Swing`, a live timing
+/// knob (decision 420), and its dice loop on a page of its own, `Dice`.
 const PLAY: DeviceLayout = live(
     "play",
     &[
@@ -795,7 +795,7 @@ const PLAY: DeviceLayout = live(
                 s("jump"),
                 s("chance"),
                 s("chancetarget"),
-                __,
+                s("swing"),
                 __,
             ],
         ),
@@ -835,7 +835,7 @@ const PLAY_PAGE: Page<Setting> = knobs(
 );
 
 /// A synth's: the sampler's, with whether its oscillators start again on each note between
-/// `Quantise` and `Mode`, and `Glide mode`, `Jump`, `Chance` and `Target` after,
+/// `Quantise` and `Mode`, and `Glide mode`, `Jump`, `Chance`, `Target` and `Swing` after,
 /// and the dice loop's page.
 const SYNTH_PLAY: DeviceLayout = live(
     "synthplay",
@@ -851,7 +851,7 @@ const SYNTH_PLAY: DeviceLayout = live(
                 s("jump"),
                 s("chance"),
                 s("chancetarget"),
-                __,
+                s("swing"),
             ],
         ),
         DICE_PAGE,

@@ -649,6 +649,19 @@ worked out before the step lands, so `GRV 01`, Straight, on a fill's rows plays
 them straight. Held with `h`, it stays until another `GRV` changes it, and `00`
 is the project's. `K` lists them by name.
 
+`SWG` is the track's swing, on top of its groove: the second step of every pair
+lands later, from `00`, 50.0 %, straight, to `FA`, 75.0 %, half a step late, a
+tenth of a percent a step, as an Elektron's swing is in whole percents. `A0`,
+66.0 %, plays just as `Swing 66` does, and each swing groove is on the scale, so
+`64` is `Swing 60` and `C8` is `Swing 70`. With a groove of its own, the track's
+swing adds to its pushes, up to half a step. It's read once a pair, as the pair's
+first step is worked out, so the pair's two steps agree on where the second
+lands: a lock on the pair's first row swings that pair, and one on its second
+row comes too late for it, though held with `h` it swings the pairs after. A
+lane of it, a macro or a mod slot moves it too, so an LFO can sway the swing
+from bar to bar. It starts from the track's `Swing`, in the Play device's title,
+which the Roto has as a knob. `:swing` still sets the project's groove.
+
 `QNT` brings the rows' nudges toward the grid as they play, leaving them written as
 they are: `00` plays them as written, `80` halves each and `FF` plays every row on
 the grid, so a take recorded loose can be tightened, or loosened again, without

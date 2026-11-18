@@ -363,6 +363,14 @@ plays out of order. They're where held `DLP`, `DMU` and `DJMP` start, a macro or
 an LFO moves them, and the Roto has them on the Play device's third page. See
 **Looping the dice** in **FX commands**.
 
+`Swing`, last in the Play device's title, puts the second step of every pair
+later, on top of the track's groove, from `00`, `50.0 %`, straight, to `FA`,
+`75.0 %`, half a step late, a tenth of a percent a step. `A0` is `66.0 %`, which
+plays just as the `Swing 66` groove does, and every swing groove has its place
+on it. It's where held `SWG` starts, so a step's `SWG` or a lane's replaces it
+and an LFO or a macro on it moves it, and on the Roto it's on the Play device's
+second page. See **Groove** in **FX commands**.
+
 `Phase`, in a fourth column of a synth's Play device, is whether its oscillators run
 on from note to note or start again on each. A synth that holds its notes plays the
 next one on the voice already sounding (see **Envelopes** in **The Mod page**). At
