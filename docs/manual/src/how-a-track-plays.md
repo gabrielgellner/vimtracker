@@ -193,7 +193,8 @@ lane row:   00   01   02   00         a new value every step, even mid-note
 ```
 
 `RET` and `CHA` in a lane are ratchet and probability lanes, as on Metropolix: they
-act on whatever step they land on, and do nothing on a step with no note. `LDLT` in a
+act on whatever step they land on. On a step with no note, a `CHA` has nothing to
+drop, and a `RET` strikes the note still sounding again. `LDLT` in a
 lane is a length lane: it moves each note's length up or down from its own, so the
 same row plays short one pass and long the next. `VDLT` is its twin for velocity, so
 a lane of it is an accent pattern that drifts against the notes, and the notes keep
@@ -426,7 +427,9 @@ phrase or chain.
 A `CND` chance, `D0` to `FF`, is rolled instead, from the `:seed`, the track and
 its count, as an `RND` is below, so each pulse of its row reads the same die. A
 failed condition skips its row's note, events and own locks, while columns with
-lanes keep to theirs. A step's `GRV` and `RATE` still time it, as they're chosen
+lanes keep to theirs. So does a note that a failed `CHA` drops or the track's
+`Chance` thins, as an Elektron trig takes its locks with it; a row with no note
+has nothing to drop, so its events and locks still run. A step's `GRV` and `RATE` still time it, as they're chosen
 before it lands. `PRE` and `NEI` read what the last condition on this track, or on
 the track to the left, decided, as each row lands.
 

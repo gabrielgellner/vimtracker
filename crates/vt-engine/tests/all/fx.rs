@@ -317,7 +317,7 @@ fn adding_a_track_doesnt_change_another_tracks_results() {
 }
 
 #[test]
-fn cha_limits_always_and_never_hold_and_other_fx_still_apply() {
+fn cha_limits_always_and_never_hold_and_take_the_rows_fx_with_the_note() {
     let out = render(song(&["C-3 -- cha:FF --- ---"]), flat(0.5), 100);
     assert_ne!(out[50][0], 0.0);
     let out = render(
@@ -325,7 +325,15 @@ fn cha_limits_always_and_never_hold_and_other_fx_still_apply() {
         flat(0.5),
         STEP * 2,
     );
-    // The note is skipped, so the first one keeps sounding, but VOL still applies.
+    // The note is skipped, so the first one keeps sounding, and its `VOL` goes with it
+    // (decision 429).
+    assert!(level_at(&out, STEP * 2 - 1) > 0.1);
+    let out = render(
+        song(&["C-3 -- --- --- ---", "--- -- cha:00 vol:00 ---"]),
+        flat(0.5),
+        STEP * 2,
+    );
+    // A row with no note has nothing to drop, so its `VOL` still applies.
     assert!(level_at(&out, STEP * 2 - 1) < 0.001);
 }
 

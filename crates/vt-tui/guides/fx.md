@@ -242,7 +242,7 @@ These have no mark.
 | `KIL` | Cut the note after `xx` units |
 | `OFF` | Start the envelopes' release after `xx` units |
 | `RET` | Retrigger every `y` units, `x` fading or swelling each: see below |
-| `CHA` | Play the note with a chance of `xx` out of `FF` |
+| `CHA` | Play the note and its locks with a chance of `xx` out of `FF` |
 | `CND` | Play the row only when condition `xx` holds: see **Conditions** |
 | `ACU` | Move the row's note on each time it plays: see **Accumulators** |
 | `ARP` | Go round the note, `x` up and `y` up: see **Arpeggios** |
@@ -262,10 +262,11 @@ to `0.3` times as loud as the one before; and `8` to `F` swell, each `1.1` up to
 an even step in dB. It moves the level of each hit, not its velocity, and an
 `Acid` ignores it: its hits all play at the note's own level.
 
-A `RET` goes with its row's note, as a retrig goes with its trig on Elektron's
-machines: when the note doesn't play, because a `CHA` or a `CND` failed or
-`CDLT` thinned it, its hits don't either, so the row is silent. A `RET` on a row
-with no note strikes the note already sounding again.
+A `KIL`, `OFF` and `RET` go with their row's note, as a retrig goes with its
+trig on Elektron's machines: when the note doesn't play, because a `CHA` or a
+`CND` failed or `CDLT` thinned it, its cut, its release and its hits don't
+either, so the note before it carries on as if the row weren't there. On a row
+with no note they cut, release or strike again the note already sounding.
 Use `:seed 3A9F12C4` to choose which results `CHA` and `RND` give, or `:seed` alone
 for a new one at random, as one undo step. The seed is hex, as the project page
 shows it, in either case, so `:seed 42` is `0x42`.
@@ -285,10 +286,9 @@ the next note's locks. A row with no note on the way that locks the setting is w
 that setting's slide ends, as its lock is the next change.
 
 Only settings that sweep slide: a list or a switch, like `FTYP` or `KTRK`, jumps as
-it would. A value marked hold or glide keeps its own mark. A thinned or failed `CHA`
-row still slides, as its locks still run; a failed `CND` skips them, and its `SLD`
-with them. The slide reads ahead through the phrase as it's playing, wrapping round
-its loop, and lands where it was aimed if the next note is skipped or a window turns
+it would. A value marked hold or glide keeps its own mark. A row whose note a
+`CHA`, a `CND` or `CDLT` drops skips its locks, and its `SLD` with them. The
+slide reads ahead through the phrase as it's playing, wrapping round its loop, and lands where it was aimed if the next note is skipped or a window turns
 under it. With `Cue` on, a turned window waits for the loop, so the rows it reads
 ahead are the rows that play. A column with a lane of its own isn't read ahead, and
 its value jumps as its row plays.
@@ -341,9 +341,10 @@ the next pass under `Cue`.
 
 `D0` to `FF` are chances, Elektron's `X%`, under **Chance** in the list: `D0`
 is 1%, `DE` 25%, `E8` 50%, `F2` 75% and `FF` 99%, in finer steps toward either
-end, where they're heard most. Unlike `CHA`, which skips only the note, a `%`
-that fails skips the row's locks too, as any condition does, so `CND E8 VOL 00`
-silences the track half the time and leaves it be otherwise. It rolls the
+end, where they're heard most. A `%` that fails skips the row's locks, as any
+condition does, so `CND E8 VOL 00` silences the track half the time and leaves it
+be otherwise, even on a row with no note, where a `CHA` has no note to drop and
+leaves its locks running. It rolls the
 track's dice, from the `:seed`, the track and how far it is into its chain, as
 `RND` does, so a render repeats, the dice loop loops it, and `PRE` and `NEI`
 follow it as they follow a `CHA`.
@@ -363,8 +364,9 @@ faint when its `CND` or `CHA` skipped it.
 `PRE` and `NEI` read what the last `CND` or `CHA` decided, and aren't counted
 themselves, so after a `1:2`, a `PRE` row plays with it and a `!PRE` row plays
 instead of it. Nothing has passed when playing starts. `CHA` is still rolled when a
-condition fails it, so its results stay the same, and a failed `CHA` skips only the
-note, as it always has, with the note's `RET`.
+condition fails it, so its results stay the same. A failed `CHA` drops its row's
+note with its events and locks, as a condition does, but on a row with no note
+it has nothing to drop, and the row's events and locks run.
 
 ### Moving every chance
 
@@ -396,8 +398,7 @@ read what a row's `CHA` came to with its chance moved, so a `PRE` row after a
 thinned `CHA` row is thinned with it: a flam stays a flam. A row with no `CHA`
 that `CDLT` thins isn't a condition, and leaves what `PRE` reads as it was, so
 turning the fader never changes which row a `PRE` follows. Like a failed
-`CHA`, a thinned row skips only its note and its `RET`, and its locks still
-run.
+`CHA`, a thinned row drops its note with its events and locks.
 
 `CDLT` on a row sets it for that row: `CDLT 00` drops the row's note whatever
 its chance, and `CHA 00 CDLT FF` plays it. It's read before the row's locks
@@ -414,9 +415,10 @@ the row's chance, its `CHA`s moved by `CDLT`, or with no `CHA` what `CDLT`
 keeps below `80`. So a `MLT4` row at `CDLT 40` loses some of its four notes
 rather than all of them, and a `RET` stutters with gaps. The row's first pulse
 decides as on `Row`, and feeds `PRE` as it would; a condition still decides the
-whole row. A pulse whose note is dropped takes its `RET`'s hits with it, while
-the row's later pulses still roll their own. The pulses and hits after the
-first are rolled from the `:seed`, so a render repeats and every `CHA` keeps the
+whole row. A pulse whose note is dropped takes its `KIL`, `OFF` and `RET`'s
+hits with it, while the row's later pulses still roll their own; the row's locks
+run, as on `Pulse` the chance drops pulses, never the row. The pulses and hits
+after the first are rolled from the `:seed`, so a render repeats and every `CHA` keeps the
 results it had.
 
 `Space l` turns fill on or off, and held, it's on until you let go. The status

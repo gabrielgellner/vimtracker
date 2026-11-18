@@ -19,6 +19,7 @@ mod compressors;
 mod conditions;
 mod dice_loop;
 mod dropped_ratchets;
+mod dropped_trigs;
 mod echo;
 mod effect_types;
 mod engine;

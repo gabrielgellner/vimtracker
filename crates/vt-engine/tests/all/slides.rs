@@ -173,7 +173,7 @@ fn lists_jump_under_a_slide() {
 }
 
 #[test]
-fn a_thinned_row_still_slides_as_its_locks_still_run() {
+fn a_thinned_row_doesnt_slide_as_its_locks_dont_run() {
     let rows = [
         "C-3 -- cut:40 sld:01 chancedelta:00",
         "",
@@ -184,8 +184,10 @@ fn a_thinned_row_still_slides_as_its_locks_still_run() {
     let thinned = song(&rows, 0xFF);
     let out = render_frames(version(&thinned), RATE, STEP * 4);
     assert!(peak(&out) < 1e-6, "the row's note is thinned out");
+    // Its locks go with its note (decision 429), so the cutoff stays the track's own until the
+    // next note's lock.
     let heard = cutoffs(&thinned, 5);
-    near(at(&heard, 2, false), 0x80);
+    assert_eq!(at(&heard, 2, false), 0xFF);
     assert_eq!(at(&heard, 4, true), 0xC0);
 }
 
