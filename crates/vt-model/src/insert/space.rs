@@ -415,7 +415,7 @@ const fn width_param(default: u8) -> Entry {
 }
 
 /// A reverb's, in the order the page shows them.
-pub(crate) const REVERB_PARAMS: [Entry; 9] = [
+pub(crate) const REVERB_PARAMS: [Entry; 10] = [
     hex_param("Pre", "pre", "PRE", Reverb::DEFAULT.pre)
         .means("how long before it comes in, up to a quarter of a second"),
     decay_param(Reverb::DEFAULT.decay),
@@ -426,17 +426,19 @@ pub(crate) const REVERB_PARAMS: [Entry; 9] = [
         .means("takes lows from what goes in, off at 00"),
     hex_param("High cut", "highcut", "HCUT", Reverb::DEFAULT.high_cut)
         .means("takes highs from what goes in, off at FF"),
+    hex_param("Mod", "mod", "MOD", Reverb::DEFAULT.excursion)
+        .means("how much its tail wobbles, which keeps it from ringing; still at 00"),
     width_param(Reverb::DEFAULT.width),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
 
 /// Where its settings sit on the FX page: its pre-delay and tail, how the tail darkens and thins,
-/// what goes in, then what comes out.
+/// what goes in and the wobble, then what comes out.
 pub(super) const REVERB_GRID: Columns = &[
     &["pre", "decay"],
     &["damp", "lowdamp"],
-    &["lowcut", "highcut"],
+    &["lowcut", "highcut", "mod"],
     &["width", "mix", "gain"],
 ];
 
@@ -458,12 +460,21 @@ pub struct Reverb {
     pub low_cut: u8,
     /// A low-pass on what goes in, which `FF` turns off.
     pub high_cut: u8,
+    /// How far everything in it that moves wobbles: its early taps, the smear in its diffusers,
+    /// its loops' allpasses and delays. At `00` nothing moves, and it answers every hit the same.
+    #[serde(skip_serializing_if = "is_reverb_excursion")]
+    pub excursion: u8,
     /// From `00`, both sides together, to `FF`, as wide as they come out.
     #[serde(skip_serializing_if = "is_full")]
     pub width: u8,
     /// From `00`, all dry, to `FF`, all wet.
     pub mix: u8,
     pub gain: u8,
+}
+
+/// Whether a reverb's `Mod` is as it starts, which a file leaves out.
+fn is_reverb_excursion(value: &u8) -> bool {
+    *value == Reverb::DEFAULT.excursion
 }
 
 impl Default for Reverb {
@@ -477,10 +488,11 @@ impl Reverb {
     pub const DEFAULT: Self = Self {
         pre: 0,
         decay: 0x60,
-        damp: 0x55,
+        damp: 0x5D,
         low_damp: 0,
         low_cut: 0,
         high_cut: 0xFF,
+        excursion: 0x20,
         width: 0xFF,
         mix: 0x80,
         gain: UNITY_LEVEL,
@@ -493,6 +505,7 @@ impl Reverb {
         low_damp,
         low_cut,
         high_cut,
+        excursion,
         width,
         mix,
         gain,

@@ -1,7 +1,7 @@
 --- | Empty
 Distort | Distort((kind:Soft,amount:64,bits:9,rate:64,mix:255,gain:224,tone:128))
 Delay | Delay((time:11,feedback:102,ping_pong:1,width:255,low_cut:0,high_cut:255,drive:0,mix:128,gain:224))
-Reverb | Reverb((pre:0,decay:96,damp:85,low_cut:0,high_cut:255,mix:128,gain:224))
+Reverb | Reverb((pre:0,decay:96,damp:93,low_cut:0,high_cut:255,mix:128,gain:224))
 Chorus | Chorus((kind:Chorus,rate:128,depth:128,mix:128,gain:224))
 EQ3 | Eq((low_frequency:59,low:128,mid_frequency:144,mid:128,mid_q:64,high_frequency:221,high:128,gain:224))
 Comp | Compressor((kind:Clean,threshold:192,ratio:96,attack:85,release:128,console_ratio:1,console_attack:4,console_release:4,glue_ratio:1,glue_attack:3,glue_release:3,range:255,peak_clip:0,source:0,auto:0,mix:255,makeup:0))

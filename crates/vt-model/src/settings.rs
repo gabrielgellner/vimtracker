@@ -1092,7 +1092,7 @@ mod tests {
         assert_eq!(shown(patch, 0x2000), "E.PIANO 1");
         let detune = SettingId::voice(SynthVoice::VirtualAnalog, 0).unwrap();
         assert_eq!(shown(detune, 0x8000), "+0 %");
-        let gain = SettingId::slot(0, EffectKind::Reverb, 8).unwrap();
+        let gain = SettingId::slot(0, EffectKind::Reverb, 9).unwrap();
         assert_eq!(shown(gain, 0xE000), "+0.0 dB");
         let decay = SettingId::slot(0, EffectKind::Reverb, 1).unwrap();
         assert_eq!(shown(decay, 0x6000), "2.02 s");
