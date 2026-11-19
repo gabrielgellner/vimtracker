@@ -2,7 +2,9 @@
 //! (J. Audio Eng. Soc., 1997). What goes in is band-limited, held back and spread by four
 //! all-passes, then goes round a tank of two halves that feed each other, each a wobbling
 //! all-pass, a delay, a damping low-pass, a second all-pass and a second delay. Each side of what
-//! comes out is seven taps from all over the tank, as the paper gives them.
+//! comes out is seven taps from all over the tank, as the paper gives them but for the first,
+//! blurred by eight short all-passes of its own, so it's dense from its first millisecond rather
+//! than a few echoes that flam (decision 446).
 //!
 //! The paper's lengths are for 29761 Hz, and are scaled here to the rate it runs at. `Size` scales
 //! the tank's lengths and taps again, read between samples, though its all-passes go no shorter
@@ -52,6 +54,16 @@ const TUNING_RATE: f32 = 29_761.0;
 /// The input all-passes' lengths, and how much each spreads what goes through it.
 const DIFFUSER_LENGTHS: [f32; 4] = [142.0, 107.0, 379.0, 277.0];
 const DIFFUSIONS: [f32; 4] = [0.75, 0.75, 0.625, 0.625];
+/// Each side's own short all-passes on the way out, and how much they spread. They blur each of
+/// the taps' echoes into a dense burst from its first millisecond, where the paper's few echoes
+/// flammed a snare, and each side's differ so the two still sound apart. They let every frequency
+/// through as loud, so the tail and the wobble on each side are as they were (decision 446).
+const BLUR_LENGTHS: [[f32; BLURS]; 2] = [
+    [7.0, 11.0, 13.0, 17.0, 19.0, 23.0, 29.0, 31.0],
+    [5.0, 8.0, 12.0, 15.0, 21.0, 25.0, 27.0, 33.0],
+];
+const BLURS: usize = 8;
+const BLUR: f32 = 0.6;
 /// Each half of the tank: its wobbling all-pass, its delay before the damping, its second all-pass
 /// and its delay after.
 const TANK_LENGTHS: [[f32; 4]; 2] = [
@@ -209,10 +221,12 @@ fn damping_at(damp: u8, rate: u32) -> f32 {
 /// rate, and whether it's added or taken away.
 type Tap = (usize, usize, f32, f32);
 
-/// The paper's taps: the left side's, then the right's.
+/// The paper's taps: the left side's, then the right's. Each side's first is a millisecond in
+/// rather than the paper's 9 and 12, so with `Pre` at `00` the plate answers at once, not after a
+/// gap (decision 446).
 const TAPS: [[Tap; 7]; 2] = [
     [
-        (1, 1, 266.0, 1.0),
+        (1, 1, 30.0, 1.0),
         (1, 1, 2974.0, 1.0),
         (1, 2, 1913.0, -1.0),
         (1, 3, 1996.0, 1.0),
@@ -221,7 +235,7 @@ const TAPS: [[Tap; 7]; 2] = [
         (0, 3, 1066.0, -1.0),
     ],
     [
-        (0, 1, 353.0, 1.0),
+        (0, 1, 30.0, 1.0),
         (0, 1, 3627.0, 1.0),
         (0, 2, 1228.0, -1.0),
         (0, 3, 2673.0, 1.0),
@@ -248,6 +262,21 @@ fn allpass(lines: &mut SharedLines, line: Line, frames: f32, input: f32, diffusi
     delayed + sum * diffusion
 }
 
+/// The same for a whole number of frames, for the blurs, which needn't read between samples.
+#[inline]
+fn whole_allpass(
+    lines: &mut SharedLines,
+    base: usize,
+    frames: usize,
+    input: f32,
+    diffusion: f32,
+) -> f32 {
+    let delayed = lines.read(base, frames);
+    let sum = input - delayed * diffusion;
+    lines.write(base, 0, sum);
+    delayed + sum * diffusion
+}
+
 /// The stereo plate.
 #[derive(Debug, Clone)]
 pub(crate) struct Plate {
@@ -256,6 +285,9 @@ pub(crate) struct Plate {
     /// How long each input all-pass is at this rate, in frames.
     diffuser_frames: [f32; 4],
     tank: [[Line; 4]; 2],
+    /// Each side's blurring all-passes on the way out: where each starts in the shared buffer,
+    /// and how long it is at this rate, in whole frames.
+    blurs: [[(usize, usize); BLURS]; 2],
     /// The band-limiting low-pass on what goes in, and each half's damping.
     band: f32,
     damped: [f32; 2],
@@ -315,6 +347,8 @@ impl Plate {
                 }
             })
         });
+        let blurs = BLUR_LENGTHS
+            .map(|side| side.map(|length| (place(length).base, (length * scale).round() as usize)));
         let size = base.next_power_of_two();
         let pre_frames = (LONGEST_PRE * rate as f32) as usize + 2;
         let turning = std::f64::consts::TAU * WOBBLE_HZ / f64::from(rate);
@@ -323,6 +357,7 @@ impl Plate {
             diffusers,
             diffuser_frames: DIFFUSER_LENGTHS.map(|length| (length * scale).round()),
             tank,
+            blurs,
             band: 0.0,
             damped: [0.0; 2],
             wobble: (1.0, 0.0),
@@ -503,8 +538,8 @@ impl Plate {
         }
 
         let mut out = [0.0; 2];
-        for (side, taps) in out.iter_mut().zip(&TAPS) {
-            *side = taps
+        for ((side, taps), blurs) in out.iter_mut().zip(&TAPS).zip(&self.blurs) {
+            let tapped = taps
                 .iter()
                 .map(|&(half, line, frames, sign)| {
                     lines.between(self.tank[half][line].base, frames * stretch) * sign
@@ -512,6 +547,9 @@ impl Plate {
                 .sum::<f32>()
                 * TAP_GAIN
                 * WET;
+            *side = blurs.iter().fold(tapped, |sample, &(base, frames)| {
+                whole_allpass(lines, base, frames, sample, BLUR)
+            });
         }
         widen(out, width)
     }
@@ -613,6 +651,34 @@ mod tests {
         let energies = energies(&out, RATE);
         let (first, last) = (energies[2], energies[energies.len() - 1]);
         assert!(last < first * 1e-4, "{first} {last}");
+    }
+
+    #[test]
+    fn it_answers_at_once_and_is_dense_from_the_start_at_any_size() {
+        // How many frames of a stretch stand out past its RMS, against the share of noise that
+        // does, as Abel and Huang's echo density: near 1 for a dense tail, near 0 for a few
+        // echoes. The paper's taps gave 0.08 at 10 ms and 0.3 at 25 ms, which flammed a snare;
+        // seen: 0.9 and over (decision 446).
+        let density = |stretch: &[[f32; 2]]| {
+            let rms =
+                (stretch.iter().map(|f| f[0] * f[0]).sum::<f32>() / stretch.len() as f32).sqrt();
+            let out = stretch.iter().filter(|f| f[0].abs() > rms).count();
+            out as f32 / stretch.len() as f32 / 0.3173
+        };
+        for size in [0x00, 0x80, 0xFF] {
+            let settings = Settings {
+                size,
+                ..Settings::DEFAULT
+            };
+            let out = impulse(&mut plate(settings, RATE), RATE as usize / 10);
+            let first = out.iter().position(|f| f[0] != 0.0 && f[1] != 0.0).unwrap();
+            assert!(first < RATE as usize / 400, "{size:02X}: {first} frames");
+            let ms = |ms: usize| first + RATE as usize * ms / 1000;
+            for (from, to) in [(0, 20), (15, 35), (30, 50)] {
+                let dense = density(&out[ms(from)..ms(to)]);
+                assert!(dense > 0.8, "{size:02X} at {from} ms: {dense}");
+            }
+        }
     }
 
     #[test]
@@ -843,11 +909,15 @@ mod tests {
             ),
         ];
         for (name, from, to) in pairs {
-            // It jumps no further moving than it does held at either end.
+            // It jumps no further moving than it does held at either end. But `Pre` bends what
+            // goes through it as it moves, at most a quarter up, and a tone bent up jumps that
+            // much further each frame; with its first taps a millisecond in, little smooths that
+            // over (decision 446). Seen: 1.27.
+            let bend = if name == "Pre" { PRE_PER_FRAME } else { 0.0 };
             let still = biggest_jump(from, from, false).max(biggest_jump(to, to, false));
             let moving = biggest_jump(from, to, true);
             assert!(
-                moving < still * 1.25,
+                moving < still * (1.25 + bend),
                 "{name}: {moving} moving, {still} still"
             );
         }
@@ -904,7 +974,8 @@ mod tests {
             let plate = Plate::new(rate);
             let scale = rate as f32 / TUNING_RATE;
             let needed: f32 = DIFFUSER_LENGTHS.iter().sum::<f32>() * scale
-                + TANK_LENGTHS.iter().flatten().sum::<f32>() * LARGEST * scale;
+                + TANK_LENGTHS.iter().flatten().sum::<f32>() * LARGEST * scale
+                + BLUR_LENGTHS.iter().flatten().sum::<f32>() * scale;
             assert!(plate.frames() as f32 >= needed, "{rate}");
         }
     }
@@ -969,10 +1040,10 @@ mod tests {
                 .iter()
                 .map(|frame| frame[0])
                 .collect();
-            // Then its taps, the nearest some milliseconds into the tank.
+            // Then its taps, the nearest a millisecond into the tank.
             let heard = measure::onset(&response, RATE);
             assert!(
-                heard >= said.pre - 1.0 / RATE as f32 && heard < said.pre + 0.05,
+                heard >= said.pre - 1.0 / RATE as f32 && heard < said.pre + 0.005,
                 "{pre:02X}: {heard} against {}",
                 said.pre
             );
