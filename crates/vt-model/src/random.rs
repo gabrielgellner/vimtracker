@@ -29,7 +29,7 @@ pub(crate) const fn splitmix64(state: u64) -> u64 {
 /// stepping through the ones before: a stateless number for a row or a cycle, so one row's value
 /// doesn't depend on any other's.
 #[inline]
-pub(crate) const fn splitmix64_nth(seed: u64, n: u64) -> u64 {
+pub const fn splitmix64_nth(seed: u64, n: u64) -> u64 {
     splitmix64(seed.wrapping_add(n.wrapping_mul(GOLDEN_GAMMA)))
 }
 

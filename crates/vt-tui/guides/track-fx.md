@@ -170,8 +170,10 @@ note ends. `Reverb` has these:
 `Decay` reads in seconds, from a quarter of one at `00` to a minute at `FF`: `60` is 2 s, and
 each `20` about doubles it. It's what the middle of the tail does, measured: the lows ring a
 little longer, as a hall's do, and `Damp` shortens the highs and darkens a hit a little as it
-goes in. A hit comes out spread at once, different on each side, with no separate echoes to
-flam a snare, and its tail moves slowly, each part its own way, so no note rings on its own.
+goes in. A hit is answered at once, as a hall's first reflections answer it, different on
+each side and with no separate echoes to flam a snare, and the tail takes over within a
+sixth of a second. Under a second of `Decay` that first answer is quieter, so a short room
+stays short. The tail moves slowly, each part its own way, so no note rings on its own.
 `Low damp` keeps a long tail from going muddy under a kick, where `Low cut` only takes the
 lows from what goes in. `Width` leaves the two sides added together
 as they were, so it sums to mono the same.

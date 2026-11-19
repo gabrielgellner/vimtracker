@@ -8,7 +8,9 @@
 //! delay and first allpass wobble, slowly and each its own way, so no mode stands still; six
 //! diffusers spread what goes in rather than four; and each side of what comes out is five taps
 //! along both loops' delays, as Dattorro's plate takes its own, rather than where one side's
-//! allpasses end, so the start fills in at once and differs side to side.
+//! allpasses end, so it differs side to side. The loops swell over a quarter of a second, so
+//! twenty early taps a side, from short diffusers of their own, answer a hit at once and fade as
+//! the loops take over.
 //!
 //! `Decay` sets how long its tail takes to fall 60 dB at 1 kHz. Each half of its loop keeps
 //! `0.001` to the power of its own length over that each time round, as sst's Reverb 2 works its
@@ -37,6 +39,7 @@
 //! OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use vt_model::insert::{Reverb as Settings, low_damp_hz, reverb_decay_seconds};
+use vt_model::random::splitmix64_nth;
 
 use crate::dsp::blocks::coefficient::of_corner;
 use crate::dsp::blocks::line::SharedLines;
@@ -80,8 +83,89 @@ const WOBBLES: [(f64, f64); 9] = [
 ];
 /// How much of what goes in reaches the lines.
 const INPUT_GAIN: f32 = 0.25;
-/// What each tap is scaled by. Tuned so its level is near the reverb's before it, decision 439's.
-const TAP_GAIN: f32 = 0.9;
+/// What each tap along the loops is scaled by: 0.9 put its level near decision 439's reverb, and
+/// it's 2.6 dB under that against the early taps, as they were fitted, and all of it `LEVEL`.
+const TAP_GAIN: f32 = 0.9 * 0.7428 * LEVEL;
+/// What the loops' taps and the early taps are both scaled by, so a snare and a pad come out about
+/// as loud as they did before the early taps (decision 447).
+const LEVEL: f32 = 0.7244;
+/// The early taps' own diffusers, at the tuning rate: short, and spreading less than those
+/// before the loops, so a hit is a blur of about 20 ms rather than a click. They're their own
+/// rather than the first of those, whose few lengths came out as a buzz at 4 to 5 ms (decision 447).
+const EARLY_DIFFUSERS: [f32; 5] = [17.0, 29.0, 47.0, 71.0, 89.0];
+const EARLY_DIFFUSION: f32 = 0.5;
+/// How many early taps each side has.
+const EARLY_TAPS: usize = 20;
+/// The early taps, the left side's and then the right's: how many milliseconds back each reads
+/// what its diffusers give, and how much of it. A hall answers a hit at once, where the loops
+/// take a quarter of a second to swell; these fill that in and are gone by 150 ms, when the loops
+/// have taken over. At times picked at random, a side's no closer than 1.5 ms and the sides' no
+/// closer than 1 ms but for the first pair, their sizes were fitted, with the loops as they are,
+/// to VintageVerb's `Hall1984` by band over a snare's and a pad's first 150 ms, for sides as alike
+/// as its (IACC 0.15) and no echo repeating or standing out (decision 447).
+const EARLY: [[(f32, f32); EARLY_TAPS]; 2] = [
+    [
+        (0.10, -1.2815),
+        (9.36, -0.3209),
+        (12.43, 0.6258),
+        (23.56, 0.1197),
+        (27.48, -0.4901),
+        (35.14, -0.1768),
+        (44.27, 0.1806),
+        (49.28, -0.5810),
+        (57.09, -0.5174),
+        (61.59, -0.1482),
+        (72.32, -0.6849),
+        (78.35, 0.5307),
+        (84.41, 0.5739),
+        (93.81, 0.5175),
+        (98.49, -0.2540),
+        (106.35, -0.5547),
+        (111.85, -0.5464),
+        (120.31, 0.4401),
+        (126.41, -0.3182),
+        (133.81, -0.5537),
+    ],
+    [
+        (3.48, -0.1683),
+        (8.58, -1.4789),
+        (18.23, 0.5644),
+        (26.10, 0.4087),
+        (32.39, -0.1502),
+        (41.01, -0.1765),
+        (43.73, 0.1795),
+        (53.28, 0.2704),
+        (60.04, 0.4417),
+        (65.16, 0.6538),
+        (75.16, -0.3510),
+        (83.32, -0.5044),
+        (89.13, -0.4914),
+        (94.57, -0.5702),
+        (104.57, -0.5947),
+        (110.03, 0.3534),
+        (117.14, -0.5688),
+        (125.45, 0.5456),
+        (129.53, -0.3900),
+        (140.00, -0.4372),
+    ],
+];
+/// How far each early tap's read drifts, in frames at the tuning rate at about one standard
+/// deviation, and how slowly: noise eased from one random value to the next every this many
+/// seconds. Read still, the taps are a fixed comb that a held note beats
+/// against as the loops wobble, one clean line per wobble; drifting, every tap by the same noise, the
+/// comb moves against the loops and the beat spreads, while what's between the taps and between
+/// the sides, which was fitted, stays as it is. The noise goes by
+/// the frame, as the wobbles do, so one that's slept is where it would have been, and stems add up.
+const EARLY_DRIFT: f32 = 10.0;
+const EARLY_DRIFT_SECONDS: f32 = 0.25;
+/// Where the drift noise starts.
+const EARLY_DRIFT_SEED: u64 = 0x4470_0001;
+/// Under a tail this long the early taps come down too, by its share of it.
+const EARLY_FULL_SECONDS: f32 = 1.0;
+/// The early taps' furthest reach, in milliseconds.
+const EARLY_LONGEST_MS: f32 = 150.0;
+/// The tail the early taps were fitted at, in seconds, which longer tails leave them as.
+const EARLY_FITTED_SECONDS: f32 = 2.0;
 /// The damping filter's coefficient at the top of `Damp`, at the tuning rate. At `00` it's open.
 const MOST_DAMPING: f32 = 0.1;
 /// The longest pre-delay, in seconds.
@@ -298,11 +382,35 @@ struct Reading {
     sign: f32,
 }
 
+/// How much of each early tap comes out for a tail of `seconds`: as fitted, or for a shorter tail,
+/// the later ones less by six times as much more as it falls in that time, and all of them less
+/// under a second, so a short room's start neither outlasts its tail nor stands in for it when
+/// `Decay` is measured.
+fn early_gains(seconds: f32) -> [[f32; EARLY_TAPS]; 2] {
+    let faster = 6.0 * (1.0 / seconds - 1.0 / EARLY_FITTED_SECONDS).max(0.0);
+    let level = LEVEL * (seconds / EARLY_FULL_SECONDS).min(1.0);
+    EARLY.map(|side| side.map(|(ms, gain)| gain * level * 0.001_f32.powf(ms / 1000.0 * faster)))
+}
+
 /// The stereo reverb.
 #[derive(Debug, Clone)]
 pub(crate) struct Reverb {
     lines: SharedLines,
     diffusers: [Line; 6],
+    /// The early taps' diffusers, and what they give, for the taps to read.
+    early_diffusers: [Line; 5],
+    early_line: Line,
+    /// How many frames back each early tap reads, and how much of it comes out.
+    early_back: [[f32; EARLY_TAPS]; 2],
+    early_gain: [[Smoothed; EARLY_TAPS]; 2],
+    /// The frame it's at, which the early taps' drift goes by; which step of the drift that's in,
+    /// and the noise at that step's ends; how many frames a step is, and what takes the
+    /// noise to `EARLY_DRIFT` frames.
+    frame: u64,
+    drift_step: u64,
+    drift_ends: [f32; 2],
+    drift_frames: u64,
+    drift_depth: f32,
     /// Each half of the loop: two allpasses and a delay.
     loops: [[Line; 3]; 2],
     taps: [[Reading; 5]; 2],
@@ -315,6 +423,8 @@ pub(crate) struct Reverb {
     damped: [f32; 2],
     /// What goes in through the damping once, as a hall's air darkens a sound before it rings.
     darkened: f32,
+    /// What the early taps read, through that one-pole again.
+    early_darkened: [f32; 2],
     /// How far that one-pole moves a frame at least, for `DARKEST_START_HZ`.
     darkest: f32,
     low_damping: LowDamping,
@@ -355,6 +465,8 @@ impl Reverb {
             line
         };
         let diffusers = DIFFUSERS.map(&mut line);
+        let early_diffusers = EARLY_DIFFUSERS.map(&mut line);
+        let early_line = line(EARLY_LONGEST_MS / 1000.0 * TUNING_RATE);
         // Room for the wobbles either way, and the frame after them to read between.
         let room = 3.0 / scale;
         let loops = HALVES.map(|[a, b, read]| {
@@ -377,6 +489,19 @@ impl Reverb {
         let mut reverb = Self {
             lines: SharedLines::new(size),
             diffusers,
+            early_diffusers,
+            early_line,
+            // Held back by as far as the drift goes, so it never reads ahead of what's written.
+            early_back: EARLY.map(|side| {
+                side.map(|(ms, _)| ms / 1000.0 * rate as f32 + EARLY_DRIFT * scale * 2.0 + 1.0)
+            }),
+            early_gain: [[Smoothed::at(0.0); EARLY_TAPS]; 2],
+            frame: 0,
+            drift_step: 0,
+            drift_ends: [drift_at(0), drift_at(1)],
+            drift_frames: ((EARLY_DRIFT_SECONDS * rate as f32) as u64).max(1),
+            // Uniform noise eased between its values has a standard deviation of about a half.
+            drift_depth: EARLY_DRIFT * scale * 2.0,
             loops,
             taps,
             smear: [50.0 * scale, 100.0 * scale, 22.5 * scale],
@@ -385,6 +510,7 @@ impl Reverb {
             swing: HALVES.map(|[.., read]| [read * scale, DELAY_WOBBLE * scale]),
             damped: [0.0; 2],
             darkened: 0.0,
+            early_darkened: [0.0; 2],
             darkest: of_corner(DARKEST_START_HZ, rate as f32),
             low_damping: LowDamping::default(),
             wobble: [(1.0, 0.0); 9],
@@ -418,6 +544,7 @@ impl Reverb {
         self.pre.fill(0.0);
         self.damped = [0.0; 2];
         self.darkened = 0.0;
+        self.early_darkened = [0.0; 2];
         self.low_damping.clear();
         self.trim = Trim::default();
     }
@@ -441,6 +568,11 @@ impl Reverb {
         }
         self.input_spread.target =
             INPUT_DIFFUSION.min(most_spread(DIFFUSERS[5], seconds, self.rate));
+        for (gains, targets) in self.early_gain.iter_mut().zip(early_gains(seconds)) {
+            for (gain, target) in gains.iter_mut().zip(targets) {
+                gain.target = target;
+            }
+        }
         self.damping.target = damping_at(settings.damp, self.rate_ratio);
         self.low_damping
             .set(low_damping_at(settings.low_damp, self.rate));
@@ -466,6 +598,7 @@ impl Reverb {
 
     /// Move the wobbles to where they are this many frames in.
     pub(crate) fn keep_time(&mut self, frames: u64) {
+        self.frame = frames;
         let seconds = frames as f64 / f64::from(self.rate);
         self.wobble = WOBBLES.map(|(hertz, from)| {
             let turns = seconds * hertz + from;
@@ -484,6 +617,9 @@ impl Reverb {
             spread.settle();
         }
         self.input_spread.settle();
+        for gain in self.early_gain.as_flattened_mut() {
+            gain.settle();
+        }
         self.damping.settle();
         self.low_damping.settle();
         self.width.settle();
@@ -554,13 +690,29 @@ impl Reverb {
         // twice as high, and never below `DARKEST_START_HZ`: about 12 kHz at `55`. At `00` it's
         // left out, following what goes in so it comes back quietly.
         let mut diffused = incoming * INPUT_GAIN;
-        if damping < 1.0 {
-            let by = (1.0 - (1.0 - damping) * (1.0 - damping)).max(self.darkest);
+        let by =
+            (damping < 1.0).then(|| (1.0 - (1.0 - damping) * (1.0 - damping)).max(self.darkest));
+        if let Some(by) = by {
             self.darkened += by * (diffused - self.darkened);
             diffused = self.darkened;
         } else {
             self.darkened = diffused;
         }
+        // The early taps' own diffusers, and the darkening twice more, as what reaches the loops
+        // is darkened again each trip round.
+        let mut early = diffused;
+        for line in self.early_diffusers {
+            early = lines.allpass(line.base, line.length, early, EARLY_DIFFUSION);
+        }
+        for held in &mut self.early_darkened {
+            if let Some(by) = by {
+                *held += by * (early - *held);
+            } else {
+                *held = early;
+            }
+            early = *held;
+        }
+        lines.write(self.early_line.base, 0, early);
         for line in self.diffusers {
             diffused = lines.allpass(line.base, line.length, diffused, input_spread);
         }
@@ -592,13 +744,39 @@ impl Reverb {
         right = lines.allpass(two_b.base, two_b.length, right, -spread[3]);
         lines.write(two_delay.base, 0, right);
 
-        self.taps.map(|side| {
+        let early = self.early_line.base;
+        let smoothing = self.smoothing;
+        let step = self.frame / self.drift_frames;
+        if step != self.drift_step {
+            self.drift_step = step;
+            self.drift_ends = [drift_at(step), drift_at(step + 1)];
+        }
+        let along = (self.frame % self.drift_frames) as f32 / self.drift_frames as f32;
+        let [from, to] = self.drift_ends;
+        let drift = (from + (to - from) * along * along * (3.0 - 2.0 * along)) * self.drift_depth;
+        self.frame += 1;
+        let mut out = self.taps.map(|side| {
             side.iter()
                 .map(|tap| lines.read(tap.base, tap.back) * tap.sign)
                 .sum::<f32>()
                 * TAP_GAIN
-        })
+        });
+        for ((out, backs), gains) in out
+            .iter_mut()
+            .zip(self.early_back)
+            .zip(&mut self.early_gain)
+        {
+            for (back, gain) in backs.into_iter().zip(gains) {
+                *out += lines.between(early, back + drift) * gain.next(smoothing);
+            }
+        }
+        out
     }
+}
+
+/// The drift noise at the end of a step, on `-1..1`.
+fn drift_at(step: u64) -> f32 {
+    (splitmix64_nth(EARLY_DRIFT_SEED, step) >> 40) as f32 / 8_388_608.0 - 1.0
 }
 
 /// A step through an allpass whose read moves, `at` frames back, read between samples.
@@ -985,9 +1163,27 @@ mod tests {
     }
 
     #[test]
+    fn a_click_is_answered_at_once() {
+        // A hall answers a hit straight away and the loops swell over a quarter of a second, so
+        // the early taps fill the start in: over the first 20 ms there's more than from 150 to
+        // 300 ms. Seen: 2 dB more, where the loops alone gave 30 dB less; VintageVerb's
+        // `Hall1984` gives 2 dB more.
+        let out = click(RATE as usize / 2);
+        let energy = |from_ms: usize, to_ms: usize| {
+            out[RATE as usize * from_ms / 1000..RATE as usize * to_ms / 1000]
+                .iter()
+                .map(|[l, r]| l * l + r * r)
+                .sum::<f32>()
+        };
+        let more = 10.0 * (energy(0, 20) / energy(150, 300)).log10();
+        assert!(more > 0.5, "{more} dB");
+    }
+
+    #[test]
     fn a_click_comes_out_spread_with_no_echo_standing_out() {
         // A snare through it shouldn't flam: over its first 350 ms no 3 ms stands out from the
-        // 50 ms around it. Seen: 1.1 dB at most, where one tap a side gave 3.3 dB.
+        // 50 ms around it. Seen: 2.0 dB at most with the early taps, 1.1 before them, where one
+        // tap a side gave 3.3 dB; VintageVerb's `Hall1984` gives 4.7.
         let out = click(RATE as usize / 2);
         let energy: Vec<f32> = out.iter().map(|[l, r]| l * l + r * r).collect();
         let start = energy.iter().position(|e| *e > 1e-8).unwrap();
@@ -998,7 +1194,7 @@ mod tests {
         let most = (start + RATE as usize / 40..start + RATE as usize * 35 / 100)
             .map(|at| 10.0 * (mean(at, short) / mean(at, long)).log10())
             .fold(f32::MIN, f32::max);
-        assert!(most < 2.0, "{most} dB");
+        assert!(most < 2.5, "{most} dB");
     }
 
     #[test]
