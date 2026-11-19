@@ -110,8 +110,8 @@ ones each time round.
 
 A 303 line: notes, accents and slides rolled together, as Roland's and Arturia's
 303s roll them. **Acid lines** in the editing guide lists its settings; here is
-how they make a line. It starts with Notes `4`, Octave `20%`, Density `50%`,
-Accent `30%` and Slide `20%`.
+how they make a line. It starts with Notes `4`, Octave `20%`, Accent `30%` and
+Slide `20%`, and on an empty column Where `Beats` at Density `50%`.
 
 **The riff's notes.** From is the root. The riff is the root and `Notes` less one
 others, taken from between From and To, in the scale while it's on; Spread and
@@ -120,12 +120,14 @@ ends is as likely. Each row plays one of the riff at random, the root counted
 twice, so with `Notes` 4 the root comes two rows in five and the others one each.
 `Notes` 1 is the root alone.
 
-**The rhythm.** On an empty column, each row has a chance to play by where it
-falls in the bar, counting from the first row selected: the beats most, then
-every third row, then the other even rows, and the rest least. `Density` is how
-many play on average: at `50%` a beat plays about seven times in ten and an odd
-row between them about three. On notes already there, the rhythm is theirs and
-Density isn't shown.
+**The rhythm.** It plays on every row its `Where` selects. On an empty column
+that's `Beats`: each row has a chance to play by where it falls in the bar,
+counting from the first row selected, the beats most, then every third row,
+then the other even rows, and the rest least. Its `Density` is how many play on
+average: at `50%` a beat plays about seven times in ten and an odd row between
+them about three. On notes already there it starts on `Notes`, so the rhythm is
+theirs; `Euclid`, `Rhythm` or any other `Where` plays its own rows instead,
+notes of its own where there were none, and leaves the notes outside it alone.
 
 **The rest.** Each note may go an octave up or down, as likely either way, by
 `Octave`; be accented, `7F`, by `Accent`; and slide into the next, a `HLD` gate,
@@ -145,11 +147,16 @@ the accent do the work.
 the root half the time. `r` until the two others sound right, then Pitches
 `Keep` and `r` for accents and slides that fit them.
 
-**Sparse and heavy.** Density `30%`, Accent `50%`, Slide `10%`. Mostly on the
-beats, half of them accented.
+**Sparse and heavy.** Where `Beats`, Density `30%`, Accent `50%`, Slide `10%`.
+Mostly on the beats, half of them accented.
 
-**Busy and legato.** Density `85%`, Slide `35%`. Nearly every row, a third of
-them sliding: runs of tied notes that glide.
+**Busy and legato.** Where `Beats`, Density `85%`, Slide `35%`. Nearly every
+row, a third of them sliding: runs of tied notes that glide.
+
+**A tresillo over your notes.** On notes you wrote, Where `Euclid`, Hits `3`.
+The tresillo's rows get the riff, a note of its own where you had none, and
+your notes off them stay as they are. Over `Notes` instead, the three hits fall
+among your notes.
 
 **Your line, new accents.** On notes you wrote, Fill `Acid`, Pitches `Keep`. Your
 notes and rhythm stay; `r` deals accents, slides and octaves until they fall

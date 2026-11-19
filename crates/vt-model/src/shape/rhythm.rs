@@ -46,7 +46,7 @@ use super::mix;
 use super::random::unit;
 use super::render::Rows;
 use super::{GenCell, ShapeColumn};
-use crate::step::{Gate, GateKind};
+use crate::step::{Gate, GateKind, Step};
 
 /// What each model's draws are for, so they don't follow another's or a fill's.
 const CLUSTER_START: u64 = 0xC105_7E00;
@@ -194,34 +194,37 @@ pub(super) fn states(open: &Rows, bias: u8, seed: u64) -> (Rows, Rows) {
 }
 
 /// Hold the value before each tie into it, over the cells a three-state rhythm's gates were
-/// written into: each tie takes the cell before it, and on notes of its own, `Acid`'s or a
-/// `Tonnetz`' chords with their locks, the note before is held into it. A gate the fill left alone has nothing to hold, so the ties after it
-/// rest, as after a rest.
+/// written into, `steps` the span's: going through the rows it's `counted` over, each tie on a row
+/// of `open`, those the column can change, takes the cell before it. On the Note column a note of its own, `Acid`'s or a `Tonnetz`' chord
+/// with its lock, is held into the tie, and a re-pitched note goes on as the tie's own note
+/// there, or as a note of its own on a row without one. A gate the fill left alone, or a row the
+/// column can't change, has nothing to hold, so the ties after it rest, as after a rest.
 pub(super) fn tie(
+    steps: &[Step],
+    counted: &Rows,
     open: &Rows,
     gates: &Rows,
     ties: &Rows,
     column: ShapeColumn,
     cells: &mut [GenCell],
 ) {
-    let notes = matches!(
-        column,
-        ShapeColumn::Note {
-            writes: Some(_),
-            ..
-        }
-    );
+    let notes = matches!(column, ShapeColumn::Note { .. });
     let mut last: Option<usize> = None;
-    for offset in open.ones() {
+    for offset in counted.ones() {
         let Some(&cell) = cells.get(offset) else {
             break;
         };
-        if gates.has(offset) {
+        if !open.has(offset) {
+            last = None;
+        } else if gates.has(offset) {
             last = (cell != GenCell::Under).then_some(offset);
         } else if ties.has(offset)
             && let Some(before) = last
         {
-            cells[offset] = cells[before];
+            cells[offset] = match (cells[before], steps.get(offset)) {
+                (GenCell::Pitch(note), Some(step)) => column.cell(step, u16::from(note) << 8),
+                (cell, _) => cell,
+            };
             if notes {
                 cells[before] = held(cells[before]);
             }

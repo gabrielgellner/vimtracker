@@ -31,6 +31,7 @@ mod random_shapes;
 mod render;
 mod sample;
 mod seeding;
+mod selection;
 mod slices;
 mod stable_names;
 

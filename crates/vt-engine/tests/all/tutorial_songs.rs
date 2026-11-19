@@ -617,11 +617,10 @@ fn kria() -> Song {
     // A second track, one `Acid` fill on a phrase of 16: a trigger loop of 12, a note loop of 7,
     // an octave loop of 5, an accent loop of 3 and a slide loop of 4, coming round every 420 rows.
     voice(&mut song, 1, "BS", SynthVoice::Acid, &[REST; 16]);
-    let mut line = shape(FillKind::Acid, note("E-2"), note("E-3"), Where::AllRows);
+    let mut line = shape(FillKind::Acid, note("E-2"), note("E-3"), Where::Beats(60));
     line.seed = 3;
     line.acid = Acid {
         octave: 30,
-        density: 60,
         accent: 40,
         slide: 30,
         loops: Loops {
@@ -913,7 +912,7 @@ fn acid_lines() -> Song {
     let mut song = song("acid-lines", 126, 0, ScaleKind::Minor, 4);
     song.seed = 0xAC;
     voice(&mut song, 0, "TB", SynthVoice::Acid, &[REST; 16]);
-    let mut riff = shape(FillKind::Acid, note("C-2"), note("C-3"), Where::AllRows);
+    let mut riff = shape(FillKind::Acid, note("C-2"), note("C-3"), Where::Beats(50));
     riff.seed = 5;
     let notes = empty_notes(&song);
     let mut song = generate(song, 0, notes, 16, riff);
@@ -2279,9 +2278,13 @@ fn accents_patch() -> PatchPreset {
 /// all it takes: `Density`, `Notes`, `Octave`, `Accent` and `Slide`.
 fn acid_line_patch() -> PatchPreset {
     let mut track = acid_lines().tracks[0].clone();
-    let acid = first_shape(&track).acid;
+    let line = first_shape(&track);
+    let acid = line.acid;
+    let Where::Beats(density) = line.place else {
+        panic!("the line plays on the beats");
+    };
     let knobs = [
-        ("Density", GenParam::Density, (0, 100), acid.density),
+        ("Density", GenParam::Density, (0, 100), density),
         ("Notes", GenParam::Notes, (1, 8), acid.notes),
         ("Octave", GenParam::Octave, (0, 100), acid.octave),
         ("Accent", GenParam::Accent, (0, 100), acid.accent),

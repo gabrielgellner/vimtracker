@@ -476,8 +476,8 @@ over 26 bars, and the phrase plays the same pass again only after 105 passes.
 `Tab`. The notes are all `E-3` on the grid, but no two bars sound alike.
 
 *   **Track 2, `BS`:** `Acid`, `Cutoff` `48`, `Resonance` `A0`; `Level` `D0`. Shape on its empty
-    Note column of 16 rows: `Fill` `Acid`, `From` `E-2`, `To` `E-3`, `Octave` `30%`, `Density`
-    `60%`, `Accent` `40%`, `Slide` `30%`; under `Pitches`, the loops, `Trig loop` 12, `Note
+    Note column of 16 rows: `Fill` `Acid`, `From` `E-2`, `To` `E-3`, `Octave` `30%`, `Where`
+    `Beats`, `Density` `60%`, `Accent` `40%`, `Slide` `30%`; under `Pitches`, the loops, `Trig loop` 12, `Note
     loop` 7, `Oct loop` 5, `Acc loop` 3 and `Sld loop` 4. A loop of `0` is `Off`, the part drawn
     afresh on every row of the span, the same each pass, as `Acid` always was. `r` rolls it
     again until the first bar sounds right; the loops only run on from pass to pass while it's
@@ -765,8 +765,8 @@ kick, a snare and hats. [`song.ron`](songs/acid-lines/song.ron)
 *   **Song:** C minor, 126 BPM.
 *   **Track 1, `TB`:** `Acid`, `Cutoff` `50`, `Resonance` `C0`, `Env mod` `A0`, `Decay` `58`;
     `Level` `C4`, `Send A` `A0`. Shape on the empty Note column: `Fill` `Acid`, `From` `C-2`,
-    `To` `C-3`. `Notes` is how many notes the riff has, `Density` how many rows play, `Accent`
-    and `Slide` the chance of each. `r` rolls another until you like it.
+    `To` `C-3`. `Notes` is how many notes the riff has; `Where` starts on `Beats`, its `Density`
+    how many rows play; `Accent` and `Slide` the chance of each. `r` rolls another until you like it.
 *   **Track 2:** the kick. **Track 3:** the hats.
 *   **Track 4, `SD`:** `Snare`; `Level` `C8`, `Send B` `98`. A `G-2` on rows `04` and `0C`.
 
@@ -779,6 +779,9 @@ kick, a snare and hats. [`song.ron`](songs/acid-lines/song.ron)
 *   `Pitches` `Keep` in the panel: `r` then rolls only the accents, slides and octaves, Roland's
     second die, and the notes stay.
 *   `Density` up for a busier line, `Notes` 2 for a two-note pump, `Octave` up for more jumps.
+*   `Where` `Euclid` instead of `Beats`: the line plays on the hits, spread over all 16 rows.
+    On a line you typed, the hits get the riff, a note of their own where you had none, and
+    your notes off them stay; `Over` `Notes` spreads the hits among your notes instead.
 *   `Spread` and `Bias` choose the riff's notes besides its root, as they lean `Random`'s
     values in Marbles' X below: `Spread` `0%` gathers them round the middle of the range,
     `D#2 F-2 G-2`, a tight riff, and `Bias` `+100` with it takes them from the top, `G#2 A#2

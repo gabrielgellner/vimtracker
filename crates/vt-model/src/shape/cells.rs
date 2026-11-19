@@ -162,39 +162,52 @@ impl Cells {
         }
     }
 
-    /// The rows it chooses among `open`, the rows of the span the column could change, by their
-    /// offset in it: the cells on in its generation, or across tracks, the generations its own
-    /// cell is on in.
+    /// The rows it chooses, by their offset in the span, counting the rows of `counted` in turn, a
+    /// cell or a generation each: on one column, the cells on in its generation, a cell for each
+    /// of them, or across tracks, the generations its own cell is on in, one for each of them.
     pub(super) fn chosen(
         self,
         steps: &[Step],
         range: StepRange,
         seed: u64,
-        open: &Rows,
+        counted: &Rows,
         len: usize,
     ) -> Rows {
+        let width = counted.count();
+        // Whether each of the rows counted has a note, by its place among them.
+        let mut hits = Rows::new(width);
+        for (nth, offset) in counted.ones().enumerate() {
+            if steps
+                .get(range.first + offset)
+                .is_some_and(|step| matches!(step.note, Note::On(_)))
+            {
+                hits.set(nth);
+            }
+        }
         let on = match self.across {
-            Some(across) => self.down(across, len),
-            None => self.along(steps, range, seed, len),
+            Some(across) => self.down(across, width),
+            None => self.along(&hits, seed, width),
         };
         let mut hit = Rows::new(len);
-        for offset in open.ones() {
-            if on.has(offset) {
+        for (nth, offset) in counted.ones().enumerate() {
+            if on.has(nth) {
                 hit.set(offset);
             }
         }
         hit
     }
 
-    /// On one column: the generation this pass plays, a row a cell.
-    fn along(self, steps: &[Step], range: StepRange, seed: u64, len: usize) -> Rows {
+    /// On one column: the generation this pass plays, a cell for each row counted, `hits` the
+    /// ones with a note.
+    fn along(self, hits: &Rows, seed: u64, len: usize) -> Rows {
         let mut row = Rows::new(len);
-        let hit = |offset: usize| {
-            steps
-                .get(range.first + offset)
-                .is_some_and(|step| matches!(step.note, Note::On(_)))
-        };
-        seeded(self.start, seed, len, hit, |cell| row.set(cell));
+        seeded(
+            self.start,
+            seed,
+            len,
+            |cell| hits.has(cell),
+            |cell| row.set(cell),
+        );
         for _ in 0..usize::from(self.stepped) % COLUMN_GENERATIONS {
             row = generation(&row, self.rule);
         }

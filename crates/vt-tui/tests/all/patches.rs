@@ -10,7 +10,7 @@ use ratatui::crossterm::event::KeyCode;
 use vt_model::macros::{GenColumn, MacroMap, MacroTarget};
 use vt_model::modulation::ModKind;
 use vt_model::settings::SettingId;
-use vt_model::shape::{GenParam, Where};
+use vt_model::shape::{GenParam, ShapeColumn, Where};
 use vt_model::song::{Phrase, Song};
 use vt_model::step::{Note, Step};
 use vt_tui::app::App;
@@ -284,7 +284,13 @@ fn a_live_generator_a_macro_holds_goes_onto_the_phrase_under_the_cursor() {
     );
     let track = &app.song().tracks[1];
     let generator = &track.phrases[&0].generators()[0];
-    assert!(generator.column.writes_notes());
+    assert!(matches!(
+        generator.column,
+        ShapeColumn::Note {
+            writes: Some(_),
+            ..
+        }
+    ));
     assert!(matches!(
         generator.shape.place,
         Where::Euclid { hits: 3, .. }

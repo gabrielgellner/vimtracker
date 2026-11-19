@@ -28,7 +28,7 @@ use super::{
     Values, Variation, WAVES, WEIGHTS, WaveRate, Where, default_step, degree_count, degree_name,
     first_note,
 };
-use super::{CHILD, CLUSTERS, MARKOV, Role, SHARE, STATES, World};
+use super::{BEATS, CHILD, CLUSTERS, MARKOV, Over, Role, SHARE, STATES, World};
 
 mod spec;
 mod table;
@@ -76,9 +76,9 @@ const LOOP_JUMP: i32 = 4;
 pub struct Context<'a> {
     /// The column it fills, which `From` and `To` are values of.
     pub column: ShapeColumn,
-    /// How many rows the column could change, which Euclid's `Hits` are spread over and its
-    /// `Rotate` goes round.
-    pub open: usize,
+    /// How many rows its `Where` counts over ([`counted`](super::counted)): Euclid's `Hits` are
+    /// spread over them and its `Rotate` goes round them.
+    pub rows: usize,
     /// Whether the column was empty, so it's generated on rather than reshaped: a transform has
     /// nothing to rework then, and no command is there to choose rows by.
     pub generates: bool,
@@ -115,21 +115,29 @@ impl Context<'_> {
         self.source.map_or(1, <[Step]>::len).max(1)
     }
 
-    /// The choices of rows. Where nothing is there, the rows already holding a command aren't one.
+    /// The choices of rows. Where nothing is there, the rows already holding a command aren't one,
+    /// and on the Note column, nor are the notes or the rows without one, which would be none or
+    /// every row.
     pub fn wheres(&self) -> Vec<Where> {
+        let notes = matches!(self.column, ShapeColumn::Note { .. });
         self.column
             .wheres()
             .into_iter()
-            .filter(|place| !(self.generates && *place == Where::Commands))
+            .filter(|place| {
+                !(self.generates
+                    && (*place == Where::Commands
+                        || notes && matches!(place, Where::Notes | Where::NoNotes)))
+            })
             .collect()
     }
 
-    /// The rows it chooses unless told otherwise: every row where nothing is there.
-    pub fn default_where(&self) -> Where {
-        if self.generates {
-            Where::AllRows
-        } else {
-            self.column.default_where()
+    /// The rows a fill chooses unless told otherwise: where nothing is there, every row, or for
+    /// `Acid`, the beats its rhythm has always played on.
+    pub fn default_where(&self, kind: FillKind) -> Where {
+        match (self.generates, kind) {
+            (true, FillKind::Acid) => BEATS,
+            (true, _) => Where::AllRows,
+            (false, _) => self.column.default_where(),
         }
     }
 }
@@ -157,6 +165,7 @@ pub enum Choice {
     World(World),
     Role(Role),
     CellStart(CellStart),
+    Over(Over),
     Moves(Moves),
     Voice(TonnetzVoice),
     Vary(u8),
@@ -177,6 +186,7 @@ impl Choice {
             Self::World(rhythm) => rhythm.name().to_owned(),
             Self::Role(part) => part.name().to_owned(),
             Self::CellStart(start) => start.name().to_owned(),
+            Self::Over(over) => over.name().to_owned(),
             Self::Moves(moves) => moves.name().to_owned(),
             Self::Voice(voice) => voice.name().to_owned(),
             Self::Vary(passes) => vary_name(passes),
@@ -193,16 +203,23 @@ impl Choice {
             Self::World(rhythm) => Some(rhythm.description()),
             Self::Role(part) => Some(part.description()),
             Self::CellStart(start) => Some(start.description()),
+            Self::Over(over) => Some(over.description()),
             Self::Moves(moves) => Some(moves.description()),
             Self::Voice(voice) => Some(voice.description()),
             _ => None,
         }
     }
 
-    /// Give a shape this choice. A `Where` chosen comes with its amount as it starts.
+    /// Give a shape this choice. A `Where` chosen comes with its amount as it starts, and `Acid`
+    /// on every row plays on the beats, as its rhythm always has.
     pub fn apply(self, shape: &mut Shape) {
         match self {
-            Self::Fill(kind) => shape.kind = kind,
+            Self::Fill(kind) => {
+                shape.kind = kind;
+                if kind == FillKind::Acid && shape.place == Where::AllRows {
+                    shape.place = BEATS;
+                }
+            }
             Self::Wave(wave) => shape.wave = wave,
             Self::Rate(rate) => shape.rate = rate,
             Self::Where(place) => shape.place = place,
@@ -225,6 +242,7 @@ impl Choice {
                     cells.start = start;
                 }
             }
+            Self::Over(over) => shape.over = Some(over),
             Self::Moves(moves) => shape.tonnetz.moves = moves,
             Self::Voice(voice) => shape.tonnetz.voice = Some(voice),
             Self::Vary(passes) => shape.vary = passes,
@@ -473,7 +491,7 @@ mod tests {
     fn context(column: ShapeColumn) -> Context<'static> {
         Context {
             column,
-            open: 16,
+            rows: 16,
             generates: false,
             sources: &[],
             source: None,
@@ -539,6 +557,18 @@ mod tests {
         assert_eq!(
             of(FillKind::Acid, true),
             [
+                Fill, From, To, Notes, Spread, Bias, Octave, Accent, Slide, Pitches, NoteLoop,
+                OctaveLoop, AccentLoop, SlideLoop, Where, Vary
+            ]
+        );
+        // On the beats, its rhythm loops, and `Density` is the `Where`'s.
+        let beats = Shape {
+            place: BEATS,
+            ..shape(FillKind::Acid)
+        };
+        assert_eq!(
+            GenParam::of(&beats, note(), true),
+            [
                 Fill, From, To, Notes, Spread, Bias, Octave, Density, Accent, Slide, Pitches,
                 TrigLoop, NoteLoop, OctaveLoop, AccentLoop, SlideLoop, Where, Vary
             ]
@@ -562,7 +592,7 @@ mod tests {
             Grid::from_columns(&[
                 [Some(From), Some(To), Some(Notes)],
                 [Some(Octave), Some(Accent), Some(Slide)],
-                [Some(Density), Some(Hits), Some(Rotate)],
+                [Some(Over), Some(Hits), Some(Rotate)],
                 [Some(Spread), Some(Bias), None],
             ])
         );
@@ -574,7 +604,7 @@ mod tests {
         euclid.place = crate::shape::Where::Euclid { hits: 3, rotate: 0 };
         assert_eq!(
             GenParam::of(&euclid, note(), false),
-            [Fill, From, To, Run, Where, Hits, Rotate]
+            [Fill, From, To, Run, Where, Over, Hits, Rotate]
         );
         euclid.place = crate::shape::Where::Chance(50);
         assert!(
@@ -734,7 +764,9 @@ mod tests {
         cells.apply(&mut ramp);
         assert_eq!(
             GenParam::of(&ramp, ShapeColumn::Velocity, false),
-            [Fill, From, To, Curve, S, Run, Where, Rule, CellStart, Vary]
+            [
+                Fill, From, To, Curve, S, Run, Where, Over, Rule, CellStart, Vary
+            ]
         );
         assert_eq!(Rule.shown(&ramp, &velocity), "30");
         assert_eq!(CellStart.shown(&ramp, &velocity), "Seed");
@@ -771,7 +803,7 @@ mod tests {
         assert!(Rule.held_in_engine() && CellStart.held_in_engine());
         assert_eq!(
             GenParam::grid(&ramp, ShapeColumn::Velocity, false).column(2),
-            [None, Some(Rule), Some(CellStart)]
+            [Some(Over), Some(Rule), Some(CellStart)]
         );
         assert_eq!(GenParam::title(&ramp)[2], Some(Vary));
         // Across tracks.
@@ -1147,7 +1179,10 @@ mod tests {
             generates: true,
             ..context(note())
         };
-        let mut acid = shape(FillKind::Acid);
+        let mut acid = Shape {
+            place: BEATS,
+            ..shape(FillKind::Acid)
+        };
         let shown = |acid: &Shape, param: GenParam| {
             (param.shown(acid, &generated), param.brief(acid, &generated))
         };
@@ -1197,12 +1232,16 @@ mod tests {
                 ],
             ]))
         );
+        let on_notes = Shape {
+            place: Where::Notes,
+            ..acid
+        };
         assert_eq!(
-            GenParam::loops_grid(&acid, note(), false)
+            GenParam::loops_grid(&on_notes, note(), false)
                 .unwrap()
                 .column(0),
             [None, Some(GenParam::NoteLoop), None],
-            "on notes there, the rhythm is theirs"
+            "on the notes there, the rhythm is theirs"
         );
         assert_eq!(
             GenParam::loops_grid(&shape(FillKind::Random), note(), true),
@@ -1488,13 +1527,15 @@ mod tests {
         Role.reset(&mut ramp, &context, starts);
         assert_eq!(ramp.place, son(super::Role::High, 100));
         // At the foot of the third column; where a fill takes its top, the rhythm tops the fourth.
+        // Its `Over` has no room there, so it tops the fourth.
         let grid = GenParam::grid(&ramp, column, false);
         assert_eq!(grid.column(2), [Some(Rhythm), Some(Role), Some(Child)]);
+        assert_eq!(grid.column(3)[0], Some(Over));
         let mut random = ramp;
         random.kind = FillKind::Random;
         let grid = GenParam::grid(&random, column, false);
         assert_eq!(grid.column(2), [None, Some(Role), Some(Child)]);
-        assert_eq!(grid.column(3)[0], Some(Rhythm));
+        assert_eq!(grid.column(3)[..2], [Some(Rhythm), Some(Over)]);
         let mut acid = ramp;
         acid.kind = FillKind::Acid;
         let notes = ShapeColumn::Note {
@@ -1502,8 +1543,8 @@ mod tests {
             writes: Some(0x64),
         };
         let grid = GenParam::grid(&acid, notes, true);
-        assert_eq!(grid.column(2), [Some(Density), Some(Role), Some(Child)]);
-        assert_eq!(grid.column(3), [Some(Spread), Some(Bias), Some(Rhythm)]);
+        assert_eq!(grid.column(2), [Some(Rhythm), Some(Role), Some(Child)]);
+        assert_eq!(grid.column(3), [Some(Spread), Some(Bias), Some(Over)]);
         // The list, each with where it's from.
         let listed = Rhythm.choices(&context).unwrap();
         assert_eq!(listed.len(), World::ALL.len());
