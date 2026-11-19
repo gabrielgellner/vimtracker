@@ -41,6 +41,7 @@ const PINS: &[(&str, &str, Option<u64>)] = &[
     ("fx/flanger", "5d4f676e543f1719", None),
     ("fx/freqshift", "481e302678387e5a", None),
     ("fx/grains", "7d7560767e604e4a", Some(0xeab1fa1cd3232e97)),
+    ("fx/hall", "5450343e59180941", None),
     ("fx/limit", "5362072e381d6736", None),
     ("fx/lpg", "42226527676c5110", None),
     ("fx/phaser", "16625053261b513f", None),

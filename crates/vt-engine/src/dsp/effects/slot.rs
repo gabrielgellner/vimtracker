@@ -1770,6 +1770,10 @@ mod tests {
             }),
             // Its longest tail takes over a minute to die away, so this one's its middle.
             Insert::Space(Space::DEFAULT),
+            Insert::Hall(Hall {
+                decay: 0x90,
+                ..Hall::DEFAULT
+            }),
             Insert::Phaser(Phaser {
                 feedback: 0xFF,
                 ..Phaser::DEFAULT

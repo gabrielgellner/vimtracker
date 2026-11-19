@@ -713,6 +713,8 @@ mod tests {
     });
     /// A space, which takes its tank's lines from the pool.
     const SPACE: Insert = Insert::Space(vt_model::insert::Space::DEFAULT);
+    /// A hall, which takes its lines and pre-delay from the pool.
+    const HALL: Insert = Insert::Hall(vt_model::insert::Hall::DEFAULT);
     /// Clouds, which takes its recording from the pool.
     const CLOUDS: Insert = Insert::Clouds(vt_model::insert::Clouds::DEFAULT);
     /// Beads, which takes its recording from the pool.
@@ -1639,7 +1641,7 @@ mod tests {
             } else if round % 32 == 5 {
                 next.tracks[round % 8].inserts = [SHIFT, COMB, STUTTER, COMB];
             } else if round % 32 == 21 {
-                next.tracks[round % 8].inserts = [SPACE, SPRING, SPACE, SPRING];
+                next.tracks[round % 8].inserts = [SPACE, SPRING, HALL, SPRING];
             } else if round % 16 == 13 {
                 next.tracks[round % 8].inserts = [SPRING, SHIFT, ROTARY, SHIFT];
             } else if round % 8 == 3 {
@@ -1690,7 +1692,7 @@ mod tests {
         more.tracks[1].inserts = [LIMIT, FLANGER, TAPE, REEL];
         more.tracks[2].inserts = [PLATE, ROTARY, CLOUDS, DECK];
         more.tracks[3].inserts = [Insert::Empty, PITCH, SPRING, SPACE];
-        more.tracks[4].inserts = [Insert::Empty, BEADS, STUTTER, GRAINS];
+        more.tracks[4].inserts = [HALL, BEADS, STUTTER, GRAINS];
         more.tracks[5].inserts = [WARPS, COMB, RESO, SHIFT];
         more.tracks[0].inserts[3] = ECHO;
         handle.publish(published(more, &pool));
@@ -1713,7 +1715,7 @@ mod tests {
         while handle.freed.pop().is_ok() {
             freed += 1;
         }
-        assert_eq!(freed, 22);
+        assert_eq!(freed, 23);
     }
 
     #[test]
