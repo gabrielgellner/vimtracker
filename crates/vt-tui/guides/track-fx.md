@@ -162,17 +162,18 @@ note ends. `Reverb` has these:
 |---|---|
 | `Pre` | How long before it comes in, up to a quarter second |
 | `Decay` | How long its tail takes to fall 60 dB at 1 kHz |
-| `Damp` | How quickly its highs fall away as it rings, and a little how dark it starts |
+| `Damp` | How quickly its highs fall away as it rings |
 | `Low damp` | How quickly its lows fall away as it rings, off at `00` |
 | `Low cut`, `High cut` | Shape what goes in |
 | `Width` | From `00`, sides together, to `FF`, as wide as it comes |
 
 `Decay` reads in seconds, from a quarter of one at `00` to a minute at `FF`: `60` is 2 s, and
 each `20` about doubles it. It's what the middle of the tail does, measured: the lows ring a
-little longer, as a hall's do, and `Damp` shortens the highs. A hit comes out spread at once,
-different on each side, with no separate echoes to flam a snare, and its tail moves slowly, each
-part its own way, so no note rings on its own. `Low damp` keeps a long tail from going muddy under a kick, where
-`Low cut` only takes the lows from what goes in. `Width` leaves the two sides added together
+little longer, as a hall's do, and `Damp` shortens the highs and darkens a hit a little as it
+goes in. A hit comes out spread at once, different on each side, with no separate echoes to
+flam a snare, and its tail moves slowly, each part its own way, so no note rings on its own.
+`Low damp` keeps a long tail from going muddy under a kick, where `Low cut` only takes the
+lows from what goes in. `Width` leaves the two sides added together
 as they were, so it sums to mono the same.
 
 `Delay` has these:
