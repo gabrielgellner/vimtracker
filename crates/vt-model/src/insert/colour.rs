@@ -615,32 +615,32 @@ const REEL_SPEED_NAMES: [&str; 4] = ["3.75 ips", "7.5 ips", "15 ips", "30 ips"];
 pub const REEL_OVERSAMPLING_NAMES: [&str; 2] = ["4x", "8x"];
 
 /// The most a reel's playback gap, the space between its head and the tape and the depth its
-/// coating is read from can be, in µm, and the least of the gap.
-pub const LEAST_REEL_GAP_UM: f32 = 0.5;
-pub const MOST_REEL_GAP_UM: f32 = 20.0;
-pub const MOST_REEL_SPACING_UM: f32 = 3.0;
-pub const MOST_REEL_THICKNESS_UM: f32 = 6.0;
+/// coating is read from can be, in µm, and the least of the gap: Satin's `Gap Width`'s range.
+pub const LEAST_REEL_GAP_UM: f32 = 1.0;
+pub const MOST_REEL_GAP_UM: f32 = 5.0;
+pub const MOST_REEL_SPACING_UM: f32 = 1.0;
+pub const MOST_REEL_THICKNESS_UM: f32 = 2.4;
 
 /// A reel's speed in inches a second, for its place in the list.
 pub fn reel_speed_ips(place: u8) -> f32 {
     REEL_SPEEDS_IPS[usize::from(place).min(REEL_SPEEDS_IPS.len() - 1)]
 }
 
-/// A reel's playback gap in µm, for a value on the `00` to `FF` scale: from 0.5 µm to 20 µm,
-/// evenly in ratio.
+/// A reel's playback gap in µm, for a value on the `00` to `FF` scale: from 1 µm to 5 µm, evenly,
+/// 3 µm at `80`, as Satin's `Gap Width` is.
 pub fn reel_gap_um(value: f32) -> f32 {
-    LEAST_REEL_GAP_UM * (MOST_REEL_GAP_UM / LEAST_REEL_GAP_UM).powf((value / 255.0).clamp(0.0, 1.0))
+    LEAST_REEL_GAP_UM + (MOST_REEL_GAP_UM - LEAST_REEL_GAP_UM) * (value / 255.0).clamp(0.0, 1.0)
 }
 
-/// How far a reel's tape is from its head, in µm: none at `00`, 3 µm at `FF`, squared so the
-/// first half is fine. At its most it takes about 3 dB off 10 kHz at 15 ips against where the
-/// replay EQ is aligned, as Satin's widest gap does.
+/// How far a reel's tape is from its head, in µm: none at `00`, 1 µm at `FF`, squared so the
+/// first half is fine. At its most it takes about 10 dB off 16 kHz at 3.75 ips against where the
+/// replay EQ is aligned, as Satin's whole `Gap Width` range moves it there.
 pub fn reel_spacing_um(value: f32) -> f32 {
     (value / 255.0).clamp(0.0, 1.0).powi(2) * MOST_REEL_SPACING_UM
 }
 
-/// How deep in its coating a reel's tape is read from, in µm: none at `00`, 6 µm at `FF`,
-/// squared as the spacing is, and as far at its most.
+/// How deep in its coating a reel's tape is read from, in µm: none at `00`, 2.4 µm at `FF`,
+/// squared as the spacing is, and about as far at its most.
 pub fn reel_thickness_um(value: f32) -> f32 {
     (value / 255.0).clamp(0.0, 1.0).powi(2) * MOST_REEL_THICKNESS_UM
 }
@@ -669,7 +669,7 @@ pub(crate) const REEL_PARAMS: [Entry; 12] = [
     },
     hex_param("Gap", "gap", "GAP", Reel::DEFAULT.gap)
         .units(Units::ReelGap)
-        .means("the playback head's gap: wider loses the highs, with notches as tape speed slows"),
+        .means("the playback head's gap: narrower lifts the highs, wider takes them down"),
     hex_param("Space", "space", "SPAC", Reel::DEFAULT.space)
         .units(Units::ReelSpacing)
         .means("how far the tape rides off the head, which takes the highs away fast"),
@@ -740,14 +740,14 @@ impl Default for Reel {
 
 impl Reel {
     /// As it starts: a studio machine at 15 ips, aligned, biased right and driven to its
-    /// reference level, with a fine gap, a little spacing and a thin coating, a trace of wow and
+    /// reference level, with a 3 µm gap, a little spacing and a thin coating, a trace of wow and
     /// the little flutter of a good transport, about a cent, at four times the rate.
     pub const DEFAULT: Self = Self {
         drive: 0x80,
         sat: 0x80,
         bias: 0x80,
         speed: 2,
-        gap: 0x40,
+        gap: 0x80,
         space: 0x30,
         thick: 0x30,
         wow: 0x08,

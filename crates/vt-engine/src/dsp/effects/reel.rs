@@ -3,9 +3,10 @@
 //! ([`crate::dsp::blocks::hysteresis`]), biased right, so it follows its anhysteretic curve; a DC
 //! blocker takes away what it leaves magnetised, loud short wavelengths erase themselves, the
 //! transport wobbles it with wow and flutter of its own ([`transport`]), and the playback head
-//! loses its highs to its gap, the tape's spacing from it and the depth it's read from, each by
-//! how fast the tape runs, which the replay EQ makes up for the lengths it's aligned for
-//! ([`replay`]), with the lows the heads leave.
+//! loses its highs to the tape's spacing from it and the depth it's read from, each by how fast
+//! the tape runs, which the replay EQ makes up for the lengths it's aligned for, then turns its top
+//! by its gap, as Satin's does ([`replay`]), with the lows the heads leave. Biased too little, a
+//! share of the tape switches late ([`Switching`]).
 //!
 //! ChowTape's loss filter is a 64-tap FIR worked out from the three losses' formulas (Wallace's
 //! spacing loss `exp(-k d)`, the thickness loss `(1 - exp(-k δ)) / (k δ)` and the gap loss
@@ -44,7 +45,7 @@ use vt_model::insert::{
 use crate::dsp::blocks::biquad::Biquad;
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::coefficient::of_corner;
-use crate::dsp::blocks::hysteresis::{Hysteresis, Magnetics};
+use crate::dsp::blocks::hysteresis::{Hysteresis, Magnetics, Switching};
 use crate::dsp::blocks::line::StereoLine;
 use crate::dsp::blocks::oversampler::{OctupleOversampler, QuadrupleOversampler};
 use crate::dsp::blocks::sides::SameBits;
@@ -52,7 +53,7 @@ use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::{Rung, SlotEffect};
 
-use replay::{Played, Shape};
+use replay::{Played, SWITCHING_CENTRE, SWITCHING_WIDTH, Shape};
 use transport::{READ_BACK, Reader, TAPS, Transport};
 
 mod replay;
@@ -293,14 +294,15 @@ impl Side {
             ..
         } = self;
         let field = x * reel.into_tape;
+        let switching = &reel.switching;
         let mut quadruple = || {
             four.process(field, |h| {
-                at_four.process(h, reel.periods[0], &reel.tape) as f32
+                switching.onto(at_four.process(h, reel.periods[0], &reel.tape), h) as f32
             })
         };
         let mut octuple = || {
             eight.process(field, |h| {
-                at_eight.process(h, reel.periods[1], &reel.tape) as f32
+                switching.onto(at_eight.process(h, reel.periods[1], &reel.tape), h) as f32
             })
         };
         let magnetised = match heard {
@@ -343,6 +345,8 @@ impl Side {
 #[derive(Debug, Clone, Copy)]
 struct Tuned {
     tape: Magnetics,
+    /// What switches late when it's biased too little.
+    switching: Switching,
     /// The gains into the tape and out of it, and how hard the tape is hit against the drive
     /// that's aligned, for the erasure.
     into_tape: f32,
@@ -409,6 +413,7 @@ impl Reel {
             flutter: Smoothed::default(),
             tuned: Tuned {
                 tape: Magnetics::biased(1.0, f64::from(SATURATION)),
+                switching: Switching::default(),
                 into_tape: 1.0,
                 out_of_tape: 1.0,
                 hit: 1.0,
@@ -532,12 +537,16 @@ impl Reel {
         if !taped.same_bits(&self.taped) {
             self.taped = taped;
             let [drive_db, sat, bias] = taped;
-            let [into, out, tilt] = replay::bias(bias);
+            let [into, out, tilt, switching] = replay::bias(bias);
             let drive = 10_f32.powf((drive_db + DRIVE_OFFSET_DB) / 20.0);
             let lower = SAT_LEAST_DB + SAT_SPAN_DB * sat.powf(SAT_CURVE);
             let saturation = SATURATION * 10_f32.powf(-lower / 20.0);
             let tuned = &mut self.tuned;
             tuned.tape = Magnetics::biased(f64::from(drive), f64::from(saturation));
+            tuned.switching =
+                tuned
+                    .tape
+                    .switching(f64::from(switching), SWITCHING_CENTRE, SWITCHING_WIDTH);
             tuned.into_tape = into;
             tuned.out_of_tape = out;
             tuned.tilt = tilt;
@@ -550,15 +559,16 @@ impl Reel {
             let [speed, gap, spacing, thickness, _] = lost;
             let rate = self.rate as f32;
             let defaults = Settings::DEFAULT;
+            // The gap's own loss is left out: the head's response for its gap is in the shape.
             let aligned = Loss::new(
                 speed,
-                reel_gap_um(f32::from(defaults.gap)),
+                0.0,
                 reel_spacing_um(f32::from(defaults.space)),
                 reel_thickness_um(f32::from(defaults.thick)),
                 rate,
             );
-            self.tuned.loss = Loss::new(speed, gap, spacing, thickness, rate).without_bump();
-            self.tuned.shape = Shape::new(speed, &aligned, self.tuned.tilt, rate);
+            self.tuned.loss = Loss::new(speed, 0.0, spacing, thickness, rate).without_bump();
+            self.tuned.shape = Shape::new(speed, gap, &aligned, self.tuned.tilt, rate);
         }
     }
 
@@ -636,9 +646,8 @@ mod tests {
         ..Settings::DEFAULT
     };
 
-    /// No losses either: only the tape.
+    /// No losses either: only the tape, and the head at the gap its level is set for.
     const BARE: Settings = Settings {
-        gap: 0,
         space: 0,
         thick: 0,
         speed: 3,
@@ -846,16 +855,20 @@ mod tests {
     }
 
     #[test]
-    fn its_replay_eq_leaves_a_quiet_sound_flat_at_every_speed_and_the_bump_moves_with_it() {
+    fn its_replay_eq_leaves_a_quiet_sound_near_flat_at_every_speed_and_the_bump_moves_with_it() {
         let at = |speed: u8, hertz: f32, level: f32| {
             response(Settings { speed, ..STILL }, hertz, level)
                 - response(Settings { speed, ..STILL }, 1_000.0, level)
         };
-        for speed in 0..4 {
+        // Within a dB or so of flat, as Satin's is: a little dull at 3.75 and 7.5 ips, a little
+        // bright at 15, and at 30 about 2 dB up at 16 kHz.
+        for (speed, wanted) in [(0, -0.8), (1, -1.1), (2, 0.6), (3, 1.8)] {
             for hertz in [5_000.0, 10_000.0, 16_000.0] {
                 let quiet = at(speed, hertz, 0.03);
-                assert!(quiet.abs() < 1.0, "{speed} {hertz}: {quiet}");
+                assert!(quiet.abs() < 2.5, "{speed} {hertz}: {quiet}");
             }
+            let top = at(speed, 16_000.0, 0.03);
+            assert!((top - wanted).abs() < 0.4, "{speed}: {top}");
         }
         // Loud highs soften at 3.75 ips, and hardly at all at 15.
         let erased = |speed: u8| at(speed, 16_000.0, 1.0) - at(speed, 16_000.0, 0.03);
@@ -890,7 +903,6 @@ mod tests {
         let speed = 0.381; // 15 ips, in m/s
         let k = |hertz: f32| TAU * hertz / speed;
         let base = Settings {
-            gap: 0,
             space: 0,
             thick: 0,
             speed: 2,
@@ -927,15 +939,51 @@ mod tests {
             let found = lost(thickness, hertz);
             assert!((found - wanted).abs() < 1.5, "{hertz}: {found} {wanted}");
         }
-        // The gap: a null where the tape crosses it in a cycle, v / g, here at 3.75 ips.
-        let gap = Settings {
-            speed: 0,
-            gap: 0xFF,
-            ..base
+    }
+
+    #[test]
+    fn the_gap_turns_the_top_and_the_level_as_satins_gap_width_does() {
+        // At 15 ips, 16 kHz against 1 kHz and 1 kHz against the default gap, at 1, 3 and 5 µm:
+        // Satin's +6.8, +0.2 and -3.5 dB, and -1.5, 0 and +1.4 dB.
+        let top = |gap: u8| {
+            response(Settings { gap, ..STILL }, 16_000.0, 0.03)
+                - response(Settings { gap, ..STILL }, 1_000.0, 0.03)
         };
-        let null = 0.095_25 / (vt_model::insert::MOST_REEL_GAP_UM * 1e-6);
-        assert!(lost(gap, null) < -25.0, "{}", lost(gap, null));
-        assert!(lost(gap, null * 0.5) > -6.0, "{}", lost(gap, null * 0.5));
+        let level = |gap: u8| {
+            response(Settings { gap, ..STILL }, 1_000.0, 0.03) - response(STILL, 1_000.0, 0.03)
+        };
+        for (gap, (wanted_top, wanted_level)) in
+            [(0x00, (6.6, -1.6)), (0x80, (0.6, 0.0)), (0xFF, (-3.6, 1.3))]
+        {
+            let (found_top, found_level) = (top(gap), level(gap));
+            assert!(
+                (found_top - wanted_top).abs() < 0.6,
+                "{gap:02X}: {found_top}"
+            );
+            assert!(
+                (found_level - wanted_level).abs() < 0.4,
+                "{gap:02X}: {found_level}"
+            );
+        }
+    }
+
+    #[test]
+    fn biased_too_little_its_harmonics_come_and_go_with_the_level() {
+        let at = |bias: u8, dbfs: f32| third(Settings { bias, ..BARE }, 10_f32.powf(dbfs / 20.0));
+        // Right, the third harmonic rises with the level; under, it rises, then falls into a null
+        // near +9 dBFS as the late switching straightens the curve, as Satin's at -5 does.
+        assert!(at(0x80, 9.0) > at(0x80, 3.0) + 4.0);
+        let (rising, null) = (at(0, 3.0), at(0, 9.0));
+        assert!(null < rising - 10.0, "{rising} {null}");
+        // Its fifth comes up past it there.
+        let mut reel = reel(Settings { bias: 0, ..BARE });
+        let out = through(
+            &mut reel,
+            1_000.0,
+            10_f32.powf(7.5 / 20.0),
+            RATE as usize / 2,
+        );
+        assert!(harmonic(&out, 5_000.0) > harmonic(&out, 3_000.0));
     }
 
     /// How far a 1 kHz sine's pitch moves, from where it crosses zero going up.
@@ -962,7 +1010,7 @@ mod tests {
     #[test]
     fn wow_and_flutter_move_the_pitch_and_at_00_not_at_all() {
         assert!(pitch_spread(STILL, 2) < 1e-5);
-        assert!(pitch_spread(Settings { wow: 0xFF, ..STILL }, 8) > 0.002);
+        assert!(pitch_spread(Settings { wow: 0xFF, ..STILL }, 8) > 0.000_5);
         assert!(
             pitch_spread(
                 Settings {

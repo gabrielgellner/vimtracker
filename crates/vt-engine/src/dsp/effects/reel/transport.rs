@@ -6,13 +6,14 @@
 //!   moving less with it, as a studio machine at 15 ips measures (and as Satin's does), with a
 //!   little random flutter between them, part of it each side's own, and each line's speed
 //!   wandering by about a percent.
-//! - **Wow** is a slow random drift from about 0.3 Hz to 4 Hz, as the reels' tension changes, not
-//!   a sine.
+//! - **Wow** is a slow, smooth random drift from about 0.1 Hz to 1.5 Hz, as the reels' tension
+//!   changes, not a sine, and slight: a studio machine's, and Satin's, is far under its flutter.
 //!
 //! Both are worked out as the tape's speed, in cents, every 16 frames, and summed into how far the
-//! line is read back, going straight between. Each knob's depth is even in its value, `FF` being
-//! about 9.6 cents rms, Satin's `Wow & Flutter` at 100, and `00` none at all: the line is then read
-//! seven frames back, still, and exactly.
+//! line is read back, going straight between. Each knob's depth is even in its value, and `00` none
+//! at all: the line is then read seven frames back, still, and exactly. `Flutter`'s `FF` is about
+//! 9.6 cents rms, Satin's `Wow & Flutter` at 100; `Wow`'s is 0.8 cents, what Satin's has under
+//! 6 Hz at 100.
 
 use std::f32::consts::TAU;
 
@@ -24,8 +25,12 @@ use crate::dsp::blocks::line::StereoLine;
 const CONTROL_FRAMES: u32 = 16;
 /// How far back the line is always read, in frames: as near as the reader can.
 pub(super) const READ_BACK: f32 = (TAPS / 2 - 1) as f32;
-/// Cents rms at the top of either knob.
-pub(super) const MOST_CENTS: f32 = 9.6;
+/// Cents rms at the top of each knob.
+pub(super) const MOST_FLUTTER_CENTS: f32 = 9.6;
+pub(super) const MOST_WOW_CENTS: f32 = 0.8;
+/// Where wow's band starts and ends, in Hz.
+const WOW_LOWEST_HZ: f32 = 0.1;
+const WOW_HIGHEST_HZ: f32 = 1.5;
 /// One cent as a share of the speed, near enough: `ln 2 / 1200`.
 const CENT: f32 = 5.776_227e-4;
 
@@ -95,7 +100,8 @@ fn loudness(mut shape: impl FnMut(f32) -> f32, seed: u32) -> f32 {
     ((sum / f64::from(count)).sqrt() as f32).max(1e-9)
 }
 
-/// The noise for wow: a band from about 0.3 Hz to 2.5 Hz, of unit rms.
+/// The noise for wow: a band from about 0.1 Hz to 1.5 Hz, of unit rms, its edges damped so nothing
+/// in it rings at a rate of its own.
 #[derive(Debug, Clone, Copy, Default)]
 struct Drift {
     high: Shaper,
@@ -106,8 +112,8 @@ struct Drift {
 impl Drift {
     fn new(rate: f32) -> Self {
         let mut drift = Self {
-            high: Shaper::new(0.3, 0.71, rate),
-            low: Shaper::new(2.5, 0.71, rate),
+            high: Shaper::new(WOW_LOWEST_HZ, 0.5, rate),
+            low: Shaper::new(WOW_HIGHEST_HZ, 0.5, rate),
             scale: 1.0,
         };
         let mut probe = drift;
@@ -206,11 +212,18 @@ impl Transport {
     /// The most either side can be read back by its moving part, in frames at a rate, with room
     /// for the rare loud stretch of the noise.
     pub(super) fn most_frames(rate: u32) -> f32 {
-        // Wow's band starts at 0.3 Hz: four times its rms there in the line, and the slowest
-        // line at 3.75 ips (3.35 Hz) at its fullest.
-        let wow = 4.0 * MOST_CENTS * CENT / (TAU * 0.3);
-        let flutter = 2.0 * MOST_CENTS * CENT * 1.12 / (TAU * 3.35);
-        2.0 * (wow + flutter) * rate as f32
+        2.0 * (Self::wow_room() + Self::flutter_room()) * rate as f32
+    }
+
+    /// How far wow can read the line back, in seconds: four times its most there, from where its
+    /// band starts.
+    fn wow_room() -> f32 {
+        4.0 * MOST_WOW_CENTS * CENT / (TAU * WOW_LOWEST_HZ)
+    }
+
+    /// How far flutter can: its slowest line, at 3.75 ips (3.35 Hz), at its fullest.
+    fn flutter_room() -> f32 {
+        2.0 * MOST_FLUTTER_CENTS * CENT * FLUTTER_BY_SPEED[0] / (TAU * 3.35)
     }
 
     /// How far back to read each side's line this frame, in frames: `wow` and `flutter` are
@@ -269,17 +282,19 @@ impl Transport {
             let speed = (shared * random + OWN_SHARE.sqrt() * own[side]) * CENT * frames;
             self.flutter_frames[side] = self.flutter_frames[side] * self.leak + speed;
         }
-        let depth_wow = wow * MOST_CENTS;
-        let depth_flutter = flutter * MOST_CENTS * by_speed;
+        let depth_wow = wow * MOST_WOW_CENTS;
+        let depth_flutter = flutter * MOST_FLUTTER_CENTS * by_speed;
         // The line is read back half the reader's width, and further by as much as either can
         // take it, so it's never read ahead: a little later as either is turned up, but still at
         // `00`.
-        let room = Self::most_frames(1) * self.control * frames * 0.5;
+        let rate = self.control * frames;
+        let ahead = (wow * Self::wow_room()
+            + flutter * by_speed / FLUTTER_BY_SPEED[0] * Self::flutter_room())
+            * rate;
         let mut out = [0.0; 2];
         for side in 0..2 {
             let flutter_part = (lines + self.flutter_frames[side]) * depth_flutter;
             let wow_part = self.wow_frames * depth_wow;
-            let ahead = (depth_wow + depth_flutter) / MOST_CENTS * room;
             out[side] = READ_BACK + ahead + (wow_part + flutter_part).clamp(-ahead, ahead);
         }
         out
@@ -394,8 +409,8 @@ mod tests {
     #[test]
     fn each_knob_reads_evenly_in_cents_up_to_satins_most() {
         for (wow, flutter) in [(0.0, 1.0), (0.0, 0.5), (1.0, 0.0), (0.5, 0.0)] {
-            let found = rms(&cents(wow, flutter, 15.0, 30.0));
-            let wanted = MOST_CENTS * (wow + flutter);
+            let found = rms(&cents(wow, flutter, 15.0, 60.0));
+            let wanted = MOST_WOW_CENTS * wow + MOST_FLUTTER_CENTS * flutter;
             assert!(
                 (found / wanted - 1.0).abs() < 0.15,
                 "{wow} {flutter}: {found}"

@@ -95,6 +95,19 @@ impl Magnetics {
         Self::of(drive, saturation, 1.0, 1.0 / (2.0 * TRAPEZOID * drive))
     }
 
+    /// What tape biased too little adds to its curve: `weight` of its saturation magnetisation,
+    /// switching once the field passes `centre`, about `width` wide, both as the anhysteretic
+    /// curve's argument, so they move with the drive and the saturation (see [`Switching`]).
+    pub(crate) fn switching(&self, weight: f64, centre: f64, width: f64) -> Switching {
+        Switching {
+            // In the model's own units: its trapezoidal rule's short step leaves `M` long by
+            // `2 T` against the curve itself, which the makeup then takes off.
+            amount: 0.5 * weight * self.saturation * 2.0 * TRAPEZOID,
+            per_width: self.per_shape / width,
+            centre: centre / width,
+        }
+    }
+
     fn of(drive: f64, saturation: f64, reversible: f64, makeup: f64) -> Self {
         let shape = saturation / (3.0 * drive);
         let irreversible = (1.0 - reversible).max(0.0);
@@ -114,6 +127,45 @@ impl Magnetics {
             coupled: reversible * saturation * per_shape * ALPHA,
             feedback: saturation * per_shape * ALPHA,
             makeup,
+        }
+    }
+}
+
+/// Tape biased too little (decision 449): the bias no longer shakes every domain loose, so some
+/// switch only once the field passes their coercive field, and the magnetisation steps up there,
+/// smoothly, as `(tanh((z - c) / w) + tanh((z + c) / w)) / 2` of the curve's argument `z`. Below
+/// it the tape is a little less sensitive; through it, a curve that was bending over straightens
+/// again, so a loud sound's third harmonic falls into a null and its fifth rises, and they come
+/// and go as the level moves through, as Satin's at its lowest bias do. The Jiles–Atherton loop
+/// can't give this itself: with a small reversible share its denominator crosses nothing.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub(crate) struct Switching {
+    /// Half the step's height in the model's units, nothing for none; one over its width in the
+    /// field, and where it is against that width.
+    amount: f64,
+    per_width: f64,
+    centre: f64,
+}
+
+impl Switching {
+    /// What it adds at a field.
+    #[inline]
+    pub(crate) fn at(&self, h: f64) -> f64 {
+        if self.amount == 0.0 {
+            return 0.0;
+        }
+        let z = h * self.per_width;
+        self.amount * ((z - self.centre).tanh() + (z + self.centre).tanh())
+    }
+
+    /// The model's magnetisation `m` at a field with it added, `m` itself to the bit when there's
+    /// none.
+    #[inline]
+    pub(crate) fn onto(&self, m: f64, h: f32) -> f64 {
+        if self.amount == 0.0 {
+            m
+        } else {
+            m + self.at(f64::from(h))
         }
     }
 }

@@ -384,9 +384,9 @@ more with wow, so `Mix` below `FF` can blend in a faint chorus.
 biased right and subtle as it starts. It's built from the physics rather
 than by ear: the tape's magnetism follows the head's field round its curve,
 so loud sounds thicken, their peaks soften and the mix glues; the playback
-head loses its highs to its gap, the tape's spacing from it and the depth
-it's read from, and the replay EQ makes those up at every speed, so a quiet
-sound comes back with its top intact. Loud highs soften at 3.75 ips, as
+head loses its highs to the tape's spacing from it and the depth it's read
+from, and the replay EQ makes those up at every speed, so a quiet sound
+comes back with its top intact. Loud highs soften at 3.75 ips, as
 short wavelengths erase themselves; the heads leave a bump in the lows with
 a dip under it. Its ranges are those of a studio machine: for obvious,
 broken tape, use `Deck`. Its `Oversampling`, in the title, is how many
@@ -398,21 +398,28 @@ times the rate the tape is worked at: `4x` as it starts, or `8x`.
 | `Sat` | The tape's headroom: higher saturates sooner |
 | `Bias` | Right at `80`: under is dirtier and brighter, over cleaner and duller |
 | `Speed` | 3.75, 7.5, 15 or 30 ips: slower softens loud highs; the bump moves |
-| `Gap` | The head's gap, 0.5 to 20 µm: wider loses highs, in notches |
-| `Space` | How far the tape rides off the head, to 3 µm: highs go fast |
-| `Thick` | How deep the coating is read, to 6 µm: highs soften gently |
-| `Wow` | A slow, wandering drift in pitch, from the reels |
+| `Gap` | The head's gap, 1 to 5 µm, 3 µm at `80`: narrower is brighter |
+| `Space` | How far the tape rides off the head, to 1 µm: highs go fast |
+| `Thick` | How deep the coating is read, to 2.4 µm: highs soften gently |
+| `Wow` | A slow, smooth drift in pitch, from the reels: slight |
 | `Flutter` | A fine, fast wobble, from the capstan and rollers |
 
 A quiet sound comes through at its level at any `Drive` and `Sat`, so
 turning them up saturates it sooner rather than turning it up; at 0 dB a
 -12 dB sine's distortion is about -54 dB, and each 6 dB of `Drive` is the
-same as 6 dB louder. The replay EQ is set for the `Gap`, `Space` and `Thick`
-it starts with, so moving them away from there brightens or darkens the top.
+same as 6 dB louder. Under-biased, toward `00`, it's less sensitive and
+dirtier, and driven loud its harmonics come and go as the level moves. Each
+speed has its own top, as an aligned machine's has: at 30 ips the highs are
+about 2 dB up. `Gap` turns the top from about 7 dB up at `00` to 2 to 5 dB
+down at `FF`, and the level a dB or two the other way. The replay EQ is set
+for the `Space` and `Thick` it starts with, so moving them away from there
+brightens or darkens the top; at most they take about 10 dB off 16 kHz at
+3.75 ips, and less the faster it runs.
 The head bump at 15 ips is about 1.3 dB near 62 Hz, with the lows falling
 away under 30 Hz; at 7.5 ips it's near 39 Hz and at 30 ips near 80 Hz.
-`Wow` and `Flutter` each reach about 10 cents at `FF`, evenly from none at
-`00`; flutter moves with the speed. At the start there's about a cent,
+`Flutter` reaches about 10 cents at `FF`, evenly from none at `00`, and
+moves with the speed; `Wow` is far slighter, under a cent at `FF`, as a
+studio machine's is. At the start there's about a cent,
 nearly all flutter. Unlike `Tape` it has no ceiling: a loud sound driven
 hard comes out quieter, as tape squashes it.
 

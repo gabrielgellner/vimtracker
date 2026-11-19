@@ -1,5 +1,5 @@
-//! A biquad in transposed direct form II, with the RBJ cookbook's peak and high-pass: the colour's
-//! transformer bump and the reel's and deck's head bumps.
+//! A biquad in transposed direct form II, with the RBJ cookbook's peak, high-pass and high shelf:
+//! the colour's transformer bump, the reel's and deck's head bumps and the reel's playback head.
 
 use std::f32::consts::TAU;
 
@@ -55,6 +55,24 @@ impl Biquad {
             b2: (1.0 - alpha * a) / a0,
             a1: -2.0 * cos / a0,
             a2: (1.0 - alpha / a) / a0,
+        }
+    }
+
+    /// A high shelf from about `hertz`, `q` sharp, lifting the top by `db` (cutting below
+    /// nothing).
+    pub(crate) fn high_shelf(hertz: f32, q: f32, db: f32, rate: f32) -> Self {
+        let a = 10.0_f32.powf(db / 40.0);
+        let omega = TAU * hertz / rate;
+        let alpha = omega.sin() / (2.0 * q);
+        let cos = omega.cos();
+        let root = 2.0 * a.sqrt() * alpha;
+        let a0 = (a + 1.0) - (a - 1.0) * cos + root;
+        Self {
+            b0: a * ((a + 1.0) + (a - 1.0) * cos + root) / a0,
+            b1: -2.0 * a * ((a - 1.0) + (a + 1.0) * cos) / a0,
+            b2: a * ((a + 1.0) + (a - 1.0) * cos - root) / a0,
+            a1: 2.0 * ((a - 1.0) - (a + 1.0) * cos) / a0,
+            a2: ((a + 1.0) - (a - 1.0) * cos - root) / a0,
         }
     }
 
