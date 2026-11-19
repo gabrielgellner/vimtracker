@@ -18,8 +18,8 @@ pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
 
 impl DeviceSpec {
     /// A slot on the FX page: its effect over the grid's first column, its type over the second
-    /// and, for Beads, its quality over the third, then its effect's grid. An empty slot has only
-    /// its effect.
+    /// and, for Beads, its quality over the third, as Reel's oversampling is, then its effect's
+    /// grid. An empty slot has only its effect.
     pub fn slot(slot: usize, insert: Insert) -> Self {
         let mut title = [None; TITLE_PLACES];
         title[0] = Some(Control::Insert(slot));

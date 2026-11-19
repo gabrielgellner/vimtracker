@@ -5,7 +5,7 @@ The FX page has 4 slots, which the sound goes through in order after the filters
 before `Level` and `Pan`. An empty slot does nothing and costs nothing.
 
 Each slot is a device: a frame with the slot's number, its switch, its effect and the effect's
-type in its title, and for `Beads` its quality too, its settings in three rows of up to four, and, for `Comp`, `Limit` and `EQ3`,
+type in its title, and for `Beads` its quality and for `Reel` its oversampling too, its settings in three rows of up to four, and, for `Comp`, `Limit` and `EQ3`,
 a box on the right with its curve or how far it's turning down. The switch is a small pill, its
 knob right and green while the slot is in, and left and faint while it's bypassed. A setting
 that's off or on, such as a Comp's `Auto`, shows the same switch rather than a word. The device
@@ -389,7 +389,8 @@ it's read from, and the replay EQ makes those up at every speed, so a quiet
 sound comes back with its top intact. Loud highs soften at 3.75 ips, as
 short wavelengths erase themselves; the heads leave a bump in the lows with
 a dip under it. Its ranges are those of a studio machine: for obvious,
-broken tape, use `Deck`. It's worked at four times the rate.
+broken tape, use `Deck`. Its `Oversampling`, in the title, is how many
+times the rate the tape is worked at: `4x` as it starts, or `8x`.
 
 | Setting | Does |
 |---|---|
@@ -414,6 +415,14 @@ away under 30 Hz; at 7.5 ips it's near 39 Hz and at 30 ips near 80 Hz.
 `00`; flutter moves with the speed. At the start there's about a cent,
 nearly all flutter. Unlike `Tape` it has no ceiling: a loud sound driven
 hard comes out quieter, as tape squashes it.
+
+`8x` sounds the same, with less aliasing: the faint tones that don't
+belong to the note, and the grit on bright, loud sounds. It matters most
+with `Drive` well up on high leads, hats or a bright mix: on a high saw
+lead at +20 dB the aliases are about 35 dB lower, and at 0 dB about
+14 dB. It costs nearly twice as much, so `4x` stays the start, for when
+CPU counts. A change while a sound plays crossfades in about 10 ms, so it
+doesn't click, and `1OVS` sets it from a step in slot 1.
 
 `Deck` is lo-fi tape: a cassette, a VCR's linear audio track, or a worn
 cassette, with everything that goes wrong with them. Its `Type`, in the

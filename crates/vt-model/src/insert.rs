@@ -394,7 +394,8 @@ impl Insert {
     }
 
     /// A second setting the FX page shows in the slot's title, after its type: Beads' quality,
-    /// which, as its mode does, chooses what it is rather than how it's played.
+    /// which, as its mode does, chooses what it is rather than how it's played, and Reel's
+    /// oversampling.
     pub fn title_param(self) -> Option<usize> {
         self.params()
             .iter()

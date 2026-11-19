@@ -1,5 +1,5 @@
 //! A studio reel-to-reel tape machine after Jatin Chowdhury's ChowTape (#259): the head's field
-//! drives the tape's magnetisation by the Jiles–Atherton model at four times the rate
+//! drives the tape's magnetisation by the Jiles–Atherton model at four or eight times the rate
 //! ([`crate::dsp::blocks::hysteresis`]), biased right, so it follows its anhysteretic curve; a DC
 //! blocker takes away what it leaves magnetised, loud short wavelengths erase themselves, the
 //! transport wobbles it with wow and flutter of its own ([`transport`]), and the playback head
@@ -46,7 +46,7 @@ use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::coefficient::of_corner;
 use crate::dsp::blocks::hysteresis::{Hysteresis, Magnetics};
 use crate::dsp::blocks::line::StereoLine;
-use crate::dsp::blocks::oversampler::QuadrupleOversampler as Oversampler;
+use crate::dsp::blocks::oversampler::{OctupleOversampler, QuadrupleOversampler};
 use crate::dsp::blocks::sides::SameBits;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::SongPlace;
@@ -58,8 +58,12 @@ use transport::{READ_BACK, Reader, TAPS, Transport};
 mod replay;
 mod transport;
 
-/// How many times the rate the hysteresis runs at.
-const OVERSAMPLING: f64 = 4.0;
+/// How many times the rate the hysteresis runs at, by `Oversampling`'s place.
+const OVERSAMPLING: [f64; 2] = [4.0, 8.0];
+/// A switch from one rate to the other: how many frames the tape coming in runs unheard first,
+/// so its halfbands fill, then how long it crossfades, in seconds.
+const SWITCH_WARMING: u32 = 64;
+const SWITCH_SECONDS: f32 = 0.01;
 /// Where the DC blocker after the hysteresis turns, in Hz.
 const DC_HZ: f32 = 5.0;
 /// Metres an inch.
@@ -255,36 +259,75 @@ impl Head {
     }
 }
 
+/// Which of the tape's rates is heard: one alone, or both through a switch, with this share of
+/// eight times the rate.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Heard {
+    Four,
+    Eight,
+    Both(f32),
+}
+
 /// One side's tape.
 #[derive(Debug, Clone, Copy, Default)]
 struct Side {
-    oversampler: Oversampler,
-    hysteresis: Hysteresis,
+    four: QuadrupleOversampler,
+    eight: OctupleOversampler,
+    /// The tape at four times the rate and at eight. Only the one heard runs, but through a
+    /// switch.
+    hysteresis: [Hysteresis; 2],
     dc: f64,
     played: Played,
     head: Head,
 }
 
 impl Side {
-    /// Onto the tape: the hysteresis at four times the rate, what it leaves magnetised taken
-    /// away, and the highs a loud sound erases.
+    /// Onto the tape: the hysteresis at four or eight times the rate, what it leaves magnetised
+    /// taken away, and the highs a loud sound erases.
     #[inline]
-    fn record(&mut self, x: f32, reel: &Tuned) -> f32 {
+    fn record(&mut self, x: f32, reel: &Tuned, heard: Heard) -> f32 {
         let Self {
-            oversampler,
-            hysteresis,
+            four,
+            eight,
+            hysteresis: [at_four, at_eight],
             ..
         } = self;
         let field = x * reel.into_tape;
-        let magnetised = oversampler.process(field, |h| {
-            hysteresis.process(h, reel.period, &reel.tape) as f32
-        });
+        let mut quadruple = || {
+            four.process(field, |h| {
+                at_four.process(h, reel.periods[0], &reel.tape) as f32
+            })
+        };
+        let mut octuple = || {
+            eight.process(field, |h| {
+                at_eight.process(h, reel.periods[1], &reel.tape) as f32
+            })
+        };
+        let magnetised = match heard {
+            Heard::Four => quadruple(),
+            Heard::Eight => octuple(),
+            Heard::Both(share) => {
+                let (four, eight) = (quadruple(), octuple());
+                four + (eight - four) * share
+            }
+        };
         // In double precision, as a one-pole this slow in single stops short of what it follows,
         // and before the makeup, so what the tape holds stays blocked as the settings move.
         let magnetised = f64::from(magnetised);
         self.dc += (magnetised - self.dc) * reel.dc;
         let recorded = ((magnetised - self.dc) * reel.tape.makeup) as f32;
         self.played.erase(recorded, reel.hit, &reel.shape)
+    }
+
+    /// Ready the rate that's coming in, `to`, for a switch: its tape takes up the magnetisation
+    /// of the one heard, which is the same in either, and its halfbands start empty.
+    fn ready(&mut self, to: usize) {
+        self.hysteresis[to] = self.hysteresis[1 - to];
+        if to == 0 {
+            self.four = QuadrupleOversampler::default();
+        } else {
+            self.eight = OctupleOversampler::default();
+        }
     }
 
     /// Off the tape: the head's losses, then the replay EQ and the rest.
@@ -310,7 +353,8 @@ struct Tuned {
     loss: Loss,
     shape: Shape,
     dc: f64,
-    period: f64,
+    /// A sample's length at four times the rate and at eight, in seconds.
+    periods: [f64; 2],
 }
 
 /// A reel's state and line.
@@ -336,6 +380,11 @@ pub(crate) struct Reel {
     /// What the tape and the losses were last worked out for.
     taped: [f32; 3],
     lost: [f32; 5],
+    /// The rate the tape's set to, as `Oversampling`'s place; where it is between four times,
+    /// `0`, and eight, `1`; and how many frames a switch has warmed the one coming in.
+    oversampling: usize,
+    switched: f32,
+    warming: u32,
     rate: u32,
     smoothing: f32,
 }
@@ -367,10 +416,13 @@ impl Reel {
                 loss: Loss::default(),
                 shape: Shape::default(),
                 dc: f64::from(of_corner(DC_HZ, rate as f32)),
-                period: 1.0 / (f64::from(rate) * OVERSAMPLING),
+                periods: OVERSAMPLING.map(|times| 1.0 / (f64::from(rate) * times)),
             },
             taped: [f32::NAN; 3],
             lost: [f32::NAN; 5],
+            oversampling: 0,
+            switched: 0.0,
+            warming: 0,
             rate,
             smoothing: coefficient(rate),
         };
@@ -388,6 +440,8 @@ impl Reel {
         self.line.clear();
         self.sides = [Side::default(); 2];
         self.transport = Transport::new(self.rate);
+        self.switched = self.oversampling as f32;
+        self.warming = 0;
     }
 
     /// Take what's set now.
@@ -402,9 +456,11 @@ impl Reel {
         self.thickness.target = reel_thickness_um(f32::from(settings.thick));
         self.wow.target = share(settings.wow);
         self.flutter.target = share(settings.flutter);
+        self.oversampling = usize::from(settings.oversampling.min(1));
     }
 
     /// Jump to what's set.
+    #[allow(clippy::float_cmp, reason = "the crossfade lands on its ends exactly")]
     pub(crate) fn settle(&mut self) {
         for setting in [
             &mut self.drive,
@@ -420,6 +476,41 @@ impl Reel {
             setting.settle();
         }
         self.transport.restart();
+        if self.switched != self.oversampling as f32 {
+            for side in &mut self.sides {
+                side.ready(self.oversampling);
+            }
+            self.switched = self.oversampling as f32;
+            self.warming = 0;
+        }
+    }
+
+    /// Which rate is heard this frame. A switch runs the one coming in unheard while its
+    /// halfbands fill, then crossfades to it, so it neither clicks nor starts on a step.
+    #[inline]
+    #[allow(clippy::float_cmp, reason = "the crossfade lands on its ends exactly")]
+    fn heard(&mut self) -> Heard {
+        let to = self.oversampling;
+        if self.switched == to as f32 {
+            self.warming = 0;
+            return if to == 0 { Heard::Four } else { Heard::Eight };
+        }
+        if self.warming == 0 {
+            for side in &mut self.sides {
+                side.ready(to);
+            }
+        }
+        if self.warming < SWITCH_WARMING {
+            self.warming += 1;
+        } else {
+            let by = 1.0 / (SWITCH_SECONDS * self.rate as f32);
+            self.switched = match to {
+                0 => (self.switched - by).max(0.0),
+                _ => (self.switched + by).min(1.0),
+            };
+        }
+        let x = self.switched;
+        Heard::Both(x * x * (3.0 - 2.0 * x))
     }
 
     /// The tape and the losses for the settings as they glide, worked out again only when they
@@ -478,10 +569,11 @@ impl Reel {
         let wow = self.wow.next(self.smoothing);
         let flutter = self.flutter.next(self.smoothing);
         let delays = self.transport.next(wow, flutter, self.speed.value);
+        let heard = self.heard();
         self.line.advance();
         let mut out = [0.0; 2];
         for (side, sample) in input.into_iter().enumerate() {
-            let recorded = self.sides[side].record(sample, &self.tuned);
+            let recorded = self.sides[side].record(sample, &self.tuned, heard);
             self.line.write(side, recorded);
             let delay = delays[side].clamp(READ_BACK, (self.line.mask() - TAPS) as f32);
             let wobbled = self.reader.read(&self.line, side, delay);
@@ -688,13 +780,69 @@ mod tests {
     }
 
     #[test]
-    fn it_aliases_little() {
-        for drive in [0x80, 0xFF] {
-            let mut reel = reel(Settings { drive, ..BARE });
+    fn it_aliases_little_and_less_at_eight_times_the_rate() {
+        let found = |drive: u8, oversampling: u8| {
+            let mut reel = reel(Settings {
+                drive,
+                oversampling,
+                ..BARE
+            });
             let out = through(&mut reel, 5_010.0, 1.0, RATE as usize / 2);
-            let found = aliasing(&out, 5_010.0);
-            assert!(found < -45.0, "{drive:02X}: {found}");
+            aliasing(&out, 5_010.0)
+        };
+        // At 0 dB both are down at the measure's floor; driven, eight times takes the aliases
+        // well down.
+        let (four, eight) = (found(0x80, 0), found(0x80, 1));
+        assert!(four < -70.0 && eight < -70.0, "{four} {eight}");
+        let (four, eight) = (found(0xFF, 0), found(0xFF, 1));
+        assert!(four < -45.0 && eight < four - 10.0, "{four} {eight}");
+    }
+
+    #[test]
+    fn switching_its_rate_crossfades_without_a_step_and_lands_on_the_other() {
+        let tone = |frame: usize| sine(frame, 100.0, 0.5, RATE);
+        let mut reel = reel(STILL);
+        let mut last = [0.0; 2];
+        for frame in 0..RATE as usize / 10 {
+            last = reel.process([tone(frame); 2]);
         }
+        // Back and forth, sometimes before a switch has finished, then left at eight times.
+        let mut frame = RATE as usize / 10;
+        for (oversampling, frames) in [(1, 30), (0, 200), (1, 2000), (0, 1000), (1, 4000)] {
+            reel.follow(Settings {
+                oversampling,
+                ..STILL
+            });
+            for _ in 0..frames {
+                let out = reel.process([tone(frame); 2]);
+                for side in 0..2 {
+                    assert!(
+                        (out[side] - last[side]).abs() < 0.02,
+                        "{frame}: {last:?} to {out:?}"
+                    );
+                }
+                last = out;
+                frame += 1;
+            }
+        }
+        assert_eq!(reel.heard(), Heard::Eight);
+        // Once there, it's what a reel set to eight times the rate gives, as near as one that
+        // never switched but heard less of the tone: the tape keeps a trace of what went before.
+        let mut eight = super::Reel::new(RATE);
+        eight.follow(Settings {
+            oversampling: 1,
+            ..STILL
+        });
+        eight.settle();
+        let mut most = 0.0_f32;
+        for at in 0..RATE as usize {
+            let x = [tone(frame + at); 2];
+            let apart = (reel.process(x)[0] - eight.process(x)[0]).abs();
+            if at > RATE as usize / 2 {
+                most = most.max(apart);
+            }
+        }
+        assert!(most < 5e-4, "{most}");
     }
 
     #[test]
@@ -831,7 +979,7 @@ mod tests {
         let mut line = std::collections::VecDeque::from(vec![[0.0_f32; 2]; 7]);
         for frame in 0..RATE as usize / 4 {
             let x = sine(frame, 3_000.0, 0.5, RATE);
-            let recorded = plain.sides[0].record(x, &plain.tuned);
+            let recorded = plain.sides[0].record(x, &plain.tuned, Heard::Four);
             line.push_back([recorded; 2]);
             let late = line.pop_front().unwrap()[0];
             let out = reel.process([x; 2])[0];

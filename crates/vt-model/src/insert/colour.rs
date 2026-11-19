@@ -611,6 +611,9 @@ pub fn reel_drive_db(value: f32) -> f32 {
 pub const REEL_SPEEDS_IPS: [f32; 4] = [3.75, 7.5, 15.0, 30.0];
 const REEL_SPEED_NAMES: [&str; 4] = ["3.75 ips", "7.5 ips", "15 ips", "30 ips"];
 
+/// How many times the rate a reel's tape runs at, by its `Oversampling`.
+pub const REEL_OVERSAMPLING_NAMES: [&str; 2] = ["4x", "8x"];
+
 /// The most a reel's playback gap, the space between its head and the tape and the depth its
 /// coating is read from can be, in µm, and the least of the gap.
 pub const LEAST_REEL_GAP_UM: f32 = 0.5;
@@ -643,7 +646,7 @@ pub fn reel_thickness_um(value: f32) -> f32 {
 }
 
 /// A reel's, in the order songs number them.
-pub(crate) const REEL_PARAMS: [Entry; 11] = [
+pub(crate) const REEL_PARAMS: [Entry; 12] = [
     hex_param("Drive", "drive", "DRIV", Reel::DEFAULT.drive)
         .units(Units::ReelDrive)
         .centred()
@@ -677,11 +680,23 @@ pub(crate) const REEL_PARAMS: [Entry; 11] = [
         .means("a slow, wandering drift in pitch, from the reels"),
     hex_param("Flutter", "flutter", "FLUT", Reel::DEFAULT.flutter)
         .means("a fine, fast wobble in pitch, from the capstan and rollers"),
+    Entry {
+        meaning: "how many times the rate its tape runs at: 8x aliases less and costs more",
+        name: "Oversampling",
+        key: "oversampling",
+        label: Some("OVS"),
+        kind: Kind::Stepped {
+            choices: &REEL_OVERSAMPLING_NAMES,
+            wraps: true,
+        },
+        default: Reel::DEFAULT.oversampling,
+        place: Place::Title,
+    },
     MIX_PARAM,
     GAIN_PARAM,
 ];
 
-/// Where its settings sit on the FX page.
+/// Where its settings sit on the FX page. Its oversampling is in the title.
 pub(super) const REEL_GRID: Columns = &[
     &["drive", "sat", "bias"],
     &["speed", "wow", "flutter"],
@@ -708,6 +723,10 @@ pub struct Reel {
     /// The slow wobble in pitch, and the fast one.
     pub wow: u8,
     pub flutter: u8,
+    /// How many times the rate its tape runs at, a place in [`REEL_OVERSAMPLING_NAMES`], saved
+    /// only when it isn't the first.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub oversampling: u8,
     /// From `00`, all dry, to `FF`, all wet.
     pub mix: u8,
     pub gain: u8,
@@ -722,7 +741,7 @@ impl Default for Reel {
 impl Reel {
     /// As it starts: a studio machine at 15 ips, aligned, biased right and driven to its
     /// reference level, with a fine gap, a little spacing and a thin coating, a trace of wow and
-    /// the little flutter of a good transport, about a cent.
+    /// the little flutter of a good transport, about a cent, at four times the rate.
     pub const DEFAULT: Self = Self {
         drive: 0x80,
         sat: 0x80,
@@ -733,6 +752,7 @@ impl Reel {
         thick: 0x30,
         wow: 0x08,
         flutter: 0x1A,
+        oversampling: 0,
         mix: 0xFF,
         gain: UNITY_LEVEL,
     };
@@ -747,6 +767,7 @@ impl Reel {
         thick,
         wow,
         flutter,
+        oversampling,
         mix,
         gain,
     }
