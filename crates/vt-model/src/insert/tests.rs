@@ -251,7 +251,7 @@ fn a_few_effects_place_their_settings_by_what_they_mean() {
     let reverb = Insert::Reverb(Reverb::DEFAULT);
     assert_eq!(names(reverb, 0), ["Pre", "Damp", "Low cut", "Width"]);
     assert_eq!(names(reverb, 1), ["Decay", "Low damp", "High cut", "Mix"]);
-    assert_eq!(names(reverb, 2), ["", "", "", "Gain"]);
+    assert_eq!(names(reverb, 2), ["", "", "Mod", "Gain"]);
 }
 
 /// A compressor of a type, as it starts.
@@ -522,15 +522,16 @@ fn a_reverbs_settings_change_alone_and_read_back() {
     assert_eq!(
         names,
         [
-            "Pre", "Decay", "Damp", "Low damp", "Low cut", "High cut", "Width", "Mix", "Gain"
+            "Pre", "Decay", "Damp", "Low damp", "Low cut", "High cut", "Mod", "Width", "Mix",
+            "Gain"
         ]
     );
-    let mixed = effect.with_value(7, 0x12);
-    assert_eq!((mixed.value(7), mixed.value(8)), (0x12, UNITY_LEVEL));
+    let mixed = effect.with_value(8, 0x12);
+    assert_eq!((mixed.value(8), mixed.value(9)), (0x12, UNITY_LEVEL));
     // What it didn't have before saves as nothing, so a song without them reads as it was.
     let text = ron::to_string(&Reverb::DEFAULT).unwrap();
     assert!(
-        !text.contains("low_damp") && !text.contains("width"),
+        !text.contains("low_damp") && !text.contains("width") && !text.contains("excursion"),
         "{text}"
     );
     assert_eq!(effect.write_key("mix", 300.0).read_key("mix"), Some(0xFF));

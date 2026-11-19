@@ -1027,7 +1027,7 @@
             inserts: (Reverb((
                 pre: 0,
                 decay: 96,
-                damp: 85,
+                damp: 93,
                 low_cut: 0,
                 high_cut: 255,
                 mix: 255,

@@ -1185,8 +1185,8 @@ const DELAY: DeviceLayout = stored(
         knobs("Time", [s("retime"), s("wow"), __, __, __, __, __, __]),
     ],
 );
-/// Its tail and how it darkens and thins, then what goes in. `Width`, past eight knobs, is on a
-/// second page, under `Mix`.
+/// Its tail and how it darkens and thins, then what goes in. `Mod` and `Width`, past eight knobs,
+/// are on a second page, under `High cut` and `Mix`.
 const REVERB: DeviceLayout = live(
     "fx/reverb",
     &[
@@ -1203,7 +1203,7 @@ const REVERB: DeviceLayout = live(
                 s("gain"),
             ],
         ),
-        knobs("Width", [GAP, GAP, GAP, GAP, GAP, GAP, s("width"), __]),
+        knobs("Tail", [GAP, GAP, GAP, GAP, GAP, s("mod"), s("width"), __]),
     ],
 );
 const CHORUS: DeviceLayout = live(
