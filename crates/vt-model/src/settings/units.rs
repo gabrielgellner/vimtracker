@@ -9,7 +9,7 @@ use crate::insert::{
     ceiling_db, colour_drive_db, colour_emphasis_db, echo_head_seconds, echo_input_db,
     echo_shelf_db, exciter_attack_ms, exciter_release_ms, exciter_tone_hz, fine_cents,
     flanger_delay_ms, grain_density, grain_length, grain_ms, grain_time_seconds, hall_lows,
-    input_db, limit_release_ms, makeup_db, plate_size, range_db, ratio, reel_gap_um,
+    input_db, limit_release_ms, makeup_db, plate_size, range_db, ratio, reel_drive_db, reel_gap_um,
     reel_spacing_um, reel_thickness_um, release_ms, repeat_decay_db, reverb_decay_seconds,
     shift_delay_ms, shift_hertz, spread_hertz, tape_drive_db, threshold_db, vowel_blend,
 };
@@ -64,8 +64,9 @@ pub enum Units {
     LimitRelease,
     /// A flanger's delay at the middle of its sweep, in ms.
     FlangerDelay,
-    /// A tape's drive, in dB either way of none.
+    /// A tape's drive, in dB either way of none, and a reel's, as an input gain.
     TapeDrive,
+    ReelDrive,
     /// An analog colour's drive in dB from none up, and how far its emphasis lifts the highs
     /// before its curve, in dB either way.
     ColourDrive,
@@ -358,6 +359,7 @@ impl Kind {
                 Units::LimitRelease => milliseconds(limit_release_ms(coarse as f32)),
                 Units::FlangerDelay => format!("{:.1} ms", flanger_delay_ms(coarse as f32)),
                 Units::TapeDrive => format!("{:+.1} dB", tape_drive_db(coarse as f32)),
+                Units::ReelDrive => format!("{:+.1} dB", reel_drive_db(coarse as f32)),
                 Units::ColourDrive => format!("+{:.1} dB", colour_drive_db(coarse as f32)),
                 Units::ColourEmphasis => {
                     format!("{:+.1} dB", colour_emphasis_db(coarse as f32))

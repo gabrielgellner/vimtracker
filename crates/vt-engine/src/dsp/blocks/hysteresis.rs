@@ -72,22 +72,48 @@ impl Magnetics {
     /// louder the more `Sat` is turned up and the more it's driven. Here the makeup divides by the
     /// drive instead, keeping ChowTape's share for the bias, so a quiet sound comes out within
     /// about a dB at any drive and saturation, and turning either up saturates sooner rather than
-    /// turning it up (decision 443).
+    /// turning it up (decision 443). `Reel` has since taken [`Self::biased`]; this stays for the
+    /// loop's own tests.
+    #[cfg(test)]
     pub(crate) fn new(drive: f64, saturation: f64, bias: f64) -> Self {
         let saturation = 0.5 + 1.5 * (1.0 - saturation);
-        let shape = saturation / (3.0 * drive);
         let reversible = bias.max(0.0).sqrt() - 0.01;
-        let irreversible = 1.0 - reversible;
+        Self::of(
+            drive,
+            saturation,
+            reversible,
+            (1.0 + 0.6 * (1.0 - bias)) / drive,
+        )
+    }
+
+    /// Tape biased right, as a studio machine is aligned: the bias's high-frequency field leaves
+    /// the tape on its anhysteretic curve, so the loop closes and all of the magnetisation is
+    /// reversible (decision 449). `drive` is a gain and `saturation` the saturation magnetisation
+    /// itself; the makeup brings a quiet sound out at the level it went in, taking off what the
+    /// trapezoidal rule's short step adds.
+    pub(crate) fn biased(drive: f64, saturation: f64) -> Self {
+        Self::of(drive, saturation, 1.0, 1.0 / (2.0 * TRAPEZOID * drive))
+    }
+
+    fn of(drive: f64, saturation: f64, reversible: f64, makeup: f64) -> Self {
+        let shape = saturation / (3.0 * drive);
+        let irreversible = (1.0 - reversible).max(0.0);
         let per_shape = 1.0 / shape;
         Self {
             saturation,
             per_shape,
             irreversible,
-            pinning: irreversible * PINNING,
+            // With nothing irreversible the pinning only divides what it then multiplies by
+            // nothing, so it's kept at one, away from where it would divide by nothing.
+            pinning: if irreversible > 0.0 {
+                irreversible * PINNING
+            } else {
+                1.0
+            },
             reversible: reversible * saturation * per_shape,
             coupled: reversible * saturation * per_shape * ALPHA,
             feedback: saturation * per_shape * ALPHA,
-            makeup: (1.0 + 0.6 * (1.0 - bias)) / drive,
+            makeup,
         }
     }
 }

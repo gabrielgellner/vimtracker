@@ -380,31 +380,40 @@ more with wow, so `Mix` below `FF` can blend in a faint chorus.
 | `Wow` | A slow, drifting wobble in pitch, as a worn transport has |
 | `Flutter` | A faster, steady wobble, about twice a second |
 
-`Reel` is a second tape machine, after ChowTape, built from the physics
-rather than by ear: the tape's magnetism follows the head round a
-hysteresis loop, so it saturates and lags a little behind what it was, and
-the playback head loses the highs to its gap, the tape's spacing from it
-and the depth it's read from, each by how fast the tape runs. A quiet sound
-comes through at about its level at any `Drive` and `Sat`, so turning them
-up saturates it sooner rather than turning it up. It's worked at four times
-the rate, and its wow and flutter are `Tape`'s.
+`Reel` is a studio reel-to-reel machine, as used for mastering: aligned,
+biased right and subtle as it starts. It's built from the physics rather
+than by ear: the tape's magnetism follows the head's field round its curve,
+so loud sounds thicken, their peaks soften and the mix glues; the playback
+head loses its highs to its gap, the tape's spacing from it and the depth
+it's read from, and the replay EQ makes those up at every speed, so a quiet
+sound comes back with its top intact. Loud highs soften at 3.75 ips, as
+short wavelengths erase themselves; the heads leave a bump in the lows with
+a dip under it. Its ranges are those of a studio machine: for obvious,
+broken tape, use `Deck`. It's worked at four times the rate.
 
 | Setting | Does |
 |---|---|
-| `Drive` | How hard it hits the tape, from -18 dB to +18 dB, 0 dB at `80` |
-| `Sat` | How low the tape saturates: higher squashes sooner and thicker |
-| `Bias` | Higher thins the loop and cleans it; lower smears and crackles |
-| `Speed` | 3.75, 7.5, 15 or 30 ips: slower is darker, its head bump lower |
+| `Drive` | How hard it hits the tape, -20 dB to +20 dB, 0 dB at `80` |
+| `Sat` | The tape's headroom: higher saturates sooner |
+| `Bias` | Right at `80`: under is dirtier and brighter, over cleaner and duller |
+| `Speed` | 3.75, 7.5, 15 or 30 ips: slower softens loud highs; the bump moves |
 | `Gap` | The head's gap, 0.5 to 20 µm: wider loses highs, in notches |
-| `Space` | How far the tape rides off the head, to 20 µm: highs go fast |
-| `Thick` | How deep the coating is read, to 50 µm: highs soften gently |
-| `Wow` | A slow, drifting wobble in pitch, as `Tape`'s |
-| `Flutter` | A faster, steady wobble, as `Tape`'s |
+| `Space` | How far the tape rides off the head, to 3 µm: highs go fast |
+| `Thick` | How deep the coating is read, to 6 µm: highs soften gently |
+| `Wow` | A slow, wandering drift in pitch, from the reels |
+| `Flutter` | A fine, fast wobble, from the capstan and rollers |
 
-The head bump lifts the lows a few dB around 60 Hz at 15 ips, twice that at
-30 and half at 7.5. `Bias` at `00` leaves the tape barely moved by a quiet
-sound, the crossover crackle of a machine set up wrong. Unlike `Tape` it has
-no ceiling: a loud sound driven hard comes out quieter, as tape squashes it.
+A quiet sound comes through at its level at any `Drive` and `Sat`, so
+turning them up saturates it sooner rather than turning it up; at 0 dB a
+-12 dB sine's distortion is about -54 dB, and each 6 dB of `Drive` is the
+same as 6 dB louder. The replay EQ is set for the `Gap`, `Space` and `Thick`
+it starts with, so moving them away from there brightens or darkens the top.
+The head bump at 15 ips is about 1.3 dB near 62 Hz, with the lows falling
+away under 30 Hz; at 7.5 ips it's near 39 Hz and at 30 ips near 80 Hz.
+`Wow` and `Flutter` each reach about 10 cents at `FF`, evenly from none at
+`00`; flutter moves with the speed. At the start there's about a cent,
+nearly all flutter. Unlike `Tape` it has no ceiling: a loud sound driven
+hard comes out quieter, as tape squashes it.
 
 `Deck` is lo-fi tape: a cassette, a VCR's linear audio track, or a worn
 cassette, with everything that goes wrong with them. Its `Type`, in the
