@@ -39,7 +39,7 @@ with the cursor has the brighter frame. An empty slot keeps its frame, says `Emp
 | Pitch & spectral | `Pitch`, `Freq Shift`, `Warps` |
 | Resonators | `Reso`, `Comb` |
 | Delay | `Delay`, `Space Echo`, `Stutter` |
-| Reverb | `Reverb`, `Plate`, `Spring`, `Space` |
+| Reverb | `Reverb`, `Plate`, `Hall`, `Spring`, `Space` |
 | Granular | `Grains`, `Clouds`, `Beads` |
 
 `=` and `-` on the effect step through them in this order too, from `---` to `Beads` and round
@@ -86,7 +86,8 @@ the page's width, with its settings in the same places and bars nearly twice as 
 | `Vowel` | Its curve |
 | `Delay`, `Space Echo` | Its repeats over time, left up and right down |
 | `Reverb`, `Plate` | How its tail dies away |
-| `Spring`, `Space` | How its tail dies away |
+| `Hall`, `Spring` | How its tail dies away |
+| `Space` | How its tail dies away |
 
 A `Comp`'s curve is square and 16 rows tall, and its meter as tall, 0 to 24 dB, with the last two
 bars of how far it turned down beside them. A `Distort`'s transfer curve, on `Soft`, `Hard`,
@@ -482,6 +483,28 @@ and `Width` work as `Reverb`'s do, and its tail is as long at every `Size`.
 
 A change to `Size` bends the pitch of the tail a little as it glides, taking
 about a second end to end.
+
+`Hall` is a big, smooth hall: eight delay lines feeding each other, after
+zita-rev1, with early reflections before the tail. It's for strings, pads,
+vocals and piano, where `Reverb` is a room and `Plate` is bright. It starts
+half wet, its tail about 2 s. `Pre`, `Decay`, `Damp`, `Low cut`, `High cut`
+and `Width` work as `Reverb`'s do, and `Size` as `Plate`'s: its tail is as
+long at every size.
+
+| Setting | Does |
+|---|---|
+| `Lows` | How long its lows ring against `Decay`: as long at `80`, up to 4x |
+| `Damp` | How long its highs ring: as long as the middle at `00`, a tenth at `FF` |
+| `Size` | How big the hall is, from a big room at `00` to twice its own at `FF` |
+| `Early` | How loud its first reflections are, off at `00` |
+| `Mod` | How much its lines wobble, which keeps the tail from ringing |
+
+`Mod` starts at `40`, a slight wobble, so a snare's tail barely changes from
+hit to hit. Higher up the tail goes chorus-like; at `00` nothing moves, and the
+hall answers every hit exactly alike.
+
+`Decay` is the middle's tail, from 500 Hz to 2 kHz; `Lows` and `Damp` set the
+lows' and highs' against it, so each band falls in its own time.
 
 `Spring` is a spring tank, as a guitar amp or an Octatrack has, after
 ChowDSP's model in Surge: a sound goes in, drips and boings down the springs

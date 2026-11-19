@@ -8,10 +8,10 @@ use super::{
     COLOUR_PARAMS, COMB_PARAMS, COMPRESSOR_PARAMS, COMPRESSOR_SHOWN, DECK_GRID, DECK_PARAMS,
     DELAY_GRID, DELAY_PARAMS, DISTORT_PARAMS, DISTORT_SHOWN, ECHO_GRID, ECHO_PARAMS, EQ_GRID,
     EQ_PARAMS, EXCITER_GRID, EXCITER_PARAMS, EffectKind, Entry, FLANGER_PARAMS, FREQ_SHIFT_PARAMS,
-    GRAINS_PARAMS, LIMIT_PARAMS, LPG_PARAMS, MAX_KEPT_PARAMS, PHASER_PARAMS, PITCH_PARAMS,
-    PLATE_GRID, PLATE_PARAMS, REEL_GRID, REEL_PARAMS, RESO_PARAMS, REVERB_GRID, REVERB_PARAMS,
-    ROTARY_GRID, ROTARY_PARAMS, SPACE_PARAMS, SPRING_GRID, SPRING_PARAMS, STUTTER_GRID,
-    STUTTER_PARAMS, TAPE_PARAMS, VOWEL_PARAMS, WARPS_PARAMS,
+    GRAINS_PARAMS, HALL_GRID, HALL_PARAMS, LIMIT_PARAMS, LPG_PARAMS, MAX_KEPT_PARAMS,
+    PHASER_PARAMS, PITCH_PARAMS, PLATE_GRID, PLATE_PARAMS, REEL_GRID, REEL_PARAMS, RESO_PARAMS,
+    REVERB_GRID, REVERB_PARAMS, ROTARY_GRID, ROTARY_PARAMS, SPACE_PARAMS, SPRING_GRID,
+    SPRING_PARAMS, STUTTER_GRID, STUTTER_PARAMS, TAPE_PARAMS, VOWEL_PARAMS, WARPS_PARAMS,
 };
 use crate::settings::same_key;
 
@@ -71,6 +71,7 @@ impl EffectKind {
         Self::Stutter,
         Self::Reverb,
         Self::Plate,
+        Self::Hall,
         Self::Spring,
         Self::Space,
         Self::Grains,
@@ -584,5 +585,14 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &DECK_PARAMS,
         shown: Shown::All,
         grid: Some(DECK_GRID),
+    },
+    EffectSpec {
+        key: "hall",
+        name: "Hall",
+        meaning: "Puts the sound in a big, smooth hall, its lows and highs ringing as long as set",
+        group: EffectGroup::Reverb,
+        params: &HALL_PARAMS,
+        shown: Shown::All,
+        grid: Some(HALL_GRID),
     },
 ];

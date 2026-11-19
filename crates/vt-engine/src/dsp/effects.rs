@@ -14,6 +14,7 @@ pub(crate) mod exciter;
 pub(crate) mod flanger;
 pub(crate) mod freq_shifter;
 pub(crate) mod granular;
+pub(crate) mod hall;
 pub(crate) mod memory;
 pub(crate) mod pedal;
 pub(crate) mod phaser;

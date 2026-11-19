@@ -10,8 +10,8 @@ use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_model::constants::MAX_GROUPS;
 use vt_model::insert::{
-    Compressor, CompressorType, Delay, Distort, DistortType, Equaliser, Exciter, Insert, Limiter,
-    LowPassGate, Plate, Reverb, Space, Spring, Stutter,
+    Compressor, CompressorType, Delay, Distort, DistortType, Equaliser, Exciter, Hall, Insert,
+    Limiter, LowPassGate, Plate, Reverb, Space, Spring, Stutter,
 };
 use vt_model::lfo::Lfo;
 use vt_model::modulation::ModSlot;
@@ -58,6 +58,7 @@ fn song() -> Song {
     song.tracks[1].inserts[0] = Insert::Plate(Plate::DEFAULT);
     song.tracks[1].inserts[1] = Insert::Delay(Delay::DEFAULT);
     song.tracks[1].inserts[2] = Insert::Stutter(Stutter::DEFAULT);
+    song.tracks[1].inserts[3] = Insert::Hall(Hall::DEFAULT);
     song.tracks[2].machine = Machine::Plaits(SynthVoice::Acid);
     song.tracks[2].mods[3] = ModSlot::lfo(Some(SettingId::CUT), Lfo::default()).with_depth(0x40);
     song.tracks[3].inserts[0] = Insert::Spring(Spring::DEFAULT);

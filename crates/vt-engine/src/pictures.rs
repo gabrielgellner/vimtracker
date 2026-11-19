@@ -25,6 +25,11 @@ pub mod eq {
     pub use crate::dsp::dynamics::eq::response_db;
 }
 
+/// The hall's tail.
+pub mod hall {
+    pub use crate::dsp::effects::hall::tail;
+}
+
 /// The plate's tail.
 pub mod plate {
     pub use crate::dsp::effects::plate::tail;
