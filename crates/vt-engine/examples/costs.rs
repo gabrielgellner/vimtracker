@@ -20,8 +20,8 @@ use vt_model::bank::{BankEntry, ContentHash};
 use vt_model::history::History;
 use vt_model::insert::{
     BEADS_QUALITY_NAMES, Beads, BeadsMode, Chorus, ChorusType, Clouds, CloudsMode, Compressor,
-    CompressorType, Distort, DistortType, Echo, Exciter, FreqShift, Grains, INSERTS, Insert, Pitch,
-    Plate, QUALITY_NAMES, Rotary, Space, Spring, Stutter, Warps,
+    CompressorType, Distort, DistortType, Echo, Exciter, FreqShift, Grains, Hall, INSERTS, Insert,
+    Pitch, Plate, QUALITY_NAMES, Rotary, Space, Spring, Stutter, Warps,
 };
 use vt_model::modulation::{MOD_SLOTS, ModKind};
 use vt_model::sample::SampleData;
@@ -451,6 +451,7 @@ fn worst_song() -> Song {
     ];
     let heavy = [
         Insert::Space(Space::DEFAULT),
+        Insert::Hall(Hall::DEFAULT),
         Insert::Spring(Spring::DEFAULT),
         Insert::Rotary(Rotary::DEFAULT),
         Insert::Plate(Plate::DEFAULT),

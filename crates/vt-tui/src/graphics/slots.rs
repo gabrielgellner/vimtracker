@@ -3,8 +3,8 @@
 //! with the caption a zoomed one has under its box.
 
 use vt_engine::pictures::{
-    DEFAULT_NOTE, Tail, comb, delay, echo, lpg, plate, resonator, reverb, space, spring, transfer,
-    vowel,
+    DEFAULT_NOTE, Tail, comb, delay, echo, hall, lpg, plate, resonator, reverb, space, spring,
+    transfer, vowel,
 };
 use vt_engine::track_state::LiveValues;
 use vt_model::insert::{
@@ -36,7 +36,7 @@ pub(crate) enum SlotDrawing {
     /// A delay's repeats, at the song's tempo in thousandths of a BPM, and a Space Echo's.
     Delay(Delay, u32),
     Echo(Echo, u32),
-    /// A reverb's tail: a `Reverb`, `Plate`, `Spring` or `Space`.
+    /// A reverb's tail: a `Reverb`, `Plate`, `Hall`, `Spring` or `Space`.
     Tail(Insert),
 }
 
@@ -79,11 +79,13 @@ impl Repeated {
     }
 }
 
-/// A reverb's tail, if it has one worked out: a `Reverb`'s, `Plate`'s, `Spring`'s or `Space`'s.
+/// A reverb's tail, if it has one worked out: a `Reverb`'s, `Plate`'s, `Hall`'s, `Spring`'s or
+/// `Space`'s.
 fn tail_of(insert: Insert, rate: u32) -> Option<Tail> {
     match insert {
         Insert::Reverb(settings) => reverb::tail(settings, rate),
         Insert::Plate(settings) => plate::tail(settings, rate),
+        Insert::Hall(settings) => hall::tail(settings, rate),
         Insert::Spring(settings) => spring::tail(settings, rate),
         Insert::Space(settings) => space::tail(settings, rate),
         _ => None,
@@ -211,6 +213,7 @@ impl SlotDrawing {
             Insert::Echo(settings) => Some(Self::Echo(settings, millibpm)),
             playing @ (Insert::Reverb(_)
             | Insert::Plate(_)
+            | Insert::Hall(_)
             | Insert::Spring(_)
             | Insert::Space(_)) => tail_of(playing, rate).map(|_| Self::Tail(playing)),
             _ => Self::of(insert, values),

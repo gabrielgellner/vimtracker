@@ -178,6 +178,7 @@ effects! {
     Colour(Colour),
     Reel(Reel),
     Deck(Deck),
+    Hall(Hall),
 }
 
 /// How a delay goes to a new time: gliding there, which bends the repeats' pitch as tape does, or

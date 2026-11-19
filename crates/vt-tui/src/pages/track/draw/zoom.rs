@@ -317,6 +317,7 @@ fn zoom_panel(page: &TrackPage, ctx: &Ctx, track: &Track, slot: usize) -> Graphi
         | Insert::Echo(_)
         | Insert::Reverb(_)
         | Insert::Plate(_)
+        | Insert::Hall(_)
         | Insert::Spring(_)
         | Insert::Space(_) => curve(panel, ZOOM_EQ_WIDTH),
         Insert::Distort(_) => curve(panel, ZOOM_CURVE_WIDTH),

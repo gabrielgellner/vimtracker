@@ -83,7 +83,7 @@ fn the_effects_list_shows_them_by_group_and_each_sets_its_own() {
         ("Pitch & spectral", vec!["Pitch", "Freq Shift", "Warps"]),
         ("Resonators", vec!["Reso", "Comb"]),
         ("Delay", vec!["Delay", "Space Echo", "Stutter"]),
-        ("Reverb", vec!["Reverb", "Plate", "Spring", "Space"]),
+        ("Reverb", vec!["Reverb", "Plate", "Hall", "Spring", "Space"]),
         ("Granular", vec!["Grains", "Clouds", "Beads"]),
     ];
     assert_eq!(grouped, expected);

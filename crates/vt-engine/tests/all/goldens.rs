@@ -31,6 +31,7 @@ fn effect_golden(kind: EffectKind) -> String {
         EffectKind::Plate => "reverb-plate",
         EffectKind::Spring => "reverb-spring",
         EffectKind::Space => "reverb-space",
+        EffectKind::Hall => "reverb-hall",
         EffectKind::Compressor => "comp-",
         EffectKind::Chorus
         | EffectKind::Grains

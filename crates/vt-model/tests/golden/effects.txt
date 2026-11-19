@@ -28,3 +28,4 @@ echo | Space Echo
 colour | Colour
 reel | Reel
 deck | Deck
+hall | Hall

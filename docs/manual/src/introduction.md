@@ -75,7 +75,7 @@ frame with its name and what gives it its character in its title:
 Every track has a **Trim** at its input, a gain for gain staging before the filter and
 the slots, so `Level` is left for the mix, as a console's input trim and fader are.
 
-**Effects** include a delay, a reverb, a plate, a spring, a huge ambient space, chorus, Rings' or a
+**Effects** include a delay, a reverb, a plate, a hall, a spring, a huge ambient space, chorus, Rings' or a
 Juno's, phaser, flanger, tape, an exciter, a three-band EQ, a pitch shifter, a frequency shifter, a rotary speaker, a stutter, granular, Mutable Instruments' Clouds and Beads, a Roland RE-201's tape echo, Warps' cross-modulation and vocoder, a low-pass gate, a
 resonator, comb and formant filters, a limiter and a compressor. The compressor has three
 types: `Clean`; `Console`, an SSL bus compressor fitted to Arturia's Bus FORCE; and
