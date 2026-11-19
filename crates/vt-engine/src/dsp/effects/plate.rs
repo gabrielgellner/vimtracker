@@ -2,9 +2,10 @@
 //! (J. Audio Eng. Soc., 1997). What goes in is band-limited, held back and spread by six short
 //! all-passes, then goes round a tank of two halves that feed each other, each four wandering
 //! all-passes, a delay, a damping low-pass, a second all-pass and a second delay. Each side of what
-//! comes out is seven taps from all over the tank, as the paper gives them but for the first, and
-//! a little of what the input all-passes give, blurred by eight short all-passes of its own, so
-//! it's dense from its first millisecond rather than a few echoes that flam (decision 446).
+//! comes out is seven taps from all over the tank, as the paper gives them but for the first, which
+//! is louder and darker, and what the input all-passes give, its lows off and its highs down,
+//! blurred by eight short all-passes of its own, so it's dense from its first millisecond rather
+//! than a few echoes that flam, and its first 20 ms sound as a plate's do (decision 446).
 //!
 //! Where the paper spreads what goes in with four all-passes of up to 0.75, and each half starts
 //! with one of 672 or 908 frames at 0.7, each of those repeated what went through it every 3.6 to
@@ -65,8 +66,19 @@ const DIFFUSER_LENGTHS: [f32; 6] = [17.0, 29.0, 43.0, 61.0, 89.0, 127.0];
 const DIFFUSION: f32 = 0.6;
 /// How much of what the input all-passes give goes straight out on each side with the taps, so the
 /// plate's first milliseconds are as full as what follows: the tank's first all-passes take about
-/// 15 ms to build up (decision 446).
-const EARLY: f32 = 0.3;
+/// 15 ms to build up (decision 446). It's what a snare's first 20 ms are mostly made of, so it's
+/// shaped to sound like the references' there: its lows taken off by two one-poles at
+/// `EARLY_LOWS_HZ`, its highs over `EARLY_HIGHS_HZ` kept by `EARLY_HIGHS`. Unshaped, the first
+/// 20 ms were 5 dB too bassy and 5 to 10 too dull against PLATE-140 and ValhallaPlate Steel.
+const EARLY: f32 = 1.8;
+const EARLY_LOWS_HZ: f32 = 355.0;
+const EARLY_HIGHS_HZ: f32 = 2000.0;
+const EARLY_HIGHS: f32 = 0.45;
+/// How loud each side's first tap is, a millisecond into the tank, against the paper's taps, and
+/// the one-pole that darkens it: it carries the hit as the first all-passes spread it, from 15
+/// to 60 ms, and at the paper's level and brightness that was too quiet and too bright there.
+const FIRST_TAP: f32 = 1.75;
+const FIRST_TAP_HZ: f32 = 2000.0;
 /// Each side's own short all-passes on the way out, and how much they spread. They blur each of
 /// the taps' echoes into a dense burst from its first millisecond, where the paper's few echoes
 /// flammed a snare, and each side's differ so the two still sound apart. They let every frequency
@@ -105,8 +117,9 @@ const LOWEST_CUT_HZ: f32 = 20.0;
 const CUT_SPAN: f32 = 1000.0;
 /// How far each of the first all-passes wanders either way at the top of `Mod`, at the tuning
 /// rate. At `80` each of 48 held partials wanders about 6 cents, as with the paper's single sine,
-/// but every way at once rather than swept together.
-const MOST_EXCURSION: f32 = 8.0;
+/// but every way at once rather than swept together. It was 8 until what goes straight out, which
+/// doesn't wander, grew louder; 10 keeps a held note's wobble as it was.
+const MOST_EXCURSION: f32 = 10.0;
 /// How long each takes to wander to its next place, in seconds, about: each line's differs, so no
 /// two keep step.
 const WANDER_SECONDS: f32 = 0.15;
@@ -126,7 +139,7 @@ const PRE_PER_FRAME: f32 = LONGEST_PRE;
 /// What each tap is scaled by, as the paper has it.
 const TAP_GAIN: f32 = 0.6;
 /// How loud what comes out is. Tuned so it's near the reverb's at both their defaults.
-const WET: f32 = 0.7;
+const WET: f32 = 0.59;
 
 /// How much a tail that falls 60 dB in `seconds` falls each frame, as the natural log of what it
 /// keeps.
@@ -401,6 +414,13 @@ pub(crate) struct Plate {
     /// The band-limiting low-pass on what goes in, and each half's damping.
     band: f32,
     damped: [f32; 2],
+    /// What goes straight out: the two one-poles under its lows and the one under its highs,
+    /// and how far each moves a frame. Then each side's first tap's one-pole, and how far it
+    /// moves.
+    early: [f32; 3],
+    early_by: [f32; 2],
+    first_tap: [f32; 2],
+    first_tap_by: f32,
     /// Where each first all-pass has wandered to: the left half's, then the right's.
     wanders: [Wander; WANDERERS],
     pre: Vec<f32>,
@@ -475,6 +495,10 @@ impl Plate {
             blurs,
             band: 0.0,
             damped: [0.0; 2],
+            early: [0.0; 3],
+            early_by: [EARLY_LOWS_HZ, EARLY_HIGHS_HZ].map(|hertz| of_corner(hertz, rate as f32)),
+            first_tap: [0.0; 2],
+            first_tap_by: of_corner(FIRST_TAP_HZ, rate as f32),
             wanders,
             pre: vec![0.0; pre_frames],
             pre_write: 0,
@@ -505,6 +529,8 @@ impl Plate {
         self.pre.fill(0.0);
         self.band = 0.0;
         self.damped = [0.0; 2];
+        self.early = [0.0; 3];
+        self.first_tap = [0.0; 2];
         self.low_damping.clear();
     }
 
@@ -645,15 +671,30 @@ impl Plate {
             lines.write(after.base, 0, sample);
         }
 
+        // What goes straight out: its lows off, then its highs down.
+        let [lows, highs_by] = self.early_by;
+        let [once, twice, highs] = &mut self.early;
+        *once += (diffused - *once) * lows;
+        let thinned = diffused - *once;
+        *twice += (thinned - *twice) * lows;
+        let thinned = thinned - *twice;
+        *highs += (thinned - *highs) * highs_by;
+        let early = (*highs + (thinned - *highs) * EARLY_HIGHS) * EARLY;
+
         let mut out = [0.0; 2];
-        for ((side, taps), blurs) in out.iter_mut().zip(&TAPS).zip(&self.blurs) {
-            let tapped = (taps
-                .iter()
-                .map(|&(half, line, frames, sign)| {
-                    lines.between(self.tank[half][line].base, frames * stretch) * sign
-                })
-                .sum::<f32>()
-                + diffused * EARLY)
+        for (((side, taps), blurs), first_tap) in out
+            .iter_mut()
+            .zip(&TAPS)
+            .zip(&self.blurs)
+            .zip(&mut self.first_tap)
+        {
+            let read = |&(half, line, frames, sign): &Tap| {
+                lines.between(self.tank[half][line].base, frames * stretch) * sign
+            };
+            *first_tap += (read(&taps[0]) - *first_tap) * self.first_tap_by;
+            let tapped = (taps[1..].iter().map(read).sum::<f32>()
+                + *first_tap * FIRST_TAP
+                + early)
                 * TAP_GAIN
                 * WET;
             *side = blurs.iter().fold(tapped, |sample, &(base, frames)| {
@@ -910,7 +951,8 @@ mod tests {
         };
         let (small, big) = (out(0x00), out(0xFF));
         // It answers at once at any size, so where the energy of its first 300 ms falls, on
-        // average: later as the taps go further apart. Seen: 1.45 times as late.
+        // average: later as the taps go further apart. Seen: 1.23 times as late, as what goes
+        // straight out is as loud at any size (1.45 before it grew louder).
         let centre = |out: &[[f32; 2]]| {
             let early = &out[..RATE as usize * 3 / 10];
             let energy = |f: &[f32; 2]| f[0] * f[0] + f[1] * f[1];
@@ -922,7 +964,7 @@ mod tests {
             timed / early.iter().map(energy).sum::<f32>()
         };
         assert!(
-            centre(&big) > centre(&small) * 1.3,
+            centre(&big) > centre(&small) * 1.15,
             "{} {}",
             centre(&small),
             centre(&big)
