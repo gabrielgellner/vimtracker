@@ -479,10 +479,12 @@ and `Width` work as `Reverb`'s do, and its tail is as long at every `Size`.
 | Setting | Does |
 |---|---|
 | `Size` | How big the plate is, from half to twice Dattorro's, his at `80` |
-| `Mod` | How much its tail shimmers, each line wandering its own way rather than sweeping together, which keeps it from ringing metallic |
+| `Mod` | How much its tail shimmers, each line wandering its own way |
 
-A change to `Size` bends the pitch of the tail a little as it glides, taking
-about a second end to end.
+`Mod` keeps the tail from ringing metallic. Its lines wander apart rather than
+sweeping together, so a held chord shimmers without the flanging of one slow
+wobble. A change to `Size` bends the pitch of the tail a little as it glides,
+taking about a second end to end.
 
 `Spring` is a spring tank, as a guitar amp or an Octatrack has, after
 ChowDSP's model in Surge: a sound goes in, drips and boings down the springs
