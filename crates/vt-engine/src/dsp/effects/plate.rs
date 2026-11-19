@@ -692,9 +692,7 @@ impl Plate {
                 lines.between(self.tank[half][line].base, frames * stretch) * sign
             };
             *first_tap += (read(&taps[0]) - *first_tap) * self.first_tap_by;
-            let tapped = (taps[1..].iter().map(read).sum::<f32>()
-                + *first_tap * FIRST_TAP
-                + early)
+            let tapped = (taps[1..].iter().map(read).sum::<f32>() + *first_tap * FIRST_TAP + early)
                 * TAP_GAIN
                 * WET;
             *side = blurs.iter().fold(tapped, |sample, &(base, frames)| {
