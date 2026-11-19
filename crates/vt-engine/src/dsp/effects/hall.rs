@@ -7,7 +7,8 @@
 //! each line's absorption, which keeps of the lows, the middle and the highs what each band's
 //! `Decay` asks for that line's length. Each side hears its own four lines' reads, as zita-rev1's
 //! outputs do, and early reflections before them: 64 taps a side on the pre-delay, at times
-//! scattered rather than evenly spaced, smoothed by five short all-passes (decision 440).
+//! scattered rather than evenly spaced, smoothed by five short all-passes, the two sides sharing
+//! what's under 300 Hz (decision 440).
 //!
 //! The lines' lengths are prime numbers of frames at 48 kHz, spread over 1:1.5, scaled to the
 //! rate and by `Size`, which moves no faster than its whole range in a second, as the plate's
@@ -47,13 +48,15 @@ const DIFFUSERS: [[usize; 7]; 2] = [
 ];
 const DIFFUSION: f32 = 0.7;
 /// How many early reflections each side has, from when to when at `Size` `80`, in seconds, and
-/// how fast they fall away: in this time they're 1/e as loud.
+/// how fast they fall away: in this time they're 1/e as loud. Most of their energy is in the first
+/// 30 ms, as a snare's attack in a hall has it.
 const EARLY_TAPS: usize = 64;
-const EARLY_FIRST: f32 = 0.003;
+const EARLY_FIRST: f32 = 0.001;
 const EARLY_LAST: f32 = 0.09;
-const EARLY_FALL: f32 = 0.08;
-/// Which of the hashed patterns the taps are: the third, whose envelope repeats least.
-const EARLY_SEED: i64 = 3;
+const EARLY_FALL: f32 = 0.035;
+/// Which of the hashed patterns the taps are: the 34th, which neither repeats nor leaves a hole in
+/// a snare's body.
+const EARLY_SEED: i64 = 34;
 /// Each side's all-passes on the early reflections, in frames at the tuning rate, and how much
 /// they spread: primes under 3.2 ms, which smear each tap into a short burst, too short to be
 /// heard as an echo of it.
@@ -62,6 +65,10 @@ const EARLY_DIFFUSION: f32 = 0.7;
 /// How loud the early reflections are at the top of `Early`, against the tail, their taps' gains
 /// adding to 1 in energy.
 const EARLY_LEVEL: f32 = 1.75;
+/// Under this, in hertz, the two sides' early reflections are one: their middle, as loud as either
+/// side, by a one-pole's share. Each side's own taps cancelled the other's in the lows, so a snare's
+/// body went missing from the mono sum.
+const EARLY_SHARED_HZ: f32 = 300.0;
 /// Where the absorption's shelves turn, in hertz.
 const LOW_CROSSOVER_HZ: f32 = 500.0;
 const HIGH_CROSSOVER_HZ: f32 = 2_000.0;
@@ -351,6 +358,9 @@ pub(crate) struct Hall {
     early_diffusers: [[(usize, usize); 5]; 2],
     /// Each side's early reflections, when at `Size` `80`, in frames here, and how loud.
     early_taps: [[(f32, f32); EARLY_TAPS]; 2],
+    /// What each side's early reflections take of the middle's lows, and what it moves each frame.
+    early_shared: [f32; 2],
+    early_shared_by: f32,
     /// Each line's shelves' states.
     absorbing: [[[f32; 2]; 2]; LINES],
     /// The bands' tails, and each line's absorption for them at the size it was worked out for.
@@ -426,6 +436,8 @@ impl Hall {
             diffusers,
             early_diffusers,
             early_taps,
+            early_shared: [0.0; 2],
+            early_shared_by: of_corner(EARLY_SHARED_HZ, rate as f32),
             absorbing: [[[0.0; 2]; 2]; LINES],
             bands: [Smoothed::at(1.0); 3],
             absorption: [Absorption::default(); LINES],
@@ -463,6 +475,7 @@ impl Hall {
             side.fill(0.0);
         }
         self.absorbing = [[[0.0; 2]; 2]; LINES];
+        self.early_shared = [0.0; 2];
         self.trims = [Trim::default(), Trim::default()];
         self.dc = [0.0; 2];
     }
@@ -632,6 +645,12 @@ impl Hall {
                 *sample = lines.allpass(base, length, *sample, EARLY_DIFFUSION);
             }
         }
+        // Each side's lows swapped for their middle's: a side plus the low-pass of what it lacks.
+        let middle = (early[0] + early[1]) * std::f32::consts::FRAC_1_SQRT_2;
+        for (sample, shared) in early.iter_mut().zip(&mut self.early_shared) {
+            *shared += (middle - *sample - *shared) * self.early_shared_by;
+            *sample += *shared;
+        }
 
         // What each line gives now, read between samples where its wobble has it, with each
         // side's input added and through its all-pass, read where its own wobble has it. Each
@@ -724,7 +743,7 @@ impl Rung for Hall {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dsp::effects::tail::measure::{click_seconds, ratios};
+    use crate::dsp::effects::tail::measure::{click_seconds, seconds};
 
     const RATE: u32 = 48_000;
 
@@ -799,16 +818,28 @@ mod tests {
         }
     }
 
+    /// A click through a hall, its two sides added, `seconds` long.
+    fn click(hall: &mut Hall, seconds: f32) -> Vec<f32> {
+        impulse(hall, (seconds * RATE as f32) as usize)
+            .iter()
+            .map(|[left, right]| left + right)
+            .collect()
+    }
+
+    /// When the early reflections are over at `Size` `80`, their all-passes' smear with them.
+    const AFTER_EARLY: f32 = EARLY_LAST + 0.01;
+
     #[test]
     fn each_band_falls_in_its_own_time_as_its_tail_says() {
         // Lows, middle and highs set apart, measured at 125 Hz, 1 kHz and 8 kHz, well inside
-        // their bands, against `band_seconds`; and the tail drawn against a click through it.
-        // With early reflections, as it's heard: without them the tail starts with the shortest
-        // line, 60 ms in, and a band that holds two times, as 1 kHz between long lows and short
-        // highs or 4 kHz with the middle's leaking in, is fitted from 5 to 35 dB down later on
-        // its curve (2.8 s for 2.0 at 1 kHz at `Lows` and `Damp` `FF`, 1.4 s for 0.3 at 4 kHz).
-        // At `Early`'s top they're most of a highs' tail of 0.3 s, so the drawing's at `40`.
-        // Seen: the bands within 10%, the drawing within 6%.
+        // their bands, against `band_seconds`; and the tail drawn against the same click at
+        // `TAIL_HZ`. With early reflections, as it's heard: without them the tail starts with the
+        // shortest line, 60 ms in, and a band that holds two times, as 1 kHz between long lows
+        // and short highs, is fitted from 5 to 35 dB down later on its curve (2.8 s for 2.0 at
+        // `Lows` and `Damp` `FF`). The highs are measured from when the early reflections are
+        // over: most of their energy is in the first 30 ms, and against a highs' tail of 0.2 to
+        // 0.4 s they're its first 15 dB, which the fit took as the tail (up to 17% long).
+        // Seen: the bands within 11%, the drawing within 6%.
         for (lows, damp) in [(0x40, 0x00), (0x80, 0x80), (0xC0, 0xC0), (0xFF, 0xFF)] {
             let settings = Settings {
                 lows,
@@ -817,31 +848,30 @@ mod tests {
                 ..FLAT
             };
             let [low, middle, high] = band_seconds(settings);
-            for (hertz, set) in [(125.0, low), (1000.0, middle), (8000.0, high)] {
-                let mut hall = hall(settings, RATE);
-                let measured = click_seconds(|x| hall.process(x), set.max(middle), RATE, hertz);
+            let response = click(&mut hall(settings, RATE), low.max(middle) * 1.3 + 0.5);
+            let after_early = &response[(AFTER_EARLY * RATE as f32) as usize..];
+            for (hertz, set, heard) in [
+                (125.0, low, &response[..]),
+                (1000.0, middle, &response[..]),
+                (8000.0, high, after_early),
+            ] {
+                let measured = seconds(heard, RATE, hertz, 35.0);
                 assert!(
                     (measured / set - 1.0).abs() < 0.15,
                     "{lows:02X} {damp:02X} at {hertz} Hz: {measured} for {set}"
                 );
             }
-            let settings = Settings {
-                early: 0x40,
-                ..settings
-            };
             let said = tail(settings, RATE).unwrap();
-            let mut hall = hall(settings, RATE);
-            let ratios = ratios(said, |x| hall.process([x, x]), RATE);
-            assert!(
-                ratios.iter().all(|ratio| (ratio - 1.0).abs() < 0.12),
-                "{lows:02X} {damp:02X}: {said:?} measured {ratios:?}"
-            );
+            for (hertz, set) in TAIL_HZ.into_iter().zip(said.seconds) {
+                let measured = seconds(&response, RATE, hertz, 35.0);
+                assert!(
+                    (measured / set - 1.0).abs() < 0.12,
+                    "{lows:02X} {damp:02X} drawn at {hertz} Hz: {measured} for {set}"
+                );
+            }
         }
     }
 
-    /// Abel and Huang's normalised echo density of the left side around `at` seconds, over 20 ms:
-    /// how many samples stand further from nothing than the window's spread, over how many would
-    /// for noise. About 1 for a tail as dense as noise.
     fn echo_density(out: &[[f32; 2]], at: f32) -> f32 {
         let window = RATE as usize / 50;
         let start = (at * RATE as f32) as usize - window / 2;
@@ -901,7 +931,7 @@ mod tests {
                     };
                     let out = hall.process([level, -level * 0.5]);
                     // The early reflections at the top of `Early` and the smallest size add up
-                    // to a little over 8 on full-scale noise.
+                    // to under 8 on full-scale noise.
                     assert!(
                         out.iter().all(|s| s.is_finite() && s.abs() < 12.0),
                         "{decay:x} {lows:x} {size:x} {rate}: {out:?}"
