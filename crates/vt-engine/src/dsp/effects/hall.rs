@@ -83,8 +83,8 @@ const LARGEST: f32 = 2.0;
 const SIZE_PER_SECOND: f32 = 1.5;
 /// How far a line's read wobbles at the top of `Mod`, in seconds, and how fast each line's goes,
 /// in hertz: slow, and never together, so the modes drift apart without a chorus. At the fastest
-/// and deepest the pitch moves by under 2 cents.
-const MOST_WOBBLE: f32 = 0.00035;
+/// and deepest the pitch moves by under 4 cents.
+const MOST_WOBBLE: f32 = 0.0007;
 const WOBBLE_HZ: [f64; LINES] = [0.13, 0.41, 0.21, 0.31, 0.17, 0.47, 0.26, 0.36];
 /// How far each wobble starts round its circle, so no two lines move together.
 const WOBBLE_PHASES: [f64; LINES] = [0.0, 0.31, 0.62, 0.13, 0.84, 0.45, 0.27, 0.71];
@@ -92,7 +92,7 @@ const WOBBLE_PHASES: [f64; LINES] = [0.0, 0.31, 0.62, 0.13, 0.84, 0.45, 0.27, 0.
 const LONGEST_PRE: f32 = 0.25;
 /// How much of each side goes into the lines, and how loud the tail comes out.
 const INPUT_GAIN: f32 = 0.5;
-const WET: f32 = 0.58;
+const WET: f32 = 0.82;
 /// How much longer a trip round a line lasts than its delay and all-pass, as far as its tail goes,
 /// as the reverb's `HELD`: its all-pass holds some frequencies back longer, and those last. From
 /// measuring the middle at 2 s and 16 s, where it's 5% and 3% long without it.
@@ -843,7 +843,7 @@ mod tests {
     }
 
     #[test]
-    fn its_wobble_moves_pitch_by_under_two_cents() {
+    fn its_wobble_moves_pitch_by_under_four_cents() {
         // A read moving by `depth` frames at `hertz` bends the pitch by up to depth times the
         // wobble's angular speed, as a share of the frequency.
         let depth = MOST_WOBBLE;
@@ -852,7 +852,7 @@ mod tests {
             .fold(0.0_f64, |most, hertz| most.max(*hertz));
         let bend = f64::from(depth) * std::f64::consts::TAU * fastest;
         let cents = 1200.0 * (1.0 + bend).log2();
-        assert!(cents < 2.0, "{cents}");
+        assert!(cents < 4.0, "{cents}");
     }
 
     #[test]
