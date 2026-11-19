@@ -1559,7 +1559,7 @@ fn k_chooses_fill_and_where_and_returns_to_the_panel() {
         shape(&app).place,
         vt_model::shape::Where::Every(4)
     ));
-    keys(&mut app, "j");
+    keys(&mut app, "jj");
     assert_eq!(
         app.overlays.shape.as_ref().unwrap().row,
         vt_model::shape::GenParam::Every
@@ -1596,6 +1596,8 @@ fn a_euclidean_where_spreads_its_hits_among_the_notes_and_rotates() {
     // The tresillo, then Alternate counts among the rows it changes.
     assert_eq!(vel(&app), ["7F", "40", "40", "00", "40", "40", "7F", "40"]);
     keys(&mut app, "j");
+    assert_eq!(panel(&app).row, GenParam::Over);
+    keys(&mut app, "j");
     assert_eq!(panel(&app).row, GenParam::Hits);
     keys(&mut app, "==");
     assert_eq!(vel(&app), ["7F", "40", "00", "7F", "40", "00", "7F", "40"]);
@@ -1630,7 +1632,7 @@ fn a_euclidean_where_spreads_its_hits_among_the_notes_and_rotates() {
         Where::Euclid { hits: 3, rotate: 0 }
     );
     // Another Where hides Hits and Rotate.
-    keys(&mut app, "kKnotes<Enter>");
+    keys(&mut app, "kkKnotes<Enter>");
     assert!(!panel(&app).rows().contains(&GenParam::Hits));
     keys(&mut app, "<Enter>");
     assert_eq!(app.services.history.undo_depth(), 1);
@@ -2241,7 +2243,7 @@ fn l_keeps_generated_notes_live_and_gl_reopens_them() {
     let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.verb(), "Generate");
     assert_eq!(panel.shape.place, Where::Euclid { hits: 3, rotate: 0 });
-    keys(&mut app, "jjjjjjjj=L");
+    keys(&mut app, "jjjjjjjjj=L");
     assert_eq!(
         notes_and_velocities(&app),
         [
@@ -2359,7 +2361,7 @@ fn acid_kept_live_rolls_again_through_gl() {
     assert_eq!(panel.verb(), "Generate");
     assert_eq!(panel.shape.kind, FillKind::Acid);
     // It counts the rows as they'd be without it, so all 16 are open to it.
-    assert_eq!(panel.open_rows(), 16);
+    assert_eq!(panel.counted_rows(), 16);
     let notes = first.iter().filter(|s| !s.starts_with("---")).count();
     let part = panel.parts[0];
     let written = vt_model::shape::written(
@@ -3492,8 +3494,8 @@ fn l_keeps_a_shape_live_as_one_undo_and_gl_turns_its_rotate() {
     let panel = app.overlays.shape.clone().unwrap();
     assert_eq!(panel.live, Some(0));
     assert_eq!(panel.shape.place, Where::Euclid { hits: 3, rotate: 0 });
-    // Down to Rotate, and round by one, heard as it's turned.
-    keys(&mut app, "jjjjjj=");
+    // Down to Rotate, past Over, and round by one, heard as it's turned.
+    keys(&mut app, "jjjjjjj=");
     assert_eq!(vel(&app), ["40", "7F", "40", "40", "7F", "40", "40", "7F"]);
     assert_eq!(app.services.history.undo_depth(), depth);
     keys(&mut app, "L");
@@ -3504,14 +3506,14 @@ fn l_keeps_a_shape_live_as_one_undo_and_gl_turns_its_rotate() {
         Where::Euclid { hits: 3, rotate: 1 }
     );
     // `Esc` leaves it as it was.
-    keys(&mut app, "gljjjjjj=<Esc>");
+    keys(&mut app, "gljjjjjjj=<Esc>");
     assert_eq!(vel(&app), ["40", "7F", "40", "40", "7F", "40", "40", "7F"]);
     assert_eq!(app.services.history.undo_depth(), depth + 1);
     keys(&mut app, "u");
     assert_eq!(vel(&app), ["7F", "40", "40", "7F", "40", "40", "7F", "40"]);
     assert_eq!(generators(&app, 0).len(), 1);
     // `Enter` there applies it with the new settings.
-    keys(&mut app, "gljjjjjj==<Enter>");
+    keys(&mut app, "gljjjjjjj==<Enter>");
     assert!(generators(&app, 0).is_empty());
     assert_eq!(vel(&app), ["7F", "40", "7F", "40", "40", "7F", "40", "40"]);
     assert!(

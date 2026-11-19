@@ -39,6 +39,8 @@ fn cells_from_one(app: &mut App, select: &str, rule: u8) {
         keys(app, "j");
     }
     keys(app, "K/cells<Enter>j");
+    assert_eq!(app.overlays.shape.as_ref().unwrap().row, GenParam::Over);
+    keys(app, "j");
     assert_eq!(app.overlays.shape.as_ref().unwrap().row, GenParam::Rule);
     keys(app, &format!("i{rule}<Enter>jK/one<Enter>"));
 }
@@ -59,7 +61,9 @@ fn on_one_column_each_row_is_a_cell() {
         use GenParam::*;
         assert_eq!(
             panel.rows(),
-            [Fill, From, To, Curve, S, Run, Where, Rule, CellStart, Vary]
+            [
+                Fill, From, To, Curve, S, Run, Where, Over, Rule, CellStart, Vary
+            ]
         );
     }
     let screen = drawn(&app);

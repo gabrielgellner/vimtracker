@@ -240,12 +240,11 @@
                                 phase: 0,
                                 run: 1,
                                 values: [],
-                                place: AllRows,
+                                place: Beats(60),
                                 seed: 3,
                                 acid: (
                                     notes: 4,
                                     octave: 30,
-                                    density: 60,
                                     accent: 40,
                                     slide: 30,
                                     keep: false,

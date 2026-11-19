@@ -22,7 +22,7 @@ use vt_model::macros::GenColumn;
 use vt_model::scale::Scale;
 use vt_model::selection::StepRange;
 use vt_model::shape::{
-    Context, FillKind, GenCell, GenParam, Kept, RowView, Shape, ShapeColumn, is_empty, open_rows,
+    Context, FillKind, GenCell, GenParam, Kept, RowView, Shape, ShapeColumn, counted, is_empty,
     render_into,
 };
 use vt_model::song::{Phrase, Song};
@@ -203,8 +203,6 @@ struct GenRun {
     rows: StepRange,
     /// Where its cells start in the scratch's.
     cells: usize,
-    /// How many rows its column could change, which Euclid's `Hits` are counted among.
-    open: usize,
     /// The shape it last rendered, as heard, and the column it rendered on, a Note column with
     /// the scale it went through, if it has since the version came.
     rendered: Option<(Shape, ShapeColumn)>,
@@ -560,7 +558,6 @@ impl GenScratch {
                 column: generator.column,
                 rows,
                 cells,
-                open: open_rows(under, rows, generator.column),
                 rendered: None,
                 pass: 0,
                 renders: 0,
@@ -658,7 +655,7 @@ impl GenScratch {
             };
             let context = Context {
                 column,
-                open: run.open,
+                rows: counted(under, run.rows, column, written),
                 generates: run.generates,
                 sources: &[],
                 source,
@@ -905,7 +902,7 @@ mod tests {
         song.tracks[0].phrases.insert(0, Arc::new(rests));
         song.tracks[1].phrases.insert(0, Arc::new(notes));
         let span = Span::rows(StepRange::between(0, rows - 1));
-        let acid = shape(FillKind::Acid, 36, 48, Where::AllRows);
+        let acid = shape(FillKind::Acid, 36, 48, vt_model::shape::BEATS);
         let song = generate(song.clone(), 0, acid_column(&song), span, acid);
         let cut = ShapeColumn::Fx {
             slot: 0,
@@ -1140,7 +1137,7 @@ mod tests {
         let mut shape = generator.shape;
         let mut renders_timed = Vec::with_capacity(rows);
         for density in 0..rows as u8 {
-            shape.acid.density = density;
+            shape.place = Where::Beats(density);
             let started = Instant::now();
             render_into(&under, span, generator.column, &shape, None, &mut cells);
             renders_timed.push(started.elapsed());

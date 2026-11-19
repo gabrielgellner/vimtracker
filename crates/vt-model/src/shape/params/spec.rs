@@ -54,9 +54,9 @@ impl GenParam {
     /// Whether a shape has it. A wave and `Alternate` have their own settings in place of a
     /// curve, a `List` has its values in place of the two ends, a transform but `Scale` works from
     /// the values there with no settings of its own, and a `Where`'s amount only comes with the
-    /// choices that have one. `Acid` has its riff's settings, its `Density` only where it
-    /// `generates` notes of its own, and keeping the pitches there leaves it no ends or notes to
-    /// choose. A `Follow` writes every row from its source, so it has no `Where`, turns about a
+    /// choices that have one: `Beats` its `Density`. `Acid` has its riff's settings, and its
+    /// `Trig loop` while its `Where` is `Beats`, whose draws are its rhythm's; keeping the pitches
+    /// of the notes it alone chooses leaves it no ends or notes to choose. A `Follow` writes every row from its source, so it has no `Where`, turns about a
     /// note only while it inverts, and has its kinds of mutation only while it mutates. `Walk` has its `Step` and `Edge`, and `1/f` its
     /// `Depth`. `Multiply` reads the rhythm itself, so it has its `Factor` and `Masks` and no
     /// `Where`; each bit transform has its one setting. `Grids` makes its own rhythm, so it has
@@ -88,13 +88,17 @@ impl GenParam {
             divisions && !matches!(shape.divisions.channel, Some(Channel::A) | Some(Channel::B));
         let density = |part: DrumPart| grids && shape.grids.part.is_none_or(|own| own == part);
         let acid = kind == FillKind::Acid;
-        let riff = acid && (generates || !shape.acid.keep);
+        // Rows without a note, which take notes of its own from the riff.
+        let gaps = generates || shape.place != Where::Notes;
+        let riff = acid && (gaps || !shape.acid.keep);
+        let beats = matches!(shape.place, Where::Beats(_));
         let rows = kind.has_where();
         let follow = kind == FillKind::Follow;
         let tonnetz = kind == FillKind::Tonnetz;
         match self {
             Self::Fill => true,
             Self::Where => rows,
+            Self::Over => rows && shape.place.counts(),
             Self::Source
             | Self::Transpose
             | Self::Invert
@@ -122,7 +126,8 @@ impl GenParam {
             }
             Self::Notes => riff,
             Self::Octave | Self::Accent | Self::Slide | Self::Pitches => acid,
-            Self::Density | Self::TrigLoop => acid && generates,
+            Self::Density => rows && beats,
+            Self::TrigLoop => acid && beats,
             Self::NoteLoop => riff,
             Self::OctaveLoop | Self::AccentLoop | Self::SlideLoop => acid,
             Self::Step | Self::Edge => kind == FillKind::Walk,
@@ -254,9 +259,10 @@ impl GenParam {
 
     /// Where a shape's other settings sit on the Gen page, in columns of rows, top to bottom (the
     /// study's §3.2): the fill's own in the first two, as its [`FillSpec`](super::FillSpec) places
-    /// them, and its `Where`'s at the foot of the third, so they stay put as the fill changes,
-    /// with `Acid`'s `Density` or a random fill's `Weights` above them. A random fill's curve does
-    /// nothing, so it isn't placed, and only the settings the shape has on its `column` are.
+    /// them, and its `Where`'s in the third, so they stay put as the fill changes, a counting
+    /// `Where`'s `Over` at the top, with a random fill's `Weights` in its place; what that leaves
+    /// out goes to the fourth column's first free places. A random fill's curve does nothing, so
+    /// it isn't placed, and only the settings the shape has on its `column` are.
     /// `Grids` has the map and chaos first, then its part's density, and has no `Where`.
     /// `Divisions` has its channel's chances, then `B`'s where it plays `A+B`. A `Follow` has no
     /// `Where` either, so its `Mutation` and the kinds it may make take the third column and the
@@ -270,13 +276,16 @@ impl GenParam {
             |param: Option<Self>| param.filter(|param| param.exists_for(shape, column, generates));
         let mut fill = shape.kind.spec().grid;
         let mut last = none;
+        // What the third column has no room for: a named rhythm's `Over`, and the top of the
+        // column where the fill takes it.
+        let mut spilled = [None; 2];
         if shape.kind.has_where() {
             last = Self::of_where(shape.place);
+            if matches!(shape.place, crate::shape::Where::Rhythm { .. }) {
+                spilled[1] = Some(Over);
+            }
         }
         let mut more = none;
-        // A named rhythm's name, where the fill takes the top of the third column, goes to the
-        // fourth.
-        let rhythm = last[0];
         match shape.kind {
             FillKind::Grids => match shape.grids.part {
                 Some(part) => fill[1] = [Some(Self::density_of(part)), Some(Pitch), Some(Rows)],
@@ -294,14 +303,8 @@ impl GenParam {
                     ];
                 }
             },
-            FillKind::Acid => {
-                last[0] = Some(Density);
-                more = [Some(Spread), Some(Bias), rhythm];
-            }
-            FillKind::Random => {
-                last[0] = Some(Weights);
-                more[0] = rhythm;
-            }
+            FillKind::Acid => more = [Some(Spread), Some(Bias), None],
+            FillKind::Random => spilled[0] = last[0].replace(Weights),
             FillKind::Follow => {
                 last = [Some(Mutation), Some(Repitch), Some(Shift)];
                 more = [Some(Retro), Some(Ratchet), Some(DropAdd)];
@@ -314,23 +317,31 @@ impl GenParam {
             }
             _ => {}
         }
-        let columns = [fill[0], fill[1], last, more];
-        Grid::from_columns(&columns.map(|places| places.map(has)))
+        let mut more = more.map(has);
+        for param in spilled.into_iter().filter_map(has) {
+            if let Some(free) = more.iter_mut().find(|place| place.is_none()) {
+                *free = Some(param);
+            }
+        }
+        let columns = [fill[0].map(has), fill[1].map(has), last.map(has), more];
+        Grid::from_columns(&columns)
     }
 
-    /// A `Where`'s own settings, as the foot of the Gen page's third column has them, top to
-    /// bottom: none for one that's only its choice of rows.
+    /// A `Where`'s own settings, as the Gen page's third column has them, top to bottom, a
+    /// counting one's `Over` first: none for one that's only its choice of rows.
     pub fn of_where(place: Where) -> [Option<Self>; GRID_ROWS] {
+        let over = Some(Self::Over);
         match place {
-            Where::Every(_) => [None, None, Some(Self::Every)],
+            Where::Every(_) => [over, None, Some(Self::Every)],
             Where::Chance(_) => [None, None, Some(Self::Chance)],
-            Where::Euclid { .. } => [None, Some(Self::Hits), Some(Self::Rotate)],
-            Where::Clusters(_) => [None, None, Some(Self::Clusters)],
-            Where::Markov(_) => [None, None, Some(Self::Markov)],
-            Where::States(_) => [None, None, Some(Self::States)],
+            Where::Beats(_) => [None, None, Some(Self::Density)],
+            Where::Euclid { .. } => [over, Some(Self::Hits), Some(Self::Rotate)],
+            Where::Clusters(_) => [over, None, Some(Self::Clusters)],
+            Where::Markov(_) => [over, None, Some(Self::Markov)],
+            Where::States(_) => [over, None, Some(Self::States)],
             Where::Complementary { .. } => [None, Some(Self::Share), Some(Self::Side)],
             Where::Rhythm { .. } => [Some(Self::Rhythm), Some(Self::Role), Some(Self::Child)],
-            Where::Cells(_) => [None, Some(Self::Rule), Some(Self::CellStart)],
+            Where::Cells(_) => [over, Some(Self::Rule), Some(Self::CellStart)],
             Where::Notes | Where::NoNotes | Where::Commands | Where::AllRows => [None; GRID_ROWS],
         }
     }
@@ -441,6 +452,11 @@ impl GenParam {
             Self::Values => column.show_list(&shape.values),
             Self::Run => shape.run.to_string(),
             Self::Where => shape.place.name().to_owned(),
+            Self::Over => shape
+                .over
+                .unwrap_or(context.column.default_over())
+                .name()
+                .to_owned(),
             Self::Every => match shape.place {
                 Where::Every(every) => format!("{every} rows"),
                 _ => String::new(),
@@ -451,8 +467,8 @@ impl GenParam {
             },
             Self::Hits => match shape.place {
                 Where::Euclid { hits, .. } => {
-                    let open = context.open;
-                    format!("{} of {open}", usize::from(hits).min(open))
+                    let rows = context.rows;
+                    format!("{} of {rows}", usize::from(hits).min(rows))
                 }
                 _ => String::new(),
             },
@@ -683,6 +699,12 @@ impl GenParam {
             Self::Wave => WAVES.into_iter().map(Choice::Wave).collect(),
             Self::Rate => listed_rates().into_iter().map(Choice::Rate).collect(),
             Self::Where => context.wheres().into_iter().map(Choice::Where).collect(),
+            Self::Over => context
+                .column
+                .overs()
+                .into_iter()
+                .map(Choice::Over)
+                .collect(),
             Self::Source => context
                 .sources
                 .iter()
@@ -778,6 +800,7 @@ impl GenParam {
                 Choice::CellStart(start) => {
                     matches!(shape.place, Where::Cells(cells) if cells.start == start)
                 }
+                Choice::Over(over) => over == shape.over.unwrap_or(context.column.default_over()),
                 Choice::Moves(moves) => moves == shape.tonnetz.moves,
                 Choice::Voice(voice) => Some(voice) == shape.tonnetz.voice,
                 Choice::Vary(passes) => passes == shape.vary,
@@ -886,16 +909,18 @@ impl GenParam {
             Self::Phase => shape.phase = 0,
             Self::Values => shape.values = Values::new(&[shape.from, shape.to]),
             Self::Run => shape.run = 1,
-            Self::Where => shape.place = context.default_where(),
-            Self::Every | Self::Chance => {
+            Self::Where => shape.place = context.default_where(shape.kind),
+            Self::Over => shape.over = None,
+            Self::Every | Self::Chance | Self::Density => {
                 shape.place = match shape.place {
                     Where::Every(_) => Where::Every(4),
                     Where::Chance(_) => Where::Chance(50),
+                    Where::Beats(_) => crate::shape::BEATS,
                     place => place,
                 };
             }
             Self::Notes => shape.acid.notes = Acid::default().notes,
-            Self::Octave | Self::Density | Self::Accent | Self::Slide => {
+            Self::Octave | Self::Accent | Self::Slide => {
                 let start = Shape {
                     acid: Acid::default(),
                     ..*shape
@@ -1299,6 +1324,7 @@ impl GenParam {
             Self::Fill
             | Self::Wave
             | Self::Where
+            | Self::Over
             | Self::Pitches
             | Self::Source
             | Self::Invert

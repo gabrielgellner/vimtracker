@@ -162,6 +162,10 @@ const EUCLID: Where = Where::Euclid {
     hits: EUCLID_HITS,
     rotate: 0,
 };
+/// The share of rows a `Beats` `Where` starts with, as `Acid`'s rhythm has always started.
+pub(crate) const BEATS_PERCENT: u8 = 50;
+/// A `Beats` `Where` as it starts.
+pub const BEATS: Where = Where::Beats(BEATS_PERCENT);
 /// A `Cells` `Where` as it starts: rule 30, from a row drawn from the seed.
 const CELLS: Where = Where::Cells(Cells {
     rule: cells::DEFAULT_RULE,
@@ -565,7 +569,10 @@ pub(crate) const FILLS: [FillSpec; FillKind::ALL.len()] = {
     ]
 };
 
-/// Which rows get a value.
+/// Which rows get a value: a selection of the span's rows. `Notes`, `NoNotes` and `Commands`
+/// choose by what's on a row; every other is a pattern over all the span's rows, counted over
+/// them whatever is on them. A row outside it is left as it is, and a row inside that the column
+/// can't change, a velocity without a note, an `OFF` or another command, is passed over.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Where {
     /// Rows with a note.
@@ -580,8 +587,11 @@ pub enum Where {
     Every(u16),
     /// Each row with this percent chance.
     Chance(u8),
-    /// `hits` spread as evenly as they go among the rows it can change, then moved `rotate` of
-    /// those rows later, going round.
+    /// About this percent of the rows, the strong beats most often: Vitling's weights over a bar,
+    /// as `Acid`'s rhythm has always drawn them.
+    Beats(u8),
+    /// `hits` spread as evenly as they go over the span's rows, then moved `rotate` rows later,
+    /// going round.
     Euclid { hits: u16, rotate: u16 },
     /// Runs of two to four rows with gaps between, about this percent of the rows, after Marbles'
     /// clusters.
@@ -606,7 +616,61 @@ pub enum Where {
     Cells(Cells),
 }
 
+/// What a counting `Where`'s pattern is counted over (decision 448): every row of the span, the
+/// rows with a note, or on an FX column the rows with its command. Over `Notes`, `Euclid 3` on 7
+/// notes in 16 rows spreads its 3 hits over the 7 notes, `x.x.x..`, and they land on the first,
+/// third and fifth; over `All rows` it spreads them over the 16, and only the hits that land on a
+/// row the column can change write there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Over {
+    AllRows,
+    Notes,
+    Commands,
+}
+
+impl Over {
+    /// Every choice, in the order a list offers them.
+    pub const ALL: [Self; 3] = [Self::AllRows, Self::Notes, Self::Commands];
+
+    /// The name on screen.
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::AllRows => "All rows",
+            Self::Notes => "Notes",
+            Self::Commands => "Commands",
+        }
+    }
+
+    /// What it counts over, for a list to choose from.
+    pub(crate) fn description(self) -> &'static str {
+        match self {
+            Self::AllRows => "The pattern counts every row, whatever is on it",
+            Self::Notes => "The pattern counts only the rows with a note",
+            Self::Commands => "The pattern counts only the rows with this command",
+        }
+    }
+}
+
+crate::listed::listed!(Over);
+
 impl Where {
+    /// Whether it's a pattern counted along the rows, a hit, a step or a generation a row, so
+    /// what it counts over moves it: `Euclid`, `Every`, a named rhythm, Marbles' three and
+    /// `Cells`. `Chance`, `Complementary` and `Beats` draw each row by itself, and `Notes`,
+    /// `NoNotes` and `Commands` choose by what's there.
+    pub fn counts(self) -> bool {
+        matches!(
+            self,
+            Self::Euclid { .. }
+                | Self::Every(_)
+                | Self::Rhythm { .. }
+                | Self::Clusters(_)
+                | Self::Markov(_)
+                | Self::States(_)
+                | Self::Cells(_)
+        )
+    }
+
     /// The name on screen, without an amount.
     pub(crate) fn name(self) -> &'static str {
         match self {
@@ -616,6 +680,7 @@ impl Where {
             Self::AllRows => "All rows",
             Self::Every(_) => "Every",
             Self::Chance(_) => "Chance",
+            Self::Beats(_) => "Beats",
             Self::Euclid { .. } => "Euclid",
             Self::Clusters(_) => "Clusters",
             Self::Markov(_) => "Markov",
@@ -635,6 +700,7 @@ impl Where {
             _ => matches!(
                 self,
                 Self::Chance(_)
+                    | Self::Beats(_)
                     | Self::Clusters(_)
                     | Self::Markov(_)
                     | Self::States(_)
@@ -681,10 +747,9 @@ pub fn euclid(hits: usize, rows: usize) -> Vec<bool> {
 /// The column being filled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShapeColumn {
-    /// The notes, re-pitched where they are, through the song's scale as it was when the panel
-    /// opened: in its degrees while it's on, and in semitones while it's off. With `writes`, it's
-    /// a column that had no notes: it writes notes of its own on the rows without one, with that
-    /// velocity and the track's gate.
+    /// The notes, through the song's scale as it was when the panel opened: in its degrees while
+    /// it's on, and in semitones while it's off. A row chosen with a note there is re-pitched; one
+    /// without takes a note of its own, with `writes` as its velocity and the row's gate.
     Note {
         scale: Scale,
         writes: Option<u8>,
@@ -734,21 +799,38 @@ impl ShapeColumn {
         }
     }
 
-    /// Which rows it fills unless told otherwise: the ones already holding such a value, or every
-    /// row for notes of its own.
+    /// Which rows it fills unless told otherwise: the ones already holding such a value. On an
+    /// empty column, every row ([`Context::default_where`]).
     pub fn default_where(self) -> Where {
         match self {
-            Self::Note {
-                writes: Some(_), ..
-            } => Where::AllRows,
             Self::Fx { .. } => Where::Commands,
             _ => Where::Notes,
         }
     }
 
+    /// What a counting `Where` counts over unless told otherwise: every row on the Note column and
+    /// an FX column, as a `Where` is a selection of the span's rows, and the notes for a note's
+    /// velocity, nudge or length, which mean nothing without one.
+    pub fn default_over(self) -> Over {
+        match self {
+            Self::Note { .. } | Self::Fx { .. } => Over::AllRows,
+            Self::Velocity | Self::Nudge { .. } | Self::Length => Over::Notes,
+        }
+    }
+
+    /// What a counting `Where` can count over: every row or the notes, and on an FX column its
+    /// command's rows.
+    pub fn overs(self) -> Vec<Over> {
+        match self {
+            Self::Fx { .. } => Over::ALL.to_vec(),
+            _ => vec![Over::AllRows, Over::Notes],
+        }
+    }
+
     /// The fills it offers: `Snap`, `Acid`, `Grids`, `Divisions`, `Ring`, `Tonnetz`, `Follow` and
-    /// `Variation` only mean something for notes, `Multiply` for notes and FX commands, whose rows are a rhythm, and a transform
-    /// or a `Variation` nothing for notes of its own, as there are none to rework or learn from.
+    /// `Variation` only mean something for notes, and `Multiply` for notes and FX commands, whose
+    /// rows are a rhythm. On an empty column a transform has nothing to rework
+    /// ([`Context::fills`]).
     pub fn fills(self) -> Vec<FillKind> {
         FillKind::ALL
             .into_iter()
@@ -768,19 +850,7 @@ impl ShapeColumn {
             .filter(|kind| {
                 *kind != FillKind::Multiply || matches!(self, Self::Note { .. } | Self::Fx { .. })
             })
-            .filter(|kind| !(kind.reworks() && self.writes_notes()))
             .collect()
-    }
-
-    /// Whether it writes notes of its own, on a column that had none.
-    pub fn writes_notes(self) -> bool {
-        matches!(
-            self,
-            Self::Note {
-                writes: Some(_),
-                ..
-            }
-        )
     }
 
     /// The nudge a value held on the Nudge column is, kept to the column's range, or 0 elsewhere.
@@ -833,23 +903,29 @@ impl ShapeColumn {
         }
     }
 
-    /// The choices of rows. A note's velocity, nudge or length means nothing without it, so those
-    /// only narrow them, as they do for the notes themselves.
+    /// The choices of rows. Each is a selection: the rows with a note, without one or with the
+    /// command, or a pattern over every row of the span, whatever is on them. A note's velocity,
+    /// nudge or length means nothing without it, so on those every row is the notes and none
+    /// is no row. On an empty column there's nothing to choose by ([`Context::wheres`]).
     pub fn wheres(self) -> Vec<Where> {
         match self {
-            // Notes of its own go on rows without one, so the rows are only a rhythm.
-            Self::Note {
-                writes: Some(_), ..
-            } => [Where::AllRows, Where::Every(4), Where::Chance(50), EUCLID]
-                .into_iter()
-                .chain(MARBLES)
-                .chain([RHYTHM, CELLS])
-                .collect(),
-            Self::Note { .. } | Self::Velocity | Self::Nudge { .. } | Self::Length => {
+            Self::Note { .. } => [
+                Where::Notes,
+                Where::AllRows,
+                Where::NoNotes,
+                Where::Every(4),
+                Where::Chance(50),
+                EUCLID,
+            ]
+            .into_iter()
+            .chain(MARBLES)
+            .chain([RHYTHM, CELLS, BEATS])
+            .collect(),
+            Self::Velocity | Self::Nudge { .. } | Self::Length => {
                 [Where::Notes, Where::Every(4), Where::Chance(50), EUCLID]
                     .into_iter()
                     .chain(MARBLES)
-                    .chain([RHYTHM, CELLS])
+                    .chain([RHYTHM, CELLS, BEATS])
                     .collect()
             }
             Self::Fx { .. } => [
@@ -863,7 +939,7 @@ impl ShapeColumn {
             ]
             .into_iter()
             .chain(MARBLES)
-            .chain([RHYTHM, CELLS])
+            .chain([RHYTHM, CELLS, BEATS])
             .collect(),
         }
     }
@@ -902,14 +978,13 @@ impl ShapeColumn {
         }
     }
 
-    /// Whether a step could take a value at all. A row holding another command keeps it, and notes
-    /// of its own go round an `OFF`.
+    /// Whether a step could take a value at all, if it's chosen. A note goes on a row with a note
+    /// or none, round an `OFF`; a note's velocity, nudge and length need the note; and a row
+    /// holding another command keeps it.
     fn can_take(self, step: &Step) -> bool {
         match self {
-            Self::Note {
-                writes: Some(_), ..
-            } => step.note == Note::Empty,
-            Self::Note { .. } | Self::Velocity | Self::Nudge { .. } | Self::Length => {
+            Self::Note { .. } => step.note != Note::Off,
+            Self::Velocity | Self::Nudge { .. } | Self::Length => {
                 matches!(step.note, Note::On(_))
             }
             Self::Fx { slot, command } => step
@@ -1106,6 +1181,10 @@ pub struct Shape {
     /// What a `List` goes through, in place of `from` and `to`.
     pub values: Values,
     pub place: Where,
+    /// What a counting `Where` counts over, or none for its column's own
+    /// ([`ShapeColumn::default_over`]), which is all that's saved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub over: Option<Over>,
     /// Picks the random values and the chance rows, so a change elsewhere doesn't reroll them.
     pub seed: u64,
     /// What an `Acid` fill writes besides its pitches. Saved only once it's changed.
@@ -1198,6 +1277,7 @@ impl Default for Shape {
             run: 1,
             values: Values::default(),
             place: Where::AllRows,
+            over: None,
             seed: 0,
             acid: Acid::default(),
             follow: Follow::default(),
@@ -1419,7 +1499,7 @@ pub fn targets(
     seed: u64,
 ) -> Vec<usize> {
     let len = range.len().min(MAX_PHRASE_STEPS);
-    render::chosen(steps, range, column, place, seed, len)
+    render::chosen(steps, range, column, place, None, seed, len)
         .ones()
         .map(|offset| range.first + offset)
         .collect()
@@ -1439,8 +1519,14 @@ pub fn is_empty(steps: &[Step], range: StepRange, column: ShapeColumn) -> bool {
     }
 }
 
-/// How many rows of a range a column could change, which a Euclidean `Where` spreads its hits
-/// over.
+/// How many rows a shape's `Where` counts over on a range, as its `Over` says: Euclid's `Hits` are
+/// spread over them and its `Rotate` goes round them.
+pub fn counted(steps: &[Step], range: StepRange, column: ShapeColumn, shape: &Shape) -> usize {
+    let len = range.len().min(MAX_PHRASE_STEPS);
+    render::over_rows(steps, range, column, shape.over, len).count()
+}
+
+/// How many rows of a range a column could change, if they were chosen.
 pub fn open_rows(steps: &[Step], range: StepRange, column: ShapeColumn) -> usize {
     (range.first..=range.last)
         .filter(|row| steps.get(*row).is_some_and(|step| column.can_take(step)))
@@ -1749,8 +1835,11 @@ mod tests {
         ]);
         let picked = |place| targets(&steps, all(&steps), VEL, place, 1);
         assert_eq!(picked(Where::Notes), [0, 2, 4]);
-        assert_eq!(picked(Where::Every(2)), [0, 2, 4]);
-        assert_eq!(picked(Where::Every(4)), [0, 4]);
+        assert_eq!(picked(Where::AllRows), [0, 2, 4]);
+        assert!(picked(Where::NoNotes).is_empty());
+        // Counted over the notes, as Velocity counts unless told otherwise: every other note.
+        assert_eq!(picked(Where::Every(2)), [0, 4]);
+        assert_eq!(picked(Where::Every(4)), [0]);
     }
 
     #[test]
@@ -1846,7 +1935,7 @@ mod tests {
     }
 
     #[test]
-    fn a_euclidean_where_counts_among_the_notes() {
+    fn a_euclidean_where_counts_among_the_notes_on_velocity_and_every_row_on_fx() {
         // Notes on 6 of 16 rows: 3 hits among them fall on every other note.
         let mut steps = rows(&vec!["--- -- --- --- ---"; 16]);
         for row in [0, 3, 4, 8, 11, 14] {
@@ -1855,7 +1944,8 @@ mod tests {
         let place = Where::Euclid { hits: 3, rotate: 0 };
         assert_eq!(targets(&steps, all(&steps), VEL, place, 1), [0, 4, 11]);
         assert_eq!(open_rows(&steps, all(&steps), VEL), 6);
-        // On an FX column, among the rows that could hold the command: not the one with another.
+        // On an FX column, over every row, `x.x..`, a hit on the row with another command
+        // leaving it as it is.
         let steps = rows(&[
             "--- -- --- --- ---",
             "--- -- res:10 --- ---",
@@ -1864,7 +1954,13 @@ mod tests {
             "--- -- --- --- ---",
         ]);
         let place = Where::Euclid { hits: 2, rotate: 0 };
-        assert_eq!(targets(&steps, all(&steps), CUT, place, 1), [0, 3]);
+        assert_eq!(targets(&steps, all(&steps), CUT, place, 1), [0, 2]);
+        let place = Where::Euclid { hits: 2, rotate: 1 };
+        assert_eq!(
+            targets(&steps, all(&steps), CUT, place, 1),
+            [3],
+            ".x.x.: the hit on res is passed over"
+        );
     }
 
     #[test]
@@ -2334,9 +2430,18 @@ mod tests {
             scale,
             writes: Some(0x50),
         };
-        assert_eq!(writing.default_where(), Where::AllRows);
-        assert!(!writing.wheres().contains(&Where::Notes));
-        assert!(writing.fills().iter().all(|kind| !kind.reworks()));
+        let context = Context {
+            column: writing,
+            rows: 8,
+            generates: true,
+            sources: &[],
+            source: None,
+        };
+        assert_eq!(context.default_where(FillKind::Ramp), Where::AllRows);
+        assert_eq!(context.default_where(FillKind::Acid), BEATS);
+        assert!(!context.wheres().contains(&Where::Notes));
+        assert!(!context.wheres().contains(&Where::NoNotes));
+        assert!(context.fills().iter().all(|kind| !kind.reworks()));
         let empty = rows(&["--- -- --- --- ---"; 8]);
         let rows_of = |place: Where| -> Vec<usize> {
             let shape = Shape {
