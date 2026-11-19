@@ -1,7 +1,8 @@
-//! `Acid`: a 303 line on the Note column, its notes, accents and slides written together. On an
-//! empty column it writes a riff of its own, its rhythm weighted toward the strong beats; on notes
-//! already there it keeps their rhythm and gives them the riff's pitches, or with `keep` their own,
-//! and new accents, slides and octaves. `Random`'s `Spread` and `Bias` (`shape/random.rs`) choose
+//! `Acid`: a 303 line on the Note column, its notes, accents and slides written together, on every
+//! row its `Where` chooses: a note there takes the riff's pitch, or with `keep` its own, and a row
+//! without one a note of its own from the riff, each with new accents, slides and octaves. Its
+//! rhythm on an empty column is `Where::Beats`, Vitling's weights toward the strong beats, which
+//! any fill can choose rows by. `Random`'s `Spread` and `Bias` (`shape/random.rs`) choose
 //! which notes between the ends the riff's set holds, round the bias point or out at the ends, low
 //! or high; as they start, every note is as likely, as it always was.
 //!
@@ -20,7 +21,7 @@ use serde::{Deserialize, Serialize};
 
 use super::random::{Random, unit as even};
 use super::render::{GenCell, Out, Shaped, chosen};
-use super::{Ladder, Shape, ShapeColumn, mix};
+use super::{Ladder, Shape, ShapeColumn, Where, mix};
 use crate::constants::{DEFAULT_NOTE_VELOCITY, TICKS_PER_QUARTER, TICKS_PER_STEP};
 use crate::selection::StepRange;
 use crate::step::{ACCENT_VELOCITY, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note, Step, slid};
@@ -43,8 +44,6 @@ pub struct Acid {
     pub notes: u8,
     /// The chance a note goes an octave up or down.
     pub octave: u8,
-    /// The share of rows that play on an empty column, on average, the strong beats more often.
-    pub density: u8,
     pub accent: u8,
     pub slide: u8,
     /// Keeps the pitches, so a roll changes only the accents, slides and octaves: on notes already
@@ -79,7 +78,7 @@ fn is_zero(value: &u64) -> bool {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Loops {
-    /// Which rows play, on an empty column, from the density's draws.
+    /// Which rows play, while its `Where` is `Beats`, from that's draws.
     pub trigs: u8,
     /// Which of the riff's notes each plays.
     pub notes: u8,
@@ -128,7 +127,6 @@ impl Default for Acid {
         Self {
             notes: 4,
             octave: 20,
-            density: 50,
             accent: 30,
             slide: 20,
             keep: false,
@@ -233,6 +231,12 @@ pub fn chance(offset: usize, density: f64) -> f64 {
     } else {
         weight + (1.0 - weight) * (density - MEAN_WEIGHT) / (1.0 - MEAN_WEIGHT)
     }
+}
+
+/// Whether a row plays at `percent` of `Where::Beats`: its draw falls within its [`chance`], `at`
+/// its place in the bar, or for `Acid` with a `Trig loop`, round the loop.
+pub(super) fn plays(seed: u64, at: usize, percent: u8) -> bool {
+    unit(seed ^ PLAYS, at) < chance(at, f64::from(percent.min(100)) / 100.0)
 }
 
 /// A draw from 0 to 1 for a row.
@@ -385,9 +389,10 @@ fn plain(velocity: u8) -> u8 {
     }
 }
 
-/// The cells of the rows an `Acid` fill changes: each a note with its velocity and gate. On a
-/// column with notes it plays on every row `Where` chooses; on an empty one, on those the density
-/// draws. Each part is drawn for its place ([`Places`]), so a part on a loop goes round it.
+/// The cells of the rows an `Acid` fill changes: each a note with its velocity and gate, on every
+/// row `Where` chooses, a note of its own where there was none. Each part is drawn for its place
+/// ([`Places`]), so a part on a loop goes round it, and `Beats`' draws are its rhythm's, so they
+/// go round the `Trig loop`.
 pub(super) fn render<F: FnMut(usize, &Shaped)>(
     steps: &[Step],
     range: StepRange,
@@ -409,15 +414,20 @@ pub(super) fn render<F: FnMut(usize, &Shaped)>(
         &shape.random,
     );
     let set = set.notes();
-    let density = f64::from(acid.density.min(100)) / 100.0;
     // The second die: the accents, slides and octaves, which a roll with `keep` changes alone.
     let flags = mix(shape.seed ^ FLAGS ^ acid.roll.rotate_left(29), 0);
     let first = acid.first(range.len());
+    // `Beats` is drawn here, as the rhythm's part, on its loop if it has one.
+    let (place, beats) = match shape.place {
+        Where::Beats(percent) => (Where::AllRows, Some(percent)),
+        place => (place, None),
+    };
     let rows = chosen(
         steps,
         range,
         column,
-        shape.place,
+        place,
+        shape.over,
         shape.seed,
         out.cells.len(),
     );
@@ -427,9 +437,14 @@ pub(super) fn render<F: FnMut(usize, &Shaped)>(
             continue;
         };
         let at = Places::of(acid.loops, first, offset);
-        if writes.is_some() && unit(shape.seed ^ PLAYS, at.trigs) >= chance(at.trigs, density) {
+        if beats.is_some_and(|percent| !plays(shape.seed, at.trigs, percent)) {
             continue;
         }
+        // A row without a note takes one of its own, at the column's velocity.
+        let writes = match step.note {
+            Note::On(_) => None,
+            _ => Some(writes.unwrap_or(DEFAULT_NOTE_VELOCITY)),
+        };
         let picked = set[(mix(shape.seed ^ PICK, at.notes) % set.len() as u64) as usize];
         let mut pitch = match step.note {
             Note::On(note) if acid.keep => note,
@@ -488,14 +503,24 @@ mod tests {
         }
     }
 
+    /// An `Acid` line on the beats, as it starts on an empty column.
     fn acid(seed: u64, acid: Acid) -> Shape {
         Shape {
             from: 36,
             to: 48,
             kind: FillKind::Acid,
+            place: crate::shape::BEATS,
             seed,
             acid,
             ..Shape::default()
+        }
+    }
+
+    /// The same on every row.
+    fn every(seed: u64, settings: Acid) -> Shape {
+        Shape {
+            place: Where::AllRows,
+            ..acid(seed, settings)
         }
     }
 
@@ -580,13 +605,10 @@ mod tests {
     fn density_runs_from_nothing_to_every_row() {
         let steps = empty(32);
         let at = |density| {
-            let shape = acid(
-                3,
-                Acid {
-                    density,
-                    ..Acid::default()
-                },
-            );
+            let shape = Shape {
+                place: Where::Beats(density),
+                ..acid(3, Acid::default())
+            };
             run(&steps, writing(OFF), &shape).len()
         };
         assert_eq!(at(0), 0);
@@ -599,13 +621,12 @@ mod tests {
         let settings = Acid {
             notes,
             octave: 0,
-            density: 100,
             ..Acid::default()
         };
         let shape = Shape {
             from,
             to,
-            ..acid(seed, settings)
+            ..every(seed, settings)
         };
         run(&steps, writing(scale), &shape)
             .iter()
@@ -661,12 +682,11 @@ mod tests {
             let settings = Acid {
                 notes: 1,
                 octave,
-                density: 100,
                 ..Acid::default()
             };
             let shape = Shape {
                 from: 48,
-                ..acid(5, settings)
+                ..every(5, settings)
             };
             run(&steps, writing(OFF), &shape)
                 .iter()
@@ -687,13 +707,7 @@ mod tests {
     #[test]
     fn accents_and_slides_come_at_their_chances_as_the_keys_write_them() {
         let steps = empty(2000);
-        let shape = acid(
-            9,
-            Acid {
-                density: 100,
-                ..Acid::default()
-            },
-        );
+        let shape = every(9, Acid { ..Acid::default() });
         let out = run(&steps, writing(OFF), &shape);
         let share = |test: &dyn Fn(&Step) -> bool| {
             out.iter().filter(|(_, step)| test(step)).count() as f64 / out.len() as f64
@@ -1053,7 +1067,6 @@ mod tests {
             Acid {
                 notes: 6,
                 octave: 50,
-                density: 50,
                 accent: 50,
                 slide: 50,
                 loops,

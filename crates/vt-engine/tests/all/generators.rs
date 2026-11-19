@@ -12,7 +12,7 @@ use vt_model::bloom::Bloom;
 use vt_model::generator::Span;
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
-use vt_model::shape::{Context, FillKind, GenParam, Role, Shape, ShapeColumn, Where, World};
+use vt_model::shape::{Context, FillKind, GenParam, Over, Role, Shape, ShapeColumn, Where, World};
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, Step};
@@ -97,7 +97,7 @@ pub fn moving_song() -> Song {
         0,
         acid,
         rows(15),
-        shape(FillKind::Acid, 36, 48, Where::AllRows),
+        shape(FillKind::Acid, 36, 48, Where::Beats(50)),
     );
     let song = generate(
         song,
@@ -225,7 +225,7 @@ fn another(shape: &Shape, column: ShapeColumn, param: GenParam) -> (i32, i32) {
 fn context(column: ShapeColumn) -> Context<'static> {
     Context {
         column,
-        open: 16,
+        rows: 16,
         generates: false,
         sources: &[],
         source: None,
@@ -1100,7 +1100,7 @@ fn kria_line() -> Song {
     song.tracks[0]
         .phrases
         .insert(0, Arc::new(Phrase::from_steps(vec![Step::default(); 16])));
-    let mut line = shape(FillKind::Acid, 40, 52, Where::AllRows);
+    let mut line = shape(FillKind::Acid, 40, 52, Where::Beats(50));
     line.acid.accent = 50;
     line.acid.slide = 40;
     line.acid.loops = vt_model::shape::Loops {
@@ -1162,4 +1162,63 @@ fn an_acids_loops_run_on_from_pass_to_pass() {
         .collect();
     assert_eq!(reported, wanted);
     assert_eq!(wanted[2].1, Some(32), "two passes of 16 rows on");
+}
+
+/// A synth track of seven notes in sixteen rows with an `Acid` kept live on Euclid's hits over
+/// them, counted over every row or over the notes (decision 448).
+fn acid_on_notes(over: Option<Over>) -> Song {
+    let mut song = Song::new(1);
+    song.millibpm = 128_000;
+    let rest: Step = "--- -- --- --- ---".parse().unwrap();
+    let note: Step = "C-3 40 --- --- ---".parse().unwrap();
+    let mut steps = vec![rest; 16];
+    for row in [0, 2, 3, 7, 9, 12, 14] {
+        steps[row] = note.clone();
+    }
+    song.tracks[0].machine = Machine::Plaits(SynthVoice::Acid);
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(steps)));
+    let column = ShapeColumn::Note {
+        scale: song.saved_scale,
+        writes: Some(0x64),
+    };
+    let line = Shape {
+        over,
+        ..shape(FillKind::Acid, 36, 48, Where::Euclid { hits: 5, rotate: 0 })
+    };
+    generate(song, 0, column, rows(15), line)
+}
+
+/// A live generator chooses its rows in the engine as the edit thread does: `Hits` held at another
+/// number plays what writing it would, over every row, a note of its own on a hit without one, or
+/// over the notes alone; and a render played twice is the same.
+#[test]
+fn a_live_where_selects_in_the_engine_as_writing_it_would() {
+    for over in [None, Some(Over::Notes)] {
+        let song = acid_on_notes(over);
+        let column = song.tracks[0].phrases[&0].generators()[0].column;
+        let hold = (0, column, GenParam::Hits, 3);
+        let (held, engine) = play(&song, &[hold], 16);
+        let (again, _) = play(&song, &[hold], 16);
+        let written = reshaped(&song, hold);
+        let (writes, _) = play(&written, &[], 16);
+        assert!(held == writes, "{over:?}: held, it plays as written");
+        assert!(held == again, "{over:?}: a render repeats");
+        assert!(heard(&engine, 0).iter().any(|run| run.moving));
+        let notes: Vec<usize> = written.tracks[0].phrases[&0]
+            .steps()
+            .iter()
+            .enumerate()
+            .filter(|(_, step)| step.note != vt_model::step::Note::Empty)
+            .map(|(row, _)| row)
+            .collect();
+        match over {
+            // E(3,16) lands on 0, 5 and 10, two of them rows without a note, which take one, and
+            // the seven stay.
+            None => assert_eq!(notes, [0, 2, 3, 5, 7, 9, 10, 12, 14]),
+            // E(3,7) over the notes, on the first, third and fifth: the rhythm is theirs.
+            Some(_) => assert_eq!(notes, [0, 2, 3, 7, 9, 12, 14]),
+        }
+    }
 }

@@ -21,9 +21,9 @@ use vt_model::selection::{Field, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
     Channel, Context, DrumPart, FillKind, GenParam, Grids, MAX_WEIGHT, Shape, ShapeColumn, Source,
-    Starts, TonnetzVoice, Walk, Where, default_ends, default_step, degree_count, degree_name,
-    divisions_seed, drum_parts, is_empty, on_track, open_rows, track_seed, variation_notes,
-    written_from,
+    Starts, TonnetzVoice, Walk, Where, counted, default_ends, default_step, degree_count,
+    degree_name, divisions_seed, drum_parts, is_empty, on_track, open_rows, track_seed,
+    variation_notes, written_from,
 };
 use vt_model::song::{Machine, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
@@ -120,7 +120,7 @@ impl ShapePanel {
     pub fn context(&self) -> Context<'_> {
         Context {
             column: self.column,
-            open: self.open_rows(),
+            rows: self.counted_rows(),
             generates: self.generates(),
             sources: &self.sources,
             source: self.source_steps(),
@@ -172,12 +172,12 @@ impl ShapePanel {
             .map(|phrase| phrase.loop_steps())
     }
 
-    /// How many rows the column could change, which a Euclidean `Where`'s hits are spread over:
+    /// How many rows its `Where` counts over, which a Euclidean `Where`'s hits are spread over:
     /// the most of any track's.
-    pub fn open_rows(&self) -> usize {
+    pub fn counted_rows(&self) -> usize {
         self.parts
             .iter()
-            .map(|part| open_rows(self.base_steps(part), part.range, part.column))
+            .map(|part| counted(self.base_steps(part), part.range, part.column, &self.shape))
             .max()
             .unwrap_or(0)
     }
@@ -413,11 +413,12 @@ impl Services {
             }
         };
         let (column, generate) = match field {
-            // An empty Note column takes notes of its own, at the velocity notes are typed with.
+            // A row chosen without a note takes one of its own, at the velocity notes are typed
+            // with.
             Field::Note => (
                 ShapeColumn::Note {
                     scale: self.live.scale,
-                    writes: (!notes).then_some(self.live.note_velocity),
+                    writes: Some(self.live.note_velocity),
                 },
                 !notes,
             ),
@@ -628,7 +629,7 @@ impl Services {
                 let column = match column {
                     ShapeColumn::Note { .. } => ShapeColumn::Note {
                         scale: self.live.scale,
-                        writes: generate.then_some(self.live.note_velocity),
+                        writes: Some(self.live.note_velocity),
                     },
                     column => column,
                 };
@@ -739,14 +740,7 @@ impl ShapePanel {
             .map_or(&[][..], |p| p.steps());
         let generates = parts.iter().all(|part| part.generate);
         let alone = parts.len() == 1;
-        // Across tracks, a Note column with notes on some offers what re-pitching them does.
-        let column = match first.column {
-            ShapeColumn::Note { scale, .. } if !generates => ShapeColumn::Note {
-                scale,
-                writes: None,
-            },
-            column => column,
-        };
+        let column = first.column;
         let (from, to) = if first.generate {
             services.generated_ends(first.column)
         } else {

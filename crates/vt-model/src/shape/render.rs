@@ -10,8 +10,8 @@
 use super::mix;
 use super::random::{Odds, unit};
 use super::{
-    FillKind, Ladder, Shape, ShapeColumn, WaveRate, Where, acid, bits, curved, divisions, follow,
-    grids, rhythm, ring, tonnetz, variation, walk, world,
+    FillKind, Ladder, Over, Shape, ShapeColumn, WaveRate, Where, acid, bits, curved, divisions,
+    follow, grids, rhythm, ring, tonnetz, variation, walk, world,
 };
 use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS, TICKS_PER_STEP};
 use crate::lfo::wave;
@@ -219,13 +219,13 @@ impl RowView {
 
 impl ShapeColumn {
     /// The cell a value with a fine part leaves on a step, as [`write_exact`](Self::write_exact)
-    /// writes it: notes of its own take the column's velocity, and a step without the FX slot
-    /// takes nothing.
+    /// writes it: a note there is re-pitched, a row without one takes a note of its own at the
+    /// column's velocity, and a step without the FX slot takes nothing.
     pub(crate) fn cell(self, step: &Step, value: u16) -> GenCell {
         let whole = (value >> 8) as u8;
         let note = whole.clamp(MIN_NOTE, MAX_NOTE);
         match self {
-            Self::Note { writes: None, .. } => GenCell::Pitch(note),
+            Self::Note { .. } if matches!(step.note, Note::On(_)) => GenCell::Pitch(note),
             Self::Note { writes, .. } => GenCell::Note {
                 note: Note::On(note),
                 velocity: writes,
@@ -380,12 +380,28 @@ pub(super) fn render(
             variation::render(steps, range, column, shape.variation, shape.seed, out.cells)
         }
         FillKind::Tonnetz => {
-            let rows = chosen(steps, range, column, shape.place, shape.seed, len);
+            let rows = chosen(
+                steps,
+                range,
+                column,
+                shape.place,
+                shape.over,
+                shape.seed,
+                len,
+            );
             tonnetz::render(steps, range, column, shape, &rows, out.cells);
             tied(steps, range, column, shape, out.cells);
         }
         _ => {
-            let rows = chosen(steps, range, column, shape.place, shape.seed, len);
+            let rows = chosen(
+                steps,
+                range,
+                column,
+                shape.place,
+                shape.over,
+                shape.seed,
+                len,
+            );
             match column {
                 ShapeColumn::Note { scale, .. } => noted(&rows, range, scale, shape, &mut out),
                 _ => {
@@ -575,73 +591,134 @@ pub(super) fn euclid(hits: usize, rows: usize) -> Rows {
     pattern
 }
 
-/// The rows of the span that get a value, by their offset in it, among its first `len`.
+/// The rows of the span that get a value, by their offset in it, among its first `len`: the rows
+/// `place` selects, by what's on them or by a pattern, that the column can change. A counting
+/// pattern counts over the rows `over` says, its column's own where it's none: a hit, a step or a
+/// generation for each of them in turn ([`Over`]).
 pub(super) fn chosen(
     steps: &[Step],
     range: StepRange,
     column: ShapeColumn,
     place: Where,
+    over: Option<Over>,
     seed: u64,
     len: usize,
 ) -> Rows {
     let mut rows = Rows::new(len);
     for offset in 0..rows.len {
-        let Some(step) = steps.get(range.first + offset) else {
-            continue;
-        };
-        if !column.can_take(step) {
-            continue;
-        }
-        let has_note = matches!(step.note, Note::On(_));
+        let step = steps.get(range.first + offset);
+        let has_note = step.is_some_and(|step| matches!(step.note, Note::On(_)));
         let chosen = match place {
             Where::Notes => has_note,
             Where::NoNotes => !has_note,
-            Where::Commands => column.value(step).is_some(),
-            Where::AllRows
-            | Where::Euclid { .. }
-            | Where::Clusters(_)
-            | Where::Markov(_)
-            | Where::States(_)
-            | Where::Cells(_) => true,
-            Where::Every(every) => offset.is_multiple_of(usize::from(every.max(1))),
+            Where::Commands => step.is_some_and(|step| column.value(step).is_some()),
+            Where::AllRows => true,
             Where::Chance(percent) => mix(seed ^ 0x5555, offset) % 100 < u64::from(percent),
+            Where::Beats(percent) => acid::plays(seed, offset, percent),
             // The same coin as `Chance`'s, the second track taking the rows the first leaves.
             Where::Complementary { share, second } => {
                 (mix(seed ^ 0x5555, offset) % 100 < u64::from(share)) != second
             }
-            Where::Rhythm {
-                rhythm,
-                part,
-                child,
-            } => world::plays(rhythm, part, child, seed, offset),
+            Where::Every(_)
+            | Where::Euclid { .. }
+            | Where::Rhythm { .. }
+            | Where::Clusters(_)
+            | Where::Markov(_)
+            | Where::States(_)
+            | Where::Cells(_) => false,
         };
         if chosen {
             rows.set(offset);
         }
     }
-    let (hits, rotate) = match place {
-        Where::Euclid { hits, rotate } => (hits, rotate),
-        Where::Clusters(percent) => return rhythm::clusters(&rows, percent, seed),
-        Where::Markov(bias) => return rhythm::markov(&rows, bias, seed),
-        Where::States(bias) => return rhythm::states(&rows, bias, seed).0,
-        Where::Cells(cells) => return cells.chosen(steps, range, seed, &rows, len),
-        _ => return rows,
+    let counted = || over_rows(steps, range, column, over, len);
+    let selected = match place {
+        Where::Every(every) => {
+            let every = usize::from(every.max(1));
+            in_turn(&counted(), |nth, _| nth.is_multiple_of(every))
+        }
+        Where::Euclid { hits, rotate } => {
+            let counted = counted();
+            let count = counted.count();
+            let pattern = euclid(usize::from(hits), count);
+            let later = usize::from(rotate) % count.max(1);
+            in_turn(&counted, |nth, _| {
+                pattern.has((nth + count - later) % count)
+            })
+        }
+        Where::Rhythm {
+            rhythm,
+            part,
+            child,
+        } => in_turn(&counted(), |nth, _| {
+            world::plays(rhythm, part, child, seed, nth)
+        }),
+        Where::Clusters(percent) => rhythm::clusters(&counted(), percent, seed),
+        Where::Markov(bias) => rhythm::markov(&counted(), bias, seed),
+        Where::States(bias) => rhythm::states(&counted(), bias, seed).0,
+        Where::Cells(cells) => cells.chosen(steps, range, seed, &counted(), len),
+        _ => rows,
     };
-    // Counted among the rows it can change, as `Alternate` counts, so on Velocity it's among the
-    // notes however they're spaced.
-    let open = rows.count();
-    let pattern = euclid(usize::from(hits), open);
-    let later = usize::from(rotate) % open.max(1);
-    let mut hit = Rows::new(len);
-    for (index, offset) in rows.ones().enumerate() {
-        if pattern.has((index + open - later) % open) {
+    writable(steps, range, column, &selected)
+}
+
+/// The rows a counting `Where` counts over, among the span's first `len`: every row, the rows
+/// with a note, or those with the column's command, as `over` says or the column has it.
+pub(super) fn over_rows(
+    steps: &[Step],
+    range: StepRange,
+    column: ShapeColumn,
+    over: Option<Over>,
+    len: usize,
+) -> Rows {
+    let over = over.unwrap_or(column.default_over());
+    let mut rows = Rows::new(len);
+    for offset in 0..rows.len {
+        let step = steps.get(range.first + offset);
+        let counts = match over {
+            Over::AllRows => true,
+            Over::Notes => step.is_some_and(|step| matches!(step.note, Note::On(_))),
+            Over::Commands => step.is_some_and(|step| match column {
+                ShapeColumn::Fx { .. } => column.value(step).is_some(),
+                _ => matches!(step.note, Note::On(_)),
+            }),
+        };
+        if counts {
+            rows.set(offset);
+        }
+    }
+    rows
+}
+
+/// The rows of `counted` a pattern plays, counting them in turn: `plays` is asked of each, the
+/// `nth` of them at its offset.
+fn in_turn(counted: &Rows, plays: impl Fn(usize, usize) -> bool) -> Rows {
+    let mut hit = Rows::new(counted.len());
+    for (nth, offset) in counted.ones().enumerate() {
+        if plays(nth, offset) {
             hit.set(offset);
         }
     }
     hit
 }
 
-/// After a three-state rhythm's gates are written, hold each into the ties after it.
+/// The rows of a selection a column can change: the rest are left as they are.
+fn writable(steps: &[Step], range: StepRange, column: ShapeColumn, selected: &Rows) -> Rows {
+    let mut rows = Rows::new(selected.len);
+    for offset in selected.ones() {
+        if steps
+            .get(range.first + offset)
+            .is_some_and(|step| column.can_take(step))
+        {
+            rows.set(offset);
+        }
+    }
+    rows
+}
+
+/// After a three-state rhythm's gates are written, hold each into the ties after it. The ties are
+/// drawn over the rows it counts over, as the gates are, and only those on rows the column can
+/// change are held.
 fn tied(
     steps: &[Step],
     range: StepRange,
@@ -652,16 +729,11 @@ fn tied(
     let Where::States(bias) = shape.place else {
         return;
     };
-    let open = chosen(
-        steps,
-        range,
-        column,
-        Where::AllRows,
-        shape.seed,
-        cells.len(),
-    );
-    let (gates, ties) = rhythm::states(&open, bias, shape.seed);
-    rhythm::tie(&open, &gates, &ties, column, cells);
+    let counted = over_rows(steps, range, column, shape.over, cells.len());
+    let open = writable(steps, range, column, &counted);
+    let (gates, ties) = rhythm::states(&counted, bias, shape.seed);
+    let span = steps.get(range.first..).unwrap_or(&[]);
+    rhythm::tie(span, &counted, &open, &gates, &ties, column, cells);
 }
 
 /// A Note column's values. A ramp, a random fill, a wave and the transforms work along the

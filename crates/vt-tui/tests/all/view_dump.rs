@@ -317,7 +317,7 @@ fn generators(dump: &mut Dump) {
             let shown = GenParam::of(&shape, column, generates);
             let context = Context {
                 column,
-                open: 16,
+                rows: 16,
                 generates,
                 sources: &[],
                 source: None,

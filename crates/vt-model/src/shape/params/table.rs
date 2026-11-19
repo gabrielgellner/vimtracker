@@ -148,6 +148,7 @@ gen_params! {
         get: |shape, _| Some(i32::from(shape.acid.octave)),
         set: |shape, _, number| shape.acid.octave = number as u8,
     },
+    /// `Where::Beats`' amount, which was `Acid`'s alone and keeps its key.
     Density => GenParamSpec {
         meaning: "about {} of the rows play, the beats most of all",
         key: "density",
@@ -158,8 +159,15 @@ gen_params! {
         stepping: PERCENT,
         engine: true,
         app_only: false,
-        get: |shape, _| Some(i32::from(shape.acid.density)),
-        set: |shape, _, number| shape.acid.density = number as u8,
+        get: |shape, _| match shape.place {
+            Where::Beats(percent) => Some(i32::from(percent)),
+            _ => None,
+        },
+        set: |shape, _, number| {
+            if let Where::Beats(percent) = &mut shape.place {
+                *percent = number as u8;
+            }
+        },
     },
     Accent => GenParamSpec {
         meaning: "each note has a {} chance of an accent",
@@ -201,8 +209,9 @@ gen_params! {
         get: |shape, _| Some(i32::from(shape.acid.keep)),
         set: |shape, _, number| shape.acid.keep = number != 0,
     },
-    /// How many rows each part of an `Acid` line loops on, after Kria: its rhythm on an empty
-    /// column, its notes, octaves, accents and slides; none for a part drawn afresh each row.
+    /// How many rows each part of an `Acid` line loops on, after Kria: its rhythm while its
+    /// `Where` is `Beats`, its notes, octaves, accents and slides; none for a part drawn afresh
+    /// each row.
     TrigLoop => GenParamSpec {
         meaning: "how many rows the rhythm loops on; Off draws it fresh each row",
         key: "trigloop",
@@ -1238,6 +1247,26 @@ gen_params! {
         get: |shape, context| GenParam::Where.chosen_number(shape, context),
         set: |shape, context, at| GenParam::Where.choose(shape, context, at),
     },
+    /// What a counting `Where` counts over: every row, the notes, or an FX column's commands. Its
+    /// column's own is saved as none.
+    Over => GenParamSpec {
+        meaning: "what the pattern counts over: every row, or only the notes",
+        key: "over",
+        name: "Over",
+        units: Reading::Listed,
+        typing: Typing::Listed,
+        bounds: Bounds::Listed,
+        stepping: None,
+        engine: false,
+        app_only: true,
+        get: |shape, context| GenParam::Over.chosen_number(shape, context),
+        set: |shape, context, at| {
+            GenParam::Over.choose(shape, context, at);
+            if shape.over == Some(context.column.default_over()) {
+                shape.over = None;
+            }
+        },
+    },
     // The amount of the `Where` it's named for, as each below is, and none while it has another.,
     Every => GenParamSpec {
         meaning: "how often a row is changed: one in every so many",
@@ -1279,19 +1308,19 @@ gen_params! {
             }
         },
     },
-    // Of the rows the column could change, so no more than them.,
+    // Of the rows it covers, so no more than them.
     Hits => GenParamSpec {
         meaning: "hits {} rows, spread as evenly as they go",
         key: "hits",
         name: "Hits",
         units: Reading::OfRows,
         typing: WHOLE,
-        bounds: Bounds::Contextual(|context| Some((0, context.open as i32))),
+        bounds: Bounds::Contextual(|context| Some((0, context.rows as i32))),
         stepping: COUNT,
         engine: true,
         app_only: false,
         get: |shape, context| match shape.place {
-            Where::Euclid { hits, .. } => Some(i32::from(hits).min(context.open as i32)),
+            Where::Euclid { hits, .. } => Some(i32::from(hits).min(context.rows as i32)),
             _ => None,
         },
         set: |shape, _, number| {
@@ -1306,7 +1335,7 @@ gen_params! {
         name: "Rotate",
         units: Reading::Number,
         typing: WHOLE,
-        bounds: Bounds::Contextual(|context| Some((0, (context.open as i32 - 1).max(0)))),
+        bounds: Bounds::Contextual(|context| Some((0, (context.rows as i32 - 1).max(0)))),
         stepping: round(1, EUCLID_JUMP),
         engine: true,
         app_only: false,

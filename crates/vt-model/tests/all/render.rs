@@ -245,8 +245,11 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         acid: Acid {
             notes: dice.below(10) as u8,
             octave: dice.below(101) as u8,
-            density: dice.below(120) as u8,
-            accent: dice.below(101) as u8,
+            // Its density, now `Where::Beats`', still drawn so the draws after stay as they were.
+            accent: {
+                dice.below(120);
+                dice.below(101) as u8
+            },
             slide: dice.below(101) as u8,
             keep: dice.chance(40),
             roll: if dice.chance(50) { 0 } else { dice.next() },
