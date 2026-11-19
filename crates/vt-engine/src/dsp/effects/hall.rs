@@ -37,8 +37,10 @@ const LINES: usize = 8;
 const DELAYS: [usize; LINES] = [2879, 3457, 3907, 4409, 3061, 3253, 3673, 4153];
 /// Each line's all-pass, the same way: primes from 9 to 21 ms.
 const LOOP_ALLPASSES: [usize; LINES] = [443, 701, 859, 1031, 547, 619, 787, 953];
-/// How much the lines' all-passes spread, alternately added and taken away, as zita-rev1's.
-const LOOP_SPREAD: f32 = 0.6;
+/// How much the lines' all-passes spread, alternately added and taken away, as zita-rev1's. At
+/// zita-rev1's 0.6 what they held back rang on longest, so the tail fell slower the later it was,
+/// and a snare's lows piled up hit after hit.
+const LOOP_SPREAD: f32 = 0.38;
 /// Each side's input all-passes, in frames at the tuning rate, and how much they spread: primes
 /// from 1.6 to 19 ms, about evenly in ratio. Four short ones, as zita-rev1 has, left the tail's
 /// first trips round the lines as clumps a round trip apart, which a snare heard as a roll.
@@ -67,8 +69,14 @@ const EARLY_DIFFUSION: f32 = 0.7;
 const EARLY_LEVEL: f32 = 1.75;
 /// Under this, in hertz, the two sides' early reflections are one: their middle, as loud as either
 /// side, by a one-pole's share. Each side's own taps cancelled the other's in the lows, so a snare's
-/// body went missing from the mono sum.
-const EARLY_SHARED_HZ: f32 = 300.0;
+/// body went missing from the mono sum; shared up to 300 Hz, its body came back too loud.
+const EARLY_SHARED_HZ: f32 = 170.0;
+/// Between these, in hertz, the early reflections are brighter: what's between two one-poles'
+/// low-passes at them comes back this much louder again, 0.8 dB at 5 kHz and 0.5 dB at 16 kHz.
+/// A snare's attack was duller than its tail; brightening all the highs, up to 24 kHz, put more
+/// of an impulse's energy at the top than the references have.
+const EARLY_BRIGHT_HZ: [f32; 2] = [3_000.0, 7_000.0];
+const EARLY_BRIGHT: f32 = 0.25;
 /// Where the absorption's shelves turn, in hertz.
 const LOW_CROSSOVER_HZ: f32 = 500.0;
 const HIGH_CROSSOVER_HZ: f32 = 2_000.0;
@@ -77,6 +85,13 @@ const HIGH_CROSSOVER_HZ: f32 = 2_000.0;
 const DC_CUT_HZ: f32 = 5.0;
 /// How long the highs ring against the middle at the top of `Damp`. At `00` they ring as long.
 const DARKEST: f32 = 0.1;
+/// Each line's air: a one-pole low-pass, its pole where one at this many hertz has it (0.04 at
+/// 48 kHz), so that the highs keep falling a little faster the higher they are, above the high
+/// shelf as well, as a hall's air takes them. It comes in with `Damp`, all of it from `Damp`'s
+/// default up, so at `00` the highs ring as long as the middle. Without it a snare's tail grew
+/// brighter as it went on than the references'.
+const AIR_HZ: f32 = 24_000.0;
+const AIR_FROM_DAMP: f32 = Settings::DEFAULT.damp as f32 / 255.0;
 /// The biggest hall, as so many times the lengths, for the lines' room.
 const LARGEST: f32 = 2.0;
 /// How far `Size` moves in a second at most, as the plate's.
@@ -208,6 +223,14 @@ fn band_seconds(settings: Settings) -> [f32; 3] {
     ]
 }
 
+/// How much of the lines' air there is for the bands' tails: none when the highs ring as long as
+/// the middle, all of it from where `Damp`'s default has them.
+fn air_share([_, middle, highs]: [f32; 3]) -> f32 {
+    let darkened = 1.0 - highs / middle;
+    let at_default = 1.0 - DARKEST.powf(AIR_FROM_DAMP);
+    (darkened / at_default).clamp(0.0, 1.0)
+}
+
 /// What a line `frames` long keeps of each band each time round, for tails of `seconds`.
 fn band_gains(seconds: [f32; 3], frames: f32, rate: u32) -> [f32; 3] {
     seconds.map(|seconds| 0.001_f32.powf(frames * HELD / (seconds * rate as f32)))
@@ -264,46 +287,54 @@ impl Biquad {
 }
 
 /// A line's absorption, from its three bands' gains: what it keeps of the middle, then a low
-/// shelf to what it keeps of the lows and a high shelf to the highs'.
+/// shelf to what it keeps of the lows and a high shelf to the highs', then its air: a one-pole
+/// low-pass, its pole this far out.
 #[derive(Debug, Clone, Copy, Default)]
 struct Absorption {
     middle: f32,
     low: Biquad,
     high: Biquad,
+    air: f32,
 }
 
 impl Absorption {
-    fn new([low, middle, high]: [f32; 3], rate: u32) -> Self {
+    fn new([low, middle, high]: [f32; 3], air: f32, rate: u32) -> Self {
         Self {
             middle,
             low: Biquad::shelf(false, LOW_CROSSOVER_HZ, low / middle, rate),
             high: Biquad::shelf(true, HIGH_CROSSOVER_HZ, high / middle, rate),
+            air: air * (-std::f32::consts::TAU * AIR_HZ / rate as f32).exp(),
         }
     }
 
-    /// One frame through it, with its shelves' states.
+    /// One frame through it, with its shelves' states and its air's.
     #[inline]
-    fn absorb(self, states: &mut [[f32; 2]; 2], input: f32) -> f32 {
+    fn absorb(self, states: &mut [[f32; 2]; 2], air: &mut f32, input: f32) -> f32 {
         let low = self.low.run(&mut states[0], input * self.middle);
-        self.high.run(&mut states[1], low)
+        let high = self.high.run(&mut states[1], low);
+        *air = high + (*air - high) * self.air;
+        *air
     }
 
-    /// How much it keeps at `hertz`, as a gain.
     /// How much it keeps at `omega` radians a frame, as a gain.
     fn kept_at(self, omega: f64) -> f64 {
+        let pole = f64::from(self.air);
+        let air = Complex(1.0 - pole, 0.0)
+            .over(Complex(1.0, 0.0).add(Complex::delay(omega, 1.0).scale(-pole)));
         self.low
             .response(omega)
             .times(self.high.response(omega))
+            .times(air)
             .scale(f64::from(self.middle))
             .size()
     }
 }
 
-/// How much a line keeps at `hertz` with its band gains, as a gain.
+/// How much a line keeps at `hertz` with its band gains and air, as a gain.
 #[cfg(test)]
-fn kept_at(gains: [f32; 3], hertz: f32, rate: u32) -> f32 {
+fn kept_at(gains: [f32; 3], air: f32, hertz: f32, rate: u32) -> f32 {
     let omega = std::f64::consts::TAU * f64::from(hertz) / f64::from(rate);
-    Absorption::new(gains, rate).kept_at(omega) as f32
+    Absorption::new(gains, air, rate).kept_at(omega) as f32
 }
 
 /// How a hall's tail dies away at its settings and a rate, for a drawing. Every line keeps of each
@@ -312,7 +343,8 @@ fn kept_at(gains: [f32; 3], hertz: f32, rate: u32) -> f32 {
 /// `tail::loop_seconds` works it out, as a shelf's corner is within an octave of where it's drawn.
 pub fn tail(settings: Settings, rate: u32) -> Option<Tail> {
     let frames = line_frames(rate, hall_size(f32::from(settings.size)))[0];
-    let absorption = Absorption::new(band_gains(band_seconds(settings), frames, rate), rate);
+    let bands = band_seconds(settings);
+    let absorption = Absorption::new(band_gains(bands, frames, rate), air_share(bands), rate);
     let held = f64::from(frames * HELD);
     let seconds = TAIL_HZ
         .map(|hertz| tail::loop_seconds(hertz, rate, |omega| (absorption.kept_at(omega), held)));
@@ -361,8 +393,13 @@ pub(crate) struct Hall {
     /// What each side's early reflections take of the middle's lows, and what it moves each frame.
     early_shared: [f32; 2],
     early_shared_by: f32,
-    /// Each line's shelves' states.
+    /// Each side's early reflections' two low-passes, brightening what's between them, and what
+    /// each moves a frame.
+    early_bright: [[f32; 2]; 2],
+    early_bright_by: [f32; 2],
+    /// Each line's shelves' states, and its air's.
     absorbing: [[[f32; 2]; 2]; LINES],
+    airs: [f32; LINES],
     /// The bands' tails, and each line's absorption for them at the size it was worked out for.
     bands: [Smoothed; 3],
     absorption: [Absorption; LINES],
@@ -438,7 +475,13 @@ impl Hall {
             early_taps,
             early_shared: [0.0; 2],
             early_shared_by: of_corner(EARLY_SHARED_HZ, rate as f32),
+            early_bright: [[0.0; 2]; 2],
+            early_bright_by: [
+                of_corner(EARLY_BRIGHT_HZ[0], rate as f32),
+                of_corner(EARLY_BRIGHT_HZ[1], rate as f32),
+            ],
             absorbing: [[[0.0; 2]; 2]; LINES],
+            airs: [0.0; LINES],
             bands: [Smoothed::at(1.0); 3],
             absorption: [Absorption::default(); LINES],
             spreads: [LOOP_SPREAD; LINES],
@@ -475,7 +518,9 @@ impl Hall {
             side.fill(0.0);
         }
         self.absorbing = [[[0.0; 2]; 2]; LINES];
+        self.airs = [0.0; LINES];
         self.early_shared = [0.0; 2];
+        self.early_bright = [[0.0; 2]; 2];
         self.trims = [Trim::default(), Trim::default()];
         self.dc = [0.0; 2];
     }
@@ -555,8 +600,10 @@ impl Hall {
         self.gains_wait = self.gains_wait.saturating_sub(1);
         if self.gains_wait == 0 && (bands, stretch) != self.gains_for {
             let frames = line_frames(self.rate, stretch);
-            self.absorption = frames
-                .map(|frames| Absorption::new(band_gains(bands, frames, self.rate), self.rate));
+            let air = air_share(bands);
+            self.absorption = frames.map(|frames| {
+                Absorption::new(band_gains(bands, frames, self.rate), air, self.rate)
+            });
             let shortest = bands
                 .iter()
                 .fold(f32::INFINITY, |least, band| least.min(*band));
@@ -645,6 +692,12 @@ impl Hall {
                 *sample = lines.allpass(base, length, *sample, EARLY_DIFFUSION);
             }
         }
+        // Each side's highs brightened, above a one-pole's low-pass.
+        for (sample, [low, high]) in early.iter_mut().zip(&mut self.early_bright) {
+            *low += (*sample - *low) * self.early_bright_by[0];
+            *high += (*sample - *high) * self.early_bright_by[1];
+            *sample += (*high - *low) * EARLY_BRIGHT;
+        }
         // Each side's lows swapped for their middle's: a side plus the low-pass of what it lacks.
         let middle = (early[0] + early[1]) * std::f32::consts::FRAC_1_SQRT_2;
         for (sample, shared) in early.iter_mut().zip(&mut self.early_shared) {
@@ -697,7 +750,11 @@ impl Hall {
         }
         let norm = (LINES as f32).sqrt().recip();
         for line in 0..LINES {
-            let kept = absorption[line].absorb(&mut self.absorbing[line], x[line] * norm);
+            let kept = absorption[line].absorb(
+                &mut self.absorbing[line],
+                &mut self.airs[line],
+                x[line] * norm,
+            );
             lines.write(self.tank[line].delay, 0, kept);
         }
         widen(out, width)
@@ -958,10 +1015,11 @@ mod tests {
         for size in [0x00_u8, 0xFF] {
             let stretch = hall_size(f32::from(size));
             for frames in line_frames(RATE, stretch) {
-                let gains = band_gains(band_seconds(settings), frames, RATE);
+                let bands = band_seconds(settings);
+                let gains = band_gains(bands, frames, RATE);
                 for step in 0..400 {
                     let hertz = 10.0 * 2400.0_f32.powf(step as f32 / 400.0);
-                    let kept = kept_at(gains, hertz, RATE);
+                    let kept = kept_at(gains, air_share(bands), hertz, RATE);
                     assert!(kept < 1.0, "{size:02X} {frames} at {hertz}: {kept}");
                 }
             }
@@ -1016,6 +1074,45 @@ mod tests {
         for _ in 0..1000 {
             assert!((ran.next(3) - slept.next(3)).abs() < 1e-3);
         }
+    }
+
+    #[test]
+    fn at_mod_00_nothing_moves() {
+        // A click two seconds after another is answered as the first was, to float rounding: what
+        // the two make, less what the first alone makes, is the first's answer moved on. At the
+        // default `Mod` the lines have wobbled on by then, and it isn't.
+        let gap = RATE as usize * 2;
+        let answers = |excursion: u8, clicks: usize| {
+            let mut hall = hall(
+                Settings {
+                    excursion,
+                    ..Settings::DEFAULT
+                },
+                RATE,
+            );
+            (0..gap * 2)
+                .map(|at| {
+                    let click = at % gap == 0 && at / gap < clicks;
+                    hall.process([if click { 1.0 } else { 0.0 }; 2])
+                })
+                .collect::<Vec<_>>()
+        };
+        let moved = |excursion: u8| {
+            let (one, two) = (answers(excursion, 1), answers(excursion, 2));
+            let (mut wrong, mut heard) = (0.0_f64, 0.0_f64);
+            for at in 0..gap {
+                for side in 0..2 {
+                    let second = f64::from(two[gap + at][side] - one[gap + at][side]);
+                    let first = f64::from(one[at][side]);
+                    wrong += (second - first).powi(2);
+                    heard += first.powi(2);
+                }
+            }
+            10.0 * (wrong / heard).log10()
+        };
+        // Seen: -108 dB at `00`, -4.5 dB at the default.
+        assert!(moved(0) < -90.0, "{}", moved(0));
+        assert!(moved(Settings::DEFAULT.excursion) > -20.0);
     }
 
     #[test]

@@ -499,6 +499,10 @@ long at every size.
 | `Early` | How loud its first reflections are, off at `00` |
 | `Mod` | How much its lines wobble, which keeps the tail from ringing |
 
+`Mod` starts at `40`, a slight wobble, so a snare's tail barely changes from
+hit to hit. Higher up the tail goes chorus-like; at `00` nothing moves, and the
+hall answers every hit exactly alike.
+
 `Decay` is the middle's tail, from 500 Hz to 2 kHz; `Lows` and `Damp` set the
 lows' and highs' against it, so each band falls in its own time.
 

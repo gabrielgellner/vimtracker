@@ -982,7 +982,7 @@ impl Hall {
         damp: 0x30,
         size: 0x80,
         early: 0x80,
-        excursion: 0x80,
+        excursion: 0x40,
         low_cut: 0,
         high_cut: 0xFF,
         width: 0xFF,
