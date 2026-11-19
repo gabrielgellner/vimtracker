@@ -12,7 +12,7 @@ use crate::scale::Scale;
 use crate::selection::StepRange;
 use crate::shape::{
     Context, FillKind, GenCell, RowView, Shape, ShapeColumn, Source, TonnetzVoice, copy_fx,
-    is_empty, open_rows, render_into,
+    counted, is_empty, render_into,
 };
 use crate::step::{FxCommand, FxSlot, Note, Step};
 
@@ -187,13 +187,14 @@ fn cell(column: ShapeColumn, owns: Owns, step: &Step) -> Step {
     cell
 }
 
-/// Whether two steps hold the same cell in a column.
-fn same(column: ShapeColumn, owns: Owns, a: &Step, b: &Step) -> bool {
+/// Whether two steps hold the same cell in a column. On the Note column a velocity is its cell's
+/// where the note is `ours`, one of its own on a row that had none, or a whole note.
+fn same(column: ShapeColumn, owns: Owns, ours: bool, a: &Step, b: &Step) -> bool {
     let whole = owns != Owns::Cell;
     match column {
-        ShapeColumn::Note { writes, .. } => {
+        ShapeColumn::Note { .. } => {
             a.note == b.note
-                && ((writes.is_none() && !whole) || a.velocity == b.velocity)
+                && ((!ours && !whole) || a.velocity == b.velocity)
                 && (!whole || a.gate == b.gate)
                 && (owns != Owns::Timed || a.nudge == b.nudge)
                 && (owns != Owns::NoteFx || a.fx == b.fx)
@@ -286,7 +287,7 @@ impl Generator {
         let rows = self.rows()?;
         Some(Context {
             column: self.column,
-            open: open_rows(under, rows, self.column),
+            rows: counted(under, rows, self.column, &self.shape),
             generates: is_empty(under, rows, self.column),
             sources,
             source,
@@ -438,13 +439,31 @@ impl Generator {
                 return false;
             };
             let came_or_went = matches!(seen.note, Note::On(_)) != matches!(now.note, Note::On(_));
-            if !same(self.column, whole, seen, now) {
+            // A note it re-pitches keeps its own velocity, which an edit can change.
+            let ours = match self.column {
+                ShapeColumn::Note { writes, .. } => {
+                    writes.is_some()
+                        && !self
+                            .under
+                            .get(offset)
+                            .is_some_and(|under| matches!(under.note, Note::On(_)))
+                }
+                _ => false,
+            };
+            if !same(self.column, whole, ours, seen, now) {
                 if !(on_notes(self.column) && came_or_went) {
                     return false;
                 }
                 self.under[offset] = cell(self.column, whole, now);
                 changed = true;
             } else if seen.note != now.note {
+                changed = true;
+            } else if matches!(self.column, ShapeColumn::Note { .. })
+                && seen.velocity != now.velocity
+            {
+                if let Some(under) = self.under.get_mut(offset) {
+                    under.velocity = now.velocity;
+                }
                 changed = true;
             }
         }

@@ -118,6 +118,7 @@ panel closes.
 | S | Eases a ramp's ends. Above 0 makes an S, and below 0 the reverse |
 | Run | How many rows each value holds for |
 | Where | Which rows change, with `Amount` below it for some |
+| Over | What a counted `Where` counts: `All rows` or `Notes` |
 
 `r` picks a random fill's values anew. `Run` makes stairs: a ramp from `00` to `30` over 8 rows with `Run 2` gives
 `00 00 10 10 20 20 30 30`, and a random fill holds each pick for that many rows.
@@ -237,18 +238,38 @@ lowest and highest.
 | Complementary | One coin a row for two tracks, so never both |
 | Rhythm | A named rhythm's part, each hit by `Child`'s chance |
 | Cells | A cellular automaton's cells, by `Rule` from `Start` |
+| Beats | About this percent of the rows, the strong beats most of all |
 
-`Euclid` spreads its hits over the rows it could change, as the Euclidean
-rhythms do: 3 in 8 is `x..x..x.` and 5 in 8 is `x.xx.xx.`. On Velocity it
-counts among the notes however they're spaced, so 5 hits over 16 hats accent 5
-of them. `Hits` shows how many rows it spreads them over, as in `5 of 16`.
-`Rotate` moves every hit that many of those rows later, going round, so 3 in 8
-rotated by 1 is `.x..x..x`.
+A `Where` is a selection of the rows. `Notes`, `No notes` and `Commands` choose
+by what's on a row; every other is a pattern over the rows, whatever is on them.
+A row outside the selection is left as it is, and a row inside it is written:
+on the Note column a note there gets a new pitch, and a row without one a note
+of its own. A row the column can't change is passed over, even inside it: a
+velocity, nudge or length without its note, an `OFF`, or an FX slot holding
+another command.
+
+`Over` says what a counted pattern counts: `Euclid`, `Every`, `Rhythm`,
+Marbles' `Clusters`, `Markov` and `3 states`, and `Cells`. `All rows` counts
+every row; `Notes` counts only the rows with a note, a hit or a step for each
+note in turn, and on an FX column `Commands` counts the rows with its command.
+It starts as `All rows` on the Note and FX columns and as `Notes` on Velocity,
+Nudge and length. With 7 notes in 16 rows, `Euclid` 3 over `Notes` is
+`x.x.x..` on the notes, the first, third and fifth; over `All rows` it's
+`x....x....x.....` on the rows, and on Velocity only a hit that lands on a note
+changes one.
+
+`Euclid` spreads its hits as evenly as they go over what it counts, as the
+Euclidean rhythms do: 3 in 8 is `x..x..x.` and 5 in 8 is `x.xx.xx.`. On Velocity
+it counts the notes however they're spaced, so 5 hits over 16 hats accent 5 of
+them. `Hits` shows how many it spreads them over, as in `5 of 16`. `Rotate`
+moves every hit that many later, going round, so 3 in 8 rotated by 1 is
+`.x..x..x`.
 
 `Clusters`, `Markov`, `3 states` and `Complementary` are the rhythm models of
 Mutable Instruments' Marbles, its T section, each with an `Amount`. Like Euclid,
-they go through the rows the column could change in order, so on Velocity they
-count among the notes.
+the first three go through the rows `Over` counts in order, so on Velocity they
+count the notes; `Complementary` and `Chance` toss a coin for each row by
+itself.
 
 - **Clusters** plays in bunches: a run of two to four rows, then a gap. Its
   amount is about how many of the rows play, as `Chance`'s is, so swapping one
@@ -303,20 +324,27 @@ snare on 2 and 4. For the rest, the low drum is the beat, a row in four, and the
 high drum the offbeats between; the bembé's low drum is its four beats and its
 high drum the six quarters across them, `x.x.x.x.x.x.`.
 
-A rhythm plays a pulse a row, going round from the first row selected, on any
-column; on Velocity it accents the notes on its hits. The bembé's twelve pulses
+A rhythm plays a pulse for each row `Over` counts, going round from the first,
+on any column; on Velocity it counts the notes, so it accents the notes in
+turn. The bembé's twelve pulses
 are a bar's triplet eighths, so on a track at `1/8T` twelve rows are a bar, and
 the panel says so on any other. `S` across tracks gives each the next part,
 `Bell`, `Low drum`, `High drum` and round again, from the one the panel shows,
 each with a seed of its own, so its children are its own; the panel says `Each
 track plays the next part`.
+`Beats` is the rhythm `Acid` has always played, for any fill: each row a chance
+by where it falls in the bar, counting from the first row selected, the beats
+most, then every third row, then the other even rows, and the rest least. Its
+`Density` is how many play on average: at `50%`, where it starts, a beat plays
+about seven times in ten and an odd row between them about three.
+
 `Cells` is an elementary cellular automaton, one of Stephen Wolfram's 256
 rules, as dan derks' *less concepts* plays them: a row of cells, each on or
 off, makes its next generation cell by cell from the cell and its two
 neighbours, by the rule. `Rule` runs from `0` to `255`: 30 is chaotic, 90
 draws Sierpiński's triangle, 110 is complex, 184 moves its cells along like
-traffic. On one column each row is a cell, so the rows chosen are the cells
-that are on; across tracks each track is a cell and each row a generation, so
+traffic. On one column each row `Over` counts is a cell, so the rows chosen are the
+cells that are on; across tracks each track is a cell and each row a generation, so
 the tracks play the automaton's picture down the rows. `Start` is the row it
 starts from: `Seed`, cells drawn from the seed, which `r` rolls again; `One`,
 one cell in the middle, as Wolfram's pictures start; or `Hits`, the rows with
@@ -327,15 +355,17 @@ them, so a track's `gl` has `Rule` and no `Start`. Kept live, `Vary` steps it
 on: see **The Gen page, macros and presets**.
 
 The ramp's ends land on the first and last rows it changes, and rows keep their
-spacing along it. A velocity only ever goes on a note, so for Velocity, Every,
-Chance and Euclid choose among the notes. On an FX column, the command is the first one
-selected, and a row holding a different command keeps it.
+spacing along it. A velocity only ever goes on a note, so on Velocity a row
+selected without one is passed over. On an FX column, the command is the first
+one selected, and a row holding a different command keeps it.
 
 ### On the Note column
 
 On the Note column, `S` gives the notes already there new pitches, keeping
 their rhythm, velocities and gates, and leaving `OFF` and empty rows alone: keep
-this rhythm, give me another line. From and To are notes, typed as `C-3`, `c3`
+this rhythm, give me another line. That's `Where` on `Notes`, as it starts; any
+other `Where` writes its own rows, a note of its own on a row without one, and
+leaves the notes outside it as they are, so `Euclid` there writes its hits. From and To are notes, typed as `C-3`, `c3`
 or `c#3`. With the scale on, every fill moves in its degrees, so it lands in key
 as it's made; with it off, in semitones. `=` and `-` move an end a degree, or a
 semitone with the scale off, and `+` and `_` an octave.
@@ -646,8 +676,8 @@ major and minor chords. With the scale off it's free either way.
 
 On a Note column with no notes in the rows selected, `S` writes notes of its
 own, and the panel's title says `Generate`. `Where` gives the rhythm, from
-`All rows`, `Every`, `Chance`, `Euclid`, Marbles' four and `Rhythm`, and the
-fill the pitches: a `Ramp` from the scale's root an octave up, in the octave
+`All rows`, `Every`, `Chance`, `Euclid`, Marbles' four, `Rhythm`, `Cells` and
+`Beats`, and the fill the pitches: a `Ramp` from the scale's root an octave up, in the octave
 notes are typed in, or a
 `Random`, `Walk`, `1/f`, `Wave`, `Alternate` or `List`, in the scale's degrees
 while it's on.
@@ -666,8 +696,11 @@ empty column, so it isn't offered. Velocity, Nudge and length still need notes.
 
 `Acid`, on the Note column only, writes a 303 line: notes, accents and slides
 together, as Roland's and Arturia's 303s roll them. It works on any machine,
-not only the `Acid`. On an empty column it writes a riff of its own; on notes
-already there it keeps their rhythm.
+not only the `Acid`. It writes on every row its `Where` selects: on an empty
+column it starts on `Beats`, a riff of its own with its rhythm weighted toward
+the beats; on notes already there it starts on `Notes`, keeping their rhythm,
+and another `Where`, such as `Euclid`, writes its own rows, notes of its own
+where there were none.
 
 | Row | Does |
 |---|---|
@@ -675,11 +708,10 @@ already there it keeps their rhythm.
 | Notes | How many notes the riff has, from 1 to 8, its root among them |
 | Spread, Bias | Which notes between the ends the riff takes |
 | Octave | The chance a note goes an octave up or down |
-| Density | On an empty column, the share of rows that play |
 | Accent | The chance a note is accented, written as `7F` |
 | Slide | The chance a note slides into the next, written as `HLD` |
 | Pitches | `Roll` gives new pitches on each `r`, `Keep` keeps them |
-| Trig loop | On an empty column, how many rows the rhythm goes round |
+| Trig loop | On `Beats`, how many rows the rhythm goes round |
 | Note loop | How many rows the riff's notes go round |
 | Oct loop | How many rows the octaves go round |
 | Acc loop | How many rows the accents go round |
@@ -693,9 +725,9 @@ gathers them round the bias point, so `0%` with four notes from `C-2` to `C-3`,
 the scale off, takes `F-2 F#2 G-2` with the root, and a wide one takes them from the ends inward; and Bias
 leans them up or down, the root staying wherever From is. With Notes as many as
 the ends hold, every note is in the riff, so there's nothing for them to choose.
-Density counts where each row falls in the bar, counting from the first row
-selected: beats play most, then every third row, then the other even rows, and
-the rest least, so at `50%` half the rows play, most of them on the beat. A
+Its rhythm is its `Where`'s: `Beats`, whose `Density` counts where each row falls
+in the bar, counting from the first row selected, so at `50%` half the rows play,
+most of them on the beat; `Density` `100%` plays every row. A
 plain note takes the velocity notes are typed with, and an accent `7F`, as `'`
 writes it; a slide is `HLD` on the gate, as `/` writes it.
 
@@ -707,9 +739,9 @@ notes and 3 accents, each round and round against the others. Kept live, the
 loops run on from pass to pass, so on a phrase of 16 rows the rhythm starts its
 second pass four rows into its round, and the loops come round together only
 after their least common multiple, 84 rows for those three. The phrase shows the
-first pass; the engine plays the rest. On notes already there the rhythm is
-theirs, so there's no `Trig loop`, and with Pitches on `Keep` there, no `Note
-loop` either.
+first pass; the engine plays the rest. `Trig loop` loops `Beats`' draws, so on
+any other `Where` there's none, and with Pitches on `Keep` on the notes there, no
+`Note loop` either.
 
 `r` rolls a new riff, rhythm and all. With Pitches on `Keep`, `r` rolls only
 the accents, slides and octaves, and the notes and rhythm stay: Roland's second

@@ -10,7 +10,7 @@ use vt_model::scale::Scale;
 use vt_model::selection::{Field, StepRange};
 use vt_model::shape::{
     Context, DrumPart, FillKind, GenParam, Shape, ShapeColumn, Source, Starts, VARIATION_NOTES,
-    Values, default_ends, is_empty, open_rows, variation_notes,
+    Values, counted, default_ends, is_empty, variation_notes,
 };
 use vt_model::song::{Song, Track};
 use vt_model::step::{MAX_NOTE, Step};
@@ -84,7 +84,12 @@ impl LiveGen {
             .context(&self.under, &self.sources, source)
             .unwrap_or(Context {
                 column: self.generator.column,
-                open: open_rows(&self.under, rows, self.generator.column),
+                rows: counted(
+                    &self.under,
+                    rows,
+                    self.generator.column,
+                    &self.generator.shape,
+                ),
                 generates: false,
                 sources: &self.sources,
                 source,
