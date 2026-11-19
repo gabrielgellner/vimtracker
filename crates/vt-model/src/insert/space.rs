@@ -513,7 +513,7 @@ pub(crate) const PLATE_PARAMS: [Entry; 10] = [
         .units(Units::PlateSize)
         .means("how big the plate is, against Dattorro's; its tail stays as long"),
     hex_param("Mod", "mod", "MOD", Plate::DEFAULT.excursion)
-        .means("how much its tail wobbles, which keeps it from ringing metallic"),
+        .means("how much its tail wobbles, still at 00; up, a long tail shimmers"),
     width_param(Plate::DEFAULT.width),
     WET_MIX_PARAM,
     GAIN_PARAM,
@@ -545,8 +545,8 @@ pub struct Plate {
     pub high_cut: u8,
     /// How big the plate is, from half to twice Dattorro's, evenly in ratio, with his at `80`.
     pub size: u8,
-    /// How far its tank's all-passes wobble, which keeps the tail from ringing metallic. Dattorro's
-    /// is at `80`.
+    /// How far its tank's all-passes wobble, which keeps a long tail from ringing metallic. At `00`
+    /// it's still, as the plates it's tuned against are, and the same every time.
     pub excursion: u8,
     /// From `00`, both sides together, to `FF`, as wide as they come out.
     #[serde(skip_serializing_if = "is_full")]
@@ -563,8 +563,7 @@ impl Default for Plate {
 }
 
 impl Plate {
-    /// As it starts: a tail of about 2 s, Dattorro's size and wobble, a little damping, and half
-    /// wet.
+    /// As it starts: a tail of about 2 s, Dattorro's size, still, a little damping, and half wet.
     pub const DEFAULT: Self = Self {
         pre: 0,
         decay: 0x60,
@@ -572,7 +571,7 @@ impl Plate {
         low_damp: 0,
         high_cut: 0xFF,
         size: 0x80,
-        excursion: 0x80,
+        excursion: 0x00,
         width: 0xFF,
         mix: 0x80,
         gain: UNITY_LEVEL,
