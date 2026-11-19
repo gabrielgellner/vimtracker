@@ -472,14 +472,14 @@ a high note stays clean of tones that don't belong.
 
 `Plate` is a second reverb, after Jon Dattorro's plate: brighter and denser
 than `Reverb`, and wide from a single sound. It answers at once, its first
-echoes blurred into a wash rather than heard one by one, so a snare through it
-doesn't flam. It starts half wet, and its tail carries on after a note ends. `Pre`, `Decay`, `Damp`, `Low damp`, `High cut`
+echoes blurred into a wash rather than heard one by one or repeating, so a
+snare through it doesn't flam or roll. It starts half wet, and its tail carries on after a note ends. `Pre`, `Decay`, `Damp`, `Low damp`, `High cut`
 and `Width` work as `Reverb`'s do, and its tail is as long at every `Size`.
 
 | Setting | Does |
 |---|---|
 | `Size` | How big the plate is, from half to twice Dattorro's, his at `80` |
-| `Mod` | How much its tail wobbles, which keeps it from ringing metallic |
+| `Mod` | How much its tail shimmers, each line wandering its own way rather than sweeping together, which keeps it from ringing metallic |
 
 A change to `Size` bends the pitch of the tail a little as it glides, taking
 about a second end to end.

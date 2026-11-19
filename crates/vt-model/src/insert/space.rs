@@ -563,7 +563,7 @@ impl Default for Plate {
 }
 
 impl Plate {
-    /// As it starts: a tail of about 2 s, Dattorro's size and wobble, a little damping, and half
+    /// As it starts: a tail of about 2 s, Dattorro's size, some shimmer, a little damping, and half
     /// wet.
     pub const DEFAULT: Self = Self {
         pre: 0,
