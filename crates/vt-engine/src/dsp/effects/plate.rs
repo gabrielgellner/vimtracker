@@ -2,10 +2,11 @@
 //! (J. Audio Eng. Soc., 1997). What goes in is band-limited, held back and spread by six short
 //! all-passes, then goes round a tank of two halves that feed each other, each four wandering
 //! all-passes, a delay, a damping low-pass, a second all-pass and a second delay. Each side of what
-//! comes out is seven taps from all over the tank, as the paper gives them but for the first, which
-//! is louder and darker, and what the input all-passes give, its lows off and its highs down,
-//! blurred by eight short all-passes of its own, so it's dense from its first millisecond rather
-//! than a few echoes that flam, and its first 20 ms sound as a plate's do (decision 446).
+//! comes out is eight taps from all over the tank, the paper's seven at levels of their own and one
+//! more, the first louder and darker and the rest under a shelf that darkens the tail, and what the
+//! input all-passes give, its lows off and its highs down, blurred by eight short all-passes of its
+//! own, so it's dense from its first millisecond rather than a few echoes that flam, and its first
+//! 150 ms fall away smoothly as a plate's do (decision 446).
 //!
 //! Where the paper spreads what goes in with four all-passes of up to 0.75, and each half starts
 //! with one of 672 or 908 frames at 0.7, each of those repeated what went through it every 3.6 to
@@ -70,15 +71,25 @@ const DIFFUSION: f32 = 0.6;
 /// shaped to sound like the references' there: its lows taken off by two one-poles at
 /// `EARLY_LOWS_HZ`, its highs over `EARLY_HIGHS_HZ` kept by `EARLY_HIGHS`. Unshaped, the first
 /// 20 ms were 5 dB too bassy and 5 to 10 too dull against PLATE-140 and ValhallaPlate Steel.
-const EARLY: f32 = 1.8;
-const EARLY_LOWS_HZ: f32 = 355.0;
+/// `EARLY_SOON` of what the first three give joins it, so it starts within a millisecond or two
+/// rather than swelling over the first 10, as Steel's does.
+const EARLY: f32 = 2.96;
+const EARLY_SOON: f32 = 0.52;
+/// Which input all-pass `EARLY_SOON` is taken after, counting from one.
+const SOON_AFTER: usize = 3;
+const EARLY_LOWS_HZ: f32 = 400.0;
 const EARLY_HIGHS_HZ: f32 = 2000.0;
-const EARLY_HIGHS: f32 = 0.45;
+const EARLY_HIGHS: f32 = 0.41;
 /// How loud each side's first tap is, a millisecond into the tank, against the paper's taps, and
 /// the one-pole that darkens it: it carries the hit as the first all-passes spread it, from 15
 /// to 60 ms, and at the paper's level and brightness that was too quiet and too bright there.
-const FIRST_TAP: f32 = 1.75;
-const FIRST_TAP_HZ: f32 = 2000.0;
+const FIRST_TAP: f32 = 2.74;
+const FIRST_TAP_HZ: f32 = 2600.0;
+/// The rest of the taps' highs over `SHELF_HZ` are kept by `SHELF_HIGHS`, a shelf on the way out
+/// rather than in the loop, so the tail is darker against the first 100 ms but falls as fast.
+/// Without it a snare's tail, 300 to 600 ms after the hit, was 4 to 5 dB too bright against Steel.
+const SHELF_HZ: f32 = 3900.0;
+const SHELF_HIGHS: f32 = 0.48;
 /// Each side's own short all-passes on the way out, and how much they spread. They blur each of
 /// the taps' echoes into a dense burst from its first millisecond, where the paper's few echoes
 /// flammed a snare, and each side's differ so the two still sound apart. They let every frequency
@@ -139,7 +150,7 @@ const PRE_PER_FRAME: f32 = LONGEST_PRE;
 /// What each tap is scaled by, as the paper has it.
 const TAP_GAIN: f32 = 0.6;
 /// How loud what comes out is. Tuned so it's near the reverb's at both their defaults.
-const WET: f32 = 0.59;
+const WET: f32 = 0.42;
 
 /// How much a tail that falls 60 dB in `seconds` falls each frame, as the natural log of what it
 /// keeps.
@@ -275,30 +286,36 @@ fn damping_at(damp: u8, rate: u32) -> f32 {
 }
 
 /// Where in the tank a tap reads: which half, which of its lines past the first all-passes, how
-/// far back at the tuning rate, and whether it's added or taken away.
+/// far back at the tuning rate, and how loud, taken away where it's below nothing.
 type Tap = (usize, usize, f32, f32);
 
-/// The paper's taps: the left side's, then the right's. Each side's first is a millisecond in
-/// rather than the paper's 9 and 12, so with `Pre` at `00` the plate answers at once, not after a
-/// gap (decision 446).
-const TAPS: [[Tap; 7]; 2] = [
+/// The taps: the left side's, then the right's. They're the paper's, but for how loud each is and
+/// one more. Each side's first is a millisecond in rather than the paper's 9 and 12, so with `Pre`
+/// at `00` the plate answers at once, not after a gap (decision 446). The paper's are all as loud;
+/// here those that read the first delay after 100 and 122 ms are quieter and those after 67 and
+/// 71 ms louder, and each side's last reads the other half's first delay at 42 and 47 ms, so the
+/// first 150 ms die away smoothly rather than dipping at 70 ms and swelling again at 100, and
+/// fall as quickly as Steel's against the tail (decision 446).
+const TAPS: [[Tap; 8]; 2] = [
     [
         (1, BEFORE, 30.0, 1.0),
-        (1, BEFORE, 2974.0, 1.0),
-        (1, SECOND, 1913.0, -1.0),
-        (1, AFTER, 1996.0, 1.0),
-        (0, BEFORE, 1990.0, -1.0),
-        (0, SECOND, 187.0, -1.0),
-        (0, AFTER, 1066.0, -1.0),
+        (1, BEFORE, 2974.0, 0.45),
+        (1, SECOND, 1913.0, -0.68),
+        (1, AFTER, 1996.0, 1.17),
+        (0, BEFORE, 1990.0, -1.73),
+        (0, SECOND, 187.0, -1.28),
+        (0, AFTER, 1066.0, -1.35),
+        (0, BEFORE, 1241.0, -1.0),
     ],
     [
         (0, BEFORE, 30.0, 1.0),
-        (0, BEFORE, 3627.0, 1.0),
-        (0, SECOND, 1228.0, -1.0),
-        (0, AFTER, 2673.0, 1.0),
-        (1, BEFORE, 2111.0, -1.0),
-        (1, SECOND, 335.0, -1.0),
-        (1, AFTER, 121.0, -1.0),
+        (0, BEFORE, 3627.0, 0.45),
+        (0, SECOND, 1228.0, -0.68),
+        (0, AFTER, 2673.0, 1.17),
+        (1, BEFORE, 2111.0, -1.73),
+        (1, SECOND, 335.0, -1.28),
+        (1, AFTER, 121.0, -1.35),
+        (1, BEFORE, 1402.4, -1.0),
     ],
 ];
 
@@ -421,6 +438,9 @@ pub(crate) struct Plate {
     early_by: [f32; 2],
     first_tap: [f32; 2],
     first_tap_by: f32,
+    /// Each side's shelf under the rest of the taps' highs, and how far it moves a frame.
+    tail: [f32; 2],
+    tail_by: f32,
     /// Where each first all-pass has wandered to: the left half's, then the right's.
     wanders: [Wander; WANDERERS],
     pre: Vec<f32>,
@@ -499,6 +519,8 @@ impl Plate {
             early_by: [EARLY_LOWS_HZ, EARLY_HIGHS_HZ].map(|hertz| of_corner(hertz, rate as f32)),
             first_tap: [0.0; 2],
             first_tap_by: of_corner(FIRST_TAP_HZ, rate as f32),
+            tail: [0.0; 2],
+            tail_by: of_corner(SHELF_HZ, rate as f32),
             wanders,
             pre: vec![0.0; pre_frames],
             pre_write: 0,
@@ -531,6 +553,7 @@ impl Plate {
         self.damped = [0.0; 2];
         self.early = [0.0; 3];
         self.first_tap = [0.0; 2];
+        self.tail = [0.0; 2];
         self.low_damping.clear();
     }
 
@@ -630,8 +653,12 @@ impl Plate {
         let lines = &mut self.lines;
         lines.advance();
         let mut diffused = incoming;
-        for (line, frames) in self.diffusers.iter().zip(self.diffuser_frames) {
+        let mut soon = 0.0;
+        for (which, (line, frames)) in self.diffusers.iter().zip(self.diffuser_frames).enumerate() {
             diffused = allpass(lines, *line, frames, diffused, DIFFUSION);
+            if which + 1 == SOON_AFTER {
+                soon = diffused;
+            }
         }
 
         // Each half takes what the other's last delay gives, so it all goes round.
@@ -674,27 +701,30 @@ impl Plate {
         // What goes straight out: its lows off, then its highs down.
         let [lows, highs_by] = self.early_by;
         let [once, twice, highs] = &mut self.early;
-        *once += (diffused - *once) * lows;
-        let thinned = diffused - *once;
+        let straight = diffused * EARLY + soon * EARLY_SOON;
+        *once += (straight - *once) * lows;
+        let thinned = straight - *once;
         *twice += (thinned - *twice) * lows;
         let thinned = thinned - *twice;
         *highs += (thinned - *highs) * highs_by;
-        let early = (*highs + (thinned - *highs) * EARLY_HIGHS) * EARLY;
+        let early = *highs + (thinned - *highs) * EARLY_HIGHS;
 
         let mut out = [0.0; 2];
-        for (((side, taps), blurs), first_tap) in out
+        for ((((side, taps), blurs), first_tap), tail) in out
             .iter_mut()
             .zip(&TAPS)
             .zip(&self.blurs)
             .zip(&mut self.first_tap)
+            .zip(&mut self.tail)
         {
-            let read = |&(half, line, frames, sign): &Tap| {
-                lines.between(self.tank[half][line].base, frames * stretch) * sign
+            let read = |&(half, line, frames, gain): &Tap| {
+                lines.between(self.tank[half][line].base, frames * stretch) * gain
             };
             *first_tap += (read(&taps[0]) - *first_tap) * self.first_tap_by;
-            let tapped = (taps[1..].iter().map(read).sum::<f32>() + *first_tap * FIRST_TAP + early)
-                * TAP_GAIN
-                * WET;
+            let rest = taps[1..].iter().map(read).sum::<f32>();
+            *tail += (rest - *tail) * self.tail_by;
+            let rest = *tail + (rest - *tail) * SHELF_HIGHS;
+            let tapped = (rest + *first_tap * FIRST_TAP + early) * TAP_GAIN * WET;
             *side = blurs.iter().fold(tapped, |sample, &(base, frames)| {
                 whole_allpass(lines, base, frames, sample, BLUR)
             });
@@ -949,8 +979,8 @@ mod tests {
         };
         let (small, big) = (out(0x00), out(0xFF));
         // It answers at once at any size, so where the energy of its first 300 ms falls, on
-        // average: later as the taps go further apart. Seen: 1.23 times as late, as what goes
-        // straight out is as loud at any size (1.45 before it grew louder).
+        // average: later as the taps go further apart. Seen: 1.08 times as late, as what goes
+        // straight out is as loud at any size and now makes up more of it (1.45, then 1.23).
         let centre = |out: &[[f32; 2]]| {
             let early = &out[..RATE as usize * 3 / 10];
             let energy = |f: &[f32; 2]| f[0] * f[0] + f[1] * f[1];
@@ -962,7 +992,7 @@ mod tests {
             timed / early.iter().map(energy).sum::<f32>()
         };
         assert!(
-            centre(&big) > centre(&small) * 1.15,
+            centre(&big) > centre(&small) * 1.05,
             "{} {}",
             centre(&small),
             centre(&big)
@@ -973,13 +1003,13 @@ mod tests {
 
     /// The biggest jump between frames from a tone through it, after a second, with the settings
     /// switching between two every 64 frames, as a knob or an LFO steps them block by block, or
-    /// held at the first.
-    fn biggest_jump(from: Settings, to: Settings, moving: bool) -> f32 {
+    /// held at the first; and the loudest it got.
+    fn biggest_jump(from: Settings, to: Settings, moving: bool) -> (f32, f32) {
         let tone =
             |frame: usize| (frame as f32 / RATE as f32 * 220.0 * std::f32::consts::TAU).sin() * 0.5;
         let mut plate = plate(from, RATE);
         let mut last = [0.0_f32; 2];
-        let mut most = 0.0_f32;
+        let (mut most, mut loudest) = (0.0_f32, 0.0_f32);
         for frame in 0..RATE as usize * 3 {
             let late = frame > RATE as usize;
             if late {
@@ -993,10 +1023,11 @@ mod tests {
             let out = plate.process([tone(frame); 2]);
             if late {
                 most = most.max((out[0] - last[0]).abs().max((out[1] - last[1]).abs()));
+                loudest = loudest.max(out[0].abs().max(out[1].abs()));
             }
             last = out;
         }
-        most
+        (most, loudest)
     }
 
     #[test]
@@ -1069,13 +1100,18 @@ mod tests {
             ),
         ];
         for (name, from, to) in pairs {
-            // It jumps no further moving than it does held at either end. But `Pre` bends what
-            // goes through it as it moves, at most a quarter up, and a tone bent up jumps that
-            // much further each frame; with its first taps a millisecond in, little smooths that
-            // over (decision 446). Seen: 1.27.
+            // It jumps no further moving than it does held at either end, for how loud it is: a
+            // tone through it moving can be louder than held, as what goes straight out no longer
+            // cancels some of what the taps give at 220 Hz (0.37 to 0.90 for `Pre`), and a step
+            // is a jump out of keeping with that. `Pre` also bends what goes through it as it
+            // moves, at most a quarter up, and a tone bent up jumps that much further each frame;
+            // with its first taps a millisecond in, little smooths that over (decision 446). Seen:
+            // 1.08 at most, `all` moving together.
             let bend = if name == "Pre" { PRE_PER_FRAME } else { 0.0 };
-            let still = biggest_jump(from, from, false).max(biggest_jump(to, to, false));
-            let moving = biggest_jump(from, to, true);
+            let jump = |(most, loudest): (f32, f32)| most / loudest;
+            let still =
+                jump(biggest_jump(from, from, false)).max(jump(biggest_jump(to, to, false)));
+            let moving = jump(biggest_jump(from, to, true));
             assert!(
                 moving < still * (1.25 + bend),
                 "{name}: {moving} moving, {still} still"
@@ -1249,6 +1285,27 @@ mod tests {
             going.next();
         }
         assert!((wander.next() - going.next()).abs() < 1e-3);
+    }
+
+    #[test]
+    fn at_mod_00_it_answers_a_hit_the_same_whenever_it_comes() {
+        // As it starts, `Mod` is `00` and nothing in it moves: a hit three seconds in comes out
+        // as one at the start does, to the last bit, where at `80` the wanderers have moved on.
+        let answer = |settings: Settings, wait: usize| {
+            let mut plate = plate(settings, RATE);
+            for _ in 0..wait {
+                plate.process([0.0; 2]);
+            }
+            impulse(&mut plate, RATE as usize)
+        };
+        let still = Settings::DEFAULT;
+        assert_eq!(still.excursion, 0);
+        assert_eq!(answer(still, 0), answer(still, 3 * RATE as usize));
+        let shimmer = Settings {
+            excursion: 0x80,
+            ..still
+        };
+        assert_ne!(answer(shimmer, 0), answer(shimmer, 3 * RATE as usize));
     }
 
     #[test]
