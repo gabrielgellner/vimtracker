@@ -9,9 +9,9 @@
 //! It runs at the rate it's given rather than the module's 32 kHz, with every time the module
 //! gives in samples scaled to it, so its buffers hold the module's seconds. The 8-bit qualities
 //! record and play at half the rate, through the module's resampling filter, as the module's do
-//! at 16 kHz, so their mu-law grit is band-limited as the module's is. The reverb is this
-//! program's `Reverb`, which is Clouds' own, tuned as the module tunes it, and the pitch shifter
-//! after the looping delay is `Pitch`'s, Clouds' own too.
+//! at 16 kHz, so their mu-law grit is band-limited as the module's is. The reverb is Clouds' own
+//! in `clouds/reverb.rs`, tuned as the module tunes it, which the `Reverb` slot effect began as
+//! (decision 447), and the pitch shifter after the looping delay is `Pitch`'s, Clouds' own too.
 //!
 //! Adapted from Clouds' `clouds/dsp/granular_processor.cc`, `granular_sample_player.h`,
 //! `grain.h`, `wsola_sample_player.h`, `window.h`, `correlator.cc`, `looping_sample_player.h`,
@@ -35,6 +35,7 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 //! OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+mod reverb;
 mod spectral;
 
 use std::f32::consts::{FRAC_1_SQRT_2, FRAC_PI_2, PI, SQRT_2};
@@ -47,9 +48,9 @@ use crate::dsp::blocks::plaits_parts::Svf;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::pitch_shifter::PitchShifter;
-use crate::dsp::effects::reverb::Reverb;
 use crate::dsp::effects::slot::{Mixing, Rung, SlotEffect};
 use crate::rng::Pcg32;
+use reverb::CloudsReverb;
 use spectral::{Spectral, SpectralControl};
 
 /// The rate the module runs at, which its times in samples are for.
@@ -680,7 +681,7 @@ pub(crate) struct Clouds {
     high_pass: [Svf; 2],
     low_pass_open: bool,
     feedback_filter: [Svf; 2],
-    reverb: Reverb,
+    reverb: CloudsReverb,
     /// What came out a block ago, to feed back, as the module feeds back its last block.
     fed: Vec<[f32; 2]>,
     fed_at: usize,
@@ -777,7 +778,7 @@ impl Clouds {
             high_pass: [Svf::default(); 2],
             low_pass_open: true,
             feedback_filter: [Svf::default(); 2],
-            reverb: Reverb::new(rate),
+            reverb: CloudsReverb::new(rate),
             fed: vec![[0.0; 2]; block],
             fed_at: 0,
             down: Resampler::QUIET,
@@ -1573,7 +1574,7 @@ impl Clouds {
         }
 
         // The reverb isn't fed back.
-        let wet = self.reverb.process_tank(out);
+        let wet = self.reverb.process(out);
         for (side, wet) in out.iter_mut().zip(wet) {
             *side += (wet - *side) * control.reverb_mix;
         }

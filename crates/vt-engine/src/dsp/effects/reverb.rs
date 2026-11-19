@@ -1,11 +1,20 @@
-//! A stereo reverb: the Griesinger topology, as in Mutable Instruments' Clouds, with its line
-//! lengths scaled from 32 kHz to the rate it runs at, and pre-delay and cuts on what goes in.
+//! A stereo reverb: the Griesinger topology Mutable Instruments' Clouds has, a run of diffusers
+//! and a figure of eight of two allpasses and a delay a side, with its line lengths scaled from
+//! 32 kHz to the rate it runs at, and pre-delay and cuts on what goes in.
 //!
-//! `Decay` sets how long its tail takes to fall 60 dB, and each half of its loop keeps `0.001` to
-//! the power of its own length over that each time round, as sst's Reverb 2 works its decay out,
-//! so the rate leaves it as long. A one-pole high-pass beside each half's damping takes the lows
-//! as it rings, and its sides are spread or brought together as mid and side on the way out
-//! (decision 439).
+//! It has gone its own way from Clouds' tank, which Clouds keeps as the module has it in
+//! `clouds/reverb.rs` (decision 447). Its loops are 1.3 times as long, so more modes share the
+//! work, and spread less, so no frequency rings on far longer than its neighbours; each half's
+//! delay and first allpass wobble, slowly and out of step, so no mode stands still; six
+//! diffusers spread what goes in rather than four; and each side of what comes out is five taps
+//! along both loops' delays, as Dattorro's plate takes its own, rather than where one side's
+//! allpasses end, so the start fills in at once and differs side to side.
+//!
+//! `Decay` sets how long its tail takes to fall 60 dB at 1 kHz. Each half of its loop keeps
+//! `0.001` to the power of its own length over that each time round, as sst's Reverb 2 works its
+//! decay out, so the rate leaves it as long, with its length counted as `held` says. A one-pole
+//! high-pass beside each half's damping takes the lows as it rings, and its sides are spread or
+//! brought together as mid and side on the way out (decision 439).
 //!
 //! The core is adapted from `clouds/dsp/fx/reverb.h` and `fx_engine.h`:
 //!
@@ -38,40 +47,83 @@ use crate::dsp::filters::filter::{Coefficients, Trim};
 
 /// The rate the line lengths and damping are written for.
 const TUNING_RATE: f32 = 32_000.0;
-/// How much the allpasses spread what goes through them.
-const DIFFUSION: f32 = 0.625;
-/// How much of what goes in reaches the lines. Tuned so its level is near the reverb before it.
+/// The diffusers' lengths at the tuning rate: Clouds' four, and two longer, so a hit is spread
+/// over about 70 ms before the loops take it.
+const DIFFUSERS: [f32; 6] = [113.0, 162.0, 241.0, 399.0, 577.0, 769.0];
+/// How much the diffusers spread what goes through them.
+const INPUT_DIFFUSION: f32 = 0.625;
+/// Each half of the loop at the tuning rate: its two allpasses, and where its delay is read,
+/// Clouds' lengths 1.3 times over.
+const HALVES: [[f32; 3]; 2] = [[2149.0, 2649.0, 4434.0], [2487.0, 2162.0, 6084.0]];
+/// How much the loop's allpasses spread. Clouds' 0.625 leaves the frequencies an allpass holds
+/// back most ringing four times as long as those it holds back least, which stood out as modes.
+const LOOP_DIFFUSION: f32 = 0.5;
+/// How far each half's first allpass and its delay's read wobble either way, at the tuning rate.
+const ALLPASS_WOBBLE: f32 = 30.0;
+const DELAY_WOBBLE: f32 = 20.0;
+/// How fast the three slow wobbles go, in hertz: the smear in the first diffuser's, the first
+/// half's delay's, which the second half's first allpass shares, and the second half's delay's,
+/// which the first half's first allpass shares.
+const WOBBLE_HERTZ: [f64; 3] = [0.5, 0.37, 0.3];
+/// How much of what goes in reaches the lines.
 const INPUT_GAIN: f32 = 0.25;
-/// How much of what's in each loop comes out.
-const WET: f32 = 2.0;
+/// What each tap is scaled by. Tuned so its level is near the reverb's before it, decision 439's.
+const TAP_GAIN: f32 = 0.9;
 /// The damping filter's coefficient at the top of `Damp`, at the tuning rate. At `00` it's open.
 const MOST_DAMPING: f32 = 0.1;
 /// The longest pre-delay, in seconds.
 const LONGEST_PRE: f32 = 0.25;
-/// How fast the two slow wobbles go, in hertz.
-const WOBBLE_HERTZ: [f64; 2] = [0.5, 0.3];
-/// Every line's length at the tuning rate: the four diffusers, then each loop's two allpasses and
-/// its delay.
-const LENGTHS: [usize; 10] = [113, 162, 241, 399, 1653, 2038, 3411, 1913, 1663, 4782];
-/// Where the second loop's delay is read, at the tuning rate, and how far its wobble moves it.
-const SWING: [f32; 2] = [4680.0, 100.0];
 
-/// How much longer a trip round the loop lasts than its lines, as far as its tail goes. Its
-/// allpasses hold some frequencies back longer than others, and those fall slowest and last, so
-/// it falls as a plain loop this much longer would (`tail`'s note). Worked out from `tail` at
-/// 250 Hz, undamped, where it's the same at every `Decay` and rate.
-const HELD: f32 = 1.4;
+/// Where a tap reads: which half's delay, how far along it as a share of where it's read, and
+/// whether it's added or taken away.
+type Tap = (usize, f32, f32);
+
+/// The taps, the left side's and then the right's: one near the start of the other half's delay,
+/// so something comes out at once, and the rest spread along both. They were picked from many by
+/// a model of the first 80 ms, for sides about as alike as a hall's early on (IACC 0.15), with few
+/// taps on one delay close enough together to comb what comes out.
+const TAPS: [[Tap; 5]; 2] = [
+    [
+        (1, 0.028, 1.0),
+        (1, 0.289, 1.0),
+        (1, 0.854, -1.0),
+        (0, 0.249, 1.0),
+        (0, 0.864, -1.0),
+    ],
+    [
+        (0, 0.023, 1.0),
+        (0, 0.352, 1.0),
+        (0, 0.94, 1.0),
+        (1, 0.159, -1.0),
+        (1, 0.551, -1.0),
+    ],
+];
+
+/// How many times faster than the tail the diffusers and the loop's allpasses may ring by
+/// themselves: an allpass's echoes of itself go round it whatever the loop keeps, falling by what
+/// it spreads each time, and at short tails they're most of what's heard, several of them one
+/// after another, so each rings out in two thirds of the tail.
+const RING_FASTER: f32 = 1.5;
+
+/// How much longer each half of the loop lasts than its lines, as far as its tail goes, for a
+/// tail of `seconds`. Its allpasses hold some frequencies back longer than others, and those fall
+/// slowest and last (decision 439), but the wobbles mix them as they go round, so a tail of a few
+/// seconds or more falls at the loop's own length. About a second, the mix is still young and the
+/// loop's tail is the most of what's heard, so it counts up to 1.28 times as long; at the
+/// shortest tails the allpasses' own ringing is what's heard, as `RING_FASTER` sets it. Measured
+/// at 1 kHz against a click, within 4% from `00` to `C0` (decision 447).
+fn held(seconds: f32) -> f32 {
+    let octaves = seconds.ln() / 0.43;
+    1.0 + 0.28 / (1.0 + octaves * octaves)
+}
 
 /// How long each half of the loop is at a rate, in frames, as far as its tail goes: its two
-/// allpasses and its delay, as far as it's read, held back by `HELD`.
-fn half_frames(rate: u32) -> [f32; 2] {
+/// allpasses and its delay, as far as it's read, held back by `held`.
+fn half_frames(seconds: f32, rate: u32) -> [f32; 2] {
     let scale = rate as f32 / TUNING_RATE;
-    let line = |at: usize| (LENGTHS[at] as f32 * scale) as usize as f32;
-    [
-        line(4) + line(5) + line(6) - 1.0,
-        line(7) + line(8) + SWING[0] * scale,
-    ]
-    .map(|frames| frames * HELD)
+    HALVES.map(|[a, b, read]| {
+        ((a * scale) as usize as f32 + (b * scale) as usize as f32 + read * scale) * held(seconds)
+    })
 }
 
 /// What each half of the loop keeps each time round, for a tail that falls 60 dB in `seconds`.
@@ -79,20 +131,18 @@ pub(crate) fn kept_for(seconds: f32, frames: f32, rate: u32) -> f32 {
     0.001_f32.powf(frames / (seconds * rate as f32))
 }
 
-/// The loop's allpasses, by their places in `LENGTHS`: the first side's two, then the second's.
-const LOOP_ALLPASSES: [usize; 4] = [4, 5, 7, 8];
+/// The most an allpass this long at the tuning rate may spread for a tail of `seconds`: so it
+/// rings by itself `RING_FASTER` times faster than the tail falls. Tails longer than about 1.5 s
+/// leave every one as it's set.
+fn most_spread(length: f32, seconds: f32, rate: u32) -> f32 {
+    let frames = (length * rate as f32 / TUNING_RATE) as usize as f32;
+    kept_for(seconds / RING_FASTER, frames, rate)
+}
 
-/// The most each of the loop's allpasses may spread, for a tail that falls 60 dB in `seconds`.
-/// An allpass's echoes of itself go round it whatever the loop keeps, falling by what it spreads
-/// each time, so a short tail can be no shorter than they ring; spreading no more than the tail
-/// keeps over its length, they ring no longer than it. Tails longer than about 0.9 s leave them at
-/// `DIFFUSION`.
-fn most_spread(seconds: f32, rate: u32) -> [f32; 4] {
-    let scale = rate as f32 / TUNING_RATE;
-    LOOP_ALLPASSES.map(|at| {
-        let frames = (LENGTHS[at] as f32 * scale) as usize as f32;
-        kept_for(seconds, frames, rate)
-    })
+/// How much each of the loop's allpasses spreads for a tail of `seconds`.
+fn loop_spread(seconds: f32, rate: u32) -> [f32; 4] {
+    let [[a, b, _], [c, d, _]] = HALVES;
+    [a, b, c, d].map(|length| LOOP_DIFFUSION.min(most_spread(length, seconds, rate)))
 }
 
 /// How much a one-pole low-pass in a loop moves each frame for `Low damp`'s corner, whose high-pass
@@ -104,22 +154,25 @@ pub(crate) fn low_damping_at(low_damp: u8, rate: u32) -> f32 {
 /// How a reverb's tail dies away at its settings and a rate, for a drawing. Its figure of eight is
 /// one loop: through each side's damping, two allpasses and a delay, kept by `Decay` on the way
 /// into each side. The allpasses keep all of it but hold each frequency back by their own amount,
-/// so the tail is the loop's as `tail::loop_seconds` works it out. The second loop's wobble
-/// moves its read by 2%, and the smear is in a diffuser, before the loop, so neither changes it.
+/// so the tail is the loop's as `tail::loop_seconds` works it out. The wobbles move the reads by
+/// under 2%, which leaves the loop as long, but reading between samples takes a little of the
+/// highs each time round, which it counts; the smear is in a diffuser, before the loop.
 pub fn tail(settings: Settings, rate: u32) -> Option<Tail> {
     let scale = rate as f32 / TUNING_RATE;
-    // Each line reads what was written a frame short of its length ago, and the second loop's
-    // delay reads at its swing.
-    let frames = |at: usize| f64::from((LENGTHS[at] as f32 * scale) as usize as f32 - 1.0);
+    // Each allpass reads what was written a frame short of its length ago.
+    let frames = |length: f32| f64::from((length * scale) as usize as f32 - 1.0);
     let seconds = reverb_decay_seconds(f32::from(settings.decay));
-    let kept = half_frames(rate).map(|frames| f64::from(kept_for(seconds, frames, rate)));
-    let spread = most_spread(seconds, rate).map(|most| f64::from(DIFFUSION.min(most)));
+    let kept = half_frames(seconds, rate).map(|frames| f64::from(kept_for(seconds, frames, rate)));
+    let spread = loop_spread(seconds, rate).map(f64::from);
     let damping = f64::from(damping_at(settings.damp, TUNING_RATE / rate as f32));
     let low = f64::from(low_damping_at(settings.low_damp, rate));
-    let swing = f64::from(SWING[0] * scale);
+    let [[a, b, one_read], [c, d, two_read]] = HALVES;
     let response = |omega: f64| {
-        let allpass = |frames: f64, into: f64| {
-            let delayed = Complex::delay(omega, frames);
+        // A read that wobbles lands anywhere between two samples, and read in a straight line
+        // between them it keeps `1 - (1 - cos ω) / 3` of a frequency's power on average.
+        let moving = (1.0 - (1.0 - omega.cos()) / 3.0).sqrt();
+        let allpass = |frames: f64, into: f64, kept: f64| {
+            let delayed = Complex::delay(omega, frames).scale(kept);
             delayed
                 .add(Complex(-into, 0.0))
                 .over(Complex::ONE.add(delayed.scale(-into)))
@@ -129,12 +182,12 @@ pub fn tail(settings: Settings, rate: u32) -> Option<Tail> {
         };
         let damped = one_pole(damping);
         let thinned = Complex::ONE.add(one_pole(low).scale(-1.0));
-        let one = allpass(frames(4), -spread[0])
-            .times(allpass(frames(5), spread[1]))
-            .times(Complex::delay(omega, frames(6)));
-        let two = allpass(frames(7), spread[2])
-            .times(allpass(frames(8), -spread[3]))
-            .times(Complex::read(omega, swing));
+        let one = allpass(frames(a), -spread[0], moving)
+            .times(allpass(frames(b), spread[1], 1.0))
+            .times(Complex::delay(omega, f64::from(one_read * scale)).scale(moving));
+        let two = allpass(frames(c), spread[2], moving)
+            .times(allpass(frames(d), -spread[3], 1.0))
+            .times(Complex::delay(omega, f64::from(two_read * scale)).scale(moving));
         one.times(two)
             .times(damped)
             .times(damped)
@@ -222,35 +275,44 @@ struct Line {
     length: usize,
 }
 
+/// A tap at a rate: where its line starts, how many frames back it reads, and its sign.
+#[derive(Debug, Clone, Copy)]
+struct Reading {
+    base: usize,
+    back: usize,
+    sign: f32,
+}
+
 /// The stereo reverb.
 #[derive(Debug, Clone)]
 pub(crate) struct Reverb {
     lines: SharedLines,
-    diffusers: [Line; 4],
-    /// Each side's loop: two allpasses and a delay.
+    diffusers: [Line; 6],
+    /// Each half of the loop: two allpasses and a delay.
     loops: [[Line; 3]; 2],
+    taps: [[Reading; 5]; 2],
     /// Where the smear in the first diffuser reads and writes, and how far it moves.
     smear: [f32; 3],
-    /// Where the second loop's delay reads, and how far it moves.
-    swing: [f32; 2],
+    /// Where each half's first allpass reads, and how far it moves.
+    allpass_wobble: [[f32; 2]; 2],
+    /// Where each half's delay is read, and how far it moves.
+    swing: [[f32; 2]; 2],
     damped: [f32; 2],
     low_damping: LowDamping,
-    wobble: [f32; 2],
+    /// The three wobbles, each a point going round a circle, and how far each turns a frame.
+    wobble: [(f32, f32); 3],
+    turn: [(f32, f32); 3],
     pre: Vec<f32>,
     pre_write: usize,
     pre_frames: Smoothed,
     /// What each half of the loop keeps each time round.
     decay: [Smoothed; 2],
-    /// How long each half is, in frames, for working that out.
-    half_frames: [f32; 2],
-    /// The most each of the loop's allpasses spreads, for `Decay`, as `most_spread` gives it.
-    most_spread: [Smoothed; 4],
+    /// How much each of the loop's allpasses spreads, for `Decay`, as `loop_spread` gives it.
+    loop_spread: [Smoothed; 4],
+    /// How much the diffusers spread, for `Decay`: what the longest may.
+    input_spread: Smoothed,
     damping: Smoothed,
     width: Smoothed,
-    /// How much the allpasses spread what goes through them, and how much of what goes in reaches
-    /// the lines: the reverb's own, unless Clouds tunes them as the module does.
-    diffusion: f32,
-    input_gain: f32,
     smoothing: f32,
     /// What damping at the tuning rate takes to be the same at this one.
     rate_ratio: f32,
@@ -265,39 +327,58 @@ impl Reverb {
     pub(crate) fn new(rate: u32) -> Self {
         let scale = rate as f32 / TUNING_RATE;
         let mut base = 0;
-        let lines = LENGTHS.map(|length| {
+        let mut line = |frames: f32| {
             let line = Line {
                 base,
-                length: (length as f32 * scale) as usize,
+                length: (frames * scale) as usize,
             };
             base += line.length + 1;
             line
+        };
+        let diffusers = DIFFUSERS.map(&mut line);
+        // Room for the wobbles either way, and the frame after them to read between.
+        let room = 3.0 / scale;
+        let loops = HALVES.map(|[a, b, read]| {
+            [
+                line(a + ALLPASS_WOBBLE + room),
+                line(b),
+                line(read + DELAY_WOBBLE + room),
+            ]
         });
         let size = base.next_power_of_two();
+        let taps = TAPS.map(|side| {
+            side.map(|(half, along, sign)| Reading {
+                base: loops[half][2].base,
+                back: ((HALVES[half][2] * along * scale) as usize).max(1),
+                sign,
+            })
+        });
         // A power of two long, so reading round it is a mask.
         let pre_frames = ((LONGEST_PRE * rate as f32) as usize + 2).next_power_of_two();
         let mut reverb = Self {
             lines: SharedLines::new(size),
-            diffusers: [lines[0], lines[1], lines[2], lines[3]],
-            loops: [
-                [lines[4], lines[5], lines[6]],
-                [lines[7], lines[8], lines[9]],
-            ],
-            smear: [50.0 * scale, 100.0 * scale, 45.0 * scale],
-            swing: SWING.map(|frames| frames * scale),
+            diffusers,
+            loops,
+            taps,
+            smear: [50.0 * scale, 100.0 * scale, 22.5 * scale],
+            // Each allpass reads what was written a frame short of its length ago.
+            allpass_wobble: HALVES.map(|[a, ..]| [a * scale - 1.0, ALLPASS_WOBBLE * scale]),
+            swing: HALVES.map(|[.., read]| [read * scale, DELAY_WOBBLE * scale]),
             damped: [0.0; 2],
             low_damping: LowDamping::default(),
-            wobble: [1.0; 2],
+            wobble: [(1.0, 0.0); 3],
+            turn: WOBBLE_HERTZ.map(|hertz| {
+                let turning = std::f64::consts::TAU * hertz / f64::from(rate);
+                (turning.cos() as f32, turning.sin() as f32)
+            }),
             pre: vec![0.0; pre_frames],
             pre_write: 0,
             pre_frames: Smoothed::at(0.0),
             decay: [Smoothed::at(0.0); 2],
-            half_frames: half_frames(rate),
-            most_spread: [Smoothed::at(1.0); 4],
+            loop_spread: [Smoothed::at(0.0); 4],
+            input_spread: Smoothed::at(0.0),
             damping: Smoothed::at(0.0),
             width: Smoothed::at(1.0),
-            diffusion: DIFFUSION,
-            input_gain: INPUT_GAIN,
             smoothing: coefficient(rate),
             rate_ratio: TUNING_RATE / rate as f32,
             trim: Trim::default(),
@@ -326,16 +407,18 @@ impl Reverb {
         self.keep_time(frames);
         self.pre_frames.target = f32::from(settings.pre) / 255.0 * LONGEST_PRE * self.rate as f32;
         let seconds = reverb_decay_seconds(f32::from(settings.decay));
-        for (decay, frames) in self.decay.iter_mut().zip(self.half_frames) {
+        for (decay, frames) in self.decay.iter_mut().zip(half_frames(seconds, self.rate)) {
             decay.target = kept_for(seconds, frames, self.rate);
         }
-        for (most, target) in self
-            .most_spread
+        for (spread, target) in self
+            .loop_spread
             .iter_mut()
-            .zip(most_spread(seconds, self.rate))
+            .zip(loop_spread(seconds, self.rate))
         {
-            most.target = target;
+            spread.target = target;
         }
+        self.input_spread.target =
+            INPUT_DIFFUSION.min(most_spread(DIFFUSERS[5], seconds, self.rate));
         self.damping.target = damping_at(settings.damp, self.rate_ratio);
         self.low_damping
             .set(low_damping_at(settings.low_damp, self.rate));
@@ -362,8 +445,11 @@ impl Reverb {
     /// Move the wobbles to where they are this many frames in.
     pub(crate) fn keep_time(&mut self, frames: u64) {
         let seconds = frames as f64 / f64::from(self.rate);
-        self.wobble =
-            WOBBLE_HERTZ.map(|hertz| (std::f64::consts::TAU * hertz * seconds).cos() as f32);
+        self.wobble = WOBBLE_HERTZ.map(|hertz| {
+            let turns = seconds * hertz;
+            let angle = std::f64::consts::TAU * (turns - turns.floor());
+            (angle.cos() as f32, angle.sin() as f32)
+        });
     }
 
     /// Jump to the settings, for starting afresh.
@@ -372,9 +458,10 @@ impl Reverb {
         for decay in &mut self.decay {
             decay.settle();
         }
-        for most in &mut self.most_spread {
-            most.settle();
+        for spread in &mut self.loop_spread {
+            spread.settle();
         }
+        self.input_spread.settle();
         self.damping.settle();
         self.low_damping.settle();
         self.width.settle();
@@ -413,89 +500,79 @@ impl Reverb {
         widen(wet, self.width.next(self.smoothing))
     }
 
-    /// Tune the tank as Clouds tunes its own reverb, block by block: what each trip round its loops
-    /// keeps, its damping as a one-pole's coefficient at 32 kHz, its allpasses' diffusion and how
-    /// much of what goes in reaches the lines. The decay and damping glide there as `Decay` and
-    /// `Damp` do.
-    pub(crate) fn tune(
-        &mut self,
-        decay: f32,
-        damping_at_tuning_rate: f32,
-        diffusion: f32,
-        gain: f32,
-    ) {
-        for half in &mut self.decay {
-            half.target = decay;
-        }
-        // Clouds spreads as it does whatever its decay, at once.
-        for most in &mut self.most_spread {
-            *most = Smoothed::at(1.0);
-        }
-        self.damping.target = 1.0 - (1.0 - damping_at_tuning_rate).powf(self.rate_ratio);
-        self.diffusion = diffusion;
-        self.input_gain = gain;
-    }
-
-    /// Feed one frame into the tank alone, with no cuts or pre-delay, as Clouds' reverb has none,
-    /// and get the wet signal out.
-    #[inline]
-    pub(crate) fn process_tank(&mut self, input: [f32; 2]) -> [f32; 2] {
-        self.tank(input[0] + input[1])
-    }
-
-    /// Both sides together through the diffusers and the tank's two loops.
+    /// What goes in through the diffusers and the loop's two halves, and the taps along them.
     #[inline]
     fn tank(&mut self, incoming: f32) -> [f32; 2] {
-        let diffusion = self.diffusion;
         let [one, two] = &mut self.decay;
         let decay = [one.next(self.smoothing), two.next(self.smoothing)];
         let damping = self.damping.next(self.smoothing);
         let low_damping = self.low_damping.next(self.smoothing);
         let spread = self
-            .most_spread
+            .loop_spread
             .each_mut()
-            .map(|most| most.next(self.smoothing));
+            .map(|spread| spread.next(self.smoothing));
+        let input_spread = self.input_spread.next(self.smoothing);
+        for ((cos, sin), (by_cos, by_sin)) in self.wobble.iter_mut().zip(self.turn) {
+            (*cos, *sin) = (*cos * by_cos - *sin * by_sin, *sin * by_cos + *cos * by_sin);
+        }
+        let wobble = self.wobble.map(|(cos, _)| cos);
         let lines = &mut self.lines;
         lines.advance();
 
-        // Smear the first allpass inside itself. In Clouds this reads below 0, out of the line and
-        // into old memory, which would go round again whatever `Decay` is, so here it stays in.
-        let [first, _, _, _] = self.diffusers;
+        // Smear the first diffuser inside itself, staying in its line, as Clouds' reverb does.
+        let [first, ..] = self.diffusers;
         let [read_at, write_at, moves] = self.smear;
-        let smeared = lines.between(first.base, read_at + moves * self.wobble[0]);
+        let smeared = lines.between(first.base, read_at + moves * wobble[0]);
         lines.write(first.base, write_at as usize, smeared);
 
-        let mut diffused = incoming * self.input_gain;
+        let mut diffused = incoming * INPUT_GAIN;
         for line in self.diffusers {
-            diffused = lines.allpass(line.base, line.length, diffused, diffusion);
+            diffused = lines.allpass(line.base, line.length, diffused, input_spread);
         }
 
         let [[one_a, one_b, one_delay], [two_a, two_b, two_delay]] = self.loops;
-        let [swing_at, swing_moves] = self.swing;
-        let from_two = lines.between(two_delay.base, swing_at + swing_moves * self.wobble[1]);
+        let [[one_wobble_at, one_wobble], [two_wobble_at, two_wobble]] = self.allpass_wobble;
+        let [[one_at, one_moves], [two_at, two_moves]] = self.swing;
+        let from_two = lines.between(two_delay.base, two_at + two_moves * wobble[2]);
         let mut left = diffused + from_two * decay[1];
         self.damped[0] += damping * (left - self.damped[0]);
         left = self.damped[0];
         if let Some(by) = low_damping {
             left = self.low_damping.thin(0, left, by);
         }
-        left = lines.allpass(one_a.base, one_a.length, left, -diffusion.min(spread[0]));
-        left = lines.allpass(one_b.base, one_b.length, left, diffusion.min(spread[1]));
+        let at = one_wobble_at + one_wobble * wobble[2];
+        left = moving_allpass(lines, one_a.base, at, left, -spread[0]);
+        left = lines.allpass(one_b.base, one_b.length, left, spread[1]);
         lines.write(one_delay.base, 0, left);
 
-        let from_one = lines.read(one_delay.base, one_delay.length - 1);
+        let from_one = lines.between(one_delay.base, one_at + one_moves * wobble[1]);
         let mut right = diffused + from_one * decay[0];
         self.damped[1] += damping * (right - self.damped[1]);
         right = self.damped[1];
         if let Some(by) = low_damping {
             right = self.low_damping.thin(1, right, by);
         }
-        right = lines.allpass(two_a.base, two_a.length, right, diffusion.min(spread[2]));
-        right = lines.allpass(two_b.base, two_b.length, right, -diffusion.min(spread[3]));
+        let at = two_wobble_at + two_wobble * wobble[1];
+        right = moving_allpass(lines, two_a.base, at, right, spread[2]);
+        right = lines.allpass(two_b.base, two_b.length, right, -spread[3]);
         lines.write(two_delay.base, 0, right);
 
-        [left * WET, right * WET]
+        self.taps.map(|side| {
+            side.iter()
+                .map(|tap| lines.read(tap.base, tap.back) * tap.sign)
+                .sum::<f32>()
+                * TAP_GAIN
+        })
     }
+}
+
+/// A step through an allpass whose read moves, `at` frames back, read between samples.
+#[inline]
+fn moving_allpass(lines: &mut SharedLines, base: usize, at: f32, input: f32, into: f32) -> f32 {
+    let read = lines.between(base, at);
+    let sum = input + read * into;
+    lines.write(base, 0, sum);
+    sum * -into + read
 }
 
 impl SlotEffect for Reverb {
@@ -683,9 +760,9 @@ mod tests {
     fn its_tail_falls_as_fast_as_a_click_through_it_measures() {
         // Each frequency's modes fall at their own rate, and the tail is what a band of them
         // measures, so it's within the measurement's spread: the wobbles mix the modes as they
-        // go round, so long tails fall a little faster than worked out, and the diffusers spread
-        // a click's start over tens of milliseconds, so short dark ones a little slower. Seen:
-        // within 9%, and 15% for highs darkened hard.
+        // go round, which `held` counts only for 1 kHz, so the lows of tails of a few seconds
+        // fall a little faster than worked out, and highs darkened hard a little slower. Seen:
+        // within 11%.
         use crate::dsp::effects::tail::measure;
         let cases = [
             (0x57, 0x00, 48_000),
@@ -752,17 +829,16 @@ mod tests {
     }
 
     #[test]
-    fn decay_is_how_long_its_tail_takes_to_fall_60_db_at_any_rate() {
-        // Undamped, under its damping. The diffusers before the loop ring for about a fifth of a
-        // second themselves, so the shortest tails are a little longer; the wobbles mix the modes
-        // as they go round, so the longest a little shorter. Seen: within 16%.
+    fn decay_is_how_long_its_tail_takes_to_fall_60_db_at_1_khz_at_any_rate() {
+        // Undamped, an octave around 1 kHz, as `held` was measured (decision 447). Seen: within
+        // 4% at 48 kHz.
         for (decay, rate) in [
             (0x00, 48_000),
             (0x20, 48_000),
             (0x40, 48_000),
             (0x60, 48_000),
             (0x80, 48_000),
-            (0xA0, 48_000),
+            (0xC0, 48_000),
             (0x60, 44_100),
             (0x60, 96_000),
         ] {
@@ -776,10 +852,10 @@ mod tests {
                 |x| reverb.process(x),
                 set,
                 rate,
-                250.0,
+                1000.0,
             );
             assert!(
-                (measured / set - 1.0).abs() < 0.2,
+                (measured / set - 1.0).abs() < 0.1,
                 "{decay:02X} at {rate}: {measured} for {set}"
             );
         }
@@ -834,6 +910,60 @@ mod tests {
         burst(&mut reverb, RATE as usize);
         assert!(reverb.low_damping.next(reverb.smoothing).is_none());
         assert_eq!(reverb.low_damping.held, [0.0; 2]);
+    }
+
+    /// A click through it at its defaults, both sides.
+    fn click(frames: usize) -> Vec<[f32; 2]> {
+        let mut reverb = reverb(Settings::DEFAULT, RATE);
+        (0..frames)
+            .map(|at| reverb.process([if at == 0 { 1.0 } else { 0.0 }; 2]))
+            .collect()
+    }
+
+    #[test]
+    fn its_sides_differ_from_the_start() {
+        // How alike its sides are over the first 80 ms, at their most alike within a millisecond
+        // either way, as IACC is measured: a hall's are about 0.15 to 0.2, and this tank's were
+        // 0.52 when each side came from one place in it. Seen: 0.15.
+        let out = click(RATE as usize / 2);
+        let start = out
+            .iter()
+            .position(|[l, r]| l.abs() + r.abs() > 1e-4)
+            .unwrap();
+        let early = &out[start..start + RATE as usize * 80 / 1000];
+        let energy = |side: usize| early.iter().map(|f| f[side] * f[side]).sum::<f32>();
+        let norm = (energy(0) * energy(1)).sqrt();
+        let lag = RATE as isize / 1000;
+        let most = (-lag..=lag)
+            .map(|by| {
+                let mut sum = 0.0;
+                for at in 0..early.len() as isize {
+                    let other = at + by;
+                    if (0..early.len() as isize).contains(&other) {
+                        sum += early[at as usize][0] * early[other as usize][1];
+                    }
+                }
+                (sum / norm).abs()
+            })
+            .fold(0.0_f32, f32::max);
+        assert!(most < 0.25, "{most}");
+    }
+
+    #[test]
+    fn a_click_comes_out_spread_with_no_echo_standing_out() {
+        // A snare through it shouldn't flam: over its first 350 ms no 3 ms stands out from the
+        // 50 ms around it. Seen: 1.1 dB at most, where one tap a side gave 3.3 dB.
+        let out = click(RATE as usize / 2);
+        let energy: Vec<f32> = out.iter().map(|[l, r]| l * l + r * r).collect();
+        let start = energy.iter().position(|e| *e > 1e-8).unwrap();
+        let mean = |at: usize, frames: usize| {
+            energy[at - frames / 2..at + frames / 2].iter().sum::<f32>() / frames as f32
+        };
+        let (short, long) = (RATE as usize * 3 / 1000, RATE as usize / 20);
+        let most = (start + RATE as usize / 40..start + RATE as usize * 35 / 100)
+            .map(|at| 10.0 * (mean(at, short) / mean(at, long)).log10())
+            .fold(f32::MIN, f32::max);
+        assert!(most < 2.0, "{most} dB");
     }
 
     #[test]
