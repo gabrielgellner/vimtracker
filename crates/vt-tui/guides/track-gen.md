@@ -14,12 +14,13 @@ them, `Acid`'s `Pitches` after them and a `Follow`'s source in place of the
 its notes, and a `Divisions`' channel and bar, as it makes its own rhythm;
 then `Vary` on a fill that draws, and `Mutate` after it while it varies, then where it acts, dim: `Ramp  Euclid ·
 Note 00–0F`, or `FX1 CUT lane 0C` for a lane. A `Where` that's its column's own is
-dim too, and so is a `Vary` of `Once`. Its settings are the
-shape panel's, laid out by what they do: the fill's down the first two columns,
-and the `Where`'s, `Hits` and `Rotate`, `Rule` and `Start`, an amount, `Complementary`'s amount
-and `Side`, or a named rhythm's `Rhythm`, `Part` and `Child`, at the foot of the third, so
-they stay put as the fill changes; where `Acid`'s `Density` or `Random`'s `Weights` takes the
-top of the third, `Rhythm` goes to the fourth. A `Follow`, which has no `Where`, has its
+dim too, and so are an `Over` that's its column's own and a `Vary` of `Once`. Its settings
+are the shape panel's, laid out by what they do: the fill's down the first two columns,
+and the `Where`'s in the third, so they stay put as the fill changes: a counted one's `Over`
+at the top, then `Hits` and `Rotate`, `Rule` and `Start`, or an amount, such as `Beats`'
+`Density`; `Complementary`'s amount and `Side`; or a named rhythm's `Rhythm`, `Part` and
+`Child`, whose `Over` goes to the fourth. Where `Random`'s `Weights` takes the top of the
+third, what was there goes to the fourth. A `Follow`, which has no `Where`, has its
 `Mutation` and the kinds it may make in the third column and the fourth, and `Acid`,
 whose three are full, its riff's `Spread` and `Bias` in the fourth, as a `Tonnetz` has its
 moves' weights, `P`, `L` and `R`. An `Acid`'s loops

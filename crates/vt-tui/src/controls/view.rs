@@ -1164,15 +1164,17 @@ fn gen_view(of: ParamView, generator: &Generator, context: &Context, param: GenP
     };
     let text = match (param, shape.place) {
         (GenParam::Hits, Where::Euclid { hits, .. }) => {
-            let open = context.open;
-            format!("{} of the {open} rows", usize::from(hits).min(open))
+            let rows = context.rows;
+            format!("{} of the {rows} rows", usize::from(hits).min(rows))
         }
         _ => param.shown(&shape, context),
     };
-    // A `Where` that's its column's own, and a `Vary` of `Once`, are dim, as they're set.
+    // A `Where` and an `Over` that are its column's own, and a `Vary` of `Once`, are dim, as
+    // they're set.
     let set = &generator.shape;
     let engaged = match param {
-        GenParam::Where => set.place != context.default_where(),
+        GenParam::Where => set.place != context.default_where(set.kind),
+        GenParam::Over => set.over.is_some(),
         GenParam::Vary => set.vary != 0,
         _ => true,
     };

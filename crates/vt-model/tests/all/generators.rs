@@ -1027,3 +1027,39 @@ fn a_rescale_leaves_alone_what_has_no_live_notes() {
         &next.tracks[0].phrases[&0]
     ));
 }
+
+/// On a Note column with notes, a live `Euclid` over every row (decision 448) re-pitches the notes
+/// on its hits and writes notes of its own on the hits without one. A note it re-pitches keeps its
+/// own velocity, which an edit changes and the generator stays live; a note of its own owns its
+/// velocity, so an edit to that applies it.
+#[test]
+fn a_live_pattern_over_notes_writes_its_hits_and_leaves_the_notes_velocities_theirs() {
+    let start = song_with(&[EMPTY, NOTE, EMPTY, NOTE, EMPTY, EMPTY, NOTE, EMPTY]);
+    let column = ShapeColumn::Note {
+        scale: Scale::default(),
+        writes: Some(0x50),
+    };
+    let tresillo = ramp(60, 72, Where::Euclid { hits: 3, rotate: 0 });
+    let live = generate(&start, column, all(8), tresillo);
+    let notes: Vec<usize> = texts(&live)
+        .iter()
+        .enumerate()
+        .filter(|(_, text)| !text.starts_with("---"))
+        .map(|(row, _)| row)
+        .collect();
+    assert_eq!(notes, [0, 1, 3, 6], "x..x..x. and the note on row 1 left");
+    assert_eq!(texts(&live)[1], NOTE, "outside the selection, as it was");
+    assert_eq!(velocities(&live)[0], "50", "a note of its own");
+    assert_eq!(velocities(&live)[3], "40", "a note there keeps its own");
+    let edited = set_velocity(&live, 3, 0x22);
+    assert_eq!(phrase(&edited).generators().len(), 1, "still live");
+    assert_eq!(velocities(&edited)[3], "22");
+    let turned = reshape(
+        &edited,
+        0,
+        ramp(48, 72, Where::Euclid { hits: 3, rotate: 0 }),
+    );
+    assert_eq!(velocities(&turned)[3], "22", "the edit is the note's own");
+    let applied = set_velocity(&turned, 0, 0x11);
+    assert!(phrase(&applied).generators().is_empty());
+}

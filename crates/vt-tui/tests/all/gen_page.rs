@@ -154,7 +154,12 @@ fn an_acid_riffs_spread_and_bias_are_in_the_fourth_column() {
 fn an_acids_loops_are_a_device_of_their_own_and_space_g_a_keeps_the_pass_heard() {
     use vt_engine::link::Command;
     let (mut app, mut realtime) = on_gen_page();
-    keys(&mut app, "Kacid<Enter>");
+    // On the beats, as its rhythm on an empty column, so the rhythm loops too.
+    keys(&mut app, "Kacid<Enter>lKbeats<Enter>h");
+    assert_eq!(
+        generators(&app)[0].shape.place,
+        vt_model::shape::Where::Beats(50)
+    );
     let text = fx_page_text(&app).join("\n");
     assert!(
         text.contains("Loops") && text.contains("Trig loop"),
