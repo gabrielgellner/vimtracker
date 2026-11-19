@@ -979,7 +979,7 @@ impl Hall {
         pre: 0x08,
         decay: 0x60,
         lows: 0x98,
-        damp: 0x20,
+        damp: 0x30,
         size: 0x80,
         early: 0x80,
         excursion: 0x80,

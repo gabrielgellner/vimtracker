@@ -1,22 +1,18 @@
 //! A stereo hall: a feedback delay network after Jot and Chaigne (1991), laid out as Fons
 //! Adriaensen's zita-rev1 lays its out (freeverb3's `zrev`). Each side goes through the cuts and a
-//! pre-delay, then four all-passes that spread it; the left feeds four of eight lines and the
-//! right the other four, as zita-rev1's do. Each line is an all-pass and a delay whose read
-//! wobbles slowly and is read between samples by a cubic; what comes out of the eight is mixed by
-//! an 8x8 Hadamard matrix, which keeps all of it, and goes back in through each line's absorption,
-//! which keeps of the lows, the middle and the highs what each band's `Decay` asks for that line's
-//! length. Early reflections are taps on the pre-delay, freeverb3's `earlyref` pattern, and the
-//! late tail is four lines a side, taken with signs that don't cancel in mono (decision 440).
+//! pre-delay, then seven all-passes that spread it; the left feeds four of eight lines and the
+//! right the other four, as zita-rev1's do. Each line is an all-pass and a delay, both read
+//! between samples by a cubic where a slow random wobble of their own has them; what comes out of
+//! the eight is mixed by an 8x8 Hadamard matrix, which keeps all of it, and goes back in through
+//! each line's absorption, which keeps of the lows, the middle and the highs what each band's
+//! `Decay` asks for that line's length. Each side hears its own four lines' reads, as zita-rev1's
+//! outputs do, and early reflections before them: 64 taps a side on the pre-delay, at times
+//! scattered rather than evenly spaced, smoothed by five short all-passes (decision 440).
 //!
 //! The lines' lengths are prime numbers of frames at 48 kHz, spread over 1:1.5, scaled to the
 //! rate and by `Size`, which moves no faster than its whole range in a second, as the plate's
 //! does. Its memory comes from the effect pool, long enough for the biggest hall at the pool's
 //! rate.
-//!
-//! The early reflections' times and gains are freeverb3's `earlyref.cpp` preset 11:
-//!
-//! Copyright (C) 2006-2018 Teru Kamogashira. Freeverb3 is free software, under the GNU General
-//! Public License version 2 or any later version, so it's used here under version 3.
 
 use vt_model::insert::{
     Hall as Settings, REVERB_DECAY_SECONDS, hall_lows, hall_size, reverb_decay_seconds,
@@ -42,33 +38,30 @@ const DELAYS: [usize; LINES] = [2879, 3457, 3907, 4409, 3061, 3253, 3673, 4153];
 const LOOP_ALLPASSES: [usize; LINES] = [443, 701, 859, 1031, 547, 619, 787, 953];
 /// How much the lines' all-passes spread, alternately added and taken away, as zita-rev1's.
 const LOOP_SPREAD: f32 = 0.6;
-/// Each side's input all-passes, in frames at the tuning rate, and how much they spread.
-const DIFFUSERS: [[usize; 4]; 2] = [[211, 157, 103, 67], [223, 163, 109, 71]];
+/// Each side's input all-passes, in frames at the tuning rate, and how much they spread: primes
+/// from 1.6 to 19 ms, about evenly in ratio. Four short ones, as zita-rev1 has, left the tail's
+/// first trips round the lines as clumps a round trip apart, which a snare heard as a roll.
+const DIFFUSERS: [[usize; 7]; 2] = [
+    [887, 619, 421, 283, 191, 127, 79],
+    [907, 601, 433, 277, 197, 131, 83],
+];
 const DIFFUSION: f32 = 0.7;
-/// The early reflections at `Size` `80`, each side's, in seconds, and their gains: freeverb3's
-/// `earlyref` preset 11.
-const EARLY_SECONDS: [[f32; 11]; 2] = [
-    [
-        0.003568, 0.011703, 0.019526, 0.024870, 0.037740, 0.048089, 0.053948, 0.061333, 0.061344,
-        0.070073, 0.077130,
-    ],
-    [
-        0.002818, 0.009115, 0.017042, 0.023885, 0.033068, 0.042307, 0.051234, 0.059896, 0.067984,
-        0.067995, 0.076458,
-    ],
-];
-const EARLY_GAINS: [[f32; 11]; 2] = [
-    [
-        0.963333, -0.806667, 0.706667, -0.656667, -0.556667, 0.526667, -0.506667, 0.503333,
-        0.450000, -0.470000, 0.456667,
-    ],
-    [
-        0.980000, -0.850000, 0.726667, -0.660000, 0.583333, 0.553333, -0.503333, 0.486667,
-        -0.473333, -0.466667, 0.463333,
-    ],
-];
-/// How loud the early reflections are at the top of `Early`, against the tail.
-const EARLY_LEVEL: f32 = 0.25;
+/// How many early reflections each side has, from when to when at `Size` `80`, in seconds, and
+/// how fast they fall away: in this time they're 1/e as loud.
+const EARLY_TAPS: usize = 64;
+const EARLY_FIRST: f32 = 0.003;
+const EARLY_LAST: f32 = 0.09;
+const EARLY_FALL: f32 = 0.08;
+/// Which of the hashed patterns the taps are: the third, whose envelope repeats least.
+const EARLY_SEED: i64 = 3;
+/// Each side's all-passes on the early reflections, in frames at the tuning rate, and how much
+/// they spread: primes under 3.2 ms, which smear each tap into a short burst, too short to be
+/// heard as an echo of it.
+const EARLY_DIFFUSERS: [[usize; 5]; 2] = [[149, 113, 83, 61, 43], [151, 109, 79, 67, 41]];
+const EARLY_DIFFUSION: f32 = 0.7;
+/// How loud the early reflections are at the top of `Early`, against the tail, their taps' gains
+/// adding to 1 in energy.
+const EARLY_LEVEL: f32 = 1.75;
 /// Where the absorption's shelves turn, in hertz.
 const LOW_CROSSOVER_HZ: f32 = 500.0;
 const HIGH_CROSSOVER_HZ: f32 = 2_000.0;
@@ -81,33 +74,113 @@ const DARKEST: f32 = 0.1;
 const LARGEST: f32 = 2.0;
 /// How far `Size` moves in a second at most, as the plate's.
 const SIZE_PER_SECOND: f32 = 1.5;
-/// How far a line's read wobbles at the top of `Mod`, in seconds, and how fast each line's goes,
-/// in hertz: slow, and never together, so the modes drift apart without a chorus. At the fastest
-/// and deepest the pitch moves by under 4 cents.
-const MOST_WOBBLE: f32 = 0.0007;
-const WOBBLE_HZ: [f64; LINES] = [0.13, 0.41, 0.21, 0.31, 0.17, 0.47, 0.26, 0.36];
-/// How far each wobble starts round its circle, so no two lines move together.
-const WOBBLE_PHASES: [f64; LINES] = [0.0, 0.31, 0.62, 0.13, 0.84, 0.45, 0.27, 0.71];
+/// How far a line's delay and its all-pass are moved at the top of `Mod`, in seconds, and how
+/// often each of the sixteen takes a new random place to glide to, in hertz: the lines' first,
+/// then the all-passes'. Each wanders on its own, at rates no two share, so the modes drift apart
+/// without the tail sweeping as a flanger does; sine wobbles at the lines alone, over twice as
+/// deep, were heard as one.
+const MOST_WOBBLE: f32 = 0.0003;
+const WOBBLE_HZ: [f64; WOBBLES] = [
+    2.0, 2.26, 1.74, 2.58, 1.86, 2.14, 2.42, 1.62, 2.5, 2.23, 2.93, 2.08, 2.78, 2.38, 3.08, 2.63,
+];
+const WOBBLES: usize = LINES * 2;
+/// The cubic through four random points can overshoot them by a quarter, so the lines have room
+/// for that.
+const OVERSHOOT: f32 = 1.25;
 /// The longest pre-delay, in seconds, as the reverbs'.
 const LONGEST_PRE: f32 = 0.25;
 /// How much of each side goes into the lines, and how loud the tail comes out.
 const INPUT_GAIN: f32 = 0.5;
-const WET: f32 = 0.82;
+const WET: f32 = 0.78;
 /// How much longer a trip round a line lasts than its delay and all-pass, as far as its tail goes,
 /// as the reverb's `HELD`: its all-pass holds some frequencies back longer, and those last. From
 /// measuring the middle at 2 s and 16 s, where it's 5% and 3% long without it.
 const HELD: f32 = 1.04;
-/// Which lines each side hears, and with what sign: four each, so their sum in mono is eight
-/// different lines, which nothing cancels.
-const OUT_SIGNS: [[f32; LINES]; 2] = [
-    [1.0, -1.0, 1.0, -1.0, 0.0, 0.0, 0.0, 0.0],
-    [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, -1.0, -1.0],
-];
 /// The sign each side goes into its four lines with, as zita-rev1's.
 const IN_SIGNS: [f32; 4] = [1.0, 1.0, -1.0, -1.0];
 /// How often the lines' gains are worked out again at most while `Decay`, `Lows`, `Damp` or
 /// `Size` glide, in frames: 24 powers a time, so not every frame.
 const GAINS_EVERY: u32 = 32;
+
+/// A number from -1 to 1 for a stream and a step along it, the same every time: `SplitMix64`'s
+/// mixer over both.
+fn hashed(stream: u64, step: i64) -> f32 {
+    let mut z = stream.wrapping_mul(0x9E37_79B9_7F4A_7C15)
+        ^ (step as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^= z >> 31;
+    (z >> 40) as f32 / (1_u64 << 23) as f32 - 1.0
+}
+
+/// Each side's early reflections at `Size` `80`: when, in seconds, and how loud. One a stretch of
+/// the span divided evenly, somewhere in it, so they're spread out but no two gaps alike; louder
+/// earlier, by a little over or under the fall at random, and of either sign; the gains adding to
+/// 1 in energy.
+fn early_taps() -> [[(f32, f32); EARLY_TAPS]; 2] {
+    std::array::from_fn(|side| {
+        let stream = |what: u64| 100 * what + side as u64;
+        let mut taps: [(f32, f32); EARLY_TAPS] = std::array::from_fn(|tap| {
+            let step = EARLY_SEED * 1000 + tap as i64;
+            let within = (hashed(stream(1), step) + 1.0) * 0.5;
+            let seconds = EARLY_FIRST
+                + (EARLY_LAST - EARLY_FIRST) * (tap as f32 + within) / EARLY_TAPS as f32;
+            let sign = if hashed(stream(2), step) > 0.0 {
+                1.0
+            } else {
+                -1.0
+            };
+            let level = (-(seconds - EARLY_FIRST) / EARLY_FALL).exp()
+                * (0.7 + 0.3 * hashed(stream(3), step).abs());
+            (seconds, sign * level)
+        });
+        let energy: f32 = taps.iter().map(|(_, gain)| gain * gain).sum();
+        for tap in &mut taps {
+            tap.1 /= energy.sqrt();
+        }
+        taps
+    })
+}
+
+/// One of the sixteen wobbles: a cubic through random points, one every `1 / WOBBLE_HZ` seconds,
+/// worked out from where it is along them, so a hall that's slept is where it would have been.
+#[derive(Debug, Clone, Copy, Default)]
+struct Wobble {
+    /// The four points around now, the step of the second, and how far past it now is.
+    points: [f32; 4],
+    step: i64,
+    past: f64,
+    /// How far it goes each frame, in steps.
+    by: f64,
+}
+
+impl Wobble {
+    /// The wobble `which`, this many seconds in.
+    fn at(which: usize, by: f64, seconds: f64) -> Self {
+        let steps = seconds * WOBBLE_HZ[which];
+        let step = steps.floor() as i64;
+        Self {
+            points: std::array::from_fn(|at| hashed(which as u64, step - 1 + at as i64)),
+            step,
+            past: steps - step as f64,
+            by,
+        }
+    }
+
+    /// Where it is now, from -1.25 to 1.25 at most, and on a frame.
+    #[inline]
+    fn next(&mut self, which: usize) -> f32 {
+        self.past += self.by;
+        if self.past >= 1.0 {
+            self.past -= 1.0;
+            self.step += 1;
+            let [_, a, b, c] = self.points;
+            self.points = [a, b, c, hashed(which as u64, self.step + 2)];
+        }
+        let [a, b, c, d] = self.points;
+        hermite(a, b, c, d, self.past as f32)
+    }
+}
 
 /// How long each line is at a rate and size, in frames: its delay and its all-pass.
 fn line_frames(rate: u32, stretch: f32) -> [f32; LINES] {
@@ -242,6 +315,21 @@ pub fn tail(settings: Settings, rate: u32) -> Option<Tail> {
     })
 }
 
+/// The line at `base` read `back` frames back, between samples by the four-point cubic.
+#[inline]
+fn read_between(lines: &SharedLines, base: usize, back: f32) -> f32 {
+    let back = back.max(1.0);
+    let whole = back as usize;
+    let between = back - whole as f32;
+    hermite(
+        lines.read(base, whole - 1),
+        lines.read(base, whole),
+        lines.read(base, whole + 1),
+        lines.read(base, whole + 2),
+        between,
+    )
+}
+
 /// One line's place in the shared buffer: where its delay starts and its length at the tuning
 /// rate, and where its all-pass starts and its length here.
 #[derive(Debug, Clone, Copy)]
@@ -257,20 +345,25 @@ struct Line {
 pub(crate) struct Hall {
     lines: SharedLines,
     tank: [Line; LINES],
-    /// Each side's input all-passes: where each starts and how long it is here.
-    diffusers: [[(usize, usize); 4]; 2],
+    /// Each side's input all-passes and its early reflections' all-passes: where each starts and
+    /// how long it is here.
+    diffusers: [[(usize, usize); 7]; 2],
+    early_diffusers: [[(usize, usize); 5]; 2],
+    /// Each side's early reflections, when at `Size` `80`, in frames here, and how loud.
+    early_taps: [[(f32, f32); EARLY_TAPS]; 2],
     /// Each line's shelves' states.
     absorbing: [[[f32; 2]; 2]; LINES],
     /// The bands' tails, and each line's absorption for them at the size it was worked out for.
     bands: [Smoothed; 3],
     absorption: [Absorption; LINES],
     spreads: [f32; LINES],
+    /// How much each side's input all-passes spread, by the same rule as the lines' all-passes.
+    diffusions: [[f32; 7]; 2],
     gains_for: ([f32; 3], f32),
     /// How many frames until they may be worked out again.
     gains_wait: u32,
-    /// Each line's wobble, as a point going round a circle, and how far it turns each frame.
-    wobble: [(f32, f32); LINES],
-    turn: [(f32, f32); LINES],
+    /// The lines' delays' wobbles, then their all-passes', and how far they go at most, in frames.
+    wobbles: [Wobble; WOBBLES],
     depth: Smoothed,
     /// Each side's pre-delay, which the early reflections read from too.
     pre: [Vec<f32>; 2],
@@ -304,44 +397,43 @@ impl Hall {
             base += frames.ceil() as usize + 4;
             at
         };
-        let most_wobble = MOST_WOBBLE * rate as f32;
+        let most_wobble = MOST_WOBBLE * OVERSHOOT * rate as f32;
         let tank = std::array::from_fn(|line| {
             let delay_frames = DELAYS[line] as f32;
             let allpass_frames = LOOP_ALLPASSES[line] as f32;
             Line {
                 delay: place(delay_frames * scale * LARGEST + most_wobble),
                 delay_frames,
-                allpass: place(allpass_frames * scale * LARGEST),
+                allpass: place(allpass_frames * scale * LARGEST + most_wobble),
                 allpass_frames,
             }
         });
-        let diffusers = DIFFUSERS.map(|side| {
-            side.map(|frames| {
-                let length = ((frames as f32 * scale) as usize).max(1);
-                (place(length as f32), length)
-            })
-        });
-        let longest_early = EARLY_SECONDS
-            .iter()
-            .flatten()
-            .fold(0.0_f32, |most, seconds| most.max(*seconds));
-        let pre_frames = ((LONGEST_PRE + longest_early * LARGEST) * rate as f32) as usize + 4;
-        let turn = WOBBLE_HZ.map(|hertz| {
-            let angle = std::f64::consts::TAU * hertz / f64::from(rate);
-            (angle.cos() as f32, angle.sin() as f32)
-        });
+        let mut diffuser = |frames: usize| {
+            let length = ((frames as f32 * scale) as usize).max(1);
+            (place(length as f32), length)
+        };
+        let diffusers = DIFFUSERS.map(|side| side.map(&mut diffuser));
+        let early_diffusers = EARLY_DIFFUSERS.map(|side| side.map(&mut diffuser));
+        // A power of two long, so a read wraps round by a mask: the early reflections read it
+        // 128 times a frame.
+        let pre_frames =
+            (((LONGEST_PRE + EARLY_LAST * LARGEST) * rate as f32) as usize + 4).next_power_of_two();
+        let early_taps =
+            early_taps().map(|side| side.map(|(seconds, gain)| (seconds * rate as f32, gain)));
         let mut hall = Self {
             lines: SharedLines::new(base),
             tank,
             diffusers,
+            early_diffusers,
+            early_taps,
             absorbing: [[[0.0; 2]; 2]; LINES],
             bands: [Smoothed::at(1.0); 3],
             absorption: [Absorption::default(); LINES],
             spreads: [LOOP_SPREAD; LINES],
+            diffusions: [[DIFFUSION; 7]; 2],
             gains_for: ([f32::NAN; 3], f32::NAN),
             gains_wait: 0,
-            wobble: [(1.0, 0.0); LINES],
-            turn,
+            wobbles: [Wobble::default(); WOBBLES],
             depth: Smoothed::at(0.0),
             pre: [vec![0.0; pre_frames], vec![0.0; pre_frames]],
             pre_write: 0,
@@ -416,12 +508,10 @@ impl Hall {
 
     /// Move the wobbles to where they are this many frames in.
     pub(crate) fn keep_time(&mut self, frames: u64) {
-        let seconds = frames as f64 / f64::from(self.rate);
-        for ((wobble, hertz), phase) in self.wobble.iter_mut().zip(WOBBLE_HZ).zip(WOBBLE_PHASES) {
-            let turns = seconds * hertz + phase;
-            let angle = std::f64::consts::TAU * (turns - turns.floor());
-            *wobble = (angle.cos() as f32, angle.sin() as f32);
-        }
+        let rate = f64::from(self.rate);
+        let seconds = frames as f64 / rate;
+        self.wobbles =
+            std::array::from_fn(|which| Wobble::at(which, WOBBLE_HZ[which] / rate, seconds));
     }
 
     /// Jump to the settings, for starting afresh.
@@ -443,7 +533,10 @@ impl Hall {
     /// them, how much each line's all-pass spreads: `LOOP_SPREAD`, or less where the shortest band
     /// is short. An all-pass's echoes of itself go round it whatever the line keeps, so it spreads
     /// no more than the shortest band keeps over twice its length; at once its length, the
-    /// all-passes' ringing and the band's together measured twice as long as the band.
+    /// all-passes' ringing and the band's together measured twice as long as the band. The input's
+    /// all-passes, which don't scale with `Size`, no more than it keeps over four times theirs:
+    /// seven in a row ring longer than one, and at `DIFFUSION` the longest alone rings for a third
+    /// of a second; all seven at it measured a half-second tail a sixth long.
     #[inline]
     fn gains(&mut self, bands: [f32; 3], stretch: f32) -> ([Absorption; LINES], [f32; LINES]) {
         self.gains_wait = self.gains_wait.saturating_sub(1);
@@ -458,6 +551,12 @@ impl Hall {
             self.spreads = LOOP_ALLPASSES.map(|frames| {
                 let frames = (frames as f32 * scale) as usize as f32;
                 LOOP_SPREAD.min(0.001_f32.powf(2.0 * frames / (shortest * self.rate as f32)))
+            });
+            let rate = self.rate as f32;
+            self.diffusions = self.diffusers.map(|side| {
+                side.map(|(_, frames)| {
+                    DIFFUSION.min(0.001_f32.powf(4.0 * frames as f32 / (shortest * rate)))
+                })
             });
             self.gains_for = (bands, stretch);
             self.gains_wait = GAINS_EVERY;
@@ -481,7 +580,7 @@ impl Hall {
         let scale = self.scale * stretch;
 
         // The cuts, then each side into its pre-delay.
-        let length = self.pre[0].len();
+        let mask = self.pre[0].len() - 1;
         let mut cut = input;
         for (side, sample) in cut.iter_mut().enumerate() {
             if let Some((_, c)) = &self.low_cut {
@@ -498,72 +597,73 @@ impl Hall {
         let read = |line: &[f32], back: f32| {
             let whole = back as usize;
             let fraction = back - whole as f32;
-            let a = line[(self.pre_write + length - whole) % length];
-            let b = line[(self.pre_write + length - whole - 1) % length];
+            let a = line[self.pre_write.wrapping_sub(whole) & mask];
+            let b = line[self.pre_write.wrapping_sub(whole + 1) & mask];
             a + (b - a) * fraction
         };
         let held = [read(&self.pre[0], back), read(&self.pre[1], back)];
         let mut early = [0.0; 2];
         if early_level > 0.0 {
-            let rate = self.rate as f32;
             for (side, out) in early.iter_mut().enumerate() {
-                *out = EARLY_SECONDS[side]
+                *out = self.early_taps[side]
                     .iter()
-                    .zip(EARLY_GAINS[side])
-                    .map(|(seconds, gain)| {
-                        read(&self.pre[side], back + seconds * stretch * rate) * gain
-                    })
+                    .map(|(frames, gain)| read(&self.pre[side], back + frames * stretch) * gain)
                     .sum::<f32>()
                     * early_level;
             }
         }
-        self.pre_write = (self.pre_write + 1) % length;
+        self.pre_write = (self.pre_write + 1) & mask;
+        let wobbles: [f32; WOBBLES] =
+            std::array::from_fn(|which| self.wobbles[which].next(which) * depth);
 
         let lines = &mut self.lines;
         lines.advance();
-        // Each side spread by its all-passes.
+        // Each side spread by its all-passes, and its early reflections by theirs.
         let mut diffused = held.map(|sample| sample * INPUT_GAIN);
-        for (sample, side) in diffused.iter_mut().zip(self.diffusers) {
+        for ((sample, side), spreads) in
+            diffused.iter_mut().zip(self.diffusers).zip(self.diffusions)
+        {
+            for ((base, length), spread) in side.into_iter().zip(spreads) {
+                *sample = lines.allpass(base, length, *sample, spread);
+            }
+        }
+        for (sample, side) in early.iter_mut().zip(self.early_diffusers) {
             for (base, length) in side {
-                *sample = lines.allpass(base, length, *sample, DIFFUSION);
+                *sample = lines.allpass(base, length, *sample, EARLY_DIFFUSION);
             }
         }
 
         // What each line gives now, read between samples where its wobble has it, with each
-        // side's input added and through its all-pass.
+        // side's input added and through its all-pass, read where its own wobble has it. Each
+        // side hears its own four lines' reads: what goes in cancels in their sum, so the tail
+        // starts with the shortest line, every trip round already spread by the all-passes.
         let mut x = [0.0_f32; LINES];
-        for (line, out) in x.iter_mut().enumerate() {
+        let mut out = early;
+        for (line, into) in x.iter_mut().enumerate() {
             let Line {
                 delay,
                 delay_frames,
                 allpass,
                 allpass_frames,
             } = self.tank[line];
-            let (cos, sin) = self.wobble[line];
-            let (turn_cos, turn_sin) = self.turn[line];
-            self.wobble[line] = (
-                cos * turn_cos - sin * turn_sin,
-                sin * turn_cos + cos * turn_sin,
-            );
-            let back = (delay_frames * scale + depth * sin).max(2.0);
-            let whole = back as usize;
-            let between = back - whole as f32;
-            let given = hermite(
-                lines.read(delay, whole - 1),
-                lines.read(delay, whole),
-                lines.read(delay, whole + 1),
-                lines.read(delay, whole + 2),
-                between,
-            );
+            let given = read_between(lines, delay, delay_frames * scale + wobbles[line]);
             let side = line / 4;
+            out[side] += given * WET;
             let sample = given + diffused[side] * IN_SIGNS[line % 4];
             let spread = if line % 2 == 0 {
                 spreads[line]
             } else {
                 -spreads[line]
             };
-            let frames = (allpass_frames * scale) as usize;
-            *out = lines.allpass(allpass, frames.max(1), sample, spread);
+            // An all-pass `frames` long reads `frames - 1` back before it writes.
+            let read = read_between(
+                lines,
+                allpass,
+                allpass_frames * scale - 1.0 + wobbles[LINES + line],
+            );
+            let sum = sample + read * spread;
+            lines.write(allpass, 0, sum);
+            *into = read - sum * spread;
         }
 
         // Hadamard's matrix, as zita-rev1 does it, by butterflies.
@@ -577,10 +677,6 @@ impl Hall {
             }
         }
         let norm = (LINES as f32).sqrt().recip();
-        let mut out = early;
-        for (side, signs) in out.iter_mut().zip(OUT_SIGNS) {
-            *side += x.iter().zip(signs).map(|(x, sign)| x * sign).sum::<f32>() * norm * WET;
-        }
         for line in 0..LINES {
             let kept = absorption[line].absorb(&mut self.absorbing[line], x[line] * norm);
             lines.write(self.tank[line].delay, 0, kept);
@@ -707,9 +803,19 @@ mod tests {
     fn each_band_falls_in_its_own_time_as_its_tail_says() {
         // Lows, middle and highs set apart, measured at 125 Hz, 1 kHz and 8 kHz, well inside
         // their bands, against `band_seconds`; and the tail drawn against a click through it.
-        // Seen: the bands within 11%, the drawing within 8%.
+        // With early reflections, as it's heard: without them the tail starts with the shortest
+        // line, 60 ms in, and a band that holds two times, as 1 kHz between long lows and short
+        // highs or 4 kHz with the middle's leaking in, is fitted from 5 to 35 dB down later on
+        // its curve (2.8 s for 2.0 at 1 kHz at `Lows` and `Damp` `FF`, 1.4 s for 0.3 at 4 kHz).
+        // At `Early`'s top they're most of a highs' tail of 0.3 s, so the drawing's at `40`.
+        // Seen: the bands within 10%, the drawing within 6%.
         for (lows, damp) in [(0x40, 0x00), (0x80, 0x80), (0xC0, 0xC0), (0xFF, 0xFF)] {
-            let settings = Settings { lows, damp, ..FLAT };
+            let settings = Settings {
+                lows,
+                damp,
+                early: Settings::DEFAULT.early,
+                ..FLAT
+            };
             let [low, middle, high] = band_seconds(settings);
             for (hertz, set) in [(125.0, low), (1000.0, middle), (8000.0, high)] {
                 let mut hall = hall(settings, RATE);
@@ -719,6 +825,10 @@ mod tests {
                     "{lows:02X} {damp:02X} at {hertz} Hz: {measured} for {set}"
                 );
             }
+            let settings = Settings {
+                early: 0x40,
+                ..settings
+            };
             let said = tail(settings, RATE).unwrap();
             let mut hall = hall(settings, RATE);
             let ratios = ratios(said, |x| hall.process([x, x]), RATE);
@@ -742,10 +852,12 @@ mod tests {
     }
 
     #[test]
-    fn its_tail_is_as_dense_as_noise_within_100_ms() {
-        for settings in [Settings::DEFAULT, FLAT] {
+    fn it_is_as_dense_as_noise_soon_after_it_starts() {
+        // From 50 ms with its early reflections; without them, from 60 ms after its shortest line
+        // first comes round, 60 ms in.
+        for (settings, from) in [(Settings::DEFAULT, 0.05), (FLAT, 0.12)] {
             let out = impulse(&mut hall(settings, RATE), RATE as usize / 2);
-            for at in [0.1, 0.15, 0.2, 0.3, 0.4] {
+            for at in [from, 0.15, 0.2, 0.3, 0.4] {
                 let density = echo_density(&out, at);
                 assert!(density > 0.85, "{settings:?} at {at} s: {density}");
             }
@@ -788,8 +900,10 @@ mod tests {
                         _ => 0.0,
                     };
                     let out = hall.process([level, -level * 0.5]);
+                    // The early reflections at the top of `Early` and the smallest size add up
+                    // to a little over 8 on full-scale noise.
                     assert!(
-                        out.iter().all(|s| s.is_finite() && s.abs() < 8.0),
+                        out.iter().all(|s| s.is_finite() && s.abs() < 12.0),
                         "{decay:x} {lows:x} {size:x} {rate}: {out:?}"
                     );
                     if frame >= rate as usize * 3 {
@@ -843,16 +957,35 @@ mod tests {
     }
 
     #[test]
-    fn its_wobble_moves_pitch_by_under_four_cents() {
-        // A read moving by `depth` frames at `hertz` bends the pitch by up to depth times the
-        // wobble's angular speed, as a share of the frequency.
-        let depth = MOST_WOBBLE;
-        let fastest = WOBBLE_HZ
-            .iter()
-            .fold(0.0_f64, |most, hertz| most.max(*hertz));
-        let bend = f64::from(depth) * std::f64::consts::TAU * fastest;
-        let cents = 1200.0 * (1.0 + bend).log2();
-        assert!(cents < 4.0, "{cents}");
+    fn its_wobble_moves_pitch_by_under_five_cents() {
+        // A read moving bends the pitch by how fast it moves, in seconds a second, as a share of
+        // the frequency: at the top of `Mod`, the steepest any of the sixteen goes in 200 s.
+        let mut steepest = 0.0_f32;
+        for (which, hertz) in WOBBLE_HZ.iter().enumerate() {
+            let mut wobble = Wobble::at(which, hertz / f64::from(RATE), 0.0);
+            let mut was = wobble.next(which);
+            for _ in 0..RATE * 200 {
+                let now = wobble.next(which);
+                steepest = steepest.max((now - was).abs() * RATE as f32);
+                was = now;
+            }
+        }
+        let cents = 1200.0 * (1.0 + steepest * MOST_WOBBLE).log2();
+        // Seen: 4.4.
+        assert!(cents < 5.0, "{cents}");
+    }
+
+    #[test]
+    fn its_wobbles_are_where_the_frame_count_says() {
+        // One that's slept, moved on by the count, is where one that ran all along is.
+        let mut ran = Wobble::at(3, WOBBLE_HZ[3] / f64::from(RATE), 0.0);
+        for _ in 0..RATE * 7 {
+            ran.next(3);
+        }
+        let mut slept = Wobble::at(3, WOBBLE_HZ[3] / f64::from(RATE), 7.0);
+        for _ in 0..1000 {
+            assert!((ran.next(3) - slept.next(3)).abs() < 1e-3);
+        }
     }
 
     #[test]
