@@ -7,13 +7,13 @@
 //!   little random flutter between them, part of it each side's own, and each line's speed
 //!   wandering by about a percent.
 //! - **Wow** is a slow, smooth random drift from about 0.1 Hz to 1.5 Hz, as the reels' tension
-//!   changes, not a sine, and slight: a studio machine's, and Satin's, is far under its flutter.
+//!   changes, not a sine: a lean in pitch rather than a pulse.
 //!
 //! Both are worked out as the tape's speed, in cents, every 16 frames, and summed into how far the
 //! line is read back, going straight between. Each knob's depth is even in its value, and `00` none
 //! at all: the line is then read seven frames back, still, and exactly. `Flutter`'s `FF` is about
-//! 9.6 cents rms, Satin's `Wow & Flutter` at 100; `Wow`'s is 0.8 cents, what Satin's has under
-//! 6 Hz at 100.
+//! 9.6 cents rms, Satin's `Wow & Flutter` at 100, and `Wow`'s the same, so its top moves the pitch
+//! as far as Satin's whole knob does, only slowly.
 
 use std::f32::consts::TAU;
 
@@ -27,7 +27,7 @@ const CONTROL_FRAMES: u32 = 16;
 pub(super) const READ_BACK: f32 = (TAPS / 2 - 1) as f32;
 /// Cents rms at the top of each knob.
 pub(super) const MOST_FLUTTER_CENTS: f32 = 9.6;
-pub(super) const MOST_WOW_CENTS: f32 = 0.8;
+pub(super) const MOST_WOW_CENTS: f32 = 9.6;
 /// Where wow's band starts and ends, in Hz.
 const WOW_LOWEST_HZ: f32 = 0.1;
 const WOW_HIGHEST_HZ: f32 = 1.5;
@@ -215,10 +215,11 @@ impl Transport {
         2.0 * (Self::wow_room() + Self::flutter_room()) * rate as f32
     }
 
-    /// How far wow can read the line back, in seconds: four times its most there, from where its
-    /// band starts.
+    /// How far wow can read the line back, in seconds: six times how far it reads it back rms, which
+    /// is its speed's rms over `2π 0.44 Hz` (measured over 20 minutes, in which its farthest was
+    /// 4.1 times its rms).
     fn wow_room() -> f32 {
-        4.0 * MOST_WOW_CENTS * CENT / (TAU * WOW_LOWEST_HZ)
+        6.0 * MOST_WOW_CENTS * CENT / (TAU * 0.44)
     }
 
     /// How far flutter can: its slowest line, at 3.75 ips (3.35 Hz), at its fullest.

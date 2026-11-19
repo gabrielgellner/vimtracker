@@ -401,7 +401,7 @@ times the rate the tape is worked at: `4x` as it starts, or `8x`.
 | `Gap` | The head's gap, 1 to 5 µm, 3 µm at `80`: narrower is brighter |
 | `Space` | How far the tape rides off the head, to 1 µm: highs go fast |
 | `Thick` | How deep the coating is read, to 2.4 µm: highs soften gently |
-| `Wow` | A slow, smooth drift in pitch, from the reels: slight |
+| `Wow` | A slow, smooth drift in pitch, from the reels |
 | `Flutter` | A fine, fast wobble, from the capstan and rollers |
 
 A quiet sound comes through at its level at any `Drive` and `Sat`, so
@@ -418,8 +418,9 @@ brightens or darkens the top; at most they take about 10 dB off 16 kHz at
 The head bump at 15 ips is about 1.3 dB near 62 Hz, with the lows falling
 away under 30 Hz; at 7.5 ips it's near 39 Hz and at 30 ips near 80 Hz.
 `Flutter` reaches about 10 cents at `FF`, evenly from none at `00`, and
-moves with the speed; `Wow` is far slighter, under a cent at `FF`, as a
-studio machine's is. At the start there's about a cent,
+moves with the speed: the light, tremolo-like warble of a worn capstan.
+`Wow` reaches as far, about 10 cents, but slowly: the pitch leans sharp
+and flat and back, without a pulse. At the start there's about a cent,
 nearly all flutter. Unlike `Tape` it has no ceiling: a loud sound driven
 hard comes out quieter, as tape squashes it.
 
