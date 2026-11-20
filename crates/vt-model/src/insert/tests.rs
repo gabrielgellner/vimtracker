@@ -188,13 +188,19 @@ fn every_effects_grid_places_each_of_its_settings_once_with_what_comes_out_last(
     {
         let grid = effect.grid();
         let params = effect.params();
-        assert!(
-            grid.places_each_once(
-                params.len(),
-                effect.type_param().into_iter().chain(effect.title_param())
-            ),
-            "{effect:?}: {grid:?}"
-        );
+        // Its second page, if it has one, places the rest (decision 452).
+        let second = effect.second_grid().unwrap_or_default();
+        let mut placed: Vec<usize> = grid.settings().chain(second.settings()).collect();
+        placed.sort_unstable();
+        let elsewhere: Vec<usize> = effect
+            .type_param()
+            .into_iter()
+            .chain(effect.title_params())
+            .collect();
+        let wanted: Vec<usize> = (0..params.len())
+            .filter(|at| !elsewhere.contains(at))
+            .collect();
+        assert_eq!(placed, wanted, "{effect:?}: {grid:?} {second:?}");
         // The column of what comes out is the last one used.
         let used = (0..GRID_COLUMNS)
             .filter(|column| (0..GRID_ROWS).any(|row| grid.at(row, *column).is_some()))
@@ -213,7 +219,7 @@ fn every_effects_grid_places_each_of_its_settings_once_with_what_comes_out_last(
         );
         // A name has its column's ten characters and a space, and a choice the value's and
         // the bar's fourteen.
-        for at in grid.settings() {
+        for at in grid.settings().chain(second.settings()) {
             assert!(params[at].name.len() < 10, "{}", params[at].name);
             for choice in params[at].choices() {
                 assert!(choice.chars().count() <= 14, "{choice}");

@@ -616,6 +616,35 @@ pub fn deck_drive_db(value: f32) -> f32 {
     from_middle(value) * MOST_DECK_DRIVE_DB
 }
 
+/// How many times its format's rate a deck's wow goes round, for a value on the `00` to `FF`
+/// scale: a fifth at `00`, its own at `80`, five times at `FF`, so a cassette's 1 Hz reaches
+/// Cassette's 0.5 to 5 Hz (decision 452).
+pub fn deck_wow_rate(value: f32) -> f32 {
+    5_f32.powf(from_middle(value))
+}
+
+/// The same for its flutter: half at `00` to twice at `FF`, so a cassette's 10 Hz reaches
+/// Cassette's 8 to 20 Hz.
+pub fn deck_flutter_rate(value: f32) -> f32 {
+    2_f32.powf(from_middle(value))
+}
+
+/// How far a deck's playback head is turned off square, as how much later one side plays than the
+/// other, in µs: the right side up to 227 µs late at `00`, none at `80`, the left as late at
+/// `FF`, Cassette's `Azimuth` from -100 to 100.
+pub fn deck_azimuth_us(value: f32) -> f32 {
+    from_middle(value) * MOST_DECK_AZIMUTH_US
+}
+
+/// How late a side plays at either end of a deck's `Azimuth`, in µs.
+pub const MOST_DECK_AZIMUTH_US: f32 = 227.0;
+
+/// How loud each side's highs leak into the other's, in dB, or none at `00`: -70 dB at `01`,
+/// -35 dB at `80`, Cassette's as it starts, and 0 dB at `FF`, Cassette's range.
+pub fn deck_crosstalk_db(value: f32) -> Option<f32> {
+    (value >= 0.5).then(|| -35.0 + (value - 128.0) * 35.0 / 127.0)
+}
+
 /// The speeds a reel runs at, in inches a second, and their names.
 pub const REEL_SPEEDS_IPS: [f32; 4] = [3.75, 7.5, 15.0, 30.0];
 const REEL_SPEED_NAMES: [&str; 4] = ["3.75 ips", "7.5 ips", "15 ips", "30 ips"];
@@ -838,8 +867,21 @@ fn is_type_i(tape: &DeckTape) -> bool {
     *tape == DeckTape::I
 }
 
+/// How many times a deck's sound is copied tape to tape, as Cassette's `Re-cassette` is.
+pub const DECK_GENERATIONS: [&str; 4] = ["x1", "x2", "x3", "x4"];
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_middle(value: &u8) -> bool {
+    *value == 0x80
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_deck_degrade(value: &u8) -> bool {
+    *value == Deck::DEFAULT.degrade
+}
+
 /// A deck's, in the order songs number them.
-pub(crate) const DECK_PARAMS: [Entry; 11] = [
+pub(crate) const DECK_PARAMS: [Entry; 19] = [
     Entry {
         meaning: "the format: a cassette, a VCR's linear audio track, or a worn cassette",
         name: "Type",
@@ -879,16 +921,56 @@ pub(crate) const DECK_PARAMS: [Entry; 11] = [
         default: 0,
         place: Place::Title,
     },
+    Entry {
+        meaning: "how many times it's copied tape to tape, each copy adding its faults again",
+        name: "Generations",
+        key: "gens",
+        label: Some("GEN"),
+        kind: Kind::Stepped {
+            choices: &DECK_GENERATIONS,
+            wraps: false,
+        },
+        default: 0,
+        place: Place::Title,
+    },
+    hex_param("Wow rate", "wowrate", "WRAT", Deck::DEFAULT.wowrate)
+        .units(Units::DeckWowRate)
+        .centred()
+        .means("how fast the wow goes round, against its format's: a fifth to five times"),
+    hex_param("Flut rate", "flutrate", "FRAT", Deck::DEFAULT.flutrate)
+        .units(Units::DeckFlutterRate)
+        .centred()
+        .means("how fast the flutter goes, against its format's: half to twice"),
+    hex_param("Degrade", "degrade", "DEGR", Deck::DEFAULT.degrade)
+        .means("how far the highs dull and come back, slowly and at random, each side its own"),
+    hex_param("Erase", "erase", "ERAS", Deck::DEFAULT.erase)
+        .means("how often the tape was erased before: fuller mids, a duller top"),
+    hex_param("Snap", "snap", "SNAP", Deck::DEFAULT.snap)
+        .means("now and then the tape snags and its pitch dives, more often as it goes up"),
+    hex_param("Azimuth", "azimuth", "AZIM", Deck::DEFAULT.azimuth)
+        .units(Units::DeckAzimuth)
+        .centred()
+        .means("the head off square: one side late, so a mono sum loses its highs"),
+    hex_param("Crosstalk", "crosstalk", "XTLK", Deck::DEFAULT.crosstalk)
+        .units(Units::DeckCrosstalk)
+        .means("how much of each side's highs leak into the other, none at 00"),
     MIX_PARAM,
     GAIN_PARAM,
 ];
 
-/// Where its settings sit on the FX page.
+/// Where its settings sit on the FX page: on the first page what it does to the sound, on the
+/// second (decision 452) its stereo, how fast its wobbles go, under where they are, and the
+/// tape's slow faults, under its quick ones.
 pub(super) const DECK_GRID: Columns = &[
     &["drive", "hiss", "track"],
     &["wow", "flutter"],
     &["drops", "chew"],
     &["mix", "gain"],
+];
+pub(super) const DECK_SECOND: Columns = &[
+    &["azimuth", "crosstalk"],
+    &["wowrate", "flutrate"],
+    &["degrade", "erase", "snap"],
 ];
 
 /// A lo-fi tape deck's settings: its format, and how much of each of its faults. One a file
@@ -904,7 +986,7 @@ pub struct Deck {
     /// The slow wobble in pitch and the fast one, from none at `00`.
     pub wow: u8,
     pub flutter: u8,
-    /// How often and how deep it drops out, and how often it chews, from none at `00`.
+    /// How deep its highs flicker away, and how often it chews, from none at `00`.
     pub drops: u8,
     pub chew: u8,
     /// How far its noise reduction mistracks; none at `00` is no noise reduction.
@@ -912,6 +994,27 @@ pub struct Deck {
     /// Its cassette's tape, saved only when it isn't Type I.
     #[serde(skip_serializing_if = "is_type_i")]
     pub tape: DeckTape,
+    /// How many times it's copied, from once at `0` to four times at `3`. Each setting from here
+    /// to `crosstalk` is saved only when it isn't as it starts (decision 452).
+    #[serde(skip_serializing_if = "is_zero")]
+    pub gens: u8,
+    /// How fast its wow and flutter go against its format's, which they do at `80`.
+    #[serde(skip_serializing_if = "is_middle")]
+    pub wowrate: u8,
+    #[serde(skip_serializing_if = "is_middle")]
+    pub flutrate: u8,
+    /// How far its highs slowly dull, how often it was erased and how often it snags.
+    #[serde(skip_serializing_if = "is_deck_degrade")]
+    pub degrade: u8,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub erase: u8,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub snap: u8,
+    /// Its head's azimuth, square at `80`, and its crosstalk, none at `00`.
+    #[serde(skip_serializing_if = "is_middle")]
+    pub azimuth: u8,
+    #[serde(skip_serializing_if = "is_middle")]
+    pub crosstalk: u8,
     /// From `00`, all dry, to `FF`, all wet.
     pub mix: u8,
     pub gain: u8,
@@ -924,8 +1027,9 @@ impl Default for Deck {
 }
 
 impl Deck {
-    /// As it starts: a Type I cassette at 0 dB, with Cassette's own hiss, wow, flutter and
-    /// dropouts (decision 451), no chew, and no noise reduction, as Cassette has none.
+    /// As it starts: a Type I cassette at 0 dB, with Cassette's own hiss, wow, flutter, dropouts,
+    /// degradation and crosstalk (decisions 451 and 452), no chew, and no noise reduction, as
+    /// Cassette has none.
     pub const DEFAULT: Self = Self {
         kind: DeckType::Cassette,
         drive: 0x80,
@@ -936,6 +1040,14 @@ impl Deck {
         chew: 0x00,
         track: 0x00,
         tape: DeckTape::I,
+        gens: 0,
+        wowrate: 0x80,
+        flutrate: 0x80,
+        degrade: 0x40,
+        erase: 0x00,
+        snap: 0x00,
+        azimuth: 0x80,
+        crosstalk: 0x80,
         mix: 0xFF,
         gain: UNITY_LEVEL,
     };
@@ -950,6 +1062,14 @@ impl Deck {
         chew,
         track,
         tape: DeckTape,
+        gens,
+        wowrate,
+        flutrate,
+        degrade,
+        erase,
+        snap,
+        azimuth,
+        crosstalk,
         mix,
         gain,
     }

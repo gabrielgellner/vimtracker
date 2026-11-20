@@ -26,7 +26,7 @@ impl<T: Copy> Grid<T> {
     }
 
     /// A grid from its columns, each listing its settings from the top. Past four columns, or past
-    /// three in a column, they're left out, which [`Grid::places_each_once`] catches.
+    /// three in a column, they're left out, which the effects' tests catch.
     pub fn from_columns<C: AsRef<[Option<T>]>>(columns: &[C]) -> Self {
         let mut grid = Self::default();
         for (column, settings) in columns.iter().take(GRID_COLUMNS).enumerate() {
@@ -56,22 +56,5 @@ impl<T: Copy> Grid<T> {
     /// Every setting it places, column by column.
     pub fn settings(self) -> impl Iterator<Item = T> {
         self.0.into_iter().flatten().flatten()
-    }
-}
-
-impl Grid {
-    /// Whether it places each of a device's settings exactly once, apart from those shown
-    /// elsewhere, such as an effect's type in its title, and nothing that isn't one of them.
-    #[cfg(test)]
-    pub(crate) fn places_each_once(
-        self,
-        count: usize,
-        elsewhere: impl IntoIterator<Item = usize>,
-    ) -> bool {
-        let mut placed: Vec<usize> = self.settings().collect();
-        placed.sort_unstable();
-        let elsewhere: Vec<usize> = elsewhere.into_iter().collect();
-        let wanted: Vec<usize> = (0..count).filter(|at| !elsewhere.contains(at)).collect();
-        placed == wanted
     }
 }

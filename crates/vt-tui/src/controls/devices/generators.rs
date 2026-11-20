@@ -103,6 +103,8 @@ pub(super) fn devices(track: &Track, phrase: Option<u32>) -> Vec<DeviceSpec> {
         width: DeviceWidth::Full,
         title,
         grid: [[None; DEVICE_COLUMNS]; GRID_ROWS],
+        second: None,
+        turned: false,
     });
     devices
 }
@@ -132,6 +134,8 @@ impl DeviceSpec {
             width: DeviceWidth::Full,
             title,
             grid,
+            second: None,
+            turned: false,
         }
     }
 }
@@ -156,6 +160,8 @@ impl DeviceSpec {
             width: DeviceWidth::Full,
             title: [None; TITLE_PLACES],
             grid,
+            second: None,
+            turned: false,
         })
     }
 
@@ -179,6 +185,8 @@ impl DeviceSpec {
             width: DeviceWidth::Full,
             title: [None; TITLE_PLACES],
             grid,
+            second: None,
+            turned: false,
         })
     }
 
@@ -205,6 +213,8 @@ impl DeviceSpec {
             width: DeviceWidth::Full,
             title: [None; TITLE_PLACES],
             grid,
+            second: None,
+            turned: false,
         }
     }
 
@@ -231,6 +241,8 @@ impl DeviceSpec {
             width: DeviceWidth::Full,
             title: [None; TITLE_PLACES],
             grid,
+            second: None,
+            turned: false,
         }
     }
 

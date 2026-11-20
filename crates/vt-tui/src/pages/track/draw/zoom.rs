@@ -18,9 +18,9 @@ use vt_model::song::Track;
 
 use super::{
     MeterScale, REDUCTION_CAPTION, REDUCTION_METER_WIDTH, TrackCells, heard_bypassed,
-    reduction_cell, slot_frame, slot_grid,
+    reduction_cell, slot_frame, slot_grid, slot_page,
 };
-use crate::controls::{Control, DeviceSpec, Page};
+use crate::controls::{Control, DeviceSpec};
 use crate::graphics::PanelKey;
 use crate::pages::Ctx;
 use crate::pages::track::TrackPage;
@@ -70,7 +70,7 @@ const TILE_SPACE: &str = "  ";
 
 /// Draw the FX page zoomed in on the cursor's slot: the strip, a blank line, and the slot.
 pub(super) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx, track: &Track) {
-    let devices = Page::Fx.devices(track);
+    let devices = page.devices(Some(track));
     let Some(last) = devices.len().checked_sub(1) else {
         return;
     };
@@ -97,7 +97,12 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx, t
         true => 0,
         false => panel.height() + 1,
     };
-    let area = take_top(&mut rest, DEVICE_HEIGHT + tall);
+    // An effect with two pages shows both, its other page under a blank line (decision 452).
+    let other = match device.second {
+        Some(_) => GRID_HEIGHT + 1,
+        None => 0,
+    };
+    let area = take_top(&mut rest, DEVICE_HEIGHT + tall + other);
     if slot_frame(frame, area, page, ctx, track, device).is_none() {
         return;
     }
@@ -106,20 +111,39 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx, t
         let at = Rect::new(top.x, top.y, top.width, panel.height());
         frame.render_widget(panel, at);
     }
-    let below = top.y + tall;
-    let settings = Rect::new(
-        top.x,
-        below,
-        top.width,
-        GRID_HEIGHT.min(area.bottom().saturating_sub(below)),
-    );
+    let rows_at = |below: u16| {
+        Rect::new(
+            top.x,
+            below,
+            top.width,
+            GRID_HEIGHT.min(area.bottom().saturating_sub(below)),
+        )
+    };
+    // Its first page over its second, whichever the cursor is on, the other faint.
+    let first = top.y + tall;
+    let second = first + GRID_HEIGHT + 1;
+    let (here, there) = match device.turned {
+        false => (first, second),
+        true => (second, first),
+    };
     slot_grid(
         frame,
-        settings,
+        rows_at(here),
         (page, ctx, track),
         device,
         CellWidths::ZOOM,
     );
+    if let Some(grid) = &device.second {
+        let faint = Some(theme::cursor(ctx.mode()));
+        slot_page(
+            frame,
+            rows_at(there),
+            (page, ctx, track),
+            grid,
+            CellWidths::ZOOM,
+            faint,
+        );
+    }
 }
 
 /// Every slot as a tile, side by side across the page, the zoomed one's frame brighter, so the

@@ -1756,9 +1756,11 @@ const REEL: DeviceLayout = live(
         ),
     ],
 );
-/// How hard the tape is hit and how much it hisses, how it wobbles and how its tape fails, then
-/// on a second page which tape it is, Type I, II or IV, and how far its noise reduction
-/// mistracks. Its format is chosen in the app.
+/// How hard the tape is hit and how much it hisses, how it wobbles and how its tape fails; on a
+/// second page which tape it is, Type I, II or IV, and how many times it's copied, then how fast
+/// it wobbles under its wow and flutter, its slow faults under its quick ones, and how far its
+/// noise reduction mistracks; and on a third its stereo, the head's azimuth and crosstalk
+/// (decision 452). Its format is chosen in the app.
 const DECK: DeviceLayout = live(
     "fx/deck",
     &[
@@ -1775,7 +1777,23 @@ const DECK: DeviceLayout = live(
                 s("gain"),
             ],
         ),
-        knobs("Tape", [s("tape"), s("track"), __, __, __, __, __, __]),
+        knobs(
+            "Tape",
+            [
+                s("tape"),
+                s("gens"),
+                s("wowrate"),
+                s("flutrate"),
+                s("degrade"),
+                s("erase"),
+                s("snap"),
+                s("track"),
+            ],
+        ),
+        knobs(
+            "Stereo",
+            [s("azimuth"), s("crosstalk"), __, __, __, __, __, __],
+        ),
     ],
 );
 /// How long the rotors take to change, the horn's Doppler and swell, the drive and the width,
@@ -2608,7 +2626,7 @@ pub fn app_only(control: Control, track: &Track) -> bool {
 /// The control of a device a layout's setting names, if the device has it. Steps' values are one
 /// cursor stop on the page, so each of their keys finds the slot's by its number.
 pub fn resolve(setting: &Setting, spec: &DeviceSpec, track: &Track) -> Option<Control> {
-    let controls = || spec.rows().flatten().flatten();
+    let controls = || spec.controls();
     if let Some(at) = STEP_KEYS.iter().position(|step| *step == setting.key) {
         return controls().find_map(|control| match control {
             Control::Mod(slot, ModField::Step(_)) => {

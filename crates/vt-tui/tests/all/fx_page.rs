@@ -1654,3 +1654,71 @@ fn a_space_echo_shows_its_mode_in_its_title_and_the_re_201s_controls_in_its_grid
     let title = slot_title(0, Some(true), "Space Echo  6: H2 +R ─");
     assert!(fx_line(&app, 0).starts_with(&title), "{}", fx_line(&app, 0));
 }
+
+/// A slot whose effect has two pages, `Deck`'s, turns between them with `]p` and `[p`, the cursor
+/// keeping its row and column; one with a single page says so (decision 452).
+#[test]
+fn a_slot_with_two_pages_turns_between_them() {
+    use vt_model::insert::Insert;
+    use vt_model::selection::Motion;
+    use vt_model::song::Track;
+    use vt_tui::controls::{Control, Page};
+    use vt_tui::input::bindings::Cmd;
+    use vt_tui::pages::Outcome;
+    use vt_tui::pages::track::TrackPage;
+    let effect = |name| {
+        *Insert::ALL
+            .iter()
+            .find(|insert| insert.name() == name)
+            .unwrap()
+    };
+    let mut track = Track::default();
+    track.inserts[0] = effect("Deck");
+    track.inserts[1] = effect("Distort");
+    let deck = track.inserts[0];
+    let key = |control| match control {
+        Control::InsertParam(0, at) => deck.params()[at].key,
+        _ => "",
+    };
+    let track = Some(&track);
+    let mut page = TrackPage::default();
+    page.show(Page::Fx);
+    // Its first page as it was: `Drive` under the effect. The title ends in its tape and its
+    // generations.
+    page.key_on(Cmd::Move(Motion::Down), 1, track);
+    assert_eq!(key(page.control(track)), "drive");
+    let devices = page.devices(track);
+    assert_eq!(devices[0].page(), Some((0, 2)));
+    assert_eq!(devices[1].page(), None);
+    let titled: Vec<&str> = devices[0].title[2..4]
+        .iter()
+        .map(|c| key(c.unwrap()))
+        .collect();
+    assert_eq!(titled, ["tape", "gens"]);
+    // `]p` turns to the second, the cursor in the same place, and `[p` back.
+    assert!(matches!(
+        page.key_on(Cmd::SlotPage(true), 1, track),
+        Outcome::Done
+    ));
+    assert_eq!(key(page.control(track)), "azimuth");
+    assert_eq!(page.devices(track)[0].page(), Some((1, 2)));
+    page.key_on(Cmd::Move(Motion::Right), 1, track);
+    assert_eq!(key(page.control(track)), "wowrate");
+    page.key_on(Cmd::Move(Motion::Down), 1, track);
+    assert_eq!(key(page.control(track)), "flutrate");
+    page.key_on(Cmd::SlotPage(false), 1, track);
+    assert_eq!(key(page.control(track)), "flutter");
+    // Every setting is on one page or the other, once.
+    let mut placed: Vec<&str> = page.devices(track)[0].controls().map(key).collect();
+    placed.retain(|key| !key.is_empty());
+    placed.sort_unstable();
+    let mut all: Vec<&str> = deck.params().iter().map(|param| param.key).collect();
+    all.sort_unstable();
+    assert_eq!(placed, all);
+    // A slot with one page stays as it is.
+    page.key_on(Cmd::Move(Motion::NextBeat), 1, track);
+    assert!(matches!(
+        page.key_on(Cmd::SlotPage(true), 1, track),
+        Outcome::Refused("This effect has one page")
+    ));
+}

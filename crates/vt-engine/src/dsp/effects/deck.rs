@@ -23,11 +23,18 @@
 //! - **Wow** is a slow sine and **flutter** the capstan's turn, a sine whose rate and depth wander
 //!   a little; each has noise round its rate, so it wanders rather than repeats, as Cassette's
 //!   randomness does.
-//! - **Degradation**, with the dropouts: the highs dull by a slow, random wander, as Cassette's
-//!   Degradation does.
+//! - **Degradation**: the highs dull by a slow, random wander, as Cassette's Degradation does, and
+//!   the tape skews, so one side plays a few µs later than the other.
 //! - **Dropouts** are its own, not ChowTape's: the tape flickers on and off the head about eight
 //!   times a second, and off it the sound goes through one pole whose corner `Drops` sets, so the
 //!   highs flicker and the lows and mids hold, as Cassette's do.
+//! - **Each side** drops out and degrades by its own, and its highs leak into the other's, so the
+//!   stereo image wanders in the highs as Cassette's does (decision 452). `Azimuth` turns the head
+//!   off square, so one side plays late.
+//! - **Generations** copy it tape to tape up to four times, each copy recorded from the last's
+//!   playback, its wobble nearly in step with the last's. **Erase** is how often the tape was
+//!   erased before, **Snap** a snag now and then that dives the pitch, and the **rates** speed the
+//!   wow and flutter up or slow them down against the format's.
 //! - **Chew** is after ChowTape's `ChewProcessor`, its times simplified: now and then, a stretch of
 //!   crinkled tape where the sound is bent by a power of its level and darkened.
 //! - **The compander** is a one-band Dolby B of a sort: what's above 1.5 kHz is lifted by up to
@@ -49,7 +56,10 @@
 
 use std::f32::consts::{FRAC_1_SQRT_2, FRAC_PI_2, TAU};
 
-use vt_model::insert::{Deck as Settings, DeckTape, DeckType, deck_drive_db};
+use vt_model::insert::{
+    Deck as Settings, DeckTape, DeckType, MOST_DECK_AZIMUTH_US, deck_azimuth_us, deck_crosstalk_db,
+    deck_drive_db, deck_flutter_rate, deck_wow_rate,
+};
 
 use crate::dsp::blocks::biquad::Biquad;
 use crate::dsp::blocks::clip::within;
@@ -437,15 +447,20 @@ const FLUTTER_NOISE: f32 = 0.46;
 /// How far either way each wobble can go, as a share of its sine's depth.
 const WOW_REACH: f32 = 2.5;
 const FLUTTER_REACH: f32 = 3.0;
-/// Degradation, as Cassette's: the highs dulled by a slow, random wander, which deepens the loud
-/// highs' shelf by a typical cut and a spread about it in dB, never below none, at `Drops` `40`
-/// and up; the spread goes up by a power of `Drops`, the typical cut is reached at `40`. The
-/// wander forgets where it was over its seconds and is smoothed at its Hz.
+/// Degradation, as Cassette's: the highs dulled by a slow, random wander, each side its own,
+/// which deepens the loud highs' shelf by a typical cut and a spread about it in dB, never below
+/// none, at `Degrade` `40` and up; the spread goes up by a power of `Degrade`, the typical cut is
+/// reached at `40`. The wander forgets where it was over its seconds and is smoothed at its Hz.
 const DEGRADE_TYPICAL_DB: f32 = 4.0;
-const DEGRADE_MOST_DB: f32 = 6.5;
-const DEGRADE_POWER: f32 = 0.51;
+const DEGRADE_MOST_DB: f32 = 11.0;
+const DEGRADE_POWER: f32 = 0.87;
 const DEGRADE_SECONDS: f32 = 0.3;
 const DEGRADE_HZ: f32 = 3.0;
+/// Each side's tape skews as it degrades, so one side plays a little later than the other by a
+/// slow wander, as Cassette's do: so many seconds a spread of its wander at `Degrade` `FF`, from
+/// so many spreads below none, so it's never early. At `40` the sides wander about 12 µs apart.
+const DEGRADE_SKEW_SECONDS: f32 = 23e-6;
+const DEGRADE_SKEW_REACH: f32 = 3.0;
 /// How many frames the line's length moves in a straight line between workings out, as the
 /// dropouts' and chews' spells are counted and the soft highs' and the dropouts' filters are
 /// worked out again.
@@ -464,6 +479,9 @@ const DROP_GLIDE_SECONDS: f32 = 0.004;
 /// goes up by, so `40` is an eighth, Cassette's own.
 const MOST_DROP_DEPTH: f32 = 0.56;
 const DROP_POWER: f32 = 1.08;
+/// How much later a side plays while its tape is off the head, in seconds a share of
+/// [`DROP_OCTAVES`] it's darkened by, so about 6.5 µs at `40`, as Cassette's do.
+const DROP_SKEW_SECONDS: f32 = 52e-6;
 /// A chew's corner, by one pole.
 const CHEW_HZ: f32 = 5_000.0;
 /// How long the tape runs clean between chews on average, at the least `Chew` and at `FF`, and
@@ -489,10 +507,47 @@ const MOST_MISTRACK_DB: f32 = 12.0;
 /// mean square follows up and down, in seconds.
 const LIMIT_CEILING: f32 = 0.49;
 const LIMIT_SECONDS: (f32, f32) = (0.005, 0.015);
+/// Crosstalk, as Cassette's: each side's highs leak into the other's through one pole's high-pass
+/// at this corner, so -35 dB at the top is -49 dB at 1 kHz and -69 at 100 Hz (decision 452).
+const CROSSTALK_HZ: f32 = 5_000.0;
+/// How many copies it can make, tape to tape.
+const GENERATIONS: usize = 4;
+/// How each copy's wobble adds to the last's: as so many copies to this power, as Cassette's do,
+/// nearly in step (4.97, 9.07, 13.2 and 17.5 cents RMS at x1 to x4).
+const GENERATION_WOBBLE: f32 = 0.91;
+/// How hard a copy hits its tape against the first, as a gain: 3 dB softer, so its harmonics add
+/// to the last's as Cassette's do (-52, -50 and -49 dB of third on a 1 kHz sine at -12 dBFS at x2
+/// to x4).
+const COPY_CURVE: f32 = 0.708;
+/// Erasures, as Cassette's: fuller low mids, a bump at 156 Hz and a notch near 10 kHz, each
+/// deepening in dB with the count, which is Cassette's most, 20, at `Erase` `FF`. Each is a corner,
+/// a Q and its dB at the most.
+const ERASE_FILTERS: [(f32, f32, f32); 3] = [
+    (454.0, 0.172, 4.37),
+    (156.0, 3.02, 3.36),
+    (9_893.0, 3.47, -15.81),
+];
+/// Snaps, as Cassette's: now and then the tape snags, so the line reads up to so much further back
+/// over the rise and then comes back by a decay, in seconds, its depth at random between the
+/// least and the most; at `FF` about so many a second, going as a power of `Snap`, and never two
+/// within the hold.
+const SNAP_SECONDS: (f32, f32) = (0.001, 0.011);
+const SNAP_RISE_SECONDS: f32 = 0.048;
+const SNAP_FALL_SECONDS: f32 = 0.062;
+const SNAP_MOST_PER_SECOND: f32 = 0.9;
+const SNAP_POWER: f32 = 0.75;
+const SNAP_HOLD_SECONDS: f32 = 0.4;
 /// How far, in spreads, a wander can go before it's held.
 const WANDER_REACH: f32 = 2.5;
 /// How far what comes out can go, 12 dB over full scale.
 const HEADROOM: f32 = 4.0;
+
+/// A first-order high-pass's coefficients at a corner, by the bilinear transform: what the change
+/// in its input is scaled by, and how much of its last output it keeps.
+fn first_order_high_pass(hertz: f32, rate: f32) -> (f32, f32) {
+    let warped = (std::f32::consts::PI * hertz / rate).tan();
+    (1.0 / (1.0 + warped), (1.0 - warped) / (1.0 + warped))
+}
 
 /// A level in dB, held off the floor.
 #[inline]
@@ -564,6 +619,7 @@ struct Side {
     unlift: [[f32; 2]; 2],
     soften: [f32; 2],
     tape: [[f32; 2]; 3],
+    erase: [[f32; 2]; 3],
     /// The noise the level is wobbled by, through its three poles.
     wobble: [f32; 2],
     wobble_last: f32,
@@ -602,10 +658,15 @@ struct Frame {
     /// What the curve's level is made up by after, so the drive is no louder, and the lows'
     /// lift into it and its undoing after.
     makeup: f32,
+    /// The same for a copy, which goes onto its tape at no drive.
+    copy_colouring: Colouring,
+    copy_makeup: f32,
     lift: [Biquad; 2],
     unlift: [Biquad; 2],
-    /// The loud highs' shelf now.
-    soften: Biquad,
+    /// Each side's loud highs' shelf now, as each degrades by its own.
+    soften: [Biquad; 2],
+    /// What erasing the tape has done to it, if it's been erased.
+    erase: Option<[Biquad; 3]>,
     /// Whether the compander is in, its band's share, its detector's, its gain's glide and how
     /// low `Track` reads, in dB.
     companding: bool,
@@ -626,9 +687,9 @@ struct Frame {
     modulation: f32,
     wobble: Biquad,
     wobble_band: f32,
-    /// How far off the head the tape is in a dropout, from 0 to 1, and its darkening's share
-    /// then.
-    drop: f32,
+    /// How far off the head each side's tape is in a dropout, from 0 to 1, and its darkening's
+    /// share then.
+    drop: [f32; 2],
     drop_band: f32,
     /// How far a chew is in, its power and its darkening's share.
     chew: f32,
@@ -637,10 +698,21 @@ struct Frame {
 }
 
 impl Side {
-    /// Onto the tape: lifted, saturated, its loud highs softened, and hiss on it.
+    /// Onto the tape: lifted, saturated, its loud highs softened, and hiss on it. A copy, after the
+    /// first, goes on at no drive.
     #[inline]
-    fn record(&mut self, x: f32, frame: &Frame, tuning: &Tuning, rng: &mut Pcg32) -> f32 {
+    fn record(
+        &mut self,
+        x: f32,
+        (frame, side, copy): (&Frame, usize, bool),
+        tuning: &Tuning,
+        rng: &mut Pcg32,
+    ) -> f32 {
         let mut x = x;
+        let (colouring, makeup) = match copy {
+            false => (frame.colouring, frame.makeup),
+            true => (frame.copy_colouring, frame.copy_makeup),
+        };
         if frame.companding {
             let highs = x - self.encoder.lows;
             self.encoder.lows += highs * frame.band;
@@ -650,13 +722,18 @@ impl Side {
         for (filter, state) in frame.lift.iter().zip(&mut self.lift) {
             x = filter.process(state, x);
         }
-        let mut out = self.saturator.process(x, frame.colouring, tuning) * frame.makeup;
+        let mut out = self.saturator.process(x, colouring, tuning) * makeup;
         for (filter, state) in frame.unlift.iter().zip(&mut self.unlift) {
             out = filter.process(state, out);
         }
-        let mut out = frame.soften.process(&mut self.soften, out);
+        let mut out = frame.soften[side].process(&mut self.soften, out);
         if let Some(tape) = &frame.tape {
             for (filter, state) in tape.iter().zip(&mut self.tape) {
+                out = filter.process(state, out);
+            }
+        }
+        if let Some(erase) = &frame.erase {
+            for (filter, state) in erase.iter().zip(&mut self.erase) {
                 out = filter.process(state, out);
             }
         }
@@ -690,22 +767,23 @@ impl Side {
     }
 
     /// Off the tape: dropped out, chewed, through the head and the replay, hiss on it, and
-    /// expanded back.
+    /// expanded back. Only the first tape chews.
     #[inline]
     fn play(
         &mut self,
         x: f32,
-        frame: &Frame,
+        (frame, side, copy): (&Frame, usize, bool),
         loss: &Loss,
         replay: &[Biquad; 5],
         rng: &mut Pcg32,
     ) -> f32 {
         let mut x = x;
         self.dropout += (x - self.dropout) * frame.drop_band;
-        if frame.drop > 0.0 {
-            x += (self.dropout - x) * frame.drop;
+        let drop = frame.drop[side];
+        if drop > 0.0 {
+            x += (self.dropout - x) * drop;
         }
-        if frame.chew > 0.0 {
+        if frame.chew > 0.0 && !copy {
             let held = within(x, -1.0, 1.0);
             let bent = held.abs().powf(frame.chew_power).copysign(held);
             self.chew += (bent - self.chew) * frame.chew_band;
@@ -742,9 +820,14 @@ struct Transport {
     /// Each wobble's noise, through its two poles.
     wow_noise: [f32; 2],
     flutter_noise: [f32; 2],
-    /// The degradation's wander, of unit spread, and the same smoothed.
-    degrade: f32,
-    degrade_smooth: f32,
+    /// Each side's degradation's wander, of unit spread, and the same smoothed.
+    degrade: [f32; 2],
+    degrade_smooth: [f32; 2],
+    /// A snag's: how far further back it reads at most, in frames, how far into it it is, in
+    /// seconds, if it's snagging, and the frames until another can start.
+    snap_depth: f32,
+    snap_at: Option<f32>,
+    snap_hold: u32,
     /// How far back the line is read, how far that moves each frame, and the frames until the
     /// next is worked out. Without one, the next is jumped to.
     delay: Option<f32>,
@@ -754,9 +837,10 @@ struct Transport {
     /// smoothed.
     flutter_wander: [f32; 2],
     flutter_smooth: [f32; 2],
-    /// Whether the tape is off the head, and the frames until it flickers back or off again.
-    dropped: bool,
-    drop_left: u32,
+    /// Whether each side's tape is off the head, and the frames until it flickers back or off
+    /// again: each side flickers by its own, as Cassette's do at its `Spread`'s 100.
+    dropped: [bool; 2],
+    drop_left: [u32; 2],
     /// Frames left in a chew or until the next, whether it's chewing, and how hard.
     chew_left: u32,
     chewing: bool,
@@ -771,15 +855,18 @@ impl Transport {
             flutter: 0.0,
             wow_noise: [0.0; 2],
             flutter_noise: [0.0; 2],
-            degrade: 0.0,
-            degrade_smooth: 0.0,
+            degrade: [0.0; 2],
+            degrade_smooth: [0.0; 2],
+            snap_depth: 0.0,
+            snap_at: None,
+            snap_hold: 0,
             delay: None,
             slope: 0.0,
             countdown: 0,
             flutter_wander: [0.0; 2],
             flutter_smooth: [0.0; 2],
-            dropped: false,
-            drop_left: 0,
+            dropped: [false; 2],
+            drop_left: [0; 2],
             chew_left: 0,
             chewing: false,
             chew_power: 1.0,
@@ -855,7 +942,10 @@ fn replay_filters(replay: Replay, rate: f32) -> [Biquad; 5] {
 /// A deck's state and line.
 #[derive(Debug, Clone)]
 pub(crate) struct Deck {
-    sides: [Side; 2],
+    /// Each copy's two sides, the first the tape the sound goes onto.
+    sides: [[Side; 2]; GENERATIONS],
+    /// How many copies it makes, at least one.
+    generations: usize,
     line: StereoLine,
     transport: Transport,
     seed: Pcg32,
@@ -877,12 +967,32 @@ pub(crate) struct Deck {
     wow_noise_scale: f32,
     flutter_noise: Biquad,
     flutter_noise_scale: f32,
-    /// How far the degradation deepens the loud highs' shelf now, in dB.
-    degrade_db: f32,
+    /// How far the degradation deepens each side's loud highs' shelf now, in dB.
+    degrade_db: [f32; 2],
+    /// How much later each side plays as its tape skews, in frames, by its degradation.
+    skew: [f32; 2],
+    /// The wobbles' rates against the format's, as last worked out into their noise filters.
+    rates: (f32, f32),
+    /// What erasing has done, worked out for the share of `Erase` it was last worked out for.
+    erase: Option<[Biquad; 3]>,
+    erased: f32,
     tuning: Tuning,
     shares: Shares,
     drive: Smoothed,
     hiss: Smoothed,
+    /// How fast the wow and the flutter go against the format's.
+    wow_rate: Smoothed,
+    flutter_rate: Smoothed,
+    degrade: Smoothed,
+    erasing: Smoothed,
+    snap: Smoothed,
+    /// How late the left side plays against the right, in frames, either way.
+    azimuth: Smoothed,
+    /// How loud each side leaks into the other, as a gain, each side's high-pass's last in and out,
+    /// and its coefficients.
+    crosstalk: Smoothed,
+    crosstalk_highs: [[f32; 2]; 2],
+    crosstalk_band: (f32, f32),
     /// How deep the noise riding on the sound wobbles its level.
     modulation: Smoothed,
     /// How far wow and flutter move the line at most, in frames.
@@ -894,11 +1004,11 @@ pub(crate) struct Deck {
     /// `Track`, from 0 to 1; none is no compander.
     track: Smoothed,
     /// The level the loud highs soften by, of what goes onto the tape, as a rectified average
-    /// through two poles, and their shelf now.
+    /// through two poles, and each side's shelf now.
     level: [f32; 2],
-    soften: Biquad,
-    /// How far off the head the tape is now, from 0 to 1, and its darkening's share.
-    drop: f32,
+    soften: [Biquad; 2],
+    /// How far off the head each side's tape is now, from 0 to 1, and its darkening's share.
+    drop: [f32; 2],
     drop_band: f32,
     /// The limiter's mean square of what comes out, both sides as one.
     limit: f32,
@@ -910,16 +1020,25 @@ pub(crate) struct Deck {
 
 impl Deck {
     pub(crate) fn new(rate: u32) -> Self {
-        let most = (MOST_WOW_SECONDS
+        // The wobbles at their most on the last copy, a snag at its deepest and the head at its
+        // most askew.
+        let copies = (GENERATIONS as f32).powf(GENERATION_WOBBLE);
+        let most = ((MOST_WOW_SECONDS
             * FORMATS.iter().map(|f| f.wow_depth).fold(0.0, f32::max)
             * WOW_REACH
             + MOST_FLUTTER_SECONDS * FLUTTER_REACH)
             * 2.0
+            * copies
+            + SNAP_SECONDS.1
+            + MOST_DECK_AZIMUTH_US * 1e-6
+            + DEGRADE_SKEW_SECONDS * 2.0 * (DEGRADE_SKEW_REACH + WANDER_REACH)
+            + DROP_SKEW_SECONDS * MOST_DROP_DEPTH)
             * rate as f32;
         let size = (most.ceil() as usize + 8).next_power_of_two();
         let seed = Pcg32::new(0x5EED_DEC4, 0);
         let mut deck = Self {
-            sides: [Side::default(); 2],
+            sides: [[Side::default(); 2]; GENERATIONS],
+            generations: 1,
             line: StereoLine::new(size),
             transport: Transport::new(seed),
             seed,
@@ -937,11 +1056,24 @@ impl Deck {
             wow_noise_scale: 0.0,
             flutter_noise: Biquad::FLAT,
             flutter_noise_scale: 0.0,
-            degrade_db: 0.0,
+            degrade_db: [0.0; 2],
+            skew: [0.0; 2],
+            rates: (1.0, 1.0),
+            erase: None,
+            erased: 0.0,
             tuning: Tuning::default(),
             shares: Shares::new(rate as f32),
             drive: Smoothed::default(),
             hiss: Smoothed::default(),
+            wow_rate: Smoothed::at(1.0),
+            flutter_rate: Smoothed::at(1.0),
+            degrade: Smoothed::default(),
+            erasing: Smoothed::default(),
+            snap: Smoothed::default(),
+            azimuth: Smoothed::default(),
+            crosstalk: Smoothed::default(),
+            crosstalk_highs: [[0.0; 2]; 2],
+            crosstalk_band: first_order_high_pass(CROSSTALK_HZ, rate as f32),
             modulation: Smoothed::default(),
             wow: Smoothed::default(),
             flutter: Smoothed::default(),
@@ -950,8 +1082,8 @@ impl Deck {
             chew_mix: Smoothed::default(),
             track: Smoothed::default(),
             level: [0.0; 2],
-            soften: Biquad::FLAT,
-            drop: 0.0,
+            soften: [Biquad::FLAT; 2],
+            drop: [0.0; 2],
             drop_band: 1.0,
             limit: 0.0,
             unheard: 0,
@@ -981,9 +1113,26 @@ impl Deck {
         }
         self.hiss_tone =
             (format.hiss_hz > 0.0).then(|| Biquad::low_pass(format.hiss_hz, 0.5, rate));
+        self.wobble_noise(self.rates);
+        self.loss = Loss::new(
+            format.ips,
+            format.gap_um,
+            format.spacing_um,
+            format.thickness_um,
+            rate,
+        );
+        self.replay = replay_filters(format.replay, rate);
+        self.tuning = Tuning::new(format.emphasis, 0.0, self.rate);
+        self.soften = self.shelves();
+    }
+
+    /// Each wobble's noise filter, at the rate the transport is worked out, and what its noise is
+    /// scaled by, for the wow and the flutter going at so many times the format's rates.
+    fn wobble_noise(&mut self, (wow, flutter): (f32, f32)) {
+        self.rates = (wow, flutter);
         // Two poles at a corner bend the pitch, unit noise in, by the root of Q ω³ over twice the
         // rate they run at; a unit sine at its rate bends it by its ω over root two.
-        let control = rate / CONTROL_FRAMES as f32;
+        let control = self.rate as f32 / CONTROL_FRAMES as f32;
         let noise = |hertz: f32, share: f32| {
             let corner = NOISE_AT * hertz;
             let q = NOISE_Q;
@@ -994,28 +1143,30 @@ impl Deck {
                 share * TAU * hertz * FRAC_1_SQRT_2 / bends,
             )
         };
-        (self.wow_noise, self.wow_noise_scale) = noise(format.wow_hz, WOW_NOISE);
-        (self.flutter_noise, self.flutter_noise_scale) = noise(format.flutter_hz, FLUTTER_NOISE);
-        self.loss = Loss::new(
-            format.ips,
-            format.gap_um,
-            format.spacing_um,
-            format.thickness_um,
-            rate,
-        );
-        self.replay = replay_filters(format.replay, rate);
-        self.tuning = Tuning::new(format.emphasis, 0.0, self.rate);
-        self.soften = self.shelf();
+        let format = self.format;
+        (self.wow_noise, self.wow_noise_scale) = noise(format.wow_hz * wow, WOW_NOISE);
+        (self.flutter_noise, self.flutter_noise_scale) =
+            noise(format.flutter_hz * flutter, FLUTTER_NOISE);
     }
 
-    /// The loud highs' shelf at the level now.
-    fn shelf(&self) -> Biquad {
+    /// Each side's loud highs' shelf at the level now.
+    fn shelves(&self) -> [Biquad; 2] {
         let soften = self.format.soften;
         // A sine's rectified average is 2/π of its peak; a tape that softens sooner reads it
         // louder.
         let sooner = 10_f32.powf(self.tape.soften_db / 20.0);
-        let cut = soften.cut_db(self.level[1] * FRAC_PI_2 * sooner) + self.degrade_db;
-        Biquad::high_shelf(soften.hz, soften.q, -cut, self.rate as f32)
+        let cut = soften.cut_db(self.level[1] * FRAC_PI_2 * sooner);
+        self.degrade_db.map(|degrade| {
+            Biquad::high_shelf(soften.hz, soften.q, -(cut + degrade), self.rate as f32)
+        })
+    }
+
+    /// What erasing the tape a share of `Erase`'s most times has done to it, or nothing for none.
+    fn erased(share: f32, rate: f32) -> Option<[Biquad; 3]> {
+        (share > 0.0).then(|| {
+            ERASE_FILTERS
+                .map(|(hertz, q, db)| Biquad::peak(hertz.min(0.45 * rate), q, db * share, rate))
+        })
     }
 
     pub(crate) fn frames(&self) -> usize {
@@ -1024,12 +1175,13 @@ impl Deck {
 
     pub(crate) fn clear(&mut self) {
         self.line.clear();
-        self.sides = [Side::default(); 2];
+        self.sides = [[Side::default(); 2]; GENERATIONS];
         self.transport = Transport::new(self.seed);
         self.level = [0.0; 2];
-        self.degrade_db = 0.0;
-        self.soften = self.shelf();
-        self.drop = 0.0;
+        self.degrade_db = [0.0; 2];
+        self.soften = self.shelves();
+        self.drop = [0.0; 2];
+        self.crosstalk_highs = [[0.0; 2]; 2];
         self.limit = 0.0;
         self.unheard = 0;
     }
@@ -1058,6 +1210,15 @@ impl Deck {
         self.drops.target = share(settings.drops);
         self.chew.target = share(settings.chew);
         self.track.target = share(settings.track);
+        self.generations = usize::from(settings.gens).min(GENERATIONS - 1) + 1;
+        self.wow_rate.target = deck_wow_rate(f32::from(settings.wowrate));
+        self.flutter_rate.target = deck_flutter_rate(f32::from(settings.flutrate));
+        self.degrade.target = share(settings.degrade);
+        self.erasing.target = share(settings.erase);
+        self.snap.target = share(settings.snap);
+        self.azimuth.target = deck_azimuth_us(f32::from(settings.azimuth)) * 1e-6 * rate;
+        self.crosstalk.target = deck_crosstalk_db(f32::from(settings.crosstalk))
+            .map_or(0.0, |db| 10_f32.powf(db / 20.0));
     }
 
     /// Jump to what's set.
@@ -1071,6 +1232,13 @@ impl Deck {
             &mut self.drops,
             &mut self.chew,
             &mut self.track,
+            &mut self.wow_rate,
+            &mut self.flutter_rate,
+            &mut self.degrade,
+            &mut self.erasing,
+            &mut self.snap,
+            &mut self.azimuth,
+            &mut self.crosstalk,
         ] {
             setting.settle();
         }
@@ -1088,16 +1256,26 @@ impl Deck {
 
     /// The transport's next frame: how far back to read the line.
     #[inline]
-    fn transport(&mut self, wow: f32, flutter: f32, drops: f32, chew: f32) -> f32 {
+    fn transport(&mut self, (wow, flutter): (f32, f32), drops: f32, chew: f32, snap: f32) -> f32 {
         let rate = self.rate as f32;
         let format = self.format;
+        if self.transport.countdown == 0 {
+            // The wobbles' noise follows their rates, worked out again only as they move.
+            let rates = (self.wow_rate.value, self.flutter_rate.value);
+            if rates.0.to_bits() != self.rates.0.to_bits()
+                || rates.1.to_bits() != self.rates.1.to_bits()
+            {
+                self.wobble_noise(rates);
+            }
+        }
+        let (wow_rate, flutter_rate) = self.rates;
         let t = &mut self.transport;
         if t.countdown == 0 {
             t.countdown = CONTROL_FRAMES;
             let frames = CONTROL_FRAMES as f32;
             let seconds = frames / rate;
             // The wow: a sine, and noise round its rate.
-            let sine = Self::turned(&mut t.wow, format.wow_hz * seconds);
+            let sine = Self::turned(&mut t.wow, format.wow_hz * wow_rate * seconds);
             let noise = self
                 .wow_noise
                 .process(&mut t.wow_noise, gaussian(&mut t.rng));
@@ -1113,7 +1291,10 @@ impl Deck {
             }
             let faster = 1.0 + FLUTTER_RATE_WANDER * t.flutter_smooth[0];
             let deeper = 1.0 + FLUTTER_DEPTH_WANDER * t.flutter_smooth[1];
-            let turn = Self::turned(&mut t.flutter, format.flutter_hz * faster * seconds);
+            let turn = Self::turned(
+                &mut t.flutter,
+                format.flutter_hz * flutter_rate * faster * seconds,
+            );
             let noise = self
                 .flutter_noise
                 .process(&mut t.flutter_noise, gaussian(&mut t.rng));
@@ -1122,28 +1303,55 @@ impl Deck {
                 -FLUTTER_REACH,
                 FLUTTER_REACH,
             );
-            let next = 1.0 + wow * (WOW_REACH + wobble) + flutter * (FLUTTER_REACH + flutter_now);
-            // The degradation's wander.
+            let mut next =
+                1.0 + wow * (WOW_REACH + wobble) + flutter * (FLUTTER_REACH + flutter_now);
+            // Each side's degradation's wander.
             let pull = seconds / DEGRADE_SECONDS;
-            t.degrade += -t.degrade * pull + (2.0 * pull).sqrt() * gaussian(&mut t.rng);
-            t.degrade_smooth +=
-                (t.degrade - t.degrade_smooth) * of_corner(DEGRADE_HZ, 1.0 / seconds);
+            for (wander, smoothed) in t.degrade.iter_mut().zip(&mut t.degrade_smooth) {
+                *wander += -*wander * pull + (2.0 * pull).sqrt() * gaussian(&mut t.rng);
+                *smoothed += (*wander - *smoothed) * of_corner(DEGRADE_HZ, 1.0 / seconds);
+            }
+            // A snag starts now and then, while `Snap` is up, and once started runs its course.
+            if snap > 0.0 {
+                t.snap_hold = t.snap_hold.saturating_sub(CONTROL_FRAMES);
+                let chance = SNAP_MOST_PER_SECOND * snap.powf(SNAP_POWER) * seconds;
+                if t.snap_at.is_none() && t.snap_hold == 0 && t.rng.unit() < chance {
+                    let (least, most) = SNAP_SECONDS;
+                    t.snap_depth = (least + (most - least) * t.rng.unit()) * rate;
+                    t.snap_at = Some(0.0);
+                    t.snap_hold = (SNAP_HOLD_SECONDS * rate) as u32;
+                }
+            }
+            if let Some(at) = &mut t.snap_at {
+                *at += seconds;
+                let pulled = if *at < SNAP_RISE_SECONDS {
+                    0.5 - 0.5 * (std::f32::consts::PI * *at / SNAP_RISE_SECONDS).cos()
+                } else {
+                    (-(*at - SNAP_RISE_SECONDS) / SNAP_FALL_SECONDS).exp()
+                };
+                next += t.snap_depth * pulled;
+                if *at > SNAP_RISE_SECONDS + 10.0 * SNAP_FALL_SECONDS {
+                    t.snap_at = None;
+                }
+            }
             let now = *t.delay.get_or_insert(next);
             t.slope = (next - now) / frames;
-            // The tape flickers on and off the head while it drops out at all, each spell as long
-            // as the shortest and a random wait.
-            if drops > 0.0 {
-                t.drop_left = t.drop_left.saturating_sub(CONTROL_FRAMES);
-                if t.drop_left == 0 {
-                    t.dropped = !t.dropped;
-                    let (shortest, touching, off) = DROP_SPELL_SECONDS;
-                    let mean = if t.dropped { off } else { touching };
-                    let spell = shortest - mean * (1.0 - t.rng.unit()).ln();
-                    t.drop_left = (spell * rate) as u32;
+            // Each side's tape flickers on and off the head by its own while it drops out at
+            // all, each spell as long as the shortest and a random wait.
+            for (dropped, left) in t.dropped.iter_mut().zip(&mut t.drop_left) {
+                if drops > 0.0 {
+                    *left = left.saturating_sub(CONTROL_FRAMES);
+                    if *left == 0 {
+                        *dropped = !*dropped;
+                        let (shortest, touching, off) = DROP_SPELL_SECONDS;
+                        let mean = if *dropped { off } else { touching };
+                        let spell = shortest - mean * (1.0 - t.rng.unit()).ln();
+                        *left = (spell * rate) as u32;
+                    }
+                } else {
+                    *dropped = false;
+                    *left = 0;
                 }
-            } else {
-                t.dropped = false;
-                t.drop_left = 0;
             }
             // A chew starts or ends, with a fresh power while it lasts.
             if chew > 0.0 {
@@ -1187,9 +1395,26 @@ impl Deck {
         } else {
             0.0
         };
-        let delay = self.transport(wow, flutter, depth, chew);
-        let delay = delay.clamp(1.0, (self.line.mask() - 3) as f32);
-        let (whole, between) = (delay as usize, delay - delay.floor());
+        self.wow_rate.next(smoothing);
+        self.flutter_rate.next(smoothing);
+        let snap = self.snap.next(smoothing);
+        // Each copy wobbles nearly in step with the last, so the line moves for all of them.
+        let copies = match self.generations {
+            1 => 1.0,
+            copies => (copies as f32).powf(GENERATION_WOBBLE),
+        };
+        let delay = self.transport((wow * copies, flutter * copies), depth, chew, snap);
+        // The head askew, one side read later than the other, and each side's tape skewing as it
+        // degrades and as it leaves the head.
+        let azimuth = self.azimuth.next(smoothing);
+        let last = (self.line.mask() - 3) as f32;
+        let lifted = DROP_SKEW_SECONDS * rate * depth;
+        let late = [azimuth.max(0.0), -azimuth.min(0.0)];
+        let reads = [0, 1].map(|side| {
+            let delay = delay + late[side] + self.skew[side] + lifted * self.drop[side];
+            let delay = delay.clamp(1.0, last);
+            (delay as usize, delay - delay.floor())
+        });
         let retarget = self.transport.countdown == CONTROL_FRAMES - 1;
 
         // The level going onto the tape, both sides as one so the image holds, which the loud
@@ -1208,17 +1433,31 @@ impl Deck {
             *stage += (level - *stage) * speed;
             level = *stage;
         }
+        let degrade = self.degrade.next(smoothing);
+        let erasing = self.erasing.next(smoothing);
         if retarget {
-            self.degrade_db = if drops > 0.0 {
-                let spread = DEGRADE_MOST_DB * drops.powf(DEGRADE_POWER);
-                let typical = DEGRADE_TYPICAL_DB * (drops * 4.0).min(1.0);
-                (typical + spread * self.transport.degrade_smooth).max(0.0)
-            } else {
-                0.0
-            };
-            self.soften = self.shelf();
+            self.degrade_db = self.transport.degrade_smooth.map(|wander| {
+                if degrade > 0.0 {
+                    let spread = DEGRADE_MOST_DB * degrade.powf(DEGRADE_POWER);
+                    let typical = DEGRADE_TYPICAL_DB * (degrade * 4.0).min(1.0);
+                    (typical + spread * wander).max(0.0)
+                } else {
+                    0.0
+                }
+            });
+            let skew = DEGRADE_SKEW_SECONDS * rate * degrade.powf(DEGRADE_POWER);
+            self.skew = self
+                .transport
+                .degrade_smooth
+                .map(|wander| (skew * (DEGRADE_SKEW_REACH + wander)).max(0.0));
+            self.soften = self.shelves();
             let corner = DROP_OPEN_HZ * (-DROP_OCTAVES * depth).exp2();
             self.drop_band = of_corner(corner.min(0.45 * rate), rate);
+            // Worked out again only as it moves, which a bit-for-bit match says.
+            if erasing.to_bits() != self.erased.to_bits() {
+                self.erased = erasing;
+                self.erase = Self::erased(erasing, rate);
+            }
         }
 
         // The hiss stops a while after the sound does.
@@ -1232,27 +1471,34 @@ impl Deck {
         let modulation = self.modulation.next(smoothing);
 
         let t = &mut self.transport;
-        // Off the head and back, gliding, and none at all once it's back and stays.
-        let off = if t.dropped { 1.0 } else { 0.0 };
-        self.drop += (off - self.drop) * shares.drop_glide;
-        if !t.dropped && self.drop < 1e-4 {
-            self.drop = 0.0;
+        // Each side off the head and back, gliding, and none at all once it's back and stays.
+        for (drop, dropped) in self.drop.iter_mut().zip(t.dropped) {
+            let off = if dropped { 1.0 } else { 0.0 };
+            *drop += (off - *drop) * shares.drop_glide;
+            if !dropped && *drop < 1e-4 {
+                *drop = 0.0;
+            }
         }
         self.chew_mix.target = if t.chewing { 1.0 } else { 0.0 };
         let chew_mix = self.chew_mix.next(shares.chew_fade) * chew.sqrt();
         let track = self.track.next(smoothing);
-        let curve = drive * CURVE_LEVEL * 10_f32.powf(self.tape.curve_db / 20.0);
+        let tape_curve = CURVE_LEVEL * 10_f32.powf(self.tape.curve_db / 20.0);
+        let curve = drive * tape_curve;
+        let colouring = |drive: f32| Colouring {
+            curve: Curve::Warm,
+            drive,
+            even: 0.0,
+            hard: 0.0,
+        };
         let frame = Frame {
-            colouring: Colouring {
-                curve: Curve::Warm,
-                drive: curve,
-                even: 0.0,
-                hard: 0.0,
-            },
+            colouring: colouring(curve),
             makeup: 1.0 / curve,
+            copy_colouring: colouring(tape_curve * COPY_CURVE),
+            copy_makeup: 1.0 / (tape_curve * COPY_CURVE),
             lift: self.lift,
             unlift: self.unlift,
             soften: self.soften,
+            erase: self.erase,
             tape: self.tape_filters,
             companding: track > 0.0,
             band: shares.band,
@@ -1276,17 +1522,23 @@ impl Deck {
         self.line.advance();
         let mut out = [0.0; 2];
         for (side, sample) in input.into_iter().enumerate() {
-            let recorded =
-                self.sides[side].record(sample, &frame, &self.tuning, &mut self.transport.rng);
-            self.line.write(side, recorded);
-            let wobbled = self.line.hermite(side, whole, between);
-            out[side] = self.sides[side].play(
-                wobbled,
-                &frame,
-                &self.loss,
-                &self.replay,
-                &mut self.transport.rng,
-            );
+            let rng = &mut self.transport.rng;
+            let mut sound = sample;
+            // Each copy is recorded from what the last played, the first through the line.
+            for (copy, sides) in self.sides[..self.generations].iter_mut().enumerate() {
+                let deck = &mut sides[side];
+                let at = (&frame, side, copy > 0);
+                let recorded = deck.record(sound, at, &self.tuning, rng);
+                let wobbled = if copy == 0 {
+                    self.line.write(side, recorded);
+                    let (whole, between) = reads[side];
+                    self.line.hermite(side, whole, between)
+                } else {
+                    recorded
+                };
+                sound = deck.play(wobbled, at, &self.loss, &self.replay, rng);
+            }
+            out[side] = sound;
         }
         // The Micro deck's limiter, both sides as one, on the level it plays at before the
         // drive is made up.
@@ -1303,6 +1555,20 @@ impl Deck {
                 let gain = LIMIT_CEILING / level;
                 out = out.map(|s| s * gain);
             }
+        }
+        // Each side's highs leak into the other's, as Cassette's do.
+        let crosstalk = self.crosstalk.next(smoothing);
+        if crosstalk > 0.0 {
+            let (scale, kept) = self.crosstalk_band;
+            let highs = [0, 1].map(|side| {
+                let [last_in, last_out] = &mut self.crosstalk_highs[side];
+                let high = scale * (out[side] - *last_in) + kept * *last_out;
+                (*last_in, *last_out) = (out[side], high);
+                high
+            });
+            out = [out[0] + highs[1] * crosstalk, out[1] + highs[0] * crosstalk];
+        } else {
+            self.crosstalk_highs = out.map(|sample| [sample, 0.0]);
         }
         // The format's stereo: its tracks' crosstalk narrows it.
         let middle = 0.5 * (out[0] + out[1]);
@@ -1362,7 +1628,8 @@ mod tests {
         deck
     }
 
-    /// Clean: no hiss, wobble, faults or noise reduction, so only the format and its curve.
+    /// Clean: no hiss, wobble, faults, crosstalk or noise reduction, so only the format and its
+    /// curve.
     const CLEAN: Settings = Settings {
         hiss: 0,
         wow: 0,
@@ -1370,6 +1637,8 @@ mod tests {
         drops: 0,
         chew: 0,
         track: 0,
+        degrade: 0,
+        crosstalk: 0,
         ..Settings::DEFAULT
     };
 
@@ -1573,7 +1842,7 @@ mod tests {
         let mut lengths = Vec::new();
         for frame in 0..RATE as usize * 4 {
             let flutter = deck.flutter.next(deck.smoothing);
-            deck.transport(0.0, flutter, 0.0, 0.0);
+            deck.transport((0.0, flutter), 0.0, 0.0, 0.0);
             if frame % CONTROL_FRAMES as usize == 0 {
                 lengths.push(deck.transport.delay.unwrap_or(1.0));
             }
@@ -1627,11 +1896,11 @@ mod tests {
     }
 
     #[test]
-    fn the_highs_degrade_slowly_with_the_drops() {
-        // A quiet 12 kHz tone's level in tenths of a second: with `Drops` it sits a few dB lower
+    fn the_highs_degrade_slowly() {
+        // A quiet 12 kHz tone's level in tenths of a second: with `Degrade` it sits a few dB lower
         // on average and wanders by a dB or more; 1 kHz doesn't.
-        let levels = |drops: u8, hertz: f32| {
-            let mut deck = deck(Settings { drops, ..CLEAN });
+        let levels = |degrade: u8, hertz: f32| {
+            let mut deck = deck(Settings { degrade, ..CLEAN });
             let out = left(&through(&mut deck, hertz, 0.01, RATE as usize * 10));
             let levels: Vec<f32> = out
                 .chunks(RATE as usize / 10)
@@ -1798,6 +2067,11 @@ mod tests {
                 wow: step * 0xFF,
                 flutter: step * 0xFF,
                 track: 0x10 + step * 0xE0,
+                wowrate: step * 0xFF,
+                degrade: step * 0xFF,
+                erase: step * 0xFF,
+                azimuth: step * 0xFF,
+                crosstalk: step * 0xFF,
                 ..CLEAN
             });
             let out = deck.process([tone(RATE as usize / 10 + frame); 2]);
@@ -1827,6 +2101,14 @@ mod tests {
                             drops: amount,
                             chew: amount,
                             track: amount,
+                            gens: amount / 0x55,
+                            wowrate: amount,
+                            flutrate: amount,
+                            degrade: amount,
+                            erase: amount,
+                            snap: amount,
+                            azimuth: amount,
+                            crosstalk: amount,
                             ..Settings::DEFAULT
                         });
                         deck.settle();
@@ -1854,5 +2136,144 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// How loud a sine on the left alone comes out on the right, against the left, in dB.
+    fn leak(settings: Settings, hertz: f32) -> f32 {
+        let mut deck = deck(settings);
+        let out: Vec<[f32; 2]> = (0..RATE as usize / 2)
+            .map(|frame| deck.process([sine(frame, hertz, 0.25, RATE), 0.0]))
+            .collect();
+        let right: Vec<f32> = out.iter().map(|frame| frame[1]).collect();
+        db(harmonic(&right, hertz) / harmonic(&left(&out), hertz))
+    }
+
+    #[test]
+    fn crosstalk_leaks_the_highs_and_none_at_its_start() {
+        let at = |crosstalk| Settings { crosstalk, ..CLEAN };
+        assert!(leak(at(0), 5_000.0) < -150.0);
+        // As it starts, Cassette's -35 dB at the top: -38 at 5 kHz and -49 at 1 kHz.
+        let (high, middle) = (leak(at(0x80), 5_000.0), leak(at(0x80), 1_000.0));
+        assert!(
+            (high + 38.0).abs() < 1.0 && (middle + 49.4).abs() < 1.0,
+            "{high} {middle}"
+        );
+        assert!((leak(at(0xFF), 10_000.0) + 0.8).abs() < 1.0);
+    }
+
+    #[test]
+    fn azimuth_plays_one_side_late() {
+        // Where a click comes out on each side.
+        let late = |azimuth| {
+            let mut deck = deck(Settings { azimuth, ..CLEAN });
+            let out: Vec<[f32; 2]> = (0..2_000)
+                .map(|frame| deck.process(if frame == 1_000 { [0.5; 2] } else { [0.0; 2] }))
+                .collect();
+            let peak = |side: usize| {
+                (0..out.len())
+                    .max_by(|a, b| out[*a][side].abs().total_cmp(&out[*b][side].abs()))
+                    .unwrap_or(0) as i32
+            };
+            peak(0) - peak(1)
+        };
+        assert_eq!(late(0x80), 0);
+        // 227 µs at 48 kHz is 11 frames.
+        assert!((10..=12).contains(&late(0xFF)), "{}", late(0xFF));
+        assert!((-12..=-10).contains(&late(0x00)), "{}", late(0x00));
+    }
+
+    #[test]
+    fn each_copy_adds_the_tape_again() {
+        let copies = |gens| response(Settings { gens, ..CLEAN }, 16_000.0);
+        let (one, two, four) = (copies(0), copies(1), copies(3));
+        assert!(two < one - 4.0 && four < two - 8.0, "{one} {two} {four}");
+        // A copy's wobble nearly doubles the first's.
+        let wobble = |gens| {
+            pitch_spread(
+                Settings {
+                    gens,
+                    wow: 0x80,
+                    ..CLEAN
+                },
+                4,
+            )
+        };
+        assert!(wobble(1) > 1.6 * wobble(0), "{} {}", wobble(0), wobble(1));
+    }
+
+    #[test]
+    fn erasing_fills_the_mids_and_notches_the_top() {
+        let erased = |erase, hertz| response(Settings { erase, ..CLEAN }, hertz);
+        assert!(erased(0xFF, 450.0) - erased(0, 450.0) > 3.5);
+        assert!(erased(0xFF, 9_900.0) - erased(0, 9_900.0) < -12.0);
+        assert!(erased(0x40, 9_900.0) - erased(0, 9_900.0) < -3.0);
+    }
+
+    #[test]
+    fn snaps_dive_the_pitch_now_and_then() {
+        assert!(pitch_spread(CLEAN, 6) < 1e-4);
+        let snapped = pitch_spread(
+            Settings {
+                snap: 0xFF,
+                ..CLEAN
+            },
+            6,
+        );
+        assert!(snapped > 0.1, "{snapped}");
+    }
+
+    #[test]
+    fn the_rates_speed_the_wobbles_up_and_slow_them_down() {
+        // The line's length from one control block to the next moves as fast as the wobble
+        // goes, at the same depth.
+        let speed = |settings: Settings| {
+            let mut deck = deck(settings);
+            let mut last = None;
+            let mut moved = 0.0;
+            for frame in 0..RATE as usize * 4 {
+                let wow = deck.wow.next(deck.smoothing);
+                let flutter = deck.flutter.next(deck.smoothing);
+                deck.wow_rate.next(deck.smoothing);
+                deck.flutter_rate.next(deck.smoothing);
+                let delay = deck.transport((wow, flutter), 0.0, 0.0, 0.0);
+                if frame % CONTROL_FRAMES as usize == 0 {
+                    moved += last.map_or(0.0, |last: f32| (delay - last).abs());
+                    last = Some(delay);
+                }
+            }
+            moved
+        };
+        let wow = |wowrate| {
+            speed(Settings {
+                wow: 0x80,
+                wowrate,
+                ..CLEAN
+            })
+        };
+        assert!(wow(0xFF) > 3.0 * wow(0x80) && wow(0x00) < 0.4 * wow(0x80));
+        let flutter = |flutrate| {
+            speed(Settings {
+                flutter: 0x80,
+                flutrate,
+                ..CLEAN
+            })
+        };
+        assert!(flutter(0xFF) > 1.6 * flutter(0x80) && flutter(0x00) < 0.7 * flutter(0x80));
+    }
+
+    #[test]
+    fn each_side_drops_out_and_degrades_by_its_own() {
+        let mut deck = deck(Settings {
+            drops: 0xC0,
+            degrade: 0xC0,
+            ..CLEAN
+        });
+        let out = through(&mut deck, 10_000.0, 0.05, RATE as usize * 4);
+        let apart = out
+            .iter()
+            .skip(RATE as usize)
+            .map(|frame| (frame[0] - frame[1]).abs())
+            .fold(0.0_f32, f32::max);
+        assert!(apart > 0.01, "{apart}");
     }
 }

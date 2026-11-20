@@ -115,10 +115,11 @@ impl Dump {
         }
     }
 
-    /// Every control of one of a page's devices on the first track, by its place in the rack.
+    /// Every control of one of a page's devices on the first track, by its place in the rack, on
+    /// each of its pages.
     fn device(&mut self, tag: &str, song: &Arc<Song>, page: Page, device: usize) {
         let devices = page.devices(&song.tracks[0]);
-        for control in devices[device].rows().flatten().flatten() {
+        for control in devices[device].controls() {
             self.control(tag, song, control);
         }
     }

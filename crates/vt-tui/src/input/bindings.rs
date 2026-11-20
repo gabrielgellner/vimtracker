@@ -144,6 +144,9 @@ pub enum Cmd {
     ZoomSlot,
     /// Zoom the FX page back out to the rack.
     ZoomRack,
+    /// Turn the cursor's FX slot to its next page, or its previous, for an effect that has more
+    /// than one (decision 452).
+    SlotPage(bool),
     Replace,
     Substitute,
     /// Choose what's under the cursor from a list.

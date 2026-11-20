@@ -185,12 +185,13 @@ effects! {
 /// jumping, crossfading from where it read to where it reads now, so they keep their pitch.
 pub(crate) const RETIMES: [&str; 2] = ["Glide", "Jump"];
 
-/// The most settings any effect shows at once, in the type or mode it's in: a grid's twelve and
-/// its type or mode in the title, and Beads' quality beside its mode there.
-pub const MAX_PARAMS: usize = 14;
+/// The most settings any effect shows at once, in the type or mode it's in: two pages' grids of
+/// twelve, as Deck has (decision 452), its type or mode in the title, and two more there beside it,
+/// as Deck's tape and generations are.
+pub const MAX_PARAMS: usize = 27;
 /// The most settings any effect keeps across all of its types and modes, of which it shows at
 /// most [`MAX_PARAMS`]. A compressor keeps each type's own.
-pub const MAX_KEPT_PARAMS: usize = 17;
+pub const MAX_KEPT_PARAMS: usize = 27;
 
 const MIX_PARAM: Entry = Entry {
     meaning: "how much of the effect is heard against the sound going in",
@@ -397,9 +398,30 @@ impl Insert {
     /// which, as its mode does, chooses what it is rather than how it's played, and Reel's
     /// oversampling.
     pub fn title_param(self) -> Option<usize> {
-        self.params()
+        self.title_params().next()
+    }
+
+    /// Every setting the FX page shows in the slot's title after its type, in order: Deck has its
+    /// tape and its generations there (decision 452).
+    pub fn title_params(self) -> impl Iterator<Item = usize> {
+        let params = self.params();
+        (0..params.len()).filter(move |at| params.get(*at).is_some_and(|p| p.place == Place::Title))
+    }
+
+    /// Where the settings that don't fit on its grid sit, on a second page of the slot, by their
+    /// places among those it has now, for an effect that has one (decision 452).
+    pub fn second_grid(self) -> Option<Grid> {
+        let placed = match self.mode() {
+            Some(_) => None,
+            None => self.kind().and_then(|kind| kind.spec().second),
+        }?;
+        let params = self.params();
+        let index = |key: &&str| params.iter().position(|found| found.key == *key);
+        let columns: Vec<Vec<Option<usize>>> = placed
             .iter()
-            .position(|found| found.place == Place::Title)
+            .map(|column| column.iter().map(index).collect())
+            .collect();
+        Some(Grid::from_columns(&columns))
     }
 
     /// Where its settings sit on the FX page, by their places among those it has now. Its type is

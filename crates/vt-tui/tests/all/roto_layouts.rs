@@ -72,12 +72,7 @@ fn every_setting_is_placed_exactly_once_by_a_key_its_device_has() {
         // Everything but what the app alone chooses: the machine, the effect and its type.
         // Steps' values are one stop on every row of the page, and each of them on the Roto.
         let mut controls: Vec<Control> = Vec::new();
-        for control in spec
-            .rows()
-            .flatten()
-            .flatten()
-            .filter(|control| !app_only(*control, track))
-        {
+        for control in spec.controls().filter(|control| !app_only(*control, track)) {
             match control {
                 Control::Mod(slot, ModField::Step(_)) => {
                     for at in 0..STEPS as u8 {

@@ -10,7 +10,7 @@ use vt_model::action::TrackControl;
 use vt_model::insert::Insert;
 use vt_model::song::{Track, TrackKind};
 
-use crate::controls::{Control, DeviceSpec, Page};
+use crate::controls::{Control, DEVICE_COLUMNS, DeviceSpec, Page};
 use crate::graphics::PanelKey;
 use crate::input::mode::Mode;
 use crate::pages::Ctx;
@@ -26,6 +26,7 @@ use crate::widgets::panel::GraphicPanel;
 use crate::widgets::table::take_top;
 use crate::widgets::theme;
 use crate::widgets::{group, role};
+use vt_model::grid::GRID_ROWS;
 
 use cells::TrackCells;
 
@@ -165,6 +166,25 @@ fn draw_slot(
     }
 }
 
+/// A slot's page tab, for an effect with two pages (decision 452): each page's number, the one
+/// showing bright and the other faint, as a hardware unit's page lights are.
+fn page_tab(device: &DeviceSpec) -> Option<Line<'static>> {
+    let (showing, pages) = device.page()?;
+    let mut spans = Vec::new();
+    for at in 0..pages {
+        if at > 0 {
+            spans.push(Span::raw(" "));
+        }
+        let style = if at == showing {
+            theme::active()
+        } else {
+            theme::faint()
+        };
+        spans.push(Span::styled((at + 1).to_string(), style));
+    }
+    Some(Line::from(spans))
+}
+
 /// A slot's frame and its title, with its bypass's toggle, as the rack and the zoom both draw it,
 /// giving back which slot it is.
 fn slot_frame(
@@ -181,6 +201,9 @@ fn slot_frame(
     let cursor = theme::cursor(ctx.mode());
     let fade = heard_bypassed(ctx, track, slot).then_some(cursor);
     let mut controls = TrackCells::new(page, ctx, track).titles(device);
+    if let Some(tab) = page_tab(device) {
+        controls.push(tab);
+    }
     if let Some(keep) = fade {
         controls = controls.into_iter().map(|line| faded(line, keep)).collect();
     }
@@ -220,7 +243,26 @@ fn slot_grid(
         return;
     }
     let fade = heard_bypassed(ctx, track, slot).then_some(theme::cursor(ctx.mode()));
-    let rows = device.grid.iter().copied().map(Vec::from).collect();
+    slot_page(
+        frame,
+        settings,
+        (page, ctx, track),
+        &device.grid,
+        widths,
+        fade,
+    );
+}
+
+/// One page of a slot's settings, faded but for the cursor's look if `fade` says so.
+fn slot_page(
+    frame: &mut Frame,
+    settings: Rect,
+    (page, ctx, track): (&TrackPage, &Ctx, &Track),
+    grid: &[[Option<Control>; DEVICE_COLUMNS]; GRID_ROWS],
+    widths: CellWidths,
+    fade: Option<Style>,
+) {
+    let rows = grid.iter().copied().map(Vec::from).collect();
     let source = TrackCells::new(page, ctx, track);
     let grid = SettingsGrid::new(&source, rows, widths).faded(fade);
     frame.render_widget(grid, settings);
@@ -241,7 +283,7 @@ fn draw_fx(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx, track: &T
         .map_or(0, |cursor| cursor.device);
     let first = (cursor + 1).saturating_sub(fit);
     let mut rest = area;
-    for device in Page::Fx.devices(track).iter().skip(first).take(fit) {
+    for device in page.devices(Some(track)).iter().skip(first).take(fit) {
         let area = take_top(&mut rest, DEVICE_HEIGHT);
         draw_slot(frame, area, page, ctx, track, device);
     }

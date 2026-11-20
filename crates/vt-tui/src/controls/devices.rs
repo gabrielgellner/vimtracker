@@ -111,6 +111,10 @@ pub struct DeviceSpec {
     pub width: DeviceWidth,
     pub title: [Option<Control>; TITLE_PLACES],
     pub grid: [[Option<Control>; DEVICE_COLUMNS]; GRID_ROWS],
+    /// The grid of its other page, for an FX slot whose effect has two (decision 452), and
+    /// whether the second is the one in `grid` now.
+    pub second: Option<[[Option<Control>; DEVICE_COLUMNS]; GRID_ROWS]>,
+    pub turned: bool,
 }
 
 impl DeviceSpec {
@@ -129,7 +133,29 @@ impl DeviceSpec {
             width: DeviceWidth::Full,
             title,
             grid: std::array::from_fn(|row| grid.row(row).map(|at| at.map(&control))),
+            second: None,
+            turned: false,
         }
+    }
+
+    /// The same device turned to its other page, if it has one: its grid and its other page's
+    /// swap places, so the cursor goes through the page it's turned to.
+    #[must_use]
+    pub fn turned(self) -> Self {
+        match self.second {
+            Some(second) => Self {
+                grid: second,
+                second: Some(self.grid),
+                turned: !self.turned,
+                ..self
+            },
+            None => self,
+        }
+    }
+
+    /// Which of its pages shows, from 0, and how many it has, for a device with more than one.
+    pub fn page(&self) -> Option<(usize, usize)> {
+        self.second.map(|_| (usize::from(self.turned), 2))
     }
 
     /// The same device at half the rack's width.
@@ -144,5 +170,12 @@ impl DeviceSpec {
     /// Its rows as the cursor goes through them: its title, then its grid's.
     pub fn rows(&self) -> impl Iterator<Item = Vec<Option<Control>>> + '_ {
         std::iter::once(self.title.to_vec()).chain(self.grid.iter().map(|row| row.to_vec()))
+    }
+
+    /// Every control it has, on any of its pages, as the Roto reaches them: its rows', then its other
+    /// page's.
+    pub fn controls(&self) -> impl Iterator<Item = Control> + '_ {
+        let other = self.second.iter().flatten().flatten().flatten().copied();
+        self.rows().flatten().flatten().chain(other)
     }
 }
