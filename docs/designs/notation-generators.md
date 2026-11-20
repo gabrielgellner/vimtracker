@@ -642,18 +642,20 @@ So the transforms don't need adding as operators; the **in-string** ones (`*`, `
 
 ---
 
-## 9. Plan: proposed issues
+## 9. Plan: the issues
 
-| # | Proposed issue | Depends on | Size |
-|---|---|---|---|
-| 1 | **The token editor:** `Typing::Tokens`, `Grammar` in `vt-model`, the field widget and its keys (§3.2 to §3.4), the error marker and last-good rule, `Space d` meanings; the 388 `Weights` digits moved onto it with no change seen. | none | L, 700–900 |
-| 2 | **A `List` as long as a phrase:** `Shape::values` moved onto the `Generator` as `list`, up to `MAX_LIST` (256); the panel, `S`, copies and patches carrying it; `render_into` reading it as a slice and the run's key holding its hash; `GeneratorFile`'s `list` skipped when empty, no format bump (§4.1). | none | M, 400–500 |
-| 3 | **`K` and `Tab` in a field:** the lists at a token and between tokens, from the track's scale, column and group; reusing `completion.rs`'s list. | 1 | M, 400 |
-| 4 | **The existing fields on it:** `List`'s values with the room in the status line and scrolling, the Gen page's `Weights` cell, `Tonnetz`'s `Moves` with chords under them, a `Bits` mask as bits, the Steps box's list. | 1, 2 | M, 400–500 |
-| 5 | **Rows lit, token playing lit:** the token table on each render, the rows line, the grid's light, the playhead's token. | 1 | M, 300–400 |
-| 6 | **`Own` rhythm:** the rhythm grammar, `Where::Own` with its text on the `Generator`, the named rhythms as its presets. | 1, 5 | M, 500 |
-| 7 | **`Mini`:** the fill, its grammar per column with notes and degrees from 1, `Step`, nudged splits, laps and seeds, `Cue` holding a retyped line to the lap, the stack across tracks; guide and tutorial recipes. | 6 | L, 800–1000 |
-| 8 | **Kit lines:** one `Mini` text kept the same across a group's tracks, tokens naming the tracks, `S` across the group, edits made to every track in one undo step, `:name` renaming tokens (§5.3). | 7 | M, 400–500 |
+Filed on 2026-11-20 in the milestone M39: Notation generators, in build order.
+
+| # | Issue | What | Depends on | Size |
+|---|---|---|---|---|
+| 1 | #1086 | **The token editor:** `Typing::Tokens`, `Grammar` in `vt-model`, the field widget and its keys (§3.2 to §3.4), the error marker and last-good rule, `Space d` meanings; the 388 `Weights` digits moved onto it with no change seen. | none | L, 700–900 |
+| 2 | #1087 | **A `List` as long as a phrase:** `Shape::values` moved onto the `Generator` as `list`, up to `MAX_LIST` (256); the panel, `S`, copies and patches carrying it; `render_into` reading it as a slice and the run's key holding its hash; `GeneratorFile`'s `list` skipped when empty, no format bump (§4.1). | none | M, 400–500 |
+| 3 | #1088 | **`K` and `Tab` in a field:** the lists at a token and between tokens, from the track's scale, column and group; reusing `completion.rs`'s list. | 1 | M, 400 |
+| 4 | #1089 | **The existing fields on it:** `List`'s values with the room in the status line and scrolling, the Gen page's `Weights` cell, `Tonnetz`'s `Moves` with chords under them, a `Bits` mask as bits, the Steps box's list. | 1, 2 | M, 400–500 |
+| 5 | #1090 | **Rows lit, token playing lit:** the token table on each render, the rows line, the grid's light, the playhead's token. | 1 | M, 300–400 |
+| 6 | #1091 | **`Own` rhythm:** the rhythm grammar, `Where::Own` with its text on the `Generator`, the named rhythms as its presets. | 1, 5 | M, 500 |
+| 7 | #1092 | **`Mini`:** the fill, its grammar per column with notes and degrees from 1, `Step`, nudged splits, laps and seeds, `Cue` holding a retyped line to the lap, the stack across tracks; guide and tutorial recipes. | 6 | L, 800–1000 |
+| 8 | #1093 | **Kit lines:** one `Mini` text kept the same across a group's tracks, tokens naming the tracks, `S` across the group, edits made to every track in one undo step, `:name` renaming tokens (§5.3). | 7 | M, 400–500 |
 
 **Order:** 1 and 2 side by side → 3, 4, 5 side by side → 6 → 7 → 8. Issues 1 to 5 improve what
 exists and are worth having if nothing new is built.
