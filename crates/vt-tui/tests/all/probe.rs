@@ -546,3 +546,16 @@ fn mod_slots_are_numbered_from_one() {
     assert!(refused(&slot("0")).contains("numbered 1 to"));
     assert!(refused(&slot("9")).contains("numbered 1 to"));
 }
+
+#[test]
+fn a_spec_drives_the_filter() {
+    let driven = |drive: &str| {
+        rendered(
+            &sine_through(&format!(
+                "[ours.settings]\nfilter = \"Ladder\"\ncut = 0xC0\ndrive = {drive}\n"
+            )),
+            None,
+        )
+    };
+    assert_ne!(driven("0x00"), driven("0xFF"));
+}

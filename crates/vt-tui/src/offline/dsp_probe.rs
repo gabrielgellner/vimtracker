@@ -18,8 +18,8 @@
 //! counts them, each as songs store a slot. With any given, the transport plays an empty song
 //! under the notes or the input, as mod slots rest while it's stopped, so an envelope on `Cut`
 //! follows the notes, which start and release the track's modulation as sequenced notes do, and an
-//! LFO runs from the first frame. `--controls` writes down the cutoff and
-//! resonance the filter heard, every 32 frames, so a reference filter can be moved the same way.
+//! LFO runs from the first frame. `--controls` writes down the cutoff and resonance the filter
+//! heard, every 32 frames, so a reference filter can be moved the same way.
 //!
 //! A spec's `[report]` says how `tools/compare/report.py` lays out its measurements, and isn't read
 //! here either.
@@ -595,12 +595,13 @@ fn setting_of(
 }
 
 /// The track's own settings a probe can set: its level, pan, filter, pitch and glide.
-const TRACK_SETTINGS: [SettingId; 7] = [
+const TRACK_SETTINGS: [SettingId; 8] = [
     SettingId::LEVEL,
     SettingId::PAN,
     SettingId::CUT,
     SettingId::RES,
     SettingId::FILTER_MODE,
+    SettingId::DRIVE,
     SettingId::PITCH,
     SettingId::GLIDE,
 ];
@@ -670,6 +671,7 @@ fn set_on(track: &mut Track, id: SettingId, value: u8) {
             SettingId::PAN => track.pan = value,
             SettingId::CUT => track.cutoff = value,
             SettingId::RES => track.resonance = value,
+            SettingId::DRIVE => track.drive = value,
             SettingId::FILTER_MODE => {
                 track.filter_mode = FilterMode::ALL
                     .get(usize::from(value))

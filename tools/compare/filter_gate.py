@@ -21,8 +21,9 @@ envelope in a mod slot, played by `vimtracker probe`, which writes down the cuto
 the filter heard every 32 frames (`--controls`), after the mod slots' smoothing. Each reference is
 then rendered in blocks of 32 frames, its cutoff and resonance set before each block to what ours
 heard in it, so both sides follow one path. A reference's own smoothing of a setting comes on top:
-the step measure shows how much. The Drop follows within about 1.5 ms; Filter SEM and Filter MS-20
-take 10 to 35 ms, so their envelope sweeps lag, and are shown as such, not as fair pairs. Our knob
+the step measure shows how much: ours and The Drop are 90% of the way in 3 to 4 ms, Filter MS-20 in
+11 to 15, Filter SEM in 14 to 36 and Filter MINI in 54 to 111, so the Arturia filters' fast sweeps
+lag, and they're no fair pair for an envelope. Our knob
 and a step's lock reach the cutoff through a 10 ms smoother rather than the mod slots' 1 ms one;
 the gate measures the mod path, which is how a sweep is played.
 
@@ -254,7 +255,10 @@ class Moved:
         onset = self.side.onset_of(kind)
         knobs = np.array([F.paired(min(1.0, float(s)), onset) for s in path.share])
         extra = extra or {}
-        key = _key(source.plugin, source.preset, source.base, kind, extra, path.hertz.round(4).tolist(), knobs.round(5).tolist(), hashlib.sha1(samples.tobytes()).hexdigest())
+        # The setter's first settings name the circuit, as The Drop's OSR or PRD, which the rest
+        # of the key doesn't.
+        first_set = self.setter(kind, float(path.hertz[0]), float(knobs[0]))
+        key = _key(source.plugin, source.preset, source.base, kind, extra, first_set, path.hertz.round(4).tolist(), knobs.round(5).tolist(), hashlib.sha1(samples.tobytes()).hexdigest())
         out_path = CACHE / f"{self.side.name.replace(' ', '-').lower()}-{key}.npy"
         if out_path.exists() and not fresh:
             return np.load(out_path)
@@ -270,21 +274,52 @@ class Moved:
         frames = given.shape[1]
         if source.settle:
             plugin(np.zeros((2, BLOCK), dtype=np.float32), RATE, buffer_size=BLOCK, reset=True)
+        # pedalboard builds its dict of every parameter each time it's asked, so it's asked once.
+        self.parameters = plugin.parameters
         now = dict(first)
         for block, start in enumerate(range(0, frames, BLOCK)):
             at = min(block, len(knobs) - 1)
             wanted = self.setter(kind, float(path.hertz[at]), float(knobs[at]))
             for name, value in wanted.items():
-                low, high = plugin.parameters[name].range[:2]
+                low, high = self.parameters[name].range[:2]
                 if isinstance(value, float) and isinstance(low, (int, float)) and isinstance(high, (int, float)):
                     # Past the end of a reference's knob, as Filter SEM's 15 kHz, it stays at its end.
                     value = min(max(value, low), high)
                 if now.get(name) != value:
-                    setattr(plugin, name, value)
+                    self.put(plugin, name, value)
                     now[name] = value
             out[:, start : start + BLOCK] = plugin(given[:, start : start + BLOCK], RATE, buffer_size=BLOCK, reset=(block == 0 and not source.settle))
         np.save(out_path, out)
         return out
+
+
+    def put(self, plugin, name: str, value) -> None:
+        """Set a parameter, a continuous one by its raw value from a table of its turn, as
+        pedalboard's own conversion takes up to 3 ms a setting, too slow for every block."""
+        parameter = self.parameters[name]
+        step = parameter.range[2]
+        if not isinstance(value, float) or (step is not None and step >= 1):
+            setattr(plugin, name, value)
+            return
+        tables = self.__dict__.setdefault("tables", {})
+        if name not in tables:
+            path = CACHE / f"table-{_key(self.side.source.plugin, name)}.npy"
+            if path.exists():
+                tables[name] = np.load(path)
+            else:
+                raws = np.linspace(0.0, 1.0, 4097)
+                values = []
+                for raw in raws:
+                    parameter.raw_value = float(raw)
+                    values.append(float(getattr(plugin, name)))
+                tables[name] = np.vstack([raws, values])
+                np.save(path, tables[name])
+        raws, values = tables[name]
+        # Read to the plugin's own display's precision, so a step or two of it may repeat.
+        if np.all(np.diff(values) >= 0):
+            parameter.raw_value = float(np.interp(value, values, raws))
+        else:
+            setattr(plugin, name, value)
 
 
 # Measuring.
@@ -358,11 +393,13 @@ def curve_apart(a: np.ndarray, b: np.ndarray, matched: bool, quiet: np.ndarray |
 
 
 def residual(samples: np.ndarray, fundamental: float, skip: float = 0.2, width: float = 25.0) -> float:
-    """What isn't within `width` Hz of a harmonic of a sine, in dB under the whole output."""
+    """What isn't within `width` Hz of a harmonic of a sine, or under 20 Hz, in dB under the whole
+    output."""
     x = np.nan_to_num(F.measure.mono(samples))[int(skip * RATE) :]
     spectrum = np.abs(np.fft.rfft(x * np.hanning(x.size))) ** 2
     hz = np.fft.rfftfreq(x.size, 1 / RATE)
-    harmonic = np.zeros_like(hz, dtype=bool)
+    # What's under 20 Hz is left out too: a lopsided filter's DC, as `OB-X` puts out, isn't zipper.
+    harmonic = hz < 20.0
     for k in range(1, int(RATE / 2 / fundamental) + 1):
         harmonic |= np.abs(hz - k * fundamental) <= width
     total = spectrum.sum()
@@ -658,6 +695,43 @@ def flagged(gated: Gated) -> list[dict]:
     return sorted(out, key=lambda row: -row["size"])
 
 
+def static_rows(result: dict) -> list[dict]:
+    """filter_refs.py's static measures against The Drop alone, each over its cases: our mean gap,
+    the Arturia filter's beside it as a yardstick, and how many cases are past the tolerance, the
+    measures most past it first."""
+    names = [side.name for side in result["circuit"].sides]
+    drop, others = names[1], names[2:]
+    by_measure = {}
+    for record in result["records"]:
+        unit = record["unit"]
+        values = record["values"]
+        main = consensus.scaled(values.get(drop, float("nan")), unit) if consensus.finite(values.get(drop)) else float("nan")
+        row = by_measure.setdefault(record["measure"], {"measure": record["measure"], "unit": consensus.GAP_UNITS.get(unit, unit), "tolerance": consensus.TOLERANCES[unit], "ours": [], "second": [], "cases": 0})
+        row["cases"] += 1
+        for name, into in [("ours", row["ours"])] + [(n, row["second"]) for n in others]:
+            value = values.get(name)
+            if consensus.finite(value) and math.isfinite(main):
+                into.append(consensus.scaled(value, unit) - main)
+    out = []
+    for row in by_measure.values():
+        ours, second = np.array(row.pop("ours")), np.array(row.pop("second"))
+        row["ours gap"] = float(np.mean(ours)) if ours.size else float("nan")
+        row["second gap"] = float(np.mean(second)) if second.size else float("nan")
+        row["past"] = int(np.sum(np.abs(ours) > row["tolerance"]))
+        row["compared"] = int(ours.size)
+        row["size"] = abs(row["ours gap"]) / row["tolerance"] if ours.size else 0.0
+        out.append(row)
+    return sorted(out, key=lambda row: -row["size"])
+
+
+def static_text(result: dict) -> str:
+    names = [side.name for side in result["circuit"].sides]
+    lines = [f"\n== {result['circuit'].title}, held still, against {names[1]}", f"{'measure':70} {'ours':>8} {names[2][:12]:>12} {'past tol':>9}"]
+    for row in static_rows(result):
+        lines.append(f"{row['measure'][:70]:70} {row['ours gap']:+8.2f} {row['second gap']:+12.2f} {row['past']:>4}/{row['compared']:<4} {row['unit']}")
+    return "\n".join(lines)
+
+
 def text_table(gated: Gated) -> str:
     lines = [f"\n== {gated.circuit} {gated.label}"]
     references = sorted({k for r in gated.records for k in r["values"] if k != "ours"}, key=lambda n: not n.startswith("The Drop"))
@@ -685,6 +759,14 @@ def page(results: list[Gated], static: list, knobs: list, path: Path) -> None:
     if knobs:
         rows = [[k["side"], k["knob"]] + [f"{k['steps'][f]:.1f}" for f in (200.0, 1000.0, 5000.0)] for k in knobs]
         sections.append("<h2>The cutoff knobs</h2><p>Cents of cutoff per 255th of each knob's turn, at three cutoffs.</p>" + report.table(["Side", "Knob", "200 Hz", "1 kHz", "5 kHz"], rows, numeric_from=2))
+    for result in static:
+        names = [side.name for side in result["circuit"].sides]
+        rows = [[html.escape(r["measure"]), f"{r['ours gap']:+.2f}", f"{r['second gap']:+.2f}", f"{r['past']}/{r['compared']}", r["unit"]] for r in static_rows(result)]
+        sections.append(
+            f"<h2>{html.escape(result['circuit'].title)}, held still, against {html.escape(names[1])}</h2>"
+            f"<p>filter_refs.py's measures, each side's mean gap from {html.escape(names[1])}'s over its cases, and how many of ours are past the tolerance.</p>"
+            + report.table(["Measure", "Ours", html.escape(names[2]), "Past", "Unit"], rows, numeric_from=1)
+        )
     for gated in results:
         flags = flagged(gated)
         rows = [[f"{r['size']:.1f}×", html.escape(r["case"]), html.escape(r["what"]), consensus.shown(r["ours"], r["unit"]), f"{html.escape(r['main'])} {consensus.shown(r['reference'], r['unit'])}", ", ".join(f"{html.escape(n)} {consensus.shown(v, r['unit'])}" for n, v in r["second"].items())] for r in flags]
@@ -770,6 +852,7 @@ def main() -> None:
         if not args.no_static:
             result = F.measure_circuit(circuit, log=print)
             static.append(result)
+            print(static_text(result), flush=True)
     if static:
         print(F.summary_text(static))
         F.page(static, args.page.with_name("static.html"))
@@ -779,7 +862,7 @@ def main() -> None:
     page(results, static, knobs, args.page)
     data = {
         "moving": [{"circuit": g.circuit, "kind": g.kind, "records": g.records, "against": g.against, "flags": flagged(g)} for g in results],
-        "static": {r["circuit"].key: {"rows": r["rows"], "onsets": r["onsets"]} for r in static},
+        "static": {r["circuit"].key: {"against The Drop": static_rows(r), "consensus": r["rows"], "onsets": r["onsets"]} for r in static},
         "knobs": knobs,
     }
     args.json.parent.mkdir(parents=True, exist_ok=True)

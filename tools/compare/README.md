@@ -233,9 +233,9 @@ Ours moves through its own mod slots: an LFO or an envelope on `Cut` or `Res`, p
 `vimtracker probe`, whose `--controls` writes down the cutoff and resonance its filter heard every
 32 frames, after the slots' smoothing. Each reference is rendered in blocks of 32 frames, set
 before each block to what ours heard in it, so both follow one path. Each plugin's own smoothing of
-a setting comes on top, which the `step` case measures: The Drop follows within about 2 ms, Filter
-SEM in 10 to 35 ms, Filter MS-20 in 12 to 25 ms and Filter MINI in 50 to 110 ms, so a fast sweep
-on an Arturia filter lags, and only The Drop is a fair pair for an envelope. The measures and the
+a setting comes on top, which the `step` case measures: a step from 250 Hz to 4 kHz is 90% done in
+3 to 4 ms on ours and The Drop, 11 to 15 ms on Filter MS-20, 14 to 36 ms on Filter SEM and 54 to
+111 ms on Filter MINI, so a fast sweep on an Arturia filter lags, and only The Drop is a fair pair for an envelope. The measures and the
 flags are in `filter_gate.py`'s docstring; the page is `out/filter-gate/index.html`, with the
 static measures on `static.html` beside it, and `gate.json` has everything.
 
@@ -640,7 +640,7 @@ effects = ["comp"]  # the track's slots, from the first, by effect key: distort,
 acid.cutoff = 0x40          # bare dotted keys, or quoted: "acid.cutoff" = 0x40
 1.comp.threshold = 0xAA     # a slot's effect: slot, effect, setting
 acid.wave = "Saw"           # a choice by its name, or its place from 0
-cut = 0xC0                  # the track's own: vol, pan, cut, res, mode, pitch, glide
+cut = 0xC0                  # the track's own: vol, pan, cut, res, mode, drive, pitch, glide
 filter = "Ladder"           # the track's filter type, by the name the Sound page shows
 
 [ours.mods.2]               # a mod slot, numbered from 1 as the Mod page does, as songs store one
