@@ -2,16 +2,20 @@
 //! 450). This program's `Spring`, ChowDSP's model, rings in one loop through its all-passes, so a
 //! sound comes round about every quarter of a second, a flutter like a snare's rattle, and its
 //! all-passes leave comb lines across the whole band. TAPE-201's has neither: a drip that rises,
-//! its lows first and its highs about 10 ms after, then a smooth, dark tail. So this one makes
-//! the drip apart from the tail. A chain of stretched all-passes, each a frame's all-pass with its
-//! delay taken out to `CHIRP_FRAMES` frames, as Parker and Välimäki model a spring's dispersion,
-//! holds highs back more than lows up to where the stretch turns them round, about 3.4 kHz; and a
-//! feedback delay network of eight lines, each losing more of its highs than its lows, makes the
-//! tail, with no one loop to come round. TAPE-201's drip is muted and dull, so the chirp is heard
-//! quietly and through a low-pass, and the network hears it only after six short all-passes have
-//! smeared it, or each line would bring the chirp back whole, a "whip" every 35 to 80 ms. A
-//! band-pass, a steep high-pass at 180 Hz and a lift at 750 Hz then shape both as TAPE-201's is
-//! shaped. It's linear but for a soft hold on what goes in.
+//! its lows first and its highs about 10 ms after, then a smooth, dark tail that falls quickly at
+//! first and then rings on, quieter and slower, for seconds. So this one makes the drip apart from
+//! the tail. A chain of stretched all-passes, each a frame's all-pass with its delay taken out to
+//! `CHIRP_FRAMES` frames, as Parker and Välimäki model a spring's dispersion, holds highs back
+//! more than lows up to where the stretch turns them round, about 3.4 kHz. Two feedback delay
+//! networks of eight lines make the tail, with no one loop to come round: a short one that falls
+//! in about 3.7 s, and a long, quiet one that rings on for about 8 s at the bottom and dies
+//! sooner above 1 kHz, the distant end of the tail. TAPE-201's drip is muted and dull, so the
+//! chirp is heard quietly and through a low-pass, and the networks hear it only after six short
+//! all-passes have smeared it, or each line would bring the chirp back whole, a "whip" every
+//! 30 to 180 ms. A band-pass, a steep high-pass at 156 Hz with a little lift over it and a lift
+//! at 750 Hz then shape both as TAPE-201's is shaped. Each side is a tank of its own, as
+//! TAPE-201's are, so a sound on the left rings on the left only and a sound in the middle rings
+//! the same on both. It's linear but for a soft hold on what goes in.
 //!
 //! `Spring` itself stays as it is, the full spring reverb on its own.
 
@@ -35,32 +39,123 @@ const CHIRP_COEFFICIENT: f32 = 0.4;
 /// frames at the tuning rate, 2.4 to 11.6 ms.
 const SMEAR_FRAMES: [f32; 6] = [113.0, 167.0, 241.0, 337.0, 431.0, 557.0];
 const SMEAR_COEFFICIENT: f32 = 0.7;
-/// The tail's lines, in frames at the tuning rate, none a multiple of another.
+/// The short network: its lines, in frames at the tuning rate, all prime, 29 to 65 ms; how long
+/// it rings at its bottom and at `HIGH_HZ`, in seconds, through a one-pole on each line as Jot's
+/// network has; and how much of it is heard.
 const LINES: [f32; 8] = [
-    1693.0, 1931.0, 2203.0, 2477.0, 2797.0, 3089.0, 3433.0, 3851.0,
+    1381.0, 1571.0, 1789.0, 2017.0, 2281.0, 2521.0, 2797.0, 3137.0,
 ];
-/// How long the tail rings at its bottom and at `HIGH_HZ`, in seconds, through a one-pole on each
-/// line as Jot's network has.
-const LOW_T60: f32 = 4.3;
-const HIGH_T60: f32 = 2.5;
-const HIGH_HZ: f32 = 3000.0;
-/// How much of the drip and of the tail is heard, and the drip's one-pole low-pass.
+const LOW_T60: f32 = 3.7;
+const HIGH_T60: f32 = 2.48;
+const HIGH_HZ: f32 = 3260.0;
+const TAIL: f32 = 0.1355;
+/// The long network, the tail's distant end: its lines, all prime, 92 to 176 ms; its T60s, at
+/// the bottom and at `LATE_HIGH_HZ`; and how much of it is heard.
+const LATE_LINES: [f32; 8] = [
+    4409.0, 4951.0, 5503.0, 6067.0, 6619.0, 7213.0, 7817.0, 8461.0,
+];
+const LATE_LOW_T60: f32 = 8.1;
+const LATE_HIGH_T60: f32 = 2.77;
+const LATE_HIGH_HZ: f32 = 1360.0;
+const LATE: f32 = 0.0612;
+/// How much of the drip is heard, and its one-pole low-pass.
 const DRIP: f32 = 0.2;
-const TAIL: f32 = 0.42;
 const DRIP_LOW_PASS_HZ: f32 = 2000.0;
 /// The band-pass: a third-order Butterworth high-pass and a fourth-order low-pass; a fourth-order
-/// Butterworth high-pass under it, as TAPE-201's falls 40 dB from 200 to 100 Hz; and the lift.
+/// high-pass under it, its second section's Q raised from Butterworth's 1.31 so it lifts a
+/// little over 156 Hz, as TAPE-201's falls 40 dB from 200 to 100 Hz yet keeps its 125 Hz octave;
+/// and the lift.
 const HIGH_PASS_HZ: f32 = 400.0;
 const LOW_PASS_HZ: f32 = 1700.0;
-const BOTTOM_HZ: f32 = 180.0;
+const BOTTOM_HZ: f32 = 156.0;
+const BOTTOM_QS: [f32; 2] = [0.541_196, 1.94];
 const LIFT: (f32, f32, f32) = (750.0, 1.4, 6.5);
 /// What goes in is held softly under this, so the tank's out is bounded and nothing near a
 /// sound's level is bent: `C tanh(x / C)`, with anything huge or a NaN held first.
 const HOLD: f32 = 4.0;
 const LOUDEST_IN: f32 = HOLD * 16.0;
 
-/// The tail's lines' signs on the way out, so the sides aren't the same.
-const SIGNS: [f32; 4] = [1.0, -1.0, 1.0, -1.0];
+/// Which way round each line hears what comes in and is heard, so the lines don't start alike.
+const IN_SIGNS: [f32; 8] = [1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0];
+const OUT_SIGNS: [f32; 8] = [1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0];
+
+/// One side's feedback delay network: eight lines mixed by a Householder matrix, each through
+/// Jot's one-pole `g (1 - p) / (1 - p z⁻¹)`, `g` for the low T60 and `p` so the gain at the high
+/// frequency is the high T60's. The lines are one after another in `buffer`, each exactly its
+/// length.
+#[derive(Debug, Clone)]
+struct Network {
+    buffer: Vec<f32>,
+    starts: [usize; 8],
+    lengths: [usize; 8],
+    at: [usize; 8],
+    keep: [f32; 8],
+    pole: [f32; 8],
+    damped: [f32; 8],
+}
+
+impl Network {
+    fn new(frames: [f32; 8], rate: u32, (low_t60, high_t60, high_hz): (f32, f32, f32)) -> Self {
+        let scale = rate as f32 / TUNING_RATE;
+        let lengths = frames.map(|frames| ((frames * scale).round() as usize).max(1));
+        let mut starts = [0; 8];
+        let mut total = 0;
+        for (start, length) in starts.iter_mut().zip(lengths) {
+            *start = total;
+            total += length;
+        }
+        let omega = TAU * high_hz.min(rate as f32 * 0.45) / rate as f32;
+        let mut keep = [0.0; 8];
+        let mut pole = [0.0; 8];
+        for (line, frames) in lengths.iter().enumerate() {
+            let dies = |t60: f32| 0.001_f32.powf(*frames as f32 / (t60 * rate as f32));
+            let (low, high) = (dies(low_t60), dies(high_t60));
+            let r = (high / low).powi(2);
+            let (a, b) = (1.0 - r, -2.0 * (1.0 - r * omega.cos()));
+            keep[line] = low;
+            pole[line] = (-b - (b * b - 4.0 * a * a).sqrt()) / (2.0 * a);
+        }
+        Self {
+            buffer: vec![0.0; total],
+            starts,
+            lengths,
+            at: [0; 8],
+            keep,
+            pole,
+            damped: [0.0; 8],
+        }
+    }
+
+    fn clear(&mut self) {
+        self.buffer.fill(0.0);
+        self.damped = [0.0; 8];
+    }
+
+    /// Feed one sample in and get the tail out: what each line gives, through its one-pole,
+    /// mixed and written back with what comes in.
+    #[inline]
+    fn process(&mut self, fed: f32) -> f32 {
+        let mut read = [0.0; 8];
+        for (line, sample) in read.iter_mut().enumerate() {
+            let back = self.buffer[self.starts[line] + self.at[line]];
+            let pole = self.pole[line];
+            self.damped[line] = self.keep[line] * (1.0 - pole) * back + pole * self.damped[line];
+            *sample = self.damped[line];
+        }
+        let mixed = read.iter().sum::<f32>() * (2.0 / 8.0);
+        let mut tail = 0.0;
+        for (line, sample) in read.iter().enumerate() {
+            tail += sample * OUT_SIGNS[line];
+            self.buffer[self.starts[line] + self.at[line]] = sample - mixed + fed * IN_SIGNS[line];
+            self.at[line] = if self.at[line] + 1 == self.lengths[line] {
+                0
+            } else {
+                self.at[line] + 1
+            };
+        }
+        tail * 0.5
+    }
+}
 
 /// The tank, both sides.
 #[derive(Debug, Clone)]
@@ -75,12 +170,9 @@ pub(crate) struct Tank {
     smear: Vec<[f32; 2]>,
     smear_frames: [usize; 6],
     smear_at: [usize; 6],
-    lines: Lines<8>,
-    lengths: [usize; 8],
-    /// Each line's one-pole: its gain at DC, its pole, and its state.
-    keep: [f32; 8],
-    pole: [f32; 8],
-    damped: [f32; 8],
+    /// Each side's short and long network.
+    tail: [Network; 2],
+    late: [Network; 2],
     one_pole_high: f32,
     one_pole_state: [f32; 2],
     drip_low: f32,
@@ -98,21 +190,6 @@ impl Tank {
         let pre_frames = ((PRE_SECONDS * rate as f32) as usize).max(1);
         let chirp_frames = ((CHIRP_FRAMES * scale).round() as usize).max(1);
         let smear_frames = SMEAR_FRAMES.map(|frames| ((frames * scale).round() as usize).max(1));
-        let lengths = LINES.map(|frames| ((frames * scale).round() as usize).max(1));
-        let longest = lengths.iter().copied().max().unwrap_or(1);
-        // Jot's one-pole: `g (1 - p) / (1 - p z⁻¹)`, `g` for the low T60 and `p` so the gain at
-        // `HIGH_HZ` is the high T60's.
-        let omega = TAU * HIGH_HZ.min(rate as f32 * 0.45) / rate as f32;
-        let mut keep = [0.0; 8];
-        let mut pole = [0.0; 8];
-        for (line, frames) in lengths.iter().enumerate() {
-            let dies = |t60: f32| 0.001_f32.powf(*frames as f32 / (t60 * rate as f32));
-            let (low, high) = (dies(LOW_T60), dies(HIGH_T60));
-            let r = (high / low).powi(2);
-            let (a, b) = (1.0 - r, -2.0 * (1.0 - r * omega.cos()));
-            keep[line] = low;
-            pole[line] = (-b - (b * b - 4.0 * a * a).sqrt()) / (2.0 * a);
-        }
         let rate_f = rate as f32;
         let tan = (std::f32::consts::PI * HIGH_PASS_HZ / rate_f).tan();
         Self {
@@ -124,11 +201,14 @@ impl Tank {
             smear: vec![[0.0; 2]; smear_frames.iter().sum()],
             smear_frames,
             smear_at: [0; 6],
-            lines: Lines::new(longest + 1),
-            lengths,
-            keep,
-            pole,
-            damped: [0.0; 8],
+            tail: std::array::from_fn(|_| Network::new(LINES, rate, (LOW_T60, HIGH_T60, HIGH_HZ))),
+            late: std::array::from_fn(|_| {
+                Network::new(
+                    LATE_LINES,
+                    rate,
+                    (LATE_LOW_T60, LATE_HIGH_T60, LATE_HIGH_HZ),
+                )
+            }),
             one_pole_high: tan / (1.0 + tan),
             one_pole_state: [0.0; 2],
             drip_low: 1.0 - (-TAU * DRIP_LOW_PASS_HZ / rate_f).exp(),
@@ -138,10 +218,7 @@ impl Tank {
                 Biquad::low_pass(LOW_PASS_HZ, 0.541_196, rate_f),
                 Biquad::low_pass(LOW_PASS_HZ, 1.306_563, rate_f),
             ],
-            bottom: [
-                Biquad::high_pass(BOTTOM_HZ, 0.541_196, rate_f),
-                Biquad::high_pass(BOTTOM_HZ, 1.306_563, rate_f),
-            ],
+            bottom: BOTTOM_QS.map(|q| Biquad::high_pass(BOTTOM_HZ, q, rate_f)),
             lift: Biquad::peak(LIFT.0, LIFT.1, LIFT.2, rate_f),
             states: [[[0.0; 2]; 6]; 2],
         }
@@ -153,8 +230,8 @@ impl Tank {
         self.chirp.fill([0.0; 2]);
         self.smear.fill([0.0; 2]);
         self.drip_state = [0.0; 2];
-        self.lines.clear();
-        self.damped = [0.0; 8];
+        self.tail.iter_mut().for_each(Network::clear);
+        self.late.iter_mut().for_each(Network::clear);
         self.one_pole_state = [0.0; 2];
         self.states = [[[0.0; 2]; 6]; 2];
     }
@@ -200,28 +277,13 @@ impl Tank {
             start += frames;
         }
 
-        // The tail: what each line gives, through its one-pole, mixed by a Householder matrix.
-        self.lines.advance();
-        let mut read = [0.0; 8];
-        for (line, sample) in read.iter_mut().enumerate() {
-            let back = self.lines.at(line, self.lengths[line]);
-            let pole = self.pole[line];
-            self.damped[line] = self.keep[line] * (1.0 - pole) * back + pole * self.damped[line];
-            *sample = self.damped[line];
-        }
-        let mixed = read.iter().sum::<f32>() * (2.0 / 8.0);
-        let mut tail = [0.0; 2];
-        for (line, sample) in read.iter().enumerate() {
-            let side = line / 4;
-            tail[side] += sample * SIGNS[line % 4] * 0.5;
-            self.lines.write(line, sample - mixed + fed[side]);
-        }
-
         let mut out = [0.0; 2];
         for side in 0..2 {
+            let tail = self.tail[side].process(fed[side]);
+            let late = self.late[side].process(fed[side]);
             let drip = &mut self.drip_state[side];
             *drip += self.drip_low * (x[side] - *drip);
-            let wet = *drip * DRIP + tail[side] * TAIL;
+            let wet = *drip * DRIP + tail * TAIL + late * LATE;
             // The first-order high-pass, then the second-order one: third-order Butterworth.
             let state = &mut self.one_pole_state[side];
             let v = (wet - *state) * self.one_pole_high;
@@ -343,6 +405,48 @@ mod tests {
         let t60 = -60.0 / (slope * 100.0);
         assert!((3.0..5.5).contains(&t60), "{t60}");
         assert!(levels.iter().all(|l| l.is_finite()));
+    }
+
+    #[test]
+    fn its_tail_falls_quickly_then_rings_on_slower() {
+        // A click's 100 ms levels: how fast it falls from 0.3 to 1.5 s against from 3 to 6 s, in
+        // dB a second, as TAPE-201's 250 Hz falls in 4.6 s early and 6.6 s late.
+        let mut tank = Tank::new(RATE);
+        let window = (RATE / 10) as usize;
+        let mut levels = Vec::new();
+        let mut sum = 0.0_f64;
+        for frame in 0..RATE as usize * 6 {
+            let x = if frame == 0 { 0.5 } else { 0.0 };
+            let [left, _] = tank.process([x, x]);
+            sum += f64::from(left * left);
+            if frame % window == window - 1 {
+                levels.push(10.0 * (sum + 1e-30).log10());
+                sum = 0.0;
+            }
+        }
+        let early = (levels[3] - levels[15]) / 1.2;
+        let late = (levels[30] - levels[59]) / 2.9;
+        assert!(early > late * 1.15, "{early} {late}");
+        assert!(late > 60.0 / 10.0, "{late}");
+    }
+
+    #[test]
+    fn each_side_is_a_tank_of_its_own() {
+        let mut tank = Tank::new(RATE);
+        let mut left = 0.0;
+        for frame in 0..RATE as usize {
+            let x = if frame == 0 { 0.5 } else { 0.0 };
+            let [l, r] = tank.process([x, 0.0]);
+            left += l * l;
+            assert!(r == 0.0, "{r}");
+        }
+        assert!(left > 1e-6, "{left}");
+        let mut tank = Tank::new(RATE);
+        for frame in 0..RATE as usize {
+            let x = if frame == 0 { 0.5 } else { 0.0 };
+            let [l, r] = tank.process([x, x]);
+            assert!(l == r, "{l} {r}");
+        }
     }
 
     #[test]

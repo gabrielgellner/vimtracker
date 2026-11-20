@@ -99,10 +99,13 @@ const BASS: (f32, f32, f32) = ECHO_BASS;
 const TREBLE: (f32, f32, f32) = ECHO_TREBLE;
 
 /// How loud the tank is at full `Reverb`: as loud as TAPE-201's on a drum loop and a sung line,
-/// 0.4 dB over it on the one and 0.9 dB under it on the other.
-const REVERB_GAIN: f32 = 1.2;
-/// How long the reverb rings, for knowing when the slot is quiet, in seconds.
-const REVERB_QUIET_SECONDS: f64 = 4.5;
+/// 0.6 dB over it on the one and 0.6 dB under it on the other.
+const REVERB_GAIN: f32 = 2.1;
+/// How long the reverb rings, for knowing when the slot is quiet, in seconds: the tank's long
+/// network rings about 8 s at its bottom. With the reverb off the slot waits the 4.5 s it waited
+/// before that network came, so the echo alone stops where it always did, to the bit.
+const REVERB_QUIET_SECONDS: f64 = 8.0;
+const REVERB_OFF_QUIET_SECONDS: f64 = 4.5;
 /// How often the tone controls' shelves are worked out again while they move, in frames.
 const BLOCK: u32 = 32;
 
@@ -502,8 +505,13 @@ impl Echo {
     /// most the wobble moves it, and the spring's ring.
     pub(crate) fn quiet_frames(&self) -> u32 {
         let rate = f64::from(self.rate);
-        (self.slow.max(self.target) * 3.0 + (MOST_WOBBLE_SECONDS + REVERB_QUIET_SECONDS) * rate)
-            as u32
+        let heard = |share: &Smoothed| share.target.max(share.value) > 0.0;
+        let reverb = if heard(&self.reverb) && heard(&self.reverb_on) {
+            REVERB_QUIET_SECONDS
+        } else {
+            REVERB_OFF_QUIET_SECONDS
+        };
+        (self.slow.max(self.target) * 3.0 + (MOST_WOBBLE_SECONDS + reverb) * rate) as u32
     }
 
     /// Feed one frame in and get what's wet out.

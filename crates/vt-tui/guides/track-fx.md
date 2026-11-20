@@ -255,11 +255,12 @@ the tape runs faster, by up to about 21 cents, with a little drift that comes fr
 seed, so a render is the same each time. `Bass` and `Treble` are on what comes out, the repeats
 and the reverb, and not in the loop.
 
-The reverb is the echo's own spring tank, fed from what comes in. A sound drips into it about
-50 ms later, quietly, its lows first and its highs rising after them, then rings out in a
-smooth, dark tail of about four seconds, mostly between 300 Hz and 2 kHz and little under
-180 Hz, so it sits under the repeats rather than over them. It doesn't rattle or whip as
-`Spring` does: for a full, bright spring reverb on its own, use `Spring`.
+The reverb is the echo's own spring tank, fed from what comes in, a tank a side. A sound drips
+into it about 50 ms later, quietly, its lows first and its highs rising after them, then rings
+out in a smooth, dark tail that falls away in about four seconds and then rings on, quieter, for
+several more, longest in the lows, mostly between 150 Hz and 2 kHz and little under that, so it
+sits under the repeats rather than over them. It doesn't rattle or whip as `Spring` does: for a
+full, bright spring reverb on its own, use `Spring`.
 
 `Mix` keeps the sound at full while it brings the echo up to full at `80`, then takes the sound
 down to nothing at `FF`, as TAPE-201's does. So turning it up from `00` to the middle only adds
