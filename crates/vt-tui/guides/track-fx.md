@@ -459,17 +459,20 @@ dull, how fast it wobbles and how wide its stereo is:
 
 | Type | Its sound |
 |---|---|
-| `Cassette` | A good deck: warm low mids, highs to about 15 kHz, a wow at 1 Hz and a flutter at 10 Hz |
+| `Cassette` | A good deck: warm low mids, highs to about 15 kHz |
 | `VHS` | Softer highs, thin lows, and its stereo narrowed by crosstalk |
-| `Worn` | A cheap, worn deck: thin and dull, very loose, and it drops out now and then by itself |
+| `Worn` | A cheap, worn deck: thin, dull, loose, and dropping out by itself |
+
+`Cassette`'s wow goes round at 1 Hz and its flutter at 10 Hz, as
+Cassette's do.
 
 | Setting | Does |
 |---|---|
-| `Drive` | How hard it hits the tape, from -24 dB to +24 dB, 0 dB at `80`, made up after so it's no louder |
-| `Hiss` | The tape's hiss, from none at `00` to about -24 dB at `FF`, and the noise riding on the sound |
-| `Wow` | A slow, wandering wobble in pitch, up to about 15 cents at `FF` |
-| `Flutter` | A fast warble in pitch, from the capstan, up to about 38 cents at `FF` |
-| `Drops` | How often and how deep the sound dips for a moment, its highs far more than its lows |
+| `Drive` | How hard it hits the tape, -24 to +24 dB, made up after |
+| `Hiss` | The hiss, none at `00` to about -24 dB at `FF`, and noise on the sound |
+| `Wow` | A slow, wandering wobble in pitch, up to 15 cents at `FF` |
+| `Flutter` | A fast warble in pitch, the capstan's, up to 38 cents at `FF` |
+| `Drops` | How often and how deep the sound dips, its highs far more |
 | `Chew` | Now and then a stretch of crinkled tape, bent and dulled |
 | `Track` | Noise reduction, mistracking more as it goes up |
 
