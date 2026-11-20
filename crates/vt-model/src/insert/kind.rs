@@ -6,11 +6,11 @@ use std::ops::Index;
 use super::{
     BEADS_GRID, BEADS_PARAMS, CHORUS_PARAMS, CLOUDS_GRID, CLOUDS_PARAMS, COLOUR_GRID,
     COLOUR_PARAMS, COMB_PARAMS, COMPRESSOR_PARAMS, COMPRESSOR_SHOWN, DECK_GRID, DECK_PARAMS,
-    DELAY_GRID, DELAY_PARAMS, DISTORT_PARAMS, DISTORT_SHOWN, ECHO_GRID, ECHO_PARAMS, EQ_GRID,
-    EQ_PARAMS, EXCITER_GRID, EXCITER_PARAMS, EffectKind, Entry, FLANGER_PARAMS, FREQ_SHIFT_PARAMS,
-    GRAINS_PARAMS, HALL_GRID, HALL_PARAMS, LIMIT_PARAMS, LPG_PARAMS, MAX_KEPT_PARAMS,
-    PHASER_PARAMS, PITCH_PARAMS, PLATE_GRID, PLATE_PARAMS, REEL_GRID, REEL_PARAMS, RESO_PARAMS,
-    REVERB_GRID, REVERB_PARAMS, ROTARY_GRID, ROTARY_PARAMS, SPACE_PARAMS, SPRING_GRID,
+    DECK_SECOND, DELAY_GRID, DELAY_PARAMS, DISTORT_PARAMS, DISTORT_SHOWN, ECHO_GRID, ECHO_PARAMS,
+    EQ_GRID, EQ_PARAMS, EXCITER_GRID, EXCITER_PARAMS, EffectKind, Entry, FLANGER_PARAMS,
+    FREQ_SHIFT_PARAMS, GRAINS_PARAMS, HALL_GRID, HALL_PARAMS, LIMIT_PARAMS, LPG_PARAMS,
+    MAX_KEPT_PARAMS, PHASER_PARAMS, PITCH_PARAMS, PLATE_GRID, PLATE_PARAMS, REEL_GRID, REEL_PARAMS,
+    RESO_PARAMS, REVERB_GRID, REVERB_PARAMS, ROTARY_GRID, ROTARY_PARAMS, SPACE_PARAMS, SPRING_GRID,
     SPRING_PARAMS, STUTTER_GRID, STUTTER_PARAMS, TAPE_PARAMS, VOWEL_PARAMS, WARPS_PARAMS,
 };
 use crate::settings::same_key;
@@ -145,6 +145,9 @@ pub struct EffectSpec {
     /// Where they sit on the FX page when it shows them all, or nothing for the grid most effects
     /// have. A mode has its own.
     pub grid: Option<Columns>,
+    /// Where those that don't fit on the first sit, on a second page of the slot, for an effect
+    /// with more than a grid holds (decision 452), or nothing for the one page most have.
+    pub second: Option<Columns>,
 }
 
 /// The FX page's columns, left to right, each from the top, by the keys of the settings in them.
@@ -324,6 +327,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &DISTORT_PARAMS,
         shown: DISTORT_SHOWN,
         grid: None,
+        second: None,
     },
     EffectSpec {
         key: "delay",
@@ -333,6 +337,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &DELAY_PARAMS,
         shown: Shown::All,
         grid: Some(DELAY_GRID),
+        second: None,
     },
     EffectSpec {
         key: "reverb",
@@ -342,6 +347,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &REVERB_PARAMS,
         shown: Shown::All,
         grid: Some(REVERB_GRID),
+        second: None,
     },
     EffectSpec {
         key: "chorus",
@@ -351,6 +357,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &CHORUS_PARAMS,
         shown: Shown::All,
         grid: None,
+        second: None,
     },
     EffectSpec {
         key: "eq3",
@@ -360,6 +367,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &EQ_PARAMS,
         shown: Shown::All,
         grid: Some(EQ_GRID),
+        second: None,
     },
     EffectSpec {
         key: "comp",
@@ -369,6 +377,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &COMPRESSOR_PARAMS,
         shown: COMPRESSOR_SHOWN,
         grid: None,
+        second: None,
     },
     EffectSpec {
         key: "limit",
@@ -378,6 +387,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &LIMIT_PARAMS,
         shown: Shown::All,
         grid: None,
+        second: None,
     },
     EffectSpec {
         key: "phaser",
@@ -387,6 +397,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &PHASER_PARAMS,
         shown: Shown::All,
         grid: None,
+        second: None,
     },
     EffectSpec {
         key: "flanger",
@@ -396,6 +407,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &FLANGER_PARAMS,
         shown: Shown::All,
         grid: None,
+        second: None,
     },
     EffectSpec {
         key: "tape",
@@ -405,6 +417,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &TAPE_PARAMS,
         shown: Shown::All,
         grid: None,
+        second: None,
     },
     EffectSpec {
         key: "plate",
@@ -414,6 +427,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &PLATE_PARAMS,
         shown: Shown::All,
         grid: Some(PLATE_GRID),
+        second: None,
     },
     EffectSpec {
         key: "pitch",
@@ -423,6 +437,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &PITCH_PARAMS,
         shown: Shown::All,
         grid: None,
+        second: None,
     },
     EffectSpec {
         key: "grains",
@@ -432,6 +447,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &GRAINS_PARAMS,
         shown: Shown::All,
         grid: None,
+        second: None,
     },
     EffectSpec {
         key: "warps",
@@ -441,6 +457,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &WARPS_PARAMS,
         shown: Shown::All,
         grid: None,
+        second: None,
     },
     EffectSpec {
         key: "lpg",
@@ -450,6 +467,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &LPG_PARAMS,
         shown: Shown::All,
         grid: None,
+        second: None,
     },
     EffectSpec {
         key: "reso",
@@ -459,6 +477,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &RESO_PARAMS,
         shown: Shown::All,
         grid: None,
+        second: None,
     },
     EffectSpec {
         key: "comb",
@@ -468,6 +487,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &COMB_PARAMS,
         shown: Shown::All,
         grid: None,
+        second: None,
     },
     EffectSpec {
         key: "vowel",
@@ -477,6 +497,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &VOWEL_PARAMS,
         shown: Shown::All,
         grid: None,
+        second: None,
     },
     EffectSpec {
         key: "freqshift",
@@ -486,6 +507,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &FREQ_SHIFT_PARAMS,
         shown: Shown::All,
         grid: None,
+        second: None,
     },
     EffectSpec {
         key: "spring",
@@ -495,6 +517,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &SPRING_PARAMS,
         shown: Shown::All,
         grid: Some(SPRING_GRID),
+        second: None,
     },
     EffectSpec {
         key: "space",
@@ -504,6 +527,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &SPACE_PARAMS,
         shown: Shown::All,
         grid: None,
+        second: None,
     },
     EffectSpec {
         key: "rotary",
@@ -513,6 +537,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &ROTARY_PARAMS,
         shown: Shown::All,
         grid: Some(ROTARY_GRID),
+        second: None,
     },
     EffectSpec {
         key: "exciter",
@@ -522,6 +547,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &EXCITER_PARAMS,
         shown: Shown::All,
         grid: Some(EXCITER_GRID),
+        second: None,
     },
     EffectSpec {
         key: "stutter",
@@ -531,6 +557,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &STUTTER_PARAMS,
         shown: Shown::All,
         grid: Some(STUTTER_GRID),
+        second: None,
     },
     EffectSpec {
         key: "clouds",
@@ -540,6 +567,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &CLOUDS_PARAMS,
         shown: Shown::All,
         grid: Some(CLOUDS_GRID),
+        second: None,
     },
     EffectSpec {
         key: "beads",
@@ -549,6 +577,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &BEADS_PARAMS,
         shown: Shown::All,
         grid: Some(BEADS_GRID),
+        second: None,
     },
     EffectSpec {
         key: "echo",
@@ -558,6 +587,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &ECHO_PARAMS,
         shown: Shown::All,
         grid: Some(ECHO_GRID),
+        second: None,
     },
     EffectSpec {
         key: "colour",
@@ -567,6 +597,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &COLOUR_PARAMS,
         shown: Shown::All,
         grid: Some(COLOUR_GRID),
+        second: None,
     },
     EffectSpec {
         key: "reel",
@@ -576,6 +607,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &REEL_PARAMS,
         shown: Shown::All,
         grid: Some(REEL_GRID),
+        second: None,
     },
     EffectSpec {
         key: "deck",
@@ -585,6 +617,7 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &DECK_PARAMS,
         shown: Shown::All,
         grid: Some(DECK_GRID),
+        second: Some(DECK_SECOND),
     },
     EffectSpec {
         key: "hall",
@@ -594,5 +627,6 @@ pub(crate) const EFFECTS: [EffectSpec; EffectKind::COUNT] = [
         params: &HALL_PARAMS,
         shown: Shown::All,
         grid: Some(HALL_GRID),
+        second: None,
     },
 ];

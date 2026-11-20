@@ -6,13 +6,13 @@ use crate::envelope::{Hold, hold_at, time_at};
 use crate::groove::swing_tenths;
 use crate::insert::{
     ALGORITHM_NAMES, ECHO_BASS, ECHO_TREBLE, Triggering, VOWEL_NAMES, algorithm_blend, attack_ms,
-    ceiling_db, colour_drive_db, colour_emphasis_db, deck_drive_db, echo_head_seconds,
-    echo_input_db, echo_shelf_db, exciter_attack_ms, exciter_release_ms, exciter_tone_hz,
-    fine_cents, flanger_delay_ms, grain_density, grain_length, grain_ms, grain_time_seconds,
-    hall_lows, input_db, limit_release_ms, makeup_db, plate_size, range_db, ratio, reel_drive_db,
-    reel_gap_um, reel_spacing_um, reel_thickness_um, release_ms, repeat_decay_db,
-    reverb_decay_seconds, shift_delay_ms, shift_hertz, spread_hertz, tape_drive_db, threshold_db,
-    vowel_blend,
+    ceiling_db, colour_drive_db, colour_emphasis_db, deck_azimuth_us, deck_crosstalk_db,
+    deck_drive_db, deck_flutter_rate, deck_wow_rate, echo_head_seconds, echo_input_db,
+    echo_shelf_db, exciter_attack_ms, exciter_release_ms, exciter_tone_hz, fine_cents,
+    flanger_delay_ms, grain_density, grain_length, grain_ms, grain_time_seconds, hall_lows,
+    input_db, limit_release_ms, makeup_db, plate_size, range_db, ratio, reel_drive_db, reel_gap_um,
+    reel_spacing_um, reel_thickness_um, release_ms, repeat_decay_db, reverb_decay_seconds,
+    shift_delay_ms, shift_hertz, spread_hertz, tape_drive_db, threshold_db, vowel_blend,
 };
 use crate::modulation::{depth_of, depth_text};
 use crate::step::MAX_VELOCITY;
@@ -69,6 +69,12 @@ pub enum Units {
     TapeDrive,
     ReelDrive,
     DeckDrive,
+    /// How fast a deck.s wow and flutter go against its format.s, as so many times, how late one
+    /// side plays by its azimuth, in µs, and its crosstalk in dB, or none.
+    DeckWowRate,
+    DeckFlutterRate,
+    DeckAzimuth,
+    DeckCrosstalk,
     /// An analog colour's drive in dB from none up, and how far its emphasis lifts the highs
     /// before its curve, in dB either way.
     ColourDrive,
@@ -363,6 +369,15 @@ impl Kind {
                 Units::TapeDrive => format!("{:+.1} dB", tape_drive_db(coarse as f32)),
                 Units::ReelDrive => format!("{:+.1} dB", reel_drive_db(coarse as f32)),
                 Units::DeckDrive => format!("{:+.1} dB", deck_drive_db(coarse as f32)),
+                Units::DeckWowRate => format!("{:.2}x", deck_wow_rate(coarse as f32)),
+                Units::DeckFlutterRate => format!("{:.2}x", deck_flutter_rate(coarse as f32)),
+                Units::DeckAzimuth => match deck_azimuth_us(coarse as f32) {
+                    us if us.abs() < 0.5 => "Square".to_owned(),
+                    us if us < 0.0 => format!("R {:.0} µs late", -us),
+                    us => format!("L {us:.0} µs late"),
+                },
+                Units::DeckCrosstalk => deck_crosstalk_db(coarse as f32)
+                    .map_or_else(|| "Off".to_owned(), |db| format!("{db:.1} dB")),
                 Units::ColourDrive => format!("+{:.1} dB", colour_drive_db(coarse as f32)),
                 Units::ColourEmphasis => {
                     format!("{:+.1} dB", colour_emphasis_db(coarse as f32))
