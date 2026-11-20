@@ -9,10 +9,11 @@
 //! more than lows up to where the stretch turns them round, about 3.4 kHz. Two feedback delay
 //! networks of eight lines make the tail, with no one loop to come round: a short one that falls
 //! in about 3.7 s, and a long, quiet one that rings on for about 8 s at the bottom and dies
-//! sooner above 1 kHz, the distant end of the tail. TAPE-201's drip is muted and dull, so the
-//! chirp is heard quietly and through a low-pass, and the networks hear it only after six short
-//! all-passes have smeared it, or each line would bring the chirp back whole, a "whip" every
-//! 30 to 180 ms. A band-pass, a steep high-pass at 156 Hz with a little lift over it and a lift
+//! sooner above 1 kHz, the distant end of the tail. Each line has a few of the chirp's
+//! all-passes in its loop too, so no line comes round as a comb. TAPE-201's drip is muted and
+//! dull, so the chirp is heard quietly and through a low-pass, and the networks hear it only
+//! after six short all-passes have smeared it, or each line would bring the chirp back whole, a
+//! "whip" every 30 to 180 ms. A band-pass, a steep high-pass at 156 Hz with a little lift over it and a lift
 //! at 750 Hz then shape both as TAPE-201's is shaped. Each side is a tank of its own, as
 //! TAPE-201's are, so a sound on the left rings on the left only and a sound in the middle rings
 //! the same on both. It's linear but for a soft hold on what goes in.
@@ -58,6 +59,13 @@ const LATE_LOW_T60: f32 = 8.1;
 const LATE_HIGH_T60: f32 = 2.77;
 const LATE_HIGH_HZ: f32 = 1360.0;
 const LATE: f32 = 0.0612;
+/// How many stretched all-passes, like the chirp's, each line of the short and the long network
+/// has in its loop. With none, each line came back mostly to itself (a Householder matrix keeps
+/// three quarters of a line in it), so it rang as a comb every 29 to 176 ms: a faint resonator's
+/// wash and a bounce in the tail. These hold the highs in each line back a little more than the
+/// lows, so its teeth aren't evenly spaced and no line's length comes round as one echo.
+const LINE_STAGES: usize = 6;
+const LATE_LINE_STAGES: usize = 4;
 /// How much of the drip is heard, and its one-pole low-pass.
 const DRIP: f32 = 0.2;
 const DRIP_LOW_PASS_HZ: f32 = 2000.0;
@@ -81,8 +89,9 @@ const OUT_SIGNS: [f32; 8] = [1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0];
 
 /// One side's feedback delay network: eight lines mixed by a Householder matrix, each through
 /// Jot's one-pole `g (1 - p) / (1 - p z⁻¹)`, `g` for the low T60 and `p` so the gain at the high
-/// frequency is the high T60's. The lines are one after another in `buffer`, each exactly its
-/// length.
+/// frequency is the high T60's, then through its stretched all-passes. The lines are one after
+/// another in `buffer`, each exactly its length; the T60s count the lines alone, not the
+/// all-passes' few frames.
 #[derive(Debug, Clone)]
 struct Network {
     buffer: Vec<f32>,
@@ -92,10 +101,19 @@ struct Network {
     keep: [f32; 8],
     pole: [f32; 8],
     damped: [f32; 8],
+    /// The stretched all-passes' lines, `turn_frames` a stage, the eight lines side by side.
+    turns: Vec<[f32; 8]>,
+    turn_frames: usize,
+    turn_at: usize,
 }
 
 impl Network {
-    fn new(frames: [f32; 8], rate: u32, (low_t60, high_t60, high_hz): (f32, f32, f32)) -> Self {
+    fn new(
+        frames: [f32; 8],
+        stages: usize,
+        rate: u32,
+        (low_t60, high_t60, high_hz): (f32, f32, f32),
+    ) -> Self {
         let scale = rate as f32 / TUNING_RATE;
         let lengths = frames.map(|frames| ((frames * scale).round() as usize).max(1));
         let mut starts = [0; 8];
@@ -104,6 +122,7 @@ impl Network {
             *start = total;
             total += length;
         }
+        let turn_frames = ((CHIRP_FRAMES * scale).round() as usize).max(1);
         let omega = TAU * high_hz.min(rate as f32 * 0.45) / rate as f32;
         let mut keep = [0.0; 8];
         let mut pole = [0.0; 8];
@@ -123,16 +142,20 @@ impl Network {
             keep,
             pole,
             damped: [0.0; 8],
+            turns: vec![[0.0; 8]; stages * turn_frames],
+            turn_frames,
+            turn_at: 0,
         }
     }
 
     fn clear(&mut self) {
         self.buffer.fill(0.0);
         self.damped = [0.0; 8];
+        self.turns.fill([0.0; 8]);
     }
 
-    /// Feed one sample in and get the tail out: what each line gives, through its one-pole,
-    /// mixed and written back with what comes in.
+    /// Feed one sample in and get the tail out: what each line gives, through its one-pole and
+    /// its all-passes, mixed and written back with what comes in.
     #[inline]
     fn process(&mut self, fed: f32) -> f32 {
         let mut read = [0.0; 8];
@@ -142,6 +165,22 @@ impl Network {
             self.damped[line] = self.keep[line] * (1.0 - pole) * back + pole * self.damped[line];
             *sample = self.damped[line];
         }
+        // Each all-pass as the chirp's, all eight lines at once.
+        let a = CHIRP_COEFFICIENT;
+        let at = self.turn_at;
+        for stage in self.turns.chunks_exact_mut(self.turn_frames) {
+            let held = &mut stage[at];
+            for (sample, held) in read.iter_mut().zip(held.iter_mut()) {
+                let v = *sample - a * *held;
+                *sample = a * v + *held;
+                *held = v;
+            }
+        }
+        self.turn_at = if at + 1 == self.turn_frames {
+            0
+        } else {
+            at + 1
+        };
         let mixed = read.iter().sum::<f32>() * (2.0 / 8.0);
         let mut tail = 0.0;
         for (line, sample) in read.iter().enumerate() {
@@ -201,10 +240,13 @@ impl Tank {
             smear: vec![[0.0; 2]; smear_frames.iter().sum()],
             smear_frames,
             smear_at: [0; 6],
-            tail: std::array::from_fn(|_| Network::new(LINES, rate, (LOW_T60, HIGH_T60, HIGH_HZ))),
+            tail: std::array::from_fn(|_| {
+                Network::new(LINES, LINE_STAGES, rate, (LOW_T60, HIGH_T60, HIGH_HZ))
+            }),
             late: std::array::from_fn(|_| {
                 Network::new(
                     LATE_LINES,
+                    LATE_LINE_STAGES,
                     rate,
                     (LATE_LOW_T60, LATE_HIGH_T60, LATE_HIGH_HZ),
                 )
@@ -428,6 +470,48 @@ mod tests {
         let late = (levels[30] - levels[59]) / 2.9;
         assert!(early > late * 1.15, "{early} {late}");
         assert!(late > 60.0 / 10.0, "{late}");
+    }
+
+    #[test]
+    fn no_line_comes_round_as_a_comb() {
+        // A click's tail from 0.25 to 1.25 s, Hann-windowed: its real cepstrum from 20 to 200 ms,
+        // each quefrency as standard deviations over the mean from 1 to 200 ms. A line that came
+        // back mostly to itself stood out at its length by 12 to 15; TAPE-201's highest is 5.
+        use realfft::RealFftPlanner;
+        let mut tank = Tank::new(RATE);
+        let (from, n) = (RATE as usize / 4, RATE as usize);
+        let mut tail = Vec::with_capacity(n);
+        for frame in 0..from + n {
+            let x = if frame == 0 { 0.5 } else { 0.0 };
+            let [left, _] = tank.process([x, x]);
+            if frame >= from {
+                let window = (std::f32::consts::PI * tail.len() as f32 / n as f32).sin();
+                tail.push(left * window * window);
+            }
+        }
+        let mut planner = RealFftPlanner::<f32>::new();
+        let mut spectrum = planner.plan_fft_forward(n).make_output_vec();
+        planner
+            .plan_fft_forward(n)
+            .process(&mut tail, &mut spectrum)
+            .unwrap();
+        let mut logs: Vec<_> = spectrum
+            .iter()
+            .map(|bin| (bin.norm() + 1e-12).ln().into())
+            .collect();
+        let mut cepstrum = vec![0.0; n];
+        planner
+            .plan_fft_inverse(n)
+            .process(&mut logs, &mut cepstrum)
+            .unwrap();
+        let ms = |ms: usize| ms * RATE as usize / 1000;
+        let part = &cepstrum[ms(1)..=ms(200)];
+        let mean = part.iter().sum::<f32>() / part.len() as f32;
+        let sd = (part.iter().map(|c| (c - mean).powi(2)).sum::<f32>() / part.len() as f32).sqrt();
+        let most = cepstrum[ms(20)..=ms(200)]
+            .iter()
+            .fold(f32::MIN, |most, c| most.max((c - mean) / sd));
+        assert!(most < 9.0, "{most}");
     }
 
     #[test]
