@@ -39,6 +39,20 @@ impl Engine {
         self.previews.let_go(track, note, LetGo::Now);
     }
 
+    /// Hold a note as [`Engine::hold_preview`] does, and start the track's modulation with it, as a
+    /// sequenced note starts it, so its envelopes follow the note. `vimtracker probe` plays notes
+    /// this way when a spec gives mod slots.
+    pub fn hold_modulated(&mut self, track: usize, note: u8, velocity: u8) {
+        self.hold_preview(track, note, velocity);
+        self.start_modulation(track);
+    }
+
+    /// Let go of a note held by [`Engine::hold_modulated`], and release the track's envelopes.
+    pub fn release_modulated(&mut self, track: usize, note: u8) {
+        self.release_preview(track, note);
+        self.release_modulation(track);
+    }
+
     /// Let go of a note held through a track once it has sounded as long as a preview does: an
     /// audition's key tapped rather than held.
     pub fn finish_preview(&mut self, track: usize, note: u8) {

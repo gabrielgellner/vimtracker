@@ -14,6 +14,13 @@
 //! track's sound, filter and effects are all heard and nothing is sequenced. An effect's input is
 //! played through the track as it is, at full level with no fades.
 //!
+//! Mod slots can move the track, from `[ours.mods.N]`, slot `N` counted from 1 as the Mod page
+//! counts them, each as songs store a slot. With any given, the transport plays an empty song
+//! under the notes or the input, as mod slots rest while it's stopped, so an envelope on `Cut`
+//! follows the notes, which start and release the track's modulation as sequenced notes do, and an
+//! LFO runs from the first frame. `--controls` writes down the cutoff and resonance the filter
+//! heard, every 32 frames, so a reference filter can be moved the same way.
+//!
 //! A spec's `[report]` says how `tools/compare/report.py` lays out its measurements, and isn't read
 //! here either.
 
@@ -29,6 +36,7 @@ use vt_engine::published::Published;
 use vt_engine::render::write_wav;
 use vt_model::constants::DEFAULT_NOTE_VELOCITY;
 use vt_model::insert::{EffectKind, INSERTS, Insert};
+use vt_model::modulation::{MAX_DEPTH, MOD_SLOTS, ModSlot};
 use vt_model::project;
 use vt_model::sample::{SampleData, SampleError, load_sample};
 use vt_model::samples::SamplePool;
@@ -117,6 +125,10 @@ pub struct Ours {
     /// `"acid.cutoff" = 0x40` and `acid.cutoff = 0x40` are the same.
     #[serde(default)]
     pub settings: toml::Table,
+    /// Mod slots by their number on the Mod page, from 1, each as songs store one, in place of a
+    /// new track's.
+    #[serde(default)]
+    pub mods: BTreeMap<String, ModSlot>,
 }
 
 /// A version of the spec.
@@ -134,6 +146,9 @@ pub struct Case {
     /// Each named reference's parameters it changes or adds, which only the reference side reads.
     #[serde(default)]
     pub references: toml::Table,
+    /// Mod slots it puts in place of the spec's, by number.
+    #[serde(default)]
+    pub mods: BTreeMap<String, ModSlot>,
     /// The notes it plays instead of the spec's, for a voice.
     pub notes: Option<Vec<NoteSpec>>,
     /// The input's fields it changes, such as a burst's `on`, or a whole input of another
@@ -297,8 +312,10 @@ pub fn parse(text: &str) -> Result<Spec, ProbeError> {
     let machine = machine(&spec.ours)?;
     let effects = effects(&spec.ours)?;
     check_settings(&settings(&spec.ours.settings)?, machine, &effects)?;
+    slots_of(&spec.ours.mods)?;
     for case in &spec.cases {
         check_settings(&settings(&case.ours)?, machine, &effects)
+            .and_then(|()| slots_of(&case.mods).map(drop))
             .and_then(|()| input_for(&spec, Some(case)).map(drop))
             .and_then(|()| notes_for(&spec, Some(case)).map(drop))
             .map_err(|error| wrong(format!("in the case {}: {error}", case.name)))?;
@@ -372,6 +389,29 @@ fn input_for(spec: &Spec, case: Option<&Case>) -> Result<Option<Input>, ProbeErr
         .try_into()
         .map(Some)
         .map_err(|error: toml::de::Error| wrong(format!("its input: {}", error.message())))
+}
+
+/// Mod slots by their place, from a spec's numbers counted from 1.
+fn slots_of(mods: &BTreeMap<String, ModSlot>) -> Result<Vec<(usize, ModSlot)>, ProbeError> {
+    mods.iter()
+        .map(|(number, slot)| {
+            let at = number
+                .parse::<usize>()
+                .ok()
+                .filter(|at| (1..=MOD_SLOTS).contains(at))
+                .ok_or_else(|| {
+                    wrong(format!(
+                        "mods.{number} isn't a mod slot, which are numbered 1 to {MOD_SLOTS}"
+                    ))
+                })?;
+            if slot.depth.abs() > MAX_DEPTH {
+                return Err(wrong(format!(
+                    "mods.{number}'s depth is out of its range, -{MAX_DEPTH} to {MAX_DEPTH}"
+                )));
+            }
+            Ok((at - 1, *slot))
+        })
+        .collect()
 }
 
 /// The key that sets the track's filter type, which a song keeps on the track rather than as a
@@ -555,12 +595,13 @@ fn setting_of(
 }
 
 /// The track's own settings a probe can set: its level, pan, filter, pitch and glide.
-const TRACK_SETTINGS: [SettingId; 7] = [
+const TRACK_SETTINGS: [SettingId; 8] = [
     SettingId::LEVEL,
     SettingId::PAN,
     SettingId::CUT,
     SettingId::RES,
     SettingId::FILTER_MODE,
+    SettingId::DRIVE,
     SettingId::PITCH,
     SettingId::GLIDE,
 ];
@@ -630,6 +671,7 @@ fn set_on(track: &mut Track, id: SettingId, value: u8) {
             SettingId::PAN => track.pan = value,
             SettingId::CUT => track.cutoff = value,
             SettingId::RES => track.resonance = value,
+            SettingId::DRIVE => track.drive = value,
             SettingId::FILTER_MODE => {
                 track.filter_mode = FilterMode::ALL
                     .get(usize::from(value))
@@ -667,6 +709,8 @@ pub struct Probe {
     pub samples: SamplePool,
     pub frames: usize,
     pub play: Play,
+    /// Whether the transport plays, for mod slots to run.
+    pub moves: bool,
 }
 
 /// What goes through the track.
@@ -875,6 +919,14 @@ pub fn prepare(loaded: &Loaded, case: Option<&str>) -> Result<Probe, ProbeError>
         let id = setting_of(&key, machine, &effects)?;
         set_on(track, id, value_of(&key, id, &given)?);
     }
+    let mut mods = slots_of(&spec.ours.mods)?;
+    if let Some(case) = case {
+        mods.extend(slots_of(&case.mods)?);
+    }
+    let moves = !mods.is_empty();
+    for (at, slot) in mods {
+        track.mods[at] = slot;
+    }
     let (play, length) = match input_for(spec, case)? {
         Some(input) => {
             let frames = signal(&input, spec.rate, &loaded.folder)?;
@@ -892,6 +944,7 @@ pub fn prepare(loaded: &Loaded, case: Option<&str>) -> Result<Probe, ProbeError>
         samples,
         frames,
         play,
+        moves,
     })
 }
 
@@ -926,18 +979,49 @@ fn happenings(notes: &[NoteSpec], rate: u32) -> Vec<(usize, Happening)> {
     out
 }
 
+/// How often `--controls` writes down what the filter heard, in frames: as often as the filter
+/// works its coefficients out.
+pub const CONTROL_FRAMES: usize = 32;
+
 /// Render a probe as interleaved stereo frames.
 pub fn render(probe: Probe) -> Vec<f32> {
+    render_with_controls(probe, false).0
+}
+
+/// Render a probe, and if asked, the cutoff and resonance the track's filter heard at the end of
+/// every [`CONTROL_FRAMES`], on their `0..=1` scales.
+pub fn render_with_controls(probe: Probe, controls: bool) -> (Vec<f32>, Vec<[f32; 2]>) {
     let Probe {
         rate,
         song,
         samples,
         frames,
         play,
+        moves,
     } = probe;
     let version = Published::new(Arc::new(song), Arc::new(samples));
     let mut engine = Engine::new(rate, Arc::new(version));
+    if moves {
+        engine.play_from(0);
+    }
     let mut out = vec![0.0; frames * 2];
+    let mut heard = Vec::new();
+    // Rendered in runs that end on each multiple of `CONTROL_FRAMES` while writing them down.
+    let mut process = |engine: &mut Engine, from: usize, to: usize| {
+        if !controls {
+            engine.process(&mut out[from * 2..to * 2]);
+            return;
+        }
+        let mut at = from;
+        while at < to {
+            let end = ((at / CONTROL_FRAMES + 1) * CONTROL_FRAMES).min(to);
+            engine.process(&mut out[at * 2..end * 2]);
+            if end.is_multiple_of(CONTROL_FRAMES) {
+                heard.push(engine.filter_heard(0).unwrap_or([1.0, 0.0]));
+            }
+            at = end;
+        }
+    };
     let happenings = match play {
         Play::Input(input) => {
             engine.play_input(0, input);
@@ -950,24 +1034,30 @@ pub fn render(probe: Probe) -> Vec<f32> {
     let mut done = 0;
     for (frame, happening) in happenings {
         let frame = frame.min(frames);
-        engine.process(&mut out[done * 2..frame * 2]);
+        process(&mut engine, done, frame);
         done = frame;
         match happening {
             Happening::Start(note, velocity) => {
                 held[usize::from(note)] += 1;
-                engine.hold_preview(0, note, velocity);
+                if moves {
+                    engine.hold_modulated(0, note, velocity);
+                } else {
+                    engine.hold_preview(0, note, velocity);
+                }
             }
             Happening::Release(note) | Happening::SlideRelease(note) => {
                 let count = &mut held[usize::from(note)];
                 *count = count.saturating_sub(1);
-                if *count == 0 {
+                if *count == 0 && moves {
+                    engine.release_modulated(0, note);
+                } else if *count == 0 {
                     engine.release_preview(0, note);
                 }
             }
         }
     }
-    engine.process(&mut out[done * 2..]);
-    out
+    process(&mut engine, done, frames);
+    (out, heard)
 }
 
 /// What `vimtracker probe` was asked for.
@@ -980,6 +1070,9 @@ pub struct ProbeRequest {
     pub write_input: Option<PathBuf>,
     /// Where to write the track filter's response as the Sound page draws it, as CSV.
     pub response: Option<PathBuf>,
+    /// Where to write the cutoff, in Hz, and the resonance, on its `0..=1` scale, that the filter
+    /// heard every [`CONTROL_FRAMES`], as CSV.
+    pub controls: Option<PathBuf>,
 }
 
 /// How many points a drawn response has to an octave, from 20 Hz to 20 kHz.
@@ -1020,7 +1113,21 @@ pub fn run(request: &ProbeRequest) -> Result<(), ProbeError> {
         })?;
     }
     let rate = probe.rate;
-    let samples = render(probe);
+    let (samples, heard) = render_with_controls(probe, request.controls.is_some());
+    if let Some(path) = &request.controls {
+        let mut text = String::from("frame,hertz,resonance\n");
+        for (at, [cutoff, resonance]) in heard.iter().enumerate() {
+            let hertz = 20.0 * 1000_f32.powf(*cutoff);
+            text.push_str(&format!(
+                "{},{hertz},{resonance}\n",
+                (at + 1) * CONTROL_FRAMES
+            ));
+        }
+        std::fs::write(path, text).map_err(|source| ProbeError::WriteText {
+            path: path.display().to_string(),
+            source,
+        })?;
+    }
     write_wav(&request.out, rate, &samples)?;
     println!(
         "Probed {} ({:.2} s)",
