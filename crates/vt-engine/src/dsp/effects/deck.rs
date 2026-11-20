@@ -363,7 +363,9 @@ const TAPES: [[Tape; 3]; 3] = [
 impl Tape {
     /// Whether it changes the response at all.
     fn shapes(self) -> bool {
-        [self.level_db, self.low_db, self.peak_db, self.high_db] != [0.0; 4]
+        [self.level_db, self.low_db, self.peak_db, self.high_db]
+            .iter()
+            .any(|db| db.abs() > 0.0)
     }
 }
 
