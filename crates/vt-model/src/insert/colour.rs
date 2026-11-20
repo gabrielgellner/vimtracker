@@ -607,6 +607,15 @@ pub fn reel_drive_db(value: f32) -> f32 {
     from_middle(value) * MOST_REEL_DRIVE_DB
 }
 
+/// How far a deck's `Drive` turns the level onto its tape up or down, at either end, in dB.
+pub(crate) const MOST_DECK_DRIVE_DB: f32 = 24.0;
+
+/// A deck's drive in dB, for a value on the `00` to `FF` scale: from -24 dB, through 0 dB at `80`,
+/// to +24 dB, Cassette's input's range (decision 451).
+pub fn deck_drive_db(value: f32) -> f32 {
+    from_middle(value) * MOST_DECK_DRIVE_DB
+}
+
 /// The speeds a reel runs at, in inches a second, and their names.
 pub const REEL_SPEEDS_IPS: [f32; 4] = [3.75, 7.5, 15.0, 30.0];
 const REEL_SPEED_NAMES: [&str; 4] = ["3.75 ips", "7.5 ips", "15 ips", "30 ips"];
@@ -800,8 +809,37 @@ crate::listed::listed!(DeckType);
 
 const DECK_TYPE_NAMES: [&str; 3] = ["Cassette", "VHS", "Worn"];
 
+/// The tape a deck's cassette is, as Cassette's tape types are (decision 451): Type I, ferric;
+/// Type II, chrome, brighter and quicker to soften its loud highs; Type IV, metal, brighter still
+/// and hotter. A VCR's track takes no cassette, so `VHS` sounds the same on each.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DeckTape {
+    #[default]
+    I,
+    II,
+    IV,
+}
+
+impl DeckTape {
+    /// Every tape, in the order `+` goes through them.
+    pub const ALL: [Self; 3] = [Self::I, Self::II, Self::IV];
+
+    /// The name on screen.
+    pub const fn name(self) -> &'static str {
+        DECK_TAPE_NAMES[self as usize]
+    }
+}
+
+crate::listed::listed!(DeckTape);
+
+const DECK_TAPE_NAMES: [&str; 3] = ["Type I", "Type II", "Type IV"];
+
+fn is_type_i(tape: &DeckTape) -> bool {
+    *tape == DeckTape::I
+}
+
 /// A deck's, in the order songs number them.
-pub(crate) const DECK_PARAMS: [Entry; 10] = [
+pub(crate) const DECK_PARAMS: [Entry; 11] = [
     Entry {
         meaning: "the format: a cassette, a VCR's linear audio track, or a worn cassette",
         name: "Type",
@@ -815,20 +853,32 @@ pub(crate) const DECK_PARAMS: [Entry; 10] = [
         place: Place::Type,
     },
     hex_param("Drive", "drive", "DRIV", Deck::DEFAULT.drive)
-        .units(Units::TapeDrive)
+        .units(Units::DeckDrive)
         .centred()
-        .means("how hard it hits the tape, which saturates the highs first"),
+        .means("how hard it hits the tape, made up after: the lows bend first, loud highs dull"),
     hex_param("Hiss", "hiss", "HISS", Deck::DEFAULT.hiss)
-        .means("the tape's hiss, from none at 00 to about -40 dB at FF"),
+        .means("the tape's hiss, from none at 00 to about -24 dB at FF"),
     hex_param("Wow", "wow", "WOW", Deck::DEFAULT.wow).means("a slow, wandering wobble in pitch"),
     hex_param("Flutter", "flutter", "FLUT", Deck::DEFAULT.flutter)
         .means("a fast wobble in pitch, from the capstan"),
     hex_param("Drops", "drops", "DROP", Deck::DEFAULT.drops)
-        .means("how often and how deep the sound drops out, dulled, for a moment"),
+        .means("how deep the highs flicker away as the tape loses the head, about 7 a second"),
     hex_param("Chew", "chew", "CHEW", Deck::DEFAULT.chew)
         .means("now and then a stretch of crinkled tape, bent and dulled"),
     hex_param("Track", "track", "TRAK", Deck::DEFAULT.track)
         .means("noise reduction, mistracking more as it's turned up: dull, breathing highs"),
+    Entry {
+        meaning: "the cassette's tape: Type II and IV are brighter and soften loud highs sooner",
+        name: "Tape",
+        key: "tape",
+        label: Some("TAPE"),
+        kind: Kind::Stepped {
+            choices: &DECK_TAPE_NAMES,
+            wraps: true,
+        },
+        default: 0,
+        place: Place::Title,
+    },
     MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -847,7 +897,7 @@ pub(super) const DECK_GRID: Columns = &[
 #[serde(default)]
 pub struct Deck {
     pub kind: DeckType,
-    /// How hard it's driven onto the tape, from -18 dB to +18 dB, with none at `80`.
+    /// How hard it's driven onto the tape, from -24 dB to +24 dB, with none at `80`.
     pub drive: u8,
     /// How much hiss, from none at `00`.
     pub hiss: u8,
@@ -859,6 +909,9 @@ pub struct Deck {
     pub chew: u8,
     /// How far its noise reduction mistracks; none at `00` is no noise reduction.
     pub track: u8,
+    /// Its cassette's tape, saved only when it isn't Type I.
+    #[serde(skip_serializing_if = "is_type_i")]
+    pub tape: DeckTape,
     /// From `00`, all dry, to `FF`, all wet.
     pub mix: u8,
     pub gain: u8,
@@ -871,17 +924,18 @@ impl Default for Deck {
 }
 
 impl Deck {
-    /// As it starts: a cassette at 0 dB, a little hiss, wow and flutter, no faults, and its
-    /// noise reduction in and nearly tracking.
+    /// As it starts: a Type I cassette at 0 dB, with Cassette's own hiss, wow, flutter and
+    /// dropouts (decision 451), no chew, and no noise reduction, as Cassette has none.
     pub const DEFAULT: Self = Self {
         kind: DeckType::Cassette,
         drive: 0x80,
         hiss: 0x40,
         wow: 0x40,
         flutter: 0x40,
-        drops: 0x00,
+        drops: 0x40,
         chew: 0x00,
-        track: 0x20,
+        track: 0x00,
+        tape: DeckTape::I,
         mix: 0xFF,
         gain: UNITY_LEVEL,
     };
@@ -895,6 +949,7 @@ impl Deck {
         drops,
         chew,
         track,
+        tape: DeckTape,
         mix,
         gain,
     }

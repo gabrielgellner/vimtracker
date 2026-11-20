@@ -1757,7 +1757,8 @@ const REEL: DeviceLayout = live(
     ],
 );
 /// How hard the tape is hit and how much it hisses, how it wobbles and how its tape fails, then
-/// on a second page how far its noise reduction mistracks. Its format is chosen in the app.
+/// on a second page which tape it is, Type I, II or IV, and how far its noise reduction
+/// mistracks. Its format is chosen in the app.
 const DECK: DeviceLayout = live(
     "fx/deck",
     &[
@@ -1774,7 +1775,7 @@ const DECK: DeviceLayout = live(
                 s("gain"),
             ],
         ),
-        knobs("Noise", [s("track"), __, __, __, __, __, __, __]),
+        knobs("Tape", [s("tape"), s("track"), __, __, __, __, __, __]),
     ],
 );
 /// How long the rotors take to change, the horn's Doppler and swell, the drive and the width,
