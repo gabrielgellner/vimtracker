@@ -1262,7 +1262,9 @@ impl Deck {
         if self.transport.countdown == 0 {
             // The wobbles' noise follows their rates, worked out again only as they move.
             let rates = (self.wow_rate.value, self.flutter_rate.value);
-            if rates != self.rates {
+            if rates.0.to_bits() != self.rates.0.to_bits()
+                || rates.1.to_bits() != self.rates.1.to_bits()
+            {
                 self.wobble_noise(rates);
             }
         }
@@ -1451,7 +1453,8 @@ impl Deck {
             self.soften = self.shelves();
             let corner = DROP_OPEN_HZ * (-DROP_OCTAVES * depth).exp2();
             self.drop_band = of_corner(corner.min(0.45 * rate), rate);
-            if erasing != self.erased {
+            // Worked out again only as it moves, which a bit-for-bit match says.
+            if erasing.to_bits() != self.erased.to_bits() {
                 self.erased = erasing;
                 self.erase = Self::erased(erasing, rate);
             }
