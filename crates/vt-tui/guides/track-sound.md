@@ -192,8 +192,11 @@ As with `Cut`, steps lock them, `LCUT` and `HCUT`, and macros and modulators
 move them, each with a fine part.
 
 `K` on `Filter` lists the types. `LP` is the clean default. `HP` needs `Cut` lowered to let anything through, as
-it starts at `FF`. `Ladder` is fatter and steeper, its bass thins as resonance
-rises, and near `FF` it sings by itself while a note lasts. `Diode` is the
+it starts at `FF`. `Ladder` is fatter and steeper, its bass thins a little as
+resonance rises, and from about three quarters its peak climbs steeply: a loud
+sound drives it harder the higher `Res` is, so the ringing saturates, quacks on
+an envelope and sizzles on a sweep, as The Drop's PRD does. Near `FF` it sings
+by itself while a note lasts. `Diode` is the
 303's filter, the one in `Acid`: rubbery and softer at first, as it starts
 falling well under `Cut`, with a peak at `Cut` that grows sharp and squelchy
 and thins the bass more than `Ladder` does. `MS20 LP` and `MS20 HP` are the
@@ -202,7 +205,7 @@ Korg MS-20's filter, at 12 dB and 6 dB. With much `Res` their peak is at
 so they get louder and harsher as it rises, and near `FF` they scream by
 themselves, much louder than `Ladder`. `Drive` makes them grittier. `Dirty` is
 Vital's: 24 dB, as `Ladder` is, but its resonance comes round a loop that
-saturates. It thins the bass as `Res` rises, though less than `Ladder` does,
+saturates. It thins the bass as `Res` rises, about as much as `Ladder` does,
 and it sings by itself sooner, from about `DB`, at `Cut`. A loud sound comes
 out a little crunched even at `Drive 00`. `Drive` grits up what comes straight
 in, less so as `Res` rises so the peak isn't swamped, and adds a little
@@ -242,8 +245,8 @@ its phaser, three stages' shift against the input, which dips at about 1.7
 times `Cut` and thins the bass, and the four with `+LP6` add a gentle low-pass
 to a high-pass, notch or phaser, so `HP12+LP6` and `HP18+LP6` are lopsided
 bands. Each band peaks as loud as `LP24` is at its loudest. `Fat24` is the
-ladder's `LP24` with much of the bass its resonance takes given back, as
-Surge's compensated ladders do: about 10 dB more near full `Res`, so the peak
+ladder's `LP24` with more of the bass its resonance takes given back, as
+Surge's compensated ladders do: about 5 dB more near full `Res`, so the peak
 rides on a full bass, and runs into its saturation sooner. The ladder's notches
 take out the very pitch it sings at, so they hardly sing at all, where
 `Dirty`'s still does. `OB-X`'s modes are the low-pass, band-pass and high-pass
