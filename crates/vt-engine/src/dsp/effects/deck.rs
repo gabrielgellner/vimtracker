@@ -647,7 +647,6 @@ impl Side {
             self.encoder.detect(highs.abs(), frame, 0.0);
             x += highs * (self.encoder.gain - 1.0);
         }
-        let mut x = x;
         for (filter, state) in frame.lift.iter().zip(&mut self.lift) {
             x = filter.process(state, x);
         }

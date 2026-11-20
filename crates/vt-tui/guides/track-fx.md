@@ -486,7 +486,7 @@ hard. A VCR's track takes no cassette, so on `VHS` all three are the same.
 | `Hiss` | The hiss, none at `00` to about -24 dB at `FF`, and noise on the sound |
 | `Wow` | A slow, wandering wobble in pitch, up to 12 cents at `FF` |
 | `Flutter` | A fast warble in pitch, the capstan's, up to 32 cents at `FF` |
-| `Drops` | How deep the highs flicker away, about 8 times a second, and dull slowly |
+| `Drops` | How deep the highs flicker away and slowly dull |
 | `Chew` | Now and then a stretch of crinkled tape, bent and dulled |
 | `Track` | Noise reduction, mistracking more as it goes up; none at the start |
 
