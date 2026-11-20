@@ -256,10 +256,10 @@ seed, so a render is the same each time. `Bass` and `Treble` are on what comes o
 and the reverb, and not in the loop.
 
 The reverb is the echo's own spring tank, fed from what comes in. A sound drips into it about
-50 ms later, its lows first and its highs rising after them, then rings out in a smooth, dark
-tail of about four seconds, mostly between 300 Hz and 2 kHz, so it sits under the repeats
-rather than over them. It doesn't rattle as `Spring` does: for a full, bright spring reverb on
-its own, use `Spring`.
+50 ms later, quietly, its lows first and its highs rising after them, then rings out in a
+smooth, dark tail of about four seconds, mostly between 300 Hz and 2 kHz and little under
+180 Hz, so it sits under the repeats rather than over them. It doesn't rattle or whip as
+`Spring` does: for a full, bright spring reverb on its own, use `Spring`.
 
 `Mix` keeps the sound at full while it brings the echo up to full at `80`, then takes the sound
 down to nothing at `FF`, as TAPE-201's does. So turning it up from `00` to the middle only adds

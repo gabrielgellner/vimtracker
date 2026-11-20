@@ -11,8 +11,9 @@
 //! read faster or slower and bends in pitch as the machine's does. The capstan's wobble moves every head's read together, at a rate that goes
 //! with the tape's speed, by as much in pitch at any speed, with a slow drift seeded from the track.
 //!
-//! The spring reverb is a tank of its own (`tank.rs`), fed from what comes in: a rising drip and
-//! a smooth, dark tail, as TAPE-201's are, where this program's `Spring` rattles (decision 450).
+//! The spring reverb is a tank of its own (`tank.rs`), fed from what comes in: a muted, rising
+//! drip and a smooth, dark tail, as TAPE-201's are, where this program's `Spring` rattles
+//! (decision 450).
 //! `Bass` and `Treble` are shelves on what comes out, as the RE-201's tone controls are on its
 //! echo and reverb, not in the loop. Its `Mix` holds the sound at full to the middle while the
 //! echo comes up, as TAPE-201's does (`Mixing::Held`).
@@ -98,7 +99,7 @@ const BASS: (f32, f32, f32) = ECHO_BASS;
 const TREBLE: (f32, f32, f32) = ECHO_TREBLE;
 
 /// How loud the tank is at full `Reverb`: as loud as TAPE-201's on a drum loop and a sung line,
-/// 0.9 dB over it on the one and 1.4 dB under it on the other.
+/// 0.4 dB over it on the one and 0.9 dB under it on the other.
 const REVERB_GAIN: f32 = 1.2;
 /// How long the reverb rings, for knowing when the slot is quiet, in seconds.
 const REVERB_QUIET_SECONDS: f64 = 4.5;
