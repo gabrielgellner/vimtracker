@@ -550,13 +550,13 @@ at random round their rate, so a heavy warble has a rough, fast edge, not
 a smooth vibrato. At the top of `Wow` and `Flutter` it's well past a good
 deck, a seasick lean and a chorus-like warble. `Drops` takes only the
 highs: at `40` they flicker a dB or two at 8 kHz, at `FF` about 19 dB,
-with the lows and mids held, and under the flicker the highs dull and come
-back slowly, a few dB on average at 12 kHz. The noise on the sound sits round what's playing, so a loud
+with the lows and mids held. The slow dulling under it is `Degrade`'s, on
+the second page. The noise on the sound sits round what's playing, so a loud
 bass line brings up a dark rumble, not a hiss. `Track` starts at `00`, no
 noise reduction at all, as Cassette has none; just above, it's a Dolby
 that nearly tracks, and higher up it reads the tape low, so the highs come
 back dull and breathe with the level, and dropouts go deeper. The hiss
-stops a few seconds after the sound does, so a quiet track falls silent. The wobble, dropouts and chews are drawn from the track's own
+stops a few seconds after the sound does, so a quiet track falls silent. The wobble, dropouts, snags and chews are drawn from the track's own
 dice, so a song plays the same each time.
 
 `Exciter` adds air, after the Aphex Aural Exciter as ChowDSP models it in
