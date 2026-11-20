@@ -205,8 +205,9 @@ from 10 ms to half a second, and a change that comes while it fades waits for it
 two seconds.
 
 `Space Echo` is a Roland RE-201's tape loop: a record head, three playback heads behind it and a
-spring reverb, fitted to Arturia's Delay TAPE-201. It starts half wet, as TAPE-201's `Default`
-does: the first head and the spring, 150 ms behind, fed back a third of the way to running away.
+spring reverb, fitted to Arturia's Delay TAPE-201. It starts as TAPE-201's `Default` does: the
+first head and the spring, 150 ms behind, fed back a third of the way to running away, with `Mix`
+at `80`.
 Its `Mode` is in the slot's title, the RE-201's selector, by its number, the heads it plays and
 whether the reverb's on:
 
@@ -240,7 +241,8 @@ mode is as loud.
 
 `Rate` moves the tape, not a delay time, so a change bends what's already on it: slowing the tape
 drops the repeats' pitch until the motor gets there, as the machine's does, and `Inertia` makes
-that slower and gentler. A step's lock of `Rate` is the classic swoop. `Sync` sets the first
+that slower and gentler. The motor pulls harder than it brakes, so speeding up bends the pitch up
+further and gets there sooner than slowing down bends it down. A step's lock of `Rate` is the classic swoop. `Sync` sets the first
 head to a note division at the song's tempo instead, up to two seconds, and a new tempo moves
 the tape the same way.
 
@@ -251,8 +253,18 @@ past where the loop gives back what it takes, the repeats grow by themselves unt
 them, a sound of their own that `Rate` then bends. `Wow` wavers as the capstan does, faster as
 the tape runs faster, by up to about 21 cents, with a little drift that comes from the track's
 seed, so a render is the same each time. `Bass` and `Treble` are on what comes out, the repeats
-and the reverb, and not in the loop. The reverb is a `Spring` at one setting, fed from what comes
-in.
+and the reverb, and not in the loop.
+
+The reverb is the echo's own spring tank, fed from what comes in, a tank a side. A sound drips
+into it about 50 ms later, quietly, its lows first and its highs rising after them, then rings
+out straight away in a smooth, dark tail, loudest just after the drip, that falls away in about
+four seconds and then rings on, quieter, for several more, longest in the lows, mostly between
+150 Hz and 2 kHz and little under that, so it sits under the repeats rather than over them. It doesn't rattle, whip or ring metallic as `Spring`
+does: for a full, bright spring reverb on its own, use `Spring`.
+
+`Mix` keeps the sound at full while it brings the echo up to full at `80`, then takes the sound
+down to nothing at `FF`, as TAPE-201's does. So turning it up from `00` to the middle only adds
+echo, and its `80` start has the sound and the echo both at full.
 
 `Chorus` thickens a sound with copies of it that drift in time. It starts half wet,
 which is the classic sound. Its first two types are after Mutable Instruments' Rings:

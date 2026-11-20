@@ -167,6 +167,11 @@ pub(crate) enum Mixing {
     /// What it gives is all wet, blended with the sound by `Mix`, then turned by `Gain`. Written
     /// so all wet and all dry are exact.
     Wet,
+    /// What it gives is all wet. The sound stays at full while `Mix` brings what it gives up to
+    /// full by the middle, and then the sound goes down, as a Space Echo's `Mix` does on
+    /// TAPE-201, so turning it up from `00` to the middle only adds echo. Then turned by `Gain`;
+    /// all wet and all dry are exact.
+    Held,
     /// What it makes is added to the sound, as an Aural Exciter's is, so `Mix` at `00` is the
     /// sound alone and at `FF` the sound with all it makes.
     Added,
@@ -375,7 +380,7 @@ static FACTS: [Facts; EffectKind::COUNT] = {
         these.mix = output(params, "mix");
         these.gain = output(params, "gain");
         let (mixes, turns) = match these.mixing {
-            Mixing::Wet | Mixing::Added => (true, true),
+            Mixing::Wet | Mixing::Held | Mixing::Added => (true, true),
             Mixing::Parallel => (true, false),
             Mixing::Inside | Mixing::AllWet => (false, true),
         };
@@ -444,7 +449,7 @@ fn levels(insert: Insert) -> (u8, u8, u8) {
             .unwrap_or(UNITY_LEVEL)
     };
     let (mix, gain) = match facts.mixing {
-        Mixing::Wet | Mixing::Added => (mix(), gain()),
+        Mixing::Wet | Mixing::Held | Mixing::Added => (mix(), gain()),
         Mixing::Parallel => (mix(), UNITY_LEVEL),
         Mixing::Inside | Mixing::AllWet => (0xFF, gain()),
     };
@@ -459,6 +464,23 @@ fn levels(insert: Insert) -> (u8, u8, u8) {
         _ => 0,
     };
     (amount, mix, gain)
+}
+
+/// `wet` brought up to full by the middle of `mix` with `dry` at full, then `dry` taken down, and
+/// both turned by `gain`, so all wet and all dry are exact.
+#[inline]
+pub(crate) fn held(wet: [f32; 2], dry: [f32; 2], mix: f32, gain: f32) -> [f32; 2] {
+    let (wet_share, dry_share) = held_shares(mix);
+    [
+        (wet[0] * wet_share + dry[0] * dry_share) * gain,
+        (wet[1] * wet_share + dry[1] * dry_share) * gain,
+    ]
+}
+
+/// What [`held`] takes of the wet and of the dry at a mix from 0 to 1.
+#[inline]
+pub(crate) fn held_shares(mix: f32) -> (f32, f32) {
+    ((2.0 * mix).min(1.0), (2.0 - 2.0 * mix).min(1.0))
 }
 
 /// `wet` blended with `dry` by `mix`, then turned by `gain`, so all wet and all dry are exact.
@@ -1191,6 +1213,11 @@ fn blended(
             let gain = gain.next(smoothing);
             mixed(wet, dry, mix, gain)
         }
+        Mixing::Held => {
+            let mix = mix.next(smoothing);
+            let gain = gain.next(smoothing);
+            held(wet, dry, mix, gain)
+        }
         Mixing::Added => {
             let mix = mix.next(smoothing);
             let gain = gain.next(smoothing);
@@ -1217,6 +1244,17 @@ mod tests {
     use crate::dsp::signals::{peak, sines};
     use vt_model::insert::{Compressor, CompressorType, Delay, Equaliser};
     use vt_model::random::NumericalRecipesLcg;
+
+    #[test]
+    #[allow(clippy::float_cmp, reason = "all dry and all wet are exact")]
+    fn held_mixing_keeps_the_sound_to_the_middle_and_its_ends_exact() {
+        let (wet, dry) = ([0.3, -0.7], [0.11, 0.5]);
+        assert_eq!(held(wet, dry, 0.0, 1.0), dry);
+        assert_eq!(held(wet, dry, 1.0, 1.0), wet);
+        assert_eq!(held_shares(0.25), (0.5, 1.0));
+        assert_eq!(held_shares(0.5), (1.0, 1.0));
+        assert_eq!(held_shares(0.75), (1.0, 0.5));
+    }
 
     const RATE: u32 = 48_000;
     /// Settings take effect at once, as the smoother has nothing to do.
@@ -1924,7 +1962,7 @@ mod tests {
             let mix = || by_key(insert, "mix").expect("a Mix");
             let gain = || by_key(insert, "gain").expect("a Gain");
             let (mix, gain) = match FACTS[kind as usize].mixing {
-                Mixing::Wet | Mixing::Added => (mix(), gain()),
+                Mixing::Wet | Mixing::Held | Mixing::Added => (mix(), gain()),
                 Mixing::Parallel => (mix(), UNITY_LEVEL),
                 Mixing::Inside | Mixing::AllWet => (0xFF, gain()),
             };
