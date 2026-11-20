@@ -486,18 +486,22 @@ hard. A VCR's track takes no cassette, so on `VHS` all three are the same.
 | `Hiss` | The hiss, none at `00` to about -24 dB at `FF`, and noise on the sound |
 | `Wow` | A slow, wandering wobble in pitch, up to 12 cents at `FF` |
 | `Flutter` | A fast warble in pitch, the capstan's, up to 32 cents at `FF` |
-| `Drops` | How deep the highs flicker away, about 8 times a second |
+| `Drops` | How deep the highs flicker away, about 8 times a second, and dull slowly |
 | `Chew` | Now and then a stretch of crinkled tape, bent and dulled |
 | `Track` | Noise reduction, mistracking more as it goes up; none at the start |
 
-`Drive` bends the lows first, so a kick and a bass squash and glue before
-the rest does. Loud highs dull as they hit, as a cassette's slow tape can't
-hold them, more as `Drive` goes up; a hit's first few milliseconds still
-come through bright, and the highs come back within about half a second
-after it. At the top of `Wow` and `Flutter` it's well past a good deck, a
-seasick lean and a chorus-like warble. `Drops` takes only the highs: at
-`40` they flicker a dB or two at 8 kHz, at `FF` about 19 dB, with the lows
-and mids held. The noise on the sound sits round what's playing, so a loud
+`Drive` bends the lows and low mids first, up to about 500 Hz, so a kick
+and a bass squash and glue, and a voice's body thickens, before the rest
+does. Loud highs dull as the sound gets louder, as a cassette's slow tape
+can't hold them, most by about -12 dBFS and more as `Drive` goes up; a
+hit's first few milliseconds still come through bright, and the highs come
+back within about a quarter of a second after it. Wow and flutter each wander
+at random round their rate, so a heavy warble has a rough, fast edge, not
+a smooth vibrato. At the top of `Wow` and `Flutter` it's well past a good
+deck, a seasick lean and a chorus-like warble. `Drops` takes only the
+highs: at `40` they flicker a dB or two at 8 kHz, at `FF` about 19 dB,
+with the lows and mids held, and under the flicker the highs dull and come
+back slowly, a few dB on average at 12 kHz. The noise on the sound sits round what's playing, so a loud
 bass line brings up a dark rumble, not a hiss. `Track` starts at `00`, no
 noise reduction at all, as Cassette has none; just above, it's a Dolby
 that nearly tracks, and higher up it reads the tape low, so the highs come
