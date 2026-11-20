@@ -60,6 +60,25 @@ const FAT_GIVEN_BACK: f32 = 0.5;
 /// bass so hard it smothered the ringing; half matched PRD's spectrum frame by frame on an envelope
 /// bass and on sweeps. Their ringing by themselves is set by the stages and stays as loud.
 const LADDER_GIVEN_BACK: f32 = 0.5;
+/// How hot the ladder runs inside at least, at high `Res`, as a gain in and out again, so its
+/// ringing saturates as PRD's does even at `Drive 00`. PRD at its lowest drive distorts as ours
+/// does at `Drive 60`, a gain of 3.6, and its ringing compresses there too, where ours at `Drive
+/// 00` stayed clean: on a fast envelope its ringing came out as a pitch of its own, gliding down
+/// and left behind each note a little under one of its harmonics, as loud as the note's loudest,
+/// heard as a second, flat copy of it (decision 455). With the drive's gain it makes
+/// `(gain^16 + heat^16)^(1/16)`, so `Drive 00` runs at the heat and `Drive 60` and over as they
+/// were, within 2%, and the drive still adds a little in between. A quiet sound comes through the
+/// same, and a loud one comes out quieter, as its ringing is held in.
+const LADDER_HEAT: f32 = 3.4;
+/// Where in the ladder's feedback, as a share of [`LADDER_FEEDBACK`], the heat comes in, over a
+/// smoothstep: none to `73` and all of it from `C5`, so a low `Res` is as it was. It goes again
+/// from `D2` to `DB`, where the ladder starts to ring by itself, so its singing comes out as loud
+/// as it did: that's where the ringing stops growing, and driving it harder would turn it down.
+/// `Safe` stops `Res` short of it.
+const LADDER_HEAT_FROM: f32 = 0.5;
+const LADDER_HEAT_FULL: f32 = 0.85;
+const LADDER_HEAT_FADES: f32 = 0.9;
+const LADDER_HEAT_GONE: f32 = 0.93;
 /// What goes into the diode ladder, and what comes out of it at no resonance, as gains. Its last
 /// stage clips at 1, so a full-level sound goes in at half, and comes out about as loud as it went
 /// in.
@@ -327,6 +346,39 @@ const OBX_BAND: [f32; 3] = [0.0, 1.0, 0.0];
 const OBX_HIGH: [f32; 3] = [0.0, 0.0, 1.0];
 const OBX_NOTCH: [f32; 3] = [1.0, 0.0, 1.0];
 
+/// The least the ladder runs hot inside at its feedback `k`, over [`LADDER_HEAT`]'s range: 0 under
+/// it, and over where it rings by itself.
+fn ladder_heat(k: f32) -> f32 {
+    let share = k / LADDER_FEEDBACK;
+    let smooth = |from: f32, to: f32| {
+        let along = ((share - from) / (to - from)).clamp(0.0, 1.0);
+        along * along * (3.0 - 2.0 * along)
+    };
+    let rising = smooth(LADDER_HEAT_FROM, LADDER_HEAT_FULL);
+    let falling = smooth(LADDER_HEAT_FADES, LADDER_HEAT_GONE);
+    LADDER_HEAT * rising * (1.0 - falling)
+}
+
+/// How hot the ladder runs inside for a drive's gain and the heat at its `Res`: about the larger,
+/// `(gain^16 + heat^16)^(1/16)`, which is the gain itself with no heat.
+#[inline]
+fn ladder_hot(gain: f32, heat: f32) -> f32 {
+    if heat <= 0.0 {
+        return gain;
+    }
+    let sixteenth = |x: f32| {
+        let square = x * x;
+        let fourth = square * square;
+        let eighth = fourth * fourth;
+        eighth * eighth
+    };
+    (sixteenth(gain) + sixteenth(heat))
+        .sqrt()
+        .sqrt()
+        .sqrt()
+        .sqrt()
+}
+
 /// `tanh(x) / x`, as a rational function, for `x` from -5 to 5: the (7, 6) Padé approximant
 /// sst-basic-blocks' `fasttanh` uses (GPL-3.0-or-later), out by at most 1e-4. The (5, 4) one before
 /// it was out by 2.3e-3 and overshot to 1.0017 at its end, 4, before going flat, a kink that
@@ -363,8 +415,9 @@ pub(crate) struct Coefficients {
     quad_g: f32,
     double_a1: f32,
     double_clean_a1: f32,
-    /// The ladder's feedback.
+    /// The ladder's feedback, and the least it runs hot inside at it, [`LADDER_HEAT`] at most.
     ladder_k: f32,
+    ladder_heat: f32,
     /// The diode ladder's cutoff as a fraction of twice the rate, set so it resonates at the cutoff
     /// asked for, and its feedback high-pass at that rate.
     diode_cutoff: f32,
@@ -430,6 +483,7 @@ impl Coefficients {
             double_a1: 0.0,
             double_clean_a1: 0.0,
             ladder_k,
+            ladder_heat: ladder_heat(ladder_k),
             diode_cutoff: {
                 let share = frequency / RESONANT_SHARE / (2.0 * rate as f32);
                 let high = 1.0 + DIODE_HIGH_TUNING * share + DIODE_TOP_TUNING * share.powi(5);
@@ -490,6 +544,7 @@ impl Coefficients {
         visit(&mut self.double_g, other.double_g);
         visit(&mut self.quad_g, other.quad_g);
         visit(&mut self.ladder_k, other.ladder_k);
+        visit(&mut self.ladder_heat, other.ladder_heat);
         visit(&mut self.diode_cutoff, other.diode_cutoff);
         visit(&mut self.diode_feedback, other.diode_feedback);
         visit(&mut self.diode_resonance, other.diode_resonance);
@@ -999,10 +1054,14 @@ impl Channel {
         }
         let output = if kind == FilterType::Ladder {
             let (ladder, inner) = (&mut self.ladder, &mut self.inner);
+            // At high `Res` it runs at least as hot as `LADDER_HEAT` inside, and comes out as much
+            // quieter, so only what saturates hears it.
+            let hot = ladder_hot(gain, c.ladder_heat);
             self.oversampler
-                .process(input * gain * mix.ladder_input * mix.ladder_inside, |x| {
+                .process(input * hot * mix.ladder_input * mix.ladder_inside, |x| {
                     inner.process(x, |x| ladder.step(x, c, &mix.ladder))
                 })
+                * (gain / hot)
         } else if kind == FilterType::Ms20LowPass {
             let korg = &mut self.korg;
             self.oversampler.process(input * gain, |x| {
@@ -1661,6 +1720,91 @@ mod tests {
             let cents = 1200.0 * (pitch / cut).log2();
             assert!(cents.abs() < 100.0, "{cut} rang at {pitch}");
         }
+    }
+
+    /// The ladder's quack at high `Res`, as `filtertest2` played it: a 98 Hz saw at 0.7, a note
+    /// every 125 ms held for 94, the cutoff falling each time from 7.1 kHz toward 141 Hz as its
+    /// envelope did. In each note's tail, 30 ms on, averaged over the notes, the loudest part
+    /// from 60 Hz to 1.2 kHz that isn't within a fifth of the pitch of one of its harmonics, in dB
+    /// against the loudest harmonic: the ringing left behind as a pitch of its own.
+    fn quack_ringing_db(drive: f32) -> f64 {
+        const NOTE: usize = 6000;
+        const HELD: usize = 4500;
+        const NOTES: usize = 8;
+        const FROM: usize = 1440;
+        const RELEASE: f32 = 300.0;
+        let (pitch, peak) = (98.0_f32, 0.7);
+        let (low, high) = (cutoff(141.0), cutoff(7150.0));
+        let res = 195.0 / 255.0;
+        let mut channel = Channel::default();
+        let mut ramp = Ramp::at(Coefficients::new(low, res, RATE));
+        let mut out = Vec::with_capacity(NOTE * NOTES);
+        let mut phase = 0.0_f32;
+        for frame in 0..NOTE * NOTES {
+            let within = frame % NOTE;
+            if frame % 32 == 0 {
+                let fall = (-(within as f32) / RATE as f32 / 0.036).exp();
+                ramp.toward(&Coefficients::new(low + (high - low) * fall, res, RATE), 32);
+            }
+            // Let go over a few milliseconds, as a voice's release does, rather than with a step.
+            let level = peak * (-(within.saturating_sub(HELD) as f32) / RELEASE).exp();
+            phase = (phase + pitch / RATE as f32).fract();
+            let saw = level * (2.0 * phase - 1.0);
+            out.push(channel.process(saw, FilterType::Ladder, drive, ramp.now()));
+            ramp.advance();
+        }
+        let tau = std::f64::consts::TAU;
+        let length = NOTE - FROM;
+        let hann: Vec<f64> = (0..length)
+            .map(|i| 0.5 - 0.5 * (tau * i as f64 / length as f64).cos())
+            .collect();
+        let bins: Vec<f64> = (30..600).map(|bin| 2.0 * f64::from(bin)).collect();
+        let mut power = vec![0.0; bins.len()];
+        for note in 1..NOTES {
+            let tail = &out[note * NOTE + FROM..(note + 1) * NOTE];
+            for (hertz, power) in bins.iter().zip(power.iter_mut()) {
+                let (step_sin, step_cos) = (tau * hertz / f64::from(RATE)).sin_cos();
+                let (mut cos, mut sin, mut real, mut imaginary) = (1.0, 0.0, 0.0, 0.0);
+                for (sample, weight) in tail.iter().zip(&hann) {
+                    let x = f64::from(*sample) * weight;
+                    real += x * cos;
+                    imaginary += x * sin;
+                    (cos, sin) = (
+                        cos * step_cos - sin * step_sin,
+                        sin * step_cos + cos * step_sin,
+                    );
+                }
+                *power += real * real + imaginary * imaginary;
+            }
+        }
+        let (mut ringing, mut harmonic) = (0.0_f64, 0.0_f64);
+        for (hertz, power) in bins.iter().zip(&power) {
+            let along = hertz / f64::from(pitch);
+            if (along - along.round()).abs() > 0.2 {
+                ringing = ringing.max(*power);
+            } else {
+                harmonic = harmonic.max(*power);
+            }
+        }
+        10.0 * (ringing / harmonic).log10()
+    }
+
+    #[test]
+    fn the_ladders_quack_leaves_no_second_pitch_behind_at_no_drive() {
+        // At `Drive 00` its ringing stayed clean, and was left behind each note a little under
+        // its 2nd harmonic, about as loud as it, -1.5 dB, heard as a flat copy of it. At `Drive
+        // 60` it was -7.3 dB, and PRD's at its lowest drive is 7 to 14 dB under on filtertest2's
+        // notes (decision 455).
+        let plain = quack_ringing_db(0.0);
+        let driven = quack_ringing_db(0x60 as f32 / 255.0);
+        assert!(
+            plain < -5.0,
+            "at no drive its ringing was {plain} dB against the note"
+        );
+        assert!(
+            (plain - driven).abs() < 2.0,
+            "{plain} dB at no drive, {driven} at Drive 60"
+        );
     }
 
     #[test]
@@ -2389,9 +2533,10 @@ mod tests {
     #[test]
     fn the_ladders_bands_peak_as_loud_as_its_low_pass_is_at_its_loudest() {
         // With no resonance at its bass's level, and with a lot as loud as its peak at `Cut`.
-        // Quietly, as the low-pass's taller peak saturates a little at 0.01 (decision 454).
+        // Quietly, as the low-pass's taller peak saturates a little at 0.01 (decision 454), and
+        // at 0.001 since it runs hotter inside at high `Res` (decision 455).
         let db = |mode, res, hertz| {
-            mode_gain_db(FilterType::Ladder, mode, 1000.0, res, hertz, 0.0, 0.001)
+            mode_gain_db(FilterType::Ladder, mode, 1000.0, res, hertz, 0.0, 0.0002)
         };
         let loudest = |mode, res| {
             (0..=48)
@@ -2414,7 +2559,7 @@ mod tests {
     #[test]
     fn a_band_pass_peaks_as_loud_as_the_low_pass_is_at_its_loudest() {
         for kind in [FilterType::Ladder, FilterType::Dirty] {
-            let db = |mode, res, hertz| mode_gain_db(kind, mode, 1000.0, res, hertz, 0.0, 0.001);
+            let db = |mode, res, hertz| mode_gain_db(kind, mode, 1000.0, res, hertz, 0.0, 0.0002);
             // With no resonance, as loud as its bass.
             near(db(FilterMode::BandPass, 0.0, 1000.0), 0.0, 0.6);
             // With a lot, as loud as its peak.
