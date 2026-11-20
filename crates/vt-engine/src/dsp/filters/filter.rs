@@ -47,8 +47,19 @@ const LADDER_MIN_SLOPE: f32 = 0.001;
 const LADDER_LOPSIDED: [(f32, f32); 4] = [(1.0, 1.04), (1.02, 1.0), (1.0, 1.015), (1.01, 1.0)];
 /// How much of what the ladder's resonance takes from the bass `Fat24` gives back: its input is
 /// turned up by `1 + 0.5 k`, as Surge's compensated ladders feed back `y4 - 0.5 x`, which is the
-/// same for a quiet sound. At full `Res` the bass is 4.5 dB down rather than 14.5.
+/// same for a quiet sound. With [`LADDER_GIVEN_BACK`] on top, at full `Res` its bass is 2.3 dB down
+/// rather than `LP24`'s 7.2.
 const FAT_GIVEN_BACK: f32 = 0.5;
+/// How much of what the resonance takes from the bass, `1 + k`, the low-pass ladders give back, as
+/// a power of it: their input is turned up by `(1 + k)^0.5`, so at full `Res` the bass is 7.2 dB
+/// down rather than 14.5, between Cytomic The Drop's PRD, which keeps it, and Arturia's Filter
+/// MINI, which loses it as a Moog does. It's turned up going in, before the stages saturate, so a
+/// loud sound drives the ladder harder the higher `Res` is, and its ringing saturates, sizzles and
+/// quacks as PRD's does at the same drive: with none, a loud bass saturated the stages less and
+/// less as `Res` rose, and the ringing stayed clean (decision 454). Full, `1 + k`, saturated the
+/// bass so hard it smothered the ringing; half matched PRD's spectrum frame by frame on an envelope
+/// bass and on sweeps. Their ringing by themselves is set by the stages and stays as loud.
+const LADDER_GIVEN_BACK: f32 = 0.5;
 /// What goes into the diode ladder, and what comes out of it at no resonance, as gains. Its last
 /// stage clips at 1, so a full-level sound goes in at half, and comes out about as loud as it went
 /// in.
@@ -162,10 +173,16 @@ const BAND_TAPER: [f32; TAPER_POINTS] = [
     0.0, 0.021, 0.037, 0.051, 0.072, 0.096, 0.127, 0.161, 0.201, 0.243, 0.287, 0.331, 0.374, 0.413,
     0.45, 0.486, 0.52, 0.64, 0.76, 0.88, 1.0,
 ];
-/// The ladder against The Drop's PRD, a transistor ladder like the Prodigy's.
+/// The ladder against The Drop's PRD, a transistor ladder like the Prodigy's, by the height at
+/// `Cut` over the passband of a sine at -60 dBFS (decision 454): PRD's resonance starts to compress
+/// at about -50 dBFS near the top, so the -30 dBFS sweep it was first fitted by read its peak 9 to
+/// 15 dB low over the last tenth of the way to ringing, and ours was set that much too low.
+/// Arturia's Filter MINI, which barely compresses, agrees with PRD's height within 1 dB to three
+/// quarters of the way at 200 Hz and 988 Hz. `k` now rises evenly with the knob, as PRD's does, to
+/// 3.77 at `CC`; over the first 35% it is within 4% of where it was.
 const LADDER_TAPER: [f32; TAPER_POINTS] = [
-    0.0, 0.055, 0.111, 0.166, 0.219, 0.271, 0.322, 0.372, 0.418, 0.462, 0.502, 0.536, 0.567, 0.593,
-    0.615, 0.634, 0.651, 0.925, 0.95, 0.975, 1.0,
+    0.0, 0.056, 0.111, 0.166, 0.222, 0.277, 0.332, 0.387, 0.442, 0.498, 0.553, 0.608, 0.663, 0.718,
+    0.773, 0.827, 0.877, 0.925, 0.95, 0.975, 1.0,
 ];
 /// The Korg 35s against The Drop's MS1, the MS-20's first Korg 35. Its peak barely stands out
 /// under half its feedback, so the taper starts quickly.
@@ -212,13 +229,15 @@ const SAFE_POINTS: usize = 17;
 /// at each sixteenth of `Cut`'s: where a quiet click's ring dies away by `SAFE_DECAY_DB` a
 /// cycle, the lower of 44.1 and 48 kHz's and of no drive and full, measured by
 /// `where_safe_stops` (decision 242). That's 1 to 5 steps of `Res` short of where each starts to
-/// ring by itself, between `D9` and `E0`, at any `Cut`, but for two. The diode rings sooner the
+/// ring by itself, between `D9` and `E0`, at any `Cut`, but for three. The ladder's feedback
+/// climbs to ringing faster over its last 15% since decision 454, so it stops 8 to 10 steps short,
+/// at the same feedback as before. The diode rings sooner the
 /// higher its `Cut`, from about 2 kHz. `Dirty`'s loop is eased off at high cutoffs, so it rings
 /// later there, and `Drive` gives it more resonance, so it has a table at full drive too, read
 /// between by `Drive`; the others hardly hear `Drive`'s.
 const SAFE_LADDER: [f32; SAFE_POINTS] = [
-    0.8447, 0.8447, 0.8447, 0.8447, 0.8447, 0.8447, 0.8448, 0.8448, 0.8448, 0.8448, 0.8448, 0.8448,
-    0.8448, 0.8445, 0.8442, 0.8436, 0.8429,
+    0.8194, 0.8200, 0.8197, 0.8200, 0.8201, 0.8201, 0.8203, 0.8205, 0.8206, 0.8207, 0.8207, 0.8203,
+    0.8203, 0.8188, 0.8171, 0.8136, 0.8099,
 ];
 const SAFE_DIODE: [f32; SAFE_POINTS] = [
     0.8690, 0.8690, 0.8690, 0.8690, 0.8689, 0.8687, 0.8684, 0.8677, 0.8635, 0.8602, 0.8572, 0.8538,
@@ -340,6 +359,8 @@ pub(crate) struct Coefficients {
     clean_a1: f32,
     /// The same at twice the rate, for what saturates.
     double_g: f32,
+    /// The ladder's, at four times the rate.
+    quad_g: f32,
     double_a1: f32,
     double_clean_a1: f32,
     /// The ladder's feedback.
@@ -393,6 +414,7 @@ impl Coefficients {
         let clean_q =
             CLEAN_LEAST_Q + tapered(&CLEAN_TAPER, resonance) * (CLEAN_MOST_Q - CLEAN_LEAST_Q);
         let double_g = (std::f32::consts::PI * nyquist_safe / (2.0 * rate as f32)).tan();
+        let quad_g = (std::f32::consts::PI * nyquist_safe / (4.0 * rate as f32)).tan();
         let ladder_k = tapered(&LADDER_TAPER, resonance) * LADDER_FEEDBACK;
         let diode_corner = (frequency * DIODE_FEEDBACK_SHARE).min(diode_filter::FEEDBACK_HIGH_PASS);
         let dirty_resonance = tapered(&DIRTY_TAPER, resonance);
@@ -404,6 +426,7 @@ impl Coefficients {
             clean_k: 1.0 / clean_q,
             clean_a1: 0.0,
             double_g,
+            quad_g,
             double_a1: 0.0,
             double_clean_a1: 0.0,
             ladder_k,
@@ -465,6 +488,7 @@ impl Coefficients {
         visit(&mut self.k, other.k);
         visit(&mut self.clean_k, other.clean_k);
         visit(&mut self.double_g, other.double_g);
+        visit(&mut self.quad_g, other.quad_g);
         visit(&mut self.ladder_k, other.ladder_k);
         visit(&mut self.diode_cutoff, other.diode_cutoff);
         visit(&mut self.diode_feedback, other.diode_feedback);
@@ -572,6 +596,9 @@ pub(crate) struct Mix {
     obx: [f32; 3],
     /// How far the ladder's input is turned up: 1, or more for `Fat24`.
     ladder_input: f32,
+    /// How far a low-pass ladder's input is turned up on top, to give back half of what its
+    /// resonance takes from the bass, by [`LADDER_GIVEN_BACK`]: 1 for the other modes.
+    ladder_inside: f32,
 }
 
 impl Mix {
@@ -581,10 +608,13 @@ impl Mix {
         // A band peaks as loud as the low-pass is at its loudest: its bass with little resonance,
         // and its peak with more. The low-pass passes a quarter at the cutoff before its loop,
         // which is `1 + k L^4` there, or `1 - k / 4`, so a band is turned up by the bass over
-        // that, from its own loudest, down to passing at the cutoff what the low-pass does.
+        // that, from its own loudest, down to passing at the cutoff what the low-pass does. The
+        // low-pass is turned up by what it gives back of its bass, so the bands are too, after
+        // the ladder, as their insides are left as they were.
+        let given_back = (1.0 + ladder_k).powf(LADDER_GIVEN_BACK);
         let band = |weights: [f32; 5], (loudest, at_cut): (f32, f32)| {
             let bass = (4.0 - ladder_k).abs() / (1.0 + ladder_k) / (4.0 * loudest);
-            let makeup = bass.max(1.0 / (4.0 * at_cut));
+            let makeup = bass.max(1.0 / (4.0 * at_cut)) * given_back;
             weights.map(|weight| weight * makeup)
         };
         let (ladder, before, entry) = match mode {
@@ -645,6 +675,26 @@ impl Mix {
             FilterMode::LowCut1 => RESONANT_SHARE / 2.0,
             _ => HIGH_PASS_RATIO,
         };
+        let ladder_input = if mode == FilterMode::LowPass24Fat {
+            1.0 + FAT_GIVEN_BACK * ladder_k
+        } else {
+            1.0
+        };
+        let low = matches!(
+            mode,
+            FilterMode::LowPass24
+                | FilterMode::LowPass24Fat
+                | FilterMode::LowPass18
+                | FilterMode::LowPass12
+                | FilterMode::LowPass6
+        );
+        // What the ladder's resonance takes from the bass is `1 + k`, of which `Fat24` gives
+        // back some already.
+        let ladder_inside = if low {
+            given_back / ladder_input.powf(LADDER_GIVEN_BACK)
+        } else {
+            1.0
+        };
         Self {
             ladder,
             before,
@@ -656,11 +706,8 @@ impl Mix {
             },
             low_cut,
             obx,
-            ladder_input: if mode == FilterMode::LowPass24Fat {
-                1.0 + FAT_GIVEN_BACK * ladder_k
-            } else {
-                1.0
-            },
+            ladder_input,
+            ladder_inside,
         }
     }
 
@@ -687,6 +734,7 @@ impl Mix {
             step(value, to);
         }
         step(&mut self.ladder_input, target.ladder_input);
+        step(&mut self.ladder_inside, target.ladder_inside);
         if furthest < 1e-6 {
             *self = *target;
         }
@@ -765,7 +813,7 @@ impl Svf {
     }
 }
 
-/// A saturating four-pole transistor ladder at twice the rate, so its saturation aliases less.
+/// A saturating four-pole transistor ladder at four times the rate, so its saturation aliases less.
 /// Huovilainen's model, with Zavalishin's trapezoidal integrators and Mystran's per-stage
 /// linearisation of `tanh`, after VCV Fundamental's VCF.
 #[derive(Debug, Clone, Copy, Default)]
@@ -782,13 +830,14 @@ tiny_by_fields!(Ladder {
 });
 
 impl Ladder {
-    /// One step at twice the rate. Each stage's `tanh` is replaced by its slope at the last output,
-    /// which leaves a linear system that can be solved for the feedback within the same sample, so
-    /// the pitch stays true at high cutoffs. The input's saturation comes from the same idea.
-    /// Its output is its stages mixed by `weights`: what goes into the first, then each one's.
+    /// One step at four times the rate. Each stage's `tanh` is replaced by its slope at the last
+    /// output, which leaves a linear system that can be solved for the feedback within the same
+    /// sample, so the pitch stays true at high cutoffs. The input's saturation comes from the same
+    /// idea. Its output is its stages mixed by `weights`: what goes into the first, then each
+    /// one's.
     #[inline]
     fn step(&mut self, input: f32, c: &Coefficients, weights: &[f32; 5]) -> f32 {
-        let g = c.double_g;
+        let g = c.quad_g;
         // Past the rational `tanh`'s range its slope is `1 / |y|`, as `tanh`'s is there, so a
         // very loud signal saturates rather than going through at a fixed slope, which let one
         // three times full level ring up without end at full drive and `Res`.
@@ -850,6 +899,8 @@ pub(crate) struct Channel {
     dirty: DirtyFilter,
     obx: ObX,
     oversampler: Oversampler,
+    /// From twice the rate to four times it, for the ladder.
+    inner: Oversampler,
     /// The mode's mix it's playing, and whether it's moving toward the coefficients' yet, which a
     /// new channel doesn't, as it starts on theirs.
     mix: Mix,
@@ -906,7 +957,10 @@ impl Channel {
         flush(&mut self.svf);
         flush(&mut self.second);
         match kind {
-            FilterType::Ladder => flush(&mut self.ladder),
+            FilterType::Ladder => {
+                flush(&mut self.ladder);
+                flush(&mut self.inner);
+            }
             FilterType::Diode => flush(&mut self.diode),
             FilterType::Ms20LowPass | FilterType::Ms20HighPass => flush(&mut self.korg),
             FilterType::Dirty => flush(&mut self.dirty),
@@ -944,10 +998,10 @@ impl Channel {
                 / gain.sqrt();
         }
         let output = if kind == FilterType::Ladder {
-            let ladder = &mut self.ladder;
+            let (ladder, inner) = (&mut self.ladder, &mut self.inner);
             self.oversampler
-                .process(input * gain * mix.ladder_input, |x| {
-                    ladder.step(x, c, &mix.ladder)
+                .process(input * gain * mix.ladder_input * mix.ladder_inside, |x| {
+                    inner.process(x, |x| ladder.step(x, c, &mix.ladder))
                 })
         } else if kind == FilterType::Ms20LowPass {
             let korg = &mut self.korg;
@@ -1041,14 +1095,14 @@ pub(crate) fn response_db(
     } else if kind == FilterType::Ladder {
         // Four one-poles in a loop, `L = 1 / (1 + jw)`, each stage `L^i / (1 + k L^4)`, which is
         // `(1 + jw)^(4 - i) / ((1 + jw)^4 + k)`, after what `Fat24` turns its input up by.
-        let w = (std::f32::consts::PI * hertz / (2.0 * rate as f32)).tan() / c.double_g;
+        let w = (std::f32::consts::PI * hertz / (4.0 * rate as f32)).tan() / c.quad_g;
         let pole = Complex(1.0, w);
         let mixed = mix.ladder.iter().fold(Complex(0.0, 0.0), |mixed, weight| {
             mixed.times(pole).add(Complex(*weight, 0.0))
         });
         let squared = pole.times(pole);
         let loop_gain = squared.times(squared).add(Complex(c.ladder_k, 0.0));
-        let input = mix.ladder_input;
+        let input = mix.ladder_input * mix.ladder_inside;
         input * input * mixed.over(loop_gain).power()
     } else {
         let w = (std::f32::consts::PI * hertz / rate as f32).tan() / c.g;
@@ -1347,11 +1401,14 @@ mod tests {
                     if worked_out < -60.0 {
                         continue;
                     }
-                    // `Dirty` and the Korg 35s saturate even a quiet signal a little, where it's
-                    // loudest.
+                    // `Dirty`, the Korg 35s and the ladder's taller peak saturate even a quiet
+                    // signal a little, where it's loudest.
                     let level = if matches!(
                         kind,
-                        FilterType::Dirty | FilterType::Ms20LowPass | FilterType::Ms20HighPass
+                        FilterType::Dirty
+                            | FilterType::Ms20LowPass
+                            | FilterType::Ms20HighPass
+                            | FilterType::Ladder
                     ) {
                         0.001
                     } else {
@@ -1463,8 +1520,10 @@ mod tests {
             // OSR's low-pass, 4.9, 11.0 and 14.8, and high-pass, 4.5, 10.6 and 14.2.
             (FilterType::LowPass, [4.8, 10.9, 14.6]),
             (FilterType::HighPass, [4.9, 11.0, 14.7]),
-            // PRD's, 6.6, 12.3 and 16.4.
-            (FilterType::Ladder, [6.6, 12.3, 16.5]),
+            // PRD's, 6.6, 12.3 and 16.4 at -30 dBFS, where it's already compressing its peak
+            // from half way; its peak's own height, under -50 dBFS, is the ladder's (decision
+            // 454).
+            (FilterType::Ladder, [6.7, 13.8, 26.9]),
             // MS1's low-pass, 4.6, 11.4 and 20.3, and high-pass, 4.0, 10.3 and 19.4.
             (FilterType::Ms20LowPass, [3.8, 10.1, 22.3]),
             (FilterType::Ms20HighPass, [1.7, 7.1, 17.2]),
@@ -1551,13 +1610,13 @@ mod tests {
     fn the_fat_ladder_keeps_more_bass_as_resonance_rises() {
         let db = |mode, res| mode_gain_db(FilterType::Ladder, mode, 2000.0, res, 100.0, 0.0, 0.01);
         let (plain, fat) = (FilterMode::LowPass24, FilterMode::LowPass24Fat);
-        // The same with no resonance, and with three quarters 7.5 dB more bass, its input turned
-        // up by `1 + 0.5 k`.
+        // The same with no resonance, and with three quarters 4.3 dB more bass: its input turned
+        // up by `1 + 0.5 k`, and its inside by `LADDER_GIVEN_BACK` of what's left of `1 + k`.
         near(db(fat, 0.0), db(plain, 0.0), 0.1);
         let k = Coefficients::new(cutoff(2000.0), 0.75, RATE).ladder_k;
-        let given_back = 20.0 * (1.0 + FAT_GIVEN_BACK * k).log10();
+        let given_back = 20.0 * (1.0 - LADDER_GIVEN_BACK) * (1.0 + FAT_GIVEN_BACK * k).log10();
         near(db(fat, 0.75) - db(plain, 0.75), given_back, 0.3);
-        assert!(given_back > 7.0, "{given_back}");
+        assert!(given_back > 4.0, "{given_back}");
         // Its slope and its peak's place are the low-pass's.
         let at =
             |mode, hertz| mode_gain_db(FilterType::Ladder, mode, 1000.0, 0.5, hertz, 0.0, 0.01);
@@ -2286,8 +2345,9 @@ mod tests {
 
     #[test]
     fn the_ladders_xpander_modes_slope_and_pass_as_they_say() {
+        // Quietly, as the low-pass's taller peak saturates a little at 0.01 (decision 454).
         let db = |mode, res, hertz| {
-            mode_gain_db(FilterType::Ladder, mode, 1000.0, res, hertz, 0.0, 0.01)
+            mode_gain_db(FilterType::Ladder, mode, 1000.0, res, hertz, 0.0, 0.001)
         };
         let fall = |mode, low: f32, high: f32| (db(mode, 0.0, low) - db(mode, 0.0, high)).abs();
         use FilterMode::*;
@@ -2329,8 +2389,9 @@ mod tests {
     #[test]
     fn the_ladders_bands_peak_as_loud_as_its_low_pass_is_at_its_loudest() {
         // With no resonance at its bass's level, and with a lot as loud as its peak at `Cut`.
+        // Quietly, as the low-pass's taller peak saturates a little at 0.01 (decision 454).
         let db = |mode, res, hertz| {
-            mode_gain_db(FilterType::Ladder, mode, 1000.0, res, hertz, 0.0, 0.01)
+            mode_gain_db(FilterType::Ladder, mode, 1000.0, res, hertz, 0.0, 0.001)
         };
         let loudest = |mode, res| {
             (0..=48)
@@ -2353,12 +2414,7 @@ mod tests {
     #[test]
     fn a_band_pass_peaks_as_loud_as_the_low_pass_is_at_its_loudest() {
         for kind in [FilterType::Ladder, FilterType::Dirty] {
-            let level = if kind == FilterType::Dirty {
-                0.001
-            } else {
-                0.01
-            };
-            let db = |mode, res, hertz| mode_gain_db(kind, mode, 1000.0, res, hertz, 0.0, level);
+            let db = |mode, res, hertz| mode_gain_db(kind, mode, 1000.0, res, hertz, 0.0, 0.001);
             // With no resonance, as loud as its bass.
             near(db(FilterMode::BandPass, 0.0, 1000.0), 0.0, 0.6);
             // With a lot, as loud as its peak.
@@ -3000,12 +3056,18 @@ mod tests {
 
     #[test]
     fn with_safe_off_full_res_still_rings_by_itself_just_past_where_safe_stops() {
-        // Safe stops just short of ringing: a little more `Res` keeps a click going by itself.
+        // Safe stops just short of ringing: a little more `Res` keeps a click going by itself. The
+        // ladder's last climb is gentler in `Res` since decision 454, so it takes a little more.
         let mode = FilterMode::default();
         for kind in FilterType::ALL.into_iter().filter(|kind| kind.has_safe()) {
+            let steps = if kind == FilterType::Ladder {
+                11.0
+            } else {
+                6.0
+            };
             for hertz in [200.0, 1000.0, 5000.0] {
                 let cut = cutoff(hertz);
-                let past = (safe_top(kind, cut, 0.0) + 6.0 / 255.0).min(1.0);
+                let past = (safe_top(kind, cut, 0.0) + steps / 255.0).min(1.0);
                 let decay = ring_decay_db(kind, mode, cut, past, 0.0, 0.0, RATE, CLICK);
                 assert!(decay < 0.05, "{kind:?} at {hertz} Hz: {decay} dB a cycle");
                 let full = ring_decay_db(kind, mode, cut, 1.0, 0.0, 0.0, RATE, CLICK);
