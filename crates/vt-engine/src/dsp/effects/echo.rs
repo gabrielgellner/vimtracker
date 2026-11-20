@@ -99,8 +99,8 @@ const BASS: (f32, f32, f32) = ECHO_BASS;
 const TREBLE: (f32, f32, f32) = ECHO_TREBLE;
 
 /// How loud the tank is at full `Reverb`: as loud as TAPE-201's on a drum loop and a sung line,
-/// 0.6 dB over it on the one and 0.6 dB under it on the other.
-const REVERB_GAIN: f32 = 2.1;
+/// 0.4 and 0.3 dB over it.
+const REVERB_GAIN: f32 = 1.9;
 /// How long the reverb rings, for knowing when the slot is quiet, in seconds: the tank's long
 /// network rings about 8 s at its bottom. With the reverb off the slot waits the 4.5 s it waited
 /// before that network came, so the echo alone stops where it always did, to the bit.

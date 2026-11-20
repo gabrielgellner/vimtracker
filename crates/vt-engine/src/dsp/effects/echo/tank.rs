@@ -13,10 +13,12 @@
 //! all-passes in its loop too, so no line comes round as a comb. TAPE-201's drip is muted and
 //! dull, so the chirp is heard quietly and through a low-pass, and the networks hear it only
 //! after six short all-passes have smeared it, or each line would bring the chirp back whole, a
-//! "whip" every 30 to 180 ms. A band-pass, a steep high-pass at 156 Hz with a little lift over it and a lift
-//! at 750 Hz then shape both as TAPE-201's is shaped. Each side is a tank of its own, as
-//! TAPE-201's are, so a sound on the left rings on the left only and a sound in the middle rings
-//! the same on both. It's linear but for a soft hold on what goes in.
+//! "whip" every 30 to 180 ms. The smeared drip is heard itself too, so the tail starts straight
+//! after the drip, as TAPE-201's does, with no hole and swell before the networks come round. A
+//! band-pass, a steep high-pass at 156 Hz with a little lift over it, a lift at 750 Hz, a dip at
+//! 2.3 kHz and a rise at 3.8 kHz then shape both as TAPE-201's is shaped. Each side is a tank of
+//! its own, as TAPE-201's are, so a sound on the left rings on the left only and a sound in the
+//! middle rings the same on both. It's linear but for a soft hold on what goes in.
 //!
 //! `Spring` itself stays as it is, the full spring reverb on its own.
 
@@ -49,7 +51,7 @@ const LINES: [f32; 8] = [
 const LOW_T60: f32 = 3.7;
 const HIGH_T60: f32 = 2.48;
 const HIGH_HZ: f32 = 3260.0;
-const TAIL: f32 = 0.1355;
+const TAIL: f32 = 0.126;
 /// The long network, the tail's distant end: its lines, all prime, 92 to 176 ms; its T60s, at
 /// the bottom and at `LATE_HIGH_HZ`; and how much of it is heard.
 const LATE_LINES: [f32; 8] = [
@@ -66,6 +68,13 @@ const LATE: f32 = 0.0612;
 /// lows, so its teeth aren't evenly spaced and no line's length comes round as one echo.
 const LINE_STAGES: usize = 6;
 const LATE_LINE_STAGES: usize = 4;
+/// How much of the smeared drip is heard itself, before the networks bring it back, taken
+/// before the last smearing all-pass. The networks' lines first come round 76 to 112 ms after a
+/// sound and build up for 100 ms more, so after the drip there was a hole and then a swell,
+/// where TAPE-201's goes from its drip straight into its tail at its loudest and falls from
+/// there: in 1 to 4 kHz ours was 5 dB under it from 65 to 150 ms and its tail 2 to 3 dB over
+/// it, a wash rising after each hit.
+const EARLY: f32 = 0.2;
 /// How much of the drip is heard, and its one-pole low-pass.
 const DRIP: f32 = 0.2;
 const DRIP_LOW_PASS_HZ: f32 = 2000.0;
@@ -78,6 +87,11 @@ const LOW_PASS_HZ: f32 = 1700.0;
 const BOTTOM_HZ: f32 = 156.0;
 const BOTTOM_QS: [f32; 2] = [0.541_196, 1.94];
 const LIFT: (f32, f32, f32) = (750.0, 1.4, 6.5);
+/// Under the low-pass, TAPE-201's falls sooner and more gently: a dip at 2.3 kHz and a rise at
+/// 3.8 kHz, peaks in hertz, Q and dB, take ours from 2 dB over it at 2 to 2.5 kHz and 5 under
+/// at 4 kHz to within about 1 dB.
+const DIP: (f32, f32, f32) = (2300.0, 2.0, -3.0);
+const RISE: (f32, f32, f32) = (3800.0, 2.0, 5.0);
 /// What goes in is held softly under this, so the tank's out is bounded and nothing near a
 /// sound's level is bent: `C tanh(x / C)`, with anything huge or a NaN held first.
 const HOLD: f32 = 4.0;
@@ -220,7 +234,9 @@ pub(crate) struct Tank {
     low_pass: [Biquad; 2],
     bottom: [Biquad; 2],
     lift: Biquad,
-    states: [[[f32; 2]; 6]; 2],
+    dip: Biquad,
+    rise: Biquad,
+    states: [[[f32; 2]; 8]; 2],
 }
 
 impl Tank {
@@ -262,7 +278,9 @@ impl Tank {
             ],
             bottom: BOTTOM_QS.map(|q| Biquad::high_pass(BOTTOM_HZ, q, rate_f)),
             lift: Biquad::peak(LIFT.0, LIFT.1, LIFT.2, rate_f),
-            states: [[[0.0; 2]; 6]; 2],
+            dip: Biquad::peak(DIP.0, DIP.1, DIP.2, rate_f),
+            rise: Biquad::peak(RISE.0, RISE.1, RISE.2, rate_f),
+            states: [[[0.0; 2]; 8]; 2],
         }
     }
 
@@ -275,7 +293,7 @@ impl Tank {
         self.tail.iter_mut().for_each(Network::clear);
         self.late.iter_mut().for_each(Network::clear);
         self.one_pole_state = [0.0; 2];
-        self.states = [[[0.0; 2]; 6]; 2];
+        self.states = [[[0.0; 2]; 8]; 2];
     }
 
     /// Feed one frame in and get the reverb out.
@@ -303,11 +321,21 @@ impl Tank {
         }
         self.chirp_at = (at + 1) % self.chirp_frames;
 
-        // What the tail hears: the drip smeared, through each all-pass in turn.
+        // What the tail hears: the drip smeared, through each all-pass in turn. What's heard
+        // itself is taken before the last, longest one, whose 23 ms would stand out in it.
         let mut fed = x;
+        let mut early = x;
         let g = SMEAR_COEFFICIENT;
         let mut start = 0;
-        for (frames, at) in self.smear_frames.iter().zip(self.smear_at.iter_mut()) {
+        for (stage, (frames, at)) in self
+            .smear_frames
+            .iter()
+            .zip(self.smear_at.iter_mut())
+            .enumerate()
+        {
+            if stage == SMEAR_FRAMES.len() - 1 {
+                early = fed;
+            }
             let slot = &mut self.smear[start + *at];
             let held = *slot;
             for side in 0..2 {
@@ -325,7 +353,7 @@ impl Tank {
             let late = self.late[side].process(fed[side]);
             let drip = &mut self.drip_state[side];
             *drip += self.drip_low * (x[side] - *drip);
-            let wet = *drip * DRIP + tail * TAIL + late * LATE;
+            let wet = *drip * DRIP + early[side] * EARLY + tail * TAIL + late * LATE;
             // The first-order high-pass, then the second-order one: third-order Butterworth.
             let state = &mut self.one_pole_state[side];
             let v = (wet - *state) * self.one_pole_high;
@@ -337,7 +365,9 @@ impl Tank {
             let y = self.low_pass[1].process(&mut states[2], y);
             let y = self.bottom[0].process(&mut states[3], y);
             let y = self.bottom[1].process(&mut states[4], y);
-            out[side] = self.lift.process(&mut states[5], y);
+            let y = self.lift.process(&mut states[5], y);
+            let y = self.dip.process(&mut states[6], y);
+            out[side] = self.rise.process(&mut states[7], y);
         }
         out
     }
@@ -382,6 +412,7 @@ mod tests {
     fn its_drip_is_muted_under_its_tail_and_never_comes_back_whole() {
         // A click: the loudest 5 ms of the drip, 40 to 80 ms after it, against the median 5 ms of
         // the tail from 80 to 300 ms, and the tail's loudest 5 ms against that median, in dB.
+        // TAPE-201's drip stands 12.3 dB over its tail's median and its loudest 5.7.
         let mut tank = Tank::new(RATE);
         let window = (RATE / 200) as usize;
         let mut levels = Vec::new();
@@ -401,8 +432,30 @@ mod tests {
         tail.sort_by(f32::total_cmp);
         let median = tail[tail.len() / 2];
         let tail_most = loudest(&tail);
-        assert!(drip - median < 12.0, "{}", drip - median);
+        assert!(drip - median < 13.5, "{}", drip - median);
         assert!(tail_most - median < 6.0, "{}", tail_most - median);
+    }
+
+    #[test]
+    fn its_tail_follows_its_drip_with_no_hole() {
+        // A click: the level from 70 to 150 ms against from 300 to 600 ms, in dB. TAPE-201's tail
+        // is loudest straight after its drip, 6.9 dB over the later part; round 5's, before its
+        // networks had come round, was 1.9.
+        let mut tank = Tank::new(RATE);
+        let ms = |ms: usize| ms * RATE as usize / 1000;
+        let (mut early, mut later) = (0.0_f64, 0.0_f64);
+        for frame in 0..ms(600) {
+            let x = if frame == 0 { 0.5 } else { 0.0 };
+            let [left, _] = tank.process([x, x]);
+            let energy = f64::from(left * left);
+            if (ms(70)..ms(150)).contains(&frame) {
+                early += energy / 80.0;
+            } else if frame >= ms(300) {
+                later += energy / 300.0;
+            }
+        }
+        let over = 10.0 * (early / later).log10();
+        assert!(over > 4.0, "{over}");
     }
 
     #[test]
