@@ -1,29 +1,31 @@
 //! A cassette deck or a VCR's linear audio track, worn or not (#259, direction 3): lo-fi tape.
 //! What goes in is pressed by a Dolby-style compander, saturated through [`Colour`]'s frame with
-//! the highs lifted first, as tape's pre-emphasis does, loses its loud highs, gathers hiss,
-//! wobbles, drops out and chews, loses its highs to the playback head as `Reel`'s does at the
-//! format's speed, goes through the format's replay, and comes back through the compander's other
-//! half, which mistracks by `Track`.
+//! the highs lifted first, as tape's pre-emphasis does, loses its loud highs, takes its tape's
+//! response and the noise that rides on it, wobbles, drops out and chews, loses its highs to the
+//! playback head as `Reel`'s does at the format's speed, goes through the format's replay, gathers
+//! hiss, and comes back through the compander's other half, which mistracks by `Track`; `Worn`
+//! ends in its deck's limiter.
 //!
 //! The format, `Type`, sets what a machine is: its speed and its head's losses, its replay, how
-//! soon its loud highs go, how fast its wow and flutter go and how wide its stereo is. The
-//! settings are amounts, the same for every format. Its sound is scaled to Wavesfactory's
-//! Cassette, compared by output only (#1079, decision 451): `Cassette` is Cassette's Type I tape
-//! on its Pro deck, `Worn` its Micro deck's replay, and the amounts' defaults are Cassette's.
+//! soon its loud highs go, how fast its wow and flutter go, its hiss's colour and how wide its
+//! stereo is; its `Tape` how bright it is, how soon its loud highs go and how hard it saturates.
+//! The settings are amounts, the same for every format. Its sound is scaled to Wavesfactory's
+//! Cassette, compared by output only (#1079, decision 451): `Cassette` is Cassette's Pro deck,
+//! `Worn` its Micro deck, each with its Type I, II and IV tape, and the amounts' defaults are
+//! Cassette's.
 //!
 //! - **Drive** is how hard it hits the tape, made up after so it's no louder: at 0 dB a 1 kHz
 //!   sine's harmonics are Cassette's at its input of 0 dB.
 //! - **Loud highs soften**, as a cassette's do at its slow speed: a high shelf cuts by more as
 //!   the level comes up, by a detector on what goes onto the tape.
-//! - **Hiss** is pink, as Cassette's is, and rides on the sound too, as tape's modulation noise
-//!   does.
+//! - **Hiss** is pink, as Cassette's is, added after the replay; and the sound's level is wobbled
+//!   by noise under 800 Hz, tape's modulation noise, which sits round what's playing.
 //! - **Wow** is a slow sine and an Ornstein–Uhlenbeck drift, as ChowTape's `WowProcess` and
-//!   `OHProcess` have it, so it wanders rather than repeats; **flutter** is ChowTape's three
-//!   harmonics of the capstan's turn, weighted in pitch rather than in time, so its own rate is
-//!   the one heard.
-//! - **Dropouts** are its own, not ChowTape's: each a dip of a raised cosine, 10 to 120 ms long,
-//!   that takes the highs far more than the lows, as a patch of missing oxide does, at random
-//!   times.
+//!   `OHProcess` have it, so it wanders rather than repeats; **flutter** is the capstan's turn, one
+//!   sine whose rate and depth wander by drifts of the same kind, as Cassette's do.
+//! - **Dropouts** are its own, not ChowTape's: the tape flickers on and off the head about eight
+//!   times a second, and off it the sound goes through one pole whose corner `Drops` sets, so the
+//!   highs flicker and the lows and mids hold, as Cassette's do.
 //! - **Chew** is after ChowTape's `ChewProcessor`, its times simplified: now and then, a stretch of
 //!   crinkled tape where the sound is bent by a power of its level and darkened.
 //! - **The compander** is a one-band Dolby B of a sort: what's above 1.5 kHz is lifted by up to
@@ -33,8 +35,8 @@
 //!
 //! Every random draw is from a generator the track hands it, so a render repeats.
 //!
-//! The wow and flutter and the chew are adapted from `Timing_Effects/{WowProcess,OHProcess,
-//! FlutterProcess}` and `Chew/ChewProcessor.cpp` in ChowTape (AnalogTapeModel), GPL-3.0:
+//! The wow and the chew are adapted from `Timing_Effects/{WowProcess,OHProcess}` and
+//! `Chew/ChewProcessor.cpp` in ChowTape (AnalogTapeModel), GPL-3.0:
 //!
 //! Copyright (c) 2019 Jatin Chowdhury.
 //!
@@ -43,9 +45,9 @@
 //!
 //! [`Colour`]: crate::dsp::blocks::saturator
 
-use std::f32::consts::{FRAC_PI_2, PI, TAU};
+use std::f32::consts::{FRAC_1_SQRT_2, FRAC_PI_2, TAU};
 
-use vt_model::insert::{Deck as Settings, DeckType, deck_drive_db};
+use vt_model::insert::{Deck as Settings, DeckTape, DeckType, deck_drive_db};
 
 use crate::dsp::blocks::biquad::Biquad;
 use crate::dsp::blocks::clip::within;
@@ -114,10 +116,15 @@ struct Format {
     wow_hz: f32,
     flutter_hz: f32,
     wow_depth: f32,
-    /// How many dropouts a second it has at `Drops` `00`, and how deep they go then.
-    worn_drops: f32,
+    /// How deep it drops out at `Drops` `00`, as a share of [`DROP_OCTAVES`], and the least it
+    /// drops out by at any.
+    own_drops: f32,
     /// How wide its stereo is, from mono at 0.
     width: f32,
+    /// Where its hiss is darkened, by two poles at a Q of a half, or none at 0.
+    hiss_hz: f32,
+    /// Whether it ends in a limiter, as Cassette's Micro deck does.
+    limits: bool,
 }
 
 /// The formats, in [`DeckType`]'s order: a cassette at 1⅞ ips; a VCR's linear audio track at
@@ -155,8 +162,10 @@ const FORMATS: [Format; 3] = [
         wow_hz: 1.0,
         flutter_hz: 10.0,
         wow_depth: 1.0,
-        worn_drops: 0.0,
+        own_drops: 0.0,
         width: 1.0,
+        hiss_hz: 0.0,
+        limits: false,
     },
     Format {
         ips: 1.31,
@@ -186,8 +195,10 @@ const FORMATS: [Format; 3] = [
         wow_hz: 0.35,
         flutter_hz: 14.0,
         wow_depth: 0.8,
-        worn_drops: 0.0,
+        own_drops: 0.0,
         width: 0.5,
+        hiss_hz: 8_000.0,
+        limits: false,
     },
     Format {
         ips: 1.875,
@@ -217,10 +228,155 @@ const FORMATS: [Format; 3] = [
         wow_hz: 0.45,
         flutter_hz: 7.0,
         wow_depth: 3.0,
-        worn_drops: 0.8,
+        own_drops: 0.125,
         width: 0.8,
+        hiss_hz: 5_000.0,
+        limits: true,
     },
 ];
+
+/// A tape on a format, against Type I on it: its response, as a level, a low shelf, a peak and a
+/// high shelf, after the curve; how many dB sooner its loud highs soften; how many dB hotter it
+/// hits the curve, and how many more its lows are lifted into it; and how many more of hiss it
+/// has.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Tape {
+    level_db: f32,
+    low_hz: f32,
+    low_db: f32,
+    peak_hz: f32,
+    peak_q: f32,
+    peak_db: f32,
+    high_hz: f32,
+    high_q: f32,
+    high_db: f32,
+    soften_db: f32,
+    curve_db: f32,
+    lows_db: f32,
+    hiss_db: f32,
+}
+
+/// Type I, against itself; on `Worn` it hits the curve softer and hisses more, as the Micro
+/// deck's does.
+const TYPE_I: Tape = Tape {
+    level_db: 0.0,
+    low_hz: 100.0,
+    low_db: 0.0,
+    peak_hz: 1_000.0,
+    peak_q: 0.7,
+    peak_db: 0.0,
+    high_hz: 8_000.0,
+    high_q: 0.7,
+    high_db: 0.0,
+    soften_db: 0.0,
+    curve_db: 0.0,
+    lows_db: 0.0,
+    hiss_db: 0.0,
+};
+
+/// A VCR's track, whatever the tape: Type I, its hiss kept where decision 445 had it.
+const VHS_TAPE: Tape = Tape {
+    hiss_db: -5.0,
+    ..TYPE_I
+};
+
+/// The tapes, by format in [`DeckType`]'s order and then in [`DeckTape`]'s, each fitted to
+/// Cassette's against its Type I on the deck the format is fitted to: `Cassette`'s on the Pro
+/// deck, `Worn`'s on the Micro, whose fixed replay suits Type I and so lifts II's and IV's highs
+/// by 20 dB and more, and drives IV far harder. A VCR takes no cassette, so `VHS`'s are all
+/// Type I.
+const TAPES: [[Tape; 3]; 3] = [
+    [
+        TYPE_I,
+        Tape {
+            level_db: -1.21,
+            low_hz: 138.0,
+            low_db: -4.34,
+            peak_hz: 8_020.0,
+            peak_q: 0.3,
+            peak_db: 3.71,
+            high_hz: 14_000.0,
+            high_q: 0.685,
+            high_db: 15.3,
+            soften_db: 6.0,
+            curve_db: -2.1,
+            lows_db: 4.7,
+            hiss_db: -0.3,
+        },
+        Tape {
+            level_db: -1.38,
+            low_hz: 64.9,
+            low_db: -5.77,
+            peak_hz: 11_000.0,
+            peak_q: 0.3,
+            peak_db: 8.88,
+            high_hz: 14_000.0,
+            high_q: 0.801,
+            high_db: 18.0,
+            soften_db: 12.0,
+            curve_db: 4.3,
+            lows_db: -1.8,
+            hiss_db: -2.0,
+        },
+    ],
+    [VHS_TAPE; 3],
+    [
+        Tape {
+            curve_db: -3.7,
+            lows_db: 2.0,
+            hiss_db: 3.0,
+            ..TYPE_I
+        },
+        Tape {
+            level_db: 1.11,
+            low_hz: 287.0,
+            low_db: -2.81,
+            peak_hz: 6_420.0,
+            peak_q: 1.03,
+            peak_db: 18.0,
+            high_hz: 6_470.0,
+            high_q: 0.922,
+            high_db: 16.1,
+            soften_db: 6.0,
+            curve_db: -6.2,
+            lows_db: 9.8,
+            hiss_db: 3.2,
+        },
+        Tape {
+            level_db: 0.64,
+            low_hz: 349.0,
+            low_db: -6.23,
+            peak_hz: 6_420.0,
+            peak_q: 1.63,
+            peak_db: 17.4,
+            high_hz: 4_460.0,
+            high_q: 0.631,
+            high_db: 11.0,
+            soften_db: 12.0,
+            curve_db: 12.0,
+            lows_db: -8.6,
+            hiss_db: 0.6,
+        },
+    ],
+];
+
+impl Tape {
+    /// Whether it changes the response at all.
+    fn shapes(self) -> bool {
+        [self.level_db, self.low_db, self.peak_db, self.high_db] != [0.0; 4]
+    }
+}
+
+/// A tape's response as filters at a rate, its shelves' corners kept under Nyquist.
+fn tape_filters(tape: Tape, rate: f32) -> [Biquad; 3] {
+    let top = 0.45 * rate;
+    [
+        Biquad::high_shelf(tape.low_hz, FRAC_1_SQRT_2, -tape.low_db, rate)
+            .scaled(10_f32.powf((tape.low_db + tape.level_db) / 20.0)),
+        Biquad::peak(tape.peak_hz.min(top), tape.peak_q, tape.peak_db, rate),
+        Biquad::high_shelf(tape.high_hz.min(top), tape.high_q, tape.high_db, rate),
+    ]
+}
 
 /// Where the curve sits against the drive shown, as a gain: at 0 dB a 1 kHz sine's third
 /// harmonic is Cassette's at its input of 0 dB, -33 dB at full scale.
@@ -229,12 +385,18 @@ const CURVE_LEVEL: f32 = 0.46;
 /// Cassette's do: a shelf's corner, its Q and its lift in dB, which at 60 and 200 Hz is 13 and
 /// 12 dB, at 1 kHz half a dB, and above it nothing.
 const LOWS_LIFT: (f32, f32, f32) = (400.0, 0.7, 13.0);
-/// The most hiss, as its RMS before the head: at `FF` about -24 dBFS heard from `Cassette`; it
-/// goes as the cube of `Hiss`, so `40` is about -60 dBFS, Cassette's own.
-const MOST_HISS: f32 = 0.061_6;
-/// The most noise riding on the sound, as a share of its level, at `Hiss` `FF`; it goes straight
-/// up with `Hiss`, so at `40` it's about 42 dB under a sine's peak, as Cassette's is.
-const MOST_MODULATION: f32 = 0.033;
+/// The most hiss, as its RMS: at `FF` about -24 dBFS heard from `Cassette`; it goes as the cube of
+/// `Hiss`, so `40` is about -60 dBFS, Cassette's own. It's added after the replay, as Cassette's
+/// is, so it stays pink whatever the format and tape do to the sound.
+const MOST_HISS: f32 = 0.069;
+/// The noise riding on the sound, tape's modulation noise: the sound's level wobbled by noise
+/// under [`MODULATION_HZ`], by three poles, so it sits round what's playing rather than over the
+/// whole band, as Cassette's Dynamic Noise does. Its depth at `Hiss` `FF`, and the power of its
+/// share it goes up by: at `40` its sidebands are about 66 dB a hertz under a tone, Cassette's
+/// own, and 8 dB more at `FF`, Cassette's most.
+const MOST_MODULATION: f32 = 0.47;
+const MODULATION_POWER: f32 = 0.664;
+const MODULATION_HZ: f32 = 800.0;
 /// Paul Kellet's economy pink: its poles' frequencies at 44.1 kHz, each one's weight over its
 /// pole's distance from one, and the white's, with its RMS at 48 kHz, so it's unit noise there.
 const PINK_HZ: [f32; 3] = [16.5, 264.0, 3_940.0];
@@ -246,17 +408,20 @@ const PINK_RMS: f32 = 1.646;
 const HISS_HOLD_SECONDS: f32 = 4.0;
 const HISS_FADE_SECONDS: f32 = 1.0;
 /// How far the wow moves the line either way at `FF`, in seconds, and the flutter, and how each
-/// goes up with its setting, as a power of its share: `FF` is Cassette's most of each, 15 and
-/// 38 cents RMS, and `40` its default of each.
-const MOST_WOW_SECONDS: f32 = 0.003_47;
-const MOST_FLUTTER_SECONDS: f32 = 0.000_575;
-const WOW_POWER: f32 = 1.3;
-const FLUTTER_POWER: f32 = 1.6;
-/// The capstan's second and third harmonics, as ChowTape weights them in pitch, and their sum
-/// with the first's.
-const FLUTTER_SECOND: f32 = 0.35;
-const FLUTTER_THIRD: f32 = 0.43;
-const FLUTTER_SUM: f32 = 1.0 + FLUTTER_SECOND / 2.0 + FLUTTER_THIRD / 3.0;
+/// goes up with its setting, as a power of its share: `FF` is Cassette's most of each with its
+/// own randomness in as it starts, 12.4 and 31.7 cents RMS, and `40` its default of each, 2.5 and
+/// 3.9.
+const MOST_WOW_SECONDS: f32 = 0.002_61;
+const MOST_FLUTTER_SECONDS: f32 = 0.000_403;
+const WOW_POWER: f32 = 1.154;
+const FLUTTER_POWER: f32 = 1.51;
+/// How far the flutter's rate and depth wander from where they'd sit, each a share of it, and how
+/// long each wander takes to forget where it was, in seconds, smoothed as the wow's drift is:
+/// Cassette's flutter, as it starts, is one sine whose rate strays by about a tenth and whose
+/// depth by about a quarter.
+const FLUTTER_RATE_WANDER: f32 = 0.12;
+const FLUTTER_DEPTH_WANDER: f32 = 0.3;
+const FLUTTER_WANDER_SECONDS: f32 = 0.4;
 /// How long the wow's drift takes to forget where it was, in seconds.
 const DRIFT_SECONDS: f32 = 0.8;
 /// Where the drift is low-passed, in Hz.
@@ -265,15 +430,24 @@ const WANDER_HZ: f32 = 1.0;
 const WOW_SINE: f32 = 0.6;
 const WOW_DRIFT: f32 = 0.4;
 /// How many frames the line's length moves in a straight line between workings out, as the
-/// dropouts' and chews' chances are drawn and the soft highs' shelf is worked out again.
+/// dropouts' and chews' spells are counted and the soft highs' and the dropouts' filters are
+/// worked out again.
 const CONTROL_FRAMES: u32 = 32;
-/// The most dropouts a second at `Drops` `FF`, the shortest and longest, and the most one takes
-/// off the whole sound, in dB; its highs go far further.
-const MOST_DROPS: f32 = 8.0;
-const DROP_SECONDS: (f32, f32) = (0.01, 0.12);
-const MOST_DROP_DB: f32 = 6.0;
-/// The corner a dropout darkens toward, by two poles, and a chew's, by one.
-const DROP_HZ: f32 = 1_500.0;
+/// Dropouts, as Cassette's are: the tape flickers between in touch with the head and a little off
+/// it, each spell at least the first time and then, on average, the second longer in touch or
+/// the third off it, in seconds, so about eight a second. Off it, the sound goes through one pole whose corner is
+/// [`DROP_OPEN_HZ`] halved [`DROP_OCTAVES`] times over by `Drops`' depth, gliding in and out over
+/// [`DROP_GLIDE_SECONDS`]: at `40` toward 10 kHz, at `FF` toward 900 Hz. The level of the lows and
+/// mids holds.
+const DROP_SPELL_SECONDS: (f32, f32, f32) = (0.015, 0.06, 0.03);
+const DROP_OPEN_HZ: f32 = 20_000.0;
+const DROP_OCTAVES: f32 = 8.0;
+const DROP_GLIDE_SECONDS: f32 = 0.004;
+/// How deep `Drops` goes, as the share of [`DROP_OCTAVES`] at `FF`, and the power of its share it
+/// goes up by, so `40` is an eighth, Cassette's own.
+const MOST_DROP_DEPTH: f32 = 0.56;
+const DROP_POWER: f32 = 1.08;
+/// A chew's corner, by one pole.
 const CHEW_HZ: f32 = 5_000.0;
 /// How long the tape runs clean between chews on average, at the least `Chew` and at `FF`, and
 /// how long a chew lasts at the shortest and longest, in seconds.
@@ -293,6 +467,13 @@ const LIFT_FROM_DB: f32 = -12.0;
 const LIFT_OVER_DB: f32 = 30.0;
 const DETECT_SECONDS: (f32, f32) = (0.002, 0.06);
 const MOST_MISTRACK_DB: f32 = 12.0;
+/// The Micro deck's limiter on `Worn`: the most a sine's peak can play at, 8 dB under full scale
+/// before the drive is made up, as Cassette's limits a 1 kHz sine from -8 dBFS in, and how fast its
+/// mean square follows up and down, in seconds.
+const LIMIT_CEILING: f32 = 0.49;
+const LIMIT_SECONDS: (f32, f32) = (0.005, 0.015);
+/// How far, in spreads, a wander can go before it's held.
+const WANDER_REACH: f32 = 2.5;
 /// How far what comes out can go, 12 dB over full scale.
 const HEADROOM: f32 = 4.0;
 
@@ -365,8 +546,13 @@ struct Side {
     lift: [f32; 2],
     unlift: [f32; 2],
     soften: [f32; 2],
+    tape: [[f32; 2]; 3],
+    /// The noise the level is wobbled by, through its three poles.
+    wobble: [f32; 2],
+    wobble_last: f32,
     pink: [f32; 3],
-    dropout: [f32; 2],
+    hiss_tone: [f32; 2],
+    dropout: f32,
     chew: f32,
     head: Head,
     replay: [[f32; 2]; 5],
@@ -413,13 +599,19 @@ struct Frame {
     misread_db: f32,
     /// Whether the compander works its gains out again this frame.
     retarget: bool,
-    /// The hiss's level, with what rides on the sound, and its colour.
+    /// The tape's own response, when it isn't Type I's.
+    tape: Option<[Biquad; 3]>,
+    /// The hiss's level and colour, its darkening after, and how deep the noise riding on the
+    /// sound wobbles it, with its poles.
     hiss: f32,
     pink: Pink,
-    /// How far into its dip a dropout is, times how deep it goes, from 0 to 1, what's left of the
-    /// level then, and its darkening's share.
+    hiss_tone: Option<Biquad>,
+    modulation: f32,
+    wobble: Biquad,
+    wobble_band: f32,
+    /// How far off the head the tape is in a dropout, from 0 to 1, and its darkening's share
+    /// then.
     drop: f32,
-    drop_level: f32,
     drop_band: f32,
     /// How far a chew is in, its power and its darkening's share.
     chew: f32,
@@ -442,31 +634,55 @@ impl Side {
         let out = self.saturator.process(x, frame.colouring, tuning) * frame.makeup;
         let out = frame.unlift.process(&mut self.unlift, out);
         let mut out = frame.soften.process(&mut self.soften, out);
-        if frame.hiss > 0.0 {
-            let white = rng.bipolar();
-            let pink = &frame.pink;
-            let mut noise = PINK_WHITE * white;
-            for (state, (pole, weight)) in self
-                .pink
-                .iter_mut()
-                .zip(pink.poles.iter().zip(&pink.weights))
-            {
-                *state = pole * *state + weight * white;
-                noise += *state;
+        if let Some(tape) = &frame.tape {
+            for (filter, state) in tape.iter().zip(&mut self.tape) {
+                out = filter.process(state, out);
             }
-            out += noise * pink.scale * frame.hiss;
+        }
+        if frame.modulation > 0.0 {
+            let noise = frame.wobble.process(&mut self.wobble, rng.bipolar());
+            self.wobble_last += (noise - self.wobble_last) * frame.wobble_band;
+            out += out * self.wobble_last * frame.modulation;
         }
         out
     }
 
-    /// Off the tape: dropped out, chewed, through the head and the replay, and expanded back.
+    /// The tape's hiss, pink and darkened by the format.
     #[inline]
-    fn play(&mut self, x: f32, frame: &Frame, loss: &Loss, replay: &[Biquad; 5]) -> f32 {
+    fn hiss(&mut self, frame: &Frame, rng: &mut Pcg32) -> f32 {
+        let white = rng.bipolar();
+        let pink = &frame.pink;
+        let mut noise = PINK_WHITE * white;
+        for (state, (pole, weight)) in self
+            .pink
+            .iter_mut()
+            .zip(pink.poles.iter().zip(&pink.weights))
+        {
+            *state = pole * *state + weight * white;
+            noise += *state;
+        }
+        let noise = noise * pink.scale * frame.hiss;
+        match &frame.hiss_tone {
+            Some(tone) => tone.process(&mut self.hiss_tone, noise),
+            None => noise,
+        }
+    }
+
+    /// Off the tape: dropped out, chewed, through the head and the replay, hiss on it, and
+    /// expanded back.
+    #[inline]
+    fn play(
+        &mut self,
+        x: f32,
+        frame: &Frame,
+        loss: &Loss,
+        replay: &[Biquad; 5],
+        rng: &mut Pcg32,
+    ) -> f32 {
         let mut x = x;
-        self.dropout[0] += (x - self.dropout[0]) * frame.drop_band;
-        self.dropout[1] += (self.dropout[0] - self.dropout[1]) * frame.drop_band;
+        self.dropout += (x - self.dropout) * frame.drop_band;
         if frame.drop > 0.0 {
-            x = (x + (self.dropout[1] - x) * frame.drop) * frame.drop_level;
+            x += (self.dropout - x) * frame.drop;
         }
         if frame.chew > 0.0 {
             let held = within(x, -1.0, 1.0);
@@ -479,6 +695,9 @@ impl Side {
         x = self.head.play(x, loss);
         for (filter, state) in replay.iter().zip(&mut self.replay) {
             x = filter.process(state, x);
+        }
+        if frame.hiss > 0.0 {
+            x += self.hiss(frame, rng);
         }
         if frame.companding {
             let highs = x - self.decoder.lows;
@@ -506,11 +725,13 @@ struct Transport {
     delay: Option<f32>,
     slope: f32,
     countdown: u32,
-    /// A dropout's place and length in frames, and how deep it goes, from 0 to 1; none at no
-    /// length.
-    drop_at: u32,
-    drop_frames: u32,
-    drop_depth: f32,
+    /// How far the flutter's rate and depth have wandered, each of unit spread, and the same
+    /// smoothed.
+    flutter_wander: [f32; 2],
+    flutter_smooth: [f32; 2],
+    /// Whether the tape is off the head, and the frames until it flickers back or off again.
+    dropped: bool,
+    drop_left: u32,
     /// Frames left in a chew or until the next, whether it's chewing, and how hard.
     chew_left: u32,
     chewing: bool,
@@ -528,9 +749,10 @@ impl Transport {
             delay: None,
             slope: 0.0,
             countdown: 0,
-            drop_at: 0,
-            drop_frames: 0,
-            drop_depth: 0.0,
+            flutter_wander: [0.0; 2],
+            flutter_smooth: [0.0; 2],
+            dropped: false,
+            drop_left: 0,
             chew_left: 0,
             chewing: false,
             chew_power: 1.0,
@@ -545,34 +767,36 @@ struct Shares {
     attack: f32,
     release: f32,
     glide: f32,
-    drop_band: f32,
+    drop_glide: f32,
     chew_band: f32,
     chew_fade: f32,
     soften_attack: f32,
     soften_release: f32,
-    lift: Biquad,
-    unlift: Biquad,
+    limit_attack: f32,
+    limit_release: f32,
     pink: Pink,
+    wobble: Biquad,
+    wobble_band: f32,
 }
 
 impl Shares {
     fn new(rate: f32) -> Self {
         let frames = rate as u32;
-        let (hertz, q, db) = LOWS_LIFT;
-        let lift = Biquad::high_shelf(hertz, q, -db, rate).scaled(10_f32.powf(db / 20.0));
         Self {
             band: of_corner(COMPANDER_HZ, rate),
             attack: of_time(DETECT_SECONDS.0, frames),
             release: of_time(DETECT_SECONDS.1, frames),
             glide: of_time(0.001, frames),
-            drop_band: of_corner(DROP_HZ, rate),
+            drop_glide: of_time(DROP_GLIDE_SECONDS, frames),
             chew_band: of_corner(CHEW_HZ, rate),
             chew_fade: of_time(CHEW_FADE_SECONDS, frames),
             soften_attack: of_time(SOFTEN_SECONDS.0, frames),
             soften_release: of_time(SOFTEN_SECONDS.1, frames),
-            lift,
-            unlift: lift.inverse(),
+            limit_attack: of_time(LIMIT_SECONDS.0, frames),
+            limit_release: of_time(LIMIT_SECONDS.1, frames),
             pink: Pink::new(rate),
+            wobble: Biquad::low_pass(MODULATION_HZ, FRAC_1_SQRT_2, rate),
+            wobble_band: of_corner(MODULATION_HZ, rate),
         }
     }
 }
@@ -612,11 +836,19 @@ pub(crate) struct Deck {
     format: Format,
     loss: Loss,
     replay: [Biquad; 5],
+    /// The tape, what it is on this format, and its response's filters when it isn't Type I's.
+    tape_kind: DeckTape,
+    tape: Tape,
+    tape_filters: Option<[Biquad; 3]>,
+    /// The lows' lift into the curve and its undoing after.
+    lift: Biquad,
+    unlift: Biquad,
+    hiss_tone: Option<Biquad>,
     tuning: Tuning,
     shares: Shares,
     drive: Smoothed,
     hiss: Smoothed,
-    /// How much noise rides on the sound, as a share of its level.
+    /// How deep the noise riding on the sound wobbles its level.
     modulation: Smoothed,
     /// How far wow and flutter move the line at most, in frames.
     wow: Smoothed,
@@ -630,6 +862,11 @@ pub(crate) struct Deck {
     /// through two poles, and their shelf now.
     level: [f32; 2],
     soften: Biquad,
+    /// How far off the head the tape is now, from 0 to 1, and its darkening's share.
+    drop: f32,
+    drop_band: f32,
+    /// The limiter's mean square of what comes out, both sides as one.
+    limit: f32,
     /// Frames since anything came in, for the hiss to stop.
     unheard: u32,
     rate: u32,
@@ -639,7 +876,7 @@ pub(crate) struct Deck {
 impl Deck {
     pub(crate) fn new(rate: u32) -> Self {
         let most = (MOST_WOW_SECONDS * FORMATS.iter().map(|f| f.wow_depth).fold(0.0, f32::max)
-            + MOST_FLUTTER_SECONDS)
+            + MOST_FLUTTER_SECONDS * (1.0 + FLUTTER_DEPTH_WANDER * WANDER_REACH))
             * 2.0
             * rate as f32;
         let size = (most.ceil() as usize + 8).next_power_of_two();
@@ -653,6 +890,12 @@ impl Deck {
             format: FORMATS[0],
             loss: Loss::default(),
             replay: [Biquad::FLAT; 5],
+            tape_kind: DeckTape::I,
+            tape: TYPE_I,
+            tape_filters: None,
+            lift: Biquad::FLAT,
+            unlift: Biquad::FLAT,
+            hiss_tone: None,
             tuning: Tuning::default(),
             shares: Shares::new(rate as f32),
             drive: Smoothed::default(),
@@ -666,22 +909,34 @@ impl Deck {
             track: Smoothed::default(),
             level: [0.0; 2],
             soften: Biquad::FLAT,
+            drop: 0.0,
+            drop_band: 1.0,
+            limit: 0.0,
             unheard: 0,
             rate,
             smoothing: coefficient(rate),
         };
-        deck.shape(DeckType::Cassette);
+        deck.shape(DeckType::Cassette, DeckTape::I);
         deck.follow(Settings::DEFAULT);
         deck.settle();
         deck
     }
 
-    /// Work out what a format fixes.
-    fn shape(&mut self, kind: DeckType) {
+    /// Work out what a format and its tape fix.
+    fn shape(&mut self, kind: DeckType, tape: DeckTape) {
         self.kind = kind;
+        self.tape_kind = tape;
         self.format = FORMATS[kind as usize];
+        self.tape = TAPES[kind as usize][tape as usize];
         let format = self.format;
         let rate = self.rate as f32;
+        self.tape_filters = self.tape.shapes().then(|| tape_filters(self.tape, rate));
+        let (hertz, q, db) = LOWS_LIFT;
+        let db = db + self.tape.lows_db;
+        self.lift = Biquad::high_shelf(hertz, q, -db, rate).scaled(10_f32.powf(db / 20.0));
+        self.unlift = self.lift.inverse();
+        self.hiss_tone =
+            (format.hiss_hz > 0.0).then(|| Biquad::low_pass(format.hiss_hz, 0.5, rate));
         self.loss = Loss::new(
             format.ips,
             format.gap_um,
@@ -697,8 +952,10 @@ impl Deck {
     /// The loud highs' shelf at the level now.
     fn shelf(&self) -> Biquad {
         let soften = self.format.soften;
-        // A sine's rectified average is 2/π of its peak.
-        let cut = soften.cut_db(self.level[1] * FRAC_PI_2);
+        // A sine's rectified average is 2/π of its peak; a tape that softens sooner reads it
+        // louder.
+        let sooner = 10_f32.powf(self.tape.soften_db / 20.0);
+        let cut = soften.cut_db(self.level[1] * FRAC_PI_2 * sooner);
         Biquad::high_shelf(soften.hz, soften.q, -cut, self.rate as f32)
     }
 
@@ -712,6 +969,8 @@ impl Deck {
         self.transport = Transport::new(self.seed);
         self.level = [0.0; 2];
         self.soften = self.shelf();
+        self.drop = 0.0;
+        self.limit = 0.0;
         self.unheard = 0;
     }
 
@@ -723,14 +982,15 @@ impl Deck {
 
     /// Take what's set now.
     pub(crate) fn follow(&mut self, settings: Settings) {
-        if settings.kind != self.kind {
-            self.shape(settings.kind);
+        if settings.kind != self.kind || settings.tape != self.tape_kind {
+            self.shape(settings.kind, settings.tape);
         }
         let share = |value: u8| f32::from(value) / 255.0;
         let rate = self.rate as f32;
         self.drive.target = 10_f32.powf(deck_drive_db(f32::from(settings.drive)) / 20.0);
-        self.hiss.target = share(settings.hiss).powi(3) * MOST_HISS;
-        self.modulation.target = share(settings.hiss) * MOST_MODULATION;
+        self.hiss.target =
+            share(settings.hiss).powi(3) * MOST_HISS * 10_f32.powf(self.tape.hiss_db / 20.0);
+        self.modulation.target = share(settings.hiss).powf(MODULATION_POWER) * MOST_MODULATION;
         self.wow.target =
             share(settings.wow).powf(WOW_POWER) * MOST_WOW_SECONDS * self.format.wow_depth * rate;
         self.flutter.target =
@@ -783,27 +1043,36 @@ impl Deck {
             // Smoothed, as ChowTape low-passes its drift, so it bends the pitch rather than jitters it.
             t.wander += (t.drift - t.wander) * of_corner(WANDER_HZ, 1.0 / seconds);
             let wobble = within(WOW_SINE * sine + WOW_DRIFT * t.wander, -1.0, 1.0);
-            // The flutter: ChowTape's three harmonics of the capstan, each moving the line by its
-            // weight over its number, so each bends the pitch by its weight.
-            let turn = &mut t.flutter;
-            let first = Self::turned(turn, format.flutter_hz * seconds);
-            let phase = *turn * TAU;
-            let flutter_now = (first
-                + FLUTTER_SECOND / 2.0 * (2.0 * phase + 13.0 * PI / 4.0).sin()
-                + FLUTTER_THIRD / 3.0 * (3.0 * phase - PI / 10.0).sin())
-                / FLUTTER_SUM;
+            // The flutter: the capstan's turn, one sine whose rate and depth wander, each moving
+            // the line less as it goes faster, so the pitch it bends by is its depth's.
+            let pull = seconds / FLUTTER_WANDER_SECONDS;
+            let smooth = of_corner(WANDER_HZ, 1.0 / seconds);
+            for (wander, smoothed) in t.flutter_wander.iter_mut().zip(&mut t.flutter_smooth) {
+                *wander += -*wander * pull + (2.0 * pull).sqrt() * gaussian(&mut t.rng);
+                *wander = wander.clamp(-WANDER_REACH, WANDER_REACH);
+                *smoothed += (*wander - *smoothed) * smooth;
+            }
+            let faster = 1.0 + FLUTTER_RATE_WANDER * t.flutter_smooth[0];
+            let deeper = 1.0 + FLUTTER_DEPTH_WANDER * t.flutter_smooth[1];
+            let turn = Self::turned(&mut t.flutter, format.flutter_hz * faster * seconds);
+            let flutter_now = turn * deeper / faster;
             let next = 1.0 + wow * (1.0 + wobble) + flutter * (1.0 + flutter_now);
             let now = *t.delay.get_or_insert(next);
             t.slope = (next - now) / frames;
-            // A dropout, by chance, with a block's worth of its rate, deeper as `Drops` goes up.
-            let drop_rate = drops * MOST_DROPS + format.worn_drops;
-            if t.drop_frames == 0 && t.rng.unit() < drop_rate * seconds {
-                let (shortest, longest) = DROP_SECONDS;
-                let length = shortest + (longest - shortest) * t.rng.unit();
-                t.drop_frames = (length * rate) as u32;
-                t.drop_at = 0;
-                let depth = drops.sqrt().max(format.worn_drops);
-                t.drop_depth = depth * (0.3 + 0.7 * t.rng.unit());
+            // The tape flickers on and off the head while it drops out at all, each spell as long
+            // as the shortest and a random wait.
+            if drops > 0.0 {
+                t.drop_left = t.drop_left.saturating_sub(CONTROL_FRAMES);
+                if t.drop_left == 0 {
+                    t.dropped = !t.dropped;
+                    let (shortest, touching, off) = DROP_SPELL_SECONDS;
+                    let mean = if t.dropped { off } else { touching };
+                    let spell = shortest - mean * (1.0 - t.rng.unit()).ln();
+                    t.drop_left = (spell * rate) as u32;
+                }
+            } else {
+                t.dropped = false;
+                t.drop_left = 0;
             }
             // A chew starts or ends, with a fresh power while it lasts.
             if chew > 0.0 {
@@ -841,7 +1110,13 @@ impl Deck {
         let flutter = self.flutter.next(smoothing);
         let drops = self.drops.next(smoothing);
         let chew = self.chew.next(smoothing);
-        let delay = self.transport(wow, flutter, drops, chew);
+        // How deep it drops out, as a share of its octaves.
+        let depth = if drops > 0.0 || self.format.own_drops > 0.0 {
+            (MOST_DROP_DEPTH * drops.powf(DROP_POWER)).max(self.format.own_drops)
+        } else {
+            0.0
+        };
+        let delay = self.transport(wow, flutter, depth, chew);
         let delay = delay.clamp(1.0, (self.line.mask() - 3) as f32);
         let (whole, between) = (delay as usize, delay - delay.floor());
         let retarget = self.transport.countdown == CONTROL_FRAMES - 1;
@@ -864,6 +1139,8 @@ impl Deck {
         }
         if retarget {
             self.soften = self.shelf();
+            let corner = DROP_OPEN_HZ * (-DROP_OCTAVES * depth).exp2();
+            self.drop_band = of_corner(corner.min(0.45 * rate), rate);
         }
 
         // The hiss stops a while after the sound does.
@@ -874,24 +1151,19 @@ impl Deck {
         }
         let past = self.unheard as f32 / rate - HISS_HOLD_SECONDS;
         let running = (1.0 - past / HISS_FADE_SECONDS).clamp(0.0, 1.0);
-        let riding = self.modulation.next(smoothing) * self.level[1] * FRAC_PI_2 / drive;
+        let modulation = self.modulation.next(smoothing);
 
         let t = &mut self.transport;
-        let drop = if t.drop_frames > 0 {
-            let along = t.drop_at as f32 / t.drop_frames as f32;
-            t.drop_at += 1;
-            if t.drop_at >= t.drop_frames {
-                t.drop_frames = 0;
-            }
-            let dip = (PI * along).sin();
-            dip * dip * t.drop_depth
-        } else {
-            0.0
-        };
+        // Off the head and back, gliding, and none at all once it's back and stays.
+        let off = if t.dropped { 1.0 } else { 0.0 };
+        self.drop += (off - self.drop) * shares.drop_glide;
+        if !t.dropped && self.drop < 1e-4 {
+            self.drop = 0.0;
+        }
         self.chew_mix.target = if t.chewing { 1.0 } else { 0.0 };
         let chew_mix = self.chew_mix.next(shares.chew_fade) * chew.sqrt();
         let track = self.track.next(smoothing);
-        let curve = drive * CURVE_LEVEL;
+        let curve = drive * CURVE_LEVEL * 10_f32.powf(self.tape.curve_db / 20.0);
         let frame = Frame {
             colouring: Colouring {
                 curve: Curve::Warm,
@@ -900,9 +1172,10 @@ impl Deck {
                 hard: 0.0,
             },
             makeup: 1.0 / curve,
-            lift: shares.lift,
-            unlift: shares.unlift,
+            lift: self.lift,
+            unlift: self.unlift,
             soften: self.soften,
+            tape: self.tape_filters,
             companding: track > 0.0,
             band: shares.band,
             attack: shares.attack,
@@ -910,15 +1183,14 @@ impl Deck {
             glide: shares.glide,
             misread_db: track * MOST_MISTRACK_DB,
             retarget,
-            hiss: (self.hiss.next(smoothing) + riding) * running,
+            hiss: self.hiss.next(smoothing) * running,
             pink: shares.pink,
-            drop,
-            drop_level: if drop > 0.0 {
-                10_f32.powf(-MOST_DROP_DB * drop / 20.0)
-            } else {
-                1.0
-            },
-            drop_band: shares.drop_band,
+            hiss_tone: self.hiss_tone,
+            modulation,
+            wobble: shares.wobble,
+            wobble_band: shares.wobble_band,
+            drop: self.drop,
+            drop_band: self.drop_band,
             chew: chew_mix,
             chew_power: t.chew_power,
             chew_band: shares.chew_band,
@@ -930,7 +1202,29 @@ impl Deck {
                 self.sides[side].record(sample, &frame, &self.tuning, &mut self.transport.rng);
             self.line.write(side, recorded);
             let wobbled = self.line.hermite(side, whole, between);
-            out[side] = self.sides[side].play(wobbled, &frame, &self.loss, &self.replay);
+            out[side] = self.sides[side].play(
+                wobbled,
+                &frame,
+                &self.loss,
+                &self.replay,
+                &mut self.transport.rng,
+            );
+        }
+        // The Micro deck's limiter, both sides as one, on the level it plays at before the
+        // drive is made up.
+        if self.format.limits {
+            let square = (out[0] * out[0]).max(out[1] * out[1]);
+            let speed = if square > self.limit {
+                shares.limit_attack
+            } else {
+                shares.limit_release
+            };
+            self.limit += (square - self.limit) * speed;
+            let level = (2.0 * self.limit).sqrt() * drive;
+            if level > LIMIT_CEILING {
+                let gain = LIMIT_CEILING / level;
+                out = out.map(|s| s * gain);
+            }
         }
         // The format's stereo: its tracks' crosstalk narrows it.
         let middle = 0.5 * (out[0] + out[1]);
@@ -1185,29 +1479,83 @@ mod tests {
     }
 
     #[test]
-    fn dropouts_dip_the_highs_now_and_then_and_the_lows_less() {
-        let dips = |drops: u8, kind: DeckType, hertz: f32| {
+    fn dropouts_flicker_the_highs_away_and_leave_the_lows() {
+        // Windows of 10 ms whose level is under a share of the tone's usual.
+        let dips = |drops: u8, kind: DeckType, hertz: f32, under: f32| {
             let mut deck = deck(Settings {
                 drops,
                 kind,
                 ..CLEAN
             });
             let out = left(&through(&mut deck, hertz, 0.05, RATE as usize * 8));
-            // Windows of 10 ms whose level is 6 dB or more under the tone's usual.
             let levels: Vec<f32> = out.chunks(RATE as usize / 100).skip(10).map(rms).collect();
             let mut sorted = levels.clone();
             sorted.sort_by(f32::total_cmp);
             let usual = sorted[sorted.len() / 2];
-            levels.iter().filter(|level| **level < usual * 0.5).count()
+            levels
+                .iter()
+                .filter(|level| **level < usual * under)
+                .count()
         };
-        assert_eq!(dips(0, DeckType::Cassette, 6_000.0), 0);
+        assert_eq!(dips(0, DeckType::Cassette, 6_000.0, 0.95), 0);
+        // At the most, 6 kHz goes 6 dB down a good share of the time and 300 Hz never does.
         let (highs, lows) = (
-            dips(0xFF, DeckType::Cassette, 6_000.0),
-            dips(0xFF, DeckType::Cassette, 500.0),
+            dips(0xFF, DeckType::Cassette, 6_000.0, 0.5),
+            dips(0xFF, DeckType::Cassette, 300.0, 0.5),
         );
-        assert!(highs > 40 && lows < highs / 2, "{highs} {lows}");
+        assert!(highs > 100 && lows == 0, "{highs} {lows}");
+        // As it starts, 8 kHz flickers by a dB or two, and 1 kHz doesn't.
+        let (highs, middle) = (
+            dips(0x40, DeckType::Cassette, 8_000.0, 0.89),
+            dips(0x40, DeckType::Cassette, 1_000.0, 0.97),
+        );
+        assert!(highs > 100 && middle == 0, "{highs} {middle}");
         // A worn tape drops out by itself.
-        assert!(dips(0, DeckType::Worn, 6_000.0) > 0);
+        assert!(dips(0, DeckType::Worn, 8_000.0, 0.89) > 0);
+    }
+
+    #[test]
+    fn a_worn_deck_limits_what_is_loud() {
+        let gain = |kind: DeckType, level: f32| {
+            let mut deck = deck(of(kind));
+            db(harmonic(
+                &left(&through(&mut deck, 1_000.0, level, RATE as usize / 2)),
+                1_000.0,
+            ) / level)
+        };
+        // Quiet, it's as loud as it came in; at full scale about 8 dB down, as Cassette's Micro
+        // deck is, where a cassette is nearly as loud.
+        assert!(gain(DeckType::Worn, 0.03).abs() < 1.0);
+        let (worn, cassette) = (gain(DeckType::Worn, 1.0), gain(DeckType::Cassette, 1.0));
+        assert!(
+            (worn + 7.9).abs() < 1.5 && cassette > -1.5,
+            "{worn} {cassette}"
+        );
+    }
+
+    #[test]
+    fn type_ii_and_iv_are_brighter_and_a_vcr_has_no_tape() {
+        // Quiet, under where the loud highs soften.
+        let highs = |kind: DeckType, tape: DeckTape| {
+            let at = |hertz: f32| {
+                let mut deck = deck(Settings { tape, ..of(kind) });
+                harmonic(
+                    &left(&through(&mut deck, hertz, 0.002, RATE as usize / 2)),
+                    hertz,
+                )
+            };
+            db(at(10_000.0) / at(1_000.0))
+        };
+        let (one, two, four) = (
+            highs(DeckType::Cassette, DeckTape::I),
+            highs(DeckType::Cassette, DeckTape::II),
+            highs(DeckType::Cassette, DeckTape::IV),
+        );
+        assert!(two > one + 3.0 && four > two + 3.0, "{one} {two} {four}");
+        assert!(highs(DeckType::Worn, DeckTape::II) > highs(DeckType::Worn, DeckTape::I) + 10.0);
+        assert!(
+            (highs(DeckType::Vhs, DeckTape::IV) - highs(DeckType::Vhs, DeckTape::I)).abs() < 0.01
+        );
     }
 
     #[test]

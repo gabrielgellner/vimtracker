@@ -809,8 +809,37 @@ crate::listed::listed!(DeckType);
 
 const DECK_TYPE_NAMES: [&str; 3] = ["Cassette", "VHS", "Worn"];
 
+/// The tape a deck's cassette is, as Cassette's tape types are (decision 451): Type I, ferric;
+/// Type II, chrome, brighter and quicker to soften its loud highs; Type IV, metal, brighter still
+/// and hotter. A VCR's track takes no cassette, so `VHS` sounds the same on each.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DeckTape {
+    #[default]
+    I,
+    II,
+    IV,
+}
+
+impl DeckTape {
+    /// Every tape, in the order `+` goes through them.
+    pub const ALL: [Self; 3] = [Self::I, Self::II, Self::IV];
+
+    /// The name on screen.
+    pub const fn name(self) -> &'static str {
+        DECK_TAPE_NAMES[self as usize]
+    }
+}
+
+crate::listed::listed!(DeckTape);
+
+const DECK_TAPE_NAMES: [&str; 3] = ["Type I", "Type II", "Type IV"];
+
+fn is_type_i(tape: &DeckTape) -> bool {
+    *tape == DeckTape::I
+}
+
 /// A deck's, in the order songs number them.
-pub(crate) const DECK_PARAMS: [Entry; 10] = [
+pub(crate) const DECK_PARAMS: [Entry; 11] = [
     Entry {
         meaning: "the format: a cassette, a VCR's linear audio track, or a worn cassette",
         name: "Type",
@@ -833,11 +862,23 @@ pub(crate) const DECK_PARAMS: [Entry; 10] = [
     hex_param("Flutter", "flutter", "FLUT", Deck::DEFAULT.flutter)
         .means("a fast wobble in pitch, from the capstan"),
     hex_param("Drops", "drops", "DROP", Deck::DEFAULT.drops)
-        .means("how often and how deep the sound drops out, its highs most, for a moment"),
+        .means("how deep the highs flicker away as the tape loses the head, about 7 a second"),
     hex_param("Chew", "chew", "CHEW", Deck::DEFAULT.chew)
         .means("now and then a stretch of crinkled tape, bent and dulled"),
     hex_param("Track", "track", "TRAK", Deck::DEFAULT.track)
         .means("noise reduction, mistracking more as it's turned up: dull, breathing highs"),
+    Entry {
+        meaning: "the cassette's tape: Type II and IV are brighter and soften loud highs sooner",
+        name: "Tape",
+        key: "tape",
+        label: Some("TAPE"),
+        kind: Kind::Stepped {
+            choices: &DECK_TAPE_NAMES,
+            wraps: true,
+        },
+        default: 0,
+        place: Place::Title,
+    },
     MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -868,6 +909,9 @@ pub struct Deck {
     pub chew: u8,
     /// How far its noise reduction mistracks; none at `00` is no noise reduction.
     pub track: u8,
+    /// Its cassette's tape, saved only when it isn't Type I.
+    #[serde(skip_serializing_if = "is_type_i")]
+    pub tape: DeckTape,
     /// From `00`, all dry, to `FF`, all wet.
     pub mix: u8,
     pub gain: u8,
@@ -880,8 +924,8 @@ impl Default for Deck {
 }
 
 impl Deck {
-    /// As it starts: a cassette at 0 dB, with Cassette's own hiss, wow, flutter and dropouts
-    /// (decision 451), no chew, and its noise reduction in and nearly tracking.
+    /// As it starts: a Type I cassette at 0 dB, with Cassette's own hiss, wow, flutter and
+    /// dropouts (decision 451), no chew, and no noise reduction, as Cassette has none.
     pub const DEFAULT: Self = Self {
         kind: DeckType::Cassette,
         drive: 0x80,
@@ -890,7 +934,8 @@ impl Deck {
         flutter: 0x40,
         drops: 0x40,
         chew: 0x00,
-        track: 0x20,
+        track: 0x00,
+        tape: DeckTape::I,
         mix: 0xFF,
         gain: UNITY_LEVEL,
     };
@@ -904,6 +949,7 @@ impl Deck {
         drops,
         chew,
         track,
+        tape: DeckTape,
         mix,
         gain,
     }
