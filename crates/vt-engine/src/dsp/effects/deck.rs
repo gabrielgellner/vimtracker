@@ -1194,11 +1194,7 @@ mod tests {
             });
             let out = left(&through(&mut deck, hertz, 0.05, RATE as usize * 8));
             // Windows of 10 ms whose level is 6 dB or more under the tone's usual.
-            let levels: Vec<f32> = out
-                .chunks(RATE as usize / 100)
-                .skip(10)
-                .map(rms)
-                .collect();
+            let levels: Vec<f32> = out.chunks(RATE as usize / 100).skip(10).map(rms).collect();
             let mut sorted = levels.clone();
             sorted.sort_by(f32::total_cmp);
             let usual = sorted[sorted.len() / 2];
