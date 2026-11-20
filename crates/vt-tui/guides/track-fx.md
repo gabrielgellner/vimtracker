@@ -419,8 +419,12 @@ The head bump at 15 ips is about 1.3 dB near 62 Hz, with the lows falling
 away under 30 Hz; at 7.5 ips it's near 39 Hz and at 30 ips near 80 Hz.
 `Flutter` reaches about 10 cents at `FF`, evenly from none at `00`, and
 moves with the speed: the light, tremolo-like warble of a worn capstan.
-`Wow` reaches as far, about 10 cents, but slowly: the pitch leans sharp
-and flat and back, without a pulse. At the start there's about a cent,
+`Wow` is slow: the pitch leans sharp and flat and back, without a pulse.
+It goes as far as `Flutter` up to `80`, about 5 cents there, then rises
+faster to about 25 cents at `FF`: the top quarter goes past what mastering
+tape does, into a seasick effect. The deeper `Wow` is, the later the tape is
+read, up to about 30 ms at `FF`, so with `Mix` below `FF` a deep `Wow` also
+brings a short delay against the dry sound. At the start there's about a cent,
 nearly all flutter. Unlike `Tape` it has no ceiling: a loud sound driven
 hard comes out quieter, as tape squashes it.
 

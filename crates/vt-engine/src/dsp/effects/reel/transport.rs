@@ -12,8 +12,9 @@
 //! Both are worked out as the tape's speed, in cents, every 16 frames, and summed into how far the
 //! line is read back, going straight between. Each knob's depth is even in its value, and `00` none
 //! at all: the line is then read seven frames back, still, and exactly. `Flutter`'s `FF` is about
-//! 9.6 cents rms, Satin's `Wow & Flutter` at 100, and `Wow`'s the same, so its top moves the pitch
-//! as far as Satin's whole knob does, only slowly.
+//! 9.6 cents rms, Satin's `Wow & Flutter` at 100. `Wow` is even up to `80`, at the same rate as
+//! `Flutter`, then rises faster, with no kink, to 25 cents rms at `FF`: its top quarter goes past
+//! what a mastering machine does, into an effect.
 
 use std::f32::consts::TAU;
 
@@ -27,7 +28,9 @@ const CONTROL_FRAMES: u32 = 16;
 pub(super) const READ_BACK: f32 = (TAPS / 2 - 1) as f32;
 /// Cents rms at the top of each knob.
 pub(super) const MOST_FLUTTER_CENTS: f32 = 9.6;
-pub(super) const MOST_WOW_CENTS: f32 = 9.6;
+pub(super) const MOST_WOW_CENTS: f32 = 25.0;
+/// Wow's cents rms per unit of its knob while it's even, up to `80`.
+const EVEN_WOW_CENTS: f32 = 9.6;
 /// Where wow's band starts and ends, in Hz.
 const WOW_LOWEST_HZ: f32 = 0.1;
 const WOW_HIGHEST_HZ: f32 = 1.5;
@@ -55,6 +58,14 @@ const FLUTTER_BY_SPEED: [f32; 4] = [1.12, 1.06, 1.0, 0.55];
 #[inline]
 fn noise(random: &mut Xorshift32) -> f32 {
     (random.unit() + random.unit() + random.unit() - 1.5) * 2.0
+}
+
+/// Wow's depth in cents rms for its knob from 0 to 1: even up to half way, then a square added on
+/// that leaves its slope as it was there and reaches `MOST_WOW_CENTS` at the top.
+#[inline]
+fn wow_cents(wow: f32) -> f32 {
+    let over = (wow - 0.5).max(0.0);
+    EVEN_WOW_CENTS * wow + 4.0 * (MOST_WOW_CENTS - EVEN_WOW_CENTS) * over * over
 }
 
 /// A state-variable filter run at the control rate, for shaping the noise.
@@ -212,14 +223,14 @@ impl Transport {
     /// The most either side can be read back by its moving part, in frames at a rate, with room
     /// for the rare loud stretch of the noise.
     pub(super) fn most_frames(rate: u32) -> f32 {
-        2.0 * (Self::wow_room() + Self::flutter_room()) * rate as f32
+        2.0 * (Self::wow_room(MOST_WOW_CENTS) + Self::flutter_room()) * rate as f32
     }
 
-    /// How far wow can read the line back, in seconds: six times how far it reads it back rms, which
-    /// is its speed's rms over `2π 0.44 Hz` (measured over 20 minutes, in which its farthest was
-    /// 4.1 times its rms).
-    fn wow_room() -> f32 {
-        6.0 * MOST_WOW_CENTS * CENT / (TAU * 0.44)
+    /// How far wow of `cents` rms can read the line back, in seconds: six times how far it reads it
+    /// back rms, which is its speed's rms over `2π 0.44 Hz` (measured over 20 minutes, in which its
+    /// farthest was 4.1 times its rms).
+    fn wow_room(cents: f32) -> f32 {
+        6.0 * cents * CENT / (TAU * 0.44)
     }
 
     /// How far flutter can: its slowest line, at 3.75 ips (3.35 Hz), at its fullest.
@@ -283,13 +294,13 @@ impl Transport {
             let speed = (shared * random + OWN_SHARE.sqrt() * own[side]) * CENT * frames;
             self.flutter_frames[side] = self.flutter_frames[side] * self.leak + speed;
         }
-        let depth_wow = wow * MOST_WOW_CENTS;
+        let depth_wow = wow_cents(wow);
         let depth_flutter = flutter * MOST_FLUTTER_CENTS * by_speed;
         // The line is read back half the reader's width, and further by as much as either can
         // take it, so it's never read ahead: a little later as either is turned up, but still at
         // `00`.
         let rate = self.control * frames;
-        let ahead = (wow * Self::wow_room()
+        let ahead = (Self::wow_room(depth_wow)
             + flutter * by_speed / FLUTTER_BY_SPEED[0] * Self::flutter_room())
             * rate;
         let mut out = [0.0; 2];
@@ -409,9 +420,9 @@ mod tests {
 
     #[test]
     fn each_knob_reads_evenly_in_cents_up_to_satins_most() {
-        for (wow, flutter) in [(0.0, 1.0), (0.0, 0.5), (1.0, 0.0), (0.5, 0.0)] {
+        for (wow, flutter) in [(0.0, 1.0), (0.0, 0.5), (1.0, 0.0), (0.75, 0.0), (0.5, 0.0)] {
             let found = rms(&cents(wow, flutter, 15.0, 60.0));
-            let wanted = MOST_WOW_CENTS * wow + MOST_FLUTTER_CENTS * flutter;
+            let wanted = wow_cents(wow) + MOST_FLUTTER_CENTS * flutter;
             assert!(
                 (found / wanted - 1.0).abs() < 0.15,
                 "{wow} {flutter}: {found}"
