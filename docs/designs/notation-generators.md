@@ -1,8 +1,9 @@
 # Rich input for generator grammars, and notation from live coding
 
-**Status:** a design study for the author to read and decide on, written on 2026-11-20. No code is
-changed and no decision numbers are reserved. Their answers to §10 will go under it, as
-**Decided**.
+**Status:** a design study written on 2026-11-20, and decided by the author the same day. Their
+answers to §10 are under it, as **Decided**, and the body is brought in line with them: a `List`
+as long as a phrase (§4.1), kit lines built (§5.3), and the plan (§9). No code is changed and no
+decision numbers are reserved.
 
 The author's request of 2026-11-20, in three parts:
 
@@ -54,7 +55,8 @@ lit in the grid, and the token playing lit as it plays. Each grammar is declared
 `Space d` read one table. **First** move the fields that exist onto it: a `List`'s `Values`, the
 Gen page's `Weights` cell, a `Tonnetz`'s `Moves`, a `Bits` mask, a typed rhythm (§4). **Then** add
 two grammars from Tidal: an `Own` rhythm, `x..x[xx]x(3,8)`, as a `Where` any fill can take, and
-`Mini`, a fill whose string holds both rhythm and values in the column's own units (§5). Both are
+`Mini`, a fill whose string holds both rhythm and values in the column's own units (§5), and then
+kit lines, one `Mini` text kept the same across a group's drum tracks (§5.3). All are
 **stepwise**: a token is a number of rows, not a fraction of a cycle, since tracks of different
 lengths, lanes and `Speed` already give vimtracker its polymeter. FX commands are still chosen with
 `K` on the column, and only their values are ever typed.
@@ -118,7 +120,8 @@ of these is a short string with a grammar of its own, and each is edited one way
 ### 2.2 What a new grammar must fit
 
 * **A `Shape` is plain `Copy` data of a fixed size** (`MAX_VALUES` is 8), copied into each
-  generator, the undo history and the engine's renders. A string of any length can't live in it.
+  generator, the undo history and the engine's renders. A string of any length can't live in it,
+  and neither can a `List` as long as a phrase (§4.1).
 * **The engine renders a moving generator** a pass at a time and again as its inputs change, from
   `render_into`, allocating nothing (decisions 287 to 289), and **passes are positional**: pass 8
   is worked out from where the song is, not from a stream (decision 293).
@@ -252,8 +255,9 @@ row), `K` on the token lists the same names, and the token shows the name.
 * **The last good text keeps playing,** Strudel's rule. The column is written from the last text
   that read, and the status line says so. `Enter` on text that doesn't read is refused, saying
   why; `Esc` goes back to how it was.
-* **Limits show before they're hit:** `List`'s 8 values are dim cells after the last, so the 9th
-  isn't a surprise (or the limit grows: question 3).
+* **Limits show before they're hit:** a field of fixed length (`Weights`, a mask) shows every
+  cell; a `List` shows its room in the status line, `3 of 256 values`, and the field refuses the
+  257th, saying so (§4.1).
 
 ### 3.7 The preview, and the token playing
 
@@ -350,12 +354,47 @@ they write changes.
   into a new melody without retyping it; `+` `_` an octave.
 * `K` on a note lists the scale round it; on an FX value, the command's named values.
 * `x` takes a value out, `p` pastes one, `~` (on the row, as now) turns the list round.
+* **Up to 256 values** (Decided 3), a value a row of the longest phrase most songs use, rather than
+  8. A list longer than the field's width scrolls by token, keeping the cursor in sight, as the
+  `:` line scrolls; a list with more values than the rows it reaches plays only its first ones,
+  and the status line says how many are heard.
 
 ```
-  Values    70  40  55  ··  ··  ··  ··  ··
+  Values    70  40  55
                 ^^
- TRACK  40, the 2nd of 3 values: = and - turn it, x takes it out
+ TRACK  40, the 2nd of 3 values, room for 256: = and - turn it, x takes it out
 ```
+
+#### Where a longer list lives
+
+Eight values fit in a `Shape` (`Values` is `[u8; 8]` and a count, nine bytes). 256 don't: a
+`Shape` is `Copy`, and it's copied into each generator, its `held` shape for macros, every undo
+step, a patch's generators and each of the engine's `GenRun`s as the shape it last rendered, so
+256 bytes more in it would be paid everywhere, by every fill that isn't a `List`. So **the list
+moves off the `Shape` onto the `Generator`**, as `Mini`'s text and `Own`'s will be (§5):
+
+* **The model.** `Shape::values` goes. `Generator` gains `list: Box<[u8]>`, empty unless the fill
+  is a `List`, at most `MAX_LIST` (256) values, which replaces `MAX_VALUES`. The shape panel,
+  which edits a `Shape` before there's a generator, holds the list beside it, and `S` puts both
+  on the generator it makes. Anything that copies a generator's shape to make another (`yy` of a
+  generator, a patch's generators, `Follow`'s source) copies the list with it. The list isn't a
+  macro target, as it isn't now, so `held` needn't carry it.
+* **Typing.** `HexList` and `Named { list: true }` read up to `MAX_LIST`, and `i` still types the
+  whole list, but at this length the token editor (§3) is how a list is changed.
+* **The engine.** `render_into` takes the list as a `&[u8]` beside the shape, borrowed from the
+  generator in the song the version carries, so nothing is copied or allocated on the audio
+  thread. A `GenRun` decides whether to render again by comparing the shape it last rendered;
+  it gains the list's hash, worked out on the edit thread as `GenScratch::for_song` walks the
+  generators, so the comparison stays a few bytes. The cells don't change: a list writes one
+  value a row as before.
+* **The format.** `GeneratorFile` gains `list`, saved as a list of values (as `Values` is now),
+  `#[serde(default, skip_serializing_if = "<[u8]>::is_empty")]`, so a song with no `List` saves
+  as before and the format number stays 11. The `values` field leaves the saved `Shape`. An old
+  song's `List` loads with no values, as no conversion is written (no backwards compatibility);
+  the issue says so, and the tutorial's songs that use `List` are saved again.
+* **Patches** carry the list with their generators' shapes, under the same rule.
+* **Phrases longer than 256 rows** (a phrase stores up to 4,096) go round the list, as a `List`
+  goes round now.
 
 ### 4.2 `Weights` on the Gen page
 
@@ -424,7 +463,8 @@ it, a `Wave` on an FX column. The tokens are Tidal's, on hits:
 | `x@3` | one hit three steps long, the next token three steps later |
 | `x?` `x?30` | a hit half the time, or 30% of the time, from the generator's seed |
 | `<x .>` | a hit one lap, nothing the next |
-| `x(3,8)` `x(3,8,2)` | Euclid's 3 over 8 steps, rotated 2 later, as our `Rotate` (question 6) |
+| `x(3,8)` `x(3,8,2)` | Euclid's 3 over 8 steps, rotated 2 later, as our `Rotate` (Decided 6) |
+| `~` | read as `.`, so Tidal's strings paste (Decided 10) |
 
 Example: `x . [. x] x(3,8)` at `Step 4 rows` writes a kick on beat 1, a push on beat 2's last
 sixteenth, and 3 of 8 in the rest.
@@ -439,7 +479,7 @@ A fill with no `Where`, as `Follow` has none: the string says where and what. Th
 
 | Column | Atom | Example |
 |---|---|---|
-| Note | a note, `C-3` or `c3`; or a scale degree from From, `1 3 5` (question 4) | `1 [. 3] <5 6>*2 8?` |
+| Note | a note by name, `C-3` or `c3`, or a scale degree, `1 3 5`, both in one line (Decided 4); `1` is the scale's root, as `Weight 1` is, in From's octave | `1 [. 3] <5 6>*2 8?` |
 | Velocity | hex | `7F 40 [60 40] 40?` |
 | Nudge | signed hex | `0 +8 0 -4` |
 | Length | hex, `_` to tie into the next (`HLD`) | `40 _ 80 20` |
@@ -452,7 +492,7 @@ span shorter than the line cuts it. Inside a token, `[ ]` and `*` split its rows
 falls between rows is **nudged** off the nearest row, as `Divisions` places its triplets, so
 `[x x x]` in a beat is a true triplet. Two hits on one row keep the first, and the status line
 says how many were dropped and which `Step` would keep them. This is Strudel's stepwise `pace`
-made the rule rather than the exception, and the cycle mode is question 5.
+made the rule rather than the exception. There's no cycle mode and no `Step` of `Span` (Decided 5).
 
 **Laps and passes.** `<a b c>` takes the next choice each **lap**, each time the line comes round,
 counted from the chain's start, so `<G-2 A#2>` in a four-row line over a 16-row phrase plays G A# G
@@ -479,7 +519,24 @@ tracks' names**: `bd*2 [. sn] hh?`. `S` across the group's tracks makes a `Mini`
 column, holding the same text: each track plays the rows where its own name is, at the velocity
 notes are typed with. An edit on one rewrites the others, as a `Follow`'s source rewrites its
 followers. `K` and `Tab` complete the names from the group. It's the one place a stack, `bd, hh*4`,
-is natural, as each layer is another track. Whether it's worth building is question 7.
+is natural, as each layer is another track. It's built (Decided 7), as its own issue after `Mini`.
+
+**How the text is kept the same.** Each track's generator holds the text, as any `Mini` does, and
+a `kit` mark naming the group, so each generator renders alone and the engine needs nothing new.
+The rules:
+
+* **One text.** An edit to the line on any of its tracks, typed or turned, is made to every track
+  the line spans in the same undo step, and each track renders its own rows from it. The tracks
+  are the group's at the time `S` made the line.
+* **A token names a track** by the track's name, matched without case. A name no track of the
+  group has is marked as text that doesn't read (§3.6). `:name` on a track in a kit line renames
+  its tokens in the text with it, in the same undo step.
+* **Leaving the line.** `dd` of the generator on one track, or a track leaving the group, takes
+  that track out of the line and leaves the rest; the text keeps the track's tokens, now marked.
+* **What each track plays.** A track plays a note on each row where its name is, at the
+  generator's note and the velocity notes are typed with; `?`, `*`, `<>` and the rest work as in
+  `Mini`, one seed for the line so the tracks agree.
+* **On the Gen page** each track's device shows the whole line, with that track's tokens lit.
 
 ### 5.4 Edits while playing
 
@@ -487,7 +544,7 @@ Every setting is heard at once now, and the per-row cache (`generators-page.md` 
 token's turn heard from the next row it writes. That's right for `=` and `-`. A retyped line heard
 mid-lap can play half of each, so: **changes land at once, as everywhere; with the track's `Cue`
 on, they wait for the line's next lap**, as `Cue` makes `Length` and `Start` wait for the pass.
-That's Sonic Pi's `live_loop` without a new switch (question 8).
+That's Sonic Pi's `live_loop` without a new switch (Decided 8).
 
 ### 5.5 Other grammars, and Tidal's transforms
 
@@ -535,7 +592,9 @@ So the transforms don't need adding as operators; the **in-string** ones (`*`, `
 | The editor | a parse on each key, a few microseconds for 64 characters | the text being edited | the widget, the keys, `Grammar`; L |
 | A token's rows lit | a byte a row from each render | up to 4,096 bytes a render | S |
 | `Own` rhythm | a bitset render, as `Euclid` | the text, and nothing in the `Shape` | M |
+| `List` to 256 | as now | 9 bytes less in every `Shape`; up to 256 on a `List`'s `Generator` | M |
 | `Mini` | a tree walk a render; at rest, nothing | the text and a fixed array on the `Generator` | L |
+| Kit lines | each track renders its own, as a `Mini` | the text on each track's generator | M |
 | The song | | new fields, skipped when empty, so no format bump | |
 
 ---
@@ -548,16 +607,17 @@ So the transforms don't need adding as operators; the **in-string** ones (`*`, `
 * **Chords on one track.** `,` goes across tracks, never into one column.
 * **Cycles as the unit of time,** and `fast 1.5`-style fractions of them. A row is a step here, and
   tracks of different lengths, lanes and `Speed` already give polymeter; cycles would be a second
-  clock (question 5 keeps the door open as a `Step` of `Span`).
+  clock. Steps only, with no `Step` of `Span` (Decided 5).
 * **Tidal's `.` feet,** which split a line into groups: here `.` is a rest, as the guides print
-  rhythms and trackers show empty rows. `[ ]` does what feet do.
+  rhythms and trackers show empty rows, and `~` reads as one too (Decided 10). `[ ]` does what feet
+  do.
 * **`jux`,** a transformed copy in the other ear: a track is one sound, and stereo is the mixer's.
 * **`^name` controls** and patterns of patterns as arguments (`"<2 3>"` as `fast`'s argument):
   macros and modulation already reach every setting.
 * **Orca as a machine.** Its operators bang cells on a grid each frame, which is a second
   sequencer inside the first. What fits, "a row triggers another track", is close to what
   `CND`'s `NEI` and `PRE` do from the other side; a `TRG` command firing another track's row would
-  break "a track plays its own phrase" and is question 9, not a proposal.
+  break "a track plays its own phrase". Neither is built (Decided 9).
 * **A step-text bridge** (copying rows to the clipboard as `steptext.rs` lines) is useful, but
   it's about Ableton and other tools, not generators; for its own issue if wanted.
 * **Strudel's code,** always (§8).
@@ -587,15 +647,16 @@ So the transforms don't need adding as operators; the **in-string** ones (`*`, `
 | # | Proposed issue | Depends on | Size |
 |---|---|---|---|
 | 1 | **The token editor:** `Typing::Tokens`, `Grammar` in `vt-model`, the field widget and its keys (§3.2 to §3.4), the error marker and last-good rule, `Space d` meanings; the 388 `Weights` digits moved onto it with no change seen. | none | L, 700–900 |
-| 2 | **`K` and `Tab` in a field:** the lists at a token and between tokens, from the track's scale, column and group; reusing `completion.rs`'s list. | 1 | M, 400 |
-| 3 | **The existing fields on it:** `List`'s `Values`, the Gen page's `Weights` cell, `Tonnetz`'s `Moves` with chords under them, a `Bits` mask as bits, the Steps box's list. | 1 | M, 400–500 |
-| 4 | **Rows lit, token playing lit:** the token table on each render, the rows line, the grid's light, the playhead's token. | 1 | M, 300–400 |
-| 5 | **`Own` rhythm:** the rhythm grammar, `Where::Own` with its text on the `Generator`, the named rhythms as its presets. | 1, 4 | M, 500 |
-| 6 | **`Mini`:** the fill, its grammar per column, `Step`, nudged splits, laps and seeds, the stack across tracks; guide and tutorial recipes. | 5 | L, 800–1000 |
-| 7 | **Kit lines,** if question 7 says yes. | 6 | M |
+| 2 | **A `List` as long as a phrase:** `Shape::values` moved onto the `Generator` as `list`, up to `MAX_LIST` (256); the panel, `S`, copies and patches carrying it; `render_into` reading it as a slice and the run's key holding its hash; `GeneratorFile`'s `list` skipped when empty, no format bump (§4.1). | none | M, 400–500 |
+| 3 | **`K` and `Tab` in a field:** the lists at a token and between tokens, from the track's scale, column and group; reusing `completion.rs`'s list. | 1 | M, 400 |
+| 4 | **The existing fields on it:** `List`'s values with the room in the status line and scrolling, the Gen page's `Weights` cell, `Tonnetz`'s `Moves` with chords under them, a `Bits` mask as bits, the Steps box's list. | 1, 2 | M, 400–500 |
+| 5 | **Rows lit, token playing lit:** the token table on each render, the rows line, the grid's light, the playhead's token. | 1 | M, 300–400 |
+| 6 | **`Own` rhythm:** the rhythm grammar, `Where::Own` with its text on the `Generator`, the named rhythms as its presets. | 1, 5 | M, 500 |
+| 7 | **`Mini`:** the fill, its grammar per column with notes and degrees from 1, `Step`, nudged splits, laps and seeds, `Cue` holding a retyped line to the lap, the stack across tracks; guide and tutorial recipes. | 6 | L, 800–1000 |
+| 8 | **Kit lines:** one `Mini` text kept the same across a group's tracks, tokens naming the tracks, `S` across the group, edits made to every track in one undo step, `:name` renaming tokens (§5.3). | 7 | M, 400–500 |
 
-**Order:** 1 → 2, 3, 4 side by side → 5 → 6 → 7. Issues 1 to 4 improve what exists and are worth
-having if nothing new is built.
+**Order:** 1 and 2 side by side → 3, 4, 5 side by side → 6 → 7 → 8. Issues 1 to 5 improve what
+exists and are worth having if nothing new is built.
 
 ---
 
@@ -625,3 +686,23 @@ having if nothing new is built.
 10. **`.` as a rest,** rather than Tidal's feet (recommended), and `~` read as a rest too, so Tidal's
     strings paste?
 11. **The names:** `Mini` for the fill, `Own` for the typed rhythm, `Step` for rows a token?
+
+**Decided** (the author, 2026-11-20):
+
+1. **Yes, the token editor first,** for the fields that exist: issues 1 to 5 before any new
+   grammar.
+2. **The keys as recommended:** `h` `l` by token, into and out of groups; `w` `b` at the same
+   depth; `%` and `(` `)` for brackets; `it`/`at` and `i[`/`i<` objects; `~` to rest a token.
+3. **Raise `List`'s limit to a phrase:** as many values as the longest phrase, up to 256. The list
+   moves off the `Copy` `Shape` onto the `Generator`, as `Mini`'s text does (§4.1), with a new
+   field skipped when empty and no format bump.
+4. **Both** notes by name (`C-3`) and scale degrees in `Mini`, degrees **from 1**, `1` the root, as
+   `Weight 1` is.
+5. **Steps only:** a top-level token is `Step` rows. No `Span` and no cycle mode.
+6. **Euclid's rotation later,** as our `Rotate`, so it has one meaning in the app.
+7. **Build kit lines:** one text, kept the same across the tracks of a group it spans, as a part
+   of the plan with its own issue after `Mini` (§5.3, issue 8).
+8. **A retyped line is heard at once,** and with the track's `Cue` on it waits for the line's lap.
+9. **No `TRG`** and no Orca-like machine.
+10. **`.` is a rest,** with no Tidal feet, and `~` reads as a rest too.
+11. **Keep the names** `Mini`, `Own` and `Step`.
