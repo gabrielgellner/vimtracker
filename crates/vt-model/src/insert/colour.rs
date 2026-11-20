@@ -598,52 +598,65 @@ impl Colour {
     }
 }
 
+/// How far a reel's `Drive` turns the level onto its tape up or down, at either end, in dB.
+pub(crate) const MOST_REEL_DRIVE_DB: f32 = 20.0;
+
+/// A reel's drive in dB, for a value on the `00` to `FF` scale: from -20 dB, through 0 dB at `80`,
+/// to +20 dB, as a studio machine's input gain, Satin's range.
+pub fn reel_drive_db(value: f32) -> f32 {
+    from_middle(value) * MOST_REEL_DRIVE_DB
+}
+
 /// The speeds a reel runs at, in inches a second, and their names.
 pub const REEL_SPEEDS_IPS: [f32; 4] = [3.75, 7.5, 15.0, 30.0];
 const REEL_SPEED_NAMES: [&str; 4] = ["3.75 ips", "7.5 ips", "15 ips", "30 ips"];
 
+/// How many times the rate a reel's tape runs at, by its `Oversampling`.
+pub const REEL_OVERSAMPLING_NAMES: [&str; 2] = ["4x", "8x"];
+
 /// The most a reel's playback gap, the space between its head and the tape and the depth its
-/// coating is read from can be, in µm, and the least of the gap.
-pub const LEAST_REEL_GAP_UM: f32 = 0.5;
-pub const MOST_REEL_GAP_UM: f32 = 20.0;
-pub const MOST_REEL_SPACING_UM: f32 = 20.0;
-pub const MOST_REEL_THICKNESS_UM: f32 = 50.0;
+/// coating is read from can be, in µm, and the least of the gap: Satin's `Gap Width`'s range.
+pub const LEAST_REEL_GAP_UM: f32 = 1.0;
+pub const MOST_REEL_GAP_UM: f32 = 5.0;
+pub const MOST_REEL_SPACING_UM: f32 = 1.0;
+pub const MOST_REEL_THICKNESS_UM: f32 = 2.4;
 
 /// A reel's speed in inches a second, for its place in the list.
 pub fn reel_speed_ips(place: u8) -> f32 {
     REEL_SPEEDS_IPS[usize::from(place).min(REEL_SPEEDS_IPS.len() - 1)]
 }
 
-/// A reel's playback gap in µm, for a value on the `00` to `FF` scale: from 0.5 µm to 20 µm,
-/// evenly in ratio.
+/// A reel's playback gap in µm, for a value on the `00` to `FF` scale: from 1 µm to 5 µm, evenly,
+/// 3 µm at `80`, as Satin's `Gap Width` is.
 pub fn reel_gap_um(value: f32) -> f32 {
-    LEAST_REEL_GAP_UM * (MOST_REEL_GAP_UM / LEAST_REEL_GAP_UM).powf((value / 255.0).clamp(0.0, 1.0))
+    LEAST_REEL_GAP_UM + (MOST_REEL_GAP_UM - LEAST_REEL_GAP_UM) * (value / 255.0).clamp(0.0, 1.0)
 }
 
-/// How far a reel's tape is from its head, in µm: none at `00`, 20 µm at `FF`, squared so the
-/// first half is fine.
+/// How far a reel's tape is from its head, in µm: none at `00`, 1 µm at `FF`, squared so the
+/// first half is fine. At its most it takes about 10 dB off 16 kHz at 3.75 ips against where the
+/// replay EQ is aligned, as Satin's whole `Gap Width` range moves it there.
 pub fn reel_spacing_um(value: f32) -> f32 {
     (value / 255.0).clamp(0.0, 1.0).powi(2) * MOST_REEL_SPACING_UM
 }
 
-/// How deep in its coating a reel's tape is read from, in µm: none at `00`, 50 µm at `FF`,
-/// squared as the spacing is.
+/// How deep in its coating a reel's tape is read from, in µm: none at `00`, 2.4 µm at `FF`,
+/// squared as the spacing is, and about as far at its most.
 pub fn reel_thickness_um(value: f32) -> f32 {
     (value / 255.0).clamp(0.0, 1.0).powi(2) * MOST_REEL_THICKNESS_UM
 }
 
 /// A reel's, in the order songs number them.
-pub(crate) const REEL_PARAMS: [Entry; 11] = [
+pub(crate) const REEL_PARAMS: [Entry; 12] = [
     hex_param("Drive", "drive", "DRIV", Reel::DEFAULT.drive)
-        .units(Units::TapeDrive)
+        .units(Units::ReelDrive)
         .centred()
-        .means("how hard the head's field drives the tape round its loop, so how far it saturates"),
+        .means("how hard the sound hits the tape: up, it thickens, softens its peaks and glues"),
     hex_param("Sat", "sat", "SAT", Reel::DEFAULT.sat)
-        .means("how low the tape saturates: turned up, it squashes sooner and comes out thicker"),
+        .means("how much headroom the tape has: turned up, it saturates sooner"),
     hex_param("Bias", "bias", "BIAS", Reel::DEFAULT.bias)
-        .means("turned up the loop thins and it's cleaner; turned down it lags and smears"),
+        .means("under at 00 a little dirtier and brighter, over at FF cleaner and duller"),
     Entry {
-        meaning: "how fast the tape runs: slower is darker, with its head bump lower",
+        meaning: "how fast the tape runs: slower softens loud highs, and moves the head bump down",
         name: "Speed",
         key: "speed",
         label: Some("SPD"),
@@ -656,7 +669,7 @@ pub(crate) const REEL_PARAMS: [Entry; 11] = [
     },
     hex_param("Gap", "gap", "GAP", Reel::DEFAULT.gap)
         .units(Units::ReelGap)
-        .means("the playback head's gap: wider loses the highs, with notches as tape speed slows"),
+        .means("the playback head's gap: narrower lifts the highs, wider takes them down"),
     hex_param("Space", "space", "SPAC", Reel::DEFAULT.space)
         .units(Units::ReelSpacing)
         .means("how far the tape rides off the head, which takes the highs away fast"),
@@ -664,14 +677,26 @@ pub(crate) const REEL_PARAMS: [Entry; 11] = [
         .units(Units::ReelThickness)
         .means("how deep the coating is read from, which softens the highs gently"),
     hex_param("Wow", "wow", "WOW", Reel::DEFAULT.wow)
-        .means("a slow wobble in pitch, as worn tape has"),
+        .means("a slow, wandering drift in pitch, from the reels"),
     hex_param("Flutter", "flutter", "FLUT", Reel::DEFAULT.flutter)
-        .means("a faster, steady wobble in pitch, about twice a second"),
+        .means("a fine, fast wobble in pitch, from the capstan and rollers"),
+    Entry {
+        meaning: "how many times the rate its tape runs at: 8x aliases less and costs more",
+        name: "Oversampling",
+        key: "oversampling",
+        label: Some("OVS"),
+        kind: Kind::Stepped {
+            choices: &REEL_OVERSAMPLING_NAMES,
+            wraps: true,
+        },
+        default: Reel::DEFAULT.oversampling,
+        place: Place::Title,
+    },
     MIX_PARAM,
     GAIN_PARAM,
 ];
 
-/// Where its settings sit on the FX page.
+/// Where its settings sit on the FX page. Its oversampling is in the title.
 pub(super) const REEL_GRID: Columns = &[
     &["drive", "sat", "bias"],
     &["speed", "wow", "flutter"],
@@ -695,9 +720,13 @@ pub struct Reel {
     pub gap: u8,
     pub space: u8,
     pub thick: u8,
-    /// The slow wobble in pitch, and the fast one, as `Tape`'s.
+    /// The slow wobble in pitch, and the fast one.
     pub wow: u8,
     pub flutter: u8,
+    /// How many times the rate its tape runs at, a place in [`REEL_OVERSAMPLING_NAMES`], saved
+    /// only when it isn't the first.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub oversampling: u8,
     /// From `00`, all dry, to `FF`, all wet.
     pub mix: u8,
     pub gain: u8,
@@ -710,18 +739,20 @@ impl Default for Reel {
 }
 
 impl Reel {
-    /// As it starts: ChowTape's drive, saturation and bias, half way, on a machine at 15 ips
-    /// with a fine gap, a little spacing and a thin coating, and `Tape`'s little wow and flutter.
+    /// As it starts: a studio machine at 15 ips, aligned, biased right and driven to its
+    /// reference level, with a 3 µm gap, a little spacing and a thin coating, a trace of wow and
+    /// the little flutter of a good transport, about a cent, at four times the rate.
     pub const DEFAULT: Self = Self {
         drive: 0x80,
         sat: 0x80,
         bias: 0x80,
         speed: 2,
-        gap: 0x40,
+        gap: 0x80,
         space: 0x30,
         thick: 0x30,
-        wow: 0x40,
-        flutter: 0x40,
+        wow: 0x08,
+        flutter: 0x1A,
+        oversampling: 0,
         mix: 0xFF,
         gain: UNITY_LEVEL,
     };
@@ -736,6 +767,7 @@ impl Reel {
         thick,
         wow,
         flutter,
+        oversampling,
         mix,
         gain,
     }

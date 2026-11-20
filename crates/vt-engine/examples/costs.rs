@@ -21,7 +21,7 @@ use vt_model::history::History;
 use vt_model::insert::{
     BEADS_QUALITY_NAMES, Beads, BeadsMode, Chorus, ChorusType, Clouds, CloudsMode, Compressor,
     CompressorType, Distort, DistortType, Echo, Exciter, FreqShift, Grains, Hall, INSERTS, Insert,
-    Pitch, Plate, QUALITY_NAMES, Rotary, Space, Spring, Stutter, Warps,
+    Pitch, Plate, QUALITY_NAMES, Reel, Rotary, Space, Spring, Stutter, Warps,
 };
 use vt_model::modulation::{MOD_SLOTS, ModKind};
 use vt_model::sample::SampleData;
@@ -279,6 +279,12 @@ fn effects() -> Vec<(String, Insert)> {
         "Space Echo, three heads, wow, spring".to_owned(),
         Insert::Echo(echo),
     ));
+    // The reel's tape at eight times the rate.
+    let reel = Reel {
+        oversampling: 1,
+        ..Reel::DEFAULT
+    };
+    all.push(("Reel 8x".to_owned(), Insert::Reel(reel)));
     all
 }
 

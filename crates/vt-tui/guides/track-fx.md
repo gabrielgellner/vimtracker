@@ -5,7 +5,7 @@ The FX page has 4 slots, which the sound goes through in order after the filters
 before `Level` and `Pan`. An empty slot does nothing and costs nothing.
 
 Each slot is a device: a frame with the slot's number, its switch, its effect and the effect's
-type in its title, and for `Beads` its quality too, its settings in three rows of up to four, and, for `Comp`, `Limit` and `EQ3`,
+type in its title, and for `Beads` its quality and for `Reel` its oversampling too, its settings in three rows of up to four, and, for `Comp`, `Limit` and `EQ3`,
 a box on the right with its curve or how far it's turning down. The switch is a small pill, its
 knob right and green while the slot is in, and left and faint while it's bypassed. A setting
 that's off or on, such as a Comp's `Auto`, shows the same switch rather than a word. The device
@@ -380,31 +380,61 @@ more with wow, so `Mix` below `FF` can blend in a faint chorus.
 | `Wow` | A slow, drifting wobble in pitch, as a worn transport has |
 | `Flutter` | A faster, steady wobble, about twice a second |
 
-`Reel` is a second tape machine, after ChowTape, built from the physics
-rather than by ear: the tape's magnetism follows the head round a
-hysteresis loop, so it saturates and lags a little behind what it was, and
-the playback head loses the highs to its gap, the tape's spacing from it
-and the depth it's read from, each by how fast the tape runs. A quiet sound
-comes through at about its level at any `Drive` and `Sat`, so turning them
-up saturates it sooner rather than turning it up. It's worked at four times
-the rate, and its wow and flutter are `Tape`'s.
+`Reel` is a studio reel-to-reel machine, as used for mastering: aligned,
+biased right and subtle as it starts. It's built from the physics rather
+than by ear: the tape's magnetism follows the head's field round its curve,
+so loud sounds thicken, their peaks soften and the mix glues; the playback
+head loses its highs to the tape's spacing from it and the depth it's read
+from, and the replay EQ makes those up at every speed, so a quiet sound
+comes back with its top intact. Loud highs soften at 3.75 ips, as
+short wavelengths erase themselves; the heads leave a bump in the lows with
+a dip under it. Its ranges are those of a studio machine: for obvious,
+broken tape, use `Deck`. Its `Oversampling`, in the title, is how many
+times the rate the tape is worked at: `4x` as it starts, or `8x`.
 
 | Setting | Does |
 |---|---|
-| `Drive` | How hard it hits the tape, from -18 dB to +18 dB, 0 dB at `80` |
-| `Sat` | How low the tape saturates: higher squashes sooner and thicker |
-| `Bias` | Higher thins the loop and cleans it; lower smears and crackles |
-| `Speed` | 3.75, 7.5, 15 or 30 ips: slower is darker, its head bump lower |
-| `Gap` | The head's gap, 0.5 to 20 µm: wider loses highs, in notches |
-| `Space` | How far the tape rides off the head, to 20 µm: highs go fast |
-| `Thick` | How deep the coating is read, to 50 µm: highs soften gently |
-| `Wow` | A slow, drifting wobble in pitch, as `Tape`'s |
-| `Flutter` | A faster, steady wobble, as `Tape`'s |
+| `Drive` | How hard it hits the tape, -20 dB to +20 dB, 0 dB at `80` |
+| `Sat` | The tape's headroom: higher saturates sooner |
+| `Bias` | Right at `80`: under is dirtier and brighter, over cleaner and duller |
+| `Speed` | 3.75, 7.5, 15 or 30 ips: slower softens loud highs; the bump moves |
+| `Gap` | The head's gap, 1 to 5 µm, 3 µm at `80`: narrower is brighter |
+| `Space` | How far the tape rides off the head, to 1 µm: highs go fast |
+| `Thick` | How deep the coating is read, to 2.4 µm: highs soften gently |
+| `Wow` | A slow, smooth drift in pitch, from the reels |
+| `Flutter` | A fine, fast wobble, from the capstan and rollers |
 
-The head bump lifts the lows a few dB around 60 Hz at 15 ips, twice that at
-30 and half at 7.5. `Bias` at `00` leaves the tape barely moved by a quiet
-sound, the crossover crackle of a machine set up wrong. Unlike `Tape` it has
-no ceiling: a loud sound driven hard comes out quieter, as tape squashes it.
+A quiet sound comes through at its level at any `Drive` and `Sat`, so
+turning them up saturates it sooner rather than turning it up; at 0 dB a
+-12 dB sine's distortion is about -54 dB, and each 6 dB of `Drive` is the
+same as 6 dB louder. Under-biased, toward `00`, it's less sensitive and
+dirtier, and driven loud its harmonics come and go as the level moves. Each
+speed has its own top, as an aligned machine's has: at 30 ips the highs are
+about 2 dB up. `Gap` turns the top from about 7 dB up at `00` to 2 to 5 dB
+down at `FF`, and the level a dB or two the other way. The replay EQ is set
+for the `Space` and `Thick` it starts with, so moving them away from there
+brightens or darkens the top; at most they take about 10 dB off 16 kHz at
+3.75 ips, and less the faster it runs.
+The head bump at 15 ips is about 1.3 dB near 62 Hz, with the lows falling
+away under 30 Hz; at 7.5 ips it's near 39 Hz and at 30 ips near 80 Hz.
+`Flutter` reaches about 10 cents at `FF`, evenly from none at `00`, and
+moves with the speed: the light, tremolo-like warble of a worn capstan.
+`Wow` is slow: the pitch leans sharp and flat and back, without a pulse.
+It goes as far as `Flutter` up to `80`, about 5 cents there, then rises
+faster to about 25 cents at `FF`: the top quarter goes past what mastering
+tape does, into a seasick effect. The deeper `Wow` is, the later the tape is
+read, up to about 30 ms at `FF`, so with `Mix` below `FF` a deep `Wow` also
+brings a short delay against the dry sound. At the start there's about a cent,
+nearly all flutter. Unlike `Tape` it has no ceiling: a loud sound driven
+hard comes out quieter, as tape squashes it.
+
+`8x` sounds the same, with less aliasing: the faint tones that don't
+belong to the note, and the grit on bright, loud sounds. It matters most
+with `Drive` well up on high leads, hats or a bright mix: on a high saw
+lead at +20 dB the aliases are about 35 dB lower, and at 0 dB about
+14 dB. It costs nearly twice as much, so `4x` stays the start, for when
+CPU counts. A change while a sound plays crossfades in about 10 ms, so it
+doesn't click, and `1OVS` sets it from a step in slot 1.
 
 `Deck` is lo-fi tape: a cassette, a VCR's linear audio track, or a worn
 cassette, with everything that goes wrong with them. Its `Type`, in the

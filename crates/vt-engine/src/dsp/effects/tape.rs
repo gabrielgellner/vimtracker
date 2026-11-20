@@ -421,13 +421,6 @@ impl Wobble {
         }
     }
 
-    /// Jump to the next length worked out, rather than moving there, as a reel only just started
-    /// does.
-    pub(super) fn restart(&mut self) {
-        self.delay = None;
-        self.countdown = 0;
-    }
-
     /// Where a sine from 0 to 1 is, after going a share of a turn.
     #[inline]
     fn turned(phase: &mut f32, by: f32) -> f32 {

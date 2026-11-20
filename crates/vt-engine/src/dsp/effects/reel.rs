@@ -1,9 +1,12 @@
-//! A reel-to-reel tape machine after Jatin Chowdhury's ChowTape (#259): the head's field drives
-//! the tape's magnetisation round a Jiles–Atherton hysteresis loop at twice the rate
-//! ([`crate::dsp::blocks::hysteresis`]), a DC blocker takes away what the loop leaves magnetised,
-//! the transport wobbles it with `Tape`'s wow and flutter, and the playback head loses its highs
-//! to its gap, the tape's spacing from it and the depth it's read from, with a head bump in the
-//! lows, each by how fast the tape runs.
+//! A studio reel-to-reel tape machine after Jatin Chowdhury's ChowTape (#259): the head's field
+//! drives the tape's magnetisation by the Jiles–Atherton model at four or eight times the rate
+//! ([`crate::dsp::blocks::hysteresis`]), biased right, so it follows its anhysteretic curve; a DC
+//! blocker takes away what it leaves magnetised, loud short wavelengths erase themselves, the
+//! transport wobbles it with wow and flutter of its own ([`transport`]), and the playback head
+//! loses its highs to the tape's spacing from it and the depth it's read from, each by how fast
+//! the tape runs, which the replay EQ makes up for the lengths it's aligned for, then turns its top
+//! by its gap, as Satin's does ([`replay`]), with the lows the heads leave. Biased too little, a
+//! share of the tape switches late ([`Switching`]).
 //!
 //! ChowTape's loss filter is a 64-tap FIR worked out from the three losses' formulas (Wallace's
 //! spacing loss `exp(-k d)`, the thickness loss `(1 - exp(-k δ)) / (k δ)` and the gap loss
@@ -22,10 +25,10 @@
 //! falls to no filter at all, so no spacing is no loss, where the bilinear transform would have
 //! to stop at Nyquist.
 //!
-//! The head bump is ChowTape's peak, Q 2 and up to 3.5 dB near 100 Hz, at the speed over a head
-//! 6.5 mm long, as a studio machine's bump is near 60 Hz at 15 ips; ChowTape ties it to the gap
-//! instead. ChowTape's azimuth, its input filters, its degrade and chew, and its own wow and
-//! flutter are left out: the wow and flutter are Beads', as `Tape`'s.
+//! [`Loss`]'s head bump is ChowTape's peak, Q 2 and up to 3.5 dB near 100 Hz, at the speed over a
+//! head 6.5 mm long, which `Deck` keeps; the reel's lows are its own, a bump with a dip under it
+//! (decision 449). ChowTape's azimuth, its input filters, its degrade and chew, and its own wow
+//! and flutter are left out.
 //!
 //! Adapted from `Plugin/Source/Processors/Loss_Effects/LossFilter.cpp` and
 //! `Hysteresis/HysteresisProcessor.cpp` in ChowTape (AnalogTapeModel), GPL-3.0:
@@ -35,24 +38,33 @@
 use std::f32::consts::TAU;
 
 use vt_model::insert::{
-    Reel as Settings, reel_gap_um, reel_spacing_um, reel_speed_ips, reel_thickness_um,
-    tape_drive_db,
+    Reel as Settings, reel_drive_db, reel_gap_um, reel_spacing_um, reel_speed_ips,
+    reel_thickness_um,
 };
 
 use crate::dsp::blocks::biquad::Biquad;
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::coefficient::of_corner;
-use crate::dsp::blocks::hysteresis::{Hysteresis, Magnetics};
+use crate::dsp::blocks::hysteresis::{Hysteresis, Magnetics, Switching};
 use crate::dsp::blocks::line::StereoLine;
-use crate::dsp::blocks::oversampler::QuadrupleOversampler as Oversampler;
+use crate::dsp::blocks::oversampler::{OctupleOversampler, QuadrupleOversampler};
 use crate::dsp::blocks::sides::SameBits;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::slot::{Rung, SlotEffect};
-use crate::dsp::effects::tape::Wobble;
 
-/// How many times the rate the hysteresis runs at.
-const OVERSAMPLING: f64 = 4.0;
+use replay::{Played, SWITCHING_CENTRE, SWITCHING_WIDTH, Shape};
+use transport::{READ_BACK, Reader, TAPS, Transport};
+
+mod replay;
+mod transport;
+
+/// How many times the rate the hysteresis runs at, by `Oversampling`'s place.
+const OVERSAMPLING: [f64; 2] = [4.0, 8.0];
+/// A switch from one rate to the other: how many frames the tape coming in runs unheard first,
+/// so its halfbands fill, then how long it crossfades, in seconds.
+const SWITCH_WARMING: u32 = 64;
+const SWITCH_SECONDS: f32 = 0.01;
 /// Where the DC blocker after the hysteresis turns, in Hz.
 const DC_HZ: f32 = 5.0;
 /// Metres an inch.
@@ -74,10 +86,17 @@ const BUMP_Q: f32 = 2.0;
 /// How far what comes out can go, 12 dB over full scale, far past anything it makes.
 const HEADROOM: f32 = 4.0;
 
-/// The most wow and flutter move the line, in frames at 48 kHz, as `Tape`'s.
-const MOST_WOW_FRAMES: f32 = 4.0 * 105.0;
-const MOST_FLUTTER_FRAMES: f32 = 4.0 * 17.0;
-const BEADS_RATE: f32 = 48_000.0;
+/// Where the head's field sits against the drive shown, in dB: at 0 dB a -12 dBFS sine's third
+/// harmonic is -54 dB, as an aligned studio machine's (and Satin's at its default) is, and the
+/// drive moves that level by its own dB, as an input gain does.
+const DRIVE_OFFSET_DB: f32 = -4.84;
+/// The saturation magnetisation at `Sat` `80`, and how far `Sat` moves the level the tape
+/// saturates at, in dB: down by 0.75 dB at `00`, and up by 3.8 dB at `FF`, as a machine's
+/// headroom from 18 dB to none does, steepest near the top.
+const SATURATION: f32 = 1.25;
+const SAT_LEAST_DB: f32 = -0.75;
+const SAT_SPAN_DB: f32 = 4.55;
+const SAT_CURVE: f32 = 2.6;
 
 /// A low-pass of one pole or a pair, its poles mapped by `exp(s T)` and one zero placed so its
 /// gain at nothing and at Nyquist are the analog filter's, as Vicanek's matched filters ("Matched
@@ -180,6 +199,15 @@ impl Loss {
             bump: Biquad::peak(bump_hz, BUMP_Q, 20.0 * bump.log10(), rate),
         }
     }
+
+    /// The same with no head bump: the reel's lows are its own (decision 449), and the deck's
+    /// keep this one.
+    fn without_bump(self) -> Self {
+        Self {
+            bump: Biquad::FLAT,
+            ..self
+        }
+    }
 }
 
 /// One side's playback head, through its [`Loss`]: the reel's and the deck's.
@@ -232,32 +260,105 @@ impl Head {
     }
 }
 
+/// Which of the tape's rates is heard: one alone, or both through a switch, with this share of
+/// eight times the rate.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Heard {
+    Four,
+    Eight,
+    Both(f32),
+}
+
 /// One side's tape.
 #[derive(Debug, Clone, Copy, Default)]
 struct Side {
-    oversampler: Oversampler,
-    hysteresis: Hysteresis,
+    four: QuadrupleOversampler,
+    eight: OctupleOversampler,
+    /// The tape at four times the rate and at eight. Only the one heard runs, but through a
+    /// switch.
+    hysteresis: [Hysteresis; 2],
     dc: f64,
+    played: Played,
     head: Head,
 }
 
 impl Side {
-    /// Onto the tape: the hysteresis at four times the rate, and what it leaves magnetised taken
-    /// away.
+    /// Onto the tape: the hysteresis at four or eight times the rate, what it leaves magnetised
+    /// taken away, and the highs a loud sound erases.
     #[inline]
-    fn record(&mut self, x: f32, tape: &Magnetics, period: f64, dc: f64) -> f32 {
+    fn record(&mut self, x: f32, reel: &Tuned, heard: Heard) -> f32 {
         let Self {
-            oversampler,
-            hysteresis,
+            four,
+            eight,
+            hysteresis: [at_four, at_eight],
             ..
         } = self;
-        let magnetised = oversampler.process(x, |h| hysteresis.process(h, period, tape) as f32);
+        let field = x * reel.into_tape;
+        let switching = &reel.switching;
+        let mut quadruple = || {
+            four.process(field, |h| {
+                switching.onto(at_four.process(h, reel.periods[0], &reel.tape), h) as f32
+            })
+        };
+        let mut octuple = || {
+            eight.process(field, |h| {
+                switching.onto(at_eight.process(h, reel.periods[1], &reel.tape), h) as f32
+            })
+        };
+        let magnetised = match heard {
+            Heard::Four => quadruple(),
+            Heard::Eight => octuple(),
+            Heard::Both(share) => {
+                let (four, eight) = (quadruple(), octuple());
+                four + (eight - four) * share
+            }
+        };
         // In double precision, as a one-pole this slow in single stops short of what it follows,
         // and before the makeup, so what the tape holds stays blocked as the settings move.
         let magnetised = f64::from(magnetised);
-        self.dc += (magnetised - self.dc) * dc;
-        ((magnetised - self.dc) * tape.makeup) as f32
+        self.dc += (magnetised - self.dc) * reel.dc;
+        let recorded = ((magnetised - self.dc) * reel.tape.makeup) as f32;
+        self.played.erase(recorded, reel.hit, &reel.shape)
     }
+
+    /// Ready the rate that's coming in, `to`, for a switch: its tape takes up the magnetisation
+    /// of the one heard, which is the same in either, and its halfbands start empty.
+    fn ready(&mut self, to: usize) {
+        self.hysteresis[to] = self.hysteresis[1 - to];
+        if to == 0 {
+            self.four = QuadrupleOversampler::default();
+        } else {
+            self.eight = OctupleOversampler::default();
+        }
+    }
+
+    /// Off the tape: the head's losses, then the replay EQ and the rest.
+    #[inline]
+    fn play(&mut self, x: f32, reel: &Tuned) -> f32 {
+        let lost = self.head.play(x, &reel.loss);
+        let out = self.played.replay(lost, &reel.shape) * reel.out_of_tape;
+        within(out, -HEADROOM, HEADROOM)
+    }
+}
+
+/// What the settings work out to, as they glide.
+#[derive(Debug, Clone, Copy)]
+struct Tuned {
+    tape: Magnetics,
+    /// What switches late when it's biased too little.
+    switching: Switching,
+    /// The gains into the tape and out of it, and how hard the tape is hit against the drive
+    /// that's aligned, for the erasure.
+    into_tape: f32,
+    out_of_tape: f32,
+    hit: f32,
+    /// The bias's shelf, as a gain.
+    tilt: f32,
+    loss: Loss,
+    shape: Shape,
+    dc: f64,
+    /// A sample's length at four times the rate and at eight, in seconds.
+    periods: [f64; 2],
 }
 
 /// A reel's state and line.
@@ -265,7 +366,8 @@ impl Side {
 pub(crate) struct Reel {
     sides: [Side; 2],
     line: StereoLine,
-    wobble: Wobble,
+    reader: Reader,
+    transport: Transport,
     drive: Smoothed,
     sat: Smoothed,
     bias: Smoothed,
@@ -275,28 +377,31 @@ pub(crate) struct Reel {
     gap: Smoothed,
     spacing: Smoothed,
     thickness: Smoothed,
-    /// How far wow and flutter move the line at most, in frames.
+    /// Wow and flutter, as shares of their most.
     wow: Smoothed,
     flutter: Smoothed,
-    /// The tape and the losses, worked out for what they were last at.
-    tape: Magnetics,
+    tuned: Tuned,
+    /// What the tape and the losses were last worked out for.
     taped: [f32; 3],
-    loss: Loss,
-    lost: [f32; 4],
-    dc: f64,
-    period: f64,
+    lost: [f32; 5],
+    /// The rate the tape's set to, as `Oversampling`'s place; where it is between four times,
+    /// `0`, and eight, `1`; and how many frames a switch has warmed the one coming in.
+    oversampling: usize,
+    switched: f32,
+    warming: u32,
     rate: u32,
     smoothing: f32,
 }
 
 impl Reel {
     pub(crate) fn new(rate: u32) -> Self {
-        let longest = 1.0 + (MOST_WOW_FRAMES + MOST_FLUTTER_FRAMES) * rate as f32 / BEADS_RATE;
-        let size = (longest.ceil() as usize + 4).next_power_of_two();
+        let longest = READ_BACK + 2.0 * Transport::most_frames(rate);
+        let size = (longest.ceil() as usize + TAPS).next_power_of_two();
         let mut reel = Self {
             sides: [Side::default(); 2],
             line: StereoLine::new(size),
-            wobble: Wobble::new(rate),
+            reader: Reader::new(),
+            transport: Transport::new(rate),
             drive: Smoothed::default(),
             sat: Smoothed::default(),
             bias: Smoothed::default(),
@@ -306,12 +411,23 @@ impl Reel {
             thickness: Smoothed::default(),
             wow: Smoothed::default(),
             flutter: Smoothed::default(),
-            tape: Magnetics::new(1.0, 0.5, 0.5),
+            tuned: Tuned {
+                tape: Magnetics::biased(1.0, f64::from(SATURATION)),
+                switching: Switching::default(),
+                into_tape: 1.0,
+                out_of_tape: 1.0,
+                hit: 1.0,
+                tilt: 1.0,
+                loss: Loss::default(),
+                shape: Shape::default(),
+                dc: f64::from(of_corner(DC_HZ, rate as f32)),
+                periods: OVERSAMPLING.map(|times| 1.0 / (f64::from(rate) * times)),
+            },
             taped: [f32::NAN; 3],
-            loss: Loss::default(),
-            lost: [f32::NAN; 4],
-            dc: f64::from(of_corner(DC_HZ, rate as f32)),
-            period: 1.0 / (f64::from(rate) * OVERSAMPLING),
+            lost: [f32::NAN; 5],
+            oversampling: 0,
+            switched: 0.0,
+            warming: 0,
             rate,
             smoothing: coefficient(rate),
         };
@@ -328,26 +444,28 @@ impl Reel {
     pub(crate) fn clear(&mut self) {
         self.line.clear();
         self.sides = [Side::default(); 2];
-        self.wobble = Wobble::new(self.rate);
+        self.transport = Transport::new(self.rate);
+        self.switched = self.oversampling as f32;
+        self.warming = 0;
     }
 
     /// Take what's set now.
     pub(crate) fn follow(&mut self, settings: Settings) {
         let share = |value: u8| f32::from(value) / 255.0;
-        self.drive.target = 10_f32.powf(tape_drive_db(f32::from(settings.drive)) / 20.0);
+        self.drive.target = reel_drive_db(f32::from(settings.drive));
         self.sat.target = share(settings.sat);
         self.bias.target = share(settings.bias);
         self.speed.target = reel_speed_ips(settings.speed);
         self.gap.target = reel_gap_um(f32::from(settings.gap));
         self.spacing.target = reel_spacing_um(f32::from(settings.space));
         self.thickness.target = reel_thickness_um(f32::from(settings.thick));
-        let frames = self.rate as f32 / BEADS_RATE;
-        let amount = |value: u8| (f32::from(value) / 255.0).powi(2);
-        self.wow.target = amount(settings.wow) * MOST_WOW_FRAMES * frames;
-        self.flutter.target = amount(settings.flutter) * MOST_FLUTTER_FRAMES * frames;
+        self.wow.target = share(settings.wow);
+        self.flutter.target = share(settings.flutter);
+        self.oversampling = usize::from(settings.oversampling.min(1));
     }
 
     /// Jump to what's set.
+    #[allow(clippy::float_cmp, reason = "the crossfade lands on its ends exactly")]
     pub(crate) fn settle(&mut self) {
         for setting in [
             &mut self.drive,
@@ -362,7 +480,42 @@ impl Reel {
         ] {
             setting.settle();
         }
-        self.wobble.restart();
+        self.transport.restart();
+        if self.switched != self.oversampling as f32 {
+            for side in &mut self.sides {
+                side.ready(self.oversampling);
+            }
+            self.switched = self.oversampling as f32;
+            self.warming = 0;
+        }
+    }
+
+    /// Which rate is heard this frame. A switch runs the one coming in unheard while its
+    /// halfbands fill, then crossfades to it, so it neither clicks nor starts on a step.
+    #[inline]
+    #[allow(clippy::float_cmp, reason = "the crossfade lands on its ends exactly")]
+    fn heard(&mut self) -> Heard {
+        let to = self.oversampling;
+        if self.switched == to as f32 {
+            self.warming = 0;
+            return if to == 0 { Heard::Four } else { Heard::Eight };
+        }
+        if self.warming == 0 {
+            for side in &mut self.sides {
+                side.ready(to);
+            }
+        }
+        if self.warming < SWITCH_WARMING {
+            self.warming += 1;
+        } else {
+            let by = 1.0 / (SWITCH_SECONDS * self.rate as f32);
+            self.switched = match to {
+                0 => (self.switched - by).max(0.0),
+                _ => (self.switched + by).min(1.0),
+            };
+        }
+        let x = self.switched;
+        Heard::Both(x * x * (3.0 - 2.0 * x))
     }
 
     /// The tape and the losses for the settings as they glide, worked out again only when they
@@ -374,21 +527,48 @@ impl Reel {
             self.sat.next(self.smoothing),
             self.bias.next(self.smoothing),
         ];
-        if !taped.same_bits(&self.taped) {
-            self.taped = taped;
-            let [drive, sat, bias] = taped.map(f64::from);
-            self.tape = Magnetics::new(drive, sat, bias);
-        }
         let lost = [
             self.speed.next(self.smoothing),
             self.gap.next(self.smoothing),
             self.spacing.next(self.smoothing),
             self.thickness.next(self.smoothing),
+            taped[2],
         ];
+        if !taped.same_bits(&self.taped) {
+            self.taped = taped;
+            let [drive_db, sat, bias] = taped;
+            let [into, out, tilt, switching] = replay::bias(bias);
+            let drive = 10_f32.powf((drive_db + DRIVE_OFFSET_DB) / 20.0);
+            let lower = SAT_LEAST_DB + SAT_SPAN_DB * sat.powf(SAT_CURVE);
+            let saturation = SATURATION * 10_f32.powf(-lower / 20.0);
+            let tuned = &mut self.tuned;
+            tuned.tape = Magnetics::biased(f64::from(drive), f64::from(saturation));
+            tuned.switching =
+                tuned
+                    .tape
+                    .switching(f64::from(switching), SWITCHING_CENTRE, SWITCHING_WIDTH);
+            tuned.into_tape = into;
+            tuned.out_of_tape = out;
+            tuned.tilt = tilt;
+            // How hard the tape is hit, against the drive at 0 dB and `Sat` `80`.
+            let aligned = 10_f32.powf(DRIVE_OFFSET_DB / 20.0) / SATURATION;
+            tuned.hit = into * drive / saturation / aligned;
+        }
         if !lost.same_bits(&self.lost) {
             self.lost = lost;
-            let [speed, gap, spacing, thickness] = lost;
-            self.loss = Loss::new(speed, gap, spacing, thickness, self.rate as f32);
+            let [speed, gap, spacing, thickness, _] = lost;
+            let rate = self.rate as f32;
+            let defaults = Settings::DEFAULT;
+            // The gap's own loss is left out: the head's response for its gap is in the shape.
+            let aligned = Loss::new(
+                speed,
+                0.0,
+                reel_spacing_um(f32::from(defaults.space)),
+                reel_thickness_um(f32::from(defaults.thick)),
+                rate,
+            );
+            self.tuned.loss = Loss::new(speed, 0.0, spacing, thickness, rate).without_bump();
+            self.tuned.shape = Shape::new(speed, gap, &aligned, self.tuned.tilt, rate);
         }
     }
 
@@ -398,16 +578,16 @@ impl Reel {
         self.tune();
         let wow = self.wow.next(self.smoothing);
         let flutter = self.flutter.next(self.smoothing);
-        let delay = self.wobble.next(wow, flutter, self.rate);
-        let delay = delay.clamp(1.0, (self.line.mask() - 3) as f32);
-        let (whole, between) = (delay as usize, delay - delay.floor());
+        let delays = self.transport.next(wow, flutter, self.speed.value);
+        let heard = self.heard();
         self.line.advance();
         let mut out = [0.0; 2];
         for (side, sample) in input.into_iter().enumerate() {
-            let recorded = self.sides[side].record(sample, &self.tape, self.period, self.dc);
+            let recorded = self.sides[side].record(sample, &self.tuned, heard);
             self.line.write(side, recorded);
-            let wobbled = self.line.hermite(side, whole, between);
-            out[side] = self.sides[side].head.play(wobbled, &self.loss);
+            let delay = delays[side].clamp(READ_BACK, (self.line.mask() - TAPS) as f32);
+            let wobbled = self.reader.read(&self.line, side, delay);
+            out[side] = self.sides[side].play(wobbled, &self.tuned);
         }
         out
     }
@@ -466,9 +646,8 @@ mod tests {
         ..Settings::DEFAULT
     };
 
-    /// No losses either: only the tape.
+    /// No losses either: only the tape, and the head at the gap its level is set for.
     const BARE: Settings = Settings {
-        gap: 0,
         space: 0,
         thick: 0,
         speed: 3,
@@ -536,11 +715,44 @@ mod tests {
         for drive in [0x00, 0x80, 0xFF] {
             for sat in [0x00, 0x80, 0xFF] {
                 let gain = response(Settings { drive, sat, ..BARE }, 1_000.0, 0.01);
-                assert!(gain.abs() < 1.0, "{drive:02X} {sat:02X}: {gain}");
+                assert!(gain.abs() < 0.5, "{drive:02X} {sat:02X}: {gain}");
             }
         }
-        // Underbiased, a quiet sound barely moves the tape at all.
-        assert!(response(Settings { bias: 0, ..BARE }, 1_000.0, 0.01) < -20.0);
+        // Biased away from right, it's a little quieter either way, more so under.
+        let under = response(Settings { bias: 0, ..BARE }, 1_000.0, 0.01);
+        let over = response(Settings { bias: 0xFF, ..BARE }, 1_000.0, 0.01);
+        assert!((-3.0..-1.5).contains(&under), "{under}");
+        assert!((-1.2..-0.3).contains(&over), "{over}");
+    }
+
+    /// The third harmonic of a 1 kHz sine at a level, against the fundamental, in dB.
+    fn third(settings: Settings, level: f32) -> f32 {
+        let mut reel = reel(settings);
+        let out = through(&mut reel, 1_000.0, level, RATE as usize / 2);
+        db(harmonic(&out, 3_000.0) / harmonic(&out, 1_000.0))
+    }
+
+    #[test]
+    fn biased_right_its_distortion_is_a_curves_falling_twice_as_fast_as_the_level() {
+        // -54 dB at -12 dBFS, as an aligned machine's, then 12 dB less for each 6 dB down, with
+        // no loop left to hold it up at low levels.
+        let at = |dbfs: f32| third(BARE, 10_f32.powf(dbfs / 20.0));
+        let (low, middle) = (at(-24.0), at(-12.0));
+        assert!((middle + 54.0).abs() < 1.5, "{middle}");
+        assert!((middle - low - 24.0).abs() < 1.5, "{low} {middle}");
+        // The drive is the level the tape sees: 6 dB more is the same as 6 dB louder.
+        let driven = third(
+            Settings {
+                drive: 0x80 + 38,
+                ..BARE
+            },
+            10_f32.powf(-18.0 / 20.0),
+        );
+        assert!((driven - middle).abs() < 1.0, "{driven} {middle}");
+        // Under-biased it's dirtier, over-biased cleaner.
+        let level = 10_f32.powf(-12.0 / 20.0);
+        assert!(third(Settings { bias: 0, ..BARE }, level) > middle + 2.0);
+        assert!(third(Settings { bias: 0xFF, ..BARE }, level) < middle - 6.0);
     }
 
     #[test]
@@ -577,28 +789,113 @@ mod tests {
     }
 
     #[test]
-    fn it_aliases_little() {
-        for drive in [0x80, 0xFF] {
-            let mut reel = reel(Settings { drive, ..BARE });
+    fn it_aliases_little_and_less_at_eight_times_the_rate() {
+        let found = |drive: u8, oversampling: u8| {
+            let mut reel = reel(Settings {
+                drive,
+                oversampling,
+                ..BARE
+            });
             let out = through(&mut reel, 5_010.0, 1.0, RATE as usize / 2);
-            let found = aliasing(&out, 5_010.0);
-            assert!(found < -45.0, "{drive:02X}: {found}");
-        }
+            aliasing(&out, 5_010.0)
+        };
+        // At 0 dB both are down at the measure's floor; driven, eight times takes the aliases
+        // well down.
+        let (four, eight) = (found(0x80, 0), found(0x80, 1));
+        assert!(four < -70.0 && eight < -70.0, "{four} {eight}");
+        let (four, eight) = (found(0xFF, 0), found(0xFF, 1));
+        assert!(four < -45.0 && eight < four - 10.0, "{four} {eight}");
     }
 
     #[test]
-    fn slower_tape_is_darker_and_its_bump_lower() {
-        let at = |speed: u8, hertz: f32| response(Settings { speed, ..STILL }, hertz, 0.01);
-        let highs: Vec<f32> = (0..4).map(|speed| at(speed, 10_000.0)).collect();
+    fn switching_its_rate_crossfades_without_a_step_and_lands_on_the_other() {
+        let tone = |frame: usize| sine(frame, 100.0, 0.5, RATE);
+        let mut reel = reel(STILL);
+        let mut last = [0.0; 2];
+        for frame in 0..RATE as usize / 10 {
+            last = reel.process([tone(frame); 2]);
+        }
+        // Back and forth, sometimes before a switch has finished, then left at eight times.
+        let mut frame = RATE as usize / 10;
+        for (oversampling, frames) in [(1, 30), (0, 200), (1, 2000), (0, 1000), (1, 4000)] {
+            reel.follow(Settings {
+                oversampling,
+                ..STILL
+            });
+            for _ in 0..frames {
+                let out = reel.process([tone(frame); 2]);
+                for side in 0..2 {
+                    assert!(
+                        (out[side] - last[side]).abs() < 0.02,
+                        "{frame}: {last:?} to {out:?}"
+                    );
+                }
+                last = out;
+                frame += 1;
+            }
+        }
+        assert_eq!(reel.heard(), Heard::Eight);
+        // Once there, it's what a reel set to eight times the rate gives, as near as one that
+        // never switched but heard less of the tone: the tape keeps a trace of what went before.
+        let mut eight = super::Reel::new(RATE);
+        eight.follow(Settings {
+            oversampling: 1,
+            ..STILL
+        });
+        eight.settle();
+        let mut most = 0.0_f32;
+        for at in 0..RATE as usize {
+            let x = [tone(frame + at); 2];
+            let apart = (reel.process(x)[0] - eight.process(x)[0]).abs();
+            if at > RATE as usize / 2 {
+                most = most.max(apart);
+            }
+        }
+        assert!(most < 5e-4, "{most}");
+    }
+
+    #[test]
+    fn its_replay_eq_leaves_a_quiet_sound_near_flat_at_every_speed_and_the_bump_moves_with_it() {
+        let at = |speed: u8, hertz: f32, level: f32| {
+            response(Settings { speed, ..STILL }, hertz, level)
+                - response(Settings { speed, ..STILL }, 1_000.0, level)
+        };
+        // Within a dB or so of flat, as Satin's is: a little dull at 3.75 and 7.5 ips, a little
+        // bright at 15, and at 30 about 2 dB up at 16 kHz.
+        for (speed, wanted) in [(0, -0.8), (1, -1.1), (2, 0.6), (3, 1.8)] {
+            for hertz in [5_000.0, 10_000.0, 16_000.0] {
+                let quiet = at(speed, hertz, 0.03);
+                assert!(quiet.abs() < 2.5, "{speed} {hertz}: {quiet}");
+            }
+            let top = at(speed, 16_000.0, 0.03);
+            assert!((top - wanted).abs() < 0.4, "{speed}: {top}");
+        }
+        // Loud highs soften at 3.75 ips, and hardly at all at 15.
+        let erased = |speed: u8| at(speed, 16_000.0, 1.0) - at(speed, 16_000.0, 0.03);
+        assert!(erased(0) < -2.0, "{}", erased(0));
+        assert!(erased(2) > -0.5, "{}", erased(2));
+        // The bump: at 15 ips about a dB at 62 Hz with the lows falling away under it, and at
+        // 30 ips higher.
         assert!(
-            highs.windows(2).all(|pair| pair[0] < pair[1] - 0.05),
-            "{highs:?}"
+            (0.8..2.0).contains(&at(2, 62.0, 0.03)),
+            "{}",
+            at(2, 62.0, 0.03)
         );
-        assert!(highs[0] < -3.0 && highs[3] > -1.0, "{highs:?}");
-        // The bump: at 15 ips near 60 Hz, at 30 ips near 120 Hz, a few dB up either way.
-        assert!(at(2, 58.0) > at(2, 1_000.0) + 1.5);
-        assert!(at(3, 117.0) > at(3, 1_000.0) + 1.5);
-        assert!(at(3, 58.0) < at(3, 117.0) - 1.0);
+        assert!(at(2, 25.0, 0.03) < -3.0, "{}", at(2, 25.0, 0.03));
+        assert!(at(3, 80.0, 0.03) > at(3, 50.0, 0.03) + 0.5);
+    }
+
+    #[test]
+    fn the_bias_tilts_the_top() {
+        let tilt = |bias: u8| {
+            response(Settings { bias, ..STILL }, 10_000.0, 0.03)
+                - response(Settings { bias, ..STILL }, 1_000.0, 0.03)
+        };
+        let (under, right, over) = (tilt(0), tilt(0x80), tilt(0xFF));
+        assert!(
+            under > right + 0.4 && over < right - 1.0,
+            "{under} {right} {over}"
+        );
     }
 
     #[test]
@@ -606,7 +903,6 @@ mod tests {
         let speed = 0.381; // 15 ips, in m/s
         let k = |hertz: f32| TAU * hertz / speed;
         let base = Settings {
-            gap: 0,
             space: 0,
             thick: 0,
             speed: 2,
@@ -643,15 +939,51 @@ mod tests {
             let found = lost(thickness, hertz);
             assert!((found - wanted).abs() < 1.5, "{hertz}: {found} {wanted}");
         }
-        // The gap: a null where the tape crosses it in a cycle, v / g, here at 3.75 ips.
-        let gap = Settings {
-            speed: 0,
-            gap: 0xFF,
-            ..base
+    }
+
+    #[test]
+    fn the_gap_turns_the_top_and_the_level_as_satins_gap_width_does() {
+        // At 15 ips, 16 kHz against 1 kHz and 1 kHz against the default gap, at 1, 3 and 5 µm:
+        // Satin's +6.8, +0.2 and -3.5 dB, and -1.5, 0 and +1.4 dB.
+        let top = |gap: u8| {
+            response(Settings { gap, ..STILL }, 16_000.0, 0.03)
+                - response(Settings { gap, ..STILL }, 1_000.0, 0.03)
         };
-        let null = 0.095_25 / (vt_model::insert::MOST_REEL_GAP_UM * 1e-6);
-        assert!(lost(gap, null) < -25.0, "{}", lost(gap, null));
-        assert!(lost(gap, null * 0.5) > -6.0, "{}", lost(gap, null * 0.5));
+        let level = |gap: u8| {
+            response(Settings { gap, ..STILL }, 1_000.0, 0.03) - response(STILL, 1_000.0, 0.03)
+        };
+        for (gap, (wanted_top, wanted_level)) in
+            [(0x00, (6.6, -1.6)), (0x80, (0.6, 0.0)), (0xFF, (-3.6, 1.3))]
+        {
+            let (found_top, found_level) = (top(gap), level(gap));
+            assert!(
+                (found_top - wanted_top).abs() < 0.6,
+                "{gap:02X}: {found_top}"
+            );
+            assert!(
+                (found_level - wanted_level).abs() < 0.4,
+                "{gap:02X}: {found_level}"
+            );
+        }
+    }
+
+    #[test]
+    fn biased_too_little_its_harmonics_come_and_go_with_the_level() {
+        let at = |bias: u8, dbfs: f32| third(Settings { bias, ..BARE }, 10_f32.powf(dbfs / 20.0));
+        // Right, the third harmonic rises with the level; under, it rises, then falls into a null
+        // near +9 dBFS as the late switching straightens the curve, as Satin's at -5 does.
+        assert!(at(0x80, 9.0) > at(0x80, 3.0) + 4.0);
+        let (rising, null) = (at(0, 3.0), at(0, 9.0));
+        assert!(null < rising - 10.0, "{rising} {null}");
+        // Its fifth comes up past it there.
+        let mut reel = reel(Settings { bias: 0, ..BARE });
+        let out = through(
+            &mut reel,
+            1_000.0,
+            10_f32.powf(7.5 / 20.0),
+            RATE as usize / 2,
+        );
+        assert!(harmonic(&out, 5_000.0) > harmonic(&out, 3_000.0));
     }
 
     /// How far a 1 kHz sine's pitch moves, from where it crosses zero going up.
@@ -676,9 +1008,9 @@ mod tests {
     }
 
     #[test]
-    fn wow_and_flutter_move_the_pitch() {
-        assert!(pitch_spread(STILL, 2) < 1e-4);
-        assert!(pitch_spread(Settings { wow: 0xFF, ..STILL }, 8) > 0.002);
+    fn wow_and_flutter_move_the_pitch_and_at_00_not_at_all() {
+        assert!(pitch_spread(STILL, 2) < 1e-5);
+        assert!(pitch_spread(Settings { wow: 0xFF, ..STILL }, 8) > 0.000_5);
         assert!(
             pitch_spread(
                 Settings {
@@ -688,6 +1020,23 @@ mod tests {
                 2
             ) > 0.002
         );
+        // Still, it's the sound seven frames late, to the bit.
+        let mut reel = reel(BARE);
+        reel.tune();
+        let mut plain = reel.clone();
+        let mut line = std::collections::VecDeque::from(vec![[0.0_f32; 2]; 7]);
+        for frame in 0..RATE as usize / 4 {
+            let x = sine(frame, 3_000.0, 0.5, RATE);
+            let recorded = plain.sides[0].record(x, &plain.tuned, Heard::Four);
+            line.push_back([recorded; 2]);
+            let late = line.pop_front().unwrap()[0];
+            let out = reel.process([x; 2])[0];
+            assert_eq!(
+                out.to_bits(),
+                plain.sides[1].play(late, &plain.tuned).to_bits(),
+                "{frame}"
+            );
+        }
     }
 
     #[test]

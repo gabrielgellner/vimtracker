@@ -86,7 +86,8 @@ pub enum Place {
     Own,
     /// What the effect is: its type or mode, in the slot's title rather than its grid.
     Type,
-    /// In the title too, after its type, but a played setting: Beads' quality.
+    /// In the title too, after its type, but a played setting: Beads' quality, Reel's
+    /// oversampling.
     Title,
     /// What comes out, `Mix` and `Gain`: most effects' last column.
     Output,

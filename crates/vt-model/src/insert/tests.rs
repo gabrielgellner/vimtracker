@@ -912,3 +912,16 @@ fn stepping_goes_round_the_effects_and_keeps_nothing() {
     assert_eq!(Insert::Empty.stepped(true), Insert::ALL[1]);
     assert_eq!(Insert::Empty.stepped(false), last);
 }
+
+#[test]
+fn a_reels_oversampling_is_in_its_title_and_saved_only_when_it_isnt_four_times() {
+    let reel = Insert::Reel(Reel::DEFAULT);
+    let at = reel.title_param().unwrap();
+    assert_eq!(reel.params()[at].key, "oversampling");
+    assert_eq!(reel.params()[at].choices(), ["4x", "8x"]);
+    assert!(!ron::to_string(&reel).unwrap().contains("oversampling"));
+    let eight = reel.write(at, 1.0);
+    let saved = ron::to_string(&eight).unwrap();
+    assert!(saved.contains("oversampling:1"), "{saved}");
+    assert_eq!(ron::from_str::<Insert>(&saved).unwrap(), eight);
+}
