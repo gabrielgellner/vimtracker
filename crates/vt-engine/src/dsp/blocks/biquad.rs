@@ -92,6 +92,28 @@ impl Biquad {
         }
     }
 
+    /// The filter that undoes this one, its zeros and poles swapped: exact for one whose zeros
+    /// are inside the circle, as a shelf's and a peak's are.
+    pub(crate) fn inverse(self) -> Self {
+        Self {
+            b0: 1.0 / self.b0,
+            b1: self.a1 / self.b0,
+            b2: self.a2 / self.b0,
+            a1: self.b1 / self.b0,
+            a2: self.b2 / self.b0,
+        }
+    }
+
+    /// The same filter times a gain.
+    pub(crate) fn scaled(self, gain: f32) -> Self {
+        Self {
+            b0: self.b0 * gain,
+            b1: self.b1 * gain,
+            b2: self.b2 * gain,
+            ..self
+        }
+    }
+
     #[inline]
     pub(crate) fn process(&self, state: &mut [f32; 2], x: f32) -> f32 {
         let y = self.b0 * x + state[0];

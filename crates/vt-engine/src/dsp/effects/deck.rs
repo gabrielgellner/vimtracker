@@ -1,18 +1,29 @@
 //! A cassette deck or a VCR's linear audio track, worn or not (#259, direction 3): lo-fi tape.
 //! What goes in is pressed by a Dolby-style compander, saturated through [`Colour`]'s frame with
-//! the highs lifted first, as tape's pre-emphasis does, gathers hiss, wobbles, drops out and
-//! chews, loses its highs to the playback head as `Reel`'s does at the format's speed, loses its
-//! lows, and comes back through the compander's other half, which mistracks by `Track`.
+//! the highs lifted first, as tape's pre-emphasis does, loses its loud highs, gathers hiss,
+//! wobbles, drops out and chews, loses its highs to the playback head as `Reel`'s does at the
+//! format's speed, goes through the format's replay, and comes back through the compander's other
+//! half, which mistracks by `Track`.
 //!
-//! The format, `Type`, sets what a machine is: its speed and its head's losses, its lows, the
-//! colour of its hiss, how fast its wow and flutter go and how wide its stereo is. The settings
-//! are amounts, the same for every format.
+//! The format, `Type`, sets what a machine is: its speed and its head's losses, its replay, how
+//! soon its loud highs go, how fast its wow and flutter go and how wide its stereo is. The
+//! settings are amounts, the same for every format. Its sound is scaled to Wavesfactory's
+//! Cassette, compared by output only (#1079, decision 451): `Cassette` is Cassette's Type I tape
+//! on its Pro deck, `Worn` its Micro deck's replay, and the amounts' defaults are Cassette's.
 //!
+//! - **Drive** is how hard it hits the tape, made up after so it's no louder: at 0 dB a 1 kHz
+//!   sine's harmonics are Cassette's at its input of 0 dB.
+//! - **Loud highs soften**, as a cassette's do at its slow speed: a high shelf cuts by more as
+//!   the level comes up, by a detector on what goes onto the tape.
+//! - **Hiss** is pink, as Cassette's is, and rides on the sound too, as tape's modulation noise
+//!   does.
 //! - **Wow** is a slow sine and an Ornstein–Uhlenbeck drift, as ChowTape's `WowProcess` and
 //!   `OHProcess` have it, so it wanders rather than repeats; **flutter** is ChowTape's three
-//!   harmonics of the capstan's turn.
+//!   harmonics of the capstan's turn, weighted in pitch rather than in time, so its own rate is
+//!   the one heard.
 //! - **Dropouts** are its own, not ChowTape's: each a dip of a raised cosine, 10 to 120 ms long,
-//!   both quieter and darker, as a patch of missing oxide is, at random times.
+//!   that takes the highs far more than the lows, as a patch of missing oxide does, at random
+//!   times.
 //! - **Chew** is after ChowTape's `ChewProcessor`, its times simplified: now and then, a stretch of
 //!   crinkled tape where the sound is bent by a power of its level and darkened.
 //! - **The compander** is a one-band Dolby B of a sort: what's above 1.5 kHz is lifted by up to
@@ -27,12 +38,16 @@
 //!
 //! Copyright (c) 2019 Jatin Chowdhury.
 //!
+//! The pink noise is Paul Kellet's three-pole "economy" filter, its poles kept at the same
+//! frequencies at any rate.
+//!
 //! [`Colour`]: crate::dsp::blocks::saturator
 
-use std::f32::consts::TAU;
+use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
-use vt_model::insert::{Deck as Settings, DeckType, tape_drive_db};
+use vt_model::insert::{Deck as Settings, DeckType, deck_drive_db};
 
+use crate::dsp::blocks::biquad::Biquad;
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::coefficient::{of_corner, of_time};
 use crate::dsp::blocks::line::StereoLine;
@@ -43,6 +58,44 @@ use crate::dsp::effects::reel::{Head, Loss};
 use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::rng::Pcg32;
 
+/// A format's replay after the head: a high-pass, a peak, a high shelf and a fourth-order
+/// low-pass, Butterworth's first pair and a second of its own Q, none at a corner of nothing, and
+/// a level in dB that brings 1 kHz back to where it went in.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Replay {
+    level_db: f32,
+    low_hz: f32,
+    low_q: f32,
+    peak_hz: f32,
+    peak_q: f32,
+    peak_db: f32,
+    shelf_hz: f32,
+    shelf_db: f32,
+    top_hz: f32,
+    top_q: f32,
+}
+
+/// How a format's loud highs soften: a high shelf at a corner and a Q, cutting by `per_level` dB
+/// for each unit of level, a sine's peak against full scale, toward at most `most_db`, by a knee
+/// that rounds the turn.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Soften {
+    hz: f32,
+    q: f32,
+    per_level: f32,
+    most_db: f32,
+    knee: f32,
+}
+
+impl Soften {
+    /// The cut in dB at a level.
+    #[inline]
+    fn cut_db(self, level: f32) -> f32 {
+        let share = (self.per_level * level / self.most_db).max(0.0);
+        self.most_db * share.powf(self.knee).tanh().powf(1.0 / self.knee)
+    }
+}
+
 /// What a format is.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Format {
@@ -52,12 +105,10 @@ struct Format {
     gap_um: f32,
     spacing_um: f32,
     thickness_um: f32,
-    /// Where its lows fall away, by two poles.
-    low_hz: f32,
+    replay: Replay,
+    soften: Soften,
     /// How far its pre-emphasis lifts the highs into the curve, as a share of `Colour`'s most.
     emphasis: f32,
-    /// How much its hiss leans to the highs, from none, white, to all.
-    hiss_highs: f32,
     /// How fast its wow's sine and its capstan go, in Hz, and how far its wow goes against a
     /// cassette's.
     wow_hz: f32,
@@ -71,18 +122,38 @@ struct Format {
 
 /// The formats, in [`DeckType`]'s order: a cassette at 1⅞ ips; a VCR's linear audio track at
 /// SP's 1.31 ips, with its crosstalk between the tracks; and a worn cassette, its tape off the
-/// head, its transport loose, and dropping out by itself.
+/// head, its transport loose, and dropping out by itself. `Cassette`'s replay and soft highs are
+/// fitted to Cassette's Type I on its Pro deck, `Worn`'s replay to its Micro deck and its highs
+/// to its Home deck's; `VHS` keeps its lows and highs of decision 444, and its highs soften as a
+/// cassette's do, from a lower corner, as it runs slower.
 const FORMATS: [Format; 3] = [
     Format {
         ips: 1.875,
         gap_um: 1.0,
         spacing_um: 0.12,
         thickness_um: 0.5,
-        low_hz: 30.0,
+        replay: Replay {
+            level_db: 0.0,
+            low_hz: 23.2,
+            low_q: 0.856,
+            peak_hz: 156.0,
+            peak_q: 0.472,
+            peak_db: 3.7,
+            shelf_hz: 7_200.0,
+            shelf_db: 7.33,
+            top_hz: 17_400.0,
+            top_q: 0.515,
+        },
+        soften: Soften {
+            hz: 6_870.0,
+            q: 0.78,
+            per_level: 38.3,
+            most_db: 16.8,
+            knee: 1.3,
+        },
         emphasis: 0.5,
-        hiss_highs: 0.5,
-        wow_hz: 0.6,
-        flutter_hz: 8.0,
+        wow_hz: 1.0,
+        flutter_hz: 10.0,
         wow_depth: 1.0,
         worn_drops: 0.0,
         width: 1.0,
@@ -92,9 +163,26 @@ const FORMATS: [Format; 3] = [
         gap_um: 1.0,
         spacing_um: 0.25,
         thickness_um: 0.5,
-        low_hz: 90.0,
+        replay: Replay {
+            level_db: 0.0,
+            low_hz: 90.0,
+            low_q: 0.5,
+            peak_hz: 1_000.0,
+            peak_q: 0.7,
+            peak_db: 0.0,
+            shelf_hz: 9_000.0,
+            shelf_db: 0.0,
+            top_hz: 0.0,
+            top_q: 0.7,
+        },
+        soften: Soften {
+            hz: 5_000.0,
+            q: 0.78,
+            per_level: 38.3,
+            most_db: 16.8,
+            knee: 1.3,
+        },
         emphasis: 0.3,
-        hiss_highs: 0.2,
         wow_hz: 0.35,
         flutter_hz: 14.0,
         wow_depth: 0.8,
@@ -106,26 +194,69 @@ const FORMATS: [Format; 3] = [
         gap_um: 2.0,
         spacing_um: 0.6,
         thickness_um: 1.0,
-        low_hz: 60.0,
+        replay: Replay {
+            level_db: 2.8,
+            low_hz: 253.0,
+            low_q: 0.659,
+            peak_hz: 493.0,
+            peak_q: 0.789,
+            peak_db: -6.0,
+            shelf_hz: 4_770.0,
+            shelf_db: -9.45,
+            top_hz: 13_600.0,
+            top_q: 1.6,
+        },
+        soften: Soften {
+            hz: 6_045.0,
+            q: 0.55,
+            per_level: 19.6,
+            most_db: 18.5,
+            knee: 1.02,
+        },
         emphasis: 0.6,
-        hiss_highs: 0.4,
         wow_hz: 0.45,
         flutter_hz: 7.0,
-        wow_depth: 1.6,
-        worn_drops: 0.5,
+        wow_depth: 3.0,
+        worn_drops: 0.8,
         width: 0.8,
     },
 ];
 
-/// The most hiss, as its RMS before the head: -30 dBFS.
-const MOST_HISS: f32 = 0.031_6;
+/// Where the curve sits against the drive shown, as a gain: at 0 dB a 1 kHz sine's third
+/// harmonic is Cassette's at its input of 0 dB, -33 dB at full scale.
+const CURVE_LEVEL: f32 = 0.46;
+/// How far the lows are lifted into the curve, and let down after, so they saturate first, as
+/// Cassette's do: a shelf's corner, its Q and its lift in dB, which at 60 and 200 Hz is 13 and
+/// 12 dB, at 1 kHz half a dB, and above it nothing.
+const LOWS_LIFT: (f32, f32, f32) = (400.0, 0.7, 13.0);
+/// The most hiss, as its RMS before the head: at `FF` about -24 dBFS heard from `Cassette`; it
+/// goes as the cube of `Hiss`, so `40` is about -60 dBFS, Cassette's own.
+const MOST_HISS: f32 = 0.061_6;
+/// The most noise riding on the sound, as a share of its level, at `Hiss` `FF`; it goes straight
+/// up with `Hiss`, so at `40` it's about 42 dB under a sine's peak, as Cassette's is.
+const MOST_MODULATION: f32 = 0.033;
+/// Paul Kellet's economy pink: its poles' frequencies at 44.1 kHz, each one's weight over its
+/// pole's distance from one, and the white's, with its RMS at 48 kHz, so it's unit noise there.
+const PINK_HZ: [f32; 3] = [16.5, 264.0, 3_940.0];
+const PINK_WEIGHTS: [f32; 3] = [42.147, 8.0140, 2.4481];
+const PINK_WHITE: f32 = 0.1848;
+const PINK_RMS: f32 = 1.646;
 /// How long hiss carries on after the sound stops, and how long it takes to fade, in seconds,
 /// so a quiet track falls silent and sleeps rather than hissing for ever.
 const HISS_HOLD_SECONDS: f32 = 4.0;
 const HISS_FADE_SECONDS: f32 = 1.0;
-/// How far the wow moves the line either way at `FF`, in seconds, and the flutter.
-const MOST_WOW_SECONDS: f32 = 0.003;
-const MOST_FLUTTER_SECONDS: f32 = 0.000_05;
+/// How far the wow moves the line either way at `FF`, in seconds, and the flutter, and how each
+/// goes up with its setting, as a power of its share: `FF` is Cassette's most of each, 15 and
+/// 38 cents RMS, and `40` its default of each.
+const MOST_WOW_SECONDS: f32 = 0.003_47;
+const MOST_FLUTTER_SECONDS: f32 = 0.000_575;
+const WOW_POWER: f32 = 1.3;
+const FLUTTER_POWER: f32 = 1.6;
+/// The capstan's second and third harmonics, as ChowTape weights them in pitch, and their sum
+/// with the first's.
+const FLUTTER_SECOND: f32 = 0.35;
+const FLUTTER_THIRD: f32 = 0.43;
+const FLUTTER_SUM: f32 = 1.0 + FLUTTER_SECOND / 2.0 + FLUTTER_THIRD / 3.0;
 /// How long the wow's drift takes to forget where it was, in seconds.
 const DRIFT_SECONDS: f32 = 0.8;
 /// Where the drift is low-passed, in Hz.
@@ -134,14 +265,15 @@ const WANDER_HZ: f32 = 1.0;
 const WOW_SINE: f32 = 0.6;
 const WOW_DRIFT: f32 = 0.4;
 /// How many frames the line's length moves in a straight line between workings out, as the
-/// dropouts' and chews' chances are drawn.
+/// dropouts' and chews' chances are drawn and the soft highs' shelf is worked out again.
 const CONTROL_FRAMES: u32 = 32;
-/// The most dropouts a second at `Drops` `FF`, the shortest and longest, and the most one dips.
-const MOST_DROPS: f32 = 4.0;
+/// The most dropouts a second at `Drops` `FF`, the shortest and longest, and the most one takes
+/// off the whole sound, in dB; its highs go far further.
+const MOST_DROPS: f32 = 8.0;
 const DROP_SECONDS: (f32, f32) = (0.01, 0.12);
-const MOST_DROP_DB: f32 = 30.0;
-/// The corner a dropout darkens toward, and a chew.
-const DROP_HZ: f32 = 2_000.0;
+const MOST_DROP_DB: f32 = 6.0;
+/// The corner a dropout darkens toward, by two poles, and a chew's, by one.
+const DROP_HZ: f32 = 1_500.0;
 const CHEW_HZ: f32 = 5_000.0;
 /// How long the tape runs clean between chews on average, at the least `Chew` and at `FF`, and
 /// how long a chew lasts at the shortest and longest, in seconds.
@@ -149,6 +281,9 @@ const CHEW_APART_SECONDS: (f32, f32) = (6.0, 0.5);
 const CHEW_SECONDS: (f32, f32) = (0.05, 0.4);
 /// How fast a chew comes in and goes, in seconds.
 const CHEW_FADE_SECONDS: f32 = 0.01;
+/// How fast the level the loud highs soften by rises and falls, in seconds, at each of its two
+/// poles.
+const SOFTEN_SECONDS: (f32, f32) = (0.03, 0.09);
 /// The compander: where its band starts, the most it lifts, the level of the highs from which it
 /// starts to lift and how far below that it reaches its most, in dB, its detector's attack and
 /// release, in seconds, and how far `Track` at `FF` reads the level low, in dB.
@@ -227,17 +362,47 @@ struct Side {
     encoder: Half,
     decoder: Half,
     saturator: Saturator,
-    hiss: f32,
-    dropout: f32,
+    lift: [f32; 2],
+    unlift: [f32; 2],
+    soften: [f32; 2],
+    pink: [f32; 3],
+    dropout: [f32; 2],
     chew: f32,
     head: Head,
-    low_cut: [f32; 2],
+    replay: [[f32; 2]; 5],
+}
+
+/// Kellet's pink at a rate: each pole and its weight, and what the whole is scaled by.
+#[derive(Debug, Clone, Copy)]
+struct Pink {
+    poles: [f32; 3],
+    weights: [f32; 3],
+    scale: f32,
+}
+
+impl Pink {
+    fn new(rate: f32) -> Self {
+        let poles = PINK_HZ.map(|hertz| (-TAU * hertz / rate).exp());
+        Self {
+            poles,
+            weights: [0, 1, 2].map(|at| PINK_WEIGHTS[at] * (1.0 - poles[at])),
+            // White of the same level a hertz at any rate, so it's heard as loud at each.
+            scale: (rate / 48_000.0).sqrt() / PINK_RMS,
+        }
+    }
 }
 
 /// What both sides share for a frame.
 #[derive(Debug, Clone, Copy)]
 struct Frame {
     colouring: Colouring,
+    /// What the curve's level is made up by after, so the drive is no louder, and the lows'
+    /// lift into it and its undoing after.
+    makeup: f32,
+    lift: Biquad,
+    unlift: Biquad,
+    /// The loud highs' shelf now.
+    soften: Biquad,
     /// Whether the compander is in, its band's share, its detector's, its gain's glide and how
     /// low `Track` reads, in dB.
     companding: bool,
@@ -248,11 +413,11 @@ struct Frame {
     misread_db: f32,
     /// Whether the compander works its gains out again this frame.
     retarget: bool,
-    /// The hiss's level and how far it leans to the highs.
+    /// The hiss's level, with what rides on the sound, and its colour.
     hiss: f32,
-    hiss_highs: f32,
-    /// How far into its dip a dropout is, from 0 to 1, what's left of the level then, and its
-    /// darkening's share.
+    pink: Pink,
+    /// How far into its dip a dropout is, times how deep it goes, from 0 to 1, what's left of the
+    /// level then, and its darkening's share.
     drop: f32,
     drop_level: f32,
     drop_band: f32,
@@ -260,11 +425,10 @@ struct Frame {
     chew: f32,
     chew_power: f32,
     chew_band: f32,
-    low_cut: f32,
 }
 
 impl Side {
-    /// Onto the tape: lifted, saturated, and hiss on it.
+    /// Onto the tape: lifted, saturated, its loud highs softened, and hiss on it.
     #[inline]
     fn record(&mut self, x: f32, frame: &Frame, tuning: &Tuning, rng: &mut Pcg32) -> f32 {
         let mut x = x;
@@ -274,24 +438,35 @@ impl Side {
             self.encoder.detect(highs.abs(), frame, 0.0);
             x += highs * (self.encoder.gain - 1.0);
         }
-        let mut out = self.saturator.process(x, frame.colouring, tuning);
+        let x = frame.lift.process(&mut self.lift, x);
+        let out = self.saturator.process(x, frame.colouring, tuning) * frame.makeup;
+        let out = frame.unlift.process(&mut self.unlift, out);
+        let mut out = frame.soften.process(&mut self.soften, out);
         if frame.hiss > 0.0 {
             let white = rng.bipolar();
-            // What a one-pole leaves above it, toward which the format's hiss leans.
-            let highs = white - self.hiss;
-            self.hiss += highs * 0.5;
-            out += (white + (highs - white) * frame.hiss_highs) * frame.hiss;
+            let pink = &frame.pink;
+            let mut noise = PINK_WHITE * white;
+            for (state, (pole, weight)) in self
+                .pink
+                .iter_mut()
+                .zip(pink.poles.iter().zip(&pink.weights))
+            {
+                *state = pole * *state + weight * white;
+                noise += *state;
+            }
+            out += noise * pink.scale * frame.hiss;
         }
         out
     }
 
-    /// Off the tape: dropped out, chewed, through the head, the lows lost, and expanded back.
+    /// Off the tape: dropped out, chewed, through the head and the replay, and expanded back.
     #[inline]
-    fn play(&mut self, x: f32, frame: &Frame, loss: &Loss) -> f32 {
+    fn play(&mut self, x: f32, frame: &Frame, loss: &Loss, replay: &[Biquad; 5]) -> f32 {
         let mut x = x;
-        self.dropout += (x - self.dropout) * frame.drop_band;
+        self.dropout[0] += (x - self.dropout[0]) * frame.drop_band;
+        self.dropout[1] += (self.dropout[0] - self.dropout[1]) * frame.drop_band;
         if frame.drop > 0.0 {
-            x = (x + (self.dropout - x) * frame.drop) * frame.drop_level;
+            x = (x + (self.dropout[1] - x) * frame.drop) * frame.drop_level;
         }
         if frame.chew > 0.0 {
             let held = within(x, -1.0, 1.0);
@@ -302,9 +477,8 @@ impl Side {
             self.chew = x;
         }
         x = self.head.play(x, loss);
-        for state in &mut self.low_cut {
-            *state += (x - *state) * frame.low_cut;
-            x -= *state;
+        for (filter, state) in replay.iter().zip(&mut self.replay) {
+            x = filter.process(state, x);
         }
         if frame.companding {
             let highs = x - self.decoder.lows;
@@ -332,10 +506,11 @@ struct Transport {
     delay: Option<f32>,
     slope: f32,
     countdown: u32,
-    /// A dropout's place and length in frames, and how deep it goes, in dB; none at no length.
+    /// A dropout's place and length in frames, and how deep it goes, from 0 to 1; none at no
+    /// length.
     drop_at: u32,
     drop_frames: u32,
-    drop_db: f32,
+    drop_depth: f32,
     /// Frames left in a chew or until the next, whether it's chewing, and how hard.
     chew_left: u32,
     chewing: bool,
@@ -355,7 +530,7 @@ impl Transport {
             countdown: 0,
             drop_at: 0,
             drop_frames: 0,
-            drop_db: 0.0,
+            drop_depth: 0.0,
             chew_left: 0,
             chewing: false,
             chew_power: 1.0,
@@ -363,7 +538,7 @@ impl Transport {
     }
 }
 
-/// How far each of its filters and followers moves a frame, worked out for the rate and format.
+/// How far each of its filters and followers moves a frame, worked out for the rate.
 #[derive(Debug, Clone, Copy)]
 struct Shares {
     band: f32,
@@ -373,12 +548,18 @@ struct Shares {
     drop_band: f32,
     chew_band: f32,
     chew_fade: f32,
-    low_cut: f32,
+    soften_attack: f32,
+    soften_release: f32,
+    lift: Biquad,
+    unlift: Biquad,
+    pink: Pink,
 }
 
 impl Shares {
-    fn new(rate: f32, low_hz: f32) -> Self {
+    fn new(rate: f32) -> Self {
         let frames = rate as u32;
+        let (hertz, q, db) = LOWS_LIFT;
+        let lift = Biquad::high_shelf(hertz, q, -db, rate).scaled(10_f32.powf(db / 20.0));
         Self {
             band: of_corner(COMPANDER_HZ, rate),
             attack: of_time(DETECT_SECONDS.0, frames),
@@ -387,9 +568,37 @@ impl Shares {
             drop_band: of_corner(DROP_HZ, rate),
             chew_band: of_corner(CHEW_HZ, rate),
             chew_fade: of_time(CHEW_FADE_SECONDS, frames),
-            low_cut: of_corner(low_hz, rate),
+            soften_attack: of_time(SOFTEN_SECONDS.0, frames),
+            soften_release: of_time(SOFTEN_SECONDS.1, frames),
+            lift,
+            unlift: lift.inverse(),
+            pink: Pink::new(rate),
         }
     }
+}
+
+/// A format's replay as filters at a rate, its low-pass's corner kept under Nyquist.
+fn replay_filters(replay: Replay, rate: f32) -> [Biquad; 5] {
+    let top = |q: f32| {
+        if replay.top_hz > 0.0 {
+            Biquad::low_pass(replay.top_hz.min(0.45 * rate), q, rate)
+        } else {
+            Biquad::FLAT
+        }
+    };
+    [
+        Biquad::high_pass(replay.low_hz, replay.low_q, rate),
+        Biquad::peak(replay.peak_hz, replay.peak_q, replay.peak_db, rate),
+        Biquad::high_shelf(
+            replay.shelf_hz,
+            std::f32::consts::FRAC_1_SQRT_2,
+            replay.shelf_db,
+            rate,
+        )
+        .scaled(10_f32.powf(replay.level_db / 20.0)),
+        top(0.541),
+        top(replay.top_q),
+    ]
 }
 
 /// A deck's state and line.
@@ -402,10 +611,13 @@ pub(crate) struct Deck {
     kind: DeckType,
     format: Format,
     loss: Loss,
+    replay: [Biquad; 5],
     tuning: Tuning,
     shares: Shares,
     drive: Smoothed,
     hiss: Smoothed,
+    /// How much noise rides on the sound, as a share of its level.
+    modulation: Smoothed,
     /// How far wow and flutter move the line at most, in frames.
     wow: Smoothed,
     flutter: Smoothed,
@@ -414,6 +626,10 @@ pub(crate) struct Deck {
     chew_mix: Smoothed,
     /// `Track`, from 0 to 1; none is no compander.
     track: Smoothed,
+    /// The level the loud highs soften by, of what goes onto the tape, as a rectified average
+    /// through two poles, and their shelf now.
+    level: [f32; 2],
+    soften: Biquad,
     /// Frames since anything came in, for the hiss to stop.
     unheard: u32,
     rate: u32,
@@ -436,16 +652,20 @@ impl Deck {
             kind: DeckType::Cassette,
             format: FORMATS[0],
             loss: Loss::default(),
+            replay: [Biquad::FLAT; 5],
             tuning: Tuning::default(),
-            shares: Shares::new(rate as f32, FORMATS[0].low_hz),
+            shares: Shares::new(rate as f32),
             drive: Smoothed::default(),
             hiss: Smoothed::default(),
+            modulation: Smoothed::default(),
             wow: Smoothed::default(),
             flutter: Smoothed::default(),
             drops: Smoothed::default(),
             chew: Smoothed::default(),
             chew_mix: Smoothed::default(),
             track: Smoothed::default(),
+            level: [0.0; 2],
+            soften: Biquad::FLAT,
             unheard: 0,
             rate,
             smoothing: coefficient(rate),
@@ -469,8 +689,17 @@ impl Deck {
             format.thickness_um,
             rate,
         );
+        self.replay = replay_filters(format.replay, rate);
         self.tuning = Tuning::new(format.emphasis, 0.0, self.rate);
-        self.shares = Shares::new(rate, format.low_hz);
+        self.soften = self.shelf();
+    }
+
+    /// The loud highs' shelf at the level now.
+    fn shelf(&self) -> Biquad {
+        let soften = self.format.soften;
+        // A sine's rectified average is 2/π of its peak.
+        let cut = soften.cut_db(self.level[1] * FRAC_PI_2);
+        Biquad::high_shelf(soften.hz, soften.q, -cut, self.rate as f32)
     }
 
     pub(crate) fn frames(&self) -> usize {
@@ -481,6 +710,8 @@ impl Deck {
         self.line.clear();
         self.sides = [Side::default(); 2];
         self.transport = Transport::new(self.seed);
+        self.level = [0.0; 2];
+        self.soften = self.shelf();
         self.unheard = 0;
     }
 
@@ -496,12 +727,14 @@ impl Deck {
             self.shape(settings.kind);
         }
         let share = |value: u8| f32::from(value) / 255.0;
-        let squared = |value: u8| share(value) * share(value);
         let rate = self.rate as f32;
-        self.drive.target = 10_f32.powf(tape_drive_db(f32::from(settings.drive)) / 20.0);
-        self.hiss.target = squared(settings.hiss) * MOST_HISS;
-        self.wow.target = squared(settings.wow) * MOST_WOW_SECONDS * self.format.wow_depth * rate;
-        self.flutter.target = squared(settings.flutter) * MOST_FLUTTER_SECONDS * rate;
+        self.drive.target = 10_f32.powf(deck_drive_db(f32::from(settings.drive)) / 20.0);
+        self.hiss.target = share(settings.hiss).powi(3) * MOST_HISS;
+        self.modulation.target = share(settings.hiss) * MOST_MODULATION;
+        self.wow.target =
+            share(settings.wow).powf(WOW_POWER) * MOST_WOW_SECONDS * self.format.wow_depth * rate;
+        self.flutter.target =
+            share(settings.flutter).powf(FLUTTER_POWER) * MOST_FLUTTER_SECONDS * rate;
         self.drops.target = share(settings.drops);
         self.chew.target = share(settings.chew);
         self.track.target = share(settings.track);
@@ -512,6 +745,7 @@ impl Deck {
         for setting in [
             &mut self.drive,
             &mut self.hiss,
+            &mut self.modulation,
             &mut self.wow,
             &mut self.flutter,
             &mut self.drops,
@@ -549,26 +783,27 @@ impl Deck {
             // Smoothed, as ChowTape low-passes its drift, so it bends the pitch rather than jitters it.
             t.wander += (t.drift - t.wander) * of_corner(WANDER_HZ, 1.0 / seconds);
             let wobble = within(WOW_SINE * sine + WOW_DRIFT * t.wander, -1.0, 1.0);
-            // The flutter: ChowTape's three harmonics of the capstan.
+            // The flutter: ChowTape's three harmonics of the capstan, each moving the line by its
+            // weight over its number, so each bends the pitch by its weight.
             let turn = &mut t.flutter;
             let first = Self::turned(turn, format.flutter_hz * seconds);
             let phase = *turn * TAU;
             let flutter_now = (first
-                + 0.35 * (2.0 * phase + 13.0 * std::f32::consts::PI / 4.0).sin()
-                + 0.43 * (3.0 * phase - std::f32::consts::PI / 10.0).sin())
-                / 1.78;
+                + FLUTTER_SECOND / 2.0 * (2.0 * phase + 13.0 * PI / 4.0).sin()
+                + FLUTTER_THIRD / 3.0 * (3.0 * phase - PI / 10.0).sin())
+                / FLUTTER_SUM;
             let next = 1.0 + wow * (1.0 + wobble) + flutter * (1.0 + flutter_now);
             let now = *t.delay.get_or_insert(next);
             t.slope = (next - now) / frames;
-            // A dropout, by chance, with a block's worth of its rate.
-            let drop_rate = drops * drops * MOST_DROPS + format.worn_drops;
+            // A dropout, by chance, with a block's worth of its rate, deeper as `Drops` goes up.
+            let drop_rate = drops * MOST_DROPS + format.worn_drops;
             if t.drop_frames == 0 && t.rng.unit() < drop_rate * seconds {
                 let (shortest, longest) = DROP_SECONDS;
                 let length = shortest + (longest - shortest) * t.rng.unit();
                 t.drop_frames = (length * rate) as u32;
                 t.drop_at = 0;
-                let depth = drops.max(format.worn_drops);
-                t.drop_db = MOST_DROP_DB * depth * (0.3 + 0.7 * t.rng.unit());
+                let depth = drops.sqrt().max(format.worn_drops);
+                t.drop_depth = depth * (0.3 + 0.7 * t.rng.unit());
             }
             // A chew starts or ends, with a fresh power while it lasts.
             if chew > 0.0 {
@@ -585,7 +820,7 @@ impl Deck {
                     t.chew_left = (span * rate) as u32;
                 }
                 t.chew_left = t.chew_left.saturating_sub(CONTROL_FRAMES);
-                t.chew_power = 1.0 + (1.0 + 2.0 * t.rng.unit()) * chew;
+                t.chew_power = 1.0 + (1.0 + 2.0 * t.rng.unit()) * chew.sqrt();
             } else {
                 t.chewing = false;
                 t.chew_left = 0;
@@ -609,6 +844,27 @@ impl Deck {
         let delay = self.transport(wow, flutter, drops, chew);
         let delay = delay.clamp(1.0, (self.line.mask() - 3) as f32);
         let (whole, between) = (delay as usize, delay - delay.floor());
+        let retarget = self.transport.countdown == CONTROL_FRAMES - 1;
+
+        // The level going onto the tape, both sides as one so the image holds, which the loud
+        // highs soften by and the noise on the sound rides.
+        let drive = self.drive.next(smoothing);
+        let shares = self.shares;
+        let mut level = within(input[0].abs().max(input[1].abs()), 0.0, HEADROOM) * drive;
+        // Two poles, so a hit's first few milliseconds go through bright before its highs
+        // soften, as Cassette's do.
+        for stage in &mut self.level {
+            let speed = if level > *stage {
+                shares.soften_attack
+            } else {
+                shares.soften_release
+            };
+            *stage += (level - *stage) * speed;
+            level = *stage;
+        }
+        if retarget {
+            self.soften = self.shelf();
+        }
 
         // The hiss stops a while after the sound does.
         if input.iter().any(|s| s.abs() >= SILENT) {
@@ -618,6 +874,7 @@ impl Deck {
         }
         let past = self.unheard as f32 / rate - HISS_HOLD_SECONDS;
         let running = (1.0 - past / HISS_FADE_SECONDS).clamp(0.0, 1.0);
+        let riding = self.modulation.next(smoothing) * self.level[1] * FRAC_PI_2 / drive;
 
         let t = &mut self.transport;
         let drop = if t.drop_frames > 0 {
@@ -626,34 +883,38 @@ impl Deck {
             if t.drop_at >= t.drop_frames {
                 t.drop_frames = 0;
             }
-            let dip = (std::f32::consts::PI * along).sin();
-            dip * dip
+            let dip = (PI * along).sin();
+            dip * dip * t.drop_depth
         } else {
             0.0
         };
-        let shares = self.shares;
         self.chew_mix.target = if t.chewing { 1.0 } else { 0.0 };
-        let chew_mix = self.chew_mix.next(shares.chew_fade) * chew;
+        let chew_mix = self.chew_mix.next(shares.chew_fade) * chew.sqrt();
         let track = self.track.next(smoothing);
+        let curve = drive * CURVE_LEVEL;
         let frame = Frame {
             colouring: Colouring {
                 curve: Curve::Warm,
-                drive: self.drive.next(smoothing),
+                drive: curve,
                 even: 0.0,
                 hard: 0.0,
             },
+            makeup: 1.0 / curve,
+            lift: shares.lift,
+            unlift: shares.unlift,
+            soften: self.soften,
             companding: track > 0.0,
             band: shares.band,
             attack: shares.attack,
             release: shares.release,
             glide: shares.glide,
             misread_db: track * MOST_MISTRACK_DB,
-            retarget: t.countdown == CONTROL_FRAMES - 1,
-            hiss: self.hiss.next(smoothing) * running,
-            hiss_highs: self.format.hiss_highs,
+            retarget,
+            hiss: (self.hiss.next(smoothing) + riding) * running,
+            pink: shares.pink,
             drop,
             drop_level: if drop > 0.0 {
-                10_f32.powf(-t.drop_db * drop / 20.0)
+                10_f32.powf(-MOST_DROP_DB * drop / 20.0)
             } else {
                 1.0
             },
@@ -661,7 +922,6 @@ impl Deck {
             chew: chew_mix,
             chew_power: t.chew_power,
             chew_band: shares.chew_band,
-            low_cut: shares.low_cut,
         };
         self.line.advance();
         let mut out = [0.0; 2];
@@ -670,7 +930,7 @@ impl Deck {
                 self.sides[side].record(sample, &frame, &self.tuning, &mut self.transport.rng);
             self.line.write(side, recorded);
             let wobbled = self.line.hermite(side, whole, between);
-            out[side] = self.sides[side].play(wobbled, &frame, &self.loss);
+            out[side] = self.sides[side].play(wobbled, &frame, &self.loss, &self.replay);
         }
         // The format's stereo: its tracks' crosstalk narrows it.
         let middle = 0.5 * (out[0] + out[1]);
@@ -802,6 +1062,52 @@ mod tests {
     }
 
     #[test]
+    fn loud_highs_soften_and_quiet_ones_dont() {
+        // 10 kHz against itself 30 dB quieter: Cassette's is about 12 dB down at -12 dBFS.
+        let at = |level: f32, drive: u8| {
+            let mut deck = deck(Settings { drive, ..CLEAN });
+            harmonic(
+                &left(&through(&mut deck, 10_000.0, level, RATE as usize)),
+                10_000.0,
+            ) / level
+        };
+        let quiet = at(0.008, 0x80);
+        let loud = db(at(0.25, 0x80) / quiet);
+        assert!(loud < -8.0 && loud > -16.0, "{loud}");
+        // Driven harder, it softens sooner.
+        assert!(db(at(0.032, 0xD5) / quiet) < db(at(0.032, 0x80) / quiet) - 3.0);
+    }
+
+    #[test]
+    fn drive_saturates_without_getting_louder() {
+        let third = |drive: u8, level: f32| {
+            let mut deck = deck(Settings { drive, ..CLEAN });
+            let out = left(&through(&mut deck, 1_000.0, level, RATE as usize / 2));
+            (
+                harmonic(&out, 1_000.0) / level,
+                harmonic(&out, 3_000.0) / harmonic(&out, 1_000.0),
+            )
+        };
+        for drive in [0x00, 0x80, 0xFF] {
+            let (gain, _) = third(drive, 0.03);
+            assert!(db(gain).abs() < 0.5, "{drive:x}: {}", db(gain));
+        }
+        // At 0 dB a full-scale sine's third is Cassette's at its input of 0 dB, -33 dB, and it
+        // comes up as the drive does.
+        let (_, most) = third(0x80, 1.0);
+        assert!((db(most) + 33.0).abs() < 1.5, "{}", db(most));
+        assert!(db(third(0xFF, 0.25).1) > db(third(0x80, 0.25).1) + 20.0);
+        // The lows saturate first: at -12 dBFS, 60 Hz's third is about 25 dB over 1 kHz's.
+        let low = |level: f32| {
+            let mut deck = deck(CLEAN);
+            let out = left(&through(&mut deck, 60.0, level, RATE as usize));
+            harmonic(&out, 180.0) / harmonic(&out, 60.0)
+        };
+        let (lows, middle) = (db(low(0.25)), db(third(0x80, 0.25).1));
+        assert!(lows > middle + 18.0, "{lows} {middle}");
+    }
+
+    #[test]
     fn hiss_comes_up_with_its_setting_and_stops_after_the_sound() {
         let hiss = |amount: u8| {
             let mut deck = deck(Settings {
@@ -818,7 +1124,7 @@ mod tests {
         assert!(hiss(0) < 1e-6, "{}", hiss(0));
         let (some, most) = (db(hiss(0x80)), db(hiss(0xFF)));
         assert!(
-            most > some + 10.0 && most < -25.0 && some > -60.0,
+            most > some + 10.0 && most < -20.0 && some > -60.0,
             "{some} {most}"
         );
         let mut deck = deck(Settings {
@@ -879,24 +1185,33 @@ mod tests {
     }
 
     #[test]
-    fn dropouts_dip_the_level_now_and_then() {
-        let dips = |drops: u8, kind: DeckType| {
+    fn dropouts_dip_the_highs_now_and_then_and_the_lows_less() {
+        let dips = |drops: u8, kind: DeckType, hertz: f32| {
             let mut deck = deck(Settings {
                 drops,
                 kind,
                 ..CLEAN
             });
-            let out = left(&through(&mut deck, 1_000.0, 0.5, RATE as usize * 8));
-            // Windows of 10 ms whose level is 6 dB or more under the tone's.
-            out.chunks(RATE as usize / 100)
+            let out = left(&through(&mut deck, hertz, 0.05, RATE as usize * 8));
+            // Windows of 10 ms whose level is 6 dB or more under the tone's usual.
+            let levels: Vec<f32> = out
+                .chunks(RATE as usize / 100)
                 .skip(10)
-                .filter(|window| rms(*window) < 0.5 / 2.0_f32.sqrt() * 0.5)
-                .count()
+                .map(|window| rms(window))
+                .collect();
+            let mut sorted = levels.clone();
+            sorted.sort_by(f32::total_cmp);
+            let usual = sorted[sorted.len() / 2];
+            levels.iter().filter(|level| **level < usual * 0.5).count()
         };
-        assert_eq!(dips(0, DeckType::Cassette), 0);
-        assert!(dips(0xFF, DeckType::Cassette) > 3);
+        assert_eq!(dips(0, DeckType::Cassette, 6_000.0), 0);
+        let (highs, lows) = (
+            dips(0xFF, DeckType::Cassette, 6_000.0),
+            dips(0xFF, DeckType::Cassette, 500.0),
+        );
+        assert!(highs > 40 && lows < highs / 2, "{highs} {lows}");
         // A worn tape drops out by itself.
-        assert!(dips(0, DeckType::Worn) > 0);
+        assert!(dips(0, DeckType::Worn, 6_000.0) > 0);
     }
 
     #[test]

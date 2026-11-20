@@ -449,32 +449,41 @@ CPU counts. A change while a sound plays crossfades in about 10 ms, so it
 doesn't click, and `1OVS` sets it from a step in slot 1.
 
 `Deck` is lo-fi tape: a cassette, a VCR's linear audio track, or a worn
-cassette, with everything that goes wrong with them. Its `Type`, in the
-title, is the format, which sets its highs and lows, its hiss, how fast it
-wobbles and how wide its stereo is:
+cassette, with everything that goes wrong with them. Where `Reel` is subtle
+mastering tape, `Deck` is the obvious kind: an audible warble, loud hits
+that dull, lows that glue. It's scaled to Wavesfactory's Cassette plugin,
+so as it starts it sounds as Cassette does as that starts, and each setting
+reaches about as far as Cassette's nearest control. Its `Type`, in the
+title, is the format, which sets its highs and lows, how soon loud highs
+dull, how fast it wobbles and how wide its stereo is:
 
 | Type | Its sound |
 |---|---|
-| `Cassette` | Highs to about 12 kHz, a gentle wow at about 0.6 Hz |
+| `Cassette` | A good deck: warm low mids, highs to about 15 kHz, a wow at 1 Hz and a flutter at 10 Hz |
 | `VHS` | Softer highs, thin lows, and its stereo narrowed by crosstalk |
-| `Worn` | Dull and loose, and it drops out now and then by itself |
+| `Worn` | A cheap, worn deck: thin and dull, very loose, and it drops out now and then by itself |
 
 | Setting | Does |
 |---|---|
-| `Drive` | How hard it hits the tape, from -18 dB to +18 dB, 0 dB at `80` |
-| `Hiss` | The tape's hiss, from none at `00` to about -40 dB at `FF` |
-| `Wow` | A slow, wandering wobble in pitch, never quite the same twice |
-| `Flutter` | A fast wobble in pitch, from the capstan |
-| `Drops` | How often and how deep the sound dips, dulled, for a moment |
+| `Drive` | How hard it hits the tape, from -24 dB to +24 dB, 0 dB at `80`, made up after so it's no louder |
+| `Hiss` | The tape's hiss, from none at `00` to about -24 dB at `FF`, and the noise riding on the sound |
+| `Wow` | A slow, wandering wobble in pitch, up to about 15 cents at `FF` |
+| `Flutter` | A fast warble in pitch, from the capstan, up to about 38 cents at `FF` |
+| `Drops` | How often and how deep the sound dips for a moment, its highs far more than its lows |
 | `Chew` | Now and then a stretch of crinkled tape, bent and dulled |
 | `Track` | Noise reduction, mistracking more as it goes up |
 
-`Drive` saturates the highs first, as tape's pre-emphasis does. `Track` at
-`00` is no noise reduction at all; just above, it's a Dolby that nearly
-tracks, and higher up it reads the tape low, so the highs come back dull and
-breathe with the level. The hiss stops a few seconds after the sound does,
-so a quiet track falls silent. The wobble, dropouts and chews are drawn from
-the track's own dice, so a song plays the same each time.
+`Drive` bends the lows first, so a kick and a bass squash and glue before
+the rest does. Loud highs dull as they hit, as a cassette's slow tape can't
+hold them, more as `Drive` goes up; a hit's first few milliseconds still
+come through bright, and the highs come back within about half a second
+after it. At the top of `Wow` and `Flutter` it's well past a good deck, a
+seasick lean and a chorus-like warble. `Track` at `00` is no noise
+reduction at all; just above, it's a Dolby that nearly tracks, and higher
+up it reads the tape low, so the highs come back dull and breathe with the
+level. The hiss stops a few seconds after the sound does, so a quiet track
+falls silent. The wobble, dropouts and chews are drawn from the track's own
+dice, so a song plays the same each time.
 
 `Exciter` adds air, after the Aphex Aural Exciter as ChowDSP models it in
 Surge: it takes the highs of the sound, drives them into a soft clip for
