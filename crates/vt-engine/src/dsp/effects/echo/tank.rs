@@ -445,7 +445,7 @@ mod tests {
         for frame in 0..RATE as usize {
             let x = if frame == 0 { 0.5 } else { 0.0 };
             let [l, r] = tank.process([x, x]);
-            assert!(l == r, "{l} {r}");
+            assert_eq!(l.to_bits(), r.to_bits(), "{l} {r}");
         }
     }
 
