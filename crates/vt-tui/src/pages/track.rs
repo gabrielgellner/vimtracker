@@ -117,6 +117,9 @@ pub struct TrackPage {
     /// Whether the FX page is zoomed in on the cursor's slot, `z i`, rather than showing the rack.
     /// It's kept while other pages show, as the FX page's own.
     pub zoomed: bool,
+    /// Which FX slots are turned to their second page, `t`, for an effect that has one (decision
+    /// 452). It's the page's, not the song's, as a hardware page button is.
+    pub slot_pages: [bool; INSERTS],
     /// The ids of the terminal's images of the pictures the page last wanted, by panel: the
     /// filter's curve and a sampler's thumbnail, the Mod page's slots, the FX page's slots or its
     /// zoomed one, the Gen page's previews by each generator's place in its phrase's list.
@@ -154,6 +157,7 @@ impl Default for TrackPage {
             kept: Default::default(),
             phrase: None,
             zoomed: false,
+            slot_pages: [false; INSERTS],
             images: PanelIds::default(),
             zoom_caption: None,
             lfo_cycles_at: Default::default(),
@@ -168,8 +172,19 @@ impl Default for TrackPage {
 
 impl TrackPage {
     /// The page's devices, or none with no track.
+    /// The page's devices, or none with no track. An FX slot turned to its second page has that
+    /// page's grid.
     pub fn devices(&self, track: Option<&Track>) -> Vec<DeviceSpec> {
-        track.map_or_else(Vec::new, |track| self.page.devices_on(track, self.phrase))
+        let mut devices =
+            track.map_or_else(Vec::new, |track| self.page.devices_on(track, self.phrase));
+        if self.page == Page::Fx {
+            for (device, turned) in devices.iter_mut().zip(self.slot_pages) {
+                if turned {
+                    *device = device.clone().turned();
+                }
+            }
+        }
+        devices
     }
 
     /// The page's rows as the cursor goes through them, each device's in turn, each a list of
@@ -307,6 +322,26 @@ impl TrackPage {
             }
             Cmd::ZoomSlot | Cmd::ZoomRack if self.page != Page::Fx => {
                 return Outcome::Refused("z i zooms in on an effect, on the FX page");
+            }
+            Cmd::SlotPage(_) if self.page != Page::Fx => {
+                return Outcome::Refused("]p and [p turn an effect's pages, on the FX page");
+            }
+            // With two pages at most, the next and the previous are the other, going round.
+            Cmd::SlotPage(_) => {
+                let Some(cursor) = self.device_cursor(track) else {
+                    return Outcome::Refused("]p and [p turn an effect's pages, on the FX page");
+                };
+                let devices = self.devices(track);
+                if devices
+                    .get(cursor.device)
+                    .is_none_or(|device| device.second.is_none())
+                {
+                    return Outcome::Refused("This effect has one page");
+                }
+                if let Some(turned) = self.slot_pages.get_mut(cursor.device) {
+                    *turned = !*turned;
+                }
+                self.move_to(track, self.row, self.field);
             }
             Cmd::ZoomSlot => self.zoomed = !self.zoomed,
             Cmd::ZoomRack => self.zoomed = false,
@@ -559,6 +594,16 @@ impl crate::pages::Page for TrackPage {
             "z o",
             Cmd::ZoomRack,
             "On the FX page, back out to every slot",
+        ),
+        (
+            "] p",
+            Cmd::SlotPage(true),
+            "On the FX page, this slot's next page",
+        ),
+        (
+            "[ p",
+            Cmd::SlotPage(false),
+            "On the FX page, this slot's previous page",
         ),
         ("/", Cmd::FieldJump, "Jump to a setting by its name"),
         (

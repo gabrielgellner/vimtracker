@@ -197,7 +197,9 @@ fn every_effects_grid_places_each_of_its_settings_once_with_what_comes_out_last(
             .into_iter()
             .chain(effect.title_params())
             .collect();
-        let wanted: Vec<usize> = (0..params.len()).filter(|at| !elsewhere.contains(at)).collect();
+        let wanted: Vec<usize> = (0..params.len())
+            .filter(|at| !elsewhere.contains(at))
+            .collect();
         assert_eq!(placed, wanted, "{effect:?}: {grid:?} {second:?}");
         // The column of what comes out is the last one used.
         let used = (0..GRID_COLUMNS)

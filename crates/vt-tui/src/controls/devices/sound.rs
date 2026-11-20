@@ -194,5 +194,7 @@ fn device<const TITLE: usize>(
         width: DeviceWidth::Full,
         title: std::array::from_fn(|at| title.get(at).copied().flatten()),
         grid,
+        second: None,
+        turned: false,
     }
 }

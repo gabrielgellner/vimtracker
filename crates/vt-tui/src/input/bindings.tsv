@@ -214,6 +214,8 @@ Track	p	Paste	Put the effect taken in this slot
 Track	b	Bypass	Switch this effect or modulator out, or back in
 Track	z i	ZoomSlot	On the FX page, zoom in on this slot, or back out
 Track	z o	ZoomRack	On the FX page, back out to every slot
+Track	] p	SlotPage(true)	On the FX page, this slot's next page
+Track	[ p	SlotPage(false)	On the FX page, this slot's previous page
 Track	/	FieldJump	Jump to a setting by its name
 Track	M	MapMacro	Map this setting to a macro, or move it, or take it off
 Track	g m	MacroMapping	This macro's mapping, or the one this setting is on

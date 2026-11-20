@@ -5,7 +5,7 @@ The FX page has 4 slots, which the sound goes through in order after the filters
 before `Level` and `Pan`. An empty slot does nothing and costs nothing.
 
 Each slot is a device: a frame with the slot's number, its switch, its effect and the effect's
-type in its title, and for `Beads` its quality and for `Reel` its oversampling too, its settings in three rows of up to four, and, for `Comp`, `Limit` and `EQ3`,
+type in its title, and for `Beads` its quality, for `Reel` its oversampling and for `Deck` its tape and generations too, its settings in three rows of up to four, and, for `Comp`, `Limit` and `EQ3`,
 a box on the right with its curve or how far it's turning down. The switch is a small pill, its
 knob right and green while the slot is in, and left and faint while it's bypassed. A setting
 that's off or on, such as a Comp's `Auto`, shows the same switch rather than a word. The device
@@ -26,6 +26,7 @@ with the cursor has the brighter frame. An empty slot keeps its frame, says `Emp
 | `p` | Put it in this slot, swapping with what's there |
 | `b` | Bypass this slot, to hear without it, or bring it back |
 | `z i` `z o` | Zoom in on this slot, or back out to every slot |
+| `]p` `[p` | Next or previous page of this slot, if it has two |
 
 `K` on the effect lists them by kind, roughly in the order a sound goes through them, with
 `---` for an empty slot first and loading or saving an effect preset last:
@@ -54,6 +55,16 @@ and its type over the second: the `Type` of a `Distort`, `Chorus` or `Comp`, and
 an `LPG` or `Comb`, are in the title rather than among the settings. `{` and `}` keep the row
 and column, so they come back after an empty slot, and `2j` goes two rows down. `b` and `p` work
 from any row of a slot, and `dd` takes the effect out from its name, in the title.
+
+A few effects have more settings than three rows of four hold, so they have a second page, as
+an Elektron's pages are: `Deck` is the one so far. Its slot's title ends in its page numbers,
+`1 2`, the one showing bright. `]p` turns the slot under the cursor to its next page and `[p`
+to its previous, going round, as `]b` and `[b` go between tracks, and the cursor stays in the
+same row and column, so a setting and the one in its place on the other page are a `]p` apart.
+On a slot with one page they do nothing, and the status line says so. Each slot keeps its page
+while you go between slots and pages, but not in the song: it's where you are, not what you made. Zoomed in, the slot shows both pages, the one you're on
+bright and the other faint under or over it. Steps, LFOs and macros reach every setting on either
+page, as they reach any other.
 
 `dd` then `p` is one undo step, and an effect can move to another track's slot too. Modulation and
 step commands stay with the slot, so they reach whatever's there now.
@@ -486,9 +497,48 @@ hard. A VCR's track takes no cassette, so on `VHS` all three are the same.
 | `Hiss` | The hiss, none at `00` to about -24 dB at `FF`, and noise on the sound |
 | `Wow` | A slow, wandering wobble in pitch, up to 12 cents at `FF` |
 | `Flutter` | A fast warble in pitch, the capstan's, up to 32 cents at `FF` |
-| `Drops` | How deep the highs flicker away and slowly dull |
+| `Drops` | How deep the highs flicker away |
 | `Chew` | Now and then a stretch of crinkled tape, bent and dulled |
 | `Track` | Noise reduction, mistracking more as it goes up; none at the start |
+
+Its second page, `]p`, has the rest of Cassette's controls, each under
+the setting on the first page it goes with:
+
+| Setting | Does |
+|---|---|
+| `Azimuth` | The head off square: a side up to 227 µs late |
+| `Crosstalk` | Each side's highs leaking into the other's |
+| `Wow rate` | How fast the wow goes, against the format's |
+| `Flut rate` | How fast the flutter goes, against the format's |
+| `Degrade` | How far the highs slowly dull and come back |
+| `Erase` | How often the tape was erased: fuller mids, a duller top |
+| `Snap` | Now and then the tape snags and the pitch dives |
+
+`Generations`, in the title after `Tape`, copies it tape to tape: `x1` is
+the tape alone, and `x2` to `x4` record each copy from the last one's
+playback, as Cassette's `Re-cassette` does. Each copy adds the tape's
+lows, its dull top, its hiss and its saturation again, and its wobble
+nearly doubles the last one's, so `x4` is a cassette dubbed three times:
+thick, dark, hissy and seasick.
+
+Each side drops out and degrades by its own, as two tracks on a real
+tape do, and a little of each side's highs leaks into the other's, about
+-35 dB at the top, Cassette's own, so the stereo image wanders a little
+in the highs while the lows and mids stay put. `Crosstalk` at `00` takes
+the leak away, and at `FF` it's 0 dB at the top, nearly mono up there.
+`Azimuth` plays one side late, the right below `80` and the left above,
+so a mono sum loses its highs, from about 2 kHz at either end. `Degrade`
+starts at `40`, Cassette's own: a few dB of slow dulling at 12 kHz, each
+side wandering by its own and a few µs apart in time. At `00` the highs
+hold still. A `Snap` dives the pitch by up to a semitone or so for a
+tenth of a second and swings back, at `FF` about once every two seconds.
+The rates are against the format's own, which they are at `80`: from a
+fifth to five times for the wow and from half to twice for the flutter.
+`Cassette`'s wow is 1 Hz and its flutter 10 Hz, so `Wow rate` reaches
+Cassette's 0.5 to 5 Hz, and `Flut rate` its 8 to 20 Hz. `Azimuth` is
+square at `80`, `Crosstalk` none at `00`, and `Erase` and `Snap` start
+at `00`, none. A faster wobble bends the pitch further at
+the same depth, as tape's does.
 
 `Drive` bends the lows and low mids first, up to about 500 Hz, so a kick
 and a bass squash and glue, and a voice's body thickens, before the rest
