@@ -171,6 +171,13 @@ impl Engine {
         self.tracks.get_mut(index)?.take_note_pitch()
     }
 
+    /// The cutoff and resonance a track's filter was last set from, on their `0..=1` scales, with
+    /// what modulation adds and their smoothing, so a probe can play the same moves on another
+    /// filter.
+    pub fn filter_heard(&self, index: usize) -> Option<[f32; 2]> {
+        self.tracks.get(index).map(|state| state.heard_filter)
+    }
+
     /// What a track is playing with right now. A sound track with nothing going through it isn't
     /// run, so its slots turn nothing down, whatever they last did.
     pub fn live(&self, index: usize) -> LiveValues {

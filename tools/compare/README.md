@@ -216,6 +216,29 @@ measuring, on 2026-11-10:
   that open response, which lifts the bass by up to 4.6 dB around 60 Hz, is taken out of every
   other. Its `limit_resonance` stops it ringing, as its name says, so it's off.
 
+### The filter gate
+
+`filter_gate.py` is the gate for M38 "Filters by ear" (#1081, decision 453): the same circuits
+against the same references while the cutoff and resonance move, and Ladder's Xpander modes
+against Filter M12, with each circuit's differences from The Drop listed biggest first. It runs
+`filter_refs.py`'s static measures too, and reads each plugin's cutoff knob in hertz per step.
+
+```sh
+uv run filter_gate.py                        # everything, about 15 minutes the first time
+uv run filter_gate.py --circuit ladder       # one: svf, obx, ladder, ms20 or xpander
+uv run filter_gate.py --no-static --no-knobs # only the moving measures
+```
+
+Ours moves through its own mod slots: an LFO or an envelope on `Cut` or `Res`, played by
+`vimtracker probe`, whose `--controls` writes down the cutoff and resonance its filter heard every
+32 frames, after the slots' smoothing. Each reference is rendered in blocks of 32 frames, set
+before each block to what ours heard in it, so both follow one path. Each plugin's own smoothing of
+a setting comes on top, which the `step` case measures: The Drop follows within about 2 ms, Filter
+SEM in 10 to 35 ms, Filter MS-20 in 12 to 25 ms and Filter MINI in 50 to 110 ms, so a fast sweep
+on an Arturia filter lags, and only The Drop is a fair pair for an envelope. The measures and the
+flags are in `filter_gate.py`'s docstring; the page is `out/filter-gate/index.html`, with the
+static measures on `static.html` beside it, and `gate.json` has everything.
+
 The Acid's filter is inside the voice, where the probe can't feed it a sweep, so `acid-filter`
 reads its shape from a held sawtooth's harmonics on both sides. The track filter's `Diode` type is
 the same ladder given a sweep, in `filter-ours`.
@@ -620,6 +643,13 @@ acid.wave = "Saw"           # a choice by its name, or its place from 0
 cut = 0xC0                  # the track's own: vol, pan, cut, res, mode, pitch, glide
 filter = "Ladder"           # the track's filter type, by the name the Sound page shows
 
+[ours.mods.2]               # a mod slot, numbered from 1 as the Mod page does, as songs store one
+kind = "Adsr"               # or "Lfo", and so on
+destination = "cut"
+depth = 120                 # in the destination's units, -255 to 255
+adsr = { attack_ms = 1, decay_ms = 120, sustain = 0, release_ms = 60, reset = true }
+# lfo = { shape = "Tri", rate = { Hertz = 50 }, phase = 0, mode = "Free" }   # Hertz in hundredths
+
 [reference]
 plugin = "/Library/Audio/Plug-Ins/VST3/Acid V.vst3"
 plugin_name = "..."         # optional, for a bundle with several plugins
@@ -677,7 +707,13 @@ makes them by the same formulas as `crates/vt-tui/src/offline/dsp_probe.rs`, in 
 
 Our side plays a note as the keyboard does, held through a track, so the track's voice, filter and
 effects are all heard and nothing is sequenced; notes that overlap slide on a voice that slides, as
-held keys do. An input goes through the track at full level with no fades. The limiter is off, so
+held keys do. With mod slots given, which rest while the transport is stopped, an empty song plays
+underneath, and each note starts and releases the track's modulation as a sequenced note does, so
+an envelope follows the notes and an LFO runs from the first frame. A case's `mods` put slots of
+its own in place of the spec's, by number. `vimtracker probe --controls heard.csv` writes down the
+cutoff in hertz and the resonance, on its `0` to `1` scale, that the track filter heard every 32
+frames, with what modulation added and after smoothing, so another filter can be moved the same
+way. An input goes through the track at full level with no fades. The limiter is off, so
 nothing is clipped. A setting the spec has no place for, such as another voice's or one for an
 effect not in its slots, is refused, as is a key the program doesn't have, with the keys beside
 it.

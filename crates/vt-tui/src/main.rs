@@ -61,6 +61,9 @@ enum Command {
         /// Also write the track filter's response as the Sound page draws it, as CSV.
         #[arg(long)]
         response: Option<PathBuf>,
+        /// Also write the cutoff and resonance the track filter heard every 32 frames, as CSV.
+        #[arg(long)]
+        controls: Option<PathBuf>,
     },
     /// Write one track's notes from a saved project, once through its chain, with the tempo and
     /// its machine's settings, as TOML for tools/compare to play on every side. The project is
@@ -189,12 +192,14 @@ fn main() -> std::process::ExitCode {
             case,
             write_input,
             response,
+            controls,
         }) => vt_tui::offline::dsp_probe::run(&vt_tui::offline::dsp_probe::ProbeRequest {
             spec,
             out,
             case,
             write_input,
             response,
+            controls,
         })
         .map_err(|e| e.to_string()),
         Some(Command::Notes {

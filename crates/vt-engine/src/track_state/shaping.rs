@@ -284,6 +284,7 @@ impl TrackState {
             + self.res_offset.next(run.fast)
             + self.res_envelope.next(run.fast))
         .clamp(0.0, 1.0);
+        self.heard_filter = [cutoff, resonance];
         let position = (self.pan.next(run.smoothing)
             + self.pan_offset.next(run.fast)
             + self.pan_envelope.next(run.fast))

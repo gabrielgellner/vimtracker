@@ -231,6 +231,9 @@ pub(crate) struct TrackState {
     /// Whether `key_track` jumps to the next note heard rather than moving there, as the filter
     /// has settled while nothing sounded.
     key_settles: bool,
+    /// The cutoff and resonance the filter was last set from, on their `0..=1` scales, with
+    /// modulation and smoothing, for a probe to write down what the filter heard.
+    pub(crate) heard_filter: [f32; 2],
     trim: [Trim; 2],
     low_cut: Smoothed,
     /// What each of its effects keeps.
@@ -444,6 +447,7 @@ impl TrackState {
             held_key_track: f32::from(SettingId::KEY_TRACK.entry().default),
             key_track: Smoothed::at(0.0),
             key_settles: false,
+            heard_filter: [1.0, 0.0],
             trim: [Trim::default(); 2],
             low_cut: Smoothed::at(0.0),
             inserts: std::array::from_fn(|slot| {

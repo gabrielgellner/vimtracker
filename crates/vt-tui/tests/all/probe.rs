@@ -4,7 +4,8 @@ use std::path::PathBuf;
 
 use vt_model::song::FilterType;
 use vt_tui::offline::dsp_probe::{
-    self, Input, Loaded, ProbeError, drawn_response, frames_in, parse, prepare, render,
+    self, CONTROL_FRAMES, Input, Loaded, ProbeError, drawn_response, frames_in, parse, prepare,
+    render, render_with_controls,
 };
 
 const ACID_SPEC: &str = include_str!("../../../../tools/compare/specs/acid-cutoff.toml");
@@ -461,4 +462,87 @@ fn case_notes_are_checked_and_need_a_voice() {
         sine_through("")
     );
     assert!(refused(&effect).contains("input"));
+}
+
+/// A sine through the ladder at `Cut` 988 Hz, with these mod slots.
+fn ladder_moved(mods: &str) -> String {
+    sine_through(&format!(
+        "[ours.settings]\nfilter = \"Ladder\"\ncut = 0x90\nres = 0x40\n{mods}"
+    ))
+}
+
+fn controls(text: &str) -> (Vec<f32>, Vec<[f32; 2]>) {
+    render_with_controls(
+        prepare(&loaded(text), None).expect("the spec prepares"),
+        true,
+    )
+}
+
+#[test]
+fn writing_down_the_controls_leaves_the_sound_as_it_is() {
+    for text in [ladder_moved(""), acid("")] {
+        let (heard, steps) = controls(&text);
+        assert_eq!(heard, rendered(&text, None));
+        assert_eq!(steps.len(), heard.len() / 2 / CONTROL_FRAMES);
+    }
+    let (_, steps) = controls(&ladder_moved(""));
+    let (cut, res) = (144.0 / 255.0, 64.0 / 255.0);
+    assert!(
+        steps
+            .iter()
+            .all(|step| (step[0] - cut).abs() < 1e-6 && (step[1] - res).abs() < 1e-6),
+        "a filter nothing moves is heard where it's set"
+    );
+}
+
+#[test]
+fn a_mod_slots_lfo_moves_the_filter() {
+    let lfo = "[ours.mods.4]\nkind = \"Lfo\"\ndestination = \"cut\"\ndepth = 64\n\
+               lfo = { shape = \"Tri\", rate = { Hertz = 2000 }, phase = 0, mode = \"Free\" }\n";
+    let (moved, steps) = controls(&ladder_moved(lfo));
+    assert_ne!(moved, rendered(&ladder_moved(""), None));
+    let (low, high) = steps.iter().fold((1.0_f32, 0.0_f32), |(low, high), step| {
+        (low.min(step[0]), high.max(step[0]))
+    });
+    let held = 144.0 / 255.0;
+    // At 20 Hz, 0.1 s is two cycles, each a quarter of the knob either way.
+    assert!(high > held + 0.2 && low < held - 0.2, "{low} to {high}");
+}
+
+#[test]
+fn a_mod_slots_envelope_follows_the_notes() {
+    let text = "duration = 0.5\n\
+                [[notes]]\ntime = 0.0\nlength = 0.1\nnote = 36\n\
+                [[notes]]\ntime = 0.25\nlength = 0.1\nnote = 36\n\
+                [ours]\nmachine = \"va\"\n\
+                [ours.settings]\nfilter = \"Ladder\"\ncut = 0x40\n\
+                [ours.mods.2]\nkind = \"Adsr\"\ndestination = \"cut\"\ndepth = 128\n\
+                adsr = { attack_ms = 1, decay_ms = 60, sustain = 0, release_ms = 20, reset = true }\n";
+    let (_, steps) = controls(text);
+    let at = |seconds: f64| steps[(seconds * 48_000.0) as usize / CONTROL_FRAMES][0];
+    let rest = 64.0 / 255.0;
+    for start in [0.0, 0.25] {
+        assert!(
+            at(start + 0.005) > rest + 0.3,
+            "it opens as the note at {start} s starts"
+        );
+        assert!(
+            (at(start + 0.2) - rest).abs() < 0.01,
+            "and falls back by its end"
+        );
+    }
+}
+
+#[test]
+fn mod_slots_are_numbered_from_one() {
+    let slot = |number: &str| {
+        format!(
+            "{}[ours.mods.{number}]\nkind = \"Lfo\"\ndestination = \"cut\"\ndepth = 1\n\
+             lfo = {{ shape = \"Tri\", rate = {{ Hertz = 100 }}, phase = 0, mode = \"Free\" }}\n",
+            sine_through("")
+        )
+    };
+    parse(&slot("1")).expect("the first slot");
+    assert!(refused(&slot("0")).contains("numbered 1 to"));
+    assert!(refused(&slot("9")).contains("numbered 1 to"));
 }
