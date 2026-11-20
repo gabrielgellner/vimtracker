@@ -1197,7 +1197,7 @@ mod tests {
             let levels: Vec<f32> = out
                 .chunks(RATE as usize / 100)
                 .skip(10)
-                .map(|window| rms(window))
+                .map(rms)
                 .collect();
             let mut sorted = levels.clone();
             sorted.sort_by(f32::total_cmp);
