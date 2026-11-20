@@ -1,5 +1,6 @@
-//! A biquad in transposed direct form II, with the RBJ cookbook's peak, high-pass and high shelf:
-//! the colour's transformer bump, the reel's and deck's head bumps and the reel's playback head.
+//! A biquad in transposed direct form II, with the RBJ cookbook's peak, high-pass, low-pass and high
+//! shelf: the colour's transformer bump, the reel's and deck's head bumps, the reel's playback head
+//! and the Space Echo's spring tank's band-pass.
 
 use std::f32::consts::TAU;
 
@@ -37,6 +38,21 @@ impl Biquad {
             b0: 0.5 * (1.0 + cos) / a0,
             b1: -(1.0 + cos) / a0,
             b2: 0.5 * (1.0 + cos) / a0,
+            a1: -2.0 * cos / a0,
+            a2: (1.0 - alpha) / a0,
+        }
+    }
+
+    /// A low-pass at `hertz`, `q` sharp.
+    pub(crate) fn low_pass(hertz: f32, q: f32, rate: f32) -> Self {
+        let omega = TAU * hertz / rate;
+        let alpha = omega.sin() / (2.0 * q);
+        let cos = omega.cos();
+        let a0 = 1.0 + alpha;
+        Self {
+            b0: 0.5 * (1.0 - cos) / a0,
+            b1: (1.0 - cos) / a0,
+            b2: 0.5 * (1.0 - cos) / a0,
             a1: -2.0 * cos / a0,
             a2: (1.0 - alpha) / a0,
         }

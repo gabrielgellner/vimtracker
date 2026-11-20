@@ -7,19 +7,21 @@
 //!
 //! The tape's speed is the delay: `Rate`, or a note division at the song's tempo, sets the first
 //! head's, and the motor comes to a new speed through two one-poles, the slower of them
-//! `Inertia`'s, so a repeat already on the tape is read faster or slower and bends in pitch as
-//! the machine's does. The capstan's wobble moves every head's read together, at a rate that goes
+//! `Inertia`'s and twice as quick speeding up as slowing down, so a repeat already on the tape is
+//! read faster or slower and bends in pitch as the machine's does. The capstan's wobble moves every head's read together, at a rate that goes
 //! with the tape's speed, by as much in pitch at any speed, with a slow drift seeded from the track.
 //!
-//! The spring reverb is this program's `Spring`, ChowDSP's model, at one setting, fed from what
-//! comes in. `Bass` and `Treble` are shelves on what comes out, as the RE-201's tone controls are
-//! on its echo and reverb, not in the loop.
+//! The spring reverb is a tank of its own (`tank.rs`), fed from what comes in: a rising drip and
+//! a smooth, dark tail, as TAPE-201's are, where this program's `Spring` rattles (decision 450).
+//! `Bass` and `Treble` are shelves on what comes out, as the RE-201's tone controls are on its
+//! echo and reverb, not in the loop. Its `Mix` holds the sound at full to the middle while the
+//! echo comes up, as TAPE-201's does (`Mixing::Held`).
 
 use std::f64::consts::TAU;
 
 use vt_model::insert::{
-    ECHO_BASS, ECHO_HEAD_SECONDS, ECHO_TREBLE, Echo as Settings, MOST_INTENSITY,
-    Spring as SpringSettings, echo_head_seconds, echo_input_db, echo_mode, from_middle,
+    ECHO_BASS, ECHO_HEAD_SECONDS, ECHO_TREBLE, Echo as Settings, MOST_INTENSITY, echo_head_seconds,
+    echo_input_db, echo_mode, from_middle,
 };
 use vt_model::lfo::DIVISION_TICKS;
 use vt_model::song::level_gain;
@@ -31,9 +33,12 @@ use crate::dsp::blocks::response::{Gain, one_pole, svf, warped};
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::delay::{MOST_TAPS, Repeats, Tap};
 use crate::dsp::effects::memory::SongPlace;
-use crate::dsp::effects::slot::{Rung, SlotEffect};
-use crate::dsp::effects::spring::Spring;
+use crate::dsp::effects::slot::{Mixing, Rung, SlotEffect, held_shares};
 use crate::rng::Pcg32;
+
+use tank::Tank;
+
+mod tank;
 
 /// The longest the first head can be behind the record head, in seconds: `Rate`'s slowest is a
 /// second, and `Sync` can ask for up to twice that at a slow tempo.
@@ -81,27 +86,22 @@ const DRIFT_SECONDS: f64 = 1.5;
 /// fast one, and its slow one at `Motor Inertia` 0 and 1, which goes evenly between them.
 const MOTOR_FAST_SECONDS: f64 = 0.013;
 const MOTOR_SLOW_SECONDS: (f64, f64) = (0.19, 2.11);
+/// How many times quicker than those the slow one-pole is while the tape speeds up and while it
+/// slows down: TAPE-201's motor pulls harder than it brakes, so a jump from 300 to 150 ms bends
+/// up by 1419 cents at `Motor Inertia` 0, where a one-pole at its slowing speed gives 850. Fitted
+/// to its bends both ways at five places of `Inertia`, from 150 to 300 ms and from 100 to 400.
+const SPEEDING_UP: f64 = 2.27;
+const SLOWING_DOWN: f64 = 1.08;
 
 /// The tone controls, the model's, so the page shows what they do.
 const BASS: (f32, f32, f32) = ECHO_BASS;
 const TREBLE: (f32, f32, f32) = ECHO_TREBLE;
 
-/// The spring tank the reverb is, set once, how long before it's heard, and how loud.
-const SPRING: SpringSettings = SpringSettings {
-    decay: 0xF8,
-    size: 0xA0,
-    damp: 0x80,
-    spin: 0x80,
-    reflect: 0xFF,
-    chaos: 0x00,
-    knock: 0,
-    mix: 0xFF,
-    gain: 0xFF,
-};
-const REVERB_PRE_SECONDS: f64 = 0.0;
-const REVERB_GAIN: f32 = 0.484;
+/// How loud the tank is at full `Reverb`: as loud as TAPE-201's on a drum loop and a sung line,
+/// 0.9 dB over it on the one and 1.4 dB under it on the other.
+const REVERB_GAIN: f32 = 1.2;
 /// How long the reverb rings, for knowing when the slot is quiet, in seconds.
-const REVERB_QUIET_SECONDS: f64 = 4.0;
+const REVERB_QUIET_SECONDS: f64 = 4.5;
 /// How often the tone controls' shelves are worked out again while they move, in frames.
 const BLOCK: u32 = 32;
 
@@ -340,6 +340,8 @@ pub struct Echo {
     slow: f64,
     fast_step: f64,
     slow_step: f64,
+    /// How far the slow one goes each frame while the tape speeds up.
+    slow_step_up: f64,
     wobble: Wobble,
     /// The share each head is heard at, and the reverb's, gliding when the mode changes.
     heads: [Smoothed; 3],
@@ -363,9 +365,7 @@ pub struct Echo {
     tuned: [f32; 2],
     /// The head's gain, so a quiet 1 kHz sine comes back as loud as TAPE-201's.
     echo_gain: f32,
-    spring: Box<Spring>,
-    pre: Vec<[f32; 2]>,
-    pre_at: usize,
+    spring: Box<Tank>,
     countdown: u32,
     smoothing: f32,
     rate: u32,
@@ -378,9 +378,6 @@ impl Echo {
         let frames = |seconds: f64| (seconds * f64::from(rate)).ceil() as usize;
         let length = frames(LONGEST_HEAD_SECONDS * 3.0 + MOST_WOBBLE_SECONDS) + 8;
         let tape = Tape::new(length);
-        let mut spring = Box::new(Spring::new(rate));
-        spring.follow(SPRING);
-        spring.settle();
         let start = head_frames(Settings::DEFAULT, 1.0, rate);
         let mut echo = Self {
             tape,
@@ -391,6 +388,7 @@ impl Echo {
             slow: start,
             fast_step: 1.0 - (-1.0 / (MOTOR_FAST_SECONDS * f64::from(rate))).exp(),
             slow_step: 0.0,
+            slow_step_up: 0.0,
             wobble: Wobble::new(Pcg32::new(0, 0)),
             heads: [Smoothed::at(0.0); 3],
             reverb_on: Smoothed::at(0.0),
@@ -410,9 +408,7 @@ impl Echo {
             treble_tuning: ShelfTuning::new(0.0, TREBLE, true, rate),
             tuned: [0.0; 2],
             echo_gain: echo_gain(rate) as f32,
-            spring,
-            pre: vec![[0.0; 2]; frames(REVERB_PRE_SECONDS).max(1)],
-            pre_at: 0,
+            spring: Box::new(Tank::new(rate)),
             countdown: 0,
             smoothing: coefficient(rate),
             rate,
@@ -426,13 +422,10 @@ impl Echo {
     pub(crate) fn clear(&mut self) {
         if self.used {
             self.tape.clear();
-            self.pre.fill([0.0; 2]);
             self.used = false;
         }
         self.sides = [Side::default(); 2];
         self.spring.clear();
-        self.spring.follow(SPRING);
-        self.spring.settle();
         self.wobble = Wobble::new(self.wobble.seed);
     }
 
@@ -449,7 +442,8 @@ impl Echo {
         let share = |value: u8| f64::from(value) / 255.0;
         let (slowest, slower) = MOTOR_SLOW_SECONDS;
         let seconds = slowest + (slower - slowest) * share(settings.inertia);
-        self.slow_step = 1.0 - (-1.0 / (seconds * rate)).exp();
+        self.slow_step = 1.0 - (-SLOWING_DOWN / (seconds * rate)).exp();
+        self.slow_step_up = 1.0 - (-SPEEDING_UP / (seconds * rate)).exp();
         let (weights, reverb) = head_weights(settings.mode);
         for (head, weight) in self.heads.iter_mut().zip(weights) {
             head.target = weight;
@@ -544,7 +538,14 @@ impl Echo {
 
         // The motor comes to its speed, and the capstan wobbles every head together.
         self.fast += (self.target - self.fast) * self.fast_step;
-        self.slow += (self.fast - self.slow) * self.slow_step;
+        // The tape speeds up as the first head comes nearer. The step changes only where the two
+        // one-poles meet, so the speed has no corner.
+        let step = if self.fast < self.slow {
+            self.slow_step_up
+        } else {
+            self.slow_step
+        };
+        self.slow += (self.fast - self.slow) * step;
         let rate = f64::from(self.rate);
         let wobble = self.wobble.next(self.slow, f64::from(wow), rate);
 
@@ -567,7 +568,6 @@ impl Echo {
 
         let mut out = [0.0; 2];
         let mut written = [0.0; 2];
-        let pre = self.pre[self.pre_at];
         for side in 0..2 {
             let filters = &mut self.sides[side];
             let (head, _) = filters.head.process(played[side], self.head_tuning);
@@ -583,12 +583,10 @@ impl Echo {
             out[side] = repeat * echo;
         }
         self.tape.push(written);
-        self.pre[self.pre_at] = [input[0] * drive, input[1] * drive];
-        self.pre_at = (self.pre_at + 1) % self.pre.len();
         self.used = true;
 
         let springs = if reverb > 0.0 {
-            self.spring.process(pre)
+            self.spring.process([input[0] * drive, input[1] * drive])
         } else {
             [0.0; 2]
         };
@@ -687,9 +685,9 @@ pub fn repeats(settings: Settings, frames_per_tick: f64, rate: u32) -> Repeats {
         from_middle(f32::from(settings.treble)),
         rate,
     );
-    let mix = f64::from(settings.mix) / 255.0;
+    let (wet, dry) = held_shares(f32::from(settings.mix) / 255.0);
     let gain = f64::from(level_gain(f32::from(settings.gain)));
-    let level = echo_gain(rate) * f64::from(settings.echo) / 255.0 * mix * gain;
+    let level = echo_gain(rate) * f64::from(settings.echo) / 255.0 * f64::from(wet) * gain;
     // What reaches the record head at each whole number of the first head's delays: the sound at
     // 0, and what's been played and sent round since.
     let mut recorded = vec![Gain::ZERO; MOST_TAPS * 3 + 1];
@@ -724,7 +722,7 @@ pub fn repeats(settings: Settings, frames_per_tick: f64, rate: u32) -> Repeats {
         }
     }
     Repeats {
-        dry: ((1.0 - mix) * gain) as f32,
+        dry: (f64::from(dry) * gain) as f32,
         hertz,
         taps,
     }
@@ -735,6 +733,8 @@ const QUIETEST_TAP: f32 = 0.001;
 
 impl SlotEffect for Echo {
     type Settings = Settings;
+    /// Its `Mix` holds the sound at full to the middle, as TAPE-201's does.
+    const MIXING: Mixing = Mixing::Held;
 
     /// A Space Echo's, whose tape holds its slowest speed, and its spring.
     fn new(rate: u32) -> Self {
@@ -777,7 +777,6 @@ impl Rung for Echo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dsp::effects::spring;
     use crate::dsp::signals::{rms, sines};
 
     const RATE: u32 = 48_000;
@@ -1038,6 +1037,31 @@ mod tests {
     }
 
     #[test]
+    fn speeding_the_tape_up_bends_whats_on_it_up_further_than_slowing_bends_it_down() {
+        let settings = Settings {
+            rate: (255.0 * (1000.0_f32 / 300.0).ln() / 100_f32.ln()).round() as u8,
+            ..PLAIN
+        };
+        let mut echo = echo(settings);
+        let tone: Vec<f32> = sines(RATE as usize * 6, 1000.0, 0.1, RATE).collect();
+        through(&mut echo, &tone[..RATE as usize], RATE as usize);
+        // From 300 ms to 150 ms, as TAPE-201 was measured: up by 1419 cents at its lowest
+        // inertia, where slowing from 150 to 300 bends down by 1850.
+        let faster = (255.0 * (1000.0_f32 / 150.0).ln() / 100_f32.ln()).round() as u8;
+        echo.follow(
+            Settings {
+                rate: faster,
+                ..settings
+            },
+            FRAMES_PER_TICK,
+        );
+        let after = pitches(&mut echo, &tone[RATE as usize..], 0);
+        let high = after.iter().fold(0.0_f32, |most, p| most.max(*p));
+        let cents = 1200.0 * (high / 1000.0).log2();
+        assert!((1250.0..1550.0).contains(&cents), "{cents}");
+    }
+
+    #[test]
     fn wow_bends_the_pitch_by_its_cents_and_repeats_from_its_seed() {
         let spread = |wow: u8, seed: u64| {
             let mut echo = echo(Settings { wow, ..PLAIN });
@@ -1264,12 +1288,5 @@ mod tests {
                 "{value:x}: {treble}"
             );
         }
-    }
-
-    #[test]
-    fn the_spring_rings_as_long_as_tape_201s() {
-        // TAPE-201's falls 60 dB in 4.7 s from half a second on, from a click.
-        let tail = spring::tail(SPRING, RATE).unwrap();
-        assert!((4.2..5.2).contains(&tail.seconds[0]), "{tail:?}");
     }
 }

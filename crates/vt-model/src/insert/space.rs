@@ -308,7 +308,8 @@ pub struct Echo {
     /// `0`, `Free`, where `Rate` sets the speed, or a place among the note divisions after it, the
     /// first head's delay at the song's tempo.
     pub sync: u8,
-    /// How slowly the motor comes to a new speed, from about a fifth of a second at `00` to two.
+    /// How slowly the motor comes to a new speed, from about a fifth of a second at `00` to two
+    /// slowing down, and in less than half that speeding up.
     pub inertia: u8,
     /// How much of what the heads play goes round again: the repeats run away from about `DC`,
     /// 1.03 on TAPE-201's scale.
@@ -325,7 +326,8 @@ pub struct Echo {
     pub reverb: u8,
     /// How loud the repeats are.
     pub echo: u8,
-    /// From `00`, all dry, to `FF`, all wet.
+    /// From `00`, all dry, to `FF`, all wet: the sound stays at full to `80` while the echo comes
+    /// up, then goes down, as TAPE-201's `Dry/Wet` does.
     pub mix: u8,
     pub gain: u8,
 }
@@ -338,7 +340,7 @@ impl Default for Echo {
 
 impl Echo {
     /// As it starts: TAPE-201's `Default`, the first head with the reverb at 150 ms, a third of the
-    /// way to running away, a little wow, flat, and half wet, with a little reverb in.
+    /// way to running away, a little wow, flat, and `Mix` in the middle, with a little reverb in.
     pub const DEFAULT: Self = Self {
         mode: 4,
         rate: 0x69,
