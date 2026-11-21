@@ -481,7 +481,7 @@ pub(super) fn render(
                 len,
                 texts.rhythm,
             );
-            tonnetz::render(steps, range, column, shape, &rows, out.cells);
+            tonnetz::render(steps, range, column, shape, &rows, &mut out);
             tied(steps, range, column, shape, out.cells);
         }
         _ => {

@@ -193,11 +193,17 @@ impl Layout {
 }
 
 /// Whether a setting's buffer has the rows line under its text: those whose tokens a render
-/// records, `Weights`, a `List`'s values and an `Own` rhythm's hits (decision 460).
+/// records, `Weights`, a `List`'s values, an `Own` rhythm's hits and a `Tonnetz`'s moves
+/// (decisions 460 and 473). A mask's bits and the Steps box have none: a bit touches every row's
+/// value, and steps aren't phrase rows.
 pub(crate) fn has_rows_line(param: GenParam) -> bool {
     matches!(
         param,
-        GenParam::Weights | GenParam::Values | GenParam::OwnText | GenParam::MiniText
+        GenParam::Weights
+            | GenParam::Values
+            | GenParam::OwnText
+            | GenParam::MiniText
+            | GenParam::MoveList
     )
 }
 

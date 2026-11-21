@@ -29,7 +29,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::render::Rows;
+use super::render::{Out, Rows, Shaped};
 use super::{GenCell, Shape, ShapeColumn, mix};
 use crate::constants::FX_SLOTS;
 use crate::scale::Scale;
@@ -526,12 +526,14 @@ impl Walk {
     }
 
     /// One move on: the next of the list or loop that keeps to the scale, or a random one that
-    /// does. With none, it holds the chord.
-    fn step(&mut self) {
-        let next = match self.tonnetz.moves {
+    /// does. With none, it holds the chord. The place in the list of the move it made, from 0,
+    /// for the token table (decision 473): none for a loop's or a random move, which the list
+    /// doesn't write, or for a chord held.
+    fn step(&mut self) -> Option<usize> {
+        let (next, listed) = match self.tonnetz.moves {
             Moves::Random => {
                 let die = mix(self.seed ^ DICE, self.moved);
-                self.weighed(die, |by| self.allowed(by))
+                (self.weighed(die, |by| self.allowed(by)), None)
             }
             Moves::List | Moves::Loop => {
                 let (_, len) = self.listed(self.place);
@@ -539,14 +541,18 @@ impl Walk {
                     let (by, _) = self.listed(self.place + ahead);
                     by.filter(|by| self.allowed(*by)).map(|by| (ahead, by))
                 });
+                let listed = found
+                    .filter(|_| self.tonnetz.moves == Moves::List)
+                    .map(|(ahead, _)| (self.place + ahead) % len.max(1));
                 self.place += found.map_or(1, |(ahead, _)| ahead + 1);
-                found.map(|(_, by)| by)
+                (found.map(|(_, by)| by), listed)
             }
         };
         self.moved += 1;
         if let Some(by) = next {
             self.take(by);
         }
+        listed
     }
 
     /// Make a move: the voice on the note it takes out moves to the nearest of the note it brings
@@ -620,16 +626,19 @@ fn chord_cell(column: ShapeColumn, step: &Step, root: u8, triad: Triad) -> GenCe
     }
 }
 
-/// A `Tonnetz` fill's cells for `range`, one for each row, the first in `cells[0]`: on each row
-/// `rows` chooses, the walk's next chord, as its voice writes it, from the triad on the shape's
-/// `From`. It writes notes; on any other column it leaves the rows alone.
-pub(super) fn render(
+/// A `Tonnetz` fill's cells for `range`, one for each row, the first in `out.cells[0]`: on each
+/// row `rows` chooses, the walk's next chord, as its voice writes it, from the triad on the
+/// shape's `From`. It tells `out.seen` each row's note with the place in the list of the move that
+/// reached its chord, for the token table: none on the first row, the chord it starts on, nor
+/// where the moves don't come from the list. It writes notes; on any other column it leaves the
+/// rows alone.
+pub(super) fn render<F: FnMut(usize, &Shaped, Option<usize>)>(
     steps: &[Step],
     range: StepRange,
     column: ShapeColumn,
     shape: &Shape,
     rows: &Rows,
-    cells: &mut [GenCell],
+    out: &mut Out<'_, F>,
 ) {
     let ShapeColumn::Note { scale, .. } = column else {
         return;
@@ -638,18 +647,17 @@ pub(super) fn render(
     let voice = tonnetz.voice.unwrap_or(Voice::Low);
     let mut walk = Walk::new(tonnetz, shape.from, shape.seed, scale);
     for (nth, offset) in rows.ones().enumerate() {
-        let (Some(cell), Some(step)) = (cells.get_mut(offset), steps.get(range.first + offset))
-        else {
+        let row = range.first + offset;
+        let (Some(cell), Some(step)) = (out.cells.get_mut(offset), steps.get(row)) else {
             break;
         };
-        if nth > 0 {
-            walk.step();
-        }
+        let listed = if nth > 0 { walk.step() } else { None };
         let note = walk.note(voice);
         *cell = match voice {
             Voice::Chord => chord_cell(column, step, note, walk.triad),
             _ => column.cell(step, u16::from(note) << 8),
         };
+        (out.seen)(row, &Shaped::note(note), listed);
     }
 }
 
