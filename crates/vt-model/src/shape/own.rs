@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use super::mix;
 use super::render::Rows;
-use super::{GenCell, Shape, Where};
+use super::{Atom, FillKind, GenCell, Shape, ShapeColumn, Texts, Where};
 use crate::constants::{GROOVE_UNIT_TICKS, MAX_PHRASE_STEPS, TICKS_PER_STEP};
 use crate::step::{FxCommand, FxSlot, Step};
 
@@ -66,6 +66,11 @@ impl Default for Own {
 }
 
 impl Own {
+    /// Whether it's as it starts, its `Step` a row, which is all that's saved.
+    pub(crate) fn is_default(&self) -> bool {
+        self.step == 1
+    }
+
     /// The same with what a rhythm's beats say of it.
     #[must_use]
     pub fn of(self, beats: &[Beat]) -> Self {
@@ -327,11 +332,26 @@ pub(super) struct Lands {
     pub(super) ratchet: u16,
     /// Its place's length, in rows, for a ratchet's spacing.
     len: f64,
+    /// How far from its row it falls, in rows, early below 0: a third of a row for a triplet's
+    /// hit, which a `Mini` on the Note column nudges off its row (decision 462).
+    pub(super) off: f64,
 }
 
 /// Each hit the line lands over `count` rows counted, on a pass, in order and once a row: the
 /// first to land on a row keeps it, and a `?` that doesn't play leaves it for the next.
-fn walk(beats: &[Beat], own: Own, seed: u64, count: usize, mut each: impl FnMut(Lands)) {
+pub(super) fn walk(beats: &[Beat], own: Own, seed: u64, count: usize, each: impl FnMut(Lands)) {
+    walk_dropping(beats, own, seed, count, each, || {});
+}
+
+/// The same, telling `dropped` of each hit that lands on a row another took first.
+pub(super) fn walk_dropping(
+    beats: &[Beat],
+    own: Own,
+    seed: u64,
+    count: usize,
+    mut each: impl FnMut(Lands),
+    mut dropped: impl FnMut(),
+) {
     let step = u32::from(own.step.clamp(1, MAX_STEP));
     let line = (line_steps(beats) * step) as usize;
     if line == 0 || count == 0 {
@@ -359,7 +379,11 @@ fn walk(beats: &[Beat], own: Own, seed: u64, count: usize, mut each: impl FnMut(
                 let last = (landed.end - 1e-9).floor().max(landed.at.floor());
                 let row = landed.at.round().min(last).max(0.0) as usize;
                 let nth = first + row;
-                if nth >= count || taken.has(nth) {
+                if nth >= count {
+                    return;
+                }
+                if taken.has(nth) {
+                    dropped();
                     return;
                 }
                 let plays = landed.chance >= 100
@@ -372,6 +396,7 @@ fn walk(beats: &[Beat], own: Own, seed: u64, count: usize, mut each: impl FnMut(
                         hit: landed.hit,
                         ratchet: landed.ratchet,
                         len: landed.end - landed.at,
+                        off: landed.at - row as f64,
                     });
                 }
             },
@@ -499,19 +524,33 @@ fn ratcheted(cell: &mut GenCell, step: Option<&Step>, apart: u16) {
     };
 }
 
-/// A rhythm of your own as its generator keeps it, beside its shape, as a text of any length
-/// can't go in one: what was typed, and the beats it reads as.
+/// A line typed on a generator, kept beside its shape, as a text of any length can't go in one:
+/// an `Own` rhythm's, or a `Mini`'s (decision 462), what was typed and the beats it reads as,
+/// with a `Mini`'s values, a hit each, in the column's units.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct OwnRhythm {
     text: Box<str>,
     beats: Box<[Beat]>,
+    atoms: Box<[Atom]>,
 }
 
 impl OwnRhythm {
-    /// What a generator of a shape keeps of a text: none unless its `Where` is `Own`, and the
-    /// beats of a text that reads, or none, so a text that doesn't plays nothing.
-    pub fn kept(shape: &Shape, text: &str) -> Self {
-        if !matches!(shape.place, Where::Own(_)) || text.is_empty() {
+    /// What a generator of a shape on a column keeps of a text: a `Mini`'s line, an `Own`
+    /// rhythm's, or none for any other shape, and the beats of a text that reads, or none, so a
+    /// text that doesn't plays nothing.
+    pub fn kept(shape: &Shape, column: ShapeColumn, text: &str) -> Self {
+        if text.is_empty() {
+            return Self::default();
+        }
+        if shape.kind == FillKind::Mini {
+            let (beats, atoms) = crate::notation::compile_mini(text, column).unwrap_or_default();
+            return Self {
+                text: text.into(),
+                beats: beats.into(),
+                atoms: atoms.into(),
+            };
+        }
+        if !matches!(shape.place, Where::Own(_)) {
             return Self::default();
         }
         Self {
@@ -519,6 +558,7 @@ impl OwnRhythm {
             beats: crate::notation::compile_rhythm(text)
                 .unwrap_or_default()
                 .into(),
+            atoms: Box::default(),
         }
     }
 
@@ -530,9 +570,21 @@ impl OwnRhythm {
         &self.beats
     }
 
-    /// A shape with what its rhythm's beats say of them in its `Where`: whether its laps count on
-    /// and whether it ratchets.
+    /// What a render reads of it, beside a `List`'s values.
+    pub fn texts<'a>(&'a self, list: &'a [u8]) -> Texts<'a> {
+        Texts {
+            list,
+            rhythm: &self.beats,
+            atoms: &self.atoms,
+        }
+    }
+
+    /// A shape with what its line's beats say of them, in its `Where` or a `Mini`'s settings:
+    /// whether its laps count on, whether it ratchets and whether it draws.
     pub fn settle(&self, shape: &mut Shape) {
+        if shape.kind == FillKind::Mini {
+            shape.mini = shape.mini.of(&self.beats);
+        }
         if let Where::Own(own) = &mut shape.place {
             *own = own.of(&self.beats);
         }
@@ -546,7 +598,7 @@ mod tests {
     use crate::scale::Scale;
     use crate::selection::StepRange;
     use crate::shape::render::chosen;
-    use crate::shape::{FillKind, Over, ShapeColumn, Texts, render_into, rhythm_tokens_into};
+    use crate::shape::{Over, render_into, rhythm_tokens_into};
     use crate::step::Note;
 
     fn notes() -> ShapeColumn {
@@ -667,8 +719,8 @@ mod tests {
         }
         let mut cells = vec![GenCell::Under; count];
         let texts = Texts {
-            list: &[],
             rhythm: &beats,
+            ..Texts::NONE
         };
         let range = StepRange::between(0, count - 1);
         render_into(&steps, range, notes(), &shape, texts, None, &mut cells);

@@ -18,14 +18,15 @@ use ratatui::layout::Rect;
 use vt_model::action::{Action, edit};
 use vt_model::generator::Span;
 use vt_model::notation::{
-    Around, Field as TokenField, Kind, Spot, Table, compile_rhythm, rhythm_preset,
+    Around, Field as TokenField, GrammarId, Kind, STACKED, Spot, Table, compile_rhythm, mini_layer,
+    mini_start, rhythm_preset, stacks,
 };
 use vt_model::selection::{Field, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
     Channel, Context, DrumPart, FillKind, GenParam, Grids, Own, OwnRhythm, Shape, ShapeColumn,
-    Source, Starts, Texts, TonnetzVoice, Walk, Where, counted, default_ends, default_step,
-    degree_count, degree_name, divisions_seed, drum_parts, is_empty, kept_list, on_track,
+    Source, Starts, TonnetzVoice, Walk, Where, counted, default_ends, default_step, degree_count,
+    degree_name, divisions_seed, dropped, drum_parts, is_empty, keeping_step, kept_list, on_track,
     open_rows, track_seed, variation_notes, written_from,
 };
 use vt_model::song::{Machine, Song, SynthVoice, Track};
@@ -91,6 +92,9 @@ pub struct ShapePanel {
     /// An `Own` rhythm's text, held beside the shape likewise, and given only to a `Where` of
     /// `Own` (decision 461).
     pub rhythm: String,
+    /// A `Mini`'s line, held likewise and given only to a `Mini` (decision 462): across tracks,
+    /// a stack, `,`, gives each track the next of its layers.
+    pub mini: String,
     /// The setting the cursor is on.
     pub row: GenParam,
     /// What's being typed into the current row.
@@ -139,7 +143,16 @@ impl ShapePanel {
             sources: &self.sources,
             source: self.source_steps(),
             list: &self.list,
-            rhythm: &self.rhythm,
+            rhythm: self.line(),
+        }
+    }
+
+    /// The text its `Text` row shows: a `Mini`'s line, its stack and all, or an `Own` rhythm's.
+    pub fn line(&self) -> &str {
+        if self.shape.kind == FillKind::Mini {
+            &self.mini
+        } else {
+            &self.rhythm
         }
     }
 
@@ -149,14 +162,39 @@ impl ShapePanel {
     }
 
     /// The rhythm a generator of its shape keeps: its own, on `Own`, and none on any other
-    /// `Where`, with the beats it reads as.
+    /// `Where`, or a `Mini`'s line, with the beats it reads as, for its first part.
     pub fn own(&self) -> OwnRhythm {
-        OwnRhythm::kept(&self.shape, &self.rhythm)
+        self.own_of(0)
     }
 
-    /// The text of that rhythm.
+    /// The same for a part, by its place: a `Mini` across tracks takes the next of its line's
+    /// layers, going round (decision 462).
+    pub fn own_of(&self, nth: usize) -> OwnRhythm {
+        let column = self.parts.get(nth).map_or(self.column, |part| part.column);
+        let text = match self.shape.kind {
+            FillKind::Mini => mini_layer(&self.mini, nth),
+            _ => &self.rhythm,
+        };
+        OwnRhythm::kept(&self.shape, column, text)
+    }
+
+    /// The text of that rhythm, or of the first part's layer.
     pub fn kept_rhythm(&self) -> Box<str> {
-        self.own().text().into()
+        self.kept_rhythm_of(0)
+    }
+
+    /// The text a part's generator keeps, by its place.
+    pub fn kept_rhythm_of(&self, nth: usize) -> Box<str> {
+        self.own_of(nth).text().into()
+    }
+
+    /// The text `.` shapes again with: a `Mini`'s whole line, its stack and all, so each track
+    /// takes a layer again, or an `Own` rhythm's.
+    pub fn kept_line(&self) -> Box<str> {
+        match self.shape.kind {
+            FillKind::Mini => self.mini.trim().into(),
+            _ => self.kept_rhythm(),
+        }
     }
 
     /// The bars of the column it shapes on the phrase in view, each row of its span with its value
@@ -170,11 +208,8 @@ impl ShapePanel {
             .position(|part| part.track == track && part.phrase == phrase)?;
         let part = &self.parts[nth];
         let steps = self.base_steps(part);
-        let own = self.own();
-        let texts = Texts {
-            list: &self.list,
-            rhythm: own.beats(),
-        };
+        let own = self.own_of(nth);
+        let texts = own.texts(&self.list);
         let written = written_from(
             steps,
             part.range,
@@ -270,6 +305,15 @@ impl ShapePanel {
                 ..self.shape.grids
             },
             tonnetz: placed.tonnetz,
+            // A `Mini`'s layer, a track's, says whether it laps, ratchets and draws.
+            mini: match self.shape.kind {
+                FillKind::Mini => {
+                    let mut shape = self.shape;
+                    self.own_of(nth).settle(&mut shape);
+                    shape.mini
+                }
+                _ => self.shape.mini,
+            },
             ..self.shape
         }
     }
@@ -331,7 +375,7 @@ impl ShapePanel {
                 column: part.column,
                 shape: self.shape_of(nth),
                 list: self.kept_list(),
-                rhythm: self.kept_rhythm(),
+                rhythm: self.kept_rhythm_of(nth),
             })
             .collect();
         if actions.len() == 1 {
@@ -359,7 +403,7 @@ impl ShapePanel {
                 },
                 shape: self.shape_of(nth),
                 list: self.kept_list(),
-                rhythm: self.kept_rhythm(),
+                rhythm: self.kept_rhythm_of(nth),
             })
             .collect();
         if actions.len() == 1 {
@@ -758,7 +802,11 @@ impl Services {
                         ..shape
                     },
                     list: list.into(),
-                    rhythm: rhythm.into(),
+                    // A `Mini`'s stack gives each track the next of its layers.
+                    rhythm: match shape.kind {
+                        FillKind::Mini => mini_layer(rhythm, nth).into(),
+                        _ => rhythm.into(),
+                    },
                 }
             })
             .collect();
@@ -827,6 +875,7 @@ impl ShapePanel {
             shape,
             list: Vec::new(),
             rhythm: String::new(),
+            mini: String::new(),
             row: GenParam::Fill,
             typing: None,
             weight: None,
@@ -1199,6 +1248,13 @@ impl ShapePanel {
         if self.shape.kind == FillKind::List && self.list.is_empty() {
             self.list = self.kept_list().into();
         }
+        // A `Mini` with no line yet starts from what's in its rows (decision 462).
+        if self.shape.kind == FillKind::Mini
+            && self.mini.is_empty()
+            && let Some(part) = self.parts.first()
+        {
+            self.mini = mini_start(self.base_steps(part), part.range, part.column);
+        }
         if let Some(from) = from_named(before, self.shape.place)
             && self.rhythm == text
         {
@@ -1206,6 +1262,16 @@ impl ShapePanel {
         }
         self.own().settle(&mut self.shape);
         self.preview(services);
+        if let Some(said) = self.dropped() {
+            services.status = said;
+        }
+    }
+
+    /// How many of a `Mini`'s hits share a row on its first part and are dropped, as the status
+    /// line says it, where any are.
+    fn dropped(&self) -> Option<String> {
+        let part = self.parts.first()?;
+        dropped_said(&self.shape_of(0), &self.own_of(0), part.range.len())
     }
 
     fn move_row(&mut self, by: isize) {
@@ -1345,6 +1411,7 @@ impl ShapePanel {
 
     fn commit_typing(&mut self, text: &str, services: &mut Services) {
         let mut refused = None;
+        let mut said = None;
         self.change(
             |panel| {
                 if panel.row == GenParam::Values {
@@ -1361,6 +1428,13 @@ impl ShapePanel {
                     }
                     return;
                 }
+                if panel.row == GenParam::MiniText {
+                    match typed_mini(text, panel.column, panel.parts.len()) {
+                        Ok(()) => panel.mini = text.trim().to_owned(),
+                        Err(why) => said = Some(why),
+                    }
+                    return;
+                }
                 let mut shape = panel.shape;
                 refused = panel.row.typed(&mut shape, &panel.context(), text).err();
                 panel.shape = shape;
@@ -1369,6 +1443,9 @@ impl ShapePanel {
         );
         if let Some(reason) = refused {
             services.status = reason.to_owned();
+        }
+        if let Some(reason) = said {
+            services.status = reason;
         }
     }
 }
@@ -1418,10 +1495,7 @@ impl ShapePanel {
             part.range,
             part.column,
             &self.shape_of(nth).on_pass(pass),
-            Texts {
-                list: &self.list,
-                rhythm: self.own().beats(),
-            },
+            self.own_of(nth).texts(&self.list),
             self.source_steps(),
         ))
     }
@@ -1643,6 +1717,43 @@ pub(crate) fn typed_rhythm(shape: &mut Shape, text: &str) -> Result<(), &'static
         shape.place = Where::Own(Own::default());
     }
     Ok(())
+}
+
+/// A `Mini`'s line typed for so many tracks: refused, saying why, where it doesn't read, and
+/// where it stacks layers on one track, which holds one (decision 462).
+pub(crate) fn typed_mini(text: &str, column: ShapeColumn, tracks: usize) -> Result<(), String> {
+    let text = text.trim();
+    let grammar = GrammarId::Mini.grammar();
+    if let Err(bad) = (grammar.read)(text, column) {
+        return Err(bad.why);
+    }
+    if tracks < 2 && stacks(text) {
+        return Err(STACKED.to_owned());
+    }
+    Ok(())
+}
+
+/// What the status line adds of a `Mini`'s line on a part: how many of its hits share a row and
+/// are dropped, and the `Step` that keeps them, as the study's §5.2 says.
+pub(crate) fn dropped_said(shape: &Shape, own: &OwnRhythm, rows: usize) -> Option<String> {
+    if shape.kind != FillKind::Mini {
+        return None;
+    }
+    let count = dropped(own.beats(), shape.mini, shape.seed, rows);
+    if count == 0 {
+        return None;
+    }
+    let hits = if count == 1 {
+        "hit shares"
+    } else {
+        "hits share"
+    };
+    let keeps = match keeping_step(own.beats(), shape.mini) {
+        Some(1) => "; Step 1 row keeps them".to_owned(),
+        Some(step) => format!("; Step {step} rows keeps them"),
+        None => String::new(),
+    };
+    Some(format!("{count} {hits} a row and dropped{keeps}"))
 }
 
 /// The token at a place as the status line says it, `Weight of G: F`, and what it means, for

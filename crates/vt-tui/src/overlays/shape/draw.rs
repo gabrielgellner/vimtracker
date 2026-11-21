@@ -40,7 +40,9 @@ fn spans(panel: &ShapePanel, context: &Context, row: GenParam, room: usize) -> V
     let value = || vec![Span::raw(row.shown(&panel.shape, context))];
     let notes: Vec<u8> = match row {
         GenParam::Values => return list_spans(panel, room, None),
-        GenParam::OwnText => return vec![Span::raw(cut_end(&value()[0].content, room))],
+        GenParam::OwnText | GenParam::MiniText => {
+            return vec![Span::raw(cut_end(&value()[0].content, room))];
+        }
         _ if !matches!(panel.column, ShapeColumn::Note { .. }) => return value(),
         GenParam::From => vec![panel.shape.from],
         GenParam::To => vec![panel.shape.to],
@@ -123,7 +125,9 @@ fn drawn_as_tokens(panel: &ShapePanel, row: GenParam, current: bool) -> bool {
     match row {
         GenParam::Weights => true,
         _ if Layout::always(row) => !current || panel.typing.is_none(),
-        GenParam::Values | GenParam::OwnText => current && panel.tokens.is_some(),
+        GenParam::Values | GenParam::OwnText | GenParam::MiniText => {
+            current && panel.tokens.is_some()
+        }
         _ => false,
     }
 }
@@ -186,7 +190,7 @@ fn token_lines(
 fn has_rows_line(row: GenParam) -> bool {
     matches!(
         row,
-        GenParam::Weights | GenParam::Values | GenParam::OwnText
+        GenParam::Weights | GenParam::Values | GenParam::OwnText | GenParam::MiniText
     )
 }
 
@@ -258,7 +262,7 @@ fn rows_line(
 /// How wide the panel is: room for eight notes in a `List`'s values, or for each of `Weights`'
 /// digits over its note.
 fn width(panel: &ShapePanel, rows: &[GenParam], label: usize) -> u16 {
-    if rows.contains(&GenParam::OwnText) {
+    if rows.contains(&GenParam::OwnText) || rows.contains(&GenParam::MiniText) {
         return WIDTH.max((label + RHYTHM_ROOM + 2) as u16);
     }
     if !rows.contains(&GenParam::Weights) {
@@ -309,7 +313,9 @@ fn window(area: Rect, panel: &ShapePanel, side: Side) -> Rect {
         .map(|row| match row {
             GenParam::Weights => 2,
             GenParam::MoveList => 1,
-            GenParam::Values | GenParam::OwnText if panel.row == *row && panel.tokens.is_some() => {
+            GenParam::Values | GenParam::OwnText | GenParam::MiniText
+                if panel.row == *row && panel.tokens.is_some() =>
+            {
                 1
             }
             _ => 0,
@@ -411,11 +417,8 @@ fn draw_in(frame: &mut Frame, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
     for (nth, part) in panel.parts.iter().enumerate() {
         let steps = panel.base_steps(part);
         let shape = panel.shape_of(nth);
-        let own = panel.own();
-        let texts = vt_model::shape::Texts {
-            list: &panel.list,
-            rhythm: own.beats(),
-        };
+        let own = panel.own_of(nth);
+        let texts = own.texts(&panel.list);
         let written = written_from(steps, part.range, part.column, &shape, texts, source);
         // A `Follow`, `Grids`, `Divisions`, `Ring` and a `Variation` write every row, rests and
         // all, so their count is of the notes, and `Multiply`'s of the rhythm it leaves. A
@@ -499,7 +502,9 @@ fn draw_in(frame: &mut Frame, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
     let hint = match panel.shape.kind {
         _ if panel.weight.is_some() => match panel.row {
             GenParam::Values => "h l move  = - turn  x out  a after  Esc out",
-            GenParam::OwnText => "h l move  = - turn  x out  ~ rest  a after  K what goes",
+            GenParam::OwnText | GenParam::MiniText => {
+                "h l move  = - turn  x out  ~ rest  a after  K what goes"
+            }
             GenParam::MoveList => "h l move  = - turn P L R  x out  Esc out",
             GenParam::Flip | GenParam::Keep => "h l move  = - switch  0 1 types  Esc out",
             _ => "h l move  = - change  0-F types  Esc out",

@@ -63,6 +63,34 @@ gen_params! {
         get: |shape, context| GenParam::Fill.chosen_number(shape, context),
         set: |shape, context, at| GenParam::Fill.choose(shape, context, at),
     },
+    /// A `Mini`'s line, typed in Tidal's mini-notation in the column's own values, kept on its
+    /// generator rather than the shape (decision 462).
+    MiniText => GenParamSpec {
+        meaning: "the line typed: the column's values, . a rest, [ ] a group, < > one each lap",
+        key: "mini_text",
+        name: "Text",
+        units: Reading::Listed,
+        typing: Typing::Mini,
+        bounds: Bounds::Typed,
+        stepping: None,
+        engine: false,
+        app_only: true,
+        get: |_, _| None,
+        set: |_, _, _| {},
+    },
+    MiniStep => GenParamSpec {
+        meaning: "how many rows each of the line's top-level tokens is",
+        key: "mini_step",
+        name: "Step",
+        units: Reading::Rows,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(1, MAX_STEP as i32),
+        stepping: stops(1, EVERY_JUMP),
+        engine: true,
+        app_only: false,
+        get: |shape, _| (shape.kind == FillKind::Mini).then(|| i32::from(shape.mini.step)),
+        set: |shape, _, number| shape.mini.step = number as u8,
+    },
     /// The two values a fill goes between.
     From => GenParamSpec {
         meaning: "one end of what the fill writes, where a ramp starts",

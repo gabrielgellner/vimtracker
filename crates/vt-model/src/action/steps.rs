@@ -1,7 +1,7 @@
 //! Edits to what is on a phrase's steps.
 
 use crate::selection::{StepRange, clear_step, mark_step, merge_step, paste_step, shift_step};
-use crate::shape::{OwnRhythm, Texts, written_from};
+use crate::shape::{OwnRhythm, written_from};
 use crate::song::Song;
 use crate::step::{FxCommand, FxSlot, Gate, Note, Step};
 
@@ -62,12 +62,9 @@ pub(super) fn edit(next: &mut Song, action: &Action) -> Result<(), EditError> {
             let source = followed(next, shape)?;
             let source = source.as_ref().map(|source| source.loop_steps());
             let mut shape = *shape;
-            let rhythm = OwnRhythm::kept(&shape, rhythm);
+            let rhythm = OwnRhythm::kept(&shape, *column, rhythm);
             rhythm.settle(&mut shape);
-            let texts = Texts {
-                list,
-                rhythm: rhythm.beats(),
-            };
+            let texts = rhythm.texts(list);
             for (row, step) in written_from(found.steps(), *range, *column, &shape, texts, source) {
                 *step_mut(next, *track, *phrase, row)? = step;
             }

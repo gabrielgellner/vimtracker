@@ -21,7 +21,9 @@ at the top, then `Hits` and `Rotate`, `Rule` and `Start`, or an amount, such as 
 `Density`; `Complementary`'s amount and `Side`; or a named rhythm's `Rhythm`, `Part` and
 `Child`, whose `Over` and `Text` go to the fourth, but on an `Acid`, whose fourth is full,
 which has no `Text` there; or an `Own` rhythm's `Rhythm`, `Text` and `Step`, its `Over` in
-the fourth. `l` on `Text` goes into its tokens, and `i` types it all. Where `Random`'s `Weights` takes the top of the
+the fourth. `l` on `Text` goes into its tokens, and `i` types it all. A `Mini`, which has no
+`Where`, has its `Text` across the first column and on, then `Step` and, on the Note column,
+`From`, whose octave its degrees count from. Where `Random`'s `Weights` takes the top of the
 third, what was there goes to the fourth. A `Follow`, which has no `Where`, has its
 `Mutation` and the kinds it may make in the third column and the fourth, and `Acid`,
 whose three are full, its riff's `Spread` and `Bias` in the fourth, as a `Tonnetz` has its

@@ -14,16 +14,17 @@
 use vt_model::action::Action;
 use vt_model::constants::FX_SLOTS;
 use vt_model::generator::Generator;
+use vt_model::notation::mini_start;
 use vt_model::selection::Field;
 use vt_model::shape::params::{Choice, Typing};
-use vt_model::shape::{Context, GenParam, Shape, ShapeColumn};
+use vt_model::shape::{Context, FillKind, GenParam, OwnRhythm, Shape, ShapeColumn};
 use vt_model::step::FxCommand;
 
 use crate::app::Entry;
 use crate::input::bindings::Cmd;
 use crate::input::mode::View;
 use crate::overlays::picker::{Item, Pick, Picker};
-use crate::overlays::shape::{choice_picker, from_named, typed_rhythm};
+use crate::overlays::shape::{choice_picker, dropped_said, from_named, typed_mini, typed_rhythm};
 use crate::pages::{CtxMut, Outcome};
 use crate::services::Services;
 use crate::services::generators::{LiveGen, generator_label};
@@ -113,8 +114,15 @@ fn reshape_live(
         return;
     }
     if shape != live.generator.shape {
-        // A named rhythm made `Own` starts from its text (decision 461).
-        let rhythm = from_named(live.generator.shape.place, shape.place);
+        // A named rhythm made `Own` starts from its text (decision 461), and a `Mini` from what's
+        // in its rows (decision 462).
+        let mut rhythm = from_named(live.generator.shape.place, shape.place);
+        if shape.kind == FillKind::Mini
+            && live.generator.shape.kind != FillKind::Mini
+            && let Some(rows) = live.generator.rows()
+        {
+            rhythm = Some(mini_start(&live.under, rows, live.generator.column));
+        }
         services.apply(&Action::Reshape {
             track,
             phrase,
@@ -123,6 +131,56 @@ fn reshape_live(
             list: None,
             rhythm: rhythm.map(Into::into),
         });
+        say_dropped(services, view, (phrase, generator));
+    }
+}
+
+/// Give a live generator of the cursor's track a `Mini`'s line, typed, as one undo step if it's
+/// a change; one that doesn't read, or stacks layers on its one track, is refused, saying why
+/// (decision 462).
+pub(super) fn reline_live(
+    services: &mut Services,
+    view: View,
+    (phrase, generator): (u32, usize),
+    text: &str,
+) {
+    let track = services.cursor.track;
+    let Some(live) = services.live_generator(track, phrase, generator, view) else {
+        return;
+    };
+    if let Err(why) = typed_mini(text, live.generator.column, 1) {
+        services.status = why;
+        return;
+    }
+    let text = text.trim();
+    if live.generator.rhythm() != text {
+        services.apply(&Action::Reshape {
+            track,
+            phrase,
+            generator,
+            shape: live.generator.shape,
+            list: None,
+            rhythm: Some(text.into()),
+        });
+        say_dropped(services, view, (phrase, generator));
+    }
+}
+
+/// The status line says how many of a live `Mini`'s hits share a row and are dropped, and the
+/// `Step` that keeps them, where any are.
+fn say_dropped(services: &mut Services, view: View, (phrase, generator): (u32, usize)) {
+    let track = services.cursor.track;
+    let Some(live) = services.live_generator(track, phrase, generator, view) else {
+        return;
+    };
+    let rows = live.generator.rows().map_or(0, |rows| rows.len());
+    let own = OwnRhythm::kept(
+        &live.generator.shape,
+        live.generator.column,
+        live.generator.rhythm(),
+    );
+    if let Some(said) = dropped_said(&live.generator.shape, &own, rows) {
+        services.status = said;
     }
 }
 
@@ -368,6 +426,10 @@ impl GenEdit<'_> {
         }
         if let Some((phrase, generator, GenParam::OwnText)) = self.here() {
             rerhythm_live(self.services, self.view, (phrase, generator), text);
+            return;
+        }
+        if let Some((phrase, generator, GenParam::MiniText)) = self.here() {
+            reline_live(self.services, self.view, (phrase, generator), text);
             return;
         }
         self.reshape(|services, param, shape, context| {

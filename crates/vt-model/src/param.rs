@@ -139,6 +139,9 @@ pub enum Typing {
     Moves,
     /// An `Own` rhythm's hits and rests, in Tidal's mini-notation, kept with `Enter`.
     Rhythm,
+    /// A `Mini`'s line, Tidal's mini-notation whose hits are the column's values, kept with
+    /// `Enter`.
+    Mini,
 }
 
 impl Typing {
@@ -150,6 +153,7 @@ impl Typing {
             Self::HexList | Self::Named { list: true } => Some(GrammarId::List),
             Self::Moves => Some(GrammarId::Moves),
             Self::Rhythm => Some(GrammarId::Rhythm),
+            Self::Mini => Some(GrammarId::Mini),
             _ => None,
         }
     }

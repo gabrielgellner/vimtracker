@@ -29,6 +29,35 @@ in turn can't give.
 `List`, `Values` `c2 c2 d#2 c2 g2 c2 a#1 c2`, `Run` `4`. Listen for the
 eight notes, each on four rows in a row, a beat, then the line again from the first.
 
+## Mini
+
+`Mini` is a line in TidalCycles' mini-notation whose hits are the column's own
+values, so its `Text` is its rhythm and its values at once: notes by name or by
+degree from `1` on the Note column, hex on Velocity and Length, signed nudges, and
+an FX column's values. Each top-level token is `Step` rows. See **Shaping a
+column** in the editing guide for the whole notation.
+
+**A bass line in degrees.** On an empty Note column over 16 rows: `Fill` `Mini`,
+`Text` `1 . 1 [. 5] 3 . <8 7> .`, `Step` `2 rows`, `From` `C-2`. Listen for the
+root, the fifth pushed off the beat, and on the last beat the octave one bar and
+the seventh the next.
+
+**A triplet fill.** On the same column, `Text` `1 . 3 [5 3 1]`, `Step` `4 rows`.
+The last beat is three notes, the middle two nudged off the rows, a true triplet.
+
+**Accents with a chance.** On a hat's Velocity over 16 rows: `Fill` `Mini`, `Text`
+`7F 30 [50 30] 30?40`, `Step` `4 rows`. An accent on the first beat, a pair of
+eighths on the third, and a soft last beat that plays four times in ten, the same
+each pass while `Vary` is `Once`.
+
+**A tied length.** On a lead's Length, a note on every row: `Text` `40 _ 80 20`,
+`Step` `1 row`. The second row ties into the third, `HLD`, one note held across
+them, and the line goes round every four rows.
+
+**A bass and its answer.** Two tracks' empty Note columns selected together:
+`Text` `C-2*4, [. G-2]*2`, `Step` `4 rows`. The first track plays `C-2` on every
+row, the second `G-2` on the offbeats: a layer a track.
+
 ## Random
 
 Random values between two ends, after Mutable Instruments' Marbles: anything
