@@ -231,6 +231,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     if let Some(path) = Settings::path() {
         let (settings, note) = Settings::load(&path);
         app.services.settings = settings;
+        app.services.settings_path = Some(path);
         if let Some(note) = note
             && status.is_empty()
         {

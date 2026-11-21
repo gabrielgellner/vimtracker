@@ -72,9 +72,10 @@ way, so nothing over full reaches your gear.
 ## The audio page
 
 The audio page is the project page's second page, `Space 9` then `L`, titled `Audio ·
-this machine`, as what it sets is kept for this machine, in `audio.ron`, `wheel.ron` and
-`roto.ron` beside `settings.ron`, not in the song. It shows which device plays, its rate
-and its buffer, the input the recorder hears, then the latency and how well it's keeping up. `H` goes back to the
+this machine`, as what it sets is kept for this machine, in `audio.ron`, `wheel.ron`,
+`roto.ron` and `settings.ron`, not in the song. It shows which device plays, its rate
+and its buffer, the input the recorder hears, the mouse wheel, the Roto-Control and
+whether `Space d`'s line describing settings shows, then the latency and how well it's keeping up. `H` goes back to the
 project's Song page. `j` and `k` choose a row, `gg` and `G` the first or last, `=` and `-`
 step through its choices, as do Cmd with `l` and `h`, or `k` and `j`, `K` lists them,
 and `x` goes back to the system's own. A change takes effect at once: the transport stops, and the song,
@@ -146,7 +147,7 @@ its mouse back.
 
 ## The Roto-Control
 
-The audio page's last row, `Roto`, turns on Melbourne Instruments' Roto-Control. It's
+The audio page's `Roto` row turns on Melbourne Instruments' Roto-Control. It's
 off until you turn it on, so opening vimtracker with Ableton Live running never takes
 the Roto from Live. On that row, `=` turns it on and `-` off, `K`, `i` or Enter switch
 it, and `x` puts it back off. This machine remembers it, in
@@ -265,4 +266,12 @@ it plays.
 
 Only one vimtracker can have the Roto. If another one has it, this one's `Roto` row says
 so; turn it off in the other and this one takes it within a second.
+
+## Describing settings
+
+The audio page's last row, `Describe`, shows the line that says what the setting under
+the cursor does, as `Space d` does anywhere: they're the same setting, so either turns it
+on or off. `=` turns it on and `-` off, `K`, `i` or Enter switch it, and `x` puts it back
+off, as it starts. It stays as you left it the next time vimtracker starts, in every
+project, kept for this machine as `describe` in `~/.config/vimtracker/settings.ron`.
 <!-- ANCHOR_END: rest -->

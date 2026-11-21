@@ -1,6 +1,7 @@
 //! The line that describes the setting under the cursor (decision 387): its name, what it does
 //! and what its value means now, in a sentence or two, in two rows above the macro panel. `Space d`
-//! shows it or hides it, for the session only, not in the song. It follows the cursor of the
+//! shows it or hides it, as the Audio page's `Describe` does, and it stays as it was left, for this
+//! machine in `settings.ron` rather than in the song (decision 476). It follows the cursor of the
 //! macro panel while the keys are in it, of the shape panel while that's open, and of the Track
 //! page's pages; anywhere else it takes no rows, so with it off, or on another page, the screen is
 //! as it was.
@@ -30,7 +31,7 @@ pub const ROWS: u16 = 2;
 /// The rows the line takes now: none while it's off, or while nothing on screen has a setting
 /// under the cursor.
 pub fn rows(app: &App) -> u16 {
-    match app.overlays.describing && subject(app).is_some() {
+    match app.services.settings.describe && subject(app).is_some() {
         true => ROWS,
         false => 0,
     }

@@ -936,6 +936,11 @@ impl<'a> Ctx<'a> {
         self.page.wheel
     }
 
+    /// Whether the line describing the setting under the cursor shows, `Space d`.
+    pub fn describing(&self) -> bool {
+        self.services.settings.describe
+    }
+
     /// The CPU the audio takes, as the system line shows it, in percent.
     pub(crate) fn cpu_percent(&self) -> u64 {
         self.page.cpu_percent

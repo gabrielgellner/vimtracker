@@ -1,6 +1,7 @@
 //! The audio page, the project page's Audio sub-page: this machine's output playing, its rate and
 //! buffer, the input the recorder hears, how it's keeping up, whether vimtracker drives the
-//! Roto-Control, and whether the mouse wheel turns the cursor's setting. It's drawn from the
+//! Roto-Control, whether the mouse wheel turns the cursor's setting, and whether the line
+//! describing the setting under the cursor shows. It's drawn from the
 //! page's own row and what it reads of the program through a [`Ctx`].
 
 use ratatui::Frame;
@@ -68,22 +69,31 @@ fn value(ctx: &Ctx, row: AudioRow) -> String {
         AudioRow::WheelDirection => {
             "With the fingers, as a bar fills: up or right raises".to_owned()
         }
+        AudioRow::Describe if ctx.describing() => {
+            "A line above the status line says what the setting under the cursor does. Space d \
+             switches it anywhere"
+                .to_owned()
+        }
+        AudioRow::Describe => {
+            "Off: Space d shows a line saying what the setting under the cursor does".to_owned()
+        }
     }
 }
 
-/// Whether an off/on row, the Roto's or the wheel's, is on.
+/// Whether an off/on row, the Roto's, the wheel's or the description's, is on.
 fn switched_on(ctx: &Ctx, row: AudioRow) -> bool {
     match row {
         AudioRow::Wheel => ctx.wheel().on,
+        AudioRow::Describe => ctx.describing(),
         _ => ctx.roto().setting.on,
     }
 }
 
-/// A row as a setting's cell: its name, and its value, a toggle on the Roto's and the wheel's
-/// rows, the cursor's where it's on it.
+/// A row as a setting's cell: its name, and its value, a toggle on the off/on rows, the cursor's
+/// where it's on it.
 fn cell<'a>(ctx: &Ctx<'a>, row: AudioRow, here: bool) -> ParamCell<'a> {
     let face = match row {
-        AudioRow::Roto | AudioRow::Wheel => Face::Toggle {
+        AudioRow::Roto | AudioRow::Wheel | AudioRow::Describe => Face::Toggle {
             on: switched_on(ctx, row),
         },
         _ => Face::Word,
@@ -98,7 +108,7 @@ fn cell<'a>(ctx: &Ctx<'a>, row: AudioRow, here: bool) -> ParamCell<'a> {
     }
 }
 
-/// An off/on row's value, the Roto's or the wheel's: its switch in its own colour, or the
+/// An off/on row's value, the Roto's, the wheel's or the description's: its switch in its own colour, or the
 /// cursor's, as its cell draws it, then what it says, dim while it's off.
 fn switch_value(on: bool, switch: Line<'static>, says: String) -> Line<'static> {
     let style = if on { Style::new() } else { theme::dim() };
@@ -130,7 +140,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &AudioPage, ctx: &Ctx) {
         let cell = cell(ctx, row, here);
         let parts = cell.parts(CELL);
         let line = match row {
-            AudioRow::Roto | AudioRow::Wheel => {
+            AudioRow::Roto | AudioRow::Wheel | AudioRow::Describe => {
                 switch_value(switched_on(ctx, row), parts.value, cell.text)
             }
             // Dim while the wheel's off, as it does nothing then.

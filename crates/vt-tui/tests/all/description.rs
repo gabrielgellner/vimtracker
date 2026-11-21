@@ -60,14 +60,14 @@ fn space_d_shows_the_line_above_the_status_line_and_hides_it_again() {
     press(&mut app, " 5");
     let before = whole_screen(&mut app);
     press(&mut app, " d");
-    assert!(app.overlays.describing);
+    assert!(app.services.settings.describe);
     let shown = whole_screen(&mut app);
     // The status line keeps its two rows at the bottom, and the line takes the two above them.
     let said = row(&shown, 38) + &row(&shown, 39);
     assert!(said.contains("Machine:"), "{said}");
     assert!(said.contains("what makes the track's sound"), "{said}");
     press(&mut app, " d");
-    assert!(!app.overlays.describing);
+    assert!(!app.services.settings.describe);
     assert_eq!(whole_screen(&mut app), before, "hidden, it's as it was");
 }
 
@@ -97,6 +97,43 @@ fn off_or_with_nothing_to_describe_nothing_changes() {
             assert_eq!(on, off, "{keys}: nothing to describe");
         }
     }
+}
+
+#[test]
+fn it_is_kept_for_the_machine_and_switched_on_the_audio_page_too() {
+    use vt_tui::pages::audio::AudioRow;
+    use vt_tui::services::config::Settings;
+    let (mut app, _realtime) = tracks_of_different_lengths();
+    let folder = folder();
+    let path = folder.join("vimtracker").join("settings.ron");
+    let (settings, _) = Settings::load(&path);
+    assert!(!settings.describe, "off until turned on");
+    app.services.settings = settings;
+    app.services.settings_path = Some(path.clone());
+    // `Space d` keeps it, so the next start shows it.
+    press(&mut app, " 5 d");
+    assert!(Settings::load(&path).0.describe);
+    // The Audio page's last row is the same setting, which `Space d` flips there too.
+    press(&mut app, " 9LG");
+    assert_eq!(app.audio_page.row_here(), AudioRow::Describe);
+    press(&mut app, "-");
+    assert!(!app.services.settings.describe);
+    assert!(!Settings::load(&path).0.describe);
+    press(&mut app, "K");
+    assert!(app.services.settings.describe);
+    press(&mut app, " d");
+    assert!(!Settings::load(&path).0.describe);
+    press(&mut app, "=");
+    let (kept, note) = Settings::load(&path);
+    assert_eq!(note, None);
+    assert!(kept.describe);
+    assert_eq!(kept.kits, Settings::default().kits, "the rest is as it was");
+    // A new start reads it back, and the line shows on the Track page as it opens.
+    let (mut again, _realtime) = tracks_of_different_lengths();
+    again.services.settings = Settings::load(&path).0;
+    press(&mut again, " 5");
+    assert!(describe::rows(&again) > 0);
+    std::fs::remove_dir_all(&folder).unwrap();
 }
 
 #[test]

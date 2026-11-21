@@ -214,9 +214,6 @@ pub struct Overlays {
     pub field_jump: Option<FieldJump>,
     /// The macro panel at the bottom of the screen, whether it shows, and where its cursor is.
     pub macro_panel: MacroPanel,
-    /// Whether the line describing the setting under the cursor shows, `Space d`, for the session
-    /// only, not in the song.
-    pub describing: bool,
 }
 
 impl Overlays {
@@ -234,7 +231,6 @@ impl Overlays {
             pattern_text: String::new(),
             field_jump: None,
             macro_panel: MacroPanel::default(),
-            describing: false,
         }
     }
 }

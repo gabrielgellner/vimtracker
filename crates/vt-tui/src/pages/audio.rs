@@ -3,7 +3,8 @@
 //! as it's made, as Ableton's audio preferences do: the main loop opens the new output. Its last
 //! rows turn the mouse wheel on and off as a knob on the cursor's setting (`wheel`), and say
 //! which way it turns, and turn on the Roto-Control (`roto`), as Live's MIDI preferences choose
-//! its control surfaces.
+//! its control surfaces. The last shows the line describing the setting under the cursor, as
+//! `Space d` does, kept in `settings.ron` (decision 476).
 //!
 //! `AudioPage` is the page as a component: the row its cursor is on, its moves, and its drawing, in
 //! `draw`, given a [`Ctx`]. It's a [`Page`], with its rows of the binding table, [`Page::KEYS`],
@@ -41,10 +42,12 @@ pub enum AudioRow {
     WheelDirection,
     /// Whether vimtracker drives the Roto-Control, and how its link is.
     Roto,
+    /// Whether the line describing the setting under the cursor shows, as `Space d` switches it.
+    Describe,
 }
 
 impl AudioRow {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Device,
         Self::Rate,
         Self::Buffer,
@@ -52,6 +55,7 @@ impl AudioRow {
         Self::Wheel,
         Self::WheelDirection,
         Self::Roto,
+        Self::Describe,
     ];
 
     pub fn name(self) -> &'static str {
@@ -63,6 +67,7 @@ impl AudioRow {
             Self::Roto => "Roto",
             Self::Wheel => "Wheel",
             Self::WheelDirection => "Direction",
+            Self::Describe => "Describe",
         }
     }
 }
@@ -295,7 +300,9 @@ impl AudioPage {
                 std::iter::once(off).chain(inputs).collect()
             }
             // Off or on, or one way or the other, which their own keys switch.
-            AudioRow::Roto | AudioRow::Wheel | AudioRow::WheelDirection => Vec::new(),
+            AudioRow::Roto | AudioRow::Wheel | AudioRow::WheelDirection | AudioRow::Describe => {
+                Vec::new()
+            }
         };
         let current = match row {
             AudioRow::Device => device.and_then(|device| {
@@ -320,7 +327,9 @@ impl AudioPage {
                     .position(|found| found.id == *id)
                     .map(|at| at + 1),
             },
-            AudioRow::Roto | AudioRow::Wheel | AudioRow::WheelDirection => None,
+            AudioRow::Roto | AudioRow::Wheel | AudioRow::WheelDirection | AudioRow::Describe => {
+                None
+            }
         };
         (options, current)
     }
@@ -331,6 +340,7 @@ impl AudioPage {
         match self.row_here() {
             AudioRow::Roto => Some(Places::switch(services.roto.setting.on)),
             AudioRow::Wheel => Some(Places::switch(wheel.on)),
+            AudioRow::Describe => Some(Places::switch(services.settings.describe)),
             AudioRow::WheelDirection => None,
             row @ (AudioRow::Device | AudioRow::Rate | AudioRow::Buffer | AudioRow::Input) => {
                 let (options, current) = self.options(row, services.rate);
@@ -367,6 +377,21 @@ impl AudioPage {
         true
     }
 
+    /// What a key does on the description's row, as on the Roto's: off, as it starts, for `x`.
+    fn describe_row(cmd: Cmd, services: &mut Services) -> bool {
+        let on = services.settings.describe;
+        let wanted = match cmd {
+            Cmd::Increase | Cmd::IncreaseLarge => true,
+            Cmd::Decrease | Cmd::DecreaseLarge | Cmd::ClearField => false,
+            Cmd::PickValue | Cmd::EnterInsert => !on,
+            _ => return false,
+        };
+        if wanted != on {
+            services.set_describing(wanted);
+        }
+        true
+    }
+
     /// What a key does on the wheel's direction row: `=`, `-`, `K`, `i` and Enter switch it, and
     /// `x` puts it back with the fingers. Returns false for a key that means nothing there.
     fn wheel_direction_row(cmd: Cmd, wheel: &mut Wheel, services: &mut Services) -> bool {
@@ -400,6 +425,7 @@ impl AudioPage {
             AudioRow::Roto => Self::roto_row(cmd, services),
             AudioRow::Wheel => Self::wheel_row(cmd, ctx.wheel, services),
             AudioRow::WheelDirection => Self::wheel_direction_row(cmd, ctx.wheel, services),
+            AudioRow::Describe => Self::describe_row(cmd, services),
             _ => false,
         };
         if done {
@@ -440,8 +466,12 @@ impl AudioPage {
                         buffer: None,
                         ..self.audio.choice.clone()
                     },
-                    // The Roto's and the wheel's rows have their own keys, above.
-                    AudioRow::Roto | AudioRow::Wheel | AudioRow::WheelDirection => {
+                    // The Roto's, the wheel's and the description's rows have their own keys,
+                    // above.
+                    AudioRow::Roto
+                    | AudioRow::Wheel
+                    | AudioRow::WheelDirection
+                    | AudioRow::Describe => {
                         return Outcome::Done;
                     }
                 };
