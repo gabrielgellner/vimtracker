@@ -15,6 +15,8 @@
 //! atoms, a few hundred bytes; the render reads them, allocating nothing, so the engine runs it
 //! unchanged.
 
+use serde::{Deserialize, Serialize};
+
 use super::own::{self, Lands, Own};
 use super::render::{Out, Rows, Shaped};
 use super::{GenCell, Shape, ShapeColumn, Texts};
@@ -38,6 +40,19 @@ pub enum Atom {
     Degree(u8),
     /// On the Length column, `_`: the note tied into the next row's, `HLD`.
     Tie,
+    /// On a kit line, a hit naming its own track: the generator's note, `From`, at the velocity
+    /// notes are typed with (decision 464).
+    Own,
+    /// On a kit line, a hit naming another track, which writes nothing on this one.
+    Other,
+}
+
+/// A kit line's mark on each of its generators (decision 464): the group whose tracks it spans,
+/// and which of the group's lines it is, so an edit to it on one track is made on the rest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct KitLine {
+    pub group: u8,
+    pub line: u32,
 }
 
 /// The note a degree is, counted from 0 at the scale's root in the octave `from` is in: the
@@ -101,6 +116,22 @@ pub(super) fn render<F: FnMut(usize, &Shaped, Option<usize>)>(
     let line = shape.mini;
     let len = out.cells.len();
     let most = most_nudge(TICKS_PER_STEP);
+    // A kit line's track plays only where its name is: every other row rests.
+    if shape.kit.is_some() && matches!(column, ShapeColumn::Note { .. }) {
+        for (offset, cell) in out.cells.iter_mut().enumerate() {
+            if steps
+                .get(range.first + offset)
+                .is_some_and(|step| step.note != Note::Off)
+            {
+                *cell = GenCell::Timed {
+                    note: Note::Empty,
+                    velocity: None,
+                    gate: None,
+                    nudge: 0,
+                };
+            }
+        }
+    }
     own::walk(texts.rhythm, line, shape.seed, len, |lands: Lands| {
         let row = range.first + lands.nth;
         let (Some(step), Some(atom)) = (steps.get(row), texts.atoms.get(usize::from(lands.hit)))
@@ -122,7 +153,10 @@ pub(super) fn render<F: FnMut(usize, &Shaped, Option<usize>)>(
                 let note = degree_note(scale, shape.from, degree);
                 (column.cell(step, u16::from(note) << 8), note)
             }
-            (Atom::Tie | Atom::Degree(_), _) => return,
+            (Atom::Own, ShapeColumn::Note { .. }) => {
+                (column.cell(step, u16::from(shape.from) << 8), shape.from)
+            }
+            (Atom::Tie | Atom::Degree(_) | Atom::Own | Atom::Other, _) => return,
             (Atom::Value(value), _) => (column.cell(step, u16::from(value) << 8), value),
         };
         let nudge = (lands.off * ROW_NUDGES)

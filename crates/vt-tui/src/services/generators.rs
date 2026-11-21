@@ -59,7 +59,8 @@ pub(crate) fn too_few(shape: &Shape, notes: usize) -> Option<String> {
 }
 
 /// A live generator as the Gen page edits it: a copy of it, with its phrase's steps as they'd be
-/// without it, the phrases a `Follow` can read and the loop it reads, and what `x` puts back.
+/// without it, the phrases a `Follow` can read and the loop it reads, what `x` puts back, and on
+/// a kit line the names of the tracks it spans.
 #[derive(Debug, Clone)]
 pub(crate) struct LiveGen {
     pub generator: Generator,
@@ -67,6 +68,9 @@ pub(crate) struct LiveGen {
     sources: Vec<Source>,
     source: Option<Vec<Step>>,
     pub starts: Starts,
+    /// On a kit line, the names of the tracks it spans, which its hits are (decision 464):
+    /// empty for any other generator.
+    pub names: Vec<String>,
 }
 
 impl LiveGen {
@@ -147,13 +151,14 @@ pub(crate) fn live_shown(
     .unwrap_or_default()
 }
 
-/// A live generator's name in the phrase's heading: its column, and for a `Follow` what it
-/// follows, like `Note←T02:05`.
+/// A live generator's name in the phrase's heading: its column, for a `Follow` what it
+/// follows, like `Note←T02:05`, and for a kit line its group's, `Note kit G1`.
 pub(crate) fn generator_label(generator: &Generator) -> String {
     let column = column_label(generator.column);
-    match generator.source() {
-        Some(source) => format!("{column}←{source}"),
-        None => column,
+    match (generator.source(), generator.shape.kit) {
+        (Some(source), _) => format!("{column}←{source}"),
+        (None, Some(kit)) => format!("{column} kit G{}", kit.group),
+        (None, None) => column,
     }
 }
 
@@ -320,11 +325,16 @@ impl Services {
         } else {
             default_ends(&under, rows, generator.column)
         };
+        let names = generator
+            .shape
+            .kit
+            .map_or_else(Vec::new, |kit| song.kit_names(kit));
         Some(LiveGen {
             generator,
             under,
             sources,
             source,
+            names,
             starts: Starts {
                 ends,
                 source: default_source,

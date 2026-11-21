@@ -47,7 +47,7 @@ pub use divisions::{
 pub(crate) use follow::copy_fx;
 pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
 pub use grids::{ACCENT_LEVEL, DrumPart, GRIDS_STEPS, Grids, parts as drum_parts};
-pub use mini::{Atom, degree_note, dropped, keeping_step};
+pub use mini::{Atom, KitLine, degree_note, dropped, keeping_step};
 pub use mutation::{MAX_MUTATION, Mutations};
 pub use own::{Beat, Euclid, MAX_STEP, Own, OwnRhythm, What, line_steps};
 pub(crate) use params::{BEND_JUMP, BEND_NUDGE};
@@ -1207,6 +1207,10 @@ pub struct Shape {
     /// changed (decision 462).
     #[serde(default, skip_serializing_if = "Own::is_default")]
     pub mini: Own,
+    /// A `Mini`'s kit line, where it's one: the group whose tracks it spans and which line of
+    /// the group's it is, its hits the tracks' names (decision 464). Saved only for one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kit: Option<KitLine>,
     /// How many passes each of its variations lasts, a new seed each time: `0` for none, the
     /// seed every pass, as written. Only a shape that [draws](Shape::draws) varies. Saved only
     /// once it's set.
@@ -1273,6 +1277,7 @@ impl Default for Shape {
             mutate: MUTATE_ALL,
             variation: Variation::default(),
             mini: Own::default(),
+            kit: None,
             divisions: Divisions::default(),
             ring: Ring::default(),
             tonnetz: Tonnetz::default(),
@@ -1472,8 +1477,11 @@ pub fn track_seed(seed: u64, nth: usize) -> u64 {
 /// [`track_seed`] gives it, and its rows [on that track](Where::on_track). `Complementary` tosses
 /// one coin for each pair of tracks, so the two of a pair share a seed. A `Tonnetz` walks one
 /// progression on every track, so they all share its seed, each playing a voice of its own unless
-/// it was given one.
+/// it was given one, and a kit line is one line on every track, from one seed.
 pub fn on_track(shape: &Shape, nth: usize) -> Shape {
+    if shape.kit.is_some() {
+        return *shape;
+    }
     if shape.kind == FillKind::Tonnetz {
         return Shape {
             place: shape.place.on_track(nth),

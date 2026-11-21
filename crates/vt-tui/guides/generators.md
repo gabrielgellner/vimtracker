@@ -56,7 +56,17 @@ them, and the line goes round every four rows.
 
 **A bass and its answer.** Two tracks' empty Note columns selected together:
 `Text` `C-2*4, [. G-2]*2`, `Step` `4 rows`. The first track plays `C-2` on every
-row, the second `G-2` on the offbeats: a layer a track.
+row, the second `G-2` on the offbeats: a layer a track. On tracks in one group,
+the same selection makes a kit line instead, as below, and the line takes names.
+
+**A kit line.** Three drum tracks named `BD`, `SN` and `HH`, all with `Group` `G1`,
+their empty Note columns over 16 rows selected together: `Fill` `Mini`, `Text`
+`bd . [. bd] . sn . bd ., hh*2 [. hh]`, `Step` `2 rows`. One line on all three,
+each playing where its name is: the kick on the first and last beats and a
+sixteenth into the second, the snare on the third, and the hat, its own layer, two
+sixteenths and the last of every beat. Type the line again on any of the three
+tracks' Gen pages and all three change; `sn?` in place of `sn` drops the snare
+half the time, the same on every track.
 
 ## Random
 

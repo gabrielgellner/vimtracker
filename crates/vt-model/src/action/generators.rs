@@ -5,8 +5,9 @@ use std::sync::Arc;
 
 use super::EditError;
 use crate::generator::{Generator, reads};
+use crate::notation::{is_name, kit_rename};
 use crate::scale::Scale;
-use crate::shape::{FillKind, Shape, Source};
+use crate::shape::{FillKind, KitLine, Own, Shape, Source};
 use crate::song::{Phrase, Song};
 use crate::step::Step;
 
@@ -78,6 +79,155 @@ pub fn hold_generators(song: &mut Song) {
             for ((at, held), source) in changes.into_iter().zip(looked) {
                 phrase.hold_generator(at, held, source.as_deref());
             }
+        }
+    }
+}
+
+/// One of a kit line's generators: its track, its phrase, its place in the phrase's list and
+/// its line.
+#[derive(Debug, Clone, Copy)]
+struct Member {
+    track: usize,
+    phrase: u32,
+    at: usize,
+    kit: KitLine,
+}
+
+/// What a kit line keeps the same on every track: its text, its `Step`, its seed, its `Vary` and
+/// its `Mutate`, which decide where its hits land. Each track keeps its own note, `From`.
+fn line_of(generator: &Generator) -> (&str, u8, u64, u8, u8) {
+    let shape = &generator.shape;
+    (
+        generator.rhythm(),
+        shape.mini.step,
+        shape.seed,
+        shape.vary,
+        shape.mutate,
+    )
+}
+
+/// The generator a member is, in a song.
+fn member_of(song: &Song, member: Member) -> Option<&Generator> {
+    song.tracks
+        .get(member.track)?
+        .phrases
+        .get(&member.phrase)?
+        .generators()
+        .get(member.at)
+}
+
+/// Keep every kit line one line across its tracks, as part of the edit (decision 464): a track
+/// that has left the line's group has its generator applied, leaving its rows as they were
+/// heard; a track renamed has its name's tokens renamed in the text; and an edit to the line
+/// on one track, its text, `Step`, seed, `Vary` or `Mutate`, is made on every track it spans.
+/// Each generator is given its track's name, which it plays the hits of. With no `before`, as a
+/// song loads, each takes its track's name and nothing else changes.
+pub fn keep_kit_lines(before: Option<&Song>, after: &mut Song) {
+    let mut members = Vec::new();
+    for (track, sound) in after.tracks.iter().enumerate() {
+        for (id, phrase) in &sound.phrases {
+            for (at, generator) in phrase.generators().iter().enumerate() {
+                if let (Some(kit), FillKind::Mini) = (generator.shape.kit, generator.shape.kind) {
+                    members.push(Member {
+                        track,
+                        phrase: *id,
+                        at,
+                        kit,
+                    });
+                }
+            }
+        }
+    }
+    if members.is_empty() {
+        return;
+    }
+    let in_group = |song: &Song, member: &Member| {
+        let track = &song.tracks[member.track];
+        track.is_sound() && track.group == Some(member.kit.group)
+    };
+    let (left, kept): (Vec<Member>, Vec<Member>) = members
+        .into_iter()
+        .partition(|member| !in_group(after, member));
+    // From the last of a phrase's, then the rest found again, as their places may have moved.
+    if !left.is_empty() {
+        for member in left.iter().rev() {
+            if let Some(phrase) = after.tracks[member.track].phrases.get_mut(&member.phrase) {
+                Arc::make_mut(phrase).apply_generator(member.at);
+            }
+        }
+        keep_kit_lines(before, after);
+        return;
+    }
+    let mut lines: Vec<KitLine> = kept.iter().map(|member| member.kit).collect();
+    lines.sort_by_key(|kit| (kit.group, kit.line));
+    lines.dedup();
+    for kit in lines {
+        let line: Vec<Member> = kept.iter().filter(|m| m.kit == kit).copied().collect();
+        keep_line(before, after, &line);
+    }
+}
+
+/// One kit line's members made one line, from the one an edit changed, or a new one, or the
+/// first.
+fn keep_line(before: Option<&Song>, after: &mut Song, line: &[Member]) {
+    let was = |member: &Member| {
+        before
+            .and_then(|before| member_of(before, *member))
+            .filter(|generator| generator.shape.kit == Some(member.kit))
+    };
+    let Some(first) = line.first() else {
+        return;
+    };
+    let changed = line.iter().find(|member| {
+        let (Some(now), Some(was)) = (member_of(after, **member), was(member)) else {
+            return false;
+        };
+        line_of(now) != line_of(was)
+    });
+    let new = || line.iter().find(|member| was(member).is_none());
+    let source = changed.or_else(new).unwrap_or(first);
+    let Some(generator) = member_of(after, *source) else {
+        return;
+    };
+    let (text, step, seed, vary, mutate) = line_of(generator);
+    let mut text = text.to_owned();
+    // A track renamed has its tokens renamed with it.
+    for member in line {
+        let Some(generator) = member_of(after, *member) else {
+            continue;
+        };
+        let label = after.tracks[member.track].label(member.track);
+        let old = generator.kit_name();
+        if !old.is_empty() && !is_name(old, &label) {
+            text = kit_rename(&text, old, &label);
+        }
+    }
+    for member in line {
+        let Some(generator) = member_of(after, *member) else {
+            continue;
+        };
+        let label = after.tracks[member.track].label(member.track);
+        let shape = Shape {
+            seed,
+            vary,
+            mutate,
+            mini: Own {
+                step,
+                ..generator.shape.mini
+            },
+            ..generator.shape
+        };
+        let same = generator.rhythm() == text && shape == generator.shape;
+        if same && *generator.kit_name() == *label {
+            continue;
+        }
+        let Some(phrase) = after.tracks[member.track].phrases.get_mut(&member.phrase) else {
+            continue;
+        };
+        let phrase = Arc::make_mut(phrase);
+        phrase.name_kit_generator(member.at, &label);
+        if !same {
+            phrase.reshape_generator(member.at, shape, (None, Some(&text)), None);
         }
     }
 }

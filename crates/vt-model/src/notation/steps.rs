@@ -8,7 +8,7 @@ use crate::steps::{MAX_STEP, STEPS};
 pub(super) static STEPS_LIST: Grammar = Grammar {
     kinds: &[Kind::Value, Kind::Unread],
     split,
-    read,
+    read: |text, column, _| read(text, column),
     meaning: |kind| match kind {
         Kind::Value => "the value step {} plays, signed hex",
         _ => "what isn't a step's value, so the text doesn't read",
@@ -17,7 +17,7 @@ pub(super) static STEPS_LIST: Grammar = Grammar {
         name: format!("Step {}", at + 1),
         subject: format!("{}", at + 1),
     },
-    turn: |kind, text, sign, large, _| {
+    turn: |kind, text, sign, large, _, _| {
         if kind != Kind::Value {
             return None;
         }
