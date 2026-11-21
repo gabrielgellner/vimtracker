@@ -20,13 +20,13 @@ use crate::controls::{Control, DeviceSpec, DeviceWidth, Page};
 use crate::graphics::PanelKey;
 use crate::pages::Ctx;
 use crate::pages::track::{GenTokens, TrackPage, rack_places};
-use crate::widgets::token_buffer::{Buffer, Marks};
-use crate::widgets::tokens::Layout;
 use crate::widgets::device::{Device, rack_areas};
 use crate::widgets::grid::{CellWidths, SettingsGrid, faded};
 use crate::widgets::image;
 use crate::widgets::panel::GraphicPanel;
 use crate::widgets::theme;
+use crate::widgets::token_buffer::{Buffer, Marks};
+use crate::widgets::tokens::Layout;
 
 use super::TrackCells;
 

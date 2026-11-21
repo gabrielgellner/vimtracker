@@ -1322,8 +1322,7 @@ impl ShapePanel {
 
     fn adjust(&mut self, sign: i16, large: bool, services: &mut Services) {
         if self.row == GenParam::Weights {
-            services.status =
-                "l goes into the weights, a digit a note; i types them all".to_owned();
+            services.status = "l opens the weights, a digit a note, to turn them there".to_owned();
             return;
         }
         let mut shape = self.shape;

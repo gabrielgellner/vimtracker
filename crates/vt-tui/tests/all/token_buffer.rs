@@ -112,7 +112,11 @@ fn i_and_a_type_at_the_end_keeping_the_text() {
     assert_eq!(app.modes.mode, Mode::Normal, "Enter closes it");
     assert_eq!(generator(&app).rhythm(), format!("{NAMED} x"));
     assert!(matches!(generator(&app).shape.place, Where::Own(_)));
-    assert_eq!(app.services.history.undo_depth(), depth + 1, "one undo step");
+    assert_eq!(
+        app.services.history.undo_depth(),
+        depth + 1,
+        "one undo step"
+    );
     keys(&mut app, "a[x x]<Enter>");
     assert_eq!(generator(&app).rhythm(), format!("{NAMED} x [x x]"));
     keys(&mut app, "u");
@@ -168,6 +172,10 @@ fn a_named_rhythms_text_edited_stays_where_it_was() {
     let named = drawn_at(&app, "Text ");
     keys(&mut app, "<Enter>x<Enter>");
     assert!(matches!(generator(&app).shape.place, Where::Own(_)));
-    assert_eq!(here(&app), Some(GenParam::OwnText), "the cursor stays on it");
+    assert_eq!(
+        here(&app),
+        Some(GenParam::OwnText),
+        "the cursor stays on it"
+    );
     assert_eq!(drawn_at(&app, "Text "), named);
 }

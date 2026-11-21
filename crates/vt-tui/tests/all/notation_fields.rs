@@ -160,8 +160,10 @@ fn the_gen_pages_cells_in_a_grammar_open_their_buffer() {
     command(&mut app, "set scale=minor-pentatonic");
     keys(&mut app, "vGSKrandom<Enter>L 5LLL");
     to_cell(&mut app, GenParam::Weights);
-    let text = fx_page_text(&app).join("
-");
+    let text = fx_page_text(&app).join(
+        "
+",
+    );
     assert!(text.contains("Weights   FFFFF"), "{text}");
     keys(&mut app, "h");
     assert_eq!(app.modes.mode, Mode::Normal, "h moves on");
@@ -173,8 +175,10 @@ fn the_gen_pages_cells_in_a_grammar_open_their_buffer() {
     keys(&mut app, "<Enter>");
     assert_eq!(app.modes.mode, Mode::Tokens);
     assert_eq!(app.key_scopes(), [Mode::Tokens]);
-    let text = fx_page_text(&app).join("
-");
+    let text = fx_page_text(&app).join(
+        "
+",
+    );
     assert!(text.contains("╭ Weights "), "{text}");
     assert!(text.contains("F  F  F  F  F"), "{text}");
     assert!(text.contains("C  D# F  G  A#"), "{text}");
@@ -185,7 +189,11 @@ fn the_gen_pages_cells_in_a_grammar_open_their_buffer() {
             .random
             .weights
     };
-    assert_eq!(weights(&app)[..5], [0xF, 0xE, 0xF, 0xF, 0xF], "heard at once");
+    assert_eq!(
+        weights(&app)[..5],
+        [0xF, 0xE, 0xF, 0xF, 0xF],
+        "heard at once"
+    );
     assert_eq!(app.services.status, "Weight of D#: E");
     keys(&mut app, "l0");
     assert_eq!(weights(&app)[..5], [0xF, 0xE, 0, 0xF, 0xF]);

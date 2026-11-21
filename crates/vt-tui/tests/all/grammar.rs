@@ -1873,7 +1873,10 @@ fn a_list_fill_types_its_values_and_goes_round_them() {
     // `S` types the list again in its buffer, a space after each two digits.
     keys(&mut app, "S704055");
     assert_eq!(
-        panel(&app).tokens.as_ref().map(|tokens| tokens.field.text()),
+        panel(&app)
+            .tokens
+            .as_ref()
+            .map(|tokens| tokens.field.text()),
         Some("70 40 55")
     );
     keys(&mut app, "<Enter>");

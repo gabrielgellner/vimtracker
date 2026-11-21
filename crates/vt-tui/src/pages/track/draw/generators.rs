@@ -19,6 +19,7 @@ use vt_model::song::Track;
 use crate::controls::macro_name;
 use crate::controls::{Control, DeviceSpec};
 use crate::graphics::PanelKey;
+use crate::input::mode::Mode;
 use crate::overlays::mapping::holds;
 use crate::pages::Ctx;
 use crate::pages::track::TrackPage;
@@ -31,7 +32,6 @@ use crate::widgets::panel::GraphicPanel;
 use crate::widgets::setting::{self, Focus};
 use crate::widgets::table::take_top;
 use crate::widgets::theme;
-use crate::input::mode::Mode;
 use crate::widgets::token_buffer::{self, Buffer, Marks};
 use crate::widgets::tokens::{Layout, buffer_hint, has_rows_line};
 
@@ -337,7 +337,14 @@ struct OpenAt {
 /// text and the list `K` or `Tab` opened under the cursor's token, over the devices.
 fn draw_buffer(frame: &mut Frame, page: &TrackPage, ctx: &Ctx, at: OpenAt) {
     let OpenAt { control, x, y } = at;
-    let (Some(open), Control::Gen { phrase, generator, param }) = (page.tokens.as_ref(), control)
+    let (
+        Some(open),
+        Control::Gen {
+            phrase,
+            generator,
+            param,
+        },
+    ) = (page.tokens.as_ref(), control)
     else {
         return;
     };
@@ -682,7 +689,8 @@ pub(super) fn draw(
             }
             (Some(Control::Gen { generator, .. }), _) => {
                 let focused = at == cursor;
-                let drawn = draw_generator(frame, area, page, ctx, track, device, focused, &mut open);
+                let drawn =
+                    draw_generator(frame, area, page, ctx, track, device, focused, &mut open);
                 if let Some(corner) = drawn {
                     previews.push((generator, corner));
                 }

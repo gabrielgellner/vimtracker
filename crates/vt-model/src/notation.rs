@@ -31,8 +31,8 @@ pub use mini::{
     layers as mini_layers, stacks, start as mini_start,
 };
 pub use offer::{degrees, groups, notes_round, values};
-pub use steps::{show as show_step, value as step_value};
 pub use rhythm::{MAX_RHYTHM, compile as compile_rhythm, preset as rhythm_preset};
+pub use steps::{show as show_step, value as step_value};
 pub use table::{Mark, Table, chance, nth_of};
 
 /// Which grammar a setting's text is in.

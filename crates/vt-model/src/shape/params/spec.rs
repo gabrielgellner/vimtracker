@@ -905,10 +905,14 @@ impl GenParam {
             }
             Self::MoveList => return Err("Type the moves with i, like P L R L"),
             Self::OwnText => {
-                return Err("Type the rhythm with i, like x . [. x] x(3,8), or l to edit a token");
+                return Err(
+                    "Type the rhythm with i, like x . [. x] x(3,8), and turn its tokens there",
+                );
             }
             Self::MiniText => {
-                return Err("Type the line with i, like C-3 [. 3] <5 6>*2, or l to edit a token");
+                return Err(
+                    "Type the line with i, like C-3 [. 3] <5 6>*2, and turn its tokens there",
+                );
             }
             _ if self.spec().typing == Typing::Listed => {
                 let choices = self.choices(context).unwrap_or_default();

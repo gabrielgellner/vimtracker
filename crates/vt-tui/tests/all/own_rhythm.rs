@@ -83,10 +83,16 @@ fn own_starts_from_the_named_rhythm_and_plays_what_is_typed() {
     // on it, saying why.
     keys(&mut app, "k");
     keys(&mut app, "ax [x<Enter>");
-    assert_eq!(panel(&app).rhythm, "x . [. x] x(3,8) x", "the last that read");
+    assert_eq!(
+        panel(&app).rhythm,
+        "x . [. x] x(3,8) x",
+        "the last that read"
+    );
     assert!(panel(&app).tokens.is_some());
     assert!(
-        app.services.status.contains("the column plays the last text that read"),
+        app.services
+            .status
+            .contains("the column plays the last text that read"),
         "{}",
         app.services.status
     );
