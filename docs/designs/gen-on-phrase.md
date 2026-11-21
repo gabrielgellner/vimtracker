@@ -1,7 +1,7 @@
 # Gen on the phrase view, beside the grid
 
-**Status:** a design study for the author to read and decide on, written on 2026-11-20. No code is
-changed. Their answers to §9 will go under it, as **Decided**.
+**Status:** decided by the author on 2026-11-20 (below, **Decided**); the plan in §10 is filed in
+the milestone. No code is changed here.
 
 The author asked, on 2026-11-20: "maybe Gen should be a page on the Phrase page, as it really is
 about that place, so S and the Gen areas are grouped in a more logical place. Keep the Macros on
@@ -13,6 +13,26 @@ the track pages is fine as well, and should be an option regardless."
 **only the phrase under the cursor's own columns** (Note, Velocity, Nudge, Length and its FX
 columns) on the left and the Gen panel on the right. No meter, and none of the other tracks'
 columns, the timeline or the row inspector. Every width below is measured on that basis.
+
+**Decided (the author, 2026-11-20), the answers to §9:**
+
+1. **The side form is the default.** The full form is `Ctrl-w o` away, remembered for the session.
+2. **`Space 8` opens Gen,** on the phrase view. Macros is reached with `L` from FX, the picker or
+   `Space T`.
+3. **`Phrase` and the lane devices move with Gen.**
+4. **Vim's `Ctrl-w` family:** `h` `l` `w` `o` `v` `c`, with `Esc` from the panel back to the grid.
+5. **`S` keeps its own box,** drawn over the panel at its top left, for now.
+6. **No setting for the default form** yet; the session remembers the last.
+7. **Previews in the side form are the phrase view's own bars,** not the devices' pictures. While
+   the keys are in a device, the column it writes shows its values as the bars `S` already draws
+   (editing guide, **Shaping a column**): each row's value solid, with what it was when the keys
+   entered the device fainter behind it; the column's name, range and `lowest─highest avg n
+   changed` line above; and on the Note column the contour over the scale's roots. They're drawn
+   over the phrase's other columns, which can't be edited while the keys are in the panel, as `S`
+   draws them over the lanes today, and go when the keys go back to the grid. A column whose
+   values aren't amounts has none, as now.
+8. **Following stops while the keys are in the panel;** the panel's cursor leads and lights its
+   device's rows, and following resumes when the keys go back to the grid.
 
 **It builds on:**
 
@@ -478,10 +498,11 @@ changes (`track-gen.md` becomes the phrase view's Gen guide, plus `navigation.md
    remembered for the session. A 163x42 `screen_cells` test pins the columns: the grid at 0 to 66,
    the panel at 68 to 162. Depends on 2.
 4. **The panel follows the grid's cursor (M).** The table in §5.3, `Empty` for the cursor's column,
-   the status line, and the panel's device lighting its rows in the grid. Depends on 3.
+   the status line, and the panel's device lighting its rows in the grid; while the keys are in a
+   device, its column's values as `S`'s bars over the other columns (Decided 7). Depends on 3.
 5. **`S` and `gl` with the panel open (S).** `S`'s box in the panel's place, `L` landing in the
    panel, `gl` moving the panel, and `gL`. Depends on 3.
 6. **Lit rows from the panel's buffer (S).** `token_rows` reads the open token buffer as well as
    the `S` panel, and #1106's dialog is placed in the area it's given. Depends on #1106 and 3.
-7. **Later, if asked for:** the `S` panel as a `New` device (question 5), a one-device zoom with its
-   preview (question 7), and a setting for the default form (question 6).
+7. **Later, if asked for:** the `S` panel as a `New` device (question 5) and a setting for the default
+   form (question 6).
