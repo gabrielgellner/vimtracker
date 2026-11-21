@@ -90,7 +90,7 @@ impl Layout {
             GenParam::MoveList => (MOVE_CELL, chords(shape, context).split_off(1)),
             GenParam::Flip | GenParam::Keep => (BIT_CELL, Vec::new()),
             // An `Own` rhythm's tokens a space apart, as its text is typed.
-            GenParam::OwnText => (RHYTHM_CELL, Vec::new()),
+            GenParam::OwnText | GenParam::MiniText => (RHYTHM_CELL, Vec::new()),
             _ => (LIST_GAP + 1, Vec::new()),
         };
         let step = match param {
@@ -99,7 +99,7 @@ impl Layout {
                 let longest = field.tokens().iter().map(|token| token.at.len()).max();
                 longest.unwrap_or(2) + LIST_GAP
             }
-            GenParam::OwnText => {
+            GenParam::OwnText | GenParam::MiniText => {
                 let longest = field.tokens().iter().map(|token| token.at.len()).max();
                 longest.unwrap_or(1) + RHYTHM_CELL - 1
             }

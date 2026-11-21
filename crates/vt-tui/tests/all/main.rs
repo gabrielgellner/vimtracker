@@ -35,6 +35,7 @@ mod launch;
 mod macro_panel;
 mod macros;
 mod marbles_rhythms;
+mod mini_line;
 mod mixer;
 mod mod_page;
 mod notation_fields;

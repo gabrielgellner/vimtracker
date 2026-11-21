@@ -23,7 +23,7 @@ use vt_model::scale::Scale;
 use vt_model::selection::StepRange;
 use vt_model::shape::{
     Context, FillKind, GenCell, GenParam, Kept, RowView, Shape, ShapeColumn, counted, is_empty,
-    render_into,
+    line_steps, render_into,
 };
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
@@ -191,6 +191,97 @@ impl Unders {
         let under = self.phrases.get(&(track, phrase))?;
         under.get(generator).map(Vec::as_slice)
     }
+}
+
+/// The most lines a `Mini` typed again and again keeps waiting, the latest first.
+const MOST_WAITING: usize = 4;
+
+/// A live `Mini` whose line was typed again (decision 462): what it played before, which, with
+/// its track's `Cue` on, it plays on until its line next comes round, so a retyped line is never
+/// heard half one and half the other. Made on the edit thread with each version, its cells
+/// rendered there, so the engine only reads them.
+#[derive(Debug, Clone)]
+pub(crate) struct Wait {
+    /// The track, the phrase and the generator's place in its list.
+    key: (usize, u32, usize),
+    column: ShapeColumn,
+    rows: StepRange,
+    /// Whether this version's line is new, rather than the last version's wait carried on.
+    fresh: bool,
+    /// The lines it may play on, the last version's first, then those that one was waiting on,
+    /// each with its lap in rows and its cells for its rows.
+    lines: Box<[(usize, Arc<[GenCell]>)]>,
+}
+
+/// Every live `Mini` of a song whose line isn't the last version's, with what that one played,
+/// and every one the last version was waiting on whose line is the same, carried on.
+pub(crate) fn waits(song: &Song, last: Option<(&Song, &Unders, &[Wait])>) -> Box<[Wait]> {
+    let Some((old_song, old_unders, old_waits)) = last else {
+        return Box::default();
+    };
+    let mut waits = Vec::new();
+    for (track, owner) in song.tracks.iter().enumerate() {
+        for (id, phrase) in &owner.phrases {
+            for (index, generator) in phrase.generators().iter().enumerate() {
+                if generator.shape.kind != FillKind::Mini {
+                    continue;
+                }
+                let (Some(rows), key) = (generator.rows(), (track, *id, index)) else {
+                    continue;
+                };
+                let Some(old) = old_song
+                    .tracks
+                    .get(track)
+                    .and_then(|owner| owner.phrases.get(id))
+                    .and_then(|phrase| phrase.generators().get(index))
+                    .filter(|old| {
+                        old.shape.kind == FillKind::Mini
+                            && old.column == generator.column
+                            && old.rows() == Some(rows)
+                    })
+                else {
+                    continue;
+                };
+                let carried = old_waits.iter().find(|wait| wait.key == key);
+                if old.rhythm() == generator.rhythm() {
+                    if let Some(wait) = carried.filter(|wait| wait.rows == rows) {
+                        waits.push(Wait {
+                            fresh: false,
+                            ..wait.clone()
+                        });
+                    }
+                    continue;
+                }
+                let heard = old.heard();
+                let line = line_steps(old.texts().rhythm) as usize * usize::from(heard.mini.step);
+                let length = rows.len().min(MAX_PHRASE_STEPS);
+                let mut cells = vec![GenCell::Under; length];
+                let under = old_unders.get(track, *id, index).unwrap_or_default();
+                render_into(
+                    under,
+                    rows,
+                    old.column,
+                    &heard,
+                    old.texts(),
+                    None,
+                    &mut cells,
+                );
+                let mut lines = vec![(line.max(1), Arc::from(cells))];
+                if let Some(wait) = carried {
+                    lines.extend(wait.lines.iter().cloned());
+                }
+                lines.truncate(MOST_WAITING);
+                waits.push(Wait {
+                    key,
+                    column: generator.column,
+                    rows,
+                    fresh: true,
+                    lines: lines.into(),
+                });
+            }
+        }
+    }
+    waits.into()
 }
 
 /// One live generator of the phrase a track is playing, as the engine renders it.
@@ -462,6 +553,9 @@ pub(crate) struct GenScratch {
     /// What's waiting for the callback to take, by track, made ahead with room for
     /// [`REPORTS_PER_RUN`] a run, and never grown.
     reports: Vec<(usize, GenReport)>,
+    /// For each of its version's [`Wait`]s, which of its lines plays on, or none once it's let
+    /// go and the new line plays.
+    waiting: Box<[Option<u8>]>,
 }
 
 /// What a moving generator was last heard as, for tests and for what reports it.
@@ -498,7 +592,7 @@ impl GenScratch {
     /// Room for every track's live generators: for each track, as many runs as the phrase of it
     /// with the most live generators has, and as many cells as the phrase whose generators cover
     /// the most rows between them.
-    pub(crate) fn for_song(song: &Song) -> Self {
+    pub(crate) fn for_song(song: &Song, waits: &[Wait]) -> Self {
         let mut rooms = Vec::with_capacity(song.tracks.len());
         let rooms_len = song.tracks.len();
         let (mut runs, mut cells) = (0, 0);
@@ -534,7 +628,35 @@ impl GenScratch {
             cells: vec![GenCell::Under; cells].into(),
             memory: Memory::for_song(song),
             reports: Vec::with_capacity((runs * REPORTS_PER_RUN).max(rooms_len)),
+            waiting: waits.iter().map(|_| Some(0)).collect(),
         }
+    }
+
+    /// Carry on what the last version's scratch was waiting on: a line typed again while one
+    /// still waits plays on what that one played, and a wait carried on plays on as it was, or
+    /// stays let go. Allocates nothing.
+    pub(crate) fn keep_waits_from(&mut self, old: &GenScratch, was: &[Wait], waits: &[Wait]) {
+        for (wait, held) in waits.iter().zip(self.waiting.iter_mut()) {
+            let before = was
+                .iter()
+                .zip(old.waiting.iter())
+                .find(|(other, _)| other.key == wait.key)
+                .and_then(|(_, held)| *held);
+            let most = wait.lines.len().saturating_sub(1) as u8;
+            *held = match (wait.fresh, before) {
+                (true, Some(at)) => Some(at.saturating_add(1).min(most)),
+                (true, None) => Some(0),
+                (false, before) => before.map(|at| at.min(most)),
+            };
+        }
+    }
+
+    /// Whether a track has a `Mini` playing on its last line, waiting for its lap.
+    fn waits_on(&self, track: usize, waits: &[Wait]) -> bool {
+        waits
+            .iter()
+            .zip(self.waiting.iter())
+            .any(|(wait, held)| wait.key.0 == track && held.is_some())
     }
 
     /// Forget what every generator was heard as, as playing starts, so a generator that mutates
@@ -609,7 +731,7 @@ impl GenScratch {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn view(
         &mut self,
-        song: &Song,
+        (song, waits, cues): (&Song, &[Wait], bool),
         unders: &Unders,
         holds: &GenHolds,
         at: RowAt,
@@ -633,7 +755,8 @@ impl GenScratch {
                     .any(|generator| generator.scale().is_some_and(|own| own != *scale))
             })
         });
-        if rescaled.is_none() && !holds.any() && !self.varies(at.track) {
+        let waiting = self.waits_on(at.track, waits);
+        if rescaled.is_none() && !holds.any() && !self.varies(at.track) && !waiting {
             if played != Played::Ahead {
                 self.quieten(at);
             }
@@ -698,6 +821,38 @@ impl GenScratch {
                 Played::Row => on_lane.is_none(),
                 Played::Lane(slot) => on_lane == Some(slot),
             };
+            // A `Mini` typed again plays on its last line, with `Cue` on, until a lap starts.
+            if waiting
+                && let Some(held) = waits
+                    .iter()
+                    .position(|wait| wait.key == (at.track, at.phrase, run.generator))
+                && let Some(line) = self.waiting[held]
+            {
+                let wait = &waits[held];
+                let offset = at.row - run.rows.first;
+                let (lap, cells) = &wait.lines[usize::from(line).min(wait.lines.len() - 1)];
+                if !cues || plays && offset.is_multiple_of(*lap) || wait.column != run.column {
+                    self.waiting[held] = None;
+                } else if let Some(cell) = cells.get(offset) {
+                    if let Some(under) = under.get(at.row) {
+                        lay_under(generator, under, &mut view);
+                    }
+                    view.lay(run.column, *cell);
+                    if plays {
+                        self.rooms[at.track].quiet = None;
+                        let row = GenRow {
+                            phrase: at.phrase,
+                            generator: run.generator,
+                            column: run.column,
+                            row: at.row,
+                            pass: run.pass,
+                            cell: Some(*cell),
+                        };
+                        tell(&mut self.reports, at.track, GenReport::Row(row));
+                    }
+                    continue;
+                }
+            }
             let held = holds.heard(written, &context, run.generates);
             let heard = held.on_pass(run.pass);
             if played != Played::Ahead && held.varies() && run.told != Some(run.pass) {
@@ -993,7 +1148,7 @@ mod tests {
     #[test]
     fn a_versions_scratch_goes_back_with_it() {
         let first = version(&song(64));
-        let made = GenScratch::for_song(&first.song).cells.len();
+        let made = GenScratch::for_song(&first.song, &first.waits).cells.len();
         assert!(made > 0, "there's room for the generators");
         let mut engine = Engine::new(RATE, Arc::clone(&first));
         engine.play_from(0);
@@ -1174,6 +1329,93 @@ mod tests {
         assert!(reported > 2, "{reported} passes reported");
         let heard = engine.generators_heard(0).next();
         assert!(heard.is_some_and(|heard| heard.renders > 0));
+    }
+
+    /// One synth track playing a phrase of 16 notes, a `Mini` on them playing `text`, a token
+    /// a row, its `Cue` as given (decision 462).
+    fn mini(text: &str, cue: bool) -> Song {
+        let mut song = Song::new(1);
+        song.millibpm = vt_model::constants::MAX_MILLIBPM;
+        song.tracks[0].machine = Machine::Plaits(SynthVoice::Acid);
+        song.tracks[0].cue = u8::from(cue);
+        let notes = Phrase::from_steps(vec!["C-3 64 --- --- ---".parse().unwrap(); 16]);
+        song.tracks[0].phrases.insert(0, Arc::new(notes));
+        let action = Action::Generate {
+            track: 0,
+            phrase: 0,
+            column: acid_column(&song),
+            span: Span::rows(StepRange::between(0, 15)),
+            shape: Shape {
+                kind: FillKind::Mini,
+                ..Shape::default()
+            },
+            list: Box::default(),
+            rhythm: text.into(),
+        };
+        Arc::unwrap_or_clone(edit(&Arc::new(song), &action).expect("the edit applies"))
+    }
+
+    /// The pitch each row was heard at after a line is typed again a row into a lap, by row,
+    /// in the order they played: none of it allocating in the callback.
+    fn retyped(cue: bool) -> Vec<(usize, u8)> {
+        // Four rows a lap, the choice making it render each pass, so every row reports.
+        let (old, new) = ("<C-3 D-3> E-3 F-3 G-3", "<C-4 D-4> E-4 F-4 G-4");
+        let first = Arc::new(Published::new(
+            Arc::new(mini(old, cue)),
+            Arc::new(SamplePool::default()),
+        ));
+        let next = Published::after(
+            Arc::new(mini(new, cue)),
+            Arc::new(SamplePool::default()),
+            Some(&first),
+        );
+        assert_eq!(next.waits.len(), 1, "the line is waited on");
+        let mut next = Some(Handover::new(Arc::new(next)));
+        let mut engine = Engine::new(RATE, Arc::clone(&first));
+        engine.play_from(0);
+        let mut out = vec![0.0; BLOCK * 2];
+        let (mut heard, mut violations, mut gone) = (Vec::with_capacity(256), 0, None);
+        for _ in 0..400 {
+            let ((), count) = forbidden(|| {
+                engine.process(&mut out);
+                let mut handed = false;
+                engine.take_gen_reports(|_, report| {
+                    let GenReport::Row(GenRow {
+                        row,
+                        cell: Some(GenCell::Pitch(note)),
+                        ..
+                    }) = report
+                    else {
+                        return;
+                    };
+                    if next.is_none() && heard.len() < heard.capacity() {
+                        heard.push((row, note));
+                    }
+                    handed |= row == 1;
+                });
+                if handed && let Some(next) = next.take() {
+                    gone = Some(engine.hand_over(next));
+                }
+            });
+            violations += count;
+        }
+        assert_eq!(violations, 0);
+        drop(gone);
+        heard
+    }
+
+    /// Typed again a row into a lap, with `Cue` on the old line plays on to the lap's end and
+    /// the new one from the next lap; with it off, the new one plays at once.
+    #[test]
+    fn a_retyped_line_waits_for_its_lap_with_cue_on() {
+        let cued = retyped(true);
+        let lap = cued.iter().position(|(row, _)| row % 4 == 0).unwrap();
+        assert!(lap > 0, "rows of the old lap still to play: {cued:?}");
+        assert!(cued[..lap].iter().all(|(_, note)| *note < 72), "{cued:?}");
+        assert!(cued[lap..].iter().all(|(_, note)| *note >= 72), "{cued:?}");
+        let at_once = retyped(false);
+        assert!(!at_once.is_empty());
+        assert!(at_once.iter().all(|(_, note)| *note >= 72), "{at_once:?}");
     }
 
     /// One synth track playing a phrase of `rows` notes, a `List` of these values on its

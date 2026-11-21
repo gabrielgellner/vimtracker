@@ -38,10 +38,7 @@ fn shaped(app: &App) -> String {
     let panel = panel(app);
     let part = panel.parts[0];
     let own = panel.own();
-    let texts = vt_model::shape::Texts {
-        list: &panel.list,
-        rhythm: own.beats(),
-    };
+    let texts = own.texts(&panel.list);
     let steps = app.song().tracks[0].phrases[&0].steps().to_vec();
     let written =
         vt_model::shape::written_from(&steps, part.range, part.column, &panel.shape, texts, None);

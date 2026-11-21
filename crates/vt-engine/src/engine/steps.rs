@@ -576,7 +576,7 @@ impl Engine {
         let (current, state) = (&self.current, &self.tracks[index]);
         let passes = || passes(&current.song, index, read);
         self.gens.view(
-            &current.song,
+            (&current.song, &current.waits, state.cues()),
             &current.unders,
             &state.gen_holds,
             at,

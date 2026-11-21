@@ -1,4 +1,6 @@
 fill | Fill
+mini_text | Text
+mini_step | Step
 from | From
 to | To
 notes | Notes
