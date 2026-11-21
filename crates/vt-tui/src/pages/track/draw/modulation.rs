@@ -153,7 +153,7 @@ fn draw_device(
 ) -> Option<(u16, u16)> {
     let bypassed = device.switchable
         && device.title[0].and_then(|control| modulator_bypassed(control, track)) == Some(true);
-    let fade = bypassed.then(|| theme::cursor(ctx.mode()));
+    let fade = bypassed.then(|| page.cursor_style(ctx));
     let mut controls = TrackCells::new(page, ctx, track).titles(device);
     if let Some(keep) = fade {
         controls = controls.into_iter().map(|line| faded(line, keep)).collect();
@@ -162,7 +162,13 @@ fn draw_device(
     if device.switchable {
         widget = widget.switch(!bypassed);
     }
-    frame.render_widget(widget.controls(controls).focused(focused), area);
+    frame.render_widget(
+        widget
+            .controls(controls)
+            .focused(focused)
+            .held(page.framed(ctx)),
+        area,
+    );
     // A Steps slot's cursor, if it's on one of its values, and its first step across the panel.
     let mut marked = None;
     let (panel, lfo) = match device.title[0] {
@@ -202,7 +208,7 @@ fn draw_device(
         if let Some(column) = marked {
             let place = (inside.0 + column as u16, inside.1 + MOD_PANEL_HEIGHT as u16);
             if let Some(cell) = frame.buffer_mut().cell_mut(place) {
-                let colour = theme::cursor(ctx.mode()).bg.unwrap_or(theme::ROSEWATER);
+                let colour = page.cursor_style(ctx).bg.unwrap_or(theme::ROSEWATER);
                 cell.set_char('▲').set_style(Style::new().fg(colour));
             }
         }

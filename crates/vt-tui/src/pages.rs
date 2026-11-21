@@ -33,6 +33,7 @@ use std::time::Instant;
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::Style;
 use vt_engine::engine::{PLAYHEADS, Playhead, SectionLoop, Transport};
 use vt_engine::link::JamState;
 use vt_engine::track_state::{Drawn, Faders, LiveValues};
@@ -71,6 +72,7 @@ use crate::services::generators::LiveGen;
 use crate::services::meter::Meter;
 use crate::services::{Cursor, Momentary, TrackLive};
 use crate::widgets::setting::{CellLook, Focus};
+use crate::widgets::theme;
 
 /// What a key did, as far as the page or the overlay it went to alone can tell, and what it asks
 /// for that only `App` can do: open the picker, show another view or run a `:` line, and start Insert or another mode,
@@ -216,6 +218,12 @@ pub(crate) struct PageState<'a> {
     /// The buffer open on a setting of Gen's panel beside the grid, whose token under the cursor
     /// lights the rows it writes there too (decision 470).
     gen_tokens: Option<&'a crate::pages::track::GenTokens>,
+    /// Whether Gen's panel is on screen beside the grid, the keys in either (decision 467).
+    beside: bool,
+    /// Whether an area that can take the keys shares the screen with the page: Gen's panel beside
+    /// the grid, the macro panel, the shape panel or a buffer open on a page, so the frame with
+    /// the keys is drawn in the focus colour (decision 475).
+    split: bool,
 }
 
 /// What a page is given to run a key: the shared services, to read and change, the modes that
@@ -279,6 +287,11 @@ impl App {
                 .tokens
                 .as_ref()
                 .filter(|_| self.gen_beside_shown()),
+            beside: self.gen_beside_shown(),
+            split: self.gen_beside_shown()
+                || self.overlays.macro_panel.open
+                || self.overlays.shape.is_some()
+                || self.modes.mode == Mode::Tokens,
         }
     }
 
@@ -665,15 +678,47 @@ impl<'a> Ctx<'a> {
         self.page.field_jump
     }
 
+    /// Whether the keys are in a panel or a buffer drawn over or under the pages, the macro
+    /// panel, the shape panel, a buffer of tokens or a macro's mapping, rather than in a page.
+    pub(crate) fn keys_over(&self) -> bool {
+        matches!(
+            self.mode(),
+            Mode::Macros | Mode::Shape | Mode::Tokens | Mode::Mapping
+        )
+    }
+
+    /// Whether the keys go to the page `view` as it's drawn: the page on screen, while no panel
+    /// or buffer has them, and beside the grid, the side they're in (decision 475).
+    pub(crate) fn keys_in(&self, view: View) -> bool {
+        !self.keys_over() && (!self.page.beside || self.view() == view)
+    }
+
+    /// Whether the page `view` draws its frame in the focus colour: it has the keys, and another
+    /// area that could take them is on screen (decision 475).
+    pub(crate) fn framed(&self, view: View) -> bool {
+        self.page.split && self.keys_in(view)
+    }
+
+    /// The cursor's style on the page `view`: the mode's where the keys go, and sat back where
+    /// they're in an area beside it or over it (decision 475).
+    pub(crate) fn cursor_on(&self, view: View) -> Style {
+        if self.keys_in(view) {
+            theme::cursor(self.mode())
+        } else {
+            theme::cursor_away()
+        }
+    }
+
     /// How the modes show a setting's cell with the cursor on it this way: in the mode's colour,
     /// with what Insert has typed while the cursor's on it, and with no jump's labels, for a
-    /// setting a jump doesn't reach.
+    /// setting a jump doesn't reach. While a panel or buffer has the keys, the cursor sits back.
     pub(crate) fn look(&self, focus: Focus) -> CellLook<'a> {
         let mode = self.mode();
         let typing = mode == Mode::Insert && focus != Focus::Off;
         CellLook {
             focus,
             mode,
+            away: self.keys_over(),
             typed: typing.then(|| self.entry().text.as_str()),
             query: self.field_jump().map(|jump| jump.query.as_str()),
             name_labels: "",

@@ -199,7 +199,7 @@ fn slot_frame(
     let Some(Control::Insert(slot)) = device.title[0] else {
         return None;
     };
-    let cursor = theme::cursor(ctx.mode());
+    let cursor = page.cursor_style(ctx);
     let fade = heard_bypassed(ctx, track, slot).then_some(cursor);
     let mut controls = TrackCells::new(page, ctx, track).titles(device);
     if let Some(tab) = page_tab(device) {
@@ -216,7 +216,8 @@ fn slot_frame(
     };
     let frame_widget = frame_widget
         .controls(controls)
-        .focused(slot_being_edited(page, ctx) == Some(slot));
+        .focused(slot_being_edited(page, ctx) == Some(slot))
+        .held(page.framed(ctx));
     frame.render_widget(frame_widget, area);
     Some(slot)
 }
@@ -243,7 +244,7 @@ fn slot_grid(
         frame.render_widget(hint, take_top(&mut row, 1));
         return;
     }
-    let fade = heard_bypassed(ctx, track, slot).then_some(theme::cursor(ctx.mode()));
+    let fade = heard_bypassed(ctx, track, slot).then_some(page.cursor_style(ctx));
     slot_page(
         frame,
         settings,
@@ -363,7 +364,7 @@ fn slot_panel(page: &TrackPage, ctx: &Ctx, track: &Track, slot: usize) -> Graphi
     } else {
         page.slot_reduction[slot].top
     };
-    let cursor = theme::cursor(ctx.mode());
+    let cursor = page.cursor_style(ctx);
     let fade = |line: Line<'static>| if bypassed { faded(line, cursor) } else { line };
     let meter = || {
         let lines = (0..SLOT_DRAWING_HEIGHT)

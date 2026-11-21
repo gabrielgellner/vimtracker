@@ -537,7 +537,10 @@ impl Buffer<'_> {
             text_lines,
             ..
         } = laid;
+        // A buffer has the keys while it's open, so it's framed in the focus colour over the
+        // page or panel it's open on (decision 475).
         let border = popup::border()
+            .border_style(theme::focus())
             .title(format!(" {} ", self.title))
             .title_bottom(format!(" {} ", self.hint))
             .title_style(Style::new().add_modifier(Modifier::BOLD));

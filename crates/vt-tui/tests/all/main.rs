@@ -17,6 +17,7 @@ mod chain;
 mod command_line;
 mod divisions;
 mod explorer;
+mod focus;
 mod fx_commands;
 mod fx_page;
 mod fx_zoom;

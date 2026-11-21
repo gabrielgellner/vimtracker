@@ -305,7 +305,8 @@ the most needs, so the page doesn't move as you go along the band; `gm` opens it
 page, above the status line, so they're at hand while you work elsewhere, and hides it again. The
 page gives up the strip's three rows while it shows. It follows the cursor's track as it moves,
 and on the project page, which has no track of its own, it shows the track last on. `Space T`
-puts the keys in it, showing it if it's hidden, on the macro they were last on:
+puts the keys in it, showing it if it's hidden, on the macro they were last on. Its rule turns
+blue, the focus colour, while the keys are in it, and the page's cursor above sits back, dimmed:
 
 | Keys | Does |
 |---|---|
