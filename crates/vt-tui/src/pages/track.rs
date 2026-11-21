@@ -25,12 +25,14 @@ pub(crate) mod patches;
 mod pickers;
 mod pictures;
 pub(crate) mod presets;
+mod tokens;
 pub(crate) mod tuning;
 pub(crate) mod typing;
 
 pub use device::DeviceCursor;
 pub(crate) use device::rack_places;
 pub(crate) use fx::TakenInsert;
+pub use tokens::GenTokens;
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -143,6 +145,8 @@ pub struct TrackPage {
     /// The cursor's track's level right after its trim, each side's in dB, for the meter in its
     /// Output device: where it is now and the highest it was lately.
     pub after_trim: [Held; 2],
+    /// The Gen page setting whose tokens the cursor is in, after `l` on it (decision 459).
+    pub tokens: Option<GenTokens>,
 }
 
 impl Default for TrackPage {
@@ -166,6 +170,7 @@ impl Default for TrackPage {
             slot_reduction: [Held::new(0.0); INSERTS],
             reduction_history: ReductionHistory::default(),
             after_trim: [Held::new(FLOOR_DB); 2],
+            tokens: None,
         }
     }
 }
@@ -689,6 +694,15 @@ impl crate::pages::Page for TrackPage {
         let braces = matches!(cmd, Cmd::Move(Motion::NextBeat | Motion::PreviousBeat));
         if !braces && ctx.modes.view != View::Mixer {
             self.settle(track);
+        }
+        // `l` on a Gen page setting in a grammar goes into its tokens.
+        let control = self.control(track);
+        if cmd == Cmd::Move(Motion::Right)
+            && self.on_gen(ctx.modes.view, control)
+            && let Some(tokens) = GenTokens::open(ctx.services, ctx.modes.view, control)
+        {
+            self.tokens = Some(tokens);
+            return Outcome::Enter(Mode::Tokens);
         }
         self.key_on(cmd, count, track)
     }

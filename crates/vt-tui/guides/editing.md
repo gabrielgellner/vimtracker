@@ -202,10 +202,16 @@ in a row: `1` gives `70 40 70 40` and `2` gives `70 70 40 40`.
 make, such as `70 40 55` over a hat, or a line as long as the phrase, a value a
 row. Its `Values` row takes the place of From and To: `i`, then up to 256 hex
 values, where two digits make a value and the space comes by itself, so `704055`
-types `70 40 55`. It starts as the two ends. `Run` works as for `Alternate`, so
-`2` gives `70 70 40 40 55 55`, and `~` turns the list round. A phrase longer than
+types `70 40 55`, starting from the values there. It starts as the two ends. `Run` works as for
+`Alternate`, so `2` gives `70 70 40 40 55 55`, and `~` turns the list round. A phrase longer than
 the list goes round it again. A list longer than the panel is wide shows its first
 values and how many more, as `+248`, and while it's typed the panel shows its end.
+`l` goes into the values, a token each (Fields of tokens, below): `=` and `-` turn the one under
+the cursor, a note by a degree of the song's scale, or a semitone with it off, and `+` `_` by an
+octave, so a line of notes can be walked into a new one without typing it again; any other value
+turns by 1, or `10`. `x` takes a value out, `a` types one after it and `p` pastes one, and the
+status line says how much room is left, `Value 2: 40, 3 of 256 values`; a 257th is refused,
+saying so. A list longer than the field shows the values round the cursor, `…` where it's cut.
 The list is kept on the live generator beside its shape, so `x` on `Values`
 puts it back to the two ends, and a fill other than `List` keeps none.
 
@@ -493,7 +499,11 @@ column's highest needs: 7 on Velocity, 8 on most FX commands and lengths, and
 On Velocity, Flip `FF` makes `35` into `4A`, Keep `F0` steps the velocities
 in `10`s, and Turn 1 doubles each, the loudest coming round to quiet. Flip
 and Keep are typed as two hex digits with `i`, and `=` and `-` move them
-by one, `+` and `_` by `10`; Turn goes from 0 to 7. Flipping the same bits
+by one, `+` and `_` by `10`; Turn goes from 0 to 7. The panel shows Flip and
+Keep as their eight bits, the lowest first, `x` for on, with the byte beside
+them, `. . . . x x x x   F0`, so a mask reads as what it keeps. `l` goes into
+the bits, `=` and `-` switch the one under the cursor, and `1` and `0` set it and
+move on; on the row, as for macros and the Roto, they step the byte as a number. Flipping the same bits
 twice gives the values back. A value pushed past the column's highest stops
 there, as a nudge's 5 bits go to 31 but a nudge only to `+B`.
 
@@ -657,8 +667,11 @@ a beat, and on a track at `1/2`, `All rows` is a chord each half note.
 | Length | How many moves a `Loop` draws before it goes round, 1 to 16 |
 | Scale | `Free`, or `In scale`: only moves that keep to the song's scale |
 
-The panel's last line names the first chords, as `C Cm G# Fm C# C#m A F#m` for
-`P L R L` from `C-3`.
+Each move is drawn over the chord it reaches, `P   L   R   L` over `Cm  G#  Fm  C#` from `C-3`,
+and the panel's last line names the first chords as the list goes round, `C Cm G# Fm C# C#m A
+F#m`. `l` goes into the moves: `=` and `-` go round `P`, `L` and `R`, so a progression is tried a
+move at a time, the status line saying the chords it goes between, `Move 2: L, Cm to G#`, and `K`
+lists the three with the chord each would reach from there.
 
 **On the Chord voice.** `Voice` `Chord` writes each row's root, within a
 tritone of `From`, and locks the voice's `Chord` to `M` or `m` in the first FX
@@ -938,8 +951,8 @@ the values it left.
 
 ## Fields of tokens
 
-A setting whose value is a short text with a grammar of its own, `Weights` now and a `List`'s
-values and a `Tonnetz`'s moves to come, is a field of tokens: `l` goes into it, the cursor on a
+A setting whose value is a short text with a grammar of its own, `Weights`, a `List`'s values, a
+`Tonnetz`'s moves and a mask's bits, is a field of tokens: `l` goes into it, the cursor on a
 whole token, a digit, a note, a value or a group, and the keys move by the grammar and turn a
 token in its own units. A **group** is a bracket and what it holds, `[. 7F]` or `<30 40>`, and a
 **rest** is `.`, with `~` read as one too, as Tidal writes it.
@@ -978,9 +991,12 @@ and `y` take a text object, and `p` pastes what they took:
 
 Keys a field doesn't have are the panel's: `j`, `k` and `L` leave the tokens and do what they do
 on the rows, while `Tab`, `Space d` and `Space ?` leave the cursor where it is, and `Space d` says
-what the token under it does. A field of fixed length, as `Weights` is, shows every token and
-never loses or gains one, and on `Weights` the letters `a` to `f` are digits, so `a`, `b`, `c` and
-`d` aren't there.
+what the token under it does. A field of fixed length, as `Weights` and a mask are, shows every
+token and never loses or gains one, and on `Weights` the letters `a` to `f` are digits, so `a`,
+`b`, `c` and `d` aren't there. A list has room for 256 values and a `Tonnetz` 8 moves, and the
+status line says the room there is. On the Gen page, `l` on a cell in a grammar goes into its
+tokens the same way, drawn over the cell with what each is for under it, each change one undo
+step; a key the field doesn't have leaves it and does what it does on the page.
 
 **What can go here.** `K` on a token lists what it could be, under it, each with what it means,
 opened on the one it is: on a weight the sixteen weights, `0  never` to `F  the most`. `j` and
@@ -989,8 +1005,7 @@ the token's place, and `Esc` closes it. While typing, `K` before anything's type
 what can go there, and `Tab` completes the word from the same list, as on the `:` line: the only
 match goes in, or what every match starts with and the list of them, which narrows as you type;
 `Tab` and `Shift-Tab` go through it and `Enter` puts one in. `Tab` plays again once you're back
-among the tokens. What's listed comes from the track, and as the other fields join the editor
-(a `List`'s values first), a note's place lists the scale's notes an
+among the tokens. What's listed comes from the track: a list's note lists the scale's notes an
 octave either way of it, a degree's the scale's degrees named by their notes, an FX value's the
 command's values, named where `K` names them on a row, as a condition's are, and a group's
 bracket the other kind of group or a rest in its place. FX commands are still chosen with `K` on

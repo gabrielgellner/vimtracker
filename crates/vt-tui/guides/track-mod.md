@@ -433,11 +433,13 @@ goes into the box, on the first step, and the cursor is a `▲` under it:
 | `0` `$` | The first or last step |
 | `=` `-` | Up or down by one |
 | `+` `_` | Up or down an octave, `0C` |
-| `i` | Type a value, signed hex such as `-0C` |
+| `i` | Type a value, signed hex such as `-0C`, or a list, `0C 00 -07` |
 | `x` | Back to `00` |
 
-Steps past the `Length` keep their values and aren't drawn, so shortening and
-lengthening it finds them again.
+A list typed with `i` fills a step each from the cursor's, as one undo step, so a figure goes in
+at once, and takes `Length` out to the last value typed where it stopped short of it. Steps past
+the `Length` keep their values and aren't drawn, so shortening and lengthening it finds them
+again.
 
 **Mutate** is the Turing Machine's knob: each time a step comes round, it's drawn
 again with that chance, anywhere within the slot's `Depth`, and keeps what it drew

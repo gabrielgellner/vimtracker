@@ -357,7 +357,8 @@ impl Field {
     pub fn turn(&mut self, at: usize, sign: i16, large: bool) -> Result<(), &'static str> {
         let token = self.tokens.get(at).ok_or("Nothing to turn")?;
         let text = &self.text[token.at.clone()];
-        let turned = (self.grammar.turn)(token.kind, text, sign, large).ok_or("It doesn't turn")?;
+        let turned = (self.grammar.turn)(token.kind, text, sign, large, self.column)
+            .ok_or("It doesn't turn")?;
         self.put(at, &turned);
         Ok(())
     }
@@ -376,6 +377,9 @@ impl Field {
     /// `~`: the token rested, or a rest given back what it was while the field has been open.
     pub fn rest(&mut self, at: usize) -> Result<(), &'static str> {
         let token = self.tokens.get(at).ok_or("Nothing to rest")?;
+        if self.grammar.rest.is_empty() {
+            return Err("Nothing rests here: x takes it away");
+        }
         if token.kind.bracket().is_some() {
             return Err("A group's brackets don't rest; ~ rests a token in it");
         }
@@ -468,6 +472,19 @@ impl Field {
         Ok(())
     }
 
+    /// Why there's no room for another token, where it has as many as it takes.
+    fn room(&self, more: usize) -> Result<(), &'static str> {
+        match self.grammar.most {
+            Some((most, full)) if self.tokens.len() + more > most => Err(full),
+            _ => Ok(()),
+        }
+    }
+
+    /// How many tokens it has room for, where it has a most; and how many it takes.
+    pub fn most(&self) -> Option<usize> {
+        self.grammar.most.map(|(most, _)| most)
+    }
+
     /// `p`: what was kept, after the token, or over the tokens from it on a field of fixed length.
     /// Where the cursor goes after: on the last token put.
     pub fn paste(&mut self, at: usize) -> Result<usize, &'static str> {
@@ -475,6 +492,7 @@ impl Field {
             .yanked
             .clone()
             .ok_or("Nothing kept to paste: y or d first")?;
+        self.room(split(self.grammar, &yanked).len())?;
         if self.fixed().is_some() {
             let pasted: Vec<String> = split(self.grammar, &yanked)
                 .iter()
@@ -511,6 +529,9 @@ impl Field {
         let fixed = self.fixed().is_some();
         if fixed && place != Place::Over {
             return Err("A field of fixed length has no room between its tokens");
+        }
+        if place != Place::Over && !self.tokens.is_empty() {
+            self.room(1)?;
         }
         let one = one || (fixed && self.grammar.width.is_some());
         let between = self.grammar.between;
@@ -909,6 +930,7 @@ mod tests {
             from: 0,
             to: 0,
             tracks: &[],
+            reached: &[],
         }
     }
 

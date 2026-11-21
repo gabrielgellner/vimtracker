@@ -1894,6 +1894,39 @@ fn the_steps_panel_is_a_cursor_stop_that_h_and_l_go_across() {
     assert_eq!(app.track_control(), Control::Mod(0, ModField::Step(7)));
 }
 
+/// `i` in the panel takes a list, typed across from the cursor's step as one undo step, taking
+/// `Length` out to the last value typed (decision 459).
+#[test]
+fn a_steps_values_are_typed_as_a_list_from_the_cursors_step() {
+    let (mut app, _realtime) = with_steps();
+    let steps = |app: &App| app.song().tracks[0].mods[3].steps;
+    press(&mut app, "jll");
+    let depth = app.services.history.undo_depth();
+    typed(&mut app, "0c 00 -07 -05");
+    assert_eq!(steps(&app).values[..4], [0x0C, 0, -7, -5]);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.status, "4 steps typed from step 1");
+    press(&mut app, "6l");
+    typed(&mut app, "10 20 30 40");
+    assert_eq!(steps(&app).values[6..10], [0x10, 0x20, 0x30, 0x40]);
+    assert_eq!(steps(&app).length, 10, "out to the last typed");
+    // A value that doesn't read, or a list past the last step, changes nothing.
+    typed(&mut app, "01 zz");
+    assert_eq!(steps(&app).values[6], 0x10);
+    assert!(
+        app.services.status.starts_with("zz"),
+        "{}",
+        app.services.status
+    );
+    press(&mut app, "$");
+    typed(&mut app, "01 02 03 04 05 06 07 08");
+    assert_eq!(steps(&app).values[9], 0x40);
+    assert_eq!(
+        app.services.status,
+        "8 values from step 10 run past the last of 16"
+    );
+}
+
 #[test]
 fn a_steps_values_are_edited_in_its_panel_and_drawn_as_bars_with_the_cursor_under_one() {
     let (mut app, _realtime) = with_steps();

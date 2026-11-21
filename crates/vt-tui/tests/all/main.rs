@@ -37,6 +37,7 @@ mod macros;
 mod marbles_rhythms;
 mod mixer;
 mod mod_page;
+mod notation_fields;
 mod notes;
 mod onsets;
 mod patches;

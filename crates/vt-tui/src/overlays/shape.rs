@@ -41,6 +41,7 @@ use crate::overlays::picker::{Item, Pick, Picker};
 use crate::pages::{Ctx, CtxMut, Outcome};
 use crate::services::Services;
 use crate::services::generators::{Part, column_label, settle, too_few};
+use crate::widgets::tokens::{reached, said_after};
 use crate::widgets::value_bars::{BarRow, ValueBars};
 
 /// The title of the list offering a beat after a kit's sounds are loaded as tracks.
@@ -89,8 +90,9 @@ pub struct ShapePanel {
     pub row: GenParam,
     /// What's being typed into the current row.
     pub typing: Option<TypedValue>,
-    /// The token the cursor is on in the row's field of tokens, while `l` has gone into it: on
-    /// `Weights`, the digit, by its degree from the root (decisions 388 and 456).
+    /// The token the cursor is on in the row's field of tokens, while `l` has gone into it, by
+    /// its place: on `Weights`, the digit, by its degree from the root (decisions 388 and 456);
+    /// a `List`'s value, a `Tonnetz`'s move or a mask's bit (decision 459).
     pub weight: Option<usize>,
     /// The row's text while the cursor is in its tokens.
     pub tokens: Option<Tokens>,
@@ -900,7 +902,8 @@ pub enum ShapeKey {
     Describe,
     /// `Space ?`: the guide, at the fill's section.
     Guide,
-    /// `l`: into the row's tokens, `Weights`' digits, where it has them.
+    /// `l`: into the row's tokens, where it has them: `Weights`' digits, a `List`'s values, a
+    /// `Tonnetz`'s moves or a mask's bits.
     Right,
 }
 
@@ -979,7 +982,7 @@ impl Overlay for ShapePanel {
         (
             "l",
             Cmd::InShape(ShapeKey::Right),
-            "Into the weights, a digit a note",
+            "Into the tokens: the weights, values, moves or bits",
         ),
     ];
 
@@ -1266,9 +1269,9 @@ impl ShapePanel {
         match self.row.typing(self.column) {
             Typing::Listed => return self.choices(services),
             Typing::Toggled => self.adjust(1, false, services),
-            // The weights start from the digits there, so one can be changed without the rest
-            // typed again.
-            Typing::Weights => {
+            // A text in a grammar starts from the text there, so one token can be changed without
+            // the rest typed again.
+            _ if self.row.grammar(self.column).is_some() => {
                 self.weight = None;
                 self.started = true;
                 self.typing = Some(TypedValue::from(
@@ -1348,8 +1351,8 @@ impl ShapePanel {
 
     /// A row's text as a field of tokens, where it's in a grammar.
     pub fn field(&self, row: GenParam) -> Option<TokenField> {
-        let grammar = row.typing(self.column).grammar()?.grammar();
-        let text = row.shown(&self.shape, &self.context());
+        let grammar = row.grammar(self.column)?.grammar();
+        let text = (grammar.from_setting)(&row.shown(&self.shape, &self.context()));
         Some(TokenField::new(grammar, &text, self.column))
     }
 
@@ -1440,7 +1443,8 @@ impl ShapePanel {
     /// One of the token editor's keys.
     fn token_key(&mut self, key: TokenKey, services: &mut Services) -> Outcome {
         let tracks = self.track_names(services);
-        let around = self.around(&tracks);
+        let reached = self.reached();
+        let around = self.around(&tracks, &reached);
         let (Some(tokens), Some(at)) = (self.tokens.as_mut(), self.weight.as_mut()) else {
             return Outcome::Passed;
         };
@@ -1455,7 +1459,8 @@ impl ShapePanel {
     /// typed, or the list `K` or `Tab` opened.
     fn token_text(&mut self, code: KeyCode, services: &mut Services) -> Outcome {
         let tracks = self.track_names(services);
-        let around = self.around(&tracks);
+        let reached = self.reached();
+        let around = self.around(&tracks, &reached);
         let (Some(tokens), Some(at)) = (self.tokens.as_mut(), self.weight.as_mut()) else {
             return Outcome::Done;
         };
@@ -1473,13 +1478,20 @@ impl ShapePanel {
 
     /// What's around a field, for what `K` and `Tab` offer in it: the column, with its scale, and
     /// From and To.
-    fn around<'a>(&self, tracks: &'a [String]) -> Around<'a> {
+    fn around<'a>(&self, tracks: &'a [String], reached: &'a [String]) -> Around<'a> {
         Around {
             column: self.column,
             from: self.shape.from,
             to: self.shape.to,
             tracks,
+            reached,
         }
+    }
+
+    /// On a `Tonnetz`'s moves, the chord each move would reach in the cursor's place.
+    fn reached(&self) -> Vec<String> {
+        let at = self.weight.unwrap_or(0);
+        reached(self.row, &self.shape_of(0), &self.context(), at)
     }
 
     /// After a key in the tokens: the text written into the setting where it reads, and heard,
@@ -1515,9 +1527,10 @@ impl ShapePanel {
         if tokens.field.bad().is_some() {
             return;
         }
-        let text = tokens.field.text().to_owned();
+        let grammar = tokens.field.grammar();
+        let text = (grammar.to_setting)(tokens.field.text());
         self.commit_typing(&text, services);
-        let shown = self.row.shown(&self.shape, &self.context());
+        let shown = (grammar.from_setting)(&self.row.shown(&self.shape, &self.context()));
         if let Some(tokens) = self.tokens.as_mut()
             && tokens.field.inserting().is_none()
         {
@@ -1549,7 +1562,10 @@ impl ShapePanel {
                 bad.why
             ),
             (None, Some(_)) => String::new(),
-            (None, None) => token_named(field, at).0,
+            (None, None) => {
+                let after = said_after(self.row, field, at, &self.shape_of(0), &self.context());
+                format!("{}{after}", token_named(field, at).0)
+            }
         };
     }
 }
@@ -1564,6 +1580,12 @@ pub(crate) fn token_named(field: &TokenField, at: usize) -> (String, String) {
     };
     let about = (grammar.about)(kind, at, field.column());
     let meaning = (grammar.meaning)(kind).replacen("{}", &about.subject, 1);
+    // A bit is said as what it is, rather than as its mark.
+    let text = match (kind, text) {
+        (Kind::Bit, "." | "0") => "off",
+        (Kind::Bit, _) => "on",
+        _ => text,
+    };
     (format!("{}: {text}", about.name), meaning)
 }
 

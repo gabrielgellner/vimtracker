@@ -141,7 +141,8 @@ fn the_bit_transforms_flip_keep_and_turn_a_columns_bits() {
     let screen = drawn(&app);
     for expected in [
         "Fill    Invert bits",
-        "Flip    FF",
+        // The mask as its bits, the lowest first, with its byte beside them (decision 459).
+        "Flip    x x x x x x x x   FF",
         "The values there, as bits",
     ] {
         assert!(screen.contains(expected), "{expected} in\n{screen}");

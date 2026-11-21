@@ -37,7 +37,11 @@ or an LFO on its macro as any setting here does, so a weight can move while it p
 cursor on a weight, the generator's preview marks the rows its degree writes with dotted lines
 down the picture, and while the phrase plays, the weight of the note playing is named in green,
 the playhead's colour, on the pass the phrase is on. The Roto has
-the first eight on one page and the last four on a second. A value with a bar is brief, as `9` for hits,
+the first eight on one page and the last four on a second. The fill's own `Weights` cell shows
+the digits each over its note, and `l` goes into them, as the shape panel's row does (see
+**Fields of tokens** in the editing guide), the fast way to see them all and type `F08F`; so do a
+`List`'s `Values`, a `Tonnetz`'s moves, each over its chord, and a mask, as its eight bits. Each
+change in a field is one undo step, and a key it doesn't have, such as `j`, leaves it. A value with a bar is brief, as `9` for hits,
 as its bar shows how many of how many; the status line says it in full, `Hits, 9
 of the 16 rows`.
 

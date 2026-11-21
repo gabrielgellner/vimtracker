@@ -1020,7 +1020,7 @@ Shape	Tab	InShape(Play)	Play, or pause in place
 Shape	S-Tab	InShape(PlayFromStart)	Play from the start
 Shape	Space d	InShape(Describe)	Describe the setting under the cursor, or stop
 Shape	Space ?	InShape(Guide)	The guide, at the fill's section
-Shape	l	InShape(Right)	Into the weights, a digit a note
+Shape	l	InShape(Right)	Into the tokens: the weights, values, moves or bits
 Macros	Esc	InMacros(Leave)	Back to the page, the panel showing
 Macros	q	InMacros(Leave)	Back to the page, the panel showing
 Macros	Space t	InMacros(Hide)	Hide the panel, and back to the page
