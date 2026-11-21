@@ -210,6 +210,10 @@ pub struct Around<'a> {
     pub reached: &'a [String],
 }
 
+/// How a grammar turns a token: its kind and text, the sign, whether it's large, the column and
+/// a kit line's names, to its new text, or none where it doesn't turn.
+pub type Turn = fn(Kind, &str, i16, bool, ShapeColumn, &[String]) -> Option<String>;
+
 /// A grammar, declared once: how its text splits into tokens, whether it reads, what each kind of
 /// token means and how it turns, what can go in its place and which rows it writes, and what the
 /// editor's keys do with it.
@@ -229,7 +233,7 @@ pub struct Grammar {
     /// A token turned by one of `=` and `-`, by its sign, or of `+` and `_` where `large`, on a
     /// column, as its new text, or none where it doesn't turn: a kit line's name to the next of
     /// the names given.
-    pub turn: fn(Kind, &str, i16, bool, ShapeColumn, &[String]) -> Option<String>,
+    pub turn: Turn,
     /// What can go at a spot, in a token's place or after one, from what's around the field,
     /// for `K` to list and `Tab` to complete from, in the order they're listed (decision 458).
     pub offer: fn(Spot, &Around) -> Vec<Offer>,
