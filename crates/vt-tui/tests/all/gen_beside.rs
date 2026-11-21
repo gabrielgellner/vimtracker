@@ -129,7 +129,10 @@ fn ctrl_w_h_l_w_and_esc_move_the_keys_between_the_grid_and_the_panel() {
     // On another track, the panel shows that track's phrase, which has nothing live.
     keys(&mut app, "W");
     let other = screen_cells(&mut app).join("\n");
-    assert!(other.contains("make a column of this phrase live"), "{other}");
+    assert!(
+        other.contains("make a column of this phrase live"),
+        "{other}"
+    );
     keys(&mut app, "B^wl");
     assert_eq!(app.modes.view, View::Gen);
     assert_eq!(app.services.cursor.step, 2, "the grid's cursor stays put");
