@@ -581,6 +581,9 @@ mod tests {
         };
         let lines = wrapped(&field, &layout, marks, ROOM).lines;
         let lit = lines[0].spans.iter().find(|span| span.content == "*2");
-        assert_eq!(lit.map(|span| span.style), Some(theme::cursor(Mode::Normal)));
+        assert_eq!(
+            lit.map(|span| span.style),
+            Some(theme::cursor(Mode::Normal))
+        );
     }
 }
