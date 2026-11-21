@@ -32,6 +32,7 @@ there are no samples to find.
 | `cells` | dan derks' *less concepts* | `S`'s `Cells`: Wolfram's rules, a row a cell or a track a cell, a generation a pass |
 | `tonnetz` | Ornament & Crime's Harrington 1200 and Automatonnetz | `S`'s `Tonnetz`: chords by P, L and R, on the `Chord` voice and a voice a track |
 | `turing-machine`, again | Nonlinear Circuits' Sloth, Ornament & Crime's Low-rents | A `Lorenz` LFO on `Pitch in scale`: a tune that drifts and never goes round |
+| `euclid`, a third time | TidalCycles' mini-notation | `S`'s `Mini`: a line of notes, degrees and groups typed as text, a layer a track |
 
 Each section says what the original does, how the song does it, what to set to build it yourself
 from an empty song, and which knob to turn next. The recipes say what goes in each field, not the
@@ -1738,3 +1739,37 @@ at each note instead: one note of the scale each, the rhythm as written.
     breathes and never quite repeats.
 *   When a pass is one you want, `Space 3` and `Space g A`: the notes it played are written in
     and the slot is switched out, as with the Steps slot.
+
+## TidalCycles' mini-notation
+
+TidalCycles and Strudel write a pattern as a short line, `c3 [~ d#3] <g3 a#3>*2`: a space
+between steps, brackets to split one, `< >` to take turns, `*` to repeat, `?` for a chance. In
+vimtracker the same line is a fill, `Mini`, that writes the column's own values, a note by name
+or a degree of the scale from `1`, hex on Velocity. It goes by steps, not cycles: each top-level
+token is `Step` rows, so a token more makes the line longer, as a row more does. The notation is
+Tidal's, by Alex McLean and the TidalCycles authors; there's no code to run, only the line.
+
+**Try it on the `euclid` song.** Its bass is a live `Alternate` on track 4; a `Mini` in its place
+types a riff.
+
+On track 4, `BS`, the bass's Note column over its 16 rows, shaped again:
+
+*   **Shape:** `Fill` `Mini`, `Text` `1 . 1 [. 5] 3 . <8 7> [. 3]`, `Step` `2 rows`, `From`
+    `C-2`. The root on the first two beats, the fifth just before the third, which plays the
+    third of the scale, and on the last beat the octave one bar and the seventh the next.
+
+Keep it live. The choice `<8 7>` takes turns a lap at a time, on from pass to pass, so the
+riff is two bars long though the phrase is one.
+
+On tracks 1 and 2, `BD` and `SD`, their Note columns selected together:
+
+*   **Shape:** `Fill` `Mini`, `Text` `C-1 . . C-1 . . C-1 ., . . G-2 . . . G-2 [. G-2]`, `Step`
+    `2 rows`. The comma is a stack: the kick takes the first layer, the tresillo, and the snare
+    the second, a backbeat with a push at the end.
+
+**Try next.**
+
+*   On the bass, `Step` `1 row`: the riff in half the time, played twice a bar.
+*   `[1 3 5]` in place of a token is a triplet, its middle notes nudged off the rows.
+*   `?` after a token, `5?`, plays it half the time; `r` draws again until it falls well.
+*   With track 4's `Cue` on, a line typed again waits for its next lap before it's heard.

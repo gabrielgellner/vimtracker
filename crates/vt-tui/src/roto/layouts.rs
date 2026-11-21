@@ -1947,6 +1947,23 @@ const GEN_LIST: DeviceLayout = live(
         ],
     )],
 );
+/// `Mini`'s `Step`, the one setting it has that turns, then `Vary` for a line that draws.
+const GEN_MINI: DeviceLayout = live(
+    "gen/mini",
+    &[knobs(
+        FillKind::Mini.name(),
+        [
+            s("mini_step"),
+            s("from"),
+            GAP,
+            GAP,
+            s("mutate"),
+            s("vary"),
+            GAP,
+            GAP,
+        ],
+    )],
+);
 /// `Acid`'s riff first, as a 303's randomiser has it, then its range, the spread and bias that
 /// lean its notes, as a random's are placed, and `Vary` on a page of their own, as it has more
 /// than eight.
@@ -2348,6 +2365,7 @@ const BY_FILL: [&DeviceLayout; FillKind::ALL.len()] = by_kind([
     (FillKind::Wave as usize, &GEN_WAVE),
     (FillKind::Alternate as usize, &GEN_ALTERNATE),
     (FillKind::List as usize, &GEN_LIST),
+    (FillKind::Mini as usize, &GEN_MINI),
     (FillKind::Acid as usize, &GEN_ACID),
     (FillKind::Grids as usize, &GEN_GRIDS),
     (FillKind::Divisions as usize, &GEN_DIVISIONS),

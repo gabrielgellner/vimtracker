@@ -13,6 +13,7 @@
 mod bits;
 mod field;
 mod list;
+mod mini;
 mod moves;
 mod offer;
 mod rhythm;
@@ -24,6 +25,10 @@ use std::ops::Range;
 use crate::shape::ShapeColumn;
 
 pub use field::{Field, Insert, Motion, Object, Place};
+pub use mini::{
+    MAX_MINI, STACKED, atom as mini_atom, compile as compile_mini, layer as mini_layer,
+    layers as mini_layers, stacks, start as mini_start,
+};
 pub use offer::{degrees, groups, notes_round, values};
 pub use rhythm::{MAX_RHYTHM, compile as compile_rhythm, preset as rhythm_preset};
 pub use table::{Mark, Table, chance, nth_of};
@@ -44,16 +49,19 @@ pub enum GrammarId {
     /// An `Own` rhythm: hits and rests in Tidal's mini-notation, a top-level token `Step` rows
     /// (decision 461).
     Rhythm,
+    /// A `Mini`'s line: the rhythm's notation, its hits the column's values (decision 462).
+    Mini,
 }
 
 impl GrammarId {
     /// Every grammar.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Weights,
         Self::List,
         Self::Moves,
         Self::Bits,
         Self::Rhythm,
+        Self::Mini,
     ];
 
     /// Its declaration.
@@ -64,6 +72,7 @@ impl GrammarId {
             Self::Moves => &moves::MOVES,
             Self::Bits => &bits::BITS,
             Self::Rhythm => &rhythm::RHYTHM,
+            Self::Mini => &mini::MINI,
         }
     }
 }

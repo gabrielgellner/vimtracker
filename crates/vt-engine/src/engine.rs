@@ -222,7 +222,7 @@ impl Engine {
         let seed = current.song.seed;
         let scale = current.song.saved_scale;
         let memory = MemoryPool::for_song(&current.song, rate);
-        let gens = GenScratch::for_song(&current.song);
+        let gens = GenScratch::for_song(&current.song, &current.waits);
         let mut engine = Self {
             rate,
             current,

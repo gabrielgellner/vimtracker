@@ -5,6 +5,7 @@ Pink | 1/f
 Wave | Wave
 Alternate | Alternate
 List | List
+Mini | Mini
 Acid | Acid
 Grids | Grids
 Divisions | Divisions

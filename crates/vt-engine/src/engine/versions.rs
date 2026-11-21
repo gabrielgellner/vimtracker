@@ -67,6 +67,9 @@ impl Engine {
         std::mem::swap(&mut self.gens, &mut scratch);
         // What each generator was heard as carries on, for `Mutate` (decision 430).
         self.gens.keep_heard_from(&scratch);
+        // A `Mini` typed again plays on its last line until its lap, with `Cue` on (decision 462).
+        self.gens
+            .keep_waits_from(&scratch, &old.waits, &self.current.waits);
         // What any track plays with may have changed.
         for track in self.tracks.iter_mut() {
             track.wake();
