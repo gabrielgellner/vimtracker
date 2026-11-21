@@ -48,7 +48,7 @@ fn drawn(app: &mut App) -> Buffer {
 /// Whether a cell between two columns, on the rows above the status lines, has this background.
 fn has_bg(buffer: &Buffer, columns: Range<u16>, bg: Color) -> bool {
     columns
-        .clone()
+        .into_iter()
         .any(|x| (1..40).any(|y| buffer[(x, y)].bg == bg))
 }
 
