@@ -10,9 +10,9 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Widget};
 use vt_model::generator::{Generator, Span as Spanned};
-use vt_model::notation::Field;
 use vt_model::grid::GRID_COLUMNS;
 use vt_model::macros::MACROS;
+use vt_model::notation::Field;
 use vt_model::shape::{ShapeColumn, degree_count};
 use vt_model::song::Track;
 
@@ -30,8 +30,8 @@ use crate::widgets::image;
 use crate::widgets::panel::GraphicPanel;
 use crate::widgets::setting::{self, Focus};
 use crate::widgets::table::take_top;
-use crate::widgets::tokens::Layout;
 use crate::widgets::theme;
+use crate::widgets::tokens::Layout;
 
 use super::{BAR_CELLS, LARGE_PANEL_HEIGHT, LARGE_PANEL_WIDTH, TrackCells};
 
@@ -281,7 +281,10 @@ fn draw_fields(
             let Some(control @ Control::Gen { param, .. }) = *place else {
                 continue;
             };
-            let open = page.tokens.as_ref().filter(|tokens| tokens.control == control);
+            let open = page
+                .tokens
+                .as_ref()
+                .filter(|tokens| tokens.control == control);
             if open.is_none() && !Layout::always(param) {
                 continue;
             }
@@ -293,7 +296,8 @@ fn draw_fields(
                         continue;
                     };
                     let grammar = grammar.grammar();
-                    let text = (grammar.from_setting)(&param.shown(&live.generator.shape, &context));
+                    let text =
+                        (grammar.from_setting)(&param.shown(&live.generator.shape, &context));
                     made = Field::new(grammar, &text, context.column);
                     &made
                 }
@@ -320,6 +324,14 @@ fn draw_fields(
             if !layout.under.is_empty() && y + 1 < settings.bottom() {
                 blank.render(Rect::new(x, y + 1, room, 1), buffer);
                 Line::from(under).render(Rect::new(x, y + 1, room, 1), buffer);
+            }
+            // The list `K` or `Tab` opened, under the token the cursor is on.
+            if let Some(tokens) = open
+                && let Some(menu) = &tokens.tokens.menu
+            {
+                let column = x + layout.x_of(field, tokens.at, room.into()) as u16;
+                let mut picker = menu.picker.clone();
+                crate::overlays::picker::draw::draw_menu_under(frame, y + 1, column, &mut picker);
             }
         }
     }

@@ -2,7 +2,7 @@
 //! on and `.` for off, so `Keep` reads as what it keeps. `=` and `-` switch the bit under the
 //! cursor, where the row's `=` steps the byte as a number, as macros and the Roto still do.
 
-use super::{About, Bad, Grammar, Kind, Token};
+use super::{About, Bad, Grammar, Kind, Offer, Token};
 
 /// A byte's bits.
 const COUNT: usize = 8;
@@ -23,7 +23,15 @@ pub(super) static BITS: Grammar = Grammar {
         Kind::Bit if !large => Some(if on(text) { "." } else { "x" }.to_owned()),
         _ => None,
     },
-    offer: |_, _| Vec::new(),
+    offer: |_, _| {
+        [("x", "on"), (".", "off")]
+            .into_iter()
+            .map(|(text, meaning)| Offer {
+                text: text.to_owned(),
+                meaning: meaning.to_owned(),
+            })
+            .collect()
+    },
     rows: |_, _, _| Vec::new(),
     fixed: |_| Some(COUNT),
     blank: ".",

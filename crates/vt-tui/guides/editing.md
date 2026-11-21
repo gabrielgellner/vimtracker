@@ -972,11 +972,27 @@ and `y` take a text object, and `p` pastes what they took:
 | `di(` `ci(` `yi(` | A Euclid's numbers |
 | `da(` `ca(` `ya(` | A Euclid, with its brackets |
 
-Keys a field doesn't have are the panel's: `j`, `k`, `K` and `L` leave the tokens and do what they
-do on the rows, while `Tab`, `Space d` and `Space ?` leave the cursor where it is, and `Space d`
-says what the token under it does. A field of fixed length, as `Weights` is, shows every token and
+Keys a field doesn't have are the panel's: `j`, `k` and `L` leave the tokens and do what they do
+on the rows, while `Tab`, `Space d` and `Space ?` leave the cursor where it is, and `Space d` says
+what the token under it does. A field of fixed length, as `Weights` is, shows every token and
 never loses or gains one, and on `Weights` the letters `a` to `f` are digits, so `a`, `b`, `c` and
 `d` aren't there.
+
+**What can go here.** `K` on a token lists what it could be, under it, each with what it means,
+opened on the one it is: on a weight the sixteen weights, `0  never` to `F  the most`. `j` and
+`k`, the arrows, `Tab` and `Shift-Tab` move through the list, `Enter` puts the one highlighted in
+the token's place, and `Esc` closes it. While typing, `K` before anything's typed of a word lists
+what can go there, and `Tab` completes the word from the same list, as on the `:` line: the only
+match goes in, or what every match starts with and the list of them, which narrows as you type;
+`Tab` and `Shift-Tab` go through it and `Enter` puts one in. `Tab` plays again once you're back
+among the tokens. What's listed comes from the track, and as the other fields join the editor
+(a `List`'s values first), a note's place lists the scale's notes an
+octave either way of it, a degree's the scale's degrees named by their notes, an FX value's the
+command's values, named where `K` names them on a row, as a condition's are, and a group's
+bracket the other kind of group or a rest in its place. FX commands are still chosen with `K` on
+the column, never typed: a field on an FX column holds only the command's values.
+<!-- ANCHOR_END: after-weights -->
+<!-- ANCHOR: after-offer -->
 
 **Text that doesn't read.** Every change reads the text again, and the column plays what it says
 at once. Where it doesn't read, the token it stops at is drawn in red with `✗` under it, and the
@@ -1321,4 +1337,4 @@ columns, and a mod slot, a macro and the Roto turn them too.
 `j` and `k` carry on past its edges. `Space c` on a dim row plays from `00`, and
 `;` there plays just that row's note.
 
-<!-- ANCHOR_END: after-weights -->
+<!-- ANCHOR_END: after-offer -->

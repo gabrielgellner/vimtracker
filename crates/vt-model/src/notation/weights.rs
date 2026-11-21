@@ -34,6 +34,8 @@ pub(super) static WEIGHTS: Grammar = Grammar {
         let turned = (weight + sign * by).clamp(0, i16::from(MAX_WEIGHT));
         Some(format!("{turned:X}"))
     },
+    // Any weight goes in a weight's place, or in what doesn't read as one, and a field of fixed
+    // length is only ever typed over, so it's the same list at every spot.
     offer: |_, _| {
         (0..=MAX_WEIGHT)
             .map(|weight| Offer {
@@ -130,6 +132,7 @@ fn read(text: &str, column: ShapeColumn) -> Result<(), Bad> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::notation::{Around, Spot};
     use crate::scale::{Scale, ScaleKind};
 
     fn pentatonic() -> ShapeColumn {
@@ -177,7 +180,19 @@ mod tests {
         assert_eq!(about.name, "Weight of G");
         assert_eq!(about.subject, "G");
         assert_eq!((WEIGHTS.fixed)(pentatonic()), Some(5));
-        let offers = (WEIGHTS.offer)(Kind::Weight, pentatonic());
+        let around = Around {
+            column: pentatonic(),
+            from: 0,
+            to: 0,
+            tracks: &[],
+            reached: &[],
+        };
+        let spot = Spot::On {
+            kind: Kind::Weight,
+            at: 3,
+            text: "F",
+        };
+        let offers = (WEIGHTS.offer)(spot, &around);
         assert_eq!(offers.len(), 16);
         assert_eq!(offers[0].meaning, "never");
         assert_eq!(offers[15].meaning, "the most");

@@ -6,18 +6,19 @@
 //! generator as one undo step, as any turn on the page is.
 
 use ratatui::crossterm::event::KeyCode;
-use vt_model::notation::Field;
+use vt_model::notation::{Around, Field};
+use vt_model::shape::ShapeColumn;
 
 use crate::controls::Control;
 use crate::input::bindings::Cmd;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
-use crate::input::tokens::{self, Did, Tokens};
+use crate::input::tokens::{self, Did, TokenKey, Tokens};
 use crate::overlays::Overlay;
 use crate::overlays::shape::token_named;
 use crate::pages::{Ctx, CtxMut, Outcome};
 use crate::services::Services;
-use crate::widgets::tokens::said_after;
+use crate::widgets::tokens::{reached, said_after};
 
 use super::generators::type_gen;
 
@@ -114,7 +115,27 @@ impl GenTokens {
         };
     }
 
-    fn live(&self, services: &Services, view: View) -> Option<crate::services::generators::LiveGen> {
+    /// What's around the field, for what `K` and `Tab` offer in it: the generator's column, its
+    /// From and To, and on a `Tonnetz`'s moves the chord each would reach in the cursor's place.
+    fn around(
+        &self,
+        services: &Services,
+        view: View,
+    ) -> Option<(ShapeColumn, u8, u8, Vec<String>)> {
+        let live = self.live(services, view)?;
+        let shape = live.generator.shape;
+        let Control::Gen { param, .. } = self.control else {
+            return None;
+        };
+        let reached = reached(param, &shape, &live.context(), self.at);
+        Some((live.generator.column, shape.from, shape.to, reached))
+    }
+
+    fn live(
+        &self,
+        services: &Services,
+        view: View,
+    ) -> Option<crate::services::generators::LiveGen> {
         let Control::Gen {
             phrase, generator, ..
         } = self.control
@@ -152,12 +173,28 @@ impl Overlay for GenTokens {
         let Cmd::InTokens(key) = cmd else {
             return Outcome::Passed;
         };
-        let did = self.tokens.key(key, &mut self.at);
+        let did = match key {
+            TokenKey::Offer => {
+                let Some((column, from, to, reached)) = self.around(ctx.services, ctx.modes.view)
+                else {
+                    return Outcome::Done;
+                };
+                let around = Around {
+                    column,
+                    from,
+                    to,
+                    tracks: &[],
+                    reached: &reached,
+                };
+                self.tokens.offer(self.at, &around)
+            }
+            key => self.tokens.key(key, &mut self.at),
+        };
         self.did(did, ctx)
     }
 
     fn takes_text(&self) -> bool {
-        self.tokens.field.inserting().is_some()
+        self.tokens.completes()
     }
 
     fn types_now(&self, key: Key) -> bool {
@@ -167,10 +204,11 @@ impl Overlay for GenTokens {
         }
     }
 
-    /// What's typed, a token typed in place or a count; `Tab` and `Shift-Tab` play, and any other
-    /// key is passed back, to leave the field and do what it does on the page.
+    /// What's typed, a token typed in place, a count or a key of the list `K` or `Tab` opened;
+    /// `Tab` and `Shift-Tab` play otherwise, and any other key is passed back, to leave the field
+    /// and do what it does on the page.
     fn text(&mut self, key: Key, ctx: &mut CtxMut) -> Outcome {
-        let typing = self.tokens.field.inserting().is_some();
+        let typing = self.tokens.completes();
         match key.code {
             KeyCode::Tab if !typing => return Outcome::Do(Cmd::PauseOrResume),
             KeyCode::BackTab if !typing => return Outcome::Do(Cmd::PlayFromStart),
@@ -180,7 +218,17 @@ impl Overlay for GenTokens {
             _ if key.command => return Outcome::Done,
             _ => {}
         }
-        let did = self.tokens.text(key.code, &mut self.at);
+        let Some((column, from, to, reached)) = self.around(ctx.services, ctx.modes.view) else {
+            return Outcome::Done;
+        };
+        let around = Around {
+            column,
+            from,
+            to,
+            tracks: &[],
+            reached: &reached,
+        };
+        let did = self.tokens.text(key.code, &mut self.at, &around);
         self.did(did, ctx)
     }
 

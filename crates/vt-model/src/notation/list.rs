@@ -2,8 +2,7 @@
 //! the Note column, a nudge on the Nudge column and a hex value on the rest, up to
 //! [`MAX_LIST`] of them, each a token turned in the column's own units.
 
-use super::{About, Bad, Grammar, Kind, Offer, Token, as_it_is};
-use crate::scale::Scale;
+use super::{About, Around, Bad, Grammar, Kind, Offer, Spot, Token, as_it_is, notes_round, values};
 use crate::shape::{MAX_LIST, ShapeColumn};
 
 /// A semitone and an octave, as a note turns with the scale off.
@@ -120,30 +119,25 @@ fn turn(kind: Kind, text: &str, sign: i16, large: bool, column: ShapeColumn) -> 
     Some(column.show(turned))
 }
 
-/// On the Note column, the scale's notes over the octaves round the middle, each named; on the
-/// others, nothing to list, as a value is typed or turned.
-fn offer(kind: Kind, column: ShapeColumn) -> Vec<Offer> {
+/// On the Note column, the scale's notes round the value in the token's place or the one before
+/// it, or round `From` for the first; on the others, the column's values, named where `K` names
+/// them on a row (decision 458's lists).
+fn offer(spot: Spot, around: &Around) -> Vec<Offer> {
+    let column = around.column;
     let ShapeColumn::Note { scale, .. } = column else {
-        return Vec::new();
+        return values(column);
     };
-    if kind != Kind::Value {
-        return Vec::new();
-    }
-    let scale = Scale { on: true, ..scale };
-    let first = scale.degree(0, 2);
-    (first..=first + 3 * OCTAVE as u8)
-        .filter(|note| scale.contains(*note))
-        .map(|note| Offer {
-            text: column.show(note),
-            meaning: format!("in {} {}", scale.root_name(), scale.kind.name()),
-        })
-        .collect()
+    let near = match spot {
+        Spot::On { text, .. } | Spot::After(Some((_, text))) => column.parse(text),
+        Spot::After(None) => None,
+    };
+    notes_round(scale, near.unwrap_or(around.from))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scale::ScaleKind;
+    use crate::scale::{Scale, ScaleKind};
     use crate::step::FxCommand;
 
     fn notes(on: bool) -> ShapeColumn {
@@ -218,10 +212,24 @@ mod tests {
         assert_eq!(about.subject, "2nd");
         assert_eq!(ordinal(11), "11th");
         assert_eq!(ordinal(23), "23rd");
-        let offers = offer(Kind::Value, notes(true));
-        assert_eq!(offers.len(), 16, "five a octave over three octaves, and the top C");
-        assert_eq!(offers[0].text, "C-2");
-        assert_eq!(offers[1].text, "D#2");
-        assert!(offer(Kind::Value, ShapeColumn::Velocity).is_empty());
+        let around = |column| Around {
+            column,
+            from: 60,
+            to: 72,
+            tracks: &[],
+            reached: &[],
+        };
+        let spot = Spot::On {
+            kind: Kind::Value,
+            at: 0,
+            text: "D#3",
+        };
+        let offers = offer(spot, &around(notes(true)));
+        assert!(offers.iter().any(|offer| offer.text == "D#3"));
+        assert!(
+            offers.iter().all(|offer| offer.text != "D-3"),
+            "in the scale"
+        );
+        assert_eq!(offer(spot, &around(ShapeColumn::Velocity)).len(), 0x80);
     }
 }

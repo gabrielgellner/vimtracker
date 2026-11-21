@@ -87,6 +87,19 @@ pub(crate) fn above(area: Rect, row: u16, column: u16, width: u16, height: u16) 
     }
 }
 
+/// A window this big starting just below a row of the screen, from a column of it, or as much of
+/// it as fits between the row and an area's bottom, moved left to stay inside the area.
+pub(crate) fn below(area: Rect, row: u16, column: u16, width: u16, height: u16) -> Rect {
+    let width = width.min(area.width);
+    let top = (row + 1).clamp(area.y, area.bottom());
+    Rect {
+        x: column.clamp(area.x, area.right() - width),
+        y: top,
+        width,
+        height: height.min(area.bottom() - top),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::{Duration, Instant};

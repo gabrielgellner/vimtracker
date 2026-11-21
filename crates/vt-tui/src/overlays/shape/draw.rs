@@ -460,6 +460,36 @@ fn draw_in(frame: &mut Frame, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
         .title_style(Style::new().add_modifier(Modifier::BOLD));
     let inside = popup::draw(frame, window, border);
     frame.render_widget(Paragraph::new(lines), inside);
+    token_menu(frame, inside, panel, labels);
+}
+
+/// The list `K` or `Tab` opened in a field of tokens, under the field, its names under the token
+/// the cursor is on (decision 458).
+fn token_menu(frame: &mut Frame, inside: Rect, panel: &ShapePanel, labels: usize) {
+    let (Some(tokens), Some(at)) = (&panel.tokens, panel.weight) else {
+        return;
+    };
+    let Some(menu) = &tokens.menu else {
+        return;
+    };
+    let rows = panel.rows();
+    let Some(place) = rows.iter().position(|row| *row == panel.row) else {
+        return;
+    };
+    // The rows above it, each a line, or two with what's under its tokens.
+    let above: usize = rows[..place]
+        .iter()
+        .map(|row| 1 + usize::from(matches!(row, GenParam::Weights | GenParam::MoveList)))
+        .sum();
+    // Under the line the field's tokens are over, after the panel's heading.
+    let row = inside.y + above as u16 + 2;
+    let field = &tokens.field;
+    let layout = Layout::of(panel.row, field, &panel.shape_of(0), &panel.context());
+    let room = usize::from(inside.width).saturating_sub(labels);
+    let column = inside.x + (labels + layout.x_of(field, at, room)) as u16;
+    // The panel keeps the list and lends it to be drawn, so it scrolls from the top each time.
+    let mut picker = menu.picker.clone();
+    crate::overlays::picker::draw::draw_menu_under(frame, row, column, &mut picker);
 }
 
 #[cfg(test)]

@@ -37,6 +37,7 @@ mod macros;
 mod marbles_rhythms;
 mod mixer;
 mod mod_page;
+mod notation_fields;
 mod notes;
 mod onsets;
 mod patches;
@@ -113,4 +114,3 @@ fn rust_files(folder: &Path) -> Vec<String> {
         })
         .collect()
 }
-mod zz_scratch;

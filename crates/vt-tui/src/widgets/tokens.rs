@@ -12,7 +12,8 @@ use ratatui::text::Span;
 use vt_model::notation::Field;
 use vt_model::scale::Scale;
 use vt_model::shape::{
-    Context, GenParam, MAX_LIST, Shape, ShapeColumn, degree_count, degree_name,
+    Context, GenParam, MAX_LIST, MoveList, Shape, ShapeColumn, TonnetzMove, degree_count,
+    degree_name,
 };
 
 use crate::input::mode::Mode;
@@ -103,6 +104,46 @@ impl Layout {
         }
     }
 
+    /// The tokens in sight in `room` characters, round the cursor or where what's typed goes.
+    fn shown(
+        &self,
+        field: &Field,
+        cursor: Option<usize>,
+        typing_at: Option<usize>,
+        room: usize,
+    ) -> Range<usize> {
+        let focus = match typing_at {
+            Some(at) => field
+                .tokens()
+                .iter()
+                .position(|token| token.at.end >= at)
+                .unwrap_or(field.tokens().len()),
+            None => cursor.unwrap_or(0),
+        };
+        let beside = self.beside.as_deref().map_or(0, str::len);
+        in_sight(
+            field.tokens().len(),
+            focus,
+            self.step,
+            room.saturating_sub(beside),
+        )
+    }
+
+    /// How far into the field's room the token the cursor is on starts, as [`Layout::lines`]
+    /// draws it, for the list `K` opens to go under it.
+    pub(crate) fn x_of(&self, field: &Field, cursor: usize, room: usize) -> usize {
+        let shown = self.shown(field, Some(cursor), None, room);
+        let gap = self.cell - 1;
+        let cut = if shown.start > 0 {
+            CUT.chars().count() + gap
+        } else {
+            0
+        };
+        cut + (shown.start..cursor.max(shown.start))
+            .map(|nth| field.token(nth).map_or(0, |text| text.chars().count()) + gap)
+            .sum::<usize>()
+    }
+
     /// Whether a setting is drawn as a field of tokens when the cursor isn't in it: `Weights`, a
     /// `Tonnetz`'s moves and a mask always show as what they are, and a `List`'s values only
     /// while the cursor is in them, as a long list reads better as text.
@@ -123,16 +164,8 @@ impl Layout {
         current: bool,
         room: usize,
     ) -> [Vec<Span<'static>>; 2] {
-        let focus = match typing_at {
-            Some(at) => field
-                .tokens()
-                .iter()
-                .position(|token| token.at.end >= at)
-                .unwrap_or(field.tokens().len()),
-            None => cursor.unwrap_or(0),
-        };
         let beside = self.beside.as_deref().unwrap_or_default();
-        let room = room.saturating_sub(beside.len());
+        let shown = self.shown(field, cursor, typing_at, room);
         let under: Vec<&str> = self.under.iter().map(String::as_str).collect();
         let [mut top, below] = TokenCells {
             field,
@@ -141,7 +174,7 @@ impl Layout {
             current,
             cell: self.cell,
             under: &under,
-            shown: in_sight(field.tokens().len(), focus, self.step, room),
+            shown,
         }
         .lines();
         if !beside.is_empty() {
@@ -158,8 +191,35 @@ fn chords(shape: &Shape, context: &Context) -> Vec<String> {
         _ => Scale::default(),
     };
     let moves = shape.tonnetz.list.as_slice().len();
-    let chords = shape.tonnetz.chords(shape.from, shape.seed, scale, moves + 1);
+    let chords = shape
+        .tonnetz
+        .chords(shape.from, shape.seed, scale, moves + 1);
     chords.into_iter().map(|chord| chord.name()).collect()
+}
+
+/// The chord each of `P`, `L` and `R` reaches in the place of a `Tonnetz`'s move `at`, from the
+/// chord before it, for `K` to say; none on any other setting.
+pub(crate) fn reached(param: GenParam, shape: &Shape, context: &Context, at: usize) -> Vec<String> {
+    if param != GenParam::MoveList {
+        return Vec::new();
+    }
+    TonnetzMove::ALL
+        .into_iter()
+        .map(|each| {
+            let mut moves = shape.tonnetz.list.as_slice().to_vec();
+            match moves.get_mut(at) {
+                Some(place) => *place = each,
+                None => moves.push(each),
+            }
+            let mut tried = *shape;
+            tried.tonnetz.list = MoveList::new(&moves);
+            let at = at.min(moves.len() - 1);
+            chords(&tried, context)
+                .get(at + 1)
+                .cloned()
+                .unwrap_or_default()
+        })
+        .collect()
 }
 
 /// What the status line says after the name of the token at `at` in a setting's field: how much
@@ -288,11 +348,13 @@ impl TokenCells<'_> {
                 .enumerate()
                 .filter(|(nth, _)| self.shown.contains(nth))
                 .map(|(nth, what)| match bad {
-                Some(bad) if bad == nth => Span::styled(format!("{BAD:<cell$}"), theme::warning()),
-                _ if self.current && self.cursor == Some(nth) => Span::styled(
-                    format!("{what:<cell$}"),
-                    Style::new().add_modifier(Modifier::BOLD),
-                ),
+                    Some(bad) if bad == nth => {
+                        Span::styled(format!("{BAD:<cell$}"), theme::warning())
+                    }
+                    _ if self.current && self.cursor == Some(nth) => Span::styled(
+                        format!("{what:<cell$}"),
+                        Style::new().add_modifier(Modifier::BOLD),
+                    ),
                     _ => Span::styled(format!("{what:<cell$}"), theme::dim()),
                 }),
         );

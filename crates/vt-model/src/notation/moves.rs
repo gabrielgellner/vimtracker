@@ -23,21 +23,34 @@ pub(super) static MOVES: Grammar = Grammar {
         subject: (at + 1).to_string(),
     },
     turn: |kind, text, sign, _, _| {
-        let at = LETTERS.iter().position(|each| text.eq_ignore_ascii_case(&each.to_string()));
+        let at = LETTERS
+            .iter()
+            .position(|each| text.eq_ignore_ascii_case(&each.to_string()));
         let at = at.filter(|_| kind == Kind::Move)?;
         let turned = (at as i16 + sign).rem_euclid(LETTERS.len() as i16) as usize;
         Some(LETTERS[turned].to_string())
     },
-    offer: |_, _| {
+    // Each of the three, with the chord it reaches from the one before, where that's known.
+    offer: |_, around| {
         [
             ("P", "parallel: the same root, major and minor turned round"),
-            ("L", "leading-tone: a major's root down a semitone, a minor's fifth up one"),
-            ("R", "relative: a major's fifth up a tone, a minor's root down one"),
+            (
+                "L",
+                "leading-tone: a major's root down a semitone, a minor's fifth up one",
+            ),
+            (
+                "R",
+                "relative: a major's fifth up a tone, a minor's root down one",
+            ),
         ]
         .into_iter()
-        .map(|(text, meaning)| Offer {
+        .enumerate()
+        .map(|(nth, (text, meaning))| Offer {
             text: text.to_owned(),
-            meaning: meaning.to_owned(),
+            meaning: match around.reached.get(nth) {
+                Some(chord) => format!("to {chord}, {meaning}"),
+                None => meaning.to_owned(),
+            },
         })
         .collect()
     },
@@ -114,7 +127,27 @@ mod tests {
         assert_eq!(turn("R", 1).as_deref(), Some("P"));
         assert_eq!(turn("P", -1).as_deref(), Some("R"));
         assert_eq!(turn("l", 1).as_deref(), Some("R"));
-        assert_eq!((MOVES.offer)(Kind::Move, column).len(), 3);
+        let around = crate::notation::Around {
+            column,
+            from: 60,
+            to: 72,
+            tracks: &[],
+            reached: &[],
+        };
+        assert_eq!(
+            (MOVES.offer)(crate::notation::Spot::After(None), &around).len(),
+            3
+        );
+        let reached = ["Cm".to_owned(), "Em".to_owned(), "Am".to_owned()];
+        let around = crate::notation::Around {
+            reached: &reached,
+            ..around
+        };
+        let offers = (MOVES.offer)(crate::notation::Spot::After(None), &around);
+        assert!(
+            offers[1].meaning.starts_with("to Em, leading-tone"),
+            "{offers:?}"
+        );
         assert_eq!((MOVES.about)(Kind::Move, 1, column).name, "Move 2");
     }
 }

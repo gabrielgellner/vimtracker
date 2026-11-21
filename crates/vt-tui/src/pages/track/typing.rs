@@ -5,7 +5,7 @@ use ratatui::crossterm::event::KeyCode;
 use vt_model::lfo::{Fade, Lfo, Rate};
 use vt_model::modulation::{ModField, ModKind, ModSlot};
 use vt_model::shape::params::Typing;
-use vt_model::steps::{StepRate, Steps};
+use vt_model::steps::{STEPS, StepRate, Steps};
 
 use crate::app::Entry;
 use crate::input::mode::View;
@@ -21,6 +21,9 @@ use crate::controls::Control;
 
 /// The longest a generator's value can be typed: a list of eight notes and the spaces between.
 const GEN_TEXT: usize = 40;
+/// The longest a Steps slot's values can be typed, from the cursor's step: all of them, each a
+/// sign, two digits and a space (decision 459).
+const STEPS_TEXT: usize = 4 * STEPS;
 
 impl TrackPage {
     /// Type a value into `entry` on the setting `control`: two hex digits for levels, and anything
@@ -37,6 +40,7 @@ impl TrackPage {
         // list of notes takes more room.
         let (hex, longest) = match control {
             Control::Gen { .. } => (gen_typing(services, control) == Some(Typing::Hex), GEN_TEXT),
+            Control::Mod(_, ModField::Step(_)) => (false, STEPS_TEXT),
             _ => (control.is_hex(), 12),
         };
         let rule = if hex { HEX } else { Rule::Text { longest } };
@@ -80,6 +84,9 @@ pub(crate) fn commit_control(services: &mut Services, control: Control, text: &s
         Control::Mod(slot, field @ (ModField::Rate | ModField::Fade)) => {
             type_kind(services, slot, field, text);
         }
+        Control::Mod(slot, ModField::Step(step)) if text.split_whitespace().count() > 1 => {
+            type_steps(services, slot, step, text);
+        }
         _ => {
             let Some(shown) = view_on(services, control, &track) else {
                 return;
@@ -91,6 +98,48 @@ pub(crate) fn commit_control(services: &mut Services, control: Control, text: &s
             }
         }
     }
+}
+
+/// A Steps slot's values typed as a list, `0C 00 -07 -05`, from the cursor's step on, as one undo
+/// step: each value signed hex, as one step's is typed, and `Length` taken out to the last if it
+/// stopped short of it (decision 459). Refused whole if any value doesn't read, or the list runs
+/// past the last step.
+fn type_steps(services: &mut Services, slot: usize, step: u8, text: &str) {
+    let track = services.page_track();
+    let mut modulator = track.mods[slot];
+    let first = usize::from(step);
+    let values: Vec<&str> = text.split_whitespace().collect();
+    if first + values.len() > STEPS {
+        services.status = format!(
+            "{} values from step {} run past the last of {STEPS}",
+            values.len(),
+            first + 1
+        );
+        return;
+    }
+    for (place, value) in (first..).zip(&values) {
+        let control = Control::Mod(slot, ModField::Step(place as u8));
+        let Some(shown) = view_on(services, control, &track) else {
+            return;
+        };
+        match edit::typed(&shown, value) {
+            Ok(typed) => modulator.steps.values[place] = typed as i16,
+            Err(why) => {
+                services.status = if why.is_empty() {
+                    format!("{value} isn't a step's value, signed hex such as -0C")
+                } else {
+                    format!("{value}: {why}")
+                };
+                return;
+            }
+        }
+    }
+    let last = first + values.len();
+    if modulator.steps.played_count() < last {
+        modulator.steps.length = last as u8;
+    }
+    set_mod(services, slot, modulator);
+    services.status = format!("{} steps typed from step {}", values.len(), first + 1);
 }
 
 /// Set a mod slot's rate or fade from what was typed, read as it's written, as neither is one
