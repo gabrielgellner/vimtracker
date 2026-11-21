@@ -792,14 +792,18 @@ pub fn draw_screen(
             lines: crate::pages::phrase::draw::rows_on_screen(&ctx, &app.phrase_view, grid),
         });
         // With Gen's panel beside the grid, the shape panel goes in its place (decision 469),
-        // and a pattern's buffer goes beside its column (decision 474).
+        // and a pattern's buffer goes past the cursor's track's whole grid, over the other
+        // tracks, so none of the columns it writes into is covered (decision 474).
         match (gen_panel, &beside) {
             _ if panel.pattern.is_some() => crate::overlays::shape::draw::draw_pattern(
                 frame,
                 view,
                 &ctx,
                 &panel,
-                beside.as_ref().map(|beside| beside.column),
+                beside.as_ref().map(|beside| {
+                    let own = grid.x + crate::pages::phrase::draw::own_width(&ctx);
+                    (beside.column.0, own.max(beside.column.1))
+                }),
             ),
             (Some(place), Some(beside)) => {
                 crate::overlays::shape::draw::draw_in_gen(frame, place, &ctx, &panel, beside);

@@ -274,7 +274,7 @@ fn across_a_group_a_pattern_is_a_kit_line() {
 /// The buffer is drawn beside the column it fills, at 163x42, so the rows it writes stay in
 /// sight, its rows line lighting the token under the cursor's rows.
 #[test]
-fn the_buffer_is_drawn_beside_its_column() {
+fn the_buffer_is_drawn_past_its_tracks_grid_over_the_other_tracks() {
     let (mut app, _rt) = app_of(1, 16);
     keys(&mut app, "!C-3 . [D-3 x] <E-3 3>*2<Esc>");
     let lines = screen_cells(&mut app);
@@ -282,11 +282,16 @@ fn the_buffer_is_drawn_beside_its_column() {
         .iter()
         .position(|line| line.contains("Note pattern  Step 4 rows"))
         .expect("the buffer's title");
-    // The first row's note is in the grid, and the buffer's text right of it.
+    // The first row is whole in the grid, its FX columns too, up to the grid's right edge, and
+    // the buffer's text starts right of that edge.
+    let row = &lines[title + 1];
+    let grid_end = row
+        .find("││")
+        .expect("the grid's edge against the buffer's");
+    assert!(row[..grid_end].contains("C-3 64"), "{row}");
     assert!(
-        lines[title + 1].contains("│C-3│ C-3 . [D-3 x] <E-3 3>*2"),
-        "{}",
-        lines[title + 1]
+        row[grid_end..].starts_with("││ C-3 . [D-3 x] <E-3 3>*2"),
+        "{row}"
     );
     assert!(lines[title + 3].contains("Rows  x . . . . . . . x . x . x . x ."));
     assert!(lines[title + 4].contains("Enter write  L keep live  [s ]s Step"));

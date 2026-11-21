@@ -1080,8 +1080,8 @@ the values it left.
 
 `!` on any column of the phrase grid fills it from a pattern, a line in `Mini`'s notation (see
 **A line of rhythm and values**), typed rather than entered a row at a time. It opens the line's
-buffer beside the column, typing, and the column changes as you type, heard if it's playing, as
-with `S`. The buffer's title says the column and its `Step`, `Note pattern  Step 4 rows`.
+buffer right of the track's grid, over the other tracks, so none of the track's columns is
+covered, typing, and the column changes as you type, heard if it's playing, as with `S`. The buffer's title says the column and its `Step`, `Note pattern  Step 4 rows`.
 
 | Keys | Does |
 |---|---|

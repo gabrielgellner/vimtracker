@@ -482,15 +482,18 @@ impl Buffer<'_> {
         self.paint(frame, window, laid);
     }
 
-    /// Draw it under a row beside a column of the screen, its left and right edges: right of
-    /// it, or where there's no room there, left of it, so the column stays in sight (decision
-    /// 474), and over it only where neither side has room.
+    /// Draw it under a row beside a span of the screen, its left and right edges: right of it,
+    /// or where there's no room there, left of it, so what's under it stays in sight (decision
+    /// 474), and where neither side has room, as far right as it fits, over as little of the
+    /// span's left as it can.
     pub(crate) fn draw_beside(self, frame: &mut Frame, area: Rect, row: u16, column: (u16, u16)) {
         let laid = self.lay_out(area);
         let x = if column.1 + laid.width <= area.right() {
             column.1
+        } else if column.0 >= area.x + laid.width {
+            column.0 - laid.width
         } else {
-            column.0.saturating_sub(laid.width)
+            area.right().saturating_sub(laid.width).max(area.x)
         };
         let window = popup::below(area, row, x, laid.width, laid.height);
         self.paint(frame, window, laid);
