@@ -799,7 +799,7 @@ fn a_generators_settings() {
         Control::Gen { .. }
     ));
     assert_drawn(
-        &cut(&page(&app), Rect::new(0, 11, 110, 8)),
+        &cut(&page(&app), Rect::new(0, 12, 110, 8)),
         &[
             "╭─ Ramp  Euclid · Note 00–07 ─────────────────────────────────────────────────────────────────────────────────",
             "aabccccbbccccccbbbbbbbbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
