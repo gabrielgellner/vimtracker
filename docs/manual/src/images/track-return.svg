@@ -5,7 +5,7 @@
 <rect x="18" y="16" width="72" height="1" fill="#949cbb"/>
 <text x="18" y="14" fill="#c6d0f5" font-weight="bold" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Return B</text>
 <text x="90" y="14" fill="#c6d0f5" font-weight="bold" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Sound </text>
-<text x="162" y="14" fill="#949cbb" textLength="126" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Mod  FX  Gen </text>
+<text x="162" y="14" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Mod  FX  Macros </text>
 <text x="1125" y="14" fill="#949cbb" textLength="225" lengthAdjust="spacingAndGlyphs" xml:space="preserve">CPU  0%  late 0  xruns 0 </text>
 <text x="0" y="52" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="27" y="52" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Output</text>

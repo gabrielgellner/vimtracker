@@ -765,7 +765,7 @@ fn a_slot_a_steps_lock_switches_out_fades_but_for_the_cursor() {
 fn the_macros_band_shows_where_each_is_heard() {
     let (mut app, mut realtime) = app();
     press(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(app.track_page.page, Page::Macros);
     catch_up(&mut app, &mut realtime);
     let mut live = live(&app);
     live.macros[1] = 0x8000;
@@ -799,7 +799,7 @@ fn a_generators_settings() {
         Control::Gen { .. }
     ));
     assert_drawn(
-        &cut(&page(&app), Rect::new(0, 11, 110, 8)),
+        &cut(&page(&app), Rect::new(0, 12, 110, 8)),
         &[
             "╭─ Ramp  Euclid · Note 00–07 ─────────────────────────────────────────────────────────────────────────────────",
             "aabccccbbccccccbbbbbbbbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

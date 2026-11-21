@@ -248,7 +248,7 @@ fn gd_on_a_setting_a_macro_holds_still_goes_to_the_gen_page() {
     press(&mut app, " 5}jM1 t");
     press(&mut app, "gd");
     assert_eq!(app.modes.view, View::Track);
-    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(app.track_page.page, Page::Macros);
     assert_eq!(app.track_control(), Control::Macro(0));
     assert_eq!(app.modes.mode, Mode::Normal);
 }

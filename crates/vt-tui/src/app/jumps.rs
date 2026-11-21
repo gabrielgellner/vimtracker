@@ -302,7 +302,7 @@ impl App {
             self.services.go_to_track_at(track, self.modes.view);
         }
         let track = self.services.page_track();
-        self.track_page.show(Page::Gen);
+        self.track_page.show(Page::Macros);
         self.track_page.phrase = self.services.phrase_id();
         let rows = self.track_page.rows(Some(&track));
         let place = rows.iter().enumerate().find_map(|(row, places)| {

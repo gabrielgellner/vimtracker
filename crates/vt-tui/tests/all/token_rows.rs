@@ -151,7 +151,7 @@ fn the_gen_page_names_the_weight_playing_in_the_playheads_colour() {
     keys(&mut app, "L");
     assert!(app.overlays.shape.is_none(), "kept live");
     keys(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(app.track_page.page, Page::Macros);
     for _ in 0..12 {
         if here(&app) == Some(GenParam::Weight1) {
             break;

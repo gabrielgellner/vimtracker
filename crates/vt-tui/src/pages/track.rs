@@ -375,7 +375,7 @@ impl TrackPage {
             Cmd::Bypass => match self.page {
                 Page::Fx => self.toggle_bypass(services),
                 Page::Mod => toggle_modulator(services, control),
-                Page::Sound | Page::Gen => {
+                Page::Sound | Page::Macros => {
                     return Outcome::Refused(
                         "b switches an effect or a modulator, on the FX and Mod pages",
                     );
@@ -583,8 +583,12 @@ impl crate::pages::Page for TrackPage {
             Cmd::Move(Motion::Last),
             "Last row, of this column of devices",
         ),
-        ("H", Cmd::PreviousPage, "Previous page: Sound, Mod, FX, Gen"),
-        ("L", Cmd::NextPage, "Next page: Sound, Mod, FX, Gen"),
+        (
+            "H",
+            Cmd::PreviousPage,
+            "Previous page: Sound, Mod, FX, Macros",
+        ),
+        ("L", Cmd::NextPage, "Next page: Sound, Mod, FX, Macros"),
         ("p", Cmd::Paste, "Put the effect taken in this slot"),
         (
             "b",
@@ -630,17 +634,13 @@ impl crate::pages::Page for TrackPage {
         (
             "Space g a",
             Cmd::ApplyGenerator,
-            "On a Steps slot, keep what Mutate drew; on Gen, apply it",
+            "On a Steps slot, keep what Mutate drew; on a generator, apply it",
         ),
-        (
-            "r",
-            Cmd::RollGenerator,
-            "On the Gen page, roll the generator again",
-        ),
+        ("r", Cmd::RollGenerator, "On a generator, roll it again"),
         (
             "Enter",
             Cmd::ReopenGenerator,
-            "On the Gen page, open the shape panel on it, or a text's buffer",
+            "On a generator, open the shape panel on it, or a text's buffer",
         ),
         (
             "}",
@@ -817,7 +817,7 @@ impl TrackPage {
                 Self::gen_panel(control, services)
             }
             Cmd::RollGenerator | Cmd::ReopenGenerator => {
-                services.status = "r and Enter work on a generator, on the Gen page".to_owned();
+                services.status = "r and Enter work on a generator, on the Macros page".to_owned();
                 Outcome::Done
             }
             Cmd::ApplyGenerator if self.page == Page::Mod => {
@@ -827,7 +827,7 @@ impl TrackPage {
             Cmd::ApplyGenerator => {
                 services.status =
                     "Space g a keeps a Steps slot's drift on the Mod page, or applies a generator \
-                     on the Gen page"
+                     on the Macros page"
                         .to_owned();
                 Outcome::Done
             }

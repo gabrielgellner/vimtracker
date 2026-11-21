@@ -1034,7 +1034,7 @@ Where kits, samples and presets are found is set for this machine in
 `kits` and `samples` are lists of folders, looked through in order, and a folder
 that isn't there is passed over. `:kit 909` opens the first `909.ron` found.
 `presets` is one folder, made the first time a preset is saved (see **Presets** in
-**The Gen page, macros and presets**). A file from before presets keeps the
+**The Macros page, Gen and presets**). A file from before presets keeps the
 default. Changes are read the next time the program starts.
 
 `:kit` opens the kit folders as a tree, with the first one open, and opens on

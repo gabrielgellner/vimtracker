@@ -183,7 +183,7 @@ fn a_live_cells_on_the_gen_page_has_its_rule_and_start_under_its_where() {
     let (mut app, _rt) = app_with(1);
     cells_from_one(&mut app, "vG", 30);
     keys(&mut app, "jK/each<Enter>L 8");
-    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(app.track_page.page, Page::Macros);
     let text = fx_page_text(&app).join("\n");
     assert!(text.contains("Ramp  Cells  Each pass"), "{text}");
     for setting in ["Rule", "Start", "One"] {

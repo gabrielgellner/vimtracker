@@ -1,11 +1,12 @@
 <!-- ANCHOR: before-gen -->
-# The Gen page, macros and presets
+# The Macros page, Gen and presets
 
-The fourth page, after FX, shows the live columns of the phrase under the cursor,
-the one `gl` reopens, as devices you turn as you would a filter. Its title names
-the phrase, `Phrase 00`, and adds `▶ 02`, dim, while the track is playing another.
-A fixed track has no phrases, so its page has only the macros. Its first band is the
-track's eight macros (see **Macros**), then the live columns, then `Phrase`.
+The fourth page, after FX, is Macros, `Space 8`. At its top are the track's eight macros, and
+under them every setting the cursor's macro holds (see **Macros**). Under those, for now, is
+Gen: the live columns of the phrase under the cursor, the one `gl` reopens, as devices you
+turn as you would a filter, then `Phrase`. The page's title names the phrase, `Phrase 00`,
+and adds `▶ 02`, dim, while the track is playing another. A fixed track has no phrases, so
+its page has only the macros.
 
 Each live column is a device, under the macros, in the phrase view's order: Note, Velocity, Nudge,
 Length, then the FX columns. Its title is its fill and its `Where`, as `K` chooses
@@ -224,10 +225,17 @@ above its `Max` turns that setting the other way. A mapping can act over part of
 its zone, so one macro can be a knob with a different job on each side of its middle. A setting
 is on one macro at most.
 
-The `Macros` band, first on the Gen page, has the eight in two rows of four, each with its name,
-its value in four digits and a bar. `=` `-` `+` `_` turn one, `i` types it, `x` takes it to `00`,
-and the status line says what it holds. A macro is named after the first setting it holds until
-you name it.
+The `Macros` band, first on the Macros page, has the eight in two rows of four, each with its
+name, its value in four digits and a bar. `=` `-` `+` `_` turn one, `i` types it, `x` takes it
+to `00`, and the status line says what it holds. A macro is named after the first setting it
+holds until you name it.
+
+Under the band is every setting the macro under the cursor holds, a row each, as `gm` lists
+them: its name, its `Min` and `Max`, its `Curve` and `S`, and its `Zone`, a straight response
+and the whole turn dim. The band's title says which macro it is and how many it holds,
+`· Macro 2 Bite, 3 mappings`. With the cursor on a setting under the band, a generator's, it
+lists the macro holding that setting, if one does. The list is as tall as the macro holding
+the most needs, so the page doesn't move as you go along the band; `gm` opens it to edit.
 
 | Keys | Does |
 |---|---|
@@ -275,7 +283,7 @@ over drawn faint behind its bar, `▕██▎░░░░  ▏`, and the status
 as `Cut, 1.05 kHz: on macro 1 Bite, 170 Hz to 9.56 kHz`. One with no bar, such as a choice, a Mod
 page value or a device's title, has a faint dot after its value instead, `1/16 •`, after the dot
 Live puts on a control it automates. Turning it is refused, as Live greys a mapped control out:
-turn its macro, or open its range with `gm`. `gd` on it goes to its macro in the Gen page's
+turn its macro, or open its range with `gm`. `gd` on it goes to its macro in the
 `Macros` band, ready to turn, and `Ctrl-o` comes back to it; `gm` there opens its mapping. So does
 `gd` on a fader on the mixer a macro holds, and `Ctrl-o` comes back to the mixer.
 
@@ -346,7 +354,7 @@ depths, phases and deforms, and their types' own: an envelope's `Attack`, `Decay
 `Mutate`, `Length` and `Depth` on three macros. It reaches the accumulator's `Up` and `Down` and the arpeggio's `Rate` and
 `Octaves` too, but never another macro.
 
-**A live generator's settings,** `M` on one on the Gen page, as `Hits`: the macro holds that
+**A live generator's settings,** `M` on one on Gen, as `Hits`: the macro holds that
 setting of the generator on that column in every phrase of the track, between numbers of its
 own, its bounds to start with. Turning the macro writes each of those columns again, one undo
 step, and the generator keeps its own setting underneath, so taking it off the macro gives it
@@ -509,7 +517,7 @@ many the track has free. `!` puts it over the last ones that aren't free instead
 anything that reached a slot or macro it replaced lets go of it.
 
 `K` on a mod slot's type, in the title of its device on the Mod page, lists `Add a patch` and
-`Save as a patch` after the types, and `K` on a macro of the Gen page's band lists the two alone.
+`Save as a patch` after the types, and `K` on a macro of the Macros band lists the two alone.
 The patches' list shows what each needs beside its name, as `1 slot, 3 macros` or
 `Note generator, 2 macros`, your own first and then `Factory`'s. `Tab` after `:patch load`
 completes both.

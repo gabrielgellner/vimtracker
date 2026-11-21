@@ -2567,7 +2567,7 @@ fn space_g_a_on_another_type_or_page_says_what_it_keeps() {
     press(&mut app, " ga");
     assert_eq!(
         app.services.status,
-        "Space g a keeps a Steps slot's drift on the Mod page, or applies a generator on the Gen page"
+        "Space g a keeps a Steps slot's drift on the Mod page, or applies a generator on the Macros page"
     );
 }
 

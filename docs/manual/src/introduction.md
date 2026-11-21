@@ -36,7 +36,7 @@ start a project in the folder `my-song`.
 ## What's in it
 
 **Views.** `Space` and a digit go to each view: `1` the song, `2` the chain, `3` the
-phrase, `4` the mixer, `5` to `8` the track's Sound, Mod, FX and Gen pages, `9` the
+phrase, `4` the mixer, `5` to `8` the track's Sound, Mod, FX and Macros pages, `9` the
 project, with its song settings and the audio device, and `0` the sample page. `:sample`
 and `:kit` choose a sample or a kit. [Navigation](guides/navigation.md) lists them
 all.

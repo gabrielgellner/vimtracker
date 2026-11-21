@@ -148,7 +148,7 @@ fn the_view_picker_lists_each_view_with_the_key_that_shows_it() {
             "sample  Space 0",
             "sound  Space 5",
             "fx  Space 7",
-            "gen  Space 8",
+            "macros  Space 8",
         ]
     );
     // The view before this one is highlighted, so Enter flips back.

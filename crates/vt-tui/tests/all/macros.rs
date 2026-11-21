@@ -323,7 +323,7 @@ fn the_macros_band_turns_a_macro_and_colon_macro_names_it() {
     press(&mut app, "M1");
     // The Gen page, its first band the macros.
     press(&mut app, "LLL");
-    assert_eq!(app.track_page.page, vt_tui::controls::Page::Gen);
+    assert_eq!(app.track_page.page, vt_tui::controls::Page::Macros);
     press(&mut app, "gg0");
     assert_eq!(app.track_control(), Control::Macro(0));
     press(&mut app, "iFF");
@@ -335,7 +335,11 @@ fn the_macros_band_turns_a_macro_and_colon_macro_names_it() {
     let text = page_text(&app).join("\n");
     assert!(text.contains("Bite"), "{text}");
     assert!(text.contains("Macros"), "{text}");
-    assert!(text.contains("Bite → Cut"), "what it holds: {text}");
+    assert!(
+        text.contains("Macro 1 Bite, 1 mapping"),
+        "what it holds: {text}"
+    );
+    assert!(text.contains("  Cut   "), "listed under the band: {text}");
     command(&mut app, "macro");
     assert_eq!(app.song().tracks[0].macros[0].name, None);
     // gm on the band opens its mapping, and M refuses a macro.
@@ -552,7 +556,7 @@ fn gd_on_a_setting_a_macro_holds_goes_to_the_macro_on_the_gen_page_and_c_o_comes
     let cut_here = app.track_control();
     press(&mut app, "gd");
     assert_eq!(app.modes.view, View::Track);
-    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(app.track_page.page, Page::Macros);
     assert_eq!(
         app.track_control(),
         Control::Macro(0),
@@ -756,4 +760,77 @@ fn the_keys_of_the_mapping_view_are_in_the_binding_table() {
     ] {
         assert!(rows.iter().any(|line| line.contains(row)), "{row}");
     }
+}
+
+/// Where a line is on the screen, by what's in it.
+fn row_of(lines: &[String], text: &str) -> Option<usize> {
+    lines.iter().position(|line| line.contains(text))
+}
+
+#[test]
+fn the_macros_page_lists_what_the_cursors_macro_holds_under_the_band() {
+    let (mut app, _realtime) = on_cut();
+    // Cut and Res on macro 1, Res kept below A0.
+    press(&mut app, "M1jM1");
+    press(&mut app, " 8gg0");
+    assert_eq!(app.track_page.page, vt_tui::controls::Page::Macros);
+    assert_eq!(app.track_control(), Control::Macro(0));
+    press(&mut app, "gmjliA0");
+    special(&mut app, KeyCode::Esc);
+    let lines = screen_cells(&mut app);
+    let text = lines.join("\n");
+    assert!(text.contains(" Sound  Mod  FX  Macros "), "{text}");
+    assert!(
+        text.contains("╭─ Macros · Macro 1 Cut, 2 mappings "),
+        "the macro listed in the title: {text}"
+    );
+    let heading = row_of(
+        &lines,
+        "Setting                   Min    Max    Curve S     Zone",
+    )
+    .expect("the table's heading");
+    let band = row_of(&lines, "Macro 5").unwrap();
+    assert!(band < heading, "under the band: {text}");
+    // The rows as `gm` lists them, from the band's left edge.
+    let cut = &lines[heading + 1];
+    let res = &lines[heading + 2];
+    assert!(
+        cut.contains("│  Cut                       00     FF     0     0     00–FF"),
+        "{cut}"
+    );
+    assert!(
+        res.contains("│  Res                       00     A0"),
+        "{res}"
+    );
+    let bottom = row_of(&lines, "╭─ Empty").unwrap();
+    // Along the band to a macro holding nothing: it says so, and the page doesn't move.
+    press(&mut app, "l");
+    let lines = screen_cells(&mut app);
+    let text = lines.join("\n");
+    assert!(text.contains("· Macro 2 ─"), "{text}");
+    assert!(
+        text.contains("It holds nothing yet: M on a setting maps it here"),
+        "{text}"
+    );
+    assert!(!text.contains("Setting                   Min"), "{text}");
+    assert_eq!(row_of(&lines, "╭─ Empty"), Some(bottom), "{text}");
+    // Off the band, on `Empty`, no macro holds the cursor's setting.
+    press(&mut app, "G");
+    let text = screen_cells(&mut app).join("\n");
+    assert!(
+        text.contains("On a macro, every setting it holds is listed here"),
+        "{text}"
+    );
+}
+
+#[test]
+fn off_the_band_the_macros_page_lists_the_macro_holding_the_cursors_setting() {
+    let (mut app, _realtime) = on_hits();
+    press(&mut app, "M2");
+    let text = screen_cells(&mut app).join("\n");
+    assert!(text.contains("· Macro 2 Hits, 1 mapping "), "{text}");
+    assert!(
+        text.contains("Note Hits                 0      8      0     0     00–FF"),
+        "{text}"
+    );
 }

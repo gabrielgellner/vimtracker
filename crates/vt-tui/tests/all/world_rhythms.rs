@@ -153,7 +153,7 @@ fn the_gen_page_has_the_rhythm_its_part_and_child() {
     keys(&mut app, "K/rhythm<Enter>L");
     assert_eq!(generators(&app, 0)[0].shape.place, son(Role::Bell, 100));
     keys(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(app.track_page.page, Page::Macros);
     keys(&mut app, "}k");
     let text = fx_page_text(&app).join("\n");
     assert!(text.contains("Ramp  Rhythm  Once"), "{text}");

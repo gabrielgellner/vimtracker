@@ -942,7 +942,7 @@ fn the_space_digits_show_the_mixer_each_track_page_and_the_project() {
         ('5', Page::Sound),
         ('6', Page::Mod),
         ('7', Page::Fx),
-        ('8', Page::Gen),
+        ('8', Page::Macros),
     ] {
         press(&mut app, &format!(" {digit}"));
         assert_eq!(app.modes.mode, Mode::Normal, "no list opens");
