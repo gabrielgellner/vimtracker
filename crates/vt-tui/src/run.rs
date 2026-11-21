@@ -760,8 +760,10 @@ pub fn draw_screen(
         macros.draw(frame, panel, &app.ctx());
         app.overlays.macro_panel = macros;
     }
-    // A column selected in a Visual mode has its bars beside it, as the shape panel's has.
-    if let Some(bars) = app.selection_bars() {
+    // A column selected in a Visual mode has its bars beside it, as the shape panel's has, and
+    // so has the column of the device the keys are in beside the grid, over the grid's other
+    // columns (decision 468).
+    if let Some(bars) = app.selection_bars().or_else(|| app.gen_bars()) {
         let ctx = app.ctx();
         let beside = Beside {
             area: grid,

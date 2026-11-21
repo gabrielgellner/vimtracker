@@ -44,6 +44,7 @@ mod commands;
 mod cursor;
 mod entry;
 mod folding;
+mod following;
 pub(crate) mod grammar;
 mod jumps;
 mod keys;
@@ -189,6 +190,12 @@ pub struct App {
     /// The song as it was when the selection on the phrase view started, while there's one, for
     /// the bars beside a selected column to show what its values were.
     pub(crate) selected_from: Option<Arc<Song>>,
+    /// Beside the grid, the device the keys are in, with the song as it was when they came into
+    /// it, for the bars of its column (decision 468).
+    pub(crate) gen_entered: Option<following::Entered>,
+    /// Beside the grid, what the panel last followed on the grid's cursor, by track and phrase,
+    /// so the status line names it as it changes.
+    pub(crate) gen_followed: Option<(usize, u32, crate::pages::track::following::Followed)>,
 }
 
 /// The keys that play while the track page's keyboard is on, from C to F. The rest stay the
@@ -245,6 +252,8 @@ impl App {
             grammar: Grammar::default(),
             work_since: None,
             selected_from: None,
+            gen_entered: None,
+            gen_followed: None,
         };
         app.services.live_song = Some(Arc::clone(app.song()));
         app.send_live();

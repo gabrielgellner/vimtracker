@@ -20,6 +20,7 @@
 mod device;
 pub mod draw;
 pub(crate) mod editing;
+pub(crate) mod following;
 mod fx;
 mod generators;
 mod modulation;

@@ -34,6 +34,7 @@ use crate::services::generators::{LiveGen, generator_label};
 use crate::widgets::param::edit;
 
 use super::TrackPage;
+use super::following::empty_named;
 use crate::controls::{Control, DEVICE_ROWS, Page};
 
 /// The phrase view's field for a column, where the cursor goes to open the panel on it.
@@ -48,7 +49,7 @@ fn field_of(column: ShapeColumn) -> Field {
 }
 
 /// The columns `K` on `Empty` offers, as the phrase view has them, by their fields and names.
-fn columns() -> Vec<(Field, String)> {
+pub(super) fn columns() -> Vec<(Field, String)> {
     let mut columns = vec![
         (Field::Note, "Note".to_owned()),
         (Field::Velocity, "Vel".to_owned()),
@@ -60,7 +61,7 @@ fn columns() -> Vec<(Field, String)> {
 }
 
 /// Whether a generator is on a field's column.
-fn on_field(generator: &Generator, field: Field) -> bool {
+pub(super) fn on_field(generator: &Generator, field: Field) -> bool {
     field_of(generator.column) == field
 }
 
@@ -92,6 +93,7 @@ pub(super) fn type_gen(services: &mut Services, view: View, control: Control, te
         services,
         view,
         control,
+        named: None,
     }
     .type_in(text);
 }
@@ -346,10 +348,18 @@ impl TrackPage {
         if !self.on_gen(ctx.modes.view, control) {
             return Outcome::Passed;
         }
+        // Beside the grid, `Empty` is for the grid's cursor's column when that has nothing live
+        // (decision 468).
+        let cursor = ctx.services.cursor;
+        let named = self
+            .beside
+            .then(|| empty_named(ctx.services.phrase_here()?, cursor.field, cursor.step))
+            .flatten();
         let mut edit = GenEdit {
             services: ctx.services,
             view: ctx.modes.view,
             control,
+            named,
         };
         match cmd {
             Cmd::Increase => edit.adjust(true, times, false),
@@ -375,6 +385,8 @@ struct GenEdit<'a> {
     services: &'a mut Services,
     view: View,
     control: Control,
+    /// The column `Empty` names beside the grid, which `K` on it makes live.
+    named: Option<Field>,
 }
 
 impl GenEdit<'_> {
@@ -445,10 +457,14 @@ impl GenEdit<'_> {
     }
 
     /// `K`: list a list setting's choices; one that's off or on switches. On `Empty`, the
-    /// columns to make live.
+    /// columns to make live, or beside the grid, the column it names made live, as choosing it
+    /// from that list does.
     fn open_picker(&mut self) -> Outcome {
         if let Control::NewGenerator(_) = self.control {
-            return self.open_column_picker();
+            return match self.named {
+                Some(field) => Outcome::Choose(Pick::GenColumn(field)),
+                None => self.open_column_picker(),
+            };
         }
         let Some((phrase, generator, param)) = self.here() else {
             return Outcome::Done;

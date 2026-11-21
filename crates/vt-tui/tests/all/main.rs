@@ -21,6 +21,7 @@ mod fx_commands;
 mod fx_page;
 mod fx_zoom;
 mod gen_beside;
+mod gen_follow;
 mod gen_page;
 mod grammar;
 mod grids;

@@ -303,6 +303,17 @@ const SHOTS: &[Shot] = &[
         size: FULL,
         ..PLAIN
     },
+    // A ramp kept live on the velocities, Gen beside the grid on its device, as the grid's
+    // cursor on the velocity column chose it, the keys in it and `To` turned down: the column's
+    // rows on a lit band, and its values as `S`'s bars over the FX columns, what they were when
+    // the keys came in faint behind (decision 468).
+    Shot {
+        name: "gen-follow",
+        rows: &["C-3 40 --- --- ---"; 16],
+        keys: "lvGSLgg 8jj____",
+        size: FULL,
+        ..PLAIN
+    },
     // An `Own` rhythm of notes kept live, Gen beside the grid, its `Text` open in its buffer over
     // the panel with the cursor on the second hit, whose row, 03, is lit in the grid beside it
     // (decision 470).

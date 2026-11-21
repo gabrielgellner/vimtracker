@@ -1158,7 +1158,10 @@ inspector and the timeline; `run::draw_screen` draws the grid in `phrase::draw::
 in the rest, and `Cmd::Window`, `Ctrl-w` and a letter, moves the keys between them
 (`app/windows.rs`). With the panel open, `S` draws in its place (`shape::draw::draw_in_gen`), `L`
 lands in the new device, `gl` moves the panel and `gL` (`Cmd::OpenGenerator`) opens it there
-(decision 469).
+(decision 469). While the keys are in the grid the panel follows its cursor's column
+(`pages/track/following.rs`, `App::follow_after_key` in `app/following.rs`), and while they're in
+the panel its device lights its rows in the grid (`PageState::gen_lit`) and its column's values are
+drawn as `S`'s bars, `ValueBars::of_steps` from the song as the keys came in (decision 468).
 `App::run_track_pages` (`pages.rs`) hands each key to `TrackPage::key`, the page and the services
 borrowed apart, and what it passes back to `App::run_across_pages` (`pages/track.rs`), which runs
 what spans the pages itself (`/`, `M`, `gm`, the Keys mode, the Gen page's keys, `K` and `i`), and

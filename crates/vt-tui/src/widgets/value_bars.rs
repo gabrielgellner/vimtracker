@@ -14,7 +14,9 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Widget};
 use vt_model::scale::Scale;
+use vt_model::selection::StepRange;
 use vt_model::shape::ShapeColumn;
+use vt_model::step::Step;
 
 use crate::widgets::theme;
 
@@ -67,6 +69,27 @@ impl ValueBars {
             column,
             rows,
         })
+    }
+
+    /// The bars of a column over a span of rows, each its value in `before` and in `now`, the
+    /// phrase's rows as they were and are: a selection's, and Gen's device beside the grid
+    /// (decision 468). None for a column whose values aren't amounts.
+    pub(crate) fn of_steps(
+        column: ShapeColumn,
+        range: StepRange,
+        before: &[Step],
+        now: &[Step],
+    ) -> Option<Self> {
+        let rows = (range.first..=range.last)
+            .filter_map(|step| {
+                Some(BarRow {
+                    step,
+                    before: before.get(step).and_then(|was| column.value(was)),
+                    now: column.value(now.get(step)?),
+                })
+            })
+            .collect();
+        Self::new(Self::label_of(column), column, rows)
     }
 
     /// The name a column has over its bars: the grid's for an FX command, and otherwise the

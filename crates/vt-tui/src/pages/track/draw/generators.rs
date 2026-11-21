@@ -23,6 +23,7 @@ use crate::input::mode::Mode;
 use crate::overlays::mapping;
 use crate::pages::Ctx;
 use crate::pages::track::TrackPage;
+use crate::pages::track::following::{column_name, empty_named};
 use crate::services::generators::LiveGen;
 use crate::services::{Services, walked_order};
 use crate::widgets::device::{DEVICE_HEIGHT, Device};
@@ -714,6 +715,15 @@ fn lcm(a: u64, b: u64) -> u64 {
     a / gcd(a, b).max(1) * b
 }
 
+/// The column `Empty` names beside the grid: the grid's cursor's, when it has no generator and no
+/// lane.
+fn empty_beside(page: &TrackPage, ctx: &Ctx) -> Option<vt_model::selection::Field> {
+    let cursor = ctx.cursor();
+    page.beside
+        .then(|| empty_named(ctx.phrase_here()?, cursor.field, cursor.step))
+        .flatten()
+}
+
 /// `Empty`, which `K` makes another column live from.
 fn draw_empty(
     frame: &mut Frame,
@@ -727,13 +737,26 @@ fn draw_empty(
     let look = ctx.look(Focus::at(here, false));
     let text = setting::text(&look, || "Empty".to_owned());
     let style = setting::style(&look, true);
-    let widget = Device::new(String::new())
+    // Beside the grid, it names the grid's cursor's column when that has nothing live, which `K`
+    // makes live (decision 468).
+    let named = empty_beside(page, ctx);
+    let mut widget = Device::new(String::new())
         .controls(vec![Line::styled(text, style)])
         .focused(focused);
+    if let Some(field) = named {
+        widget = widget.after(Line::styled(
+            format!("· {}", column_name(field)),
+            theme::dim(),
+        ));
+    }
     frame.render_widget(widget, area);
     let mut row = Device::settings_area(area);
     take_top(&mut row, ROW_STEP);
-    let hint = Line::from(vec![Span::raw("K"), Span::styled(EMPTY_HINT, theme::dim())]);
+    let hint = match named {
+        Some(field) => format!("  make {} live over the phrase", column_name(field)),
+        None => EMPTY_HINT.to_owned(),
+    };
+    let hint = Line::from(vec![Span::raw("K"), Span::styled(hint, theme::dim())]);
     frame.render_widget(hint, take_top(&mut row, 1));
 }
 

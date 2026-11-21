@@ -30,6 +30,10 @@ impl App {
         let song = Arc::clone(self.song());
         self.gen_page
             .settle(song.tracks.get(self.services.cursor.track));
+        // Beside the grid, on the device the grid's cursor chooses (decision 468).
+        if self.gen_page.beside {
+            self.follow_grid_cursor();
+        }
     }
 
     /// A window key, `Ctrl-w` and a letter, or `Esc` in the panel. Moving the keys between the

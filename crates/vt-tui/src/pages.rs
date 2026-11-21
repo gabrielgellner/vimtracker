@@ -41,7 +41,8 @@ use vt_model::generator::Generator;
 use vt_model::order::{Dealer, WalkMove};
 use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
-use vt_model::selection::{Extent, Field};
+use vt_model::selection::{Extent, Field, StepRange};
+use vt_model::shape::ShapeColumn;
 use vt_model::song::{ChainEntry, Phrase, Section, Song, Track};
 use vt_model::step::{FxSlot, Gate, Step};
 
@@ -209,6 +210,9 @@ pub(crate) struct PageState<'a> {
     field_jump: Option<&'a FieldJump>,
     /// The shape panel, while it's open, whose token under the cursor lights the rows it writes.
     shape: Option<&'a ShapePanel>,
+    /// Beside the grid with the keys in Gen's panel, the rows its device lights in the grid, and
+    /// their column (decision 468).
+    gen_lit: Option<(ShapeColumn, StepRange)>,
     /// The buffer open on a setting of Gen's panel beside the grid, whose token under the cursor
     /// lights the rows it writes there too (decision 470).
     gen_tokens: Option<&'a crate::pages::track::GenTokens>,
@@ -264,6 +268,7 @@ impl App {
             slowdown: &self.readouts.slowdown,
             field_jump: self.overlays.field_jump.as_ref(),
             shape: self.overlays.shape.as_ref(),
+            gen_lit: self.gen_lit(),
             gen_tokens: self
                 .gen_page
                 .tokens
@@ -797,6 +802,12 @@ impl<'a> Ctx<'a> {
     /// The shape panel, while it's open.
     pub(crate) fn shape_panel(&self) -> Option<&'a ShapePanel> {
         self.page.shape
+    }
+
+    /// The rows Gen's device lights in the grid beside it, while the keys are in the panel, and
+    /// their column (decision 468).
+    pub(crate) fn gen_lit(&self) -> Option<(ShapeColumn, StepRange)> {
+        self.page.gen_lit
     }
 
     /// The buffer open on a setting of Gen's panel, while the panel's beside the grid.

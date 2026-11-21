@@ -429,7 +429,10 @@ fn empty_makes_another_column_live() {
 #[test]
 fn a_phrase_with_none_has_phrase_and_empty() {
     let (mut app, _rt) = app_with(&[E; 8]);
+    // It opens on `Empty`, the note column having nothing live (decision 468).
     keys(&mut app, " 8");
+    assert!(matches!(app.track_control(), Control::NewGenerator(0)));
+    keys(&mut app, "gg");
     assert_eq!(app.gen_page.devices(app.services.track_here()).len(), 2);
     assert_eq!(
         app.track_control(),

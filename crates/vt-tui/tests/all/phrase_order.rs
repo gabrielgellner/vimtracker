@@ -26,7 +26,7 @@ const ROWS: [&str; 8] = [
 /// The Gen page of a phrase with no live columns, on `Phrase`'s `Order`.
 fn on_phrase_device() -> (App, Realtime) {
     let (mut app, realtime) = app_with(&ROWS);
-    keys(&mut app, " 8");
+    keys(&mut app, " 8gg");
     assert_eq!(app.modes.view, View::Gen);
     assert_eq!(app.track_control(), Control::Base(TrackControl::Order));
     (app, realtime)
