@@ -338,3 +338,23 @@ fn the_buffer_is_framed_in_the_focus_colour() {
         vt_tui::widgets::theme::FOCUS
     );
 }
+
+/// The pattern's buffer completes with Neovim's keys, as every buffer does, and `Tab` plays while
+/// it's typed (decision 477).
+#[test]
+fn the_patterns_buffer_completes_with_ctrl_n_and_tab_plays() {
+    use ratatui::crossterm::event::KeyCode;
+    use vt_engine::engine::Transport;
+    let (mut app, mut rt) = app_of(1, 16);
+    keys(&mut app, "!^n");
+    let menu = |app: &App| panel(app).tokens.as_ref().unwrap().menu.is_some();
+    assert!(menu(&app), "Ctrl-n lists what can go here");
+    keys(&mut app, "^e");
+    assert!(!menu(&app));
+    special(&mut app, KeyCode::Tab);
+    block(&mut rt, &mut app);
+    assert_eq!(app.services.reported.transport, Transport::Playing);
+    assert!(!menu(&app), "Tab lists nothing");
+    keys(&mut app, "C-3<Enter>");
+    assert_eq!(notes(&app, 0)[0], "C-3");
+}

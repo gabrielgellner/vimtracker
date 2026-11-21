@@ -1,6 +1,6 @@
-//! What Tab completes on the `:` command line, after Vim's command-line completion: command names,
-//! `:set` keys and their values, each command's own words, kits and paths. The words come from the
-//! parser's own tables in `command.rs`, so the two can't drift apart.
+//! What `C-n` and `C-y` complete on the `:` command line, after Vim's command-line completion:
+//! command names, `:set` keys and their values, each command's own words, kits and paths. The words
+//! come from the parser's own tables in `command.rs`, so the two can't drift apart.
 
 use std::path::{Path, PathBuf};
 
@@ -53,8 +53,8 @@ impl Candidate {
     }
 }
 
-/// What Tab can do with a command line: where the word being completed starts, in bytes, what the
-/// list of ways to finish it is called, and the ways, in order.
+/// What completing can do with a command line: where the word being completed starts, in bytes,
+/// what the list of ways to finish it is called, and the ways, in order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Completions {
     pub start: usize,
@@ -104,12 +104,14 @@ impl Completions {
     }
 }
 
-/// The list of matches open above the command line: a picker over them, and where the word they
-/// finish starts.
+/// The list of matches open above the command line: a picker over them, where the word they
+/// finish starts, and what was typed of it before the list filled in what the matches share,
+/// which `C-e` puts back.
 #[derive(Debug, Clone)]
 pub struct CommandMenu {
     pub picker: Picker,
     pub start: usize,
+    pub typed: String,
 }
 
 impl CommandMenu {
@@ -174,7 +176,7 @@ fn words<'a>(
     }
 }
 
-/// What a field of tokens offers that starts with what's typed of the word, as `Tab` completes it
+/// What a field of tokens offers that starts with what's typed of the word, as `C-n` completes it
 /// and `K` lists it (decision 458): the word starting at `start`, in the field's text.
 pub(crate) fn offered(
     start: usize,
@@ -456,7 +458,7 @@ struct Entry {
 
 impl Entry {
     /// What replaces the word: the folder as typed, then the name, with a `/` on a folder so the
-    /// next Tab goes into it.
+    /// next `C-n` goes into it.
     fn candidate(&self, folder_typed: &str) -> Candidate {
         let label = if self.folder {
             format!("{}/", self.name)
@@ -566,8 +568,8 @@ mod tests {
         path
     }
 
-    /// The line after one Tab, the way the command line puts it: the only match, or the part every
-    /// match shares.
+    /// The line after one `C-n`, the way the command line puts it: the only match, or the part
+    /// every match shares.
     fn tab(line: &str, places: Places) -> String {
         let found = complete(line, places);
         match found.candidates.as_slice() {

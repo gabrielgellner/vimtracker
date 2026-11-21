@@ -1,4 +1,4 @@
-//! The lists a grammar's offer is made of, for `K` and `Tab` in a field (decision 458): the scale's
+//! The lists a grammar's offer is made of, for `K` and `C-n` in a field (decision 458): the scale's
 //! notes round a note, its degrees named by their notes, a column's values named where `K` names
 //! them on a row, and the groups a group's place can hold. Each grammar takes those it reads, so
 //! a note means the same in every field.

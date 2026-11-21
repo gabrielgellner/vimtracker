@@ -175,31 +175,74 @@ fn k_on_a_weight_lists_the_weights_and_enter_puts_one_in_its_place() {
     assert_eq!(weights(&app), [0xF, 0xC, 0xF, 0xF, 0xF]);
 }
 
-/// `Tab` while typing lists what can go, as the `:` line's does, `Tab` and `Shift-Tab` going
-/// through it, and `Enter` types the one highlighted, which on `Weights` ends the typing; `K` at
-/// the start of what's typed lists the same.
+/// `Ctrl-n` and `Ctrl-p` move through `K`'s list beside `j` and `k`, and `Ctrl-y` puts one in, as
+/// `Enter` does (decision 477).
 #[test]
-fn tab_while_typing_completes_from_the_same_list() {
+fn ctrl_n_and_ctrl_p_move_through_ks_list() {
+    let mut app = on_weights();
+    keys(&mut app, "llK^p^p");
+    assert_eq!(listed(&app).unwrap().1, "D");
+    keys(&mut app, "^n");
+    assert_eq!(listed(&app).unwrap().1, "E");
+    keys(&mut app, "^y");
+    assert_eq!(listed(&app), None);
+    assert_eq!(weights(&app), [0xF, 0xE, 0xF, 0xF, 0xF]);
+}
+
+/// `Ctrl-e` closes the list and puts back what was typed, still typing; and `Tab` plays while
+/// typing, completing nothing (decision 477).
+#[test]
+fn ctrl_e_closes_the_list_and_tab_plays_while_typing() {
+    use vt_engine::engine::Transport;
+    let (mut app, mut realtime) = app_with(&[E; 16]);
+    command(&mut app, "set scale=minor-pentatonic");
+    keys(&mut app, "vGSKrandom<Enter>");
+    down_to(&mut app, GenParam::Weights);
+    keys(&mut app, "ls^n^n");
+    assert_eq!(listed(&app).unwrap().1, "1");
+    keys(&mut app, "^e");
+    assert_eq!(listed(&app), None);
+    let tokens = panel(&app).tokens.as_ref().unwrap();
+    assert_eq!(
+        tokens.field.typed_word(),
+        Some(""),
+        "what was typed is back"
+    );
+    assert_eq!(weights(&app), [0xF; 5]);
+    press(&mut app, KeyCode::Tab);
+    crate::common::block(&mut realtime, &mut app);
+    assert_eq!(app.services.reported.transport, Transport::Playing);
+    assert_eq!(listed(&app), None, "Tab lists nothing");
+    let tokens = panel(&app).tokens.as_ref().unwrap();
+    assert!(tokens.field.inserting().is_some(), "and typing goes on");
+    keys(&mut app, "3");
+    assert_eq!(weights(&app), [3, 0xF, 0xF, 0xF, 0xF]);
+}
+
+/// `Ctrl-n` while typing lists what can go, as the `:` line's does, `Ctrl-n` and `Ctrl-p` going
+/// through it, and `Ctrl-y` or `Enter` types the one highlighted, which on `Weights` ends the
+/// typing; `K` at the start of what's typed lists the same (decision 477).
+#[test]
+fn ctrl_n_while_typing_completes_from_the_same_list() {
     let mut app = on_weights();
     keys(&mut app, "ls");
     assert_eq!(
         app.services.status,
-        "K lists what can go here, Tab completes a word"
+        "K lists what can go here, Ctrl-n completes a word"
     );
-    press(&mut app, KeyCode::Tab);
+    keys(&mut app, "^n");
     assert_eq!(listed(&app), Some(("What can go here", "0".to_owned())));
-    press(&mut app, KeyCode::BackTab);
+    keys(&mut app, "^p");
     assert_eq!(
         listed(&app).unwrap().1,
         "F",
         "round from the first to the last"
     );
-    press(&mut app, KeyCode::BackTab);
-    keys(&mut app, "<Enter>");
+    keys(&mut app, "^p^y");
     assert_eq!(weights(&app), [0xE, 0xF, 0xF, 0xF, 0xF]);
     let tokens = panel(&app).tokens.as_ref().unwrap();
     assert!(tokens.field.inserting().is_none(), "a weight is one digit");
-    assert!(!tokens.completes(), "so Tab plays again");
+    assert!(!tokens.completes());
     keys(&mut app, "sK");
     assert_eq!(listed(&app), Some(("What can go here", "0".to_owned())));
     keys(&mut app, "<Esc>");

@@ -183,14 +183,14 @@ pub struct About {
     pub subject: String,
 }
 
-/// One of what `K` and `Tab` offer in a token's place, with what it means.
+/// One of what `K` and `C-n` offer in a token's place, with what it means.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Offer {
     pub text: String,
     pub meaning: String,
 }
 
-/// Where `K` and `Tab` ask what can go (decision 458).
+/// Where `K` and `C-n` ask what can go (decision 458).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Spot<'a> {
     /// In place of a token: what kind it is, its place counted from 0, and its text.
@@ -203,7 +203,7 @@ pub enum Spot<'a> {
     After(Option<(Kind, &'a str)>),
 }
 
-/// What the track says about what can go in a field, for `K` and `Tab`: its column, with the
+/// What the track says about what can go in a field, for `K` and `C-n`: its column, with the
 /// scale and root on a Note column and the command on an FX one; the setting's From and To,
 /// which degrees count from; the names of the tracks it spans, for a kit line's tokens; and on a
 /// `Tonnetz`'s moves, the chord each of `P`, `L` and `R` would reach in the cursor's place.
@@ -241,7 +241,7 @@ pub struct Grammar {
     /// the names given.
     pub turn: Turn,
     /// What can go at a spot, in a token's place or after one, from what's around the field,
-    /// for `K` to list and `Tab` to complete from, in the order they're listed (decision 458).
+    /// for `K` to list and `C-n` to complete from, in the order they're listed (decision 458).
     pub offer: fn(Spot, &Around) -> Vec<Offer>,
     /// Which rows the token at a place among a text's tokens writes: those a render's [`Table`]
     /// holds this byte on, the token's place as its fill counts them, or none for a token that

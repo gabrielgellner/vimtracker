@@ -1,6 +1,7 @@
-//! The `:` command line: typing, Tab completing, after Vim's `wildmenu`, and `Up` and `Down` going
-//! back through what was run before, as Vim's history does, and `C-r` rolling a new random name on
-//! a name line.
+//! The `:` command line: typing, completing with Neovim's keys, `C-n` and `C-p` through the list
+//! of matches, `C-y` taking one and `C-e` closing it (decision 477), `Up` and `Down` going back
+//! through what was run before, as Vim's history does, and `C-r` rolling a new random name on a
+//! name line. `Tab` plays, as on every page.
 
 pub(crate) mod completion;
 pub(crate) mod history;
@@ -48,18 +49,24 @@ pub enum CommandKey {
     Run,
     /// Leave the line, or close the list of matches, keeping what's typed.
     Close,
-    /// Complete the word, or move down the list of matches.
-    Complete,
-    /// Complete the word from the last match, or move up the list.
-    CompleteBack,
+    /// Play, or pause in place, as `Tab` does on every page.
+    Play,
+    /// Play from the start.
+    PlayFromStart,
     /// An older line run before, or up the list.
     Older,
     /// A newer line run before, or down the list.
     Newer,
-    /// Down the list of matches, while it's open.
+    /// Down the list of matches, or with none open, complete the word: the only match, or what
+    /// every match starts with and the list of them, the first highlighted.
     NextMatch,
-    /// Up the list of matches, while it's open.
+    /// Up the list of matches, or with none open, complete the word, the last match highlighted.
     PreviousMatch,
+    /// Put the highlighted match in the line and close the list, or with none open, complete the
+    /// word.
+    Accept,
+    /// Close the list of matches, putting back what was typed.
+    Dismiss,
     /// Erase a character, or leave the line once it's empty.
     Erase,
     /// Another random name, on a name line.
@@ -82,13 +89,13 @@ impl Overlay for CommandLine {
         ),
         (
             "Tab",
-            Cmd::InCommand(CommandKey::Complete),
-            "Complete the word, or the next match",
+            Cmd::InCommand(CommandKey::Play),
+            "Play, or pause in place",
         ),
         (
             "S-Tab",
-            Cmd::InCommand(CommandKey::CompleteBack),
-            "Complete the word, or the match before",
+            Cmd::InCommand(CommandKey::PlayFromStart),
+            "Play from the start",
         ),
         (
             "Up",
@@ -103,12 +110,22 @@ impl Overlay for CommandLine {
         (
             "C-n",
             Cmd::InCommand(CommandKey::NextMatch),
-            "In the list of matches: the next",
+            "Complete the word, or the next match",
         ),
         (
             "C-p",
             Cmd::InCommand(CommandKey::PreviousMatch),
-            "In the list of matches: the one before",
+            "Complete the word, or the match before",
+        ),
+        (
+            "C-y",
+            Cmd::InCommand(CommandKey::Accept),
+            "Put in the highlighted match, or complete the word",
+        ),
+        (
+            "C-e",
+            Cmd::InCommand(CommandKey::Dismiss),
+            "Close the list of matches, putting back what was typed",
         ),
         (
             "Backspace",
@@ -136,14 +153,18 @@ impl Overlay for CommandLine {
                 Outcome::Close
             }
             CommandKey::Run => self.run(ctx),
-            CommandKey::Complete => {
+            CommandKey::Play => return Outcome::Do(Cmd::PauseOrResume),
+            CommandKey::PlayFromStart => return Outcome::Do(Cmd::PlayFromStart),
+            CommandKey::NextMatch | CommandKey::Accept => {
                 self.complete(false, ctx);
                 Outcome::Done
             }
-            CommandKey::CompleteBack => {
+            CommandKey::PreviousMatch => {
                 self.complete(true, ctx);
                 Outcome::Done
             }
+            // With no list, there's nothing to close.
+            CommandKey::Dismiss => Outcome::Done,
             CommandKey::Older => {
                 if let Some(line) = self.history.older(&self.line) {
                     self.line = line;
@@ -169,8 +190,6 @@ impl Overlay for CommandLine {
                 self.roll_name(ctx);
                 Outcome::Done
             }
-            // Only the list moves with these.
-            CommandKey::NextMatch | CommandKey::PreviousMatch => return Outcome::Passed,
         };
         if menu_was_open {
             self.narrow_menu(ctx);
@@ -178,8 +197,8 @@ impl Overlay for CommandLine {
         outcome
     }
 
-    /// Every key but `C-r`, `C-n` and `C-p` means what it does with nothing held, and those only
-    /// with `Ctrl`.
+    /// Every key but `C-r`, `C-n`, `C-p`, `C-y` and `C-e` means what it does with nothing held,
+    /// and those only with `Ctrl`.
     fn reads(&self, key: Key) -> Key {
         match key.code {
             KeyCode::Char(_) => Key {
@@ -239,26 +258,32 @@ impl CommandLine {
         }
     }
 
-    /// A key while the list of matches is open, which says whether the list took it. Tab and
-    /// Shift-Tab, the arrows, and `C-n` `C-p` move through it, `Enter` puts the highlighted match
-    /// in the line, and `Esc` closes it, keeping what's typed.
+    /// A key while the list of matches is open, which says whether the list took it. `C-n` `C-p`
+    /// and the arrows move through it, `C-y` and `Enter` put the highlighted match in the line,
+    /// `Esc` closes it, keeping what's typed, and `C-e` closes it, putting back what was typed
+    /// before it opened.
     fn menu_key(&mut self, key: CommandKey) -> bool {
         let Some(menu) = self.menu.as_mut() else {
             return false;
         };
         match key {
-            CommandKey::Complete | CommandKey::Newer | CommandKey::NextMatch => menu.step(1),
-            CommandKey::CompleteBack | CommandKey::Older | CommandKey::PreviousMatch => {
-                menu.step(-1);
-            }
-            CommandKey::Run => {
+            CommandKey::Newer | CommandKey::NextMatch => menu.step(1),
+            CommandKey::Older | CommandKey::PreviousMatch => menu.step(-1),
+            CommandKey::Run | CommandKey::Accept => {
                 if let Some(text) = menu.highlighted() {
                     self.line = replaced(&self.line, menu.start, text);
                 }
                 self.menu = None;
             }
             CommandKey::Close => self.menu = None,
-            CommandKey::Erase | CommandKey::RollName => return false,
+            CommandKey::Dismiss => {
+                self.line = replaced(&self.line, menu.start, &menu.typed);
+                self.menu = None;
+            }
+            CommandKey::Erase
+            | CommandKey::RollName
+            | CommandKey::Play
+            | CommandKey::PlayFromStart => return false,
         }
         true
     }
@@ -284,8 +309,8 @@ impl CommandLine {
         )
     }
 
-    /// Tab: put the only match in place, or fill in the part every match shares and list them,
-    /// with the first highlighted, or the last for Shift-Tab.
+    /// `C-n`, `C-y` or `C-p` with no list open: put the only match in place, or fill in the part
+    /// every match shares and list them, with the first highlighted, or the last for `C-p`.
     fn complete(&mut self, backwards: bool, ctx: &CtxMut) {
         self.history.stop();
         let found = self.completions(ctx);
@@ -293,10 +318,12 @@ impl CommandLine {
             [] => {}
             [only] => self.line = replaced(&self.line, found.start, &only.text),
             _ => {
+                let typed = self.line[found.start.min(self.line.len())..].to_owned();
                 self.line = replaced(&self.line, found.start, found.common());
                 let mut menu = CommandMenu {
                     picker: found.picker(),
                     start: found.start,
+                    typed,
                 };
                 if backwards {
                     menu.step(-1);
@@ -329,6 +356,7 @@ impl CommandLine {
         self.menu = Some(CommandMenu {
             picker,
             start: found.start,
+            typed: self.line[found.start.min(self.line.len())..].to_owned(),
         });
     }
 

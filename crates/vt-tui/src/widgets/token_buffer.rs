@@ -110,7 +110,7 @@ struct Piece {
     token: Option<usize>,
     /// Where what's typed goes.
     typing: bool,
-    /// Where the list `K` or `Tab` opens goes under: the cursor's token, or what's typed.
+    /// Where the list `K` or `C-n` opens goes under: the cursor's token, or what's typed.
     here: bool,
 }
 
@@ -456,7 +456,7 @@ struct Laid {
 }
 
 /// A buffer to draw: its setting's name, the keys it says along its foot, its field and what's
-/// lit in it, the rows line under the text where the field has one, and the list `K` or `Tab`
+/// lit in it, the rows line under the text where the field has one, and the list `K` or `C-n`
 /// opened.
 pub(crate) struct Buffer<'a> {
     pub title: &'a str,

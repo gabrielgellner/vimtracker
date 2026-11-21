@@ -247,11 +247,11 @@ shows each under its folders, with how many it found at the top. Each word after
 `#` is another tag, and the other words search names as before, so
 `#kick #one-shot 909` finds the 909 kick one-shots. A `#` alone lists everything below
 the open folders. While a tag is being typed, a row under the search shows the tags
-that could finish it, with how many have each, and `Tab` takes the first.
+that could finish it, with how many have each, and `Ctrl-y` takes the first.
 
 `T` changes the tags of what's under the cursor: they're typed after a `#` on the search
 line, starting with the ones it has, so a wrong guess is taken off by deleting it.
-`Enter` keeps them, `Tab` finishes a tag from those in use, and `Esc` leaves them as
+`Enter` keeps them, `Ctrl-y` finishes a tag from those in use, and `Esc` leaves them as
 they were. A tag is lower case, letters, digits and dashes, up to 24 characters; a
 space or capital typed becomes a dash or lower case. A preset's kind and machine are
 always its tags, so `T` leaves them out.
@@ -263,16 +263,19 @@ of the row, and the preview shows them all, yours plain and the guesses dim.
 
 ## The command line
 
-`:` opens the command line at the bottom. `Tab` completes what you're typing, as in
-Vim: command names, `:set` keys and their values, each command's own words, such as
-`:launch 4bar` and `:track add`, kit names, and paths for `:e`, `:w`, `:new`,
-`:sample`, `:render` and `:kit`. Paths go one folder at a time, and `~` is your home
-folder.
+`:` opens the command line at the bottom. `Ctrl-n` completes what you're typing, with
+Neovim's completion keys: command names, `:set` keys and their values, each command's
+own words, such as `:launch 4bar` and `:track add`, kit names, and paths for `:e`,
+`:w`, `:new`, `:sample`, `:render` and `:kit`. Paths go one folder at a time, and `~`
+is your home folder. `Tab` and `Shift-Tab` play and play from the start here too, as on
+every page; they complete nothing.
 
 | Keys | Does |
 |---|---|
-| `Tab` | Complete, or list the matches and fill in what they share |
-| `Tab` `Shift-Tab` | Move through the list. Typing narrows it |
+| `Ctrl-n` `Ctrl-p` | Complete, or list the matches and fill in what they share |
+| `Ctrl-n` `Ctrl-p` | With the list open, move through it. Typing narrows it |
+| `Ctrl-y` | Take the match from the list, or complete as `Ctrl-n` does |
+| `Ctrl-e` | Close the list and put back what was typed |
 | `Enter` | Take the match from the list, or run the line |
 | `Esc` | Close the list and keep what's typed, or leave the line |
 | `Up` `Down` | Earlier commands, those starting with what is typed |

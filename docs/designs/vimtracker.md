@@ -1068,7 +1068,7 @@ only name Normal's keys on those pages, for the binding table.
     `TagLibrary` or a preset's file; its search reads `#` words as tags (`picker/tree.rs`'s `Search`), and
     `tagging.rs` keeps what `T` gives (decision 315).
 *   **The command line** (`overlays/command.rs` and `overlays/command/`): `parse.rs` parses a `:`
-    line into a `Line`, `completion.rs` completes it with `Tab` from the parser's own tables, and
+    line into a `Line`, `completion.rs` completes it with `Ctrl-n` from the parser's own tables, and
     `history.rs` keeps the lines run, in `history.ron`. `command.rs` has the line's keys.
 
 **Drawing.** `run::draw_screen` lays out the page, the meter's column on the right with the scope

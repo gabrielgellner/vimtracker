@@ -80,7 +80,7 @@ pub struct Tree {
 pub(crate) const MARKING_HINT: &str = "Space mark  a all  Enter load";
 
 /// The hint while `T` types an item's tags.
-pub(crate) const TAGGING_HINT: &str = "Enter tag  Tab complete  Esc back";
+pub(crate) const TAGGING_HINT: &str = "Enter tag  Ctrl-y complete  Esc back";
 
 /// The end of a hint that says `T` tags, left off where it can't: on a shipped patch.
 pub(crate) const TAG_HINT: &str = "  T tag";
@@ -587,7 +587,7 @@ impl Picker {
         Some(found.count())
     }
 
-    /// `Tab` in the search: finish the tag being typed as the tag row's first, and start the
+    /// `C-y` in the search: finish the tag being typed as the tag row's first, and start the
     /// next word.
     pub(super) fn complete_tag(&mut self) {
         let first = self
@@ -668,8 +668,9 @@ impl Picker {
         self.focus = super::Focus::Tags;
     }
 
-    /// A key while typing tags: `Enter` gives them, `Tab` finishes the word from the tags in
-    /// use, and `Esc` goes back to the list with nothing changed.
+    /// A key while typing tags: `Enter` gives them, `C-y` finishes the word from the tags in
+    /// use, as completion takes a match everywhere (decision 477), and `Esc` goes back to the
+    /// list with nothing changed.
     pub(super) fn tag_key(&mut self, key: crate::input::keys::Key) -> Outcome {
         use ratatui::crossterm::event::KeyCode;
         match key.code {
@@ -694,7 +695,7 @@ impl Picker {
             KeyCode::Backspace => {
                 self.tag_line.pop();
             }
-            KeyCode::Tab => {
+            KeyCode::Char('y') if key.ctrl => {
                 let start = self
                     .tag_line
                     .rfind(char::is_whitespace)
@@ -725,7 +726,7 @@ impl Picker {
         }
     }
 
-    /// Every tag on what's been read, and every one given by hand anywhere, for `Tab` to
+    /// Every tag on what's been read, and every one given by hand anywhere, for `C-y` to
     /// complete one from as it's typed.
     pub(crate) fn tags_in_use(&self) -> Vec<String> {
         let mut names: Vec<String> = self

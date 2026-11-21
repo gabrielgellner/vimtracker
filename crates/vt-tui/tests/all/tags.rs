@@ -135,9 +135,9 @@ fn a_search_by_tag_finds_every_kick_below_the_open_folders() {
             ("snare".to_owned(), 1)
         ]
     );
-    // `Tab` finishes the tag being typed as the row's first.
+    // `Ctrl-y` finishes the tag being typed as the row's first.
     press(&mut app, "sn");
-    special(&mut app, KeyCode::Tab);
+    keys(&mut app, "^y");
     assert_eq!(app.overlays.picker.as_ref().unwrap().query, "#snare ");
     assert_eq!(found(&app), ["snare 808.wav"]);
     std::fs::remove_dir_all(&library).unwrap();
@@ -165,7 +165,10 @@ fn t_gives_a_sample_tags_by_its_content_and_takes_a_wrong_guess_off() {
     press(&mut app, "T");
     let text = drawn(&app);
     assert!(text.contains("# kick one-shot _"), "{text}");
-    assert!(text.contains("Enter tag  Tab complete  Esc back"), "{text}");
+    assert!(
+        text.contains("Enter tag  Ctrl-y complete  Esc back"),
+        "{text}"
+    );
     press(&mut app, "punchy");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.services.status, "thump.wav: #kick #one-shot #punchy");
@@ -186,13 +189,13 @@ fn t_gives_a_sample_tags_by_its_content_and_takes_a_wrong_guess_off() {
         "given by hand, at the right of its row: {text}"
     );
 
-    // Deleting a guess takes it off, and `Tab` finishes a tag from those in use.
+    // Deleting a guess takes it off, and `Ctrl-y` finishes a tag from those in use.
     press(&mut app, "T");
     for _ in 0.."kick one-shot punchy ".len() {
         special(&mut app, KeyCode::Backspace);
     }
     press(&mut app, "pun");
-    special(&mut app, KeyCode::Tab);
+    keys(&mut app, "^y");
     assert_eq!(app.overlays.picker.as_ref().unwrap().tag_line, "punchy ");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.services.status, "thump.wav: #punchy");

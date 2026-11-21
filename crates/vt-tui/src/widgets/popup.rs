@@ -229,7 +229,13 @@ mod tests {
     fn the_command_lines_matches_sit_above_it_under_the_word_they_finish() {
         let (mut app, _realtime) = app();
         press(&mut app, ":set ");
-        app.key(Key::new(KeyCode::Tab), Instant::now());
+        app.key(
+            Key {
+                ctrl: true,
+                ..Key::char('n')
+            },
+            Instant::now(),
+        );
         let title = format!(
             " {} ",
             app.overlays

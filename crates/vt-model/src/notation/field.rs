@@ -718,7 +718,7 @@ impl Field {
     }
 
     /// The word being typed: from the last space, comma or bracket typed to where the next
-    /// character goes, which `Tab` completes.
+    /// character goes, which `C-n` completes.
     fn word(&self, insert: Insert) -> Range<usize> {
         let ends = |c: char| c.is_whitespace() || c == ',' || Bracket::of(c).is_some();
         let start = self.text[insert.from..insert.to]
@@ -735,7 +735,7 @@ impl Field {
         Some(&self.text[self.word(insert)])
     }
 
-    /// Where `K` and `Tab` ask what can go, from the cursor, and the bytes what's chosen goes in
+    /// Where `K` and `C-n` ask what can go, from the cursor, and the bytes what's chosen goes in
     /// place of: the token's, or while typing the word typed so far, after the token before it.
     pub fn spot(&self, at: usize) -> (Spot<'_>, Range<usize>) {
         if let Some(insert) = self.insert {
@@ -761,7 +761,7 @@ impl Field {
         }
     }
 
-    /// What can go at the cursor, for `K` to list and `Tab` to complete from.
+    /// What can go at the cursor, for `K` to list and `C-n` to complete from.
     /// On a kit line, the names it spans are what's around it, where whoever asks gives none.
     pub fn offers(&self, at: usize, around: &Around) -> Vec<Offer> {
         let named = Around {
@@ -775,7 +775,7 @@ impl Field {
         (self.grammar.offer)(self.spot(at).0, &named)
     }
 
-    /// What `K` or `Tab` offered, chosen: while typing, in place of the word typed so far, typing
+    /// What `K` or `C-n` offered, chosen: while typing, in place of the word typed so far, typing
     /// going on unless a token as long as each is ends it; and among the tokens in the token's
     /// place, where on a group's bracket another pair of brackets changes the group's, and
     /// anything else goes in place of the group. Where the cursor goes, once back among the
