@@ -343,6 +343,8 @@ impl PhraseView {
         ("l", Cmd::Move(Motion::Right), "Next field"),
         ("j", Cmd::Move(Motion::Down), "Next step"),
         ("k", Cmd::Move(Motion::Up), "Previous step"),
+        ("Down", Cmd::Move(Motion::Down), "Next step"),
+        ("Up", Cmd::Move(Motion::Up), "Previous step"),
         (
             "w",
             Cmd::Move(Motion::NextGroup),
@@ -359,6 +361,43 @@ impl PhraseView {
         ("{", Cmd::Move(Motion::PreviousBeat), "Previous beat"),
         ("g g", Cmd::Move(Motion::First), "First step, or step n"),
         ("G", Cmd::Move(Motion::Last), "Last step, or step n"),
+    ];
+
+    /// The left and right arrows move by the grid, as they do in Insert, in Normal and the Visual
+    /// modes; `Up` and `Down` are motions, a step.
+    pub(crate) const ARROWS: &'static [(&'static str, Cmd, &'static str)] = &[
+        (
+            "Left",
+            Cmd::GridMove {
+                forward: false,
+                snap: false,
+            },
+            "Back by the grid",
+        ),
+        (
+            "Right",
+            Cmd::GridMove {
+                forward: true,
+                snap: false,
+            },
+            "On by the grid",
+        ),
+        (
+            "S-Left",
+            Cmd::GridMove {
+                forward: false,
+                snap: true,
+            },
+            "The previous row on the grid",
+        ),
+        (
+            "S-Right",
+            Cmd::GridMove {
+                forward: true,
+                snap: true,
+            },
+            "The next row on the grid",
+        ),
     ];
 
     /// Targets work after an operator and in Visual modes.
@@ -626,6 +665,20 @@ impl Page for PhraseView {
         match cmd {
             Cmd::Move(_) if mode == Mode::OperatorPending => return Outcome::Passed,
             Cmd::Move(motion) => Self::move_cursor(motion, ctx.modes.count, services),
+            Cmd::GridMove { forward, snap } => {
+                let skip = services.song().skip as usize;
+                for _ in 0..times {
+                    let by = match (snap, forward) {
+                        (true, _) => {
+                            let row = services.extent().row(services.cursor.step);
+                            crate::app::snap_by(row, skip, forward)
+                        }
+                        (false, true) => skip as isize,
+                        (false, false) => -(skip as isize),
+                    };
+                    services.move_step(by);
+                }
+            }
             Cmd::ViewTop | Cmd::ViewMiddle | Cmd::ViewBottom => {
                 self.view_cursor(cmd, ctx.modes.count, services, view);
             }

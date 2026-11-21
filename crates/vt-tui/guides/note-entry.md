@@ -104,7 +104,8 @@ accent.
 
 ## Moving without writing a note
 
-The arrows move and write nothing, and you stay in Insert.
+The arrows move and write nothing, and you stay in Insert. They move the same
+way in Normal, so you can walk the grid before and after writing.
 
 | Keys | Does |
 |---|---|
