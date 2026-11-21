@@ -421,6 +421,32 @@ takes, each with what it does. A line typed again is heard at once; with the
 track's `Cue` on, the line playing plays on until its next lap starts, so it's
 never heard half the old and half the new. The line is the generator's, saved
 with it.
+
+**A kit line.** `S` across two or more tracks of one group, on their Note
+columns, makes a `Mini` a kit line: one line across the group's drum tracks,
+whose hits are the tracks' names, `bd*2 [. sn] hh?`, matched without case. Each
+track holds the whole line and plays a note on each row where its own name is, at
+its own note and the velocity notes are typed with, and rests on every other row
+of its span. The line starts from the rows, each the name of the track with a
+note there, a layer a track where two share a row; on empty columns, from a line
+of the names. Each track keeps the note it plays, its first in the rows, until
+`From` is turned in the panel, which gives every track that note; on Gen
+each track's `From` is its own. A stack is natural here, as each layer is other
+tracks': `bd . . bd . . bd ., hh*2` at `Step 1 row` puts the kick's tresillo
+over a hat on every row, each a `RET` of two. A name in two layers is refused, as a track plays one. `K` and
+`Tab` offer the line's names, and `=` and `-` on a name turn it to the next
+track's or the one before.
+
+The line is kept the same on every track it spans. An edit to it on any of
+them, typed or turned in its tokens, on the panel or a track's Gen, is made
+on all of them as one change, one `u`: its `Text`, its `Step`, its seed, `Vary`
+and `Mutate`, so a `?` falls the same on every track. A name no track of the line
+has is marked as text that doesn't read. `:name` on one of its tracks renames
+its tokens in the line, in the same change. `dd` on one track's `Fill` takes
+that track out of the line, putting back what was under it, and a track leaving
+the group leaves it too, its rows kept as they were heard; the rest play on, and
+its tokens stay in the line, now marked. Gen's device title names the
+group's kit, `Note kit G1`.
 `Beats` is the rhythm `Acid` has always played, for any fill: each row a chance
 by where it falls in the bar, counting from the first row selected, the beats
 most, then every third row, then the other even rows, and the rest least. Its

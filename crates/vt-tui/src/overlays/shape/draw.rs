@@ -149,7 +149,7 @@ fn token_lines(
         return Vec::new();
     };
     let field = match typed {
-        Some(typed) => Field::new(field.grammar(), typed, panel.column),
+        Some(typed) => field.retyped(typed),
         None => field,
     };
     let field = &field;

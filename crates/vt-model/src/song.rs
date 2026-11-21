@@ -24,7 +24,7 @@ use crate::modulation::{MOD_SLOTS, ModSlot, default_mods};
 use crate::order::{ChainMove, Deal, Dealer, Order, WalkMove};
 use crate::scale::Scale;
 use crate::settings::{Owner, SettingId};
-use crate::shape::Source;
+use crate::shape::{KitLine, Source};
 use crate::speed::Speed;
 use crate::step::{FxCommand, FxSlot, Step};
 use crate::view::ViewState;
@@ -1401,6 +1401,44 @@ impl Song {
     pub fn group_track_of(&self, track: usize) -> Option<usize> {
         let group = self.tracks.get(track).filter(|t| t.is_sound())?.group?;
         self.fixed_track(TrackKind::Group(group))
+    }
+
+    /// The names of the tracks a kit line spans, in order, each once: the sound tracks of its
+    /// group with one of its generators, by [`Track::label`] (decision 464).
+    pub fn kit_names(&self, kit: KitLine) -> Vec<String> {
+        let mut names: Vec<String> = Vec::new();
+        for (index, track) in self.tracks.iter().enumerate() {
+            let on = track.is_sound()
+                && track.group == Some(kit.group)
+                && track.phrases.values().any(|phrase| {
+                    phrase
+                        .generators()
+                        .iter()
+                        .any(|generator| generator.shape.kit == Some(kit))
+                });
+            let name = track.label(index);
+            if on && !names.contains(&name) {
+                names.push(name);
+            }
+        }
+        names
+    }
+
+    /// A new kit line on a group, one past the last of the song's on it.
+    pub fn next_kit_line(&self, group: u8) -> KitLine {
+        let last = self
+            .tracks
+            .iter()
+            .flat_map(|track| track.phrases.values())
+            .flat_map(|phrase| phrase.generators())
+            .filter_map(|generator| generator.shape.kit)
+            .filter(|kit| kit.group == group)
+            .map(|kit| kit.line)
+            .max();
+        KitLine {
+            group,
+            line: last.map_or(0, |line| line.wrapping_add(1)),
+        }
     }
 
     /// The sound tracks a group track sums, in order, or none for any other track.

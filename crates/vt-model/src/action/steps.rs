@@ -62,7 +62,9 @@ pub(super) fn edit(next: &mut Song, action: &Action) -> Result<(), EditError> {
             let source = followed(next, shape)?;
             let source = source.as_ref().map(|source| source.loop_steps());
             let mut shape = *shape;
-            let rhythm = OwnRhythm::kept(&shape, *column, rhythm);
+            // A kit line's track plays the hits of its own name.
+            let name = next.tracks[*track].label(*track);
+            let rhythm = OwnRhythm::kept_as(&shape, *column, rhythm, &name);
             rhythm.settle(&mut shape);
             let texts = rhythm.texts(list);
             for (row, step) in written_from(found.steps(), *range, *column, &shape, texts, source) {

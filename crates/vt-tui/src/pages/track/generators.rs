@@ -148,7 +148,7 @@ pub(super) fn reline_live(
     let Some(live) = services.live_generator(track, phrase, generator, view) else {
         return;
     };
-    if let Err(why) = typed_mini(text, live.generator.column, 1) {
+    if let Err(why) = typed_mini(text, live.generator.column, 1, &live.names) {
         services.status = why;
         return;
     }
@@ -174,10 +174,11 @@ fn say_dropped(services: &mut Services, view: View, (phrase, generator): (u32, u
         return;
     };
     let rows = live.generator.rows().map_or(0, |rows| rows.len());
-    let own = OwnRhythm::kept(
+    let own = OwnRhythm::kept_as(
         &live.generator.shape,
         live.generator.column,
         live.generator.rhythm(),
+        live.generator.kit_name(),
     );
     if let Some(said) = dropped_said(&live.generator.shape, &own, rows) {
         services.status = said;

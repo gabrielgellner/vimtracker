@@ -50,7 +50,7 @@ pub(super) static MINI: Grammar = Grammar {
         Kind::Unread,
     ],
     split,
-    read,
+    read: |text, column, _| read(text, column),
     meaning: |kind| match kind {
         Kind::Hit => {
             "the value it writes on the row it lands on, in the {}'s units: on the Note column a \
@@ -90,7 +90,7 @@ pub(super) static MINI: Grammar = Grammar {
             subject: column_word(column),
         }
     },
-    turn,
+    turn: |kind, text, sign, large, column, _| turn(kind, text, sign, large, column),
     offer,
     // Its table holds each row's hit, by its place among the hits, as a rhythm's does.
     rows: |tokens, at| nth_of(tokens, at, Kind::Hit),
@@ -126,7 +126,7 @@ fn column_word(column: ShapeColumn) -> String {
 
 /// Brackets, rests and modifiers as a rhythm's are; a word, up to the next space, comma,
 /// bracket, rest or modifier, a hit; and inside a Euclid's `( )`, its numbers.
-fn split(text: &str) -> Vec<Token> {
+pub(super) fn split(text: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
     let mut round = 0usize;
     let mut chars = text.char_indices().peekable();
@@ -240,7 +240,7 @@ pub fn start(steps: &[Step], range: StepRange, column: ShapeColumn) -> String {
 }
 
 /// Where a comma stacks one line over another, other than in a Euclid's `( )`, if one does.
-fn stacked(text: &str) -> Option<usize> {
+pub(super) fn stacked(text: &str) -> Option<usize> {
     let mut round = 0usize;
     for (at, c) in text.char_indices() {
         match c {
@@ -373,7 +373,7 @@ fn turn(kind: Kind, text: &str, sign: i16, large: bool, column: ShapeColumn) -> 
         return rhythm::turn(kind, text, sign, large, column);
     }
     match atom(text, column).ok()? {
-        Atom::Tie => None,
+        Atom::Tie | Atom::Own | Atom::Other => None,
         Atom::Degree(degree) => {
             let ShapeColumn::Note { scale, .. } = column else {
                 return None;

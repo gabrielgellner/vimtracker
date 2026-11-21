@@ -293,6 +293,15 @@ impl Phrase {
         true
     }
 
+    /// Have a live generator on a kit line play the hits of this name, its track's, and write
+    /// them: false if there's no such one, or it isn't on a kit line or has that name already.
+    pub(crate) fn name_kit_generator(&mut self, index: usize, name: &str) -> bool {
+        let Some(generator) = self.generators.get_mut(index) else {
+            return false;
+        };
+        generator.name_in_kit(&mut self.steps, name)
+    }
+
     /// Have a live generator held by its track's macros as this shape, or let go with none,
     /// writing its column again if that changes what's heard, a `Follow` from `source`.
     pub(crate) fn hold_generator(

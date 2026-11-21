@@ -35,7 +35,12 @@ fn fitted(shape: Shape, column: ShapeColumn) -> Result<Shape, String> {
     } else {
         column.default_where()
     };
-    Ok(Shape { place, ..shape })
+    // A kit line is its tracks', so a patch's goes on as a `Mini` of its own.
+    Ok(Shape {
+        place,
+        kit: None,
+        ..shape
+    })
 }
 
 impl Services {
@@ -205,6 +210,8 @@ impl ShapePanel {
             ShapeColumn::Note { .. } => services.follow_sources(&base, &[part], view),
             _ => (Vec::new(), None),
         };
+        // On a kit line, its line on every track it spans (decision 464).
+        let names = shape.kit.map_or_else(Vec::new, |kit| base.kit_names(kit));
         Outcome::Shape(Box::new(Self {
             selection: Selection {
                 range,
@@ -217,6 +224,10 @@ impl ShapePanel {
             list,
             rhythm,
             mini,
+            kit: shape.kit,
+            names,
+            kit_notes: Vec::new(),
+            kit_from: shape.from,
             row: GenParam::Fill,
             typing: None,
             weight: None,

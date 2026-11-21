@@ -13,7 +13,7 @@ const OCTAVE: i16 = 12;
 pub(super) static LIST: Grammar = Grammar {
     kinds: &[Kind::Value, Kind::Unread],
     split,
-    read,
+    read: |text, column, _| read(text, column),
     meaning: |kind| match kind {
         Kind::Value => "the value it writes on the {} of the rows it fills, going round the list",
         _ => "what isn't a value of the column, so the text doesn't read",
@@ -22,7 +22,7 @@ pub(super) static LIST: Grammar = Grammar {
         name: format!("Value {}", at + 1),
         subject: ordinal(at + 1),
     },
-    turn,
+    turn: |kind, text, sign, large, column, _| turn(kind, text, sign, large, column),
     offer,
     rows: |tokens, at| nth_of(tokens, at, Kind::Value),
     fixed: |_| None,

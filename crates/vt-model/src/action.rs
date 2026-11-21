@@ -45,7 +45,7 @@ mod steps;
 mod tracks;
 
 use generators::follow_generators;
-pub use generators::{hold_generators, rescale_generators};
+pub use generators::{hold_generators, keep_kit_lines, rescale_generators};
 
 /// A new value for one field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -914,6 +914,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
         | Action::JoinSlices { .. }
         | Action::LoadKit(_) => bank::edit(&mut next, action)?,
     }
+    keep_kit_lines(Some(song), &mut next);
     hold_generators(&mut next);
     follow_generators(song, &mut next);
     Ok(Arc::new(next))
