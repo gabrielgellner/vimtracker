@@ -29,6 +29,7 @@ pub mod machine;
 pub mod macros;
 pub mod modulation;
 pub mod names;
+pub mod notation;
 pub mod octatrack;
 pub mod onsets;
 pub mod order;

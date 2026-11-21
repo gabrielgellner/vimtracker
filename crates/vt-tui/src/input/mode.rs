@@ -62,6 +62,10 @@ pub enum Mode {
     Help,
     /// The shape panel is open.
     Shape,
+    /// The cursor is in a field of tokens, a text-like setting edited a token at a time
+    /// (decision 456). Only the binding table and its keys' lookup use this: the mode stays the
+    /// panel's, and keys it doesn't bind are the panel's.
+    Tokens,
     /// A macro's mapping view is open, its settings and their ranges.
     Mapping,
     /// The keys are in the macro panel at the bottom of the screen, turning the cursor's track's
@@ -107,6 +111,7 @@ impl Mode {
             Self::Command => "COMMAND",
             Self::Help => "HELP",
             Self::Shape => "SHAPE",
+            Self::Tokens => "TOKENS",
             Self::Mapping => "MAP",
             Self::Macros => "MACROS",
             Self::Jump => "JUMP",

@@ -13,6 +13,7 @@ use crate::constants::BAR_STEPS;
 use crate::lfo::Fade;
 use crate::listed::Listed;
 use crate::modulation::depth_text;
+use crate::notation::GrammarId;
 use crate::settings::{Kind, LONGEST_GLIDE_MS, Units, glide_value};
 use crate::song::reset_named;
 use crate::step::Note;
@@ -136,6 +137,17 @@ pub enum Typing {
     Weights,
     /// The letters of a `Tonnetz`' moves, `P`, `L` and `R`, kept with `Enter`.
     Moves,
+}
+
+impl Typing {
+    /// The grammar its text is in, where `l` goes into it to edit it a token at a time
+    /// (decision 456), as well as `i` typing it all.
+    pub fn grammar(self) -> Option<GrammarId> {
+        match self {
+            Self::Weights => Some(GrammarId::Weights),
+            _ => None,
+        }
+    }
 }
 
 /// How `i`'s text reads as a value. Where it doesn't, or the value is outside its bounds, it's

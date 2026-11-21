@@ -401,6 +401,9 @@ off a digit for each of the twelve semitones. `l` goes into the digits, on the f
 status line names the one under the cursor, `Weight of G: F`. Each change is heard as it's made,
 and `Enter` on the panel keeps them all as one undo.
 
+The digits are a field of tokens, each digit a token, and take the keys every text-like setting
+is edited with, under Fields of tokens below. On `Weights`:
+
 | Keys | Does |
 |---|---|
 | `h` `l` | Across the digits. `h` from the first goes back to the rows |
@@ -408,16 +411,18 @@ and `Enter` on the panel keeps them all as one undo.
 | `=` `-` | Up or down by one |
 | `+` `_` | Up or down by 4 |
 | `0` to `F` | Sets the digit, and moves on to the next |
+| `r` `s` | Then a digit: sets it, and stays on it |
 | `x` | Back to `F` |
+| `~` | `0`, the digit rested, and again gives back what it was |
 | `Esc` `Enter` | Back to the rows |
 
-`0` types a 0 here, as each hex digit types itself, so `^` goes to the first. In C major `F08F`
-typed from the first keeps the second out and gives the third about half the root's chances.
-`i` types them all at once: it starts from the digits there, and the first digit typed starts
-them afresh, the degrees after those typed keeping theirs, while `Backspace` edits them from the
-end. Spread and Bias still shape the notes let through, so a narrow Spread stays in the middle of
-the range, and one value on a degree left out lands on the nearest one let through, the lower of
-two as near.
+`0` types a 0 here, as each hex digit types itself, so `^` goes to the first, and `a` to `f` are
+digits too. In C major `F08F` typed from the first keeps the second out and gives the third about
+half the root's chances. `i` types them all at once: it starts from the digits there, and the
+first digit typed starts them afresh, the degrees after those typed keeping theirs, while
+`Backspace` edits them from the end. Spread and Bias still shape the notes let through, so a
+narrow Spread stays in the middle of the range, and one value on a degree left out lands on the
+nearest one let through, the lower of two as near.
 <!-- ANCHOR_END: after-bars -->
 <!-- ANCHOR: after-weights -->
 
@@ -922,6 +927,57 @@ its own, which `gl` opens and `Space g a` applies on its own. Doubling a phrase
 applies its live columns, and so does `]r` on the rows it rotates. A new live
 shape over one on the same column applies the old one first, and starts from
 the values it left.
+
+## Fields of tokens
+
+A setting whose value is a short text with a grammar of its own, `Weights` now and a `List`'s
+values and a `Tonnetz`'s moves to come, is a field of tokens: `l` goes into it, the cursor on a
+whole token, a digit, a note, a value or a group, and the keys move by the grammar and turn a
+token in its own units. A **group** is a bracket and what it holds, `[. 7F]` or `<30 40>`, and a
+**rest** is `.`, with `~` read as one too, as Tidal writes it.
+
+| Keys | Does |
+|---|---|
+| `h` `l` | The token before or after, in and out of groups; out from the first |
+| `w` `b` | The next or previous token at the same depth, a group as one |
+| `^` `$` | The first or last token |
+| `%` | The bracket that matches the one under the cursor |
+| `(` `)` | Out to the start or the end of the group the cursor is in |
+| `=` `-` | Turns the token by one of its units |
+| `+` `_` | Turns it by a large step |
+| `x` | Takes the token away; on a fixed length, back to how it starts |
+| `~` | Rests the token, and again gives back what it was |
+| `r` | Replaces the token: `r`, then the new one, and back on it |
+| `s` | Types over the token |
+| `i` `a` | Types before or after the token, or on a fixed length types it all |
+| `p` | Pastes after the token, or on a fixed length over it |
+| `Esc` | Back to the row, putting back the last text that read |
+| `Enter` | Back to the row, where the text reads |
+
+A count before a key goes so far, `3l` or `2w`, where digits aren't tokens of the field. `d`, `c`
+and `y` take a text object, and `p` pastes what they took:
+
+| Keys | Takes away, types over, or keeps |
+|---|---|
+| `dit` `cit` `yit` | The token |
+| `dat` `cat` `yat` | The token and what changes it after it, `*2` or `?` |
+| `di[` `ci[` `yi[` | What the `[ ]` group holds |
+| `da[` `ca[` `ya[` | The `[ ]` group, brackets and all |
+| `di<` `ci<` `yi<` | What the `< >` group holds |
+| `da<` `ca<` `ya<` | The `< >` group |
+| `di(` `ci(` `yi(` | A Euclid's numbers |
+| `da(` `ca(` `ya(` | A Euclid, with its brackets |
+
+Keys a field doesn't have are the panel's: `j`, `k`, `K` and `L` leave the tokens and do what they
+do on the rows, while `Tab`, `Space d` and `Space ?` leave the cursor where it is, and `Space d`
+says what the token under it does. A field of fixed length, as `Weights` is, shows every token and
+never loses or gains one, and on `Weights` the letters `a` to `f` are digits, so `a`, `b`, `c` and
+`d` aren't there.
+
+**Text that doesn't read.** Every change reads the text again, and the column plays what it says
+at once. Where it doesn't read, the token it stops at is drawn in red with `✗` under it, and the
+status line says why, `g isn't a weight, a hex digit from 0 to F`. The column keeps playing the
+last text that read, `Enter` is refused, saying why, and `Esc` puts back the last that read.
 
 ## Values and small edits
 

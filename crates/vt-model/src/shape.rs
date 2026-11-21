@@ -50,7 +50,7 @@ pub(crate) use params::{BEND_JUMP, BEND_NUDGE};
 pub use params::{Context, GenParam, Starts, TITLE_PLACES};
 pub use random::{
     Degrees, EVEN_SPREAD, MAX_BIAS, MAX_SPREAD, MAX_WEIGHT, Random, WEIGHTS, degree_count,
-    degree_name,
+    degree_name, degree_of,
 };
 pub use render::{GenCell, RowView, render_into};
 pub use ring::{Kept, MAX_RING, Ring};

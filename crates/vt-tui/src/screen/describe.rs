@@ -21,7 +21,7 @@ use crate::app::App;
 use crate::controls::{Control, ParamView, view};
 use crate::input::mode::{Mode, View};
 use crate::overlays::mapping::{MappingView, mapping_line, moves};
-use crate::overlays::shape::ShapePanel;
+use crate::overlays::shape::{ShapePanel, token_named};
 
 /// The rows the line takes while it shows: one for most settings, and room for a second where
 /// the words run on, kept the same so the page above doesn't jump as the cursor moves.
@@ -105,11 +105,10 @@ fn chosen(found: &ParamView) -> &str {
 
 /// The shape panel's setting under its cursor, as the panel shows its value.
 pub(crate) fn shape_line(panel: &ShapePanel) -> String {
-    // In `Weights`' digits, the one under the cursor.
-    if let Some((_, note, weight)) = panel.weight_here() {
-        return format!(
-            "Weight of {note}: {weight:X}, how often {note} is chosen, from 0, never, to F, the most."
-        );
+    // In a field of tokens, `Weights`' digits, the one under the cursor.
+    if let (Some(tokens), Some(at)) = (&panel.tokens, panel.weight) {
+        let (named, meaning) = token_named(&tokens.field, at);
+        return format!("{named}, {meaning}.");
     }
     let context = panel.context();
     let row = panel.row;

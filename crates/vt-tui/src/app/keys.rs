@@ -367,7 +367,8 @@ impl App {
                 self.settled(outcome, false);
             }
             Mode::Picker => self.picker_key(key, now),
-            Mode::Shape => self.shape_key(key, now),
+            // The token editor's keys are the panel's to give, while its cursor is in them.
+            Mode::Shape | Mode::Tokens => self.shape_key(key, now),
             Mode::Mapping => self.mapping_key(key, now),
             Mode::Macros => self.macro_panel_key(key, now),
             Mode::Jump => {
@@ -451,7 +452,19 @@ impl App {
             return Vec::new();
         }
         self.table
-            .continuations(self.key_scope(), &self.grammar.pending)
+            .continuations_in(&self.key_scopes(), &self.grammar.pending)
+    }
+
+    /// The modes whose rows of the binding table apply now, the first's before the rest's: the
+    /// token editor's before the shape panel's while its cursor is in a field of tokens.
+    pub fn key_scopes(&self) -> Vec<Mode> {
+        let scope = self.key_scope();
+        match &self.overlays.shape {
+            Some(panel) if scope == Mode::Shape && panel.tokens.is_some() => {
+                vec![Mode::Tokens, scope]
+            }
+            _ => vec![scope],
+        }
     }
 
     /// Which rows of the binding table apply now. Normal mode's keys depend on the view.

@@ -210,7 +210,7 @@ pub fn degree_count(scale: Scale) -> usize {
 
 /// The degree a note is, counted from the root: its place in the scale while it's on, if it's in
 /// it, and otherwise its semitones above the root.
-fn degree_of(scale: Scale, note: u8) -> Option<usize> {
+pub fn degree_of(scale: Scale, note: u8) -> Option<usize> {
     let above = (usize::from(note) + WEIGHTS - usize::from(scale.root) % WEIGHTS) % WEIGHTS;
     if scale.on {
         scale
