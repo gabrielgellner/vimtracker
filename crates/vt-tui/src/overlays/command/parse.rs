@@ -10,7 +10,7 @@ use vt_model::bloom::{MAX_BRANCHES, PATH_WORDS, Path};
 use vt_model::constants::{MAX_GROUPS, MAX_LABEL_CHARS};
 use vt_model::groove::{GrooveId, SWING_PERCENTS};
 use vt_model::kit::MAX_TUNE;
-use vt_model::label::{GROUP_NAME_CHARS, is_group_name, is_name};
+use vt_model::label::{GROUP_NAME_CHARS, NAME_RULE, is_group_name, is_name};
 use vt_model::lane::MOST_DIVISION;
 use vt_model::order::Order;
 use vt_model::shape::MAX_MUTATION;
@@ -544,7 +544,7 @@ pub enum LineError {
     #[error("unknown command: {0}")]
     Unknown(String),
     #[error(
-        ":name takes two characters, the first a letter, or on a group 1 to {GROUP_NAME_CHARS} letters or digits, or nothing to clear it"
+        ":name takes {NAME_RULE}, so a kit line can play it, or on a group 1 to {GROUP_NAME_CHARS} letters or digits, or nothing to clear it"
     )]
     Name,
     #[error(":bpm takes a number from 20 to 400, or sample for the track's sample's own tempo")]
@@ -1665,7 +1665,10 @@ mod tests {
             ("name drums", Ok(Line::Name(Some("DRUMS".into())))),
             ("name 1A", Ok(Line::Name(Some("1A".into())))),
             ("name drumss", Err(LineError::Name)),
-            ("name B-", Err(LineError::Name)),
+            ("name b-", Ok(Line::Name(Some("B-".into())))),
+            ("name h_", Ok(Line::Name(Some("H_".into())))),
+            ("name B*", Err(LineError::Name)),
+            ("name -B", Err(LineError::Name)),
             ("sample a b.wav", Ok(Line::Sample(Some("a b.wav".into())))),
             ("sample", Ok(Line::Sample(None))),
             ("e", Ok(edit(None, false))),

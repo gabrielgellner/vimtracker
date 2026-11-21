@@ -1,7 +1,7 @@
 //! Edits to tracks, and how each one plays and sits in the mix.
 
 use crate::constants::{FX_SLOTS, MAX_GROUPS, MAX_LEVEL, MAX_SOUND_TRACKS, MAX_TRACK_RESET};
-use crate::label::is_group_name;
+use crate::label::{differ_by_case, is_group_name, is_name};
 use crate::lane::LANE_RATES;
 use crate::song::Song;
 
@@ -161,6 +161,36 @@ pub(super) fn edit(next: &mut Song, action: &Action) -> Result<(), EditError> {
             };
         }
         _ => unreachable!("not an edit to tracks, and how each one plays and sits in the mix"),
+    }
+    Ok(())
+}
+
+/// Refuse an edit that names a sound track what can't be a kit line's token, or puts two names
+/// that differ only by case in one group, as a kit line reads them without case (decision 472).
+/// Only the tracks whose name or group the edit changed are held to it, so a song saved with an
+/// older name still opens and edits.
+pub(super) fn check_names(before: &Song, after: &Song) -> Result<(), EditError> {
+    for (index, track) in after.tracks.iter().enumerate() {
+        let was = before.tracks.get(index);
+        let changed = was.is_none_or(|was| was.name != track.name || was.group != track.group);
+        if !track.is_sound() || !changed {
+            continue;
+        }
+        if !track.name.is_empty() && !is_name(&track.name) {
+            return Err(EditError::TrackName(track.name.clone()));
+        }
+        let Some(group) = track.group else {
+            continue;
+        };
+        let other = after.tracks.iter().enumerate().find(|(at, other)| {
+            *at != index
+                && other.is_sound()
+                && other.group == Some(group)
+                && differ_by_case(&other.name, &track.name)
+        });
+        if let Some((_, other)) = other {
+            return Err(EditError::NameCase(other.name.clone(), track.name.clone()));
+        }
     }
     Ok(())
 }

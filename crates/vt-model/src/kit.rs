@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::label::is_name;
+use crate::label::{NAME_RULE, is_name};
 use crate::project::ProjectError;
 use crate::ron_file;
 
@@ -139,9 +139,7 @@ pub fn load_kit(path: &Path) -> Result<Kit, ProjectError> {
 fn check(sound: &SoundFile) -> Result<(), String> {
     let label = sound.label.as_str();
     if !label.is_empty() && !is_name(label) {
-        return Err(format!(
-            "{label:?} can't be a name: it needs two characters, the first a letter"
-        ));
+        return Err(format!("{label:?} can't be a name: a name is {NAME_RULE}"));
     }
     let who = || {
         if label.is_empty() {
