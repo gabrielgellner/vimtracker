@@ -13,7 +13,9 @@
 //! list, which is the `:` line's list of matches (decision 458).
 
 use ratatui::crossterm::event::KeyCode;
-use vt_model::notation::{Around, Bracket, Field, Motion, Object, Place, Spot};
+use vt_model::notation::{Around, Bracket, Field, GrammarId, Motion, Object, Place, Spot};
+use vt_model::shape::GenParam;
+use vt_model::shape::params::Typing;
 
 use crate::input::bindings::Cmd;
 use crate::overlays::command::completion::{CommandMenu, Completions, offered};
@@ -232,6 +234,8 @@ pub enum Did {
     Changed,
     /// The buffer closed.
     Out,
+    /// What's typed kept, and the buffer closed: `Enter` while typing.
+    Kept,
     /// Nothing done, and why.
     Refused(String),
 }
@@ -248,6 +252,12 @@ pub struct Tokens {
 /// The title of the list `K` opens on a token, and of the one it and `Tab` open while typing.
 const IN_PLACE: &str = "In its place";
 const HERE: &str = "What can go here";
+
+/// Whether a field is a `List`'s values on a column of hex values.
+fn hex_list(field: &Field) -> bool {
+    std::ptr::eq(field.grammar(), GrammarId::List.grammar())
+        && GenParam::Values.typing(field.column()) == Typing::HexList
+}
 
 /// The largest count.
 const MOST: usize = 999;
@@ -521,8 +531,8 @@ impl Tokens {
     }
 
     /// A key that isn't the table's: with a list open, the list's; while typing, into the text,
-    /// `K` at the start of a word listing what can go there, `Tab` completing, and `Esc` and
-    /// `Enter` back to the tokens; and among them, a token the grammar types in place, which
+    /// `K` at the start of a word listing what can go there, `Tab` completing, `Esc` back to
+    /// the tokens and `Enter` closing the buffer where the text reads; and among them, a token the grammar types in place, which
     /// moves on to the next, or a count's digit.
     pub fn text(&mut self, code: KeyCode, at: &mut usize, around: &Around) -> Did {
         if let Some(did) = self.menu_key(code, at) {
@@ -537,8 +547,25 @@ impl Tokens {
                 KeyCode::Tab | KeyCode::BackTab => {
                     return self.complete(at, around, code == KeyCode::BackTab);
                 }
-                KeyCode::Esc | KeyCode::Enter => *at = field.end_insert(),
+                KeyCode::Esc => *at = field.end_insert(),
+                // `Enter` keeps what's typed and closes the buffer, as a dialog's does, where the
+                // text reads.
+                KeyCode::Enter => {
+                    *at = field.end_insert();
+                    return match field.bad() {
+                        Some(_) => Did::Changed,
+                        None => Did::Kept,
+                    };
+                }
                 KeyCode::Backspace => field.backspace(),
+                // A list of hex values takes a space after each two digits, as it did typed whole,
+                // so `704055` is three values.
+                KeyCode::Char(c) if hex_list(field) && c.is_ascii_hexdigit() => {
+                    if field.typed_word().is_some_and(|word| word.len() >= 2) {
+                        field.typed(' ');
+                    }
+                    field.typed(c.to_ascii_uppercase());
+                }
                 KeyCode::Char(c) if !field.typed(c) => *at = field.end_insert(),
                 _ => {}
             }

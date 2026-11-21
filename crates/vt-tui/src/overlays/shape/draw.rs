@@ -818,7 +818,10 @@ mod tests {
         keys(&mut app, "lvGSKlist<Enter>j");
         keys(
             &mut app,
-            &format!("i{}<Enter>", "1020304050607071".repeat(32)),
+            &format!(
+                "S{}<Esc><Enter>",
+                "10 20 30 40 50 60 70 71 ".repeat(32).trim_end()
+            ),
         );
         assert_eq!(app.overlays.shape.as_ref().unwrap().list.len(), 256);
         let shown = screen(&mut app, 163, 42);
@@ -827,11 +830,39 @@ mod tests {
             values.starts_with("Values  10 20 30 40 50 60 70 71 10 +247"),
             "{values}"
         );
-        // While it's typed, the end of what's typed is in sight.
-        keys(&mut app, &format!("i{}", "40".repeat(20)));
+    }
+
+    /// The buffer shows a rhythm's whole text as typed, its brackets and commas as they are, and
+    /// wraps a text longer than its room (decision 463).
+    #[test]
+    fn the_buffer_draws_the_whole_text_as_typed_wrapped() {
+        let mut app = app_on(&["--- -- --- --- ---"; 16]);
+        keys(&mut app, "vGS");
+        while app.overlays.shape.as_ref().unwrap().row != GenParam::Where {
+            keys(&mut app, "j");
+        }
+        keys(&mut app, "K/rhythm<Enter>");
+        while app.overlays.shape.as_ref().unwrap().row != GenParam::OwnText {
+            keys(&mut app, "j");
+        }
+        let long = "x(3,8) [. x]*2 <x . .> ".repeat(5);
+        keys(&mut app, &format!("S{}<Esc>", long.trim_end()));
         let shown = screen(&mut app, 163, 42);
-        let typed = labelled(&shown, "Values");
-        assert!(typed.starts_with("Values  \u{2026}"), "{typed}");
-        assert!(typed.contains("40 40 40_"), "{typed}");
+        let text: Vec<String> = (0..42).map(|y| row(&shown, y)).collect();
+        let first = text
+            .iter()
+            .position(|line| line.contains("╭ Text "))
+            .expect("the buffer");
+        assert!(
+            text[first + 1].contains("x(3,8) [. x]*2 <x . .> x(3,8)"),
+            "{}",
+            text.join("\n")
+        );
+        assert!(
+            text[first + 2].contains("<x . .>"),
+            "wrapped: {}",
+            text.join("\n")
+        );
+        assert!(text.iter().any(|line| line.contains("Enter close")));
     }
 }

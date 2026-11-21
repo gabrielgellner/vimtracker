@@ -211,7 +211,9 @@ pub(crate) fn playing_row(services: &Services, generator: &Generator) -> Option<
         .then(|| step - rows.first)
 }
 
-/// One generator as a device, giving back where its preview's picture is.
+/// One generator as a device, giving back where its preview's picture is, and in `open` where the
+/// buffer open on one of its cells goes, for it to be drawn over the devices after it.
+#[allow(clippy::too_many_arguments)]
 fn draw_generator(
     frame: &mut Frame,
     area: Rect,
@@ -220,6 +222,7 @@ fn draw_generator(
     track: &Track,
     device: &DeviceSpec,
     focused: bool,
+    open: &mut Option<OpenAt>,
 ) -> Option<(u16, u16)> {
     let Some(Control::Gen {
         phrase, generator, ..
@@ -259,13 +262,13 @@ fn draw_generator(
     let rows = device.grid.iter().copied().map(Vec::from).collect();
     let grid = SettingsGrid::new(&cells, rows, widths);
     frame.render_widget(grid, settings);
-    draw_fields(frame, settings, widths, page, ctx, device, &live);
+    *open = draw_fields(frame, settings, widths, page, ctx, device, &live).or(*open);
     preview
 }
 
 /// The device's settings in a grammar, their text on their cells as typed, cut to the room to
 /// the next cell in the row or the grid's edge, the token playing in the playhead's colour; and
-/// the buffer of the one open, under its cell (decision 463).
+/// where the buffer open on one of them goes (decision 463).
 fn draw_fields(
     frame: &mut Frame,
     settings: Rect,
@@ -274,7 +277,7 @@ fn draw_fields(
     ctx: &Ctx,
     device: &DeviceSpec,
     live: &LiveGen,
-) {
+) -> Option<OpenAt> {
     let here = page.control_here(ctx);
     let context = live.context();
     let mut open_at = None;
@@ -296,6 +299,17 @@ fn draw_fields(
             let end = next.map_or(settings.right(), |after| {
                 settings.x + (column + 1 + after) as u16 * widths.column()
             });
+            if page
+                .tokens
+                .as_ref()
+                .is_some_and(|tokens| tokens.control == control)
+            {
+                open_at = Some(OpenAt {
+                    control,
+                    x: x.min(end),
+                    y,
+                });
+            }
             if x >= end || y >= settings.bottom() {
                 continue;
             }
@@ -306,32 +320,43 @@ fn draw_fields(
             let buffer = frame.buffer_mut();
             Line::raw(" ".repeat(room.into())).render(Rect::new(x, y, room, 1), buffer);
             Line::from(line).render(Rect::new(x, y, room, 1), buffer);
-            if page
-                .tokens
-                .as_ref()
-                .is_some_and(|tokens| tokens.control == control)
-            {
-                open_at = Some((control, param, x, y));
-            }
         }
     }
-    let (Some((control, param, x, y)), Some(open)) = (open_at, page.tokens.as_ref()) else {
+    open_at
+}
+
+/// Where the buffer open on a cell goes: under the cell's value.
+#[derive(Debug, Clone, Copy)]
+struct OpenAt {
+    control: Control,
+    x: u16,
+    y: u16,
+}
+
+/// The buffer open on a Gen page cell (decision 463), under its value, its rows line under the
+/// text and the list `K` or `Tab` opened under the cursor's token, over the devices.
+fn draw_buffer(frame: &mut Frame, page: &TrackPage, ctx: &Ctx, at: OpenAt) {
+    let OpenAt { control, x, y } = at;
+    let (Some(open), Control::Gen { phrase, generator, param }) = (page.tokens.as_ref(), control)
+    else {
         return;
     };
+    let track = ctx.cursor().track;
+    let Some(live) = ctx.live_generator(track, phrase, generator) else {
+        return;
+    };
+    let live = &live;
+    let context = live.context();
     let field = &open.tokens.field;
     let layout = Layout::of(param, field, &live.generator.shape, &context);
     let area = frame.area();
     let room = Buffer::room(area);
-    let track = ctx.cursor().track;
-    let table = match control {
-        Control::Gen { phrase, .. } => ctx
-            .song()
-            .tracks
-            .get(track)
-            .and_then(|found| found.phrases.get(&phrase))
-            .and_then(|found| Table::of_generator(&live.generator, found.steps(), 0)),
-        _ => None,
-    };
+    let table = ctx
+        .song()
+        .tracks
+        .get(track)
+        .and_then(|found| found.phrases.get(&phrase))
+        .and_then(|found| Table::of_generator(&live.generator, found.steps(), 0));
     let rows = table.filter(|_| has_rows_line(param)).map(|table| {
         let lit = table.rows(field, open.at);
         let playing = ctx
@@ -633,6 +658,7 @@ pub(super) fn draw(
     let first = (cursor + 1).saturating_sub(fit);
     let mut rest = area;
     let mut previews = Vec::new();
+    let mut open = None;
     for (at, device) in devices.iter().enumerate().skip(first).take(fit) {
         let area = take_top(&mut rest, DEVICE_HEIGHT);
         match (device.title[0], device.grid[0][0]) {
@@ -656,8 +682,8 @@ pub(super) fn draw(
             }
             (Some(Control::Gen { generator, .. }), _) => {
                 let focused = at == cursor;
-                if let Some(corner) = draw_generator(frame, area, page, ctx, track, device, focused)
-                {
+                let drawn = draw_generator(frame, area, page, ctx, track, device, focused, &mut open);
+                if let Some(corner) = drawn {
                     previews.push((generator, corner));
                 }
             }
@@ -671,6 +697,9 @@ pub(super) fn draw(
             "A fixed track has no phrases, so it has no generators"
         };
         frame.render_widget(Paragraph::new(Line::styled(why, theme::dim())), rest);
+    }
+    if let Some(at) = open {
+        draw_buffer(frame, page, ctx, at);
     }
     previews
 }

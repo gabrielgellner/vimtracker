@@ -185,24 +185,33 @@ fn in_cells(field: &Field, layout: &Layout, marks: Marks) -> Vec<Piece> {
             });
         }
         let what = layout.under.get(nth).map_or("", String::as_str);
-        let under = match bad {
-            Some(bad) if bad == nth => Span::styled(format!("{BAD:<cell$}"), theme::warning()),
-            _ if marks.cursor == Some(nth) => Span::styled(
+        let (under, style) = match bad {
+            Some(bad) if bad == nth => (format!("{BAD:<cell$}"), theme::warning()),
+            _ if marks.cursor == Some(nth) => (
                 format!("{what:<cell$}"),
                 Style::new().add_modifier(Modifier::BOLD),
             ),
-            _ => Span::styled(format!("{what:<cell$}"), theme::dim()),
+            _ => (format!("{what:<cell$}"), theme::dim()),
         };
+        let text = field.token(nth).unwrap_or_default().to_owned();
+        let width = text.chars().count().min(under.chars().count());
+        // What's under the token, then under the room after it.
+        let (first, rest): (String, String) = (
+            under.chars().take(width).collect(),
+            under.chars().skip(width).collect(),
+        );
         pieces.push(Piece {
-            text: field.token(nth).unwrap_or_default().to_owned(),
+            text,
             style: token_style(field, nth, marks, bad),
-            under: Some(under),
+            under: Some(Span::styled(first, style)),
             token: Some(nth),
             typing: false,
             here: marks.typing_at.is_none() && marks.cursor == Some(nth),
         });
-        let pad = cell.saturating_sub(field.token(nth).map_or(0, |text| text.chars().count()));
-        pieces.push(Piece::gap(&" ".repeat(pad)));
+        pieces.push(Piece {
+            under: Some(Span::styled(rest.clone(), style)),
+            ..Piece::gap(&" ".repeat(rest.chars().count()))
+        });
     }
     if marks.typing_at.is_some() && !pieces.iter().any(|p| p.typing) {
         pieces.push(Piece::typing());
@@ -227,23 +236,26 @@ pub(crate) struct Wrapped {
 /// each where something's under its tokens.
 fn wrap(pieces: Vec<Piece>, room: usize, under: bool) -> Wrapped {
     let room = room.max(1);
+    // Words: the runs of pieces between spaces, so `x(3,8)` stays whole.
+    let mut words: Vec<(bool, Vec<Piece>)> = Vec::new();
+    for piece in pieces {
+        let space = piece.token.is_none() && !piece.typing && piece.text.trim().is_empty();
+        match words.last_mut() {
+            Some((was, word)) if *was == space && !space => word.push(piece),
+            _ => words.push((space, vec![piece])),
+        }
+    }
     let mut rows: Vec<Vec<Piece>> = vec![Vec::new()];
     let mut x = 0;
-    for piece in pieces {
-        let width = piece.width();
-        if x > 0 && x + width > room {
+    for (space, word) in words {
+        let width: usize = word.iter().map(Piece::width).sum();
+        // A line breaks before a word, and the spaces after one stay at the end of its line.
+        if !space && x > 0 && x + width > room {
             rows.push(Vec::new());
             x = 0;
-            // A space it broke at goes with the break.
-            if piece.token.is_none() && !piece.typing && piece.text.trim().is_empty() {
-                if piece.under.is_some() {
-                    rows.last_mut().unwrap().push(piece);
-                }
-                continue;
-            }
         }
         x += width;
-        rows.last_mut().unwrap().push(piece);
+        rows.last_mut().unwrap().extend(word);
     }
     let mut lines = Vec::new();
     let mut cursor = None;

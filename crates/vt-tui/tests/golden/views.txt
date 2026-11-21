@@ -10666,9 +10666,9 @@ gen note Ramp Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2
 gen note Ramp Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note Ramp Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Ramp Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note Ramp Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note Ramp Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note Ramp Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note Ramp Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note Ramp Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note Ramp Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note Ramp Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note Ramp Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Ramp Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -10704,9 +10704,9 @@ gen note Random Where=9 Gen { phrase: 0, generator: 0, param: Share } = v2549 @0
 gen note Random Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen note Random Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Random Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note Random Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note Random Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note Random Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note Random Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note Random Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note Random Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note Random Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Random Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen note Random Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -10739,9 +10739,9 @@ gen note Walk Where=9 Gen { phrase: 0, generator: 0, param: Share } = v2549 @0:v
 gen note Walk Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen note Walk Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Walk Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note Walk Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note Walk Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note Walk Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note Walk Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note Walk Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note Walk Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note Walk Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Walk Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen note Walk Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -10773,9 +10773,9 @@ gen note Pink Where=9 Gen { phrase: 0, generator: 0, param: Share } = v2549 @0:v
 gen note Pink Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen note Pink Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Pink Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note Pink Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note Pink Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note Pink Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note Pink Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note Pink Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note Pink Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note Pink Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Pink Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen note Pink Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -10814,9 +10814,9 @@ gen note Wave Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2
 gen note Wave Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note Wave Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Wave Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note Wave Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note Wave Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note Wave Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note Wave Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note Wave Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note Wave Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note Wave Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note Wave Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Wave Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -10850,9 +10850,9 @@ gen note Alternate Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 
 gen note Alternate Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note Alternate Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Alternate Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note Alternate Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note Alternate Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note Alternate Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note Alternate Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note Alternate Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note Alternate Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note Alternate Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note Alternate Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Alternate Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -10885,9 +10885,9 @@ gen note List Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2
 gen note List Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note List Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note List Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note List Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note List Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note List Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note List Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note List Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note List Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note List Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note List Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note List Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -10931,8 +10931,8 @@ gen note Acid Where=9 Gen { phrase: 0, generator: 0, param: Share } = v2549 @0:v
 gen note Acid Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen note Acid Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Acid Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note Acid Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note Acid Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
+gen note Acid Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note Acid Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note Acid Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Acid Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen note Acid Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -11020,9 +11020,9 @@ gen note Tonnetz Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0
 gen note Tonnetz Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note Tonnetz Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Tonnetz Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11073,9 +11073,9 @@ gen note Scale Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v
 gen note Scale Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note Scale Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Scale Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note Scale Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note Scale Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note Scale Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note Scale Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note Scale Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note Scale Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note Scale Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note Scale Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Scale Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11106,9 +11106,9 @@ gen note Invert Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:
 gen note Invert Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note Invert Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Invert Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note Invert Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note Invert Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note Invert Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note Invert Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note Invert Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note Invert Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note Invert Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note Invert Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Invert Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11135,9 +11135,9 @@ gen note Shuffle Where=9 Gen { phrase: 0, generator: 0, param: Share } = v2549 @
 gen note Shuffle Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen note Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note Shuffle Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note Shuffle Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note Shuffle Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Shuffle Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen note Shuffle Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -11169,9 +11169,9 @@ gen note Reverse Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0
 gen note Reverse Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note Reverse Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Reverse Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note Reverse Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note Reverse Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note Reverse Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note Reverse Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note Reverse Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note Reverse Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note Reverse Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note Reverse Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Reverse Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11202,9 +11202,9 @@ gen note Snap Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2
 gen note Snap Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note Snap Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Snap Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note Snap Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note Snap Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note Snap Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note Snap Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note Snap Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note Snap Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note Snap Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note Snap Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note Snap Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11239,9 +11239,9 @@ gen note InvertBits Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552
 gen note InvertBits Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note InvertBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note InvertBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note InvertBits Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note InvertBits Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11273,9 +11273,9 @@ gen note MaskBits Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @
 gen note MaskBits Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note MaskBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note MaskBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note MaskBits Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note MaskBits Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11307,9 +11307,9 @@ gen note RotateBits Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552
 gen note RotateBits Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note RotateBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note RotateBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note RotateBits Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note RotateBits Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11345,9 +11345,9 @@ gen note in scale Ramp Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2
 gen note in scale Ramp Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale Ramp Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Ramp Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note in scale Ramp Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note in scale Ramp Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note in scale Ramp Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note in scale Ramp Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note in scale Ramp Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note in scale Ramp Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note in scale Ramp Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale Ramp Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Ramp Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11383,9 +11383,9 @@ gen note in scale Random Where=9 Gen { phrase: 0, generator: 0, param: Share } =
 gen note in scale Random Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen note in scale Random Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Random Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note in scale Random Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note in scale Random Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note in scale Random Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note in scale Random Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note in scale Random Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note in scale Random Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note in scale Random Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Random Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen note in scale Random Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -11418,9 +11418,9 @@ gen note in scale Walk Where=9 Gen { phrase: 0, generator: 0, param: Share } = v
 gen note in scale Walk Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen note in scale Walk Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Walk Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note in scale Walk Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note in scale Walk Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note in scale Walk Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note in scale Walk Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note in scale Walk Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note in scale Walk Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note in scale Walk Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Walk Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen note in scale Walk Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -11452,9 +11452,9 @@ gen note in scale Pink Where=9 Gen { phrase: 0, generator: 0, param: Share } = v
 gen note in scale Pink Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen note in scale Pink Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Pink Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note in scale Pink Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note in scale Pink Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note in scale Pink Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note in scale Pink Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note in scale Pink Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note in scale Pink Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note in scale Pink Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Pink Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen note in scale Pink Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -11493,9 +11493,9 @@ gen note in scale Wave Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2
 gen note in scale Wave Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale Wave Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Wave Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note in scale Wave Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note in scale Wave Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note in scale Wave Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note in scale Wave Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note in scale Wave Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note in scale Wave Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note in scale Wave Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale Wave Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Wave Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11529,9 +11529,9 @@ gen note in scale Alternate Where=9 Gen { phrase: 0, generator: 0, param: Side }
 gen note in scale Alternate Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale Alternate Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Alternate Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note in scale Alternate Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note in scale Alternate Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note in scale Alternate Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note in scale Alternate Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note in scale Alternate Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note in scale Alternate Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note in scale Alternate Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale Alternate Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Alternate Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11564,9 +11564,9 @@ gen note in scale List Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2
 gen note in scale List Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale List Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale List Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note in scale List Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note in scale List Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note in scale List Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note in scale List Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note in scale List Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note in scale List Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note in scale List Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale List Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale List Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11610,8 +11610,8 @@ gen note in scale Acid Where=9 Gen { phrase: 0, generator: 0, param: Share } = v
 gen note in scale Acid Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen note in scale Acid Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Acid Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note in scale Acid Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note in scale Acid Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
+gen note in scale Acid Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note in scale Acid Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note in scale Acid Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Acid Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen note in scale Acid Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -11699,9 +11699,9 @@ gen note in scale Tonnetz Where=9 Gen { phrase: 0, generator: 0, param: Side } =
 gen note in scale Tonnetz Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note in scale Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note in scale Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note in scale Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note in scale Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note in scale Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note in scale Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note in scale Tonnetz Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale Tonnetz Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Tonnetz Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11752,9 +11752,9 @@ gen note in scale Scale Where=9 Gen { phrase: 0, generator: 0, param: Side } = v
 gen note in scale Scale Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale Scale Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Scale Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note in scale Scale Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note in scale Scale Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note in scale Scale Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note in scale Scale Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note in scale Scale Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note in scale Scale Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note in scale Scale Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale Scale Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Scale Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11785,9 +11785,9 @@ gen note in scale Invert Where=9 Gen { phrase: 0, generator: 0, param: Side } = 
 gen note in scale Invert Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale Invert Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Invert Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note in scale Invert Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note in scale Invert Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note in scale Invert Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note in scale Invert Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note in scale Invert Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note in scale Invert Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note in scale Invert Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale Invert Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Invert Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11814,9 +11814,9 @@ gen note in scale Shuffle Where=9 Gen { phrase: 0, generator: 0, param: Share } 
 gen note in scale Shuffle Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen note in scale Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note in scale Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note in scale Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note in scale Shuffle Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note in scale Shuffle Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note in scale Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note in scale Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note in scale Shuffle Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Shuffle Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen note in scale Shuffle Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -11848,9 +11848,9 @@ gen note in scale Reverse Where=9 Gen { phrase: 0, generator: 0, param: Side } =
 gen note in scale Reverse Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale Reverse Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Reverse Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note in scale Reverse Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note in scale Reverse Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note in scale Reverse Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note in scale Reverse Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note in scale Reverse Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note in scale Reverse Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note in scale Reverse Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale Reverse Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Reverse Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11881,9 +11881,9 @@ gen note in scale Snap Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2
 gen note in scale Snap Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale Snap Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Snap Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note in scale Snap Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note in scale Snap Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note in scale Snap Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note in scale Snap Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note in scale Snap Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note in scale Snap Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note in scale Snap Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale Snap Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale Snap Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11918,9 +11918,9 @@ gen note in scale InvertBits Where=9 Gen { phrase: 0, generator: 0, param: Side 
 gen note in scale InvertBits Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note in scale InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note in scale InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note in scale InvertBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note in scale InvertBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note in scale InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note in scale InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note in scale InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale InvertBits Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale InvertBits Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11952,9 +11952,9 @@ gen note in scale MaskBits Where=9 Gen { phrase: 0, generator: 0, param: Side } 
 gen note in scale MaskBits Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note in scale MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note in scale MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note in scale MaskBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note in scale MaskBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note in scale MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note in scale MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note in scale MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale MaskBits Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale MaskBits Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -11986,9 +11986,9 @@ gen note in scale RotateBits Where=9 Gen { phrase: 0, generator: 0, param: Side 
 gen note in scale RotateBits Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note in scale RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note in scale RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note in scale RotateBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note in scale RotateBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note in scale RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note in scale RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note in scale RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note in scale RotateBits Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note in scale RotateBits Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12024,9 +12024,9 @@ gen note written Ramp Where=7 Gen { phrase: 0, generator: 0, param: Side } = v25
 gen note written Ramp Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written Ramp Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Ramp Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note written Ramp Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note written Ramp Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note written Ramp Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note written Ramp Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note written Ramp Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note written Ramp Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note written Ramp Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written Ramp Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Ramp Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12062,9 +12062,9 @@ gen note written Random Where=7 Gen { phrase: 0, generator: 0, param: Share } = 
 gen note written Random Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen note written Random Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Random Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note written Random Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note written Random Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note written Random Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note written Random Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note written Random Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note written Random Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note written Random Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Random Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen note written Random Where=9 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -12097,9 +12097,9 @@ gen note written Walk Where=7 Gen { phrase: 0, generator: 0, param: Share } = v2
 gen note written Walk Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen note written Walk Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Walk Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note written Walk Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note written Walk Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note written Walk Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note written Walk Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note written Walk Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note written Walk Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note written Walk Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Walk Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen note written Walk Where=9 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -12131,9 +12131,9 @@ gen note written Pink Where=7 Gen { phrase: 0, generator: 0, param: Share } = v2
 gen note written Pink Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen note written Pink Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Pink Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note written Pink Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note written Pink Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note written Pink Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note written Pink Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note written Pink Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note written Pink Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note written Pink Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Pink Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen note written Pink Where=9 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -12172,9 +12172,9 @@ gen note written Wave Where=7 Gen { phrase: 0, generator: 0, param: Side } = v25
 gen note written Wave Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written Wave Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Wave Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note written Wave Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note written Wave Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note written Wave Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note written Wave Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note written Wave Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note written Wave Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note written Wave Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written Wave Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Wave Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12208,9 +12208,9 @@ gen note written Alternate Where=7 Gen { phrase: 0, generator: 0, param: Side } 
 gen note written Alternate Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written Alternate Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Alternate Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note written Alternate Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note written Alternate Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note written Alternate Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note written Alternate Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note written Alternate Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note written Alternate Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note written Alternate Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written Alternate Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Alternate Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12243,9 +12243,9 @@ gen note written List Where=7 Gen { phrase: 0, generator: 0, param: Side } = v25
 gen note written List Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written List Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written List Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note written List Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note written List Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note written List Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note written List Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note written List Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note written List Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note written List Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written List Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written List Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12289,8 +12289,8 @@ gen note written Acid Where=7 Gen { phrase: 0, generator: 0, param: Share } = v2
 gen note written Acid Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen note written Acid Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Acid Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note written Acid Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note written Acid Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
+gen note written Acid Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note written Acid Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note written Acid Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Acid Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen note written Acid Where=9 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -12380,9 +12380,9 @@ gen note written Tonnetz Where=7 Gen { phrase: 0, generator: 0, param: Side } = 
 gen note written Tonnetz Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written Tonnetz Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Tonnetz Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note written Tonnetz Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note written Tonnetz Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note written Tonnetz Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note written Tonnetz Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note written Tonnetz Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note written Tonnetz Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note written Tonnetz Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written Tonnetz Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Tonnetz Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12433,9 +12433,9 @@ gen note written Scale Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2
 gen note written Scale Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written Scale Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Scale Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note written Scale Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note written Scale Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note written Scale Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note written Scale Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note written Scale Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note written Scale Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note written Scale Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written Scale Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Scale Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12466,9 +12466,9 @@ gen note written Invert Where=7 Gen { phrase: 0, generator: 0, param: Side } = v
 gen note written Invert Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written Invert Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Invert Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note written Invert Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note written Invert Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note written Invert Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note written Invert Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note written Invert Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note written Invert Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note written Invert Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written Invert Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Invert Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12495,9 +12495,9 @@ gen note written Shuffle Where=7 Gen { phrase: 0, generator: 0, param: Share } =
 gen note written Shuffle Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen note written Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note written Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note written Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note written Shuffle Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note written Shuffle Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note written Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note written Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note written Shuffle Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Shuffle Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen note written Shuffle Where=9 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -12529,9 +12529,9 @@ gen note written Reverse Where=7 Gen { phrase: 0, generator: 0, param: Side } = 
 gen note written Reverse Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written Reverse Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Reverse Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note written Reverse Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note written Reverse Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note written Reverse Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note written Reverse Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note written Reverse Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note written Reverse Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note written Reverse Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written Reverse Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Reverse Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12562,9 +12562,9 @@ gen note written Snap Where=7 Gen { phrase: 0, generator: 0, param: Side } = v25
 gen note written Snap Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written Snap Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Snap Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note written Snap Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note written Snap Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note written Snap Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note written Snap Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note written Snap Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note written Snap Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note written Snap Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written Snap Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written Snap Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12599,9 +12599,9 @@ gen note written InvertBits Where=7 Gen { phrase: 0, generator: 0, param: Side }
 gen note written InvertBits Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note written InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note written InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note written InvertBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note written InvertBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note written InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note written InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note written InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written InvertBits Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written InvertBits Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12633,9 +12633,9 @@ gen note written MaskBits Where=7 Gen { phrase: 0, generator: 0, param: Side } =
 gen note written MaskBits Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note written MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note written MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note written MaskBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note written MaskBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note written MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note written MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note written MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written MaskBits Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written MaskBits Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12667,9 +12667,9 @@ gen note written RotateBits Where=7 Gen { phrase: 0, generator: 0, param: Side }
 gen note written RotateBits Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen note written RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen note written RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen note written RotateBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen note written RotateBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen note written RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen note written RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen note written RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen note written RotateBits Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2519 @0:v2519 @0:v2519 @1:v2520
 gen note written RotateBits Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12705,9 +12705,9 @@ gen velocity Ramp Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @
 gen velocity Ramp Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity Ramp Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Ramp Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen velocity Ramp Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen velocity Ramp Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen velocity Ramp Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen velocity Ramp Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen velocity Ramp Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen velocity Ramp Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen velocity Ramp Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity Ramp Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Ramp Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12741,9 +12741,9 @@ gen velocity Random Where=7 Gen { phrase: 0, generator: 0, param: Share } = v254
 gen velocity Random Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen velocity Random Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Random Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen velocity Random Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen velocity Random Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen velocity Random Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen velocity Random Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen velocity Random Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen velocity Random Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen velocity Random Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Random Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen velocity Random Where=9 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -12776,9 +12776,9 @@ gen velocity Walk Where=7 Gen { phrase: 0, generator: 0, param: Share } = v2549 
 gen velocity Walk Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen velocity Walk Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Walk Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen velocity Walk Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen velocity Walk Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen velocity Walk Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen velocity Walk Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen velocity Walk Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen velocity Walk Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen velocity Walk Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Walk Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen velocity Walk Where=9 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -12810,9 +12810,9 @@ gen velocity Pink Where=7 Gen { phrase: 0, generator: 0, param: Share } = v2549 
 gen velocity Pink Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen velocity Pink Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Pink Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen velocity Pink Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen velocity Pink Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen velocity Pink Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen velocity Pink Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen velocity Pink Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen velocity Pink Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen velocity Pink Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Pink Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen velocity Pink Where=9 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -12851,9 +12851,9 @@ gen velocity Wave Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @
 gen velocity Wave Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity Wave Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Wave Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen velocity Wave Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen velocity Wave Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen velocity Wave Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen velocity Wave Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen velocity Wave Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen velocity Wave Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen velocity Wave Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity Wave Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Wave Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12887,9 +12887,9 @@ gen velocity Alternate Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2
 gen velocity Alternate Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity Alternate Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Alternate Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen velocity Alternate Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen velocity Alternate Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen velocity Alternate Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen velocity Alternate Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen velocity Alternate Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen velocity Alternate Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen velocity Alternate Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity Alternate Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Alternate Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12922,9 +12922,9 @@ gen velocity List Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @
 gen velocity List Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity List Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity List Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen velocity List Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen velocity List Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen velocity List Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen velocity List Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen velocity List Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen velocity List Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen velocity List Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity List Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity List Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12962,9 +12962,9 @@ gen velocity Scale Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 
 gen velocity Scale Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity Scale Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Scale Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen velocity Scale Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen velocity Scale Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen velocity Scale Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen velocity Scale Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen velocity Scale Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen velocity Scale Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen velocity Scale Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity Scale Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Scale Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -12995,9 +12995,9 @@ gen velocity Invert Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552
 gen velocity Invert Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity Invert Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Invert Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen velocity Invert Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen velocity Invert Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen velocity Invert Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen velocity Invert Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen velocity Invert Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen velocity Invert Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen velocity Invert Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity Invert Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Invert Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13024,9 +13024,9 @@ gen velocity Shuffle Where=7 Gen { phrase: 0, generator: 0, param: Share } = v25
 gen velocity Shuffle Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen velocity Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen velocity Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen velocity Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen velocity Shuffle Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen velocity Shuffle Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen velocity Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen velocity Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen velocity Shuffle Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Shuffle Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen velocity Shuffle Where=9 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -13058,9 +13058,9 @@ gen velocity Reverse Where=7 Gen { phrase: 0, generator: 0, param: Side } = v255
 gen velocity Reverse Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity Reverse Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Reverse Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen velocity Reverse Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen velocity Reverse Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen velocity Reverse Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen velocity Reverse Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen velocity Reverse Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen velocity Reverse Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen velocity Reverse Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity Reverse Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity Reverse Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13092,9 +13092,9 @@ gen velocity InvertBits Where=7 Gen { phrase: 0, generator: 0, param: Side } = v
 gen velocity InvertBits Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen velocity InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen velocity InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen velocity InvertBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen velocity InvertBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen velocity InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen velocity InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen velocity InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity InvertBits Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity InvertBits Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13126,9 +13126,9 @@ gen velocity MaskBits Where=7 Gen { phrase: 0, generator: 0, param: Side } = v25
 gen velocity MaskBits Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen velocity MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen velocity MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen velocity MaskBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen velocity MaskBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen velocity MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen velocity MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen velocity MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity MaskBits Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity MaskBits Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13160,9 +13160,9 @@ gen velocity RotateBits Where=7 Gen { phrase: 0, generator: 0, param: Side } = v
 gen velocity RotateBits Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen velocity RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen velocity RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen velocity RotateBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen velocity RotateBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen velocity RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen velocity RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen velocity RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen velocity RotateBits Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen velocity RotateBits Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13198,9 +13198,9 @@ gen nudge Ramp Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v
 gen nudge Ramp Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge Ramp Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Ramp Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen nudge Ramp Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen nudge Ramp Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen nudge Ramp Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen nudge Ramp Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen nudge Ramp Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen nudge Ramp Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen nudge Ramp Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge Ramp Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Ramp Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13234,9 +13234,9 @@ gen nudge Random Where=7 Gen { phrase: 0, generator: 0, param: Share } = v2549 @
 gen nudge Random Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen nudge Random Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Random Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen nudge Random Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen nudge Random Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen nudge Random Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen nudge Random Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen nudge Random Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen nudge Random Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen nudge Random Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Random Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen nudge Random Where=9 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -13269,9 +13269,9 @@ gen nudge Walk Where=7 Gen { phrase: 0, generator: 0, param: Share } = v2549 @0:
 gen nudge Walk Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen nudge Walk Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Walk Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen nudge Walk Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen nudge Walk Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen nudge Walk Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen nudge Walk Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen nudge Walk Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen nudge Walk Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen nudge Walk Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Walk Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen nudge Walk Where=9 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -13303,9 +13303,9 @@ gen nudge Pink Where=7 Gen { phrase: 0, generator: 0, param: Share } = v2549 @0:
 gen nudge Pink Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen nudge Pink Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Pink Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen nudge Pink Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen nudge Pink Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen nudge Pink Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen nudge Pink Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen nudge Pink Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen nudge Pink Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen nudge Pink Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Pink Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen nudge Pink Where=9 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -13344,9 +13344,9 @@ gen nudge Wave Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v
 gen nudge Wave Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge Wave Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Wave Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen nudge Wave Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen nudge Wave Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen nudge Wave Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen nudge Wave Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen nudge Wave Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen nudge Wave Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen nudge Wave Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge Wave Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Wave Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13380,9 +13380,9 @@ gen nudge Alternate Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552
 gen nudge Alternate Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge Alternate Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Alternate Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen nudge Alternate Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen nudge Alternate Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen nudge Alternate Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen nudge Alternate Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen nudge Alternate Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen nudge Alternate Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen nudge Alternate Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge Alternate Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Alternate Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13415,9 +13415,9 @@ gen nudge List Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v
 gen nudge List Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge List Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge List Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen nudge List Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen nudge List Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen nudge List Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen nudge List Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen nudge List Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen nudge List Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen nudge List Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge List Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge List Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13455,9 +13455,9 @@ gen nudge Scale Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:
 gen nudge Scale Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge Scale Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Scale Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen nudge Scale Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen nudge Scale Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen nudge Scale Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen nudge Scale Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen nudge Scale Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen nudge Scale Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen nudge Scale Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge Scale Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Scale Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13488,9 +13488,9 @@ gen nudge Invert Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0
 gen nudge Invert Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge Invert Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Invert Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen nudge Invert Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen nudge Invert Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen nudge Invert Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen nudge Invert Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen nudge Invert Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen nudge Invert Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen nudge Invert Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge Invert Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Invert Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13517,9 +13517,9 @@ gen nudge Shuffle Where=7 Gen { phrase: 0, generator: 0, param: Share } = v2549 
 gen nudge Shuffle Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen nudge Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen nudge Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen nudge Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen nudge Shuffle Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen nudge Shuffle Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen nudge Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen nudge Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen nudge Shuffle Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Shuffle Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen nudge Shuffle Where=9 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -13551,9 +13551,9 @@ gen nudge Reverse Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @
 gen nudge Reverse Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge Reverse Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Reverse Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen nudge Reverse Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen nudge Reverse Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen nudge Reverse Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen nudge Reverse Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen nudge Reverse Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen nudge Reverse Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen nudge Reverse Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge Reverse Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge Reverse Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13585,9 +13585,9 @@ gen nudge InvertBits Where=7 Gen { phrase: 0, generator: 0, param: Side } = v255
 gen nudge InvertBits Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen nudge InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen nudge InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen nudge InvertBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen nudge InvertBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen nudge InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen nudge InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen nudge InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge InvertBits Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge InvertBits Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13619,9 +13619,9 @@ gen nudge MaskBits Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 
 gen nudge MaskBits Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen nudge MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen nudge MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen nudge MaskBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen nudge MaskBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen nudge MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen nudge MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen nudge MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge MaskBits Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge MaskBits Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13653,9 +13653,9 @@ gen nudge RotateBits Where=7 Gen { phrase: 0, generator: 0, param: Side } = v255
 gen nudge RotateBits Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen nudge RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen nudge RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen nudge RotateBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen nudge RotateBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen nudge RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen nudge RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen nudge RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen nudge RotateBits Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen nudge RotateBits Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13691,9 +13691,9 @@ gen length Ramp Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:
 gen length Ramp Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length Ramp Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Ramp Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen length Ramp Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen length Ramp Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen length Ramp Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen length Ramp Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen length Ramp Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen length Ramp Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen length Ramp Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length Ramp Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Ramp Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13727,9 +13727,9 @@ gen length Random Where=7 Gen { phrase: 0, generator: 0, param: Share } = v2549 
 gen length Random Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen length Random Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Random Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen length Random Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen length Random Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen length Random Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen length Random Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen length Random Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen length Random Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen length Random Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Random Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen length Random Where=9 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -13762,9 +13762,9 @@ gen length Walk Where=7 Gen { phrase: 0, generator: 0, param: Share } = v2549 @0
 gen length Walk Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen length Walk Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Walk Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen length Walk Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen length Walk Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen length Walk Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen length Walk Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen length Walk Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen length Walk Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen length Walk Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Walk Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen length Walk Where=9 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -13796,9 +13796,9 @@ gen length Pink Where=7 Gen { phrase: 0, generator: 0, param: Share } = v2549 @0
 gen length Pink Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen length Pink Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Pink Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen length Pink Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen length Pink Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen length Pink Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen length Pink Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen length Pink Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen length Pink Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen length Pink Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Pink Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen length Pink Where=9 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -13837,9 +13837,9 @@ gen length Wave Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:
 gen length Wave Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length Wave Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Wave Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen length Wave Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen length Wave Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen length Wave Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen length Wave Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen length Wave Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen length Wave Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen length Wave Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length Wave Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Wave Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13873,9 +13873,9 @@ gen length Alternate Where=7 Gen { phrase: 0, generator: 0, param: Side } = v255
 gen length Alternate Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length Alternate Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Alternate Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen length Alternate Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen length Alternate Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen length Alternate Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen length Alternate Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen length Alternate Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen length Alternate Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen length Alternate Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length Alternate Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Alternate Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13908,9 +13908,9 @@ gen length List Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:
 gen length List Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length List Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length List Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen length List Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen length List Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen length List Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen length List Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen length List Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen length List Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen length List Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length List Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length List Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13948,9 +13948,9 @@ gen length Scale Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0
 gen length Scale Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length Scale Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Scale Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen length Scale Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen length Scale Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen length Scale Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen length Scale Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen length Scale Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen length Scale Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen length Scale Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length Scale Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Scale Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -13981,9 +13981,9 @@ gen length Invert Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @
 gen length Invert Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length Invert Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Invert Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen length Invert Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen length Invert Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen length Invert Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen length Invert Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen length Invert Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen length Invert Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen length Invert Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length Invert Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Invert Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14010,9 +14010,9 @@ gen length Shuffle Where=7 Gen { phrase: 0, generator: 0, param: Share } = v2549
 gen length Shuffle Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen length Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen length Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen length Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen length Shuffle Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen length Shuffle Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen length Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen length Shuffle Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen length Shuffle Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Shuffle Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen length Shuffle Where=9 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -14044,9 +14044,9 @@ gen length Reverse Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552 
 gen length Reverse Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length Reverse Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Reverse Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen length Reverse Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen length Reverse Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen length Reverse Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen length Reverse Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen length Reverse Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen length Reverse Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen length Reverse Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length Reverse Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length Reverse Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14078,9 +14078,9 @@ gen length InvertBits Where=7 Gen { phrase: 0, generator: 0, param: Side } = v25
 gen length InvertBits Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen length InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen length InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen length InvertBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen length InvertBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen length InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen length InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen length InvertBits Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length InvertBits Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length InvertBits Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14112,9 +14112,9 @@ gen length MaskBits Where=7 Gen { phrase: 0, generator: 0, param: Side } = v2552
 gen length MaskBits Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen length MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen length MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen length MaskBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen length MaskBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen length MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen length MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen length MaskBits Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length MaskBits Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length MaskBits Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14146,9 +14146,9 @@ gen length RotateBits Where=7 Gen { phrase: 0, generator: 0, param: Side } = v25
 gen length RotateBits Where=7 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen length RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen length RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen length RotateBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen length RotateBits Where=8 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen length RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen length RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen length RotateBits Where=8 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen length RotateBits Where=9 Gen { phrase: 0, generator: 0, param: Over } = v2885 @0:v2886 @0:v2886 @1:v2885
 gen length RotateBits Where=9 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14184,9 +14184,9 @@ gen fx lock Ramp Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0
 gen fx lock Ramp Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock Ramp Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Ramp Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx lock Ramp Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx lock Ramp Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx lock Ramp Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx lock Ramp Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx lock Ramp Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx lock Ramp Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx lock Ramp Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock Ramp Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Ramp Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14220,9 +14220,9 @@ gen fx lock Random Where=9 Gen { phrase: 0, generator: 0, param: Share } = v2549
 gen fx lock Random Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen fx lock Random Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Random Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx lock Random Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx lock Random Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx lock Random Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx lock Random Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx lock Random Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx lock Random Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx lock Random Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Random Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen fx lock Random Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -14255,9 +14255,9 @@ gen fx lock Walk Where=9 Gen { phrase: 0, generator: 0, param: Share } = v2549 @
 gen fx lock Walk Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen fx lock Walk Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Walk Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx lock Walk Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx lock Walk Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx lock Walk Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx lock Walk Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx lock Walk Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx lock Walk Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx lock Walk Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Walk Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen fx lock Walk Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -14289,9 +14289,9 @@ gen fx lock Pink Where=9 Gen { phrase: 0, generator: 0, param: Share } = v2549 @
 gen fx lock Pink Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen fx lock Pink Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Pink Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx lock Pink Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx lock Pink Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx lock Pink Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx lock Pink Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx lock Pink Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx lock Pink Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx lock Pink Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Pink Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen fx lock Pink Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -14330,9 +14330,9 @@ gen fx lock Wave Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0
 gen fx lock Wave Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock Wave Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Wave Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx lock Wave Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx lock Wave Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx lock Wave Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx lock Wave Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx lock Wave Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx lock Wave Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx lock Wave Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock Wave Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Wave Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14366,9 +14366,9 @@ gen fx lock Alternate Where=9 Gen { phrase: 0, generator: 0, param: Side } = v25
 gen fx lock Alternate Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock Alternate Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Alternate Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx lock Alternate Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx lock Alternate Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx lock Alternate Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx lock Alternate Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx lock Alternate Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx lock Alternate Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx lock Alternate Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock Alternate Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Alternate Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14401,9 +14401,9 @@ gen fx lock List Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0
 gen fx lock List Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock List Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock List Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx lock List Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx lock List Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx lock List Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx lock List Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx lock List Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx lock List Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx lock List Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock List Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock List Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14441,9 +14441,9 @@ gen fx lock Scale Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @
 gen fx lock Scale Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock Scale Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Scale Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx lock Scale Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx lock Scale Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx lock Scale Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx lock Scale Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx lock Scale Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx lock Scale Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx lock Scale Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock Scale Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Scale Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14474,9 +14474,9 @@ gen fx lock Invert Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 
 gen fx lock Invert Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock Invert Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Invert Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx lock Invert Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx lock Invert Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx lock Invert Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx lock Invert Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx lock Invert Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx lock Invert Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx lock Invert Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock Invert Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Invert Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14503,9 +14503,9 @@ gen fx lock Shuffle Where=9 Gen { phrase: 0, generator: 0, param: Share } = v254
 gen fx lock Shuffle Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen fx lock Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx lock Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx lock Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx lock Shuffle Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx lock Shuffle Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx lock Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx lock Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx lock Shuffle Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Shuffle Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen fx lock Shuffle Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -14537,9 +14537,9 @@ gen fx lock Reverse Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552
 gen fx lock Reverse Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock Reverse Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Reverse Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx lock Reverse Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx lock Reverse Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx lock Reverse Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx lock Reverse Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx lock Reverse Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx lock Reverse Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx lock Reverse Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock Reverse Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock Reverse Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14574,9 +14574,9 @@ gen fx lock InvertBits Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2
 gen fx lock InvertBits Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx lock InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx lock InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx lock InvertBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx lock InvertBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx lock InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx lock InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx lock InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock InvertBits Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock InvertBits Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14608,9 +14608,9 @@ gen fx lock MaskBits Where=9 Gen { phrase: 0, generator: 0, param: Side } = v255
 gen fx lock MaskBits Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx lock MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx lock MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx lock MaskBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx lock MaskBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx lock MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx lock MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx lock MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock MaskBits Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock MaskBits Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14642,9 +14642,9 @@ gen fx lock RotateBits Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2
 gen fx lock RotateBits Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx lock RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx lock RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx lock RotateBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx lock RotateBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx lock RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx lock RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx lock RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx lock RotateBits Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx lock RotateBits Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14680,9 +14680,9 @@ gen fx event Ramp Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @
 gen fx event Ramp Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event Ramp Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Ramp Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx event Ramp Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx event Ramp Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx event Ramp Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx event Ramp Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx event Ramp Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx event Ramp Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx event Ramp Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event Ramp Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Ramp Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14716,9 +14716,9 @@ gen fx event Random Where=9 Gen { phrase: 0, generator: 0, param: Share } = v254
 gen fx event Random Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen fx event Random Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Random Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx event Random Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx event Random Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx event Random Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx event Random Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx event Random Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx event Random Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx event Random Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Random Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen fx event Random Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -14751,9 +14751,9 @@ gen fx event Walk Where=9 Gen { phrase: 0, generator: 0, param: Share } = v2549 
 gen fx event Walk Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen fx event Walk Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Walk Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx event Walk Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx event Walk Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx event Walk Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx event Walk Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx event Walk Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx event Walk Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx event Walk Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Walk Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen fx event Walk Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -14785,9 +14785,9 @@ gen fx event Pink Where=9 Gen { phrase: 0, generator: 0, param: Share } = v2549 
 gen fx event Pink Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen fx event Pink Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Pink Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx event Pink Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx event Pink Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx event Pink Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx event Pink Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx event Pink Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx event Pink Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx event Pink Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Pink Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen fx event Pink Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -14826,9 +14826,9 @@ gen fx event Wave Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @
 gen fx event Wave Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event Wave Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Wave Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx event Wave Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx event Wave Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx event Wave Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx event Wave Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx event Wave Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx event Wave Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx event Wave Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event Wave Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Wave Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14862,9 +14862,9 @@ gen fx event Alternate Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2
 gen fx event Alternate Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event Alternate Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Alternate Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx event Alternate Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx event Alternate Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx event Alternate Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx event Alternate Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx event Alternate Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx event Alternate Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx event Alternate Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event Alternate Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Alternate Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14897,9 +14897,9 @@ gen fx event List Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @
 gen fx event List Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event List Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event List Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx event List Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx event List Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx event List Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx event List Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx event List Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx event List Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx event List Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event List Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event List Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14937,9 +14937,9 @@ gen fx event Scale Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 
 gen fx event Scale Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event Scale Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Scale Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx event Scale Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx event Scale Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx event Scale Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx event Scale Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx event Scale Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx event Scale Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx event Scale Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event Scale Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Scale Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14970,9 +14970,9 @@ gen fx event Invert Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552
 gen fx event Invert Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event Invert Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Invert Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx event Invert Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx event Invert Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx event Invert Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx event Invert Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx event Invert Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx event Invert Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx event Invert Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event Invert Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Invert Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -14999,9 +14999,9 @@ gen fx event Shuffle Where=9 Gen { phrase: 0, generator: 0, param: Share } = v25
 gen fx event Shuffle Where=9 Gen { phrase: 0, generator: 0, param: Side } = v2552 @0:v2552 @0:v2552 @1:v2553
 gen fx event Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx event Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx event Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx event Shuffle Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx event Shuffle Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx event Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx event Shuffle Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx event Shuffle Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Shuffle Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
 gen fx event Shuffle Where=11 Gen { phrase: 0, generator: 0, param: CellStart } = v2568 @0:v2568 @1:v2569 @2:v2570
@@ -15033,9 +15033,9 @@ gen fx event Reverse Where=9 Gen { phrase: 0, generator: 0, param: Side } = v255
 gen fx event Reverse Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event Reverse Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Reverse Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx event Reverse Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx event Reverse Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx event Reverse Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx event Reverse Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx event Reverse Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx event Reverse Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx event Reverse Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event Reverse Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event Reverse Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -15070,9 +15070,9 @@ gen fx event InvertBits Where=9 Gen { phrase: 0, generator: 0, param: Side } = v
 gen fx event InvertBits Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx event InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx event InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx event InvertBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx event InvertBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx event InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx event InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx event InvertBits Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event InvertBits Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event InvertBits Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -15104,9 +15104,9 @@ gen fx event MaskBits Where=9 Gen { phrase: 0, generator: 0, param: Side } = v25
 gen fx event MaskBits Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx event MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx event MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx event MaskBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx event MaskBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx event MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx event MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx event MaskBits Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event MaskBits Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event MaskBits Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -15138,9 +15138,9 @@ gen fx event RotateBits Where=9 Gen { phrase: 0, generator: 0, param: Side } = v
 gen fx event RotateBits Where=9 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Rhythm } = v2554 @0:v2554 @5:v2555 @11:v2556
-gen fx event RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2557 @0:v2557 @1:v2558 @2:v2559
-gen fx event RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2560 @0:v2561 @50:v2562 @100:v2560
-gen fx event RotateBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2563 @0:v2563 @0:v2563 @0:v2563
+gen fx event RotateBits Where=10 Gen { phrase: 0, generator: 0, param: OwnText } = v2557 @0:v2557 @0:v2557 @0:v2557
+gen fx event RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Role } = v2558 @0:v2558 @1:v2559 @2:v2560
+gen fx event RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Child } = v2561 @0:v2562 @50:v2563 @100:v2561
 gen fx event RotateBits Where=10 Gen { phrase: 0, generator: 0, param: Vary } = v2528 @0:v2528 @2:v2529 @4:v2530
 gen fx event RotateBits Where=11 Gen { phrase: 0, generator: 0, param: Over } = v2938 @0:v2938 @1:v2939 @2:v2940
 gen fx event RotateBits Where=11 Gen { phrase: 0, generator: 0, param: Rule } = v2564 @0:v2565 @127:v2566 @255:v2567
@@ -17705,13 +17705,13 @@ v2553 ParamView { key: "side", name: "Side", label: "Side", value: 1, fine: None
 v2554 ParamView { key: "rhythm", name: "Rhythm", label: "Rhythm", value: 0, fine: None, bounds: (0, 11), default: 0, nudge: Steps { up: 1, down: 1 }, jump: Steps { up: 16, down: 16 }, pace: Even, wraps: true, centred: false, bar: None, toggle: false, choices: [], numbered: false, title: "Rhythm", cell: "Son clave", text: "Son clave", typing: Listed, reads: No, why_not: "", units: None, engaged: true, meaning: "the traditional pattern the rows play" } choices c96
 v2555 ParamView { key: "rhythm", name: "Rhythm", label: "Rhythm", value: 5, fine: None, bounds: (0, 11), default: 5, nudge: Steps { up: 1, down: 1 }, jump: Steps { up: 16, down: 16 }, pace: Even, wraps: true, centred: false, bar: None, toggle: false, choices: [], numbered: false, title: "Rhythm", cell: "Soukous", text: "Soukous", typing: Listed, reads: No, why_not: "", units: None, engaged: true, meaning: "the traditional pattern the rows play" } choices c96
 v2556 ParamView { key: "rhythm", name: "Rhythm", label: "Rhythm", value: 11, fine: None, bounds: (0, 11), default: 11, nudge: Steps { up: 1, down: 1 }, jump: Steps { up: 16, down: 16 }, pace: Even, wraps: true, centred: false, bar: None, toggle: false, choices: [], numbered: false, title: "Rhythm", cell: "Own", text: "Own", typing: Listed, reads: No, why_not: "", units: None, engaged: true, meaning: "the traditional pattern the rows play" } choices c96
-v2557 ParamView { key: "role", name: "Part", label: "Part", value: 0, fine: None, bounds: (0, 2), default: 0, nudge: Steps { up: 1, down: 1 }, jump: Steps { up: 16, down: 16 }, pace: Even, wraps: true, centred: false, bar: None, toggle: false, choices: [], numbered: false, title: "Part", cell: "Bell", text: "Bell", typing: Listed, reads: No, why_not: "", units: None, engaged: true, meaning: "which of the rhythm's three parts this track plays" } choices c97
-v2558 ParamView { key: "role", name: "Part", label: "Part", value: 1, fine: None, bounds: (0, 2), default: 1, nudge: Steps { up: 1, down: 1 }, jump: Steps { up: 16, down: 16 }, pace: Even, wraps: true, centred: false, bar: None, toggle: false, choices: [], numbered: false, title: "Part", cell: "Low drum", text: "Low drum", typing: Listed, reads: No, why_not: "", units: None, engaged: true, meaning: "which of the rhythm's three parts this track plays" } choices c97
-v2559 ParamView { key: "role", name: "Part", label: "Part", value: 2, fine: None, bounds: (0, 2), default: 2, nudge: Steps { up: 1, down: 1 }, jump: Steps { up: 16, down: 16 }, pace: Even, wraps: true, centred: false, bar: None, toggle: false, choices: [], numbered: false, title: "Part", cell: "High drum", text: "High drum", typing: Listed, reads: No, why_not: "", units: None, engaged: true, meaning: "which of the rhythm's three parts this track plays" } choices c97
-v2560 ParamView { key: "child", name: "Child", label: "Child", value: 100, fine: None, bounds: (0, 100), default: 100, nudge: Steps { up: 0, down: 1 }, jump: Steps { up: 0, down: 10 }, pace: Even, wraps: false, centred: false, bar: Some(255), toggle: false, choices: [], numbered: false, title: "Child", cell: "100%", text: "100%", typing: Whole { signed: false }, reads: No, why_not: "", units: None, engaged: true, meaning: "each of the part's hits has a {} chance of playing" }
-v2561 ParamView { key: "child", name: "Child", label: "Child", value: 0, fine: None, bounds: (0, 100), default: 0, nudge: Steps { up: 1, down: 0 }, jump: Steps { up: 10, down: 0 }, pace: Even, wraps: false, centred: false, bar: Some(0), toggle: false, choices: [], numbered: false, title: "Child", cell: "0%", text: "0%", typing: Whole { signed: false }, reads: No, why_not: "", units: None, engaged: true, meaning: "each of the part's hits has a {} chance of playing" }
-v2562 ParamView { key: "child", name: "Child", label: "Child", value: 50, fine: None, bounds: (0, 100), default: 50, nudge: Steps { up: 1, down: 1 }, jump: Steps { up: 10, down: 10 }, pace: Even, wraps: false, centred: false, bar: Some(128), toggle: false, choices: [], numbered: false, title: "Child", cell: "50%", text: "50%", typing: Whole { signed: false }, reads: No, why_not: "", units: None, engaged: true, meaning: "each of the part's hits has a {} chance of playing" }
-v2563 ParamView { key: "own_text", name: "Text", label: "Text", value: 0, fine: None, bounds: (0, 0), default: 0, nudge: Steps { up: 0, down: 0 }, jump: Steps { up: 0, down: 0 }, pace: Even, wraps: false, centred: false, bar: None, toggle: false, choices: [], numbered: false, title: "Text", cell: "x . . x . . x . . . x . x . . .", text: "x . . x . . x . . . x . x . . .", typing: Rhythm, reads: No, why_not: "", units: None, engaged: true, meaning: "the rhythm typed: x a hit, . a rest, [ ] a group, < > one each lap" }
+v2557 ParamView { key: "own_text", name: "Text", label: "Text", value: 0, fine: None, bounds: (0, 0), default: 0, nudge: Steps { up: 0, down: 0 }, jump: Steps { up: 0, down: 0 }, pace: Even, wraps: false, centred: false, bar: None, toggle: false, choices: [], numbered: false, title: "Text", cell: "x . . x . . x . . . x . x . . .", text: "x . . x . . x . . . x . x . . .", typing: Rhythm, reads: No, why_not: "", units: None, engaged: true, meaning: "the rhythm typed: x a hit, . a rest, [ ] a group, < > one each lap" }
+v2558 ParamView { key: "role", name: "Part", label: "Part", value: 0, fine: None, bounds: (0, 2), default: 0, nudge: Steps { up: 1, down: 1 }, jump: Steps { up: 16, down: 16 }, pace: Even, wraps: true, centred: false, bar: None, toggle: false, choices: [], numbered: false, title: "Part", cell: "Bell", text: "Bell", typing: Listed, reads: No, why_not: "", units: None, engaged: true, meaning: "which of the rhythm's three parts this track plays" } choices c97
+v2559 ParamView { key: "role", name: "Part", label: "Part", value: 1, fine: None, bounds: (0, 2), default: 1, nudge: Steps { up: 1, down: 1 }, jump: Steps { up: 16, down: 16 }, pace: Even, wraps: true, centred: false, bar: None, toggle: false, choices: [], numbered: false, title: "Part", cell: "Low drum", text: "Low drum", typing: Listed, reads: No, why_not: "", units: None, engaged: true, meaning: "which of the rhythm's three parts this track plays" } choices c97
+v2560 ParamView { key: "role", name: "Part", label: "Part", value: 2, fine: None, bounds: (0, 2), default: 2, nudge: Steps { up: 1, down: 1 }, jump: Steps { up: 16, down: 16 }, pace: Even, wraps: true, centred: false, bar: None, toggle: false, choices: [], numbered: false, title: "Part", cell: "High drum", text: "High drum", typing: Listed, reads: No, why_not: "", units: None, engaged: true, meaning: "which of the rhythm's three parts this track plays" } choices c97
+v2561 ParamView { key: "child", name: "Child", label: "Child", value: 100, fine: None, bounds: (0, 100), default: 100, nudge: Steps { up: 0, down: 1 }, jump: Steps { up: 0, down: 10 }, pace: Even, wraps: false, centred: false, bar: Some(255), toggle: false, choices: [], numbered: false, title: "Child", cell: "100%", text: "100%", typing: Whole { signed: false }, reads: No, why_not: "", units: None, engaged: true, meaning: "each of the part's hits has a {} chance of playing" }
+v2562 ParamView { key: "child", name: "Child", label: "Child", value: 0, fine: None, bounds: (0, 100), default: 0, nudge: Steps { up: 1, down: 0 }, jump: Steps { up: 10, down: 0 }, pace: Even, wraps: false, centred: false, bar: Some(0), toggle: false, choices: [], numbered: false, title: "Child", cell: "0%", text: "0%", typing: Whole { signed: false }, reads: No, why_not: "", units: None, engaged: true, meaning: "each of the part's hits has a {} chance of playing" }
+v2563 ParamView { key: "child", name: "Child", label: "Child", value: 50, fine: None, bounds: (0, 100), default: 50, nudge: Steps { up: 1, down: 1 }, jump: Steps { up: 10, down: 10 }, pace: Even, wraps: false, centred: false, bar: Some(128), toggle: false, choices: [], numbered: false, title: "Child", cell: "50%", text: "50%", typing: Whole { signed: false }, reads: No, why_not: "", units: None, engaged: true, meaning: "each of the part's hits has a {} chance of playing" }
 v2564 ParamView { key: "rule", name: "Rule", label: "Rule", value: 30, fine: None, bounds: (0, 255), default: 30, nudge: Steps { up: 1, down: 1 }, jump: Steps { up: 10, down: 10 }, pace: Even, wraps: false, centred: false, bar: Some(30), toggle: false, choices: [], numbered: false, title: "Rule", cell: "30", text: "30", typing: Whole { signed: false }, reads: No, why_not: "", units: None, engaged: true, meaning: "which of Wolfram's 256 rules makes each next generation" }
 v2565 ParamView { key: "rule", name: "Rule", label: "Rule", value: 0, fine: None, bounds: (0, 255), default: 0, nudge: Steps { up: 1, down: 0 }, jump: Steps { up: 10, down: 0 }, pace: Even, wraps: false, centred: false, bar: Some(0), toggle: false, choices: [], numbered: false, title: "Rule", cell: "0", text: "0", typing: Whole { signed: false }, reads: No, why_not: "", units: None, engaged: true, meaning: "which of Wolfram's 256 rules makes each next generation" }
 v2566 ParamView { key: "rule", name: "Rule", label: "Rule", value: 127, fine: None, bounds: (0, 255), default: 127, nudge: Steps { up: 1, down: 1 }, jump: Steps { up: 10, down: 10 }, pace: Even, wraps: false, centred: false, bar: Some(127), toggle: false, choices: [], numbered: false, title: "Rule", cell: "127", text: "127", typing: Whole { signed: false }, reads: No, why_not: "", units: None, engaged: true, meaning: "which of Wolfram's 256 rules makes each next generation" }

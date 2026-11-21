@@ -1634,6 +1634,13 @@ impl ShapePanel {
     /// while text that doesn't leaves the last that did playing.
     fn tokens_did(&mut self, did: Did, services: &mut Services) -> Outcome {
         match did {
+            // What the setting said of what's typed, if it refused it, stays on the status line.
+            Did::Kept => {
+                services.status.clear();
+                self.write_tokens(services);
+                self.leave_tokens();
+                return Outcome::Done;
+            }
             Did::Out => {
                 self.leave_tokens();
                 services.status.clear();

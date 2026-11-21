@@ -654,7 +654,7 @@ fn a_list_fill_draws_its_values_in_place_of_the_ends() {
     let (mut app, _realtime) = tracks_of_different_lengths();
     press(&mut app, "lvGSK/list");
     special(&mut app, KeyCode::Enter);
-    press(&mut app, "ji704055");
+    press(&mut app, "jS704055");
     special(&mut app, KeyCode::Enter);
     let panel = app.overlays.shape.clone().unwrap();
     let backend = ratatui::backend::TestBackend::new(80, 16);

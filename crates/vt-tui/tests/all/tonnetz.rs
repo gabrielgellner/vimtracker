@@ -95,7 +95,7 @@ fn on_the_chord_voice_each_row_is_a_root_with_its_chord_locked() {
     assert!(screen.contains(&names.join(" ")), "{names:?} in\n{screen}");
     // The moves typed as letters, spaces or none.
     to_row(&mut app, GenParam::MoveList);
-    keys(&mut app, "ilr<Enter>");
+    keys(&mut app, "Slr<Enter>");
     let list = app.overlays.shape.as_ref().unwrap().shape.tonnetz.list;
     assert_eq!(list.as_slice(), [TonnetzMove::L, TonnetzMove::R]);
     keys(&mut app, "<Enter>");

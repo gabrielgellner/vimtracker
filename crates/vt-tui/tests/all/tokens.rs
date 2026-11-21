@@ -1,7 +1,7 @@
 //! The token editor (decision 456, #1086), on the shape panel's `Weights`, its first grammar: `~`
 //! rests a digit and gives it back, `r` and `s` type over one, text that doesn't read is marked
 //! with `✗` and a reason while the last that did keeps playing, `Enter` on it is refused and `Esc`
-//! puts it back, and the panel's own keys still work from inside the tokens.
+//! puts it back, and the buffer is a dialog over the panel (decision 463).
 
 use std::time::Instant;
 
@@ -86,9 +86,12 @@ fn text_that_doesnt_read_is_marked_and_the_last_that_did_keeps_playing() {
         "g isn't a weight, a hex digit from 0 to F; the column plays the last text that read. \
          Esc puts it back"
     );
-    let drawn = shape_panel(&app, 60, 24);
-    assert!(drawn.contains("Weights E  g  F  F  F"), "{drawn}");
-    assert!(drawn.contains("        C  ✗  F  G  A#"), "{drawn}");
+    // The row is the last that read, and the buffer what's typed.
+    let drawn = shape_panel(&app, 60, 30);
+    assert!(drawn.contains("Weights E  F  F  F  F"), "{drawn}");
+    assert!(drawn.contains(" E  g  F  F  F"), "{drawn}");
+    assert!(drawn.contains(" C  ✗  F  G  A#"), "{drawn}");
+    assert!(drawn.contains("still the last text that read"), "{drawn}");
     keys(&mut app, "<Enter>");
     assert!(panel(&app).tokens.is_some(), "Enter is refused");
     assert!(
@@ -104,10 +107,10 @@ fn text_that_doesnt_read_is_marked_and_the_last_that_did_keeps_playing() {
     assert_eq!(weights(&app), [0xE, 0xF, 0xF, 0xF, 0xF]);
 }
 
-/// The token editor's keys come first, in a mode of their own, and the panel's are there under
-/// them: `j` leaves the tokens for the next row, and `Space d` describes the digit.
+/// The buffer's keys come first, in a mode of their own; of the panel's, `Space d` describes the
+/// digit, and the rest do nothing while it's open, as it's a dialog: `j` doesn't leave it.
 #[test]
-fn the_panels_keys_still_work_from_the_tokens() {
+fn the_buffer_is_a_dialog_over_the_panel() {
     let mut app = on_weights();
     keys(&mut app, "l");
     assert_eq!(app.key_scopes(), [Mode::Tokens, Mode::Shape]);
@@ -123,7 +126,11 @@ fn the_panels_keys_still_work_from_the_tokens() {
         .position(|row| *row == GenParam::Weights)
         .unwrap()
         + 1];
-    keys(&mut app, "j");
+    keys(&mut app, "jL");
+    assert!(panel(&app).tokens.is_some());
+    assert_eq!(panel(&app).row, GenParam::Weights);
+    assert!(app.overlays.shape.is_some(), "L doesn't keep it");
+    keys(&mut app, "<Esc>j");
     assert!(panel(&app).tokens.is_none());
     assert_eq!(panel(&app).row, below);
     assert_eq!(app.key_scopes(), [Mode::Shape]);

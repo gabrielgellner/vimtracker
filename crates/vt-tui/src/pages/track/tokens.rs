@@ -81,6 +81,13 @@ impl GenTokens {
     /// its changes are one undo step.
     fn did(&mut self, did: Did, ctx: &mut CtxMut) -> Outcome {
         match did {
+            // What the setting said of what's typed, if it refused it, stays on the status line.
+            Did::Kept => {
+                ctx.services.status.clear();
+                self.write(ctx.services, ctx.modes.view);
+                ctx.services.history.squash_to(self.depth);
+                return Outcome::Close;
+            }
             Did::Out => {
                 ctx.services.history.squash_to(self.depth);
                 ctx.services.status.clear();

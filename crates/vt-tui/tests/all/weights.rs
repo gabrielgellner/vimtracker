@@ -59,8 +59,10 @@ fn l_goes_into_the_weights_on_the_first_digit_and_names_its_note() {
     let drawn = shape_panel(&app, 60, 24);
     assert!(drawn.contains("Weights F  F  F  F  F"), "{drawn}");
     assert!(drawn.contains("        C  D# F  G  A#"), "{drawn}");
-    // `h` from the first leaves them, and the panel stays open.
+    // `h` from the first stays there, and `Esc` closes the buffer, the panel staying open.
     keys(&mut app, "h");
+    assert_eq!(panel(&app).weight, Some(0));
+    keys(&mut app, "<Esc>");
     assert_eq!(panel(&app).weight, None);
     assert_eq!(panel(&app).row, GenParam::Weights);
 }
@@ -117,23 +119,24 @@ fn h_l_and_the_adjusting_keys_change_the_digit_under_the_cursor_as_its_heard() {
     assert!(app.overlays.shape.is_some());
 }
 
+/// `i` on `Weights` opens the buffer on the first digit, as a field of fixed length has no room
+/// after its digits, keeping them: digits typed go over them in turn (decision 463). `S` puts
+/// each back to `F` first.
 #[test]
-fn i_types_them_all_starting_from_the_digits_there() {
+fn i_opens_the_digits_keeping_them_and_s_starts_them_afresh() {
     let mut app = on_weights("minor-pentatonic");
     keys(&mut app, "l-<Esc>i");
-    let typing = panel(&app).typing.clone().expect("typing");
-    assert_eq!(typing, "EFFFF");
-    keys(&mut app, "<BS><BS>00<Enter>");
-    assert_eq!(weights(&app, 5), [0xE, 0xF, 0xF, 0, 0]);
-    // From inside the digits too. Typed at once, the digits start afresh, as a selected field's
-    // text does, and those after the digits typed keep theirs.
-    keys(&mut app, "li");
-    assert_eq!(panel(&app).weight, None);
-    assert_eq!(panel(&app).typing.clone().expect("typing"), "EFF00");
-    keys(&mut app, "f0");
-    assert_eq!(panel(&app).typing.clone().expect("typing"), "F0");
-    keys(&mut app, "<Enter>");
-    assert_eq!(weights(&app, 5), [0xF, 0, 0xF, 0, 0]);
+    assert_eq!(panel(&app).weight, Some(0));
+    assert_eq!(
+        app.services.status,
+        "A field of fixed length: type over its tokens in turn, or s over one"
+    );
+    keys(&mut app, "$00");
+    assert_eq!(weights(&app, 5), [0xE, 0xF, 0xF, 0xF, 0]);
+    keys(&mut app, "<Esc>S");
+    assert_eq!(weights(&app, 5), [0xF; 5]);
+    keys(&mut app, "f0<Enter>");
+    assert_eq!(weights(&app, 5), [0xF, 0, 0xF, 0xF, 0xF]);
 }
 
 #[test]
