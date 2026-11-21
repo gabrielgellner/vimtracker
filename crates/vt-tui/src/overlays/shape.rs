@@ -36,7 +36,7 @@ use crate::app::{App, Selection, TrackSpan};
 use crate::input::bindings::{Cmd, DESCRIBE, adjusting_key};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
-use crate::input::tokens::{Did, TokenKey, Tokens};
+use crate::input::tokens::{Did, Opening, TokenKey, Tokens};
 use crate::input::typed::{Typed, TypedValue};
 use crate::overlays::Overlay;
 use crate::overlays::picker::{Item, Pick, Picker};
@@ -95,15 +95,12 @@ pub struct ShapePanel {
     pub row: GenParam,
     /// What's being typed into the current row.
     pub typing: Option<TypedValue>,
-    /// The token the cursor is on in the row's field of tokens, while `l` has gone into it, by
-    /// its place: on `Weights`, the digit, by its degree from the root (decisions 388 and 456);
+    /// The token the cursor is on in the row's buffer, while it's open (decision 463), by its
+    /// place: on `Weights`, the digit, by its degree from the root (decisions 388 and 456);
     /// a `List`'s value, a `Tonnetz`'s move or a mask's bit (decision 459).
     pub weight: Option<usize>,
-    /// The row's text while the cursor is in its tokens.
+    /// The row's text while its buffer is open.
     pub tokens: Option<Tokens>,
-    /// Whether what `i` started from is as it was, so the first character typed replaces it, as
-    /// a field whose text is selected does, and `Backspace` edits it instead.
-    started: bool,
     /// The live generator it was opened on with `gl`, by its place in its phrase's list, which
     /// it reshapes rather than shaping the rows once.
     pub live: Option<usize>,
@@ -831,7 +828,6 @@ impl ShapePanel {
             typing: None,
             weight: None,
             tokens: None,
-            started: false,
             live: None,
             base,
             under: None,
@@ -922,8 +918,12 @@ pub enum ShapeKey {
     Roll,
     /// `K`: choose from a list.
     Choose,
-    /// `i`: type the row's value.
+    /// `i`: type the row's value; on a text in a grammar, its buffer typing at the end.
     Type,
+    /// `a`: as `i`.
+    Append,
+    /// `cc` and `S`: as `i`, but on a text in a grammar, its buffer typing it all again.
+    Retype,
     /// `Tab` and `Shift-Tab` play as they do in Normal.
     Play,
     PlayFromStart,
@@ -931,8 +931,8 @@ pub enum ShapeKey {
     Describe,
     /// `Space ?`: the guide, at the fill's section.
     Guide,
-    /// `l`: into the row's tokens, where it has them: `Weights`' digits, a `List`'s values, a
-    /// `Tonnetz`'s moves or a mask's bits.
+    /// `l`: the row's buffer, where it's a text in a grammar: `Weights`' digits, a `List`'s
+    /// values, a `Tonnetz`'s moves, a mask's bits or a rhythm's `Text`, on its first token.
     Right,
 }
 
@@ -991,7 +991,26 @@ impl Overlay for ShapePanel {
         ),
         ("r", Cmd::InShape(ShapeKey::Roll), "Roll it again"),
         ("K", Cmd::InShape(ShapeKey::Choose), "Choose from a list"),
-        ("i", Cmd::InShape(ShapeKey::Type), "Type the setting"),
+        (
+            "i",
+            Cmd::InShape(ShapeKey::Type),
+            "Type the setting; on a text, its buffer typing at the end",
+        ),
+        (
+            "a",
+            Cmd::InShape(ShapeKey::Append),
+            "Type the setting; on a text, its buffer typing at the end",
+        ),
+        (
+            "S",
+            Cmd::InShape(ShapeKey::Retype),
+            "Type the setting; on a text, its buffer typing it all again",
+        ),
+        (
+            "c c",
+            Cmd::InShape(ShapeKey::Retype),
+            "Type the setting; on a text, its buffer typing it all again",
+        ),
         (
             "Tab",
             Cmd::InShape(ShapeKey::Play),
@@ -1011,7 +1030,7 @@ impl Overlay for ShapePanel {
         (
             "l",
             Cmd::InShape(ShapeKey::Right),
-            "Into the tokens: the weights, values, moves or bits",
+            "A text's buffer, on its first token: weights, values, moves, bits or a rhythm",
         ),
     ];
 
@@ -1022,7 +1041,16 @@ impl Overlay for ShapePanel {
             Cmd::InTokens(key) => return self.token_key(key, services),
             _ => return Outcome::Passed,
         };
-        self.leave_tokens_for(key, services);
+        // The buffer is a dialog: of the panel's keys, only playing and what describes the token
+        // reach past it.
+        if self.tokens.is_some()
+            && !matches!(
+                key,
+                ShapeKey::Play | ShapeKey::PlayFromStart | ShapeKey::Describe | ShapeKey::Guide
+            )
+        {
+            return Outcome::Done;
+        }
         match key {
             ShapeKey::Play => return Outcome::Do(Cmd::PauseOrResume),
             ShapeKey::PlayFromStart => return Outcome::Do(Cmd::PlayFromStart),
@@ -1059,8 +1087,19 @@ impl Overlay for ShapePanel {
                 self.change(|panel| panel.shape = shape, services);
             }
             ShapeKey::Choose => return self.choices(services),
-            ShapeKey::Type => return self.start_typing(services),
-            ShapeKey::Right => self.enter_tokens(services),
+            ShapeKey::Type | ShapeKey::Append => {
+                if !self.open_buffer(Opening::Append, services) {
+                    return self.start_typing(services);
+                }
+            }
+            ShapeKey::Retype => {
+                if !self.open_buffer(Opening::Replace, services) {
+                    return self.start_typing(services);
+                }
+            }
+            ShapeKey::Right => {
+                self.open_buffer(Opening::Tokens, services);
+            }
         }
         Outcome::Done
     }
@@ -1306,15 +1345,6 @@ impl ShapePanel {
         match self.row.typing(self.column) {
             Typing::Listed => return self.choices(services),
             Typing::Toggled => self.adjust(1, false, services),
-            // A text in a grammar starts from the text there, so one token can be changed without
-            // the rest typed again.
-            _ if self.row.grammar(self.column).is_some() => {
-                self.weight = None;
-                self.started = true;
-                self.typing = Some(TypedValue::from(
-                    self.row.shown(&self.shape, &self.context()),
-                ));
-            }
             _ => self.typing = Some(TypedValue::default()),
         }
         Outcome::Done
@@ -1325,9 +1355,6 @@ impl ShapePanel {
         let Some(text) = &mut self.typing else {
             return;
         };
-        if std::mem::take(&mut self.started) && matches!(code, KeyCode::Char(_)) {
-            text.clear();
-        }
         // `Enter` keeps a single hex digit too, here.
         let typed = match code {
             KeyCode::Enter => Typed::Commit(text.take()),
@@ -1450,41 +1477,29 @@ impl ShapePanel {
         self.table(track, phrase, pass)?.token_of(field, row)
     }
 
-    /// `l` on a row in a grammar: into its tokens, on the first.
-    fn enter_tokens(&mut self, services: &mut Services) {
+    /// The buffer of a row in a grammar, opened as `how` says (decision 463), the token it's on
+    /// named or why it isn't typing said; false on a row that isn't one.
+    fn open_buffer(&mut self, how: Opening, services: &mut Services) -> bool {
         let Some(field) = self.field(self.row) else {
-            return;
+            return false;
         };
-        if field.tokens().is_empty() && field.fixed().is_some() {
-            return;
+        let (tokens, at, why) = Tokens::open(field, how);
+        self.tokens = Some(tokens);
+        self.weight = Some(at);
+        // `cc` and `S` change the text as they open it.
+        if how == Opening::Replace {
+            self.write_tokens(services);
         }
-        self.tokens = Some(Tokens::new(field));
-        self.weight = Some(0);
         self.say_token(services);
+        if let Some(why) = why {
+            services.status = why;
+        }
+        true
     }
 
     fn leave_tokens(&mut self) {
         self.tokens = None;
         self.weight = None;
-    }
-
-    /// A key of the panel's while the cursor is in the tokens: playing and the line describing
-    /// the token leave it where it is, and the rest leave the tokens first and do what they do on
-    /// the rows, the last text that read put back where what's there doesn't.
-    fn leave_tokens_for(&mut self, key: ShapeKey, services: &mut Services) {
-        let Some(tokens) = &self.tokens else {
-            return;
-        };
-        if matches!(
-            key,
-            ShapeKey::Play | ShapeKey::PlayFromStart | ShapeKey::Describe | ShapeKey::Guide
-        ) {
-            return;
-        }
-        if tokens.field.bad().is_some() {
-            services.status = "The last text that read is back".to_owned();
-        }
-        self.leave_tokens();
     }
 
     /// One of the token editor's keys.
@@ -1549,10 +1564,6 @@ impl ShapePanel {
                 self.leave_tokens();
                 services.status.clear();
                 return Outcome::Done;
-            }
-            Did::TypeAll => {
-                self.leave_tokens();
-                return self.start_typing(services);
             }
             Did::Refused(why) => {
                 services.status = why;

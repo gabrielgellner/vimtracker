@@ -1,9 +1,10 @@
-//! A Gen page setting's field of tokens (#1089, decision 459): `l` on a cell whose text is in a
-//! grammar, `Weights`, a `List`'s values, a `Tonnetz`'s moves or a mask, goes into its tokens, as
-//! the shape panel's rows do (decision 456), drawn over the cell with what each token is for
-//! under it. The token editor's keys come first, in `Mode::Tokens`; a key they don't bind leaves
-//! the field and does what it does on the page. Each change that reads is written to the
-//! generator as one undo step, as any turn on the page is.
+//! A Gen page setting's buffer (decisions 459 and 463): on a cell whose text is in a grammar,
+//! `Weights`, a `List`'s values, a `Tonnetz`'s moves, a mask or a rhythm's `Text`, `Enter` opens
+//! a dialog of its whole text on the first token, `i` and `a` open it typing at the end, and `cc`
+//! and `S` typing it all again, as the shape panel's rows do. The token editor's keys are its own,
+//! in `Mode::Tokens`; a key they don't bind does nothing but play, until `Esc` or `Enter` closes
+//! it. Each change that reads is written to the generator and heard as it's made, and the changes
+//! are one undo step when it closes.
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::notation::{Around, Field};
@@ -13,7 +14,7 @@ use crate::controls::Control;
 use crate::input::bindings::Cmd;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
-use crate::input::tokens::{self, Did, TokenKey, Tokens};
+use crate::input::tokens::{self, Did, Opening, TokenKey, Tokens};
 use crate::overlays::Overlay;
 use crate::overlays::shape::token_named;
 use crate::pages::{Ctx, CtxMut, Outcome};
@@ -30,6 +31,8 @@ pub struct GenTokens {
     pub tokens: Tokens,
     /// The token the cursor is on, by its place.
     pub at: usize,
+    /// How many undo steps there were as it opened, for its changes to be one when it closes.
+    depth: usize,
 }
 
 /// The same setting, cursor and text, as the page compares its state.
@@ -42,27 +45,42 @@ impl PartialEq for GenTokens {
 }
 
 impl GenTokens {
-    /// The field of a Gen page setting under the cursor, `control`, where its text is in a
-    /// grammar, on the first token.
-    pub(crate) fn open(services: &Services, view: View, control: Control) -> Option<Self> {
+    /// The buffer of a Gen page setting under the cursor, `control`, where its text is in a
+    /// grammar, opened as `how` says, the token it's on named or why it isn't typing said.
+    pub(crate) fn open(
+        services: &mut Services,
+        view: View,
+        control: Control,
+        how: Opening,
+    ) -> Option<Self> {
         let field = field_of(services, view, control)?;
-        Some(Self {
+        let (tokens, at, why) = Tokens::open(field, how);
+        let mut open = Self {
             control,
-            tokens: Tokens::new(field),
-            at: 0,
-        })
+            tokens,
+            at,
+            depth: services.history.undo_depth(),
+        };
+        // `cc` and `S` change the text as they open it.
+        if how == Opening::Replace {
+            open.write(services, view);
+        }
+        open.say(services, view);
+        if let Some(why) = why {
+            services.status = why;
+        }
+        Some(open)
     }
 
-    /// After a key: what reads written to the generator and heard, and the token named.
+    /// After a key: what reads written to the generator and heard, and the token named. Closed,
+    /// its changes are one undo step.
     fn did(&mut self, did: Did, ctx: &mut CtxMut) -> Outcome {
         match did {
             Did::Out => {
+                ctx.services.history.squash_to(self.depth);
                 ctx.services.status.clear();
                 return Outcome::Close;
             }
-            // A field of fixed length has no room between its tokens: `i` types it all, as on
-            // the cell.
-            Did::TypeAll => return Outcome::Insert(crate::app::Entry::default()),
             Did::Refused(why) => {
                 ctx.services.status = why;
                 return Outcome::Done;
@@ -205,15 +223,15 @@ impl Overlay for GenTokens {
     }
 
     /// What's typed, a token typed in place, a count or a key of the list `K` or `Tab` opened;
-    /// `Tab` and `Shift-Tab` play otherwise, and any other key is passed back, to leave the field
-    /// and do what it does on the page.
+    /// `Tab` and `Shift-Tab` play otherwise, and any other key does nothing, as the buffer is a
+    /// dialog.
     fn text(&mut self, key: Key, ctx: &mut CtxMut) -> Outcome {
         let typing = self.tokens.completes();
         match key.code {
             KeyCode::Tab if !typing => return Outcome::Do(Cmd::PauseOrResume),
             KeyCode::BackTab if !typing => return Outcome::Do(Cmd::PlayFromStart),
             KeyCode::Char(c) if !typing && !self.tokens.types(c) && !c.is_ascii_digit() => {
-                return Outcome::Passed;
+                return Outcome::Done;
             }
             _ if key.command => return Outcome::Done,
             _ => {}
@@ -237,8 +255,7 @@ impl Overlay for GenTokens {
 }
 
 impl crate::app::App {
-    /// Give the Gen page's field of tokens a key. One it passes back leaves the field and is the
-    /// page's, as a key the shape panel's tokens don't bind is the panel's.
+    /// Give the Gen page's buffer a key.
     pub(crate) fn gen_tokens_key(&mut self, key: Key, now: std::time::Instant) {
         let Some(mut tokens) = self.track_page.tokens.take() else {
             self.modes.mode = Mode::Normal;
@@ -257,18 +274,13 @@ impl crate::app::App {
             now,
         );
         self.track_page.tokens = Some(tokens);
-        if matches!(outcome, Outcome::Passed) {
-            self.leave_gen_tokens();
-            self.handle_key(key, now);
-            return;
-        }
         self.settled(outcome, false);
         if self.modes.mode != Mode::Tokens {
             self.track_page.tokens = None;
         }
     }
 
-    /// Out of the Gen page's field, back on its cell.
+    /// The Gen page's buffer closed, back on its cell.
     pub(crate) fn leave_gen_tokens(&mut self) {
         self.track_page.tokens = None;
         self.modes.mode = Mode::Normal;

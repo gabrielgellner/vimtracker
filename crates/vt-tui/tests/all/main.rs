@@ -41,6 +41,7 @@ mod notation_fields;
 mod notes;
 mod onsets;
 mod own_rhythm;
+mod repro_1106;
 mod patches;
 mod phrase;
 mod phrase_order;
