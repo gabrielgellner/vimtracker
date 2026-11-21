@@ -54,6 +54,8 @@ const DICE_MUTATE: &str = "Mutate ";
 const DICE_JUMP: &str = "Dice jump ";
 /// What a track's swing is called in the Play device's title, before its value (decision 420).
 const SWING: &str = "Swing ";
+/// What a track's velocity range is called there, before its value (decision 478).
+const VELOCITY_RANGE: &str = "Vel range ";
 
 /// The track page's cells, read from the track as the page draws it.
 pub(super) struct TrackCells<'a> {
@@ -209,6 +211,7 @@ impl<'a> TrackCells<'a> {
             Control::Base(TrackControl::DiceMutate) => Some(DICE_MUTATE),
             Control::Base(TrackControl::DiceJump) => Some(DICE_JUMP),
             Control::Base(TrackControl::Swing) => Some(SWING),
+            Control::Base(TrackControl::VelocityRange) => Some(VELOCITY_RANGE),
             _ => None,
         };
         if let Some(before) = before {

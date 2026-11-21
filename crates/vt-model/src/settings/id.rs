@@ -246,6 +246,10 @@ impl SettingId {
     pub const CHAIN_ORDER: Self = Self(LATER_TRACK_START as u16 + 24);
     /// The chance each turn of a track's chain plays any of its phrases instead (decision 424).
     pub const CHAIN_JUMP: Self = Self(LATER_TRACK_START as u16 + 25);
+    /// How far below a full velocity's level a velocity of `01` plays, in dB, a dB a step from
+    /// `00`, where velocity leaves the level alone, to [`MOST_VELOCITY_RANGE`](super::MOST_VELOCITY_RANGE)'s
+    /// 48 dB, as [`velocity_gain`](super::velocity_gain) gives it (decision 478).
+    pub const VELOCITY_RANGE: Self = Self(LATER_TRACK_START as u16 + 26);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.

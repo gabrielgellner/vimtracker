@@ -35,6 +35,7 @@ pub use units::{
     moved_chance, moved_velocity, orders_text, quantised_nudge, rows_text, slide_ms,
     velocity_delta,
 };
+pub use units::{DEFAULT_VELOCITY_RANGE, MOST_VELOCITY_RANGE, velocity_gain, velocity_range_db};
 pub use voices::{
     FOUR_OP_ALGORITHMS, FOUR_OP_EACH, FOUR_OP_SHARED, MAX_MACHINE_SETTINGS, voice_entries,
     voice_key, voice_place,
@@ -391,7 +392,7 @@ const TRACK_GROUPS: [&str; 16] = [
 
 /// The track's own settings added since places were fixed, at the end of the table so none moves
 /// (#718): the track's own after [`TRACK`]'s, in the order they came.
-const LATER_TRACK: [Entry; 26] = [
+const LATER_TRACK: [Entry; 27] = [
     // Whether a synth's oscillators run on from note to note or start again on each, read as a
     // note starts, so a lock on its row sets it for that note (decision 370).
     Entry {
@@ -668,13 +669,28 @@ const LATER_TRACK: [Entry; 26] = [
     },
     level("chainjump", "Chain jump", "CJMP", 0x00)
         .means("the chance each turn of the chain plays any of its phrases instead"),
+    // How much quieter a soft note plays than a full one, even in dB, read as a note starts, as
+    // its velocity is, so a lock on its row sets it for that note (decision 478).
+    Entry {
+        meaning: "how far below a full velocity's level velocity 01 plays, even in dB between",
+        key: "velocityrange",
+        name: "Velocity range",
+        label: Some("VRNG"),
+        kind: Kind::Continuous {
+            top: MOST_VELOCITY_RANGE,
+            middle: false,
+            units: Units::VelocityRange,
+        },
+        default: DEFAULT_VELOCITY_RANGE,
+        place: Place::Own,
+    },
 ];
 /// What each of [`LATER_TRACK`] is listed with.
-const LATER_TRACK_GROUPS: [&str; 26] = [
+const LATER_TRACK_GROUPS: [&str; 27] = [
     "Machine", "Machine", "Filter", "Machine", "Machine", "Filter", "Filter", "Filter", "Filter",
     "Filter", "Filter", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
     "Machine", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine", "Machine",
-    "Machine",
+    "Machine", "Machine",
 ];
 
 /// What a row's chance decides, `CTGT`'s choices: the whole row, or each of its pulses and
@@ -1122,6 +1138,16 @@ mod tests {
         assert_eq!(shown(SettingId::SWING, 0x4600), "57.0 %");
         assert_eq!(shown(SettingId::SWING, 0xFA00), "75.0 %");
         assert_eq!(SettingId::SWING.label(), Some("SWG".into()));
+        assert_eq!(shown(SettingId::VELOCITY_RANGE, 0x0000), "0 dB");
+        assert_eq!(shown(SettingId::VELOCITY_RANGE, 0x1800), "24 dB");
+        assert_eq!(shown(SettingId::VELOCITY_RANGE, 0x3000), "48 dB");
+        assert_eq!(shown(SettingId::VELOCITY_RANGE, 0xFF00), "48 dB");
+        assert_eq!(SettingId::VELOCITY_RANGE.label(), Some("VRNG".into()));
+        assert_eq!(SettingId::VELOCITY_RANGE.entry().default, 24);
+        assert!(
+            !SettingId::VELOCITY_RANGE.entry().kind.has_fine(),
+            "a dB a step"
+        );
         assert!(
             !SettingId::SWING.entry().kind.has_fine(),
             "a tenth of a percent a step"

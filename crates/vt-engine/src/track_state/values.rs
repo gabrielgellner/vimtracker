@@ -553,6 +553,10 @@ impl TrackState {
                     self.held_velocity_delta = value;
                     return;
                 }
+                SettingId::VELOCITY_RANGE => {
+                    self.held_velocity_range = value;
+                    return;
+                }
                 SettingId::CHANCE_DELTA => {
                     self.held_chance_delta = value;
                     return;

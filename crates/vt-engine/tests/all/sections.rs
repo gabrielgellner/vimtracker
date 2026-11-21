@@ -8,6 +8,7 @@ use vt_engine::render::{RenderOptions, render_loop, render_stems};
 use vt_model::groove::GrooveId;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
+use vt_model::settings::{DEFAULT_VELOCITY_RANGE, velocity_gain};
 use vt_model::song::{Chain, ChainEntry, Launch, Phrase, Repeat, Section, SectionStart, Song};
 
 use crate::support;
@@ -79,9 +80,22 @@ fn levels(song: Song, steps: usize) -> Vec<f32> {
 const A: &str = "C-3 40 --- --- ---";
 const B: &str = "C-3 20 --- --- ---";
 const C: &str = "C-3 10 --- --- ---";
-const AV: f32 = 0x40 as f32 / 0x7F as f32;
-const BV: f32 = 0x20 as f32 / 0x7F as f32;
-const CV: f32 = 0x10 as f32 / 0x7F as f32;
+/// What each of those velocities plays at, with the track's `Velocity range` where it starts.
+fn heard(velocity: u8) -> f32 {
+    velocity_gain(velocity, f32::from(DEFAULT_VELOCITY_RANGE))
+}
+
+fn av() -> f32 {
+    heard(0x40)
+}
+
+fn bv() -> f32 {
+    heard(0x20)
+}
+
+fn cv() -> f32 {
+    heard(0x10)
+}
 
 #[track_caller]
 fn same(actual: &[f32], expected: &[f32]) {
@@ -97,17 +111,17 @@ fn same(actual: &[f32], expected: &[f32]) {
 #[test]
 fn sections_play_in_order_and_the_song_loops() {
     let out = levels(song(&[&[A, A], &[B], &[C, C, C]]), 8);
-    same(&out, &[AV, AV, BV, CV, CV, CV, AV, AV]);
+    same(&out, &[av(), av(), bv(), cv(), cv(), cv(), av(), av()]);
 }
 
 #[test]
 fn a_set_length_cuts_a_section_short_or_lets_its_chains_loop_on() {
     let mut cut = song(&[&[A, A, A, A], &[B]]);
     cut.sections[0].length = Some(2);
-    same(&levels(cut, 4), &[AV, AV, BV, AV]);
+    same(&levels(cut, 4), &[av(), av(), bv(), av()]);
     let mut long = song(&[&[A], &[B]]);
     long.sections[0].length = Some(3);
-    same(&levels(long, 5), &[AV, AV, AV, BV, AV]);
+    same(&levels(long, 5), &[av(), av(), av(), bv(), av()]);
 }
 
 /// Three different notes tell which step of a chain is playing.
@@ -122,7 +136,7 @@ fn a_different_chain_starts_from_its_top() {
     let mut new = song(&[&[A, A], &STEPS]);
     new.sections[1].length = Some(3);
     assert_eq!(new.sections[1].start, SectionStart::New);
-    same(&levels(new, 5), &[AV, AV, AV, BV, CV]);
+    same(&levels(new, 5), &[av(), av(), av(), bv(), cv()]);
 }
 
 /// A chain of six steps, on two sections of three.
@@ -146,7 +160,10 @@ fn spanning() -> Song {
 
 #[test]
 fn the_same_chain_runs_across_sections_and_a_reset_restarts_it() {
-    same(&levels(spanning(), 6), &[AV, BV, CV, AV, BV, CV]);
+    same(
+        &levels(spanning(), 6),
+        &[av(), bv(), cv(), av(), bv(), cv()],
+    );
     let mut restart = spanning();
     let steps: Vec<_> = STEPS
         .iter()
@@ -156,9 +173,12 @@ fn the_same_chain_runs_across_sections_and_a_reset_restarts_it() {
     restart.tracks[0]
         .phrases
         .insert(11, Arc::new(Phrase::from_steps(steps)));
-    same(&levels(restart.clone(), 6), &[AV, BV, CV, CV, CV, CV]);
+    same(
+        &levels(restart.clone(), 6),
+        &[av(), bv(), cv(), cv(), cv(), cv()],
+    );
     restart.sections[1].start = SectionStart::Reset;
-    same(&levels(restart, 6), &[AV, BV, CV, AV, BV, CV]);
+    same(&levels(restart, 6), &[av(), bv(), cv(), av(), bv(), cv()]);
 }
 
 #[test]
@@ -168,7 +188,10 @@ fn the_song_wrapping_starts_every_chain_from_its_top() {
     // The second section keeps the first's chain, which a wrap restarts all the same.
     wrap.sections[1].chains = wrap.sections[0].chains.clone();
     wrap.sections[1].length = Some(2);
-    same(&levels(wrap, 8), &[AV, BV, CV, AV, AV, BV, CV, AV]);
+    same(
+        &levels(wrap, 8),
+        &[av(), bv(), cv(), av(), av(), bv(), cv(), av()],
+    );
 }
 
 #[test]
@@ -221,7 +244,7 @@ fn a_launch_ending_on_the_same_chain_keeps_going() {
     out.extend_from_slice(&rest);
     let got: Vec<f32> = (0..7).map(|step| out[(step * STEP + 3000) * 2]).collect();
     // Launched at step 2, and the second section's chain is the same chain, so it runs on through.
-    same(&got, &[AV, AV, AV, BV, CV, AV, BV]);
+    same(&got, &[av(), av(), av(), bv(), cv(), av(), bv()]);
 }
 
 /// The levels from a section on, playing from it or playing through to it.
@@ -246,7 +269,7 @@ fn from_and_through(
 fn playing_from_a_row_stands_where_playing_through_would() {
     let (from, through) = from_and_through(spanning(), 1, 3, 3);
     same(&from, &through);
-    same(&from, &[AV, BV, CV]);
+    same(&from, &[av(), bv(), cv()]);
 }
 
 #[test]
@@ -278,7 +301,7 @@ fn a_track_can_be_placed_past_where_the_row_has_got_to() {
     engine.place_track(0, 4);
     let mut out = vec![0.0; 2 * STEP * 2];
     engine.process(&mut out);
-    same(&[out[3000 * 2], out[(STEP + 3000) * 2]], &[BV, CV]);
+    same(&[out[3000 * 2], out[(STEP + 3000) * 2]], &[bv(), cv()]);
 }
 
 #[test]
@@ -305,7 +328,7 @@ fn one_section_that_wraps_keeps_its_tracks_free_running() {
     two.tracks[1].mods[0].adsr.attack_ms = 0;
     two.tracks[1].mods[0].adsr.release_ms = 0;
     two.limiter = false;
-    same(&levels(two, 4), &[AV, BV, CV, AV]);
+    same(&levels(two, 4), &[av(), bv(), cv(), av()]);
 }
 
 #[test]
@@ -316,8 +339,8 @@ fn a_section_can_be_looped_while_working_on_it() {
     let mut out = vec![0.0; 5 * STEP * 2];
     engine.process(&mut out);
     assert_eq!(engine.section(), 1);
-    assert!((out[3000 * 2] - BV).abs() < 0.01);
-    assert!((out[(4 * STEP + 3000) * 2] - BV).abs() < 0.01);
+    assert!((out[3000 * 2] - bv()).abs() < 0.01);
+    assert!((out[(4 * STEP + 3000) * 2] - bv()).abs() < 0.01);
     engine.set_loop_section(None);
     let mut seen = Vec::new();
     for _ in 0..4 {
@@ -334,13 +357,13 @@ fn playing_from_a_section_starts_there_and_auditions_use_it() {
     engine.play_section(1, 0);
     let mut out = vec![0.0; STEP * 2];
     engine.process(&mut out);
-    assert!((out[3000 * 2] - BV).abs() < 0.01);
+    assert!((out[3000 * 2] - bv()).abs() < 0.01);
     engine.return_to_start();
     assert_eq!(engine.section(), 0);
     engine.audition_section(1, 0);
     let mut out = vec![0.0; 3000 * 2];
     engine.process(&mut out);
-    assert!((out[2000 * 2] - BV).abs() < 0.01);
+    assert!((out[2000 * 2] - bv()).abs() < 0.01);
 }
 
 #[test]
@@ -348,7 +371,7 @@ fn a_section_with_no_length_is_skipped_and_nothing_is_fine() {
     let mut gap = song(&[&[A], &[B]]);
     gap.sections.insert(1, Section::default());
     gap.sections[1].chains = vec![None];
-    same(&levels(gap, 3), &[AV, BV, AV]);
+    same(&levels(gap, 3), &[av(), bv(), av()]);
     let mut empty = song(&[&[A]]);
     empty.sections[0].chains = vec![None];
     same(&levels(empty, 2), &[0.0, 0.0]);
@@ -374,7 +397,7 @@ fn a_render_covers_the_whole_song_once() {
     let frames = |song: Song| render_loop(version(song), RATE, RenderOptions::default()).len() / 2;
     assert_eq!(frames(whole.clone()), 6 * STEP);
     let out = render_loop(version(whole.clone()), RATE, RenderOptions::default());
-    for (step, level) in [(0, AV), (1, AV), (2, BV), (3, CV), (5, CV)] {
+    for (step, level) in [(0, av()), (1, av()), (2, bv()), (3, cv()), (5, cv())] {
         let at = (step * STEP + 3000) * 2;
         assert!((out[at] - level).abs() < 0.01, "step {step}: {}", out[at]);
     }
@@ -411,13 +434,16 @@ fn a_launched_chain_waits_for_the_end_then_plays_from_its_own_start() {
     let out = jam(song(&[&[A, A, A], &[B, C]]), 9, 1, |engine| {
         engine.launch(0, Some(11));
     });
-    same(&out, &[AV, AV, AV, BV, CV, BV, CV, BV, CV]);
+    same(
+        &out,
+        &[av(), av(), av(), bv(), cv(), bv(), cv(), bv(), cv()],
+    );
 }
 
 #[test]
 fn launching_on_a_none_stops_the_track_at_its_end() {
     let out = jam(song(&[&[A, A]]), 5, 0, |engine| engine.launch(0, None));
-    same(&out, &[AV, AV, 0.0, 0.0, 0.0]);
+    same(&out, &[av(), av(), 0.0, 0.0, 0.0]);
 }
 
 #[test]
@@ -445,7 +471,7 @@ fn a_reset_keeps_a_launched_chain_and_starts_it_over() {
     reset.sections[0].start = SectionStart::Reset;
     let out = jam(reset, 7, 0, |engine| engine.launch(0, Some(11)));
     // Launched at step 2. The section's 2 steps send it back to the chain's start each time.
-    same(&out, &[AV, AV, BV, CV, BV, CV, BV]);
+    same(&out, &[av(), av(), bv(), cv(), bv(), cv(), bv()]);
 }
 
 #[test]
@@ -479,19 +505,19 @@ fn on_grid(mut song: Song, every: usize, steps: usize, chain: Option<u32>) -> Ve
 #[test]
 fn a_launch_starts_on_the_next_grid_line_and_cuts_its_chain_there() {
     let out = on_grid(song(&[&[A, A, A, A, A, A], &[B, C]]), 4, 8, Some(11));
-    same(&out, &[AV, AV, AV, AV, BV, CV, BV, CV]);
+    same(&out, &[av(), av(), av(), av(), bv(), cv(), bv(), cv()]);
 }
 
 #[test]
 fn every_step_is_a_line_on_a_grid_of_one() {
     let out = on_grid(song(&[&[A, A, A, A], &[B, C]]), 1, 4, Some(11));
-    same(&out, &[AV, BV, CV, BV]);
+    same(&out, &[av(), bv(), cv(), bv()]);
 }
 
 #[test]
 fn a_stop_waits_for_the_grid_too() {
     let out = on_grid(song(&[&[A, A, A, A]]), 2, 4, None);
-    same(&out, &[AV, AV, 0.0, 0.0]);
+    same(&out, &[av(), av(), 0.0, 0.0]);
 }
 
 #[test]
@@ -499,7 +525,7 @@ fn a_short_chain_loops_until_the_grid_line() {
     let mut short = song(&[&[A], &[B, C]]);
     short.sections[0].length = Some(8);
     let out = on_grid(short, 4, 7, Some(11));
-    same(&out, &[AV, AV, AV, AV, BV, CV, BV]);
+    same(&out, &[av(), av(), av(), av(), bv(), cv(), bv()]);
 }
 
 #[test]
@@ -507,13 +533,13 @@ fn a_row_shorter_than_the_grid_only_has_a_line_at_its_start() {
     let mut twelve = song(&[&[A, A, A], &[B, C]]);
     twelve.sections[0].length = Some(3);
     let out = on_grid(twelve, 16, 6, Some(11));
-    same(&out, &[AV, AV, AV, BV, CV, BV]);
+    same(&out, &[av(), av(), av(), bv(), cv(), bv()]);
 }
 
 #[test]
 fn launching_the_chain_playing_restarts_it_on_the_grid() {
     let out = on_grid(song(&[&[A, B, C, A, B, C]]), 4, 6, Some(10));
-    same(&out, &[AV, BV, CV, AV, AV, BV]);
+    same(&out, &[av(), bv(), cv(), av(), av(), bv()]);
 }
 
 #[test]
@@ -550,7 +576,7 @@ fn a_cue_survives_the_song_moving_on_and_starts_with_the_new_row() {
         engine.process(&mut rest);
         out.extend_from_slice(&rest);
         let got: Vec<f32> = (0..4).map(|step| out[(step * STEP + 3000) * 2]).collect();
-        same(&got, &[AV, AV, BV, CV]);
+        same(&got, &[av(), av(), bv(), cv()]);
         assert_eq!(engine.jam(0).playing, Some(Some(12)));
     }
 }
@@ -570,7 +596,7 @@ fn a_cue_into_a_reset_row_plays_from_its_top() {
     engine.process(&mut rest);
     out.extend_from_slice(&rest);
     let got: Vec<f32> = (0..4).map(|step| out[(step * STEP + 3000) * 2]).collect();
-    same(&got, &[AV, AV, AV, BV]);
+    same(&got, &[av(), av(), av(), bv()]);
 }
 
 #[test]
@@ -588,7 +614,7 @@ fn a_row_of_nothing_with_a_set_length_is_a_rest() {
     rest.sections[1].chains = vec![None];
     rest.sections[1].length = Some(2);
     // Nothing plays over the last note, so it rings on until the next row's.
-    same(&levels(rest, 6), &[AV, AV, AV, AV, CV, CV]);
+    same(&levels(rest, 6), &[av(), av(), av(), av(), cv(), cv()]);
 }
 
 #[test]
@@ -596,14 +622,14 @@ fn a_song_can_start_on_a_row_of_nothing() {
     let mut rest = song(&[&[A], &[B]]);
     rest.sections[0].chains = vec![None];
     rest.sections[0].length = Some(2);
-    same(&levels(rest, 3), &[0.0, 0.0, BV]);
+    same(&levels(rest, 3), &[0.0, 0.0, bv()]);
 }
 
 #[test]
 fn a_song_starting_on_an_empty_row_plays_the_next() {
     let mut empty = song(&[&[A], &[B]]);
     empty.sections[0].chains = vec![None];
-    same(&levels(empty, 2), &[BV, BV]);
+    same(&levels(empty, 2), &[bv(), bv()]);
 }
 
 #[test]
@@ -611,7 +637,7 @@ fn a_section_plays_its_repeats_before_moving_on() {
     let mut twice = song(&[&[A], &[B]]);
     twice.sections[0].length = Some(2);
     twice.sections[0].repeat = Repeat::new(2);
-    same(&levels(twice, 5), &[AV, AV, AV, AV, BV]);
+    same(&levels(twice, 5), &[av(), av(), av(), av(), bv()]);
 }
 
 #[test]
@@ -619,9 +645,9 @@ fn chains_run_on_across_repeats_unless_the_section_resets() {
     let mut twice = song(&[&STEPS]);
     twice.sections[0].length = Some(2);
     twice.sections[0].repeat = Repeat::new(2);
-    same(&levels(twice.clone(), 4), &[AV, BV, CV, AV]);
+    same(&levels(twice.clone(), 4), &[av(), bv(), cv(), av()]);
     twice.sections[0].start = SectionStart::Reset;
-    same(&levels(twice, 4), &[AV, BV, AV, BV]);
+    same(&levels(twice, 4), &[av(), bv(), av(), bv()]);
 }
 
 #[test]

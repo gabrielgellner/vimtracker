@@ -32,7 +32,7 @@ use crate::lane::LaneMove;
 use crate::macros::{MACROS, Macro};
 use crate::modulation::{MOD_SLOTS, ModSlot, default_mod};
 use crate::ron_file;
-use crate::settings::{Owner, SettingId};
+use crate::settings::{DEFAULT_VELOCITY_RANGE, Owner, SettingId};
 use crate::song::{FilterMode, FilterType, GlideMode, Machine, Phase, Track, VoiceMode};
 
 /// The format presets are written in. A preset from a later format isn't read; one from this
@@ -158,6 +158,14 @@ fn is_open(value: &u8) -> bool {
     *value == 0xFF
 }
 
+fn default_velocity_range() -> u8 {
+    DEFAULT_VELOCITY_RANGE
+}
+
+fn is_default_velocity_range(value: &u8) -> bool {
+    *value == DEFAULT_VELOCITY_RANGE
+}
+
 fn centre() -> u8 {
     0x80
 }
@@ -262,6 +270,11 @@ pub struct Sound {
     pub gate_length: Option<u8>,
     #[serde(default = "centre", skip_serializing_if = "is_centre")]
     pub velocity_delta: u8,
+    #[serde(
+        default = "default_velocity_range",
+        skip_serializing_if = "is_default_velocity_range"
+    )]
+    pub velocity_range: u8,
     #[serde(default, skip_serializing_if = "Phase::is_free")]
     pub phase: Phase,
     #[serde(default, skip_serializing_if = "VoiceMode::is_mono")]
@@ -321,6 +334,7 @@ copied!(
     glide,
     gate_length,
     velocity_delta,
+    velocity_range,
     phase,
     voice_mode,
     glide_mode,

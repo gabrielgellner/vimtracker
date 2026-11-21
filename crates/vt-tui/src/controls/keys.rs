@@ -68,6 +68,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             TrackControl::Swing => "swing",
             TrackControl::ChainOrder => "chainorder",
             TrackControl::ChainJump => "chainjump",
+            TrackControl::VelocityRange => "velocityrange",
         },
         Control::Level => "level",
         Control::Trim => "trim",

@@ -100,6 +100,7 @@ mod trim;
 mod tutorial_songs;
 mod variations;
 mod velocity_delta;
+mod velocity_range;
 mod voice_mode;
 
 /// Every file here has its `mod` line, as one without isn't built, and none sits beside this
