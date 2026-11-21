@@ -34,8 +34,8 @@ eight notes, each on four rows in a row, a beat, then the line again from the fi
 `Mini` is a line in TidalCycles' mini-notation whose hits are the column's own
 values, so its `Text` is its rhythm and its values at once: notes by name or by
 degree from `1` on the Note column, hex on Velocity and Length, signed nudges, and
-an FX column's values. Each top-level token is `Step` rows. See **Shaping a
-column** in the editing guide for the whole notation.
+an FX column's values. Each top-level token is `Step` rows. The whole notation
+is the **Patterns** guide.
 
 **A bass line in degrees.** On an empty Note column over 16 rows: `Fill` `Mini`,
 `Text` `1 . 1 [. 5] 3 . <8 7> .`, `Step` `2 rows`, `From` `C-2`. Listen for the

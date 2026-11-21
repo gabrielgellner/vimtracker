@@ -356,69 +356,21 @@ named rhythm's part, a token a pulse, and so does editing a named rhythm's
 ([Fields of tokens](#fields-of-tokens)). The text stays where it is, named or
 `Own`: editing a named one's makes it `Own` without moving its row or cell.
 
-| Text | Means |
-|---|---|
-| `x` `.` | A hit, and a rest; `~` is a rest too |
-| `[x x]` | A group: its tokens share its place |
-| `x*3` | Three in its place, or in one row a `RET` |
-| `x!3` | Three places of `x` |
-| `x@3` | One hit three places long |
-| `x?` `x?30` | A hit half the time, or 30% of it |
-| `<x .>` | One of them each lap, in turn |
-| `x(3,8)` `x(3,8,2)` | 3 hits in 8 parts of its place, 2 later |
-
-It goes by steps, not cycles: each top-level token is `Step` rows, from `1 row`
-to `16 rows`, so a token more makes the line longer, as a row more does, and the
-line goes round to fill the span; a span shorter than the line cuts it. At
-`Step 4 rows`, `x . [. x] x(3,8)` is a hit on row 0, one on row 10, and 3 of 8
-in the last beat, on rows 12, 13 and 15. Inside a token, a group, `*` and a
-Euclid split its rows, each hit on the row nearest it within its place, and two
-hits on one row keep the first. So a Euclid is one token: `x(3,8)@8` at `Step 1
-row` is the tresillo over eight rows. On the Note column, `x*3` in a single row
-is a `RET` in the row's first empty FX slot, three strikes in the row; given rows
-enough, as `x*2` at `Step 2 rows`, it's split rows instead.
-
-`<a b>` takes the next choice each lap, counted on from pass to pass, so
-`<x . .>` over a span of four laps carries its turn into the next pass; the
-phrase holds the first pass and the engine plays the rest. `?` draws from the
-seed, its hit and its row, the same each pass until `Vary` draws again. Euclid's
-third number moves the hits later, as `Rotate` does, where Tidal's moves them
-earlier; `.` is always a rest, never Tidal's feet, so `[ ]` groups. The text is
-the generator's, saved with it, and `Step` is a setting a macro can turn.
+The notation, `x . [. x] <x .> x*2 x(3,8)`, is the **Patterns** guide: each
+top-level token is `Step` rows, from `1 row` to `16 rows`, and the line goes round
+to fill the span. The text is the generator's, saved with it, and `Step` is a
+setting a macro can turn.
 
 **A line of rhythm and values.** The fill `Mini` has no `Where`: its `Text`
 says where and what, in the same notation as an `Own` rhythm, but each hit is a
 value in the column's own units rather than `x`. It starts from what's in the
 rows, a token a row, or on an empty column from a line of its own.
 
-| Column | A hit is | Like |
-|---|---|---|
-| Note | A note, or a degree from `1` | `C-3 [. 3] <5 6>*2 8?` |
-| Velocity | Hex | `7F 40 [60 40] 40?` |
-| Nudge | A nudge with its sign | `0 +8 0 -4` |
-| Length | Hex, or `_` for `HLD` | `40 _ 80 20` |
-| FX | Its value, or its name | `30 [60 90] A0 <C0 40>` |
-
-On the Note column a note is `C-3` or `c3`, and a degree counts from `1`, the
-root, in `From`'s octave, both in one line. `_` on Length ties the row's note
-into the next. On an FX column a value is hex, or its name where `K` names them,
-a `CND`'s condition or an `ACU`'s amount. The FX command is the column's, chosen with `K` before `S`, as on any empty FX
-column; the line holds only its values. `[ ]`, `< >`, `*`, `!`, `@`, `?` and
-`(3,8)` mean what they mean in an `Own` rhythm, a top-level token is `Step` rows,
-and the line goes round to fill its span. On the Note column a hit that falls
-between rows is nudged off the nearest, as `Divisions` nudges its triplets, so
-`[C-3 D-3 E-3]` at `Step 4 rows` is a true triplet, rows 0, 1 and 3, the second
-nudged `+8` and the third `-8`; and `C-3*3` in one row is a `RET`. Two hits on a
-row keep the first, and the status line says how many were dropped and which
-`Step` keeps them all: `2 hits share a row and dropped; Step 3 rows keeps them`.
-`<a b>` takes the next choice each lap, on from pass to pass, and `?` draws from
-the seed, its hit and its row, the same each pass while `Vary` is `Once`.
-
-A stack, `,`, puts lines over one another, which one track's column can't hold:
-on one track it's refused, saying so. Across tracks, `W` selecting them or `S`
-across them, each takes the next layer, so `C-2*4, [. G-2]*2` at `Step 4 rows` on
-two tracks is a bass on every row and its answer on the offbeats. `K` in the
-line lists what can go where the cursor is: the scale's notes round the one
+A hit is a note or a degree on the Note column, hex on Velocity and Length, a
+signed nudge on Nudge, and an FX column's values, with `_` on Length tying into
+the next row; a stack, `,`, gives each track of a selection its own layer. The
+whole notation, with what each column takes, is the **Patterns** guide. `K` in
+the line lists what can go where the cursor is: the scale's notes round the one
 before, or its degrees, a rest, the groups, and after a token the changes it
 takes, each with what it does. A line typed again is heard at once; with the
 track's `Cue` on, the line playing plays on until its next lap starts, so it's
@@ -1079,7 +1031,7 @@ the values it left.
 ## Entering a pattern
 
 `!` on any column of the phrase grid fills it from a pattern, a line in `Mini`'s notation (see
-**A line of rhythm and values**), typed rather than entered a row at a time. It opens the line's
+the **Patterns** guide), typed rather than entered a row at a time. It opens the line's
 buffer right of the track's grid, over the other tracks, so none of the track's columns is
 covered, typing, and the column changes as you type, heard if it's playing, as with `S`. The buffer's title says the column and its `Step`, `Note pattern  Step 4 rows`.
 

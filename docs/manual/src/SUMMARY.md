@@ -20,6 +20,7 @@
 # Reference
 
 - [Selecting and editing](guides/editing.md)
+- [Patterns](guides/patterns.md)
 - [Phrases and chains](guides/chains.md)
 - [FX commands](guides/fx.md)
 - [The Sound page, output and groups](guides/track-sound.md)
