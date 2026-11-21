@@ -75,10 +75,11 @@ puts it back as unsaved changes, never over the song: `:w path` or `:w!` keeps i
 
 *   **Song** shows the project's own settings in one place, each the same value as its
     command changes, with undo where the command has it.
-*   **Audio** is this machine's: the device, its rate and buffer, the mouse wheel and
-    the Roto-Control. Its title says `Audio · this machine`, as these are kept with the
-    machine, in `audio.ron`, `wheel.ron` and `roto.ron` beside `settings.ron`, rather
-    than in the song, so a song opened on another machine plays through that one's. See **The audio page** in the meter guide.
+*   **Audio** is this machine's: the device, its rate and buffer, the mouse wheel, the
+    Roto-Control, and `Describe`, whether `Space d`'s line describing the setting under
+    the cursor shows, which `Space d` switches too. Its title says `Audio · this
+    machine`, as these are kept with the machine, in `audio.ron`, `wheel.ron`,
+    `roto.ron` and `settings.ron`, rather than in the song, so a song opened on another machine plays through that one's. See **The audio page** in the meter guide.
 <!-- ANCHOR_END: top -->
 <!-- ANCHOR: rest -->
 

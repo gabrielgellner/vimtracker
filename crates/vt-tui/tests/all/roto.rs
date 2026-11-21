@@ -277,7 +277,7 @@ fn the_roto_is_off_until_turned_on_on_the_audio_page() {
         ports.with(|fake| fake.received.is_empty()),
         "nothing is sent while it's off"
     );
-    press(&mut app, " 9LG");
+    press(&mut app, " 9LGk");
     assert_eq!(app.modes.view, View::Audio);
     assert_eq!(vt_tui::screen::status::column_name(&app), "Roto");
     press(&mut app, "=");
@@ -372,7 +372,7 @@ fn turning_the_roto_off_hands_it_back_and_closes_the_link() {
     let (mut app, _realtime, ports) = app_with_a_fake_roto();
     app.services.set_roto(true);
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
-    press(&mut app, " 9LG-");
+    press(&mut app, " 9LGk-");
     assert!(!app.services.roto.setting.on);
     assert!(!app.services.roto.is_linked());
     assert_eq!(app.services.roto.connection, Connection::Off);

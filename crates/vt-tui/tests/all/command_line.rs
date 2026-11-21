@@ -237,6 +237,7 @@ fn paths_and_kits_complete_from_the_disk() {
         kits: vec![root.join("kits").display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
+        describe: false,
     };
     press(&mut app, ":kit ");
     keys(&mut app, "^n");

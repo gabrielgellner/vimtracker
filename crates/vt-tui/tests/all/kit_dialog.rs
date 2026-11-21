@@ -36,6 +36,7 @@ fn kit_in_folder(app: &mut App) -> PathBuf {
         kits: vec![kit.parent().unwrap().display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
+        describe: false,
     };
     kit
 }

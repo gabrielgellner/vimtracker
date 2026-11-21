@@ -1032,6 +1032,7 @@ Where kits, samples and presets are found is set for this machine in
     kits: ["~/Music/vimtracker/kits"],
     samples: ["~/Music/vimtracker/samples"],
     presets: "~/Music/vimtracker/presets",
+    describe: false,
 )
 ```
 
@@ -1039,7 +1040,9 @@ Where kits, samples and presets are found is set for this machine in
 that isn't there is passed over. `:kit 909` opens the first `909.ron` found.
 `presets` is one folder, made the first time a preset is saved (see **Presets** in
 **Gen, the Macros page and presets**). A file from before presets keeps the
-default. Changes are read the next time the program starts.
+default. Changes are read the next time the program starts. `describe` is whether
+`Space d`'s line shows, which `Space d` and the Audio page's `Describe` row write back
+here, changing that one line and leaving the rest as you wrote it.
 
 `:kit` opens the kit folders as a tree, with the first one open, and opens on
 the kit in use. Beside the list are the sounds of the kit under the cursor, each

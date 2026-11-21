@@ -116,8 +116,11 @@ pub struct Services {
     pub samples: Arc<SamplePool>,
     /// Analyses the bank's files, off this thread, for normalising, `:trim` and the waveform.
     pub analyst: Analyst,
-    /// Where this machine keeps its kits and samples.
+    /// Where this machine keeps its kits and samples, and whether the description line shows.
     pub settings: Settings,
+    /// Where they're kept, which the description line's switch is saved to, or nowhere, as in
+    /// tests.
+    pub settings_path: Option<PathBuf>,
     /// The Roto-Control: whether it's on, the link to it, and what it shows.
     pub roto: crate::roto::Roto,
     /// Makes the random names that name lines start with and `C-r` rolls, seeded from the clock.
@@ -311,6 +314,7 @@ impl Services {
             samples,
             analyst: Analyst::new(None),
             settings: Settings::none(),
+            settings_path: None,
             roto: crate::roto::Roto::default(),
             names,
             handle,
@@ -335,6 +339,18 @@ impl Services {
     /// The current song.
     pub fn song(&self) -> &Arc<Song> {
         self.history.current()
+    }
+
+    /// Shows or hides the line describing the setting under the cursor, as `Space d` and the
+    /// Audio page's `Describe` do, keeping the choice for this machine in `settings.ron`. If it
+    /// can't be kept, it changes for now and the status line says why.
+    pub fn set_describing(&mut self, on: bool) {
+        self.settings.describe = on;
+        if let Some(path) = &self.settings_path
+            && let Err(error) = self.settings.save_describe(path)
+        {
+            self.status = error;
+        }
     }
 
     /// When a realign or a switch on the grid lands: on the launch grid's next line, or on the next

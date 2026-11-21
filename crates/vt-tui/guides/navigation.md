@@ -272,7 +272,8 @@ every page; they complete nothing.
 
 | Keys | Does |
 |---|---|
-| `Ctrl-n` `Ctrl-p` | Complete, or list the matches and fill in what they share; then move through the list. Typing narrows it |
+| `Ctrl-n` `Ctrl-p` | Complete, or list the matches and fill in what they share |
+| `Ctrl-n` `Ctrl-p` | With the list open, move through it. Typing narrows it |
 | `Ctrl-y` | Take the match from the list, or complete as `Ctrl-n` does |
 | `Ctrl-e` | Close the list and put back what was typed |
 | `Enter` | Take the match from the list, or run the line |
@@ -293,8 +294,10 @@ that says what the setting under the cursor does and what its value means now, a
 setting does and then what its choice does: `Filter: which filter the sound goes
 through`, then `LP: Low-pass, clean, 12 or 24 dB`. It follows the cursor on the Track
 page's four pages, in the shape panel and in the macro panel, the same key in each,
-and stays on until `Space d` again, for as long as the program runs. Elsewhere it
-takes no room.
+and stays on until `Space d` again. Elsewhere it takes no room. This machine
+remembers it, so it's as you left it the next time vimtracker starts, in every
+project: the project page's Audio page (`Space 9`, then `L`) has it as its last row,
+`Describe`, the same setting, kept in `settings.ron`.
 
 `Space k` lists every key, and `Space ?` opens these guides, on the one for the page
 you're on: the mixer's is the Sound page's, and the phrase view's this one. In a guide,
