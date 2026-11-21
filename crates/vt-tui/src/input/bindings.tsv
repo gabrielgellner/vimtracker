@@ -2,6 +2,8 @@ Normal	h	Move(Left)	Previous field
 Normal	l	Move(Right)	Next field
 Normal	j	Move(Down)	Next step
 Normal	k	Move(Up)	Previous step
+Normal	Down	Move(Down)	Next step
+Normal	Up	Move(Up)	Previous step
 Normal	w	Move(NextGroup)	Next part: the note, then each FX
 Normal	b	Move(PreviousGroup)	Previous part: an FX, or the note
 Normal	0	Move(RowStart)	Start of the row
@@ -10,6 +12,10 @@ Normal	}	Move(NextBeat)	Next beat
 Normal	{	Move(PreviousBeat)	Previous beat
 Normal	g g	Move(First)	First step, or step n
 Normal	G	Move(Last)	Last step, or step n
+Normal	Left	GridMove { forward: false, snap: false }	Back by the grid
+Normal	Right	GridMove { forward: true, snap: false }	On by the grid
+Normal	S-Left	GridMove { forward: false, snap: true }	The previous row on the grid
+Normal	S-Right	GridMove { forward: true, snap: true }	The next row on the grid
 Normal	H	ViewTop	Cursor to the top of the view
 Normal	M	ViewMiddle	Cursor to the middle of the view
 Normal	L	ViewBottom	Cursor to the bottom of the view
@@ -911,6 +917,8 @@ OperatorPending	h	Move(Left)	Previous field
 OperatorPending	l	Move(Right)	Next field
 OperatorPending	j	Move(Down)	Next step
 OperatorPending	k	Move(Up)	Previous step
+OperatorPending	Down	Move(Down)	Next step
+OperatorPending	Up	Move(Up)	Previous step
 OperatorPending	w	Move(NextGroup)	Next part: the note, then each FX
 OperatorPending	b	Move(PreviousGroup)	Previous part: an FX, or the note
 OperatorPending	0	Move(RowStart)	Start of the row
@@ -930,6 +938,8 @@ VisualField	h	Move(Left)	Previous field
 VisualField	l	Move(Right)	Next field
 VisualField	j	Move(Down)	Next step
 VisualField	k	Move(Up)	Previous step
+VisualField	Down	Move(Down)	Next step
+VisualField	Up	Move(Up)	Previous step
 VisualField	w	Move(NextGroup)	Next part: the note, then each FX
 VisualField	b	Move(PreviousGroup)	Previous part: an FX, or the note
 VisualField	0	Move(RowStart)	Start of the row
@@ -938,6 +948,10 @@ VisualField	}	Move(NextBeat)	Next beat
 VisualField	{	Move(PreviousBeat)	Previous beat
 VisualField	g g	Move(First)	First step, or step n
 VisualField	G	Move(Last)	Last step, or step n
+VisualField	Left	GridMove { forward: false, snap: false }	Back by the grid
+VisualField	Right	GridMove { forward: true, snap: false }	On by the grid
+VisualField	S-Left	GridMove { forward: false, snap: true }	The previous row on the grid
+VisualField	S-Right	GridMove { forward: true, snap: true }	The next row on the grid
 VisualField	H	ViewTop	Cursor to the top of the view
 VisualField	M	ViewMiddle	Cursor to the middle of the view
 VisualField	L	ViewBottom	Cursor to the bottom of the view
@@ -980,6 +994,8 @@ VisualStep	h	Move(Left)	Previous field
 VisualStep	l	Move(Right)	Next field
 VisualStep	j	Move(Down)	Next step
 VisualStep	k	Move(Up)	Previous step
+VisualStep	Down	Move(Down)	Next step
+VisualStep	Up	Move(Up)	Previous step
 VisualStep	w	Move(NextGroup)	Next part: the note, then each FX
 VisualStep	b	Move(PreviousGroup)	Previous part: an FX, or the note
 VisualStep	0	Move(RowStart)	Start of the row
@@ -988,6 +1004,10 @@ VisualStep	}	Move(NextBeat)	Next beat
 VisualStep	{	Move(PreviousBeat)	Previous beat
 VisualStep	g g	Move(First)	First step, or step n
 VisualStep	G	Move(Last)	Last step, or step n
+VisualStep	Left	GridMove { forward: false, snap: false }	Back by the grid
+VisualStep	Right	GridMove { forward: true, snap: false }	On by the grid
+VisualStep	S-Left	GridMove { forward: false, snap: true }	The previous row on the grid
+VisualStep	S-Right	GridMove { forward: true, snap: true }	The next row on the grid
 VisualStep	H	ViewTop	Cursor to the top of the view
 VisualStep	M	ViewMiddle	Cursor to the middle of the view
 VisualStep	L	ViewBottom	Cursor to the bottom of the view

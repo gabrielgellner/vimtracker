@@ -534,7 +534,7 @@ pub(crate) const GRID_SIZES: [u32; 5] = [1, 2, 4, 8, 16];
 
 /// How far to move from a row to reach the next multiple of the skip, so a jump lands on the grid
 /// wherever it starts.
-fn snap_by(row: isize, skip: usize, forward: bool) -> isize {
+pub(crate) fn snap_by(row: isize, skip: usize, forward: bool) -> isize {
     if skip == 0 {
         return 0;
     }

@@ -165,6 +165,41 @@ fn arrows_move_in_insert_without_writing() {
     assert_eq!(app.services.cursor.step, 3);
 }
 
+/// In Normal the arrows move as they do in Insert: `Up` and `Down` a step, `Left` and `Right`
+/// by the grid, `Shift` with them to the grid's next row, and a count repeats them.
+#[test]
+fn arrows_move_in_normal_as_in_insert() {
+    let (mut app, _realtime) = app();
+    assert_eq!(app.modes.mode, Mode::Normal);
+    special(&mut app, KeyCode::Down);
+    assert_eq!(app.services.cursor.step, 1);
+    special(&mut app, KeyCode::Right);
+    assert_eq!(
+        app.services.cursor.step, 5,
+        "a beat on, keeping its place in it"
+    );
+    shifted(&mut app, KeyCode::Right);
+    assert_eq!(app.services.cursor.step, 8, "to the next beat");
+    shifted(&mut app, KeyCode::Left);
+    assert_eq!(app.services.cursor.step, 4);
+    special(&mut app, KeyCode::Up);
+    assert_eq!(app.services.cursor.step, 3);
+    press(&mut app, "2");
+    special(&mut app, KeyCode::Right);
+    assert_eq!(app.services.cursor.step, 11, "a count repeats it");
+    special(&mut app, KeyCode::Left);
+    special(&mut app, KeyCode::Left);
+    special(&mut app, KeyCode::Left);
+    assert_eq!(app.services.cursor.step, 0, "stopping at the first row");
+    assert_eq!(app.modes.mode, Mode::Normal);
+    assert!(!app.services.dirty);
+    // In Visual it moves the selection's end.
+    press(&mut app, "v");
+    special(&mut app, KeyCode::Right);
+    assert_eq!(app.services.cursor.step, 4);
+    assert!(app.modes.mode.is_visual());
+}
+
 #[test]
 fn an_arrow_drops_a_half_typed_value() {
     let (mut app, _realtime) = app();

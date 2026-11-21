@@ -18,6 +18,15 @@ on beside it.
 | `H` `M` `L` | Top, middle or bottom of the screen |
 | `Ctrl-d` `Ctrl-u` | Half a screen down or up |
 | `Ctrl-e` `Ctrl-y` | Scroll the view without moving the cursor |
+| `Up` `Down` | Previous or next step, as `k` and `j` |
+| `Left` `Right` | Back or on by the grid, as in Insert |
+| `Shift-Left` `Shift-Right` | To the previous or next row on the grid |
+
+The arrows move as they do in Insert, so the same keys walk the grid whichever
+mode you're in: `Right` from row `02` with the grid at a beat goes to `06`, and
+`Shift-Right` to `04`. The grid is `Grid` on the status line, which `Option-1`
+and `Option-2` narrow and widen. A count repeats them, `2 Right` two grid steps,
+and in Visual they move the selection's end.
 
 ## Counts
 

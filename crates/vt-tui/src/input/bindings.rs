@@ -198,9 +198,15 @@ pub enum Cmd {
     NextPage,
     /// Search this page for a setting to jump to.
     FieldJump,
-    /// Halve or double how far the left and right arrows move in Insert.
+    /// Halve or double how far the left and right arrows move.
     NarrowGrid,
     WidenGrid,
+    /// The left and right arrows on the phrase grid: back or on by the grid, or with `snap`, to
+    /// the previous or next row on it, as in Insert.
+    GridMove {
+        forward: bool,
+        snap: bool,
+    },
     /// Turn the scale on or off.
     ToggleScale,
     /// Collapse the phrase view to a line a row, or lay it out in time again.
@@ -504,6 +510,7 @@ pub fn bindings() -> Vec<Binding> {
         }
     };
     add(Mode::Normal, PhraseView::MOTIONS);
+    add(Mode::Normal, PhraseView::ARROWS);
     add(Mode::Normal, PhraseView::VIEWPORT);
     add(Mode::Normal, PhraseView::KEYS);
     add(Mode::Normal, WINDOWS);
@@ -547,6 +554,7 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::OperatorPending, PhraseView::WHOLE_STEP);
     for mode in [Mode::VisualField, Mode::VisualStep] {
         add(mode, PhraseView::MOTIONS);
+        add(mode, PhraseView::ARROWS);
         add(mode, PhraseView::VIEWPORT);
         add(mode, PhraseView::TARGETS);
         add(mode, PhraseView::VISUAL);
