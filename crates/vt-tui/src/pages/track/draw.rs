@@ -37,7 +37,7 @@ mod sound;
 mod zoom;
 
 pub(crate) use generators::playing_row as gen_playing_row;
-pub(crate) use generators::{STRIP_HEIGHT, draw_macro_strip};
+pub(crate) use generators::{STRIP_HEIGHT, draw_macro_strip, weights_field};
 
 pub(crate) use modulation::CyclesAt;
 pub(crate) use modulation::{MOD_PANEL_HEIGHT, MOD_PANEL_WIDTH, mod_being_edited};

@@ -1,7 +1,8 @@
 //! A field of tokens (decision 456): a text-like setting drawn a token at a time, the cursor's lit,
 //! what's typed with a `_` where the next character goes, and the token where the text stops
 //! reading in the warning colour with `✗` under it. Each token takes a cell, over what it's for
-//! in a second line, as `Weights`' digits are over their notes.
+//! in a second line, as `Weights`' digits are over their notes. While the phrase plays, the token
+//! that wrote the row playing is in the playhead's colour (decision 460).
 
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
@@ -27,6 +28,8 @@ pub(crate) struct TokenCells<'a> {
     pub cell: usize,
     /// What's under each token: what it's for.
     pub under: &'a [&'static str],
+    /// The token that wrote the row playing, while the phrase plays.
+    pub playing: Option<usize>,
 }
 
 /// A piece of the field's line: a token by its place, or where what's typed goes.
@@ -66,6 +69,7 @@ impl TokenCells<'_> {
                     let style = match bad {
                         Some(bad) if bad == *nth => theme::warning(),
                         _ if self.typing_at.is_none() && self.cursor == Some(*nth) => lit,
+                        _ if self.playing == Some(*nth) => theme::active(),
                         _ => Style::new(),
                     };
                     Span::styled(text, style)

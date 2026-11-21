@@ -17,7 +17,7 @@ use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::Rect;
 use vt_model::action::{Action, edit};
 use vt_model::generator::Span;
-use vt_model::notation::{Around, Field as TokenField, Kind, Spot};
+use vt_model::notation::{Around, Field as TokenField, Kind, Spot, Table};
 use vt_model::selection::{Field, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
@@ -1351,6 +1351,53 @@ impl ShapePanel {
         let grammar = row.typing(self.column).grammar()?.grammar();
         let text = row.shown(&self.shape, &self.context());
         Some(TokenField::new(grammar, &text, self.column))
+    }
+
+    /// The part shaping a track's phrase, by its place, or the first where none does.
+    fn part_on(&self, track: usize, phrase: Option<u32>) -> usize {
+        self.parts
+            .iter()
+            .position(|part| part.track == track && Some(part.phrase) == phrase)
+            .unwrap_or(0)
+    }
+
+    /// Which token wrote each row of the part shaping a track's phrase, or the first part, as
+    /// it's shaped now, on a pass of it from 0 (decision 460).
+    pub fn table(&self, track: usize, phrase: Option<u32>, pass: i64) -> Option<Table> {
+        let nth = self.part_on(track, phrase);
+        let part = self.parts.get(nth)?;
+        Some(Table::render(
+            self.base_steps(part),
+            part.range,
+            part.column,
+            &self.shape_of(nth).on_pass(pass),
+            &self.list,
+            self.source_steps(),
+        ))
+    }
+
+    /// The rows the token under the cursor writes on a track's phrase, while the cursor's in a
+    /// field of tokens and its text reads, with the column they're on: for the grid to light.
+    pub fn token_rows(&self, track: usize, phrase: u32) -> Option<(ShapeColumn, Vec<usize>)> {
+        let (tokens, at) = (self.tokens.as_ref()?, self.weight?);
+        let part = self.parts.get(self.part_on(track, Some(phrase)))?;
+        if (part.track, part.phrase) != (track, phrase) {
+            return None;
+        }
+        let table = self.table(track, Some(phrase), 0)?;
+        Some((part.column, table.rows(&tokens.field, at)))
+    }
+
+    /// The token of a field that wrote the row playing on the cursor's phrase, while it plays:
+    /// from the table of the pass it's on, for a live generator that varies.
+    pub fn playing_token(&self, ctx: &Ctx, field: &TokenField) -> Option<usize> {
+        let row = ctx.playhead_place()?.0;
+        let (track, phrase) = (ctx.cursor().track, ctx.phrase_id());
+        let pass = match (self.live, phrase) {
+            (Some(generator), Some(phrase)) => ctx.heard_pass(track, phrase, generator),
+            _ => 0,
+        };
+        self.table(track, phrase, pass)?.token_of(field, row)
     }
 
     /// `l` on a row in a grammar: into its tokens, on the first.

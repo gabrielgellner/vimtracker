@@ -18,7 +18,7 @@ use vt_model::shape::{
     Follow, GenCell, Grids, Kept, MAX_DEPTH, MAX_FACTOR, MAX_LIST, MAX_MOVE_LOOP, MAX_MOVE_WEIGHT,
     MAX_MUTATION, MAX_RING, MAX_WEIGHT, MoveList, Moves, Mutations, Pink, Quality, Random, Ring,
     Role, RowView, Shape, ShapeColumn, Tonnetz, TonnetzMove, TonnetzVoice, Variation, WAVES, Walk,
-    WaveRate, Where, World, render_into, written_from,
+    WaveRate, Where, World, render_into, render_tokens_into, written_from,
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 
@@ -681,10 +681,13 @@ fn a_cell_is_at_most_32_bytes() {
     assert!(size_of::<GenCell>() <= 32, "{}", size_of::<GenCell>());
 }
 
+/// And with its token table (decision 460), which writes the same cells.
 #[test]
 fn every_fill_renders_on_every_column_without_allocating() {
     let mut dice = Dice::new(0xA110C);
     let mut cells = vec![GenCell::Under; MAX_PHRASE_STEPS];
+    let mut kept = vec![GenCell::Under; MAX_PHRASE_STEPS];
+    let mut tokens = vec![0; MAX_PHRASE_STEPS];
     for kind in FillKind::ALL {
         for (name, column) in columns(&mut dice) {
             // The longest phrase there is, and short ones, each `Where` among them.
@@ -733,6 +736,21 @@ fn every_fill_renders_on_every_column_without_allocating() {
                         &case.list,
                         case.source.as_deref(),
                         &mut cells[..case.range.len()],
+                    );
+                    let len = case.range.len();
+                    render_tokens_into(
+                        &case.steps,
+                        case.range,
+                        column,
+                        &case.shape,
+                        &case.list,
+                        case.source.as_deref(),
+                        &mut kept[..len],
+                        &mut tokens[..len],
+                    );
+                    assert!(
+                        cells[..len] == kept[..len],
+                        "the table's render is the same"
                     );
                 }
             });

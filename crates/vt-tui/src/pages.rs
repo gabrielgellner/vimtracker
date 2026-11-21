@@ -206,6 +206,8 @@ pub(crate) struct PageState<'a> {
     slowdown: &'a SlowdownReadout,
     /// The search for a setting under way, whose labels go over the settings it finds.
     field_jump: Option<&'a FieldJump>,
+    /// The shape panel, while it's open, whose token under the cursor lights the rows it writes.
+    shape: Option<&'a ShapePanel>,
 }
 
 /// What a page is given to run a key: the shared services, to read and change, the modes that
@@ -257,6 +259,7 @@ impl App {
             cpu_percent: self.readouts.cpu.percent(),
             slowdown: &self.readouts.slowdown,
             field_jump: self.overlays.field_jump.as_ref(),
+            shape: self.overlays.shape.as_ref(),
         }
     }
 
@@ -749,6 +752,16 @@ impl<'a> Ctx<'a> {
     ) -> Option<LiveGen> {
         self.services
             .live_generator(track, phrase, index, self.modes.view)
+    }
+
+    /// The shape panel, while it's open.
+    pub(crate) fn shape_panel(&self) -> Option<&'a ShapePanel> {
+        self.page.shape
+    }
+
+    /// The pass of its phrase a live generator was last heard on, from 0.
+    pub(crate) fn heard_pass(&self, track: usize, phrase: u32, generator: usize) -> i64 {
+        self.services.heard_pass(track, phrase, generator)
     }
 
     /// The row of its span a live generator is playing, counted from its first, while the phrase

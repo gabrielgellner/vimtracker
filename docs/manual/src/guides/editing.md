@@ -4,7 +4,7 @@
 
 {{#include ../../../../crates/vt-tui/guides/editing.md:after-bars}}
 
-![The shape panel generating on an empty Note column in C minor pentatonic: a Random fill, its Weights gone into with l and F08 typed, each hex digit over the note it's for, C D# F G A#, the cursor on G's, which the status line names, and beside the Note column the notes it writes as a contour, a mark a row](../images/shape-weights.svg)
+![The shape panel generating on an empty Note column in C minor pentatonic: a Random fill, its Weights gone into with l and F08 typed, each hex digit over the note it's for, C D# F G A#, the cursor on G's, which the status line names, under them the Rows line marking each row written with an x, those G writes lit, and beside the Note column the notes it writes as a contour, a mark a row](../images/shape-weights.svg)
 
 {{#include ../../../../crates/vt-tui/guides/editing.md:after-weights}}
 
