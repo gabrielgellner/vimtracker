@@ -363,3 +363,40 @@ fn the_patterns_buffer_completes_with_ctrl_n_and_tab_plays() {
     keys(&mut app, "C-3<Enter>");
     assert_eq!(notes(&app, 0)[0], "C-3");
 }
+
+/// Recipes from the patterns guide write what it says they do.
+#[test]
+fn the_patterns_guides_recipes_write_what_it_says() {
+    let on = |rows: &[usize]| -> String {
+        (0..16)
+            .map(|row| if rows.contains(&row) { "C-3" } else { "." })
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    // Four on the floor, at `Step 4 rows`.
+    let (mut app, _rt) = app_of(1, 16);
+    keys(&mut app, "!C-3!4<Enter>");
+    assert_eq!(line(&app, 0), on(&[0, 4, 8, 12]));
+    // The tresillo at `Step 1 row`, eight rows and round again.
+    let (mut app, _rt) = app_of(1, 16);
+    keys(&mut app, "!C-3(3,8)@8<Esc>[s[s<Enter>");
+    assert_eq!(line(&app, 0), on(&[0, 3, 6, 8, 11, 14]));
+    // `[. x]` at `Step 4 rows` is the offbeat, two rows in.
+    let (mut app, _rt) = app_of(1, 16);
+    keys(&mut app, "![. C-3]<Enter>");
+    assert_eq!(line(&app, 0), on(&[2, 6, 10, 14]));
+}
+
+/// `Enter` writes the pattern after `Esc` has stopped the typing, as it does while typing, so
+/// `[s` and `]s` can set the `Step` before it's written.
+#[test]
+fn enter_after_esc_writes_the_pattern_too() {
+    let (mut app, _rt) = app_of(1, 16);
+    keys(&mut app, "!C-3 D-3<Esc><Enter>");
+    assert_eq!(app.modes.mode, Mode::Normal);
+    assert_eq!(notes(&app, 0)[0], "C-3");
+    assert_eq!(notes(&app, 0)[4], "D-3");
+    let (mut app, _rt) = app_of(1, 16);
+    keys(&mut app, "!C-3 D-3<Esc>[s<Enter>");
+    assert_eq!(notes(&app, 0)[2], "D-3", "at the Step it was set to");
+}

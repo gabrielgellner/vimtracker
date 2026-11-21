@@ -241,6 +241,9 @@ const NOTE_ENTRY: Guide = Guide {
 const EDITING: Guide = Guide {
     source: include_str!("../../guides/editing.md"),
 };
+const PATTERNS: Guide = Guide {
+    source: include_str!("../../guides/patterns.md"),
+};
 const FX: Guide = Guide {
     source: include_str!("../../guides/fx.md"),
 };
@@ -276,11 +279,12 @@ const METER: Guide = Guide {
 };
 
 /// Every guide, in the order to learn them.
-pub(crate) const GUIDES: [Guide; 15] = [
+pub(crate) const GUIDES: [Guide; 16] = [
     FIRST_LOOP,
     NAVIGATION,
     NOTE_ENTRY,
     EDITING,
+    PATTERNS,
     FX,
     CHAINS,
     SOUNDS,
@@ -889,8 +893,8 @@ mod tests {
 
     #[test]
     fn every_effect_its_types_and_its_settings_are_in_the_fx_page_guide() {
-        let effects = GUIDES[10].source;
-        assert_eq!(GUIDES[10].title(), "The FX page and its effects");
+        let effects = TRACK_FX.source;
+        assert_eq!(TRACK_FX.title(), "The FX page and its effects");
         let mut missing = Vec::new();
         for effect in vt_model::insert::Insert::ALL {
             // An empty slot says `Empty` on the FX page, not its name `---`.
@@ -933,8 +937,8 @@ mod tests {
 
     #[test]
     fn every_machine_and_its_settings_are_in_the_sounds_guide() {
-        let sounds = GUIDES[6].source;
-        assert_eq!(GUIDES[6].title(), "Sounds, samples and kits");
+        let sounds = SOUNDS.source;
+        assert_eq!(SOUNDS.title(), "Sounds, samples and kits");
         for machine in vt_model::song::Machine::ALL {
             assert!(names(sounds, machine.name()), "{}", machine.name());
             for setting in machine.settings() {

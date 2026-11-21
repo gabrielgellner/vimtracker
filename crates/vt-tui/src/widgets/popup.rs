@@ -222,7 +222,7 @@ mod tests {
         assert_eq!(picker_window(&mut app), Rect::new(44, 10, 74, 19));
         special(&mut app, KeyCode::Esc);
         press(&mut app, " ?");
-        assert_eq!(picker_window(&mut app), Rect::new(63, 11, 37, 18));
+        assert_eq!(picker_window(&mut app), Rect::new(63, 10, 37, 19));
     }
 
     #[test]
