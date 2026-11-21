@@ -565,6 +565,58 @@ impl Field {
         Ok(())
     }
 
+    /// Start typing at the end, after the last token, keeping the text (decision 463): `i` and `a`
+    /// on a setting's cell. A field of fixed length has no room there.
+    pub fn append(&mut self) -> Result<(), &'static str> {
+        if self.fixed().is_some() {
+            return Err("A field of fixed length has no room after its tokens");
+        }
+        let end = self.text.trim_end().len();
+        if end < self.text.len() {
+            self.replace(end..self.text.len(), "");
+        }
+        let (from, gap) = if self.tokens.is_empty() {
+            (end, Gap::None)
+        } else {
+            self.room(1)?;
+            let between = self.grammar.between;
+            self.replace(end..end, between);
+            let gap = if between.is_empty() {
+                Gap::None
+            } else {
+                Gap::Before
+            };
+            (end + between.len(), gap)
+        };
+        self.insert = Some(Insert {
+            from,
+            to: from,
+            gap,
+            one: false,
+        });
+        Ok(())
+    }
+
+    /// `cc` and `S` on a setting's cell: the whole text kept for `p` and typed again from nothing,
+    /// or on a field of fixed length each token put back to what it starts as, to be typed over.
+    pub fn replace_all(&mut self) {
+        if !self.text.trim().is_empty() {
+            self.yanked = Some(self.text.trim().to_owned());
+        }
+        if let Some(count) = self.fixed() {
+            let blank = vec![self.grammar.blank; count].join(self.grammar.between);
+            self.replace(0..self.text.len(), &blank);
+            return;
+        }
+        self.replace(0..self.text.len(), "");
+        self.insert = Some(Insert {
+            from: 0,
+            to: 0,
+            gap: Gap::None,
+            one: false,
+        });
+    }
+
     /// A character typed, and whether typing goes on: a token typed as `r` types one, or over a
     /// token on a field of fixed length, ends it, and [`Field::end_insert`] says where the cursor
     /// goes.
@@ -994,5 +1046,46 @@ mod tests {
         assert_eq!(field.choose(1, "C"), Ok(Some(1)));
         assert_eq!(field.text(), "FC8FF");
         assert!(field.inserting().is_none());
+    }
+
+    /// `i` and `a` on a cell type at the end, keeping the text, and with nothing typed leave it as
+    /// it was (decision 463).
+    #[test]
+    fn appending_keeps_the_text_and_types_after_it() {
+        let mut field = Field::new(GrammarId::Rhythm.grammar(), "x . [. x] ", note());
+        field.append().unwrap();
+        for c in "x(3,8)".chars() {
+            field.typed(c);
+        }
+        assert_eq!(field.text(), "x . [. x] x(3,8)");
+        assert!(field.bad().is_none());
+        let mut field = Field::new(GrammarId::Rhythm.grammar(), "x .", note());
+        field.append().unwrap();
+        field.end_insert();
+        assert_eq!(field.text(), "x .");
+        let mut empty = Field::new(GrammarId::List.grammar(), "", note());
+        empty.append().unwrap();
+        empty.typed('C');
+        assert_eq!(empty.text(), "C");
+        let mut weights = Field::new(GrammarId::Weights.grammar(), "F08FF", pentatonic());
+        assert!(weights.append().is_err());
+    }
+
+    /// `cc` and `S` type the whole text again, keeping it for `p`; on a field of fixed length each
+    /// token goes back to what it starts as, to be typed over.
+    #[test]
+    fn replacing_it_all_starts_from_nothing_and_keeps_what_was_there() {
+        let mut field = Field::new(GrammarId::Moves.grammar(), "P L R", note());
+        field.replace_all();
+        assert_eq!(field.text(), "");
+        assert!(field.inserting().is_some());
+        field.typed('R');
+        field.end_insert();
+        assert_eq!(field.paste(0), Ok(1));
+        assert_eq!(field.text(), "R P L R");
+        let mut weights = Field::new(GrammarId::Weights.grammar(), "F08FF", pentatonic());
+        weights.replace_all();
+        assert_eq!(weights.text(), "FFFFF");
+        assert!(weights.inserting().is_none());
     }
 }

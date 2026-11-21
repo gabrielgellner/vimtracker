@@ -19,12 +19,14 @@ use crate::controls::modulator_bypassed;
 use crate::controls::{Control, DeviceSpec, DeviceWidth, Page};
 use crate::graphics::PanelKey;
 use crate::pages::Ctx;
-use crate::pages::track::{TrackPage, rack_places};
+use crate::pages::track::{GenTokens, TrackPage, rack_places};
 use crate::widgets::device::{Device, rack_areas};
 use crate::widgets::grid::{CellWidths, SettingsGrid, faded};
 use crate::widgets::image;
 use crate::widgets::panel::GraphicPanel;
 use crate::widgets::theme;
+use crate::widgets::token_buffer::{Buffer, Marks};
+use crate::widgets::tokens::Layout;
 
 use super::TrackCells;
 
@@ -136,7 +138,9 @@ fn bar_cell(value: i16, row: usize) -> char {
 /// One of the Mod page's devices: its frame and title, with a slot's switch, its
 /// settings in compact cells, and an envelope's shape or an LFO's cycle in its panel, with the
 /// settings stopping short of it. One switched out is faint, its title's destination too, but for
-/// the cursor. It gives back where an LFO's cycle is, if it's drawn whole.
+/// the cursor. It gives back where an LFO's cycle is, if it's drawn whole, and in `open` where
+/// the buffer open on a Steps slot's values goes, under its box.
+#[allow(clippy::too_many_arguments)]
 fn draw_device(
     frame: &mut Frame,
     area: Rect,
@@ -145,6 +149,7 @@ fn draw_device(
     track: &Track,
     device: &DeviceSpec,
     focused: bool,
+    open: &mut Option<(u16, u16)>,
 ) -> Option<(u16, u16)> {
     let bypassed = device.switchable
         && device.title[0].and_then(|control| modulator_bypassed(control, track)) == Some(true);
@@ -190,6 +195,9 @@ fn draw_device(
         }
         let inside = panel.inside_at(at);
         frame.render_widget(panel, at);
+        if marked.is_some() && page.tokens.is_some() {
+            *open = Some((inside.0, inside.1 + MOD_PANEL_HEIGHT as u16));
+        }
         // The step being edited, marked in the box's bottom border in the cursor's colour.
         if let Some(column) = marked {
             let place = (inside.0 + column as u16, inside.1 + MOD_PANEL_HEIGHT as u16);
@@ -246,6 +254,7 @@ pub(super) fn draw(
         })
         .collect();
     let mut cycles = CyclesAt::default();
+    let mut open = None;
     for (at, (device, shown)) in devices
         .iter()
         .zip(rack_areas(area, &sides, keep))
@@ -254,10 +263,41 @@ pub(super) fn draw(
         let Some(shown) = shown else {
             continue;
         };
-        let cycle_at = draw_device(frame, shown, page, ctx, track, device, at == cursor);
+        let focused = at == cursor;
+        let cycle_at = draw_device(frame, shown, page, ctx, track, device, focused, &mut open);
         if let Some(Control::Mod(slot, _)) = device.title[0] {
             cycles[slot] = cycle_at;
         }
     }
+    if let (Some((x, y)), Some(tokens)) = (open, page.tokens.as_ref()) {
+        draw_buffer(frame, ctx, track, tokens, x, y);
+    }
     cycles
+}
+
+/// A Steps slot's values in their buffer (decision 463), under its box, the step playing lit.
+fn draw_buffer(frame: &mut Frame, ctx: &Ctx, track: &Track, open: &GenTokens, x: u16, y: u16) {
+    let Control::Mod(slot, _) = open.control else {
+        return;
+    };
+    let field = &open.tokens.field;
+    let layout = Layout::plain();
+    let playing = ctx
+        .live()
+        .and_then(|live| live.steps[slot])
+        .filter(|_| !track.mods[slot].bypassed);
+    let buffer = Buffer {
+        title: "Steps",
+        hint: "= - turn  x out  a after  Enter close",
+        field,
+        layout: &layout,
+        marks: Marks {
+            cursor: Some(open.at),
+            typing_at: field.inserting().map(|insert| insert.to),
+            playing: playing.map(usize::from),
+        },
+        rows: None,
+        menu: open.tokens.menu.as_ref(),
+    };
+    buffer.draw(frame, frame.area(), y, x.saturating_sub(2));
 }

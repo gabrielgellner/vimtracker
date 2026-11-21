@@ -17,6 +17,7 @@ mod mini;
 mod moves;
 mod offer;
 mod rhythm;
+mod steps;
 mod table;
 mod weights;
 
@@ -31,6 +32,7 @@ pub use mini::{
 };
 pub use offer::{degrees, groups, notes_round, values};
 pub use rhythm::{MAX_RHYTHM, compile as compile_rhythm, preset as rhythm_preset};
+pub use steps::{show as show_step, value as step_value};
 pub use table::{Mark, Table, chance, nth_of};
 
 /// Which grammar a setting's text is in.
@@ -51,17 +53,20 @@ pub enum GrammarId {
     Rhythm,
     /// A `Mini`'s line: the rhythm's notation, its hits the column's values (decision 462).
     Mini,
+    /// A Steps slot's values, signed hex, as many as it plays (decision 463).
+    Steps,
 }
 
 impl GrammarId {
     /// Every grammar.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Weights,
         Self::List,
         Self::Moves,
         Self::Bits,
         Self::Rhythm,
         Self::Mini,
+        Self::Steps,
     ];
 
     /// Its declaration.
@@ -73,6 +78,7 @@ impl GrammarId {
             Self::Bits => &bits::BITS,
             Self::Rhythm => &rhythm::RHYTHM,
             Self::Mini => &mini::MINI,
+            Self::Steps => &steps::STEPS_LIST,
         }
     }
 }

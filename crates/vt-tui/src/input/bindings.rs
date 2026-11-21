@@ -150,6 +150,12 @@ pub enum Cmd {
     SlotPage(bool),
     Replace,
     Substitute,
+    /// `a` on the track page: on a text in a grammar, its buffer typing at the end (decision
+    /// 463); anywhere else, as `i`.
+    Append,
+    /// `cc` and `S` on the track page: on a text in a grammar, its buffer typing it all again;
+    /// anywhere else, as `i`.
+    Retype,
     /// Choose what's under the cursor from a list.
     PickValue,
     /// Fill the selected column with a ramp or random values.

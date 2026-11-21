@@ -115,6 +115,16 @@ impl Layout {
         }
     }
 
+    /// The layout of a field with nothing under or beside its tokens, as a Steps slot's list.
+    pub(crate) fn plain() -> Self {
+        Self {
+            cell: LIST_GAP + 1,
+            step: LIST_GAP + 1,
+            under: Vec::new(),
+            beside: None,
+        }
+    }
+
     /// The tokens in sight in `room` characters, round the cursor or where what's typed goes.
     fn shown(
         &self,
@@ -138,21 +148,6 @@ impl Layout {
             self.step,
             room.saturating_sub(beside),
         )
-    }
-
-    /// How far into the field's room the token the cursor is on starts, as [`Layout::lines`]
-    /// draws it, for the list `K` opens to go under it.
-    pub(crate) fn x_of(&self, field: &Field, cursor: usize, room: usize) -> usize {
-        let shown = self.shown(field, Some(cursor), None, room);
-        let gap = self.cell - 1;
-        let cut = if shown.start > 0 {
-            CUT.chars().count() + gap
-        } else {
-            0
-        };
-        cut + (shown.start..cursor.max(shown.start))
-            .map(|nth| field.token(nth).map_or(0, |text| text.chars().count()) + gap)
-            .sum::<usize>()
     }
 
     /// Whether a setting is drawn as a field of tokens when the cursor isn't in it: `Weights`, a
@@ -194,6 +189,29 @@ impl Layout {
             top.push(Span::styled(beside.to_owned(), theme::dim()));
         }
         [top, below]
+    }
+}
+
+/// Whether a setting's buffer has the rows line under its text: those whose tokens a render
+/// records, `Weights`, a `List`'s values and an `Own` rhythm's hits (decision 460).
+pub(crate) fn has_rows_line(param: GenParam) -> bool {
+    matches!(
+        param,
+        GenParam::Weights | GenParam::Values | GenParam::OwnText | GenParam::MiniText
+    )
+}
+
+/// The keys a setting's buffer says along its foot (decision 463).
+pub(crate) fn buffer_hint(param: GenParam) -> &'static str {
+    match param {
+        GenParam::Values => "= - turn  x out  a after  K what goes  Enter close",
+        GenParam::OwnText | GenParam::MiniText => {
+            "= - turn  x out  ~ rest  a after  K what goes  Enter close"
+        }
+        GenParam::MoveList => "= - turn P L R  x out  K what goes  Enter close",
+        GenParam::Flip | GenParam::Keep => "= - switch  0 1 types  Enter close",
+        GenParam::Weights => "= - change  0-F types  K what goes  Enter close",
+        _ => "h l move  K what goes  Enter close",
     }
 }
 

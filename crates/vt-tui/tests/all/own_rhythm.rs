@@ -71,7 +71,7 @@ fn own_starts_from_the_named_rhythm_and_plays_what_is_typed() {
     assert_eq!(panel(&app).rhythm, "x . . x . . x . . . x . x . . .");
     assert_eq!(shaped(&app), "x..x..x...x.x...");
     down_to(&mut app, GenParam::OwnText);
-    keys(&mut app, "ix . [. x] x(3,8)<Enter>");
+    keys(&mut app, "Sx . [. x] x(3,8)<Enter>");
     assert_eq!(panel(&app).rhythm, "x . [. x] x(3,8)");
     // A token a beat.
     down_to(&mut app, GenParam::OwnStep);
@@ -79,15 +79,26 @@ fn own_starts_from_the_named_rhythm_and_plays_what_is_typed() {
     assert_eq!(shaped(&app), "x.........x.xx.x");
     let drawn = shape_panel(&app, 80, 30);
     assert!(drawn.contains("Step    4 rows"), "{drawn}");
-    // Text that doesn't read is refused, and the last that did is kept.
+    // Text that doesn't read keeps the last that did playing, and `Enter` keeps the buffer open
+    // on it, saying why.
     keys(&mut app, "k");
-    keys(&mut app, "ix [x<Enter>");
-    assert_eq!(panel(&app).rhythm, "x . [. x] x(3,8)");
+    keys(&mut app, "ax [x<Enter>");
+    assert_eq!(
+        panel(&app).rhythm,
+        "x . [. x] x(3,8) x",
+        "the last that read"
+    );
+    assert!(panel(&app).tokens.is_some());
     assert!(
-        app.services.status.contains("doesn't read"),
+        app.services
+            .status
+            .contains("the column plays the last text that read"),
         "{}",
         app.services.status
     );
+    keys(&mut app, "<Esc>");
+    assert!(panel(&app).tokens.is_none());
+    assert_eq!(panel(&app).rhythm, "x . [. x] x(3,8) x");
 }
 
 /// Editing a named rhythm's text a token at a time makes it `Own`, from its text; the cursor's
@@ -104,7 +115,7 @@ fn editing_a_named_rhythm_makes_it_own_and_lights_its_hits() {
     assert_eq!(shaped(&app), "x.....x...x.x...");
     let drawn = shape_panel(&app, 80, 30);
     assert!(
-        drawn.contains("Rows    x . . . . . x . . . x . x . . ."),
+        drawn.contains("Rows  x . . . . . x . . . x . x . . ."),
         "{drawn}"
     );
     // On the second hit: the rows it writes.
@@ -119,7 +130,7 @@ fn editing_a_named_rhythm_makes_it_own_and_lights_its_hits() {
 fn kept_live_the_text_is_the_generators_and_saved_with_it() {
     let (mut app, _rt) = on_rhythm();
     down_to(&mut app, GenParam::OwnText);
-    keys(&mut app, "ix x [. x]<Enter>L");
+    keys(&mut app, "Sx x [. x]<Enter>L");
     let generator = &app.song().tracks[0].phrases[&0].generators()[0];
     assert_eq!(generator.rhythm(), "x x [. x]");
     let folder = std::env::temp_dir().join(format!("vt-own-rhythm-{}", std::process::id()));
@@ -166,7 +177,7 @@ fn the_gen_pages_text_cell_takes_the_token_editor() {
     assert_eq!(generator(&app).rhythm(), "x . . x . . x . . . x . x . . .");
     to_cell(&mut app, GenParam::OwnText);
     let depth = app.services.history.undo_depth();
-    keys(&mut app, "lx");
+    keys(&mut app, "<Enter>x<Enter>");
     assert_eq!(generator(&app).rhythm(), ". . x . . x . . . x . x . . .");
     assert_eq!(app.services.history.undo_depth(), depth + 1);
 }

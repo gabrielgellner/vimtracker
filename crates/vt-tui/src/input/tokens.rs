@@ -1,8 +1,10 @@
-//! The token editor's keys (decision 456): a text-like setting gone into with `l`, its cursor on a
-//! whole token, moving by the grammar, each token turned in its own units, taken away, rested,
-//! replaced and typed over, the text checked on every key. One key table, in a mode of its own
-//! whose keys come before the panel's, so a key it doesn't bind leaves the tokens and does what
-//! it does on the rows.
+//! The token editor's keys (decision 456), in the buffer a text-like setting opens from its cell
+//! or row (decision 463): `Enter` (or `l` on the shape panel) opens it on the first token, `i` and
+//! `a` typing at the end, keeping the text, and `cc` and `S` typing it all again. Its cursor is on
+//! a whole token, moving by the grammar, each token turned in its own units, taken away, rested,
+//! replaced and typed over, the text checked on every key. One key table, in a mode of its own;
+//! the buffer is a dialog, so a key it doesn't bind does nothing but play, until `Esc` or `Enter`
+//! closes it.
 //!
 //! Whoever shows the field keeps its cursor, by its token's place, and is told what each key did,
 //! so it can write the text that reads into its setting and say what the cursor is on.
@@ -11,7 +13,9 @@
 //! list, which is the `:` line's list of matches (decision 458).
 
 use ratatui::crossterm::event::KeyCode;
-use vt_model::notation::{Around, Bracket, Field, Motion, Object, Place, Spot};
+use vt_model::notation::{Around, Bracket, Field, GrammarId, Motion, Object, Place, Spot};
+use vt_model::shape::GenParam;
+use vt_model::shape::params::Typing;
 
 use crate::input::bindings::Cmd;
 use crate::overlays::command::completion::{CommandMenu, Completions, offered};
@@ -19,11 +23,13 @@ use crate::overlays::command::completion::{CommandMenu, Completions, offered};
 /// What a key does in a field of tokens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKey {
-    /// `Esc`: back to the row, the last text that read put back.
+    /// `Esc`: the buffer closed, the last text that read put back.
     Back,
-    /// `Enter`: back to the row, while the text reads.
+    /// `Enter`: the buffer closed, while the text reads.
     Done,
     Move(Motion),
+    /// `0`: the first token, or a count's digit after another, as in Vim.
+    Zero,
     Increase,
     Decrease,
     IncreaseLarge,
@@ -49,17 +55,17 @@ pub const KEYS: &[(&str, Cmd, &str)] = &[
     (
         "Esc",
         Cmd::InTokens(TokenKey::Back),
-        "Back to the row, putting back the last text that read",
+        "Close, putting back the last text that read",
     ),
     (
         "Enter",
         Cmd::InTokens(TokenKey::Done),
-        "Back to the row, where the text reads",
+        "Close, where the text reads",
     ),
     (
         "h",
         Cmd::InTokens(TokenKey::Move(Motion::Left)),
-        "The token before, into and out of groups; from the first, back to the row",
+        "The token before, into and out of groups",
     ),
     (
         "l",
@@ -80,6 +86,11 @@ pub const KEYS: &[(&str, Cmd, &str)] = &[
         "^",
         Cmd::InTokens(TokenKey::Move(Motion::First)),
         "The first token",
+    ),
+    (
+        "0",
+        Cmd::InTokens(TokenKey::Zero),
+        "The first token, or after a count's digits, another",
     ),
     (
         "$",
@@ -135,12 +146,12 @@ pub const KEYS: &[(&str, Cmd, &str)] = &[
     (
         "i",
         Cmd::InTokens(TokenKey::Type(Place::Before)),
-        "Type before the token, or on a field of fixed length type it all",
+        "Type before the token, or on a field of fixed length over it",
     ),
     (
         "a",
         Cmd::InTokens(TokenKey::Type(Place::After)),
-        "Type after the token, or on a field of fixed length type it all",
+        "Type after the token, or on a field of fixed length over it",
     ),
     (
         "s",
@@ -221,11 +232,10 @@ pub enum Did {
     Moved,
     /// The text changed, or what's typed did.
     Changed,
-    /// Back to the row.
+    /// The buffer closed.
     Out,
-    /// `i` or `a` on a field of fixed length, which has no room between its tokens: type it all,
-    /// as on the row.
-    TypeAll,
+    /// What's typed kept, and the buffer closed: `Enter` while typing.
+    Kept,
     /// Nothing done, and why.
     Refused(String),
 }
@@ -243,8 +253,28 @@ pub struct Tokens {
 const IN_PLACE: &str = "In its place";
 const HERE: &str = "What can go here";
 
+/// Whether a field is a `List`'s values on a column of hex values.
+fn hex_list(field: &Field) -> bool {
+    std::ptr::eq(field.grammar(), GrammarId::List.grammar())
+        && GenParam::Values.typing(field.column()) == Typing::HexList
+}
+
 /// The largest count.
 const MOST: usize = 999;
+
+/// What the status line says as `i`, `a`, `cc` or `S` opens a field of fixed length.
+const FIXED: &str = "A field of fixed length: type over its tokens in turn, or s over one";
+
+/// How the buffer opens from a setting's cell or row (decision 463).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Opening {
+    /// `Enter` on a cell, `l` on the shape panel's row: on the first token.
+    Tokens,
+    /// `i` and `a`: typing at the end, keeping the text.
+    Append,
+    /// `cc` and `S`: typing it all again.
+    Replace,
+}
 
 impl Tokens {
     pub fn new(field: Field) -> Self {
@@ -253,6 +283,29 @@ impl Tokens {
             count: None,
             menu: None,
         }
+    }
+
+    /// The buffer opened on a field, and the token the cursor starts on, or why it's opened on
+    /// the first token rather than typing: on a field of fixed length, there's no room after
+    /// its tokens, so `i` and `a` open on the first, its tokens typed over in turn, and `cc` and
+    /// `S` put each back to what it starts as first; and a field with all the tokens it takes
+    /// has no room for another.
+    pub fn open(mut field: Field, how: Opening) -> (Self, usize, Option<String>) {
+        let fixed = field.fixed().is_some();
+        let last = field.tokens().len().saturating_sub(1);
+        let (at, why) = match how {
+            Opening::Tokens => (0, None),
+            Opening::Append if fixed => (0, Some(FIXED.to_owned())),
+            Opening::Append => match field.append() {
+                Ok(()) => (last, None),
+                Err(why) => (last, Some(why.to_owned())),
+            },
+            Opening::Replace => {
+                field.replace_all();
+                (0, fixed.then(|| FIXED.to_owned()))
+            }
+        };
+        (Self::new(field), at, why)
     }
 
     /// Whether `Tab` completes rather than plays: while typing, or with a list open.
@@ -403,6 +456,14 @@ impl Tokens {
 
     /// A key of the table, from the token at `at`, which it moves.
     pub fn key(&mut self, key: TokenKey, at: &mut usize) -> Did {
+        if let (TokenKey::Zero, Some(count)) = (key, self.count) {
+            self.count = Some((count * 10).min(MOST));
+            return Did::Moved;
+        }
+        let key = match key {
+            TokenKey::Zero => TokenKey::Move(Motion::First),
+            key => key,
+        };
         let count = self.count.take().unwrap_or(1);
         let field = &mut self.field;
         let turn = |field: &mut Field, sign, large| {
@@ -427,20 +488,19 @@ impl Tokens {
                     None => Did::Out,
                 };
             }
+            // `h` from the first stays there, as the buffer is a dialog.
             TokenKey::Move(motion) => {
-                return match field.moved(*at, motion, count) {
-                    Some(to) => {
-                        *at = to;
-                        Did::Moved
-                    }
-                    None => Did::Out,
-                };
+                if let Some(to) = field.moved(*at, motion, count) {
+                    *at = to;
+                }
+                return Did::Moved;
             }
-            // What's offered depends on what's around the field, which [`Tokens::offer`] is
-            // given by whoever shows it.
-            TokenKey::Offer => return Did::Moved,
-            TokenKey::Type(place) if place != Place::Over && field.fixed().is_some() => {
-                return Did::TypeAll;
+            // `0` is the first token by now; and what's offered depends on what's around the
+            // field, which [`Tokens::offer`] is given by whoever shows it.
+            TokenKey::Zero | TokenKey::Offer => return Did::Moved,
+            // A field of fixed length has no room between its tokens, so it's typed over.
+            TokenKey::Type(_) if field.fixed().is_some() => {
+                field.insert(*at, Place::Over, false).map(|()| None)
             }
             TokenKey::Yank(object) => {
                 return match field.yank(*at, object) {
@@ -470,8 +530,8 @@ impl Tokens {
     }
 
     /// A key that isn't the table's: with a list open, the list's; while typing, into the text,
-    /// `K` at the start of a word listing what can go there, `Tab` completing, and `Esc` and
-    /// `Enter` back to the tokens; and among them, a token the grammar types in place, which
+    /// `K` at the start of a word listing what can go there, `Tab` completing, `Esc` back to
+    /// the tokens and `Enter` closing the buffer where the text reads; and among them, a token the grammar types in place, which
     /// moves on to the next, or a count's digit.
     pub fn text(&mut self, code: KeyCode, at: &mut usize, around: &Around) -> Did {
         if let Some(did) = self.menu_key(code, at) {
@@ -486,8 +546,25 @@ impl Tokens {
                 KeyCode::Tab | KeyCode::BackTab => {
                     return self.complete(at, around, code == KeyCode::BackTab);
                 }
-                KeyCode::Esc | KeyCode::Enter => *at = field.end_insert(),
+                KeyCode::Esc => *at = field.end_insert(),
+                // `Enter` keeps what's typed and closes the buffer, as a dialog's does, where the
+                // text reads.
+                KeyCode::Enter => {
+                    *at = field.end_insert();
+                    return match field.bad() {
+                        Some(_) => Did::Changed,
+                        None => Did::Kept,
+                    };
+                }
                 KeyCode::Backspace => field.backspace(),
+                // A list of hex values takes a space after each two digits, as it did typed whole,
+                // so `704055` is three values.
+                KeyCode::Char(c) if hex_list(field) && c.is_ascii_hexdigit() => {
+                    if field.typed_word().is_some_and(|word| word.len() >= 2) {
+                        field.typed(' ');
+                    }
+                    field.typed(c.to_ascii_uppercase());
+                }
                 KeyCode::Char(c) if !field.typed(c) => *at = field.end_insert(),
                 _ => {}
             }

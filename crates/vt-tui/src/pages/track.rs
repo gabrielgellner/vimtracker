@@ -48,6 +48,7 @@ use crate::graphics::slots::SlotDrawing;
 use crate::graphics::{PanelIds, PanelWant};
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
+use crate::input::tokens::Opening;
 use crate::pages::track::draw::{CyclesAt, Drawn};
 use crate::pages::{Ctx, CtxMut, Outcome};
 use crate::services::Services;
@@ -639,7 +640,7 @@ impl crate::pages::Page for TrackPage {
         (
             "Enter",
             Cmd::ReopenGenerator,
-            "On the Gen page, open the shape panel on it",
+            "On the Gen page, open the shape panel on it, or a text's buffer",
         ),
         (
             "}",
@@ -677,6 +678,21 @@ impl crate::pages::Page for TrackPage {
         ),
         ("K", Cmd::PickValue, "Choose this setting from a list"),
         (
+            "a",
+            Cmd::Append,
+            "Type; on a text, its buffer typing at the end, keeping it",
+        ),
+        (
+            "S",
+            Cmd::Retype,
+            "Type; on a text, its buffer typing it all again",
+        ),
+        (
+            "c c",
+            Cmd::Retype,
+            "Type; on a text, its buffer typing it all again",
+        ),
+        (
             ";",
             Cmd::Audition,
             "Play the sound on a w s e d f, until ; again",
@@ -695,13 +711,25 @@ impl crate::pages::Page for TrackPage {
         if !braces && ctx.modes.view != View::Mixer {
             self.settle(track);
         }
-        // `l` on a Gen page setting in a grammar goes into its tokens.
+        // On a Gen page setting in a grammar, or a Steps slot's step on the Mod page, `Enter`
+        // opens its buffer on the first token, or the step, `i` and `a` typing at the end and
+        // `cc` and `S` typing it all again (decision 463).
         let control = self.control(track);
-        if cmd == Cmd::Move(Motion::Right)
-            && self.on_gen(ctx.modes.view, control)
-            && let Some(tokens) = GenTokens::open(ctx.services, ctx.modes.view, control)
+        let opening = match cmd {
+            Cmd::ReopenGenerator => Some(Opening::Tokens),
+            Cmd::EnterInsert | Cmd::Append => Some(Opening::Append),
+            Cmd::Retype => Some(Opening::Replace),
+            _ => None,
+        };
+        // A step's own value is still typed with `i`, as any value is.
+        let steps = self.page == Page::Mod
+            && matches!(control, Control::Mod(_, ModField::Step(_)))
+            && cmd != Cmd::EnterInsert;
+        if let Some(how) = opening
+            && (self.on_gen(ctx.modes.view, control) || steps)
+            && GenTokens::opens(ctx.services, ctx.modes.view, control)
         {
-            self.tokens = Some(tokens);
+            self.tokens = GenTokens::open(ctx.services, ctx.modes.view, control, how);
             return Outcome::Enter(Mode::Tokens);
         }
         self.key_on(cmd, count, track)
@@ -763,6 +791,11 @@ impl TrackPage {
         control: Control,
         ctx: &mut CtxMut,
     ) -> Outcome {
+        // Off a setting in a grammar, `a`, `cc` and `S` type as `i` does.
+        let cmd = match cmd {
+            Cmd::Append | Cmd::Retype => Cmd::EnterInsert,
+            cmd => cmd,
+        };
         if ctx.services.refuses_turn(cmd, control) {
             return Outcome::Done;
         }

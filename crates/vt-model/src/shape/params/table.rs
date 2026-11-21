@@ -1504,6 +1504,21 @@ gen_params! {
             None => Choice::Own.apply(shape),
         },
     },
+    /// An `Own` rhythm's text, typed in Tidal's mini-notation, kept on its generator rather than
+    /// the shape, and the rows each of its top-level tokens is (decision 461).
+    OwnText => GenParamSpec {
+        meaning: "the rhythm typed: x a hit, . a rest, [ ] a group, < > one each lap",
+        key: "own_text",
+        name: "Text",
+        units: Reading::Listed,
+        typing: Typing::Rhythm,
+        bounds: Bounds::Typed,
+        stepping: None,
+        engine: false,
+        app_only: true,
+        get: |_, _| None,
+        set: |_, _, _| {},
+    },
     Role => GenParamSpec {
         meaning: "which of the rhythm's three parts this track plays",
         key: "role",
@@ -1539,21 +1554,6 @@ gen_params! {
                 *child = number as u8;
             }
         },
-    },
-    /// An `Own` rhythm's text, typed in Tidal's mini-notation, kept on its generator rather than
-    /// the shape, and the rows each of its top-level tokens is (decision 461).
-    OwnText => GenParamSpec {
-        meaning: "the rhythm typed: x a hit, . a rest, [ ] a group, < > one each lap",
-        key: "own_text",
-        name: "Text",
-        units: Reading::Listed,
-        typing: Typing::Rhythm,
-        bounds: Bounds::Typed,
-        stepping: None,
-        engine: false,
-        app_only: true,
-        get: |_, _| None,
-        set: |_, _, _| {},
     },
     OwnStep => GenParamSpec {
         meaning: "how many rows each of the rhythm's top-level tokens is",

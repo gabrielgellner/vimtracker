@@ -221,7 +221,6 @@ impl ShapePanel {
             typing: None,
             weight: None,
             tokens: None,
-            started: false,
             live: Some(index),
             base,
             under: Some(under),

@@ -80,7 +80,7 @@ fn a_line_of_names_and_degrees_plays_a_token_a_row() {
         assert!(panel(&app).rows().contains(&row), "{row:?}");
     }
     down_to(&mut app, GenParam::MiniText);
-    keys(&mut app, "iC-3 . 1 c4<Enter>");
+    keys(&mut app, "SC-3 . 1 c4<Enter>");
     assert_eq!(panel(&app).mini, "C-3 . 1 c4");
     let scale = match panel(&app).column {
         ShapeColumn::Note { scale, .. } => scale,
@@ -93,7 +93,7 @@ fn a_line_of_names_and_degrees_plays_a_token_a_row() {
     let drawn = shape_panel(&app, 80, 30);
     assert!(drawn.contains("Text    C-3 . 1 c4"), "{drawn}");
     // A stack on one track is refused, and the line kept.
-    keys(&mut app, "iC-3, G-3<Enter>");
+    keys(&mut app, "a, G-3<Enter>");
     assert_eq!(panel(&app).mini, "C-3 . 1 c4");
     assert!(
         app.services.status.contains("layer a track"),
@@ -101,7 +101,7 @@ fn a_line_of_names_and_degrees_plays_a_token_a_row() {
         app.services.status
     );
     // A triplet in a row drops two of its hits, and the status line says which `Step` keeps them.
-    keys(&mut app, "i[C-3 D-3 E-3]<Enter>");
+    keys(&mut app, "S[C-3 D-3 E-3]<Enter>");
     assert!(
         app.services.status.contains("Step 3 rows keeps them"),
         "{}",
@@ -119,7 +119,7 @@ fn a_stack_across_tracks_gives_each_a_layer() {
     on_mini(&mut app, "vGWS");
     assert_eq!(panel(&app).parts.len(), 2);
     down_to(&mut app, GenParam::MiniText);
-    keys(&mut app, "iC-2*4, [. G-2]*2<Enter>");
+    keys(&mut app, "SC-2*4, [. G-2]*2<Enter>");
     assert_eq!(panel(&app).mini, "C-2*4, [. G-2]*2");
     // A token a beat.
     down_to(&mut app, GenParam::MiniStep);
@@ -141,7 +141,7 @@ fn kept_live_the_line_is_saved_and_the_gen_page_types_it() {
     let (mut app, _rt) = app_with(1);
     on_mini(&mut app, "vGS");
     down_to(&mut app, GenParam::MiniText);
-    keys(&mut app, "iC-3 <D#3 G-3> [. 5]<Enter>L");
+    keys(&mut app, "SC-3 <D#3 G-3> [. 5]<Enter>L");
     let generator = |app: &App| app.song().tracks[0].phrases[&0].generators()[0].clone();
     assert_eq!(generator(&app).rhythm(), "C-3 <D#3 G-3> [. 5]");
     assert!(generator(&app).heard().varies(), "its choice laps on");
@@ -164,10 +164,10 @@ fn kept_live_the_line_is_saved_and_the_gen_page_types_it() {
     keys(&mut app, "L 5LLL");
     to_cell(&mut app, GenParam::MiniText);
     let depth = app.services.history.undo_depth();
-    keys(&mut app, "iE-3 F-3<Enter>");
+    keys(&mut app, "SE-3 F-3<Enter>");
     assert_eq!(generator(&app).rhythm(), "E-3 F-3");
     assert_eq!(app.services.history.undo_depth(), depth + 1);
-    keys(&mut app, "iE-3, F-3<Enter>");
+    keys(&mut app, "a, F-3<Enter>");
     assert_eq!(generator(&app).rhythm(), "E-3 F-3");
     assert!(
         app.services.status.contains("layer a track"),

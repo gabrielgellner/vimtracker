@@ -280,7 +280,9 @@ impl GenParam {
     /// `Where` either, so its `Mutation` and the kinds it may make take the third column and the
     /// fourth. `Acid`'s three are full, so its riff's `Spread` and `Bias` take the fourth. A
     /// `Tonnetz` has its first chord and its voice, then its moves, and its moves' weights in the
-    /// fourth.
+    /// fourth. A rhythm's `Text` is in the fourth, named or `Own`, so a named one's made `Own` by
+    /// editing it stays where it is (decision 463), but on an `Acid`, whose fourth is full and
+    /// whose named rhythms show no text, where an `Own` one's is in the third.
     pub fn grid(shape: &Shape, column: ShapeColumn, generates: bool) -> Grid<Self> {
         use GenParam::*;
         let none = [None; GRID_ROWS];
@@ -293,12 +295,15 @@ impl GenParam {
         let mut spilled = [None; 3];
         if shape.kind.has_where() {
             last = Self::of_where(shape.place);
-            if matches!(shape.place, crate::shape::Where::Rhythm { .. }) {
+            if matches!(
+                shape.place,
+                crate::shape::Where::Rhythm { .. } | crate::shape::Where::Own(_)
+            ) {
                 spilled[1] = Some(Over);
-                spilled[2] = Some(OwnText);
-            }
-            if matches!(shape.place, crate::shape::Where::Own(_)) {
-                spilled[1] = Some(Over);
+                match shape.kind {
+                    FillKind::Acid => last[1] = last[1].or(Some(OwnText)),
+                    _ => spilled[2] = Some(OwnText),
+                }
             }
         }
         let mut more = none;
@@ -357,7 +362,8 @@ impl GenParam {
             Where::States(_) => [over, None, Some(Self::States)],
             Where::Complementary { .. } => [None, Some(Self::Share), Some(Self::Side)],
             Where::Rhythm { .. } => [Some(Self::Rhythm), Some(Self::Role), Some(Self::Child)],
-            Where::Own(_) => [Some(Self::Rhythm), Some(Self::OwnText), Some(Self::OwnStep)],
+            // Its `Text` is placed with a named rhythm's, by [`GenParam::grid`].
+            Where::Own(_) => [Some(Self::Rhythm), None, Some(Self::OwnStep)],
             Where::Cells(_) => [over, Some(Self::Rule), Some(Self::CellStart)],
             Where::Notes | Where::NoNotes | Where::Commands | Where::AllRows => [None; GRID_ROWS],
         }
@@ -899,10 +905,14 @@ impl GenParam {
             }
             Self::MoveList => return Err("Type the moves with i, like P L R L"),
             Self::OwnText => {
-                return Err("Type the rhythm with i, like x . [. x] x(3,8), or l to edit a token");
+                return Err(
+                    "Type the rhythm with i, like x . [. x] x(3,8), and turn its tokens there",
+                );
             }
             Self::MiniText => {
-                return Err("Type the line with i, like C-3 [. 3] <5 6>*2, or l to edit a token");
+                return Err(
+                    "Type the line with i, like C-3 [. 3] <5 6>*2, and turn its tokens there",
+                );
             }
             _ if self.spec().typing == Typing::Listed => {
                 let choices = self.choices(context).unwrap_or_default();
