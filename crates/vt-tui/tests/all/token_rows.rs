@@ -2,6 +2,7 @@
 //! line under `Weights` says each row of the span as `x` or `.`, the rows the digit under the
 //! cursor writes are lit in it and in the phrase view's column, and while the phrase plays the
 //! digit that wrote the row playing is in the playhead's colour, in the panel and on the Gen page.
+//! A `Tonnetz`'s moves light the rows their chords are on, and the move playing (decision 473).
 
 use ratatui::style::Modifier;
 use vt_engine::engine::Transport;
@@ -247,4 +248,84 @@ fn the_gen_pages_preview_marks_the_rows_of_the_weight_under_the_cursor() {
     keys(&mut app, "l");
     assert_eq!(here(&app), Some(GenParam::Weight2));
     assert_eq!(sent(&mut app, &mut graphics), 1, "D#'s rows marked");
+}
+
+const NOTES: &str = "C-3 40 --- --- ---";
+
+/// Sixteen notes, a `Tonnetz` walking `P L R L` on them, and the cursor in its moves' buffer on
+/// the first, `P` (decision 473).
+fn on_moves() -> (App, Realtime) {
+    let (mut app, realtime) = app_with(&[NOTES; 16]);
+    keys(&mut app, "vGSKtonnetz<Enter>");
+    assert_eq!(panel(&app).shape.kind, FillKind::Tonnetz);
+    down_to(&mut app, GenParam::MoveList);
+    keys(&mut app, "l");
+    (app, realtime)
+}
+
+/// A `Tonnetz`'s move lights the rows whose chord it reached, its buffer has the rows line, and
+/// the row playing names the move that reached its chord; the first row, the chord it starts on,
+/// is no move's (decision 473).
+#[test]
+fn a_move_lights_the_rows_its_chord_is_on_and_the_move_playing() {
+    let (mut app, _realtime) = on_moves();
+    assert_eq!(lit(&app), [1, 5, 9, 13], "P's rows");
+    keys(&mut app, "l");
+    assert_eq!(lit(&app), [2, 6, 10, 14], "L's rows");
+    keys(&mut app, "ll");
+    assert_eq!(lit(&app), [4, 8, 12], "the second L's rows");
+    let drawn = shape_panel(&app, 80, 30);
+    eprintln!("{drawn}");
+    assert!(
+        drawn
+            .lines()
+            .any(|line| line.contains("Rows") && line.contains(&["x"; 16].join(" "))),
+        "{drawn}"
+    );
+    let field = panel(&app).field(GenParam::MoveList).unwrap();
+    playing_at(&mut app, 6);
+    assert_eq!(panel(&app).playing_token(&app.ctx(), &field), Some(1));
+    playing_at(&mut app, 0);
+    assert_eq!(panel(&app).playing_token(&app.ctx(), &field), None);
+}
+
+/// Kept live, on the whole Gen page, the move that reached the chord of the row playing is green
+/// in the `Tonnetz`'s `List` cell, and none while the first row, the chord it starts on, plays
+/// (decision 473).
+#[test]
+fn the_gen_page_draws_the_move_playing_in_the_playheads_colour() {
+    let (mut app, _realtime) = on_moves();
+    keys(&mut app, "<Esc>L");
+    assert!(app.overlays.shape.is_none(), "kept live");
+    keys(&mut app, " 8^wo");
+    assert_eq!(app.modes.view, View::Gen);
+    'found: for _ in 0..12 {
+        keys(&mut app, "0");
+        for _ in 0..6 {
+            if here(&app) == Some(GenParam::MoveList) {
+                break 'found;
+            }
+            keys(&mut app, "l");
+        }
+        keys(&mut app, "j");
+    }
+    assert_eq!(here(&app), Some(GenParam::MoveList));
+    // Off the cell, where the cursor doesn't light it as one value.
+    keys(&mut app, "k");
+    let green = |app: &App| {
+        let buffer = crate::common::track_page_buffer(app);
+        let lines = crate::common::drawn_lines(&buffer);
+        let (y, at) = lines
+            .iter()
+            .enumerate()
+            .find_map(|(y, line)| line.find("P L R L").map(|at| (y, at)))
+            .unwrap_or_else(|| panic!("the moves: {lines:#?}"));
+        let start = lines[y][..at].chars().count() as u16;
+        // The four moves, a cell apart, and which of them is green.
+        (0..4).position(|nth| buffer[(start + 2 * nth, y as u16)].fg == theme::GREEN)
+    };
+    playing_at(&mut app, 7);
+    assert_eq!(green(&app), Some(2), "row 07 is R's chord");
+    playing_at(&mut app, 0);
+    assert_eq!(green(&app), None, "the chord it starts on");
 }
