@@ -495,10 +495,9 @@ impl Tokens {
                 }
                 return Did::Moved;
             }
-            TokenKey::Zero => return Did::Moved,
-            // What's offered depends on what's around the field, which [`Tokens::offer`] is
-            // given by whoever shows it.
-            TokenKey::Offer => return Did::Moved,
+            // `0` is the first token by now; and what's offered depends on what's around the
+            // field, which [`Tokens::offer`] is given by whoever shows it.
+            TokenKey::Zero | TokenKey::Offer => return Did::Moved,
             // A field of fixed length has no room between its tokens, so it's typed over.
             TokenKey::Type(_) if field.fixed().is_some() => {
                 field.insert(*at, Place::Over, false).map(|()| None)
