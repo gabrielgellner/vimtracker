@@ -309,3 +309,32 @@ fn a_kit_line_on_unnamed_tracks_is_refused() {
         app.services.status
     );
 }
+
+/// The buffer has the keys, so its frame is in the focus colour (decision 475).
+#[test]
+fn the_buffer_is_framed_in_the_focus_colour() {
+    let (mut app, _rt) = app_of(1, 16);
+    keys(&mut app, "!C-3 D-3");
+    let lines = screen_cells(&mut app);
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(163, 42)).unwrap();
+    terminal
+        .draw(|frame| vt_tui::run::draw_screen(frame, &mut app, None, std::time::Instant::now()))
+        .unwrap();
+    let screen = terminal.backend().buffer().clone();
+    let y = lines
+        .iter()
+        .position(|line| line.contains("Note pattern  Step 4 rows"))
+        .expect("the buffer's title");
+    // Its corner, the first after the grid's own frame.
+    let x = lines[y]
+        .chars()
+        .enumerate()
+        .skip(10)
+        .find(|(_, c)| *c == '╭')
+        .map(|(x, _)| x)
+        .expect("the buffer's corner");
+    assert_eq!(
+        screen[(x as u16, y as u16)].fg,
+        vt_tui::widgets::theme::FOCUS
+    );
+}
