@@ -481,7 +481,9 @@ in the cursor's colour, bold, as decision 460 draws them.
 
 ---
 
-## 10. Plan: proposed issues
+## 10. Plan: the issues
+
+Filed on 2026-11-20 in the milestone M40: Gen beside the grid, items 1 to 6 as #1110 to #1115.
 
 Sizes: **S** is a day or less, **M** a few days, **L** a week or more. Each comes with its guide
 changes (`track-gen.md` becomes the phrase view's Gen guide, plus `navigation.md` and
