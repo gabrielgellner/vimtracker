@@ -393,7 +393,7 @@ fn plain(velocity: u8) -> u8 {
 /// row `Where` chooses, a note of its own where there was none. Each part is drawn for its place
 /// ([`Places`]), so a part on a loop goes round it, and `Beats`' draws are its rhythm's, so they
 /// go round the `Trig loop`.
-pub(super) fn render<F: FnMut(usize, &Shaped)>(
+pub(super) fn render<F: FnMut(usize, &Shaped, Option<usize>)>(
     steps: &[Step],
     range: StepRange,
     column: ShapeColumn,
@@ -474,7 +474,7 @@ pub(super) fn render<F: FnMut(usize, &Shaped)>(
             velocity,
             gate,
         };
-        (out.seen)(row, &Shaped::note(pitch));
+        (out.seen)(row, &Shaped::note(pitch), None);
     }
 }
 

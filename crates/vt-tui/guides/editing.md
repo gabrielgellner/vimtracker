@@ -427,6 +427,10 @@ first digit typed starts them afresh, the degrees after those typed keeping thei
 `Backspace` edits them from the end. Spread and Bias still shape the notes let through, so a
 narrow Spread stays in the middle of the range, and one value on a degree left out lands on the
 nearest one let through, the lower of two as near.
+
+Under the notes, `Rows` marks each row the fill writes `x`, `.` for one it leaves, so in the
+digits the rows a digit writes, those whose notes are on its degree, are lit there and in the
+Note column as `l` goes along, and while the phrase plays the digit of the note playing is green.
 <!-- ANCHOR_END: after-bars -->
 <!-- ANCHOR: after-weights -->
 
@@ -998,6 +1002,24 @@ the column, never typed: a field on an FX column holds only the command's values
 at once. Where it doesn't read, the token it stops at is drawn in red with `✗` under it, and the
 status line says why, `g isn't a weight, a hex digit from 0 to F`. The column keeps playing the
 last text that read, `Enter` is refused, saying why, and `Esc` puts back the last that read.
+
+**The rows a token writes.** Under the field, the rows line says each row of the span as the text
+writes it, a mark a row: `x` where a token writes it, `?` where one with a chance after it does,
+and `.` where nothing does. The marks are spaced while they fit, and past that a page of them at a
+time, the page with the rows lit.
+
+```
+Weights F  F  8  F  F
+        C  D# F  G  A#
+Rows    x x x x x x x x x x x x x x x x
+```
+
+In the tokens, the rows the token under the cursor writes are lit as it is, in the rows line and
+in the phrase view's column, so moving along the field moves the light along the rows; the grid's
+own cursor stays the cursor. While the phrase plays, the token that wrote the row playing is
+green, the playhead's colour, and so is that row's mark. A generator whose `Vary` gives a pass a
+seed of its own lights the token of the pass playing. While the text doesn't read, the line is of
+the last text that did, and says `still the last text that read`.
 
 ## Values and small edits
 

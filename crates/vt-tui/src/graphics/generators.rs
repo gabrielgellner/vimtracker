@@ -3,13 +3,14 @@
 //! as short lines at their pitch, a mini piano roll; velocities and lengths as bars up from the
 //! bottom, and nudges either side of the middle; and an FX column as its values' line, as the
 //! FX page draws a curve. Its picture is sent again only when what it shows changes, and the row
-//! playing rides it as a dot, placed as an LFO's is.
+//! playing rides it as a dot, placed as an LFO's is. The rows the token under the cursor writes,
+//! a weight's on `Weights`, are marked down the picture by dotted lines (decision 460).
 
 use vt_model::generator::Generator;
 use vt_model::shape::ShapeColumn;
 use vt_model::step::{MAX_VELOCITY, Note, Step};
 
-use super::plot::Plot;
+use super::plot::{Mark, Plot};
 
 /// How a column's values are drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,6 +31,8 @@ pub(crate) enum GenLook {
 pub(crate) struct GenDrawing {
     pub(crate) look: GenLook,
     pub levels: Vec<Option<f32>>,
+    /// The rows the token under the cursor writes, counted from the first.
+    pub lit: Vec<usize>,
 }
 
 /// The value a row has in a column, as a share of its range: a note as itself, the others
@@ -87,7 +90,11 @@ impl GenDrawing {
                 };
             }
         }
-        Some(Self { look, levels })
+        Some(Self {
+            look,
+            levels,
+            lit: Vec::new(),
+        })
     }
 
     /// Where a row's middle is across, from 0 to 1.
@@ -110,6 +117,9 @@ impl GenDrawing {
     /// Its picture, this many pixels across and down.
     pub(crate) fn plot(&self, size: (usize, usize)) -> Plot {
         let mut plot = Plot::new(size.0, size.1);
+        for row in &self.lit {
+            plot.down(self.x_of(*row), Mark::Grid);
+        }
         let half = 0.35 / self.levels.len().max(1) as f32;
         let mut line = Vec::new();
         for (row, level) in self.levels.iter().enumerate() {

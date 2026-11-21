@@ -1,8 +1,8 @@
 //! `Weights`' grammar: a hex digit for each of the scale's degrees, from the root (decision 388),
 //! each digit a token of its own, over the note it's for.
 
-use super::{About, Bad, Grammar, Kind, Offer, Token};
-use crate::shape::{MAX_WEIGHT, ShapeColumn, degree_count, degree_name, degree_of};
+use super::{About, Bad, Grammar, Kind, Offer, Token, nth_of};
+use crate::shape::{MAX_WEIGHT, ShapeColumn, degree_count, degree_name};
 
 /// How far `+` and `_` turn a weight, a quarter of its range, as decision 388 has it.
 const JUMP: i16 = 4;
@@ -51,17 +51,8 @@ pub(super) static WEIGHTS: Grammar = Grammar {
             })
             .collect()
     },
-    rows: |at, column, written| {
-        let ShapeColumn::Note { scale, .. } = column else {
-            return Vec::new();
-        };
-        written
-            .iter()
-            .enumerate()
-            .filter(|(_, note)| note.and_then(|note| degree_of(scale, note)) == Some(at))
-            .map(|(row, _)| row)
-            .collect()
-    },
+    // A random fill's table holds each note's degree, and a digit is its degree's.
+    rows: |tokens, at| nth_of(tokens, at, Kind::Weight),
     fixed: |column| match column {
         ShapeColumn::Note { scale, .. } => Some(degree_count(scale)),
         _ => None,
@@ -194,13 +185,12 @@ mod tests {
         assert_eq!(offers[15].meaning, "the most");
     }
 
-    /// The rows a weight wrote are those on its degree.
+    /// A digit is its degree's byte of a render's table, its place among the digits.
     #[test]
-    fn a_weights_rows_are_those_on_its_degree() {
-        // C, D#, G and C again, in C minor pentatonic: the root, the minor third and the fifth.
-        let written = [Some(48), None, Some(51), Some(55), Some(60)];
-        assert_eq!((WEIGHTS.rows)(0, pentatonic(), &written), [0, 4]);
-        assert_eq!((WEIGHTS.rows)(3, pentatonic(), &written), [3]);
-        assert!((WEIGHTS.rows)(2, pentatonic(), &written).is_empty());
+    fn a_weight_writes_as_its_degree() {
+        let tokens = split("F0F8F");
+        assert_eq!((WEIGHTS.rows)(&tokens, 0), Some(0));
+        assert_eq!((WEIGHTS.rows)(&tokens, 3), Some(3));
+        assert_eq!((WEIGHTS.rows)(&split("F0G8F"), 2), None);
     }
 }

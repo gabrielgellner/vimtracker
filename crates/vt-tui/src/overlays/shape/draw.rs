@@ -108,10 +108,18 @@ fn typed_text(typing: &TypedValue, room: usize) -> String {
 /// The room each of `Weights`' digits takes, so the note under it fits, `C#` and a space.
 const WEIGHT_CELL: usize = 3;
 
-/// `Weights` in two lines, a field of tokens, each digit over the note it's for: `F  0  8` over
-/// `C  D  E`. The cursor in them is on its digit, and its note is in full; on the row but not in
-/// them, the digits are lit together; and while they're typed, the text so far and a `_` after it.
-fn weight_lines(panel: &ShapePanel, current: bool, label: usize) -> [Line<'static>; 2] {
+/// `Weights` in three lines, a field of tokens, each digit over the note it's for: `F  0  8` over
+/// `C  D  E`, and under them the rows line. The cursor in them is on its digit, and its note is in
+/// full; on the row but not in them, the digits are lit together; while they're typed, the text so
+/// far and a `_` after it; and while the phrase plays, the digit that wrote the row playing is in
+/// the playhead's colour.
+fn weight_lines(
+    panel: &ShapePanel,
+    ctx: &Ctx,
+    current: bool,
+    label: usize,
+    room: usize,
+) -> [Line<'static>; 3] {
     let notes = panel.weight_notes();
     let typed = current.then_some(panel.typing.as_ref()).flatten();
     let tokens = panel.tokens.as_ref().filter(|_| current);
@@ -125,7 +133,7 @@ fn weight_lines(panel: &ShapePanel, current: bool, label: usize) -> [Line<'stati
             };
             &made
         }
-        (None, None) => return [Line::default(), Line::default()],
+        (None, None) => return [Line::default(), Line::default(), Line::default()],
     };
     let typing_at = match typed {
         Some(typed) => Some(typed.len()),
@@ -138,13 +146,81 @@ fn weight_lines(panel: &ShapePanel, current: bool, label: usize) -> [Line<'stati
         current,
         cell: WEIGHT_CELL,
         under: &notes,
+        playing: panel.playing_token(ctx, field),
     }
     .lines();
     let mut line = vec![Span::raw(format!("{:<label$}", GenParam::Weights.name()))];
     line.extend(top);
     let mut below = vec![Span::raw(" ".repeat(label))];
     below.extend(under);
-    [Line::from(line), Line::from(below)]
+    let mut rows = vec![Span::raw(format!("{:<label$}", ROWS))];
+    rows.extend(rows_line(panel, ctx, field, current, room));
+    [Line::from(line), Line::from(below), Line::from(rows)]
+}
+
+/// The rows line's label.
+const ROWS: &str = "Rows";
+
+/// The rows line under a field of tokens (decision 460, the study's Mockup 1): a mark for each row
+/// of the span on the phrase in view, `x` where a token writes it, `?` where one with a chance
+/// does and `.` where nothing does. The rows the token under the cursor writes are lit as it is,
+/// and the row playing is in the playhead's colour. Spaced while they fit, then close, then a page
+/// of them at a time, the one with the cursor's first row or the row playing. While the text
+/// doesn't read it's of the last text that did, and says so.
+fn rows_line(
+    panel: &ShapePanel,
+    ctx: &Ctx,
+    field: &Field,
+    current: bool,
+    room: usize,
+) -> Vec<Span<'static>> {
+    let (track, phrase) = (ctx.cursor().track, ctx.phrase_id());
+    let Some(table) = panel.table(track, phrase, 0) else {
+        return Vec::new();
+    };
+    let range = table.range();
+    let marks = table.marks(field);
+    let lit = match (current, panel.weight) {
+        (true, Some(at)) if panel.tokens.is_some() => table.rows(field, at),
+        _ => Vec::new(),
+    };
+    let playing = ctx
+        .playhead_place()
+        .map(|(row, _)| row)
+        .filter(|row| range.first <= *row && *row <= range.last);
+    let bad = field.bad().is_some();
+    let note = "  still the last text that read";
+    let room = if bad {
+        room.saturating_sub(note.len())
+    } else {
+        room
+    }
+    .max(1);
+    let spaced = marks.len() * 2 <= room + 1;
+    let fits = if spaced { marks.len() } else { room };
+    let focus = lit.first().copied().or(playing).unwrap_or(range.first) - range.first;
+    let start = focus / fits * fits;
+    let mut spans = Vec::new();
+    for (offset, mark) in marks.iter().enumerate().skip(start).take(fits) {
+        let row = range.first + offset;
+        let style = if lit.contains(&row) {
+            theme::cursor(Mode::Normal)
+        } else if playing == Some(row) {
+            theme::active()
+        } else if *mark == vt_model::notation::Mark::Nothing {
+            theme::faint()
+        } else {
+            Style::new()
+        };
+        if spaced && offset > start {
+            spans.push(Span::raw(" "));
+        }
+        spans.push(Span::styled(mark.glyph().to_string(), style));
+    }
+    if bad {
+        spans.push(Span::styled(note, theme::dim()));
+    }
+    spans
 }
 
 /// How wide the panel is: room for eight notes in a `List`'s values, or for each of `Weights`'
@@ -191,8 +267,8 @@ fn window(area: Rect, panel: &ShapePanel, side: Side) -> Rect {
         height: area.height.saturating_sub(FROM_TOP),
         ..area
     };
-    // `Weights` takes a second line, for its notes.
-    let lines_more = u16::from(rows.contains(&GenParam::Weights));
+    // `Weights` takes two lines more, for its notes and the rows line.
+    let lines_more = 2 * u16::from(rows.contains(&GenParam::Weights));
     let width = width(panel, &rows, labels(&rows));
     let height = rows.len() as u16 + lines_more + AROUND_ROWS;
     match side {
@@ -333,7 +409,7 @@ fn draw_in(frame: &mut Frame, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
     for row in rows {
         let current = row == panel.row;
         if row == GenParam::Weights {
-            lines.extend(weight_lines(panel, current, labels));
+            lines.extend(weight_lines(panel, ctx, current, labels, room));
             continue;
         }
         let typing = current.then_some(panel.typing.as_ref()).flatten();

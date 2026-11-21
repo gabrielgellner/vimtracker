@@ -52,7 +52,7 @@ pub use random::{
     Degrees, EVEN_SPREAD, MAX_BIAS, MAX_SPREAD, MAX_WEIGHT, Random, WEIGHTS, degree_count,
     degree_name, degree_of,
 };
-pub use render::{GenCell, RowView, render_into};
+pub use render::{GenCell, NO_TOKEN, RowView, render_into, render_tokens_into};
 pub use ring::{Kept, MAX_RING, Ring};
 use serde::{Deserialize, Serialize};
 pub use tonnetz::{
@@ -1571,7 +1571,7 @@ fn shaped(
         list,
         None,
         &mut cells,
-        |row, value| {
+        |row, value, _| {
             found.push((row, *value));
         },
     );

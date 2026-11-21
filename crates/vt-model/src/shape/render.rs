@@ -8,7 +8,7 @@
 //! themselves before it writes them, so it needs nothing more.
 
 use super::mix;
-use super::random::{Odds, unit};
+use super::random::{Odds, degree_of, unit};
 use super::{
     FillKind, Ladder, Over, Shape, ShapeColumn, WaveRate, Where, acid, bits, curved, divisions,
     follow, grids, rhythm, ring, tonnetz, variation, walk, world,
@@ -266,7 +266,64 @@ pub fn render_into(
     source: Option<&[Step]>,
     cells: &mut [GenCell],
 ) {
-    render(steps, range, column, shape, list, source, cells, |_, _| {});
+    render(
+        steps,
+        range,
+        column,
+        shape,
+        list,
+        source,
+        cells,
+        |_, _, _| {},
+    );
+}
+
+/// What a render's token table holds on a row no token of a setting wrote: one left alone, or
+/// written by a fill whose settings aren't tokens. A full `List`'s 256th value shares it, and
+/// never meets it, as a `List` writes every row it fills from a token.
+pub const NO_TOKEN: u8 = u8::MAX;
+
+/// [`render_into`], keeping beside the cells which token of the setting the fill reads wrote each
+/// row, a byte a row in `tokens`, as long as `cells` (decision 460): a `List`'s by the place of
+/// its value, from 0, and a random fill's on notes by the degree its note is on from the root,
+/// as `Weights`' digits are. A row no token wrote holds [`NO_TOKEN`]. It allocates nothing, so the
+/// edit thread can keep a table for each render without a cost the engine pays: the engine's own
+/// render keeps none.
+#[allow(clippy::too_many_arguments)]
+pub fn render_tokens_into(
+    steps: &[Step],
+    range: StepRange,
+    column: ShapeColumn,
+    shape: &Shape,
+    list: &[u8],
+    source: Option<&[Step]>,
+    cells: &mut [GenCell],
+    tokens: &mut [u8],
+) {
+    tokens.fill(NO_TOKEN);
+    let degrees = match column {
+        ShapeColumn::Note { scale, .. } if shape.kind == FillKind::Random => Some(scale),
+        _ => None,
+    };
+    let first = range.first;
+    render(
+        steps,
+        range,
+        column,
+        shape,
+        list,
+        source,
+        cells,
+        |row, value, nth| {
+            let nth = nth.or_else(|| degrees.and_then(|scale| degree_of(scale, value.whole)));
+            if let (Some(token), Some(nth)) = (
+                row.checked_sub(first).and_then(|at| tokens.get_mut(at)),
+                nth,
+            ) {
+                *token = u8::try_from(nth).unwrap_or(NO_TOKEN);
+            }
+        },
+    );
 }
 
 /// A shape's value on a row: where it falls exactly, and the whole value written without a fine
@@ -316,7 +373,7 @@ pub(super) fn render(
     list: &[u8],
     source: Option<&[Step]>,
     cells: &mut [GenCell],
-    seen: impl FnMut(usize, &Shaped),
+    seen: impl FnMut(usize, &Shaped, Option<usize>),
 ) {
     let len = range.len().min(MAX_PHRASE_STEPS).min(cells.len());
     debug_assert_eq!(
@@ -443,9 +500,15 @@ pub(super) struct Out<'a, F> {
     pub(super) seen: F,
 }
 
-impl<F: FnMut(usize, &Shaped)> Out<'_, F> {
+impl<F: FnMut(usize, &Shaped, Option<usize>)> Out<'_, F> {
     /// A row's value, by its offset in the span.
     fn put(&mut self, offset: usize, value: Shaped) {
+        self.put_nth(offset, value, None);
+    }
+
+    /// The same, from the `nth` of its setting's tokens, as a `List`'s value is, for
+    /// [`render_tokens_into`]'s table.
+    fn put_nth(&mut self, offset: usize, value: Shaped, nth: Option<usize>) {
         let value = match self.along {
             Some((ladder, moved)) => {
                 let position = if moved {
@@ -462,7 +525,7 @@ impl<F: FnMut(usize, &Shaped)> Out<'_, F> {
             return;
         };
         self.cells[offset] = self.column.cell(step, exact(self.column, value));
-        (self.seen)(row, &value);
+        (self.seen)(row, &value, nth);
     }
 }
 
@@ -746,7 +809,7 @@ fn tied(
 /// A Note column's values. A ramp, a random fill, a wave and the transforms work along the
 /// `Ladder`, so they land on the scale's degrees while it's on; `Alternate` and `List` write their
 /// notes as they're given, and `Snap` moves each note to the nearest in the scale.
-fn noted<F: FnMut(usize, &Shaped)>(
+fn noted<F: FnMut(usize, &Shaped, Option<usize>)>(
     rows: &Rows,
     range: StepRange,
     scale: Scale,
@@ -814,7 +877,7 @@ fn noted<F: FnMut(usize, &Shaped)>(
 /// The values on the rows chosen, for a column whose values run from 0 to `top`. A transform reads
 /// the values there through `read`, from the column's value with its fine part, and a random fill
 /// weighing its notes draws them by their `odds`.
-fn filled<F: FnMut(usize, &Shaped), R: Fn(u16) -> f64>(
+fn filled<F: FnMut(usize, &Shaped, Option<usize>), R: Fn(u16) -> f64>(
     rows: &Rows,
     range: StepRange,
     shape: &Shape,
@@ -847,6 +910,8 @@ fn filled<F: FnMut(usize, &Shaped), R: Fn(u16) -> f64>(
     let mut held = first;
     let list = out.list;
     for (index, offset) in rows.ones().enumerate() {
+        // The value of a `List`'s that writes the row, for the token table.
+        let mut nth = None;
         if index.is_multiple_of(run) {
             held = offset;
         }
@@ -901,7 +966,9 @@ fn filled<F: FnMut(usize, &Shaped), R: Fn(u16) -> f64>(
             FillKind::List => {
                 // An empty list never comes from the panel, but leaves the rows at nothing rather
                 // than failing. A phrase longer than the list goes round it.
-                let value = list.get(index / run % list.len().max(1)).copied();
+                let at = index / run % list.len().max(1);
+                nth = Some(at);
+                let value = list.get(at).copied();
                 whole(f64::from(value.unwrap_or(0)).min(top))
             }
             FillKind::Scale
@@ -921,7 +988,7 @@ fn filled<F: FnMut(usize, &Shaped), R: Fn(u16) -> f64>(
             FillKind::Variation => unreachable!("rendered by `variation::render`"),
             FillKind::Follow => unreachable!("read from what it follows"),
         };
-        out.put(offset, value);
+        out.put_nth(offset, value, nth);
     }
 }
 
@@ -932,7 +999,7 @@ fn filled<F: FnMut(usize, &Shaped), R: Fn(u16) -> f64>(
 /// row from the last back: a row is never before its place among them, so none is written over
 /// before it's moved. Until then a cell holds its value in an FX slot's, the one with room for a
 /// fine part.
-fn reworked<F: FnMut(usize, &Shaped), R: Fn(u16) -> f64>(
+fn reworked<F: FnMut(usize, &Shaped, Option<usize>), R: Fn(u16) -> f64>(
     rows: &Rows,
     shape: &Shape,
     top: f64,

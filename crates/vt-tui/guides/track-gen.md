@@ -33,7 +33,10 @@ weights on a device of their own under it too, `Weights`: a cell for each degree
 scale, in rows of four from the root, each named by its note, `C`, `D#`, and at the end of its
 title, dim, how many of them `Steps` lets through, `Steps lets 5 of 5 through`. They're the shape
 panel's `Weights` digits, so a turn of a cell is that digit, and each takes a macro, a `MAC` lock
-or an LFO on its macro as any setting here does, so a weight can move while it plays. The Roto has
+or an LFO on its macro as any setting here does, so a weight can move while it plays. With the
+cursor on a weight, the generator's preview marks the rows its degree writes with dotted lines
+down the picture, and while the phrase plays, the weight of the note playing is named in green,
+the playhead's colour, on the pass the phrase is on. The Roto has
 the first eight on one page and the last four on a second. A value with a bar is brief, as `9` for hits,
 as its bar shows how many of how many; the status line says it in full, `Hits, 9
 of the 16 rows`.
