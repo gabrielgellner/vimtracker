@@ -121,8 +121,13 @@ in the panel, they're Gen's (see the Gen guide). `gl` moves the panel rather tha
 panel, which shows nothing the device doesn't, and `gL` opens the side form whichever you used
 last. `S` still opens the shape panel on a selection, drawn at the top left of Gen's panel so the
 grid's columns stay in view; `L` there lands in the new generator's device with the keys in the
-panel, and `Enter` or `Esc` leaves them in the grid. The status line's mode, `NORMAL` or `GEN`, and
-the bold `Grid` or `Gen` in the title say which has them. While the keys are in the grid the panel
+panel, and `Enter` or `Esc` leaves them in the grid. The side with the keys has its frame in blue,
+the focus colour: the grid's frame, or the frame of the panel's device the cursor is in. The other
+side's cursor sits back, dimmed, so you still see where it is. The status line's mode, `NORMAL` or
+`GEN`, and the bold `Grid` or `Gen` in the title say the same. Blue frames work the same way
+wherever another area could take the keys: the macro panel's rule while `Space T` has put the keys
+in it, the shape panel, and a buffer of tokens open over its page. In each, the page's cursor
+behind sits back. Insert still turns the grid's frame green. While the keys are in the grid the panel
 follows its cursor, onto the device of the column it's on, and while they're in the panel its
 device lights its rows in the grid and shows its column's values as bars (see the Gen guide).
 `Space 8` opens Gen in the form you used last, kept until you quit, and `Space 3` goes to the grid

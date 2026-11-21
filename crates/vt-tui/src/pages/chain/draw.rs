@@ -64,7 +64,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &ChainView, ctx: &Ctx) {
     let room = usize::from(area.height.saturating_sub(2)).max(1);
     let first = (ctx.cursor().slot + 1).saturating_sub(room);
     let typing = ctx.mode() == Mode::Insert;
-    let cursor = theme::cursor(ctx.mode());
+    let cursor = ctx.cursor_on(ctx.view());
     for slot in (first..=entries.len()).take(room) {
         let entry = entries.get(slot);
         let marker = if playing == Some(slot) { ">" } else { " " };

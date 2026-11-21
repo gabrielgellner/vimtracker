@@ -30,7 +30,7 @@ use crate::widgets::device::{DEVICE_HEIGHT, Device};
 use crate::widgets::grid::{CellParts, CellSource, CellWidths, ROW_STEP, SettingsGrid};
 use crate::widgets::image;
 use crate::widgets::panel::GraphicPanel;
-use crate::widgets::setting::{self, Focus};
+use crate::widgets::setting::{self, CellLook, Focus};
 use crate::widgets::table::take_top;
 use crate::widgets::theme;
 use crate::widgets::token_buffer::{self, Buffer, Marks};
@@ -111,7 +111,9 @@ fn draw_macros(
     focused: bool,
 ) {
     let listed = macro_listed(page, ctx);
-    let mut widget = Device::new(device.identity.clone()).focused(focused);
+    let mut widget = Device::new(device.identity.clone())
+        .focused(focused)
+        .held(page.framed(ctx));
     // Which macro is listed, its name after its number once it has one, and how many it holds.
     if let Some(at) = listed {
         let held = &track.macros[at];
@@ -194,7 +196,7 @@ const STRIP_INDENT: u16 = 2;
 /// The macro panel (decision 385): the cursor's track's eight macros in a row, each its name over
 /// its value and bar, drawn as the Macros page's band draws them, under a rule that names the track.
 /// `cursor` is the macro the keys are on, while they're in the panel, whose value is in the
-/// cursor's colour and whose rule is brighter.
+/// cursor's colour and whose rule is in the focus colour.
 pub(crate) fn draw_macro_strip(frame: &mut Frame, area: Rect, ctx: &Ctx, cursor: Option<usize>) {
     let index = ctx.cursor().track;
     let Some(track) = ctx.song().tracks.get(index) else {
@@ -209,8 +211,9 @@ pub(crate) fn draw_macro_strip(frame: &mut Frame, area: Rect, ctx: &Ctx, cursor:
     } else {
         crate::widgets::group::title(track)
     };
+    // Its rule is in the focus colour while the keys are in it (decision 475).
     let (rule, title) = match cursor {
-        Some(_) => (theme::OVERLAY2, Style::new().add_modifier(Modifier::BOLD)),
+        Some(_) => (theme::FOCUS, Style::new().add_modifier(Modifier::BOLD)),
         None => (theme::SURFACE1, Style::new()),
     };
     let heading = Line::from(vec![
@@ -328,7 +331,8 @@ fn draw_generator(
     let widget = Device::new(String::new())
         .controls(cells.titles(device))
         .after(Line::styled(format!("· {}", acts_on(&live)), theme::dim()))
-        .focused(focused);
+        .focused(focused)
+        .held(page.framed(ctx));
     frame.render_widget(widget, area);
     let mut settings = Device::settings_area(area);
     let mut preview = None;
@@ -370,7 +374,11 @@ fn draw_fields(
     device: &DeviceSpec,
     live: &LiveGen,
 ) -> Option<OpenAt> {
-    let here = page.has_keys(ctx).then(|| page.control_here(ctx));
+    let here = Some(page.control_here(ctx));
+    let cursor = match page.has_keys(ctx) {
+        true => theme::cursor(Mode::Normal),
+        false => theme::cursor_away(),
+    };
     let context = live.context();
     let mut open_at = None;
     for (row, places) in device.grid.iter().enumerate() {
@@ -406,7 +414,7 @@ fn draw_fields(
                 continue;
             }
             let room = end - x;
-            let lit = (here == Some(control)).then(|| theme::cursor(Mode::Normal));
+            let lit = (here == Some(control)).then_some(cursor);
             let playing = playing_token(ctx, control, live, &field);
             let line = token_buffer::cell_line(&field, playing, room.into(), lit);
             let buffer = frame.buffer_mut();
@@ -510,7 +518,8 @@ fn draw_loops(
     };
     let widget = Device::new(device.identity.clone())
         .after(Line::styled(after, theme::dim()))
-        .focused(focused);
+        .focused(focused)
+        .held(page.framed(ctx));
     frame.render_widget(widget, area);
     let cells = TrackCells::new(page, ctx, track).of_generator(&live);
     let rows = device.grid.iter().copied().map(Vec::from).collect();
@@ -550,7 +559,8 @@ fn draw_weights(
     };
     let widget = Device::new(device.identity.clone())
         .after(Line::styled(after, theme::dim()))
-        .focused(focused);
+        .focused(focused)
+        .held(page.framed(ctx));
     frame.render_widget(widget, area);
     let playing = playing_weight(ctx, phrase, generator, &live).map(|degree| Control::Gen {
         phrase,
@@ -668,7 +678,8 @@ fn draw_lane(
     });
     let widget = Device::new(device.identity.clone())
         .after(Line::styled(after.unwrap_or_default(), theme::dim()))
-        .focused(focused);
+        .focused(focused)
+        .held(page.framed(ctx));
     frame.render_widget(widget, area);
     let cells = TrackCells::new(page, ctx, track);
     let rows = device.grid.iter().copied().map(Vec::from).collect();
@@ -699,7 +710,8 @@ fn draw_phrase(
     });
     let widget = Device::new(device.identity.clone())
         .after(Line::styled(after.unwrap_or_default(), theme::dim()))
-        .focused(focused);
+        .focused(focused)
+        .held(page.framed(ctx));
     frame.render_widget(widget, area);
     let cells = TrackCells::new(page, ctx, track);
     let rows = device.grid.iter().copied().map(Vec::from).collect();
@@ -733,8 +745,11 @@ fn draw_empty(
     device: &DeviceSpec,
     focused: bool,
 ) {
-    let here = page.has_keys(ctx) && device.title[0] == Some(page.control_here(ctx));
-    let look = ctx.look(Focus::at(here, false));
+    let here = device.title[0] == Some(page.control_here(ctx));
+    let look = CellLook {
+        away: !page.has_keys(ctx),
+        ..ctx.look(Focus::at(here, false))
+    };
     let text = setting::text(&look, || "Empty".to_owned());
     let style = setting::style(&look, true);
     // Beside the grid, it names the grid's cursor's column when that has nothing live, which `K`
@@ -742,7 +757,8 @@ fn draw_empty(
     let named = empty_beside(page, ctx);
     let mut widget = Device::new(String::new())
         .controls(vec![Line::styled(text, style)])
-        .focused(focused);
+        .focused(focused)
+        .held(page.framed(ctx));
     if let Some(field) = named {
         widget = widget.after(Line::styled(
             format!("· {}", column_name(field)),

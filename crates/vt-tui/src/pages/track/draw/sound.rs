@@ -127,7 +127,8 @@ fn draw_device(
     let cells = TrackCells::new(page, ctx, &heard);
     let widget = Device::new(device.identity.clone())
         .controls(cells.titles(device))
-        .focused(focused);
+        .focused(focused)
+        .held(page.framed(ctx));
     frame.render_widget(widget, area);
     let rows = device.grid.iter().copied().map(Vec::from).collect();
     let grid = SettingsGrid::new(&cells, rows, CellWidths::SOUND);
