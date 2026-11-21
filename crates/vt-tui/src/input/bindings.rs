@@ -160,6 +160,9 @@ pub enum Cmd {
     PickValue,
     /// Fill the selected column with a ramp or random values.
     Shape,
+    /// `!`: fill the cursor's column from a pattern in `Mini`'s notation, counted from the
+    /// phrase's row 00, on the rows selected or every row (decision 474).
+    Pattern,
     /// Open the shape panel again on the live generator under the cursor; with Gen beside the
     /// grid, move the panel to its device instead (decision 469).
     ReopenGenerator,

@@ -268,7 +268,12 @@ impl App {
                 .grammar
                 .replacing_selection
                 .map(|(selection, _)| selection)
-                .or(self.overlays.shape.as_ref().map(|panel| panel.selection)),
+                .or(self
+                    .overlays
+                    .shape
+                    .as_ref()
+                    .filter(|panel| panel.pattern.as_ref().is_none_or(|p| p.selected))
+                    .map(|panel| panel.selection)),
             recording: self.sampling_shown(),
             audio: &self.audio_page.audio,
             wheel: self.wheel.setting,

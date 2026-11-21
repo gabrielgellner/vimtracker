@@ -87,6 +87,14 @@ pub(crate) enum Change {
         steps: usize,
         tracks: usize,
     },
+    /// A pattern entered with `!` (decision 474): its line as typed, `x` and all, its `Step`,
+    /// whether `L` kept it live, and on an empty FX column the command it wrote.
+    Pattern {
+        text: Box<str>,
+        step: u8,
+        live: bool,
+        command: Option<FxCommand>,
+    },
     /// A field replaced, with the step that holds its new value.
     Replace {
         field: Field,
@@ -993,6 +1001,12 @@ impl App {
                 let (range, scope) = self.resolve_cover(*cover);
                 self.cycle_mark(range, scope, self.span_of(*cover));
             }
+            Change::Pattern {
+                text,
+                step,
+                live,
+                command,
+            } => self.repeat_pattern(text, *step, *live, *command),
             // `x` on a value's fine digits sets them back to 00, and keeps the value.
             Change::ClearField
                 if !self.modes.mode.is_visual()
@@ -1200,6 +1214,17 @@ impl App {
             return;
         };
         self.modes.count = None;
+        // A pattern goes on the cursor's column, on the rows selected or every row.
+        if let Change::Pattern {
+            text,
+            step,
+            live,
+            command,
+        } = change
+        {
+            self.repeat_pattern(&text, step, live, command);
+            return;
+        }
         if self.modes.mode.is_visual() {
             let selection = self.current_selection();
             let before = Arc::clone(self.song());
@@ -1256,7 +1281,7 @@ impl App {
                         self.modes.view,
                     );
                 }
-                Change::Paste { .. } => {}
+                Change::Paste { .. } | Change::Pattern { .. } => {}
             }
             match kept {
                 Some(adjustment) => self.adjusted(&before, adjustment),
@@ -1294,6 +1319,18 @@ impl App {
 
     /// Remember a kept shape for `.`.
     pub(crate) fn remember_shape(&mut self, panel: &ShapePanel) {
+        if let Some(pattern) = &panel.pattern {
+            self.grammar.last_change = Some(Change::Pattern {
+                text: pattern.typed.as_str().into(),
+                step: panel.shape.mini.step,
+                live: panel.kept_live,
+                command: match panel.column {
+                    ShapeColumn::Fx { command, .. } => Some(command),
+                    _ => None,
+                },
+            });
+            return;
+        }
         self.grammar.last_change = Some(Change::Shape {
             column: panel.column,
             shape: Box::new(panel.shape),

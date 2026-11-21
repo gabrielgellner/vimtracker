@@ -245,6 +245,13 @@ pub struct Live {
     pub octave: i8,
     /// The velocity new notes are written with, like the octave.
     pub note_velocity: u8,
+    /// The last note typed in Insert, which `x` is in a pattern entered with `!`, or none
+    /// before one is typed (decision 474).
+    pub insert_note: Option<u8>,
+    /// The `Step` a pattern entered with `!` was last given, which the next starts with.
+    pub pattern_step: u8,
+    /// The last pattern entered with `!`, as typed, which `!!` opens with.
+    pub last_pattern: String,
 }
 
 impl Live {
@@ -258,9 +265,22 @@ impl Live {
             fill: false,
             octave: 3,
             note_velocity: DEFAULT_NOTE_VELOCITY,
+            insert_note: None,
+            pattern_step: PATTERN_STEP,
+            last_pattern: String::new(),
         }
     }
+
+    /// The note `x` is in a pattern: the last typed in Insert, or before one is, C in the keys'
+    /// octave.
+    pub(crate) fn insert_note(&self) -> u8 {
+        self.insert_note
+            .unwrap_or_else(|| ((i16::from(self.octave) + 2) * 12).clamp(0, 127) as u8)
+    }
 }
+
+/// The `Step` a pattern entered with `!` starts at, a row a quarter of a beat: four rows a token.
+pub(crate) const PATTERN_STEP: u8 = 4;
 
 impl Services {
     /// Start with a song, its project folder if it has one, a connection to the engine, and what

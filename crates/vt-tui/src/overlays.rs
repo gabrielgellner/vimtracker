@@ -12,11 +12,9 @@ pub mod shape;
 use ratatui::Frame;
 use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::Rect;
-use vt_model::selection::Field;
 
 use std::time::Instant;
 
-use crate::app::Selection;
 use crate::app::grammar::Grammar;
 use crate::input::bindings::{Cmd, Resolved, Table};
 use crate::input::keys::Key;
@@ -209,7 +207,9 @@ pub struct Overlays {
     /// The open mapping view of a macro.
     pub mapping: Option<MappingView>,
     /// A selection to shape once the command for its empty FX column is chosen, and its field.
-    pub(crate) shape_command: Option<(Selection, Field)>,
+    pub(crate) shape_command: Option<shape::Waiting>,
+    /// The line a pattern waiting for its FX command opens with.
+    pub(crate) pattern_text: String,
     /// The search for a setting under way, `/` on the track page or the mixer.
     pub field_jump: Option<FieldJump>,
     /// The macro panel at the bottom of the screen, whether it shows, and where its cursor is.
@@ -231,6 +231,7 @@ impl Overlays {
             shape: None,
             mapping: None,
             shape_command: None,
+            pattern_text: String::new(),
             field_jump: None,
             macro_panel: MacroPanel::default(),
             describing: false,
