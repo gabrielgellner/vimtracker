@@ -236,7 +236,7 @@ pub enum Did {
     Changed,
     /// The buffer closed.
     Out,
-    /// What's typed kept, and the buffer closed: `Enter` while typing.
+    /// What's typed kept, and the buffer closed: `Enter`, typing or not.
     Kept,
     /// Nothing done, and why.
     Refused(String),
@@ -492,13 +492,14 @@ impl Tokens {
                 }
                 return Did::Out;
             }
+            // Kept, as `Enter` while typing is, so a pattern's `Enter` writes it either way.
             TokenKey::Done => {
                 return match field.bad() {
                     Some(bad) => Did::Refused(format!(
                         "{}: Enter keeps text that reads, and Esc puts back the last that did",
                         bad.why
                     )),
-                    None => Did::Out,
+                    None => Did::Kept,
                 };
             }
             // `h` from the first stays there, as the buffer is a dialog.
