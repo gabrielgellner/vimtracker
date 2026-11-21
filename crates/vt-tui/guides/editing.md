@@ -205,8 +205,8 @@ values, where two digits make a value and the space comes by itself, so `704055`
 types `70 40 55`, starting from the values there. It starts as the two ends. `Run` works as for
 `Alternate`, so `2` gives `70 70 40 40 55 55`, and `~` turns the list round. A phrase longer than
 the list goes round it again. A list longer than the panel is wide shows its first
-values and how many more, as `+248`, and while it's typed the panel shows its end.
-`l` goes into the values, a token each (Fields of tokens, below): `=` and `-` turn the one under
+values and how many more, as `+248`; its buffer shows them all.
+`l` opens the values, a token each (Fields of tokens, below): `=` and `-` turn the one under
 the cursor, a note by a degree of the song's scale, or a semitone with it off, and `+` `_` by an
 octave, so a line of notes can be walked into a new one without typing it again; any other value
 turns by 1, or `10`. `x` takes a value out, `a` types one after it and `p` pastes one, and the
@@ -348,8 +348,10 @@ track plays the next part`.
 a `Random` velocity, a `Wave` on an FX column. Choosing `Own` starts it from the
 named rhythm's part, a token a pulse, and so does editing a named rhythm's
 `Text`, which shows on its row: the son clave's bell is
-`x . . x . . x . . . x . x . . .`. `i` types the whole text, and `l` goes into
-its tokens ([Fields of tokens](#fields-of-tokens)).
+`x . . x . . x . . . x . x . . .`. Its buffer opens with `l` on the panel and
+`Enter` on the Gen page, `i` typing at the end and `S` typing it afresh
+([Fields of tokens](#fields-of-tokens)). The text stays where it is, named or
+`Own`: editing a named one's makes it `Own` without moving its row or cell.
 
 | Text | Means |
 |---|---|
@@ -484,7 +486,7 @@ F, A, E, D#, G#, A#, D, B, C# and F#.
 
 `Weights` is Vermona's meloDICER's row of faders, one for each degree: a hex digit each from the
 root, with the note it's for under it, `C  D# F  G  A#` in C minor pentatonic, and with the scale
-off a digit for each of the twelve semitones. `l` goes into the digits, on the first, and the
+off a digit for each of the twelve semitones. `l` opens them, on the first, and the
 status line names the one under the cursor, `Weight of G: F`. Each change is heard as it's made,
 and `Enter` on the panel keeps them all as one undo.
 
@@ -493,7 +495,7 @@ is edited with, under Fields of tokens below. On `Weights`:
 
 | Keys | Does |
 |---|---|
-| `h` `l` | Across the digits. `h` from the first goes back to the rows |
+| `h` `l` | Across the digits |
 | `^` `$` | The first or last digit |
 | `=` `-` | Up or down by one |
 | `+` `_` | Up or down by 4 |
@@ -501,19 +503,19 @@ is edited with, under Fields of tokens below. On `Weights`:
 | `r` `s` | Then a digit: sets it, and stays on it |
 | `x` | Back to `F` |
 | `~` | `0`, the digit rested, and again gives back what it was |
-| `Esc` `Enter` | Back to the rows |
+| `Esc` `Enter` | Close the buffer, back on the row |
 
 `0` types a 0 here, as each hex digit types itself, so `^` goes to the first, and `a` to `f` are
 digits too. In C major `F08F` typed from the first keeps the second out and gives the third about
-half the root's chances. `i` types them all at once: it starts from the digits there, and the
-first digit typed starts them afresh, the degrees after those typed keeping theirs, while
-`Backspace` edits them from the end. Spread and Bias still shape the notes let through, so a
+half the root's chances. `i` opens them on the first digit too, so the digits typed go over
+them in turn, the degrees after those typed keeping theirs, and `S` puts every one back to `F`
+first. Spread and Bias still shape the notes let through, so a
 narrow Spread stays in the middle of the range, and one value on a degree left out lands on the
 nearest one let through, the lower of two as near.
 
 Under the notes, `Rows` marks each row the fill writes `x`, `.` for one it leaves, so in the
 digits the rows a digit writes, those whose notes are on its degree, are lit there and in the
-Note column as `l` goes along, and while the phrase plays the digit of the note playing is green.
+Note column as the cursor goes along, and while the phrase plays the digit of the note playing is green.
 <!-- ANCHOR_END: after-bars -->
 <!-- ANCHOR: after-weights -->
 
@@ -575,10 +577,10 @@ column's highest needs: 7 on Velocity, 8 on most FX commands and lengths, and
 
 On Velocity, Flip `FF` makes `35` into `4A`, Keep `F0` steps the velocities
 in `10`s, and Turn 1 doubles each, the loudest coming round to quiet. Flip
-and Keep are typed as two hex digits with `i`, and `=` and `-` move them
-by one, `+` and `_` by `10`; Turn goes from 0 to 7. The panel shows Flip and
+and Keep are a byte, `=` and `-` moving them by one and `+` and `_` by `10`
+on the row; Turn goes from 0 to 7. The panel shows Flip and
 Keep as their eight bits, the lowest first, `x` for on, with the byte beside
-them, `. . . . x x x x   F0`, so a mask reads as what it keeps. `l` goes into
+them, `. . . . x x x x   F0`, so a mask reads as what it keeps. `l` or `i` opens
 the bits, `=` and `-` switch the one under the cursor, and `1` and `0` set it and
 move on; on the row, as for macros and the Roto, they step the byte as a number. Flipping the same bits
 twice gives the values back. A value pushed past the column's highest stops
@@ -746,7 +748,7 @@ a beat, and on a track at `1/2`, `All rows` is a chord each half note.
 
 Each move is drawn over the chord it reaches, `P   L   R   L` over `Cm  G#  Fm  C#` from `C-3`,
 and the panel's last line names the first chords as the list goes round, `C Cm G# Fm C# C#m A
-F#m`. `l` goes into the moves: `=` and `-` go round `P`, `L` and `R`, so a progression is tried a
+F#m`. `l` opens the moves: `=` and `-` go round `P`, `L` and `R`, so a progression is tried a
 move at a time, the status line saying the chords it goes between, `Move 2: L, Cm to G#`, and `K`
 lists the three with the chord each would reach from there.
 
@@ -1029,17 +1031,28 @@ the values it left.
 ## Fields of tokens
 
 A setting whose value is a short text with a grammar of its own, `Weights`, a `List`'s values, a
-`Tonnetz`'s moves, a mask's bits and an `Own` rhythm's or a `Mini`'s `Text`, is a field of tokens: `l` goes
-into it, the cursor on a
-whole token, a digit, a note, a value or a group, and the keys move by the grammar and turn a
-token in its own units. A **group** is a bracket and what it holds, `[. 7F]` or `<30 40>`, and a
-**rest** is `.`, with `~` read as one too, as Tidal writes it.
+`Tonnetz`'s moves, a mask's bits, an `Own` rhythm's or a `Mini`'s `Text` and a Steps slot's
+values, is a field of tokens, edited in its **buffer**: a box opened from the setting, its whole
+text in it as typed, over as many lines as it takes, so a pattern longer than a cell is seen
+whole. Its cell or row shows the text, cut to its width, and `h` `l` `j` `k` go from it to the
+next setting, as from any other.
+
+| On it | Opens the buffer |
+|---|---|
+| `Enter` | On the first token; `l` on the shape panel |
+| `i` `a` | Typing at the end, keeping the text |
+| `cc` `S` | Typing it all again, what was there kept for `p` |
+| `K` | Not the buffer: the setting's own list, as `Rhythm`'s presets |
+
+In the buffer the cursor is on a whole token, a digit, a note, a value or a group, and the keys
+move by the grammar and turn a token in its own units. A **group** is a bracket and what it
+holds, `[. 7F]` or `<30 40>`, and a **rest** is `.`, with `~` read as one too, as Tidal writes it.
 
 | Keys | Does |
 |---|---|
-| `h` `l` | The token before or after, in and out of groups; out from the first |
+| `h` `l` | The token before or after, in and out of groups |
 | `w` `b` | The next or previous token at the same depth, a group as one |
-| `^` `$` | The first or last token |
+| `0` `^` `$` | The first or last token |
 | `%` | The bracket that matches the one under the cursor |
 | `(` `)` | Out to the start or the end of the group the cursor is in |
 | `=` `-` | Turns the token by one of its units |
@@ -1048,10 +1061,10 @@ token in its own units. A **group** is a bracket and what it holds, `[. 7F]` or 
 | `~` | Rests the token, and again gives back what it was |
 | `r` | Replaces the token: `r`, then the new one, and back on it |
 | `s` | Types over the token |
-| `i` `a` | Types before or after the token, or on a fixed length types it all |
+| `i` `a` | Types before or after the token, or on a fixed length over it |
 | `p` | Pastes after the token, or on a fixed length over it |
-| `Esc` | Back to the row, putting back the last text that read |
-| `Enter` | Back to the row, where the text reads |
+| `Esc` | Stops typing, or closes it, the last text that read put back |
+| `Enter` | Closes it, where the text reads, typing or not |
 
 A count before a key goes so far, `3l` or `2w`, where digits aren't tokens of the field. `d`, `c`
 and `y` take a text object, and `p` pastes what they took:
@@ -1067,14 +1080,29 @@ and `y` take a text object, and `p` pastes what they took:
 | `di(` `ci(` `yi(` | A Euclid's numbers |
 | `da(` `ca(` `ya(` | A Euclid, with its brackets |
 
-Keys a field doesn't have are the panel's: `j`, `k` and `L` leave the tokens and do what they do
-on the rows, while `Tab`, `Space d` and `Space ?` leave the cursor where it is, and `Space d` says
-what the token under it does. A field of fixed length, as `Weights` and a mask are, shows every
-token and never loses or gains one, and on `Weights` the letters `a` to `f` are digits, so `a`,
-`b`, `c` and `d` aren't there. A list has room for 256 values and a `Tonnetz` 8 moves, and the
-status line says the room there is. On the Gen page, `l` on a cell in a grammar goes into its
-tokens the same way, drawn over the cell with what each is for under it, each change one undo
-step; a key the field doesn't have leaves it and does what it does on the page.
+The buffer is a dialog: a key it doesn't have does nothing, `j` and `k` too, until `Esc` or
+`Enter` closes it; `Tab` still plays, and on the shape panel `Space d` says what the token under
+the cursor does. Each change is heard as it's made, and on the Gen page and the Mod page the
+changes are one undo step when it closes. A field of fixed length, as `Weights` and a mask are,
+shows every token and never loses or gains one, so `i` and `a` open it on the first token, what's
+typed going over them in turn, and `S` puts each back to how it starts first; on `Weights` the
+letters `a` to `f` are digits, so `a`, `b`, `c` and `d` aren't there. A list has room for 256
+values, a `Tonnetz` 8 moves and a Steps slot 16 steps, and the status line says the room there
+is. A list of hex values takes a space after each two digits, so `704055` is three. Where
+something is said under each token, `Weights`' notes or the chord a move reaches, each token
+keeps a cell so it fits; any other text is drawn as it's typed, brackets, commas and all:
+
+```
+╭ Text ─────────────────────────────────╮
+│ x(3,8) [. x]*2 <x . .> x              │
+│                                       │
+│ Rows  x . . x . . x . x x . . x . . . │
+╰ = - turn  x out  K what goes  Enter close ╯
+```
+
+A Steps slot's values open on the cursor's step with `Enter` on one, as many as it plays: `x`
+takes one out and `a` adds one, so its `Length` follows. `i` on a step still types that step's
+value, or a list from it.
 
 **What can go here.** `K` on a token lists what it could be, under it, each with what it means,
 opened on the one it is: on a weight the sixteen weights, `0  never` to `F  the most`. `j` and
