@@ -12,6 +12,7 @@
 
 mod bits;
 mod field;
+mod kit;
 mod list;
 mod mini;
 mod moves;
@@ -26,6 +27,7 @@ use std::ops::Range;
 use crate::shape::ShapeColumn;
 
 pub use field::{Field, Insert, Motion, Object, Place};
+pub use kit::{compile as compile_kit, is_name, rename as kit_rename, start as kit_start};
 pub use mini::{
     MAX_MINI, STACKED, atom as mini_atom, compile as compile_mini, layer as mini_layer,
     layers as mini_layers, stacks, start as mini_start,
@@ -53,19 +55,22 @@ pub enum GrammarId {
     Rhythm,
     /// A `Mini`'s line: the rhythm's notation, its hits the column's values (decision 462).
     Mini,
+    /// A kit line: a `Mini`'s line across a group's tracks, its hits their names (decision 464).
+    Kit,
     /// A Steps slot's values, signed hex, as many as it plays (decision 463).
     Steps,
 }
 
 impl GrammarId {
     /// Every grammar.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Weights,
         Self::List,
         Self::Moves,
         Self::Bits,
         Self::Rhythm,
         Self::Mini,
+        Self::Kit,
         Self::Steps,
     ];
 
@@ -78,6 +83,7 @@ impl GrammarId {
             Self::Bits => &bits::BITS,
             Self::Rhythm => &rhythm::RHYTHM,
             Self::Mini => &mini::MINI,
+            Self::Kit => &kit::KIT,
             Self::Steps => &steps::STEPS_LIST,
         }
     }
@@ -210,6 +216,10 @@ pub struct Around<'a> {
     pub reached: &'a [String],
 }
 
+/// How a grammar turns a token: its kind and text, the sign, whether it's large, the column and
+/// a kit line's names, to its new text, or none where it doesn't turn.
+pub type Turn = fn(Kind, &str, i16, bool, ShapeColumn, &[String]) -> Option<String>;
+
 /// A grammar, declared once: how its text splits into tokens, whether it reads, what each kind of
 /// token means and how it turns, what can go in its place and which rows it writes, and what the
 /// editor's keys do with it.
@@ -219,15 +229,17 @@ pub struct Grammar {
     pub kinds: &'static [Kind],
     /// The tokens of a text, in order, at depth 0, which [`split`] works out.
     pub split: fn(&str) -> Vec<Token>,
-    /// Whether a text reads, on this column, or where and why it doesn't.
-    pub read: fn(&str, ShapeColumn) -> Result<(), Bad>,
+    /// Whether a text reads, on this column, or where and why it doesn't, given the names of the
+    /// tracks a kit line spans, which only a kit line's grammar reads (#1093).
+    pub read: fn(&str, ShapeColumn, &[String]) -> Result<(), Bad>,
     /// What a kind of token does, for `Space d`, with `{}` where what it's for goes.
     pub meaning: fn(Kind) -> &'static str,
     /// What the token at a place, counted from 0, is for.
     pub about: fn(Kind, usize, ShapeColumn) -> About,
     /// A token turned by one of `=` and `-`, by its sign, or of `+` and `_` where `large`, on a
-    /// column, as its new text, or none where it doesn't turn.
-    pub turn: fn(Kind, &str, i16, bool, ShapeColumn) -> Option<String>,
+    /// column, as its new text, or none where it doesn't turn: a kit line's name to the next of
+    /// the names given.
+    pub turn: Turn,
     /// What can go at a spot, in a token's place or after one, from what's around the field,
     /// for `K` to list and `Tab` to complete from, in the order they're listed (decision 458).
     pub offer: fn(Spot, &Around) -> Vec<Offer>,
@@ -309,7 +321,7 @@ pub(crate) mod tests {
             Kind::Unread,
         ],
         split: words,
-        read: |text, _| {
+        read: |text, _, _| {
             let mut open = Vec::new();
             for token in split(&WORDS, text) {
                 match token.kind {
@@ -339,7 +351,7 @@ pub(crate) mod tests {
             name: format!("Token {at}"),
             subject: at.to_string(),
         },
-        turn: |kind, text, sign, large, _| match kind {
+        turn: |kind, text, sign, large, _, _| match kind {
             Kind::Value => {
                 let value = i16::from_str_radix(text, 16).ok()?;
                 let by = if large { 0x10 } else { 1 };
@@ -493,9 +505,9 @@ pub(crate) mod tests {
         assert_eq!(tokens[2].kind, Kind::Rest);
         assert_eq!(tokens[4].kind, Kind::Modifier);
         assert!(is_rest("~"));
-        assert!((WORDS.read)(text, note()).is_ok());
+        assert!((WORDS.read)(text, note(), &[]).is_ok());
         assert_eq!(
-            (WORDS.read)("10 [20", note()),
+            (WORDS.read)("10 [20", note(), &[]),
             Err(bad(3, "an open with no close"))
         );
     }

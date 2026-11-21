@@ -48,6 +48,9 @@ pub struct Generator {
     /// An `Own` rhythm's text and beats, kept here as the list is: empty unless its `Where` is
     /// `Own` (decision 461).
     rhythm: OwnRhythm,
+    /// On a kit line, its track's name, whose hits it plays (decision 464): given from its track
+    /// as each edit is made, so it isn't saved, and empty on any other generator.
+    name: Box<str>,
     /// The first stored row it covers.
     first: usize,
     /// Its column's cell from under each of its rows, on a step holding nothing else: what the
@@ -230,6 +233,7 @@ impl Generator {
             span,
             list: kept_list(&shape, &[]),
             rhythm: OwnRhythm::default(),
+            name: Box::default(),
             shape,
             first: 0,
             under: Vec::new(),
@@ -254,9 +258,28 @@ impl Generator {
     /// The same, an `Own` rhythm playing this text, which any other `Where` keeps none of.
     #[must_use]
     pub fn with_rhythm(mut self, text: &str) -> Self {
-        self.rhythm = OwnRhythm::kept(&self.shape, self.column, text);
+        self.rhythm = OwnRhythm::kept_as(&self.shape, self.column, text, &self.name);
         self.rhythm.settle(&mut self.shape);
         self
+    }
+
+    /// On a kit line, the name of its track it plays the hits of: empty on any other generator.
+    pub fn kit_name(&self) -> &str {
+        &self.name
+    }
+
+    /// Play a kit line's hits of this name, its track's, and write them: false if it isn't on a
+    /// kit line or has that name already, and nothing is written.
+    pub(crate) fn name_in_kit(&mut self, steps: &mut [Step], name: &str) -> bool {
+        if self.shape.kit.is_none() || *self.name == *name {
+            return false;
+        }
+        self.name = name.into();
+        let text = self.rhythm.text().to_owned();
+        self.rhythm = OwnRhythm::kept_as(&self.shape, self.column, &text, name);
+        self.rhythm.settle(&mut self.shape);
+        self.render(steps, None);
+        true
     }
 
     /// An `Own` rhythm's text: empty for any other `Where`.
@@ -413,7 +436,7 @@ impl Generator {
         self.restore(steps);
         self.list = kept_list(&shape, list.unwrap_or(&self.list));
         let text = rhythm.unwrap_or(self.rhythm.text()).to_owned();
-        self.rhythm = OwnRhythm::kept(&shape, self.column, &text);
+        self.rhythm = OwnRhythm::kept_as(&shape, self.column, &text, &self.name);
         self.shape = shape;
         self.rhythm.settle(&mut self.shape);
         let owns = owns(&self.shape);
@@ -595,6 +618,7 @@ impl Generator {
             // (no backwards compatibility).
             list: file.list.into_iter().take(MAX_LIST).collect(),
             rhythm: OwnRhythm::default(),
+            name: Box::default(),
             first: file.first,
             under: file.under,
             seen: Vec::new(),

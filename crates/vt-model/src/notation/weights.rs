@@ -10,7 +10,7 @@ const JUMP: i16 = 4;
 pub(super) static WEIGHTS: Grammar = Grammar {
     kinds: &[Kind::Weight, Kind::Unread],
     split,
-    read,
+    read: |text, column, _| read(text, column),
     meaning: |kind| match kind {
         Kind::Weight => "how often {} is chosen, from 0, never, to F, the most",
         _ => "what isn't a weight, a hex digit from 0 to F, so the text doesn't read",
@@ -25,7 +25,7 @@ pub(super) static WEIGHTS: Grammar = Grammar {
             subject: note.to_owned(),
         }
     },
-    turn: |kind, text, sign, large, _| {
+    turn: |kind, text, sign, large, _, _| {
         let weight = match kind {
             Kind::Weight => i16::from_str_radix(text, 16).ok()?,
             _ => return None,
@@ -161,7 +161,8 @@ mod tests {
 
     #[test]
     fn a_weight_turns_by_one_or_four_and_is_named_by_its_note() {
-        let turn = |kind, text, sign, large| (WEIGHTS.turn)(kind, text, sign, large, pentatonic());
+        let turn =
+            |kind, text, sign, large| (WEIGHTS.turn)(kind, text, sign, large, pentatonic(), &[]);
         assert_eq!(turn(Kind::Weight, "E", 1, false).as_deref(), Some("F"));
         assert_eq!(turn(Kind::Weight, "F", 1, false).as_deref(), Some("F"));
         assert_eq!(turn(Kind::Weight, "8", -1, true).as_deref(), Some("4"));

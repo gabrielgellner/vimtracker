@@ -291,7 +291,7 @@ fn draw_fields(
             };
             let grammar = grammar.grammar();
             let text = (grammar.from_setting)(&param.shown(&live.generator.shape, &context));
-            let field = Field::new(grammar, &text, context.column);
+            let field = Field::new(grammar, &text, context.column).in_kit(&live.names);
             let x = settings.x + column as u16 * widths.column() + widths.name;
             let y = settings.y + row as u16 * ROW_STEP;
             // To the next setting in the row, or the grid's edge.
