@@ -744,7 +744,10 @@ fn draw_empty(
         .controls(vec![Line::styled(text, style)])
         .focused(focused);
     if let Some(field) = named {
-        widget = widget.after(Line::styled(format!("· {}", column_name(field)), theme::dim()));
+        widget = widget.after(Line::styled(
+            format!("· {}", column_name(field)),
+            theme::dim(),
+        ));
     }
     frame.render_widget(widget, area);
     let mut row = Device::settings_area(area);

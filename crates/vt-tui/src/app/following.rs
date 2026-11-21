@@ -67,8 +67,7 @@ impl App {
             if self.gen_followed != now {
                 self.gen_followed = now;
                 let quiet = self.services.status.is_empty() || self.services.status == said;
-                if quiet && let Some(found) = self.services.phrase_here()
-                {
+                if quiet && let Some(found) = self.services.phrase_here() {
                     self.services.status = followed_said(found, followed);
                 }
             }

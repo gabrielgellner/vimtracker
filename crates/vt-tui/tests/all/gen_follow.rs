@@ -54,8 +54,7 @@ fn panel_generator(app: &App) -> Option<usize> {
 
 /// The screen as drawn at 163x42, every cell with its style.
 fn drawn(app: &mut App) -> Buffer {
-    let mut terminal =
-        ratatui::Terminal::new(ratatui::backend::TestBackend::new(163, 42)).unwrap();
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(163, 42)).unwrap();
     terminal
         .draw(|frame| vt_tui::run::draw_screen(frame, app, None, std::time::Instant::now()))
         .unwrap();
@@ -85,12 +84,21 @@ fn the_panel_follows_the_grids_cursor_column_by_column() {
     assert!(matches!(panel_on(&app), Control::NewGenerator(_)));
     let screen = screen_cells(&mut app).join("\n");
     assert!(screen.contains("Empty · Note"), "{screen}");
-    assert!(screen.contains("K  make Note live over the phrase"), "{screen}");
-    assert!(screen.contains("Gen   Phrase 00 · on Note, row 00"), "{screen}");
+    assert!(
+        screen.contains("K  make Note live over the phrase"),
+        "{screen}"
+    );
+    assert!(
+        screen.contains("Gen   Phrase 00 · on Note, row 00"),
+        "{screen}"
+    );
     keys(&mut app, "l");
     assert_eq!(panel_generator(&app), Some(0));
     assert_eq!(app.services.cursor.step, 0, "following isn't moving");
-    assert_eq!(app.services.status, "Vel is live, rows 00–0F: Ctrl-w l turns it");
+    assert_eq!(
+        app.services.status,
+        "Vel is live, rows 00–0F: Ctrl-w l turns it"
+    );
     let screen = screen_cells(&mut app).join("\n");
     assert!(!screen.contains("Empty · "), "{screen}");
     assert!(screen.contains("· on Vel, row 00"), "{screen}");
@@ -110,10 +118,7 @@ fn the_panel_follows_the_grids_cursor_column_by_column() {
 /// Of two generators on a column, the one whose rows hold the cursor's row; the gate is Length's.
 #[test]
 fn the_generator_holding_the_row_and_the_gate_follows_length() {
-    let (mut app, _rt) = followed_on(
-        &["C-4 40 SGL4"; 16],
-        "lvjjjjjjjSL8jvGSLlllvGSL",
-    );
+    let (mut app, _rt) = followed_on(&["C-4 40 SGL4"; 16], "lvjjjjjjjSL8jvGSLlllvGSL");
     let generators = |app: &App| app.services.phrase_here().unwrap().generators().to_vec();
     let at = |column: fn(&ShapeColumn) -> bool, first: usize| {
         generators(&app)
@@ -173,7 +178,10 @@ fn in_the_panel_its_device_leads_and_lights_its_rows() {
     keys(&mut app, "}");
     assert!(panel_generator(&app).is_none());
     keys(&mut app, "j");
-    assert!(panel_generator(&app).is_none(), "nothing follows in the panel");
+    assert!(
+        panel_generator(&app).is_none(),
+        "nothing follows in the panel"
+    );
     let screen = drawn(&mut app);
     assert_ne!(screen[(x, y)].bg, theme::SURFACE0);
     assert!(!line(&screen, 0).contains("VEL"), "{}", line(&screen, 0));
@@ -203,7 +211,11 @@ fn in_a_device_its_columns_values_are_bars_over_the_other_columns() {
     // The last row's ramp is full, drawn over the FX columns beside the velocity.
     let screen = drawn(&mut app);
     let y = grid_line(&screen, 0x0F);
-    assert!(line(&screen, y).contains("C-4 7F ██████████"), "{}", line(&screen, y));
+    assert!(
+        line(&screen, y).contains("C-4 7F ██████████"),
+        "{}",
+        line(&screen, y)
+    );
     // With `To` turned down, every row is lower than it was, what it was faint behind it.
     keys(&mut app, "jj____");
     let lines = screen_cells(&mut app);
@@ -225,7 +237,11 @@ fn a_note_columns_bars_are_its_contour() {
     keys(&mut app, "^wl");
     let lines = screen_cells(&mut app);
     assert!(lines[0].contains("NOTE"), "{}", lines[0]);
-    assert!(lines.iter().any(|line| line.contains('●')), "{}", lines.join("\n"));
+    assert!(
+        lines.iter().any(|line| line.contains('●')),
+        "{}",
+        lines.join("\n")
+    );
 }
 
 /// A column whose values aren't amounts has no bars.
@@ -236,5 +252,9 @@ fn a_column_whose_values_arent_amounts_has_none() {
     assert!(panel_generator(&app).is_some());
     keys(&mut app, "^wl");
     let lines = screen_cells(&mut app);
-    assert!(lines[0].contains("Chain 00"), "the title as it was: {}", lines[0]);
+    assert!(
+        lines[0].contains("Chain 00"),
+        "the title as it was: {}",
+        lines[0]
+    );
 }

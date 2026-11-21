@@ -476,7 +476,8 @@ fn with_the_panel_open_gl_moves_it_to_the_columns_device() {
         "{}",
         app.services.status
     );
-    assert_eq!(gen_device(&app), Some(1));
+    // The panel follows the grid's cursor onto the column's `Empty` (decision 468).
+    assert_eq!(gen_device(&app), None);
     // Without the panel, `gl` opens the shape panel as it did.
     keys(&mut app, "^wc0gl");
     assert_eq!(app.modes.mode, Mode::Shape);

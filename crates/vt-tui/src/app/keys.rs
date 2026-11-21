@@ -511,7 +511,8 @@ impl App {
             self.services.status = why;
         }
         // Gen shows the phrase under the cursor, its cursor where it was left (decision 466), in
-        // the form it was last in (decision 467).
+        // the form it was last in (decision 467), and beside the grid on the device of the grid's
+        // cursor's column (decision 468).
         if view == View::Gen {
             self.gen_form_shown();
         }
