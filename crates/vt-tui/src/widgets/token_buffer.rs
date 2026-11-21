@@ -5,8 +5,11 @@
 //! with `✗` under it (decision 456), and while the phrase plays the token that wrote the row
 //! playing is in the playhead's colour (decision 460), with the rows line under the text. A field
 //! with something under each token, `Weights`' notes or the chords a `Tonnetz`'s moves reach,
-//! keeps a cell a token so what's under it fits. Each token is drawn in its kind's style, plain
-//! for now, ready for syntax colouring (#1107).
+//! keeps a cell a token so what's under it fits. Each token is drawn in its kind's colour
+//! (decision 471): what writes a row plain, as a note is in the grid, a rest and an off bit faint,
+//! as an empty cell is, a group's brackets and the commas between dim, and what changes a token,
+//! `*2` `!` `@3` `?30` and a Euclid's `(3,8)`, in an event FX's colour, as `RTG` and `CHA`, which do
+//! what `*` and `?` do, are in the grid.
 //!
 //! The cell a buffer opens from shows the same text on one line, cut to its width.
 
@@ -15,7 +18,7 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use vt_model::notation::{Field, Kind, Mark, Table};
+use vt_model::notation::{Bracket, Field, Kind, Mark, Table};
 
 use crate::input::mode::Mode;
 use crate::overlays::command::completion::CommandMenu;
@@ -30,10 +33,71 @@ pub(crate) const ROOM: usize = 64;
 /// The rows line's label in a buffer.
 const ROWS: &str = "Rows  ";
 
-/// The style a token of a kind is drawn in. Plain for every kind for now; syntax colouring
-/// (#1107) gives each kind its own here.
-pub(crate) fn kind_style(_kind: Kind) -> Style {
-    Style::new()
+/// The style a token of a kind is drawn in, by its text (decision 471): what writes a row plain,
+/// as a note is in the grid; a rest, an off bit and a weight of `0`, which write nothing, faint, as
+/// an empty cell is; a group's brackets dim, as they hold rather than write; what changes the
+/// token before it in an event FX's colour, as `RTG` and `CHA` are; and what doesn't read in the
+/// warning colour.
+pub(crate) fn kind_style(kind: Kind, text: &str) -> Style {
+    match kind {
+        Kind::Rest => theme::faint(),
+        Kind::Bit if !matches!(text, "x" | "X" | "1") => theme::faint(),
+        Kind::Weight if text == "0" => theme::faint(),
+        Kind::Modifier => change(),
+        Kind::Open(_) | Kind::Close(_) => theme::dim(),
+        Kind::Unread => theme::warning(),
+        Kind::Hit | Kind::Value | Kind::Weight | Kind::Move | Kind::Bit => Style::new(),
+    }
+}
+
+/// What changes a token: an event FX's colour, as `RTG` and `CHA`, which do what `*` and `?` do.
+fn change() -> Style {
+    Style::new().fg(theme::PEACH)
+}
+
+/// Whether a token is a Euclid's, `(3,8)`, its brackets or a number inside them, which is drawn
+/// as what changes a token, as it changes the one before it.
+fn euclid(field: &Field, nth: usize) -> bool {
+    let tokens = field.tokens();
+    let Some(token) = tokens.get(nth) else {
+        return false;
+    };
+    if token.kind.bracket().map(|(bracket, _)| bracket) == Some(Bracket::Round) {
+        return true;
+    }
+    let Some(depth) = token.depth.checked_sub(1) else {
+        return false;
+    };
+    tokens[..nth]
+        .iter()
+        .rev()
+        .find(|before| before.depth == depth && matches!(before.kind, Kind::Open(_)))
+        .is_some_and(|open| open.kind == Kind::Open(Bracket::Round))
+}
+
+/// The style of a token where nothing's lit on it: its kind's, or a Euclid's.
+fn plain_style(field: &Field, nth: usize) -> Style {
+    let Some(token) = field.tokens().get(nth) else {
+        return Style::new();
+    };
+    if token.kind != Kind::Unread && euclid(field, nth) {
+        return change();
+    }
+    kind_style(token.kind, field.token(nth).unwrap_or_default())
+}
+
+/// The style of what's between two tokens as typed: a comma dim, as a bracket is, or a Euclid's
+/// as its numbers are, and a space plain.
+fn gap_style(field: &Field, before: Option<usize>, text: &str) -> Style {
+    if text.trim().is_empty() {
+        return Style::new();
+    }
+    let inside = before.is_some_and(|nth| {
+        euclid(field, nth)
+            && field.tokens()[nth].kind != Kind::Close(Bracket::Round)
+            && euclid(field, nth + 1)
+    });
+    if inside { change() } else { theme::dim() }
 }
 
 /// A piece of a buffer's line: a token, the text between two as typed, or where what's typed
@@ -105,10 +169,7 @@ fn token_style(field: &Field, nth: usize, marks: Marks, bad: Option<usize>) -> S
         Some(bad) if bad == nth => theme::warning(),
         _ if marks.typing_at.is_none() && marks.cursor == Some(nth) => theme::cursor(Mode::Normal),
         _ if marks.playing == Some(nth) => theme::active(),
-        _ => field
-            .tokens()
-            .get(nth)
-            .map_or_else(Style::new, |token| kind_style(token.kind)),
+        _ => plain_style(field, nth),
     }
 }
 
@@ -146,7 +207,14 @@ fn as_typed(field: &Field, marks: Marks) -> Vec<Piece> {
                     && marks.cursor == Some(nth)
                     && token_starts(field, nth, from),
             },
-            None => Piece::gap(piece),
+            None => Piece {
+                style: gap_style(
+                    field,
+                    tokens.iter().rposition(|token| token.at.end <= from),
+                    piece,
+                ),
+                ..Piece::gap(piece)
+            },
         });
     }
     if marks.typing_at.is_some_and(|at| at >= text.len()) && !pieces.iter().any(|p| p.typing) {
@@ -437,5 +505,82 @@ impl Buffer<'_> {
                 &mut picker,
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vt_model::notation::GrammarId;
+    use vt_model::shape::ShapeColumn;
+
+    /// Each piece of a field's cell as typed, with its style.
+    fn styles(grammar: GrammarId, text: &str, playing: Option<usize>) -> Vec<(String, Style)> {
+        let field = Field::new(grammar.grammar(), text, ShapeColumn::Velocity);
+        cell_line(&field, playing, 128, None)
+            .into_iter()
+            .map(|span| (span.content.into_owned(), span.style))
+            .collect()
+    }
+
+    fn style_of(pieces: &[(String, Style)], text: &str) -> Style {
+        pieces
+            .iter()
+            .find(|(piece, _)| piece == text)
+            .unwrap_or_else(|| panic!("no {text} in {pieces:?}"))
+            .1
+    }
+
+    #[test]
+    fn a_rhythm_is_coloured_by_what_each_token_is() {
+        let pieces = styles(GrammarId::Rhythm, "x(3,8) [. x]*2 <x ~>?30", None);
+        let change = Some(theme::PEACH);
+        assert_eq!(style_of(&pieces, "x"), Style::new());
+        assert_eq!(style_of(&pieces, "."), theme::faint());
+        assert_eq!(style_of(&pieces, "~"), theme::faint());
+        assert_eq!(style_of(&pieces, "["), theme::dim());
+        assert_eq!(style_of(&pieces, ">"), theme::dim());
+        assert_eq!(style_of(&pieces, "*2").fg, change);
+        assert_eq!(style_of(&pieces, "?30").fg, change);
+        // A Euclid is a change: its brackets, its numbers and its comma.
+        for euclid in ["(", "3", ",", "8", ")"] {
+            assert_eq!(style_of(&pieces, euclid).fg, change, "{euclid}");
+        }
+    }
+
+    #[test]
+    fn what_doesnt_read_is_a_warning_and_playing_goes_over_a_kind() {
+        let pieces = styles(GrammarId::Rhythm, "x q", None);
+        assert_eq!(style_of(&pieces, "q"), theme::warning());
+        // The rest playing is green, not faint.
+        let pieces = styles(GrammarId::Rhythm, "x .", Some(1));
+        assert_eq!(style_of(&pieces, "."), theme::active());
+    }
+
+    #[test]
+    fn what_writes_nothing_is_faint() {
+        let pieces = styles(GrammarId::Bits, "x.x.....", None);
+        assert_eq!(style_of(&pieces, "x"), Style::new());
+        assert_eq!(style_of(&pieces, "."), theme::faint());
+        assert_eq!(kind_style(Kind::Weight, "F"), Style::new());
+        assert_eq!(kind_style(Kind::Weight, "0"), theme::faint());
+    }
+
+    #[test]
+    fn the_cursor_lights_a_token_over_its_kind() {
+        let field = Field::new(GrammarId::Rhythm.grammar(), "x*2", ShapeColumn::Velocity);
+        let marks = Marks {
+            cursor: Some(1),
+            ..Marks::default()
+        };
+        let layout = Layout {
+            cell: 1,
+            step: 2,
+            under: Vec::new(),
+            beside: None,
+        };
+        let lines = wrapped(&field, &layout, marks, ROOM).lines;
+        let lit = lines[0].spans.iter().find(|span| span.content == "*2");
+        assert_eq!(lit.map(|span| span.style), Some(theme::cursor(Mode::Normal)));
     }
 }

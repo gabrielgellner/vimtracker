@@ -1100,6 +1100,13 @@ keeps a cell so it fits; any other text is drawn as it's typed, brackets, commas
 ╰ = - turn  x out  K what goes  Enter close ╯
 ```
 
+The text is coloured by what each token is, in the buffer and on its cell, as the grid colours a
+row: what writes a row is plain, as a note is; a rest, an off bit and a weight of `0`, which write
+nothing, are faint, as an empty cell is; a group's brackets and the commas between tokens are dim;
+and what changes the token before it, `*2`, `!`, `@3`, `?30` and a Euclid's `(3,8)`, is in the
+orange of an event FX, as `RTG` and `CHA`, which do what `*` and `?` do. Text that doesn't read is
+red. The cursor's token, and the token playing in green, go over its colour.
+
 A Steps slot's values open on the cursor's step with `Enter` on one, as many as it plays: `x`
 takes one out and `a` adds one, so its `Length` follows. `i` on a step still types that step's
 value, or a list from it.
