@@ -24,7 +24,7 @@ pub const SUBTEXT1: Color = Color::Rgb(0xb5, 0xbf, 0xe2);
 pub const OVERLAY2: Color = Color::Rgb(0x94, 0x9c, 0xbb);
 pub const OVERLAY0: Color = Color::Rgb(0x73, 0x79, 0x94);
 pub const SURFACE1: Color = Color::Rgb(0x51, 0x57, 0x6d);
-pub(crate) const SURFACE0: Color = Color::Rgb(0x41, 0x45, 0x59);
+pub const SURFACE0: Color = Color::Rgb(0x41, 0x45, 0x59);
 pub const BASE: Color = Color::Rgb(0x30, 0x34, 0x46);
 pub(crate) const MANTLE: Color = Color::Rgb(0x29, 0x2c, 0x3c);
 /// Under a step's FX, a shade darker than the screen, so they sit back from the notes.

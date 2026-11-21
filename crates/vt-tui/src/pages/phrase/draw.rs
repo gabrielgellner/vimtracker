@@ -1042,6 +1042,9 @@ struct Grid<'a> {
     /// The rows the token under the shape panel's cursor writes, and their column, lit as the
     /// token is (decision 460).
     token_rows: Option<(ShapeColumn, Vec<usize>)>,
+    /// Beside Gen's panel with the keys in it, the rows its device writes, and their column, lit
+    /// on a band (decision 468).
+    gen_lit: Option<(ShapeColumn, StepRange)>,
     /// The frame's edge, and the grid's parts named in it.
     edge: Style,
     named: Style,
@@ -1154,6 +1157,7 @@ impl<'a> Grid<'a> {
             stored_lines,
             live,
             token_rows,
+            gen_lit: ctx.gen_lit(),
             edge,
             named,
         }
@@ -1552,6 +1556,16 @@ impl<'a> Grid<'a> {
     /// Put the selection over a row, where it reaches it, and the cursor over that, so the
     /// cursor stays visible inside a selection and the moving end can be seen.
     fn select(&self, ctx: &Ctx, step: &Step, index: usize, len: usize, styles: &mut [Style]) {
+        // The rows Gen's device writes, on a band under their cells, as a device's frame is lit.
+        if let Some((column, rows)) = self.gen_lit
+            && (rows.first..=rows.last).contains(&index)
+        {
+            let (start, end) = token_cells(column);
+            let end = end.min(len);
+            for style in &mut styles[start.min(end)..end] {
+                *style = style.bg(theme::SURFACE0);
+            }
+        }
         let selected = self
             .selection
             .filter(|s| (s.range.first..=s.range.last).contains(&index));

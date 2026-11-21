@@ -112,10 +112,9 @@ fn the_gen_page_shows_a_lane_device_only_for_a_column_with_a_lane() {
     let (app, _realtime) = on_gen_page(false);
     let text = fx_page_text(&app).join("\n");
     assert!(!text.contains("FX1 Lane"), "{text}");
-    assert_eq!(
-        app.track_control(),
-        Control::Base(vt_model::action::TrackControl::Order)
-    );
+    // On FX1, with neither a generator nor a lane, Gen opens on `Empty` naming it (decision 468).
+    assert!(matches!(app.track_control(), Control::NewGenerator(_)));
+    assert!(text.contains("Empty · FX1"), "{text}");
     let (app, _realtime) = on_gen_page(true);
     let text = fx_page_text(&app).join("\n");
     assert!(text.contains("FX1 Lane"), "{text}");

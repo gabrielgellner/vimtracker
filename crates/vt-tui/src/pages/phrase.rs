@@ -31,7 +31,7 @@ use crate::input::mode::{Mode, View};
 use crate::pages::{Ctx, CtxMut, Outcome, Page};
 use crate::services::Cursor;
 use crate::services::Services;
-use crate::widgets::value_bars::{BarRow, ValueBars};
+use crate::widgets::value_bars::ValueBars;
 
 /// One beat, as a slide.
 const BEAT: isize = BEAT_STEPS as isize;
@@ -157,6 +157,19 @@ impl PhraseView {
                 .min(step);
         }
         self.top = self.top.min(last_top);
+    }
+
+    /// Beside Gen's panel with the keys in it, keep its device's rows in view rather than the
+    /// cursor's, which stays where it is: where none of them is on screen, the first goes to the
+    /// middle, as `zz` puts a row (decision 468).
+    pub(crate) fn show_rows(&mut self, height: usize, rows: StepRange, services: &Services) {
+        self.height = height.max(1);
+        let counts = self.row_line_counts(services);
+        let past = timeline::row_at_line(&counts, self.top, self.height);
+        if rows.last < self.top || rows.first >= past {
+            self.top = timeline::row_lines_before(&counts, rows.first, self.height / 2)
+                .min(self.last_top(services));
+        }
     }
 
     /// `H`, `M` and `L`: the cursor to the top, the middle or the bottom of the view. A count
@@ -707,17 +720,7 @@ impl crate::app::App {
             }
             Field::Gate | Field::FxCommand(_) => return None,
         };
-        let rows = (range.first..=range.last)
-            .filter_map(|step| {
-                let now = steps.get(step)?;
-                Some(BarRow {
-                    step,
-                    before: before.get(step).and_then(|was| column.value(was)),
-                    now: column.value(now),
-                })
-            })
-            .collect();
-        ValueBars::new(ValueBars::label_of(column), column, rows)
+        ValueBars::of_steps(column, range, before, steps)
     }
 }
 

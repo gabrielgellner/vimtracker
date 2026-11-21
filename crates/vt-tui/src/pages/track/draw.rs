@@ -493,6 +493,13 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx) -
         && let Some(phrase) = page.phrase
     {
         title.push(Span::styled(format!("  Phrase {phrase:02X}"), bold));
+        // Beside the grid, where the grid's cursor is, which the panel follows (decision 468).
+        if page.beside {
+            let cursor = ctx.cursor();
+            let on = crate::pages::track::following::column_name(cursor.field);
+            let at = format!(" · on {on}, row {:02X}", cursor.step);
+            title.push(Span::styled(at, theme::dim()));
+        }
         if let Some(playing) = generators::playing_phrase(ctx).filter(|id| *id != phrase) {
             title.push(Span::styled(format!("  ▶ {playing:02X}"), theme::dim()));
         }

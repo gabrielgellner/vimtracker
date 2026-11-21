@@ -73,7 +73,11 @@ fn the_side_form_is_the_phrases_own_columns_at_0_to_66_and_the_panel_at_68_to_16
     let row = &lines[2];
     assert_eq!(row.chars().nth(66), Some('│'), "{row}");
     assert_eq!(row.chars().nth(67), Some(' '), "{row}");
-    // The title names the grid on the left and Gen over the panel, the CPU figure at the right.
+    // The title names the grid on the left and Gen over the panel, the CPU figure at the right,
+    // seen from the grid, as with the keys in a device its column's bars go over the title
+    // (decision 468).
+    keys(&mut app, "^wh");
+    let lines = screen_cells(&mut app);
     let title = &lines[0];
     assert!(columns(title, 0, 66).contains("Track 01  Grid "), "{title}");
     assert!(!columns(title, 0, 66).contains("Gen"), "{title}");
@@ -87,6 +91,7 @@ fn the_side_form_is_the_phrases_own_columns_at_0_to_66_and_the_panel_at_68_to_16
     let text = lines.join("\n");
     assert!(text.contains("Order Y   Own"), "{text}");
     // The status line is the panel's while the keys are in it.
+    keys(&mut app, "^wl");
     assert!(status_line(&app).contains("GEN"), "{}", status_line(&app));
 }
 
@@ -126,13 +131,11 @@ fn ctrl_w_h_l_w_and_esc_move_the_keys_between_the_grid_and_the_panel() {
     let lines = screen_cells(&mut app);
     assert_eq!(lines[1].chars().nth(68), Some('╭'), "{}", lines[1]);
     assert!(!meter_shown(&lines));
-    // On another track, the panel shows that track's phrase, which has nothing live.
+    // On another track, the panel shows that track's phrase, which has nothing live, on the
+    // `Empty` for the cursor's column.
     keys(&mut app, "W");
     let other = screen_cells(&mut app).join("\n");
-    assert!(
-        other.contains("make a column of this phrase live"),
-        "{other}"
-    );
+    assert!(other.contains("Empty · Note"), "{other}");
     keys(&mut app, "B^wl");
     assert_eq!(app.modes.view, View::Gen);
     assert_eq!(app.services.cursor.step, 2, "the grid's cursor stays put");

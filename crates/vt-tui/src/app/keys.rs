@@ -287,9 +287,14 @@ impl App {
         // The Gen page shows the phrase under the cursor, wherever a key or the time between
         // keys has moved it.
         self.gen_page.phrase = self.services.phrase_id();
+        let before = Arc::clone(self.services.song());
+        let said = self.services.status.clone();
         self.handle_key(key, now);
         self.keep_cursor_shown();
         self.gen_page.phrase = self.services.phrase_id();
+        // Beside the grid, the panel follows the grid's cursor, or notes the device the keys
+        // came into (decision 468).
+        self.follow_after_key(&before, &said);
         // Something that lasts while its key is down is tied to that key, and doesn't repeat.
         // One already held ends as if let go now, as only one is kept.
         if let Some(what) = self.held.started.take() {
