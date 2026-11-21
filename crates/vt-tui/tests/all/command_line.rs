@@ -1,4 +1,5 @@
-//! The command line: commands, completion with `Tab`, the list of matches, and its history.
+//! The command line: commands, completion with `Ctrl-n`, `Ctrl-p`, `Ctrl-y` and `Ctrl-e`, the list
+//! of matches, and its history.
 
 use std::time::Instant;
 
@@ -55,10 +56,10 @@ fn menu(app: &App) -> (Vec<String>, String) {
 }
 
 #[test]
-fn tab_completes_a_command_name_in_place() {
+fn ctrl_n_completes_a_command_name_in_place() {
     let (mut app, _rt) = app();
     press(&mut app, ":sa");
-    tap_special(&mut app, KeyCode::Tab);
+    keys(&mut app, "^n");
     assert_eq!(app.overlays.command.line, "sample");
     assert!(
         app.overlays.command.menu.is_none(),
@@ -66,10 +67,10 @@ fn tab_completes_a_command_name_in_place() {
     );
     special(&mut app, KeyCode::Esc);
     press(&mut app, ":set sc");
-    tap_special(&mut app, KeyCode::Tab);
+    keys(&mut app, "^n");
     assert_eq!(app.overlays.command.line, "set scale=");
     press(&mut app, "dor");
-    tap_special(&mut app, KeyCode::Tab);
+    keys(&mut app, "^n");
     assert_eq!(app.overlays.command.line, "set scale=dorian");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.services.status, "Scale C Dorian", "it parses and runs");
@@ -77,10 +78,10 @@ fn tab_completes_a_command_name_in_place() {
 }
 
 #[test]
-fn several_matches_list_above_the_command_line_and_tab_moves_through_them() {
+fn several_matches_list_above_the_command_line_and_ctrl_n_moves_through_them() {
     let (mut app, _rt) = app();
     press(&mut app, ":s");
-    tap_special(&mut app, KeyCode::Tab);
+    keys(&mut app, "^n");
     assert_eq!(app.overlays.command.line, "s", "nothing more in common");
     assert_eq!(
         menu(&app),
@@ -91,11 +92,11 @@ fn several_matches_list_above_the_command_line_and_tab_moves_through_them() {
             "sample".to_owned()
         )
     );
-    tap_special(&mut app, KeyCode::Tab);
-    tap_special(&mut app, KeyCode::Tab);
-    tap_special(&mut app, KeyCode::Tab);
+    keys(&mut app, "^n");
+    keys(&mut app, "^n");
+    keys(&mut app, "^n");
     assert_eq!(menu(&app).1, "scale");
-    tap_special(&mut app, KeyCode::BackTab);
+    keys(&mut app, "^p");
     assert_eq!(menu(&app).1, "set");
     assert_eq!(app.overlays.command.line, "s", "moving puts nothing in");
     // Typing narrows it, keeping the highlight.
@@ -104,8 +105,8 @@ fn several_matches_list_above_the_command_line_and_tab_moves_through_them() {
         menu(&app),
         (vec!["set".into(), "seed".into()], "set".into())
     );
-    tap_special(&mut app, KeyCode::Tab);
-    tap_special(&mut app, KeyCode::Tab);
+    keys(&mut app, "^n");
+    keys(&mut app, "^n");
     assert_eq!(menu(&app).1, "set", "it goes round");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.overlays.command.line, "set", "Enter takes it");
@@ -113,7 +114,7 @@ fn several_matches_list_above_the_command_line_and_tab_moves_through_them() {
     assert_eq!(app.modes.mode, Mode::Command, "and the line stays open");
     // Esc closes the list and keeps what's typed.
     press(&mut app, " ");
-    tap_special(&mut app, KeyCode::Tab);
+    keys(&mut app, "^n");
     assert_eq!(
         menu(&app).0.len(),
         6,
@@ -127,10 +128,10 @@ fn several_matches_list_above_the_command_line_and_tab_moves_through_them() {
         (app.modes.mode, app.overlays.command.line.as_str()),
         (Mode::Command, "set r")
     );
-    // Shift-Tab opens on the last, and a new word closes the list.
+    // `Ctrl-p` opens on the last, and a new word closes the list.
     special(&mut app, KeyCode::Esc);
     press(&mut app, ":track ");
-    app.key(Key::new(KeyCode::BackTab), Instant::now());
+    keys(&mut app, "^p");
     assert_eq!(menu(&app).1, "del");
     press(&mut app, "a");
     assert_eq!(menu(&app).0, ["add"]);
@@ -140,9 +141,70 @@ fn several_matches_list_above_the_command_line_and_tab_moves_through_them() {
     // Backspace widens it again, and a word nothing matches closes it.
     special(&mut app, KeyCode::Esc);
     press(&mut app, ":se");
-    tap_special(&mut app, KeyCode::Tab);
+    keys(&mut app, "^n");
     tap(&mut app, "x");
     assert!(app.overlays.command.menu.is_none());
+}
+
+/// `Ctrl-y` takes the highlighted match and closes the list, or with none open completes as
+/// `Ctrl-n` does; `Ctrl-e` closes the list and puts back what was typed (decision 477).
+#[test]
+fn ctrl_y_accepts_a_match_and_ctrl_e_puts_back_what_was_typed() {
+    let (mut app, _rt) = app();
+    press(&mut app, ":sa");
+    keys(&mut app, "^y");
+    assert_eq!(
+        app.overlays.command.line, "sample",
+        "one match goes in at once"
+    );
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, ":ne");
+    keys(&mut app, "^y");
+    assert_eq!(app.overlays.command.line, "new", "what the matches share");
+    assert_eq!(
+        menu(&app),
+        (vec!["new".into(), "new!".into()], "new".into())
+    );
+    keys(&mut app, "^e");
+    assert!(app.overlays.command.menu.is_none());
+    assert_eq!(app.overlays.command.line, "ne", "what was typed is back");
+    assert_eq!(app.modes.mode, Mode::Command);
+    keys(&mut app, "^n^n");
+    assert_eq!(menu(&app).1, "new!");
+    keys(&mut app, "^y");
+    assert!(app.overlays.command.menu.is_none());
+    assert_eq!(
+        (app.modes.mode, app.overlays.command.line.as_str()),
+        (Mode::Command, "new!")
+    );
+    keys(&mut app, "^e");
+    assert_eq!(
+        app.overlays.command.line, "new!",
+        "with no list, Ctrl-e does nothing"
+    );
+}
+
+/// `Tab` and `Shift-Tab` play on the command line, as on every page, and complete nothing.
+#[test]
+fn tab_plays_on_the_command_line() {
+    use vt_engine::engine::Transport;
+    let (mut app, mut rt) = app();
+    press(&mut app, ":s");
+    tap_special(&mut app, KeyCode::Tab);
+    block(&mut rt, &mut app);
+    assert_eq!(app.services.reported.transport, Transport::Playing);
+    assert_eq!(
+        (app.modes.mode, app.overlays.command.line.as_str()),
+        (Mode::Command, "s")
+    );
+    assert!(app.overlays.command.menu.is_none(), "nothing is listed");
+    tap_special(&mut app, KeyCode::Tab);
+    block(&mut rt, &mut app);
+    assert_eq!(app.services.reported.transport, Transport::Paused);
+    tap_special(&mut app, KeyCode::BackTab);
+    block(&mut rt, &mut app);
+    assert_eq!(app.services.reported.transport, Transport::Playing);
+    assert_eq!(app.modes.mode, Mode::Command);
 }
 
 #[test]
@@ -155,19 +217,19 @@ fn paths_and_kits_complete_from_the_disk() {
     std::fs::write(root.join("kits/808.ron"), "").unwrap();
     std::fs::write(root.join("kick.wav"), "").unwrap();
     press(&mut app, &format!(":e {}/so", root.display()));
-    tap_special(&mut app, KeyCode::Tab);
+    keys(&mut app, "^n");
     assert_eq!(
         app.overlays.command.line,
         format!("e {}/songs/", root.display())
     );
-    tap_special(&mut app, KeyCode::Tab);
+    keys(&mut app, "^n");
     assert_eq!(
         app.overlays.command.line,
         format!("e {}/songs/verse/", root.display())
     );
     special(&mut app, KeyCode::Esc);
     press(&mut app, &format!(":sample {}/k", root.display()));
-    tap_special(&mut app, KeyCode::Tab);
+    keys(&mut app, "^n");
     assert_eq!(menu(&app).0, ["kick.wav", "kits/"], "the list shows names");
     special(&mut app, KeyCode::Esc);
     special(&mut app, KeyCode::Esc);
@@ -177,14 +239,14 @@ fn paths_and_kits_complete_from_the_disk() {
         presets: String::new(),
     };
     press(&mut app, ":kit ");
-    tap_special(&mut app, KeyCode::Tab);
+    keys(&mut app, "^n");
     assert_eq!(menu(&app).0, ["808", "909", "Ableton/"]);
     press(&mut app, "9");
     special(&mut app, KeyCode::Esc);
-    tap_special(&mut app, KeyCode::Tab);
+    keys(&mut app, "^n");
     assert_eq!(app.overlays.command.line, "kit 909");
     press(&mut app, " a");
-    tap_special(&mut app, KeyCode::Tab);
+    keys(&mut app, "^n");
     assert_eq!(app.overlays.command.line, "kit 909 all");
     std::fs::remove_dir_all(&root).unwrap();
 }

@@ -17,7 +17,7 @@
 | `Space qq` | The same as `:q` |
 
 `Space 9` opens the project page, which does the same from rows; see **The project
-page** below. `Tab` completes a path, one folder at a time, and `Up` brings back an earlier
+page** below. `Ctrl-n` completes a path, one folder at a time, and `Up` brings back an earlier
 command. **Navigation** has the rest of the command line.
 
 `:e` on its own lists projects and folders as a tree, starting beside this project,

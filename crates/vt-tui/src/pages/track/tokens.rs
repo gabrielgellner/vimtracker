@@ -176,7 +176,7 @@ impl GenTokens {
         };
     }
 
-    /// What's around the field, for what `K` and `Tab` offer in it: the generator's column, its
+    /// What's around the field, for what `K` and `C-n` offer in it: the generator's column, its
     /// From and To, and on a `Tonnetz`'s moves the chord each would reach in the cursor's place.
     fn around(
         &self,
@@ -293,14 +293,14 @@ impl Overlay for GenTokens {
         }
     }
 
-    /// What's typed, a token typed in place, a count or a key of the list `K` or `Tab` opened;
-    /// `Tab` and `Shift-Tab` play otherwise, and any other key does nothing, as the buffer is a
-    /// dialog.
+    /// What's typed, a token typed in place, a count or a key of the list `K` or `C-n` opened;
+    /// `Tab` and `Shift-Tab` play, typing or not (decision 477), and any other key does nothing,
+    /// as the buffer is a dialog.
     fn text(&mut self, key: Key, ctx: &mut CtxMut) -> Outcome {
         let typing = self.tokens.completes();
         match key.code {
-            KeyCode::Tab if !typing => return Outcome::Do(Cmd::PauseOrResume),
-            KeyCode::BackTab if !typing => return Outcome::Do(Cmd::PlayFromStart),
+            KeyCode::Tab => return Outcome::Do(Cmd::PauseOrResume),
+            KeyCode::BackTab => return Outcome::Do(Cmd::PlayFromStart),
             KeyCode::Char(c) if !typing && !self.tokens.types(c) && !c.is_ascii_digit() => {
                 return Outcome::Done;
             }
@@ -317,7 +317,7 @@ impl Overlay for GenTokens {
             tracks: &[],
             reached: &reached,
         };
-        let did = self.tokens.text(key.code, &mut self.at, &around);
+        let did = self.tokens.text(key, &mut self.at, &around);
         self.did(did, ctx)
     }
 

@@ -776,8 +776,8 @@ fn bloom(argument: &str) -> Result<Line, LineError> {
     })
 }
 
-/// `:render`'s flags, which its parser reads and Tab completes. `--split` renders stems of each
-/// track rather than each group, so it means `--stems` too.
+/// `:render`'s flags, which its parser reads and completion finishes. `--split` renders stems of
+/// each track rather than each group, so it means `--stems` too.
 pub(crate) const RENDER_FLAGS: [&str; 4] = ["--rows", "--tail", "--stems", "--split"];
 
 /// Read `:render`'s arguments. Anything that isn't a flag is the path, which can hold spaces.
@@ -813,8 +813,8 @@ fn render(argument: &str) -> Result<Line, LineError> {
     })
 }
 
-/// What comes after a command's name, or after a `:set` key's `=`, which says what Tab completes
-/// there.
+/// What comes after a command's name, or after a `:set` key's `=`, which says what completion
+/// finishes there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Takes {
     /// Nothing, or a number or text that nothing completes.
@@ -902,7 +902,7 @@ pub struct Setting {
 /// `on` and `off`, for settings that turn something on.
 const ON_OFF: &[&str] = &["on", "off"];
 
-/// Every `:set` key, which the parser reads and Tab completes.
+/// Every `:set` key, which the parser reads and completion finishes.
 pub const SETTINGS: [Setting; 4] = [
     Setting {
         key: "skip",
@@ -972,7 +972,7 @@ impl Switch {
     }
 }
 
-/// Every option `:set` switches by name, which the parser reads and Tab completes.
+/// Every option `:set` switches by name, which the parser reads and completion finishes.
 pub(crate) const SWITCHES: [Switch; 1] = [Switch {
     name: "readonly",
     short: "ro",
@@ -988,7 +988,8 @@ fn optional_path(argument: &str) -> Option<PathBuf> {
     (!argument.is_empty()).then(|| path(argument))
 }
 
-/// Every command, in the order Tab lists them, which the parser reads and Tab completes.
+/// Every command, in the order completion lists them, which the parser reads and completion
+/// finishes.
 pub(crate) const COMMANDS: [Command; 49] = [
     Command {
         name: "w",

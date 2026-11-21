@@ -163,7 +163,7 @@ pub(crate) fn draw_menu(frame: &mut Frame, status: Rect, column: usize, picker: 
 }
 
 /// Draw the same list under a row of the screen, its names under the token they go in place of,
-/// which starts at `column` on the screen: what `K` and `Tab` offer in a field of tokens
+/// which starts at `column` on the screen: what `K` and `C-n` offer in a field of tokens
 /// (decision 458).
 pub(crate) fn draw_menu_under(frame: &mut Frame, row: u16, column: u16, picker: &mut Picker) {
     menu_in(frame, picker, |area, width, height| {
@@ -250,7 +250,7 @@ fn list(picker: &Picker, columns: &Columns, area: Rect) -> Vec<Line<'static>> {
 }
 
 /// The tag row: each tag that could finish the one being typed, with how many have it, as many as
-/// fit, `Tab` taking the first. With none, it says so.
+/// fit, `C-y` taking the first. With none, it says so.
 fn tag_row(tags: &[(String, usize)], width: usize) -> Line<'static> {
     if tags.is_empty() {
         return Line::styled("  no tags", theme::dim());

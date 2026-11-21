@@ -9,8 +9,9 @@
 //! Whoever shows the field keeps its cursor, by its token's place, and is told what each key did,
 //! so it can write the text that reads into its setting and say what the cursor is on.
 //!
-//! `K` lists what can go at the cursor, and `Tab` while typing completes the word from the same
-//! list, which is the `:` line's list of matches (decision 458).
+//! `K` lists what can go at the cursor, and `C-n` while typing completes the word from the same
+//! list, which is the `:` line's list of matches (decision 458), with Neovim's keys: `C-n` and
+//! `C-p` move through it, `C-y` takes one and `C-e` closes it (decision 477).
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::notation::{Around, Bracket, Field, GrammarId, Motion, Object, Place, Spot};
@@ -18,6 +19,7 @@ use vt_model::shape::GenParam;
 use vt_model::shape::params::Typing;
 
 use crate::input::bindings::Cmd;
+use crate::input::keys::Key;
 use crate::overlays::command::completion::{CommandMenu, Completions, offered};
 
 /// What a key does in a field of tokens.
@@ -241,7 +243,7 @@ pub enum Did {
 }
 
 /// A field of tokens with the cursor in it: the text, a count typed before a key, and the list
-/// `K` or `Tab` opened.
+/// `K` or `C-n` opened.
 #[derive(Debug, Clone)]
 pub struct Tokens {
     pub field: Field,
@@ -249,7 +251,7 @@ pub struct Tokens {
     pub menu: Option<CommandMenu>,
 }
 
-/// The title of the list `K` opens on a token, and of the one it and `Tab` open while typing.
+/// The title of the list `K` opens on a token, and of the one it and `C-n` open while typing.
 const IN_PLACE: &str = "In its place";
 const HERE: &str = "What can go here";
 
@@ -308,7 +310,7 @@ impl Tokens {
         (Self::new(field), at, why)
     }
 
-    /// Whether `Tab` completes rather than plays: while typing, or with a list open.
+    /// Whether every key goes to the text or the list: while typing, or with a list open.
     pub fn completes(&self) -> bool {
         self.field.inserting().is_some() || self.menu.is_some()
     }
@@ -336,21 +338,19 @@ impl Tokens {
         {
             picker.selected = own;
         }
+        let typed = self.field.typed_word().unwrap_or_default().to_owned();
         self.menu = Some(CommandMenu {
             picker,
             start: found.start,
+            typed,
         });
         Did::Moved
     }
 
-    /// `Tab` and `Shift-Tab` while typing: the next or the one before in the list, or with none
-    /// open, the only match put in place of the word, or what every match starts with and the
-    /// list of them, as on the `:` line.
-    pub fn complete(&mut self, at: &mut usize, around: &Around, backwards: bool) -> Did {
-        if let Some(menu) = &mut self.menu {
-            menu.step(if backwards { -1 } else { 1 });
-            return Did::Moved;
-        }
+    /// `C-n`, `C-p` or `C-y` while typing with no list open: the only match put in place of the
+    /// word, or what every match starts with and the list of them, the first highlighted, or the
+    /// last for `C-p`, as on the `:` line.
+    fn complete(&mut self, at: &mut usize, around: &Around, backwards: bool) -> Did {
         if self.field.inserting().is_none() {
             return Did::Moved;
         }
@@ -365,11 +365,13 @@ impl Tokens {
                 self.chosen(at, &only)
             }
             _ => {
+                let typed = self.field.typed_word().unwrap_or_default().to_owned();
                 let common = found.common().to_owned();
                 let did = self.chosen(at, &common);
                 let mut menu = CommandMenu {
                     picker: found.picker(),
                     start: found.start,
+                    typed,
                 };
                 if backwards {
                     menu.step(-1);
@@ -392,18 +394,19 @@ impl Tokens {
     }
 
     /// A key while the list is open, or none where it closes the list and is read as it would be
-    /// without it. `Tab` and `Shift-Tab`, the arrows and, among the tokens, `j` and `k` move
-    /// through it, `Enter` puts what's highlighted in place, and `Esc` closes it, keeping what's
-    /// typed; while typing, the rest type, and the list narrows to what still matches.
-    fn menu_key(&mut self, code: KeyCode, at: &mut usize) -> Option<Did> {
+    /// without it. `C-n` and `C-p`, the arrows and, among the tokens, `j` and `k` move through it,
+    /// `C-y` and `Enter` put what's highlighted in place, `Esc` closes it, keeping what's typed,
+    /// and `C-e` closes it, putting back what was typed before it opened; while typing, the rest
+    /// type, and the list narrows to what still matches.
+    fn menu_key(&mut self, key: Key, at: &mut usize) -> Option<Did> {
         let menu = self.menu.as_mut()?;
         let typing = self.field.inserting().is_some();
-        match code {
-            KeyCode::Down | KeyCode::Tab => menu.step(1),
-            KeyCode::Up | KeyCode::BackTab => menu.step(-1),
-            KeyCode::Char('j') if !typing => menu.step(1),
-            KeyCode::Char('k') if !typing => menu.step(-1),
-            KeyCode::Enter => {
+        match (key.code, key.ctrl) {
+            (KeyCode::Down, _) | (KeyCode::Char('n'), true) => menu.step(1),
+            (KeyCode::Up, _) | (KeyCode::Char('p'), true) => menu.step(-1),
+            (KeyCode::Char('j'), false) if !typing => menu.step(1),
+            (KeyCode::Char('k'), false) if !typing => menu.step(-1),
+            (KeyCode::Enter, _) | (KeyCode::Char('y'), true) => {
                 let chosen = menu.highlighted().map(str::to_owned);
                 self.menu = None;
                 return Some(match chosen {
@@ -411,7 +414,16 @@ impl Tokens {
                     None => Did::Moved,
                 });
             }
-            KeyCode::Esc => self.menu = None,
+            (KeyCode::Char('e'), true) => {
+                let typed = std::mem::take(&mut menu.typed);
+                self.menu = None;
+                return Some(if typing {
+                    self.chosen(at, &typed)
+                } else {
+                    Did::Moved
+                });
+            }
+            (KeyCode::Esc, _) => self.menu = None,
             _ if typing => return None,
             _ => {
                 self.menu = None;
@@ -446,6 +458,7 @@ impl Tokens {
         self.menu = Some(CommandMenu {
             picker,
             start: found.start,
+            typed: self.field.typed_word().unwrap_or_default().to_owned(),
         });
     }
 
@@ -530,21 +543,26 @@ impl Tokens {
     }
 
     /// A key that isn't the table's: with a list open, the list's; while typing, into the text,
-    /// `K` at the start of a word listing what can go there, `Tab` completing, `Esc` back to
-    /// the tokens and `Enter` closing the buffer where the text reads; and among them, a token the grammar types in place, which
-    /// moves on to the next, or a count's digit.
-    pub fn text(&mut self, code: KeyCode, at: &mut usize, around: &Around) -> Did {
-        if let Some(did) = self.menu_key(code, at) {
+    /// `K` at the start of a word listing what can go there, `C-n`, `C-p` and `C-y` completing,
+    /// `Esc` back to the tokens and `Enter` closing the buffer where the text reads; and among
+    /// them, a token the grammar types in place, which moves on to the next, or a count's digit.
+    /// Any other key held with `Ctrl` does nothing.
+    pub fn text(&mut self, key: Key, at: &mut usize, around: &Around) -> Did {
+        if let Some(did) = self.menu_key(key, at) {
             return did;
         }
+        let code = key.code;
         let field = &mut self.field;
         if field.inserting().is_some() {
+            if key.ctrl {
+                return match code {
+                    KeyCode::Char(c @ ('n' | 'p' | 'y')) => self.complete(at, around, c == 'p'),
+                    _ => Did::Moved,
+                };
+            }
             match code {
                 KeyCode::Char('K') if field.typed_word() == Some("") => {
                     return self.offer(*at, around);
-                }
-                KeyCode::Tab | KeyCode::BackTab => {
-                    return self.complete(at, around, code == KeyCode::BackTab);
                 }
                 KeyCode::Esc => *at = field.end_insert(),
                 // `Enter` keeps what's typed and closes the buffer, as a dialog's does, where the
@@ -574,6 +592,9 @@ impl Tokens {
         let KeyCode::Char(c) = code else {
             return Did::Moved;
         };
+        if key.ctrl {
+            return Did::Moved;
+        }
         if self.types(c) {
             let field = &mut self.field;
             field.put(*at, &c.to_string());

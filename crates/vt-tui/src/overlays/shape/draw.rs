@@ -536,7 +536,7 @@ fn draw_in(frame: &mut Frame, area: Rect, window: Rect, ctx: &Ctx, panel: &Shape
 }
 
 /// The row's buffer while it's open (decision 463): under the row, from the panel's left edge,
-/// its rows line under the text and the list `K` or `Tab` opened under the cursor's token.
+/// its rows line under the text and the list `K` or `C-n` opened under the cursor's token.
 fn draw_buffer(frame: &mut Frame, area: Rect, inside: Rect, ctx: &Ctx, panel: &ShapePanel) {
     let (Some(tokens), Some(at)) = (&panel.tokens, panel.weight) else {
         return;

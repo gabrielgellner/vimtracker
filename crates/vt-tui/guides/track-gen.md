@@ -478,7 +478,7 @@ effect, and anywhere else the cursor's track's sound. `K` on `Machine`, the Soun
 setting, and on an effect's name on the FX page, lists `Load a sound preset` or `Load an effect
 preset` after the machines or effects, which opens the list on the presets folder, and `Save as a
 sound preset` or `Save as an effect preset`, which types `:preset save ` for the name. A name is
-letters, digits, spaces and `-` `_` `.` `(` `)`, with `/` before a folder; `Tab` completes one. A
+letters, digits, spaces and `-` `_` `.` `(` `)`, with `/` before a folder; `Ctrl-n` completes one. A
 name that's taken is refused, so nothing is written over by mistake.
 
 **Loading** is one undo step. A sound keeps the track's level, pan, sends, name and phrases, and
@@ -575,6 +575,6 @@ anything that reached a slot or macro it replaced lets go of it.
 `K` on a mod slot's type, in the title of its device on the Mod page, lists `Add a patch` and
 `Save as a patch` after the types, and `K` on a macro of the Macros band lists the two alone.
 The patches' list shows what each needs beside its name, as `1 slot, 3 macros` or
-`Note generator, 2 macros`, your own first and then `Factory`'s. `Tab` after `:patch load`
-completes both.
+`Note generator, 2 macros`, your own first and then `Factory`'s. `Ctrl-n` after `:patch
+load` completes both.
 <!-- ANCHOR_END: rest -->

@@ -434,7 +434,7 @@ struct OpenAt {
 }
 
 /// The buffer open on a Gen page cell (decision 463), under its value, its rows line under the
-/// text and the list `K` or `Tab` opened under the cursor's token, over the devices.
+/// text and the list `K` or `C-n` opened under the cursor's token, over the devices.
 fn draw_buffer(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx, at: OpenAt) {
     let OpenAt { control, x, y } = at;
     let (

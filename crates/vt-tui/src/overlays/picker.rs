@@ -978,7 +978,7 @@ impl Picker {
             KeyCode::Down => self.move_highlight(1),
             KeyCode::Up => self.move_highlight(-1),
             KeyCode::Enter => return self.enter(false, true),
-            KeyCode::Tab if self.tree.is_some() => self.complete_tag(),
+            KeyCode::Char('y') if key.ctrl && self.tree.is_some() => self.complete_tag(),
             // Back to the list, as `Esc` leaves Insert mode, keeping what's found so `j` and `k`
             // move through it. Only the list's own `Esc` closes.
             KeyCode::Esc => self.focus = Focus::List,

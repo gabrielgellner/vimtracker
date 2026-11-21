@@ -1242,13 +1242,20 @@ impl Overlay for ShapePanel {
     }
 
     /// `Tab` and `Shift-Tab` play whatever's held with them. Cmd with `=`'s and its neighbours'
-    /// Cmd keys is that key, but types nothing; Cmd with any other key does nothing; and nothing
-    /// else held is read.
+    /// Cmd keys is that key, but types nothing; Cmd with any other key does nothing; `Ctrl` is
+    /// read on a letter while a field of tokens is typed or its list is open, for `C-n` `C-p`
+    /// `C-y` and `C-e`; and nothing else held is read.
     fn reads(&self, key: Key) -> Key {
         match key.code {
             KeyCode::Tab | KeyCode::BackTab => Key::new(key.code),
             _ if key.command && self.typing.is_none() => adjusting_key(key).unwrap_or(key),
             _ if key.command => key,
+            KeyCode::Char(_) if key.ctrl && self.tokens.as_ref().is_some_and(Tokens::completes) => {
+                Key {
+                    ctrl: true,
+                    ..Key::new(key.code)
+                }
+            }
             code => Key::new(code),
         }
     }
@@ -1268,19 +1275,15 @@ impl Overlay for ShapePanel {
         }
     }
 
-    /// What's typed into a row; `Tab` and `Shift-Tab` play while it is, but complete while a field
-    /// of tokens is typed or its list is open, and any other key does nothing.
+    /// What's typed into a row or a field of tokens; `Tab` and `Shift-Tab` play while it is, also
+    /// in a field of tokens (decision 477), and any other key does nothing.
     fn text(&mut self, key: Key, ctx: &mut CtxMut) -> Outcome {
-        let completes = self.tokens.as_ref().is_some_and(Tokens::completes);
         match key.code {
-            KeyCode::Tab | KeyCode::BackTab if completes => {
-                return self.token_text(key.code, ctx.services);
-            }
             KeyCode::Tab => return Outcome::Do(Cmd::PauseOrResume),
             KeyCode::BackTab => return Outcome::Do(Cmd::PlayFromStart),
             _ if key.command => {}
             code if self.typing.is_some() => self.typed(code, ctx.services),
-            code if self.tokens.is_some() => return self.token_text(code, ctx.services),
+            _ if self.tokens.is_some() => return self.token_text(key, ctx.services),
             _ => {}
         }
         Outcome::Done
@@ -1721,15 +1724,15 @@ impl ShapePanel {
     }
 
     /// A key that isn't the table's, in the tokens: a token typed in place, a count, what's being
-    /// typed, or the list `K` or `Tab` opened.
-    fn token_text(&mut self, code: KeyCode, services: &mut Services) -> Outcome {
+    /// typed, or the list `K` or `C-n` opened.
+    fn token_text(&mut self, key: Key, services: &mut Services) -> Outcome {
         let tracks = self.track_names(services);
         let reached = self.reached();
         let around = self.around(&tracks, &reached);
         let (Some(tokens), Some(at)) = (self.tokens.as_mut(), self.weight.as_mut()) else {
             return Outcome::Done;
         };
-        let did = tokens.text(code, at, &around);
+        let did = tokens.text(key, at, &around);
         self.tokens_did(did, services)
     }
 
@@ -1745,7 +1748,7 @@ impl ShapePanel {
             .collect()
     }
 
-    /// What's around a field, for what `K` and `Tab` offer in it: the column, with its scale, and
+    /// What's around a field, for what `K` and `C-n` offer in it: the column, with its scale, and
     /// From and To.
     fn around<'a>(&self, tracks: &'a [String], reached: &'a [String]) -> Around<'a> {
         Around {
@@ -1827,7 +1830,7 @@ impl ShapePanel {
                     }
                     _ => String::new(),
                 };
-                format!("{after}K lists what can go here, Tab completes a word")
+                format!("{after}K lists what can go here, Ctrl-n completes a word")
             }
             (Some(bad), _) => format!(
                 "{}; the column plays the last text that read. Esc puts it back",

@@ -436,7 +436,7 @@ of the names. Each track keeps the note it plays, its first in the rows, until
 each track's `From` is its own. A stack is natural here, as each layer is other
 tracks': `bd . . bd . . bd ., hh*2` at `Step 1 row` puts the kick's tresillo
 over a hat on every row, each a `RET` of two. A name in two layers is refused, as a track plays one. `K` and
-`Tab` offer the line's names, and `=` and `-` on a name turn it to the next
+`Ctrl-n` offer the line's names, and `=` and `-` on a name turn it to the next
 track's or the one before.
 
 Every track of the line needs a name, as its number can't be a token: while any
@@ -1160,12 +1160,13 @@ value, or a list from it.
 
 **What can go here.** `K` on a token lists what it could be, under it, each with what it means,
 opened on the one it is: on a weight the sixteen weights, `0  never` to `F  the most`. `j` and
-`k`, the arrows, `Tab` and `Shift-Tab` move through the list, `Enter` puts the one highlighted in
-the token's place, and `Esc` closes it. While typing, `K` before anything's typed of a word lists
-what can go there, and `Tab` completes the word from the same list, as on the `:` line: the only
-match goes in, or what every match starts with and the list of them, which narrows as you type;
-`Tab` and `Shift-Tab` go through it and `Enter` puts one in. `Tab` plays again once you're back
-among the tokens. What's listed comes from the track: a list's note lists the scale's notes an
+`k`, `Ctrl-n` and `Ctrl-p` and the arrows move through the list, `Enter` or `Ctrl-y` puts the one
+highlighted in the token's place, and `Esc` closes it. While typing, `K` before anything's typed
+of a word lists what can go there, and `Ctrl-n` completes the word from the same list, as on the
+`:` line, with Neovim's keys: the only match goes in, or what every match starts with and the
+list of them, which narrows as you type; `Ctrl-n` and `Ctrl-p` go through it, `Ctrl-y` or
+`Enter` puts one in, and `Ctrl-e` closes it and puts back what you typed. `Tab` plays all the
+while, typing or not. What's listed comes from the track: a list's note lists the scale's notes an
 octave either way of it, a degree's the scale's degrees named by their notes, an FX value's the
 command's values, named where `K` names them on a row, as a condition's are, and a group's
 bracket the other kind of group or a rest in its place. FX commands are still chosen with `K` on
