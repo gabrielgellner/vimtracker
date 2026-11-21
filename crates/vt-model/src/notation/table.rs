@@ -413,6 +413,70 @@ mod tests {
         assert_ne!(first, second);
     }
 
+    /// A `Tonnetz`'s table holds the place in its list of the move that reached each row's chord
+    /// (decision 473): the first row, the chord it starts on, none; a list going round lights each
+    /// move's rows; a move left out for the scale, none, its rows the next move's; and a walk
+    /// whose moves are drawn, none, as its list isn't what writes them.
+    #[test]
+    fn a_tonnetzs_rows_are_lit_by_the_move_that_reached_them() {
+        use crate::shape::{MoveList, Moves, Tonnetz, TonnetzMove};
+        let column = ShapeColumn::Note {
+            scale: Scale::default(),
+            writes: None,
+        };
+        let walk = |list: &[TonnetzMove], moves: Moves| Shape {
+            kind: FillKind::Tonnetz,
+            place: Where::AllRows,
+            from: 60,
+            tonnetz: Tonnetz {
+                list: MoveList::new(list),
+                moves,
+                ..Tonnetz::default()
+            },
+            ..Shape::default()
+        };
+        let range = StepRange::between(0, 8);
+        let (p, l, r) = (TonnetzMove::P, TonnetzMove::L, TonnetzMove::R);
+        let shape = walk(&[p, l, r, l], Moves::List);
+        let table = Table::render(&steps(9), range, column, &shape, Texts::NONE, None);
+        let field = Field::new(GrammarId::Moves.grammar(), "P L R L", column);
+        assert_eq!(table.token_of(&field, 0), None, "the chord it starts on");
+        assert_eq!(table.rows(&field, 0), [1, 5]);
+        assert_eq!(table.rows(&field, 1), [2, 6]);
+        assert_eq!(table.rows(&field, 2), [3, 7]);
+        assert_eq!(table.rows(&field, 3), [4, 8]);
+        let marks: String = table
+            .marks(&field)
+            .iter()
+            .map(|mark| mark.glyph())
+            .collect();
+        assert_eq!(marks, "xxxxxxxxx");
+        // In C major `P` is never taken, so `L` and `R` write its rows.
+        let major = ShapeColumn::Note {
+            scale: Scale {
+                on: true,
+                kind: ScaleKind::Major,
+                ..Scale::default()
+            },
+            writes: None,
+        };
+        let in_scale = Shape {
+            tonnetz: Tonnetz {
+                in_scale: true,
+                ..shape.tonnetz
+            },
+            ..shape
+        };
+        let table = Table::render(&steps(9), range, major, &in_scale, Texts::NONE, None);
+        let field = Field::new(GrammarId::Moves.grammar(), "P L R L", major);
+        assert!(table.rows(&field, 0).is_empty(), "P is left out");
+        let lit: usize = (0..4).map(|at| table.rows(&field, at).len()).sum();
+        assert_eq!(lit, 8, "every row after the first by L or R");
+        let random = walk(&[p, l, r, l], Moves::Random);
+        let table = Table::render(&steps(9), range, column, &random, Texts::NONE, None);
+        assert!((0..4).all(|at| table.rows(&field, at).is_empty()));
+    }
+
     #[test]
     fn a_tokens_place_among_its_kind() {
         let field = Field::new(&WORDS, "10 [. 20*2] 30", ShapeColumn::Velocity);

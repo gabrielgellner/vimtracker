@@ -789,7 +789,12 @@ Each move is drawn over the chord it reaches, `P   L   R   L` over `Cm  G#  Fm  
 and the panel's last line names the first chords as the list goes round, `C Cm G# Fm C# C#m A
 F#m`. `l` opens the moves: `=` and `-` go round `P`, `L` and `R`, so a progression is tried a
 move at a time, the status line saying the chords it goes between, `Move 2: L, Cm to G#`, and `K`
-lists the three with the chord each would reach from there.
+lists the three with the chord each would reach from there. In the buffer each move lights the
+rows its chord is on, `P` of `P L R L` on 16 rows lighting rows 01, 05, 09 and 0D, the first row
+being the chord the walk starts on, which no move reaches; while the phrase plays, the move that
+reached the chord playing is green. A move `In scale` leaves out lights nothing, the next move
+taking its rows, and with `Moves` at `Random` or `Loop` nothing is lit, as the list isn't what
+writes them.
 
 **On the Chord voice.** `Voice` `Chord` writes each row's root, within a
 tritone of `From`, and locks the voice's `Chord` to `M` or `m` in the first FX
@@ -1191,6 +1196,11 @@ the same way. While the phrase plays, the token that wrote the row playing is
 green, the playhead's colour, and so is that row's mark. A generator whose `Vary` gives a pass a
 seed of its own lights the token of the pass playing. While the text doesn't read, the line is of
 the last text that did, and says `still the last text that read`.
+
+`Weights`, a `List`'s values, an `Own` rhythm's or a `Mini`'s text and a `Tonnetz`'s moves have
+the rows line. A mask's bits, `Flip` and `Keep`, and the Mod page's Steps box have none on
+purpose: a bit touches every row's value, so it would light them all, and steps aren't phrase
+rows.
 
 ## Values and small edits
 

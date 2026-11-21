@@ -404,6 +404,46 @@ fn the_buffers_token_lights_its_rows_in_the_grid_beside_it() {
     assert!(lit_in_grid(&mut app).is_empty(), "none once it closes");
 }
 
+/// Kept live beside the grid, a `Tonnetz`'s moves light in the grid the rows whose chords they
+/// reach, `P` of `P L R L` rows 01, 05, 09 and 0D, and its buffer has the rows line (decision
+/// 473).
+#[test]
+fn a_tonnetzs_move_lights_its_chords_rows_in_the_grid_beside_it() {
+    let (mut app, _rt) = app_with(&["C-3 40 --- --- ---"; 16]);
+    keys(&mut app, "vGSKtonnetz<Enter>L 8");
+    assert!(app.gen_beside_shown());
+    'found: for _ in 0..12 {
+        keys(&mut app, "0");
+        for _ in 0..6 {
+            if here(&app) == Some(GenParam::MoveList) {
+                break 'found;
+            }
+            keys(&mut app, "l");
+        }
+        keys(&mut app, "j");
+    }
+    assert_eq!(here(&app), Some(GenParam::MoveList));
+    assert!(
+        lit_in_grid(&mut app).is_empty(),
+        "nothing lit while it's shut"
+    );
+    keys(&mut app, "<Enter>");
+    assert_eq!(app.modes.mode, Mode::Tokens);
+    assert_eq!(lit_in_grid(&mut app), vec![1, 5, 9, 13]);
+    keys(&mut app, "l");
+    assert_eq!(lit_in_grid(&mut app), vec![2, 6, 10, 14]);
+    let lines = screen_cells(&mut app);
+    assert!(
+        lines
+            .iter()
+            .any(|line| columns(line, 68, 162).contains("Rows  x x x x")),
+        "{}",
+        lines.join("\n")
+    );
+    keys(&mut app, "<Esc>");
+    assert!(lit_in_grid(&mut app).is_empty(), "none once it closes");
+}
+
 /// The live generator Gen's cursor is on, by its place in the phrase's list.
 fn gen_device(app: &App) -> Option<usize> {
     match app.gen_page.control(app.services.track_here()) {
