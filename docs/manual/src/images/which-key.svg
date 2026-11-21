@@ -458,13 +458,13 @@
 <rect x="792" y="646" width="675" height="19" fill="#292c3c"/>
 <text x="792" y="660" fill="#c6d0f5" textLength="675" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│?      Open a guide                                                      │</text>
 <rect x="792" y="665" width="675" height="19" fill="#292c3c"/>
-<text x="792" y="679" fill="#c6d0f5" textLength="675" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│k      Show every key                                                    │</text>
+<text x="792" y="679" fill="#c6d0f5" textLength="675" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│/      Search the text of every guide                                    │</text>
 <rect x="792" y="684" width="675" height="19" fill="#292c3c"/>
-<text x="792" y="698" fill="#c6d0f5" textLength="675" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│t      Show or hide the macro panel: this track's macros, at the bottom  │</text>
+<text x="792" y="698" fill="#c6d0f5" textLength="675" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│k      Show every key                                                    │</text>
 <rect x="792" y="703" width="675" height="19" fill="#292c3c"/>
-<text x="792" y="717" fill="#c6d0f5" textLength="675" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│T      Into the macro panel, showing it, to turn the macros              │</text>
+<text x="792" y="717" fill="#c6d0f5" textLength="675" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│t      Show or hide the macro panel: this track's macros, at the bottom  │</text>
 <rect x="792" y="722" width="675" height="19" fill="#292c3c"/>
-<text x="792" y="736" fill="#c6d0f5" textLength="675" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│d      Describe the setting under the cursor, or stop                    │</text>
+<text x="792" y="736" fill="#c6d0f5" textLength="675" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│T      Into the macro panel, showing it, to turn the macros              │</text>
 <rect x="792" y="741" width="675" height="19" fill="#292c3c"/>
 <text x="792" y="755" fill="#c6d0f5" textLength="675" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╰─────────────────────────────────────────────────────────────────────────╯</text>
 <rect x="0" y="760" width="72" height="19" fill="#8caaee"/>

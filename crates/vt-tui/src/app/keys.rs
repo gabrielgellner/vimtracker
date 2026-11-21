@@ -734,6 +734,7 @@ impl App {
                 Some(panel) => self.show_fill_guide(panel.shape.kind),
                 None => self.show_picker(guides::picker(self.guide_here())),
             },
+            Cmd::SearchGuides => self.show_picker(guides::search(self.overlays.guide.width)),
             Cmd::ToggleMacroPanel => self.toggle_macro_panel(),
             Cmd::FocusMacroPanel => self.focus_macro_panel(),
             Cmd::ToggleDescription => {

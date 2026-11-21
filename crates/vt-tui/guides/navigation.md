@@ -303,4 +303,12 @@ project: the project page's Audio page (`Space 9`, then `L`) has it as its last 
 you're on: the mixer's is the Sound page's, and the phrase view's this one. In a guide,
 `?` goes back to the list, on the guide you were reading. In a list, `?` opens `Space k`'s
 list at the list's own keys, and closing it goes back to the list as it was.
+
+`Space /` searches the text of every guide, as `grep` would: each word you type is
+found exactly, whatever its case, in any order, so `velocity range` finds every
+sentence with both words in it. Each sentence, table row and
+heading is a row of the list, under its guide, with the heading it's in beside it.
+`Enter` opens the guide there with the words marked, and `n` and `N` go to the next
+and the last place in that guide that has them, going round at either end. In a
+guide, `/` starts a new search.
 <!-- ANCHOR_END: rest -->

@@ -21,13 +21,15 @@ use crate::pages::{Ctx, CtxMut, Outcome};
 use crate::widgets::theme;
 
 /// The guide that's open, if one is, how far it has scrolled, and how many of its rows fit and
-/// how wide its text is, as the screen was when last drawn.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// how wide its text is, as the screen was when last drawn, and the words a search of the guides
+/// opened it on, which it marks and `n` and `N` go between.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GuideView {
     pub open: Option<Guide>,
     pub scroll: usize,
     pub page: usize,
     pub width: usize,
+    pub found: Vec<String>,
 }
 
 impl Default for GuideView {
@@ -37,6 +39,7 @@ impl Default for GuideView {
             scroll: 0,
             page: 16,
             width: 76,
+            found: Vec::new(),
         }
     }
 }
@@ -52,6 +55,11 @@ pub enum GuideKey {
     Bottom,
     /// `?`: the list of guides, on this one.
     Guides,
+    /// `/`: search the text of every guide.
+    Search,
+    /// `n` and `N`: the next or the last passage the search found in this guide, going round.
+    Next,
+    Previous,
     Close,
 }
 
@@ -60,6 +68,53 @@ impl GuideView {
     pub(crate) fn show(&mut self, guide: Guide) {
         self.open = Some(guide);
         self.scroll = 0;
+        self.found.clear();
+    }
+
+    /// Open a guide at a passage a search found, by its place among the guide's passages, which
+    /// is the same at any width, marking the words it was for.
+    pub(crate) fn show_found(&mut self, guide: Guide, passage: usize, words: &str) {
+        self.show(guide);
+        self.found = search_words(words);
+        let line = guide
+            .passages(self.width)
+            .get(passage)
+            .map_or(0, |passage| passage.line);
+        let last = guide.lines(self.width).len().saturating_sub(self.page);
+        self.scroll = line.min(last);
+    }
+
+    /// Scroll to the next passage the search found after the top line, or the last before it,
+    /// going round past either end, and say where it went.
+    fn step_found(&mut self, guide: Guide, forward: bool) -> &'static str {
+        if self.found.is_empty() {
+            return "No search: / searches every guide";
+        }
+        let lines: Vec<usize> = guide
+            .passages(self.width)
+            .iter()
+            .filter(|passage| passage.has(&self.found))
+            .map(|passage| passage.line)
+            .collect();
+        let next = if forward {
+            lines.iter().find(|&&line| line > self.scroll)
+        } else {
+            lines.iter().rev().find(|&&line| line < self.scroll)
+        };
+        let (line, said) = match next {
+            Some(line) => (*line, ""),
+            None if forward => match lines.first() {
+                Some(line) => (*line, "Search went round to the top"),
+                None => return "Not in this guide",
+            },
+            None => match lines.last() {
+                Some(line) => (*line, "Search went round to the bottom"),
+                None => return "Not in this guide",
+            },
+        };
+        let last = guide.lines(self.width).len().saturating_sub(self.page);
+        self.scroll = line.min(last);
+        said
     }
 
     /// Open a guide at a heading, or at its top if it has none by that title. Whether it had one.
@@ -94,11 +149,14 @@ impl Overlay for GuideView {
         ("g", Cmd::InGuide(GuideKey::Top), "The top"),
         ("G", Cmd::InGuide(GuideKey::Bottom), "The bottom"),
         ("?", Cmd::InGuide(GuideKey::Guides), "The list of guides"),
+        ("/", Cmd::InGuide(GuideKey::Search), "Search every guide"),
+        ("n", Cmd::InGuide(GuideKey::Next), "The next found"),
+        ("N", Cmd::InGuide(GuideKey::Previous), "The last found"),
         ("q", Cmd::InGuide(GuideKey::Close), "Close"),
         ("Esc", Cmd::InGuide(GuideKey::Close), "Close"),
     ];
 
-    fn key(&mut self, cmd: Cmd, _ctx: &mut CtxMut) -> Outcome {
+    fn key(&mut self, cmd: Cmd, ctx: &mut CtxMut) -> Outcome {
         let Some(guide) = self.open else {
             return Outcome::Close;
         };
@@ -118,6 +176,15 @@ impl Overlay for GuideView {
             GuideKey::Guides => {
                 self.open = None;
                 return Outcome::Open(Box::new(picker(guide)));
+            }
+            GuideKey::Search => {
+                self.open = None;
+                return Outcome::Open(Box::new(search(self.width)));
+            }
+            GuideKey::Next | GuideKey::Previous => {
+                let said = self.step_found(guide, key == GuideKey::Next);
+                ctx.services.status = said.to_owned();
+                return Outcome::Done;
             }
             GuideKey::Close => return Outcome::Close,
         }
@@ -151,7 +218,7 @@ impl Overlay for GuideView {
         self.page = draw::page(area.height);
         self.width = draw::text_width(area.width);
         if let Some(guide) = self.open {
-            draw::draw(frame, area, guide, self.scroll);
+            draw::draw(frame, area, guide, self.scroll, &self.found);
         }
     }
 }
@@ -236,6 +303,45 @@ pub(crate) fn picker(on: Guide) -> Picker {
     Picker::new("Guides", items).revealing(GUIDES.iter().position(|guide| *guide == on))
 }
 
+/// A search of the text of every guide, at the width their text is shown: a row for each
+/// sentence, table row, heading and line of a fence, under its guide, its heading beside it.
+/// Each word typed is found exactly, whatever its case, in any order, as `grep` would find them
+/// all, and choosing one opens its guide there with the words marked, which `n` and `N` go
+/// between.
+pub(crate) fn search(width: usize) -> Picker {
+    let items = GUIDES
+        .iter()
+        .flat_map(|guide| {
+            guide
+                .passages(width)
+                .into_iter()
+                .enumerate()
+                .map(|(at, passage)| {
+                    Item::new(
+                        passage.text,
+                        Pick::GuideAt {
+                            guide: *guide,
+                            passage: at,
+                            words: String::new(),
+                        },
+                    )
+                    .meaning(passage.heading)
+                    .category(guide.title())
+                })
+        })
+        .collect();
+    Picker::new("Search guides", items).exact().searching("")
+}
+
+/// The words of a search, as a passage is checked for them.
+fn search_words(query: &str) -> Vec<String> {
+    query
+        .split_whitespace()
+        .map(|word| word.trim_start_matches('\'').to_ascii_lowercase())
+        .filter(|word| !word.is_empty())
+        .collect()
+}
+
 /// The guide for the shape panel's fill, and the heading to open it at: the fill's own section
 /// in **Generators in depth**, or for a fill without one **Shaping a column**. Whether it had one.
 pub(crate) fn for_fill(fill: &str) -> (Guide, &str, bool) {
@@ -288,7 +394,22 @@ impl Guide {
     /// The guide as lines on screen, with paragraphs wrapped to a width. Tables and fences aren't
     /// wrapped, so they need to fit the narrowest window.
     pub fn lines(self, width: usize) -> Vec<Line<'static>> {
-        let mut lines = Vec::new();
+        self.layout(width).0
+    }
+
+    /// What a search of the guides looks through, at a width: each sentence, table row, heading
+    /// and line of a fence, with the line it starts on.
+    pub(crate) fn passages(self, width: usize) -> Vec<Passage> {
+        self.layout(width).1
+    }
+
+    /// The lines, and the passages in them.
+    fn layout(self, width: usize) -> (Vec<Line<'static>>, Vec<Passage>) {
+        let mut laid = Laid {
+            lines: Vec::new(),
+            passages: Vec::new(),
+            heading: self.title(),
+        };
         let mut table: Vec<&str> = Vec::new();
         let mut paragraph: Vec<&str> = Vec::new();
         let mut fenced = false;
@@ -300,7 +421,7 @@ impl Guide {
                 table.push(line);
                 continue;
             }
-            lines.append(&mut table_lines(&table));
+            laid.table(&table);
             table.clear();
             let prose =
                 !fenced && !line.is_empty() && !line.starts_with("```") && !line.starts_with('#');
@@ -308,26 +429,122 @@ impl Guide {
                 paragraph.push(line);
                 continue;
             }
-            lines.append(&mut wrapped(&paragraph.join(" "), width));
+            laid.paragraph(&paragraph.join(" "), width);
             paragraph.clear();
             if line.starts_with("```") {
                 fenced = !fenced;
             } else if fenced {
-                lines.push(Line::styled(line.to_owned(), code()));
+                laid.add(line, Line::styled(line.to_owned(), code()));
             } else if let Some(title) = line.strip_prefix("# ") {
-                lines.push(Line::styled(title.to_owned(), heading(theme::MAUVE)));
+                laid.add(title, Line::styled(title.to_owned(), heading(theme::MAUVE)));
             } else if let Some(title) = line
                 .strip_prefix("## ")
                 .or_else(|| line.strip_prefix("### "))
             {
-                lines.push(Line::styled(title.to_owned(), heading(theme::BLUE)));
+                laid.heading = title;
+                laid.add(title, Line::styled(title.to_owned(), heading(theme::BLUE)));
             } else {
-                lines.push(Line::raw(""));
+                laid.lines.push(Line::raw(""));
             }
         }
-        lines.append(&mut table_lines(&table));
-        lines.append(&mut wrapped(&paragraph.join(" "), width));
-        lines
+        laid.table(&table);
+        laid.paragraph(&paragraph.join(" "), width);
+        (laid.lines, laid.passages)
+    }
+}
+
+/// A piece of a guide a search finds: a sentence, a table's row, a heading or a line of a fence,
+/// as it reads on screen, under the heading it's in, starting on this line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Passage {
+    pub text: String,
+    pub heading: &'static str,
+    pub line: usize,
+}
+
+impl Passage {
+    /// Whether every word is in it, whatever their case, in any order.
+    pub(crate) fn has(&self, words: &[String]) -> bool {
+        let text = self.text.to_ascii_lowercase();
+        !words.is_empty() && words.iter().all(|word| text.contains(word.as_str()))
+    }
+}
+
+/// A guide being laid out: its lines so far, the passages in them, and the heading they're under.
+struct Laid {
+    lines: Vec<Line<'static>>,
+    passages: Vec<Passage>,
+    heading: &'static str,
+}
+
+impl Laid {
+    /// A line that's a passage of its own.
+    fn add(&mut self, text: &str, line: Line<'static>) {
+        self.passage(text.trim(), self.lines.len());
+        self.lines.push(line);
+    }
+
+    fn passage(&mut self, text: &str, line: usize) {
+        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        if !text.is_empty() {
+            self.passages.push(Passage {
+                text,
+                heading: self.heading,
+                line,
+            });
+        }
+    }
+
+    /// A table, a passage a row.
+    fn table(&mut self, rows: &[&str]) {
+        for line in table_lines(rows) {
+            let text: String = line
+                .spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect();
+            self.add(&text, line);
+        }
+    }
+
+    /// A paragraph, wrapped, a passage a sentence, each starting on the line its first word is.
+    fn paragraph(&mut self, text: &str, width: usize) {
+        let start = self.lines.len();
+        let lines = wrapped(text, width);
+        let shown: Vec<String> = lines
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect()
+            })
+            .collect();
+        self.lines.extend(lines);
+        // Where each line starts in the paragraph as shown, its lines joined by a space.
+        let mut starts = Vec::with_capacity(shown.len());
+        let mut at = 0;
+        for line in &shown {
+            starts.push(at);
+            at += line.len() + 1;
+        }
+        let whole = shown.join(" ");
+        // The line a sentence starting here is on, past the space before it.
+        let line_of = |from: usize| {
+            let begins = from + whole[from..].len() - whole[from..].trim_start().len();
+            start + starts.partition_point(|&at| at <= begins).max(1) - 1
+        };
+        let mut from = 0;
+        for (end, _) in whole.match_indices(['.', '?', '!']) {
+            let after = &whole[end + 1..];
+            if after.is_empty() || after.starts_with(' ') {
+                self.passage(&whole[from..=end], line_of(from));
+                from = end + 1;
+            }
+        }
+        if !whole[from..].trim().is_empty() {
+            self.passage(&whole[from..], line_of(from));
+        }
     }
 }
 
@@ -467,6 +684,63 @@ mod tests {
 
     fn text(line: &Line) -> String {
         line.spans.iter().map(|s| s.content.as_ref()).collect()
+    }
+
+    #[test]
+    fn every_passage_starts_on_its_line_and_together_they_keep_every_word() {
+        for guide in GUIDES {
+            for width in [ROOM, 96] {
+                let lines = guide.lines(width);
+                let passages = guide.passages(width);
+                for passage in &passages {
+                    let first = passage.text.split_whitespace().next().unwrap();
+                    assert!(
+                        text(&lines[passage.line]).contains(first),
+                        "{}: {:?} isn't on line {}",
+                        guide.title(),
+                        passage.text,
+                        passage.line
+                    );
+                }
+                let shown: Vec<String> = lines
+                    .iter()
+                    .flat_map(|line| {
+                        text(line)
+                            .split_whitespace()
+                            .map(str::to_owned)
+                            .collect::<Vec<_>>()
+                    })
+                    .collect();
+                let found: Vec<String> = passages
+                    .iter()
+                    .flat_map(|passage| passage.text.split_whitespace().map(str::to_owned))
+                    .collect();
+                assert_eq!(found, shown, "{}", guide.title());
+            }
+        }
+    }
+
+    #[test]
+    fn a_paragraph_is_a_passage_a_sentence_and_a_number_is_no_end() {
+        let guide = Guide {
+            source: "# T\n\nOne is `1.5` long. Is two? Three!\n",
+        };
+        let texts: Vec<String> = guide.passages(ROOM).into_iter().map(|p| p.text).collect();
+        assert_eq!(texts, ["T", "One is 1.5 long.", "Is two?", "Three!"]);
+    }
+
+    #[test]
+    fn a_search_marks_its_words_whatever_their_case_and_leaves_the_rest() {
+        let line = Line::from(vec![Span::raw("A Loop and "), Span::styled("loop", code())]);
+        let marked = draw::marked(line, &["loop".to_owned()]);
+        let reversed: Vec<&str> = marked
+            .spans
+            .iter()
+            .filter(|span| span.style.add_modifier.contains(Modifier::REVERSED))
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert_eq!(reversed, ["Loop", "loop"]);
+        assert_eq!(text(&marked), "A Loop and loop");
     }
 
     #[test]

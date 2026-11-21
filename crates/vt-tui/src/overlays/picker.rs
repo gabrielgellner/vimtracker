@@ -204,6 +204,13 @@ pub enum Pick {
         slot: usize,
     },
     Guide(Guide),
+    /// A guide at a passage a search of the guides found, by its place in the guide, with the
+    /// words it was for, which the picker fills in from its search as it's chosen.
+    GuideAt {
+        guide: Guide,
+        passage: usize,
+        words: String,
+    },
     /// Play through another output, from the audio page.
     Audio(AudioChoice),
     /// Put this in the command line in place of the word being completed.
@@ -440,6 +447,9 @@ pub struct Picker {
     /// A hint for keys this list has beyond the usual, drawn under it. The explorer's `H`, `P`
     /// and `A` follow it there, each with its switch showing whether it's on.
     pub hint: Option<&'static str>,
+    /// Whether each word of the search is found exactly rather than loosely, as a search of the
+    /// guides' text is, where a loose match would find nearly every sentence.
+    pub exact: bool,
     items: Vec<Item>,
     categories: Vec<Category>,
     /// Which category each item is in, if it's in one of more than one item.
@@ -514,6 +524,7 @@ impl Picker {
             past_end: false,
             room: 0,
             hint: None,
+            exact: false,
             items,
             categories,
             item_categories,
@@ -549,6 +560,14 @@ impl Picker {
             self.reveal(item);
         }
         self
+    }
+
+    /// Find each word of the search exactly, whatever its case, as `grep` would.
+    pub(crate) fn exact(self) -> Self {
+        Self {
+            exact: true,
+            ..self
+        }
     }
 
     /// Open on the search, with this already typed.
@@ -749,7 +768,20 @@ impl Picker {
                 .zip(&haystacks)
                 .map(|(item, haystack)| (item.label.as_str(), haystack.as_str()))
                 .collect();
-            let (rows, matched) = rank_with_positions(&texts, &self.query)
+            // fzf's syntax, which the matcher reads: a word after `'` is found exactly.
+            let needle = if self.exact {
+                self.query
+                    .split_whitespace()
+                    .map(|word| match word.starts_with(['\'', '^', '!']) {
+                        true => word.to_owned(),
+                        false => format!("'{word}"),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            } else {
+                self.query.clone()
+            };
+            let (rows, matched) = rank_with_positions(&texts, &needle)
                 .into_iter()
                 .map(|(item, positions)| (Row::Item(item), positions))
                 .unzip();
@@ -807,7 +839,11 @@ impl Picker {
             Some(Row::Item(item)) => {
                 let item = &self.items[item];
                 let pick = if wider { item.wider.as_ref() } else { None };
-                Outcome::Choose(pick.unwrap_or(&item.pick).clone())
+                let mut pick = pick.unwrap_or(&item.pick).clone();
+                if let Pick::GuideAt { words, .. } = &mut pick {
+                    words.clone_from(&self.query);
+                }
+                Outcome::Choose(pick)
             }
             None => Outcome::Close,
         }

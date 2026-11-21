@@ -780,7 +780,7 @@ pub fn draw_screen(
     }
     // An overlay may keep something of how it was drawn, so each is lent apart from the rest.
     // A guide keeps how many of its rows fit, which its keys go by, open or not.
-    let mut guide = app.overlays.guide;
+    let mut guide = std::mem::take(&mut app.overlays.guide);
     guide.draw(frame, body, &app.ctx());
     app.overlays.guide = guide;
     if let Some(panel) = app.overlays.shape.take() {
