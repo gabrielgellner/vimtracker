@@ -118,12 +118,11 @@ pub(super) fn render<F: FnMut(usize, &Shaped, Option<usize>)>(
                 };
                 (GenCell::Gate(gate), 0)
             }
-            (Atom::Tie, _) => return,
             (Atom::Degree(degree), ShapeColumn::Note { scale, .. }) => {
                 let note = degree_note(scale, shape.from, degree);
                 (column.cell(step, u16::from(note) << 8), note)
             }
-            (Atom::Degree(_), _) => return,
+            (Atom::Tie | Atom::Degree(_), _) => return,
             (Atom::Value(value), _) => (column.cell(step, u16::from(value) << 8), value),
         };
         let nudge = (lands.off * ROW_NUDGES)
@@ -227,8 +226,8 @@ mod tests {
         cells
             .iter()
             .map(|cell| match *cell {
-                GenCell::Pitch(note) => Some(note),
-                GenCell::Timed {
+                GenCell::Pitch(note)
+                | GenCell::Timed {
                     note: Note::On(note),
                     ..
                 } => Some(note),

@@ -831,7 +831,7 @@ impl GenScratch {
                 let wait = &waits[held];
                 let offset = at.row - run.rows.first;
                 let (lap, cells) = &wait.lines[usize::from(line).min(wait.lines.len() - 1)];
-                if !cues || plays && offset % *lap == 0 || wait.column != run.column {
+                if !cues || plays && offset.is_multiple_of(*lap) || wait.column != run.column {
                     self.waiting[held] = None;
                 } else if let Some(cell) = cells.get(offset) {
                     if let Some(under) = under.get(at.row) {

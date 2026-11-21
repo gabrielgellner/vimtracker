@@ -645,12 +645,16 @@ impl GeneratorFile {
             span: generator.span,
             shape: generator.shape,
             list: generator.list.to_vec(),
-            rhythm: (generator.shape.kind != FillKind::Mini)
-                .then(|| generator.rhythm.text().to_owned())
-                .unwrap_or_default(),
-            mini: (generator.shape.kind == FillKind::Mini)
-                .then(|| generator.rhythm.text().to_owned())
-                .unwrap_or_default(),
+            rhythm: if generator.shape.kind == FillKind::Mini {
+                String::new()
+            } else {
+                generator.rhythm.text().to_owned()
+            },
+            mini: if generator.shape.kind == FillKind::Mini {
+                generator.rhythm.text().to_owned()
+            } else {
+                String::new()
+            },
             first: generator.first,
             under: generator.under.clone(),
         }
