@@ -12,8 +12,8 @@ use ratatui::widgets::{Block, Borders, Paragraph, Widget};
 use vt_model::generator::{Generator, Span as Spanned};
 use vt_model::grid::GRID_COLUMNS;
 use vt_model::macros::MACROS;
-use vt_model::notation::Field;
-use vt_model::shape::{ShapeColumn, degree_count};
+use vt_model::notation::{Field, Table};
+use vt_model::shape::{GenParam, ShapeColumn, degree_count};
 use vt_model::song::Track;
 
 use crate::controls::macro_name;
@@ -25,7 +25,7 @@ use crate::pages::track::TrackPage;
 use crate::services::generators::LiveGen;
 use crate::services::{Services, walked_order};
 use crate::widgets::device::{DEVICE_HEIGHT, Device};
-use crate::widgets::grid::{CellSource, CellWidths, ROW_STEP, SettingsGrid};
+use crate::widgets::grid::{CellParts, CellSource, CellWidths, ROW_STEP, SettingsGrid};
 use crate::widgets::image;
 use crate::widgets::panel::GraphicPanel;
 use crate::widgets::setting::{self, Focus};
@@ -316,7 +316,15 @@ fn draw_fields(
             let layout = Layout::of(param, field, &live.generator.shape, &context);
             let cursor = open.map(|tokens| tokens.at);
             let typing_at = field.inserting().map(|insert| insert.to);
-            let [top, under] = layout.lines(field, cursor, typing_at, here == control, room.into());
+            let playing = playing_token(ctx, control, live, field);
+            let [top, under] = layout.lines(
+                field,
+                cursor,
+                typing_at,
+                here == control,
+                playing,
+                room.into(),
+            );
             let buffer = frame.buffer_mut();
             let blank = Line::raw(" ".repeat(room.into()));
             blank.clone().render(Rect::new(x, y, room, 1), buffer);
@@ -411,10 +419,80 @@ fn draw_weights(
         .after(Line::styled(after, theme::dim()))
         .focused(focused);
     frame.render_widget(widget, area);
-    let cells = TrackCells::new(page, ctx, track).of_generator(&live);
+    let playing = playing_weight(ctx, phrase, generator, &live).map(|degree| Control::Gen {
+        phrase,
+        generator,
+        param: GenParam::WEIGHTS[degree],
+    });
+    let cells = Playing {
+        cells: TrackCells::new(page, ctx, track).of_generator(&live),
+        playing,
+    };
     let rows = device.grid.iter().copied().map(Vec::from).collect();
     let grid = SettingsGrid::new(&cells, rows, GEN_CELLS);
     frame.render_widget(grid, Device::settings_area(area));
+}
+
+/// A live generator's `Weights` as a field of tokens, from its shape, for its token table to be
+/// read by: none for a generator without them.
+pub(crate) fn weights_field(live: &LiveGen) -> Option<Field> {
+    let column = live.generator.column;
+    let grammar = GenParam::Weights.typing(column).grammar()?.grammar();
+    if !GenParam::Weights.exists_for(&live.generator.shape, column, false) {
+        return None;
+    }
+    let text = GenParam::Weights.shown(&live.generator.shape, &live.context());
+    Some(Field::new(grammar, &text, column))
+}
+
+/// The degree whose weight wrote the row a live generator is playing, while its phrase plays:
+/// from the token table of the pass it's on, which the edit thread renders itself (decision 460).
+fn playing_weight(ctx: &Ctx, phrase: u32, generator: usize, live: &LiveGen) -> Option<usize> {
+    let track = ctx.cursor().track;
+    let row = ctx.gen_playing_row(&live.generator)?;
+    let steps = ctx.song().tracks.get(track)?.phrases.get(&phrase)?.steps();
+    let field = weights_field(live)?;
+    let pass = ctx.heard_pass(track, phrase, generator);
+    let table = Table::of_generator(&live.generator, steps, pass)?;
+    table.token_of(&field, table.range().first + row)
+}
+
+/// The token of a field on the Gen page that wrote the row its generator is playing, while its
+/// phrase plays, from the token table of the pass it's on (decision 460).
+fn playing_token(ctx: &Ctx, control: Control, live: &LiveGen, field: &Field) -> Option<usize> {
+    let Control::Gen {
+        phrase, generator, ..
+    } = control
+    else {
+        return None;
+    };
+    let track = ctx.cursor().track;
+    let row = ctx.gen_playing_row(&live.generator)?;
+    let steps = ctx.song().tracks.get(track)?.phrases.get(&phrase)?.steps();
+    let pass = ctx.heard_pass(track, phrase, generator);
+    let table = Table::of_generator(&live.generator, steps, pass)?;
+    table.token_of(field, table.range().first + row)
+}
+
+/// A device's cells with one named in the playhead's colour: on `Weights`, the weight of the
+/// degree the row playing is on.
+struct Playing<'a> {
+    cells: TrackCells<'a>,
+    playing: Option<Control>,
+}
+
+impl CellSource for Playing<'_> {
+    type Id = Control;
+
+    fn cell(&self, control: Control, widths: CellWidths) -> CellParts {
+        let mut parts = self.cells.cell(control, widths);
+        if self.playing == Some(control) {
+            for span in &mut parts.name.spans {
+                span.style = span.style.patch(theme::active());
+            }
+        }
+        parts
+    }
 }
 
 /// A lane's length and division in words, as `4 rows` or `4 rows of 2 steps`.

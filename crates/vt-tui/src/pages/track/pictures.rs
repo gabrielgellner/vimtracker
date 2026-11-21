@@ -6,8 +6,10 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use vt_model::generator::Generator;
 use vt_model::insert::INSERTS;
 use vt_model::modulation::{MOD_SLOTS, ModKind};
+use vt_model::notation::Table;
 use vt_model::song::{Machine, Track};
 
 use crate::controls::{Control, Page};
@@ -25,6 +27,7 @@ use crate::pages::track::draw::{
     FILTER_CURVE_HEIGHT, FILTER_CURVE_WIDTH, LARGE_PANEL_HEIGHT, LARGE_PANEL_WIDTH,
     MOD_PANEL_HEIGHT, MOD_PANEL_WIDTH, SLOT_DRAWING_HEIGHT, WAVEFORM_HEIGHT, WAVEFORM_WIDTH,
     filter_being_edited, heard_bypassed, machine_being_edited, mod_being_edited, slot_being_edited,
+    weights_field,
 };
 
 impl TrackPage {
@@ -197,9 +200,10 @@ impl TrackPage {
         let edited = self.generator_here(ctx);
         let mut wants = Vec::new();
         for (at, generator) in phrase.generators().iter().enumerate() {
-            let Some(drawing) = GenDrawing::of(generator, phrase.steps()) else {
+            let Some(mut drawing) = GenDrawing::of(generator, phrase.steps()) else {
                 continue;
             };
+            drawing.lit = self.weight_rows(ctx, at, generator).unwrap_or_default();
             wants.push(PanelWant {
                 key: PanelKey::Gen(at),
                 shade: Shade::of(edited == Some(at), false),
@@ -208,6 +212,32 @@ impl TrackPage {
             });
         }
         wants
+    }
+
+    /// The rows of a live generator the weight under the cursor writes, counted from its first,
+    /// while the cursor's on one of its `Weights` (decision 460).
+    fn weight_rows(&self, ctx: &Ctx, at: usize, generator: &Generator) -> Option<Vec<usize>> {
+        let Control::Gen {
+            phrase,
+            generator: here,
+            param,
+        } = self.control_here(ctx)
+        else {
+            return None;
+        };
+        let degree = param.weight_degree().filter(|_| here == at)?;
+        let live = ctx.live_generator(ctx.cursor().track, phrase, at)?;
+        let field = weights_field(&live)?;
+        let steps = ctx.track_here()?.phrases.get(&phrase)?.steps();
+        let table = Table::of_generator(generator, steps, 0)?;
+        let first = table.range().first;
+        Some(
+            table
+                .rows(&field, degree)
+                .into_iter()
+                .map(|row| row - first)
+                .collect(),
+        )
     }
 
     /// The place in its phrase's list of the generator the cursor is on, on the Gen page.

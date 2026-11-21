@@ -3,7 +3,8 @@
 //! reading in the warning colour with `✗` under it. Each token takes a cell, over what it's for
 //! in a second line, as `Weights`' digits are over their notes and a `Tonnetz`'s moves over their
 //! chords. A field longer than its room shows the tokens round the cursor, `…` where it's cut,
-//! as the `:` line scrolls (decision 459).
+//! as the `:` line scrolls (decision 459). While the phrase plays, the token that wrote the row
+//! playing is in the playhead's colour (decision 460).
 
 use std::ops::Range;
 
@@ -39,6 +40,8 @@ pub(crate) struct TokenCells<'a> {
     pub under: &'a [&'a str],
     /// The tokens drawn, by place: all of them, or those round the cursor where they don't fit.
     pub shown: Range<usize>,
+    /// The token that wrote the row playing, while the phrase plays.
+    pub playing: Option<usize>,
 }
 
 /// What stands for the tokens a field cut off, at either end.
@@ -155,13 +158,14 @@ impl Layout {
     }
 
     /// A field's two lines in `room` characters, as many tokens as fit round the cursor, or where
-    /// what's typed goes, with what's beside them after the first.
+    /// what's typed goes, with what's beside them after the first and the token `playing` lit.
     pub(crate) fn lines(
         &self,
         field: &Field,
         cursor: Option<usize>,
         typing_at: Option<usize>,
         current: bool,
+        playing: Option<usize>,
         room: usize,
     ) -> [Vec<Span<'static>>; 2] {
         let beside = self.beside.as_deref().unwrap_or_default();
@@ -175,6 +179,7 @@ impl Layout {
             cell: self.cell,
             under: &under,
             shown,
+            playing,
         }
         .lines();
         if !beside.is_empty() {
@@ -308,6 +313,7 @@ impl TokenCells<'_> {
                     let style = match bad {
                         Some(bad) if bad == *nth => theme::warning(),
                         _ if self.typing_at.is_none() && self.cursor == Some(*nth) => lit,
+                        _ if self.playing == Some(*nth) => theme::active(),
                         _ => Style::new(),
                     };
                     Span::styled(text, style)

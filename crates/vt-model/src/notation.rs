@@ -15,6 +15,7 @@ mod field;
 mod list;
 mod moves;
 mod offer;
+mod table;
 mod weights;
 
 use std::ops::Range;
@@ -23,6 +24,7 @@ use crate::shape::ShapeColumn;
 
 pub use field::{Field, Insert, Motion, Object, Place};
 pub use offer::{degrees, groups, notes_round, values};
+pub use table::{Mark, Table, chance, nth_of};
 
 /// Which grammar a setting's text is in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -200,9 +202,10 @@ pub struct Grammar {
     /// What can go at a spot, in a token's place or after one, from what's around the field,
     /// for `K` to list and `Tab` to complete from, in the order they're listed (decision 458).
     pub offer: fn(Spot, &Around) -> Vec<Offer>,
-    /// The rows of the column the token at a place wrote, from each row's value there, for the
-    /// grid to light (#1090).
-    pub rows: fn(usize, ShapeColumn, &[Option<u8>]) -> Vec<usize>,
+    /// Which rows the token at a place among a text's tokens writes: those a render's [`Table`]
+    /// holds this byte on, the token's place as its fill counts them, or none for a token that
+    /// writes no row of its own, as a bracket (decision 460).
+    pub rows: fn(&[Token], usize) -> Option<u8>,
     /// How many tokens it always has on a column, where none can be added or taken away.
     pub fixed: fn(ShapeColumn) -> Option<usize>,
     /// What `x` puts back on a field of fixed length.
@@ -337,7 +340,7 @@ pub(crate) mod tests {
                 }
             }
         },
-        rows: |_, _, _| Vec::new(),
+        rows: |tokens, at| nth_of(tokens, at, Kind::Value),
         fixed: |_| None,
         blank: "00",
         rest: ".",

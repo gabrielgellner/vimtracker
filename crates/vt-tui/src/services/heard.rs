@@ -61,6 +61,16 @@ impl Services {
 }
 
 impl Services {
+    /// The pass of its phrase a live generator was last heard on, from 0: the one whose token
+    /// table the edit thread renders for the token playing (decision 460), as passes are
+    /// positional. The engine says only of one that varies, so any other's is 0.
+    pub(crate) fn heard_pass(&self, track: usize, phrase: u32, generator: usize) -> i64 {
+        self.reported
+            .heard_passes
+            .get(&(track, phrase, generator))
+            .map_or(0, |pass| pass.pass)
+    }
+
     /// A live generator's rows as last heard, if any was heard otherwise than written.
     pub(crate) fn heard_rows_of(
         &self,

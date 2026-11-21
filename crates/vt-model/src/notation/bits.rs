@@ -32,7 +32,7 @@ pub(super) static BITS: Grammar = Grammar {
             })
             .collect()
     },
-    rows: |_, _, _| Vec::new(),
+    rows: |_, _| None,
     fixed: |_| Some(COUNT),
     blank: ".",
     rest: ".",

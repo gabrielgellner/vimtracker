@@ -2,7 +2,9 @@
 //! the Note column, a nudge on the Nudge column and a hex value on the rest, up to
 //! [`MAX_LIST`] of them, each a token turned in the column's own units.
 
-use super::{About, Around, Bad, Grammar, Kind, Offer, Spot, Token, as_it_is, notes_round, values};
+use super::{
+    About, Around, Bad, Grammar, Kind, Offer, Spot, Token, as_it_is, notes_round, nth_of, values,
+};
 use crate::shape::{MAX_LIST, ShapeColumn};
 
 /// A semitone and an octave, as a note turns with the scale off.
@@ -22,7 +24,7 @@ pub(super) static LIST: Grammar = Grammar {
     },
     turn,
     offer,
-    rows: |_, _, _| Vec::new(),
+    rows: |tokens, at| nth_of(tokens, at, Kind::Value),
     fixed: |_| None,
     blank: "",
     rest: "",

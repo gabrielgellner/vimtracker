@@ -54,7 +54,7 @@ pub(super) static MOVES: Grammar = Grammar {
         })
         .collect()
     },
-    rows: |_, _, _| Vec::new(),
+    rows: |_, _| None,
     fixed: |_| None,
     blank: "",
     rest: "",

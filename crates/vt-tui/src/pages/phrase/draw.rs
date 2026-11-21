@@ -256,6 +256,18 @@ fn live_cells(column: ShapeColumn) -> (usize, usize) {
     }
 }
 
+/// The characters a column's values take in a step's text, for the rows a token writes: an FX
+/// column's command and value.
+fn token_cells(column: ShapeColumn) -> (usize, usize) {
+    match column {
+        ShapeColumn::Fx { slot, .. } => {
+            let (start, end) = slot_columns(slot);
+            (start, end - MARK_WIDTH)
+        }
+        column => live_cells(column),
+    }
+}
+
 /// A live generator's cells on a step as the grid writes them, for the status line to say: a
 /// note, `7F`, `CUT40`; a note with its velocity and gate where `heard` differs from the step in
 /// those too, as an `Acid` line's accents and slides do.
@@ -1010,6 +1022,9 @@ struct Grid<'a> {
     stored_lines: usize,
     /// The rows each live generator writes, and its column.
     live: Vec<(StepRange, ShapeColumn)>,
+    /// The rows the token under the shape panel's cursor writes, and their column, lit as the
+    /// token is (decision 460).
+    token_rows: Option<(ShapeColumn, Vec<usize>)>,
     /// The frame's edge, and the grid's parts named in it.
     edge: Style,
     named: Style,
@@ -1097,6 +1112,9 @@ impl<'a> Grid<'a> {
             theme::SURFACE1
         });
         let named = if insert { edge } else { theme::dim() };
+        let token_rows = ctx
+            .shape_panel()
+            .and_then(|panel| panel.token_rows(ctx.cursor().track, ctx.phrase_id()?));
         Self {
             phrase,
             extent,
@@ -1118,6 +1136,7 @@ impl<'a> Grid<'a> {
             first_line,
             stored_lines,
             live,
+            token_rows,
             edge,
             named,
         }
@@ -1522,6 +1541,16 @@ impl<'a> Grid<'a> {
         if let Some(selected) = selected {
             let (start, end) = selected_columns(step, selected.scope, len);
             styles[start..end].fill(theme::selected());
+        }
+        // The rows the shape panel's token writes, in the cursor's colour as the token is.
+        if let Some((column, rows)) = &self.token_rows
+            && rows.contains(&index)
+        {
+            let (start, end) = token_cells(*column);
+            let end = end.min(len);
+            for style in &mut styles[start.min(end)..end] {
+                *style = style.fg(theme::ROSEWATER).add_modifier(Modifier::BOLD);
+            }
         }
         // The cursor stays visible inside a selection, so the moving end can be seen.
         if index == ctx.cursor().step {

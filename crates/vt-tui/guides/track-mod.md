@@ -433,7 +433,7 @@ goes into the box, on the first step, and the cursor is a `▲` under it:
 | `0` `$` | The first or last step |
 | `=` `-` | Up or down by one |
 | `+` `_` | Up or down an octave, `0C` |
-| `i` | Type a value, signed hex such as `-0C`, or a list from this step on, `0C 00 -07 -05` |
+| `i` | Type a value, signed hex such as `-0C`, or a list, `0C 00 -07` |
 | `x` | Back to `00` |
 
 A list typed with `i` fills a step each from the cursor's, as one undo step, so a figure goes in
