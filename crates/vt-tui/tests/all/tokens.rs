@@ -3,8 +3,12 @@
 //! with `✗` and a reason while the last that did keeps playing, `Enter` on it is refused and `Esc`
 //! puts it back, and the panel's own keys still work from inside the tokens.
 
+use std::time::Instant;
+
+use ratatui::crossterm::event::KeyCode;
 use vt_model::shape::{FillKind, GenParam};
 use vt_tui::app::App;
+use vt_tui::input::keys::Key;
 use vt_tui::input::mode::Mode;
 use vt_tui::screen::describe;
 
@@ -123,4 +127,81 @@ fn the_panels_keys_still_work_from_the_tokens() {
     assert!(panel(&app).tokens.is_none());
     assert_eq!(panel(&app).row, below);
     assert_eq!(app.key_scopes(), [Mode::Shape]);
+}
+
+fn press(app: &mut App, code: KeyCode) {
+    app.key(Key::new(code), Instant::now());
+}
+
+/// The list open in the field, its title and what's highlighted.
+fn listed(app: &App) -> Option<(&'static str, String)> {
+    let menu = panel(app).tokens.as_ref()?.menu.as_ref()?;
+    Some((menu.picker.title, menu.highlighted()?.to_owned()))
+}
+
+/// `K` on a weight lists the weights, each with what it means, opened on the weight there, under
+/// the digit; `j` `k` move through them and `Enter` puts one in its place (decision 458).
+#[test]
+fn k_on_a_weight_lists_the_weights_and_enter_puts_one_in_its_place() {
+    let mut app = on_weights();
+    keys(&mut app, "llK");
+    assert_eq!(listed(&app), Some(("In its place", "F".to_owned())));
+    let drawn = shape_panel(&app, 80, 30);
+    assert!(drawn.contains("In its place 16"), "{drawn}");
+    // Under the digit, scrolled to the weight there.
+    assert!(drawn.contains("Weights F  F  F  F  F"), "{drawn}");
+    assert!(drawn.contains("│  E  93% as often as F │"), "{drawn}");
+    assert!(drawn.contains("│  F  the most          │"), "{drawn}");
+    keys(&mut app, "kk");
+    assert_eq!(listed(&app).unwrap().1, "D");
+    assert_eq!(weights(&app), [0xF; 5], "nothing changes until Enter");
+    keys(&mut app, "<Enter>");
+    assert_eq!(listed(&app), None);
+    assert_eq!(weights(&app), [0xF, 0xD, 0xF, 0xF, 0xF]);
+    assert_eq!(panel(&app).weight, Some(1));
+    assert_eq!(app.services.status, "Weight of D#: D");
+    // `Esc` closes it and changes nothing, and the field's keys work again.
+    keys(&mut app, "K<Esc>");
+    assert_eq!(listed(&app), None);
+    assert!(panel(&app).tokens.is_some());
+    keys(&mut app, "-");
+    assert_eq!(weights(&app), [0xF, 0xC, 0xF, 0xF, 0xF]);
+}
+
+/// `Tab` while typing lists what can go, as the `:` line's does, `Tab` and `Shift-Tab` going
+/// through it, and `Enter` types the one highlighted, which on `Weights` ends the typing; `K` at
+/// the start of what's typed lists the same.
+#[test]
+fn tab_while_typing_completes_from_the_same_list() {
+    let mut app = on_weights();
+    keys(&mut app, "ls");
+    assert_eq!(
+        app.services.status,
+        "K lists what can go here, Tab completes a word"
+    );
+    press(&mut app, KeyCode::Tab);
+    assert_eq!(listed(&app), Some(("What can go here", "0".to_owned())));
+    press(&mut app, KeyCode::BackTab);
+    assert_eq!(
+        listed(&app).unwrap().1,
+        "F",
+        "round from the first to the last"
+    );
+    press(&mut app, KeyCode::BackTab);
+    keys(&mut app, "<Enter>");
+    assert_eq!(weights(&app), [0xE, 0xF, 0xF, 0xF, 0xF]);
+    let tokens = panel(&app).tokens.as_ref().unwrap();
+    assert!(tokens.field.inserting().is_none(), "a weight is one digit");
+    assert!(!tokens.completes(), "so Tab plays again");
+    keys(&mut app, "sK");
+    assert_eq!(listed(&app), Some(("What can go here", "0".to_owned())));
+    keys(&mut app, "<Esc>");
+    assert_eq!(listed(&app), None);
+    let tokens = panel(&app).tokens.as_ref().unwrap();
+    assert!(
+        tokens.field.inserting().is_some(),
+        "Esc closes only the list"
+    );
+    keys(&mut app, "3");
+    assert_eq!(weights(&app), [3, 0xF, 0xF, 0xF, 0xF]);
 }

@@ -73,7 +73,8 @@ degree past it a weight of 0, so in C minor `Steps` 2 plays only C and G, as
 weights. With the scale off, `Weights` has a digit for each of the twelve
 semitones. In the panel `Weights` is a field of tokens, a digit over each note:
 `l` goes in, `=` and `-` turn the digit under the cursor, `~` rests it at `0`
-and gives it back, and a digit that isn't one is marked `✗` while the line keeps
+and gives it back, `K` lists the sixteen weights with how often each comes, for
+`Enter` to put one in, and a digit that isn't one is marked `✗` while the line keeps
 playing the last weights that read (the editing guide's Fields of tokens).
 
 **Over time.** `Run` holds a value for that many of the rows it changes: `Run 4`
