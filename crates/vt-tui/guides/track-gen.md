@@ -21,7 +21,10 @@ have. `Ctrl-w l` puts the keys in the panel and `Ctrl-w h` or `Esc` gives them b
 the panel staying; `Ctrl-w w` goes to the other one and `Ctrl-w c` closes it. The cursor's
 setting is lit only while the keys are in the panel, and a text's buffer opens over the panel,
 never over the grid. The meter, the other tracks' columns, the row inspector and the timeline
-are hidden while it shows (see **Beside the grid** in the navigation guide).
+are hidden while it shows (see **Beside the grid** in the navigation guide). From the grid, `gl`
+on a live column moves the panel to its device, the keys staying in the grid, and `gL` opens the
+panel there with the keys in it, from either form. `S` on a selection draws its box at the
+panel's top left, and `L` in it lands in the new device, the keys in the panel.
 
 The track's eight macros are the track page's, on its fourth page, Macros, `L` from FX (see
 **Macros**).

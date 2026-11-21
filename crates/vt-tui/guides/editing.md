@@ -106,7 +106,9 @@ over faint lines on each of the scale's roots, and on its other notes while ther
 column whose values aren't amounts, such as a list setting's lock or `CND`, has no bars. They go
 right of the column, and the panel stays top right; where that would cover them, the panel moves
 to the top left, and where the right has no room, the bars go left of the column. They go when the
-panel closes.
+panel closes. With Gen's panel beside the grid, the shape panel opens at the top left of Gen's
+panel instead, and the bars stay beside the column in the grid (see **Beside the grid** in the
+navigation guide).
 <!-- ANCHOR_END: before-bars -->
 <!-- ANCHOR: after-bars -->
 
@@ -1007,12 +1009,15 @@ Euclidean velocity accent is the one to try: keep it live, then turn its
 |---|---|
 | `L` | In the panel, keep it live, as one undo |
 | `gl` | Open the panel again on the live column here |
+| `gL` | Gen beside the grid on the live column here, the keys in it |
 | `Space 8`, Gen | Every live column of the phrase, as devices |
 | `Space g a`, `:gen apply` | Apply it: keep its values as plain ones |
 
 `gl` works from any row of the column, and after the song is saved and opened
 again. In the panel it opens, `L` keeps the new settings live, `Enter` applies
-it with them, and `Esc` leaves it as it was. A live column's values are drawn
+it with them, and `Esc` leaves it as it was. With Gen's panel beside the grid,
+`gl` moves that panel to the column's device instead, and `L` in the shape
+panel lands there, the keys in Gen. A live column's values are drawn
 in the shape panel's colour, and the phrase's title names its live columns
 after a wand, like `󰁨 Vel,FX1`.
 

@@ -20,6 +20,7 @@ use vt_model::notation::mini_start;
 use vt_model::selection::{Field, Motion};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{Context, FillKind, GenParam, OwnRhythm, Shape, ShapeColumn};
+use vt_model::song::Track;
 use vt_model::step::FxCommand;
 
 use crate::app::Entry;
@@ -736,14 +737,20 @@ impl TrackPage {
         let Some(made) = generators.iter().position(|found| on_field(found, field)) else {
             return Outcome::Done;
         };
-        let track = &services.song().tracks[services.cursor.track];
-        let devices = Page::Gen.devices_on(track, services.phrase_id());
+        self.to_generator(services.track_here(), made);
+        Outcome::Done
+    }
+
+    /// Put the cursor on the title of a live generator's device, by its place in the list of the
+    /// phrase the page shows, if it has one there.
+    pub(crate) fn to_generator(&mut self, track: Option<&Track>, made: usize) -> bool {
+        let devices = self.devices(track);
         let device = devices.iter().position(|device| {
             matches!(device.title[0], Some(Control::Gen { generator, .. }) if generator == made)
         });
         if let Some(device) = device {
-            self.move_to(services.track_here(), device * DEVICE_ROWS, 0);
+            self.move_to(track, device * DEVICE_ROWS, 0);
         }
-        Outcome::Done
+        device.is_some()
     }
 }
