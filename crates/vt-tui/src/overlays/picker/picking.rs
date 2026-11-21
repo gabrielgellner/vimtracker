@@ -450,6 +450,14 @@ impl App {
                 self.overlays.guide.show(guide);
                 self.modes.mode = Mode::Guide;
             }
+            Pick::GuideAt {
+                guide,
+                passage,
+                words,
+            } => {
+                self.overlays.guide.show_found(guide, passage, &words);
+                self.modes.mode = Mode::Guide;
+            }
             Pick::KitTracks(path) => {
                 self.note_place_of(Purpose::Kit, &path);
                 self.load_kit(&path);

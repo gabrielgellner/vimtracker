@@ -117,6 +117,8 @@ pub enum Cmd {
     EndLoopHere,
     Help,
     Guides,
+    /// Search the text of every guide, as `grep` would.
+    SearchGuides,
     ShowView(View),
     /// Show the track page on one of its pages.
     ShowTrackPage(Page),
@@ -387,6 +389,11 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("Space f f", Cmd::Picker, "Open the view picker"),
     ("Space f b", Cmd::TrackPicker, "Open the track picker"),
     ("Space ?", Cmd::Guides, "Open a guide"),
+    (
+        "Space /",
+        Cmd::SearchGuides,
+        "Search the text of every guide",
+    ),
     ("Space k", Cmd::Help, "Show every key"),
     (
         "Space t",

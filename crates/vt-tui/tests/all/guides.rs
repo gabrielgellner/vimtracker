@@ -304,3 +304,74 @@ fn keys_are_shown_as_cmd_ctrl_option_and_shift_never_as_vim_writes_them() {
         );
     }
 }
+
+#[test]
+fn space_slash_searches_every_guides_text_and_opens_where_it_found_it() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " /");
+    assert_eq!(app.modes.mode, Mode::Picker);
+    // Each word exactly, in any order, whatever its case: a sentence of Editing's.
+    press(&mut app, "PATTERN buffer");
+    let picker = app.overlays.picker.as_ref().unwrap();
+    assert!(!picker.rows().is_empty());
+    assert!(
+        picker.shown().all(|item| {
+            let text = item.label.to_lowercase();
+            text.contains("pattern") && text.contains("buffer")
+                || item.meaning.to_lowercase().contains("pattern")
+        }),
+        "only what has both words"
+    );
+    let first = picker.current().unwrap().label.clone();
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.modes.mode, Mode::Guide);
+    let view = &app.overlays.guide;
+    let guide = view.open.expect("a guide");
+    assert_eq!(view.found, ["pattern", "buffer"]);
+    // The passage found is on the guide's top line, or as near as the guide's end lets it be.
+    let lines: Vec<String> = guide
+        .lines(view.width)
+        .iter()
+        .map(|line| {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect()
+        })
+        .collect();
+    let first_word = first.split_whitespace().next().unwrap();
+    assert!(
+        lines[view.scroll..(view.scroll + view.page).min(lines.len())]
+            .iter()
+            .any(|line| line.contains(first_word)),
+        "{first} not in view"
+    );
+    // `n` goes on to the next it found in this guide, and round.
+    let at = app.overlays.guide.scroll;
+    press(&mut app, "n");
+    assert_ne!(app.overlays.guide.scroll, at);
+    press(&mut app, "N");
+    assert_eq!(app.overlays.guide.scroll, at);
+}
+
+#[test]
+fn a_loose_spelling_finds_nothing_in_the_guides_as_grep_would_not() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " /");
+    press(&mut app, "ptrnbfr");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().rows().len(), 0);
+}
+
+#[test]
+fn n_with_no_search_says_how_to_search() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " ?");
+    press(&mut app, "note");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "n");
+    assert!(
+        app.services.status.contains("/ searches"),
+        "{}",
+        app.services.status
+    );
+}
