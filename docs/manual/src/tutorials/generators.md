@@ -1798,3 +1798,6 @@ Keep it live. Its device on each track's Gen is `Note kit G1`, and its `Text` th
     it back on all three.
 *   `Step` `1 row` on any of them: the whole kit twice as fast, together.
 *   `:name KK` on track 1: the line's `bd` becomes `KK`, and the kick plays on.
+*   `:name K*` on track 1 is refused: a name is always one token of the line, two characters,
+    a letter then a letter, a digit, `-` or `_`. A track with no name can't be in a kit line,
+    and one put in `G1` joins this line, playing where its name is typed.

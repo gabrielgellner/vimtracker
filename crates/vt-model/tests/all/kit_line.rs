@@ -3,8 +3,9 @@
 
 use std::sync::Arc;
 
-use vt_model::action::{Action, edit};
+use vt_model::action::{Action, EditError, edit};
 use vt_model::generator::Span;
+use vt_model::history::History;
 use vt_model::project::{load_song, save_song};
 use vt_model::scale::Scale;
 use vt_model::selection::StepRange;
@@ -267,4 +268,156 @@ fn a_kit_line_saves_and_reads_back() {
             NAMES[track]
         );
     }
+}
+
+/// A track's name is always a token of a kit line: two characters, a letter then a letter, a
+/// digit, `-` or `_`, wherever it's set; and two names of one group can't differ only by case,
+/// as the line reads them without case (decision 472).
+#[test]
+fn a_name_is_always_a_token() {
+    let song = with_line("bd sn hh .");
+    let name = |track: usize, name: &str| {
+        edit(
+            &song,
+            &Action::SetTrackName {
+                track,
+                name: name.to_owned(),
+            },
+        )
+    };
+    for wrong in ["B D", "B*", "B.", "KICK", "1A", "é1"] {
+        let refused = name(0, wrong).unwrap_err();
+        assert_eq!(refused, EditError::TrackName(wrong.to_owned()), "{wrong}");
+        assert!(refused.to_string().contains("a letter then"), "{refused}");
+    }
+    let dashed = name(0, "B-").unwrap();
+    assert_eq!(text(&dashed, 1), "B- sn hh .");
+    assert_eq!(rows(&dashed, 0), rows(&song, 0));
+    assert_eq!(
+        name(1, "bd").unwrap_err(),
+        EditError::NameCase("BD".to_owned(), "bd".to_owned())
+    );
+    assert!(name(1, "BD").is_ok(), "the same name, both playing it");
+    // Out of the group a name is the track's own; joining with it is refused.
+    let mut apart = Song::clone(&song);
+    apart.add_track();
+    apart.tracks[3].name = "hh".to_owned();
+    assert_eq!(
+        join(&Arc::new(apart), 3).unwrap_err(),
+        EditError::NameCase("HH".to_owned(), "hh".to_owned())
+    );
+}
+
+/// A kit line can't be made on a track with no name, as its number isn't a token: the edit says
+/// which track (decision 472).
+#[test]
+fn a_kit_line_needs_its_tracks_named() {
+    let mut song = Song::clone(&kit_song(ROWS));
+    song.tracks[1].name.clear();
+    let refused = edit(
+        &Arc::new(song),
+        &Action::Generate {
+            track: 1,
+            phrase: 0,
+            column: column(),
+            span: Span::rows(StepRange::between(0, ROWS - 1)),
+            shape: shape(37),
+            list: Box::default(),
+            rhythm: "bd 02".into(),
+        },
+    )
+    .unwrap_err();
+    assert_eq!(refused, EditError::Unnamed("track 02".to_owned()));
+    assert!(refused.to_string().contains(":name it first"), "{refused}");
+}
+
+/// The line and a fourth track out of its group, named `CP`, with a phrase of its own, a note on
+/// one row if given.
+fn with_outsider(text: &str, note: Option<(usize, u8)>) -> Arc<Song> {
+    let mut song = Song::clone(&with_line(text));
+    song.add_track();
+    song.tracks[3].name = "CP".to_owned();
+    let mut steps = vec![Step::default(); ROWS];
+    if let Some((row, note)) = note {
+        steps[row].note = Note::On(note);
+    }
+    song.tracks[3]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(steps)));
+    Arc::new(song)
+}
+
+fn join(song: &Arc<Song>, track: usize) -> Result<Arc<Song>, EditError> {
+    edit(
+        song,
+        &Action::SetTrackGroup {
+            first: track,
+            last: track,
+            group: Some(1),
+        },
+    )
+}
+
+/// A track that joins a group with a kit line joins the line in the same edit: it gets the line
+/// over the same rows and plays where its name is typed, nothing until then, at its first note
+/// there; leaving takes it out again (decision 472).
+#[test]
+fn a_track_joining_the_group_joins_the_line() {
+    let song = with_outsider("bd sn hh .", Some((5, 50)));
+    let joined = join(&song, 3).unwrap();
+    assert_eq!(text(&joined, 3), "bd sn hh .");
+    assert_eq!(
+        rows(&joined, 3),
+        "........",
+        "nothing until its name is typed"
+    );
+    assert_eq!(joined.kit_names(KIT), ["BD", "SN", "HH", "CP"]);
+    let typed = reline(&joined, 0, "bd sn hh cp");
+    for track in 0..4 {
+        assert_eq!(text(&typed, track), "bd sn hh cp");
+    }
+    assert_eq!(rows(&typed, 3), "...x...x");
+    let step = &typed.tracks[3].phrases[&0].steps()[3];
+    assert_eq!(step.note, Note::On(50), "its own note");
+    // A name typed before it joined plays as it joins.
+    let early = join(&with_outsider("bd cp hh .", None), 3).unwrap();
+    assert_eq!(rows(&early, 3), ".x...x..");
+    assert_eq!(
+        early.tracks[3].phrases[&0].steps()[1].note,
+        Note::On(36),
+        "the line's From, with no note of its own"
+    );
+    let left = edit(
+        &typed,
+        &Action::SetTrackGroup {
+            first: 3,
+            last: 3,
+            group: None,
+        },
+    )
+    .unwrap();
+    assert!(left.tracks[3].phrases[&0].generators().is_empty());
+    assert_eq!(left.kit_names(KIT), ["BD", "SN", "HH"]);
+}
+
+/// Joining is one undo step with the join, and a track with no name can't join a line.
+#[test]
+fn joining_is_one_edit_and_needs_a_name() {
+    let song = with_outsider("bd sn hh cp", None);
+    let mut history = History::new(Arc::clone(&song));
+    history.commit(join(&song, 3).unwrap());
+    assert_eq!(rows(history.current(), 3), "...x...x");
+    history.undo();
+    assert_eq!(history.current().tracks[3].group, None);
+    assert!(
+        history.current().tracks[3].phrases[&0]
+            .generators()
+            .is_empty()
+    );
+    let mut unnamed = Song::clone(&song);
+    unnamed.tracks[3].name.clear();
+    assert_eq!(
+        join(&Arc::new(unnamed), 3).unwrap_err(),
+        EditError::Unnamed("track 04".to_owned())
+    );
 }
