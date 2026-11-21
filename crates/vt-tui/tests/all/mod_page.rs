@@ -1927,6 +1927,40 @@ fn a_steps_values_are_typed_as_a_list_from_the_cursors_step() {
     );
 }
 
+/// `Enter` on a step opens the slot's values in a buffer, on the cursor's step, each value a token
+/// turned in signed hex; `a` adds one at the end, which plays it, and the changes are one undo
+/// step as it closes (decision 463).
+#[test]
+fn a_steps_values_open_in_a_buffer_on_the_cursors_step() {
+    let (mut app, _realtime) = with_steps();
+    let steps = |app: &App| app.song().tracks[0].mods[3].steps;
+    press(&mut app, "jll");
+    typed(&mut app, "0c 00 -07 -05");
+    let length = steps(&app).played_count();
+    press(&mut app, "l");
+    let depth = app.services.history.undo_depth();
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.modes.mode, Mode::Tokens);
+    let open = app.track_page.tokens.as_ref().expect("the buffer");
+    assert_eq!(open.at, 1, "on the cursor's step");
+    assert_eq!(open.tokens.field.tokens().len(), length);
+    assert_eq!(app.services.status, "Step 2: 00");
+    press(&mut app, "l=");
+    assert_eq!(steps(&app).values[2], -6);
+    press(&mut app, "+");
+    assert_eq!(steps(&app).values[2], 0x0A);
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.modes.mode, Mode::Normal);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
+    press(&mut app, "a");
+    assert_eq!(app.modes.mode, Mode::Tokens);
+    press(&mut app, "7F");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.modes.mode, Mode::Normal, "Enter keeps it and closes");
+    assert_eq!(steps(&app).length as usize, length + 1);
+    assert_eq!(steps(&app).values[length], 0x7F);
+}
+
 #[test]
 fn a_steps_values_are_edited_in_its_panel_and_drawn_as_bars_with_the_cursor_under_one() {
     let (mut app, _realtime) = with_steps();

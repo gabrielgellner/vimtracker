@@ -711,8 +711,9 @@ impl crate::pages::Page for TrackPage {
         if !braces && ctx.modes.view != View::Mixer {
             self.settle(track);
         }
-        // On a Gen page setting in a grammar, `Enter` opens its buffer on the first token, `i`
-        // and `a` typing at the end and `cc` and `S` typing it all again (decision 463).
+        // On a Gen page setting in a grammar, or a Steps slot's step on the Mod page, `Enter`
+        // opens its buffer on the first token, or the step, `i` and `a` typing at the end and
+        // `cc` and `S` typing it all again (decision 463).
         let control = self.control(track);
         let opening = match cmd {
             Cmd::ReopenGenerator => Some(Opening::Tokens),
@@ -720,8 +721,12 @@ impl crate::pages::Page for TrackPage {
             Cmd::Retype => Some(Opening::Replace),
             _ => None,
         };
+        // A step's own value is still typed with `i`, as any value is.
+        let steps = self.page == Page::Mod
+            && matches!(control, Control::Mod(_, ModField::Step(_)))
+            && cmd != Cmd::EnterInsert;
         if let Some(how) = opening
-            && self.on_gen(ctx.modes.view, control)
+            && (self.on_gen(ctx.modes.view, control) || steps)
             && GenTokens::opens(ctx.services, ctx.modes.view, control)
         {
             self.tokens = GenTokens::open(ctx.services, ctx.modes.view, control, how);

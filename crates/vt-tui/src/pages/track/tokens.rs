@@ -7,7 +7,8 @@
 //! are one undo step when it closes.
 
 use ratatui::crossterm::event::KeyCode;
-use vt_model::notation::{Around, Field};
+use vt_model::modulation::ModField;
+use vt_model::notation::{Around, Field, GrammarId, show_step, step_value};
 use vt_model::shape::ShapeColumn;
 
 use crate::controls::Control;
@@ -21,6 +22,7 @@ use crate::pages::{Ctx, CtxMut, Outcome};
 use crate::services::Services;
 use crate::widgets::tokens::{reached, said_after};
 
+use super::editing::set_mod;
 use super::generators::type_gen;
 
 /// A Gen page setting's text while the cursor is in its tokens.
@@ -59,7 +61,11 @@ impl GenTokens {
         how: Opening,
     ) -> Option<Self> {
         let field = field_of(services, view, control)?;
-        let (tokens, at, why) = Tokens::open(field, how);
+        let (tokens, mut at, why) = Tokens::open(field, how);
+        // A Steps slot's list opens on the cursor's step.
+        if let (Control::Mod(_, ModField::Step(step)), Opening::Tokens) = (control, how) {
+            at = usize::from(step).min(tokens.field.tokens().len().saturating_sub(1));
+        }
         let mut open = Self {
             control,
             tokens,
@@ -112,7 +118,10 @@ impl GenTokens {
             return;
         }
         let text = (field.grammar().to_setting)(field.text());
-        type_gen(services, view, self.control, &text);
+        match self.control {
+            Control::Mod(slot, ModField::Step(_)) => write_steps(services, slot, &text),
+            control => type_gen(services, view, control, &text),
+        }
         if self.tokens.field.inserting().is_none()
             && let Some(shown) = field_of(services, view, self.control)
         {
@@ -152,6 +161,9 @@ impl GenTokens {
         services: &Services,
         view: View,
     ) -> Option<(ShapeColumn, u8, u8, Vec<String>)> {
+        if let Control::Mod(..) = self.control {
+            return Some((ShapeColumn::Velocity, 0, 0, Vec::new()));
+        }
         let live = self.live(services, view)?;
         let shape = live.generator.shape;
         let Control::Gen { param, .. } = self.control else {
@@ -177,8 +189,18 @@ impl GenTokens {
 }
 
 /// A Gen page setting's text as a field of tokens, where it's in a grammar, as its generator has
-/// it now.
+/// it now; or a Steps slot's values, as many as it plays, on the Mod page.
 fn field_of(services: &Services, view: View, control: Control) -> Option<Field> {
+    if let Control::Mod(slot, ModField::Step(_)) = control {
+        let track = services.page_track();
+        let steps = track.mods.get(slot)?.steps;
+        let text: Vec<String> = steps.values[..steps.played_count()]
+            .iter()
+            .map(|value| show_step(*value))
+            .collect();
+        let grammar = GrammarId::Steps.grammar();
+        return Some(Field::new(grammar, &text.join(" "), ShapeColumn::Velocity));
+    }
     let Control::Gen {
         phrase,
         generator,
@@ -192,6 +214,21 @@ fn field_of(services: &Services, view: View, control: Control) -> Option<Field> 
     let grammar = param.grammar(context.column)?.grammar();
     let text = (grammar.from_setting)(&param.shown(&live.generator.shape, &context));
     Some(Field::new(grammar, &text, context.column))
+}
+
+/// A Steps slot's values from its list, as many as it plays now, as one undo step.
+fn write_steps(services: &mut Services, slot: usize, text: &str) {
+    let track = services.page_track();
+    let mut modulator = track.mods[slot];
+    let values: Vec<i16> = text.split_whitespace().filter_map(step_value).collect();
+    if values.is_empty() {
+        return;
+    }
+    modulator.steps.values[..values.len()].copy_from_slice(&values);
+    modulator.steps.length = values.len() as u8;
+    if modulator != track.mods[slot] {
+        set_mod(services, slot, modulator);
+    }
 }
 
 impl Overlay for GenTokens {

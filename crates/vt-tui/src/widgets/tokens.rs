@@ -115,6 +115,16 @@ impl Layout {
         }
     }
 
+    /// The layout of a field with nothing under or beside its tokens, as a Steps slot's list.
+    pub(crate) fn plain() -> Self {
+        Self {
+            cell: LIST_GAP + 1,
+            step: LIST_GAP + 1,
+            under: Vec::new(),
+            beside: None,
+        }
+    }
+
     /// The tokens in sight in `room` characters, round the cursor or where what's typed goes.
     fn shown(
         &self,
