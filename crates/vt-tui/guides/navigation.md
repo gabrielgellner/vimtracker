@@ -113,8 +113,8 @@ two:
 | `Ctrl-w o` | Gen as the whole page, with its previews and the meter |
 | `Ctrl-w v` | Gen beside the grid again; from the grid, the keys stay |
 | `Ctrl-w c` | Close Gen: the grid as it was, the meter back |
-| `gl` | From the grid, the panel on the live column's device, the keys staying |
-| `gL` | On a live column, the panel open beside the grid on its device, the keys in it |
+| `gl` | The panel to the live column's device, keys staying |
+| `gL` | The panel open on the live column's device, keys in it |
 
 With the keys in the grid, every grid key works as it does, and the panel stays in view; with
 them in the panel, they're Gen's (see the Gen guide). `gl` moves the panel rather than opening

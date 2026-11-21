@@ -1009,7 +1009,7 @@ Euclidean velocity accent is the one to try: keep it live, then turn its
 |---|---|
 | `L` | In the panel, keep it live, as one undo |
 | `gl` | Open the panel again on the live column here |
-| `gL` | Gen beside the grid on the live column here, the keys in it |
+| `gL` | Gen beside the grid on the live column here |
 | `Space 8`, Gen | Every live column of the phrase, as devices |
 | `Space g a`, `:gen apply` | Apply it: keep its values as plain ones |
 
