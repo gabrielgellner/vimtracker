@@ -10,7 +10,7 @@ use vt_model::shape::{GenParam, Where};
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
 use vt_tui::app::App;
-use vt_tui::controls::Page;
+use vt_tui::input::mode::View;
 
 use crate::common::*;
 
@@ -123,9 +123,8 @@ fn the_gen_page_turns_a_rhythms_amount_and_switches_complementarys_side() {
     assert!(runs.contains("xx") && runs.contains('.'), "{runs}");
     let whole = runs.trim_end_matches('x');
     assert!(!whole.split('.').any(|run| run.len() == 1), "{runs}");
-    keys(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Macros);
-    keys(&mut app, "}k");
+    keys(&mut app, " 8");
+    assert_eq!(app.modes.view, View::Gen);
     let text = fx_page_text(&app).join("\n");
     assert!(text.contains("Ramp  Clusters  Once"), "{text}");
     assert!(text.contains("Amount"), "{text}");

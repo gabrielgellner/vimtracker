@@ -938,16 +938,21 @@ fn the_space_digits_show_the_mixer_each_track_page_and_the_project() {
     let (mut app, _realtime) = app();
     press(&mut app, " 4");
     assert_eq!(app.modes.view, View::Mixer);
-    for (digit, page) in [
-        ('5', Page::Sound),
-        ('6', Page::Mod),
-        ('7', Page::Fx),
-        ('8', Page::Macros),
-    ] {
+    for (digit, page) in [('5', Page::Sound), ('6', Page::Mod), ('7', Page::Fx)] {
         press(&mut app, &format!(" {digit}"));
         assert_eq!(app.modes.mode, Mode::Normal, "no list opens");
         assert_eq!((app.modes.view, app.track_page.page), (View::Track, page));
     }
+    // `L` goes on from FX to Macros, and `Space 8` is the phrase view's Gen (decision 466).
+    press(&mut app, "L");
+    assert_eq!(app.track_page.page, Page::Macros);
+    press(&mut app, " 8");
+    assert_eq!(app.modes.view, View::Gen);
+    assert_eq!(
+        app.track_page.page,
+        Page::Macros,
+        "the track page keeps its own"
+    );
     // Each page keeps its cursor, and H and L still go between them.
     press(&mut app, " 5j");
     let sound = app.track_control();

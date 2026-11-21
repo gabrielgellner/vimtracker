@@ -36,7 +36,8 @@ start a project in the folder `my-song`.
 ## What's in it
 
 **Views.** `Space` and a digit go to each view: `1` the song, `2` the chain, `3` the
-phrase, `4` the mixer, `5` to `8` the track's Sound, Mod, FX and Macros pages, `9` the
+phrase, `4` the mixer, `5` to `7` the track's Sound, Mod and FX pages, then `L` to its Macros,
+`8` Gen, the phrase's live generators, a page of the phrase view, `9` the
 project, with its song settings and the audio device, and `0` the sample page. `:sample`
 and `:kit` choose a sample or a kit. [Navigation](guides/navigation.md) lists them
 all.
@@ -57,7 +58,7 @@ returns, `A` and `B`, and the master. A sound track plays the sampler or one of 
 synth voices, most of them ported from Mutable Instruments' Plaits, and `Acid`, after a
 TB-303.
 
-**The track pages**, on `Space 5` to `Space 8`, are racks of devices, as Ableton Live's are, each a
+**The track pages**, on `Space 5` to `Space 7` and `L` on to Macros, and Gen, `Space 8`, are racks of devices, as Ableton Live's are, each a
 frame with its name and what gives it its character in its title:
 
 - **Sound** has four: the Machine with the voice's own settings, the Filter, the Output,

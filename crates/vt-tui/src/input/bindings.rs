@@ -342,8 +342,8 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ),
     (
         "Space 8",
-        Cmd::ShowTrackPage(Page::Macros),
-        "Macros page: the macros, and the live generators",
+        Cmd::ShowView(View::Gen),
+        "Gen: the phrase's live generators",
     ),
     (
         "Space 9",
@@ -447,6 +447,9 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Track, TrackPage::KEYS);
     add(Mode::Track, FOLDS);
     add(Mode::Track, EVERY_VIEW);
+    add(Mode::Gen, TrackPage::GEN_KEYS);
+    add(Mode::Gen, FOLDS);
+    add(Mode::Gen, EVERY_VIEW);
     add(Mode::Song, SongView::KEYS);
     add(Mode::Song, FOLDS);
     add(Mode::Song, EVERY_VIEW);

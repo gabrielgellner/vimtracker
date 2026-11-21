@@ -80,11 +80,9 @@ fn every_generator_puts_each_setting_on_one_knob_and_the_app_keeps_what_it_is() 
             let devices = track_devices(track, Some(0));
             // `Phrase` comes last.
             let (page, _, _) = devices.iter().rev().nth(1).unwrap();
-            assert_eq!(*page, Page::Macros, "{}", kind.name());
+            assert_eq!(*page, Page::Gen, "{}", kind.name());
             // The generator's device, and an `Acid`'s `Loops` after it.
-            let generators = devices.iter().filter(|(page, _, spec)| {
-                *page == Page::Macros && !matches!(spec.grid[0][0], Some(Control::Macro(_)))
-            });
+            let generators = devices.iter().filter(|(page, _, _)| *page == Page::Gen);
             for (_, _, spec) in generators {
                 let layout = layout_of(spec, track);
                 used.insert(layout.kind);

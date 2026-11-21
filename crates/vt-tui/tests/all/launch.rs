@@ -176,7 +176,7 @@ fn space_a_works_in_every_view_and_space_k_lists_it_beside_space_capital_a() {
     let (mut app, mut rt) = app();
     special(&mut app, KeyCode::Tab);
     block(&mut rt, &mut app);
-    for view in ["1", "2", "3", "4", "6", "7", "9", "0"] {
+    for view in ["1", "2", "3", "4", "6", "7", "8", "9", "0"] {
         press(&mut app, &format!(" {view}"));
         tap(&mut app, " a");
         assert!(
@@ -197,7 +197,7 @@ fn space_a_works_in_every_view_and_space_k_lists_it_beside_space_capital_a() {
         .iter()
         .filter(|row| row.trim_start().starts_with("Space a "))
         .count();
-    assert_eq!(listed, 8, "{rows:?}");
+    assert_eq!(listed, 9, "{rows:?}");
 }
 
 #[test]
@@ -259,7 +259,7 @@ fn space_a_works_in_every_view_and_space_k_lists_it() {
     let (mut app, mut rt) = app();
     special(&mut app, KeyCode::Tab);
     block(&mut rt, &mut app);
-    for view in ["1", "2", "3", "4", "6", "7", "9", "0"] {
+    for view in ["1", "2", "3", "4", "6", "7", "8", "9", "0"] {
         press(&mut app, &format!(" {view}"));
         tap(&mut app, " A");
         assert!(
@@ -278,5 +278,5 @@ fn space_a_works_in_every_view_and_space_k_lists_it() {
         .iter()
         .filter(|row| row.trim_start().starts_with("Space A "))
         .count();
-    assert_eq!(listed, 8, "{rows:?}");
+    assert_eq!(listed, 9, "{rows:?}");
 }

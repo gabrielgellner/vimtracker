@@ -57,6 +57,7 @@ pub fn column_name(app: &App) -> String {
         View::Chain => app.chain_view.column(&ctx),
         View::Phrase => app.phrase_view.column(&ctx),
         View::Track => app.track_page.column(&ctx),
+        View::Gen => app.gen_page.column(&ctx),
         View::Mixer => app.mixer_page.column(&ctx),
         View::Project => app.project_page.column(&ctx),
         View::Audio => app.audio_page.column(&ctx),
@@ -72,6 +73,7 @@ fn page_hint(app: &App) -> Option<String> {
         View::Chain => app.chain_view.hint(&ctx),
         View::Phrase => app.phrase_view.hint(&ctx),
         View::Track => app.track_page.hint(&ctx),
+        View::Gen => app.gen_page.hint(&ctx),
         View::Mixer => app.mixer_page.hint(&ctx),
         View::Project => app.project_page.hint(&ctx),
         View::Audio => app.audio_page.hint(&ctx),
@@ -90,7 +92,7 @@ pub fn value_shown(app: &App) -> Option<String> {
             return heard_shown(app, app.services.cursor.field)
                 .or_else(|| phrase_value(&app.services, app.services.cursor.field));
         }
-        if !matches!(app.modes.view, View::Track | View::Mixer) {
+        if !matches!(app.modes.view, View::Track | View::Mixer | View::Gen) {
             return None;
         }
         app.track_control()
@@ -474,6 +476,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             | Mode::OperatorPending
             | Mode::Chain
             | Mode::Track
+            | Mode::Gen
             | Mode::Mixer
             | Mode::Song
             | Mode::Audio

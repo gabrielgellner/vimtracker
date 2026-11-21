@@ -122,7 +122,7 @@ fn an_edit_on_one_tracks_gen_page_is_made_on_all() {
     keys(&mut app, "Sbd sn hh .<Enter>L");
     // To the third track's Gen page.
     app.services.cursor.track = 2;
-    keys(&mut app, " 5LLL");
+    keys(&mut app, " 8");
     to_cell(&mut app, GenParam::MiniText);
     let depth = app.services.history.undo_depth();
     keys(&mut app, "Shh hh sn bd<Enter>");
@@ -136,7 +136,7 @@ fn an_edit_on_one_tracks_gen_page_is_made_on_all() {
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
         .draw(|frame| {
-            vt_tui::run::draw_view(frame, frame.area(), &app, vt_tui::input::mode::View::Track)
+            vt_tui::run::draw_view(frame, frame.area(), &app, vt_tui::input::mode::View::Gen)
         })
         .unwrap();
     let buffer = terminal.backend().buffer().clone();

@@ -10,7 +10,7 @@ use vt_model::song::{Phrase, Song};
 use vt_model::speed::Speed;
 use vt_model::step::{Note, Step};
 use vt_tui::app::App;
-use vt_tui::controls::Page;
+use vt_tui::input::mode::View;
 
 use crate::common::*;
 
@@ -181,7 +181,7 @@ fn a_live_divisions_on_the_gen_page_shows_its_channel_bar_and_chances() {
     let (mut app, _rt) = app_with(&[Speed::Sixteenth], 16);
     keys(&mut app, "vGSK/divisions<Enter>L");
     keys(&mut app, " 8");
-    assert_eq!(app.track_page.page, Page::Macros);
+    assert_eq!(app.modes.view, View::Gen);
     let text = fx_page_text(&app).join("\n");
     assert!(
         text.contains("Divisions  A  4/4 16ths  Once · Note 00–0F"),

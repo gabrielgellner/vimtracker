@@ -1,13 +1,14 @@
 <!-- ANCHOR: before-folded -->
 # The Sound page, output and groups
 
-Press `Space 5` to `Space 8` for what a track holds apart from its steps, on four pages: Sound
+Press `Space 5` to `Space 7` for what a track holds apart from its steps, on four pages: Sound
 has its machine, filter, output and how it plays, with a bar beside each value showing where
 it sits between the lines at each end of its range (a centred one, like Pan or Trim, with a faint
 `┊` at its middle), and moving with whatever
 plays it, with a dim mark left where it's set once it's a cell or more away, Mod its six mod slots,
-envelopes and LFOs, its accumulator and arpeggio, FX its effects, and Gen the live
-columns of the phrase under the cursor, on `Space 5`, `Space 6`, `Space 7` and `Space 8` in that order. `H` and `L` go to the previous or next page, each with the cursor where you left it, or on its first setting the first time. FX columns belong
+envelopes and LFOs, its accumulator and arpeggio, FX its effects, and Macros the track's eight
+macros, on `Space 5`, `Space 6`, `Space 7` and then `L` in that order. `H` and `L` go to the previous or next page, each with the cursor where you left it, or on its first setting the first time. The phrase's live columns are on Gen, `Space 8`, a
+page of the phrase view's. FX columns belong
 to steps, and an LFO keeps moving on its own, like a filter drifting under a
 hat pattern.
 
@@ -42,7 +43,7 @@ A count before `=` `-` `+` `_` goes that many steps. On a value each is its step
 moves a hex value `0A`. On a list, `=` and `-` move one choice and `+` and `_` sixteen, so `3=`
 moves three choices: the track's lists, Machine, the filter's Type and Mode, Role, Speed, Groove,
 a slot's effect and an effect's lists, a machine's own, such as the 6-op's patches, a mod slot's
-and the Macros page's all go so. Machine, Type, Mode, Role, a slot's effect and a mod slot's lists go
+and Gen's all go so. Machine, Type, Mode, Role, a slot's effect and a mod slot's lists go
 round past either end with `=` and `-`; `+` and `_` stop at the first or last, as every key does
 on Speed, Groove and a machine's own lists.
 
@@ -88,7 +89,7 @@ A machine's type is the setting that changes its character: the sample the sampl
 plays, `Acid`'s `Wave`, `Supersaw`'s `Stack`, 6-op's `Patch`, and the chord of `Chord`
 and `Chip`. Other synths have none. `K` lists whatever's under the cursor in a title, as
 on a setting, and `g d` on the sample opens the sample page, as `g d` on a setting a macro
-holds goes to the macro (see **Macros** in **The Macros page, Gen and presets**).
+holds goes to the macro (see **Macros** in **Gen, the Macros page and presets**).
 Each machine places its own settings: most go down the columns in order, the sampler has `Slice`, `Play` and `Reverse` in
 one column, `Start` and `Length` in the next, and its sample's own `Tune` and `Cents`
 in the third, which tune the sample rather than the track (see **Tuning a sample** in
@@ -521,7 +522,7 @@ tracks hits its slots. The rest is as on a return.
 
 A group's macros can hold settings on its tracks as well as its own, so one knob turns the
 cutoff on every drum, or `Hits` on each of their generators: `M` on a track's setting lists
-the group's macros after the track's own. The Macros page's guide has the details, under
+the group's macros after the track's own. The guide **Gen, the Macros page and presets** has the details, under
 Group macros.
 
 Each group has a colour: its icon, its strip on the mixer and the `G1` under each of its
@@ -632,7 +633,7 @@ stays where it is. Moving the value by hand takes it over from the steps, marked
 **Fader automation and relative modulation** in **FX commands**.
 
 A fader a macro holds shows where the macro puts it, as on the track page, and its fader
-beside the meters stands there too; see **Macros** in **The Macros page, Gen and presets**.
+beside the meters stands there too; see **Macros** in **Gen, the Macros page and presets**.
 
 The tracks come first, then the groups, then `A`, `B` and `M`, with a gap between each
 part, and a rule over each part's strips names it, `Tracks`, `Groups` or `Returns`, the

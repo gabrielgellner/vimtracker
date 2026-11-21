@@ -18,7 +18,7 @@ impl App {
     fn folding_track(&self) -> Option<usize> {
         match self.modes.view {
             View::Song => self.song_view.column.checked_sub(COLUMNS_BEFORE_TRACKS),
-            View::Mixer | View::Phrase | View::Chain | View::Track => {
+            View::Mixer | View::Phrase | View::Gen | View::Chain | View::Track => {
                 Some(self.services.cursor.track)
             }
             View::Audio | View::Project | View::Sample => None,

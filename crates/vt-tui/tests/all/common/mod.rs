@@ -320,12 +320,21 @@ pub fn typed(app: &mut App, text: &str) {
     special(app, KeyCode::Enter);
 }
 
-/// Everything the track page draws, a line at a time.
+/// The rack the helpers draw: Gen while it shows, and the track page otherwise.
+fn rack_view(app: &App) -> View {
+    if app.modes.view == View::Gen {
+        View::Gen
+    } else {
+        View::Track
+    }
+}
+
+/// Everything the track page draws, or Gen while it shows, a line at a time.
 pub fn track_page_text(app: &App) -> Vec<String> {
     let backend = ratatui::backend::TestBackend::new(80, 16);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, rack_view(app)))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..16)
@@ -347,12 +356,13 @@ pub fn with_cmd(app: &mut App, name: &str) {
     app.key_event(key, KeyEventKind::Release, now);
 }
 
-/// The FX page's lines, drawn as wide and tall as the page is beside the main meter at 163x42.
+/// The track page's lines, or Gen's while it shows, drawn as wide and tall as the page is beside
+/// the main meter at 163x42.
 pub fn fx_page_text(app: &App) -> Vec<String> {
     let backend = ratatui::backend::TestBackend::new(150, 40);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, rack_view(app)))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..40)
@@ -441,12 +451,13 @@ pub fn png_size(png: &[u8]) -> (u32, u32) {
     (number(0), number(4))
 }
 
-/// The track page drawn as wide and tall as the page is beside the main meter at 163x42.
+/// The track page, or Gen while it shows, drawn as wide and tall as the page is beside the main
+/// meter at 163x42.
 pub fn track_page_buffer(app: &App) -> ratatui::buffer::Buffer {
     let backend = ratatui::backend::TestBackend::new(150, 40);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, rack_view(app)))
         .unwrap();
     terminal.backend().buffer().clone()
 }

@@ -1,7 +1,9 @@
-//! The Gen page's devices: the track's macros, a device for each live generator of a phrase in the
-//! phrase view's column order, an `Acid`'s `Loops` and an FX column's `Lane` under theirs, then
-//! `Phrase`, the track's settings that move its phrases' walks (decision 400), and `Empty` (the generators study, `docs/designs/generators-page.md`, §3). A device's title and
-//! grid are its fill's, from the declared table, [`GenParam`].
+//! The Gen page's devices, on the phrase view (decision 466): a device for each live generator of
+//! a phrase in the phrase view's column order, an `Acid`'s `Loops` and an FX column's `Lane` under
+//! theirs, then `Phrase`, the track's settings that move its phrases' walks (decision 400), and
+//! `Empty` (the generators study, `docs/designs/generators-page.md`, §3). A device's title and
+//! grid are its fill's, from the declared table, [`GenParam`]. The macros' band, the Macros page's
+//! one device (decision 465), is made here too.
 
 use vt_model::action::TrackControl;
 use vt_model::constants::FX_SLOTS;
@@ -57,17 +59,16 @@ pub(crate) fn macros_device() -> DeviceSpec {
     )
 }
 
-/// The Gen page's devices for a phrase of a track: the track's macros first, then a device each
-/// for its live generators, an `Acid`'s with its `Loops` under it, and for each FX column with a
-/// lane, its `Lane`, under its column's generator if it has one, then `Phrase` and `Empty`. With no phrase
-/// there are only the macros.
+/// The Gen page's devices for a phrase of a track: a device each for its live generators, an
+/// `Acid`'s with its `Loops` under it, and for each FX column with a lane, its `Lane`, under its
+/// column's generator if it has one, then `Phrase` and `Empty`. With no phrase there are none.
 pub(super) fn devices(track: &Track, phrase: Option<u32>) -> Vec<DeviceSpec> {
     let Some((id, found)) = phrase.and_then(|id| Some((id, track.phrases.get(&id)?))) else {
-        return vec![macros_device()];
+        return Vec::new();
     };
     let generators = found.generators();
-    // Each device with where its column comes, the macros before them all.
-    let mut placed: Vec<(usize, DeviceSpec)> = vec![(0, macros_device())];
+    // Each device with where its column comes.
+    let mut placed: Vec<(usize, DeviceSpec)> = Vec::new();
     placed.extend(order(generators).into_iter().flat_map(|at| {
         let generator = &generators[at];
         let generates = generator

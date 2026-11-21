@@ -59,7 +59,7 @@ if a row shows `10`, then `10j` or `10k` lands on it.
 | `Space 5` | Track page: Sound, the machine, filter and output |
 | `Space 6` | Track page: Mod, the envelopes, LFOs and mod slots |
 | `Space 7` | Track page: FX, the effects |
-| `Space 8` | Track page: Macros, and the live generators |
+| `Space 8` | Gen, the phrase view's page of its live generators |
 | `Space 9` | Project: song settings, and this machine's audio |
 | `Space 0` | Sample page: this track's sample, big |
 | `Space Space`, `Space ff` | Pick a view. `Enter` flips back to the last one |
@@ -69,14 +69,16 @@ if a row shows `10`, then `10j` or `10k` lands on it.
 | `Space d` | Describe the setting under the cursor, or stop |
 | `Ctrl-o` `Ctrl-i` | Jump back or forward, as in Vim's jump list |
 
-`Space 5` to `Space 8` open the track page on one of its four pages, each where you
-left its cursor, and `H` and `L` still go between them. `Space 9` opens the project
+`Space 5` to `Space 7` open the track page on one of its first three pages, each where you
+left its cursor, and `H` and `L` still go between them and on to the fourth, Macros, the track's
+macros. `Space 8` opens Gen, the phrase view's second page, beside the grid's, where `H` goes
+back to the grid. `Space 9` opens the project
 page on whichever of its two pages you saw last: Song, the song's own settings, and
 Audio, this machine's device, rate and buffer, which are kept with the machine rather
 than the song. `H` and `L` go between those too.
 
 The view picker, `Space Space`, lists every view with the key that opens it, the track
-page by its four pages, so it teaches the keys as it's used.
+page by its four pages and Gen as `phrase: gen`, so it teaches the keys as it's used.
 
 The phrase view's title shows the chain the phrase is in, `Chain 02  00 03 03 07`,
 its phrases in order with this one in the cursor's colour, so `]p` and `[p` are

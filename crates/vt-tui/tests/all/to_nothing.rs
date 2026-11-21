@@ -136,7 +136,7 @@ fn on_the_fx_page_dd_on_a_setting_clears_it_and_on_the_name_takes_the_effect_out
 fn on_the_gen_page_dd_on_a_setting_clears_it_and_on_fill_takes_the_generator_away() {
     let (mut app, _rt) = app_with(&["--- -- --- --- ---"; 8]);
     keys(&mut app, "vGSjjjjjj===L");
-    keys(&mut app, " 5LLL}k");
+    keys(&mut app, " 8");
     let generators = |app: &App| app.song().tracks[0].phrases[&0].generators().to_vec();
     assert_eq!(here(&app), Some(GenParam::Fill));
     keys(&mut app, "jj$");

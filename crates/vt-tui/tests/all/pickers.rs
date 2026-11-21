@@ -81,7 +81,7 @@ fn the_view_picker_searches_and_moves_with_ctrl_keys() {
     special(&mut app, KeyCode::Backspace);
     assert_eq!(
         app.overlays.picker.as_ref().unwrap().shown().count(),
-        11,
+        12,
         "every view, with each of the track page's pages"
     );
     app.key(parse_sequence("C-p").unwrap()[0], Instant::now());
@@ -140,6 +140,7 @@ fn the_view_picker_lists_each_view_with_the_key_that_shows_it() {
         [
             "mod  Space 6",
             "phrase  Space 3",
+            "phrase: gen  Space 8",
             "chain  Space 2",
             "song  Space 1",
             "mixer  Space 4",
@@ -148,7 +149,7 @@ fn the_view_picker_lists_each_view_with_the_key_that_shows_it() {
             "sample  Space 0",
             "sound  Space 5",
             "fx  Space 7",
-            "macros  Space 8",
+            "macros  Space 7, L",
         ]
     );
     // The view before this one is highlighted, so Enter flips back.

@@ -137,7 +137,7 @@ fn esc_gives_the_track_page_back_on_the_setting_it_was_on() {
 }
 
 #[test]
-fn a_turn_in_the_panel_is_one_undo_step_as_on_the_gen_page() {
+fn a_turn_in_the_panel_is_one_undo_step_as_on_the_macros_page() {
     let (mut app, _realtime) = tracks_of_different_lengths();
     press(&mut app, " T===");
     assert_eq!(macro_value(&app, 0, 0), 0x0300);
@@ -151,7 +151,7 @@ fn a_turn_in_the_panel_is_one_undo_step_as_on_the_gen_page() {
 
     // The same keys on the Gen page's band leave the same song and the same undo.
     let (mut band, _realtime) = tracks_of_different_lengths();
-    press(&mut band, " 8gg0===u");
+    press(&mut band, " 7Lgg0===u");
     assert_eq!(band.track_control(), Control::Macro(0));
     assert_eq!(macro_value(&band, 0, 0), 0x0200);
     let (mut panel, _realtime) = tracks_of_different_lengths();
@@ -221,14 +221,14 @@ fn the_status_line_names_the_panels_macro_and_what_it_holds() {
     assert!(status.contains(said), "{status}");
     // As the band says it on the Gen page.
     special(&mut app, KeyCode::Esc);
-    press(&mut app, " 8gg0l");
+    press(&mut app, " 7Lgg0l");
     assert_eq!(app.track_control(), Control::Macro(1));
     let status = status_line(&app);
     assert!(status.contains(said), "{status}");
 }
 
 #[test]
-fn a_macro_holding_nothing_is_dim_as_on_the_gen_page() {
+fn a_macro_holding_nothing_is_dim_as_on_the_macros_page() {
     let (mut app, _realtime) = tracks_of_different_lengths();
     // Cut on macro 2, and macro 1 holding nothing.
     press(&mut app, " 5}jM2 t");

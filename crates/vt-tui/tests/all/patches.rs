@@ -222,7 +222,7 @@ fn the_browser_and_k_add_a_patch() {
 
     // And on a macro, the patch's knob, on the Gen page.
     special(&mut app, KeyCode::Esc);
-    press(&mut app, " 8gg0");
+    press(&mut app, " 7Lgg0");
     press(&mut app, "K");
     let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(picker.title, "Patches");
@@ -243,7 +243,7 @@ fn euclid_on_first() -> (App, vt_engine::link::Realtime, PathBuf) {
     let (mut app, realtime, presets) = app_on(song);
     press(&mut app, "vGSjjjjjj===");
     special(&mut app, KeyCode::Char('L'));
-    press(&mut app, " 8}kjj$");
+    press(&mut app, " 8jj$");
     press(&mut app, "M1");
     (app, realtime, presets)
 }

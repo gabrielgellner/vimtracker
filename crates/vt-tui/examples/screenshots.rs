@@ -179,7 +179,7 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "track-gen-lane",
         rows: LANE,
-        keys: "lllll:lane 3<Enter> 8}==l-",
+        keys: "lllll:lane 3<Enter> 8==l-",
         play: 21,
         voice: Some(SynthVoice::VirtualAnalog),
         size: FULL,
@@ -284,8 +284,18 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "track-gen",
         rows: &[],
-        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8}kj$M2:macro Dense<Enter>k$M2<Tab>",
+        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8j$M2:macro Dense<Enter>k$M2<Tab>",
         play: 6,
+        voice: Some(SynthVoice::Acid),
+        size: FULL,
+        ..PLAIN
+    },
+    // The same, then the track page's Macros page, `L` from FX, on macro 2, `Dense`, listing the
+    // two settings it holds under the band.
+    Shot {
+        name: "track-macros",
+        rows: &[],
+        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8j$M2:macro Dense<Enter>k$M2 7Lgg0l",
         voice: Some(SynthVoice::Acid),
         size: FULL,
         ..PLAIN
@@ -295,7 +305,7 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "mapping",
         rows: &[],
-        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8}kj$M2:macro Dense<Enter>gg0gmjliA0kl++jlli80",
+        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8j$M2:macro Dense<Enter> 7Lgg0gmjliA0kl++jlli80",
         voice: Some(SynthVoice::Acid),
         size: FULL,
         ..PLAIN
@@ -305,7 +315,7 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "macro-panel",
         rows: &[],
-        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8}kj$M2:macro Dense<Enter>k$M2 3 Tl__<Tab>",
+        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8j$M2:macro Dense<Enter>k$M2 3 Tl__<Tab>",
         play: 6,
         voice: Some(SynthVoice::Acid),
         size: FULL,

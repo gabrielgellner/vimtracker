@@ -101,7 +101,7 @@ Normal	Space 4	ShowView(Mixer)	Mixer
 Normal	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
 Normal	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
 Normal	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
-Normal	Space 8	ShowTrackPage(Macros)	Macros page: the macros, and the live generators
+Normal	Space 8	ShowView(Gen)	Gen: the phrase's live generators
 Normal	Space 9	ShowProject	Project: song settings, and audio
 Normal	Space 0	ShowView(Sample)	Sample page: the sample, big
 Normal	Space Space	Picker	Open the view picker
@@ -185,7 +185,7 @@ Chain	Space 4	ShowView(Mixer)	Mixer
 Chain	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
 Chain	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
 Chain	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
-Chain	Space 8	ShowTrackPage(Macros)	Macros page: the macros, and the live generators
+Chain	Space 8	ShowView(Gen)	Gen: the phrase's live generators
 Chain	Space 9	ShowProject	Project: song settings, and audio
 Chain	Space 0	ShowView(Sample)	Sample page: the sample, big
 Chain	Space Space	Picker	Open the view picker
@@ -220,9 +220,8 @@ Track	/	FieldJump	Jump to a setting by its name
 Track	M	MapMacro	Map this setting to a macro, or move it, or take it off
 Track	g m	MacroMapping	This macro's mapping, or the one this setting is on
 Track	g d	OpenItem	Open Sample's sample page, or a macro-held setting's macro
-Track	Space g a	ApplyGenerator	On a Steps slot, keep what Mutate drew; on a generator, apply it
-Track	r	RollGenerator	On a generator, roll it again
-Track	Enter	ReopenGenerator	On a generator, open the shape panel on it, or a text's buffer
+Track	Space g a	ApplyGenerator	On a Steps slot, keep what Mutate drew
+Track	Enter	ReopenGenerator	On a Steps slot's step, open its buffer
 Track	}	Move(NextBeat)	Next device down, in the same column
 Track	{	Move(PreviousBeat)	Previous device up, in the same column
 Track	h	Move(Left)	Previous setting, or the device on the left
@@ -277,7 +276,7 @@ Track	Space 4	ShowView(Mixer)	Mixer
 Track	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
 Track	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
 Track	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
-Track	Space 8	ShowTrackPage(Macros)	Macros page: the macros, and the live generators
+Track	Space 8	ShowView(Gen)	Gen: the phrase's live generators
 Track	Space 9	ShowProject	Project: song settings, and audio
 Track	Space 0	ShowView(Sample)	Sample page: the sample, big
 Track	Space Space	Picker	Open the view picker
@@ -296,6 +295,91 @@ Track	] b	NextTrack	Next track
 Track	[ b	PreviousTrack	Previous track
 Track	] g	NextGroupTrack	Next group, folded or open
 Track	[ g	PreviousGroupTrack	Previous group, folded or open
+Gen	j	Move(Down)	Next row
+Gen	k	Move(Up)	Previous row
+Gen	g g	Move(First)	First row, of the first device
+Gen	G	Move(Last)	Last row, of the last device
+Gen	H	PreviousPage	Back to the phrase view's grid
+Gen	L	NextPage	Next page: Gen is the phrase view's last
+Gen	/	FieldJump	Jump to a setting by its name
+Gen	M	MapMacro	Map this setting to a macro, or move it, or take it off
+Gen	g m	MacroMapping	This macro's mapping, or the one this setting is on
+Gen	g d	OpenItem	Go to the macro holding this setting
+Gen	Space g a	ApplyGenerator	Apply this generator; with Vary on, keep the pass heard
+Gen	r	RollGenerator	Roll this generator again
+Gen	Enter	ReopenGenerator	Open the shape panel on this generator, or a text's buffer
+Gen	}	Move(NextBeat)	Next device down
+Gen	{	Move(PreviousBeat)	Previous device up
+Gen	h	Move(Left)	Previous setting
+Gen	l	Move(Right)	Next setting
+Gen	0	Move(RowStart)	First setting
+Gen	$	Move(RowEnd)	Last setting
+Gen	=	Increase	Increase the value
+Gen	D-l	Increase	Increase the value
+Gen	-	Decrease	Decrease the value
+Gen	D-h	Decrease	Decrease the value
+Gen	+	IncreaseLarge	Increase the value, a large step
+Gen	D-k	IncreaseLarge	Increase the value, a large step
+Gen	_	DecreaseLarge	Decrease the value, a large step
+Gen	D-j	DecreaseLarge	Decrease the value, a large step
+Gen	C-a	Increase	Increase the value
+Gen	C-x	Decrease	Decrease the value
+Gen	x	ClearField	Back to its default
+Gen	d d	ToNothing	To nothing; on a generator's Fill, take it away
+Gen	K	PickValue	Choose this setting from a list
+Gen	a	Append	Type; on a text, its buffer typing at the end, keeping it
+Gen	S	Retype	Type; on a text, its buffer typing it all again
+Gen	c c	Retype	Type; on a text, its buffer typing it all again
+Gen	z a	ToggleFold	Fold this group, or the one this track is in, or open it
+Gen	z M	FoldAll(true)	Fold every group
+Gen	z R	FoldAll(false)	Open every group, the empty ones too
+Gen	u	Undo	Undo
+Gen	C-r	Redo	Redo
+Gen	:	EnterCommand	Command
+Gen	i	EnterInsert	Insert
+Gen	Tab	PauseOrResume	Play, or pause in place
+Gen	S-Tab	PlayFromStart	Play from the start
+Gen	Space c	PlayFromCursor	Play from the cursor
+Gen	Space q q	Quit	Quit
+Gen	Space m	ToggleMute	Mute or unmute; held, until let go
+Gen	Space s	ToggleSolo	Solo or unsolo; held, until let go
+Gen	Space g m	MuteOnGrid	Mute or unmute on the launch grid, or take it back
+Gen	Space g s	SoloOnGrid	Solo or unsolo on the launch grid, or take it back
+Gen	Space M	ClearMutes	Clear all mutes and solos
+Gen	Space R	ToggleSampling	Record the master, a track or the input into a new sample, or stop
+Gen	Space l	ToggleFill	Fill on or off; held, until let go
+Gen	Space A	Realign	Realign every track on the launch grid, or take it back
+Gen	Space a	RealignTrack	Realign this track on the launch grid, or take it back
+Gen	Space o	RotateSpeeds(false)	Rotate the speeds round this group: each takes the next's
+Gen	Space O	RotateSpeeds(true)	Rotate the speeds round every track: each takes the next's
+Gen	Space e	GiveBack	Give this track's faders back to the steps' automation
+Gen	Space E	GiveBackAll	Give every track's faders back to the steps' automation
+Gen	Space 1	ShowView(Song)	Song view
+Gen	Space 2	ShowView(Chain)	Chain view
+Gen	Space 3	ShowView(Phrase)	Phrase view
+Gen	Space 4	ShowView(Mixer)	Mixer
+Gen	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
+Gen	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
+Gen	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
+Gen	Space 8	ShowView(Gen)	Gen: the phrase's live generators
+Gen	Space 9	ShowProject	Project: song settings, and audio
+Gen	Space 0	ShowView(Sample)	Sample page: the sample, big
+Gen	Space Space	Picker	Open the view picker
+Gen	Space f f	Picker	Open the view picker
+Gen	Space f b	TrackPicker	Open the track picker
+Gen	Space ?	Guides	Open a guide
+Gen	Space k	Help	Show every key
+Gen	Space t	ToggleMacroPanel	Show or hide the macro panel: this track's macros, at the bottom
+Gen	Space T	FocusMacroPanel	Into the macro panel, showing it, to turn the macros
+Gen	Space d	ToggleDescription	Describe the setting under the cursor, or stop
+Gen	C-o	JumpBack	Jump back
+Gen	C-i	JumpForward	Jump forward
+Gen	W	NextTrack	Next track
+Gen	B	PreviousTrack	Previous track
+Gen	] b	NextTrack	Next track
+Gen	[ b	PreviousTrack	Previous track
+Gen	] g	NextGroupTrack	Next group, folded or open
+Gen	[ g	PreviousGroupTrack	Previous group, folded or open
 Song	j	Move(Down)	Next section
 Song	k	Move(Up)	Previous section
 Song	g g	Move(First)	First section
@@ -356,7 +440,7 @@ Song	Space 4	ShowView(Mixer)	Mixer
 Song	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
 Song	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
 Song	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
-Song	Space 8	ShowTrackPage(Macros)	Macros page: the macros, and the live generators
+Song	Space 8	ShowView(Gen)	Gen: the phrase's live generators
 Song	Space 9	ShowProject	Project: song settings, and audio
 Song	Space 0	ShowView(Sample)	Sample page: the sample, big
 Song	Space Space	Picker	Open the view picker
@@ -429,7 +513,7 @@ Mixer	Space 4	ShowView(Mixer)	Mixer
 Mixer	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
 Mixer	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
 Mixer	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
-Mixer	Space 8	ShowTrackPage(Macros)	Macros page: the macros, and the live generators
+Mixer	Space 8	ShowView(Gen)	Gen: the phrase's live generators
 Mixer	Space 9	ShowProject	Project: song settings, and audio
 Mixer	Space 0	ShowView(Sample)	Sample page: the sample, big
 Mixer	Space Space	Picker	Open the view picker
@@ -490,7 +574,7 @@ Audio	Space 4	ShowView(Mixer)	Mixer
 Audio	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
 Audio	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
 Audio	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
-Audio	Space 8	ShowTrackPage(Macros)	Macros page: the macros, and the live generators
+Audio	Space 8	ShowView(Gen)	Gen: the phrase's live generators
 Audio	Space 9	ShowProject	Project: song settings, and audio
 Audio	Space 0	ShowView(Sample)	Sample page: the sample, big
 Audio	Space Space	Picker	Open the view picker
@@ -560,7 +644,7 @@ Project	Space 4	ShowView(Mixer)	Mixer
 Project	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
 Project	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
 Project	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
-Project	Space 8	ShowTrackPage(Macros)	Macros page: the macros, and the live generators
+Project	Space 8	ShowView(Gen)	Gen: the phrase's live generators
 Project	Space 9	ShowProject	Project: song settings, and audio
 Project	Space 0	ShowView(Sample)	Sample page: the sample, big
 Project	Space Space	Picker	Open the view picker
@@ -669,7 +753,7 @@ Sample	Space 4	ShowView(Mixer)	Mixer
 Sample	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
 Sample	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
 Sample	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
-Sample	Space 8	ShowTrackPage(Macros)	Macros page: the macros, and the live generators
+Sample	Space 8	ShowView(Gen)	Gen: the phrase's live generators
 Sample	Space 9	ShowProject	Project: song settings, and audio
 Sample	Space 0	ShowView(Sample)	Sample page: the sample, big
 Sample	Space Space	Picker	Open the view picker
@@ -779,7 +863,7 @@ SampleVisual	Space 4	ShowView(Mixer)	Mixer
 SampleVisual	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
 SampleVisual	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
 SampleVisual	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
-SampleVisual	Space 8	ShowTrackPage(Macros)	Macros page: the macros, and the live generators
+SampleVisual	Space 8	ShowView(Gen)	Gen: the phrase's live generators
 SampleVisual	Space 9	ShowProject	Project: song settings, and audio
 SampleVisual	Space 0	ShowView(Sample)	Sample page: the sample, big
 SampleVisual	Space Space	Picker	Open the view picker

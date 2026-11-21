@@ -10,7 +10,7 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::shape::{FillKind, GenParam, degree_of};
 use vt_model::step::Note;
 use vt_tui::app::App;
-use vt_tui::controls::Page;
+use vt_tui::input::mode::View;
 use vt_tui::widgets::theme;
 
 use crate::common::{app_with, command, down_to, here, keys, screen, shape_panel};
@@ -150,8 +150,8 @@ fn the_gen_page_names_the_weight_playing_in_the_playheads_colour() {
     let (mut app, _realtime) = on_weights();
     keys(&mut app, "L");
     assert!(app.overlays.shape.is_none(), "kept live");
-    keys(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Macros);
+    keys(&mut app, " 8");
+    assert_eq!(app.modes.view, View::Gen);
     for _ in 0..12 {
         if here(&app) == Some(GenParam::Weight1) {
             break;
@@ -223,7 +223,7 @@ fn the_gen_pages_preview_marks_the_rows_of_the_weight_under_the_cursor() {
     use vt_tui::graphics::Graphics;
     let (mut app, _realtime) = on_weights();
     keys(&mut app, "L");
-    keys(&mut app, " 5LLL");
+    keys(&mut app, " 8");
     let mut graphics = Graphics::new();
     let sent = |app: &mut App, graphics: &mut Graphics| {
         let mut out = Vec::new();
@@ -241,6 +241,8 @@ fn the_gen_pages_preview_marks_the_rows_of_the_weight_under_the_cursor() {
     }
     assert_eq!(here(&app), Some(GenParam::Weight1));
     assert_eq!(sent(&mut app, &mut graphics), 1, "C's rows marked");
+    // A picture that changes again within two frames waits, so a frame goes by first.
+    assert_eq!(sent(&mut app, &mut graphics), 0, "nothing new");
     keys(&mut app, "l");
     assert_eq!(here(&app), Some(GenParam::Weight2));
     assert_eq!(sent(&mut app, &mut graphics), 1, "D#'s rows marked");

@@ -710,7 +710,7 @@ fn identity(
         ),
         Page::Macros if is_macros(spec) => ("Macros".to_owned(), "vimtracker/macros".to_owned()),
         // An `Acid`'s loops by its column, as `Note Loops`.
-        Page::Macros if spec.is_loops() => {
+        Page::Gen if spec.is_loops() => {
             let column = spec
                 .grid
                 .iter()
@@ -729,17 +729,17 @@ fn identity(
             )
         }
         // A `Random`'s weights, as `Note Weights`.
-        Page::Macros if spec.is_weights() => (
+        Page::Gen if spec.is_weights() => (
             "Note Weights".to_owned(),
             "vimtracker/gen/note/weights".to_owned(),
         ),
         // An FX column's lane, as `FX1 Lane`, and `Phrase`.
-        Page::Macros if spec.lane_slot().is_some() || spec.is_phrase() => (
+        Page::Gen if spec.lane_slot().is_some() || spec.is_phrase() => (
             spec.identity.clone(),
             format!("vimtracker/gen/{}", lower(&spec.identity)),
         ),
         // A generator by its column and its fill, as `Note Ramp`.
-        Page::Macros => {
+        Page::Gen => {
             let Some(Control::Gen {
                 phrase, generator, ..
             }) = spec.title[0]
@@ -843,20 +843,18 @@ pub fn live_devices(
 /// A track's devices in the order the Roto's list has them, each with its page and its place
 /// on that page.
 pub fn track_devices(track: &Track, phrase: Option<u32>) -> Vec<(Page, usize, DeviceSpec)> {
-    let pages = [Page::Sound, Page::Fx, Page::Mod, Page::Macros]
+    let pages = [Page::Sound, Page::Fx, Page::Mod, Page::Gen]
         .into_iter()
         .flat_map(|page| {
             page.devices_on(track, phrase)
                 .into_iter()
-                // The Gen page's `Empty` makes a column live, which only the app does, and its
-                // macros' band comes first of all.
+                // The Gen page's `Empty` makes a column live, which only the app does.
                 .filter(|spec| !matches!(spec.title[0], Some(Control::NewGenerator(_))))
-                .filter(|spec| !is_macros(spec))
                 .enumerate()
                 .map(move |(slot, spec)| (page, slot, spec))
                 .collect::<Vec<_>>()
         });
-    // The macros first, before the machine, as the Gen page has them first.
+    // The macros first, before the machine, as they lead the track's settings.
     std::iter::once((Page::Macros, 0, macros_device()))
         .chain(pages)
         .collect()
@@ -933,7 +931,7 @@ pub fn every_kind_of_device() -> Vec<(Song, usize, Page, usize)> {
     for slot in 0..Page::Mod.devices(&base.tracks[0]).len() {
         found.push((base.clone(), 0, Page::Mod, slot));
     }
-    // The macros, the Gen page's first band.
+    // The macros, the Macros page's band.
     found.push((base.clone(), 0, Page::Macros, 0));
     // Each type of mod slot a new track hasn't, in `Mod 3`.
     let unused = ModKind::ALL

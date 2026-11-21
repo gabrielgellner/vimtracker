@@ -442,7 +442,7 @@
 <rect x="792" y="513" width="675" height="19" fill="#292c3c"/>
 <text x="792" y="527" fill="#c6d0f5" textLength="675" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│7      FX page: the track's effects                                      │</text>
 <rect x="792" y="532" width="675" height="19" fill="#292c3c"/>
-<text x="792" y="546" fill="#c6d0f5" textLength="675" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│8      Macros page: the macros, and the live generators                  │</text>
+<text x="792" y="546" fill="#c6d0f5" textLength="675" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│8      Gen: the phrase's live generators                                 │</text>
 <rect x="792" y="551" width="675" height="19" fill="#292c3c"/>
 <text x="792" y="565" fill="#c6d0f5" textLength="675" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│9      Project: song settings, and audio                                 │</text>
 <rect x="792" y="570" width="675" height="19" fill="#292c3c"/>

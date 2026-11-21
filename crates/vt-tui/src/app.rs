@@ -152,6 +152,9 @@ pub struct App {
     pub phrase_view: PhraseView,
     /// The track page: which of its pages shows, where its cursor is, and the images it shows.
     pub track_page: TrackPage,
+    /// The phrase view's Gen page: a rack as the track page's pages are, always on Gen, with
+    /// where its cursor is and the previews it shows (decision 466).
+    pub gen_page: TrackPage,
     /// The sample page: where it is, and the pictures of its waveform and its overview.
     pub sample_page: crate::pages::sample::SamplePage,
     /// The project page's Song sub-page: where its cursor is, and the groove it draws.
@@ -222,6 +225,7 @@ impl App {
             song_view: SongView::default(),
             phrase_view: PhraseView::default(),
             track_page: TrackPage::default(),
+            gen_page: TrackPage::on_gen_page(),
             sample_page: crate::pages::sample::SamplePage::default(),
             project_page: ProjectPage::default(),
             audio_page: AudioPage::default(),

@@ -41,6 +41,12 @@ impl App {
                         "g d opens the sample page from an SLI's value".to_owned();
                 }
             }
+            View::Gen => {
+                if !self.open_macro_here() {
+                    self.services.status =
+                        "g d goes to the macro holding a setting, on the Macros page".to_owned();
+                }
+            }
             View::Mixer => {
                 if !self.open_macro_here() {
                     self.services.status = "g d goes to the macro holding a fader".to_owned();

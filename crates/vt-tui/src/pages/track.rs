@@ -1,4 +1,6 @@
-//! The track page, `Space 5` to `Space 8`: a track's Sound, Mod, FX and Gen pages.
+//! The track page, `Space 5` to `Space 7` and `L` on to Macros: a track's Sound, Mod, FX and Macros
+//! pages; and the phrase view's Gen page, `Space 8`, a rack walked as they are, so it's a `TrackPage`
+//! of its own, `App`'s `gen_page` (decision 466).
 //!
 //! `TrackPage` is the page as a component, which page shows, where its cursor is and the images it
 //! shows, with the moves that need only the cursor's track, its edits, [`TrackPage::edit`] and the
@@ -96,7 +98,7 @@ fn place_in(rows: &[Vec<Option<Control>>], rack: bool, row: usize, field: usize)
 /// given the rest of the program as a [`Ctx`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct TrackPage {
-    /// The page showing: Sound, Mod or FX.
+    /// The page showing: Sound, Mod, FX or Macros, or Gen for the phrase view's Gen page.
     pub page: Page,
     /// The row and field the cursor is kept at. It can be on a hole or past the end of a shorter
     /// row, as after `}` onto an empty slot, so where it's seen is [`TrackPage::place`].
@@ -113,7 +115,7 @@ pub struct TrackPage {
     pub step: u8,
     /// The row and field the cursor was kept at on each page, by [`Page::index`], the showing
     /// page's being `row` and `field`.
-    kept: [(usize, usize); Page::ALL.len()],
+    kept: [(usize, usize); Page::ALL.len() + 1],
     /// The phrase the Gen page shows: the one under the app's cursor, which the app gives it
     /// as each key comes, so the page itself holds no song.
     pub phrase: Option<u32>,
@@ -177,7 +179,15 @@ impl Default for TrackPage {
 }
 
 impl TrackPage {
-    /// The page's devices, or none with no track.
+    /// The phrase view's Gen page, a rack of its own on [`Page::Gen`], which it never leaves
+    /// (decision 466).
+    pub fn on_gen_page() -> Self {
+        Self {
+            page: Page::Gen,
+            ..Self::default()
+        }
+    }
+
     /// The page's devices, or none with no track. An FX slot turned to its second page has that
     /// page's grid.
     pub fn devices(&self, track: Option<&Track>) -> Vec<DeviceSpec> {
@@ -322,6 +332,12 @@ impl TrackPage {
             Cmd::Move(Motion::Left) => (0..times).for_each(|_| self.step_left(track)),
             Cmd::Move(Motion::RowStart) => self.row_end(false, track),
             Cmd::Move(Motion::RowEnd) => self.row_end(true, track),
+            // Gen is the phrase view's page after the grid: `H` goes back to the grid, as it goes
+            // back a page on the track page, and there's none after it.
+            Cmd::PreviousPage if self.page == Page::Gen => return Outcome::Show(View::Phrase),
+            Cmd::NextPage if self.page == Page::Gen => {
+                return Outcome::Refused("Gen is the phrase view's last page: H goes to the grid");
+            }
             Cmd::PreviousPage | Cmd::NextPage => {
                 self.show(self.page.beside(cmd == Cmd::NextPage));
                 self.settle(track);
@@ -375,7 +391,7 @@ impl TrackPage {
             Cmd::Bypass => match self.page {
                 Page::Fx => self.toggle_bypass(services),
                 Page::Mod => toggle_modulator(services, control),
-                Page::Sound | Page::Macros => {
+                Page::Sound | Page::Macros | Page::Gen => {
                     return Outcome::Refused(
                         "b switches an effect or a modulator, on the FX and Mod pages",
                     );
@@ -634,13 +650,12 @@ impl crate::pages::Page for TrackPage {
         (
             "Space g a",
             Cmd::ApplyGenerator,
-            "On a Steps slot, keep what Mutate drew; on a generator, apply it",
+            "On a Steps slot, keep what Mutate drew",
         ),
-        ("r", Cmd::RollGenerator, "On a generator, roll it again"),
         (
             "Enter",
             Cmd::ReopenGenerator,
-            "On a generator, open the shape panel on it, or a text's buffer",
+            "On a Steps slot's step, open its buffer",
         ),
         (
             "}",
@@ -761,6 +776,35 @@ impl crate::pages::Page for TrackPage {
     }
 }
 
+/// Whether a key works on the setting under the cursor, which Gen with no phrase hasn't: a turn,
+/// a list, typing, a macro's keys, the generators' own and the search.
+fn takes_a_setting(cmd: Cmd) -> bool {
+    matches!(
+        cmd,
+        Cmd::Increase
+            | Cmd::Decrease
+            | Cmd::IncreaseLarge
+            | Cmd::DecreaseLarge
+            | Cmd::ClearField
+            | Cmd::ToNothing
+            | Cmd::PickValue
+            | Cmd::EnterInsert
+            | Cmd::MapMacro
+            | Cmd::MacroMapping
+            | Cmd::OpenItem
+            | Cmd::FieldJump
+            | Cmd::ApplyGenerator
+            | Cmd::RollGenerator
+            | Cmd::ReopenGenerator
+            | Cmd::Paste
+    )
+}
+
+/// Why Gen has no devices, on the cursor's track: it has no phrase here, or is a fixed track.
+fn no_phrase_said(services: &Services) -> String {
+    draw::no_generators(&services.page_track()).to_owned()
+}
+
 /// How many values a track's Steps slot plays, 1 to 16, or all 16 with no track.
 fn steps_played(track: Option<&Track>, slot: usize) -> u8 {
     track.map_or(STEPS as u8, |track| {
@@ -771,11 +815,11 @@ fn steps_played(track: Option<&Track>, slot: usize) -> u8 {
 impl TrackPage {
     /// What a key the track page or the mixer passed back means, `times` being its count, on the
     /// setting under the cursor, `control`, in this order:
+    /// 0. On Gen with no phrase here, a key on a setting is refused, saying why.
     /// 1. A turn of a setting a macro holds is refused, saying where to turn it
     ///    ([`Services::refuses_turn`]), before anything can turn it.
     /// 2. The Gen page's edits, on the generator under the cursor ([`TrackPage::gen_edit`]), only
-    ///    while the track page is on screen: the mixer keeps its keys though the track page is
-    ///    left on Gen.
+    ///    while Gen is on screen.
     /// 3. What only `App` opens for the page, `/`, `M` and `gm`, and the Keys mode, none of which
     ///    the Gen page takes, and `Enter` on the Gen page, which opens the shape panel.
     /// 4. `r`, `Enter` and `Space g a` off the Gen page, which say where they work, but for
@@ -796,6 +840,14 @@ impl TrackPage {
             Cmd::Append | Cmd::Retype => Cmd::EnterInsert,
             cmd => cmd,
         };
+        // Gen with no phrase here has nothing to turn, and the cursor stands on no setting.
+        if self.page == Page::Gen
+            && self.device_cursor(ctx.services.track_here()).is_none()
+            && takes_a_setting(cmd)
+        {
+            ctx.services.status = no_phrase_said(ctx.services);
+            return Outcome::Done;
+        }
         if ctx.services.refuses_turn(cmd, control) {
             return Outcome::Done;
         }
@@ -817,7 +869,8 @@ impl TrackPage {
                 Self::gen_panel(control, services)
             }
             Cmd::RollGenerator | Cmd::ReopenGenerator => {
-                services.status = "r and Enter work on a generator, on the Macros page".to_owned();
+                services.status =
+                    "Enter opens a generator's shape panel, on Gen: Space 8".to_owned();
                 Outcome::Done
             }
             Cmd::ApplyGenerator if self.page == Page::Mod => {
@@ -827,7 +880,7 @@ impl TrackPage {
             Cmd::ApplyGenerator => {
                 services.status =
                     "Space g a keeps a Steps slot's drift on the Mod page, or applies a generator \
-                     on the Macros page"
+                     on Gen"
                         .to_owned();
                 Outcome::Done
             }

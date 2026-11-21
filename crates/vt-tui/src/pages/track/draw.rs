@@ -36,6 +36,7 @@ mod modulation;
 mod sound;
 mod zoom;
 
+pub(crate) use generators::no_generators;
 pub(crate) use generators::playing_row as gen_playing_row;
 pub(crate) use generators::{STRIP_HEIGHT, draw_macro_strip, weights_field};
 
@@ -436,9 +437,18 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx) -
     let shown = ctx.song().track_with_macros(ctx.cursor().track);
     let track = shown.as_ref();
     let bold = Style::new().add_modifier(Modifier::BOLD);
-    let tabs = Page::ALL.map(|tab| {
-        let text = format!(" {} ", tab.name());
-        if tab == page.page {
+    // The track page's four pages, or on Gen the phrase view's two, the grid's and Gen's
+    // (decision 466).
+    let names: Vec<(&str, bool)> = match page.page {
+        Page::Gen => vec![("Grid", false), ("Gen", true)],
+        shown => Page::ALL
+            .iter()
+            .map(|tab| (tab.name(), *tab == shown))
+            .collect(),
+    };
+    let tabs = names.into_iter().map(|(name, here)| {
+        let text = format!(" {name} ");
+        if here {
             Span::styled(text, bold)
         } else {
             Span::styled(text, theme::dim())
@@ -472,7 +482,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx) -
         title.push(Span::styled(format!("{glyph} "), style));
     }
     title.extend(tabs);
-    if page.page == Page::Macros
+    if page.page == Page::Gen
         && let Some(phrase) = page.phrase
     {
         title.push(Span::styled(format!("  Phrase {phrase:02X}"), bold));
@@ -491,7 +501,8 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx) -
                 ..Drawn::default()
             };
         }
-        Page::Macros => {
+        Page::Macros => generators::draw_macros_page(frame, rest, page, ctx, track),
+        Page::Gen => {
             return Drawn {
                 previews: generators::draw(frame, rest, page, ctx, track),
                 ..Drawn::default()

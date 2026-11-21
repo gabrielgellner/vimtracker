@@ -117,10 +117,12 @@ impl App {
                         let view = self.modes.view;
                         let entry = &mut self.modes.entry;
                         let services = &mut self.services;
-                        if !self
-                            .track_page
-                            .insert(key.code, control, view, entry, services)
-                        {
+                        let rack = if view == View::Gen {
+                            &mut self.gen_page
+                        } else {
+                            &mut self.track_page
+                        };
+                        if !rack.insert(key.code, control, view, entry, services) {
                             self.modes.mode = Mode::Normal;
                         }
                     }

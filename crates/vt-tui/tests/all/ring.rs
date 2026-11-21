@@ -10,7 +10,8 @@ use vt_model::shape::{FillKind, GenParam, written};
 use vt_model::song::{Phrase, Song};
 use vt_model::step::{Note, Step};
 use vt_tui::app::App;
-use vt_tui::controls::{Control, Page};
+use vt_tui::controls::Control;
+use vt_tui::input::mode::View;
 
 use crate::common::*;
 
@@ -100,9 +101,8 @@ fn space_g_a_on_the_gen_page_keeps_the_loop_a_pass_heard_began_with() {
     let (mut app, mut realtime) = ringing();
     let written_shape = generators(&app)[0].shape;
     let first = notes(&app);
-    keys(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Macros);
-    keys(&mut app, "}k");
+    keys(&mut app, " 8");
+    assert_eq!(app.modes.view, View::Gen);
     assert!(matches!(app.track_control(), Control::Gen { .. }));
     let text = fx_page_text(&app).join("\n");
     assert!(text.contains("Ring · Note"), "{text}");

@@ -6,8 +6,9 @@ use vt_engine::engine::Transport;
 use vt_engine::link::Realtime;
 use vt_model::action::TrackControl;
 use vt_tui::app::App;
-use vt_tui::controls::{Control, Page};
+use vt_tui::controls::Control;
 use vt_tui::input::mode::Mode;
+use vt_tui::input::mode::View;
 
 use crate::common::*;
 
@@ -25,9 +26,8 @@ const ROWS: [&str; 8] = [
 /// The Gen page of a phrase with no live columns, on `Phrase`'s `Order`.
 fn on_phrase_device() -> (App, Realtime) {
     let (mut app, realtime) = app_with(&ROWS);
-    keys(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Macros);
-    keys(&mut app, "}");
+    keys(&mut app, " 8");
+    assert_eq!(app.modes.view, View::Gen);
     assert_eq!(app.track_control(), Control::Base(TrackControl::Order));
     (app, realtime)
 }
