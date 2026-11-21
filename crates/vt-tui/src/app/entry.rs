@@ -228,6 +228,10 @@ impl App {
                 // While recording, a note goes in where the track is playing, and the cursor
                 // stays.
                 let played = self.played_key(c).map(|midi| self.flagged_note(midi));
+                // The last note typed, which `x` is in a pattern entered with `!`.
+                if let Some(midi) = played {
+                    self.services.live.insert_note = Some(midi);
+                }
                 if let Some(midi) = played
                     && self.recording.is_some()
                     && self.modes.mode == Mode::Insert

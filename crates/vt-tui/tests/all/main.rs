@@ -46,6 +46,7 @@ mod notes;
 mod onsets;
 mod own_rhythm;
 mod patches;
+mod pattern_entry;
 mod phrase;
 mod phrase_order;
 mod phrase_view;

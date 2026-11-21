@@ -1774,6 +1774,17 @@ On tracks 1 and 2, `BD` and `SD`, their Note columns selected together:
 *   `?` after a token, `5?`, plays it half the time; `r` draws again until it falls well.
 *   With track 4's `Cue` on, a line typed again waits for its next lap before it's heard.
 
+**A pattern instead of rows.** The same line can be entered straight onto a column, as plain
+rows, rather than kept as a fill: a pattern counts from the phrase's row 00 and goes round the
+whole phrase, and with rows selected writes only those. On track 4's Note column, after a `C-2`
+typed in Insert, which `x` stands for:
+
+*   **Pattern:** `Text` `x . x [. 5] 3 . <8 7> [. 3]`, `Step` `2 rows`, written as plain rows.
+    The same riff, its first pass written out, `x` as `C-2`, the octave on the last beat.
+*   **Pattern**, on the same column's rows 08 to 0F alone: `Text` `x . . . 8 . 7 .`, `Step`
+    `2 rows`. Counted from row 00, its `8` lands on row 0C, the bar's last beat, rows 00 to
+    07 kept as they were.
+
 **A kit line.** In Tidal a drum pattern names its sounds, `bd*2 [~ sn] hh`. Here the names are
 the tracks', and one line plays across a group's drum tracks, each track the rows where its name
 is. The `euclid` song's drums are tracks 1 to 3, `BD`, `SD` and `HH`.
