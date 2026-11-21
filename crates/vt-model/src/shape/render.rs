@@ -694,6 +694,7 @@ pub(super) fn euclid(hits: usize, rows: usize) -> Rows {
 /// `place` selects, by what's on them or by a pattern, that the column can change. A counting
 /// pattern counts over the rows `over` says, its column's own where it's none: a hit, a step or a
 /// generation for each of them in turn ([`Over`]).
+#[allow(clippy::too_many_arguments)]
 pub(super) fn chosen(
     steps: &[Step],
     range: StepRange,

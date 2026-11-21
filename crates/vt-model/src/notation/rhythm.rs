@@ -423,7 +423,7 @@ fn turn(kind: Kind, text: &str, sign: i16, large: bool, _: ShapeColumn) -> Optio
     match kind {
         Kind::Modifier => {
             let (mark, number) = modifier(text);
-            let (now, low, high, by) = match mark {
+            let (now, low, high, by): (u16, u16, u16, i16) = match mark {
                 '?' => (number.unwrap_or(u16::from(HALF)), 0, 100, by(10, 25)),
                 '*' => (number?, 1, MOST_FAST, by(1, 4)),
                 '!' => (number.unwrap_or(2), 1, MOST_PLACES, by(1, 4)),
