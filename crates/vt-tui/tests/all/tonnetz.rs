@@ -79,7 +79,9 @@ fn on_the_chord_voice_each_row_is_a_root_with_its_chord_locked() {
         .map(|chord| chord.name())
         .collect();
     let screen = drawn(&app);
-    for expected in ["Tonnetz", "Triad", "Major", "Chord", "P L R L", "Free"] {
+    // Each move over the chord it reaches (decision 459).
+    let under = format!("{:<4}{:<4}{:<4}{}", names[1], names[2], names[3], names[4]);
+    for expected in ["Tonnetz", "Triad", "Major", "Chord", "P   L   R   L", &under, "Free"] {
         assert!(screen.contains(expected), "{expected} in\n{screen}");
     }
     assert!(screen.contains(&names.join(" ")), "{names:?} in\n{screen}");

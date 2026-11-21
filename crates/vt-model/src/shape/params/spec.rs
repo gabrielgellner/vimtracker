@@ -2,6 +2,7 @@
 //! shown, stepped, typed, chosen from a list and put back.
 
 use super::*;
+use crate::notation::GrammarId;
 
 /// How many choices a large step moves a list, as a machine's lists and the track's go.
 const LIST_JUMP: usize = 0x10;
@@ -690,6 +691,15 @@ impl GenParam {
             Self::From | Self::To | Self::Step if typed_in_hex(column) => Typing::Hex,
             Self::Values if typed_in_hex(column) => Typing::HexList,
             _ => self.spec().typing,
+        }
+    }
+
+    /// The grammar its text is in on a column, where `l` goes into it a token at a time
+    /// (decisions 456 and 459): its typing's, or a mask's bits, which are typed as a byte.
+    pub fn grammar(self, column: ShapeColumn) -> Option<GrammarId> {
+        match self {
+            Self::Flip | Self::Keep => Some(GrammarId::Bits),
+            _ => self.typing(column).grammar(),
         }
     }
     /// The choices a list setting offers, in order, or none for a setting that isn't one.

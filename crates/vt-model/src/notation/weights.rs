@@ -1,7 +1,7 @@
 //! `Weights`' grammar: a hex digit for each of the scale's degrees, from the root (decision 388),
 //! each digit a token of its own, over the note it's for.
 
-use super::{About, Bad, Grammar, Kind, Offer, Token};
+use super::{About, Bad, Grammar, Kind, Offer, Token, as_it_is};
 use crate::shape::{MAX_WEIGHT, ShapeColumn, degree_count, degree_name, degree_of};
 
 /// How far `+` and `_` turn a weight, a quarter of its range, as decision 388 has it.
@@ -25,7 +25,7 @@ pub(super) static WEIGHTS: Grammar = Grammar {
             subject: note.to_owned(),
         }
     },
-    turn: |kind, text, sign, large| {
+    turn: |kind, text, sign, large, _| {
         let weight = match kind {
             Kind::Weight => i16::from_str_radix(text, 16).ok()?,
             _ => return None,
@@ -66,9 +66,12 @@ pub(super) static WEIGHTS: Grammar = Grammar {
     },
     blank: "F",
     rest: "0",
+    most: None,
     width: Some(1),
     between: "",
     types: |c| c.is_ascii_hexdigit(),
+    from_setting: as_it_is,
+    to_setting: as_it_is,
 };
 
 /// Each character a token, a hex digit a weight; spaces between are let be.
@@ -164,7 +167,7 @@ mod tests {
 
     #[test]
     fn a_weight_turns_by_one_or_four_and_is_named_by_its_note() {
-        let turn = WEIGHTS.turn;
+        let turn = |kind, text, sign, large| (WEIGHTS.turn)(kind, text, sign, large, pentatonic());
         assert_eq!(turn(Kind::Weight, "E", 1, false).as_deref(), Some("F"));
         assert_eq!(turn(Kind::Weight, "F", 1, false).as_deref(), Some("F"));
         assert_eq!(turn(Kind::Weight, "8", -1, true).as_deref(), Some("4"));

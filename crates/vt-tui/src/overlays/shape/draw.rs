@@ -19,7 +19,7 @@ use crate::overlays::shape::ShapePanel;
 use crate::pages::Ctx;
 use crate::widgets::popup;
 use crate::widgets::theme;
-use crate::widgets::tokens::TokenCells;
+use crate::widgets::tokens::{Layout, WEIGHT_CELL};
 use crate::widgets::value_bars::{Beside, Side};
 
 /// Room for eight notes in a `List`'s values; a longer list shows as many as fit and how many
@@ -105,18 +105,33 @@ fn typed_text(typing: &TypedValue, room: usize) -> String {
     format!("…{tail}")
 }
 
-/// The room each of `Weights`' digits takes, so the note under it fits, `C#` and a space.
-const WEIGHT_CELL: usize = 3;
+/// Whether a row is drawn as a field of tokens: those [`Layout::always`] drawn so, but while
+/// they're typed with `i`, and a `List`'s values while the cursor is in them.
+fn drawn_as_tokens(panel: &ShapePanel, row: GenParam, current: bool) -> bool {
+    match row {
+        GenParam::Weights => true,
+        _ if Layout::always(row) => !current || panel.typing.is_none(),
+        GenParam::Values => current && panel.tokens.is_some(),
+        _ => false,
+    }
+}
 
-/// `Weights` in two lines, a field of tokens, each digit over the note it's for: `F  0  8` over
-/// `C  D  E`. The cursor in them is on its digit, and its note is in full; on the row but not in
-/// them, the digits are lit together; and while they're typed, the text so far and a `_` after it.
-fn weight_lines(panel: &ShapePanel, current: bool, label: usize) -> [Line<'static>; 2] {
-    let notes = panel.weight_notes();
+/// A row in a grammar as a field of tokens, in `room` characters: `Weights`' digits each over the
+/// note it's for, `F  0  8` over `C  D  E`; a `Tonnetz`'s moves each over the chord it reaches; a
+/// mask's bits with its byte beside them; a `List`'s values, as many as fit round the cursor.
+/// The cursor in them is on its token, and what it's for is in full; on the row but not in them,
+/// the tokens are lit together; and while they're typed, the text so far and a `_` after it.
+fn token_lines(
+    panel: &ShapePanel,
+    row: GenParam,
+    current: bool,
+    label: usize,
+    room: usize,
+) -> Vec<Line<'static>> {
     let typed = current.then_some(panel.typing.as_ref()).flatten();
     let tokens = panel.tokens.as_ref().filter(|_| current);
     let made;
-    let field = match (tokens, panel.field(GenParam::Weights)) {
+    let field = match (tokens, panel.field(row)) {
         (Some(tokens), _) => &tokens.field,
         (None, Some(field)) => {
             made = match typed {
@@ -125,26 +140,24 @@ fn weight_lines(panel: &ShapePanel, current: bool, label: usize) -> [Line<'stati
             };
             &made
         }
-        (None, None) => return [Line::default(), Line::default()],
+        (None, None) => return Vec::new(),
     };
     let typing_at = match typed {
         Some(typed) => Some(typed.len()),
         None => field.inserting().map(|insert| insert.to),
     };
-    let [top, under] = TokenCells {
-        field,
-        cursor: panel.weight.filter(|_| current),
-        typing_at,
-        current,
-        cell: WEIGHT_CELL,
-        under: &notes,
-    }
-    .lines();
-    let mut line = vec![Span::raw(format!("{:<label$}", GenParam::Weights.name()))];
+    let layout = Layout::of(row, field, &panel.shape_of(0), &panel.context());
+    let cursor = panel.weight.filter(|_| current);
+    let [top, below] = layout.lines(field, cursor, typing_at, current, room);
+    let mut line = vec![Span::raw(format!("{:<label$}", row.name()))];
     line.extend(top);
-    let mut below = vec![Span::raw(" ".repeat(label))];
-    below.extend(under);
-    [Line::from(line), Line::from(below)]
+    let mut lines = vec![Line::from(line)];
+    if !layout.under.is_empty() {
+        let mut second = vec![Span::raw(" ".repeat(label))];
+        second.extend(below);
+        lines.push(Line::from(second));
+    }
+    lines
 }
 
 /// How wide the panel is: room for eight notes in a `List`'s values, or for each of `Weights`'
@@ -191,8 +204,11 @@ fn window(area: Rect, panel: &ShapePanel, side: Side) -> Rect {
         height: area.height.saturating_sub(FROM_TOP),
         ..area
     };
-    // `Weights` takes a second line, for its notes.
-    let lines_more = u16::from(rows.contains(&GenParam::Weights));
+    // `Weights` takes a second line, for its notes, and a `Tonnetz`'s moves one for their chords.
+    let lines_more = rows
+        .iter()
+        .filter(|row| matches!(row, GenParam::Weights | GenParam::MoveList))
+        .count() as u16;
     let width = width(panel, &rows, labels(&rows));
     let height = rows.len() as u16 + lines_more + AROUND_ROWS;
     match side {
@@ -332,8 +348,8 @@ fn draw_in(frame: &mut Frame, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
     )];
     for row in rows {
         let current = row == panel.row;
-        if row == GenParam::Weights {
-            lines.extend(weight_lines(panel, current, labels));
+        if drawn_as_tokens(panel, row, current) {
+            lines.extend(token_lines(panel, row, current, labels, room));
             continue;
         }
         let typing = current.then_some(panel.typing.as_ref()).flatten();
@@ -370,7 +386,12 @@ fn draw_in(frame: &mut Frame, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
         String::new()
     };
     let hint = match panel.shape.kind {
-        _ if panel.weight.is_some() => "h l move  = - change  0-F types  Esc out",
+        _ if panel.weight.is_some() => match panel.row {
+            GenParam::Values => "h l move  = - turn  x out  a after  Esc out",
+            GenParam::MoveList => "h l move  = - turn P L R  x out  Esc out",
+            GenParam::Flip | GenParam::Keep => "h l move  = - switch  0 1 types  Esc out",
+            _ => "h l move  = - change  0-F types  Esc out",
+        },
         // Each pair of tracks shares one coin.
         _ if pairs && panel.shape.kind.has_where() => "Each row goes to one track or the other",
         // A named rhythm's parts go to the tracks in turn, and a 12/8 one's pulses are a bar's

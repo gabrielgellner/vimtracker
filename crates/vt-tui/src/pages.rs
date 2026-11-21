@@ -467,6 +467,7 @@ impl App {
                     self.overlays.shape = None;
                     self.modes.mode = Mode::Normal;
                 }
+                Mode::Tokens if self.overlays.shape.is_none() => self.leave_gen_tokens(),
                 _ => {
                     self.overlays.picker = None;
                     // A shape waiting for its command is given up.

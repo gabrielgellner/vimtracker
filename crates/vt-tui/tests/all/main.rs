@@ -113,3 +113,4 @@ fn rust_files(folder: &Path) -> Vec<String> {
         })
         .collect()
 }
+mod zz_scratch;

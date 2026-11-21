@@ -141,10 +141,12 @@ pub enum Typing {
 
 impl Typing {
     /// The grammar its text is in, where `l` goes into it to edit it a token at a time
-    /// (decision 456), as well as `i` typing it all.
+    /// (decisions 456 and 459), as well as `i` typing it all.
     pub fn grammar(self) -> Option<GrammarId> {
         match self {
             Self::Weights => Some(GrammarId::Weights),
+            Self::HexList | Self::Named { list: true } => Some(GrammarId::List),
+            Self::Moves => Some(GrammarId::Moves),
             _ => None,
         }
     }

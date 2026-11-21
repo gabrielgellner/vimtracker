@@ -317,7 +317,7 @@ impl App {
         }
     }
 
-    fn handle_key(&mut self, key: Key, now: Instant) {
+    pub(crate) fn handle_key(&mut self, key: Key, now: Instant) {
         match self.modes.mode {
             Mode::Normal
             | Mode::OperatorPending
@@ -367,7 +367,9 @@ impl App {
                 self.settled(outcome, false);
             }
             Mode::Picker => self.picker_key(key, now),
-            // The token editor's keys are the panel's to give, while its cursor is in them.
+            // The token editor's keys are the panel's to give, while its cursor is in them, and
+            // otherwise the Gen page's field's.
+            Mode::Tokens if self.overlays.shape.is_none() => self.gen_tokens_key(key, now),
             Mode::Shape | Mode::Tokens => self.shape_key(key, now),
             Mode::Mapping => self.mapping_key(key, now),
             Mode::Macros => self.macro_panel_key(key, now),

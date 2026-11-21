@@ -1,15 +1,19 @@
 //! The grammars of a generator's text-like settings, and a [`Field`] that edits one a token at a
 //! time (#1086, decision 456).
 //!
-//! A setting whose value is a short string with a grammar of its own, `Weights`' digits now and a
-//! `List`'s values, `Tonnetz`'s moves and Tidal's mini-notation later, is edited as a row of
+//! A setting whose value is a short string with a grammar of its own, `Weights`' digits, a `List`'s
+//! values, a `Tonnetz`'s moves and a `Bits` mask now (#1089, decision 459), and Tidal's
+//! mini-notation later, is edited as a row of
 //! tokens: a cursor on a whole token, moving by the grammar, turned by `=` and `-` in its own
 //! units. A grammar is declared once here, as a generator's settings are in `shape::params`, so
 //! the panel, the Gen page, the status line and `Space d` read the one declaration of how its text
 //! splits, whether it reads, what each token means, how it turns, what can go in its place and
 //! which rows it writes.
 
+mod bits;
 mod field;
+mod list;
+mod moves;
 mod weights;
 
 use std::ops::Range;
@@ -24,16 +28,26 @@ pub enum GrammarId {
     /// A random fill's `Weights`: a hex digit for each of the scale's degrees, from the root, as
     /// decision 388 has them.
     Weights,
+    /// A `List`'s values: a note each on the Note column, and a value in the column's own units
+    /// on the others, up to [`crate::shape::MAX_LIST`].
+    List,
+    /// A `Tonnetz`'s moves, `P`, `L` and `R`, up to [`crate::shape::MAX_MOVES`].
+    Moves,
+    /// A `Bits` mask: its byte as eight bits, `x` for on, the lowest first.
+    Bits,
 }
 
 impl GrammarId {
     /// Every grammar.
-    pub const ALL: [Self; 1] = [Self::Weights];
+    pub const ALL: [Self; 4] = [Self::Weights, Self::List, Self::Moves, Self::Bits];
 
     /// Its declaration.
     pub fn grammar(self) -> &'static Grammar {
         match self {
             Self::Weights => &weights::WEIGHTS,
+            Self::List => &list::LIST,
+            Self::Moves => &moves::MOVES,
+            Self::Bits => &bits::BITS,
         }
     }
 }
@@ -71,6 +85,10 @@ pub enum Kind {
     Weight,
     /// A value in the column's own units.
     Value,
+    /// A `Tonnetz`'s move, `P`, `L` or `R`.
+    Move,
+    /// One of a mask's bits, `x` for on and `.` for off.
+    Bit,
     /// A rest: `.`, or `~` as Tidal writes one.
     Rest,
     /// What follows a token and changes it, `*2` or `?30`.
@@ -148,9 +166,9 @@ pub struct Grammar {
     pub meaning: fn(Kind) -> &'static str,
     /// What the token at a place, counted from 0, is for.
     pub about: fn(Kind, usize, ShapeColumn) -> About,
-    /// A token turned by one of `=` and `-`, by its sign, or of `+` and `_` where `large`, as its
-    /// new text, or none where it doesn't turn.
-    pub turn: fn(Kind, &str, i16, bool) -> Option<String>,
+    /// A token turned by one of `=` and `-`, by its sign, or of `+` and `_` where `large`, on a
+    /// column, as its new text, or none where it doesn't turn.
+    pub turn: fn(Kind, &str, i16, bool, ShapeColumn) -> Option<String>,
     /// What can go in place of a token of a kind, for `K` and `Tab` (#1088).
     pub offer: fn(Kind, ShapeColumn) -> Vec<Offer>,
     /// The rows of the column the token at a place wrote, from each row's value there, for the
@@ -160,8 +178,11 @@ pub struct Grammar {
     pub fixed: fn(ShapeColumn) -> Option<usize>,
     /// What `x` puts back on a field of fixed length.
     pub blank: &'static str,
-    /// What `~` puts in a token's place.
+    /// What `~` puts in a token's place, or nothing where its tokens don't rest.
     pub rest: &'static str,
+    /// The most tokens it takes, where it's not of fixed length, so the one after is refused, and
+    /// what's said when it is.
+    pub most: Option<(usize, &'static str)>,
     /// How long each token is, where every one is as long, so typing over one ends with it.
     pub width: Option<usize>,
     /// What goes between two tokens.
@@ -169,6 +190,16 @@ pub struct Grammar {
     /// Whether a character typed among the tokens is a token typed in place, as decision 388's
     /// digits are, rather than a key.
     pub types: fn(char) -> bool,
+    /// The field's text from the setting's, as the row shows it, where they differ: a mask's
+    /// byte as its bits.
+    pub from_setting: fn(&str) -> String,
+    /// The setting's text from the field's, which the setting reads as typed.
+    pub to_setting: fn(&str) -> String,
+}
+
+/// A text the same in the field as on the row.
+pub(crate) fn as_it_is(text: &str) -> String {
+    text.to_owned()
 }
 
 /// A rest, `.`, or `~` as Tidal writes one, so its strings paste.
@@ -241,13 +272,13 @@ pub(crate) mod tests {
             Kind::Modifier => "a change to what's before it",
             Kind::Open(_) | Kind::Close(_) => "a group",
             Kind::Unread => "what doesn't read",
-            Kind::Weight => "",
+            Kind::Weight | Kind::Move | Kind::Bit => "",
         },
         about: |_, at, _| About {
             name: format!("Token {at}"),
             subject: at.to_string(),
         },
-        turn: |kind, text, sign, large| match kind {
+        turn: |kind, text, sign, large, _| match kind {
             Kind::Value => {
                 let value = i16::from_str_radix(text, 16).ok()?;
                 let by = if large { 0x10 } else { 1 };
@@ -260,9 +291,12 @@ pub(crate) mod tests {
         fixed: |_| None,
         blank: "00",
         rest: ".",
+        most: None,
         width: None,
         between: " ",
         types: |_| false,
+        from_setting: as_it_is,
+        to_setting: as_it_is,
     };
 
     fn bad(at: usize, why: &str) -> Bad {
@@ -332,7 +366,7 @@ pub(crate) mod tests {
             for kind in grammar.kinds {
                 assert!(said((grammar.meaning)(*kind)), "{id:?}'s {kind:?}");
             }
-            for text in ["F08F", "FFFFFFFFFFFF", "F0 8", "G1.", ""] {
+            for text in ["F08F", "FFFFFFFFFFFF", "F0 8", "G1.", "", "C-3 70 x P L", "x . x 1 0"] {
                 for token in split(grammar, text) {
                     assert!(grammar.kinds.contains(&token.kind), "{id:?}: {text}");
                 }
