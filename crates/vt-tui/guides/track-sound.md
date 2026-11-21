@@ -195,8 +195,11 @@ move them, each with a fine part.
 it starts at `FF`. `Ladder` is fatter and steeper, its bass thins a little as
 resonance rises, and from about three quarters its peak climbs steeply: a loud
 sound drives it harder the higher `Res` is, so the ringing saturates, quacks on
-an envelope and sizzles on a sweep, as The Drop's PRD does. Near `FF` it sings
-by itself while a note lasts. `Diode` is the
+an envelope and sizzles on a sweep, as The Drop's PRD does. From about `80` to
+`C5` it comes to run hot inside even at `Drive 00`, as PRD does at its lowest
+drive, so a fast envelope's ringing is held in rather than left behind each note
+as a second, flat pitch, and a loud sound comes out a little quieter there; more
+`Drive` adds to it. Near `FF` it sings by itself while a note lasts. `Diode` is the
 303's filter, the one in `Acid`: rubbery and softer at first, as it starts
 falling well under `Cut`, with a peak at `Cut` that grows sharp and squelchy
 and thins the bass more than `Ladder` does. `MS20 LP` and `MS20 HP` are the
