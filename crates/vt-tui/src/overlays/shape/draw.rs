@@ -369,10 +369,11 @@ fn column_name(ctx: &Ctx, panel: &ShapePanel) -> String {
 /// The keys along a pattern's buffer's foot.
 const PATTERN_HINT: &str = "Enter write  L keep live  [s ]s Step  K what goes  Esc cancel";
 
-/// A pattern entered with `!` (decision 474): its buffer alone, under the grid's top beside the
-/// column it fills, right of it or, where there's no room, left, so the rows it writes stay in
-/// sight, lit as the token under the cursor writes them; its title names the column and its
-/// `Step`. `column` is the column's left and right edges on screen, where the grid shows it.
+/// A pattern entered with `!` (decision 474): its buffer alone, under the grid's top, right of
+/// the cursor's track's grid, over the other tracks, or, where there's no room, left of the
+/// column it fills, so the rows it writes stay in sight, lit as the token under the cursor writes
+/// them; its title names the column and its `Step`. `column` is the column's left edge on screen
+/// and the right edge of its track's grid.
 pub(crate) fn draw_pattern(
     frame: &mut Frame,
     area: Rect,
