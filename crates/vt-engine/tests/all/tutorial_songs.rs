@@ -224,6 +224,7 @@ fn generate(song: Song, track: usize, column: ShapeColumn, rows: usize, shape: S
             span: Span::rows(StepRange::between(0, rows - 1)),
             shape,
             list: Box::default(),
+            rhythm: Box::default(),
         },
     )
 }
@@ -399,6 +400,7 @@ fn deja_vu() -> Song {
             },
             shape: chances,
             list: Box::default(),
+            rhythm: Box::default(),
         },
     );
     set(&mut song, 2, "hat.decay", 0x28);
@@ -899,6 +901,7 @@ fn live_generators() -> Song {
             span: Span::Lane,
             shape: wave,
             list: Box::default(),
+            rhythm: Box::default(),
         },
     );
     set(&mut song, 2, "acid.resonance", 0xB0);
@@ -1678,6 +1681,7 @@ fn clock_multiplier() -> Song {
             span: Span::Lane,
             shape: skip,
             list: Box::default(),
+            rhythm: Box::default(),
         },
     );
     gen_knob(
@@ -2205,6 +2209,7 @@ fn kria_patch() -> PatchPreset {
                 span: Span::Lane,
                 shape: list,
                 list: values.into(),
+                rhythm: Box::default(),
             },
         );
     }
@@ -2549,6 +2554,7 @@ fn marbles_t_hat_and_percussion_take_every_row_between_them() {
                 generator: 0,
                 shape,
                 list: None,
+                rhythm: None,
             },
         );
     }
@@ -2618,6 +2624,7 @@ fn the_variation_is_like_its_line_and_order_3_cold_writes_the_line_back() {
             generator: 0,
             shape,
             list: None,
+            rhythm: None,
         },
     )
     .unwrap();

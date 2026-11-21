@@ -40,6 +40,7 @@ mod mod_page;
 mod notation_fields;
 mod notes;
 mod onsets;
+mod own_rhythm;
 mod patches;
 mod phrase;
 mod phrase_order;

@@ -64,6 +64,7 @@ fn song(vary: u8, mutate: u8) -> Song {
                 ..Shape::default()
             },
             list: Box::default(),
+            rhythm: Box::default(),
         },
     )
 }
@@ -85,7 +86,7 @@ fn whole(song: &Song, pass: i64) -> Vec<GenCell> {
         rows,
         generator.column,
         &heard,
-        generator.list(),
+        vt_model::shape::Texts::list(generator.list()),
         None,
         &mut cells,
     );
@@ -173,6 +174,7 @@ fn at_none_the_first_pass_heard_repeats_exactly() {
                 generator: 0,
                 shape: written,
                 list: None,
+                rhythm: None,
             },
         );
         assert!(play(&once).0 == out, "Vary {vary}: as if it never varied");

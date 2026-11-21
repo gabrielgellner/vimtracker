@@ -92,6 +92,7 @@ fn generate_list(
             span,
             shape,
             list: list.into(),
+            rhythm: Box::default(),
         },
     )
     .unwrap()
@@ -106,6 +107,7 @@ fn reshape(song: &Arc<Song>, generator: usize, shape: Shape) -> Arc<Song> {
             generator,
             shape,
             list: None,
+            rhythm: None,
         },
     )
     .unwrap()
@@ -151,6 +153,7 @@ fn a_live_generator_writes_what_the_panel_would_and_stays_live() {
             column: ShapeColumn::Velocity,
             shape,
             list: Box::default(),
+            rhythm: Box::default(),
         },
     )
     .unwrap();

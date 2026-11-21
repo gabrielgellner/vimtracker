@@ -199,7 +199,7 @@ impl Services {
                     {
                         placement.fx.insert(saved, slot);
                     }
-                    let made = (generator.shape, &generator.list[..]);
+                    let made = (generator.shape, &generator.list[..], &generator.rhythm[..]);
                     let action = self.patch_generator(field, command, made, live, view)?;
                     Ok(match (generator.lane, live) {
                         (Some(length), None) => self.onto_lane(action, length),
@@ -305,6 +305,7 @@ impl Services {
             column: column @ ShapeColumn::Fx { slot, .. },
             shape,
             list,
+            rhythm,
             ..
         } = action
         else {
@@ -325,6 +326,7 @@ impl Services {
                 span: Span::Lane,
                 shape,
                 list,
+                rhythm,
             },
         ]
     }

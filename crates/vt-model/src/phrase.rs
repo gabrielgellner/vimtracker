@@ -277,18 +277,19 @@ impl Phrase {
     }
 
     /// Give a live generator a new shape, and write it, a `List` through `list` or with none its
-    /// own, a `Follow` from `source`. Returns false if there's no such one.
+    /// own, an `Own` rhythm likewise through `rhythm`, a `Follow` from `source`. Returns false if
+    /// there's no such one.
     pub(crate) fn reshape_generator(
         &mut self,
         index: usize,
         shape: Shape,
-        list: Option<&[u8]>,
+        (list, rhythm): (Option<&[u8]>, Option<&str>),
         source: Option<&[Step]>,
     ) -> bool {
         let Some(generator) = self.generators.get_mut(index) else {
             return false;
         };
-        generator.reshape(&mut self.steps, shape, list, source);
+        generator.reshape(&mut self.steps, shape, list, rhythm, source);
         true
     }
 

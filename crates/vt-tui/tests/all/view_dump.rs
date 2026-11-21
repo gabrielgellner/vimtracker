@@ -323,6 +323,7 @@ fn generators(dump: &mut Dump) {
                 sources: &[],
                 source: None,
                 list: &[],
+                rhythm: "",
             };
             for param in &shown {
                 if *param == GenParam::Fill || param.spec().typing != Typing::Listed {
@@ -367,6 +368,7 @@ fn generated(
             span: Span::rows(StepRange { first: 0, last: 15 }),
             shape,
             list: Box::default(),
+            rhythm: Box::default(),
         },
     );
     let live = match made {

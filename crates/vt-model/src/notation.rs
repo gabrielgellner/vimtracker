@@ -15,6 +15,7 @@ mod field;
 mod list;
 mod moves;
 mod offer;
+mod rhythm;
 mod table;
 mod weights;
 
@@ -24,6 +25,7 @@ use crate::shape::ShapeColumn;
 
 pub use field::{Field, Insert, Motion, Object, Place};
 pub use offer::{degrees, groups, notes_round, values};
+pub use rhythm::{MAX_RHYTHM, compile as compile_rhythm, preset as rhythm_preset};
 pub use table::{Mark, Table, chance, nth_of};
 
 /// Which grammar a setting's text is in.
@@ -39,11 +41,20 @@ pub enum GrammarId {
     Moves,
     /// A `Bits` mask: its byte as eight bits, `x` for on, the lowest first.
     Bits,
+    /// An `Own` rhythm: hits and rests in Tidal's mini-notation, a top-level token `Step` rows
+    /// (decision 461).
+    Rhythm,
 }
 
 impl GrammarId {
     /// Every grammar.
-    pub const ALL: [Self; 4] = [Self::Weights, Self::List, Self::Moves, Self::Bits];
+    pub const ALL: [Self; 5] = [
+        Self::Weights,
+        Self::List,
+        Self::Moves,
+        Self::Bits,
+        Self::Rhythm,
+    ];
 
     /// Its declaration.
     pub fn grammar(self) -> &'static Grammar {
@@ -52,6 +63,7 @@ impl GrammarId {
             Self::List => &list::LIST,
             Self::Moves => &moves::MOVES,
             Self::Bits => &bits::BITS,
+            Self::Rhythm => &rhythm::RHYTHM,
         }
     }
 }
@@ -93,6 +105,8 @@ pub enum Kind {
     Move,
     /// One of a mask's bits, `x` for on and `.` for off.
     Bit,
+    /// A rhythm's hit, `x`.
+    Hit,
     /// A rest: `.`, or `~` as Tidal writes one.
     Rest,
     /// What follows a token and changes it, `*2` or `?30`.
@@ -304,7 +318,7 @@ pub(crate) mod tests {
             Kind::Modifier => "a change to what's before it",
             Kind::Open(_) | Kind::Close(_) => "a group",
             Kind::Unread => "what doesn't read",
-            Kind::Weight | Kind::Move | Kind::Bit => "",
+            Kind::Weight | Kind::Move | Kind::Bit | Kind::Hit => "",
         },
         about: |_, at, _| About {
             name: format!("Token {at}"),

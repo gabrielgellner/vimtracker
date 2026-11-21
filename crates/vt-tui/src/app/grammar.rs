@@ -82,6 +82,8 @@ pub(crate) enum Change {
         shape: Box<Shape>,
         /// A `List`'s values, as the panel held them.
         list: Box<[u8]>,
+        /// An `Own` rhythm's text, likewise.
+        rhythm: Box<str>,
         steps: usize,
         tracks: usize,
     },
@@ -1027,6 +1029,7 @@ impl App {
                 column,
                 shape,
                 list,
+                rhythm,
                 steps,
                 tracks,
             } => {
@@ -1046,7 +1049,7 @@ impl App {
                     StepRange::between(self.services.cursor.step, end),
                     tracks,
                     *column,
-                    (**shape, list),
+                    (**shape, list, rhythm),
                     self.modes.view,
                 );
             }
@@ -1235,13 +1238,14 @@ impl App {
                     column,
                     shape,
                     list,
+                    rhythm,
                     ..
                 } => {
                     self.services.shape_again(
                         selection.range,
                         selection.tracks,
                         column,
-                        (*shape, &list),
+                        (*shape, &list, &rhythm),
                         self.modes.view,
                     );
                 }
@@ -1287,6 +1291,7 @@ impl App {
             column: panel.column,
             shape: Box::new(panel.shape),
             list: panel.kept_list(),
+            rhythm: panel.kept_rhythm(),
             steps: panel.selection.range.len(),
             tracks: panel.selection.tracks.count(),
         });

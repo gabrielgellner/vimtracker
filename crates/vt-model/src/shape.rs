@@ -21,6 +21,7 @@ mod divisions;
 mod follow;
 mod grids;
 mod mutation;
+mod own;
 pub mod params;
 mod random;
 mod render;
@@ -46,13 +47,16 @@ pub(crate) use follow::copy_fx;
 pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
 pub use grids::{ACCENT_LEVEL, DrumPart, GRIDS_STEPS, Grids, parts as drum_parts};
 pub use mutation::{MAX_MUTATION, Mutations};
+pub use own::{Beat, Euclid, MAX_STEP, Own, OwnRhythm, What, line_steps};
 pub(crate) use params::{BEND_JUMP, BEND_NUDGE};
 pub use params::{Context, GenParam, Starts, TITLE_PLACES};
 pub use random::{
     Degrees, EVEN_SPREAD, MAX_BIAS, MAX_SPREAD, MAX_WEIGHT, Random, WEIGHTS, degree_count,
     degree_name, degree_of,
 };
-pub use render::{GenCell, NO_TOKEN, RowView, render_into, render_tokens_into};
+pub use render::{
+    GenCell, NO_TOKEN, RowView, Texts, render_into, render_tokens_into, rhythm_tokens_into,
+};
 pub use ring::{Kept, MAX_RING, Ring};
 use serde::{Deserialize, Serialize};
 pub use tonnetz::{
@@ -615,6 +619,9 @@ pub enum Where {
     /// The cells an elementary cellular automaton has on: a row a cell on one column, each pass a
     /// generation, or across tracks, a track a cell and a row a generation.
     Cells(Cells),
+    /// A rhythm of your own, typed in Tidal's mini-notation, its text and beats on its generator,
+    /// a top-level token `Step` rows (decision 461).
+    Own(Own),
 }
 
 /// What a counting `Where`'s pattern is counted over (decision 448): every row of the span, the
@@ -669,6 +676,7 @@ impl Where {
                 | Self::Markov(_)
                 | Self::States(_)
                 | Self::Cells(_)
+                | Self::Own(_)
         )
     }
 
@@ -687,7 +695,7 @@ impl Where {
             Self::Markov(_) => "Markov",
             Self::States(_) => "3 states",
             Self::Complementary { .. } => "Complementary",
-            Self::Rhythm { .. } => "Rhythm",
+            Self::Rhythm { .. } | Self::Own(_) => "Rhythm",
             Self::Cells(_) => "Cells",
         }
     }
@@ -698,6 +706,7 @@ impl Where {
     pub(crate) fn draws(self) -> bool {
         match self {
             Self::Cells(cells) => cells.start == CellStart::Seed && cells.across.is_none(),
+            Self::Own(own) => own.chances,
             _ => matches!(
                 self,
                 Self::Chance(_)
@@ -1306,6 +1315,13 @@ impl Shape {
         self.vary > 0 && self.can_vary()
             || self.kind == FillKind::Ring
             || self.kind == FillKind::Acid && self.acid.loops()
+            || self.laps()
+    }
+
+    /// Whether it plays an `Own` rhythm with a `< >`, whose laps count on from pass to pass, so
+    /// each pass plays the choices that come round on it (decision 461).
+    fn laps(&self) -> bool {
+        self.kind.has_where() && matches!(self.place, Where::Own(own) if own.laps)
     }
 
     /// Whether a new variation draws only some of its rows again, keeping the rest as last heard:
@@ -1353,6 +1369,12 @@ impl Shape {
             return shape;
         }
         let mut shape = *self;
+        // An `Own` rhythm's laps count on from pass to pass, whatever its `Vary`.
+        if let Where::Own(own) = &mut shape.place
+            && self.laps()
+        {
+            own.pass = pass.clamp(0, i64::from(u32::MAX)) as u32;
+        }
         // An `Acid`'s loops run on from pass to pass, whatever its `Vary`.
         if self.kind == FillKind::Acid && self.acid.loops() {
             shape.acid.pass = Acid::round(pass, self.acid.loops);
@@ -1454,7 +1476,7 @@ pub fn targets(
     seed: u64,
 ) -> Vec<usize> {
     let len = range.len().min(MAX_PHRASE_STEPS);
-    render::chosen(steps, range, column, place, None, seed, len)
+    render::chosen(steps, range, column, place, None, seed, len, &[])
         .ones()
         .map(|offset| range.first + offset)
         .collect()
@@ -1497,21 +1519,22 @@ pub fn written(
     column: ShapeColumn,
     shape: &Shape,
 ) -> Vec<(usize, Step)> {
-    written_from(steps, range, column, shape, &[], None)
+    written_from(steps, range, column, shape, Texts::NONE, None)
 }
 
-/// The same, given a `List`'s values, `list`, and the loop's steps of the phrase a `Follow` reads,
-/// if it has one: the cells [`render_into`] leaves, laid over copies of their steps.
+/// The same, given what's kept beside the shape, a `List`'s values and an `Own` rhythm's beats,
+/// and the loop's steps of the phrase a `Follow` reads, if it has one: the cells [`render_into`]
+/// leaves, laid over copies of their steps.
 pub fn written_from(
     steps: &[Step],
     range: StepRange,
     column: ShapeColumn,
     shape: &Shape,
-    list: &[u8],
+    texts: Texts,
     source: Option<&[Step]>,
 ) -> Vec<(usize, Step)> {
     let mut cells = vec![GenCell::Under; range.len().min(MAX_PHRASE_STEPS)];
-    render_into(steps, range, column, shape, list, source, &mut cells);
+    render_into(steps, range, column, shape, texts, source, &mut cells);
     cells
         .into_iter()
         .enumerate()
@@ -1533,7 +1556,7 @@ pub fn values(
     column: ShapeColumn,
     shape: &Shape,
 ) -> Vec<(usize, u8)> {
-    shaped(steps, range, column, shape, &[])
+    shaped(steps, range, column, shape, Texts::NONE)
         .into_iter()
         .map(|(row, value)| (row, value.whole))
         .collect()
@@ -1547,7 +1570,7 @@ pub fn exact_values(
     column: ShapeColumn,
     shape: &Shape,
 ) -> Vec<(usize, u16)> {
-    shaped(steps, range, column, shape, &[])
+    shaped(steps, range, column, shape, Texts::NONE)
         .into_iter()
         .map(|(row, value)| (row, render::exact(column, value)))
         .collect()
@@ -1559,7 +1582,7 @@ fn shaped(
     range: StepRange,
     column: ShapeColumn,
     shape: &Shape,
-    list: &[u8],
+    texts: Texts,
 ) -> Vec<(usize, render::Shaped)> {
     let mut cells = vec![GenCell::Under; range.len().min(MAX_PHRASE_STEPS)];
     let mut found = Vec::new();
@@ -1568,7 +1591,7 @@ fn shaped(
         range,
         column,
         shape,
-        list,
+        texts,
         None,
         &mut cells,
         |row, value, _| {
@@ -2150,7 +2173,7 @@ mod tests {
 
     /// The values a `List` of these values writes on a column, by row.
     fn listed(steps: &[Step], column: ShapeColumn, run: u16, list: &[u8]) -> Vec<(usize, u8)> {
-        shaped(steps, all(steps), column, &listing(run), list)
+        shaped(steps, all(steps), column, &listing(run), Texts::list(list))
             .into_iter()
             .map(|(row, value)| (row, value.whole))
             .collect()
@@ -2422,6 +2445,7 @@ mod tests {
             sources: &[],
             source: None,
             list: &[],
+            rhythm: "",
         };
         assert_eq!(context.default_where(FillKind::Ramp), Where::AllRows);
         assert_eq!(context.default_where(FillKind::Acid), BEATS);

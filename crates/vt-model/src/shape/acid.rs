@@ -430,6 +430,7 @@ pub(super) fn render<F: FnMut(usize, &Shaped, Option<usize>)>(
         shape.over,
         shape.seed,
         out.cells.len(),
+        out.rhythm,
     );
     for offset in rows.ones() {
         let row = range.first + offset;

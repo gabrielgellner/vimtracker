@@ -23,7 +23,7 @@ use crate::app::Entry;
 use crate::input::bindings::Cmd;
 use crate::input::mode::View;
 use crate::overlays::picker::{Item, Pick, Picker};
-use crate::overlays::shape::choice_picker;
+use crate::overlays::shape::{choice_picker, from_named, typed_rhythm};
 use crate::pages::{CtxMut, Outcome};
 use crate::services::Services;
 use crate::services::generators::{LiveGen, generator_label};
@@ -113,12 +113,45 @@ fn reshape_live(
         return;
     }
     if shape != live.generator.shape {
+        // A named rhythm made `Own` starts from its text (decision 461).
+        let rhythm = from_named(live.generator.shape.place, shape.place);
         services.apply(&Action::Reshape {
             track,
             phrase,
             generator,
             shape,
             list: None,
+            rhythm: rhythm.map(Into::into),
+        });
+    }
+}
+
+/// Give a live generator of the cursor's track an `Own` rhythm's text, typed, a named rhythm
+/// made `Own` by it, as one undo step if it's a change (decision 461).
+pub(super) fn rerhythm_live(
+    services: &mut Services,
+    view: View,
+    (phrase, generator): (u32, usize),
+    text: &str,
+) {
+    let track = services.cursor.track;
+    let Some(live) = services.live_generator(track, phrase, generator, view) else {
+        return;
+    };
+    let mut shape = live.generator.shape;
+    if let Err(why) = typed_rhythm(&mut shape, text) {
+        services.status = why.to_owned();
+        return;
+    }
+    let text = text.trim();
+    if shape != live.generator.shape || live.generator.rhythm() != text {
+        services.apply(&Action::Reshape {
+            track,
+            phrase,
+            generator,
+            shape,
+            list: None,
+            rhythm: Some(text.into()),
         });
     }
 }
@@ -142,6 +175,7 @@ fn relist_live(
             generator,
             shape: live.generator.shape,
             list: Some(list.into()),
+            rhythm: None,
         });
     }
 }
@@ -332,6 +366,10 @@ impl GenEdit<'_> {
             }
             return;
         }
+        if let Some((phrase, generator, GenParam::OwnText)) = self.here() {
+            rerhythm_live(self.services, self.view, (phrase, generator), text);
+            return;
+        }
         self.reshape(|services, param, shape, context| {
             if let Err(why) = param.typed(shape, context, text) {
                 services.status = why.to_owned();
@@ -415,6 +453,7 @@ impl GenEdit<'_> {
             generator,
             shape,
             list: None,
+            rhythm: None,
         });
         self.services.status = if heard.ring.is_some() {
             format!(

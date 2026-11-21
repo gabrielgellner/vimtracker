@@ -44,6 +44,9 @@ pub struct PatchGen {
     /// A `List`'s values, as its generator keeps them: saved only for one.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub list: Vec<u8>,
+    /// An `Own` rhythm's text, as its generator keeps it: saved only for one (decision 461).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub rhythm: String,
     /// The length of the lane it fills, which it's given again where it's added, or none for a
     /// generator over the phrase's loop.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -80,6 +83,7 @@ impl PatchGen {
             },
             shape: found.shape,
             list: found.list().to_vec(),
+            rhythm: found.rhythm().to_owned(),
             lane,
         }
     }

@@ -342,6 +342,44 @@ the panel says so on any other. `S` across tracks gives each the next part,
 `Bell`, `Low drum`, `High drum` and round again, from the one the panel shows,
 each with a seed of its own, so its children are its own; the panel says `Each
 track plays the next part`.
+
+**A rhythm of your own.** `K` on `Rhythm` ends with `Own`, a rhythm typed in
+`Text`, in TidalCycles' mini-notation, that any fill plays on: an `Acid` on it,
+a `Random` velocity, a `Wave` on an FX column. Choosing `Own` starts it from the
+named rhythm's part, a token a pulse, and so does editing a named rhythm's
+`Text`, which shows on its row: the son clave's bell is
+`x . . x . . x . . . x . x . . .`. `i` types the whole text, and `l` goes into
+its tokens ([Fields of tokens](#fields-of-tokens)).
+
+| Text | Means |
+|---|---|
+| `x` `.` | A hit, and a rest; `~` is a rest too |
+| `[x x]` | A group: its tokens share its place |
+| `x*3` | Three in its place, or in one row a `RET` |
+| `x!3` | Three places of `x` |
+| `x@3` | One hit three places long |
+| `x?` `x?30` | A hit half the time, or 30% of it |
+| `<x .>` | One of them each lap, in turn |
+| `x(3,8)` `x(3,8,2)` | 3 hits in 8 parts of its place, 2 later |
+
+It goes by steps, not cycles: each top-level token is `Step` rows, from `1 row`
+to `16 rows`, so a token more makes the line longer, as a row more does, and the
+line goes round to fill the span; a span shorter than the line cuts it. At
+`Step 4 rows`, `x . [. x] x(3,8)` is a hit on row 0, one on row 10, and 3 of 8
+in the last beat, on rows 12, 13 and 15. Inside a token, a group, `*` and a
+Euclid split its rows, each hit on the row nearest it within its place, and two
+hits on one row keep the first. So a Euclid is one token: `x(3,8)@8` at `Step 1
+row` is the tresillo over eight rows. On the Note column, `x*3` in a single row
+is a `RET` in the row's first empty FX slot, three strikes in the row; given rows
+enough, as `x*2` at `Step 2 rows`, it's split rows instead.
+
+`<a b>` takes the next choice each lap, counted on from pass to pass, so
+`<x . .>` over a span of four laps carries its turn into the next pass; the
+phrase holds the first pass and the engine plays the rest. `?` draws from the
+seed, its hit and its row, the same each pass until `Vary` draws again. Euclid's
+third number moves the hits later, as `Rotate` does, where Tidal's moves them
+earlier; `.` is always a rest, never Tidal's feet, so `[ ]` groups. The text is
+the generator's, saved with it, and `Step` is a setting a macro can turn.
 `Beats` is the rhythm `Acid` has always played, for any fill: each row a chance
 by where it falls in the bar, counting from the first row selected, the beats
 most, then every third row, then the other even rows, and the rest least. Its
@@ -952,7 +990,8 @@ the values it left.
 ## Fields of tokens
 
 A setting whose value is a short text with a grammar of its own, `Weights`, a `List`'s values, a
-`Tonnetz`'s moves and a mask's bits, is a field of tokens: `l` goes into it, the cursor on a
+`Tonnetz`'s moves, a mask's bits and an `Own` rhythm's `Text`, is a field of tokens: `l` goes
+into it, the cursor on a
 whole token, a digit, a note, a value or a group, and the keys move by the grammar and turn a
 token in its own units. A **group** is a bracket and what it holds, `[. 7F]` or `<30 40>`, and a
 **rest** is `.`, with `~` read as one too, as Tidal writes it.

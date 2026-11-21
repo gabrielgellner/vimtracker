@@ -17,14 +17,16 @@ use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::Rect;
 use vt_model::action::{Action, edit};
 use vt_model::generator::Span;
-use vt_model::notation::{Around, Field as TokenField, Kind, Spot, Table};
+use vt_model::notation::{
+    Around, Field as TokenField, Kind, Spot, Table, compile_rhythm, rhythm_preset,
+};
 use vt_model::selection::{Field, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
-    Channel, Context, DrumPart, FillKind, GenParam, Grids, Shape, ShapeColumn, Source, Starts,
-    TonnetzVoice, Walk, Where, counted, default_ends, default_step, degree_count, degree_name,
-    divisions_seed, drum_parts, is_empty, kept_list, on_track, open_rows, track_seed,
-    variation_notes, written_from,
+    Channel, Context, DrumPart, FillKind, GenParam, Grids, Own, OwnRhythm, Shape, ShapeColumn,
+    Source, Starts, Texts, TonnetzVoice, Walk, Where, counted, default_ends, default_step,
+    degree_count, degree_name, divisions_seed, drum_parts, is_empty, kept_list, on_track,
+    open_rows, track_seed, variation_notes, written_from,
 };
 use vt_model::song::{Machine, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
@@ -86,6 +88,9 @@ pub struct ShapePanel {
     /// The values a `List` goes through, held beside the shape as a generator keeps them, as they
     /// don't fit in one. Kept while another fill is tried, and given only to a `List`.
     pub list: Vec<u8>,
+    /// An `Own` rhythm's text, held beside the shape likewise, and given only to a `Where` of
+    /// `Own` (decision 461).
+    pub rhythm: String,
     /// The setting the cursor is on.
     pub row: GenParam,
     /// What's being typed into the current row.
@@ -134,12 +139,24 @@ impl ShapePanel {
             sources: &self.sources,
             source: self.source_steps(),
             list: &self.list,
+            rhythm: &self.rhythm,
         }
     }
 
     /// The list a generator of its shape keeps: its own, on a `List`, and none on any other fill.
     pub fn kept_list(&self) -> Box<[u8]> {
         kept_list(&self.shape, &self.list)
+    }
+
+    /// The rhythm a generator of its shape keeps: its own, on `Own`, and none on any other
+    /// `Where`, with the beats it reads as.
+    pub fn own(&self) -> OwnRhythm {
+        OwnRhythm::kept(&self.shape, &self.rhythm)
+    }
+
+    /// The text of that rhythm.
+    pub fn kept_rhythm(&self) -> Box<str> {
+        self.own().text().into()
     }
 
     /// The bars of the column it shapes on the phrase in view, each row of its span with its value
@@ -153,12 +170,17 @@ impl ShapePanel {
             .position(|part| part.track == track && part.phrase == phrase)?;
         let part = &self.parts[nth];
         let steps = self.base_steps(part);
+        let own = self.own();
+        let texts = Texts {
+            list: &self.list,
+            rhythm: own.beats(),
+        };
         let written = written_from(
             steps,
             part.range,
             part.column,
             &self.shape_of(nth),
-            &self.list,
+            texts,
             self.source_steps(),
         );
         let rows = (part.range.first..=part.range.last)
@@ -295,6 +317,7 @@ impl ShapePanel {
                 generator,
                 shape: self.shape,
                 list: Some(self.kept_list()),
+                rhythm: Some(self.kept_rhythm()),
             };
         }
         let mut actions: Vec<Action> = self
@@ -308,6 +331,7 @@ impl ShapePanel {
                 column: part.column,
                 shape: self.shape_of(nth),
                 list: self.kept_list(),
+                rhythm: self.kept_rhythm(),
             })
             .collect();
         if actions.len() == 1 {
@@ -335,6 +359,7 @@ impl ShapePanel {
                 },
                 shape: self.shape_of(nth),
                 list: self.kept_list(),
+                rhythm: self.kept_rhythm(),
             })
             .collect();
         if actions.len() == 1 {
@@ -610,6 +635,7 @@ impl Services {
                     column,
                     shape,
                     list: Box::default(),
+                    rhythm: Box::default(),
                 })
             })
             .collect();
@@ -623,7 +649,8 @@ impl Services {
 
     /// Apply a shape to a range, on each of these tracks. A ramp's, random fill's, walk's or 1/f
     /// fill's ends are chosen again from what's there on the first, a wave or `Alternate` keeps the two values it
-    /// moves between, a `List` keeps its list, `list`, and `Scale` the two it scales onto. Each
+    /// moves between, a `List` keeps its list, `list`, an `Own` rhythm its text, `rhythm`, and
+    /// `Scale` the two it scales onto. Each
     /// track has a seed of its own. Each track's column is judged as `S` judges it: an empty one
     /// is generated on, notes of its own or the same command.
     pub(crate) fn shape_again(
@@ -631,7 +658,7 @@ impl Services {
         range: StepRange,
         tracks: TrackSpan,
         column: ShapeColumn,
-        (shape, list): (Shape, &[u8]),
+        (shape, list, rhythm): (Shape, &[u8], &str),
         view: View,
     ) {
         let song = Arc::clone(self.song());
@@ -731,6 +758,7 @@ impl Services {
                         ..shape
                     },
                     list: list.into(),
+                    rhythm: rhythm.into(),
                 }
             })
             .collect();
@@ -798,6 +826,7 @@ impl ShapePanel {
             column,
             shape,
             list: Vec::new(),
+            rhythm: String::new(),
             row: GenParam::Fill,
             typing: None,
             weight: None,
@@ -1162,12 +1191,20 @@ impl ShapePanel {
 
     /// Change the shape, settle what follows from it, and show the result. A `List` with no
     /// values yet starts as the two ends, so it sounds as `Alternate` did until it's typed.
+    /// A named rhythm made `Own` starts from its text, its part a token a pulse (decision 461).
     pub(crate) fn change(&mut self, change: impl FnOnce(&mut Self), services: &mut Services) {
+        let (before, text) = (self.shape.place, self.rhythm.clone());
         change(self);
         settle(&mut self.shape, &self.sources, self.default_source);
         if self.shape.kind == FillKind::List && self.list.is_empty() {
             self.list = self.kept_list().into();
         }
+        if let Some(from) = from_named(before, self.shape.place)
+            && self.rhythm == text
+        {
+            self.rhythm = from;
+        }
+        self.own().settle(&mut self.shape);
         self.preview(services);
     }
 
@@ -1317,6 +1354,13 @@ impl ShapePanel {
                     }
                     return;
                 }
+                if panel.row == GenParam::OwnText {
+                    match typed_rhythm(&mut panel.shape, text) {
+                        Ok(()) => panel.rhythm = text.trim().to_owned(),
+                        Err(why) => refused = Some(why),
+                    }
+                    return;
+                }
                 let mut shape = panel.shape;
                 refused = panel.row.typed(&mut shape, &panel.context(), text).err();
                 panel.shape = shape;
@@ -1374,7 +1418,10 @@ impl ShapePanel {
             part.range,
             part.column,
             &self.shape_of(nth).on_pass(pass),
-            &self.list,
+            Texts {
+                list: &self.list,
+                rhythm: self.own().beats(),
+            },
             self.source_steps(),
         ))
     }
@@ -1568,6 +1615,34 @@ impl ShapePanel {
             }
         };
     }
+}
+
+/// The text a named rhythm made `Own` starts from, its part a token a pulse, where a change made
+/// one `Own` (decision 461).
+pub(crate) fn from_named(before: Where, after: Where) -> Option<String> {
+    match (before, after) {
+        (
+            Where::Rhythm {
+                rhythm,
+                part,
+                child,
+            },
+            Where::Own(_),
+        ) => Some(rhythm_preset(rhythm, part, child)),
+        _ => None,
+    }
+}
+
+/// An `Own` rhythm's text typed: a shape on a named rhythm is made `Own`, and text that doesn't
+/// read is refused, saying why.
+pub(crate) fn typed_rhythm(shape: &mut Shape, text: &str) -> Result<(), &'static str> {
+    if compile_rhythm(text.trim()).is_err() {
+        return Err("That rhythm doesn't read: x a hit, . a rest, [ ] a group, < > one each lap");
+    }
+    if let Where::Rhythm { .. } = shape.place {
+        shape.place = Where::Own(Own::default());
+    }
+    Ok(())
 }
 
 /// The token at a place as the status line says it, `Weight of G: F`, and what it means, for

@@ -601,7 +601,7 @@ fn rendered(case: &Case, column: ShapeColumn) -> Vec<(usize, Step)> {
         case.range,
         column,
         &case.shape,
-        &case.list,
+        vt_model::shape::Texts::list(&case.list),
         case.source.as_deref(),
         &mut cells,
     );
@@ -626,7 +626,7 @@ fn rendered(case: &Case, column: ShapeColumn) -> Vec<(usize, Step)> {
         case.range,
         column,
         &case.shape,
-        &case.list,
+        vt_model::shape::Texts::list(&case.list),
         case.source.as_deref(),
     );
     assert_eq!(written, wrapped);
@@ -733,7 +733,7 @@ fn every_fill_renders_on_every_column_without_allocating() {
                         case.range,
                         column,
                         &case.shape,
-                        &case.list,
+                        vt_model::shape::Texts::list(&case.list),
                         case.source.as_deref(),
                         &mut cells[..case.range.len()],
                     );
@@ -743,7 +743,7 @@ fn every_fill_renders_on_every_column_without_allocating() {
                         case.range,
                         column,
                         &case.shape,
-                        &case.list,
+                        vt_model::shape::Texts::list(&case.list),
                         case.source.as_deref(),
                         &mut kept[..len],
                         &mut tokens[..len],

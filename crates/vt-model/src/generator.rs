@@ -11,8 +11,8 @@ use crate::song::Song;
 use crate::scale::Scale;
 use crate::selection::StepRange;
 use crate::shape::{
-    Context, FillKind, GenCell, MAX_LIST, RowView, Shape, ShapeColumn, Source, TonnetzVoice,
-    copy_fx, counted, is_empty, kept_list, render_into,
+    Context, FillKind, GenCell, MAX_LIST, OwnRhythm, RowView, Shape, ShapeColumn, Source, Texts,
+    TonnetzVoice, Where, copy_fx, counted, is_empty, kept_list, render_into,
 };
 use crate::step::{FxCommand, FxSlot, Note, Step};
 
@@ -45,6 +45,9 @@ pub struct Generator {
     /// `List`. Kept here rather than in the `Copy` shape, so no other fill, undo step or engine run
     /// pays for them; macros don't reach it, so `held` doesn't carry it.
     list: Box<[u8]>,
+    /// An `Own` rhythm's text and beats, kept here as the list is: empty unless its `Where` is
+    /// `Own` (decision 461).
+    rhythm: OwnRhythm,
     /// The first stored row it covers.
     first: usize,
     /// Its column's cell from under each of its rows, on a step holding nothing else: what the
@@ -107,6 +110,10 @@ fn owns(shape: &Shape) -> Owns {
         FillKind::Ring => Owns::Note,
         // On the `Chord` voice, a row's chord is locked in one of its FX slots.
         FillKind::Tonnetz if shape.tonnetz.voice == Some(TonnetzVoice::Chord) => Owns::NoteFx,
+        // An `Own` rhythm's `x*3` in a row is a `RET` in one of its FX slots (decision 461).
+        _ if matches!(shape.place, Where::Own(own) if own.ratchets) && shape.kind.has_where() => {
+            Owns::NoteFx
+        }
         _ => Owns::Cell,
     }
 }
@@ -219,6 +226,7 @@ impl Generator {
             column,
             span,
             list: kept_list(&shape, &[]),
+            rhythm: OwnRhythm::default(),
             shape,
             first: 0,
             under: Vec::new(),
@@ -238,6 +246,27 @@ impl Generator {
     /// The values a `List` goes through: none for any other fill.
     pub fn list(&self) -> &[u8] {
         &self.list
+    }
+
+    /// The same, an `Own` rhythm playing this text, which any other `Where` keeps none of.
+    #[must_use]
+    pub fn with_rhythm(mut self, text: &str) -> Self {
+        self.rhythm = OwnRhythm::kept(&self.shape, text);
+        self.rhythm.settle(&mut self.shape);
+        self
+    }
+
+    /// An `Own` rhythm's text: empty for any other `Where`.
+    pub fn rhythm(&self) -> &str {
+        self.rhythm.text()
+    }
+
+    /// What its render reads beside its shape: its list and its rhythm's beats.
+    pub fn texts(&self) -> Texts<'_> {
+        Texts {
+            list: &self.list,
+            rhythm: self.rhythm.beats(),
+        }
     }
 
     /// The stored rows it covers now.
@@ -311,6 +340,7 @@ impl Generator {
             sources,
             source,
             list: &self.list,
+            rhythm: self.rhythm.text(),
         })
     }
 
@@ -367,7 +397,8 @@ impl Generator {
         self.render(steps, source);
     }
 
-    /// Take a new shape and write it, a `List` going through `list`, or with none, its own. One
+    /// Take a new shape and write it, a `List` going through `list`, or with none, its own, and an
+    /// `Own` rhythm playing `rhythm`, or with none, its own. One
     /// that owns more of each note, as `Acid` owns its velocity and gate, takes what's there now
     /// as what's under those, and one that owns less puts back what was under them first.
     pub(crate) fn reshape(
@@ -375,11 +406,15 @@ impl Generator {
         steps: &mut [Step],
         shape: Shape,
         list: Option<&[u8]>,
+        rhythm: Option<&str>,
         source: Option<&[Step]>,
     ) {
         self.restore(steps);
         self.list = kept_list(&shape, list.unwrap_or(&self.list));
+        let text = rhythm.unwrap_or(self.rhythm.text()).to_owned();
+        self.rhythm = OwnRhythm::kept(&shape, &text);
         self.shape = shape;
+        self.rhythm.settle(&mut self.shape);
         let owns = owns(&self.shape);
         for (offset, under) in self.under.iter_mut().enumerate() {
             if let Some(step) = steps.get(self.first + offset) {
@@ -435,7 +470,10 @@ impl Generator {
             range,
             self.column,
             &shape,
-            &self.list,
+            Texts {
+                list: &self.list,
+                rhythm: self.rhythm.beats(),
+            },
             source,
             &mut cells,
         );
@@ -558,11 +596,14 @@ impl Generator {
             // As saved: an older song's `List`, saved with its values in its shape, has none
             // (no backwards compatibility).
             list: file.list.into_iter().take(MAX_LIST).collect(),
+            rhythm: OwnRhythm::default(),
             first: file.first,
             under: file.under,
             seen: Vec::new(),
             held: None,
         };
+        generator.rhythm = OwnRhythm::kept(&generator.shape, &file.rhythm);
+        generator.rhythm.settle(&mut generator.shape);
         // What's under it is cut to the rows stored, as a phrase is never shorter than it was.
         let room = steps.len().saturating_sub(generator.first);
         generator.under.truncate(room);
@@ -583,6 +624,9 @@ pub(crate) struct GeneratorFile {
     /// A `List`'s values, saved only for one.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     list: Vec<u8>,
+    /// An `Own` rhythm's text, saved only for one (decision 461).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    rhythm: String,
     first: usize,
     under: Vec<Step>,
 }
@@ -594,6 +638,7 @@ impl GeneratorFile {
             span: generator.span,
             shape: generator.shape,
             list: generator.list.to_vec(),
+            rhythm: generator.rhythm.text().to_owned(),
             first: generator.first,
             under: generator.under.clone(),
         }
