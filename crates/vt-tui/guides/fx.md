@@ -57,6 +57,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `LEN` | Gate, for rows with no length of their own. `80` is half |
 | `LDLT` | Gate up or down from a note's own: `80` none, `00` half off |
 | `VDLT` | Velocity up or down from a note's own: `80` none, `90` adds `10` |
+| `VRNG` | How far below `7F` velocity `01` plays: `00` 0 dB, `18` 24 dB, `30` 48 dB |
 | `GRV` | The step's groove: `00` the project's, `01` Straight |
 | `RATE` | The step's speed: `00` 1/32, `02` 1/16, `04` 1/8, `06` 1/4 |
 | `QNT` | Nudges brought to the grid: `00` none, `80` half, `FF` all |
@@ -157,6 +158,13 @@ the notes. Glided, `VDLT 40g` to `VDLT C0` many rows on, it's a crescendo, each
 note on the way getting its own share. A mod slot's `Dest` lists it too, for an
 LFO's swells. It starts from the track's `Velocity`, on the Sound page's Play
 device, which the Roto has as a knob, for dynamics played live.
+
+`VRNG` is how far apart those velocities are in level: velocity `01` plays this
+many dB below `7F`, evenly in dB between, a dB a step from `00`, where velocity
+leaves the level alone, to `30`, 48 dB. A track starts at `18`, 24 dB. It's read
+as a note starts, so `VRNG 30` on a row makes that note's velocity count for twice
+as much as `18` does, and a lane of it or an LFO widens and narrows the dynamics as they play.
+It starts from the track's `Vel range`, in the Play device's title.
 
 On `Acid`, velocity only says whether a note is accented, at `70` or above, so a
 `VDLT` that takes a note across `70` switches its accent on or off, and does

@@ -74,7 +74,10 @@ fn hits(song: &Song, steps: usize, channel: usize) -> Vec<usize> {
 
 /// The level a flat note plays at with this velocity.
 fn level(velocity: u8) -> f32 {
-    0.5 * f32::from(velocity) / f32::from(0x7F_u8)
+    0.5 * vt_model::settings::velocity_gain(
+        velocity,
+        f32::from(vt_model::settings::DEFAULT_VELOCITY_RANGE),
+    )
 }
 
 #[test]

@@ -403,7 +403,8 @@ fn acid_ignores_velocity_but_for_the_accent() {
 
 #[test]
 fn every_other_voice_is_as_loud_as_its_velocity() {
-    // A note's level is its velocity's share of the most, on every voice but `Acid`.
+    // A note's level is its velocity's, even in dB over the track's `Velocity range`, on every
+    // voice but `Acid` (decision 478).
     for voice in SynthVoice::ALL {
         if voice == SynthVoice::Acid {
             continue;
@@ -414,7 +415,10 @@ fn every_other_voice_is_as_loud_as_its_velocity() {
         };
         let (soft, full) = (at("40"), at("7F"));
         let ratio = rms(&soft, 0) / rms(&full, 0);
-        let expected = f32::from(0x40_u8) / f32::from(0x7F_u8);
+        let expected = vt_model::settings::velocity_gain(
+            0x40,
+            f32::from(vt_model::settings::DEFAULT_VELOCITY_RANGE),
+        );
         assert!(
             (ratio / expected - 1.0).abs() < 0.01,
             "{voice:?}: {ratio} against {expected}"

@@ -81,7 +81,7 @@ fn a_mute_armed_mid_bar_switches_exactly_on_the_next_line() {
     by_hand.set_mute(0, true);
     play(&mut by_hand, 4 * STEP, &mut expected);
     assert_eq!(heard, expected);
-    assert!(heard[(3 * STEP + HALF) * 2] > 0.1, "heard up to the line");
+    assert!(heard[(3 * STEP + HALF) * 2] > 0.05, "heard up to the line");
     assert!(heard[(6 * STEP) * 2].abs() < 1e-6, "silent after it");
 }
 
@@ -96,7 +96,7 @@ fn arming_again_before_the_line_takes_it_back() {
     play(&mut engine, 8 * STEP, &mut heard);
     assert!(!engine.jam(0).mute);
     assert_eq!(engine.jam(0).switches_landed, 0);
-    assert!(heard[(5 * STEP) * 2] > 0.1);
+    assert!(heard[(5 * STEP) * 2] > 0.05);
 }
 
 #[test]

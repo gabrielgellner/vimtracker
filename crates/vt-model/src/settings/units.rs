@@ -147,6 +147,8 @@ pub enum Units {
     /// A track's swing, from 50.0% at `00` up a tenth of a percent a step, as
     /// [`swing_tenths`](crate::groove::swing_tenths) gives it.
     Swing,
+    /// A track's velocity range, in whole dB from `00`, as [`velocity_gain`] reads it.
+    VelocityRange,
 }
 
 /// How close to an end the utility filter's cuts count as off, as a share of their range: the
@@ -252,6 +254,31 @@ pub fn velocity_delta(value: f32) -> f32 {
     value - 128.0
 }
 
+/// The top of a track's `Velocity range`: 48 dB, Surge's top and near Ableton Live's 50.4, so a
+/// step of velocity is about 0.38 dB, near the least change of level that's heard (decision 478).
+pub const MOST_VELOCITY_RANGE: u8 = 48;
+
+/// Where a track's `Velocity range` starts: 24 dB, which puts velocity `40` about 12 dB down, as
+/// MIDI's GM curve does, and `01` no further down than 24 dB, so ghost notes stay heard.
+pub const DEFAULT_VELOCITY_RANGE: u8 = 24;
+
+/// The dB a `Velocity range` value is, a dB a step, stopping at [`MOST_VELOCITY_RANGE`].
+pub fn velocity_range_db(value: f32) -> f32 {
+    value.clamp(0.0, f32::from(MOST_VELOCITY_RANGE))
+}
+
+/// The gain a note's velocity plays at, with its track's `Velocity range` of `range` dB: even in
+/// dB from `7F` at 0 dB down to `01` at `range` dB below it, so each step of velocity is as far
+/// in level as the next, as Ableton Live's Simpler and Surge have it. `00` is silent. Velocity
+/// never raises a note past its voice's own level, so the range only takes away (decision 478).
+pub fn velocity_gain(velocity: u8, range: f32) -> f32 {
+    if velocity == 0 {
+        return 0.0;
+    }
+    let below = f32::from(MAX_VELOCITY - velocity.min(MAX_VELOCITY)) / f32::from(MAX_VELOCITY - 1);
+    10f32.powf(-velocity_range_db(range) * below / 20.0)
+}
+
 /// A note's velocity moved by a `VDLT` value, kept to the velocity's range.
 pub fn moved_velocity(velocity: u8, value: f32) -> u8 {
     (f32::from(velocity) + velocity_delta(value))
@@ -311,7 +338,7 @@ impl Kind {
     pub fn has_fine(self) -> bool {
         matches!(
             self,
-            Self::Continuous { units, .. } if !matches!(units, Units::Decibels | Units::Rows | Units::Orders | Units::Swing)
+            Self::Continuous { units, .. } if !matches!(units, Units::Decibels | Units::Rows | Units::Orders | Units::Swing | Units::VelocityRange)
         )
     }
 
@@ -447,6 +474,7 @@ impl Kind {
                 Units::Rows if middle => rows_text((coarse.round() as i32 - 128).clamp(-128, 127)),
                 Units::Rows => rows_text(coarse.round() as i32),
                 Units::Orders => orders_text((coarse.round() as i32 - 128).clamp(-128, 127)),
+                Units::VelocityRange => format!("{:.0} dB", velocity_range_db(coarse as f32)),
                 Units::Swing => {
                     let tenths = swing_tenths(coarse.round().clamp(0.0, 255.0) as u8);
                     format!("{}.{} %", tenths / 10, tenths % 10)

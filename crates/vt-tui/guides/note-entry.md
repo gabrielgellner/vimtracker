@@ -232,6 +232,14 @@ project.
 
 `Backspace` clears a note with the velocity it was written with. An empty velocity, `··`, plays at full.
 
+Velocity sets how loud the note plays, evenly in dB, so each step down is as
+much quieter as the last. `7F` plays at the sound's own level, `01` plays the
+track's `Vel range` below it, and `00` is silent. At the range's `24 dB`,
+where a track starts, `40` is 12 dB down and `01` 24 dB down. A wider range
+spreads the steps further apart, up to `48 dB`, and `0 dB` has velocity leave
+the level alone. Velocity never makes a note louder than `7F` does. On `Acid` it
+only says whether a note is accented. See the Play device in **The Sound page**.
+
 For how loud a whole track is, use its `Level`, on the mixer or the Sound page's
 Output, or `:tvol`. See **Phrases and chains**. To move the notes' velocities as
 they play, leaving what's written, use `VDLT` on a step, in a lane or from a mod

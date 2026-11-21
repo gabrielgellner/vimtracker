@@ -380,6 +380,17 @@ on it. It's where held `SWG` starts, so a step's `SWG` or a lane's replaces it
 and an LFO or a macro on it moves it, and on the Roto it's on the Play device's
 second page. See **Groove** in **FX commands**.
 
+`Vel range`, after it, is how much quieter a soft note plays than a full one:
+velocity `01` plays this far below `7F`, evenly in dB between, a dB a step from
+`00`, `0 dB`, where velocity leaves the level alone, to `30`, `48 dB`. A track
+starts at `18`, `24 dB`, where `40` is 12 dB down. `7F` is always the sound's own
+level, so a wider range only makes the soft notes softer, and `00` velocity is
+silent. It's read as each note starts, so a sounding note keeps its level. It's
+where held `VRNG` starts, so a step's `VRNG` or a lane's replaces it, and an LFO
+or a macro on it moves it. A sound saved as a preset keeps it. On `Acid`, which
+has no velocity but its accent, it does nothing. On the Roto it's on the Play
+device's `Level` page.
+
 `Phase`, in a fourth column of a synth's Play device, is whether its oscillators run
 on from note to note or start again on each. A synth that holds its notes plays the
 next one on the voice already sounding (see **Envelopes** in **The Mod page**). At

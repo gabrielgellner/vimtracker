@@ -160,7 +160,8 @@ impl Family {
             | Units::Range
             | Units::Input
             | Units::Ceiling
-            | Units::VelocityDelta => Self::Level,
+            | Units::VelocityDelta
+            | Units::VelocityRange => Self::Level,
             Units::Hertz
             | Units::LowCut
             | Units::HighCut

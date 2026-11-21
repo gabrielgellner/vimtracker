@@ -10,7 +10,7 @@ use vt_model::playable::Playable;
 use vt_model::settings::{
     FADER_COUNT, FADERS, LANE_SETTINGS, MAX_MACHINE_SETTINGS, MOD_OWN_SETTINGS, PLAYED_SETTINGS,
     PlayMode, SAMPLER_SETTINGS, SettingId, gate_delta, gate_share, glide_ms, moved_velocity,
-    quantised_nudge,
+    quantised_nudge, velocity_gain,
 };
 use vt_model::song::{DEFAULT_ACCENT, FilterType, SynthVoice, Track};
 use vt_model::step::slice_letter;
@@ -308,6 +308,8 @@ pub(crate) struct TrackState {
     held_gate_delta: f32,
     /// Held `VDLT`, which moves each note's velocity up or down from its own, with `80` as none.
     held_velocity_delta: f32,
+    /// Held `VRNG`, how far below a full velocity's level velocity `01` plays, in dB.
+    held_velocity_range: f32,
     /// Held `CDLT`, which moves every row's chance to play up or down, with `80` as none.
     held_chance_delta: f32,
     /// Held `GLD`, how long a tie glides into the next note, on the `00` to `FF` scale.
@@ -496,6 +498,7 @@ impl TrackState {
             held_gate: f32::from(SettingId::GATE_LENGTH.entry().default),
             held_gate_delta: f32::from(SettingId::GATE_DELTA.entry().default),
             held_velocity_delta: f32::from(SettingId::VELOCITY_DELTA.entry().default),
+            held_velocity_range: f32::from(SettingId::VELOCITY_RANGE.entry().default),
             held_chance_delta: f32::from(SettingId::CHANCE_DELTA.entry().default),
             held_glide: f32::from(SettingId::GLIDE.entry().default),
             held_phase: f32::from(SettingId::PHASE.entry().default),
@@ -793,6 +796,15 @@ impl TrackState {
         let moved =
             self.held_velocity_delta + self.offsets[SettingId::VELOCITY_DELTA.index()] * 255.0;
         moved_velocity(own, moved)
+    }
+
+    /// The gain a note at this velocity plays at, as it starts: even in dB from `7F` at 0 dB down
+    /// to `01` at held `VRNG` below it, with what modulation adds to `VRNG`, and `00` silent. It's
+    /// read once, so a sounding note keeps it (decision 478).
+    pub(crate) fn velocity_gain(&self, velocity: u8) -> f32 {
+        let range =
+            self.held_velocity_range + self.offsets[SettingId::VELOCITY_RANGE.index()] * 255.0;
+        velocity_gain(velocity, range)
     }
 
     /// The `CDLT` a row decides its chances by, on the `00` to `FF` scale: `own`, a lock of it on

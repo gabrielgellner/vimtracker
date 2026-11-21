@@ -23,7 +23,7 @@ use crate::macros::{MACROS, Macro, MacroMap, MacroTarget};
 use crate::modulation::{MOD_SLOTS, ModSlot, default_mods};
 use crate::order::{ChainMove, Deal, Dealer, Order, WalkMove};
 use crate::scale::Scale;
-use crate::settings::{Owner, SettingId};
+use crate::settings::{DEFAULT_VELOCITY_RANGE, MOST_VELOCITY_RANGE, Owner, SettingId};
 use crate::shape::{KitLine, Source};
 use crate::speed::Speed;
 use crate::step::{FxCommand, FxSlot, Step};
@@ -294,6 +294,13 @@ pub struct Track {
     /// phrases instead (decision 424).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub chain_jump: u8,
+    /// Where held `VRNG` starts: how far below a full velocity's level velocity `01` plays, in dB,
+    /// even in dB between, by [`velocity_gain`](crate::settings::velocity_gain) (decision 478).
+    #[serde(
+        default = "default_velocity_range",
+        skip_serializing_if = "is_default_velocity_range"
+    )]
+    pub velocity_range: u8,
     /// The choke group it's in, if any, from 1 to `CHOKE_GROUPS`: a note on it cuts off what's
     /// sounding on the other tracks in the group, as a closed hat cuts an open one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -542,6 +549,7 @@ impl Track {
             TrackControl::Swing => self.swing,
             TrackControl::ChainOrder => self.chain_order,
             TrackControl::ChainJump => self.chain_jump,
+            TrackControl::VelocityRange => self.velocity_range,
         }
     }
 
@@ -577,10 +585,12 @@ impl Track {
             TrackControl::Swing => &mut self.swing,
             TrackControl::ChainOrder => &mut self.chain_order,
             TrackControl::ChainJump => &mut self.chain_jump,
+            TrackControl::VelocityRange => &mut self.velocity_range,
         };
         *held = match control {
             TrackControl::SendA | TrackControl::SendB => value.min(MAX_LEVEL),
             TrackControl::Swing => value.min(MOST_SWING),
+            TrackControl::VelocityRange => value.min(MOST_VELOCITY_RANGE),
             _ => value,
         };
     }
@@ -859,6 +869,7 @@ impl Default for Track {
             swing: 0,
             chain_order: 0,
             chain_jump: 0,
+            velocity_range: DEFAULT_VELOCITY_RANGE,
             choke: None,
             group: None,
             gate_length: None,
@@ -893,6 +904,14 @@ fn is_unity_trim(trim: &u8) -> bool {
 
 fn open_cutoff() -> u8 {
     0xFF
+}
+
+fn default_velocity_range() -> u8 {
+    DEFAULT_VELOCITY_RANGE
+}
+
+fn is_default_velocity_range(value: &u8) -> bool {
+    *value == DEFAULT_VELOCITY_RANGE
 }
 
 fn centre() -> u8 {

@@ -135,7 +135,12 @@ fn an_early_step_after_a_late_one_still_plays_in_order() {
     let rows = ["C-3 20", "C-3 40", "C-3 7F", "C-3 40"];
     let played = with_own(song(&[&rows]), groove);
     let out = render(&played, flat_pool(), 4, 0);
-    let level = |velocity: u8| 0.5 * f32::from(velocity) / f32::from(0x7F_u8);
+    let level = |velocity: u8| {
+        0.5 * vt_model::settings::velocity_gain(
+            velocity,
+            f32::from(vt_model::settings::DEFAULT_VELOCITY_RANGE),
+        )
+    };
     let at = STEP + 120 * TICK;
     assert!((out[at - 1] - level(0x20)).abs() < 1e-3, "{}", out[at - 1]);
     assert!(
@@ -214,10 +219,18 @@ fn a_groove_shapes_each_steps_velocity() {
     let groove = Groove::pattern(&[0, 0]).with_velocity(1, 50);
     let played = with_own(song(&[&["C-3 60", "C-3 60"]]), groove);
     let out = render(&played, flat_pool(), 2, 0);
-    // Once the first note has faded under the second.
+    // Once the first note has faded under the second. Half of `60` is `30`, which plays at its
+    // own level on the track's `Velocity range`.
     let (first, second) = (out[300].abs(), out[STEP + 300].abs());
+    let halved = vt_model::settings::velocity_gain(
+        0x30,
+        f32::from(vt_model::settings::DEFAULT_VELOCITY_RANGE),
+    ) / vt_model::settings::velocity_gain(
+        0x60,
+        f32::from(vt_model::settings::DEFAULT_VELOCITY_RANGE),
+    );
     assert!(
-        (second / first - 0.5).abs() < 1e-3,
+        (second / first - halved).abs() < 1e-3,
         "{second} against {first}"
     );
     // Over 100% it's louder, up to the most a velocity is.
@@ -226,7 +239,15 @@ fn a_groove_shapes_each_steps_velocity() {
         Groove::pattern(&[0, 0]).with_velocity(1, 150),
     );
     let out = render(&louder, flat_pool(), 2, 0);
-    assert!((out[STEP + 300] / out[300] - 1.5).abs() < 1e-2);
+    // `40` at 150% is `60`.
+    let raised = vt_model::settings::velocity_gain(
+        0x60,
+        f32::from(vt_model::settings::DEFAULT_VELOCITY_RANGE),
+    ) / vt_model::settings::velocity_gain(
+        0x40,
+        f32::from(vt_model::settings::DEFAULT_VELOCITY_RANGE),
+    );
+    assert!((out[STEP + 300] / out[300] - raised).abs() < 1e-2);
 }
 
 #[test]

@@ -308,7 +308,10 @@ fn chain_transpose_and_step_volume_apply() {
         .rposition(|f| f[0] != 0.0)
         .unwrap();
     assert!((495..=510).contains(&last), "ended at {last}");
-    let expected = 64.0_f32 / 127.0;
+    let expected = vt_model::settings::velocity_gain(
+        0x40,
+        f32::from(vt_model::settings::DEFAULT_VELOCITY_RANGE),
+    );
     assert!((out[0] - expected).abs() < 1e-3, "got {}", out[0]);
 }
 

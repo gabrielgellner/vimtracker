@@ -448,7 +448,11 @@ fn track_level_scales_the_track_and_multiplies_with_velocity() {
     let mut both = song(&soft);
     both.tracks[0].level = 0x80;
     let both = level_at(&render(both, flat(0.02), STEP), STEP - 1);
-    let expected = full * (64.0 / 127.0) * down;
+    let expected =
+        full * vt_model::settings::velocity_gain(
+            0x40,
+            f32::from(vt_model::settings::DEFAULT_VELOCITY_RANGE),
+        ) * down;
     assert!((both / expected - 1.0).abs() < 1e-3, "{both} vs {expected}");
 }
 
@@ -519,7 +523,13 @@ fn audition_uses_velocity_and_is_cut_by_the_next_one() {
     let full = auditioned(song(&["C-3 -- --- --- ---"]), 0.02, |e| e.audition(0));
     let soft = auditioned(song(&["C-3 40 --- --- ---"]), 0.02, |e| e.audition(0));
     assert!(
-        (soft / full - 64.0 / 127.0).abs() < 1e-3,
+        (soft / full
+            - vt_model::settings::velocity_gain(
+                0x40,
+                f32::from(vt_model::settings::DEFAULT_VELOCITY_RANGE)
+            ))
+        .abs()
+            < 1e-3,
         "{soft} vs {full}"
     );
 

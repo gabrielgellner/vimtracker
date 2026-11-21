@@ -206,6 +206,7 @@ impl Control {
             Self::Base(TrackControl::Swing) => "Swing",
             Self::Base(TrackControl::ChainOrder) => "Chain",
             Self::Base(TrackControl::ChainJump) => "Jump",
+            Self::Base(TrackControl::VelocityRange) => "Vel range",
             Self::Choke => "Choke",
             Self::Group => "Group",
             Self::Role => "Role",
@@ -437,7 +438,8 @@ impl Control {
                 | TrackControl::DiceJump
                 | TrackControl::Swing
                 | TrackControl::ChainOrder
-                | TrackControl::ChainJump,
+                | TrackControl::ChainJump
+                | TrackControl::VelocityRange,
             )
             | Self::Choke
             | Self::Group

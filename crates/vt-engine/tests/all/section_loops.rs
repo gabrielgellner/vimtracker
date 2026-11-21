@@ -7,6 +7,7 @@ use vt_engine::engine::{Engine, SectionLoop};
 use vt_engine::published::Published;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
+use vt_model::settings::DEFAULT_VELOCITY_RANGE;
 use vt_model::song::{Chain, ChainEntry, Launch, Phrase, Section, Song};
 
 const RATE: u32 = 48_000;
@@ -80,7 +81,9 @@ fn steps(engine: &mut Engine, count: usize) -> Vec<(usize, bool)> {
         .map(|_| {
             let mut out = vec![0.0; STEP * 2];
             engine.process(&mut out);
-            let velocity = out[3000 * 2] * 0x7F as f32;
+            // The velocity back from its level, even in dB over the track's `Velocity range`.
+            let db = 20.0 * out[3000 * 2].log10();
+            let velocity = 127.0 + 126.0 * db / f32::from(DEFAULT_VELOCITY_RANGE);
             let section = (velocity / 16.0 + 0.01).floor() as usize - 1;
             let first = velocity - 16.0 * (section as f32 + 1.0) > 4.0;
             (section, first)

@@ -641,6 +641,7 @@ fn a_tracks_controls_read_and_set_their_own_fields() {
         let top = match control {
             TrackControl::SendA | TrackControl::SendB => MAX_LEVEL,
             TrackControl::Swing => vt_model::groove::MOST_SWING,
+            TrackControl::VelocityRange => vt_model::settings::MOST_VELOCITY_RANGE,
             _ => 0xFF,
         };
         assert_eq!(set.control(control), top, "{control:?}");

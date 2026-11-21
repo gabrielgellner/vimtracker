@@ -77,7 +77,9 @@ impl Engine {
             track,
             file,
             span,
-            velocity_gain(DEFAULT_NOTE_VELOCITY),
+            self.tracks
+                .get(track)
+                .map_or(1.0, |state| state.velocity_gain(DEFAULT_NOTE_VELOCITY)),
             Envelope::note_shape(),
         )
     }
@@ -238,16 +240,16 @@ impl Engine {
             Machine::Plaits(voice) => (0, None, 0, None, Cut::default(), Some(voice)),
         };
         let accent = velocity >= ACCENT_VELOCITY;
-        let heard = match synth {
-            Some(SynthVoice::Acid) => ACID_VELOCITY,
-            _ => velocity,
+        let gain = match synth {
+            Some(SynthVoice::Acid) => ACID_GAIN,
+            _ => self.tracks.get(track)?.velocity_gain(velocity),
         };
         Some(NoteOn {
             sample,
             synth,
             note,
             velocity,
-            gain: velocity_gain(heard),
+            gain,
             entry,
             slice,
             span,
@@ -367,12 +369,8 @@ impl Engine {
     }
 }
 
-/// The velocity every `Acid` note plays at, whatever its own: 99, where its level was fitted, so a
-/// note there sounds as it did before velocity was taken away from it. An accented note
-/// plays at it too, as all an accent adds to the level is the voice's own accent circuit's.
-const ACID_VELOCITY: u8 = 99;
-
-/// The gain of a step's velocity.
-fn velocity_gain(velocity: u8) -> f32 {
-    f32::from(velocity) / f32::from(MAX_VELOCITY)
-}
+/// The gain every `Acid` note plays at, whatever its velocity: velocity 99's when velocity was
+/// even in amplitude, where its level was fitted, so it sounds as it did before velocity was taken
+/// away from it, whatever the track's `VRNG`. An accented note plays at it too, as all an accent
+/// adds to the level is the voice's own accent circuit's.
+const ACID_GAIN: f32 = 99.0 / 127.0;
