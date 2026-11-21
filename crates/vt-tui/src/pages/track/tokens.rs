@@ -8,7 +8,7 @@
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::modulation::ModField;
-use vt_model::notation::{Around, Field, GrammarId, show_step, step_value};
+use vt_model::notation::{Around, Field, GrammarId, Table, show_step, step_value};
 use vt_model::shape::ShapeColumn;
 
 use crate::controls::Control;
@@ -20,7 +20,7 @@ use crate::overlays::Overlay;
 use crate::overlays::shape::token_named;
 use crate::pages::{Ctx, CtxMut, Outcome};
 use crate::services::Services;
-use crate::widgets::tokens::{reached, said_after};
+use crate::widgets::tokens::{has_rows_line, reached, said_after};
 
 use super::editing::set_mod;
 use super::generators::type_gen;
@@ -47,6 +47,28 @@ impl PartialEq for GenTokens {
 }
 
 impl GenTokens {
+    /// The rows the token under the cursor writes on the phrase the grid shows, with the column
+    /// they're on, for the grid beside the panel to light as the buffer's rows line does
+    /// (decisions 460 and 470): a generator's setting with a rows line, on the cursor's phrase.
+    pub(crate) fn token_rows(&self, ctx: &Ctx) -> Option<(ShapeColumn, Vec<usize>)> {
+        let Control::Gen {
+            phrase,
+            generator,
+            param,
+        } = self.control
+        else {
+            return None;
+        };
+        if !has_rows_line(param) || ctx.phrase_id() != Some(phrase) {
+            return None;
+        }
+        let track = ctx.song().tracks.get(ctx.cursor().track)?;
+        let found = track.phrases.get(&phrase)?;
+        let generator = found.generators().get(generator)?;
+        let table = Table::of_generator(generator, found.steps(), 0)?;
+        Some((generator.column, table.rows(&self.tokens.field, self.at)))
+    }
+
     /// Whether a Gen page setting, `control`, has a buffer: its text is in a grammar.
     pub(crate) fn opens(services: &Services, view: View, control: Control) -> bool {
         field_of(services, view, control).is_some()
