@@ -393,7 +393,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &MixerPage, ctx: &Ctx) {
                 }),
             };
             let style = match switched {
-                _ if selected => theme::cursor(ctx.mode()),
+                _ if selected => ctx.cursor_on(ctx.view()),
                 _ if waiting => theme::dim(),
                 Some((why, _)) if why.is_on() => why.style(),
                 _ if muted.is_on() => theme::dim(),

@@ -488,7 +488,10 @@ impl Buffer<'_> {
         let width = (widest.max(room.min(32)) + 3).max(self.hint.chars().count() + 4) as u16;
         let height = lines.len() as u16 + 2;
         let window = popup::below(area, row, column, width, height);
+        // A buffer has the keys while it's open, so it's framed in the focus colour over the
+        // page or panel it's open on (decision 475).
         let border = popup::border()
+            .border_style(theme::focus())
             .title(format!(" {} ", self.title))
             .title_bottom(format!(" {} ", self.hint))
             .title_style(Style::new().add_modifier(Modifier::BOLD));

@@ -44,6 +44,8 @@ pub(crate) struct Device {
     /// What comes after the controls, a space on, as a generator's `· Note 00–0F`.
     after: Option<Line<'static>>,
     focused: bool,
+    /// Whether its page has the keys beside another area that could take them.
+    held: bool,
 }
 
 impl Device {
@@ -55,6 +57,7 @@ impl Device {
             controls: Vec::new(),
             after: None,
             focused: false,
+            held: false,
         }
     }
 
@@ -97,6 +100,12 @@ impl Device {
     #[must_use]
     pub(crate) fn focused(self, focused: bool) -> Self {
         Self { focused, ..self }
+    }
+
+    /// Whether its page has the keys while another area that could take them is on screen, so
+    /// the device with the cursor is framed in the focus colour (decision 475).
+    pub(crate) fn held(self, held: bool) -> Self {
+        Self { held, ..self }
     }
 
     /// Where a device's settings go in its area: in from its frame, after a blank line.
@@ -158,7 +167,9 @@ pub(crate) fn rack_areas(
 
 impl Widget for Device {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let frame = if self.focused {
+        let frame = if self.focused && self.held {
+            theme::FOCUS
+        } else if self.focused {
             theme::OVERLAY2
         } else {
             theme::SURFACE1

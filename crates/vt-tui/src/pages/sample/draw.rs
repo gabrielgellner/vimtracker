@@ -548,6 +548,7 @@ fn setting_value(state: &SamplePage, shown: &Shown, setting: SampleSetting) -> L
         look: CellLook {
             focus: Focus::at(state.setting == Some(setting), false),
             mode: Mode::Normal,
+            away: false,
             typed: None,
             query: None,
             name_labels: "",

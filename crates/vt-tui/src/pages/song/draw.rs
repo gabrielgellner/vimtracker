@@ -166,7 +166,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &SongView, ctx: &Ctx) {
                 text
             };
             let style = if selected {
-                theme::cursor(ctx.mode())
+                ctx.cursor_on(ctx.view())
             } else if chosen {
                 theme::selected()
             } else if let Some(faint) = faint {

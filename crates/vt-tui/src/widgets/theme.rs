@@ -50,6 +50,24 @@ pub fn cursor(mode: Mode) -> Style {
     Style::new().fg(BASE).bg(color)
 }
 
+/// The colour of the frame the keys go to, where another area on screen could take them: the
+/// grid beside Gen's panel, the macro panel, the shape panel or a buffer over its page (decision
+/// 475). It's the blue of the Normal badge, which says the keys are on a page; no frame, role or
+/// cursor has it, and it isn't Insert's green, which lights the grid's frame while typing.
+pub const FOCUS: Color = BLUE;
+
+/// The frame, and the names set in it, of the area the keys go to (decision 475).
+pub fn focus() -> Style {
+    Style::new().fg(FOCUS)
+}
+
+/// The cursor of an area beside the one with the keys: the cursor's colour sat back toward the
+/// screen, so it's seen to be there but the eye goes to the side that answers keys (decision
+/// 475).
+pub fn cursor_away() -> Style {
+    Style::new().fg(BASE).bg(dimmed(ROSEWATER))
+}
+
 /// A selection, and the picker's highlighted row. The text stays readable on it.
 pub fn selected() -> Style {
     Style::new()

@@ -1124,14 +1124,16 @@ impl<'a> Grid<'a> {
         // The grid is a device, framed as the track page's are, its parts named in its top edge:
         // dim while it's looked at, as a device without the cursor is, and green in Insert, so
         // Insert lights the frame rather than drawing a box that wasn't there. It's always there,
-        // so nothing moves when Insert starts.
-        let insert = ctx.mode() == Mode::Insert;
-        let edge = Style::new().fg(if insert {
-            theme::GREEN
+        // so nothing moves when Insert starts. With another area on screen that could take the
+        // keys, Gen's panel beside it, the macro panel or the shape panel, it's in the focus
+        // colour while it has them, and Insert in the panel leaves it be (decision 475).
+        let lit = if ctx.mode() == Mode::Insert && ctx.keys_in(View::Phrase) {
+            Some(theme::GREEN)
         } else {
-            theme::SURFACE1
-        });
-        let named = if insert { edge } else { theme::dim() };
+            ctx.framed(View::Phrase).then_some(theme::FOCUS)
+        };
+        let edge = Style::new().fg(lit.unwrap_or(theme::SURFACE1));
+        let named = if lit.is_some() { edge } else { theme::dim() };
         // The rows the shape panel's token writes, or the token of the buffer open in Gen's panel
         // beside the grid (decision 470).
         let token_rows = ctx
@@ -1597,7 +1599,7 @@ impl<'a> Grid<'a> {
                 let (from, to) = selected_columns(step, selected.scope, len);
                 (start.clamp(from, to), end.clamp(from, to))
             });
-            styles[first..last].fill(theme::cursor(ctx.mode()));
+            styles[first..last].fill(ctx.cursor_on(View::Phrase));
         }
     }
 }

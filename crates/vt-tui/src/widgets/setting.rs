@@ -34,11 +34,14 @@ impl Focus {
 }
 
 /// What the modes say about a setting's cell: where the cursor is on it, the mode the cursor's
-/// colour comes from, what Insert has typed, and a field jump's query and labels.
+/// colour comes from, whether the keys are elsewhere, what Insert has typed, and a field jump's
+/// query and labels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CellLook<'a> {
     pub focus: Focus,
     pub mode: Mode,
+    /// Whether the keys are in another area on screen, so the cursor sits back (decision 475).
+    pub away: bool,
     /// What Insert has typed, while it's on this cell.
     pub typed: Option<&'a str>,
     /// A field jump's query, while one is under way.
@@ -47,6 +50,17 @@ pub struct CellLook<'a> {
     pub(crate) name_labels: &'a str,
     /// The label a jump puts over the value's first letter.
     pub(crate) value_label: Option<char>,
+}
+
+impl CellLook<'_> {
+    /// The cursor's style on this cell: the mode's, or sat back while the keys are elsewhere.
+    pub(crate) fn cursor(&self) -> Style {
+        if self.away {
+            theme::cursor_away()
+        } else {
+            theme::cursor(self.mode)
+        }
+    }
 }
 
 /// A part of a setting's value as text: while Insert has the cursor on it, what's been typed, with
@@ -61,7 +75,7 @@ fn part_text(look: &CellLook, part: Focus, value: impl FnOnce() -> String) -> St
 /// A part of a setting's value's style: the cursor's under the cursor, and otherwise `resting`.
 fn part_style(look: &CellLook, part: Focus, default: bool) -> Style {
     if look.focus == part {
-        theme::cursor(look.mode)
+        look.cursor()
     } else {
         resting(default)
     }
