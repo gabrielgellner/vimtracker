@@ -11,8 +11,8 @@ use crate::song::Song;
 use crate::scale::Scale;
 use crate::selection::StepRange;
 use crate::shape::{
-    Context, FillKind, GenCell, RowView, Shape, ShapeColumn, Source, TonnetzVoice, copy_fx,
-    counted, is_empty, render_into,
+    Context, FillKind, GenCell, MAX_LIST, RowView, Shape, ShapeColumn, Source, TonnetzVoice,
+    copy_fx, counted, is_empty, kept_list, render_into,
 };
 use crate::step::{FxCommand, FxSlot, Note, Step};
 
@@ -41,6 +41,10 @@ pub struct Generator {
     pub column: ShapeColumn,
     pub span: Span,
     pub shape: Shape,
+    /// The values a `List` goes through, up to [`MAX_LIST`], one a row: empty unless its fill is a
+    /// `List`. Kept here rather than in the `Copy` shape, so no other fill, undo step or engine run
+    /// pays for them; macros don't reach it, so `held` doesn't carry it.
+    list: Box<[u8]>,
     /// The first stored row it covers.
     first: usize,
     /// Its column's cell from under each of its rows, on a step holding nothing else: what the
@@ -208,17 +212,32 @@ fn same(column: ShapeColumn, owns: Owns, ours: bool, a: &Step, b: &Step) -> bool
 
 impl Generator {
     /// A generator not yet on any rows, to make live with
-    /// [`Phrase::add_generator`](crate::song::Phrase::add_generator).
+    /// [`Phrase::add_generator`](crate::song::Phrase::add_generator). A `List` goes through its two
+    /// ends until it's given a list ([`Generator::with_list`]).
     pub fn new(column: ShapeColumn, span: Span, shape: Shape) -> Self {
         Self {
             column,
             span,
+            list: kept_list(&shape, &[]),
             shape,
             first: 0,
             under: Vec::new(),
             seen: Vec::new(),
             held: None,
         }
+    }
+
+    /// The same, a `List` going through these values, its first [`MAX_LIST`] of them. Any other
+    /// fill keeps none.
+    #[must_use]
+    pub fn with_list(mut self, list: &[u8]) -> Self {
+        self.list = kept_list(&self.shape, list);
+        self
+    }
+
+    /// The values a `List` goes through: none for any other fill.
+    pub fn list(&self) -> &[u8] {
+        &self.list
     }
 
     /// The stored rows it covers now.
@@ -279,7 +298,7 @@ impl Generator {
     /// column, the rows it could change and whether its column is empty without it, with what a
     /// `Follow` can read and the loop it reads. It has none while it covers no rows.
     pub fn context<'a>(
-        &self,
+        &'a self,
         under: &[Step],
         sources: &'a [Source],
         source: Option<&'a [Step]>,
@@ -291,6 +310,7 @@ impl Generator {
             generates: is_empty(under, rows, self.column),
             sources,
             source,
+            list: &self.list,
         })
     }
 
@@ -347,11 +367,18 @@ impl Generator {
         self.render(steps, source);
     }
 
-    /// Take a new shape and write it. One that owns more of each note, as `Acid` owns its velocity
-    /// and gate, takes what's there now as what's under those, and one that owns less puts back
-    /// what was under them first.
-    pub(crate) fn reshape(&mut self, steps: &mut [Step], shape: Shape, source: Option<&[Step]>) {
+    /// Take a new shape and write it, a `List` going through `list`, or with none, its own. One
+    /// that owns more of each note, as `Acid` owns its velocity and gate, takes what's there now
+    /// as what's under those, and one that owns less puts back what was under them first.
+    pub(crate) fn reshape(
+        &mut self,
+        steps: &mut [Step],
+        shape: Shape,
+        list: Option<&[u8]>,
+        source: Option<&[Step]>,
+    ) {
         self.restore(steps);
+        self.list = kept_list(&shape, list.unwrap_or(&self.list));
         self.shape = shape;
         let owns = owns(&self.shape);
         for (offset, under) in self.under.iter_mut().enumerate() {
@@ -403,7 +430,15 @@ impl Generator {
         };
         let mut cells = vec![GenCell::Under; range.len()];
         let shape = self.heard();
-        render_into(steps, range, self.column, &shape, source, &mut cells);
+        render_into(
+            steps,
+            range,
+            self.column,
+            &shape,
+            &self.list,
+            source,
+            &mut cells,
+        );
         for (step, cell) in steps.iter_mut().skip(range.first).zip(cells) {
             cell.apply(self.column, step);
         }
@@ -520,6 +555,9 @@ impl Generator {
             column: file.column.into(),
             span: file.span,
             shape: file.shape,
+            // As saved: an older song's `List`, saved with its values in its shape, has none
+            // (no backwards compatibility).
+            list: file.list.into_iter().take(MAX_LIST).collect(),
             first: file.first,
             under: file.under,
             seen: Vec::new(),
@@ -542,6 +580,9 @@ pub(crate) struct GeneratorFile {
     column: ColumnFile,
     span: Span,
     shape: Shape,
+    /// A `List`'s values, saved only for one.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    list: Vec<u8>,
     first: usize,
     under: Vec<Step>,
 }
@@ -552,6 +593,7 @@ impl GeneratorFile {
             column: generator.column.into(),
             span: generator.span,
             shape: generator.shape,
+            list: generator.list.to_vec(),
             first: generator.first,
             under: generator.under.clone(),
         }

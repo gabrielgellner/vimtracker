@@ -130,7 +130,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Beats(50),
                                 seed: 5,
                             ),

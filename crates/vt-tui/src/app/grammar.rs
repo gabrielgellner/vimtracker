@@ -80,6 +80,8 @@ pub(crate) enum Change {
     Shape {
         column: ShapeColumn,
         shape: Box<Shape>,
+        /// A `List`'s values, as the panel held them.
+        list: Box<[u8]>,
         steps: usize,
         tracks: usize,
     },
@@ -1024,6 +1026,7 @@ impl App {
             Change::Shape {
                 column,
                 shape,
+                list,
                 steps,
                 tracks,
             } => {
@@ -1043,7 +1046,7 @@ impl App {
                     StepRange::between(self.services.cursor.step, end),
                     tracks,
                     *column,
-                    **shape,
+                    (**shape, list),
                     self.modes.view,
                 );
             }
@@ -1228,12 +1231,17 @@ impl App {
                 Change::Replace { field, value, .. } => {
                     self.fill(selection.range, selection.tracks, field, &value);
                 }
-                Change::Shape { column, shape, .. } => {
+                Change::Shape {
+                    column,
+                    shape,
+                    list,
+                    ..
+                } => {
                     self.services.shape_again(
                         selection.range,
                         selection.tracks,
                         column,
-                        *shape,
+                        (*shape, &list),
                         self.modes.view,
                     );
                 }
@@ -1278,6 +1286,7 @@ impl App {
         self.grammar.last_change = Some(Change::Shape {
             column: panel.column,
             shape: Box::new(panel.shape),
+            list: panel.kept_list(),
             steps: panel.selection.range.len(),
             tracks: panel.selection.tracks.count(),
         });

@@ -203,9 +203,11 @@ struct GenRun {
     rows: StepRange,
     /// Where its cells start in the scratch's.
     cells: usize,
-    /// The shape it last rendered, as heard, and the column it rendered on, a Note column with
-    /// the scale it went through, if it has since the version came.
-    rendered: Option<(Shape, ShapeColumn)>,
+    /// The hash of the values its `List` goes through, from its [`Heard`].
+    list: u64,
+    /// The shape it last rendered, as heard, the column it rendered on, a Note column with the
+    /// scale it went through, and its list's hash, if it has since the version came.
+    rendered: Option<(Shape, ShapeColumn, u64)>,
     /// Which pass of its phrase, or of its lane, it was last read on.
     pass: i64,
     /// How many times it has rendered since the version came.
@@ -236,6 +238,19 @@ struct Heard {
     /// The variation whose cells are in `now`, and the one before it, whose are in `was`.
     now: Option<i64>,
     was: Option<i64>,
+    /// The hash of the values its `List` goes through, worked out on the edit thread, which its
+    /// run's render key holds, so the list is never copied to the audio thread.
+    list: u64,
+}
+
+/// A `List`'s values hashed, FNV-1a, with their count, for a run's render key.
+fn list_hash(list: &[u8]) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+    let count = list.len() as u64;
+    for byte in count.to_le_bytes().iter().chain(list) {
+        hash = (hash ^ u64::from(*byte)).wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
 }
 
 /// Every live generator's [`Heard`], by key.
@@ -264,6 +279,7 @@ impl Memory {
                         length,
                         now: None,
                         was: None,
+                        list: list_hash(live.list()),
                     });
                     cells += length;
                 }
@@ -553,18 +569,20 @@ impl GenScratch {
                 break;
             }
             let under = unders.get(at.track, at.phrase, index).unwrap_or_default();
+            let kept = self.memory.find((at.track, at.phrase, index));
             *run = Some(GenRun {
                 generator: index,
                 column: generator.column,
                 rows,
                 cells,
+                list: kept.map_or(0, |at| self.memory.kept[at].list),
                 rendered: None,
                 pass: 0,
                 renders: 0,
                 generates: is_empty(under, rows, generator.column),
                 told: None,
                 report: None,
-                kept: self.memory.find((at.track, at.phrase, index)),
+                kept,
                 variation: None,
             });
             cells += length;
@@ -659,6 +677,7 @@ impl GenScratch {
                 generates: run.generates,
                 sources: &[],
                 source,
+                list: generator.list(),
             };
             let on_lane = match run.column {
                 ShapeColumn::Fx { slot, .. } if generator.span == Span::Lane => Some(slot),
@@ -716,13 +735,22 @@ impl GenScratch {
             }
             let length = run.rows.len().min(MAX_PHRASE_STEPS);
             let cells = &mut self.cells[run.cells..run.cells + length];
-            if run.rendered != Some((heard, column)) || run.variation != variation {
+            let key = (heard, column, run.list);
+            if run.rendered != Some(key) || run.variation != variation {
                 // A `Follow` whose source has gone leaves what it last wrote, as the edit thread's.
                 if heard.kind == FillKind::Follow && source.is_none() {
                     continue;
                 }
                 let render = |cells: &mut [GenCell]| {
-                    render_into(under, run.rows, column, &heard, source, cells);
+                    render_into(
+                        under,
+                        run.rows,
+                        column,
+                        &heard,
+                        generator.list(),
+                        source,
+                        cells,
+                    );
                 };
                 match (kept.map(|at| &mut self.memory.kept[at]), variation) {
                     (Some(kept), Some(variation)) if kept.length == length => {
@@ -738,7 +766,7 @@ impl GenScratch {
                     }
                     _ => render(cells),
                 }
-                run.rendered = Some((heard, column));
+                run.rendered = Some(key);
                 run.variation = variation;
                 run.renders = run.renders.wrapping_add(1);
             }
@@ -870,6 +898,7 @@ mod tests {
             column,
             span,
             shape,
+            list: Box::default(),
         };
         Arc::unwrap_or_clone(edit(&Arc::new(song), &action).expect("the edit applies"))
     }
@@ -1046,6 +1075,7 @@ mod tests {
             phrase: 0,
             generator: 0,
             shape,
+            list: None,
         };
         Arc::unwrap_or_clone(edit(&Arc::new(song), &action).expect("the edit applies"))
     }
@@ -1077,6 +1107,88 @@ mod tests {
         assert!(reported > 2, "{reported} passes reported");
         let acid = engine.generators_heard(0).find(|heard| heard.moving);
         assert!(acid.is_some_and(|heard| heard.renders > 0));
+    }
+
+    /// One synth track playing a phrase of `rows` notes, a `List` of these values on its
+    /// velocities, kept on the generator, each value for a run of 2 rows.
+    fn listed(rows: usize, list: &[u8]) -> Song {
+        let mut song = Song::new(1);
+        song.millibpm = vt_model::constants::MAX_MILLIBPM;
+        song.tracks[0].machine = Machine::Plaits(SynthVoice::Acid);
+        let notes = Phrase::from_steps(vec!["C-3 64 --- --- ---".parse().unwrap(); rows]);
+        song.tracks[0].phrases.insert(0, Arc::new(notes));
+        let action = Action::Generate {
+            track: 0,
+            phrase: 0,
+            column: ShapeColumn::Velocity,
+            span: Span::rows(StepRange::between(0, rows - 1)),
+            shape: Shape {
+                run: 2,
+                ..shape(FillKind::List, 0, 0, Where::AllRows)
+            },
+            list: list.into(),
+        };
+        Arc::unwrap_or_clone(edit(&Arc::new(song), &action).expect("the edit applies"))
+    }
+
+    /// A `List` of 256 values, moving as its `Run` is held at 1, plays a value a row from its
+    /// generator's list, borrowed from the version's song, and a phrase of 300 rows goes round
+    /// it. A new version with another list, its hash worked out on the edit thread, is heard from
+    /// the next row; rendering, swapping and reporting allocate and free nothing.
+    #[test]
+    fn a_list_edit_is_heard_from_the_next_row_without_allocating() {
+        use vt_model::shape::MAX_LIST;
+        let rows = 300;
+        let first: Vec<u8> = (0..MAX_LIST).map(|at| (at % 0x80) as u8).collect();
+        let second: Vec<u8> = first.iter().map(|value| 0x7F - value).collect();
+        let mut edited = Some(Handover::new(version(&listed(rows, &second))));
+        let hash = |handover: &Handover| handover.scratch.memory.kept[0].list;
+        let unedited = Handover::new(version(&listed(rows, &first)));
+        assert_ne!(hash(edited.as_ref().unwrap()), hash(&unedited));
+        let mut engine = Engine::new(RATE, version(&listed(rows, &first)));
+        engine.play_from(0);
+        engine.hold_generator(0, ShapeColumn::Velocity, GenParam::Run, Some(1));
+        let mut out = vec![0.0; BLOCK * 2];
+        let mut heard: Vec<(usize, Option<GenCell>)> = Vec::with_capacity(4 * rows);
+        let (mut violations, mut old) = (0, Vec::with_capacity(4));
+        // Edited as the fifth row plays.
+        let edit_after = 4;
+        while heard.last().is_none_or(|(row, _)| *row < rows - 1) {
+            let swap = heard.last().is_some_and(|(row, _)| *row == edit_after);
+            let next = swap.then(|| edited.take()).flatten();
+            let ((), count) = forbidden(|| {
+                if let Some(next) = next {
+                    old.push(engine.hand_over(next));
+                }
+                engine.process(&mut out);
+                engine.take_gen_reports(|_, report| {
+                    if let GenReport::Row(row) = report {
+                        heard.push((row.row, row.cell));
+                    }
+                });
+            });
+            violations += count;
+        }
+        assert_eq!(violations, 0);
+        assert!(edited.is_none(), "the edit came");
+        let velocity = |list: &[u8], row: usize| Some(GenCell::Velocity(list[row % MAX_LIST]));
+        let at = |row: usize| {
+            heard
+                .iter()
+                .find(|(at, _)| *at == row)
+                .and_then(|(_, cell)| *cell)
+        };
+        for row in 0..=edit_after {
+            assert_eq!(at(row), velocity(&first, row), "row {row}, before the edit");
+        }
+        for row in edit_after + 1..rows {
+            assert_eq!(at(row), velocity(&second, row), "row {row}, after it");
+        }
+        assert_eq!(
+            at(MAX_LIST + 1),
+            Some(GenCell::Velocity(second[1])),
+            "round"
+        );
     }
 
     /// The time in the middle of some, by length: what one of them takes when nothing else has the
@@ -1139,7 +1251,15 @@ mod tests {
         for density in 0..rows as u8 {
             shape.place = Where::Beats(density);
             let started = Instant::now();
-            render_into(&under, span, generator.column, &shape, None, &mut cells);
+            render_into(
+                &under,
+                span,
+                generator.column,
+                &shape,
+                generator.list(),
+                None,
+                &mut cells,
+            );
             renders_timed.push(started.elapsed());
         }
         let render_worst = renders_timed.iter().copied().max().unwrap_or_default();
@@ -1215,6 +1335,7 @@ mod tests {
                     range,
                     column,
                     &ramp,
+                    &[],
                     None,
                     &mut cells[..range.len()],
                 );
@@ -1230,6 +1351,7 @@ mod tests {
                         range,
                         column,
                         &ramp,
+                        &[],
                         None,
                         &mut cells[..range.len()],
                     );

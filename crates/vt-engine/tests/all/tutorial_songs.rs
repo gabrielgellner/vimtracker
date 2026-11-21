@@ -35,8 +35,7 @@ use vt_model::settings::{SettingId, glide_value};
 use vt_model::shape::{
     Acid, Bar, CellStart, Cells, Divisions, DrumPart, Edge, FillKind, Follow, GenParam, Grids,
     Loops, MoveList, Mutations, Random, Ring, Role, Shape, ShapeColumn, Source, Tonnetz,
-    TonnetzMove, TonnetzVoice, Values, Walk, WaveRate, Where, World, divisions_seed, on_track,
-    track_seed,
+    TonnetzMove, TonnetzVoice, Walk, WaveRate, Where, World, divisions_seed, on_track, track_seed,
 };
 use vt_model::song::{GlideMode, Lane, Machine, Phrase, Song, SynthVoice, Track, VoiceMode};
 use vt_model::speed::Speed;
@@ -224,6 +223,7 @@ fn generate(song: Song, track: usize, column: ShapeColumn, rows: usize, shape: S
             column,
             span: Span::rows(StepRange::between(0, rows - 1)),
             shape,
+            list: Box::default(),
         },
     )
 }
@@ -398,6 +398,7 @@ fn deja_vu() -> Song {
                 command: FxCommand::Cha,
             },
             shape: chances,
+            list: Box::default(),
         },
     );
     set(&mut song, 2, "hat.decay", 0x28);
@@ -897,6 +898,7 @@ fn live_generators() -> Song {
             },
             span: Span::Lane,
             shape: wave,
+            list: Box::default(),
         },
     );
     set(&mut song, 2, "acid.resonance", 0xB0);
@@ -1675,6 +1677,7 @@ fn clock_multiplier() -> Song {
             },
             span: Span::Lane,
             shape: skip,
+            list: Box::default(),
         },
     );
     gen_knob(
@@ -2192,8 +2195,7 @@ fn kria_patch() -> PatchPreset {
             true => Where::AllRows,
             false => Where::Every(every),
         };
-        let mut list = shape(FillKind::List, 0, 0, place);
-        list.values = Values::new(&values);
+        let list = shape(FillKind::List, 0, 0, place);
         song = apply(
             song,
             &Action::Generate {
@@ -2202,6 +2204,7 @@ fn kria_patch() -> PatchPreset {
                 column: ShapeColumn::Fx { slot, command },
                 span: Span::Lane,
                 shape: list,
+                list: values.into(),
             },
         );
     }
@@ -2545,6 +2548,7 @@ fn marbles_t_hat_and_percussion_take_every_row_between_them() {
                 phrase: 0,
                 generator: 0,
                 shape,
+                list: None,
             },
         );
     }
@@ -2613,6 +2617,7 @@ fn the_variation_is_like_its_line_and_order_3_cold_writes_the_line_back() {
             phrase: 0,
             generator: 0,
             shape,
+            list: None,
         },
     )
     .unwrap();

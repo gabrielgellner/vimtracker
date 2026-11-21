@@ -124,29 +124,34 @@ pub enum Action {
         step: usize,
         value: FieldValue,
     },
-    /// Fill a column across steps with a ramp or random values.
+    /// Fill a column across steps with a ramp or random values, a `List` going through `list`.
     Shape {
         track: usize,
         phrase: u32,
         range: StepRange,
         column: ShapeColumn,
         shape: Shape,
+        list: Box<[u8]>,
     },
     /// Keep a shape live on a column of a phrase, on rows or on the column's lane, starting from
-    /// the values there.
+    /// the values there. A `List` goes through `list`, which the generator keeps.
     Generate {
         track: usize,
         phrase: u32,
         column: ShapeColumn,
         span: Span,
         shape: Shape,
+        list: Box<[u8]>,
     },
-    /// Give one of a phrase's live generators, by its place in the phrase's list, a new shape.
+    /// Give one of a phrase's live generators, by its place in the phrase's list, a new shape: a
+    /// `List` goes through `list`, or with none, the list it has, as a macro or the Gen page
+    /// reshapes it.
     Reshape {
         track: usize,
         phrase: u32,
         generator: usize,
         shape: Shape,
+        list: Option<Box<[u8]>>,
     },
     /// Apply one of a phrase's live generators, leaving its values as plain ones.
     ApplyGenerator {

@@ -50,6 +50,7 @@ pub(super) fn edit(next: &mut Song, action: &Action) -> Result<(), EditError> {
             range,
             column,
             shape,
+            list,
         } => {
             let found = track_mut(next, *track)?
                 .phrases
@@ -59,7 +60,7 @@ pub(super) fn edit(next: &mut Song, action: &Action) -> Result<(), EditError> {
             // Once, as plain notes, a phrase may copy its own loop.
             let source = followed(next, shape)?;
             let source = source.as_ref().map(|source| source.loop_steps());
-            for (row, step) in written_from(found.steps(), *range, *column, shape, source) {
+            for (row, step) in written_from(found.steps(), *range, *column, shape, list, source) {
                 *step_mut(next, *track, *phrase, row)? = step;
             }
         }

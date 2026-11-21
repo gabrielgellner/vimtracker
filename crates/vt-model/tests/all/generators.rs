@@ -8,7 +8,7 @@ use vt_model::generator::{Span, applied};
 use vt_model::project::{load_song, save_song};
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
-use vt_model::shape::{Acid, Bits, Edge, FillKind, Pink, Shape, ShapeColumn, Values, Walk, Where};
+use vt_model::shape::{Acid, Bits, Edge, FillKind, Pink, Shape, ShapeColumn, Walk, Where};
 use vt_model::song::{Lane, Phrase, Song};
 use vt_model::step::{FxCommand, Note, Step};
 
@@ -72,6 +72,17 @@ fn all(rows: usize) -> Span {
 }
 
 fn generate(song: &Arc<Song>, column: ShapeColumn, span: Span, shape: Shape) -> Arc<Song> {
+    generate_list(song, column, span, shape, &[])
+}
+
+/// The same, a `List` going through `list`.
+fn generate_list(
+    song: &Arc<Song>,
+    column: ShapeColumn,
+    span: Span,
+    shape: Shape,
+    list: &[u8],
+) -> Arc<Song> {
     edit(
         song,
         &Action::Generate {
@@ -80,6 +91,7 @@ fn generate(song: &Arc<Song>, column: ShapeColumn, span: Span, shape: Shape) -> 
             column,
             span,
             shape,
+            list: list.into(),
         },
     )
     .unwrap()
@@ -93,6 +105,7 @@ fn reshape(song: &Arc<Song>, generator: usize, shape: Shape) -> Arc<Song> {
             phrase: 0,
             generator,
             shape,
+            list: None,
         },
     )
     .unwrap()
@@ -137,6 +150,7 @@ fn a_live_generator_writes_what_the_panel_would_and_stays_live() {
             range: StepRange::between(0, 3),
             column: ShapeColumn::Velocity,
             shape,
+            list: Box::default(),
         },
     )
     .unwrap();
@@ -454,7 +468,6 @@ fn a_live_generator_round_trips_through_saving() {
     };
     let mut wave = ramp(0x30, 0x50, Where::Notes);
     wave.kind = FillKind::List;
-    wave.values = Values::new(&[0x30, 0x40, 0x48]);
     let one = generate(
         &start,
         ShapeColumn::Velocity,
@@ -462,15 +475,18 @@ fn a_live_generator_round_trips_through_saving() {
         ramp(0x10, 0x40, Where::Euclid { hits: 3, rotate: 1 }),
     );
     let two = generate(&one, CUT, all(4), ramp(0x00, 0x40, Where::Commands));
-    let three = generate(&two, note, all(4), wave);
+    let three = generate_list(&two, note, all(4), wave, &[0x30, 0x40, 0x48]);
     let folder = std::env::temp_dir().join(format!("vt-generators-{}", std::process::id()));
     let _ = fs::remove_dir_all(&folder);
     save_song(&folder, &three).unwrap();
     let text = fs::read_to_string(folder.join("song.ron")).unwrap();
     assert!(text.contains("generators"), "{text}");
+    // The list is saved beside its shape, and only for the `List`.
+    assert_eq!(text.matches("list:").count(), 1, "{text}");
     let loaded = load_song(&folder).unwrap();
     let _ = fs::remove_dir_all(&folder);
     assert_eq!(phrase(&loaded), phrase(&three));
+    assert_eq!(phrase(&loaded).generators()[2].list(), [0x30, 0x40, 0x48]);
     // Still live after a reload: a reshape works, and a hand edit applies it.
     let loaded = Arc::new(loaded);
     let reshaped = reshape(

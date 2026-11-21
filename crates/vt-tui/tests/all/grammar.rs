@@ -1850,7 +1850,7 @@ fn a_list_fill_types_its_values_and_goes_round_them() {
     ]);
     keys(&mut app, "lvGS");
     let panel = |app: &App| app.overlays.shape.clone().unwrap();
-    let list = |app: &App| panel(app).shape.values.to_string();
+    let list = |app: &App| vt_model::shape::hex_list(&panel(app).list);
 
     // It starts as the two ends, so it sounds as Alternate did, and they're hidden.
     keys(&mut app, "K/list<Enter>");
@@ -1885,7 +1885,13 @@ fn a_list_fill_types_its_values_and_goes_round_them() {
     );
     assert_eq!(list(&app), "07 40", "nothing typed keeps the list");
     keys(&mut app, "i1020304050607071727<Enter>");
-    assert_eq!(list(&app), "10 20 30 40 50 60 70 71", "eight at most");
+    assert_eq!(
+        list(&app),
+        "10 20 30 40 50 60 70 71 72 07",
+        "more than eight, as many as a phrase has rows"
+    );
+    keys(&mut app, &format!("i{}<Enter>", "40".repeat(300)));
+    assert_eq!(panel(&app).list, [0x40; 256], "256 at most");
     keys(&mut app, "iFF 20<Enter>");
     assert_eq!(list(&app), "7F 20", "a value stops at the column's top");
     keys(&mut app, "i30<Esc>");

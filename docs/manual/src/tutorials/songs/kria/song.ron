@@ -239,7 +239,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Beats(60),
                                 seed: 3,
                                 acid: (

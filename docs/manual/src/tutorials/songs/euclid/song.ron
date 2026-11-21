@@ -127,7 +127,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Euclid(
                                     hits: 5,
                                     rotate: 0,
@@ -271,7 +270,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Euclid(
                                     hits: 2,
                                     rotate: 4,
@@ -412,7 +410,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Euclid(
                                     hits: 7,
                                     rotate: 0,
@@ -554,7 +551,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Euclid(
                                     hits: 7,
                                     rotate: 2,
