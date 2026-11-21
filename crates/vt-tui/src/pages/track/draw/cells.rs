@@ -59,6 +59,8 @@ const SWING: &str = "Swing ";
 pub(super) struct TrackCells<'a> {
     /// The setting the cursor is on, which is drawn in the cursor's colour, if it's on one here.
     here: Option<Control>,
+    /// Whether the keys are in another area, so the cursor sits back (decision 475).
+    away: bool,
     /// Whether the cursor is on its setting's fine digits.
     fine: bool,
     ctx: &'a Ctx<'a>,
@@ -73,7 +75,8 @@ pub(super) struct TrackCells<'a> {
 impl<'a> TrackCells<'a> {
     pub(super) fn new(page: &'a TrackPage, ctx: &'a Ctx<'a>, track: &'a Track) -> Self {
         Self {
-            here: page.has_keys(ctx).then(|| page.control_here(ctx)),
+            here: Some(page.control_here(ctx)),
+            away: !page.has_keys(ctx),
             fine: page.fine,
             ctx,
             track,
@@ -86,6 +89,7 @@ impl<'a> TrackCells<'a> {
     pub(super) fn apart(ctx: &'a Ctx<'a>, track: &'a Track, here: Option<Control>) -> Self {
         Self {
             here,
+            away: false,
             fine: false,
             ctx,
             track,
@@ -139,7 +143,10 @@ impl<'a> TrackCells<'a> {
             text,
             place,
             state,
-            look: ctx.look_on(control, Focus::at(here, fine)),
+            look: CellLook {
+                away: self.away,
+                ..ctx.look_on(control, Focus::at(here, fine))
+            },
         }
     }
 
@@ -147,9 +154,12 @@ impl<'a> TrackCells<'a> {
     pub(super) fn titles(&self, device: &DeviceSpec) -> Vec<Line<'static>> {
         let mut lines: Vec<Line<'static>> = Vec::new();
         for &control in device.title.iter().flatten() {
-            let look = self
-                .ctx
-                .look_on(control, Focus::at(Some(control) == self.here, false));
+            let look = CellLook {
+                away: self.away,
+                ..self
+                    .ctx
+                    .look_on(control, Focus::at(Some(control) == self.here, false))
+            };
             let line = self.title(control, look);
             // Steps' `From` is the loop's number, a space after it, `Loop 1`, as the title has no
             // room for its name (decision 428).

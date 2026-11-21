@@ -133,6 +133,7 @@ fn colour_name(colour: Color) -> String {
         (theme::SURFACE0, "SURFACE0"),
         (theme::BASE, "BASE"),
         (theme::MANTLE, "MANTLE"),
+        (theme::dimmed(theme::ROSEWATER), "AWAY"),
     ];
     match named.iter().find(|(named, _)| *named == colour) {
         Some((_, name)) => (*name).to_owned(),

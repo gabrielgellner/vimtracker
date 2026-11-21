@@ -195,10 +195,30 @@ impl TrackPage {
         }
     }
 
-    /// Whether the keys are in the page as it's drawn: always, but for Gen beside the grid while
-    /// they're in the grid, which draws no cursor in it then (decision 467).
+    /// The view the page is drawn as: Gen's, or the track page's.
+    fn drawn_as(&self) -> View {
+        match self.page {
+            Page::Gen => View::Gen,
+            _ => View::Track,
+        }
+    }
+
+    /// Whether the keys are in the page as it's drawn: but for Gen beside the grid while they're
+    /// in the grid (decision 467), and a panel or buffer that has them, where its cursor sits
+    /// back (decision 475).
     pub(crate) fn has_keys(&self, ctx: &Ctx) -> bool {
-        !self.beside || ctx.view() == View::Gen
+        ctx.keys_in(self.drawn_as())
+    }
+
+    /// The cursor's style on the page: the mode's, or sat back while the keys are elsewhere.
+    pub(crate) fn cursor_style(&self, ctx: &Ctx) -> ratatui::style::Style {
+        ctx.cursor_on(self.drawn_as())
+    }
+
+    /// Whether the device with the cursor is framed in the focus colour: the page has the keys
+    /// and another area that could take them is on screen (decision 475).
+    pub(crate) fn framed(&self, ctx: &Ctx) -> bool {
+        ctx.framed(self.drawn_as())
     }
 
     /// The page's devices, or none with no track. An FX slot turned to its second page has that

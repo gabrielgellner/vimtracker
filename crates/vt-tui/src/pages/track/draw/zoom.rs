@@ -134,7 +134,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx, t
         CellWidths::ZOOM,
     );
     if let Some(grid) = &device.second {
-        let faint = Some(theme::cursor(ctx.mode()));
+        let faint = Some(page.cursor_style(ctx));
         slot_page(
             frame,
             rows_at(there),
@@ -202,7 +202,12 @@ fn draw_tile(
         true => tile.switch_room(),
         false => tile.switch(!bypassed),
     };
-    frame.render_widget(tile.controls(controls).focused(zoomed), area);
+    frame.render_widget(
+        tile.controls(controls)
+            .focused(zoomed)
+            .held(page.framed(ctx)),
+        area,
+    );
     if empty || area.height < TILE_HEIGHT {
         return;
     }
@@ -287,7 +292,7 @@ fn zoom_panel(page: &TrackPage, ctx: &Ctx, track: &Track, slot: usize) -> Graphi
     } else {
         page.slot_reduction[slot].top
     };
-    let cursor = theme::cursor(ctx.mode());
+    let cursor = page.cursor_style(ctx);
     let fade = |line: Line<'static>| if bypassed { faded(line, cursor) } else { line };
     let curve = |panel: GraphicPanel, width: usize| match page.images.get(PanelKey::Zoom) {
         Some(id) => {

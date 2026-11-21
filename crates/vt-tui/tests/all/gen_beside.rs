@@ -160,9 +160,10 @@ fn ctrl_w_h_l_w_and_esc_move_the_keys_between_the_grid_and_the_panel() {
     assert_eq!(app.modes.view, View::Phrase);
 }
 
-/// The cursor's setting is lit only while the keys are in the panel.
+/// The cursor's setting is lit only while the keys are in the panel; while they're in the grid it
+/// sits back, dimmed (decision 475, in `focus.rs`).
 #[test]
-fn the_panels_cursor_shows_only_while_the_keys_are_in_it() {
+fn the_panels_cursor_is_lit_only_while_the_keys_are_in_it() {
     let (mut app, _rt) = beside_the_grid();
     let lit = |app: &mut App| {
         let mut terminal =

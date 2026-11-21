@@ -426,11 +426,12 @@ fn draw_in(frame: &mut Frame, area: Rect, window: Rect, ctx: &Ctx, panel: &Shape
         let typing = current.then_some(panel.typing.as_ref()).flatten();
         let mut line = vec![Span::raw(format!("{:<labels$}", row.name()))];
         if current {
-            let style = theme::cursor(if panel.typing.is_some() {
-                Mode::Insert
-            } else {
-                Mode::Normal
-            });
+            // While its row's buffer has the keys, the panel's cursor sits back (decision 475).
+            let style = match (ctx.mode(), &panel.typing) {
+                (Mode::Tokens, _) => theme::cursor_away(),
+                (_, Some(_)) => theme::cursor(Mode::Insert),
+                (_, None) => theme::cursor(Mode::Normal),
+            };
             match typing {
                 Some(typing) => line.push(Span::styled(typed_text(typing, room), style)),
                 None if row == GenParam::Values => {
@@ -523,6 +524,12 @@ fn draw_in(frame: &mut Frame, area: Rect, window: Rect, ctx: &Ctx, panel: &Shape
             " Enter keep  L keep live  Esc cancel "
         })
         .title_style(Style::new().add_modifier(Modifier::BOLD));
+    // Framed in the focus colour while it has the keys, as it does but while its row's buffer
+    // has them (decision 475).
+    let border = match ctx.mode() {
+        Mode::Tokens => border,
+        _ => border.border_style(theme::focus()),
+    };
     let inside = popup::draw(frame, window, border);
     frame.render_widget(Paragraph::new(lines), inside);
     draw_buffer(frame, area, inside, ctx, panel);
@@ -680,7 +687,7 @@ mod tests {
                 "i fg TEXT bg MANTLE +BOLD",
                 "j fg OVERLAY2 bg MANTLE",
                 "k fg TEXT bg BASE ul SURFACE1 +UNDERLINED",
-                "l fg BASE bg ROSEWATER ul SURFACE1 +UNDERLINED",
+                "l fg BASE bg AWAY ul SURFACE1 +UNDERLINED",
                 "m fg #75638e bg MANTLE",
             ],
         );

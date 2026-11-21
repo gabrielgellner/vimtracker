@@ -178,7 +178,7 @@ impl ParamCell<'_> {
     /// isn't dim or tinted being in its own colour.
     fn style(&self, toggle: Option<bool>) -> Style {
         if self.look.focus == Focus::Value {
-            return theme::cursor(self.look.mode);
+            return self.look.cursor();
         }
         match (self.state.tone, toggle) {
             (Tone::Tint(style), _) => style,
@@ -251,6 +251,7 @@ mod tests {
             look: CellLook {
                 focus: Focus::Off,
                 mode: Mode::Normal,
+                away: false,
                 typed: None,
                 query: None,
                 name_labels: "",
