@@ -742,6 +742,7 @@ impl App {
             }
             Cmd::Window(key) => self.window(key),
             Cmd::Shape => self.open_shape(),
+            Cmd::Pattern => self.open_pattern(),
             // The sample page's marks: `'` and `m` wait for a letter, as an operator waits for a
             // motion, and `]'` and `['` are jumps, the jump list's.
             Cmd::Sample(key @ (SampleKey::Mark | SampleKey::NameSlice)) => {

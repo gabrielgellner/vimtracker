@@ -19,15 +19,15 @@ use vt_model::action::{Action, edit};
 use vt_model::generator::Span;
 use vt_model::notation::{
     Around, Field as TokenField, GrammarId, Kind, STACKED, Spot, Table, compile_rhythm, kit_start,
-    mini_layer, mini_start, rhythm_preset, stacks,
+    mini_layer, mini_start, rhythm_preset, stacks, with_insert,
 };
-use vt_model::selection::{Field, StepRange};
+use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
     Channel, Context, DrumPart, FillKind, GenParam, Grids, KitLine, Own, OwnRhythm, Shape,
     ShapeColumn, Source, Starts, TonnetzVoice, Walk, Where, counted, default_ends, default_step,
     degree_count, degree_name, divisions_seed, dropped, drum_parts, is_empty, keeping_step,
-    kept_list, on_track, open_rows, track_seed, variation_notes, written_from,
+    kept_list, line_steps, on_track, open_rows, track_seed, variation_notes, written_from,
 };
 use vt_model::song::{Machine, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
@@ -151,6 +151,41 @@ pub struct ShapePanel {
     pub(crate) kept: bool,
     /// Whether it was `L` that kept it, live.
     pub(crate) kept_live: bool,
+    /// What makes it a pattern entered with `!`, drawn as its buffer alone (decision 474).
+    pub pattern: Option<PatternEntry>,
+}
+
+/// A pattern entered with `!` (decision 474): a `Mini` on the cursor's column whose line counts
+/// from the phrase's row 00 and goes round down the whole phrase, written only on the rows
+/// selected, or every row, and edited in its buffer alone.
+#[derive(Debug, Clone)]
+pub struct PatternEntry {
+    /// The line as typed, `x` and all, which the buffer shows. The panel's `mini` is the same
+    /// with each `x` written out as the last note typed.
+    pub typed: String,
+    /// The last note typed, by name, which `x` is.
+    pub note: String,
+    /// Whether rows were selected, which the grid shows while it's open.
+    pub selected: bool,
+    /// How many rows the phrase has, where the line is cut.
+    pub rows: usize,
+}
+
+/// A `Step`'s rows, as the status line says them.
+fn rows_word(step: u8) -> &'static str {
+    if step == 1 { "row" } else { "rows" }
+}
+
+/// The `Step`s `[s` and `]s` go between.
+const STEPS: [u8; 5] = [1, 2, 4, 8, 16];
+
+/// A `Step` halved or doubled, to the next of [`STEPS`] below or above it.
+fn stepped(step: u8, up: bool) -> u8 {
+    if up {
+        STEPS.into_iter().find(|to| *to > step).unwrap_or(16)
+    } else {
+        STEPS.into_iter().rfind(|to| *to < step).unwrap_or(1)
+    }
 }
 
 impl ShapePanel {
@@ -513,11 +548,24 @@ pub(crate) fn choice_picker(
     Some(Picker::new(title, items).opened_on(Some(position)))
 }
 
+/// What a list of FX commands opens once its command is chosen: the shape panel, or a
+/// pattern's buffer, on rows selected or every row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Opens {
+    Shape,
+    Pattern { selected: bool },
+}
+
+/// A selection waiting for its FX command: its rows, its column and what it opens.
+pub(crate) type Waiting = (Selection, Field, Opens);
+
 /// Why a selection shapes nothing yet.
 enum Refusal {
     Reason(&'static str),
     /// An FX column on this track is empty, so the command to write on it is chosen first.
     Command(usize),
+    /// Why is already on the status line.
+    Said,
 }
 
 impl Services {
@@ -631,6 +679,7 @@ impl Services {
                 Err(Refusal::Reason(reason)) => {
                     refused.get_or_insert(reason);
                 }
+                Err(Refusal::Said) => {}
             }
         }
         if parts.is_empty() {
@@ -971,7 +1020,74 @@ impl ShapePanel {
             default_source,
             kept: false,
             kept_live: false,
+            pattern: None,
         })
+    }
+
+    /// The panel `!` opens (decision 474): a `Mini` on the selection's column, at the `Step` a
+    /// pattern was last given, counted from the phrase's row 00, with its buffer open on `text`,
+    /// typing at its end, or on nothing typed yet. Across a group's tracks, a kit line, refused
+    /// as `S` refuses one.
+    fn pattern(
+        selection: Selection,
+        (field, command): (Field, Option<FxCommand>),
+        services: &mut Services,
+        (view, selected): (View, bool),
+        text: &str,
+    ) -> Result<Self, Refusal> {
+        let mut panel = Self::new(selection, field, command, services, view)?;
+        let first = panel.parts[0];
+        let rows = panel
+            .base
+            .tracks
+            .get(first.track)
+            .and_then(|track| track.phrases.get(&first.phrase))
+            .map_or(0, |phrase| phrase.steps().len());
+        let note = ShapeColumn::Note {
+            scale: services.live.scale,
+            writes: None,
+        }
+        .show(services.live.insert_note());
+        panel.pattern = Some(PatternEntry {
+            typed: String::new(),
+            note,
+            selected,
+            rows,
+        });
+        panel.row = GenParam::MiniText;
+        let step = services.live.pattern_step;
+        let skip = first.range.first as u16;
+        // A degree counts from the root in the last note typed's octave, as `x` is that note;
+        // a kit line's tracks each keep their own.
+        let from = (panel.kit.is_none() && matches!(panel.column, ShapeColumn::Note { .. }))
+            .then(|| services.live.insert_note());
+        panel.change(
+            |panel| {
+                panel.shape.kind = FillKind::Mini;
+                panel.shape.mini.step = step;
+                panel.shape.mini.skip = skip;
+                if let Some(from) = from {
+                    panel.shape.from = from;
+                }
+            },
+            services,
+        );
+        // A kit line on a track with no name is refused, as `S` refuses it, and said.
+        if panel.shape.kind != FillKind::Mini {
+            services.history.replace_current(Arc::clone(&panel.base));
+            services.publish();
+            return Err(Refusal::Said);
+        }
+        if !text.is_empty() {
+            panel.commit_typing(text, services);
+        }
+        let how = if text.is_empty() {
+            Opening::Replace
+        } else {
+            Opening::Append
+        };
+        panel.open_buffer(how, services);
+        Ok(panel)
     }
 }
 
@@ -984,10 +1100,18 @@ impl App {
         self.open_shape_on(selection, field, None);
     }
 
-    /// Open the panel on the selection, now its empty FX column has its command.
+    /// Open the panel, or a pattern's buffer, on the selection, now its empty FX column has its
+    /// command.
     pub(crate) fn pick_shape_command(&mut self, command: FxCommand) {
-        if let Some((selection, field)) = self.overlays.shape_command.take() {
-            self.open_shape_on(selection, field, Some(command));
+        match self.overlays.shape_command.take() {
+            Some((selection, field, Opens::Shape)) => {
+                self.open_shape_on(selection, field, Some(command));
+            }
+            Some((selection, field, Opens::Pattern { selected })) => {
+                let text = std::mem::take(&mut self.overlays.pattern_text);
+                self.open_pattern_on(selection, (field, Some(command)), selected, &text);
+            }
+            None => {}
         }
     }
 
@@ -1000,18 +1124,8 @@ impl App {
             self.modes.view,
         ) {
             Ok(panel) => panel,
-            Err(Refusal::Reason(reason)) => {
-                self.services.status = reason.to_owned();
-                return;
-            }
-            Err(Refusal::Command(track)) => {
-                self.leave_selection(selection);
-                self.services.cursor.field = field;
-                self.overlays.shape_command = Some((selection, field));
-                let (_, items) = self.services.fx_command_items(track, Pick::ShapeCommand);
-                self.show_picker(Picker::new("FX commands", items).searching(""));
-                self.services.status =
-                    "Choose the command to write on the empty FX column".to_owned();
+            Err(refusal) => {
+                self.refused(refusal, (selection, field, Opens::Shape), "");
                 return;
             }
         };
@@ -1020,6 +1134,154 @@ impl App {
         panel.preview(&mut self.services);
         self.overlays.shape = Some(panel);
         self.modes.mode = Mode::Shape;
+    }
+
+    /// Why a panel or a pattern's buffer didn't open, said; or on an empty FX column, the
+    /// commands listed, to choose the one it writes, which opens it.
+    fn refused(&mut self, refusal: Refusal, (selection, field, opens): Waiting, text: &str) {
+        match refusal {
+            Refusal::Reason(reason) => self.services.status = reason.to_owned(),
+            Refusal::Said => {}
+            Refusal::Command(track) => {
+                if opens != (Opens::Pattern { selected: false }) {
+                    self.leave_selection(selection);
+                }
+                self.services.cursor.field = field;
+                self.overlays.shape_command = Some((selection, field, opens));
+                text.clone_into(&mut self.overlays.pattern_text);
+                let (_, items) = self.services.fx_command_items(track, Pick::ShapeCommand);
+                self.show_picker(Picker::new("FX commands", items).searching(""));
+                self.services.status =
+                    "Choose the command to write on the empty FX column".to_owned();
+            }
+        }
+    }
+
+    /// `!` (decision 474): a pattern's buffer on the cursor's column, on the rows selected or
+    /// on every row of the phrase, opened on nothing typed yet. On the tracks of a `W`
+    /// selection, a pattern on each, or across a group's tracks a kit line.
+    pub(crate) fn open_pattern(&mut self) {
+        if let Some((selection, selected)) = self.pattern_rows() {
+            let field = self.services.cursor.field;
+            self.open_pattern_on(selection, (field, None), selected, "");
+        }
+    }
+
+    /// The rows `!` writes on and whether they were selected: in a Visual mode the selection's,
+    /// on the cursor's column, and otherwise every row of the cursor's phrase. None, said, off
+    /// the phrase grid or a phrase.
+    pub(crate) fn pattern_rows(&mut self) -> Option<(Selection, bool)> {
+        if self.modes.view != View::Phrase {
+            self.services.status = "! enters a pattern on the phrase grid".to_owned();
+            return None;
+        }
+        let scope = Scope::column(self.services.cursor.field.group());
+        if self.modes.mode.is_visual() {
+            let selection = Selection {
+                scope,
+                ..self.current_selection()
+            };
+            return Some((selection, true));
+        }
+        let Some(rows) = self
+            .services
+            .phrase_here()
+            .map(|phrase| phrase.steps().len())
+        else {
+            self.services.status = "This track has no phrase here".to_owned();
+            return None;
+        };
+        let track = self.services.cursor.track;
+        let selection = Selection {
+            range: StepRange::between(0, rows.saturating_sub(1)),
+            scope,
+            tracks: TrackSpan {
+                first: track,
+                last: track,
+            },
+        };
+        Some((selection, false))
+    }
+
+    /// `.` after a pattern (decision 474): the same line, at the same `Step`, on the cursor's
+    /// column, on the rows selected or every row, kept as it was, plain or live; or where it
+    /// doesn't read on this column, why. An empty FX column takes the command it wrote.
+    pub(crate) fn repeat_pattern(
+        &mut self,
+        text: &str,
+        step: u8,
+        live: bool,
+        command: Option<FxCommand>,
+    ) {
+        let Some((selection, selected)) = self.pattern_rows() else {
+            return;
+        };
+        let field = self.services.cursor.field;
+        let command = command.filter(|_| {
+            matches!(
+                field,
+                Field::FxCommand(_) | Field::FxValue(_) | Field::FxFine(_)
+            )
+        });
+        self.services.live.pattern_step = step;
+        if !self.open_pattern_on(selection, (field, command), selected, text) {
+            return;
+        }
+        let Some(mut panel) = self.overlays.shape.take() else {
+            return;
+        };
+        self.modes.mode = Mode::Normal;
+        let reads = panel
+            .pattern
+            .as_ref()
+            .is_some_and(|pattern| pattern.typed == text.trim());
+        if !reads {
+            let why = std::mem::take(&mut self.services.status);
+            self.services
+                .history
+                .replace_current(Arc::clone(&panel.base));
+            self.services.publish();
+            self.services.status = format!("The last pattern doesn't read here: {why}");
+            return;
+        }
+        panel.leave_tokens();
+        self.services.status.clear();
+        panel.keep(live, &mut self.services);
+    }
+
+    /// Open a pattern's buffer on these rows, the line `text` in it; whether it opened.
+    pub(crate) fn open_pattern_on(
+        &mut self,
+        selection: Selection,
+        (field, command): (Field, Option<FxCommand>),
+        selected: bool,
+        text: &str,
+    ) -> bool {
+        let opened = ShapePanel::pattern(
+            selection,
+            (field, command),
+            &mut self.services,
+            (self.modes.view, selected),
+            text,
+        );
+        let panel = match opened {
+            Ok(panel) => panel,
+            Err(refusal) => {
+                self.refused(
+                    refusal,
+                    (selection, field, Opens::Pattern { selected }),
+                    text,
+                );
+                return false;
+            }
+        };
+        if selected && self.modes.mode.is_visual() {
+            self.leave_selection(selection);
+        }
+        self.services.cursor.field = field;
+        self.overlays.shape = Some(panel);
+        self.modes.mode = Mode::Shape;
+        true
     }
 
     /// The mode a picker goes back to.
@@ -1071,6 +1333,10 @@ pub enum ShapeKey {
     /// `l`: the row's buffer, where it's a text in a grammar: `Weights`' digits, a `List`'s
     /// values, a `Tonnetz`'s moves, a mask's bits or a rhythm's `Text`, on its first token.
     Right,
+    /// `[s`: a `Mini`'s `Step` halved, in the buffer of a pattern entered with `!` too.
+    HalveStep,
+    /// `]s`: a `Mini`'s `Step` doubled.
+    DoubleStep,
 }
 
 impl Overlay for ShapePanel {
@@ -1169,6 +1435,16 @@ impl Overlay for ShapePanel {
             Cmd::InShape(ShapeKey::Right),
             "A text's buffer, on its first token: weights, values, moves, bits or a rhythm",
         ),
+        (
+            "[ s",
+            Cmd::InShape(ShapeKey::HalveStep),
+            "Halve a Mini's Step, to 1, 2, 4, 8 or 16 rows",
+        ),
+        (
+            "] s",
+            Cmd::InShape(ShapeKey::DoubleStep),
+            "Double a Mini's Step, to 1, 2, 4, 8 or 16 rows",
+        ),
     ];
 
     fn key(&mut self, cmd: Cmd, ctx: &mut CtxMut) -> Outcome {
@@ -1178,13 +1454,20 @@ impl Overlay for ShapePanel {
             Cmd::InTokens(key) => return self.token_key(key, services),
             _ => return Outcome::Passed,
         };
-        // The buffer is a dialog: of the panel's keys, only playing and what describes the token
-        // reach past it.
+        // The buffer is a dialog: of the panel's keys, only playing, what describes the token
+        // and turning a `Mini`'s `Step` reach past it, and in a pattern's, `L` keeping it live.
+        let pattern = self.pattern.is_some();
         if self.tokens.is_some()
             && !matches!(
                 key,
-                ShapeKey::Play | ShapeKey::PlayFromStart | ShapeKey::Describe | ShapeKey::Guide
+                ShapeKey::Play
+                    | ShapeKey::PlayFromStart
+                    | ShapeKey::Describe
+                    | ShapeKey::Guide
+                    | ShapeKey::HalveStep
+                    | ShapeKey::DoubleStep
             )
+            && !(pattern && key == ShapeKey::KeepLive)
         {
             return Outcome::Done;
         }
@@ -1237,6 +1520,8 @@ impl Overlay for ShapePanel {
             ShapeKey::Right => {
                 self.open_buffer(Opening::Tokens, services);
             }
+            ShapeKey::HalveStep => self.turn_step(false, services),
+            ShapeKey::DoubleStep => self.turn_step(true, services),
         }
         Outcome::Done
     }
@@ -1340,6 +1625,10 @@ impl ShapePanel {
         services.publish();
         self.kept = true;
         self.kept_live = live;
+        if let Some(pattern) = &self.pattern {
+            pattern.typed.clone_into(&mut services.live.last_pattern);
+            services.live.pattern_step = self.shape.mini.step;
+        }
         let mut name = column_label(part.column);
         if self.shape.kind == FillKind::Follow {
             name = format!("{name}←{}", self.shape.follow.source);
@@ -1362,6 +1651,13 @@ impl ShapePanel {
                 services.status = format!("{name} is applied, as plain values");
             }
             (None, false) => {}
+        }
+        if let Some(cut) = self.cut_said() {
+            services.status = if services.status.is_empty() {
+                cut
+            } else {
+                format!("{}; {cut}", services.status)
+            };
         }
         Outcome::Close
     }
@@ -1397,6 +1693,7 @@ impl ShapePanel {
         // from which of its tracks has a note on each.
         if self.shape.kind == FillKind::Mini
             && self.mini.is_empty()
+            && self.pattern.is_none()
             && let Some(part) = self.parts.first()
         {
             self.mini = if self.shape.kit.is_some() {
@@ -1436,6 +1733,45 @@ impl ShapePanel {
     fn dropped(&self) -> Option<String> {
         let part = self.parts.first()?;
         dropped_said(&self.shape_of(0), &self.own_of(0), part.range.len())
+    }
+
+    /// `[s` and `]s`: a `Mini`'s `Step` halved or doubled, which a pattern entered with `!`
+    /// remembers for the next.
+    fn turn_step(&mut self, up: bool, services: &mut Services) {
+        if self.shape.kind != FillKind::Mini {
+            services.status = "[s and ]s halve and double a Mini's Step".to_owned();
+            return;
+        }
+        let step = stepped(self.shape.mini.step, up);
+        self.change(|panel| panel.shape.mini.step = step, services);
+        if self.pattern.is_some() {
+            services.live.pattern_step = step;
+        }
+        self.say_token(services);
+        if self.tokens.is_none() {
+            services.status = format!("Step {step} {}", rows_word(step));
+        }
+    }
+
+    /// How many rows of a pattern's line, one time through, are past the phrase's end and cut
+    /// there (decision 474): none where it fits, or off a pattern.
+    pub fn rows_cut(&self) -> usize {
+        let Some(pattern) = &self.pattern else {
+            return 0;
+        };
+        let lap = line_steps(self.own().beats()) as usize * usize::from(self.shape.mini.step);
+        lap.saturating_sub(pattern.rows)
+    }
+
+    /// What the status line says of a pattern cut at the phrase's end, where it is.
+    fn cut_said(&self) -> Option<String> {
+        let cut = self.rows_cut();
+        let rows = self.pattern.as_ref()?.rows;
+        match cut {
+            0 => None,
+            1 => Some(format!("1 row didn't fit in the phrase's {rows}")),
+            cut => Some(format!("{cut} rows didn't fit in the phrase's {rows}")),
+        }
     }
 
     fn move_row(&mut self, by: isize) {
@@ -1580,8 +1916,20 @@ impl ShapePanel {
                     return;
                 }
                 if panel.row == GenParam::MiniText {
-                    match typed_mini(text, panel.column, panel.parts.len(), &panel.names) {
-                        Ok(()) => panel.mini = text.trim().to_owned(),
+                    // In a pattern, each `x` is written out as the last note typed.
+                    let line = match &panel.pattern {
+                        Some(pattern) if panel.shape.kit.is_none() => {
+                            with_insert(text, &pattern.note)
+                        }
+                        _ => text.to_owned(),
+                    };
+                    match typed_mini(&line, panel.column, panel.parts.len(), &panel.names) {
+                        Ok(()) => {
+                            panel.mini = line.trim().to_owned();
+                            if let Some(pattern) = &mut panel.pattern {
+                                text.trim().clone_into(&mut pattern.typed);
+                            }
+                        }
                         Err(why) => said = Some(why),
                     }
                     return;
@@ -1624,13 +1972,26 @@ impl ShapePanel {
     /// A row's text as a field of tokens, where it's in a grammar.
     pub fn field(&self, row: GenParam) -> Option<TokenField> {
         let grammar = row.grammar(self.column)?.grammar();
-        let text = (grammar.from_setting)(&row.shown(&self.shape, &self.context()));
+        let text = self.setting_text(row);
         let field = TokenField::new(grammar, &text, self.column);
-        // A kit line's hits are its tracks' names.
+        // A kit line's hits are its tracks' names, and in a pattern `x` is the last note typed.
         Some(match row {
             GenParam::MiniText if self.shape.kit.is_some() => field.in_kit(&self.names),
+            GenParam::MiniText if self.pattern.is_some() => field.with_insert(),
             _ => field,
         })
+    }
+
+    /// A row's text as its field shows it: in a pattern, the line as typed, `x` and all.
+    fn setting_text(&self, row: GenParam) -> String {
+        match &self.pattern {
+            Some(pattern) if row == GenParam::MiniText => pattern.typed.clone(),
+            _ => row
+                .grammar(self.column)
+                .map_or_else(String::new, |grammar| {
+                    (grammar.grammar().from_setting)(&row.shown(&self.shape, &self.context()))
+                }),
+        }
     }
 
     /// The part shaping a track's phrase, by its place, or the first where none does.
@@ -1723,6 +2084,23 @@ impl ShapePanel {
     /// A key that isn't the table's, in the tokens: a token typed in place, a count, what's being
     /// typed, or the list `K` or `Tab` opened.
     fn token_text(&mut self, code: KeyCode, services: &mut Services) -> Outcome {
+        // `!` typed first in a pattern's buffer, so `!!`, opens it on the last pattern.
+        if code == KeyCode::Char('!')
+            && self.pattern.is_some()
+            && self
+                .tokens
+                .as_ref()
+                .is_some_and(|tokens| tokens.field.text().trim().is_empty())
+        {
+            let last = services.live.last_pattern.clone();
+            if last.is_empty() {
+                services.status = "No pattern yet for !! to open".to_owned();
+                return Outcome::Done;
+            }
+            self.commit_typing(&last, services);
+            self.open_buffer(Opening::Append, services);
+            return Outcome::Done;
+        }
         let tracks = self.track_names(services);
         let reached = self.reached();
         let around = self.around(&tracks, &reached);
@@ -1772,7 +2150,18 @@ impl ShapePanel {
                 services.status.clear();
                 self.write_tokens(services);
                 self.leave_tokens();
+                // A pattern's `Enter` writes it, as plain rows.
+                if self.pattern.is_some() {
+                    return self.keep(false, services);
+                }
                 return Outcome::Done;
+            }
+            // A pattern's `Esc` puts everything back.
+            Did::Out if self.pattern.is_some() => {
+                services.history.replace_current(Arc::clone(&self.base));
+                services.publish();
+                services.status.clear();
+                return Outcome::Close;
             }
             Did::Out => {
                 self.leave_tokens();
@@ -1802,7 +2191,7 @@ impl ShapePanel {
         let grammar = tokens.field.grammar();
         let text = (grammar.to_setting)(tokens.field.text());
         self.commit_typing(&text, services);
-        let shown = (grammar.from_setting)(&self.row.shown(&self.shape, &self.context()));
+        let shown = self.setting_text(self.row);
         if let Some(tokens) = self.tokens.as_mut()
             && tokens.field.inserting().is_none()
         {
@@ -1839,6 +2228,15 @@ impl ShapePanel {
                 format!("{}{after}", token_named(field, at).0)
             }
         };
+        if field.bad().is_none()
+            && let Some(cut) = self.cut_said()
+        {
+            services.status = if services.status.is_empty() {
+                cut
+            } else {
+                format!("{}; {cut}", services.status)
+            };
+        }
     }
 }
 

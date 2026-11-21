@@ -51,6 +51,20 @@ pub struct Own {
     /// sets while it [`laps`](Own::laps).
     #[serde(skip)]
     pub pass: u32,
+    /// How many rows of the line go by before its span's first row: a pattern entered with `!`
+    /// on rows 8 to 15 is counted from row 0, so its beats stay on the phrase's grid (decision
+    /// 474). Saved only where it isn't 0.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub skip: u16,
+}
+
+/// Whether a count is 0, for a setting saved only where it isn't.
+#[allow(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's skip_serializing_if passes a reference"
+)]
+fn is_zero(count: &u16) -> bool {
+    *count == 0
 }
 
 impl Default for Own {
@@ -61,14 +75,16 @@ impl Default for Own {
             ratchets: false,
             chances: false,
             pass: 0,
+            skip: 0,
         }
     }
 }
 
 impl Own {
-    /// Whether it's as it starts, its `Step` a row, which is all that's saved.
+    /// Whether it's as it starts, its `Step` a row and nothing skipped, which is all that's
+    /// saved.
     pub(crate) fn is_default(&self) -> bool {
-        self.step == 1
+        self.step == 1 && self.skip == 0
     }
 
     /// The same with what a rhythm's beats say of it.
@@ -357,7 +373,9 @@ pub(super) fn walk_dropping(
     if line == 0 || count == 0 {
         return;
     }
-    let count = count.min(MAX_PHRASE_STEPS);
+    // The rows skipped are walked as any other, so a hit there takes its row, but go unsaid.
+    let skip = usize::from(own.skip).min(MAX_PHRASE_STEPS);
+    let count = (count + skip).min(MAX_PHRASE_STEPS);
     let laps = count.div_ceil(line);
     let mut taken = Rows::new(count);
     // The laps of the passes before, where the line's laps count on from pass to pass.
@@ -383,7 +401,9 @@ pub(super) fn walk_dropping(
                     return;
                 }
                 if taken.has(nth) {
-                    dropped();
+                    if nth >= skip {
+                        dropped();
+                    }
                     return;
                 }
                 let plays = landed.chance >= 100
@@ -391,8 +411,11 @@ pub(super) fn walk_dropping(
                         < u64::from(landed.chance);
                 if plays {
                     taken.set(nth);
+                    if nth < skip {
+                        return;
+                    }
                     each(Lands {
-                        nth,
+                        nth: nth - skip,
                         hit: landed.hit,
                         ratchet: landed.ratchet,
                         len: landed.end - landed.at,
@@ -410,7 +433,7 @@ pub(super) fn chosen(beats: &[Beat], own: Own, seed: u64, counted: &Rows) -> Row
     let mut hits = Rows::new(count);
     // A line with no choice and no chance is the same each lap, so one lap is walked and the
     // rest are its copies.
-    let same = !own.laps && !own.chances;
+    let same = !own.laps && !own.chances && own.skip == 0;
     let line = (line_steps(beats) * u32::from(own.step.clamp(1, MAX_STEP))) as usize;
     if same && line > 0 && line < count {
         walk(beats, own, seed, line, |lands| hits.set(lands.nth));

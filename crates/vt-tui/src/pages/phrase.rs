@@ -404,6 +404,11 @@ impl PhraseView {
             Cmd::Shape,
             "Fill this column with a ramp or random values",
         ),
+        (
+            "!",
+            Cmd::Pattern,
+            "Fill this column from a pattern on the rows selected, counted from row 00",
+        ),
         ("=", Cmd::Increase, "Increase the selection's values"),
         ("-", Cmd::Decrease, "Decrease the selection's values"),
         (
@@ -523,6 +528,11 @@ impl Page for PhraseView {
             "Cycle a value's mark: lock, hold, glide",
         ),
         (".", Cmd::Repeat, "Repeat the last change"),
+        (
+            "!",
+            Cmd::Pattern,
+            "Fill this column from a pattern, counted from row 00",
+        ),
         ("v", Cmd::VisualField, "Select fields"),
         ("V", Cmd::VisualStep, "Select whole steps"),
         ("g v", Cmd::Reselect, "Reselect the last selection"),
