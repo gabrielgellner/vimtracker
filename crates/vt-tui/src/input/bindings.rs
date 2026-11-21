@@ -160,8 +160,12 @@ pub enum Cmd {
     PickValue,
     /// Fill the selected column with a ramp or random values.
     Shape,
-    /// Open the shape panel again on the live generator under the cursor.
+    /// Open the shape panel again on the live generator under the cursor; with Gen beside the
+    /// grid, move the panel to its device instead (decision 469).
     ReopenGenerator,
+    /// `gL`, the wider `gl`: Gen beside the grid on the live generator under the cursor's device,
+    /// the keys in it (decision 469).
+    OpenGenerator,
     /// Roll the live generator under the cursor again, on the Gen page.
     RollGenerator,
     /// Apply the live generator under the cursor, leaving plain values; on the Mod page, keep what

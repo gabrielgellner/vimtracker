@@ -131,6 +131,8 @@ pub struct ShapePanel {
     default_source: Option<Source>,
     /// Whether `Enter` or `L` kept it, as it closes.
     pub(crate) kept: bool,
+    /// Whether it was `L` that kept it, live.
+    pub(crate) kept_live: bool,
 }
 
 impl ShapePanel {
@@ -950,6 +952,7 @@ impl ShapePanel {
             sources,
             default_source,
             kept: false,
+            kept_live: false,
         })
     }
 }
@@ -1318,6 +1321,7 @@ impl ShapePanel {
         }
         services.publish();
         self.kept = true;
+        self.kept_live = live;
         let mut name = column_label(part.column);
         if self.shape.kind == FillKind::Follow {
             name = format!("{name}←{}", self.shape.follow.source);
@@ -1900,7 +1904,8 @@ pub(crate) fn token_named(field: &TokenField, at: usize) -> (String, String) {
 }
 
 impl App {
-    /// Give the shape panel a key. A shape kept is remembered, for `.` to shape again.
+    /// Give the shape panel a key. A shape kept is remembered, for `.` to shape again, and one
+    /// kept live with Gen's panel beside the grid lands there, in its device.
     pub(crate) fn shape_key(&mut self, key: Key, now: Instant) {
         let Some(panel) = self.overlays.shape.as_mut() else {
             return;
@@ -1917,12 +1922,16 @@ impl App {
             key,
             now,
         );
-        if matches!(outcome, Outcome::Close)
-            && let Some(panel) = self.overlays.shape.take()
-            && panel.kept
-        {
-            self.remember_shape(&panel);
+        let kept = matches!(outcome, Outcome::Close)
+            .then(|| self.overlays.shape.take())
+            .flatten()
+            .filter(|panel| panel.kept);
+        if let Some(panel) = &kept {
+            self.remember_shape(panel);
         }
         self.settled(outcome, false);
+        if let Some(panel) = &kept {
+            self.land_kept(panel);
+        }
     }
 }

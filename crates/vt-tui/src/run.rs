@@ -721,11 +721,11 @@ pub fn draw_screen(
         app.sample_page.lay_out(view);
     }
     // Beside Gen's panel, the grid is the phrase's own columns, and the panel has the rest.
-    let grid = if beside {
+    let (grid, gen_panel) = if beside {
         let (grid, panel) = gen_beside_areas(view, &app.ctx());
         draw_view_noting(frame, grid, app, View::Phrase);
         draw_view_noting(frame, panel, app, View::Gen);
-        grid
+        (grid, Some(panel))
     } else {
         match draw_view_noting(frame, view, app, app.modes.view) {
             PageNotes::Nothing => {}
@@ -735,7 +735,7 @@ pub fn draw_screen(
             }
             PageNotes::Sample(on_screen) => app.sample_page.on_screen = on_screen,
         }
-        view
+        (view, None)
     };
     // Inside the box the track page has while the keyboard plays it.
     let free = if app.modes.mode == Mode::Keys && app.modes.view == View::Track {
@@ -788,7 +788,19 @@ pub fn draw_screen(
             column: crate::pages::phrase::draw::column_cells(panel.column),
             lines: crate::pages::phrase::draw::rows_on_screen(&ctx, &app.phrase_view, grid),
         });
-        crate::overlays::shape::draw::draw_with_bars(frame, view, &ctx, &panel, beside.as_ref());
+        // With Gen's panel beside the grid, the shape panel goes in its place (decision 469).
+        match (gen_panel, &beside) {
+            (Some(place), Some(beside)) => {
+                crate::overlays::shape::draw::draw_in_gen(frame, place, &ctx, &panel, beside);
+            }
+            _ => crate::overlays::shape::draw::draw_with_bars(
+                frame,
+                view,
+                &ctx,
+                &panel,
+                beside.as_ref(),
+            ),
+        }
         app.overlays.shape = Some(panel);
     }
     if let Some(mut mapping) = app.overlays.mapping.take() {
