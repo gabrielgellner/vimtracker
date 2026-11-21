@@ -10,6 +10,6 @@
 
 ![The same Weights with K pressed on G's digit: under it a list titled In its place, of the sixteen weights each with what it means, 0 never up to F the most, the ones between as a share of F, opened on F, the weight G has](../images/shape-weights-offer.svg)
 
-![An Own rhythm's Text in its buffer under the shape panel's row: typed again with S, x(3,8) [. x]*2 x? . [x x x] . x(5,8,2) and more, longer than the row, which is cut, drawn whole as typed, brackets and commas as they are, the cursor on its first token, and under it the Rows line marking each row a hit writes, x, or one with a chance, ?](../images/shape-buffer.svg)
+![An Own rhythm's Text in its buffer under the shape panel's row: typed again with S, x(3,8) [. x]*2 x? . [x x x] . x(5,8,2) and more, longer than the row, which is cut, drawn whole as typed, brackets and commas as they are, coloured by what each token is, the rests faint, the brackets dim and the changes and Euclids orange, the cursor on its first token, and under it the Rows line marking each row a hit writes, x, or one with a chance, ?](../images/shape-buffer.svg)
 
 {{#include ../../../../crates/vt-tui/guides/editing.md:after-offer}}

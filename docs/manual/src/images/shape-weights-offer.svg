@@ -597,8 +597,12 @@
 <text x="657" y="280" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="702" y="280" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="747" y="280" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="891" y="266" width="99" height="19" fill="#292c3c"/>
-<text x="891" y="280" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│ F  0  8  </text>
+<rect x="891" y="266" width="45" height="19" fill="#292c3c"/>
+<text x="891" y="280" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│ F  </text>
+<rect x="936" y="266" width="9" height="19" fill="#292c3c"/>
+<text x="936" y="280" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">0</text>
+<rect x="945" y="266" width="45" height="19" fill="#292c3c"/>
+<text x="945" y="280" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  8  </text>
 <rect x="990" y="266" width="9" height="19" fill="#f2d5cf"/>
 <text x="990" y="280" fill="#303446" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">F</text>
 <rect x="999" y="266" width="351" height="19" fill="#292c3c"/>
