@@ -13,6 +13,22 @@ them. Those on the Note column are in C minor with the scale on. Each ends with
 what to listen for. Keep a recipe live with `L` to turn its settings while it
 plays, and `r` rolls a fill that draws from its seed again.
 
+## List
+
+`List` goes round the values typed into its `Values`, up to 256, so a line can be
+as long as the phrase, a value a row, and a longer phrase goes round it again. On
+the Note column they're notes, `c3 d#3 g3`, written as they are, in the scale or
+not; elsewhere two hex digits each. `Run` gives each value that many rows.
+
+**A sixteen-step accent line.** On a hat's Velocity over a 16-row loop: `Fill`
+`List`, `Values` `7F 30 50 30 70 30 50 40 7F 30 50 30 70 40 60 50`, `Run` `1`.
+Listen for an accent on every beat and a lift into the next bar, which two values
+in turn can't give.
+
+**A bass line typed as notes.** On an empty Note column over 32 rows: `Fill`
+`List`, `Values` `c2 c2 d#2 c2 g2 c2 a#1 c2`, `Run` `4`. Listen for the
+eight notes, each on four rows in a row, a beat, then the line again from the first.
+
 ## Random
 
 Random values between two ends, after Mutable Instruments' Marbles: anything

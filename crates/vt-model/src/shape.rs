@@ -199,8 +199,9 @@ const RHYTHM: Where = Where::Rhythm {
     part: Role::Bell,
     child: CHILD,
 };
-/// The most values a `List` fill goes through, so a shape stays plain data of a fixed size.
-pub const MAX_VALUES: usize = 8;
+/// The most values a `List` fill goes through: a value a row of a phrase of 256 rows, which a
+/// longer phrase goes round. The list is kept on its generator, not in the `Copy` shape.
+pub const MAX_LIST: usize = 256;
 
 /// What goes in the rows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -877,8 +878,8 @@ impl ShapeColumn {
     }
 
     /// A list of values as the panel shows it, with a space between each.
-    pub(crate) fn show_list(self, values: &Values) -> String {
-        let shown: Vec<String> = values.as_slice().iter().map(|v| self.show(*v)).collect();
+    pub(crate) fn show_list(self, values: &[u8]) -> String {
+        let shown: Vec<String> = values.iter().map(|v| self.show(*v)).collect();
         shown.join(" ")
     }
 
@@ -1100,64 +1101,21 @@ impl Ladder {
     }
 }
 
-/// The values a `List` fill goes through, up to `MAX_VALUES` of them. Saved as a list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(from = "Vec<u8>", into = "Vec<u8>")]
-pub struct Values {
-    values: [u8; MAX_VALUES],
-    len: u8,
-}
-
-impl Values {
-    /// The first `MAX_VALUES` of these values.
-    pub fn new(values: &[u8]) -> Self {
-        let mut list = Self::default();
-        for (slot, value) in list.values.iter_mut().zip(values) {
-            *slot = *value;
-            list.len += 1;
-        }
-        list
-    }
-
-    pub fn as_slice(&self) -> &[u8] {
-        &self.values[..usize::from(self.len)]
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len == 0
-    }
-
-    /// The same values the other way round.
-    pub fn reversed(&self) -> Self {
-        let mut list = *self;
-        list.values[..usize::from(self.len)].reverse();
-        list
+/// The list a generator of a shape keeps from one it's given: none unless it's a `List`, which
+/// starts as its two ends, so it sounds as `Alternate` did until it's typed, and keeps its first
+/// [`MAX_LIST`] values.
+pub fn kept_list(shape: &Shape, list: &[u8]) -> Box<[u8]> {
+    match shape.kind {
+        FillKind::List if list.is_empty() => Box::new([shape.from, shape.to]),
+        FillKind::List => list[..list.len().min(MAX_LIST)].into(),
+        _ => Box::default(),
     }
 }
 
-impl From<Vec<u8>> for Values {
-    fn from(values: Vec<u8>) -> Self {
-        Self::new(&values)
-    }
-}
-
-impl From<Values> for Vec<u8> {
-    fn from(values: Values) -> Self {
-        values.as_slice().to_vec()
-    }
-}
-
-/// The values in hex with a space between each, as they're typed.
-impl std::fmt::Display for Values {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (index, value) in self.as_slice().iter().enumerate() {
-            if index > 0 {
-                f.write_str(" ")?;
-            }
-            write!(f, "{value:02X}")?;
-        }
-        Ok(())
-    }
+/// A list's values in hex with a space between each, as they're typed.
+pub fn hex_list(list: &[u8]) -> String {
+    let shown: Vec<String> = list.iter().map(|value| format!("{value:02X}")).collect();
+    shown.join(" ")
 }
 
 /// How to fill a column.
@@ -1178,8 +1136,6 @@ pub struct Shape {
     /// How many of the rows it fills in a row take each value: `Alternate` and `List` give each
     /// value that many, and a ramp, wave or random fill holds a value for that many.
     pub run: u16,
-    /// What a `List` goes through, in place of `from` and `to`.
-    pub values: Values,
     pub place: Where,
     /// What a counting `Where` counts over, or none for its column's own
     /// ([`ShapeColumn::default_over`]), which is all that's saved.
@@ -1275,7 +1231,6 @@ impl Default for Shape {
             rate: DEFAULT_RATE,
             phase: 0,
             run: 1,
-            values: Values::default(),
             place: Where::AllRows,
             over: None,
             seed: 0,
@@ -1534,28 +1489,29 @@ pub fn open_rows(steps: &[Step], range: StepRange, column: ShapeColumn) -> usize
 }
 
 /// The rows a shape changes, each with its step as the shape leaves it: a value of its column, or
-/// for `Acid`, a note with its velocity and gate. `Follow` needs what it reads, so it writes
-/// nothing here: see [`written_from`].
+/// for `Acid`, a note with its velocity and gate. `Follow` needs what it reads, and `List` its
+/// values, so they write nothing here: see [`written_from`].
 pub fn written(
     steps: &[Step],
     range: StepRange,
     column: ShapeColumn,
     shape: &Shape,
 ) -> Vec<(usize, Step)> {
-    written_from(steps, range, column, shape, None)
+    written_from(steps, range, column, shape, &[], None)
 }
 
-/// The same, given the loop's steps of the phrase a `Follow` reads, if it has one: the cells
-/// [`render_into`] leaves, laid over copies of their steps.
+/// The same, given a `List`'s values, `list`, and the loop's steps of the phrase a `Follow` reads,
+/// if it has one: the cells [`render_into`] leaves, laid over copies of their steps.
 pub fn written_from(
     steps: &[Step],
     range: StepRange,
     column: ShapeColumn,
     shape: &Shape,
+    list: &[u8],
     source: Option<&[Step]>,
 ) -> Vec<(usize, Step)> {
     let mut cells = vec![GenCell::Under; range.len().min(MAX_PHRASE_STEPS)];
-    render_into(steps, range, column, shape, source, &mut cells);
+    render_into(steps, range, column, shape, list, source, &mut cells);
     cells
         .into_iter()
         .enumerate()
@@ -1569,15 +1525,15 @@ pub fn written_from(
         .collect()
 }
 
-/// The values a shape writes, by row. A ramp's ends are the first and last rows it fills, and rows
-/// keep their spacing along it.
+/// The values a shape with no list writes, by row. A ramp's ends are the first and last rows it
+/// fills, and rows keep their spacing along it.
 pub fn values(
     steps: &[Step],
     range: StepRange,
     column: ShapeColumn,
     shape: &Shape,
 ) -> Vec<(usize, u8)> {
-    shaped(steps, range, column, shape)
+    shaped(steps, range, column, shape, &[])
         .into_iter()
         .map(|(row, value)| (row, value.whole))
         .collect()
@@ -1591,7 +1547,7 @@ pub fn exact_values(
     column: ShapeColumn,
     shape: &Shape,
 ) -> Vec<(usize, u16)> {
-    shaped(steps, range, column, shape)
+    shaped(steps, range, column, shape, &[])
         .into_iter()
         .map(|(row, value)| (row, render::exact(column, value)))
         .collect()
@@ -1603,6 +1559,7 @@ fn shaped(
     range: StepRange,
     column: ShapeColumn,
     shape: &Shape,
+    list: &[u8],
 ) -> Vec<(usize, render::Shaped)> {
     let mut cells = vec![GenCell::Under; range.len().min(MAX_PHRASE_STEPS)];
     let mut found = Vec::new();
@@ -1611,6 +1568,7 @@ fn shaped(
         range,
         column,
         shape,
+        list,
         None,
         &mut cells,
         |row, value| {
@@ -2182,26 +2140,46 @@ mod tests {
         assert_eq!(out, [(0, 0x70), (3, 0x40), (4, 0x70), (6, 0x40)]);
     }
 
-    fn listing(run: u16, list: &[u8]) -> Shape {
+    fn listing(run: u16) -> Shape {
         Shape {
             kind: FillKind::List,
             run,
-            values: Values::new(list),
             ..ramp(0, 0x7F, 0, 0)
         }
+    }
+
+    /// The values a `List` of these values writes on a column, by row.
+    fn listed(steps: &[Step], column: ShapeColumn, run: u16, list: &[u8]) -> Vec<(usize, u8)> {
+        shaped(steps, all(steps), column, &listing(run), list)
+            .into_iter()
+            .map(|(row, value)| (row, value.whole))
+            .collect()
+    }
+
+    fn list_written(steps: &[Step], run: u16, list: &[u8]) -> Vec<u8> {
+        let out = listed(steps, VEL, run, list);
+        out.into_iter().map(|(_, value)| value).collect()
     }
 
     #[test]
     fn a_list_goes_round_its_values_for_its_run() {
         assert_eq!(
-            written(&notes(7), listing(1, &[0x70, 0x40, 0x55])),
+            list_written(&notes(7), 1, &[0x70, 0x40, 0x55]),
             [0x70, 0x40, 0x55, 0x70, 0x40, 0x55, 0x70]
         );
         assert_eq!(
-            written(&notes(7), listing(2, &[0x70, 0x40, 0x55])),
+            list_written(&notes(7), 2, &[0x70, 0x40, 0x55]),
             [0x70, 0x70, 0x40, 0x40, 0x55, 0x55, 0x70]
         );
-        assert_eq!(written(&notes(3), listing(1, &[0x30])), [0x30; 3]);
+        assert_eq!(list_written(&notes(3), 1, &[0x30]), [0x30; 3]);
+    }
+
+    #[test]
+    fn a_list_as_long_as_a_phrase_plays_a_value_a_row_and_a_longer_phrase_goes_round_it() {
+        let list: Vec<u8> = (0..MAX_LIST).map(|value| value as u8 / 2).collect();
+        let out = list_written(&notes(MAX_LIST + 3), 1, &list);
+        assert_eq!(out[..MAX_LIST], list[..]);
+        assert_eq!(out[MAX_LIST..], list[..3]);
     }
 
     #[test]
@@ -2214,21 +2192,28 @@ mod tests {
             "--- -- --- --- ---",
             "C-3 -- --- --- ---",
         ]);
-        let out = values(&steps, all(&steps), VEL, &listing(1, &[0x70, 0xFF, 0x20]));
+        let out = listed(&steps, VEL, 1, &[0x70, 0xFF, 0x20]);
         assert_eq!(out, [(0, 0x70), (2, 0x7F), (3, 0x20), (5, 0x70)]);
     }
 
     #[test]
-    fn a_list_keeps_at_most_eight_values_and_shows_them_in_hex() {
-        let list = Values::new(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-        assert_eq!(list.as_slice(), [1, 2, 3, 4, 5, 6, 7, 8]);
-        assert_eq!(Values::new(&[0x70, 0x40, 0x5]).to_string(), "70 40 05");
+    fn a_list_keeps_at_most_256_values_only_on_a_list_and_shows_them_in_hex() {
+        let long: Vec<u8> = (0..300).map(|value| value as u8).collect();
+        assert_eq!(kept_list(&listing(1), &long).len(), MAX_LIST);
+        assert_eq!(*kept_list(&listing(1), &[3, 4]), [3, 4]);
+        let ends = Shape {
+            from: 0x10,
+            to: 0x20,
+            ..listing(1)
+        };
         assert_eq!(
-            Values::new(&[0x70, 0x40, 0x5]).reversed().as_slice(),
-            [0x5, 0x40, 0x70]
+            *kept_list(&ends, &[]),
+            [0x10, 0x20],
+            "a new list is its ends"
         );
-        assert!(Values::default().is_empty());
-        assert!(written(&notes(2), listing(1, &[])).iter().all(|v| *v == 0));
+        assert!(kept_list(&ramp(0, 0x7F, 0, 0), &[3, 4]).is_empty());
+        assert_eq!(hex_list(&[0x70, 0x40, 0x5]), "70 40 05");
+        assert!(list_written(&notes(2), 1, &[]).iter().all(|v| *v == 0));
     }
 
     #[test]
@@ -2436,6 +2421,7 @@ mod tests {
             generates: true,
             sources: &[],
             source: None,
+            list: &[],
         };
         assert_eq!(context.default_where(FillKind::Ramp), Where::AllRows);
         assert_eq!(context.default_where(FillKind::Acid), BEATS);
@@ -2537,11 +2523,11 @@ mod tests {
         // Four degrees either side of E, the middle of C to G.
         assert_eq!(named(&notes(4), major, wave), ["E-3", "G-3", "E-3", "C-3"]);
         // A motif is written as it's given, in the scale or not.
-        let motif = Shape {
-            values: Values::new(&[C3, C3 + 3, C3 + 7]),
-            ..listing(1, &[])
-        };
-        assert_eq!(named(&notes(4), major, motif), ["C-3", "D#3", "G-3", "C-3"]);
+        let motif: Vec<String> = listed(&notes(4), major, 1, &[C3, C3 + 3, C3 + 7])
+            .iter()
+            .map(|(_, note)| Note::On(*note).to_string())
+            .collect();
+        assert_eq!(motif, ["C-3", "D#3", "G-3", "C-3"]);
     }
 
     #[test]
@@ -2718,10 +2704,7 @@ mod tests {
         for typed in ["H3", "e#3", "C-9", ""] {
             assert_eq!(CHROMATIC.parse(typed), None, "{typed}");
         }
-        assert_eq!(
-            CHROMATIC.show_list(&Values::new(&[60, 64, 67])),
-            "C-3 E-3 G-3"
-        );
+        assert_eq!(CHROMATIC.show_list(&[60, 64, 67]), "C-3 E-3 G-3");
         let one = rows(&["G-3 -- --- --- ---"; 2]);
         assert_eq!(default_ends(&one, all(&one), CHROMATIC), (67, 79));
     }

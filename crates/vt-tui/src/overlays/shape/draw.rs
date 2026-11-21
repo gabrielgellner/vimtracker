@@ -22,7 +22,8 @@ use crate::widgets::theme;
 use crate::widgets::tokens::TokenCells;
 use crate::widgets::value_bars::{Beside, Side};
 
-/// Room for eight notes in a `List`'s values.
+/// Room for eight notes in a `List`'s values; a longer list shows as many as fit and how many
+/// more.
 const WIDTH: u16 = 42;
 /// The border, the heading and the keys, beyond the rows.
 const AROUND_ROWS: u16 = 4;
@@ -31,31 +32,77 @@ const FROM_TOP: u16 = 2;
 /// The room a row's label takes unless one is longer.
 const LABEL: usize = 8;
 
-/// A row's value in spans, with a note outside the scale coloured as the grid colours it.
-fn spans(panel: &ShapePanel, context: &Context, row: GenParam) -> Vec<Span<'static>> {
+/// A row's value in spans, `room` characters at most for a `List`'s values, with a note outside
+/// the scale coloured as the grid colours it.
+fn spans(panel: &ShapePanel, context: &Context, row: GenParam, room: usize) -> Vec<Span<'static>> {
     let value = || vec![Span::raw(row.shown(&panel.shape, context))];
-    let ShapeColumn::Note { scale, .. } = panel.column else {
-        return value();
-    };
     let notes: Vec<u8> = match row {
+        GenParam::Values => return list_spans(panel, room, None),
+        _ if !matches!(panel.column, ShapeColumn::Note { .. }) => return value(),
         GenParam::From => vec![panel.shape.from],
         GenParam::To => vec![panel.shape.to],
-        GenParam::Values => panel.shape.values.as_slice().to_vec(),
         _ => return value(),
     };
-    let mut spans = Vec::new();
-    for (index, note) in notes.into_iter().enumerate() {
-        if index > 0 {
-            spans.push(Span::raw(" "));
-        }
-        let style = if scale.on && !scale.contains(note) {
+    notes
+        .into_iter()
+        .map(|note| Span::styled(panel.column.show(note), note_style(panel, note)))
+        .collect()
+}
+
+/// How a value of the column is drawn: a note outside the scale as the grid colours it.
+fn note_style(panel: &ShapePanel, value: u8) -> Style {
+    match panel.column {
+        ShapeColumn::Note { scale, .. } if scale.on && !scale.contains(value) => {
             theme::out_of_scale()
+        }
+        _ => Style::new(),
+    }
+}
+
+/// A `List`'s values in `room` characters: as many as fit from the first, then how many more
+/// there are, as `+248`, so a list as long as a phrase shows its start and its length. On the
+/// cursor's row, `lit`, they're lit together, as a value on its row is.
+fn list_spans(panel: &ShapePanel, room: usize, lit: Option<Style>) -> Vec<Span<'static>> {
+    let list = &panel.list;
+    let mut spans = Vec::new();
+    let mut used = 0;
+    for (index, value) in list.iter().enumerate() {
+        let shown = panel.column.show(*value);
+        let gap = usize::from(index > 0);
+        let left = list.len() - index;
+        // Room for this one, and for what says how many are left after it, unless it's the last.
+        let after = if left > 1 {
+            format!(" +{}", left - 1).len()
         } else {
-            Style::new()
+            0
         };
-        spans.push(Span::styled(panel.column.show(note), style));
+        if used + gap + shown.len() + after > room {
+            let more = format!("{}+{left}", if index > 0 { " " } else { "" });
+            spans.push(Span::styled(more, lit.unwrap_or_else(theme::dim)));
+            break;
+        }
+        if gap > 0 {
+            spans.push(Span::styled(" ", lit.unwrap_or_default()));
+        }
+        used += gap + shown.len();
+        spans.push(Span::styled(
+            shown,
+            lit.unwrap_or_else(|| note_style(panel, *value)),
+        ));
     }
     spans
+}
+
+/// What's being typed, in `room` characters: its end, where the next character goes, kept in
+/// sight as a long list is typed, with `…` before it where the start is cut off.
+fn typed_text(typing: &TypedValue, room: usize) -> String {
+    let shown = typing.shown();
+    let count = shown.chars().count();
+    if count <= room || room < 2 {
+        return shown;
+    }
+    let tail: String = shown.chars().skip(count - (room - 1)).collect();
+    format!("…{tail}")
 }
 
 /// The room each of `Weights`' digits takes, so the note under it fits, `C#` and a space.
@@ -224,6 +271,8 @@ fn draw_in(frame: &mut Frame, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
     let rows = panel.rows();
     let context = panel.context();
     let labels = labels(&rows);
+    // What a row's value has beside its label, inside the border.
+    let room = usize::from(window.width).saturating_sub(labels + 2);
     let name = match panel.column {
         ShapeColumn::Note { .. } => "Note".to_owned(),
         ShapeColumn::Velocity => "Velocity".to_owned(),
@@ -240,7 +289,7 @@ fn draw_in(frame: &mut Frame, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
     for (nth, part) in panel.parts.iter().enumerate() {
         let steps = panel.base_steps(part);
         let shape = panel.shape_of(nth);
-        let written = written_from(steps, part.range, part.column, &shape, source);
+        let written = written_from(steps, part.range, part.column, &shape, &panel.list, source);
         // A `Follow`, `Grids`, `Divisions`, `Ring` and a `Variation` write every row, rests and
         // all, so their count is of the notes, and `Multiply`'s of the rhythm it leaves. A
         // `Tonnetz` writes the rows its `Where` chooses, as other fills do.
@@ -290,15 +339,20 @@ fn draw_in(frame: &mut Frame, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
         let typing = current.then_some(panel.typing.as_ref()).flatten();
         let mut line = vec![Span::raw(format!("{:<labels$}", row.name()))];
         if current {
-            let text = typing.map_or_else(|| row.shown(&panel.shape, &context), TypedValue::shown);
             let style = theme::cursor(if panel.typing.is_some() {
                 Mode::Insert
             } else {
                 Mode::Normal
             });
-            line.push(Span::styled(text, style));
+            match typing {
+                Some(typing) => line.push(Span::styled(typed_text(typing, room), style)),
+                None if row == GenParam::Values => {
+                    line.extend(list_spans(panel, room, Some(style)));
+                }
+                None => line.push(Span::styled(row.shown(&panel.shape, &context), style)),
+            }
         } else {
-            line.extend(spans(panel, &context, row));
+            line.extend(spans(panel, &context, row, room));
         }
         lines.push(Line::from(line));
     }
@@ -644,5 +698,38 @@ mod tests {
             println!("{}", row(&screen, y));
         }
         assert_eq!(panel_at(&screen, " Reshape "), (108, 2));
+    }
+
+    /// The panel's row on screen whose label is this.
+    fn labelled(buffer: &Buffer, label: &str) -> String {
+        let (left, top) = panel_at(buffer, " Reshape ");
+        (top..buffer.area.height)
+            .map(|y| row(buffer, y))
+            .map(|text| text.chars().skip(usize::from(left) + 1).collect::<String>())
+            .find(|text| text.starts_with(label))
+            .unwrap_or_else(|| panic!("no {label} row"))
+    }
+
+    #[test]
+    fn a_list_longer_than_the_panel_shows_its_first_values_and_how_many_more() {
+        let mut app = app_on(&["C-3 40 --- --- ---"; 64]);
+        keys(&mut app, "lvGSKlist<Enter>j");
+        keys(
+            &mut app,
+            &format!("i{}<Enter>", "1020304050607071".repeat(32)),
+        );
+        assert_eq!(app.overlays.shape.as_ref().unwrap().list.len(), 256);
+        let shown = screen(&mut app, 163, 42);
+        let values = labelled(&shown, "Values");
+        assert!(
+            values.starts_with("Values  10 20 30 40 50 60 70 71 10 +247"),
+            "{values}"
+        );
+        // While it's typed, the end of what's typed is in sight.
+        keys(&mut app, &format!("i{}", "40".repeat(20)));
+        let shown = screen(&mut app, 163, 42);
+        let typed = labelled(&shown, "Values");
+        assert!(typed.starts_with("Values  \u{2026}"), "{typed}");
+        assert!(typed.contains("40 40 40_"), "{typed}");
     }
 }

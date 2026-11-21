@@ -85,12 +85,12 @@ impl Services {
     /// The edit that puts a patch's generator live on a column of the phrase under the cursor,
     /// over its loop or its lane, judged as `S` judges the column: an empty Note column is
     /// generated and notes are reshaped, and the generator already live there, `live`, is
-    /// reshaped in place. Or why it can't go there.
+    /// reshaped in place. A `List` goes through the patch's list. Or why it can't go there.
     pub(crate) fn patch_generator(
         &mut self,
         field: Field,
         command: Option<FxCommand>,
-        shape: Shape,
+        (shape, list): (Shape, &[u8]),
         live: Option<usize>,
         view: View,
     ) -> Result<Action, String> {
@@ -109,6 +109,7 @@ impl Services {
                 phrase,
                 generator,
                 shape: fitted(shape, column)?,
+                list: Some(list.into()),
             });
         }
         let selection = self.loop_selection(field);
@@ -120,6 +121,7 @@ impl Services {
             }
         };
         panel.shape = fitted(shape, panel.parts[0].column)?;
+        panel.list = list.to_vec();
         Ok(panel.live_action())
     }
 
@@ -187,6 +189,7 @@ impl ShapePanel {
             drum: generator.shape.grids.part(),
         };
         let shape = generator.shape;
+        let list = generator.list().to_vec();
         let (sources, default_source) = match part.column {
             ShapeColumn::Note { .. } => services.follow_sources(&base, &[part], view),
             _ => (Vec::new(), None),
@@ -200,6 +203,7 @@ impl ShapePanel {
             parts: vec![part],
             column: part.column,
             shape,
+            list,
             row: GenParam::Fill,
             typing: None,
             weight: None,

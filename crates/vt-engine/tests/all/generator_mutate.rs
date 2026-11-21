@@ -63,6 +63,7 @@ fn song(vary: u8, mutate: u8) -> Song {
                 mutate,
                 ..Shape::default()
             },
+            list: Box::default(),
         },
     )
 }
@@ -79,7 +80,15 @@ fn whole(song: &Song, pass: i64) -> Vec<GenCell> {
     let mut cells = vec![GenCell::Under; ROWS];
     let rows = generator.rows().unwrap();
     let heard = generator.shape.on_pass(pass);
-    render_into(&under, rows, generator.column, &heard, None, &mut cells);
+    render_into(
+        &under,
+        rows,
+        generator.column,
+        &heard,
+        generator.list(),
+        None,
+        &mut cells,
+    );
     cells
 }
 
@@ -163,6 +172,7 @@ fn at_none_the_first_pass_heard_repeats_exactly() {
                 phrase: 0,
                 generator: 0,
                 shape: written,
+                list: None,
             },
         );
         assert!(play(&once).0 == out, "Vary {vary}: as if it never varied");

@@ -120,7 +120,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: AllRows,
                                 seed: 89,
                                 tonnetz: (
@@ -307,7 +306,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Euclid(
                                     hits: 8,
                                     rotate: 0,
@@ -553,7 +551,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Euclid(
                                     hits: 8,
                                     rotate: 2,
@@ -799,7 +796,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Euclid(
                                     hits: 8,
                                     rotate: 4,
@@ -990,7 +986,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: AllRows,
                                 seed: 89,
                                 tonnetz: (

@@ -198,12 +198,16 @@ LFO, `Sine` and `Tri` start half way and head for `To`.
 other hit flips however they're spaced. `Run` sets how many rows each value gets
 in a row: `1` gives `70 40 70 40` and `2` gives `70 70 40 40`.
 
-`List` goes round a short list of values instead, for accents two values can't
-make, such as `70 40 55` over a hat. Its `Values` row takes the place of From and
-To: `i`, then up to eight hex values, where two digits make a value and the space
-comes by itself, so `704055` types `70 40 55`. It starts as the two ends. `Run`
-works as for `Alternate`, so `2` gives `70 70 40 40 55 55`, and `~` turns the
-list round.
+`List` goes round a list of values instead, for accents two values can't
+make, such as `70 40 55` over a hat, or a line as long as the phrase, a value a
+row. Its `Values` row takes the place of From and To: `i`, then up to 256 hex
+values, where two digits make a value and the space comes by itself, so `704055`
+types `70 40 55`. It starts as the two ends. `Run` works as for `Alternate`, so
+`2` gives `70 70 40 40 55 55`, and `~` turns the list round. A phrase longer than
+the list goes round it again. A list longer than the panel is wide shows its first
+values and how many more, as `+248`, and while it's typed the panel shows its end.
+The list is kept on the live generator beside its shape, so `x` on `Values`
+puts it back to the two ends, and a fill other than `List` keeps none.
 
 The last four fills are transforms: rather than making new values, they rework
 the ones already in the rows `Where` chooses, and a row it chooses with no value

@@ -87,6 +87,7 @@ fn follow_on(
             column: note_column(),
             span: Span::rows(StepRange::between(0, rows - 1)),
             shape,
+            list: Box::default(),
         },
     )
 }
@@ -261,6 +262,7 @@ fn a_cycle_is_refused_directly_or_through_others() {
             phrase: 0,
             generator: 0,
             shape: plain(at(2)),
+            list: None,
         },
     );
     assert_eq!(reshaped.unwrap_err(), EditError::FollowCycle(at(2)));
@@ -356,6 +358,7 @@ fn reshaping_a_follower_changes_its_transforms_and_keeps_it_live() {
             phrase: 0,
             generator: 0,
             shape: following(at(0), mirrored),
+            list: None,
         },
     )
     .unwrap();

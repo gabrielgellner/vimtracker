@@ -124,7 +124,7 @@ pub enum Typing {
     Toggled,
     /// Two hex digits, kept as soon as the second is typed.
     Hex,
-    /// Hex values, up to [`crate::shape::MAX_VALUES`], a space coming by itself after each two
+    /// Hex values, up to [`crate::shape::MAX_LIST`], a space coming by itself after each two
     /// digits.
     HexList,
     /// A note's name or a nudge, alone or in a list with spaces between, kept with `Enter`.

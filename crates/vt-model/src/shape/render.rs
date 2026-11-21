@@ -254,17 +254,19 @@ impl ShapeColumn {
 /// Write a shape's cells for `range` into `cells`, the first for its first row, allocating
 /// nothing. `cells` holds one for each row of the range, up to `MAX_PHRASE_STEPS`; a row it has no
 /// room for isn't rendered. Each is what the shape leaves on that row, or `Under` where it leaves
-/// the row alone. A `Follow` reads `source`, the loop of the phrase it follows, and with none
-/// leaves every row alone.
+/// the row alone. A `List` goes through `list`, its generator's values, borrowed so nothing is
+/// copied; any other shape is given none. A `Follow` reads `source`, the loop of the phrase it
+/// follows, and with none leaves every row alone.
 pub fn render_into(
     steps: &[Step],
     range: StepRange,
     column: ShapeColumn,
     shape: &Shape,
+    list: &[u8],
     source: Option<&[Step]>,
     cells: &mut [GenCell],
 ) {
-    render(steps, range, column, shape, source, cells, |_, _| {});
+    render(steps, range, column, shape, list, source, cells, |_, _| {});
 }
 
 /// A shape's value on a row: where it falls exactly, and the whole value written without a fine
@@ -305,11 +307,13 @@ pub(super) fn exact(column: ShapeColumn, value: Shaped) -> u16 {
 
 /// The render, telling `seen` each row's value as it's written, by row, for
 /// [`values`](super::values). A transform tells them from the last row back.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn render(
     steps: &[Step],
     range: StepRange,
     column: ShapeColumn,
     shape: &Shape,
+    list: &[u8],
     source: Option<&[Step]>,
     cells: &mut [GenCell],
     seen: impl FnMut(usize, &Shaped),
@@ -327,6 +331,7 @@ pub(super) fn render(
         first: range.first,
         column,
         cells,
+        list,
         along: None,
         seen,
     };
@@ -429,6 +434,8 @@ pub(super) struct Out<'a, F> {
     pub(super) first: usize,
     pub(super) column: ShapeColumn,
     pub(super) cells: &'a mut [GenCell],
+    /// The values a `List` goes through.
+    list: &'a [u8],
     /// For a Note column's ramp, random fill, wave or transform, the ladder its values are
     /// positions on, and whether a value between two steps stays there rather than going to the
     /// lower.
@@ -775,6 +782,7 @@ fn noted<F: FnMut(usize, &Shaped)>(
                 first: out.first,
                 column: out.column,
                 cells: &mut *out.cells,
+                list: out.list,
                 along: Some((&ladder, moved)),
                 seen: &mut out.seen,
             };
@@ -837,6 +845,7 @@ fn filled<F: FnMut(usize, &Shaped), R: Fn(u16) -> f64>(
     let mut walker =
         walk::Walker::new(shape.walk, shape.seed, from as i32, low as i32, high as i32);
     let mut held = first;
+    let list = out.list;
     for (index, offset) in rows.ones().enumerate() {
         if index.is_multiple_of(run) {
             held = offset;
@@ -890,9 +899,8 @@ fn filled<F: FnMut(usize, &Shaped), R: Fn(u16) -> f64>(
                 whole(if turn.is_multiple_of(2) { from } else { to })
             }
             FillKind::List => {
-                let list = shape.values.as_slice();
                 // An empty list never comes from the panel, but leaves the rows at nothing rather
-                // than failing.
+                // than failing. A phrase longer than the list goes round it.
                 let value = list.get(index / run % list.len().max(1)).copied();
                 whole(f64::from(value.unwrap_or(0)).min(top))
             }

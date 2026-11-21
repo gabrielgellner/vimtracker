@@ -127,7 +127,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Rhythm(
                                     rhythm: SonClave,
                                     part: Bell,
@@ -269,7 +268,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Rhythm(
                                     rhythm: SonClave,
                                     part: Low,
@@ -411,7 +409,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Rhythm(
                                     rhythm: SonClave,
                                     part: High,
@@ -553,7 +550,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Rhythm(
                                     rhythm: Bembe,
                                     part: Bell,
@@ -692,7 +688,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Rhythm(
                                     rhythm: Bembe,
                                     part: Low,

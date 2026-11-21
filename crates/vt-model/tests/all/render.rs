@@ -15,10 +15,10 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
     Acid, Across, Bar, Bits, CellStart, Cells, Channel, Divisions, DrumPart, Edge, FillKind,
-    Follow, GenCell, Grids, Kept, MAX_DEPTH, MAX_FACTOR, MAX_MOVE_LOOP, MAX_MOVE_WEIGHT,
-    MAX_MUTATION, MAX_RING, MAX_VALUES, MAX_WEIGHT, MoveList, Moves, Mutations, Pink, Quality,
-    Random, Ring, Role, RowView, Shape, ShapeColumn, Tonnetz, TonnetzMove, TonnetzVoice, Values,
-    Variation, WAVES, Walk, WaveRate, Where, World, render_into, written_from,
+    Follow, GenCell, Grids, Kept, MAX_DEPTH, MAX_FACTOR, MAX_LIST, MAX_MOVE_LOOP, MAX_MOVE_WEIGHT,
+    MAX_MUTATION, MAX_RING, MAX_WEIGHT, MoveList, Moves, Mutations, Pink, Quality, Random, Ring,
+    Role, RowView, Shape, ShapeColumn, Tonnetz, TonnetzMove, TonnetzVoice, Variation, WAVES, Walk,
+    WaveRate, Where, World, render_into, written_from,
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 
@@ -200,8 +200,12 @@ fn place(dice: &mut Dice) -> Where {
     }
 }
 
-/// A shape of this fill with every other setting drawn.
-fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
+/// How many values a `List` drew at most, less one, when the list was in the shape: still drawn
+/// so, so the draws after stay as they were.
+const DRAWN_LIST: u64 = 10;
+
+/// A shape of this fill with every other setting drawn, and a list of values for a `List`.
+fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> (Shape, Vec<u8>) {
     let end = |dice: &mut Dice| {
         if dice.chance(80) {
             dice.below(u64::from(column.highest()) + 1) as u8
@@ -216,9 +220,7 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
             (dice.below(201) as i16 - 100) as i8
         }
     };
-    let list: Vec<u8> = (0..dice.below(MAX_VALUES as u64 + 2))
-        .map(|_| end(dice))
-        .collect();
+    let list: Vec<u8> = (0..dice.below(DRAWN_LIST)).map(|_| end(dice)).collect();
     let mut shape = Shape {
         from: end(dice),
         to: end(dice),
@@ -239,7 +241,6 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         } else {
             dice.below(6) as u16
         },
-        values: Values::new(&list),
         place: place(dice),
         seed: dice.next(),
         acid: Acid {
@@ -350,7 +351,7 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         voice: Some(more.pick(&TonnetzVoice::ALL)),
         in_scale: more.chance(50),
     };
-    shape
+    (shape, list)
 }
 
 /// A fill's settings added since its line was made, drawn, each such fill hashed again under a name
@@ -493,6 +494,9 @@ struct Case {
     steps: Vec<Step>,
     range: StepRange,
     shape: Shape,
+    /// What a `List` goes through, its first eight as the shape kept them, as a generator keeps
+    /// the list beside its shape.
+    list: Vec<u8>,
     source: Option<Vec<Step>>,
 }
 
@@ -520,10 +524,13 @@ fn case(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Case {
             Some(self::steps(dice, length))
         }
     };
+    let (shape, mut list) = shape(dice, kind, column);
+    list.truncate(8);
     Case {
         steps,
         range: StepRange::between(first, last),
-        shape: shape(dice, kind, column),
+        shape,
+        list,
         source,
     }
 }
@@ -594,6 +601,7 @@ fn rendered(case: &Case, column: ShapeColumn) -> Vec<(usize, Step)> {
         case.range,
         column,
         &case.shape,
+        &case.list,
         case.source.as_deref(),
         &mut cells,
     );
@@ -618,6 +626,7 @@ fn rendered(case: &Case, column: ShapeColumn) -> Vec<(usize, Step)> {
         case.range,
         column,
         &case.shape,
+        &case.list,
         case.source.as_deref(),
     );
     assert_eq!(written, wrapped);
@@ -685,6 +694,8 @@ fn every_fill_renders_on_every_column_without_allocating() {
                     if nth < 2 {
                         case.steps = steps(&mut dice, MAX_PHRASE_STEPS);
                         case.range = StepRange::between(0, MAX_PHRASE_STEPS - 1);
+                        // A `List` as long as a phrase, which the longest goes round.
+                        case.list = (0..MAX_LIST).map(|_| dice.byte()).collect();
                     }
                     if nth % 4 == 3 {
                         case.shape.place = Where::Euclid {
@@ -719,6 +730,7 @@ fn every_fill_renders_on_every_column_without_allocating() {
                         case.range,
                         column,
                         &case.shape,
+                        &case.list,
                         case.source.as_deref(),
                         &mut cells[..case.range.len()],
                     );

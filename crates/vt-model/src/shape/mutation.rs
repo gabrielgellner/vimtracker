@@ -409,6 +409,7 @@ mod tests {
             range,
             column,
             &Shape::following(follow, seed),
+            &[],
             Some(source),
             &mut cells,
         );

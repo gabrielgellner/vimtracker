@@ -144,7 +144,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Every(2),
                                 seed: 4,
                             ),
@@ -298,7 +297,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Euclid(
                                     hits: 7,
                                     rotate: 0,
@@ -439,7 +437,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Notes,
                                 seed: 6,
                                 walk: (

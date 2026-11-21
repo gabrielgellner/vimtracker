@@ -1429,6 +1429,7 @@ pub fn set(
                 phrase,
                 generator,
                 shape,
+                list: None,
             }
         }
     })

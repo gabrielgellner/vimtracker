@@ -6,10 +6,10 @@ use std::ops::Deref;
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::shape::params::Typing;
-use vt_model::shape::{MAX_VALUES, WEIGHTS};
+use vt_model::shape::{MAX_LIST, WEIGHTS};
 
-/// The longest list of notes or nudges that can be typed: eight notes and the spaces between.
-const NAMED_LIST_TEXT: usize = 40;
+/// The longest a note or a nudge is typed, as `C#3` or `+B`, with room to spare.
+const NAMED_TEXT: usize = 4;
 /// The longest rate that can be typed, like `64 bars`.
 const RATE_TEXT: usize = 8;
 /// The longest list of a `Tonnetz`' moves that can be typed: eight and the spaces between.
@@ -90,16 +90,7 @@ impl TypedValue {
                 }
             }
             // A note's name or a nudge, alone or in a list, ended with Enter.
-            Typing::Named { list } => {
-                let longest = if list { NAMED_LIST_TEXT } else { 4 };
-                if text.len() < longest
-                    && (c.is_ascii_alphanumeric()
-                        || matches!(c, '#' | '-' | '+' | '_')
-                        || (list && c == ' '))
-                {
-                    text.push(c);
-                }
-            }
+            Typing::Named { list } => type_named(text, c, list),
             Typing::HexList => type_list(text, c),
             // A `Tonnetz`' moves, `P`, `L` and `R`, with spaces between as wanted.
             Typing::Moves
@@ -160,20 +151,36 @@ impl TypedValue {
 }
 
 /// A character typed into a list of values. Two hex digits make a value, and the space after it
-/// comes by itself, so `704055` types `70 40 55`; a space ends a value of one digit sooner.
+/// comes by itself, so `704055` types `70 40 55`; a space ends a value of one digit sooner. It
+/// takes up to [`MAX_LIST`] values.
 fn type_list(text: &mut String, c: char) {
     let count = text.split_whitespace().count();
     let last = text.rsplit(' ').next().unwrap_or("");
     if c.is_ascii_hexdigit() {
         if last.len() == 2 {
-            if count == MAX_VALUES {
+            if count == MAX_LIST {
                 return;
             }
             text.push(' ');
         }
         text.push(c.to_ascii_uppercase());
-    } else if c == ' ' && !last.is_empty() && count < MAX_VALUES {
+    } else if c == ' ' && !last.is_empty() && count < MAX_LIST {
         text.push(' ');
+    }
+}
+
+/// A character typed into a note's name or a nudge, or in a `list` of them, spaces between, up
+/// to [`MAX_LIST`] of them.
+fn type_named(text: &mut String, c: char, list: bool) {
+    let last = text.rsplit(' ').next().unwrap_or("");
+    if list && c == ' ' {
+        if !last.is_empty() && text.split_whitespace().count() < MAX_LIST {
+            text.push(' ');
+        }
+    } else if last.len() < NAMED_TEXT
+        && (c.is_ascii_alphanumeric() || matches!(c, '#' | '-' | '+' | '_'))
+    {
+        text.push(c);
     }
 }
 
@@ -312,14 +319,31 @@ mod tests {
         let mut value = TypedValue::default();
         typed(
             &mut value,
-            &"00".repeat(MAX_VALUES + 1),
+            &"00".repeat(MAX_LIST + 1),
             Typing::HexList.into(),
         );
         assert_eq!(
             value.split_whitespace().count(),
-            MAX_VALUES,
+            MAX_LIST,
             "no more than it holds"
         );
+    }
+
+    #[test]
+    fn a_list_of_notes_takes_up_to_256_of_them() {
+        let named = Typing::Named { list: true }.into();
+        let mut value = TypedValue::default();
+        typed(&mut value, &"C#3 ".repeat(MAX_LIST + 1), named);
+        assert_eq!(value.split_whitespace().count(), MAX_LIST);
+        assert!(
+            value
+                .split_whitespace()
+                .take(MAX_LIST - 1)
+                .all(|note| note == "C#3")
+        );
+        let mut value = TypedValue::default();
+        typed(&mut value, "C-3  E-3x5", named);
+        assert_eq!(value, "C-3 E-3x", "a note is four characters at most");
     }
 
     #[test]

@@ -245,6 +245,7 @@ fn kit(value: u16) -> (Song, usize) {
                 column: ShapeColumn::Velocity,
                 span: Span::rows(StepRange::between(0, 15)),
                 shape: tresillo(),
+                list: Box::default(),
             },
         );
     }

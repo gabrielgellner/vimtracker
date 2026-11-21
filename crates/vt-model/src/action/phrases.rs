@@ -15,10 +15,11 @@ pub(super) fn edit(next: &mut Song, action: &Action) -> Result<(), EditError> {
             column,
             span,
             shape,
+            list,
         } => {
             let source = followed_live(next, shape, *track, *phrase)?;
             let source = source.as_ref().map(|source| source.loop_steps());
-            let generator = Generator::new(*column, *span, *shape);
+            let generator = Generator::new(*column, *span, *shape).with_list(list);
             if !phrase_mut(next, *track, *phrase)?.add_generator(generator, source) {
                 return Err(EditError::NoLane);
             }
@@ -28,10 +29,13 @@ pub(super) fn edit(next: &mut Song, action: &Action) -> Result<(), EditError> {
             phrase,
             generator,
             shape,
+            list,
         } => {
             let source = followed_live(next, shape, *track, *phrase)?;
             let source = source.as_ref().map(|source| source.loop_steps());
-            if !phrase_mut(next, *track, *phrase)?.reshape_generator(*generator, *shape, source) {
+            let list = list.as_deref();
+            let found = phrase_mut(next, *track, *phrase)?;
+            if !found.reshape_generator(*generator, *shape, list, source) {
                 return Err(EditError::NoGenerator {
                     phrase: *phrase,
                     generator: *generator,
