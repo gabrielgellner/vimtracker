@@ -209,3 +209,73 @@ fn to_cell(app: &mut App, param: GenParam) {
     }
     panic!("no {param:?} on the Gen page");
 }
+
+/// `S` across a group whose tracks aren't all named makes no kit line, saying which have no
+/// name (decision 472).
+#[test]
+fn s_refuses_a_kit_line_on_unnamed_tracks() {
+    let (app, rt) = kit_app();
+    let mut song = (**app.song()).clone();
+    drop((app, rt));
+    song.tracks[1].name.clear();
+    let (mut app, _rt) = app_for(song);
+    keys(&mut app, "vGWWS");
+    keys(&mut app, "K/mini<Enter>");
+    assert_ne!(panel(&app).shape.kind, FillKind::Mini);
+    assert!(panel(&app).shape.kit.is_none());
+    assert_eq!(
+        app.services.status,
+        "Track 02 has no name, and a kit line plays its tracks by their names: :name it first"
+    );
+}
+
+/// `:name` takes only a name a kit line can play, saying why it refuses one; and a track that
+/// joins the group joins its line, as one `u` (decision 472).
+#[test]
+fn a_track_named_and_joining_the_group_joins_its_line() {
+    let (mut app, _rt) = kit_app();
+    keys(&mut app, "vGWWS");
+    keys(&mut app, "K/mini<Enter>");
+    down_to(&mut app, GenParam::MiniText);
+    keys(&mut app, "Sbd sn hh .<Enter>L");
+    app.services.cursor.track = 3;
+    keys(&mut app, ":name c*<Enter>");
+    assert!(
+        app.services.status.contains(":name takes two characters"),
+        "{}",
+        app.services.status
+    );
+    assert!(app.song().tracks[3].name.is_empty());
+    keys(&mut app, ":group 1<Enter>");
+    assert!(
+        app.services.status.contains("has none: :name it first"),
+        "{}",
+        app.services.status
+    );
+    assert_eq!(app.song().tracks[3].group, None);
+    keys(&mut app, ":name c-<Enter>");
+    assert_eq!(app.song().tracks[3].name, "C-");
+    keys(&mut app, ":name cp<Enter>");
+    let depth = app.services.history.undo_depth();
+    keys(&mut app, ":group 1<Enter>");
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
+    assert_eq!(text(&app, 3), "bd sn hh .");
+    assert_eq!(
+        rows(&app, 3),
+        "................",
+        "nothing until its name is typed"
+    );
+    assert_eq!(
+        app.song().kit_names(
+            app.song().tracks[0].phrases[&0].generators()[0]
+                .shape
+                .kit
+                .unwrap()
+        ),
+        ["BD", "SN", "HH", "CP"]
+    );
+    keys(&mut app, "u");
+    assert_eq!(app.song().tracks[3].group, None);
+    assert!(app.song().tracks[3].phrases[&0].generators().is_empty());
+    assert_eq!(rows(&app, 3), "................");
+}

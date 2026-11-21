@@ -344,8 +344,12 @@ impl App {
             };
             return;
         }
-        self.services
-            .apply(&Action::SetTrackGroup { first, last, group });
+        if !self
+            .services
+            .applied(&Action::SetTrackGroup { first, last, group })
+        {
+            return;
+        }
         let which = if first == last {
             format!("Track {:02}", first + 1)
         } else {

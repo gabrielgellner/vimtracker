@@ -912,7 +912,11 @@ it, name its slices and set its points by eye and by ear; `Ctrl-o` comes back.
 ## Names
 
 `:name BD` names the current track, in place of its number. A name is two
-characters and starts with a letter. `:name` on its own clears it. On a group's own
+characters, a letter then a letter, a digit, `-` or `_`, as `BD`, `S2` or `H-`,
+so it's always one token of a kit line (**A kit line**, in the editing guide);
+anything else is refused, saying why, wherever a name comes from, a kit's file
+included. Two tracks of one group can't have names that differ only by case.
+`:name` on its own clears it. On a group's own
 track it takes up to five letters or digits, as `:group name` does, so `:name drums`
 names the group `DRUMS`.
 

@@ -329,8 +329,13 @@ impl Services {
     /// Run an action and make the result current. A fader it moves that the steps drive is
     /// taken over by the hand that moved it. One that changes nothing leaves no undo step, keeps
     /// the song as saved and isn't sent again; the take-over still happens, as the hand moved the
-    /// fader off what the steps had it at.
+    /// fader off what the steps had it at. A refused one says why on the status line.
     pub fn apply(&mut self, action: &Action) {
+        self.applied(action);
+    }
+
+    /// The same, giving whether it was made rather than refused, for whoever would say more.
+    pub fn applied(&mut self, action: &Action) -> bool {
         match edit(self.song(), action) {
             Ok(next) => {
                 self.say_applied(&next);
@@ -339,8 +344,12 @@ impl Services {
                     self.dirty = true;
                     self.publish();
                 }
+                true
             }
-            Err(error) => self.status = error.to_string(),
+            Err(error) => {
+                self.status = error.to_string();
+                false
+            }
         }
     }
 

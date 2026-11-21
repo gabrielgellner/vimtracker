@@ -1,7 +1,7 @@
 //! A `Tonnetz`'s moves (#1089, decision 459): `P`, `L` and `R`, each a token, spaces between as
 //! wanted, up to [`MAX_MOVES`]; `=` and `-` go round the three.
 
-use super::{About, Bad, Grammar, Kind, Offer, Token, as_it_is};
+use super::{About, Bad, Grammar, Kind, Offer, Token, as_it_is, nth_of};
 use crate::shape::MAX_MOVES;
 
 /// The moves in the order `=` goes round them.
@@ -54,7 +54,8 @@ pub(super) static MOVES: Grammar = Grammar {
         })
         .collect()
     },
-    rows: |_, _| None,
+    // A move by its place in the list, as the walk counts it (decision 473).
+    rows: |tokens, at| nth_of(tokens, at, Kind::Move),
     fixed: |_| None,
     blank: "",
     rest: "",
@@ -149,5 +150,11 @@ mod tests {
             "{offers:?}"
         );
         assert_eq!((MOVES.about)(Kind::Move, 1, column).name, "Move 2");
+        let tokens = split("P L R");
+        assert_eq!(
+            (MOVES.rows)(&tokens, 2),
+            Some(2),
+            "by its place in the list"
+        );
     }
 }

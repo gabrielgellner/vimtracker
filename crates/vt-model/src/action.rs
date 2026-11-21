@@ -17,7 +17,7 @@ use crate::generator::Span;
 use crate::groove::{CUSTOM_GROOVES, Groove, GrooveId};
 use crate::insert::Insert;
 use crate::kit::CHOKE_GROUPS;
-use crate::label::GROUP_NAME_CHARS;
+use crate::label::{GROUP_NAME_CHARS, NAME_RULE};
 use crate::lane::{LANE_RATES, LaneMove};
 use crate::macros::{MACRO_NAME_LENGTH, MACROS, MacroMap, MacroTarget};
 use crate::modulation::ModSlot;
@@ -44,7 +44,7 @@ mod sound;
 mod steps;
 mod tracks;
 
-use generators::follow_generators;
+use generators::{follow_generators, join_kit_lines};
 pub use generators::{hold_generators, keep_kit_lines, rescale_generators};
 
 /// A new value for one field.
@@ -792,6 +792,12 @@ pub enum EditError {
     GroupMember,
     #[error("a group's name is 1 to {GROUP_NAME_CHARS} letters or digits")]
     GroupName,
+    #[error("{0} can't name a track: a name is {NAME_RULE}, so it's one token of a kit line")]
+    TrackName(String),
+    #[error("{0} and {1} can't be in one group: a kit line reads names without case")]
+    NameCase(String, String),
+    #[error("a kit line plays its tracks by their names, and {0} has none: :name it first")]
+    Unnamed(String),
     #[error(
         "an accumulator's limits go from 1 to {MOST_DEGREES}, and its loops from 1 to {MOST_LOOPS}"
     )]
@@ -914,6 +920,8 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
         | Action::JoinSlices { .. }
         | Action::LoadKit(_) => bank::edit(&mut next, action)?,
     }
+    tracks::check_names(song, &next)?;
+    join_kit_lines(song, &mut next)?;
     keep_kit_lines(Some(song), &mut next);
     hold_generators(&mut next);
     follow_generators(song, &mut next);

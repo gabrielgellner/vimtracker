@@ -47,6 +47,24 @@ use crate::services::generators::{Part, column_label, settle, too_few};
 use crate::widgets::tokens::{reached, said_after};
 use crate::widgets::value_bars::{BarRow, ValueBars};
 
+/// Why a kit line isn't made on these tracks, by their numbers: they have no names, which its
+/// hits would be (decision 472).
+fn unnamed_said(tracks: &[usize]) -> String {
+    let numbers: Vec<String> = tracks.iter().map(|at| format!("{:02}", at + 1)).collect();
+    match numbers.split_last() {
+        Some((last, [])) => {
+            format!(
+                "Track {last} has no name, and a kit line plays its tracks by their names: :name it first"
+            )
+        }
+        Some((last, rest)) => format!(
+            "Tracks {} and {last} have no names, and a kit line plays its tracks by their names: :name them first",
+            rest.join(", ")
+        ),
+        None => String::new(),
+    }
+}
+
 /// The title of the list offering a beat after a kit's sounds are loaded as tracks.
 pub const KIT_BEAT_PICKER: &str = "Start a beat";
 
@@ -1353,13 +1371,28 @@ impl ShapePanel {
     /// A named rhythm made `Own` starts from its text, its part a token a pulse (decision 461).
     pub(crate) fn change(&mut self, change: impl FnOnce(&mut Self), services: &mut Services) {
         let (before, text) = (self.shape.place, self.rhythm.clone());
+        let was = self.shape;
         change(self);
         settle(&mut self.shape, &self.sources, self.default_source);
         if self.shape.kind == FillKind::List && self.list.is_empty() {
             self.list = self.kept_list().into();
         }
-        // A `Mini` across a group's tracks is a kit line, and only a `Mini` (decision 464).
+        // A `Mini` across a group's tracks is a kit line, and only a `Mini` (decision 464), and
+        // only while each of its tracks has a name, its token (decision 472).
         self.shape.kit = self.kit.filter(|_| self.shape.kind == FillKind::Mini);
+        if self.shape.kit.is_some() && was.kit.is_none() {
+            let unnamed: Vec<usize> = self
+                .parts
+                .iter()
+                .map(|part| part.track)
+                .filter(|&track| self.base.tracks[track].name.is_empty())
+                .collect();
+            if !unnamed.is_empty() {
+                self.shape = was;
+                services.status = unnamed_said(&unnamed);
+                return;
+            }
+        }
         // A `Mini` with no line yet starts from what's in its rows (decision 462), a kit line
         // from which of its tracks has a note on each.
         if self.shape.kind == FillKind::Mini

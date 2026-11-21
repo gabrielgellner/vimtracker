@@ -439,6 +439,13 @@ over a hat on every row, each a `RET` of two. A name in two layers is refused, a
 `Tab` offer the line's names, and `=` and `-` on a name turn it to the next
 track's or the one before.
 
+Every track of the line needs a name, as its number can't be a token: while any
+has none, `Mini` makes no kit line and says which, `Track 02 has no name`, so
+`:name` them first. A name is always one token, two characters, a letter then a
+letter, a digit, `-` or `_` (**Names**, in the sound guide), and two tracks of
+one group can't have names that differ only by case, `BD` and `bd`, as the line
+reads them as one.
+
 The line is kept the same on every track it spans. An edit to it on any of
 them, typed or turned in its tokens, on the panel or a track's Gen, is made
 on all of them as one change, one `u`: its `Text`, its `Step`, its seed, `Vary`
@@ -447,8 +454,12 @@ has is marked as text that doesn't read. `:name` on one of its tracks renames
 its tokens in the line, in the same change. `dd` on one track's `Fill` takes
 that track out of the line, putting back what was under it, and a track leaving
 the group leaves it too, its rows kept as they were heard; the rest play on, and
-its tokens stay in the line, now marked. Gen's device title names the
-group's kit, `Note kit G1`.
+its tokens stay in the line, now marked. A track joining the group joins the
+line in the same change, one `u`: it gets the line over the same rows, at its
+first note there or else the line's `From`, and plays where its name is typed,
+nothing until then. One with no name can't join a group with a kit line. The
+line's tracks are the group's, but for one `dd` took out. Gen's device title
+names the group's kit, `Note kit G1`.
 `Beats` is the rhythm `Acid` has always played, for any fill: each row a chance
 by where it falls in the bar, counting from the first row selected, the beats
 most, then every third row, then the other even rows, and the rest least. Its
@@ -778,7 +789,12 @@ Each move is drawn over the chord it reaches, `P   L   R   L` over `Cm  G#  Fm  
 and the panel's last line names the first chords as the list goes round, `C Cm G# Fm C# C#m A
 F#m`. `l` opens the moves: `=` and `-` go round `P`, `L` and `R`, so a progression is tried a
 move at a time, the status line saying the chords it goes between, `Move 2: L, Cm to G#`, and `K`
-lists the three with the chord each would reach from there.
+lists the three with the chord each would reach from there. In the buffer each move lights the
+rows its chord is on, `P` of `P L R L` on 16 rows lighting rows 01, 05, 09 and 0D, the first row
+being the chord the walk starts on, which no move reaches; while the phrase plays, the move that
+reached the chord playing is green. A move `In scale` leaves out lights nothing, the next move
+taking its rows, and with `Moves` at `Random` or `Loop` nothing is lit, as the list isn't what
+writes them.
 
 **On the Chord voice.** `Voice` `Chord` writes each row's root, within a
 tritone of `From`, and locks the voice's `Chord` to `M` or `m` in the first FX
@@ -1180,6 +1196,11 @@ the same way. While the phrase plays, the token that wrote the row playing is
 green, the playhead's colour, and so is that row's mark. A generator whose `Vary` gives a pass a
 seed of its own lights the token of the pass playing. While the text doesn't read, the line is of
 the last text that did, and says `still the last text that read`.
+
+`Weights`, a `List`'s values, an `Own` rhythm's or a `Mini`'s text and a `Tonnetz`'s moves have
+the rows line. A mask's bits, `Flip` and `Keep`, and the Mod page's Steps box have none on
+purpose: a bit touches every row's value, so it would light them all, and steps aren't phrase
+rows.
 
 ## Values and small edits
 
