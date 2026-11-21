@@ -147,8 +147,8 @@ fn the_bit_transforms_flip_keep_and_turn_a_columns_bits() {
     ] {
         assert!(screen.contains(expected), "{expected} in\n{screen}");
     }
-    // `i` types the bits in hex.
-    keys(&mut app, "ji0f");
+    // `i` opens the bits on the first, and `1` and `0` type over them in turn, the lowest first.
+    keys(&mut app, "ji11110000<Enter>");
     assert_eq!(velocities(&app), ["3A", "0F", "4E"]);
     // `Mask bits` keeps some, and `Rotate bits` turns them.
     keys(&mut app, "k=");

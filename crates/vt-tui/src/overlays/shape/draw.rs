@@ -19,7 +19,8 @@ use crate::overlays::shape::ShapePanel;
 use crate::pages::Ctx;
 use crate::widgets::popup;
 use crate::widgets::theme;
-use crate::widgets::tokens::{Layout, WEIGHT_CELL};
+use crate::widgets::token_buffer::{self, Buffer, Marks};
+use crate::widgets::tokens::{Layout, WEIGHT_CELL, buffer_hint, has_rows_line};
 use crate::widgets::value_bars::{Beside, Side};
 
 /// Room for eight notes in a `List`'s values; a longer list shows as many as fit and how many
@@ -120,14 +121,11 @@ fn typed_text(typing: &TypedValue, room: usize) -> String {
 }
 
 /// Whether a row is drawn as a field of tokens: those [`Layout::always`] drawn so, but while
-/// they're typed with `i`, and a `List`'s values while the cursor is in them.
+/// they're typed with `i`. Their buffer is where they're edited (decision 463).
 fn drawn_as_tokens(panel: &ShapePanel, row: GenParam, current: bool) -> bool {
     match row {
         GenParam::Weights => true,
         _ if Layout::always(row) => !current || panel.typing.is_none(),
-        GenParam::Values | GenParam::OwnText | GenParam::MiniText => {
-            current && panel.tokens.is_some()
-        }
         _ => false,
     }
 }
@@ -135,10 +133,9 @@ fn drawn_as_tokens(panel: &ShapePanel, row: GenParam, current: bool) -> bool {
 /// A row in a grammar as a field of tokens, in `room` characters: `Weights`' digits each over the
 /// note it's for, `F  0  8` over `C  D  E`; a `Tonnetz`'s moves each over the chord it reaches; a
 /// mask's bits with its byte beside them; a `List`'s values, as many as fit round the cursor.
-/// The cursor in them is on its token, and what it's for is in full; on the row but not in them,
-/// the tokens are lit together; while they're typed, the text so far and a `_` after it; while
-/// the phrase plays, the token that wrote the row playing is in the playhead's colour; and under
-/// `Weights` and a `List`'s values, the rows line (decision 460).
+/// On the cursor's row the tokens are lit together; while they're typed, the text so far and a
+/// `_` after it; while the phrase plays, the token that wrote the row playing is in the
+/// playhead's colour; and under `Weights`, the rows line (decision 460).
 fn token_lines(
     panel: &ShapePanel,
     ctx: &Ctx,
@@ -148,25 +145,17 @@ fn token_lines(
     room: usize,
 ) -> Vec<Line<'static>> {
     let typed = current.then_some(panel.typing.as_ref()).flatten();
-    let tokens = panel.tokens.as_ref().filter(|_| current);
-    let made;
-    let field = match (tokens, panel.field(row)) {
-        (Some(tokens), _) => &tokens.field,
-        (None, Some(field)) => {
-            made = match typed {
-                Some(typed) => field.retyped(typed),
-                None => field,
-            };
-            &made
-        }
-        (None, None) => return Vec::new(),
+    let Some(field) = panel.field(row) else {
+        return Vec::new();
     };
-    let typing_at = match typed {
-        Some(typed) => Some(typed.len()),
-        None => field.inserting().map(|insert| insert.to),
+    let field = match typed {
+        Some(typed) => field.retyped(typed),
+        None => field,
     };
+    let field = &field;
+    let typing_at = typed.map(|typed| typed.len());
     let layout = Layout::of(row, field, &panel.shape_of(0), &panel.context());
-    let cursor = panel.weight.filter(|_| current);
+    let cursor = None;
     let playing = panel.playing_token(ctx, field);
     let [top, below] = layout.lines(field, cursor, typing_at, current, playing, room);
     let mut line = vec![Span::raw(format!("{:<label$}", row.name()))];
@@ -177,87 +166,33 @@ fn token_lines(
         second.extend(below);
         lines.push(Line::from(second));
     }
-    if has_rows_line(row) {
+    if row == GenParam::Weights {
         let mut rows = vec![Span::raw(format!("{:<label$}", ROWS))];
-        rows.extend(rows_line(panel, ctx, field, current, room));
+        rows.extend(rows_of(panel, ctx, field, &[], room));
         lines.push(Line::from(rows));
     }
     lines
 }
 
-/// Whether a field has the rows line under it: those whose tokens a render records, `Weights`,
-/// a `List`'s values and an `Own` rhythm's hits.
-fn has_rows_line(row: GenParam) -> bool {
-    matches!(
-        row,
-        GenParam::Weights | GenParam::Values | GenParam::OwnText | GenParam::MiniText
-    )
-}
-
-/// The rows line's label.
-const ROWS: &str = "Rows";
-
-/// The rows line under a field of tokens (decision 460, the study's Mockup 1): a mark for each row
-/// of the span on the phrase in view, `x` where a token writes it, `?` where one with a chance
-/// does and `.` where nothing does. The rows the token under the cursor writes are lit as it is,
-/// and the row playing is in the playhead's colour. Spaced while they fit, then close, then a page
-/// of them at a time, the one with the cursor's first row or the row playing. While the text
-/// doesn't read it's of the last text that did, and says so.
-fn rows_line(
+/// The rows line of a field on the phrase in view, the rows `lit` lit and the row playing in
+/// the playhead's colour.
+fn rows_of(
     panel: &ShapePanel,
     ctx: &Ctx,
     field: &Field,
-    current: bool,
+    lit: &[usize],
     room: usize,
 ) -> Vec<Span<'static>> {
     let (track, phrase) = (ctx.cursor().track, ctx.phrase_id());
     let Some(table) = panel.table(track, phrase, 0) else {
         return Vec::new();
     };
-    let range = table.range();
-    let marks = table.marks(field);
-    let lit = match (current, panel.weight) {
-        (true, Some(at)) if panel.tokens.is_some() => table.rows(field, at),
-        _ => Vec::new(),
-    };
-    let playing = ctx
-        .playhead_place()
-        .map(|(row, _)| row)
-        .filter(|row| range.first <= *row && *row <= range.last);
-    let bad = field.bad().is_some();
-    let note = "  still the last text that read";
-    let room = if bad {
-        room.saturating_sub(note.len())
-    } else {
-        room
-    }
-    .max(1);
-    let spaced = marks.len() * 2 <= room + 1;
-    let fits = if spaced { marks.len() } else { room };
-    let focus = lit.first().copied().or(playing).unwrap_or(range.first) - range.first;
-    let start = focus / fits * fits;
-    let mut spans = Vec::new();
-    for (offset, mark) in marks.iter().enumerate().skip(start).take(fits) {
-        let row = range.first + offset;
-        let style = if lit.contains(&row) {
-            theme::cursor(Mode::Normal)
-        } else if playing == Some(row) {
-            theme::active()
-        } else if *mark == vt_model::notation::Mark::Nothing {
-            theme::faint()
-        } else {
-            Style::new()
-        };
-        if spaced && offset > start {
-            spans.push(Span::raw(" "));
-        }
-        spans.push(Span::styled(mark.glyph().to_string(), style));
-    }
-    if bad {
-        spans.push(Span::styled(note, theme::dim()));
-    }
-    spans
+    let playing = ctx.playhead_place().map(|(row, _)| row);
+    token_buffer::rows_line(&table, field, lit, playing, room)
 }
+
+/// The rows line's label.
+const ROWS: &str = "Rows";
 
 /// How wide the panel is: room for eight notes in a `List`'s values, or for each of `Weights`'
 /// digits over its note.
@@ -306,18 +241,13 @@ fn window(area: Rect, panel: &ShapePanel, side: Side) -> Rect {
         height: area.height.saturating_sub(FROM_TOP),
         ..area
     };
-    // `Weights` takes two lines more, for its notes and the rows line, a `Tonnetz`'s moves one for
-    // their chords, and a `List`'s values one for the rows line while the cursor is in them.
+    // `Weights` takes two lines more, for its notes and the rows line, and a `Tonnetz`'s moves one
+    // for their chords.
     let lines_more = rows
         .iter()
         .map(|row| match row {
             GenParam::Weights => 2,
             GenParam::MoveList => 1,
-            GenParam::Values | GenParam::OwnText | GenParam::MiniText
-                if panel.row == *row && panel.tokens.is_some() =>
-            {
-                1
-            }
             _ => 0,
         })
         .sum::<u16>();
@@ -340,7 +270,7 @@ fn labels(rows: &[GenParam]) -> usize {
 
 /// Draw the panel in its usual place, the area's top right.
 pub fn draw(frame: &mut Frame, area: Rect, ctx: &Ctx, panel: &ShapePanel) {
-    draw_in(frame, window(area, panel, Side::Right), ctx, panel);
+    draw_in(frame, area, window(area, panel, Side::Right), ctx, panel);
 }
 
 /// Draw the panel with the bars of the column it shapes beside the column, when the phrase grid is
@@ -380,7 +310,7 @@ pub(crate) fn draw_with_bars(
     match found {
         Some((at, window)) => {
             beside.draw(frame.buffer_mut(), &bars, at);
-            draw_in(frame, window, ctx, panel);
+            draw_in(frame, area, window, ctx, panel);
         }
         None => {
             draw(frame, area, ctx, panel);
@@ -394,8 +324,8 @@ pub(crate) fn draw_with_bars(
     }
 }
 
-/// Draw the panel in its window.
-fn draw_in(frame: &mut Frame, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
+/// Draw the panel in its window, and the row's buffer under the row where it's open.
+fn draw_in(frame: &mut Frame, area: Rect, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
     let rows = panel.rows();
     let context = panel.context();
     let labels = labels(&rows);
@@ -500,15 +430,6 @@ fn draw_in(frame: &mut Frame, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
         String::new()
     };
     let hint = match panel.shape.kind {
-        _ if panel.weight.is_some() => match panel.row {
-            GenParam::Values => "h l move  = - turn  x out  a after  Esc out",
-            GenParam::OwnText | GenParam::MiniText => {
-                "h l move  = - turn  x out  ~ rest  a after  K what goes"
-            }
-            GenParam::MoveList => "h l move  = - turn P L R  x out  Esc out",
-            GenParam::Flip | GenParam::Keep => "h l move  = - switch  0 1 types  Esc out",
-            _ => "h l move  = - change  0-F types  Esc out",
-        },
         // Each pair of tracks shares one coin.
         _ if pairs && panel.shape.kind.has_where() => "Each row goes to one track or the other",
         // A named rhythm's parts go to the tracks in turn, and a 12/8 one's pulses are a bar's
@@ -577,36 +498,49 @@ fn draw_in(frame: &mut Frame, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
         .title_style(Style::new().add_modifier(Modifier::BOLD));
     let inside = popup::draw(frame, window, border);
     frame.render_widget(Paragraph::new(lines), inside);
-    token_menu(frame, inside, panel, labels);
+    draw_buffer(frame, area, inside, ctx, panel);
 }
 
-/// The list `K` or `Tab` opened in a field of tokens, under the field, its names under the token
-/// the cursor is on (decision 458).
-fn token_menu(frame: &mut Frame, inside: Rect, panel: &ShapePanel, labels: usize) {
+/// The row's buffer while it's open (decision 463): under the row, from the panel's left edge,
+/// its rows line under the text and the list `K` or `Tab` opened under the cursor's token.
+fn draw_buffer(frame: &mut Frame, area: Rect, inside: Rect, ctx: &Ctx, panel: &ShapePanel) {
     let (Some(tokens), Some(at)) = (&panel.tokens, panel.weight) else {
-        return;
-    };
-    let Some(menu) = &tokens.menu else {
         return;
     };
     let rows = panel.rows();
     let Some(place) = rows.iter().position(|row| *row == panel.row) else {
         return;
     };
-    // The rows above it, each a line, or two with what's under its tokens.
-    let above: usize = rows[..place]
-        .iter()
-        .map(|row| 1 + usize::from(matches!(row, GenParam::Weights | GenParam::MoveList)))
-        .sum();
-    // Under the line the field's tokens are over, after the panel's heading.
-    let row = inside.y + above as u16 + 2;
+    // The lines of each row: its tokens, what's under them, and `Weights`' rows line.
+    let lines = |row: &GenParam| match row {
+        GenParam::Weights => 3,
+        GenParam::MoveList => 2,
+        _ => 1,
+    };
+    let above: u16 = rows[..=place].iter().map(lines).sum();
+    // After the panel's heading, the row's last line.
+    let row = inside.y + above;
     let field = &tokens.field;
     let layout = Layout::of(panel.row, field, &panel.shape_of(0), &panel.context());
-    let room = usize::from(inside.width).saturating_sub(labels);
-    let column = inside.x + (labels + layout.x_of(field, at, room)) as u16;
-    // The panel keeps the list and lends it to be drawn, so it scrolls from the top each time.
-    let mut picker = menu.picker.clone();
-    crate::overlays::picker::draw::draw_menu_under(frame, row, column, &mut picker);
+    let room = Buffer::room(area);
+    let lit = match panel.table(ctx.cursor().track, ctx.phrase_id(), 0) {
+        Some(table) => table.rows(field, at),
+        None => Vec::new(),
+    };
+    let buffer = Buffer {
+        title: panel.row.name(),
+        hint: buffer_hint(panel.row),
+        field,
+        layout: &layout,
+        marks: Marks {
+            cursor: Some(at),
+            typing_at: field.inserting().map(|insert| insert.to),
+            playing: panel.playing_token(ctx, field),
+        },
+        rows: has_rows_line(panel.row).then(|| rows_of(panel, ctx, field, &lit, room)),
+        menu: tokens.menu.as_ref(),
+    };
+    buffer.draw(frame, area, row, inside.x.saturating_sub(1));
 }
 
 #[cfg(test)]
@@ -884,7 +818,10 @@ mod tests {
         keys(&mut app, "lvGSKlist<Enter>j");
         keys(
             &mut app,
-            &format!("i{}<Enter>", "1020304050607071".repeat(32)),
+            &format!(
+                "S{}<Esc><Enter>",
+                "10 20 30 40 50 60 70 71 ".repeat(32).trim_end()
+            ),
         );
         assert_eq!(app.overlays.shape.as_ref().unwrap().list.len(), 256);
         let shown = screen(&mut app, 163, 42);
@@ -893,11 +830,39 @@ mod tests {
             values.starts_with("Values  10 20 30 40 50 60 70 71 10 +247"),
             "{values}"
         );
-        // While it's typed, the end of what's typed is in sight.
-        keys(&mut app, &format!("i{}", "40".repeat(20)));
+    }
+
+    /// The buffer shows a rhythm's whole text as typed, its brackets and commas as they are, and
+    /// wraps a text longer than its room (decision 463).
+    #[test]
+    fn the_buffer_draws_the_whole_text_as_typed_wrapped() {
+        let mut app = app_on(&["--- -- --- --- ---"; 16]);
+        keys(&mut app, "vGS");
+        while app.overlays.shape.as_ref().unwrap().row != GenParam::Where {
+            keys(&mut app, "j");
+        }
+        keys(&mut app, "K/rhythm<Enter>");
+        while app.overlays.shape.as_ref().unwrap().row != GenParam::OwnText {
+            keys(&mut app, "j");
+        }
+        let long = "x(3,8) [. x]*2 <x . .> ".repeat(5);
+        keys(&mut app, &format!("S{}<Esc>", long.trim_end()));
         let shown = screen(&mut app, 163, 42);
-        let typed = labelled(&shown, "Values");
-        assert!(typed.starts_with("Values  \u{2026}"), "{typed}");
-        assert!(typed.contains("40 40 40_"), "{typed}");
+        let text: Vec<String> = (0..42).map(|y| row(&shown, y)).collect();
+        let first = text
+            .iter()
+            .position(|line| line.contains("╭ Text "))
+            .expect("the buffer");
+        assert!(
+            text[first + 1].contains("x(3,8) [. x]*2 <x . .> x(3,8)"),
+            "{}",
+            text.join("\n")
+        );
+        assert!(
+            text[first + 2].contains("<x . .>"),
+            "wrapped: {}",
+            text.join("\n")
+        );
+        assert!(text.iter().any(|line| line.contains("Enter close")));
     }
 }

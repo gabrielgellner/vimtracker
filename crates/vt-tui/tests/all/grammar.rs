@@ -1870,41 +1870,45 @@ fn a_list_fill_types_its_values_and_goes_round_them() {
         app.services.status
     );
     assert_eq!(list(&app), "10 40");
-    keys(&mut app, "i704055");
-    assert_eq!(panel(&app).typing.as_deref(), Some("70 40 55"));
+    // `S` types the list again in its buffer, a space after each two digits.
+    keys(&mut app, "S704055");
+    assert_eq!(
+        panel(&app)
+            .tokens
+            .as_ref()
+            .map(|tokens| tokens.field.text()),
+        Some("70 40 55")
+    );
     keys(&mut app, "<Enter>");
     assert_eq!(list(&app), "70 40 55");
     assert_eq!(vel(&app), ["70", "40", "--", "55", "70", "40", "55"]);
-    keys(&mut app, "i7 4<BS>40<Enter>");
+    keys(&mut app, "S7 4<BS>40<Enter>");
     assert_eq!(list(&app), "07 40");
-    keys(&mut app, "i<Enter>");
-    assert!(
-        app.services.status.contains("hex values"),
-        "{}",
-        app.services.status
-    );
+    // Nothing typed doesn't read: `Enter` is refused, and `Esc` keeps the list.
+    keys(&mut app, "S<Enter>");
+    assert!(panel(&app).tokens.is_some());
+    keys(&mut app, "<Esc>");
     assert_eq!(list(&app), "07 40", "nothing typed keeps the list");
-    keys(&mut app, "i1020304050607071727<Enter>");
+    keys(&mut app, "S1020304050607071727<Enter>");
     assert_eq!(
         list(&app),
         "10 20 30 40 50 60 70 71 72 07",
         "more than eight, as many as a phrase has rows"
     );
-    keys(&mut app, &format!("i{}<Enter>", "40".repeat(300)));
+    // Past 256 the text doesn't read, and the last that did, 256 values, is kept.
+    keys(&mut app, &format!("S{}<Enter><Esc>", "40".repeat(300)));
     assert_eq!(panel(&app).list, [0x40; 256], "256 at most");
-    keys(&mut app, "iFF 20<Enter>");
+    keys(&mut app, "SFF 20<Enter>");
     assert_eq!(list(&app), "7F 20", "a value stops at the column's top");
-    keys(&mut app, "i30<Esc>");
-    assert_eq!(list(&app), "7F 20");
 
     // Run gives each value that many rows, and ~ turns the list round.
-    keys(&mut app, "i704055<Enter>j=");
+    keys(&mut app, "S704055<Enter>j=");
     assert_eq!(vel(&app), ["70", "70", "--", "40", "40", "55", "55"]);
     keys(&mut app, "~");
     assert_eq!(list(&app), "55 40 70");
     keys(&mut app, "kx");
     assert_eq!(list(&app), "10 40", "the default is the two ends");
-    keys(&mut app, "i704055<Enter><Enter>");
+    keys(&mut app, "S704055<Enter><Enter>");
     assert_eq!(app.modes.mode, Mode::Normal);
     assert_eq!(app.services.history.undo_depth(), 1);
 
@@ -1968,15 +1972,16 @@ fn shape_on_the_note_column_re_pitches_in_degrees_and_snaps() {
     keys(&mut app, "u");
     keys(&mut app, "vGSK/list<Enter>j");
     assert_eq!(panel(&app).row, GenParam::Values);
-    keys(&mut app, "ic3 d#3 g3<Enter>");
+    keys(&mut app, "Sc3 d#3 g3<Enter>");
     assert_eq!(notes_of(&app), ["C-3", "D#3", "---", "OFF", "G-3", "C-3"]);
-    keys(&mut app, "ic3 q3<Enter>");
+    keys(&mut app, "Sc3 q3<Enter>");
     assert!(
         app.services.status.contains("C-3"),
         "{}",
         app.services.status
     );
-    keys(&mut app, "<Esc>");
+    // `Esc` closes the buffer, and a second the panel, putting back what was there.
+    keys(&mut app, "<Esc><Esc>");
     assert_eq!(steps(&app), start);
 }
 

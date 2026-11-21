@@ -20,8 +20,9 @@ and the `Where`'s in the third, so they stay put as the fill changes: a counted 
 at the top, then `Hits` and `Rotate`, `Rule` and `Start`, or an amount, such as `Beats`'
 `Density`; `Complementary`'s amount and `Side`; or a named rhythm's `Rhythm`, `Part` and
 `Child`, whose `Over` and `Text` go to the fourth, but on an `Acid`, whose fourth is full,
-which has no `Text` there; or an `Own` rhythm's `Rhythm`, `Text` and `Step`, its `Over` in
-the fourth. `l` on `Text` goes into its tokens, and `i` types it all. A `Mini`, which has no
+which has no `Text` there; or an `Own` rhythm's `Rhythm` and `Step`, its `Over` and `Text`
+in the fourth, where a named one's are, but on an `Acid`, where its `Text` is in the third.
+`Enter` on `Text` opens its buffer, and `i` types at its end. A `Mini`, which has no
 `Where`, has its `Text` across the first column and on, then `Step` and, on the Note column,
 `From`, whose octave its degrees count from; on a kit line, `Note kit G1` at the end of its
 title, `From` is the note its track plays, its own, and its `Text` is the whole line, the
@@ -45,10 +46,15 @@ cursor on a weight, the generator's preview marks the rows its degree writes wit
 down the picture, and while the phrase plays, the weight of the note playing is named in green,
 the playhead's colour, on the pass the phrase is on. The Roto has
 the first eight on one page and the last four on a second. The fill's own `Weights` cell shows
-the digits each over its note, and `l` goes into them, as the shape panel's row does (see
-**Fields of tokens** in the editing guide), the fast way to see them all and type `F08F`; so do a
-`List`'s `Values`, a `Tonnetz`'s moves, each over its chord, and a mask, as its eight bits. Each
-change in a field is one undo step, and a key it doesn't have, such as `j`, leaves it. A value with a bar is brief, as `9` for hits,
+its digits, `F08FF`, cut to the cell's width, and so do a `List`'s `Values`, a `Tonnetz`'s moves,
+a mask's bits and a rhythm's or a `Mini`'s `Text`; `h` `l` `j` `k` go from them as from any cell.
+`Enter` on one opens its buffer under it, the whole text, on the first token, `i` and `a` open it
+typing at the end, keeping the text, and `cc` and `S` typing it all again (see **Fields of
+tokens** in the editing guide): the digits each over its note, the moves each over its chord.
+`K` stays the setting's own. Each change is heard as it's made, and the changes are one undo
+step as it closes; a key it doesn't have, such as `j`, does nothing until `Esc` or `Enter` closes
+it. A rhythm's `Text` is in the fourth column, named or `Own`, so editing a named one's turns it
+`Own` with nothing moved. A value with a bar is brief, as `9` for hits,
 as its bar shows how many of how many; the status line says it in full, `Hits, 9
 of the 16 rows`.
 

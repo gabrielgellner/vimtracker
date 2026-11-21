@@ -107,9 +107,9 @@ states | Amount
 share | Amount
 side | Side
 rhythm | Rhythm
+own_text | Text
 role | Part
 child | Child
-own_text | Text
 own_step | Step
 rule | Rule
 start | Start

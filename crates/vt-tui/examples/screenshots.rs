@@ -312,8 +312,8 @@ const SHOTS: &[Shot] = &[
         ..PLAIN
     },
     // The shape panel's random fill on an empty Note column in C minor pentatonic, its `Weights`
-    // gone into with `l` and `F08` typed, so the cursor is on the fourth digit, G's, each digit
-    // over its note.
+    // opened with `l` in their buffer and `F08` typed, so the cursor is on the fourth digit,
+    // G's, each digit over its note.
     Shot {
         name: "shape-weights",
         rows: &[],
@@ -327,6 +327,15 @@ const SHOTS: &[Shot] = &[
         name: "shape-weights-offer",
         rows: &[],
         keys: ":set scale=minor-pentatonic<Enter>vGSKrandom<Enter>jjjjjjlf08K",
+        size: FULL,
+        ..PLAIN
+    },
+    // An `Own` rhythm's `Text` in its buffer (decision 463): typed again with `S`, longer than the
+    // panel's row, drawn whole as typed, the cursor on its first token and the rows line under it.
+    Shot {
+        name: "shape-buffer",
+        rows: &[],
+        keys: "vGSjjjjjjK/rhythm<Enter>jjjSx(3,8) [. x]*2 x? . [x x x] . x(5,8,2) . x . x x . x x . .<Esc>",
         size: FULL,
         ..PLAIN
     },

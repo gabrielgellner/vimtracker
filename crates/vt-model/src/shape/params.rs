@@ -531,6 +531,34 @@ mod tests {
         }
     }
 
+    /// A rhythm's `Text` is in one place, named or `Own`, on the Gen page and the panel, so a
+    /// named one made `Own` by editing its text moves nothing (decision 463).
+    #[test]
+    fn a_rhythms_text_stays_put_whether_named_or_own() {
+        let place_of = |shape: &Shape| {
+            let grid = GenParam::grid(shape, note(), false);
+            let at = (0..crate::grid::GRID_ROWS)
+                .flat_map(|row| (0..crate::grid::GRID_COLUMNS).map(move |column| (row, column)))
+                .find(|(row, column)| grid.at(*row, *column) == Some(GenParam::OwnText));
+            let rows = GenParam::of(shape, note(), false);
+            let before = rows.iter().position(|row| *row == GenParam::OwnText);
+            (at, before)
+        };
+        for kind in [FillKind::Alternate, FillKind::Random, FillKind::Ramp] {
+            let mut named = shape(kind);
+            named.place = Where::Rhythm {
+                rhythm: World::ALL[0],
+                part: Role::ALL[0],
+                child: 100,
+            };
+            let mut own = named;
+            own.place = Where::Own(Own::default());
+            let (on_page, on_panel) = place_of(&named);
+            assert!(on_page.is_some(), "{kind:?}");
+            assert_eq!(place_of(&own), (on_page, on_panel), "{kind:?}");
+        }
+    }
+
     #[test]
     fn every_setting_has_a_key_of_its_own_and_is_found_by_it() {
         for param in GenParam::ALL {

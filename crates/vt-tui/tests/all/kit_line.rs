@@ -65,7 +65,7 @@ fn s_across_a_group_makes_a_kit_line() {
     assert_eq!(panel(&app).names, NAMES.map(str::to_owned));
     assert_eq!(panel(&app).mini, "BD . SN . BD BD SN ., HH!8");
     down_to(&mut app, GenParam::MiniText);
-    keys(&mut app, "ibd . sn . bd bd sn ., hh*2<Enter>");
+    keys(&mut app, "Sbd . sn . bd bd sn ., hh*2<Enter>");
     assert_eq!(panel(&app).mini, "bd . sn . bd bd sn ., hh*2");
     let drawn = shape_panel(&app, 80, 30);
     assert!(
@@ -73,13 +73,15 @@ fn s_across_a_group_makes_a_kit_line() {
         "{drawn}"
     );
     // A name no track of the line has is refused, the line kept.
-    keys(&mut app, "ibd cp<Enter>");
+    keys(&mut app, "a cp<Enter>");
     assert_eq!(panel(&app).mini, "bd . sn . bd bd sn ., hh*2");
     assert!(
         app.services.status.contains("cp isn't a track of the line"),
         "{}",
         app.services.status
     );
+    keys(&mut app, "<Esc>");
+    assert_eq!(panel(&app).mini, "bd . sn . bd bd sn ., hh*2");
     let field = panel(&app).field(GenParam::MiniText).unwrap();
     assert_eq!(field.names(), NAMES.map(str::to_owned));
     let around = Around {
@@ -117,13 +119,13 @@ fn an_edit_on_one_tracks_gen_page_is_made_on_all() {
     keys(&mut app, "vGWWS");
     keys(&mut app, "K/mini<Enter>");
     down_to(&mut app, GenParam::MiniText);
-    keys(&mut app, "ibd sn hh .<Enter>L");
+    keys(&mut app, "Sbd sn hh .<Enter>L");
     // To the third track's Gen page.
     app.services.cursor.track = 2;
     keys(&mut app, " 5LLL");
     to_cell(&mut app, GenParam::MiniText);
     let depth = app.services.history.undo_depth();
-    keys(&mut app, "ihh hh sn bd<Enter>");
+    keys(&mut app, "Shh hh sn bd<Enter>");
     assert_eq!(app.services.history.undo_depth(), depth + 1);
     for track in 0..3 {
         assert_eq!(text(&app, track), "hh hh sn bd");
@@ -151,14 +153,14 @@ fn an_edit_on_one_tracks_gen_page_is_made_on_all() {
             .any(|line| line.contains("Text      hh hh sn bd")),
         "{page:#?}"
     );
-    keys(&mut app, "ihh qq<Enter>");
+    keys(&mut app, "a qq<Enter><Esc><Esc>");
     assert_eq!(text(&app, 0), "hh hh sn bd", "a name of none of its tracks");
     // Turned in its tokens, a name goes to the one before among the line's tracks.
-    keys(&mut app, "l-");
+    keys(&mut app, "<Enter>-<Enter>");
     for track in 0..3 {
         assert_eq!(text(&app, track), "SN hh sn bd");
     }
-    keys(&mut app, "<Esc>uu");
+    keys(&mut app, "uu");
     for track in 0..3 {
         assert_eq!(text(&app, track), "bd sn hh .");
     }

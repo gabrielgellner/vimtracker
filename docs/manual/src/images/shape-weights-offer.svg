@@ -410,12 +410,12 @@
 <text x="657" y="204" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="702" y="204" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="747" y="204" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="972" y="190" width="162" height="19" fill="#292c3c"/>
-<text x="972" y="204" fill="#c6d0f5" textLength="162" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│Weights F  0  8  </text>
-<rect x="1134" y="190" width="9" height="19" fill="#f2d5cf"/>
-<text x="1134" y="204" fill="#303446" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">F</text>
-<rect x="1143" y="190" width="207" height="19" fill="#292c3c"/>
-<text x="1143" y="204" fill="#c6d0f5" textLength="207" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  F                   │</text>
+<rect x="972" y="190" width="81" height="19" fill="#292c3c"/>
+<text x="972" y="204" fill="#c6d0f5" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│Weights </text>
+<rect x="1053" y="190" width="117" height="19" fill="#f2d5cf"/>
+<text x="1053" y="204" fill="#303446" textLength="117" lengthAdjust="spacingAndGlyphs" xml:space="preserve">F  0  8  F  F</text>
+<rect x="1170" y="190" width="180" height="19" fill="#292c3c"/>
+<text x="1170" y="204" fill="#c6d0f5" textLength="180" lengthAdjust="spacingAndGlyphs" xml:space="preserve">                   │</text>
 <text x="1350" y="204" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">   0 </text>
 <rect x="1395" y="190" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="190" width="18" height="19" fill="#292c3c"/>
@@ -459,12 +459,8 @@
 <text x="747" y="223" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <rect x="972" y="209" width="81" height="19" fill="#292c3c"/>
 <text x="972" y="223" fill="#c6d0f5" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│        </text>
-<rect x="1053" y="209" width="81" height="19" fill="#292c3c"/>
-<text x="1053" y="223" fill="#949cbb" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">C  D# F  </text>
-<rect x="1134" y="209" width="27" height="19" fill="#292c3c"/>
-<text x="1134" y="223" fill="#c6d0f5" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">G  </text>
-<rect x="1161" y="209" width="27" height="19" fill="#292c3c"/>
-<text x="1161" y="223" fill="#949cbb" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">A# </text>
+<rect x="1053" y="209" width="135" height="19" fill="#292c3c"/>
+<text x="1053" y="223" fill="#949cbb" textLength="135" lengthAdjust="spacingAndGlyphs" xml:space="preserve">C  D# F  G  A# </text>
 <rect x="1188" y="209" width="162" height="19" fill="#292c3c"/>
 <text x="1188" y="223" fill="#c6d0f5" textLength="162" lengthAdjust="spacingAndGlyphs" xml:space="preserve">                 │</text>
 <rect x="1395" y="209" width="18" height="19" fill="#292c3c"/>
@@ -507,14 +503,8 @@
 <text x="657" y="242" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="702" y="242" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="747" y="242" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="972" y="228" width="144" height="19" fill="#292c3c"/>
-<text x="972" y="242" fill="#c6d0f5" textLength="144" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│Rows    x x x ╭</text>
-<rect x="1116" y="228" width="126" height="19" fill="#292c3c"/>
-<text x="1116" y="242" fill="#c6d0f5" font-weight="bold" textLength="126" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> In its place </text>
-<rect x="1242" y="228" width="27" height="19" fill="#292c3c"/>
-<text x="1242" y="242" fill="#949cbb" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">16 </text>
-<rect x="1269" y="228" width="81" height="19" fill="#292c3c"/>
-<text x="1269" y="242" fill="#c6d0f5" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────╮ │</text>
+<rect x="972" y="228" width="378" height="19" fill="#292c3c"/>
+<text x="972" y="242" fill="#c6d0f5" textLength="378" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│Rows    x x x x x x x x x x x x x x x x │</text>
 <rect x="1395" y="228" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="228" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="228" width="18" height="19" fill="#292c3c"/>
@@ -561,12 +551,12 @@
 <text x="657" y="261" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="702" y="261" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="747" y="261" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="972" y="247" width="189" height="19" fill="#292c3c"/>
-<text x="972" y="261" fill="#c6d0f5" textLength="189" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│Curve   --    │  6  </text>
-<rect x="1161" y="247" width="153" height="19" fill="#292c3c"/>
-<text x="1161" y="261" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">40% as often as F</text>
-<rect x="1314" y="247" width="36" height="19" fill="#292c3c"/>
-<text x="1314" y="261" fill="#c6d0f5" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │ │</text>
+<rect x="891" y="247" width="9" height="19" fill="#292c3c"/>
+<text x="891" y="261" fill="#c6d0f5" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭</text>
+<rect x="900" y="247" width="81" height="19" fill="#292c3c"/>
+<text x="900" y="261" fill="#c6d0f5" font-weight="bold" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Weights </text>
+<rect x="981" y="247" width="369" height="19" fill="#292c3c"/>
+<text x="981" y="261" fill="#c6d0f5" textLength="369" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────╮</text>
 <rect x="1395" y="247" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="247" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="247" width="18" height="19" fill="#292c3c"/>
@@ -607,12 +597,12 @@
 <text x="657" y="280" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="702" y="280" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="747" y="280" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="972" y="266" width="189" height="19" fill="#292c3c"/>
-<text x="972" y="280" fill="#c6d0f5" textLength="189" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│S       --    │  7  </text>
-<rect x="1161" y="266" width="153" height="19" fill="#292c3c"/>
-<text x="1161" y="280" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">46% as often as F</text>
-<rect x="1314" y="266" width="36" height="19" fill="#292c3c"/>
-<text x="1314" y="280" fill="#c6d0f5" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │ │</text>
+<rect x="891" y="266" width="99" height="19" fill="#292c3c"/>
+<text x="891" y="280" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│ F  0  8  </text>
+<rect x="990" y="266" width="9" height="19" fill="#f2d5cf"/>
+<text x="990" y="280" fill="#303446" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">F</text>
+<rect x="999" y="266" width="351" height="19" fill="#292c3c"/>
+<text x="999" y="280" fill="#c6d0f5" textLength="351" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  F                                   │</text>
 <text x="1350" y="280" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  -6 </text>
 <rect x="1395" y="266" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="266" width="18" height="19" fill="#292c3c"/>
@@ -654,12 +644,18 @@
 <text x="657" y="299" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="702" y="299" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="747" y="299" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="972" y="285" width="189" height="19" fill="#292c3c"/>
-<text x="972" y="299" fill="#c6d0f5" textLength="189" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│Run     1     │  8  </text>
-<rect x="1161" y="285" width="153" height="19" fill="#292c3c"/>
-<text x="1161" y="299" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">53% as often as F</text>
-<rect x="1314" y="285" width="36" height="19" fill="#292c3c"/>
-<text x="1314" y="299" fill="#c6d0f5" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │ │</text>
+<rect x="891" y="285" width="18" height="19" fill="#292c3c"/>
+<text x="891" y="299" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│ </text>
+<rect x="909" y="285" width="54" height="19" fill="#292c3c"/>
+<text x="909" y="299" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">C  D# </text>
+<rect x="963" y="285" width="9" height="19" fill="#292c3c"/>
+<text x="963" y="299" fill="#c6d0f5" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭</text>
+<rect x="972" y="285" width="126" height="19" fill="#292c3c"/>
+<text x="972" y="299" fill="#c6d0f5" font-weight="bold" textLength="126" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> In its place </text>
+<rect x="1098" y="285" width="27" height="19" fill="#292c3c"/>
+<text x="1098" y="299" fill="#949cbb" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">16 </text>
+<rect x="1125" y="285" width="225" height="19" fill="#292c3c"/>
+<text x="1125" y="299" fill="#c6d0f5" textLength="225" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────╮                 │</text>
 <rect x="1395" y="285" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="285" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="285" width="18" height="19" fill="#292c3c"/>
@@ -700,12 +696,12 @@
 <text x="657" y="318" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="702" y="318" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="747" y="318" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="972" y="304" width="189" height="19" fill="#292c3c"/>
-<text x="972" y="318" fill="#c6d0f5" textLength="189" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│Where   All ro│  9  </text>
-<rect x="1161" y="304" width="153" height="19" fill="#292c3c"/>
-<text x="1161" y="318" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">60% as often as F</text>
-<rect x="1314" y="304" width="36" height="19" fill="#292c3c"/>
-<text x="1314" y="318" fill="#c6d0f5" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │ │</text>
+<rect x="891" y="304" width="126" height="19" fill="#292c3c"/>
+<text x="891" y="318" fill="#c6d0f5" textLength="126" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│       │  6  </text>
+<rect x="1017" y="304" width="153" height="19" fill="#292c3c"/>
+<text x="1017" y="318" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">40% as often as F</text>
+<rect x="1170" y="304" width="180" height="19" fill="#292c3c"/>
+<text x="1170" y="318" fill="#c6d0f5" textLength="180" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │                 │</text>
 <rect x="1395" y="304" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="304" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="304" width="18" height="19" fill="#292c3c"/>
@@ -746,89 +742,118 @@
 <text x="657" y="337" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="702" y="337" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="747" y="337" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="972" y="323" width="189" height="19" fill="#292c3c"/>
-<text x="972" y="337" fill="#c6d0f5" textLength="189" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│Vary    Once  │  A  </text>
-<rect x="1161" y="323" width="153" height="19" fill="#292c3c"/>
-<text x="1161" y="337" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">66% as often as F</text>
-<rect x="1314" y="323" width="36" height="19" fill="#292c3c"/>
-<text x="1314" y="337" fill="#c6d0f5" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │ │</text>
+<rect x="891" y="323" width="18" height="19" fill="#292c3c"/>
+<text x="891" y="337" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│ </text>
+<rect x="909" y="323" width="54" height="19" fill="#292c3c"/>
+<text x="909" y="337" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Rows  </text>
+<rect x="963" y="323" width="54" height="19" fill="#292c3c"/>
+<text x="963" y="337" fill="#c6d0f5" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│  7  </text>
+<rect x="1017" y="323" width="153" height="19" fill="#292c3c"/>
+<text x="1017" y="337" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">46% as often as F</text>
+<rect x="1170" y="323" width="27" height="19" fill="#292c3c"/>
+<text x="1170" y="337" fill="#c6d0f5" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │ </text>
+<rect x="1197" y="323" width="9" height="19" fill="#f2d5cf"/>
+<text x="1197" y="337" fill="#303446" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">x</text>
+<rect x="1206" y="323" width="9" height="19" fill="#292c3c"/>
+<rect x="1215" y="323" width="9" height="19" fill="#f2d5cf"/>
+<text x="1215" y="337" fill="#303446" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">x</text>
+<rect x="1224" y="323" width="126" height="19" fill="#292c3c"/>
+<text x="1224" y="337" fill="#c6d0f5" textLength="126" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> x           │</text>
 <rect x="1395" y="323" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="323" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="323" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="356" fill="#51576d" textLength="603" lengthAdjust="spacingAndGlyphs" xml:space="preserve">        ╰─────────────────────────────────────────────────────────╯</text>
-<rect x="972" y="342" width="9" height="19" fill="#292c3c"/>
-<text x="972" y="356" fill="#c6d0f5" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="981" y="342" width="126" height="19" fill="#292c3c"/>
-<text x="981" y="356" fill="#949cbb" textLength="126" lengthAdjust="spacingAndGlyphs" xml:space="preserve">h l move  = - </text>
-<rect x="1107" y="342" width="54" height="19" fill="#292c3c"/>
-<text x="1107" y="356" fill="#c6d0f5" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│  B  </text>
-<rect x="1161" y="342" width="153" height="19" fill="#292c3c"/>
-<text x="1161" y="356" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">73% as often as F</text>
-<rect x="1314" y="342" width="18" height="19" fill="#292c3c"/>
-<text x="1314" y="356" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │</text>
-<rect x="1332" y="342" width="9" height="19" fill="#292c3c"/>
-<text x="1332" y="356" fill="#949cbb" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">t</text>
+<rect x="891" y="342" width="9" height="19" fill="#292c3c"/>
+<text x="891" y="356" fill="#c6d0f5" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╰</text>
+<rect x="900" y="342" width="63" height="19" fill="#292c3c"/>
+<text x="900" y="356" fill="#c6d0f5" font-weight="bold" textLength="63" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> = - ch</text>
+<rect x="963" y="342" width="54" height="19" fill="#292c3c"/>
+<text x="963" y="356" fill="#c6d0f5" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│  8  </text>
+<rect x="1017" y="342" width="153" height="19" fill="#292c3c"/>
+<text x="1017" y="356" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">53% as often as F</text>
+<rect x="1170" y="342" width="18" height="19" fill="#292c3c"/>
+<text x="1170" y="356" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │</text>
+<rect x="1188" y="342" width="153" height="19" fill="#292c3c"/>
+<text x="1188" y="356" fill="#c6d0f5" font-weight="bold" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">oes  Enter close </text>
 <rect x="1341" y="342" width="9" height="19" fill="#292c3c"/>
-<text x="1341" y="356" fill="#c6d0f5" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1341" y="356" fill="#c6d0f5" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╯</text>
 <text x="1350" y="356" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> -12 </text>
 <rect x="1395" y="342" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="342" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="342" width="18" height="19" fill="#292c3c"/>
-<rect x="972" y="361" width="9" height="19" fill="#292c3c"/>
-<text x="972" y="375" fill="#c6d0f5" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╰</text>
-<rect x="981" y="361" width="126" height="19" fill="#292c3c"/>
-<text x="981" y="375" fill="#c6d0f5" font-weight="bold" textLength="126" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Enter keep  L</text>
-<rect x="1107" y="361" width="54" height="19" fill="#292c3c"/>
-<text x="1107" y="375" fill="#c6d0f5" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│  C  </text>
-<rect x="1161" y="361" width="153" height="19" fill="#292c3c"/>
-<text x="1161" y="375" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">80% as often as F</text>
+<rect x="963" y="361" width="54" height="19" fill="#292c3c"/>
+<text x="963" y="375" fill="#c6d0f5" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│  9  </text>
+<rect x="1017" y="361" width="153" height="19" fill="#292c3c"/>
+<text x="1017" y="375" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">60% as often as F</text>
+<rect x="1170" y="361" width="18" height="19" fill="#292c3c"/>
+<text x="1170" y="375" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │</text>
+<rect x="1188" y="361" width="126" height="19" fill="#292c3c"/>
+<text x="1188" y="375" fill="#c6d0f5" font-weight="bold" textLength="126" lengthAdjust="spacingAndGlyphs" xml:space="preserve">e  Esc cancel </text>
 <rect x="1314" y="361" width="36" height="19" fill="#292c3c"/>
-<text x="1314" y="375" fill="#c6d0f5" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │─╯</text>
+<text x="1314" y="375" fill="#c6d0f5" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">───╯</text>
 <rect x="1395" y="361" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="361" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="361" width="18" height="19" fill="#292c3c"/>
-<rect x="1107" y="380" width="54" height="19" fill="#292c3c"/>
-<text x="1107" y="394" fill="#c6d0f5" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│  D  </text>
-<rect x="1161" y="380" width="153" height="19" fill="#292c3c"/>
-<text x="1161" y="394" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">86% as often as F</text>
-<rect x="1314" y="380" width="18" height="19" fill="#292c3c"/>
-<text x="1314" y="394" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │</text>
+<rect x="963" y="380" width="54" height="19" fill="#292c3c"/>
+<text x="963" y="394" fill="#c6d0f5" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│  A  </text>
+<rect x="1017" y="380" width="153" height="19" fill="#292c3c"/>
+<text x="1017" y="394" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">66% as often as F</text>
+<rect x="1170" y="380" width="18" height="19" fill="#292c3c"/>
+<text x="1170" y="394" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │</text>
 <rect x="1395" y="380" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="380" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="380" width="18" height="19" fill="#292c3c"/>
-<rect x="1107" y="399" width="54" height="19" fill="#292c3c"/>
-<text x="1107" y="413" fill="#c6d0f5" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│  E  </text>
-<rect x="1161" y="399" width="153" height="19" fill="#292c3c"/>
-<text x="1161" y="413" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">93% as often as F</text>
-<rect x="1314" y="399" width="18" height="19" fill="#292c3c"/>
-<text x="1314" y="413" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │</text>
+<rect x="963" y="399" width="54" height="19" fill="#292c3c"/>
+<text x="963" y="413" fill="#c6d0f5" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│  B  </text>
+<rect x="1017" y="399" width="153" height="19" fill="#292c3c"/>
+<text x="1017" y="413" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">73% as often as F</text>
+<rect x="1170" y="399" width="18" height="19" fill="#292c3c"/>
+<text x="1170" y="413" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │</text>
 <rect x="1395" y="399" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="399" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="399" width="18" height="19" fill="#292c3c"/>
-<rect x="1107" y="418" width="9" height="19" fill="#292c3c"/>
-<text x="1107" y="432" fill="#c6d0f5" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="1116" y="418" width="45" height="19" fill="#51576d"/>
-<text x="1116" y="432" fill="#c6d0f5" font-weight="bold" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  F  </text>
-<rect x="1161" y="418" width="72" height="19" fill="#51576d"/>
-<text x="1161" y="432" fill="#949cbb" font-weight="bold" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve">the most</text>
-<rect x="1233" y="418" width="90" height="19" fill="#51576d"/>
-<rect x="1323" y="418" width="9" height="19" fill="#292c3c"/>
-<text x="1323" y="432" fill="#c6d0f5" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="963" y="418" width="54" height="19" fill="#292c3c"/>
+<text x="963" y="432" fill="#c6d0f5" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│  C  </text>
+<rect x="1017" y="418" width="153" height="19" fill="#292c3c"/>
+<text x="1017" y="432" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">80% as often as F</text>
+<rect x="1170" y="418" width="18" height="19" fill="#292c3c"/>
+<text x="1170" y="432" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │</text>
 <text x="1350" y="432" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> -18 </text>
 <rect x="1395" y="418" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="418" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="418" width="18" height="19" fill="#292c3c"/>
-<rect x="1107" y="437" width="225" height="19" fill="#292c3c"/>
-<text x="1107" y="451" fill="#c6d0f5" textLength="225" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╰───────────────────────╯</text>
+<rect x="963" y="437" width="54" height="19" fill="#292c3c"/>
+<text x="963" y="451" fill="#c6d0f5" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│  D  </text>
+<rect x="1017" y="437" width="153" height="19" fill="#292c3c"/>
+<text x="1017" y="451" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">86% as often as F</text>
+<rect x="1170" y="437" width="18" height="19" fill="#292c3c"/>
+<text x="1170" y="451" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │</text>
 <rect x="1395" y="437" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="437" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="437" width="18" height="19" fill="#292c3c"/>
+<rect x="963" y="456" width="54" height="19" fill="#292c3c"/>
+<text x="963" y="470" fill="#c6d0f5" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│  E  </text>
+<rect x="1017" y="456" width="153" height="19" fill="#292c3c"/>
+<text x="1017" y="470" fill="#949cbb" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve">93% as often as F</text>
+<rect x="1170" y="456" width="18" height="19" fill="#292c3c"/>
+<text x="1170" y="470" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │</text>
 <rect x="1395" y="456" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="456" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="456" width="18" height="19" fill="#292c3c"/>
+<rect x="963" y="475" width="9" height="19" fill="#292c3c"/>
+<text x="963" y="489" fill="#c6d0f5" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="972" y="475" width="45" height="19" fill="#51576d"/>
+<text x="972" y="489" fill="#c6d0f5" font-weight="bold" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  F  </text>
+<rect x="1017" y="475" width="72" height="19" fill="#51576d"/>
+<text x="1017" y="489" fill="#949cbb" font-weight="bold" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve">the most</text>
+<rect x="1089" y="475" width="90" height="19" fill="#51576d"/>
+<rect x="1179" y="475" width="9" height="19" fill="#292c3c"/>
+<text x="1179" y="489" fill="#c6d0f5" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="1395" y="475" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="475" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="475" width="18" height="19" fill="#292c3c"/>
+<rect x="963" y="494" width="225" height="19" fill="#292c3c"/>
+<text x="963" y="508" fill="#c6d0f5" textLength="225" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╰───────────────────────╯</text>
 <text x="1350" y="508" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> -24 </text>
 <rect x="1395" y="494" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="494" width="18" height="19" fill="#292c3c"/>

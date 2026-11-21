@@ -29,6 +29,7 @@ pub mod setting;
 pub(crate) mod table;
 pub mod theme;
 pub mod toggle;
+pub(crate) mod token_buffer;
 pub(crate) mod tokens;
 pub(crate) mod value_bars;
 
