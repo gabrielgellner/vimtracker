@@ -72,7 +72,7 @@ impl App {
         self.gen_page.phrase = self.services.phrase_id();
         let song = Arc::clone(self.song());
         self.gen_page
-            .to_generator(song.tracks.get(self.services.cursor.track), generator)
+            .move_to_generator(song.tracks.get(self.services.cursor.track), generator)
     }
 
     /// `gl` with Gen's panel beside the grid: the panel on the cursor's live column's device, the

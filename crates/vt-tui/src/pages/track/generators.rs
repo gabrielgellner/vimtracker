@@ -737,13 +737,13 @@ impl TrackPage {
         let Some(made) = generators.iter().position(|found| on_field(found, field)) else {
             return Outcome::Done;
         };
-        self.to_generator(services.track_here(), made);
+        self.move_to_generator(services.track_here(), made);
         Outcome::Done
     }
 
     /// Put the cursor on the title of a live generator's device, by its place in the list of the
     /// phrase the page shows, if it has one there.
-    pub(crate) fn to_generator(&mut self, track: Option<&Track>, made: usize) -> bool {
+    pub(crate) fn move_to_generator(&mut self, track: Option<&Track>, made: usize) -> bool {
         let devices = self.devices(track);
         let device = devices.iter().position(|device| {
             matches!(device.title[0], Some(Control::Gen { generator, .. }) if generator == made)
