@@ -7,7 +7,7 @@
 
 use std::ops::Range;
 
-use super::{Around, Bad, Bracket, Grammar, Kind, Offer, Spot, Token, is_rest, split};
+use super::{Around, Bad, Bracket, Grammar, GrammarId, Kind, Offer, Spot, Token, is_rest, split};
 use crate::shape::ShapeColumn;
 
 /// A move of the cursor among the tokens.
@@ -83,6 +83,9 @@ pub struct Field {
     /// What `y` and `d` took, for `p`.
     yanked: Option<String>,
     insert: Option<Insert>,
+    /// On a kit line, the names of the tracks it spans, which its hits are (#1093): empty
+    /// otherwise.
+    names: Vec<String>,
 }
 
 impl Field {
@@ -98,8 +101,41 @@ impl Field {
             rested: Vec::new(),
             yanked: None,
             insert: None,
+            names: Vec::new(),
         };
         field.settle();
+        field
+    }
+
+    /// The same field on a kit line, a `Mini`'s line whose hits are the names of the tracks it
+    /// spans (#1093): read in the kit line's grammar, a name no track of the line has marked as
+    /// text that doesn't read. With no names, or on any other grammar's field, it's the field as
+    /// it was.
+    #[must_use]
+    pub fn in_kit(mut self, names: &[String]) -> Self {
+        if names.is_empty() || !std::ptr::eq(self.grammar, GrammarId::Mini.grammar()) {
+            return self;
+        }
+        self.grammar = GrammarId::Kit.grammar();
+        self.names = names.to_vec();
+        self.tokens.clear();
+        self.settle();
+        self
+    }
+
+    /// The names of the tracks a kit line spans, or none for any other field.
+    pub fn names(&self) -> &[String] {
+        &self.names
+    }
+
+    /// Another text in the same grammar, on the same column and kit line, as typed.
+    #[must_use]
+    pub fn retyped(&self, text: &str) -> Self {
+        let mut field = Self::new(self.grammar, text, self.column);
+        if !self.names.is_empty() {
+            field.names.clone_from(&self.names);
+            field.settle();
+        }
         field
     }
 
@@ -175,7 +211,7 @@ impl Field {
         if self.tokens.len() != count {
             self.rested.clear();
         }
-        match (self.grammar.read)(&self.text, self.column) {
+        match (self.grammar.read)(&self.text, self.column, &self.names) {
             Ok(()) => {
                 self.good.clone_from(&self.text);
                 self.bad = None;
@@ -357,7 +393,7 @@ impl Field {
     pub fn turn(&mut self, at: usize, sign: i16, large: bool) -> Result<(), &'static str> {
         let token = self.tokens.get(at).ok_or("Nothing to turn")?;
         let text = &self.text[token.at.clone()];
-        let turned = (self.grammar.turn)(token.kind, text, sign, large, self.column)
+        let turned = (self.grammar.turn)(token.kind, text, sign, large, self.column, &self.names)
             .ok_or("It doesn't turn")?;
         self.put(at, &turned);
         Ok(())
@@ -658,8 +694,17 @@ impl Field {
     }
 
     /// What can go at the cursor, for `K` to list and `Tab` to complete from.
+    /// On a kit line, the names it spans are what's around it, where whoever asks gives none.
     pub fn offers(&self, at: usize, around: &Around) -> Vec<Offer> {
-        (self.grammar.offer)(self.spot(at).0, around)
+        let named = Around {
+            tracks: if around.tracks.is_empty() {
+                &self.names
+            } else {
+                around.tracks
+            },
+            ..*around
+        };
+        (self.grammar.offer)(self.spot(at).0, &named)
     }
 
     /// What `K` or `Tab` offered, chosen: while typing, in place of the word typed so far, typing

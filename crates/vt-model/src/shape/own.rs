@@ -539,8 +539,22 @@ impl OwnRhythm {
     /// rhythm's, or none for any other shape, and the beats of a text that reads, or none, so a
     /// text that doesn't plays nothing.
     pub fn kept(shape: &Shape, column: ShapeColumn, text: &str) -> Self {
+        Self::kept_as(shape, column, text, "")
+    }
+
+    /// The same on the track named `name`, which on a kit line plays the hits of its name
+    /// (decision 464).
+    pub fn kept_as(shape: &Shape, column: ShapeColumn, text: &str, name: &str) -> Self {
         if text.is_empty() {
             return Self::default();
+        }
+        if shape.kind == FillKind::Mini && shape.kit.is_some() {
+            let (beats, atoms) = crate::notation::compile_kit(text, name).unwrap_or_default();
+            return Self {
+                text: text.into(),
+                beats: beats.into(),
+                atoms: atoms.into(),
+            };
         }
         if shape.kind == FillKind::Mini {
             let (beats, atoms) = crate::notation::compile_mini(text, column).unwrap_or_default();

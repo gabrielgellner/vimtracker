@@ -10,7 +10,7 @@ const LETTERS: [char; 3] = ['P', 'L', 'R'];
 pub(super) static MOVES: Grammar = Grammar {
     kinds: &[Kind::Move, Kind::Unread],
     split,
-    read,
+    read: |text, column, _| read(text, column),
     meaning: |kind| match kind {
         Kind::Move => {
             "move {} of the walk: P keeps the root and turns major and minor round, L and R \
@@ -22,7 +22,7 @@ pub(super) static MOVES: Grammar = Grammar {
         name: format!("Move {}", at + 1),
         subject: (at + 1).to_string(),
     },
-    turn: |kind, text, sign, _, _| {
+    turn: |kind, text, sign, _, _, _| {
         let at = LETTERS
             .iter()
             .position(|each| text.eq_ignore_ascii_case(&each.to_string()));
@@ -122,7 +122,7 @@ mod tests {
         );
         assert_eq!(read("PLRLPLRLP", column).map_err(|bad| bad.at), Err(8));
         assert!(read(" ", column).is_err());
-        let turn = |text, sign| (MOVES.turn)(Kind::Move, text, sign, false, column);
+        let turn = |text, sign| (MOVES.turn)(Kind::Move, text, sign, false, column, &[]);
         assert_eq!(turn("P", 1).as_deref(), Some("L"));
         assert_eq!(turn("R", 1).as_deref(), Some("P"));
         assert_eq!(turn("P", -1).as_deref(), Some("R"));

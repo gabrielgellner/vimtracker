@@ -23,7 +23,10 @@ at the top, then `Hits` and `Rotate`, `Rule` and `Start`, or an amount, such as 
 which has no `Text` there; or an `Own` rhythm's `Rhythm`, `Text` and `Step`, its `Over` in
 the fourth. `l` on `Text` goes into its tokens, and `i` types it all. A `Mini`, which has no
 `Where`, has its `Text` across the first column and on, then `Step` and, on the Note column,
-`From`, whose octave its degrees count from. Where `Random`'s `Weights` takes the top of the
+`From`, whose octave its degrees count from; on a kit line, `Note kit G1` at the end of its
+title, `From` is the note its track plays, its own, and its `Text` is the whole line, the
+tracks' names, an edit to it made on every track the line spans (see **A kit line** in the
+editing guide). Where `Random`'s `Weights` takes the top of the
 third, what was there goes to the fourth. A `Follow`, which has no `Where`, has its
 `Mutation` and the kinds it may make in the third column and the fourth, and `Acid`,
 whose three are full, its riff's `Spread` and `Bias` in the fourth, as a `Tonnetz` has its

@@ -74,6 +74,8 @@ fn parse_song(text: &str, path: &Path) -> Result<Song, ProjectError> {
     song.ensure_fixed_tracks();
     // Generators' held shapes aren't saved: work them out once, as an edit would, so a song is
     // heard as held from the moment it loads. Its columns are already what that writes.
+    // A kit line's generators take their tracks' names, which aren't saved either.
+    crate::action::keep_kit_lines(None, &mut song);
     crate::action::hold_generators(&mut song);
     Ok(song)
 }

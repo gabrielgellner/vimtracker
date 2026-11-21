@@ -21,6 +21,7 @@ mod follow;
 mod generators;
 mod history;
 mod kit;
+mod kit_line;
 mod listed;
 mod macro_generators;
 mod macros;

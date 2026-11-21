@@ -29,6 +29,7 @@ mod guides;
 mod heard_generators;
 mod keys;
 mod kit_dialog;
+mod kit_line;
 mod kits;
 mod lane_moves;
 mod launch;

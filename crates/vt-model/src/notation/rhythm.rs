@@ -45,7 +45,7 @@ pub(super) static RHYTHM: Grammar = Grammar {
         Kind::Unread,
     ],
     split: split_rhythm,
-    read: |text, _| compile(text).map(|_| ()),
+    read: |text, _, _| compile(text).map(|_| ()),
     meaning: |kind| match kind {
         Kind::Hit => "a hit: the row it lands on gets a value",
         Kind::Rest => "a rest: nothing on its rows",
@@ -82,7 +82,7 @@ pub(super) static RHYTHM: Grammar = Grammar {
             subject: String::new(),
         }
     },
-    turn,
+    turn: |kind, text, sign, large, column, _| turn(kind, text, sign, large, column),
     offer,
     // A rhythm's table holds each row's hit, by its place among the hits.
     rows: |tokens, at| nth_of(tokens, at, Kind::Hit),
@@ -565,7 +565,7 @@ mod tests {
 
     #[test]
     fn what_doesnt_read_says_where_and_why() {
-        let read = |text| (RHYTHM.read)(text, note());
+        let read = |text| (RHYTHM.read)(text, note(), &[]);
         assert_eq!(read("x . [. x] x(3,8)"), Ok(()));
         assert_eq!(read("x <x . x?> x!3 x@2 x(3,8,2) ~"), Ok(()));
         assert_eq!(read(""), Ok(()));

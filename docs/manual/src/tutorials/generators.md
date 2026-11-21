@@ -32,7 +32,7 @@ there are no samples to find.
 | `cells` | dan derks' *less concepts* | `S`'s `Cells`: Wolfram's rules, a row a cell or a track a cell, a generation a pass |
 | `tonnetz` | Ornament & Crime's Harrington 1200 and Automatonnetz | `S`'s `Tonnetz`: chords by P, L and R, on the `Chord` voice and a voice a track |
 | `turing-machine`, again | Nonlinear Circuits' Sloth, Ornament & Crime's Low-rents | A `Lorenz` LFO on `Pitch in scale`: a tune that drifts and never goes round |
-| `euclid`, a third time | TidalCycles' mini-notation | `S`'s `Mini`: a line of notes, degrees and groups typed as text, a layer a track |
+| `euclid`, a third time | TidalCycles' mini-notation | `S`'s `Mini`: a line of notes, degrees and groups typed as text, a layer a track, and a kit line of the drums' names |
 
 Each section says what the original does, how the song does it, what to set to build it yourself
 from an empty song, and which knob to turn next. The recipes say what goes in each field, not the
@@ -1773,3 +1773,28 @@ On tracks 1 and 2, `BD` and `SD`, their Note columns selected together:
 *   `[1 3 5]` in place of a token is a triplet, its middle notes nudged off the rows.
 *   `?` after a token, `5?`, plays it half the time; `r` draws again until it falls well.
 *   With track 4's `Cue` on, a line typed again waits for its next lap before it's heard.
+
+**A kit line.** In Tidal a drum pattern names its sounds, `bd*2 [~ sn] hh`. Here the names are
+the tracks', and one line plays across a group's drum tracks, each track the rows where its name
+is. The `euclid` song's drums are tracks 1 to 3, `BD`, `SD` and `HH`.
+
+On each of tracks 1 to 3:
+
+*   **Sound page:** `Group` `G1`.
+
+Then their three Note columns, selected together over the 16 rows:
+
+*   **Shape:** `Fill` `Mini`, `Text` `bd . . bd . . bd ., . . sd . . . sd [. sd], hh*2`, `Step`
+    `2 rows`. The first layer is the kick's tresillo, the second the snare's backbeat with a push,
+    and the hat, a layer of its own, two hits in each token's two rows, so on every row. Each
+    track keeps the note it played.
+
+Keep it live. Its device on each track's Gen page is `Note kit G1`, and its `Text` the whole line.
+
+**Try next.**
+
+*   On the hat's Gen page, `Text` `bd . . bd . . bd ., . . sd . . . sd [. sd], hh*2 hh?`: the hat
+    plays two rows and a third half the time, every four rows; the line changes on all three tracks, and one `u` takes
+    it back on all three.
+*   `Step` `1 row` on any of them: the whole kit twice as fast, together.
+*   `:name KK` on track 1: the line's `bd` becomes `KK`, and the kick plays on.

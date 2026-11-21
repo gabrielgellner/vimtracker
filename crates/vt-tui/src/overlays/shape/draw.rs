@@ -154,7 +154,7 @@ fn token_lines(
         (Some(tokens), _) => &tokens.field,
         (None, Some(field)) => {
             made = match typed {
-                Some(typed) => Field::new(field.grammar(), typed, panel.column),
+                Some(typed) => field.retyped(typed),
                 None => field,
             };
             &made

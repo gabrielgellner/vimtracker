@@ -298,7 +298,7 @@ fn draw_fields(
                     let grammar = grammar.grammar();
                     let text =
                         (grammar.from_setting)(&param.shown(&live.generator.shape, &context));
-                    made = Field::new(grammar, &text, context.column);
+                    made = Field::new(grammar, &text, context.column).in_kit(&live.names);
                     &made
                 }
             };

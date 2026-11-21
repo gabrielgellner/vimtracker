@@ -18,16 +18,16 @@ use ratatui::layout::Rect;
 use vt_model::action::{Action, edit};
 use vt_model::generator::Span;
 use vt_model::notation::{
-    Around, Field as TokenField, GrammarId, Kind, STACKED, Spot, Table, compile_rhythm, mini_layer,
-    mini_start, rhythm_preset, stacks,
+    Around, Field as TokenField, GrammarId, Kind, STACKED, Spot, Table, compile_rhythm, kit_start,
+    mini_layer, mini_start, rhythm_preset, stacks,
 };
 use vt_model::selection::{Field, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
-    Channel, Context, DrumPart, FillKind, GenParam, Grids, Own, OwnRhythm, Shape, ShapeColumn,
-    Source, Starts, TonnetzVoice, Walk, Where, counted, default_ends, default_step, degree_count,
-    degree_name, divisions_seed, dropped, drum_parts, is_empty, keeping_step, kept_list, on_track,
-    open_rows, track_seed, variation_notes, written_from,
+    Channel, Context, DrumPart, FillKind, GenParam, Grids, KitLine, Own, OwnRhythm, Shape,
+    ShapeColumn, Source, Starts, TonnetzVoice, Walk, Where, counted, default_ends, default_step,
+    degree_count, degree_name, divisions_seed, dropped, drum_parts, is_empty, keeping_step,
+    kept_list, on_track, open_rows, track_seed, variation_notes, written_from,
 };
 use vt_model::song::{Machine, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
@@ -95,6 +95,17 @@ pub struct ShapePanel {
     /// A `Mini`'s line, held likewise and given only to a `Mini` (decision 462): across tracks,
     /// a stack, `,`, gives each track the next of its layers.
     pub mini: String,
+    /// The kit line a `Mini` makes across a group's tracks, or is, where the panel spans two or
+    /// more tracks of one group on their Note column or opened on one (decision 464): given to
+    /// the shape while its fill is `Mini`.
+    pub kit: Option<KitLine>,
+    /// The names of the tracks that kit line spans, which its hits are: empty for no kit line.
+    pub names: Vec<String>,
+    /// The note each part's track plays a kit line's hits at: the first in its rows, or none,
+    /// while `From` is still `kit_from`, as the panel opened (decision 464). Turning `From` gives
+    /// every track the one note.
+    kit_notes: Vec<Option<u8>>,
+    kit_from: u8,
     /// The setting the cursor is on.
     pub row: GenParam,
     /// What's being typed into the current row.
@@ -171,6 +182,13 @@ impl ShapePanel {
     /// layers, going round (decision 462).
     pub fn own_of(&self, nth: usize) -> OwnRhythm {
         let column = self.parts.get(nth).map_or(self.column, |part| part.column);
+        // On a kit line, each track holds the whole line and plays its own name's hits.
+        if self.shape.kit.is_some()
+            && let Some(part) = self.parts.get(nth)
+        {
+            let name = self.base.tracks[part.track].label(part.track);
+            return OwnRhythm::kept_as(&self.shape, column, self.mini.trim(), &name);
+        }
         let text = match self.shape.kind {
             FillKind::Mini => mini_layer(&self.mini, nth),
             _ => &self.rhythm,
@@ -305,6 +323,15 @@ impl ShapePanel {
                 ..self.shape.grids
             },
             tonnetz: placed.tonnetz,
+            // A kit line's track keeps its own note, until `From` is turned.
+            from: match self.kit_notes.get(nth) {
+                Some(Some(note))
+                    if self.shape.kit.is_some() && self.shape.from == self.kit_from =>
+                {
+                    *note
+                }
+                _ => self.shape.from,
+            },
             // A `Mini`'s layer, a track's, says whether it laps, ratchets and draws.
             mini: match self.shape.kind {
                 FillKind::Mini => {
@@ -804,7 +831,7 @@ impl Services {
                     list: list.into(),
                     // A `Mini`'s stack gives each track the next of its layers.
                     rhythm: match shape.kind {
-                        FillKind::Mini => mini_layer(rhythm, nth).into(),
+                        FillKind::Mini if shape.kit.is_none() => mini_layer(rhythm, nth).into(),
                         _ => rhythm.into(),
                     },
                 }
@@ -868,6 +895,42 @@ impl ShapePanel {
             Machine::Plaits(SynthVoice::Chord) => TonnetzVoice::Chord,
             _ => TonnetzVoice::Root,
         });
+        // Two or more tracks of one group, on their Note column, make a kit line with `Mini`.
+        let groups: Vec<Option<u8>> = parts
+            .iter()
+            .map(|part| base.tracks[part.track].group)
+            .collect();
+        let kit = match groups.first() {
+            Some(Some(group))
+                if parts.len() > 1
+                    && matches!(column, ShapeColumn::Note { .. })
+                    && groups.iter().all(|other| *other == Some(*group)) =>
+            {
+                Some(base.next_kit_line(*group))
+            }
+            _ => None,
+        };
+        let names = match kit {
+            Some(_) => parts
+                .iter()
+                .map(|part| base.tracks[part.track].label(part.track))
+                .collect(),
+            None => Vec::new(),
+        };
+        let kit_notes = parts
+            .iter()
+            .map(|part| {
+                let steps = base.tracks[part.track]
+                    .phrases
+                    .get(&part.phrase)
+                    .map_or(&[][..], |p| p.steps());
+                (part.range.first..=part.range.last).find_map(|row| match steps.get(row)?.note {
+                    Note::On(note) => Some(note),
+                    _ => None,
+                })
+            })
+            .filter(|_| kit.is_some())
+            .collect();
         Ok(Self {
             selection,
             parts,
@@ -876,6 +939,10 @@ impl ShapePanel {
             list: Vec::new(),
             rhythm: String::new(),
             mini: String::new(),
+            kit,
+            names,
+            kit_notes,
+            kit_from: from,
             row: GenParam::Fill,
             typing: None,
             weight: None,
@@ -1248,12 +1315,33 @@ impl ShapePanel {
         if self.shape.kind == FillKind::List && self.list.is_empty() {
             self.list = self.kept_list().into();
         }
-        // A `Mini` with no line yet starts from what's in its rows (decision 462).
+        // A `Mini` across a group's tracks is a kit line, and only a `Mini` (decision 464).
+        self.shape.kit = self.kit.filter(|_| self.shape.kind == FillKind::Mini);
+        // A `Mini` with no line yet starts from what's in its rows (decision 462), a kit line
+        // from which of its tracks has a note on each.
         if self.shape.kind == FillKind::Mini
             && self.mini.is_empty()
             && let Some(part) = self.parts.first()
         {
-            self.mini = mini_start(self.base_steps(part), part.range, part.column);
+            self.mini = if self.shape.kit.is_some() {
+                let notes: Vec<Vec<bool>> = self
+                    .parts
+                    .iter()
+                    .map(|part| {
+                        let steps = self.base_steps(part);
+                        (part.range.first..=part.range.last)
+                            .map(|row| {
+                                steps
+                                    .get(row)
+                                    .is_some_and(|step| matches!(step.note, Note::On(_)))
+                            })
+                            .collect()
+                    })
+                    .collect();
+                kit_start(&self.names, &notes)
+            } else {
+                mini_start(self.base_steps(part), part.range, part.column)
+            };
         }
         if let Some(from) = from_named(before, self.shape.place)
             && self.rhythm == text
@@ -1429,7 +1517,7 @@ impl ShapePanel {
                     return;
                 }
                 if panel.row == GenParam::MiniText {
-                    match typed_mini(text, panel.column, panel.parts.len()) {
+                    match typed_mini(text, panel.column, panel.parts.len(), &panel.names) {
                         Ok(()) => panel.mini = text.trim().to_owned(),
                         Err(why) => said = Some(why),
                     }
@@ -1474,7 +1562,12 @@ impl ShapePanel {
     pub fn field(&self, row: GenParam) -> Option<TokenField> {
         let grammar = row.grammar(self.column)?.grammar();
         let text = (grammar.from_setting)(&row.shown(&self.shape, &self.context()));
-        Some(TokenField::new(grammar, &text, self.column))
+        let field = TokenField::new(grammar, &text, self.column);
+        // A kit line's hits are its tracks' names.
+        Some(match row {
+            GenParam::MiniText if self.shape.kit.is_some() => field.in_kit(&self.names),
+            _ => field,
+        })
     }
 
     /// The part shaping a track's phrase, by its place, or the first where none does.
@@ -1589,8 +1682,12 @@ impl ShapePanel {
         self.tokens_did(did, services)
     }
 
-    /// The names of the tracks the panel shapes, for a kit line's tokens.
+    /// The names of the tracks the panel shapes, for a kit line's tokens: on one, the names of
+    /// all the tracks it spans.
     fn track_names(&self, services: &Services) -> Vec<String> {
+        if self.shape.kit.is_some() {
+            return self.names.clone();
+        }
         self.parts
             .iter()
             .map(|part| services.track_name(part.track))
@@ -1720,11 +1817,21 @@ pub(crate) fn typed_rhythm(shape: &mut Shape, text: &str) -> Result<(), &'static
 }
 
 /// A `Mini`'s line typed for so many tracks: refused, saying why, where it doesn't read, and
-/// where it stacks layers on one track, which holds one (decision 462).
-pub(crate) fn typed_mini(text: &str, column: ShapeColumn, tracks: usize) -> Result<(), String> {
+/// where it stacks layers on one track, which holds one (decision 462). On a kit line, `names`,
+/// its hits are the names of its tracks, and its stack's layers are theirs (decision 464).
+pub(crate) fn typed_mini(
+    text: &str,
+    column: ShapeColumn,
+    tracks: usize,
+    names: &[String],
+) -> Result<(), String> {
     let text = text.trim();
+    if !names.is_empty() {
+        let grammar = GrammarId::Kit.grammar();
+        return (grammar.read)(text, column, names).map_err(|bad| bad.why);
+    }
     let grammar = GrammarId::Mini.grammar();
-    if let Err(bad) = (grammar.read)(text, column) {
+    if let Err(bad) = (grammar.read)(text, column, &[]) {
         return Err(bad.why);
     }
     if tracks < 2 && stacks(text) {

@@ -161,7 +161,7 @@ fn field_of(services: &Services, view: View, control: Control) -> Option<Field> 
     let context = live.context();
     let grammar = param.grammar(context.column)?.grammar();
     let text = (grammar.from_setting)(&param.shown(&live.generator.shape, &context));
-    Some(Field::new(grammar, &text, context.column))
+    Some(Field::new(grammar, &text, context.column).in_kit(&live.names))
 }
 
 impl Overlay for GenTokens {

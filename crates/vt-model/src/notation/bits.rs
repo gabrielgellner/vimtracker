@@ -10,7 +10,7 @@ const COUNT: usize = 8;
 pub(super) static BITS: Grammar = Grammar {
     kinds: &[Kind::Bit, Kind::Unread],
     split,
-    read: |text, _| read(text),
+    read: |text, _, _| read(text),
     meaning: |kind| match kind {
         Kind::Bit => "bit {} of the mask, counted from the lowest: x is on and . off",
         _ => "what isn't a bit, x or ., so the text doesn't read",
@@ -19,7 +19,7 @@ pub(super) static BITS: Grammar = Grammar {
         name: format!("Bit {}", at + 1),
         subject: (at + 1).to_string(),
     },
-    turn: |kind, text, _, large, _| match kind {
+    turn: |kind, text, _, large, _, _| match kind {
         Kind::Bit if !large => Some(if on(text) { "." } else { "x" }.to_owned()),
         _ => None,
     },
@@ -127,7 +127,7 @@ mod tests {
         );
         assert_eq!(read("x . y x . . . x").map_err(|bad| bad.at), Err(4));
         let column = crate::shape::ShapeColumn::Velocity;
-        let turn = |text| (BITS.turn)(Kind::Bit, text, 1, false, column);
+        let turn = |text| (BITS.turn)(Kind::Bit, text, 1, false, column, &[]);
         assert_eq!(turn("x").as_deref(), Some("."));
         assert_eq!(turn(".").as_deref(), Some("x"));
     }
