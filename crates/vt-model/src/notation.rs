@@ -29,8 +29,8 @@ use crate::shape::ShapeColumn;
 pub use field::{Field, Insert, Motion, Object, Place};
 pub use kit::{compile as compile_kit, is_name, rename as kit_rename, start as kit_start};
 pub use mini::{
-    MAX_MINI, STACKED, atom as mini_atom, compile as compile_mini, layer as mini_layer,
-    layers as mini_layers, stacks, start as mini_start,
+    INSERT, MAX_MINI, STACKED, atom as mini_atom, compile as compile_mini, layer as mini_layer,
+    layers as mini_layers, stacks, start as mini_start, with_insert,
 };
 pub use offer::{degrees, groups, notes_round, values};
 pub use rhythm::{MAX_RHYTHM, compile as compile_rhythm, preset as rhythm_preset};

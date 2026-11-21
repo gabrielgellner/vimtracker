@@ -284,6 +284,63 @@ mod tests {
         assert_eq!(degree_note(Scale::default(), 48, 3), 51, "semitones off");
     }
 
+    /// A line that skips rows is counted from before its span, so on rows 3 to 5 of a phrase it
+    /// writes what it would there counted from row 0 (decision 474), and a `?` draws the same.
+    #[test]
+    fn a_line_skipping_rows_counts_from_before_its_span() {
+        let column = notes(Scale::default());
+        let (beats, atoms) = compile_mini("C-3 D-3 [E-3 F-3]?", column).unwrap();
+        let texts = Texts {
+            list: &[],
+            rhythm: &beats,
+            atoms: &atoms,
+        };
+        let shape = |skip| Shape {
+            kind: FillKind::Mini,
+            seed: 7,
+            mini: Own {
+                step: 2,
+                skip,
+                ..Own::default()
+            }
+            .of(&beats),
+            ..Shape::default()
+        };
+        let steps = vec![
+            Step {
+                note: Note::On(48),
+                ..Step::default()
+            };
+            16
+        ];
+        let mut whole = vec![GenCell::Under; 16];
+        render_into(
+            &steps,
+            StepRange::between(0, 15),
+            column,
+            &shape(0),
+            texts,
+            None,
+            &mut whole,
+        );
+        let mut part = vec![GenCell::Under; 7];
+        render_into(
+            &steps,
+            StepRange::between(5, 11),
+            column,
+            &shape(5),
+            texts,
+            None,
+            &mut part,
+        );
+        assert_eq!(pitches(&part), pitches(&whole[5..12]));
+        assert_ne!(
+            pitches(&part),
+            pitches(&whole[..7]),
+            "not counted from its own first row"
+        );
+    }
+
     /// Each column's atoms: hex velocities, signed nudges, lengths with `_` tying.
     #[test]
     fn each_column_writes_its_own_units() {

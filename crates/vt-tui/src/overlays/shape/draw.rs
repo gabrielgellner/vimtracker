@@ -351,14 +351,9 @@ pub(crate) fn draw_in_gen(
     );
 }
 
-/// Draw the panel in its window, and the row's buffer under the row where it's open.
-fn draw_in(frame: &mut Frame, area: Rect, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
-    let rows = panel.rows();
-    let context = panel.context();
-    let labels = labels(&rows);
-    // What a row's value has beside its label, inside the border.
-    let room = usize::from(window.width).saturating_sub(labels + 2);
-    let name = match panel.column {
+/// The name of the column a panel shapes, an FX command's as its track names it.
+fn column_name(ctx: &Ctx, panel: &ShapePanel) -> String {
+    match panel.column {
         ShapeColumn::Note { .. } => "Note".to_owned(),
         ShapeColumn::Velocity => "Velocity".to_owned(),
         ShapeColumn::Nudge { .. } => "Nudge".to_owned(),
@@ -368,7 +363,69 @@ fn draw_in(frame: &mut Frame, area: Rect, window: Rect, ctx: &Ctx, panel: &Shape
             .tracks
             .get(panel.parts[0].track)
             .map_or_else(|| command.name(), |track| command.name_on(track)),
+    }
+}
+
+/// The keys along a pattern's buffer's foot.
+const PATTERN_HINT: &str = "Enter write  L keep live  [s ]s Step  K what goes  Esc cancel";
+
+/// A pattern entered with `!` (decision 474): its buffer alone, under the grid's top beside the
+/// column it fills, right of it or, where there's no room, left, so the rows it writes stay in
+/// sight, lit as the token under the cursor writes them; its title names the column and its
+/// `Step`. `column` is the column's left and right edges on screen, where the grid shows it.
+pub(crate) fn draw_pattern(
+    frame: &mut Frame,
+    area: Rect,
+    ctx: &Ctx,
+    panel: &ShapePanel,
+    column: Option<(u16, u16)>,
+) {
+    let (Some(tokens), Some(at)) = (&panel.tokens, panel.weight) else {
+        return;
     };
+    let field = &tokens.field;
+    let row = GenParam::MiniText;
+    let layout = Layout::of(row, field, &panel.shape_of(0), &panel.context());
+    let room = Buffer::room(area);
+    let lit = match panel.table(ctx.cursor().track, ctx.phrase_id(), 0) {
+        Some(table) => table.rows(field, at),
+        None => Vec::new(),
+    };
+    let step = panel.shape.mini.step;
+    let rows = if step == 1 { "row" } else { "rows" };
+    let kit = if panel.shape.kit.is_some() {
+        " kit line"
+    } else {
+        " pattern"
+    };
+    let title = format!("{}{kit}  Step {step} {rows}", column_name(ctx, panel));
+    let buffer = Buffer {
+        title: &title,
+        hint: PATTERN_HINT,
+        field,
+        layout: &layout,
+        marks: Marks {
+            cursor: Some(at),
+            typing_at: field.inserting().map(|insert| insert.to),
+            playing: panel.playing_token(ctx, field),
+        },
+        rows: Some(rows_of(panel, ctx, field, &lit, room)),
+        menu: tokens.menu.as_ref(),
+    };
+    match column {
+        Some(column) => buffer.draw_beside(frame, area, area.y, column),
+        None => buffer.draw(frame, area, area.y, area.right()),
+    }
+}
+
+/// Draw the panel in its window, and the row's buffer under the row where it's open.
+fn draw_in(frame: &mut Frame, area: Rect, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
+    let rows = panel.rows();
+    let context = panel.context();
+    let labels = labels(&rows);
+    // What a row's value has beside its label, inside the border.
+    let room = usize::from(window.width).saturating_sub(labels + 2);
+    let name = column_name(ctx, panel);
     let (mut filled, mut rows_shaped) = (0, 0);
     let source = panel.source_steps();
     for (nth, part) in panel.parts.iter().enumerate() {

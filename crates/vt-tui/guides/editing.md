@@ -43,10 +43,11 @@ Follow one with a motion or a target, or double it for this whole step:
 | `r` | Fill the cursor's column, and stay selected |
 | `u` `Ctrl-r` | Undo or redo one change, and stay selected |
 | `d` `x` `y` `S` `~` | Clear, copy, shape or mark, and stop selecting |
+| `!` | Enter a pattern on the rows selected, counted from row 00 |
 | `Esc` | Stop selecting |
 
 Move to grow the selection. The cursor shows which end is moving. Then press
-`d`, `x`, `y`, `>`, `<`, `-`, `=`, `_`, `+`, `r`, `S` or `.`.
+`d`, `x`, `y`, `>`, `<`, `-`, `=`, `_`, `+`, `r`, `S`, `!` or `.`.
 
 A selection stays until `Esc` while you change its values, so `+ + -` can go in
 one after the other as the loop plays, as Vim's popular `vnoremap > >gv` does.
@@ -1074,6 +1075,49 @@ its own, which `gl` opens and `Space g a` applies on its own. Doubling a phrase
 applies its live columns, and so does `]r` on the rows it rotates. A new live
 shape over one on the same column applies the old one first, and starts from
 the values it left.
+
+## Entering a pattern
+
+`!` on any column of the phrase grid fills it from a pattern, a line in `Mini`'s notation (see
+**A line of rhythm and values**), typed rather than entered a row at a time. It opens the line's
+buffer beside the column, typing, and the column changes as you type, heard if it's playing, as
+with `S`. The buffer's title says the column and its `Step`, `Note pattern  Step 4 rows`.
+
+| Keys | Does |
+|---|---|
+| `!` | Open a pattern's buffer on the cursor's column, typing |
+| `!!` | The same, on the last pattern entered |
+| `Enter` | Write it as plain rows, one undo, as if typed a row at a time |
+| `L` | Keep it live, a `Mini` on its column, as `S`'s `L` does |
+| `[s` `]s` | Halve or double its `Step`: 1, 2, 4, 8 or 16 rows a token |
+| `Esc` | Stop typing; again, put everything back |
+| `.` | In Normal, the last pattern on the cursor's column |
+
+A pattern always counts from the phrase's row 00 and goes round down the whole phrase,
+wherever the cursor is: `C-3 . D-3 .` at `Step 4 rows` puts `C-3` on row 00 and `D-3` on
+row 08 of a 16-row phrase, from any row. With rows selected with `v`, only those are written,
+still counted from row 00, so the beats stay on the phrase's grid: `v` on rows 04 to 07 and
+`C-3 D-3` writes `D-3` on row 04 and nothing else. That's where `S` differs, as its line starts
+at its selection. A pattern longer than the phrase is cut at the phrase's end, and the status
+line says how many rows didn't fit, `4 rows didn't fit in the phrase's 16`; the phrase's
+length and loop never change.
+
+On the Note column a hit is a note, `C-3`, a degree from `1`, or `x`, the last note typed in
+Insert, which before one is typed is C in the keys' octave; a degree counts from the root in
+that note's octave. `x` is only a pattern's: the line
+written or kept holds the note by name, so `x . x C-3` after typing `E-3` keeps
+`E-3 . E-3 C-3`. On Velocity and Length a hit is hex, on Nudge a nudge with its sign, and on an
+FX column the command's values; an empty FX column lists its commands first, as `S` does.
+
+`Step` starts at 4 rows, a token a beat, and each pattern starts at the last `Step` used.
+With `Enter`, `< >` and `?` are frozen as the line's first pass; with `L` they go on pass to
+pass. `.` puts the same pattern, at its `Step`, on the cursor's column, on another column,
+phrase or track, written or live as it was; in a Visual mode, on the rows selected. Where it
+doesn't read on that column, the status line says why.
+
+On a `W` selection across tracks, each gets its own pattern, a stack giving each a layer, and
+across two or more tracks of one group, on their Note columns, `!` makes a kit line, its hits the
+tracks' names (see **A kit line**), refused as `S` refuses it while a track has no name.
 
 ## Fields of tokens
 

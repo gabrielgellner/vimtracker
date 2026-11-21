@@ -264,11 +264,11 @@ of the row, and the preview shows them all, yours plain and the guesses dim.
 ## The command line
 
 `:` opens the command line at the bottom. `Ctrl-n` completes what you're typing, with
-Neovim's completion keys: command names, `:set` keys and their values, each command's own words, such as
-`:launch 4bar` and `:track add`, kit names, and paths for `:e`, `:w`, `:new`,
-`:sample`, `:render` and `:kit`. Paths go one folder at a time, and `~` is your home
-folder. `Tab` and `Shift-Tab` play and play from the start here too, as on every page;
-they complete nothing.
+Neovim's completion keys: command names, `:set` keys and their values, each command's
+own words, such as `:launch 4bar` and `:track add`, kit names, and paths for `:e`,
+`:w`, `:new`, `:sample`, `:render` and `:kit`. Paths go one folder at a time, and `~`
+is your home folder. `Tab` and `Shift-Tab` play and play from the start here too, as on
+every page; they complete nothing.
 
 | Keys | Does |
 |---|---|

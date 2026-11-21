@@ -49,6 +49,10 @@ letter, `_` for a natural and `+` for a sharp, so it fits three characters:
 
 Notes play the track's sample: see **Sounds, samples and kits**.
 
+Rather than a row at a time, `!` enters a whole column from a pattern, `C-3 . [x 5] .`, a
+token every `Step` rows from row 00, in which `x` is the last note typed: see **Entering a
+pattern** in the editing guide.
+
 ## Accent and slide
 
 As on a 303, `'` and `/` sit past the top of the keyboard, for accent and slide.

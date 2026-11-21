@@ -61,6 +61,7 @@ impl Services {
                 self.status = reason.to_owned();
                 return Err(None);
             }
+            Err(Refusal::Said) => return Err(None),
             Err(Refusal::Command(track)) => {
                 let (_, items) =
                     self.fx_command_items(track, |command| Pick::GenCommand { field, command });
@@ -123,6 +124,7 @@ impl Services {
         let mut panel = match ShapePanel::new(selection, field, command, self, view) {
             Ok(panel) => panel,
             Err(Refusal::Reason(reason)) => return Err(reason.to_owned()),
+            Err(Refusal::Said) => return Err(self.status.clone()),
             Err(Refusal::Command(_)) => {
                 return Err("The patch's FX generator has no command".to_owned());
             }
@@ -266,6 +268,7 @@ impl ShapePanel {
             default_source,
             kept: false,
             kept_live: false,
+            pattern: None,
         }))
     }
 }

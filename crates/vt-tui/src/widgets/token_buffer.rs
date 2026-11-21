@@ -445,6 +445,16 @@ pub(crate) fn rows_line(
     spans
 }
 
+/// A buffer laid out: its lines, its cursor's line and column, how many lines its text takes,
+/// and its window's size.
+struct Laid {
+    lines: Vec<Line<'static>>,
+    cursor: Option<(usize, usize)>,
+    text_lines: usize,
+    width: u16,
+    height: u16,
+}
+
 /// A buffer to draw: its setting's name, the keys it says along its foot, its field and what's
 /// lit in it, the rows line under the text where the field has one, and the list `K` or `C-n`
 /// opened.
@@ -467,13 +477,34 @@ impl Buffer<'_> {
     /// Draw it in an area, under a row of the screen from a column, moved left or cut to stay
     /// in the area, its list under the cursor's token.
     pub(crate) fn draw(self, frame: &mut Frame, area: Rect, row: u16, column: u16) {
+        let laid = self.lay_out(area);
+        let window = popup::below(area, row, column, laid.width, laid.height);
+        self.paint(frame, window, laid);
+    }
+
+    /// Draw it under a row beside a column of the screen, its left and right edges: right of
+    /// it, or where there's no room there, left of it, so the column stays in sight (decision
+    /// 474), and over it only where neither side has room.
+    pub(crate) fn draw_beside(self, frame: &mut Frame, area: Rect, row: u16, column: (u16, u16)) {
+        let laid = self.lay_out(area);
+        let x = if column.1 + laid.width <= area.right() {
+            column.1
+        } else {
+            column.0.saturating_sub(laid.width)
+        };
+        let window = popup::below(area, row, x, laid.width, laid.height);
+        self.paint(frame, window, laid);
+    }
+
+    /// Its lines, how big its window is, and where its cursor's token is.
+    fn lay_out(&self, area: Rect) -> Laid {
         let room = Self::room(area);
         let Wrapped { mut lines, cursor } = wrapped(self.field, self.layout, self.marks, room);
         let text_lines = lines.len();
-        if let Some(rows) = self.rows {
+        if let Some(rows) = &self.rows {
             lines.push(Line::raw(""));
             let mut line = vec![Span::styled(ROWS, theme::dim())];
-            line.extend(rows);
+            line.extend(rows.iter().cloned());
             lines.push(Line::from(line));
         }
         let lines: Vec<Line> = lines
@@ -485,9 +516,27 @@ impl Buffer<'_> {
             })
             .collect();
         let widest = lines.iter().map(Line::width).max().unwrap_or(0);
-        let width = (widest.max(room.min(32)) + 3).max(self.hint.chars().count() + 4) as u16;
+        let width = (widest.max(room.min(32)) + 3)
+            .max(self.hint.chars().count() + 4)
+            .max(self.title.chars().count() + 4) as u16;
         let height = lines.len() as u16 + 2;
-        let window = popup::below(area, row, column, width, height);
+        Laid {
+            lines,
+            cursor,
+            text_lines,
+            width,
+            height,
+        }
+    }
+
+    /// Draw it in its window, as laid out.
+    fn paint(self, frame: &mut Frame, window: Rect, laid: Laid) {
+        let Laid {
+            lines,
+            cursor,
+            text_lines,
+            ..
+        } = laid;
         // A buffer has the keys while it's open, so it's framed in the focus colour over the
         // page or panel it's open on (decision 475).
         let border = popup::border()

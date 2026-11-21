@@ -123,6 +123,22 @@ impl Field {
         self
     }
 
+    /// The same field where `!` enters a pattern (decision 474): on the Note column, a `Mini`'s
+    /// line in which `x` is the last note typed too. On any other column or grammar, it's the
+    /// field as it was.
+    #[must_use]
+    pub fn with_insert(mut self) -> Self {
+        if !std::ptr::eq(self.grammar, GrammarId::Mini.grammar())
+            || !matches!(self.column, ShapeColumn::Note { .. })
+        {
+            return self;
+        }
+        self.grammar = &super::mini::PATTERN;
+        self.tokens.clear();
+        self.settle();
+        self
+    }
+
     /// The names of the tracks a kit line spans, or none for any other field.
     pub fn names(&self) -> &[String] {
         &self.names

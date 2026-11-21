@@ -35,7 +35,57 @@ const OCTAVE: i16 = 12;
 pub const STACKED: &str =
     "A stack , is a layer a track: select tracks with W, or S across them, for one each";
 
-pub(super) static MINI: Grammar = Grammar {
+pub(super) static MINI: Grammar = MINI_GRAMMAR;
+
+/// `Mini`'s grammar where `!` enters a pattern on the Note column (decision 474): the same, with
+/// `x` a hit too, the last note typed in Insert, which [`with_insert`] writes out as that note
+/// before the line is compiled or kept, so no generator ever holds an `x`.
+pub(super) static PATTERN: Grammar = Grammar {
+    read: |text, column, _| read(&with_insert(text, "1"), column),
+    meaning: |kind| match kind {
+        Kind::Hit => {
+            "the value it writes on the row it lands on: a note, C-3, a degree from 1, the \
+             root, or x, the last note typed"
+        }
+        kind => (MINI_GRAMMAR.meaning)(kind),
+    },
+    offer: |spot, around| {
+        let mut offers = offer(spot, around);
+        let values_here = !matches!(
+            spot,
+            Spot::On {
+                kind: Kind::Open(_) | Kind::Close(_) | Kind::Modifier | Kind::Value,
+                ..
+            }
+        );
+        if values_here && matches!(around.column, ShapeColumn::Note { .. }) {
+            offers.insert(0, offer_of(INSERT, "the last note typed in Insert"));
+        }
+        offers
+    },
+    ..MINI_GRAMMAR
+};
+
+/// The hit that is the last note typed, in a pattern entered with `!`.
+pub const INSERT: &str = "x";
+
+/// A line with each `x` hit, outside a Euclid's `( )`, written as `note`, the last note typed by
+/// name: what a pattern entered with `!` compiles and keeps (decision 474).
+pub fn with_insert(text: &str, note: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut from = 0;
+    for token in split(text) {
+        if token.kind == Kind::Hit && &text[token.at.clone()] == INSERT {
+            out.push_str(&text[from..token.at.start]);
+            out.push_str(note);
+            from = token.at.end;
+        }
+    }
+    out.push_str(&text[from..]);
+    out
+}
+
+const MINI_GRAMMAR: Grammar = Grammar {
     kinds: &[
         Kind::Hit,
         Kind::Rest,
@@ -580,6 +630,45 @@ mod tests {
         assert_eq!(
             read(&first.label(), cnd),
             Ok(vec![Atom::Value(first.value())])
+        );
+    }
+
+    /// Where `!` enters a pattern, `x` is a hit, the last note typed, written out by name before
+    /// the line is compiled; a word with an x in it, or `x` in a Euclid's numbers, isn't one.
+    #[test]
+    fn x_in_a_pattern_is_the_last_note_typed() {
+        let line = "x [. x]*2 D-3 x(3,8)";
+        assert_eq!(with_insert(line, "C-3"), "C-3 [. C-3]*2 D-3 C-3(3,8)");
+        assert_eq!(with_insert("xx x3", "C-3"), "xx x3");
+        assert!(
+            (MINI.read)(line, notes(), &[]).is_err(),
+            "x isn't a note in Mini"
+        );
+        assert_eq!((PATTERN.read)(line, notes(), &[]), Ok(()));
+        assert_eq!(
+            (PATTERN.read)("x H-3", notes(), &[]).map_err(|bad| bad.at),
+            Err(2),
+            "where it stops reading, as typed"
+        );
+        let around = Around {
+            column: notes(),
+            from: 48,
+            to: 72,
+            tracks: &[],
+            reached: &[],
+        };
+        assert_eq!((PATTERN.offer)(Spot::After(None), &around)[0].text, "x");
+        assert!(
+            (PATTERN.offer)(
+                Spot::On {
+                    kind: Kind::Modifier,
+                    at: 0,
+                    text: "*2"
+                },
+                &around
+            )
+            .iter()
+            .all(|offer| offer.text != "x")
         );
     }
 
