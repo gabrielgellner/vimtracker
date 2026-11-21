@@ -111,7 +111,11 @@ fn the_audio_page_shows_what_plays_and_when_it_stops() {
         lines[8].contains("Roto") && lines[8].contains("Off, so Live can have it"),
         "{lines:?}"
     );
-    assert!(lines[10].contains("21.3 ms"), "{lines:?}");
+    assert!(
+        lines[9].contains("Describe") && lines[9].contains("Off: Space d shows a line"),
+        "{lines:?}"
+    );
+    assert!(lines[11].contains("21.3 ms"), "{lines:?}");
     app.wheel.setting.on = true;
     assert!(
         text(&app)[6].contains("Scrolling turns the setting under the cursor"),

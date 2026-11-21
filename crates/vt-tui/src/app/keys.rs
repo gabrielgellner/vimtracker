@@ -736,7 +736,10 @@ impl App {
             },
             Cmd::ToggleMacroPanel => self.toggle_macro_panel(),
             Cmd::FocusMacroPanel => self.focus_macro_panel(),
-            Cmd::ToggleDescription => self.overlays.describing = !self.overlays.describing,
+            Cmd::ToggleDescription => {
+                let on = !self.services.settings.describe;
+                self.services.set_describing(on);
+            }
             Cmd::Window(key) => self.window(key),
             Cmd::Shape => self.open_shape(),
             // The sample page's marks: `'` and `m` wait for a letter, as an operator waits for a

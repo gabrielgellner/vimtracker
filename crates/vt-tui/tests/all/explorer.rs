@@ -106,6 +106,7 @@ fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
+        describe: false,
     };
     command(&mut app, "kit");
     assert_eq!(app.modes.mode, Mode::Picker);
@@ -186,6 +187,7 @@ fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
+        describe: false,
     };
     command(&mut app, "kit");
     press(&mut app, "jj");
@@ -240,6 +242,7 @@ fn sample_explores_the_sample_folders_and_opens_on_the_tracks_own() {
         kits: Vec::new(),
         samples: vec![library.display().to_string()],
         presets: String::new(),
+        describe: false,
     };
     command(&mut app, "sample");
     assert_eq!(
@@ -278,6 +281,7 @@ fn the_sample_explorer_starts_from_the_project_the_settings_here_and_home() {
         kits: Vec::new(),
         samples: vec![library.display().to_string(), "/nowhere/samples".to_owned()],
         presets: String::new(),
+        describe: false,
     };
     command(&mut app, "sample");
     assert_eq!(app.modes.mode, Mode::Picker);
@@ -309,6 +313,7 @@ fn kits_in_folders_are_found_in_the_explorer_and_named_by_their_path() {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
+        describe: false,
     };
     command(&mut app, "kit");
     assert_eq!(
@@ -340,6 +345,7 @@ fn the_sample_explorer_opens_a_kit_like_a_folder_and_plays_and_chooses_its_sound
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
+        describe: false,
     };
     command(&mut app, "sample");
     assert_eq!(explorer_roots(&app)[0].1, "kits");
@@ -431,6 +437,7 @@ fn a_kit_sound_opens_to_its_variants_and_layers_and_a_missing_one_says_so() {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
+        describe: false,
     };
     command(&mut app, "sample");
     press(&mut app, "jjl");
@@ -583,6 +590,7 @@ fn the_explorer_shows_what_each_row_is_with_an_icon() {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
+        describe: false,
     };
     command(&mut app, "sample");
     assert_eq!(
@@ -674,6 +682,7 @@ fn the_sample_explorer_lists_the_kits_and_the_library_and_no_other_ron_files() {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
+        describe: false,
     };
     app.overlays.explorer.library = Some(library.clone());
     command(&mut app, "sample");
@@ -714,6 +723,7 @@ fn sample_library(app: &mut App) -> PathBuf {
         kits: Vec::new(),
         samples: vec![library.display().to_string()],
         presets: String::new(),
+        describe: false,
     };
     library
 }

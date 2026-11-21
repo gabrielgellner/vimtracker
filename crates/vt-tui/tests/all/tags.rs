@@ -33,6 +33,7 @@ fn drum_library(app: &mut App) -> PathBuf {
         kits: Vec::new(),
         samples: vec![library.display().to_string()],
         presets: String::new(),
+        describe: false,
     };
     library
 }
@@ -282,6 +283,7 @@ fn a_kits_sounds_have_their_labels_tags() {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
+        describe: false,
     };
     command(&mut app, "kit");
     // The kit isn't open, so the search reads it. Its file names say nothing, so its labels do.

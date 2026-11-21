@@ -1,5 +1,8 @@
 //! The program's settings for this machine, kept in `settings.ron` beside `audio.ron`: where its
-//! kits, samples and presets are. They belong to the machine rather than to a song.
+//! kits, samples and presets are, and whether the line describing the setting under the cursor
+//! shows. They belong to the machine rather than to a song. The file is the user's to edit, and
+//! the program writes back only that last one, as `Space d` or the Audio page switches it
+//! (decision 476), changing its one line so the rest stays as it was written.
 
 use std::path::{Path, PathBuf};
 
@@ -17,6 +20,8 @@ const TEMPLATE: &str = r#"// vimtracker's settings for this machine. A path can 
     samples: ["~/Music/vimtracker/samples"],
     // The folder presets are saved in and loaded from, with sounds and effects inside it.
     presets: "~/Music/vimtracker/presets",
+    // Whether the line describing the setting under the cursor shows. Space d switches it.
+    describe: false,
 )
 "#;
 
@@ -46,8 +51,9 @@ pub(crate) fn home_folder() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
 }
 
-/// Where kits, samples and presets are found. Each list is searched in order, and a folder that
-/// isn't there is passed over. Paths are kept as written, so `~/` stays readable in the file.
+/// Where kits, samples and presets are found, and whether the description line shows. Each list
+/// is searched in order, and a folder that isn't there is passed over. Paths are kept as written,
+/// so `~/` stays readable in the file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
@@ -56,6 +62,9 @@ pub struct Settings {
     /// The one folder presets are saved in and loaded from, made on the first save, or empty for
     /// none.
     pub presets: String,
+    /// Whether the line describing the setting under the cursor shows, `Space d`: off until
+    /// turned on, then as it was left, in every project.
+    pub describe: bool,
 }
 
 impl Default for Settings {
@@ -66,6 +75,7 @@ impl Default for Settings {
             kits: vec!["~/Music/vimtracker/kits".to_owned()],
             samples: vec!["~/Music/vimtracker/samples".to_owned()],
             presets: "~/Music/vimtracker/presets".to_owned(),
+            describe: false,
         }
     }
 }
@@ -78,6 +88,7 @@ impl Settings {
             kits: Vec::new(),
             samples: Vec::new(),
             presets: String::new(),
+            describe: false,
         }
     }
 
@@ -120,6 +131,41 @@ impl Settings {
         }
     }
 
+    /// Keep whether the description line shows in the file at `path`, changing its `describe`
+    /// line or adding one, and leaving the rest as it's written there, even if it was edited since
+    /// the program started. A file that's gone is made again from these settings; one that won't
+    /// read is left alone, and the error says why.
+    pub(crate) fn save_describe(&self, path: &Path) -> Result<(), String> {
+        let text = match std::fs::read_to_string(path) {
+            Ok(text) => {
+                let mut kept: Self = ron::from_str(&text).map_err(|error| {
+                    format!("{}: {error}. Describe isn't kept", path.display())
+                })?;
+                kept.describe = self.describe;
+                // Where the line can't be changed or added in place, the file is written again
+                // from what it says, with the template's notes.
+                with_describe(&text, self.describe)
+                    .filter(|changed| ron::from_str::<Self>(changed).ok().as_ref() == Some(&kept))
+                    .unwrap_or_else(|| kept.written())
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => self.written(),
+            Err(error) => {
+                return Err(format!("{}: {error}. Describe isn't kept", path.display()));
+            }
+        };
+        vt_model::ron_file::write_atomic(path, text)
+            .map_err(|error| format!("{}: couldn't be saved: {error}", path.display()))
+    }
+
+    /// The settings as a new file says them, with the template's notes.
+    fn written(&self) -> String {
+        TEMPLATE
+            .replace(r#"["~/Music/vimtracker/kits"]"#, &text(&self.kits))
+            .replace(r#"["~/Music/vimtracker/samples"]"#, &text(&self.samples))
+            .replace(r#""~/Music/vimtracker/presets""#, &text(&self.presets))
+            .replace("describe: false", &format!("describe: {}", self.describe))
+    }
+
     /// The folders to find kits in, with `~/` expanded.
     pub fn kit_folders(&self) -> Vec<PathBuf> {
         self.kits.iter().map(|folder| expand_home(folder)).collect()
@@ -139,6 +185,35 @@ impl Settings {
     }
 }
 
+/// A value as the settings file writes it.
+fn text<T: Serialize + ?Sized>(value: &T) -> String {
+    ron::to_string(value).unwrap_or_default()
+}
+
+/// A settings file's text with its `describe` line saying `on`, or with one added before its
+/// closing bracket where it has none, if the bracket has a line of its own.
+fn with_describe(text: &str, on: bool) -> Option<String> {
+    let line = format!("describe: {on},");
+    let mut found = false;
+    let mut lines: Vec<String> = text
+        .lines()
+        .map(|each| {
+            let trimmed = each.trim_start();
+            if !found && trimmed.starts_with("describe:") {
+                found = true;
+                format!("{}{line}", &each[..each.len() - trimmed.len()])
+            } else {
+                each.to_owned()
+            }
+        })
+        .collect();
+    if !found {
+        let close = lines.iter().rposition(|each| each.trim() == ")")?;
+        lines.insert(close, format!("    {line}"));
+    }
+    Some(lines.join("\n") + "\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -155,6 +230,7 @@ mod tests {
             ron::from_str::<Settings>(TEMPLATE).unwrap(),
             Settings::default()
         );
+        assert_eq!(Settings::default().written(), TEMPLATE);
     }
 
     #[test]
@@ -172,6 +248,7 @@ mod tests {
         assert_eq!(settings.kits, ["/kits", "~/more"]);
         assert_eq!(settings.samples, Settings::default().samples);
         assert_eq!(settings.presets, Settings::default().presets);
+        assert!(!settings.describe);
     }
 
     #[test]
@@ -187,6 +264,71 @@ mod tests {
             note.contains("settings.ron") && note.contains("kit"),
             "{note}"
         );
+        std::fs::remove_dir_all(&folder).unwrap();
+    }
+
+    fn describing() -> Settings {
+        Settings {
+            describe: true,
+            ..Settings::none()
+        }
+    }
+
+    #[test]
+    fn describe_changes_its_one_line_and_keeps_the_rest_as_written() {
+        let folder = folder("describe");
+        let path = folder.join(SETTINGS_FILE);
+        std::fs::create_dir_all(&folder).unwrap();
+        let mine = TEMPLATE.replace("    kits: [", "    // Mine first.\n    kits: [\"/mine\", ");
+        std::fs::write(&path, &mine).unwrap();
+        describing().save_describe(&path).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(text, mine.replace("describe: false", "describe: true"));
+        let (read, note) = Settings::load(&path);
+        assert_eq!(note, None);
+        assert!(read.describe);
+        assert_eq!(read.kits[0], "/mine");
+        std::fs::remove_dir_all(&folder).unwrap();
+    }
+
+    #[test]
+    fn a_file_without_describe_has_it_added() {
+        let folder = folder("added");
+        let path = folder.join(SETTINGS_FILE);
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(&path, "(\n    kits: [\"/kits\"],\n)\n").unwrap();
+        describing().save_describe(&path).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "(\n    kits: [\"/kits\"],\n    describe: true,\n)\n"
+        );
+        // On one line, it's written again from what it says.
+        std::fs::write(&path, r#"(kits: ["/kits"])"#).unwrap();
+        describing().save_describe(&path).unwrap();
+        let (read, note) = Settings::load(&path);
+        assert_eq!(note, None);
+        assert!(read.describe);
+        assert_eq!(read.kits, ["/kits"]);
+        assert_eq!(read.samples, Settings::default().samples);
+        std::fs::remove_dir_all(&folder).unwrap();
+    }
+
+    #[test]
+    fn a_file_that_wont_read_isnt_written_over() {
+        let folder = folder("unread");
+        let path = folder.join(SETTINGS_FILE);
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(&path, r#"(kit: ["/kits"])"#).unwrap();
+        let error = describing().save_describe(&path).unwrap_err();
+        assert!(error.contains("settings.ron"), "{error}");
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            r#"(kit: ["/kits"])"#
+        );
+        // And one that's gone is made again.
+        std::fs::remove_file(&path).unwrap();
+        Settings::default().save_describe(&path).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), TEMPLATE);
         std::fs::remove_dir_all(&folder).unwrap();
     }
 
