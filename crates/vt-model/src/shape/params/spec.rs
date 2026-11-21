@@ -96,8 +96,12 @@ impl GenParam {
         let rows = kind.has_where();
         let follow = kind == FillKind::Follow;
         let tonnetz = kind == FillKind::Tonnetz;
+        let mini = kind == FillKind::Mini;
         match self {
             Self::Fill => true,
+            Self::MiniText | Self::MiniStep => mini,
+            // A `Mini`'s degrees count from the root in its octave.
+            Self::From if mini => matches!(column, ShapeColumn::Note { .. }),
             Self::Where => rows,
             Self::Over => rows && shape.place.counts(),
             Self::Source
@@ -241,7 +245,7 @@ impl GenParam {
         let mut title = [None; TITLE_PLACES];
         let what = match shape.kind {
             FillKind::Follow => [Some(Self::Fill), Some(Self::Source), None],
-            FillKind::Multiply | FillKind::Variation | FillKind::Ring => {
+            FillKind::Multiply | FillKind::Variation | FillKind::Ring | FillKind::Mini => {
                 [Some(Self::Fill), None, None]
             }
             FillKind::Grids => [Some(Self::Fill), Some(Self::Part), None],
@@ -517,7 +521,8 @@ impl GenParam {
                 Where::Own(_) => context.rhythm.to_owned(),
                 _ => String::new(),
             },
-            Self::OwnStep => match number() {
+            Self::MiniText => context.rhythm.to_owned(),
+            Self::OwnStep | Self::MiniStep => match number() {
                 Some(1) => "1 row".to_owned(),
                 Some(rows) => format!("{rows} rows"),
                 None => String::new(),
@@ -902,6 +907,9 @@ impl GenParam {
             Self::OwnText => {
                 return Err("Type the rhythm with i, like x . [. x] x(3,8), or l to edit a token");
             }
+            Self::MiniText => {
+                return Err("Type the line with i, like C-3 [. 3] <5 6>*2, or l to edit a token");
+            }
             _ if self.spec().typing == Typing::Listed => {
                 let choices = self.choices(context).unwrap_or_default();
                 if !choices.is_empty() {
@@ -1078,7 +1086,8 @@ impl GenParam {
             Self::Moves => shape.tonnetz.moves = Moves::default(),
             Self::MoveList => shape.tonnetz.list = MoveList::default(),
             // The text is its generator's, so it's put back beside the shape.
-            Self::OwnText => {}
+            Self::OwnText | Self::MiniText => {}
+            Self::MiniStep => shape.mini.step = 1,
             Self::OwnStep => {
                 if let Where::Own(own) = &mut shape.place {
                     own.step = 1;
@@ -1251,7 +1260,8 @@ impl GenParam {
             // A list is its generator's, typed with [`GenParam::typed_list`].
             Self::Values => return Err("A list's values are its generator's, typed beside it"),
             Self::OwnText => return Err("A rhythm's text is its generator's, typed beside it"),
-            Self::OwnStep => match text.parse::<u16>() {
+            Self::MiniText => return Err("A line's text is its generator's, typed beside it"),
+            Self::OwnStep | Self::MiniStep => match text.parse::<u16>() {
                 Ok(step) if (1..=u16::from(MAX_STEP)).contains(&step) => step.into(),
                 _ => return Err("Step runs from 1 to 16 rows"),
             },

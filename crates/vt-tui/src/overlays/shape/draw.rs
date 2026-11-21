@@ -41,7 +41,9 @@ fn spans(panel: &ShapePanel, context: &Context, row: GenParam, room: usize) -> V
     let value = || vec![Span::raw(row.shown(&panel.shape, context))];
     let notes: Vec<u8> = match row {
         GenParam::Values => return list_spans(panel, room, None),
-        GenParam::OwnText => return vec![Span::raw(cut_end(&value()[0].content, room))],
+        GenParam::OwnText | GenParam::MiniText => {
+            return vec![Span::raw(cut_end(&value()[0].content, room))];
+        }
         _ if !matches!(panel.column, ShapeColumn::Note { .. }) => return value(),
         GenParam::From => vec![panel.shape.from],
         GenParam::To => vec![panel.shape.to],
@@ -195,7 +197,7 @@ const ROWS: &str = "Rows";
 /// How wide the panel is: room for eight notes in a `List`'s values, or for each of `Weights`'
 /// digits over its note.
 fn width(panel: &ShapePanel, rows: &[GenParam], label: usize) -> u16 {
-    if rows.contains(&GenParam::OwnText) {
+    if rows.contains(&GenParam::OwnText) || rows.contains(&GenParam::MiniText) {
         return WIDTH.max((label + RHYTHM_ROOM + 2) as u16);
     }
     if !rows.contains(&GenParam::Weights) {
@@ -345,11 +347,8 @@ fn draw_in(frame: &mut Frame, area: Rect, window: Rect, ctx: &Ctx, panel: &Shape
     for (nth, part) in panel.parts.iter().enumerate() {
         let steps = panel.base_steps(part);
         let shape = panel.shape_of(nth);
-        let own = panel.own();
-        let texts = vt_model::shape::Texts {
-            list: &panel.list,
-            rhythm: own.beats(),
-        };
+        let own = panel.own_of(nth);
+        let texts = own.texts(&panel.list);
         let written = written_from(steps, part.range, part.column, &shape, texts, source);
         // A `Follow`, `Grids`, `Divisions`, `Ring` and a `Variation` write every row, rests and
         // all, so their count is of the notes, and `Multiply`'s of the rhythm it leaves. A

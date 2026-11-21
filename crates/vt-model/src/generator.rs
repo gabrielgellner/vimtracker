@@ -110,7 +110,10 @@ fn owns(shape: &Shape) -> Owns {
         FillKind::Ring => Owns::Note,
         // On the `Chord` voice, a row's chord is locked in one of its FX slots.
         FillKind::Tonnetz if shape.tonnetz.voice == Some(TonnetzVoice::Chord) => Owns::NoteFx,
-        // An `Own` rhythm's `x*3` in a row is a `RET` in one of its FX slots (decision 461).
+        // An `Own` rhythm's `x*3` in a row is a `RET` in one of its FX slots (decision 461), and
+        // a `Mini`'s `C-3*3`; a `Mini`'s hit between rows is nudged.
+        FillKind::Mini if shape.mini.ratchets => Owns::NoteFx,
+        FillKind::Mini => Owns::Timed,
         _ if matches!(shape.place, Where::Own(own) if own.ratchets) && shape.kind.has_where() => {
             Owns::NoteFx
         }
@@ -251,7 +254,7 @@ impl Generator {
     /// The same, an `Own` rhythm playing this text, which any other `Where` keeps none of.
     #[must_use]
     pub fn with_rhythm(mut self, text: &str) -> Self {
-        self.rhythm = OwnRhythm::kept(&self.shape, text);
+        self.rhythm = OwnRhythm::kept(&self.shape, self.column, text);
         self.rhythm.settle(&mut self.shape);
         self
     }
@@ -261,12 +264,10 @@ impl Generator {
         self.rhythm.text()
     }
 
-    /// What its render reads beside its shape: its list and its rhythm's beats.
+    /// What its render reads beside its shape: its list, and its rhythm's or line's beats and a
+    /// line's values.
     pub fn texts(&self) -> Texts<'_> {
-        Texts {
-            list: &self.list,
-            rhythm: self.rhythm.beats(),
-        }
+        self.rhythm.texts(&self.list)
     }
 
     /// The stored rows it covers now.
@@ -412,7 +413,7 @@ impl Generator {
         self.restore(steps);
         self.list = kept_list(&shape, list.unwrap_or(&self.list));
         let text = rhythm.unwrap_or(self.rhythm.text()).to_owned();
-        self.rhythm = OwnRhythm::kept(&shape, &text);
+        self.rhythm = OwnRhythm::kept(&shape, self.column, &text);
         self.shape = shape;
         self.rhythm.settle(&mut self.shape);
         let owns = owns(&self.shape);
@@ -470,10 +471,7 @@ impl Generator {
             range,
             self.column,
             &shape,
-            Texts {
-                list: &self.list,
-                rhythm: self.rhythm.beats(),
-            },
+            self.rhythm.texts(&self.list),
             source,
             &mut cells,
         );
@@ -602,7 +600,13 @@ impl Generator {
             seen: Vec::new(),
             held: None,
         };
-        generator.rhythm = OwnRhythm::kept(&generator.shape, &file.rhythm);
+        // A `Mini`'s line is saved as `mini`, and an `Own` rhythm's as `rhythm`.
+        let text = if file.mini.is_empty() {
+            &file.rhythm
+        } else {
+            &file.mini
+        };
+        generator.rhythm = OwnRhythm::kept(&generator.shape, generator.column, text);
         generator.rhythm.settle(&mut generator.shape);
         // What's under it is cut to the rows stored, as a phrase is never shorter than it was.
         let room = steps.len().saturating_sub(generator.first);
@@ -627,6 +631,9 @@ pub(crate) struct GeneratorFile {
     /// An `Own` rhythm's text, saved only for one (decision 461).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     rhythm: String,
+    /// A `Mini`'s line, saved only for one (decision 462).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    mini: String,
     first: usize,
     under: Vec<Step>,
 }
@@ -638,7 +645,16 @@ impl GeneratorFile {
             span: generator.span,
             shape: generator.shape,
             list: generator.list.to_vec(),
-            rhythm: generator.rhythm.text().to_owned(),
+            rhythm: if generator.shape.kind == FillKind::Mini {
+                String::new()
+            } else {
+                generator.rhythm.text().to_owned()
+            },
+            mini: if generator.shape.kind == FillKind::Mini {
+                generator.rhythm.text().to_owned()
+            } else {
+                String::new()
+            },
             first: generator.first,
             under: generator.under.clone(),
         }

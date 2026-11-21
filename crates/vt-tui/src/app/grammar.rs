@@ -1291,7 +1291,7 @@ impl App {
             column: panel.column,
             shape: Box::new(panel.shape),
             list: panel.kept_list(),
-            rhythm: panel.kept_rhythm(),
+            rhythm: panel.kept_line(),
             steps: panel.selection.range.len(),
             tracks: panel.selection.tracks.count(),
         });

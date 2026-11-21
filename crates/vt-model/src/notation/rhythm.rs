@@ -98,12 +98,12 @@ pub(super) static RHYTHM: Grammar = Grammar {
 };
 
 /// Whether a character ends a word: a space, a comma or a bracket.
-fn ends(c: char) -> bool {
+pub(super) fn ends(c: char) -> bool {
     c.is_whitespace() || c == ',' || Bracket::of(c).is_some()
 }
 
 /// A modifier's mark.
-fn modifies(c: char) -> bool {
+pub(super) fn modifies(c: char) -> bool {
     matches!(c, '*' | '!' | '@' | '?')
 }
 
@@ -151,7 +151,7 @@ fn split_rhythm(text: &str) -> Vec<Token> {
     tokens
 }
 
-fn bad(at: usize, why: impl Into<String>) -> Bad {
+pub(super) fn bad(at: usize, why: impl Into<String>) -> Bad {
     Bad {
         at,
         why: why.into(),
@@ -165,16 +165,22 @@ fn modifier(text: &str) -> (char, Option<u16>) {
     (mark, chars.as_str().parse().ok())
 }
 
+/// What a reader makes of a hit's own text: nothing for a rhythm's `x`, and a `Mini`'s value in
+/// its column's units, or why it isn't one.
+pub(super) type Atoms<'a> = &'a mut dyn FnMut(&str, usize) -> Result<(), Bad>;
+
 /// Reading a rhythm's tokens into beats.
-struct Reader<'a> {
+struct Reader<'a, 'b> {
     text: &'a str,
     tokens: Vec<Token>,
     next: usize,
     beats: Vec<Beat>,
     hits: u8,
+    /// Each hit's text and where it is, as it's read, in order.
+    atom: Atoms<'b>,
 }
 
-impl Reader<'_> {
+impl Reader<'_, '_> {
     fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.next)
     }
@@ -254,6 +260,7 @@ impl Reader<'_> {
         let head = self.beats.len();
         match token.kind {
             Kind::Hit => {
+                (self.atom)(&self.text[token.at.clone()], token.at.start)?;
                 let hit = self.hits;
                 self.hits = self
                     .hits
@@ -391,12 +398,20 @@ pub fn compile(text: &str) -> Result<Vec<Beat>, Bad> {
             format!("A rhythm is at most {MAX_RHYTHM} characters"),
         ));
     }
+    read_line(&RHYTHM, text, &mut |_, _| Ok(()))
+}
+
+/// A line in a grammar whose tokens are a rhythm's, read into its beats: a hit is whatever that
+/// grammar's split calls one, and `atom` reads each hit's own text as it comes, so a `Mini`'s
+/// values are read in the same walk as its rhythm (decision 462).
+pub(super) fn read_line(grammar: &Grammar, text: &str, atom: Atoms) -> Result<Vec<Beat>, Bad> {
     let mut reader = Reader {
         text,
-        tokens: split(&RHYTHM, text),
+        tokens: split(grammar, text),
         next: 0,
         beats: vec![Beat::new(What::Group)],
         hits: 0,
+        atom,
     };
     reader.line(0, None, 0)?;
     Ok(reader.beats)
@@ -418,7 +433,13 @@ pub fn preset(rhythm: World, part: Role, child: u8) -> String {
 
 /// A token turned: a change's number by one, or by four where `large`, a chance by 10% or 25%,
 /// and a Euclid's number by one or four.
-fn turn(kind: Kind, text: &str, sign: i16, large: bool, _: ShapeColumn) -> Option<String> {
+pub(super) fn turn(
+    kind: Kind,
+    text: &str,
+    sign: i16,
+    large: bool,
+    _: ShapeColumn,
+) -> Option<String> {
     let by = |small: i16, big: i16| sign * if large { big } else { small };
     match kind {
         Kind::Modifier => {
@@ -444,11 +465,30 @@ fn turn(kind: Kind, text: &str, sign: i16, large: bool, _: ShapeColumn) -> Optio
     }
 }
 
-fn offer_of(text: &str, meaning: &str) -> Offer {
+pub(super) fn offer_of(text: &str, meaning: &str) -> Offer {
     Offer {
         text: text.to_owned(),
         meaning: meaning.to_owned(),
     }
+}
+
+/// The changes a token can take, each with what it does, as `K` lists them after one (the
+/// study's Mockup 2).
+pub(super) fn changes() -> Vec<Offer> {
+    vec![
+        offer_of("*2", "twice in its place"),
+        offer_of("!2", "again, in a place of its own"),
+        offer_of("@2", "twice as long"),
+        offer_of("?", "half the time; ?30 for 30%"),
+        offer_of("(3,8)", "3 hits spread over 8 parts of its place"),
+    ]
+}
+
+/// What a Euclid's number can be.
+pub(super) fn numbers() -> Vec<Offer> {
+    (1..=16)
+        .map(|number: u16| offer_of(&number.to_string(), ""))
+        .collect()
 }
 
 /// What can go in a token's place or after one: a hit or a rest, a group, and after a token the
@@ -458,15 +498,6 @@ fn offer(spot: Spot, _: &Around) -> Vec<Offer> {
         let mut offers = vec![offer_of("x", "a hit"), offer_of(".", "a rest")];
         offers.extend(groups(".").into_iter().filter(|offer| offer.text != "."));
         offers
-    };
-    let changes = || {
-        vec![
-            offer_of("*2", "twice in its place"),
-            offer_of("!2", "again, in a place of its own"),
-            offer_of("@2", "twice as long"),
-            offer_of("?", "half the time; ?30 for 30%"),
-            offer_of("(3,8)", "3 hits spread over 8 parts of its place"),
-        ]
     };
     match spot {
         Spot::On {
@@ -479,9 +510,7 @@ fn offer(spot: Spot, _: &Around) -> Vec<Offer> {
         } => changes(),
         Spot::On {
             kind: Kind::Value, ..
-        } => (1..=16)
-            .map(|number: u16| offer_of(&number.to_string(), ""))
-            .collect(),
+        } => numbers(),
         Spot::On { .. } | Spot::After(None) => atoms(),
         Spot::After(Some(_)) => {
             let mut offers = atoms();

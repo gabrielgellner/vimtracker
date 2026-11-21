@@ -90,7 +90,7 @@ impl Layout {
             GenParam::MoveList => (MOVE_CELL, chords(shape, context).split_off(1)),
             GenParam::Flip | GenParam::Keep => (BIT_CELL, Vec::new()),
             // An `Own` rhythm's tokens a space apart, as its text is typed.
-            GenParam::OwnText => (RHYTHM_CELL, Vec::new()),
+            GenParam::OwnText | GenParam::MiniText => (RHYTHM_CELL, Vec::new()),
             _ => (LIST_GAP + 1, Vec::new()),
         };
         let step = match param {
@@ -99,7 +99,7 @@ impl Layout {
                 let longest = field.tokens().iter().map(|token| token.at.len()).max();
                 longest.unwrap_or(2) + LIST_GAP
             }
-            GenParam::OwnText => {
+            GenParam::OwnText | GenParam::MiniText => {
                 let longest = field.tokens().iter().map(|token| token.at.len()).max();
                 longest.unwrap_or(1) + RHYTHM_CELL - 1
             }
@@ -187,7 +187,7 @@ impl Layout {
 pub(crate) fn has_rows_line(param: GenParam) -> bool {
     matches!(
         param,
-        GenParam::Weights | GenParam::Values | GenParam::OwnText
+        GenParam::Weights | GenParam::Values | GenParam::OwnText | GenParam::MiniText
     )
 }
 
@@ -195,7 +195,9 @@ pub(crate) fn has_rows_line(param: GenParam) -> bool {
 pub(crate) fn buffer_hint(param: GenParam) -> &'static str {
     match param {
         GenParam::Values => "= - turn  x out  a after  K what goes  Enter close",
-        GenParam::OwnText => "= - turn  x out  ~ rest  a after  K what goes  Enter close",
+        GenParam::OwnText | GenParam::MiniText => {
+            "= - turn  x out  ~ rest  a after  K what goes  Enter close"
+        }
         GenParam::MoveList => "= - turn P L R  x out  K what goes  Enter close",
         GenParam::Flip | GenParam::Keep => "= - switch  0 1 types  Enter close",
         GenParam::Weights => "= - change  0-F types  K what goes  Enter close",

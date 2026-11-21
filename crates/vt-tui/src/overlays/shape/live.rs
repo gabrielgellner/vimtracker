@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use vt_model::action::Action;
 use vt_model::selection::{Field, Scope, StepRange};
-use vt_model::shape::{GenParam, Shape, ShapeColumn, Where, is_empty};
+use vt_model::shape::{FillKind, GenParam, Shape, ShapeColumn, Where, is_empty};
 use vt_model::step::FxCommand;
 
 use crate::app::{Selection, TrackSpan};
@@ -124,7 +124,10 @@ impl Services {
         };
         panel.shape = fitted(shape, panel.parts[0].column)?;
         panel.list = list.to_vec();
-        rhythm.clone_into(&mut panel.rhythm);
+        match panel.shape.kind {
+            FillKind::Mini => rhythm.clone_into(&mut panel.mini),
+            _ => rhythm.clone_into(&mut panel.rhythm),
+        }
         panel.own().settle(&mut panel.shape);
         Ok(panel.live_action())
     }
@@ -194,7 +197,10 @@ impl ShapePanel {
         };
         let shape = generator.shape;
         let list = generator.list().to_vec();
-        let rhythm = generator.rhythm().to_owned();
+        let (rhythm, mini) = match shape.kind {
+            FillKind::Mini => (String::new(), generator.rhythm().to_owned()),
+            _ => (generator.rhythm().to_owned(), String::new()),
+        };
         let (sources, default_source) = match part.column {
             ShapeColumn::Note { .. } => services.follow_sources(&base, &[part], view),
             _ => (Vec::new(), None),
@@ -210,6 +216,7 @@ impl ShapePanel {
             shape,
             list,
             rhythm,
+            mini,
             row: GenParam::Fill,
             typing: None,
             weight: None,

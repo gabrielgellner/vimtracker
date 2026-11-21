@@ -20,6 +20,7 @@ mod cells;
 mod divisions;
 mod follow;
 mod grids;
+mod mini;
 mod mutation;
 mod own;
 pub mod params;
@@ -46,6 +47,7 @@ pub use divisions::{
 pub(crate) use follow::copy_fx;
 pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
 pub use grids::{ACCENT_LEVEL, DrumPart, GRIDS_STEPS, Grids, parts as drum_parts};
+pub use mini::{Atom, degree_note, dropped, keeping_step};
 pub use mutation::{MAX_MUTATION, Mutations};
 pub use own::{Beat, Euclid, MAX_STEP, Own, OwnRhythm, What, line_steps};
 pub(crate) use params::{BEND_JUMP, BEND_NUDGE};
@@ -224,6 +226,9 @@ pub enum FillKind {
     Alternate,
     /// Each value of a short list in turn, on the rows it fills, then round again.
     List,
+    /// A line in Tidal's mini-notation whose atoms are the column's values, its rhythm and
+    /// values together, a top-level token `Step` rows (decision 462).
+    Mini,
     /// A 303 line: notes from a small set, with accents, slides and octaves, and on an empty
     /// column a rhythm weighted toward the strong beats.
     Acid,
@@ -266,7 +271,7 @@ pub enum FillKind {
 
 impl FillKind {
     /// Every fill, in the order `+` goes through them.
-    pub const ALL: [Self; 23] = [
+    pub const ALL: [Self; 24] = [
         Self::Ramp,
         Self::Random,
         Self::Walk,
@@ -274,6 +279,7 @@ impl FillKind {
         Self::Wave,
         Self::Alternate,
         Self::List,
+        Self::Mini,
         Self::Acid,
         Self::Grids,
         Self::Divisions,
@@ -417,6 +423,15 @@ pub(crate) const FILLS: [FillSpec; FillKind::ALL.len()] = {
             on_bits: false,
             has_where: true,
             grid: [[Some(Values), Some(Run), None], NONE],
+        },
+        // Its text across the page, its `Step` and its degrees' octave under it.
+        FillSpec {
+            name: "Mini",
+            meaning: "A line of values in Tidal's mini-notation",
+            reworks: false,
+            on_bits: false,
+            has_where: false,
+            grid: [[Some(MiniText), Some(MiniStep), Some(From)], NONE],
         },
         FillSpec {
             name: "Acid",
@@ -1188,6 +1203,10 @@ pub struct Shape {
     /// What a `Variation` learns and how far it strays. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Variation::is_default")]
     pub variation: Variation,
+    /// A `Mini`'s `Step`, and what its generator works out from its line. Saved only once it's
+    /// changed (decision 462).
+    #[serde(default, skip_serializing_if = "Own::is_default")]
+    pub mini: Own,
     /// How many passes each of its variations lasts, a new seed each time: `0` for none, the
     /// seed every pass, as written. Only a shape that [draws](Shape::draws) varies. Saved only
     /// once it's set.
@@ -1253,6 +1272,7 @@ impl Default for Shape {
             vary: 0,
             mutate: MUTATE_ALL,
             variation: Variation::default(),
+            mini: Own::default(),
             divisions: Divisions::default(),
             ring: Ring::default(),
             tonnetz: Tonnetz::default(),
@@ -1284,6 +1304,7 @@ impl Shape {
             || self.kind == FillKind::Follow && self.follow.mutates()
             || self.kind == FillKind::Tonnetz && self.tonnetz.draws()
             || self.place.draws() && self.kind.has_where()
+            || self.kind == FillKind::Mini && self.mini.chances
             || matches!(
                 self.kind,
                 FillKind::Random
@@ -1322,6 +1343,7 @@ impl Shape {
     /// each pass plays the choices that come round on it (decision 461).
     fn laps(&self) -> bool {
         self.kind.has_where() && matches!(self.place, Where::Own(own) if own.laps)
+            || self.kind == FillKind::Mini && self.mini.laps
     }
 
     /// Whether a new variation draws only some of its rows again, keeping the rest as last heard:
@@ -1369,11 +1391,14 @@ impl Shape {
             return shape;
         }
         let mut shape = *self;
-        // An `Own` rhythm's laps count on from pass to pass, whatever its `Vary`.
+        // An `Own` rhythm's laps count on from pass to pass, whatever its `Vary`, and a `Mini`'s.
         if let Where::Own(own) = &mut shape.place
             && self.laps()
         {
             own.pass = pass.clamp(0, i64::from(u32::MAX)) as u32;
+        }
+        if self.kind == FillKind::Mini && self.laps() {
+            shape.mini.pass = pass.clamp(0, i64::from(u32::MAX)) as u32;
         }
         // An `Acid`'s loops run on from pass to pass, whatever its `Vary`.
         if self.kind == FillKind::Acid && self.acid.loops() {

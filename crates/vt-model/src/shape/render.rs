@@ -10,8 +10,8 @@
 use super::mix;
 use super::random::{Odds, degree_of, unit};
 use super::{
-    Beat, FillKind, Ladder, Over, Shape, ShapeColumn, WaveRate, Where, acid, bits, curved,
-    divisions, follow, grids, own, rhythm, ring, tonnetz, variation, walk, world,
+    Atom, Beat, FillKind, Ladder, Over, Shape, ShapeColumn, WaveRate, Where, acid, bits, curved,
+    divisions, follow, grids, mini, own, rhythm, ring, tonnetz, variation, walk, world,
 };
 use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS, TICKS_PER_STEP};
 use crate::lfo::wave;
@@ -252,11 +252,13 @@ impl ShapeColumn {
 }
 
 /// What a render reads that's kept on its generator, beside its `Copy` shape, as it doesn't fit
-/// in one: a `List`'s values and an `Own` rhythm's beats, borrowed so nothing is copied.
+/// in one: a `List`'s values, and an `Own` rhythm's or a `Mini`'s beats, with a `Mini`'s value
+/// for each hit, borrowed so nothing is copied.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Texts<'a> {
     pub list: &'a [u8],
     pub rhythm: &'a [Beat],
+    pub atoms: &'a [Atom],
 }
 
 impl<'a> Texts<'a> {
@@ -264,11 +266,15 @@ impl<'a> Texts<'a> {
     pub const NONE: Texts<'static> = Texts {
         list: &[],
         rhythm: &[],
+        atoms: &[],
     };
 
     /// A `List`'s values alone.
     pub fn list(list: &'a [u8]) -> Self {
-        Self { list, rhythm: &[] }
+        Self {
+            list,
+            ..Texts::NONE
+        }
     }
 }
 
@@ -433,6 +439,7 @@ pub(super) fn render(
             tied(steps, range, column, shape, out.cells);
         }
         FillKind::Multiply => bits::render(steps, range, column, shape.bits, out.cells),
+        FillKind::Mini => mini::render(steps, range, column, shape, texts, &mut out),
         FillKind::Grids => grids::render(
             steps,
             range,
@@ -1059,6 +1066,7 @@ fn filled<F: FnMut(usize, &Shaped, Option<usize>), R: Fn(u16) -> f64>(
             | FillKind::MaskBits
             | FillKind::RotateBits => unreachable!("reworked above"),
             FillKind::Multiply => unreachable!("rendered by `bits::render`"),
+            FillKind::Mini => unreachable!("rendered by `mini::render`"),
             FillKind::Grids => unreachable!("rendered by `grids::render`"),
             FillKind::Divisions => unreachable!("rendered by `divisions::render`"),
             FillKind::Ring => unreachable!("rendered by `ring::render`"),

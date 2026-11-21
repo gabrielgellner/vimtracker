@@ -14,7 +14,7 @@ use vt_model::song::{Song, Track};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, most_nudge};
 
-use crate::gens::{GenScratch, Unders};
+use crate::gens::{GenScratch, Unders, Wait, waits};
 
 /// Each bank number's entry, `00` to `FF`, worked out on the edit thread so the callback only has
 /// to look it up, if it has one and its file loaded.
@@ -58,6 +58,8 @@ pub struct Published {
     pub has_steps: bool,
     /// The steps under each live generator, which the engine renders a moving one from.
     pub(crate) unders: Unders,
+    /// The live `Mini`s whose line was typed again, with what each played before (decision 462).
+    pub(crate) waits: Box<[Wait]>,
     /// Which tracks each group's macros reach, so the engine puts them before it works those out.
     pub(crate) group_macros: GroupMacros,
     /// What each track's rows ask of the version, in the song's order, which the next version
@@ -101,7 +103,7 @@ pub struct Handover {
 impl Handover {
     /// Make room for a version's generators, here rather than in the callback.
     pub fn new(version: Arc<Published>) -> Self {
-        let scratch = GenScratch::for_song(&version.song);
+        let scratch = GenScratch::for_song(&version.song, &version.waits);
         Self { version, scratch }
     }
 }
@@ -199,6 +201,10 @@ impl Published {
                     .any(|track| track.speed != Speed::Sixteenth),
             has_steps: song.sections.iter().any(|s| song.section_length(s) > 0),
             unders: Unders::of(&song, last.map(|last| (&*last.song, &last.unders))),
+            waits: waits(
+                &song,
+                last.map(|last| (&*last.song, &last.unders, &last.waits[..])),
+            ),
             group_macros: GroupMacros::of(&song),
             rows,
             song,

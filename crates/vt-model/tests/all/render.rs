@@ -13,6 +13,7 @@ use vt_model::lfo::Rate;
 use vt_model::random::SplitMix64;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
+use vt_model::shape::OwnRhythm;
 use vt_model::shape::{
     Acid, Across, Bar, Bits, CellStart, Cells, Channel, Divisions, DrumPart, Edge, FillKind,
     Follow, GenCell, Grids, Kept, MAX_DEPTH, MAX_FACTOR, MAX_LIST, MAX_MOVE_LOOP, MAX_MOVE_WEIGHT,
@@ -497,7 +498,46 @@ struct Case {
     /// What a `List` goes through, its first eight as the shape kept them, as a generator keeps
     /// the list beside its shape.
     list: Vec<u8>,
+    /// A `Mini`'s line, compiled, as its generator keeps it beside its shape.
+    line: OwnRhythm,
     source: Option<Vec<Step>>,
+}
+
+/// A `Mini`'s line on a column, of its values drawn from the dice, with groups, a choice, a
+/// chance, a Euclid and a ratchet, at a `Step` of 1 to 4 rows.
+fn mini_line(dice: &mut Dice, shape: &mut Shape, column: ShapeColumn) -> OwnRhythm {
+    let words: Vec<String> = match column {
+        ShapeColumn::Note { .. } => ["C-3", "3", "D#2", "8", "c4", "1"]
+            .map(String::from)
+            .to_vec(),
+        ShapeColumn::Velocity => ["7F", "40", "20"].map(String::from).to_vec(),
+        ShapeColumn::Nudge { .. } => ["0", "+3", "-2"].map(String::from).to_vec(),
+        ShapeColumn::Length => ["40", "_", "80"].map(String::from).to_vec(),
+        ShapeColumn::Fx { .. } => vt_model::notation::values(column)
+            .into_iter()
+            .take(4)
+            .map(|offer| offer.text)
+            .collect(),
+    };
+    let mut word = || words[dice.below(words.len() as u64) as usize].clone();
+    let line = format!(
+        "{} [{} ~ {}] <{} {}>*2 {}?30 . {}(3,8) [{} {} {}] {}*3",
+        word(),
+        word(),
+        word(),
+        word(),
+        word(),
+        word(),
+        word(),
+        word(),
+        word(),
+        word(),
+        word()
+    );
+    shape.mini.step = 1 + dice.below(4) as u8;
+    let kept = OwnRhythm::kept(shape, column, &line);
+    kept.settle(shape);
+    kept
 }
 
 fn case(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Case {
@@ -524,13 +564,18 @@ fn case(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Case {
             Some(self::steps(dice, length))
         }
     };
-    let (shape, mut list) = shape(dice, kind, column);
+    let (mut shape, mut list) = shape(dice, kind, column);
     list.truncate(8);
+    let line = match kind {
+        FillKind::Mini => mini_line(dice, &mut shape, column),
+        _ => OwnRhythm::default(),
+    };
     Case {
         steps,
         range: StepRange::between(first, last),
         shape,
         list,
+        line,
         source,
     }
 }
@@ -601,7 +646,7 @@ fn rendered(case: &Case, column: ShapeColumn) -> Vec<(usize, Step)> {
         case.range,
         column,
         &case.shape,
-        vt_model::shape::Texts::list(&case.list),
+        case.line.texts(&case.list),
         case.source.as_deref(),
         &mut cells,
     );
@@ -626,7 +671,7 @@ fn rendered(case: &Case, column: ShapeColumn) -> Vec<(usize, Step)> {
         case.range,
         column,
         &case.shape,
-        vt_model::shape::Texts::list(&case.list),
+        case.line.texts(&case.list),
         case.source.as_deref(),
     );
     assert_eq!(written, wrapped);
@@ -733,7 +778,7 @@ fn every_fill_renders_on_every_column_without_allocating() {
                         case.range,
                         column,
                         &case.shape,
-                        vt_model::shape::Texts::list(&case.list),
+                        case.line.texts(&case.list),
                         case.source.as_deref(),
                         &mut cells[..case.range.len()],
                     );
@@ -743,7 +788,7 @@ fn every_fill_renders_on_every_column_without_allocating() {
                         case.range,
                         column,
                         &case.shape,
-                        vt_model::shape::Texts::list(&case.list),
+                        case.line.texts(&case.list),
                         case.source.as_deref(),
                         &mut kept[..len],
                         &mut tokens[..len],

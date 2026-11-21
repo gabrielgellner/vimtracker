@@ -5,7 +5,7 @@ use std::fmt;
 use std::ops::Deref;
 
 use ratatui::crossterm::event::KeyCode;
-use vt_model::notation::MAX_RHYTHM;
+use vt_model::notation::{MAX_MINI, MAX_RHYTHM};
 use vt_model::shape::params::Typing;
 use vt_model::shape::{MAX_LIST, WEIGHTS};
 
@@ -102,6 +102,10 @@ impl TypedValue {
             }
             // An `Own` rhythm, Tidal's mini-notation, read as a whole once it's kept.
             Typing::Rhythm if text.len() < MAX_RHYTHM && (c.is_ascii_graphic() || c == ' ') => {
+                text.push(c);
+            }
+            // A `Mini`'s line likewise, its column's values among its hits.
+            Typing::Mini if text.len() < MAX_MINI && (c.is_ascii_graphic() || c == ' ') => {
                 text.push(c);
             }
             // A hex digit a degree, at most one for each semitone.
