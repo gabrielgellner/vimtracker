@@ -25,7 +25,7 @@
 - [The Sound page, output and groups](guides/track-sound.md)
 - [The Mod page, envelopes and LFOs](guides/track-mod.md)
 - [The FX page and its effects](guides/track-fx.md)
-- [The Gen page, macros and presets](guides/track-gen.md)
+- [The Macros page, Gen and presets](guides/track-gen.md)
 - [Generators in depth](guides/generators.md)
 - [Sounds, samples and kits](guides/sounds.md)
 - [The sample editor](guides/sample-editor.md)

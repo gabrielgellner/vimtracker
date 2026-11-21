@@ -472,7 +472,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx) -
         title.push(Span::styled(format!("{glyph} "), style));
     }
     title.extend(tabs);
-    if page.page == Page::Gen
+    if page.page == Page::Macros
         && let Some(phrase) = page.phrase
     {
         title.push(Span::styled(format!("  Phrase {phrase:02X}"), bold));
@@ -491,7 +491,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx) -
                 ..Drawn::default()
             };
         }
-        Page::Gen => {
+        Page::Macros => {
             return Drawn {
                 previews: generators::draw(frame, rest, page, ctx, track),
                 ..Drawn::default()

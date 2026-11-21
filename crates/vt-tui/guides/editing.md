@@ -349,7 +349,7 @@ a `Random` velocity, a `Wave` on an FX column. Choosing `Own` starts it from the
 named rhythm's part, a token a pulse, and so does editing a named rhythm's
 `Text`, which shows on its row: the son clave's bell is
 `x . . x . . x . . . x . x . . .`. Its buffer opens with `l` on the panel and
-`Enter` on the Gen page, `i` typing at the end and `S` typing it afresh
+`Enter` on Gen, `i` typing at the end and `S` typing it afresh
 ([Fields of tokens](#fields-of-tokens)). The text stays where it is, named or
 `Own`: editing a named one's makes it `Own` without moving its row or cell.
 
@@ -441,7 +441,7 @@ a note on them, or across tracks the tracks with a note on the first row. The
 row is a ring, so the first cell's neighbour is the last. Across tracks, every
 track plays one automaton, the row they start from worked out once for all of
 them, so a track's `gl` has `Rule` and no `Start`. Kept live, `Vary` steps it
-on: see **The Gen page, macros and presets**.
+on: see **The Macros page, Gen and presets**.
 
 The ramp's ends land on the first and last rows it changes, and rows keep their
 spacing along it. A velocity only ever goes on a note, so on Velocity a row
@@ -629,7 +629,7 @@ and `-` and by `10` with `+` and `_`, and `i` types them in hex.
 
 Kept live with `L`, it's a live column a track, each with its part, so `gl` on
 the snare reopens the snare's alone, with its own density and the Part row; a
-change there moves that track and leaves the others. On the Gen page its title
+change there moves that track and leaves the others. On Gen its title
 is its part, like `Grids  SD`.
 
 ### A chance for each division
@@ -676,7 +676,7 @@ A strike on a note keeps its pitch, and a new one takes the first note in the
 rows, so type one note on each track first; on an empty column it writes
 `Note`. A strike is a note at its nudge, so the generator owns the rows'
 nudges; a row it doesn't strike is cleared, and an `OFF` stays. Kept live with
-`L`, its title on the Gen page is its channel and bar, like
+`L`, its title on Gen is its channel and bar, like
 `Divisions  A  4/4 32nds`. With `A+B`, the twelve chances fill the device, so
 its `Note` is set in the panel, with `gl`.
 
@@ -713,7 +713,7 @@ Kept live with `L`, the register runs on from pass to pass, so each time round
 the phrase plays where the last pass left it, as the module does, not the bar
 written again; there's no `Vary`, as it varies by itself. Each pass is worked out
 from the seed and its number, so playing from bar 33 hears what playing to it
-would. On the Gen page, `Space g a` keeps the register as the pass just heard
+would. On Gen, `Space g a` keeps the register as the pass just heard
 began: that pass then plays first, the ring runs on from there, and `Change`
 down to `0%` holds its loop, the Turing Machine's lock.
 
@@ -907,7 +907,7 @@ the kinds switched on, which show once it mutates:
 The changes fall in the same places each time, so an edit to the source comes
 through everywhere but the rows they change, and `r` draws others. A note it
 moves lands in the scale while the scale is on. As it draws from its seed, the
-Gen page gives it `Vary`, so a new set of changes plays every pass or every few.
+Gen gives it `Vary`, so a new set of changes plays every pass or every few.
 
 `:bloom` grows branches from the phrase under the cursor, the trunk. Each branch
 is a new phrase on the same track, a copy of the trunk whose Note column follows
@@ -931,7 +931,7 @@ the path through them, each row with the trunk's transpose.
 | `shuffle` | `T`, then each branch once, in an order drawn from the seed |
 
 Up to seven branches, on the lowest free phrase numbers. Each is a live column
-like any other: `gl` on one, or the Gen page, changes its Mutation and kinds,
+like any other: `gl` on one, or Gen, changes its Mutation and kinds,
 and the branches after it follow; `Space g a` freezes it as plain notes. A macro
 mapped to `Mutation` turns every branch at once, as it holds the Note column in
 every phrase of its track. Another `:bloom` draws other branches, and `u` takes
@@ -967,7 +967,7 @@ where the loop would.
 notes there: with fewer, the panel says so and `Enter` and `L` refuse it. Kept
 live with `L`, it learns from the notes under it, never from what it wrote, so
 `gl` and another Order or `r` give a new variation of the same line, `Space g a`
-keeps the one you like, and on the Gen page `Vary` plays a new one every pass or
+keeps the one you like, and on Gen `Vary` plays a new one every pass or
 every few.
 
 ### Keeping it live
@@ -981,7 +981,7 @@ Euclidean velocity accent is the one to try: keep it live, then turn its
 |---|---|
 | `L` | In the panel, keep it live, as one undo |
 | `gl` | Open the panel again on the live column here |
-| `Space 8`, the Gen page | Every live column of the phrase, as devices |
+| `Space 8`, Gen | Every live column of the phrase, as devices |
 | `Space g a`, `:gen apply` | Apply it: keep its values as plain ones |
 
 `gl` works from any row of the column, and after the song is saved and opened
@@ -1082,7 +1082,7 @@ and `y` take a text object, and `p` pastes what they took:
 
 The buffer is a dialog: a key it doesn't have does nothing, `j` and `k` too, until `Esc` or
 `Enter` closes it; `Tab` still plays, and on the shape panel `Space d` says what the token under
-the cursor does. Each change is heard as it's made, and on the Gen page and the Mod page the
+the cursor does. Each change is heard as it's made, and on Gen and the Mod page the
 changes are one undo step when it closes. A field of fixed length, as `Weights` and a mask are,
 shows every token and never loses or gains one, so `i` and `a` open it on the first token, what's
 typed going over them in turn, and `S` puts each back to how it starts first; on `Weights` the
@@ -1353,8 +1353,8 @@ order while it plays keeps the row that was next, where the new walk plays it
 in the same pass, or stays put if that pass doesn't play it.
 
 **The track's Phrase settings** move the walk live, as the Metropolix's ORDER
-and Direction do when they're turned or sent CV. They're the track's, on the
-Gen page's `Phrase` device, so they move every phrase it plays, and `:order`
+and Direction do when they're turned or sent CV. They're the track's, on
+Gen's `Phrase` device, so they move every phrase it plays, and `:order`
 stays each phrase's own:
 
 | Setting | Does |
@@ -1446,8 +1446,8 @@ or a `CHA` acts once, and a lock or a hold of it holds through the rest of the
 row, a note there or not. Its playhead stays on it for as long, and the phrase
 view adds no lines for it.
 
-**Turned from the track.** Each FX column has a `Length` and a `Rate` on the
-Gen page's `Lane` device (`Space 8`), which move every phrase's lane on that
+**Turned from the track.** Each FX column has a `Length` and a `Rate` on
+Gen's `Lane` device (`Space 8`), which move every phrase's lane on that
 column from its own: at `+2` a lane of 4 plays 6 rows and one of 7 plays 9, and
 at `÷2` each row lasts twice its own steps, half as fast, and at `×2` half its
 own, though never under a step. A lane heard longer than its own

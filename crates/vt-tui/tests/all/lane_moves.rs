@@ -34,7 +34,7 @@ fn on_gen_page(with_lane: bool) -> (App, Realtime) {
         command(&mut app, "lane 4");
     }
     keys(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(app.track_page.page, Page::Macros);
     keys(&mut app, "}");
     (app, realtime)
 }

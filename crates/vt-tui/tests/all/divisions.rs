@@ -181,7 +181,7 @@ fn a_live_divisions_on_the_gen_page_shows_its_channel_bar_and_chances() {
     let (mut app, _rt) = app_with(&[Speed::Sixteenth], 16);
     keys(&mut app, "vGSK/divisions<Enter>L");
     keys(&mut app, " 8");
-    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(app.track_page.page, Page::Macros);
     let text = fx_page_text(&app).join("\n");
     assert!(
         text.contains("Divisions  A  4/4 16ths  Once · Note 00–0F"),

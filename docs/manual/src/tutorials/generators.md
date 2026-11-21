@@ -139,7 +139,7 @@ plays every time, as the module's knob fully right locks it. The draws aren't sa
 are a loop kept that way.
 
 **Give it knobs.** A macro is one knob that turns any of the track's settings, each between a
-`Min` and a `Max` of its own (see **Macros** in **The Gen page, macros and presets**). Three
+`Min` and a `Max` of its own (see **Macros** in **The Macros page, Gen and presets**). Three
 make the slot a panel, each mapped to a setting of `Mod 4`:
 
 | Macro | Turns | `Min` | `Max` | The song has it at |
@@ -157,7 +157,7 @@ Now `Mutate`, `Length` and `Depth` show where their macros put them, each with a
 its value to say a macro holds it, and won't turn on their own: turning one says to turn its
 macro instead, or `gm` for its range.
 
-**Play it.** `Space 8` for the Gen page. Its first band is the `Macros`, with `Change`,
+**Play it.** `Space 8` for the Macros page. Its first band is the `Macros`, with `Change`,
 `Length` and `Range` along the top row, each with its value in four digits and a bar. `h` and
 `l` go between them, `=` and `-` turn one a little, `+` and `_` by `10`, about a step of
 `Length`, `i` types two hex digits, and `x` takes one to `00`.
@@ -191,7 +191,7 @@ it has a `Rate` to map, for a register that steps in time rather than with the n
     one it was moved to the last time it was heard, and the slot is switched out, knobs and all.
 
 **Save it as a patch.** The Steps slot and the three macros that turn it are a Turing Machine you
-can put on any track, keeping that track's sound (see **Patches** in **The Gen page, macros and presets**).
+can put on any track, keeping that track's sound (see **Patches** in **The Macros page, Gen and presets**).
 
 1.  On track 1, `:patch save Turing Machine`. A patch is the track's macros that hold something
     and what they move, so this one is `Mod 4` and the three macros, `1 slot, 3 macros` as the
@@ -203,7 +203,7 @@ can put on any track, keeping that track's sound (see **Patches** in **The Gen p
     holding nothing, every mapping moved to match: `Change` turns `Mod 3`'s `Mutate` there. The
     status line says where each part went, and `u` takes it all off at once.
 3.  `Tab`. The kick's beats now wander in pitch from the same kind of loop, through the kick's
-    own sound, and `Space 8` shows `Change`, `Length` and `Range` on its Gen page, to play as on
+    own sound, and `Space 8` shows `Change`, `Length` and `Range` on its Macros page, to play as on
     track 1.
 
 A track with too few free slots or macros refuses it, saying how many it needs and how many are
@@ -232,7 +232,7 @@ is a drone with a `Smooth` LFO wandering on its filter, as Marbles' Y output wan
 is a hat on every step, each with a `CHA` of its own, Marbles' T.
 [`song.ron`](songs/deja-vu/song.ron)
 
-**Build it.** See **Macros** in **The Gen page, macros and presets** for how macros and their
+**Build it.** See **Macros** in **The Macros page, Gen and presets** for how macros and their
 zones are set.
 
 *   **Song:** D dorian, 100 BPM.
@@ -399,7 +399,7 @@ the notes, and `Follow` writes it again whenever the theme changes. The follower
     dotted quarter, three eighths a row, so its notes fall across the beats and meet the bar again
     every three bars.
 *   `Space g a` on a voice freezes it: it keeps its notes as plain ones, and stops following.
-*   On `V2`'s Gen page, `Phrase` `Order` `+1`: `up-down-inc`, the answer playing its ends
+*   On `V2`'s Gen, `Phrase` `Order` `+1`: `up-down-inc`, the answer playing its ends
     twice, with `:order` left as it is. A macro mapped to `Order`, `Min` `-2` and `Max` `+8`,
     turns `V2` from `forward` to `converge` while the theme plays.
 *   `Phrase` `Length` `-4` on `V3`: the slow voice plays the theme's first four notes, twice in
@@ -487,7 +487,7 @@ over 26 bars, and the phrase plays the same pass again only after 105 passes.
 *   **Track 4, `HH`:** `Hat`, `Decay` `30`; `Level` `C4`. Phrase: 3 rows, `C-4`s at velocities
     `60`, `20` and `38`.
 
-On the Gen page the loops are a device of their own, `Loops`, under the `Acid`'s, which says how
+On Gen the loops are a device of their own, `Loops`, under the `Acid`'s, which says how
 long the whole line takes to come round.
 
 **As a patch.** Track 1's pitch, octave, length, ratchet and probability loops are the shipped
@@ -495,7 +495,7 @@ patch `Kria`; add it with `:patch`. `Pitch loop` and `Octave loop` are macros tu
 slots' `Length` from 1 step to 16. The three loops on the FX columns each come as a live `List`
 of their values, the `RET`s on every second row of their lane and the `CHA`s on every third,
 and the patch gives each FX column it goes on a lane as long. `Length loop`, `Ratchet loop` and
-`Chance loop` turn those lanes' lengths, `FX1 Length` to `FX3 Length` on the Gen page's `Lane`
+`Chance loop` turn those lanes' lengths, `FX1 Length` to `FX3 Length` on Gen's `Lane`
 devices, each from 1 row to 16, so every part has its loop on a knob, as Kria is played. Past
 its own length a lane plays its rows again from the first, so the length loop at 6 is
 `20 C0 08 E6 20 C0`, and the line drifts against itself as Kria's does. A patch carries a
@@ -510,7 +510,7 @@ their `Lane` devices. Track 2 is the shipped patch `Acid loops`, its five loops 
 *   `:len 13` on track 1, a trigger loop that drifts against the bar too.
 *   `Rate` `1/8` on the octave loop, so it turns over half as fast, as Kria's clock divisions do.
 *   The lane's length: `:len 5` with the cursor on FX 1, or `Length loop` on the patch.
-*   `Rate` `÷2` on the Gen page's `FX1 Lane`, so each length lasts two steps, or `:lane /3` on
+*   `Rate` `÷2` on Gen's `FX1 Lane`, so each length lasts two steps, or `:lane /3` on
     FX 1 for three: Kria's clock division on one part.
 *   `Ratchet loop` down to 1 row: only `RET 03`, on every third step, so a ratchet wherever a
     note lands there. Or `Rate` `×3` on `FX2 Lane`, three times as fast, its rows a step each,
@@ -520,9 +520,9 @@ their `Lane` devices. Track 2 is the shipped patch `Acid loops`, its five loops 
     rolls other chances.
 *   On track 2, `Acc loop` `16` against `Trig loop` `12`: the accents fall somewhere new each
     bar for three bars. Or every loop at `16`, and it's an ordinary 16-row `Acid` line again.
-*   `Space g a` on track 2's Gen page keeps the pass just heard as the one written, and the
+*   `Space g a` on track 2's Gen keeps the pass just heard as the one written, and the
     loops go on from there.
-*   On track 1's Gen page, `Phrase` `Cue` `On`, then `FX1 Lane` `Length` `+2` while it plays:
+*   On track 1's Gen, `Phrase` `Cue` `On`, then `FX1 Lane` `Length` `+2` while it plays:
     the length loop plays out its four rows before it takes six, as Kria's division cueing waits
     for a loop to start again. `Rate` and `Start` on `FX2 Lane` wait the same way.
 *   `Phrase` `Length` `-4` on track 1: the trigger loop walks its first 12 rows in each pass of
@@ -732,13 +732,13 @@ macros; add it with `:patch` to a track with notes to accent.
 *   `gl` on the bass, `r` for a new line, `L` to keep it, as many times as you like.
 *   `gl` on FX 1, `Shape` `Saw` or `Smooth`, or `:lane 7/4` on row `00` for a shorter sweep: the
     wave fills the new lane.
-*   The sweep's speed is the lane's `Rate`, on the Gen page's `FX1 Lane` (`Space 8`): `÷2` takes
+*   The sweep's speed is the lane's `Rate`, on Gen's `FX1 Lane` (`Space 8`): `÷2` takes
     six bars, `×2` a bar and a half, and `×4` a row a step, 12 steps that drift against the bar.
     Mapped to a macro named `Sweep`, it's on a knob. `Rate`, not `Length`, is the knob for a wave
     lane: a lane heard longer plays its own rows again from the first, so `Length` `+4` plays the
     whole wave and then its first four rows again, a jump back partway through the sweep.
 *   `Space g a` on any of them when you're done, to keep the values as plain ones.
-*   All three on track 3's bass at once: `Space 8`, the Gen page, where each live
+*   All three on track 3's bass at once: `Space 8`, Gen, where each live
     column of the phrase under the cursor is a device, `Random  Euclid · Note 00–0F` and
     `Wave  All rows · FX1 FREQ lane 0C`. The note device's `Hits` turns as the line plays, each
     press its own undo step.
@@ -786,12 +786,12 @@ kick, a snare and hats. [`song.ron`](songs/acid-lines/song.ron)
 *   `Spread` and `Bias` choose the riff's notes besides its root, as they lean `Random`'s
     values in Marbles' X below: `Spread` `0%` gathers them round the middle of the range,
     `D#2 F-2 G-2`, a tight riff, and `Bias` `+100` with it takes them from the top, `G#2 A#2
-    C-3`, leaps up from the root. On the Gen page they're in the fourth column, to turn while
+    C-3`, leaps up from the root. On Gen they're in the fourth column, to turn while
     it plays.
 *   Write a line by hand first, then `S` with `Acid` on it: its rhythm stays, and the panel gives
     it new pitches, accents and slides.
 *   `Space g a` keeps the one you like as plain notes, to tweak by hand.
-*   On the Gen page, `Vary` `Each pass`, after `Pitches` in the device's title: a new line
+*   On Gen, `Vary` `Each pass`, after `Pitches` in the device's title: a new line
     every time round, as Endless Acid Banger plays, and the first pass is the one written. `Every
     4 passes` holds each for four bars. When one sticks, `Space g a` keeps it, the line just heard,
     and `Vary` goes back to `Once`.
@@ -937,7 +937,7 @@ order, so three tracks of samples named `BD`, `SD` and `CH`, or nothing at all, 
     on all three for a new beat, or `S` across them again.
 *   `Y` `00` with the kick's density at `40`: four on the floor. Up from there, it fills in.
 *   `r` on the hats rolls their chaos again; `Chaos` `00` makes both bars the same.
-*   On the Gen page, `Space 8`, the drum's device is titled `Grids  BD`, its map, density and
+*   On Gen, `Space 8`, the drum's device is titled `Grids  BD`, its map, density and
     chaos ready to turn while it plays, and on the Roto its first knobs.
 *   One map for the whole kit: tracks 1 to 3 in group 1, and each drum's `X` and `Y` on the
     group's macros 1 and 2, `G1 1` and `G1 2` in `M`'s list. Two knobs move the kit round the
@@ -1007,7 +1007,7 @@ chances as its own.
     Down to `0%`, its triplets go, and the straight eighths are left.
 *   `1/4` `100%` on the kick: four on the floor, whatever the dice. Then `1/16` up, and the
     sixteenths it adds are always the same ones, as the dice are fixed.
-*   On the Gen page, `Space 8`, `Vary` `Each pass` on all three tracks, the module's `Realtime`:
+*   On Gen, `Space 8`, `Vary` `Each pass` on all three tracks, the module's `Realtime`:
     a new bar every time round. Set it the same on all three, so the hats stay the sum of the
     other two. `Every 4 passes` holds each roll for four bars.
 *   `Bar` `3/4 32nds` on the woodblock: its dice go round every 24 rows against the kick's 32,
@@ -1059,7 +1059,7 @@ at a time.
     column: `Fill` `Ring`, `From` `D-1`, `To` `D-2`, `Change` `0%`, `Chance` `60%`, `Length` 5.
 *   **Track 3:** the kick. **Track 4:** the hats.
 
-**Play it.** `Tab`, and `Space 8` on track 1 for the Gen page: the ring's device has `From` and
+**Play it.** `Tab`, and `Space 8` on track 1 for Gen: the ring's device has `From` and
 `To`, then `Change`, `Chance` and `Length`.
 
 *   `Change` up to `40%` while it plays: the bar changes more each time round, and at `100%`
@@ -1075,7 +1075,7 @@ at a time.
 
 **As a patch.** The bell's ring is the shipped patch `Noise Ring`, with `Change`, `Chance` and
 `Length` on macros, the module's two knobs and the Turing Machine's switch; add it with
-`:patch` on any track and turn them on the Gen page or the Roto.
+`:patch` on any track and turn them on the Macros page or the Roto.
 
 ## Marbles' X
 
@@ -1124,12 +1124,12 @@ and `Steps` on macros; add it with `:patch`.
 *   `Steps` back to all 7, then `Weights` `F4F4F4F`: a hex digit a degree from D, each over
     its note, so all of dorian plays, but the chord's four notes most of the time, as on the
     meloDICER.
-*   On the Gen page, the tune's `Weights` has a cell for each of dorian's degrees, `D` to `C`.
+*   On Gen, the tune's `Weights` has a cell for each of dorian's degrees, `D` to `C`.
     `A`, the fifth, on a macro, `Min` `0`, `Max` `F`, and an LFO on that macro: the fifth comes
     and goes as it plays, a meloDICER fader pushed up and pulled down by a hand that never tires.
 *   `Spread` `0%` on the tune: one note, `D-4`, the middle of the range. With `Bias` `+50`, the
     `A-4` three quarters of the way up.
-*   On the Gen page, `Space 8`, `Spread` and `Bias` are cells to turn while it plays, and with
+*   On Gen, `Space 8`, `Spread` and `Bias` are cells to turn while it plays, and with
     `M` a macro: map both to one, and an LFO on it sweeps the tune from a drone to a scatter.
 *   `Vary` `Each pass` on the bass, and every pass draws a new pattern of octaves.
 
@@ -1208,10 +1208,10 @@ draws again.
     busier, and never plays the same eight rows twice.
 *   On the bass, `Amount` `0%` is mostly gates, short notes, and `50%` mostly rests.
 *   `Vary` `Each pass` on the string, and every pass bunches its notes anew.
-*   Then the string's `Mutate` `25%`, after `Vary` on the Gen page: each pass keeps about three
+*   Then the string's `Mutate` `25%`, after `Vary` on Gen: each pass keeps about three
     rows in four as the last pass played them and draws the rest anew, Marbles' Déjà vu on its
     clusters. `0%` locks the bunch first heard; on the Roto it's on the `Mutate` page.
-*   On the Gen page, `Space 8`, each `Amount` is a cell to turn while it plays, and on the Roto
+*   On Gen, `Space 8`, each `Amount` is a cell to turn while it plays, and on the Roto
     knob 7.
 
 ## Zularic Repetitor
@@ -1291,7 +1291,7 @@ again.
 *   `Vary` `Each pass` on the conga too, and it plays a new child each bar round the bembé's.
 *   `Rhythm` `Motorik` across the first three tracks makes its hats, kick and snare, Neu!'s beat,
     if the voices are a hat, a kick and a snare.
-*   On the Gen page, `Space 8`, `Child` is a cell at the foot of the third column, and on the
+*   On Gen, `Space 8`, `Child` is a cell at the foot of the third column, and on the
     Roto knob 7; a macro or an LFO on it thins a part and fills it in again as it plays.
 
 ## Variations of your own phrase
@@ -1323,7 +1323,7 @@ A#1 50   ---      C-2 50   C-3 7F   ---      G-2 HLD  D#2 50   C-2 50
     gate of `HLD1`.
 *   **Shape on its Note column,** all 16 rows: `Fill` `Variation`, `Order` 1 and `Temp` `50%`,
     as it starts. The panel's heading counts the notes it wrote, and the line changes; `r` rolls
-    another until you like it. Then, on the Gen page, `Vary` `Every 4 passes`, in the device's
+    another until you like it. Then, on Gen, `Vary` `Every 4 passes`, in the device's
     title.
 *   **Track 2:** the kick. **Track 3:** the hats.
 *   **Track 4, `SD`:** `Snare`; `Level` `C8`, `Send B` `98`. A `G-2` on rows `04` and `0C`.
@@ -1340,7 +1340,7 @@ it to learn from.
     takes it apart and puts it together another way.
 *   `Temp` `100%`: every row that ever followed is as likely, so a slide
     the line has once comes as often as a note it has five times.
-*   `dd` on the Gen page takes the generator away and gives the line back, to
+*   `dd` on Gen takes the generator away and gives the line back, to
     edit; `Space g a` instead keeps the variation as plain notes.
 *   On a longer line, two bars or four of a melody that comes back to its
     figures, `Order` 2 gives phrases that sound like it without repeating it.
@@ -1399,7 +1399,7 @@ Track 1, a grid of 4×4                    Track 2, a grid of 4×2
     the rest.
 *   `:order` alone lists every order, each snake and Cartesian with what it plays in a phrase of
     16.
-*   On track 1's Gen page, `Phrase` `Order Y` `4`: the grid plays forward, as `cartesian 1 4`
+*   On track 1's Gen, `Phrase` `Order Y` `4`: the grid plays forward, as `cartesian 1 4`
     does, with `:order` left as it is. A macro mapped to `Order Y`, `Min` `1` and `Max` `4`,
     sweeps from the diagonal to the lines while it plays, and one on `Order X` moves X's rate.
 *   `Phrase` `Reverse` `On`: the grid the other way up, C7's last note first.
@@ -1454,14 +1454,14 @@ trunk's `Followed by 1`.
 
 *   `:bloom` alone, on the trunk's row of a new chain, lists the paths: `pendulum` goes out to the
     last branch and back, and `shuffle` plays the branches in an order of its own.
-*   `gl` on a branch's notes, or `Space 8` for the Gen page, then `Mutation` up to `6`: that
+*   `gl` on a branch's notes, or `Space 8` for Gen, then `Mutation` up to `6`: that
     branch strays further, and the ones after it with it. Turn `Shift` on and the branch moves
     up or down the scale as a whole, as Bloom's `Root` would.
-*   On the Gen page, `Vary` `Each pass` on branch `04`: it mutates again every time round the
+*   On Gen, `Vary` `Each pass` on branch `04`: it mutates again every time round the
     eight bars, so the last branch is always new.
-*   Map a macro to `Mutation` on the Gen page with `M`, and one knob turns every branch at once.
+*   Map a macro to `Mutation` on Gen with `M`, and one knob turns every branch at once.
 *   `Space g a` on a branch keeps it as plain notes, to edit by hand; it stops following.
-*   Bloom's `Path` live, track 1's Gen page, `Phrase` device: `Chain` `Shuffle`, the eight bars
+*   Bloom's `Path` live, track 1's Gen, `Phrase` device: `Chain` `Shuffle`, the eight bars
     dealt in a new order each time round; `Chain` `Up-down`, out to branch `04` and back;
     the `Jump` beside it `40`, now and then a bar plays any of the nine. A macro mapped to `Chain` with
     `M` turns the path from a knob.
@@ -1511,7 +1511,7 @@ Bar 3  .   x   x   x   .   x   x   .   X   x   x   .   X   x   .   x
 *   **Track 5, FX 1:** lane `7`, then a shape on it: the command `CHA`, `From` and `To` `00`,
     `Where` `Chance`, `Amount` `35%`. It fills the lane's seven rows; `r` before keeping it draws
     others, and two of seven is about right.
-*   **Track 5's macro 1, `Skip`:** the generator's `Amount` on the Gen page, from `0%` to
+*   **Track 5's macro 1, `Skip`:** the generator's `Amount` on Gen, from `0%` to
     `100%`, at `35%`.
 
 **Play it.**
@@ -1522,9 +1522,9 @@ Bar 3  .   x   x   x   .   x   x   .   X   x   x   .   X   x   .   x
 *   `Space r`, then `Space o` on a bar line and again two bars later: the turns go in as held
     `RATE`s on the rows where you pressed, so the loop plays them back each time round.
 *   Turn `Skip` up while it plays: the hat drops more steps, keeping the ones already gone, until at
-    `100%` it's silent; down to `0%` it's a clock again. `r` on the Gen page draws other steps.
+    `100%` it's silent; down to `0%` it's a clock again. `r` on Gen draws other steps.
 *   `Where` on `Euclid` with `Hits` as the amount spreads the dropped steps evenly instead.
-*   The lane's `Rate`, on the Gen page's `FX1 Lane`, divides the skip pattern's clock: at `÷2`
+*   The lane's `Rate`, on Gen's `FX1 Lane`, divides the skip pattern's clock: at `÷2`
     each of its rows lasts two steps and acts on the first, so the skips fall only on every
     other step and take fourteen steps to come round. `:lane 5` on row `00` makes a pattern
     of five, a rotation every five steps.
@@ -1606,7 +1606,7 @@ row.
     and `r` rolls another start.
 *   `Vary` `Every 4 passes` holds each generation for four bars. `Once` stops it: the first pass
     plays every time.
-*   On the Gen page, `Space 8`, `Rule` and `Start` are at the foot of the third column, where
+*   On Gen, `Space 8`, `Rule` and `Start` are at the foot of the third column, where
     Euclid's `Hits` and `Rotate` go: map a macro to `Rule` with `M`, and an LFO on the macro
     goes through the rules as it plays.
 *   `S` across the five again with `Rule` `30`: chaos down the kit. `gl` on one track and a new

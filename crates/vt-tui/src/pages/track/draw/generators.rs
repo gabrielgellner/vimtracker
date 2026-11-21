@@ -1,6 +1,7 @@
-//! The Gen page: a device for each live generator of the phrase under the cursor, each FX
-//! column's `Lane` where it has one, then `Empty`,
-//! stacked down the page as the FX page's slots are. Each has its preview at its right, the
+//! The Macros page (decision 465): the track's eight macros and the mappings of the cursor's, then,
+//! until they move to the phrase view (#1111), a device for each live generator of the phrase
+//! under the cursor, each FX column's `Lane` where it has one, `Phrase` and `Empty`, stacked down
+//! the page as the FX page's slots are. Each has its preview at its right, the
 //! large panel the Sound page's filter has, of what it writes across its span, with the row
 //! playing as a dot the terminal places (`graphics/generators.rs`).
 
@@ -16,11 +17,10 @@ use vt_model::notation::{Field, Table};
 use vt_model::shape::{GenParam, ShapeColumn, degree_count};
 use vt_model::song::Track;
 
-use crate::controls::macro_name;
 use crate::controls::{Control, DeviceSpec};
 use crate::graphics::PanelKey;
 use crate::input::mode::Mode;
-use crate::overlays::mapping::holds;
+use crate::overlays::mapping::{self, holding};
 use crate::pages::Ctx;
 use crate::pages::track::TrackPage;
 use crate::services::generators::LiveGen;
@@ -60,7 +60,29 @@ const MACRO_CELLS: CellWidths = CellWidths {
     gap: 3,
 };
 
-/// The macros' band: the eight in two rows of four, and under them what the cursor's holds.
+/// How tall the macros' device is: a device's frame round the band, and under the band the
+/// table's heading and a row for each mapping of the macro with the most, or a line saying there
+/// are none, so the device keeps its height as the cursor goes along the band. It's no taller
+/// than `room`, but always a device's height.
+fn macros_height(track: &Track, room: u16) -> u16 {
+    let most = track.macros.iter().map(|held| held.maps.len()).max();
+    let rows = most.unwrap_or(0).max(1) as u16;
+    // The frame, the room above the band, the band's three lines, the room under it, the heading
+    // and the room under the rows.
+    (rows + 9).min(room).max(DEVICE_HEIGHT)
+}
+
+/// The macro whose mappings the Macros page lists: the cursor's, on the band, or else the one
+/// holding the setting under the cursor, if one does.
+fn macro_listed(page: &TrackPage, ctx: &Ctx, track: &Track) -> Option<usize> {
+    match page.control_here(ctx) {
+        Control::Macro(at) => Some(at),
+        control => holding(control, track).next().map(|(at, _)| at),
+    }
+}
+
+/// The macros' device (decision 465): the eight in two rows of four, and under them every setting
+/// the listed macro holds, with its range, its bends and its zone, as `gm`'s view lists them.
 fn draw_macros(
     frame: &mut Frame,
     area: Rect,
@@ -70,21 +92,69 @@ fn draw_macros(
     device: &DeviceSpec,
     focused: bool,
 ) {
-    frame.render_widget(Device::new(device.identity.clone()).focused(focused), area);
+    let listed = macro_listed(page, ctx, track);
+    let mut widget = Device::new(device.identity.clone()).focused(focused);
+    // Which macro is listed, its name after its number once it has one, and how many it holds.
+    if let Some(at) = listed {
+        let held = &track.macros[at];
+        let mut after = format!("· Macro {}", at + 1);
+        if let Some(name) = held.shown_name() {
+            after.push_str(&format!(" {name}"));
+        }
+        match held.maps.len() {
+            0 => {}
+            1 => after.push_str(", 1 mapping"),
+            count => after.push_str(&format!(", {count} mappings")),
+        }
+        widget = widget.after(Line::styled(after, theme::dim()));
+    }
+    frame.render_widget(widget, area);
     let cells = TrackCells::new(page, ctx, track);
     let rows = device.grid.iter().copied().map(Vec::from).collect();
-    let mut settings = Device::settings_area(area);
+    let settings = Device::settings_area(area);
     frame.render_widget(SettingsGrid::new(&cells, rows, MACRO_CELLS), settings);
-    if let Control::Macro(at) = page.control_here(ctx) {
-        take_top(&mut settings, 2 * ROW_STEP);
-        let line = format!(
-            "{} → {}",
-            macro_name(&track.macros[at], at),
-            holds(ctx.song(), ctx.cursor().track, at)
-        );
-        frame.render_widget(Line::styled(line, theme::dim()), take_top(&mut settings, 1));
+    // Under the band, down to the room above the frame's bottom, in from the frame's edge as the
+    // mapping view's rows are from its own, so the `Setting` column lines up with the band.
+    let top = settings.y + 2 * ROW_STEP;
+    let left = settings.x.saturating_sub(TABLE_INDENT);
+    let mut below = Rect::new(
+        left,
+        top,
+        settings.right().saturating_sub(left),
+        area.bottom().saturating_sub(top + 2),
+    );
+    let maps = listed.map_or(&[][..], |at| &track.macros[at].maps[..]);
+    let hint = match listed {
+        None => Some("On a macro, every setting it holds is listed here"),
+        Some(_) if maps.is_empty() => Some("It holds nothing yet: M on a setting maps it here"),
+        Some(_) => None,
+    };
+    if let Some(hint) = hint {
+        let line = Line::styled(format!("  {hint}"), theme::dim());
+        frame.render_widget(line, take_top(&mut below, 1));
+        return;
+    }
+    let heading = Line::styled(mapping::draw::heading(), theme::dim());
+    frame.render_widget(heading, take_top(&mut below, 1));
+    let room = usize::from(below.height);
+    let shown = if maps.len() > room {
+        room.saturating_sub(1)
+    } else {
+        maps.len()
+    };
+    for map in &maps[..shown] {
+        let row = mapping::draw::mapping_row(ctx, map, false, None);
+        frame.render_widget(row, take_top(&mut below, 1));
+    }
+    if shown < maps.len() {
+        let more = format!("  and {} more: gm lists them all", maps.len() - shown);
+        frame.render_widget(Line::styled(more, theme::dim()), take_top(&mut below, 1));
     }
 }
+
+/// How far the mappings' table starts left of the band's settings, its `›`'s room, so its
+/// settings' names line up with the macros' names.
+const TABLE_INDENT: u16 = 2;
 
 /// How many rows the macro panel takes at the bottom of the screen: its rule with the track's
 /// name, the macros' names, and their values and bars.
@@ -645,9 +715,10 @@ fn draw_empty(
     frame.render_widget(hint, take_top(&mut row, 1));
 }
 
-/// The Gen page: its devices stacked down the page, going by whole devices to keep the cursor's
-/// in view. A fixed track has no phrases, so it has none. It gives back where each generator's
-/// preview is drawn, by its place in its phrase's list.
+/// The Macros page: the macros' device, as tall as its mappings need, then the generators' devices
+/// under it until they move to the phrase view, stacked down the page and going by whole devices
+/// to keep the cursor's in view. A fixed track has no phrases, so it has only the macros. It gives
+/// back where each generator's preview is drawn, by its place in its phrase's list.
 pub(super) fn draw(
     frame: &mut Frame,
     area: Rect,
@@ -658,16 +729,28 @@ pub(super) fn draw(
     let devices = page.devices(Some(track));
     // The macros alone, with no phrase for generators, say why under them.
     let alone = devices.len() == 1;
-    let fit = usize::from(area.height / DEVICE_HEIGHT).max(1);
+    let height = |at: usize| match at {
+        0 => macros_height(track, area.height),
+        _ => DEVICE_HEIGHT,
+    };
     let cursor = page
         .device_cursor(Some(track))
         .map_or(0, |cursor| cursor.device);
-    let first = (cursor + 1).saturating_sub(fit);
+    // From the cursor's device up, as many as fit above it, so it's as low as it can be.
+    let mut first = cursor;
+    let mut taken = height(cursor);
+    while first > 0 && taken + height(first - 1) <= area.height {
+        first -= 1;
+        taken += height(first);
+    }
     let mut rest = area;
     let mut previews = Vec::new();
     let mut open = None;
-    for (at, device) in devices.iter().enumerate().skip(first).take(fit) {
-        let area = take_top(&mut rest, DEVICE_HEIGHT);
+    for (at, device) in devices.iter().enumerate().skip(first) {
+        if at > cursor && rest.height < height(at) {
+            break;
+        }
+        let area = take_top(&mut rest, height(at));
         match (device.title[0], device.grid[0][0]) {
             (_, Some(Control::Macro(_))) => {
                 draw_macros(frame, area, page, ctx, track, device, at == cursor);

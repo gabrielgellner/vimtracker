@@ -177,7 +177,7 @@ fn the_gen_pages_weights_are_the_panels_digits_and_take_a_macro_each() {
     let live = |app: &App| app.song().tracks[0].phrases[&0].generators()[0].shape;
     assert_eq!(live(&app).random.weights[..5], [0xE, 0xF, 0xF, 0xF, 0xF]);
     keys(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(app.track_page.page, Page::Macros);
     for _ in 0..12 {
         if here(&app) == Some(GenParam::Weight1) {
             break;

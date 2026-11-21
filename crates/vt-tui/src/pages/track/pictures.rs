@@ -45,7 +45,7 @@ impl TrackPage {
             Page::Sound => Vec::new(),
             Page::Mod => self.mod_panels(ctx, track),
             Page::Fx => self.fx_panels(ctx, track),
-            Page::Gen => self.gen_panels(ctx, track),
+            Page::Macros => self.gen_panels(ctx, track),
         }
     }
 
@@ -261,7 +261,7 @@ impl TrackPage {
         now: Instant,
     ) -> [Option<(Shade, Placement)>; MOD_SLOTS] {
         match self.page {
-            Page::Gen => self.gen_dots(ctx, cell, now),
+            Page::Macros => self.gen_dots(ctx, cell, now),
             Page::Mod => self.mod_dots(ctx, cell, now),
             Page::Sound | Page::Fx => [None; MOD_SLOTS],
         }

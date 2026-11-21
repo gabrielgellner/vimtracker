@@ -26,7 +26,7 @@ const ROWS: [&str; 8] = [
 fn on_phrase_device() -> (App, Realtime) {
     let (mut app, realtime) = app_with(&ROWS);
     keys(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(app.track_page.page, Page::Macros);
     keys(&mut app, "}");
     assert_eq!(app.track_control(), Control::Base(TrackControl::Order));
     (app, realtime)

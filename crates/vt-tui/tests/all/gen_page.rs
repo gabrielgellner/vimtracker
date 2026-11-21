@@ -32,7 +32,7 @@ fn on_gen_page() -> (App, Realtime) {
     keys(&mut app, "vGSjjjjjj===L");
     assert_eq!(generators(&app).len(), 1);
     keys(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(app.track_page.page, Page::Macros);
     // Past the macros' band, first on the page, to the generator's title.
     assert_eq!(app.track_control(), Control::Macro(0));
     keys(&mut app, "}k");
@@ -43,7 +43,7 @@ fn on_gen_page() -> (App, Realtime) {
 fn the_page_is_fourth_and_shows_the_phrase_under_the_cursor_with_a_device_a_generator() {
     let (app, _rt) = on_gen_page();
     let text = fx_page_text(&app).join("\n");
-    assert!(text.contains(" Sound  Mod  FX  Gen "), "{text}");
+    assert!(text.contains(" Sound  Mod  FX  Macros "), "{text}");
     assert!(text.contains("Phrase 00"), "{text}");
     assert!(text.contains("Ramp  Euclid · Note 00–07"), "{text}");
     assert!(text.contains("Hits"), "{text}");

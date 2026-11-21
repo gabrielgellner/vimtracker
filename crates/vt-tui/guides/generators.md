@@ -4,7 +4,7 @@
 The shape panel's fills with the most settings, one by one: what each is for, what
 its settings do together, and a few recipes to start from. **Shaping a column** in
 the editing guide says how the panel opens and how its rows are set; this guide
-says what to set them to. `Space d` in the panel or on the Gen page says in a line
+says what to set them to. `Space d` in the panel or on Gen says in a line
 what the setting under the cursor does, and `Space ?` in the panel opens this guide at the
 fill's section; `Esc` goes back to the panel as it was.
 
@@ -112,18 +112,18 @@ on every row is a new value a beat on a track at `1/16`. `Where` chooses the row
 every row again each time the phrase comes round, and `Every 4 passes` keeps each
 draw for four. `Mutate` below `100%` draws only that share of the rows again each
 time, keeping the rest as they were heard, so the line drifts, and `0%` holds the
-first one heard, Marbles' Déjà vu. `Space g a` on the Gen page keeps the one you hear.
+first one heard, Marbles' Déjà vu. `Space g a` on Gen keeps the one you hear.
 
 **What's going on.** As each row keeps its own draw, turning Spread or Bias moves
 the line rather than rolling a new one: the rows keep their order, so the row that
 drew highest still writes the highest value. A macro on Spread opens a line out
 from one note to the whole range, and back. Kept live, each of `Weights`' digits is
-a setting of its own as well, a cell on the Gen page's `Weights` device, so a macro,
+a setting of its own as well, a cell on Gen's `Weights` device, so a macro,
 a `MAC` lock or an LFO on a macro moves one degree's weight while the line plays: the
 meloDICER's fader for that note, turned for you.
 
 **A fifth that comes and goes.** Note column, live, From `C-2`, To `C-3`, Steps all
-7, Weights `F000000`. On the Gen page, `Weights`' `G` on a macro, `Min` `0`, `Max`
+7, Weights `F000000`. On Gen, `Weights`' `G` on a macro, `Min` `0`, `Max`
 `F`, and an LFO on the macro. Listen for a bass on the two Cs alone that brings in
 G as the LFO rises, a third of the time at the top, and back to C alone as it falls.
 
@@ -186,7 +186,7 @@ them, and the notes and rhythm stay.
 **Loops.** Each part, the rhythm, the notes, the octaves, the accents and the
 slides, can go round a loop of its own, from 1 to 64 rows. Loops of different
 lengths drift against each other, and the whole comes round again only after
-their least common multiple, which the Gen page's `Loops` title gives.
+their least common multiple, which Gen's `Loops` title gives.
 
 **One note that talks.** Notes `1`, Octave `40%`, Accent `40%`, Slide `30%`.
 The root alone, moved by octaves, accents and slides: listen to the filter and
@@ -338,8 +338,8 @@ and low. From above To turns that round.
 rests twice a bar. `r` for another.
 
 **A slow drift.** Change `10%`, as it starts, kept live. The figure mostly
-repeats, a bit changing now and then. When one sounds right, `Space g a` on the
-Gen page and Change `0%` hold it.
+repeats, a bit changing now and then. When one sounds right, `Space g a` on
+Gen and Change `0%` hold it.
 
 **Against the bar.** Change `0%`, Length `5`, on a 16-row phrase. A figure of
 five rows that never lines up with the bar.

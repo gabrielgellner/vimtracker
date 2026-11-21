@@ -256,7 +256,7 @@ pub(crate) fn for_view(view: View, page: Page) -> Guide {
             Page::Sound => TRACK_SOUND,
             Page::Mod => TRACK_MOD,
             Page::Fx => TRACK_FX,
-            Page::Gen => TRACK_GEN,
+            Page::Macros => TRACK_GEN,
         },
         View::Mixer => TRACK_SOUND,
         View::Audio => METER,

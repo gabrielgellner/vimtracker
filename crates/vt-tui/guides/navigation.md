@@ -59,7 +59,7 @@ if a row shows `10`, then `10j` or `10k` lands on it.
 | `Space 5` | Track page: Sound, the machine, filter and output |
 | `Space 6` | Track page: Mod, the envelopes, LFOs and mod slots |
 | `Space 7` | Track page: FX, the effects |
-| `Space 8` | Track page: Gen, the phrase's live generators |
+| `Space 8` | Track page: Macros, the macros, and Gen, the phrase's live generators |
 | `Space 9` | Project: song settings, and this machine's audio |
 | `Space 0` | Sample page: this track's sample, big |
 | `Space Space`, `Space ff` | Pick a view. `Enter` flips back to the last one |
