@@ -65,6 +65,7 @@ mod tags;
 mod tempo;
 mod timeline;
 mod to_nothing;
+mod tokens;
 mod tonnetz;
 mod track_page;
 mod tracks;

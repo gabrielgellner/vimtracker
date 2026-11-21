@@ -240,7 +240,7 @@ impl App {
             !self.grammar.pending.is_empty()
                 && !self
                     .table
-                    .continuations(self.key_scope(), &self.grammar.pending)
+                    .continuations_in(&self.key_scopes(), &self.grammar.pending)
                     .is_empty()
         };
         PageState {

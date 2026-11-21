@@ -17,12 +17,13 @@ use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::Rect;
 use vt_model::action::{Action, edit};
 use vt_model::generator::Span;
+use vt_model::notation::{Field as TokenField, Kind};
 use vt_model::selection::{Field, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
-    Channel, Context, DrumPart, FillKind, GenParam, Grids, MAX_WEIGHT, Shape, ShapeColumn, Source,
-    Starts, TonnetzVoice, Walk, Where, counted, default_ends, default_step, degree_count,
-    degree_name, divisions_seed, drum_parts, is_empty, kept_list, on_track, open_rows, track_seed,
+    Channel, Context, DrumPart, FillKind, GenParam, Grids, Shape, ShapeColumn, Source, Starts,
+    TonnetzVoice, Walk, Where, counted, default_ends, default_step, degree_count, degree_name,
+    divisions_seed, drum_parts, is_empty, kept_list, on_track, open_rows, track_seed,
     variation_notes, written_from,
 };
 use vt_model::song::{Machine, Song, SynthVoice, Track};
@@ -33,6 +34,7 @@ use crate::app::{App, Selection, TrackSpan};
 use crate::input::bindings::{Cmd, DESCRIBE, adjusting_key};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
+use crate::input::tokens::{Did, TokenKey, Tokens};
 use crate::input::typed::{Typed, TypedValue};
 use crate::overlays::Overlay;
 use crate::overlays::picker::{Item, Pick, Picker};
@@ -87,9 +89,11 @@ pub struct ShapePanel {
     pub row: GenParam,
     /// What's being typed into the current row.
     pub typing: Option<TypedValue>,
-    /// On `Weights`, the digit the cursor is on, by its degree from the root, while `l` has gone
-    /// into them.
+    /// The token the cursor is on in the row's field of tokens, while `l` has gone into it: on
+    /// `Weights`, the digit, by its degree from the root (decisions 388 and 456).
     pub weight: Option<usize>,
+    /// The row's text while the cursor is in its tokens.
+    pub tokens: Option<Tokens>,
     /// Whether what `i` started from is as it was, so the first character typed replaces it, as
     /// a field whose text is selected does, and `Backspace` edits it instead.
     started: bool,
@@ -795,6 +799,7 @@ impl ShapePanel {
             row: GenParam::Fill,
             typing: None,
             weight: None,
+            tokens: None,
             started: false,
             live: None,
             base,
@@ -895,13 +900,8 @@ pub enum ShapeKey {
     Describe,
     /// `Space ?`: the guide, at the fill's section.
     Guide,
-    /// `l`: into `Weights`' digits, or the next of them.
+    /// `l`: into the row's tokens, `Weights`' digits, where it has them.
     Right,
-    /// `h`: the digit before, or out of them from the first.
-    Left,
-    /// `^` and `$`: the first or the last digit.
-    First,
-    Last,
 }
 
 impl Overlay for ShapePanel {
@@ -979,25 +979,18 @@ impl Overlay for ShapePanel {
         (
             "l",
             Cmd::InShape(ShapeKey::Right),
-            "Into the weights, or the next digit",
+            "Into the weights, a digit a note",
         ),
-        (
-            "h",
-            Cmd::InShape(ShapeKey::Left),
-            "The digit before, or out of the weights",
-        ),
-        ("^", Cmd::InShape(ShapeKey::First), "The first digit"),
-        ("$", Cmd::InShape(ShapeKey::Last), "The last digit"),
     ];
 
     fn key(&mut self, cmd: Cmd, ctx: &mut CtxMut) -> Outcome {
-        let Cmd::InShape(key) = cmd else {
-            return Outcome::Passed;
-        };
         let services = &mut *ctx.services;
-        if self.weight_key(key, services) {
-            return Outcome::Done;
-        }
+        let key = match cmd {
+            Cmd::InShape(key) => key,
+            Cmd::InTokens(key) => return self.token_key(key, services),
+            _ => return Outcome::Passed,
+        };
+        self.leave_tokens_for(key, services);
         match key {
             ShapeKey::Play => return Outcome::Do(Cmd::PauseOrResume),
             ShapeKey::PlayFromStart => return Outcome::Do(Cmd::PlayFromStart),
@@ -1035,8 +1028,7 @@ impl Overlay for ShapePanel {
             }
             ShapeKey::Choose => return self.choices(services),
             ShapeKey::Type => return self.start_typing(services),
-            ShapeKey::Right => self.enter_weights(services),
-            ShapeKey::Left | ShapeKey::First | ShapeKey::Last => {}
+            ShapeKey::Right => self.enter_tokens(services),
         }
         Outcome::Done
     }
@@ -1055,6 +1047,21 @@ impl Overlay for ShapePanel {
 
     fn takes_text(&self) -> bool {
         self.typing.is_some()
+            || self
+                .tokens
+                .as_ref()
+                .is_some_and(|tokens| tokens.field.inserting().is_some())
+    }
+
+    fn inner_mode(&self) -> Option<Mode> {
+        self.tokens.as_ref().map(|_| Mode::Tokens)
+    }
+
+    fn types_now(&self, key: Key) -> bool {
+        match (key.code, &self.tokens) {
+            (KeyCode::Char(c), Some(tokens)) => !key.command && tokens.types(c),
+            _ => false,
+        }
     }
 
     /// What's typed into a row; `Tab` and `Shift-Tab` play while it is, and any other key does
@@ -1065,7 +1072,7 @@ impl Overlay for ShapePanel {
             KeyCode::BackTab => return Outcome::Do(Cmd::PlayFromStart),
             _ if key.command => {}
             code if self.typing.is_some() => self.typed(code, ctx.services),
-            KeyCode::Char(c) if self.weight.is_some() => self.type_weight(c, ctx.services),
+            code if self.tokens.is_some() => return self.token_text(code, ctx.services),
             _ => {}
         }
         Outcome::Done
@@ -1319,9 +1326,6 @@ impl ShapePanel {
     }
 }
 
-/// How far `+` and `_` move a weight, a quarter of its range.
-const WEIGHT_JUMP: u8 = 4;
-
 impl ShapePanel {
     /// The notes `Weights`' digits are for, from the root, as the grid spells them: the scale's
     /// degrees while it's on, and the twelve semitones while it's off. None off the Note column.
@@ -1342,90 +1346,141 @@ impl ShapePanel {
         Some((at, note, self.shape.random.weights[at]))
     }
 
-    /// `l` on `Weights`: into its digits, on the first.
-    fn enter_weights(&mut self, services: &mut Services) {
-        if self.row != GenParam::Weights || self.weight_notes().is_empty() {
+    /// A row's text as a field of tokens, where it's in a grammar.
+    pub fn field(&self, row: GenParam) -> Option<TokenField> {
+        let grammar = row.typing(self.column).grammar()?.grammar();
+        let text = row.shown(&self.shape, &self.context());
+        Some(TokenField::new(grammar, &text, self.column))
+    }
+
+    /// `l` on a row in a grammar: into its tokens, on the first.
+    fn enter_tokens(&mut self, services: &mut Services) {
+        let Some(field) = self.field(self.row) else {
+            return;
+        };
+        if field.tokens().is_empty() && field.fixed().is_some() {
             return;
         }
+        self.tokens = Some(Tokens::new(field));
         self.weight = Some(0);
-        self.say_weight(services);
+        self.say_token(services);
     }
 
-    /// A key while the cursor is in `Weights`' digits, or false where it isn't, or for a key that
-    /// means what it does on the rows, which leaves the digits first.
-    fn weight_key(&mut self, key: ShapeKey, services: &mut Services) -> bool {
-        let Some(at) = self.weight else {
-            return false;
-        };
-        let last = self.weight_notes().len().saturating_sub(1);
-        match key {
-            ShapeKey::Left if at == 0 => self.weight = None,
-            ShapeKey::Left => self.weight = Some(at - 1),
-            ShapeKey::Right => self.weight = Some((at + 1).min(last)),
-            ShapeKey::First => self.weight = Some(0),
-            ShapeKey::Last => self.weight = Some(last),
-            ShapeKey::Increase => self.set_weight(|weight| weight.saturating_add(1), services),
-            ShapeKey::Decrease => self.set_weight(|weight| weight.saturating_sub(1), services),
-            ShapeKey::IncreaseLarge => {
-                self.set_weight(|weight| weight.saturating_add(WEIGHT_JUMP), services);
-            }
-            ShapeKey::DecreaseLarge => {
-                self.set_weight(|weight| weight.saturating_sub(WEIGHT_JUMP), services);
-            }
-            ShapeKey::Reset => self.set_weight(|_| MAX_WEIGHT, services),
-            // `Esc` and `Enter` leave the digits, and the panel stays open.
-            ShapeKey::Cancel | ShapeKey::Keep => self.weight = None,
-            // Playing, rolling and the line describing the digit leave the cursor on it.
-            ShapeKey::Play
-            | ShapeKey::PlayFromStart
-            | ShapeKey::Describe
-            | ShapeKey::Guide
-            | ShapeKey::Roll => {
-                return false;
-            }
-            _ => {
-                self.weight = None;
-                return false;
-            }
-        }
-        match self.weight {
-            Some(_) => self.say_weight(services),
-            None => services.status.clear(),
-        }
-        true
+    fn leave_tokens(&mut self) {
+        self.tokens = None;
+        self.weight = None;
     }
 
-    /// A hex digit typed on a weight sets it, and the cursor moves on to the next.
-    fn type_weight(&mut self, c: char, services: &mut Services) {
-        let (Some(at), Some(digit)) = (self.weight, c.to_digit(16)) else {
+    /// A key of the panel's while the cursor is in the tokens: playing and the line describing
+    /// the token leave it where it is, and the rest leave the tokens first and do what they do on
+    /// the rows, the last text that read put back where what's there doesn't.
+    fn leave_tokens_for(&mut self, key: ShapeKey, services: &mut Services) {
+        let Some(tokens) = &self.tokens else {
             return;
         };
-        self.set_weight(|_| digit as u8, services);
-        let last = self.weight_notes().len().saturating_sub(1);
-        self.weight = Some((at + 1).min(last));
-        self.say_weight(services);
+        if matches!(
+            key,
+            ShapeKey::Play | ShapeKey::PlayFromStart | ShapeKey::Describe | ShapeKey::Guide
+        ) {
+            return;
+        }
+        if tokens.field.bad().is_some() {
+            services.status = "The last text that read is back".to_owned();
+        }
+        self.leave_tokens();
     }
 
-    /// Change the weight under the cursor, kept from 0 to `F`, and show the result.
-    fn set_weight(&mut self, to: impl FnOnce(u8) -> u8, services: &mut Services) {
-        let Some(at) = self.weight else {
+    /// One of the token editor's keys.
+    fn token_key(&mut self, key: TokenKey, services: &mut Services) -> Outcome {
+        let (Some(tokens), Some(at)) = (self.tokens.as_mut(), self.weight.as_mut()) else {
+            return Outcome::Passed;
+        };
+        let did = tokens.key(key, at);
+        self.tokens_did(did, services)
+    }
+
+    /// A key that isn't the table's, in the tokens: a token typed in place, a count, or what's
+    /// being typed.
+    fn token_text(&mut self, code: KeyCode, services: &mut Services) -> Outcome {
+        let (Some(tokens), Some(at)) = (self.tokens.as_mut(), self.weight.as_mut()) else {
+            return Outcome::Done;
+        };
+        let did = tokens.text(code, at);
+        self.tokens_did(did, services)
+    }
+
+    /// After a key in the tokens: the text written into the setting where it reads, and heard,
+    /// while text that doesn't leaves the last that did playing.
+    fn tokens_did(&mut self, did: Did, services: &mut Services) -> Outcome {
+        match did {
+            Did::Out => {
+                self.leave_tokens();
+                services.status.clear();
+                return Outcome::Done;
+            }
+            Did::TypeAll => {
+                self.leave_tokens();
+                return self.start_typing(services);
+            }
+            Did::Refused(why) => {
+                services.status = why;
+                return Outcome::Done;
+            }
+            Did::Moved => {}
+            Did::Changed => self.write_tokens(services),
+        }
+        self.say_token(services);
+        Outcome::Done
+    }
+
+    /// The field's text into the setting where it reads, and back as the setting shows it once
+    /// it's no longer being typed.
+    fn write_tokens(&mut self, services: &mut Services) {
+        let Some(tokens) = &self.tokens else {
             return;
         };
-        self.change(
-            |panel| {
-                let weight = &mut panel.shape.random.weights[at];
-                *weight = to(*weight).min(MAX_WEIGHT);
-            },
-            services,
-        );
-    }
-
-    /// The status line names the cursor's note and its weight: `Weight of G: F`.
-    fn say_weight(&self, services: &mut Services) {
-        if let Some((_, note, weight)) = self.weight_here() {
-            services.status = format!("Weight of {note}: {weight:X}");
+        if tokens.field.bad().is_some() {
+            return;
+        }
+        let text = tokens.field.text().to_owned();
+        self.commit_typing(&text, services);
+        let shown = self.row.shown(&self.shape, &self.context());
+        if let Some(tokens) = self.tokens.as_mut()
+            && tokens.field.inserting().is_none()
+        {
+            tokens.field.set(&shown);
         }
     }
+
+    /// The status line names the token under the cursor, `Weight of G: F`, or says why the text
+    /// doesn't read.
+    fn say_token(&self, services: &mut Services) {
+        let (Some(tokens), Some(at)) = (&self.tokens, self.weight) else {
+            return;
+        };
+        let field = &tokens.field;
+        services.status = match (field.bad(), field.inserting()) {
+            (Some(bad), _) => format!(
+                "{}; the column plays the last text that read. Esc puts it back",
+                bad.why
+            ),
+            (None, Some(_)) => String::new(),
+            (None, None) => token_named(field, at).0,
+        };
+    }
+}
+
+/// The token at a place as the status line says it, `Weight of G: F`, and what it means, for
+/// `Space d`.
+pub(crate) fn token_named(field: &TokenField, at: usize) -> (String, String) {
+    let grammar = field.grammar();
+    let (kind, text) = match (field.tokens().get(at), field.token(at)) {
+        (Some(token), Some(text)) => (token.kind, text),
+        _ => (Kind::Unread, ""),
+    };
+    let about = (grammar.about)(kind, at, field.column());
+    let meaning = (grammar.meaning)(kind).replacen("{}", &about.subject, 1);
+    (format!("{}: {text}", about.name), meaning)
 }
 
 impl App {

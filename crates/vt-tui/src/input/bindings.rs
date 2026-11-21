@@ -9,6 +9,7 @@ use vt_model::selection::{Motion, Target};
 use crate::controls::Page;
 use crate::input::keys::{Key, parse, parse_sequence};
 use crate::input::mode::{Mode, View};
+use crate::input::tokens::{self, TokenKey};
 use crate::overlays::Overlay as _;
 use crate::overlays::command::{CommandKey, CommandLine};
 use crate::overlays::field_jump::{FieldJump, JumpKey};
@@ -222,6 +223,8 @@ pub enum Cmd {
     InMapping(MappingKey),
     /// A key of the shape panel.
     InShape(ShapeKey),
+    /// A key of a field of tokens, a text-like setting edited a token at a time.
+    InTokens(TokenKey),
     /// Show the macro panel at the bottom of the screen, or hide it.
     ToggleMacroPanel,
     /// Put the keys in the macro panel, showing it if it's hidden.
@@ -477,6 +480,11 @@ pub fn bindings() -> Vec<Binding> {
     add(MappingView::MODE, MappingView::KEYS);
     add(ShapePanel::MODE, ShapePanel::KEYS);
     add(MacroPanel::MODE, MacroPanel::KEYS);
+    // The token editor's, which come before the panel's while the cursor is in a field of them.
+    add(Mode::Tokens, tokens::KEYS);
+    for objects in tokens::OBJECTS {
+        add(Mode::Tokens, objects);
+    }
     with_cmd_adjusts(rows)
 }
 
@@ -529,6 +537,17 @@ impl Table {
         }
     }
 
+    /// Resolve the keys typed so far in the first of some modes that binds them or starts a
+    /// sequence with them, so a mode's rows come before another's, as the token editor's before
+    /// the panel it's in.
+    pub fn resolve_in(&self, modes: &[Mode], keys: &[Key]) -> Resolved {
+        modes
+            .iter()
+            .map(|mode| self.resolve(*mode, keys))
+            .find(|resolved| *resolved != Resolved::Unbound)
+            .unwrap_or(Resolved::Unbound)
+    }
+
     /// Resolve the keys typed so far.
     pub fn resolve(&self, mode: Mode, keys: &[Key]) -> Resolved {
         let mut prefix = false;
@@ -560,6 +579,24 @@ impl Table {
                 (rest.join(" "), binding.description)
             })
             .collect()
+    }
+
+    /// What could come next after these keys in some modes, the first's before the rest's, for
+    /// the popup: a later mode's that an earlier one binds are left out.
+    pub(crate) fn continuations_in(
+        &self,
+        modes: &[Mode],
+        keys: &[Key],
+    ) -> Vec<(String, &'static str)> {
+        let mut next: Vec<(String, &'static str)> = Vec::new();
+        for mode in modes {
+            for (rest, description) in self.continuations(*mode, keys) {
+                if !next.iter().any(|(seen, _)| *seen == rest) {
+                    next.push((rest, description));
+                }
+            }
+        }
+        next
     }
 
     /// Every row, for `Space k`.

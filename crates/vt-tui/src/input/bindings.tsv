@@ -1020,10 +1020,7 @@ Shape	Tab	InShape(Play)	Play, or pause in place
 Shape	S-Tab	InShape(PlayFromStart)	Play from the start
 Shape	Space d	InShape(Describe)	Describe the setting under the cursor, or stop
 Shape	Space ?	InShape(Guide)	The guide, at the fill's section
-Shape	l	InShape(Right)	Into the weights, or the next digit
-Shape	h	InShape(Left)	The digit before, or out of the weights
-Shape	^	InShape(First)	The first digit
-Shape	$	InShape(Last)	The last digit
+Shape	l	InShape(Right)	Into the weights, a digit a note
 Macros	Esc	InMacros(Leave)	Back to the page, the panel showing
 Macros	q	InMacros(Leave)	Back to the page, the panel showing
 Macros	Space t	InMacros(Hide)	Hide the panel, and back to the page
@@ -1048,3 +1045,53 @@ Macros	Tab	InMacros(Play)	Play, or pause in place
 Macros	W	InMacros(NextTrack)	Next track
 Macros	B	InMacros(PreviousTrack)	Previous track
 Macros	Space d	InMacros(Describe)	Describe the setting under the cursor, or stop
+Tokens	Esc	InTokens(Back)	Back to the row, putting back the last text that read
+Tokens	Enter	InTokens(Done)	Back to the row, where the text reads
+Tokens	h	InTokens(Move(Left))	The token before, into and out of groups; from the first, back to the row
+Tokens	l	InTokens(Move(Right))	The next token, into and out of groups
+Tokens	w	InTokens(Move(Next))	The next token at the same depth, a group as one
+Tokens	b	InTokens(Move(Previous))	The token before at the same depth, a group as one
+Tokens	^	InTokens(Move(First))	The first token
+Tokens	$	InTokens(Move(Last))	The last token
+Tokens	%	InTokens(Move(Match))	The bracket that matches this one
+Tokens	(	InTokens(Move(GroupStart))	Out to the start of the group
+Tokens	)	InTokens(Move(GroupEnd))	Out to the end of the group
+Tokens	=	InTokens(Increase)	Turn the token up, in its own units
+Tokens	D-l	InTokens(Increase)	Turn the token up, in its own units
+Tokens	-	InTokens(Decrease)	Turn the token down, in its own units
+Tokens	D-h	InTokens(Decrease)	Turn the token down, in its own units
+Tokens	+	InTokens(IncreaseLarge)	Turn the token up a large step
+Tokens	D-k	InTokens(IncreaseLarge)	Turn the token up a large step
+Tokens	_	InTokens(DecreaseLarge)	Turn the token down a large step
+Tokens	D-j	InTokens(DecreaseLarge)	Turn the token down a large step
+Tokens	x	InTokens(Remove)	Take the token away, or on a field of fixed length put back what it starts as
+Tokens	~	InTokens(Rest)	Rest the token, or give back what it was
+Tokens	r	InTokens(Replace)	Replace the token
+Tokens	i	InTokens(Type(Before))	Type before the token, or on a field of fixed length type it all
+Tokens	a	InTokens(Type(After))	Type after the token, or on a field of fixed length type it all
+Tokens	s	InTokens(Type(Over))	Type over the token
+Tokens	p	InTokens(Paste)	Paste after the token, or over it on a field of fixed length
+Tokens	d i t	InTokens(Delete(Token))	Take away the token
+Tokens	d a t	InTokens(Delete(TokenAround))	Take away the token and its modifiers
+Tokens	d i [	InTokens(Delete(Inside(Square)))	Take away what the [ ] group holds
+Tokens	d a [	InTokens(Delete(Around(Square)))	Take away the [ ] group
+Tokens	d i <	InTokens(Delete(Inside(Angle)))	Take away what the < > group holds
+Tokens	d a <	InTokens(Delete(Around(Angle)))	Take away the < > group
+Tokens	d i (	InTokens(Delete(Inside(Round)))	Take away a Euclid's numbers
+Tokens	d a (	InTokens(Delete(Around(Round)))	Take away a Euclid, with its brackets
+Tokens	c i t	InTokens(Change(Token))	Type over the token
+Tokens	c a t	InTokens(Change(TokenAround))	Type over the token and its modifiers
+Tokens	c i [	InTokens(Change(Inside(Square)))	Type over what the [ ] group holds
+Tokens	c a [	InTokens(Change(Around(Square)))	Type over the [ ] group
+Tokens	c i <	InTokens(Change(Inside(Angle)))	Type over what the < > group holds
+Tokens	c a <	InTokens(Change(Around(Angle)))	Type over the < > group
+Tokens	c i (	InTokens(Change(Inside(Round)))	Type over a Euclid's numbers
+Tokens	c a (	InTokens(Change(Around(Round)))	Type over a Euclid, with its brackets
+Tokens	y i t	InTokens(Yank(Token))	Keep, for p, the token
+Tokens	y a t	InTokens(Yank(TokenAround))	Keep, for p, the token and its modifiers
+Tokens	y i [	InTokens(Yank(Inside(Square)))	Keep, for p, what the [ ] group holds
+Tokens	y a [	InTokens(Yank(Around(Square)))	Keep, for p, the [ ] group
+Tokens	y i <	InTokens(Yank(Inside(Angle)))	Keep, for p, what the < > group holds
+Tokens	y a <	InTokens(Yank(Around(Angle)))	Keep, for p, the < > group
+Tokens	y i (	InTokens(Yank(Inside(Round)))	Keep, for p, a Euclid's numbers
+Tokens	y a (	InTokens(Yank(Around(Round)))	Keep, for p, a Euclid, with its brackets

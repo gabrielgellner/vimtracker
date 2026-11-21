@@ -7,6 +7,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_model::lfo::Shape as Wave;
+use vt_model::notation::Field;
 use vt_model::scale::Scale;
 use vt_model::shape::{Context, FillKind, GenParam, ShapeColumn, Where, World, written_from};
 use vt_model::speed::Speed;
@@ -18,6 +19,7 @@ use crate::overlays::shape::ShapePanel;
 use crate::pages::Ctx;
 use crate::widgets::popup;
 use crate::widgets::theme;
+use crate::widgets::tokens::TokenCells;
 use crate::widgets::value_bars::{Beside, Side};
 
 /// Room for eight notes in a `List`'s values; a longer list shows as many as fit and how many
@@ -106,59 +108,43 @@ fn typed_text(typing: &TypedValue, room: usize) -> String {
 /// The room each of `Weights`' digits takes, so the note under it fits, `C#` and a space.
 const WEIGHT_CELL: usize = 3;
 
-/// `Weights` in two lines, each digit over the note it's for: `F  0  8` over `C  D  E`. The
-/// cursor in them is on its digit, and its note is in full; on the row but not in them, the
-/// digits are lit together; and while they're typed, the text so far and a `_` after it.
+/// `Weights` in two lines, a field of tokens, each digit over the note it's for: `F  0  8` over
+/// `C  D  E`. The cursor in them is on its digit, and its note is in full; on the row but not in
+/// them, the digits are lit together; and while they're typed, the text so far and a `_` after it.
 fn weight_lines(panel: &ShapePanel, current: bool, label: usize) -> [Line<'static>; 2] {
     let notes = panel.weight_notes();
     let typed = current.then_some(panel.typing.as_ref()).flatten();
-    let digits: Vec<String> = match typed {
-        Some(typed) => typed
-            .chars()
-            .map(String::from)
-            .chain(std::iter::once("_".to_owned()))
-            .collect(),
-        None => panel.shape.random.weights[..notes.len()]
-            .iter()
-            .map(|weight| format!("{weight:X}"))
-            .collect(),
-    };
-    let lit = theme::cursor(if typed.is_some() {
-        Mode::Insert
-    } else {
-        Mode::Normal
-    });
-    let mut top = vec![Span::raw(format!("{:<label$}", GenParam::Weights.name()))];
-    let mut under = vec![Span::raw(" ".repeat(label))];
-    // The cursor: on a digit in them, or while they're typed, where the next goes.
-    let at = match typed {
-        Some(_) => Some(digits.len() - 1),
-        None => panel.weight.filter(|_| current),
-    };
-    let gap = " ".repeat(WEIGHT_CELL - 1);
-    if current && at.is_none() && typed.is_none() {
-        // Lit as one value, the gaps and all, as a value on its row is.
-        top.push(Span::styled(digits.join(&gap), lit));
-    } else {
-        for (nth, digit) in digits.iter().enumerate() {
-            let shown = match at {
-                Some(at) if at == nth => Span::styled(digit.clone(), lit),
-                _ => Span::raw(digit.clone()),
+    let tokens = panel.tokens.as_ref().filter(|_| current);
+    let made;
+    let field = match (tokens, panel.field(GenParam::Weights)) {
+        (Some(tokens), _) => &tokens.field,
+        (None, Some(field)) => {
+            made = match typed {
+                Some(typed) => Field::new(field.grammar(), typed, panel.column),
+                None => field,
             };
-            if nth > 0 {
-                top.push(Span::raw(gap.clone()));
-            }
-            top.push(shown);
+            &made
         }
+        (None, None) => return [Line::default(), Line::default()],
+    };
+    let typing_at = match typed {
+        Some(typed) => Some(typed.len()),
+        None => field.inserting().map(|insert| insert.to),
+    };
+    let [top, under] = TokenCells {
+        field,
+        cursor: panel.weight.filter(|_| current),
+        typing_at,
+        current,
+        cell: WEIGHT_CELL,
+        under: &notes,
     }
-    for (nth, note) in notes.iter().enumerate() {
-        let style = match panel.weight.filter(|_| current) {
-            Some(at) if at == nth => Style::new().add_modifier(Modifier::BOLD),
-            _ => theme::dim(),
-        };
-        under.push(Span::styled(format!("{note:<WEIGHT_CELL$}"), style));
-    }
-    [Line::from(top), Line::from(under)]
+    .lines();
+    let mut line = vec![Span::raw(format!("{:<label$}", GenParam::Weights.name()))];
+    line.extend(top);
+    let mut below = vec![Span::raw(" ".repeat(label))];
+    below.extend(under);
+    [Line::from(line), Line::from(below)]
 }
 
 /// How wide the panel is: room for eight notes in a `List`'s values, or for each of `Weights`'

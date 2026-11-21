@@ -207,6 +207,7 @@ impl ShapePanel {
             row: GenParam::Fill,
             typing: None,
             weight: None,
+            tokens: None,
             started: false,
             live: Some(index),
             base,

@@ -487,6 +487,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             | Mode::Guide
             | Mode::Picker
             | Mode::Shape
+            | Mode::Tokens
             | Mode::Mapping
             | Mode::Macros
             | Mode::Jump => theme::TEAL,

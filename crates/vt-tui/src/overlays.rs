@@ -62,6 +62,19 @@ pub(crate) trait Overlay {
         false
     }
 
+    /// A mode whose rows of the table come before its own for now, the token editor's while the
+    /// cursor is in a field of tokens (decision 456): a key that mode doesn't bind is its own
+    /// mode's.
+    fn inner_mode(&self) -> Option<Mode> {
+        None
+    }
+
+    /// Whether a key types itself now, before the table reads it: a hex digit among `Weights`'
+    /// digits, where `a` to `f` are digits rather than keys.
+    fn types_now(&self, _key: Key) -> bool {
+        false
+    }
+
     /// Take a key as text: any key while [`Overlay::takes_text`], and otherwise one the table
     /// doesn't bind in its mode or that [`Overlay::key`] passed back.
     fn text(&mut self, _key: Key, _ctx: &mut CtxMut) -> Outcome {
@@ -90,14 +103,20 @@ pub(crate) enum Meant {
 /// which it joins or ends. A sequence that isn't bound gives up its earlier keys and its last
 /// is read again alone, so a `g` not followed by `g` is dropped, and `Esc` after the start of
 /// one only lets it go.
+#[cfg(test)]
 pub(crate) fn meant(table: &Table, mode: Mode, pending: &mut Vec<Key>, key: Key) -> Meant {
+    meant_in(table, &[mode], pending, key)
+}
+
+/// What a key means in the first of some modes that binds it, as [`meant`] reads one.
+pub(crate) fn meant_in(table: &Table, modes: &[Mode], pending: &mut Vec<Key>, key: Key) -> Meant {
     if key.code == KeyCode::Esc && !pending.is_empty() {
         pending.clear();
         return Meant::Wait;
     }
     pending.push(key);
     loop {
-        match table.resolve(mode, pending) {
+        match table.resolve_in(modes, pending) {
             Resolved::Command(cmd) => {
                 pending.clear();
                 return Meant::Cmd(cmd);
@@ -126,10 +145,15 @@ pub(crate) fn press<O: Overlay>(
     ctx: &mut CtxMut,
 ) -> Outcome {
     let key = overlay.reads(key);
-    if overlay.takes_text() {
+    if overlay.takes_text() || (pending.is_empty() && overlay.types_now(key)) {
         return overlay.text(key, ctx);
     }
-    match meant(table, O::MODE, pending, key) {
+    let inner = overlay.inner_mode();
+    let modes = match inner {
+        Some(inner) => &[inner, O::MODE][..],
+        None => &[O::MODE][..],
+    };
+    match meant_in(table, modes, pending, key) {
         Meant::Cmd(cmd) => match overlay.key(cmd, ctx) {
             Outcome::Passed => overlay.text(key, ctx),
             outcome => outcome,

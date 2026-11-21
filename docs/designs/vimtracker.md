@@ -868,7 +868,8 @@ crates/vt-tui/src/
   widgets.rs  widgets/      what pages are drawn from, param/ (ParamView, ParamCell and edit),
                             theme.rs and glyphs.rs
   graphics.rs  graphics/    kitty's graphics protocol: Graphics (sender.rs), the PNGs and curves
-  input.rs  input/          keys.rs, bindings.rs with bindings.tsv, mode.rs, typed.rs and wheel.rs
+  input.rs  input/          keys.rs, bindings.rs with bindings.tsv, mode.rs, typed.rs, tokens.rs
+                            (the token editor's keys) and wheel.rs
   roto.rs  roto/            the Roto-Control
   offline.rs  offline/      bench, probe (dsp_probe.rs), notes (track_notes.rs), kits
                             import-ableton (ableton.rs) and probe-keys (probe.rs)
@@ -998,6 +999,15 @@ setting's `Typing` or plain text up to a length, and says whether it's still typ
 given up: two hex digits commit as the second is typed, in this one place for the phrase grid, the
 song view, the track page, the shape panel and the mapping view, and the rest on `Enter`. A caller
 with keys of its own, such as `Backspace` clearing an empty cell, handles them before it.
+
+**`Tokens`** (`input/tokens.rs`, decision 456) is a text-like setting edited a token at a time:
+a `vt-model` `notation::Field`, its text split by its `Grammar`, read on every change and kept
+as the last text that read, with the token editor's keys, `Mode::Tokens` in the table. An
+overlay with one open gives its keys to that mode first (`Overlay::inner_mode`, and
+`Overlay::types_now` for a token typed in place, as `Weights`' digits are), and a key it doesn't
+bind is the overlay's own; the overlay keeps the cursor, writes the text that reads into its
+setting and draws the field with `widgets/tokens.rs`. Each grammar is declared once, in
+`vt-model`'s `notation`, and `Typing::grammar` says which setting is in one.
 `TypedValue::shown` is the text with a `_` where the next character goes, as the pages draw it.
 
 **Pages and modes** (`input/mode.rs`). A `View` is a page: the song view (`Space 1`), the chain view
