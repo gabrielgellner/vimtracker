@@ -138,9 +138,8 @@ impl Settings {
     pub(crate) fn save_describe(&self, path: &Path) -> Result<(), String> {
         let text = match std::fs::read_to_string(path) {
             Ok(text) => {
-                let mut kept: Self = ron::from_str(&text).map_err(|error| {
-                    format!("{}: {error}. Describe isn't kept", path.display())
-                })?;
+                let mut kept: Self = ron::from_str(&text)
+                    .map_err(|error| format!("{}: {error}. Describe isn't kept", path.display()))?;
                 kept.describe = self.describe;
                 // Where the line can't be changed or added in place, the file is written again
                 // from what it says, with the template's notes.
