@@ -34,7 +34,11 @@ scale, in rows of four from the root, each named by its note, `C`, `D#`, and at 
 title, dim, how many of them `Steps` lets through, `Steps lets 5 of 5 through`. They're the shape
 panel's `Weights` digits, so a turn of a cell is that digit, and each takes a macro, a `MAC` lock
 or an LFO on its macro as any setting here does, so a weight can move while it plays. The Roto has
-the first eight on one page and the last four on a second. A value with a bar is brief, as `9` for hits,
+the first eight on one page and the last four on a second. The fill's own `Weights` cell shows
+the digits each over its note, and `l` goes into them, as the shape panel's row does (see
+**Fields of tokens** in the editing guide), the fast way to see them all and type `F08F`; so do a
+`List`'s `Values`, a `Tonnetz`'s moves, each over its chord, and a mask, as its eight bits. Each
+change in a field is one undo step, and a key it doesn't have, such as `j`, leaves it. A value with a bar is brief, as `9` for hits,
 as its bar shows how many of how many; the status line says it in full, `Hits, 9
 of the 16 rows`.
 
