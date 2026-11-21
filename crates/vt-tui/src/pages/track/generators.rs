@@ -247,7 +247,7 @@ impl TrackPage {
     /// be left on Gen behind, keeps its own keys.
     pub(super) fn on_gen(&self, view: View, control: Control) -> bool {
         view == View::Track
-            && self.page == Page::Gen
+            && self.page == Page::Macros
             && !matches!(
                 control,
                 Control::Macro(_) | Control::Lane(..) | Control::Base(_)
@@ -661,7 +661,7 @@ impl TrackPage {
             return Outcome::Done;
         };
         let track = &services.song().tracks[services.cursor.track];
-        let devices = Page::Gen.devices_on(track, services.phrase_id());
+        let devices = Page::Macros.devices_on(track, services.phrase_id());
         let device = devices.iter().position(|device| {
             matches!(device.title[0], Some(Control::Gen { generator, .. }) if generator == made)
         });

@@ -124,7 +124,7 @@ fn the_gen_page_turns_a_rhythms_amount_and_switches_complementarys_side() {
     let whole = runs.trim_end_matches('x');
     assert!(!whole.split('.').any(|run| run.len() == 1), "{runs}");
     keys(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(app.track_page.page, Page::Macros);
     keys(&mut app, "}k");
     let text = fx_page_text(&app).join("\n");
     assert!(text.contains("Ramp  Clusters  Once"), "{text}");

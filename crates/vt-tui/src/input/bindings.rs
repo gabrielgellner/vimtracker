@@ -342,8 +342,8 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ),
     (
         "Space 8",
-        Cmd::ShowTrackPage(Page::Gen),
-        "Gen page: the live generators",
+        Cmd::ShowTrackPage(Page::Macros),
+        "Macros page: the macros, and the live generators",
     ),
     (
         "Space 9",

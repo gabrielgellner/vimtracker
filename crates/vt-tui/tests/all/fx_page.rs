@@ -32,11 +32,11 @@ fn l_reaches_the_fx_page_and_then_the_gen_page() {
     press(&mut app, "L");
     assert_eq!(
         app.track_page.page,
-        Page::Gen,
+        Page::Macros,
         "the Gen page comes after it"
     );
     press(&mut app, "L");
-    assert_eq!(app.track_page.page, Page::Gen, "it stops at the last");
+    assert_eq!(app.track_page.page, Page::Macros, "it stops at the last");
     press(&mut app, "HH");
     assert_eq!(app.track_page.page, Page::Mod);
     press(&mut app, "L");

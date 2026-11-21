@@ -23,13 +23,14 @@ pub enum Page {
     Sound,
     Mod,
     Fx,
-    /// The live generators of the phrase under the cursor.
-    Gen,
+    /// The track's eight macros and the cursor's macro's mappings (decision 465), with the live
+    /// generators of the phrase under the cursor under them until they move to the phrase view.
+    Macros,
 }
 
 impl Page {
     /// Every page, in order.
-    pub const ALL: [Self; 4] = [Self::Sound, Self::Mod, Self::Fx, Self::Gen];
+    pub const ALL: [Self; 4] = [Self::Sound, Self::Mod, Self::Fx, Self::Macros];
 
     /// The page's name on screen.
     pub fn name(self) -> &'static str {
@@ -37,7 +38,7 @@ impl Page {
             Self::Sound => "Sound",
             Self::Mod => "Mod",
             Self::Fx => "FX",
-            Self::Gen => "Gen",
+            Self::Macros => "Macros",
         }
     }
 
@@ -57,20 +58,20 @@ impl Page {
     /// page's machine, filter, output and play, or a fixed track's output alone, the Mod page's
     /// mod slots, accumulator and arpeggio, and the FX page's slots. The cursor, `j`, `k`,
     /// `h`, `l`, `{` and `}` go through whatever devices a page gives, laid out as its rack
-    /// (the track page's `rack_places`). The Gen page's hang on a phrase as well, so they're
+    /// (the track page's `rack_places`). The Macros page's generators hang on a phrase as well, so they're
     /// [`Page::devices_on`]'s, and here there are none.
     pub fn devices(self, track: &Track) -> Vec<DeviceSpec> {
         self.devices_on(track, None)
     }
 
-    /// The page's devices, the Gen page's being a device for each live generator of this phrase
-    /// of the track, then `Empty`.
+    /// The page's devices, the Macros page's being the macros, then a device for each live
+    /// generator of this phrase of the track, then `Empty`.
     pub(crate) fn devices_on(self, track: &Track, phrase: Option<u32>) -> Vec<DeviceSpec> {
         match self {
             Self::Sound => sound::devices(track),
             Self::Mod => modulation::devices(track),
             Self::Fx => fx::devices(track),
-            Self::Gen => generators::devices(track, phrase),
+            Self::Macros => generators::devices(track, phrase),
         }
     }
 }

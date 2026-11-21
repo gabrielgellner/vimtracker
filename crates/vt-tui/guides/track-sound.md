@@ -42,7 +42,7 @@ A count before `=` `-` `+` `_` goes that many steps. On a value each is its step
 moves a hex value `0A`. On a list, `=` and `-` move one choice and `+` and `_` sixteen, so `3=`
 moves three choices: the track's lists, Machine, the filter's Type and Mode, Role, Speed, Groove,
 a slot's effect and an effect's lists, a machine's own, such as the 6-op's patches, a mod slot's
-and the Gen page's all go so. Machine, Type, Mode, Role, a slot's effect and a mod slot's lists go
+and the Macros page's all go so. Machine, Type, Mode, Role, a slot's effect and a mod slot's lists go
 round past either end with `=` and `-`; `+` and `_` stop at the first or last, as every key does
 on Speed, Groove and a machine's own lists.
 
@@ -88,7 +88,7 @@ A machine's type is the setting that changes its character: the sample the sampl
 plays, `Acid`'s `Wave`, `Supersaw`'s `Stack`, 6-op's `Patch`, and the chord of `Chord`
 and `Chip`. Other synths have none. `K` lists whatever's under the cursor in a title, as
 on a setting, and `g d` on the sample opens the sample page, as `g d` on a setting a macro
-holds goes to the macro (see **Macros** in **The Gen page, macros and presets**).
+holds goes to the macro (see **Macros** in **The Macros page, Gen and presets**).
 Each machine places its own settings: most go down the columns in order, the sampler has `Slice`, `Play` and `Reverse` in
 one column, `Start` and `Length` in the next, and its sample's own `Tune` and `Cents`
 in the third, which tune the sample rather than the track (see **Tuning a sample** in
@@ -342,7 +342,7 @@ it, and on the Roto it's the first knob of the Play device's second page. See
 **Nudging a note off the grid** in **Note entry**.
 
 `Jump`, in the Play device's title, is the chance each step plays any row of
-its phrase's window, `Length` rows from `Start` on the Gen page's `Phrase`,
+its phrase's window, `Length` rows from `Start` on Gen's `Phrase`,
 instead of the one the phrase's `:order` walks to, from `0 %`, the
 order as it is, to `100 %`, any row every step. It's where held `JMP` starts, so
 a step's `JMP` or a lane's replaces it and an LFO on `JMP` moves around it, and
@@ -521,7 +521,7 @@ tracks hits its slots. The rest is as on a return.
 
 A group's macros can hold settings on its tracks as well as its own, so one knob turns the
 cutoff on every drum, or `Hits` on each of their generators: `M` on a track's setting lists
-the group's macros after the track's own. The Gen page's guide has the details, under
+the group's macros after the track's own. The Macros page's guide has the details, under
 Group macros.
 
 Each group has a colour: its icon, its strip on the mixer and the `G1` under each of its
@@ -621,7 +621,7 @@ tracks, `0` and `$` to the first or last, `j` and `k` up and down the strip, and
 nothing: a fader down, a pan to the middle, mute and solo off. On mute
 and solo, `=` switches on, `-` switches off, and `K` or `i` changes it. `/` jumps to a setting by its name, as
 it does on the track page, staying on the cursor's track. `gd` on a fader a macro holds goes
-to that macro on the Gen page, and `Ctrl-o` comes back; with more than one holding it, a list
+to that macro on the Macros page, and `Ctrl-o` comes back; with more than one holding it, a list
 of them to choose from.
 
 While a step's `LEV`, `PAN`, `SNA` or `SNB` drives a fader, the strip shows the
@@ -632,7 +632,7 @@ stays where it is. Moving the value by hand takes it over from the steps, marked
 **Fader automation and relative modulation** in **FX commands**.
 
 A fader a macro holds shows where the macro puts it, as on the track page, and its fader
-beside the meters stands there too; see **Macros** in **The Gen page, macros and presets**.
+beside the meters stands there too; see **Macros** in **The Macros page, Gen and presets**.
 
 The tracks come first, then the groups, then `A`, `B` and `M`, with a gap between each
 part, and a rule over each part's strips names it, `Tracks`, `Groups` or `Returns`, the

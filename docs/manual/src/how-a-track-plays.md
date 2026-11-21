@@ -208,7 +208,7 @@ slow row is read as a row of several pulses is: its FX run on its first step, so
 `CHA` acts once a row, and a lock or a hold of it holds through the rest. The title says
 `FX1:4/2`.
 
-Each FX column also has a `Length` and a `Rate` on the track, on the Gen page's `FX1 Lane`,
+Each FX column also has a `Length` and a `Rate` on the track, on Gen's `FX1 Lane`,
 which move every phrase's lane on that column from its own, as a macro, a mod slot or a step's
 `LLEN1` and `LRAT1` can. A lane heard longer than its own plays its own rows again from the
 first; nothing is written, so at `+0` and `×1` it's as written:
@@ -226,7 +226,7 @@ row: it counts along from where it is, and playing from a step works its place o
 
 ![A lane turned from the track, heard longer than its own](images/lane-moved.svg)
 
-![The Gen page's FX1 Lane, its Length and Rate](images/track-gen-lane.svg)
+![Gen's FX1 Lane, its Length and Rate](images/track-gen-lane.svg)
 
 ### The two side by side
 

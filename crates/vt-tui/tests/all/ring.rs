@@ -101,7 +101,7 @@ fn space_g_a_on_the_gen_page_keeps_the_loop_a_pass_heard_began_with() {
     let written_shape = generators(&app)[0].shape;
     let first = notes(&app);
     keys(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(app.track_page.page, Page::Macros);
     keys(&mut app, "}k");
     assert!(matches!(app.track_control(), Control::Gen { .. }));
     let text = fx_page_text(&app).join("\n");

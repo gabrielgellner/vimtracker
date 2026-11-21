@@ -188,7 +188,7 @@ fn the_mixers_keys_work_while_the_track_page_is_left_on_gen() {
     use vt_tui::controls::Page;
     let (mut app, _realtime) = app();
     press(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(app.track_page.page, Page::Macros);
     press(&mut app, " 4");
     assert_eq!(app.modes.view, View::Mixer);
     press(&mut app, "=");
@@ -210,7 +210,7 @@ fn the_mixers_keys_work_while_the_track_page_is_left_on_gen() {
     assert!(app.services.live.levels[0].solo);
     assert_eq!(
         app.track_page.page,
-        Page::Gen,
+        Page::Macros,
         "the track page stays on Gen"
     );
 }
@@ -568,7 +568,7 @@ fn gd_on_a_fader_a_macro_holds_goes_to_its_macro_and_c_o_comes_back() {
     assert_eq!(column_name(&app), "Pan");
     press(&mut app, "gd");
     assert_eq!(app.modes.view, View::Track);
-    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(app.track_page.page, Page::Macros);
     assert_eq!(app.track_control(), Control::Macro(2), "on the macro");
     assert_eq!(app.modes.mode, Mode::Normal, "no mapping view opens");
     assert!(app.overlays.mapping.is_none());

@@ -238,7 +238,7 @@ fn macros_and_lanes(dump: &mut Dump) {
             member: None,
         });
     });
-    dump.page("macros", &mapped, Page::Gen);
+    dump.page("macros", &mapped, Page::Macros);
     for (tag, moved) in [
         ("lane at rest", LaneMove::default()),
         (

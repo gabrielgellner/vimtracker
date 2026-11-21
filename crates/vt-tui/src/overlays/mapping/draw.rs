@@ -9,9 +9,11 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
+use vt_model::macros::MacroMap;
 
 use crate::controls::macro_name;
 use crate::graphics::PanelKey;
+use crate::input::typed::TypedValue;
 use crate::overlays::mapping::{MapField, MappingView, bend_text, end_text, map_name};
 use crate::pages::Ctx;
 use crate::widgets::theme;
@@ -73,77 +75,14 @@ pub fn draw(frame: &mut Frame, area: Rect, ctx: &Ctx, view: &MappingView) {
         .title(title)
         .title_bottom(Line::styled(KEYS, theme::dim()));
     let inner = popup::draw(frame, window, border);
-    let mut heading = format!("  {:<SETTING_WIDTH$}", "Setting");
-    for field in MapField::ALL {
-        // The zone's two ends share a heading.
-        let width = match field {
-            MapField::ZoneStart => 2 * ZONE_END_WIDTH,
-            MapField::ZoneEnd => continue,
-            _ => width_of(field),
-        };
-        heading.push_str(&format!("{:<width$}", field.name()));
-    }
     let mut lines = vec![
         Line::raw(""),
-        Line::styled(heading, theme::dim()),
+        Line::styled(heading(), theme::dim()),
         Line::raw(""),
     ];
     for (row, map) in held.maps.iter().enumerate() {
-        let target = map.target;
-        let here = row == view.row;
-        let marker = if here { "›" } else { " " };
-        let name: String = map_name(ctx.song(), ctx.cursor().track, map)
-            .chars()
-            .take(SETTING_WIDTH - 1)
-            .collect();
-        // A generator's `Wave` or `Rate` is reached by hand alone, which its row says, dim.
-        let by_hand = target.by_hand();
-        let cell = |field: MapField| {
-            let on = here && view.field == field;
-            let text = match &view.typing {
-                Some(typed) if on => typed.shown(),
-                _ => match field {
-                    MapField::Min => end_text(target, map.min),
-                    MapField::Max => end_text(target, map.max),
-                    MapField::Curve => bend_text(map.curve),
-                    MapField::S => bend_text(map.s),
-                    MapField::ZoneStart => format!("{:02X}", map.zone.start),
-                    MapField::ZoneEnd => format!("{:02X}", map.zone.end),
-                },
-            };
-            let style = if on {
-                theme::cursor(ctx.mode())
-            } else if by_hand
-                || (field.bends() && map.is_straight())
-                || (field.zones() && map.zone.is_whole())
-            {
-                // A straight response and the whole turn are dim, so a bent one or a zone
-                // stands out.
-                theme::dim()
-            } else {
-                Style::new()
-            };
-            let padded = format!("{text:<width$}", width = width_of(field) - 1);
-            // The zone reads as one, `00–7F`.
-            let after = if field == MapField::ZoneStart {
-                Span::styled("–", theme::dim())
-            } else {
-                Span::raw(" ")
-            };
-            [Span::styled(padded, style), after]
-        };
-        let name_style = if by_hand { theme::dim() } else { Style::new() };
-        let mut spans = vec![
-            Span::styled(format!(" {marker}"), theme::dim()),
-            Span::styled(format!("{name:<SETTING_WIDTH$}"), name_style),
-        ];
-        for field in MapField::ALL {
-            spans.extend(cell(field));
-        }
-        if by_hand {
-            spans.push(Span::styled("by hand", theme::dim()));
-        }
-        lines.push(Line::from(spans));
+        let here = (row == view.row).then_some((view.field, view.typing.as_ref()));
+        lines.push(mapping_row(ctx, map, row == view.row, here));
     }
     frame.render_widget(Paragraph::new(lines), inner);
     // The response of the mapping under the cursor, its box drawn empty until the terminal has
@@ -160,6 +99,87 @@ pub fn draw(frame: &mut Frame, area: Rect, ctx: &Ctx, view: &MappingView) {
         None => empty_box(RESPONSE_WIDTH, RESPONSE_HEIGHT),
     };
     frame.render_widget(Paragraph::new(drawing), response);
+}
+
+/// The mappings' table's heading, each column's name over it, as the view and the Macros page
+/// (decision 465) show it.
+pub(crate) fn heading() -> String {
+    let mut heading = format!("  {:<SETTING_WIDTH$}", "Setting");
+    for field in MapField::ALL {
+        // The zone's two ends share a heading.
+        let width = match field {
+            MapField::ZoneStart => 2 * ZONE_END_WIDTH,
+            MapField::ZoneEnd => continue,
+            _ => width_of(field),
+        };
+        heading.push_str(&format!("{:<width$}", field.name()));
+    }
+    heading
+}
+
+/// A mapping's row of the table: its setting, the ends of its range, its bends and its zone.
+/// `marked` puts the view's `›` before it, and `here` is the field the view's cursor is on in it,
+/// with what's typed there so far.
+pub(crate) fn mapping_row(
+    ctx: &Ctx,
+    map: &MacroMap,
+    marked: bool,
+    here: Option<(MapField, Option<&TypedValue>)>,
+) -> Line<'static> {
+    let target = map.target;
+    let marker = if marked { "›" } else { " " };
+    let name: String = map_name(ctx.song(), ctx.cursor().track, map)
+        .chars()
+        .take(SETTING_WIDTH - 1)
+        .collect();
+    // A generator's `Wave` or `Rate` is reached by hand alone, which its row says, dim.
+    let by_hand = target.by_hand();
+    let cell = |field: MapField| {
+        let on = here.is_some_and(|(at, _)| at == field);
+        let text = match here {
+            Some((_, Some(typed))) if on => typed.shown(),
+            _ => match field {
+                MapField::Min => end_text(target, map.min),
+                MapField::Max => end_text(target, map.max),
+                MapField::Curve => bend_text(map.curve),
+                MapField::S => bend_text(map.s),
+                MapField::ZoneStart => format!("{:02X}", map.zone.start),
+                MapField::ZoneEnd => format!("{:02X}", map.zone.end),
+            },
+        };
+        let style = if on {
+            theme::cursor(ctx.mode())
+        } else if by_hand
+            || (field.bends() && map.is_straight())
+            || (field.zones() && map.zone.is_whole())
+        {
+            // A straight response and the whole turn are dim, so a bent one or a zone stands
+            // out.
+            theme::dim()
+        } else {
+            Style::new()
+        };
+        let padded = format!("{text:<width$}", width = width_of(field) - 1);
+        // The zone reads as one, `00–7F`.
+        let after = if field == MapField::ZoneStart {
+            Span::styled("–", theme::dim())
+        } else {
+            Span::raw(" ")
+        };
+        [Span::styled(padded, style), after]
+    };
+    let name_style = if by_hand { theme::dim() } else { Style::new() };
+    let mut spans = vec![
+        Span::styled(format!(" {marker}"), theme::dim()),
+        Span::styled(format!("{name:<SETTING_WIDTH$}"), name_style),
+    ];
+    for field in MapField::ALL {
+        spans.extend(cell(field));
+    }
+    if by_hand {
+        spans.push(Span::styled("by hand", theme::dim()));
+    }
+    Line::from(spans)
 }
 
 /// A faint box with nothing in it, as [`image::boxed`] draws one round a picture.
