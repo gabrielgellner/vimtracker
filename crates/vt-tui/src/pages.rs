@@ -213,6 +213,9 @@ pub(crate) struct PageState<'a> {
     /// Beside the grid with the keys in Gen's panel, the rows its device lights in the grid, and
     /// their column (decision 468).
     gen_lit: Option<(ShapeColumn, StepRange)>,
+    /// The buffer open on a setting of Gen's panel beside the grid, whose token under the cursor
+    /// lights the rows it writes there too (decision 470).
+    gen_tokens: Option<&'a crate::pages::track::GenTokens>,
 }
 
 /// What a page is given to run a key: the shared services, to read and change, the modes that
@@ -266,6 +269,11 @@ impl App {
             field_jump: self.overlays.field_jump.as_ref(),
             shape: self.overlays.shape.as_ref(),
             gen_lit: self.gen_lit(),
+            gen_tokens: self
+                .gen_page
+                .tokens
+                .as_ref()
+                .filter(|_| self.gen_beside_shown()),
         }
     }
 
@@ -800,6 +808,11 @@ impl<'a> Ctx<'a> {
     /// their column (decision 468).
     pub(crate) fn gen_lit(&self) -> Option<(ShapeColumn, StepRange)> {
         self.page.gen_lit
+    }
+
+    /// The buffer open on a setting of Gen's panel, while the panel's beside the grid.
+    pub(crate) fn gen_tokens(&self) -> Option<&'a crate::pages::track::GenTokens> {
+        self.page.gen_tokens
     }
 
     /// The pass of its phrase a live generator was last heard on, from 0.

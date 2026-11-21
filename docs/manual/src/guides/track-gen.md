@@ -4,6 +4,8 @@
 
 ![Gen beside the grid, as Space 8 opens it: the phrase's own columns on the left, an acid line live on the Note column, and on the right the 95-wide panel with the Acid's settings, Phrase and Empty under it, with no meter and no other tracks' columns](../images/gen-beside.svg)
 
+![Gen beside the grid with an Own rhythm's Text open in its buffer over the panel, under its cell: the cursor on the second hit, and row 03, the row it plays on, lit bold in the grid beside it](../images/gen-beside-buffer.svg)
+
 {{#include ../../../../crates/vt-tui/guides/track-gen.md:before-macros}}
 
 ![The Macros page, L from FX: the Macros band, Bite and Dense holding settings, and under it the two that Dense, the macro under the cursor, holds, Note Spread and Note Vary, each with its Min, Max, Curve, S and Zone](../images/track-macros.svg)
