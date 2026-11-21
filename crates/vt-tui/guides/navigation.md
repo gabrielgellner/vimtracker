@@ -114,11 +114,13 @@ two:
 | `Ctrl-w v` | Gen beside the grid again; from the grid, the keys stay |
 | `Ctrl-w c` | Close Gen: the grid as it was, the meter back |
 
-With the keys in the grid, every grid key works as it does, and the panel stays in view; with
-them in the panel, they're Gen's (see the Gen guide). The status line's mode, `NORMAL` or
-`GEN`, and the bold `Grid` or `Gen` in the title say which has them. `Space 8` opens Gen in
-the form you used last, kept until you quit, and `Space 3` goes to the grid with the panel still
-beside it if it was.
+With the keys in the grid, every grid key works as it does, and the panel stays in view; with them
+in the panel, they're Gen's (see the Gen guide). The status line's mode, `NORMAL` or `GEN`, and the
+bold `Grid` or `Gen` in the title say which has them. While the keys are in the grid the panel
+follows its cursor, onto the device of the column it's on, and while they're in the panel its
+device lights its rows in the grid and shows its column's values as bars (see the Gen guide).
+`Space 8` opens Gen in the form you used last, kept until you quit, and `Space 3` goes to the grid
+with the panel still beside it if it was.
 
 ## Lists
 

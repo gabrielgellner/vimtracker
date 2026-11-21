@@ -9,7 +9,7 @@ between them, and `Space 8` opens the one you used last (see **Beside the grid**
 whole page its title names the track and the phrase view's two pages, `Track 01  Grid  Gen`, then
 the phrase, `Phrase 00`, and `▶ 02`, dim, while the track is playing another. `H` goes back to
 the grid, as it goes back a page on the track page, and `Space 8` comes back to Gen where you
-left it; `Space 3` goes to the grid too. In the grid `H` and `L` stay Vim's top and bottom of
+left it, or beside the grid on the device of the grid's cursor's column; `Space 3` goes to the grid too. In the grid `H` and `L` stay Vim's top and bottom of
 the screen. The view picker lists it as `phrase: gen`. A fixed track has no phrases, so on one
 Gen says so and has nothing to turn.
 
@@ -24,6 +24,33 @@ under its cell, never over the grid. While it's open, the rows the token under i
 are lit in the grid beside it, in the cursor's colour, bold, as the buffer's `Rows` line lights
 them: along an `Own` rhythm's `Text`, each `x` lights the row it plays on. The meter, the other tracks' columns, the row inspector and the timeline
 are hidden while it shows (see **Beside the grid** in the navigation guide).
+
+**The panel follows the grid's cursor.** While the keys are in the grid, the panel goes to the
+device of the column the cursor is on, its frame lit, and its title says where the cursor is,
+`Gen   Phrase 00 · on Vel, row 00`, so going along a row with `l` goes through each column's
+generator. The status line names it too, `Vel is live, rows 00–0F: Ctrl-w l turns it`.
+
+| Grid cursor on | The panel is on |
+|---|---|
+| Note, Vel, Nudge, Len | That column's generator whose rows hold the cursor's row, or its first |
+| The gate (`G1`, `M2`) | Len's, as the gate cell's last digits are its length |
+| An FX column | Its generator, or with none its `Lane` |
+| A column with neither | `Empty`, naming the column: `Empty · Vel` |
+
+On `Empty · Vel`, `K` makes Velocity live over the phrase, as choosing `Vel` from `Empty`'s list
+does, and the panel goes to its new device. Following only moves the panel: the grid's cursor
+stays where it is, and nothing follows while the keys are in the panel. Then the panel's device
+leads instead: its rows are on a lit band in the grid, on its column, and where none of them is
+on screen the grid scrolls to put the first in the middle. `Phrase` lights none.
+
+**Its column's bars.** While the keys are in a generator's device, its `Loops` or its `Weights`,
+the column it writes shows its values as the bars `S` draws (see **Shaping a column** in the
+editing guide), over the grid's other columns, which you aren't editing then: each row's value
+now solid, and what it was when the keys came into the device fainter behind it, with the
+column's name and range, `VEL 00 ─ 7F`, and `00─7F avg 40 15 changed` over them. A note
+column's are its contour over the scale's roots. They go when the keys go back to the grid, and
+the next device starts again from its column as it is then. A column whose values aren't
+amounts, as an `ARP`'s, has none.
 
 The track's eight macros are the track page's, on its fourth page, Macros, `L` from FX (see
 **Macros**).

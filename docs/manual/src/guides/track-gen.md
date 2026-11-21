@@ -6,6 +6,8 @@
 
 ![Gen beside the grid with an Own rhythm's Text open in its buffer over the panel, under its cell: the cursor on the second hit, and row 03, the row it plays on, lit bold in the grid beside it](../images/gen-beside-buffer.svg)
 
+![Gen beside the grid on a ramp live on the velocities, the keys in its device and To turned down: the velocity column's rows on a lit band in the grid, and over the FX columns its values as bars, each row's now solid with what it was when the keys came in faint behind, under VEL 00 ─ 7F and how many rows changed](../images/gen-follow.svg)
+
 {{#include ../../../../crates/vt-tui/guides/track-gen.md:before-macros}}
 
 ![The Macros page, L from FX: the Macros band, Bite and Dense holding settings, and under it the two that Dense, the macro under the cursor, holds, Note Spread and Note Vary, each with its Min, Max, Curve, S and Zone](../images/track-macros.svg)
