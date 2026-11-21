@@ -10,7 +10,7 @@ use vt_model::scale::Scale;
 use vt_model::selection::{Field, StepRange};
 use vt_model::shape::{
     Context, DrumPart, FillKind, GenParam, Shape, ShapeColumn, Source, Starts, VARIATION_NOTES,
-    Values, counted, default_ends, is_empty, variation_notes,
+    counted, default_ends, is_empty, variation_notes,
 };
 use vt_model::song::{Song, Track};
 use vt_model::step::{MAX_NOTE, Step};
@@ -35,13 +35,10 @@ pub struct Part {
     pub drum: DrumPart,
 }
 
-/// A shape made whole after a change: a list starts as the two ends, so it sounds as `Alternate`
-/// did until it's typed, and a `Follow` follows a phrase it can, the one it starts on if what it
-/// holds isn't one.
+/// A shape made whole after a change: a `Follow` follows a phrase it can, the one it starts on if
+/// what it holds isn't one. A list, which starts as the two ends, is its generator's
+/// ([`vt_model::shape::kept_list`]).
 pub(crate) fn settle(shape: &mut Shape, sources: &[Source], start: Option<Source>) {
-    if shape.kind == FillKind::List && shape.values.is_empty() {
-        shape.values = Values::new(&[shape.from, shape.to]);
-    }
     if shape.kind == FillKind::Follow
         && !sources.contains(&shape.follow.source)
         && let Some(source) = start.or(sources.first().copied())
@@ -93,11 +90,12 @@ impl LiveGen {
                 generates: false,
                 sources: &self.sources,
                 source,
+                list: self.generator.list(),
             })
     }
 
-    /// A shape it's given, made whole as the panel makes it: a list starts as the two ends, and
-    /// a `Follow` reads a phrase it can.
+    /// A shape it's given, made whole as the panel makes it: a `Follow` reads a phrase it can. A
+    /// list starts as the two ends, as its generator keeps it.
     pub(crate) fn settle(&self, shape: &mut Shape) {
         settle(shape, &self.sources, self.starts.source);
     }

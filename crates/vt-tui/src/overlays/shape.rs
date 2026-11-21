@@ -22,7 +22,7 @@ use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
     Channel, Context, DrumPart, FillKind, GenParam, Grids, MAX_WEIGHT, Shape, ShapeColumn, Source,
     Starts, TonnetzVoice, Walk, Where, counted, default_ends, default_step, degree_count,
-    degree_name, divisions_seed, drum_parts, is_empty, on_track, open_rows, track_seed,
+    degree_name, divisions_seed, drum_parts, is_empty, kept_list, on_track, open_rows, track_seed,
     variation_notes, written_from,
 };
 use vt_model::song::{Machine, Song, SynthVoice, Track};
@@ -80,6 +80,9 @@ pub struct ShapePanel {
     pub parts: Vec<Part>,
     pub column: ShapeColumn,
     pub shape: Shape,
+    /// The values a `List` goes through, held beside the shape as a generator keeps them, as they
+    /// don't fit in one. Kept while another fill is tried, and given only to a `List`.
+    pub list: Vec<u8>,
     /// The setting the cursor is on.
     pub row: GenParam,
     /// What's being typed into the current row.
@@ -124,7 +127,13 @@ impl ShapePanel {
             generates: self.generates(),
             sources: &self.sources,
             source: self.source_steps(),
+            list: &self.list,
         }
+    }
+
+    /// The list a generator of its shape keeps: its own, on a `List`, and none on any other fill.
+    pub fn kept_list(&self) -> Box<[u8]> {
+        kept_list(&self.shape, &self.list)
     }
 
     /// The bars of the column it shapes on the phrase in view, each row of its span with its value
@@ -143,6 +152,7 @@ impl ShapePanel {
             part.range,
             part.column,
             &self.shape_of(nth),
+            &self.list,
             self.source_steps(),
         );
         let rows = (part.range.first..=part.range.last)
@@ -278,6 +288,7 @@ impl ShapePanel {
                 phrase: part.phrase,
                 generator,
                 shape: self.shape,
+                list: Some(self.kept_list()),
             };
         }
         let mut actions: Vec<Action> = self
@@ -290,6 +301,7 @@ impl ShapePanel {
                 range: part.range,
                 column: part.column,
                 shape: self.shape_of(nth),
+                list: self.kept_list(),
             })
             .collect();
         if actions.len() == 1 {
@@ -316,6 +328,7 @@ impl ShapePanel {
                     Span::rows(part.range)
                 },
                 shape: self.shape_of(nth),
+                list: self.kept_list(),
             })
             .collect();
         if actions.len() == 1 {
@@ -590,6 +603,7 @@ impl Services {
                     range: StepRange::between(0, rows.saturating_sub(1)),
                     column,
                     shape,
+                    list: Box::default(),
                 })
             })
             .collect();
@@ -603,15 +617,15 @@ impl Services {
 
     /// Apply a shape to a range, on each of these tracks. A ramp's, random fill's, walk's or 1/f
     /// fill's ends are chosen again from what's there on the first, a wave or `Alternate` keeps the two values it
-    /// moves between, a `List` keeps its list, and `Scale` the two it scales onto. Each track has
-    /// a seed of its own. Each track's column is judged as `S` judges it: an empty one is
-    /// generated on, notes of its own or the same command.
+    /// moves between, a `List` keeps its list, `list`, and `Scale` the two it scales onto. Each
+    /// track has a seed of its own. Each track's column is judged as `S` judges it: an empty one
+    /// is generated on, notes of its own or the same command.
     pub(crate) fn shape_again(
         &mut self,
         range: StepRange,
         tracks: TrackSpan,
         column: ShapeColumn,
-        shape: Shape,
+        (shape, list): (Shape, &[u8]),
         view: View,
     ) {
         let song = Arc::clone(self.song());
@@ -710,6 +724,7 @@ impl Services {
                         tonnetz: placed.tonnetz,
                         ..shape
                     },
+                    list: list.into(),
                 }
             })
             .collect();
@@ -776,6 +791,7 @@ impl ShapePanel {
             parts,
             column,
             shape,
+            list: Vec::new(),
             row: GenParam::Fill,
             typing: None,
             weight: None,
@@ -1005,7 +1021,7 @@ impl Overlay for ShapePanel {
                 |panel| {
                     let shape = &mut panel.shape;
                     if shape.kind == FillKind::List {
-                        shape.values = shape.values.reversed();
+                        panel.list.reverse();
                     } else {
                         std::mem::swap(&mut shape.from, &mut shape.to);
                     }
@@ -1134,10 +1150,14 @@ impl ShapePanel {
         Outcome::Close
     }
 
-    /// Change the shape, settle what follows from it, and show the result.
+    /// Change the shape, settle what follows from it, and show the result. A `List` with no
+    /// values yet starts as the two ends, so it sounds as `Alternate` did until it's typed.
     pub(crate) fn change(&mut self, change: impl FnOnce(&mut Self), services: &mut Services) {
         change(self);
         settle(&mut self.shape, &self.sources, self.default_source);
+        if self.shape.kind == FillKind::List && self.list.is_empty() {
+            self.list = self.kept_list().into();
+        }
         self.preview(services);
     }
 
@@ -1185,6 +1205,10 @@ impl ShapePanel {
                 let mut shape = panel.shape;
                 panel.row.reset(&mut shape, &panel.context(), starts);
                 panel.shape = shape;
+                // A list goes back to the two ends, as it starts.
+                if panel.row == GenParam::Values {
+                    panel.list = vec![shape.from, shape.to];
+                }
                 let rows = panel.rows();
                 if !rows.contains(&panel.row) {
                     panel.row = if rows.contains(&GenParam::Where) {
@@ -1276,6 +1300,13 @@ impl ShapePanel {
         let mut refused = None;
         self.change(
             |panel| {
+                if panel.row == GenParam::Values {
+                    match GenParam::typed_list(panel.column, text) {
+                        Ok(list) => panel.list = list,
+                        Err(why) => refused = Some(why),
+                    }
+                    return;
+                }
                 let mut shape = panel.shape;
                 refused = panel.row.typed(&mut shape, &panel.context(), text).err();
                 panel.shape = shape;

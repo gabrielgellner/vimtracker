@@ -22,11 +22,11 @@ use crate::step::Step;
 use super::{
     Acid, Bar, Bits, CellStart, Channel, DEFAULT_RATE, DEFAULT_RULE, Degrees, Division, Divisions,
     DrumPart, EUCLID_HITS, Edge, FillKind, Follow, Grids, MAX_ACID_NOTES, MAX_BEND, MAX_BIAS,
-    MAX_DEPTH, MAX_FACTOR, MAX_LOOP, MAX_MOVE_LOOP, MAX_MOVE_WEIGHT, MAX_MUTATION, MAX_ORDER,
-    MAX_RING, MAX_SPREAD, MAX_TRANSPOSE, MAX_TURN, MAX_WEIGHT, MIN_DEPTH, MUTATE_ALL, MoveList,
-    Moves, Pink, Quality, Random, Ring, Shape, ShapeColumn, Source, Tonnetz, TonnetzVoice, VARIES,
-    Values, Variation, WAVES, WEIGHTS, WaveRate, Where, default_step, degree_count, degree_name,
-    first_note,
+    MAX_DEPTH, MAX_FACTOR, MAX_LIST, MAX_LOOP, MAX_MOVE_LOOP, MAX_MOVE_WEIGHT, MAX_MUTATION,
+    MAX_ORDER, MAX_RING, MAX_SPREAD, MAX_TRANSPOSE, MAX_TURN, MAX_WEIGHT, MIN_DEPTH, MUTATE_ALL,
+    MoveList, Moves, Pink, Quality, Random, Ring, Shape, ShapeColumn, Source, Tonnetz,
+    TonnetzVoice, VARIES, Variation, WAVES, WEIGHTS, WaveRate, Where, default_step, degree_count,
+    degree_name, first_note,
 };
 use super::{BEATS, CHILD, CLUSTERS, MARKOV, Over, Role, SHARE, STATES, World};
 
@@ -86,6 +86,9 @@ pub struct Context<'a> {
     /// goes round and its `Invert` turns about the first note of. Elsewhere, none.
     pub sources: &'a [Source],
     pub source: Option<&'a [Step]>,
+    /// The values a `List` goes through, kept on its generator, or beside the panel's shape, as
+    /// they don't fit in a `Shape`. Elsewhere, none.
+    pub list: &'a [u8],
 }
 
 /// What a setting goes back to with `x` where that hangs on what's there: `From` and `To` to the
@@ -495,6 +498,7 @@ mod tests {
             generates: false,
             sources: &[],
             source: None,
+            list: &[],
         }
     }
 

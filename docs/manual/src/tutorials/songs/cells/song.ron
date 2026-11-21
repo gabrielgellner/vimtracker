@@ -124,7 +124,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Cells((
                                     rule: 30,
                                     start: One,
@@ -269,7 +268,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Cells((
                                     rule: 26,
                                     start: One,
@@ -416,7 +414,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Cells((
                                     rule: 26,
                                     start: One,
@@ -563,7 +560,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Cells((
                                     rule: 26,
                                     start: One,
@@ -710,7 +706,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Cells((
                                     rule: 26,
                                     start: One,
@@ -857,7 +852,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Cells((
                                     rule: 26,
                                     start: One,

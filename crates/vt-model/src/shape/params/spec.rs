@@ -449,7 +449,7 @@ impl GenParam {
             Self::Wave => shape.wave.name().to_owned(),
             Self::Rate => shape.rate.to_string(),
             Self::Phase => format!("{}°", shape.phase),
-            Self::Values => column.show_list(&shape.values),
+            Self::Values => column.show_list(context.list),
             Self::Run => shape.run.to_string(),
             Self::Where => shape.place.name().to_owned(),
             Self::Over => shape
@@ -907,7 +907,9 @@ impl GenParam {
             Self::Wave => shape.wave = Wave::Sine,
             Self::Rate => shape.rate = DEFAULT_RATE,
             Self::Phase => shape.phase = 0,
-            Self::Values => shape.values = Values::new(&[shape.from, shape.to]),
+            // A list goes back to its two ends, as it starts: see [`super::super::kept_list`].
+            // It's its generator's, so it's put back beside the shape.
+            Self::Values => {}
             Self::Run => shape.run = 1,
             Self::Where => shape.place = context.default_where(shape.kind),
             Self::Over => shape.over = None,
@@ -1076,8 +1078,27 @@ impl GenParam {
         }
     }
 
+    /// A `List`'s values typed for a column, up to [`MAX_LIST`] of them, which go beside its
+    /// shape, on its generator, as they don't fit in one.
+    pub fn typed_list(column: ShapeColumn, text: &str) -> Result<Vec<u8>, &'static str> {
+        let typed: Option<Vec<u8>> = text
+            .split_whitespace()
+            .map(|value| column.parse(value))
+            .collect();
+        match typed {
+            Some(list) if (1..=MAX_LIST).contains(&list.len()) => Ok(list),
+            Some(list) if !list.is_empty() => Err("A list has up to 256 values"),
+            _ => Err(match column {
+                ShapeColumn::Note { .. } => "A note is like C-3, C#3 or c3",
+                ShapeColumn::Nudge { .. } => "A nudge is a sign and hex, like -3, 0 or +B",
+                _ => "Values are hex values like 70 40 55, up to 256 of them",
+            }),
+        }
+    }
+
     /// Give it a typed value, or say why the text isn't one. A list setting and `Pitches` aren't
-    /// typed, so their text changes nothing.
+    /// typed, so their text changes nothing, and a `List`'s values aren't the shape's, so they're
+    /// typed with [`GenParam::typed_list`].
     #[allow(
         clippy::match_same_arms,
         reason = "in the settings' order, a fill's together"
@@ -1167,18 +1188,8 @@ impl GenParam {
                 Ok(run) if run > 0 => run.into(),
                 _ => return Err("Run is a whole number above 0"),
             },
-            Self::Values => {
-                let typed: Option<Vec<u8>> = text
-                    .split_whitespace()
-                    .map(|value| column.parse(value))
-                    .collect();
-                match typed {
-                    Some(list) if !list.is_empty() => shape.values = Values::new(&list),
-                    _ if !typed_in_hex(column) => return Err(unknown),
-                    _ => return Err("Values are hex values like 70 40 55, up to 8 of them"),
-                }
-                return Ok(());
-            }
+            // A list is its generator's, typed with [`GenParam::typed_list`].
+            Self::Values => return Err("A list's values are its generator's, typed beside it"),
             Self::Transpose => text
                 .parse::<i16>()
                 .map_err(|_| "Transpose runs from -48 to 48")?

@@ -174,7 +174,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: AllRows,
                                 seed: 6427630494660688291,
                                 follow: (
@@ -258,7 +257,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: AllRows,
                                 seed: 3290597292303798524,
                                 follow: (
@@ -342,7 +340,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: AllRows,
                                 seed: 12073464823017969658,
                                 follow: (
@@ -426,7 +423,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: AllRows,
                                 seed: 7631719078061062981,
                                 follow: (

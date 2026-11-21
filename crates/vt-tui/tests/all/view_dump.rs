@@ -322,6 +322,7 @@ fn generators(dump: &mut Dump) {
                 generates,
                 sources: &[],
                 source: None,
+                list: &[],
             };
             for param in &shown {
                 if *param == GenParam::Fill || param.spec().typing != Typing::Listed {
@@ -365,6 +366,7 @@ fn generated(
             column,
             span: Span::rows(StepRange { first: 0, last: 15 }),
             shape,
+            list: Box::default(),
         },
     );
     let live = match made {

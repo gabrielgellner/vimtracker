@@ -143,7 +143,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: AllRows,
                                 seed: 13,
                                 divisions: (
@@ -318,7 +317,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: AllRows,
                                 seed: 13,
                                 divisions: (
@@ -496,7 +494,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: AllRows,
                                 seed: 13,
                                 divisions: (

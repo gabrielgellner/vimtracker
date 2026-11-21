@@ -276,18 +276,19 @@ impl Phrase {
         true
     }
 
-    /// Give a live generator a new shape, and write it, a `Follow` from `source`. Returns false if
-    /// there's no such one.
+    /// Give a live generator a new shape, and write it, a `List` through `list` or with none its
+    /// own, a `Follow` from `source`. Returns false if there's no such one.
     pub(crate) fn reshape_generator(
         &mut self,
         index: usize,
         shape: Shape,
+        list: Option<&[u8]>,
         source: Option<&[Step]>,
     ) -> bool {
         let Some(generator) = self.generators.get_mut(index) else {
             return false;
         };
-        generator.reshape(&mut self.steps, shape, source);
+        generator.reshape(&mut self.steps, shape, list, source);
         true
     }
 

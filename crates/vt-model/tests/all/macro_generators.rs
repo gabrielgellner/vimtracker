@@ -38,6 +38,7 @@ fn song() -> Arc<Song> {
                 column: ShapeColumn::Velocity,
                 span: Span::rows(StepRange::between(0, 7)),
                 shape: tresillo(),
+                list: Box::default(),
             },
         )
         .unwrap();
@@ -147,6 +148,7 @@ fn a_reshape_of_a_held_generator_keeps_the_macros_setting_and_changes_the_rest()
             phrase: 0,
             generator: 0,
             shape: rotated,
+            list: None,
         },
     )
     .unwrap();

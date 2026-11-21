@@ -64,6 +64,7 @@ fn song(rows: &[(usize, &str)]) -> Song {
             column: ShapeColumn::Velocity,
             span: Span::rows(StepRange::between(0, 15)),
             shape: tresillo(),
+            list: Box::default(),
         },
     );
     let hits = MacroTarget::Gen {
@@ -421,6 +422,7 @@ fn random_song(rows: &[(usize, &str)]) -> Song {
             column: ShapeColumn::Velocity,
             span: Span::rows(StepRange::between(0, 15)),
             shape: random,
+            list: Box::default(),
         },
     );
     for (param, ends) in [(GenParam::Spread, (0, 100)), (GenParam::Bias, (-100, 100))] {
@@ -528,6 +530,7 @@ fn a_moving_generator_on_notes_renders_through_the_scale_it_was_given() {
                 seed: 7,
                 ..Shape::default()
             },
+            list: Box::default(),
         },
     );
     let song = rescale_generators(&song, minor).expect("it was in major");
@@ -615,6 +618,7 @@ fn weighted_song(turn: u16) -> Song {
             column,
             span: Span::rows(StepRange::between(0, 15)),
             shape: random,
+            list: Box::default(),
         },
     );
     let root = MacroTarget::Gen {
@@ -692,6 +696,7 @@ fn an_lfo_on_a_macro_sweeps_one_weight() {
             phrase: 0,
             generator: 0,
             shape: Shape { vary: 0, ..shape },
+            list: None,
         },
     );
     song.tracks[0].mods[0] = ModSlot::lfo(

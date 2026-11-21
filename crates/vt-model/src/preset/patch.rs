@@ -31,8 +31,8 @@ use crate::song::{Phrase, Track};
 use crate::step::FxCommand;
 
 /// A live generator a patch carries: its column, an FX column's command by its key, and its
-/// shape, which goes onto the phrase under the cursor when the patch is loaded; and for one
-/// filling an FX column's lane, the lane's length.
+/// shape, with a `List`'s values, which go onto the phrase under the cursor when the patch is
+/// loaded; and for one filling an FX column's lane, the lane's length.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PatchGen {
@@ -41,6 +41,9 @@ pub struct PatchGen {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub command: Option<String>,
     pub shape: Shape,
+    /// A `List`'s values, as its generator keeps them: saved only for one.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub list: Vec<u8>,
     /// The length of the lane it fills, which it's given again where it's added, or none for a
     /// generator over the phrase's loop.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -76,6 +79,7 @@ impl PatchGen {
                 _ => None,
             },
             shape: found.shape,
+            list: found.list().to_vec(),
             lane,
         }
     }

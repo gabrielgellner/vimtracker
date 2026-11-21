@@ -118,6 +118,30 @@ fn reshape_live(
             phrase,
             generator,
             shape,
+            list: None,
+        });
+    }
+}
+
+/// Give a live generator of the cursor's track the `List` values `list`, as one undo step if
+/// they're a change.
+fn relist_live(
+    services: &mut Services,
+    view: View,
+    (phrase, generator): (u32, usize),
+    list: &[u8],
+) {
+    let track = services.cursor.track;
+    let Some(live) = services.live_generator(track, phrase, generator, view) else {
+        return;
+    };
+    if live.generator.list() != list {
+        services.apply(&Action::Reshape {
+            track,
+            phrase,
+            generator,
+            shape: live.generator.shape,
+            list: Some(list.into()),
         });
     }
 }
@@ -225,12 +249,18 @@ impl GenEdit<'_> {
 
     /// `x`: the setting back to what it starts as.
     fn reset(&mut self) {
-        let Some((phrase, generator, _)) = self.here() else {
+        let Some((phrase, generator, param)) = self.here() else {
             return;
         };
         let Some(live) = self.live(phrase, generator) else {
             return;
         };
+        // A list goes back to the two ends, as it starts.
+        if param == GenParam::Values {
+            let ends = [live.generator.shape.from, live.generator.shape.to];
+            relist_live(self.services, self.view, (phrase, generator), &ends);
+            return;
+        }
         let starts = live.starts;
         self.reshape(|_, param, shape, context| param.reset(shape, context, starts));
     }
@@ -289,8 +319,19 @@ impl GenEdit<'_> {
         }
     }
 
-    /// A typed value, for the generator setting under the cursor.
+    /// A typed value, for the generator setting under the cursor. A `List`'s values go on the
+    /// generator, beside its shape.
     fn type_in(&mut self, text: &str) {
+        if let Some((phrase, generator, GenParam::Values)) = self.here() {
+            let Some(live) = self.live(phrase, generator) else {
+                return;
+            };
+            match GenParam::typed_list(live.generator.column, text) {
+                Ok(list) => relist_live(self.services, self.view, (phrase, generator), &list),
+                Err(why) => self.services.status = why.to_owned(),
+            }
+            return;
+        }
         self.reshape(|services, param, shape, context| {
             if let Err(why) = param.typed(shape, context, text) {
                 services.status = why.to_owned();
@@ -373,6 +414,7 @@ impl GenEdit<'_> {
             phrase,
             generator,
             shape,
+            list: None,
         });
         self.services.status = if heard.ring.is_some() {
             format!(

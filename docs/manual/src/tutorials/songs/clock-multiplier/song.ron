@@ -477,7 +477,6 @@
                                 rate: Time(Note(1920)),
                                 phase: 0,
                                 run: 1,
-                                values: [],
                                 place: Chance(35),
                                 seed: 43,
                             ),

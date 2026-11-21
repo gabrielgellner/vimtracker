@@ -7,7 +7,7 @@ use std::sync::Arc;
 use vt_model::action::{Action, edit};
 use vt_model::generator::{Generator, Span};
 use vt_model::scale::Scale;
-use vt_model::shape::{FillKind, GenParam, Role, Shape, ShapeColumn, Values, Where, World};
+use vt_model::shape::{FillKind, GenParam, Role, Shape, ShapeColumn, Where, World};
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
 use vt_roto::live::{Feel, KNOB_TOP};
@@ -21,7 +21,6 @@ fn shape(kind: FillKind, place: Where) -> Shape {
         from: 0x30,
         to: 0x48,
         kind,
-        values: Values::new(&[0x30, 0x40]),
         place,
         seed: 1,
         ..Shape::default()
@@ -43,7 +42,8 @@ fn song_with(shape: Shape) -> Song {
         .map(|_| "C-3 40 --- --- ---".parse().unwrap())
         .collect();
     let mut phrase = Phrase::from_steps(steps);
-    let generator = Generator::new(note(), Span::Rows { first: 0, last: 15 }, shape);
+    let generator =
+        Generator::new(note(), Span::Rows { first: 0, last: 15 }, shape).with_list(&[0x30, 0x40]);
     assert!(phrase.add_generator(generator, None));
     song.tracks[0].phrases.insert(0, Arc::new(phrase));
     song
