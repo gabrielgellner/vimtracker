@@ -303,6 +303,17 @@ const SHOTS: &[Shot] = &[
         size: FULL,
         ..PLAIN
     },
+    // An `Own` rhythm of notes kept live, Gen beside the grid, its `Text` open in its buffer over
+    // the panel with the cursor on the second hit, whose row, 03, is lit in the grid beside it
+    // (decision 470).
+    Shot {
+        name: "gen-beside-buffer",
+        rows: &[],
+        keys: "vGSjjjjjjK/rhythm<Enter>jjK/own<Enter>L 80jj0ll<Enter>lll",
+        voice: Some(SynthVoice::Acid),
+        size: FULL,
+        ..PLAIN
+    },
     // The same, then the track page's Macros page, `L` from FX, on macro 2, `Dense`, listing the
     // two settings it holds under the band.
     Shot {

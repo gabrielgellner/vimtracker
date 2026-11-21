@@ -209,6 +209,9 @@ pub(crate) struct PageState<'a> {
     field_jump: Option<&'a FieldJump>,
     /// The shape panel, while it's open, whose token under the cursor lights the rows it writes.
     shape: Option<&'a ShapePanel>,
+    /// The buffer open on a setting of Gen's panel beside the grid, whose token under the cursor
+    /// lights the rows it writes there too (decision 470).
+    gen_tokens: Option<&'a crate::pages::track::GenTokens>,
 }
 
 /// What a page is given to run a key: the shared services, to read and change, the modes that
@@ -261,6 +264,11 @@ impl App {
             slowdown: &self.readouts.slowdown,
             field_jump: self.overlays.field_jump.as_ref(),
             shape: self.overlays.shape.as_ref(),
+            gen_tokens: self
+                .gen_page
+                .tokens
+                .as_ref()
+                .filter(|_| self.gen_beside_shown()),
         }
     }
 
@@ -789,6 +797,11 @@ impl<'a> Ctx<'a> {
     /// The shape panel, while it's open.
     pub(crate) fn shape_panel(&self) -> Option<&'a ShapePanel> {
         self.page.shape
+    }
+
+    /// The buffer open on a setting of Gen's panel, while the panel's beside the grid.
+    pub(crate) fn gen_tokens(&self) -> Option<&'a crate::pages::track::GenTokens> {
+        self.page.gen_tokens
     }
 
     /// The pass of its phrase a live generator was last heard on, from 0.

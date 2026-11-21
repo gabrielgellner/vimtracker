@@ -1175,7 +1175,8 @@ Rows    x x x x x x x x x x x x x x x x
 
 In the tokens, the rows the token under the cursor writes are lit as it is, in the rows line and
 in the phrase view's column, so moving along the field moves the light along the rows; the grid's
-own cursor stays the cursor. While the phrase plays, the token that wrote the row playing is
+own cursor stays the cursor. A buffer open in Gen's panel beside the grid lights the grid's rows
+the same way. While the phrase plays, the token that wrote the row playing is
 green, the playhead's colour, and so is that row's mark. A generator whose `Vary` gives a pass a
 seed of its own lights the token of the pass playing. While the text doesn't read, the line is of
 the last text that did, and says `still the last text that read`.

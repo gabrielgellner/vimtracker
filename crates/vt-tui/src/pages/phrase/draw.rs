@@ -1129,9 +1129,12 @@ impl<'a> Grid<'a> {
             theme::SURFACE1
         });
         let named = if insert { edge } else { theme::dim() };
+        // The rows the shape panel's token writes, or the token of the buffer open in Gen's panel
+        // beside the grid (decision 470).
         let token_rows = ctx
             .shape_panel()
-            .and_then(|panel| panel.token_rows(ctx.cursor().track, ctx.phrase_id()?));
+            .and_then(|panel| panel.token_rows(ctx.cursor().track, ctx.phrase_id()?))
+            .or_else(|| ctx.gen_tokens().and_then(|open| open.token_rows(ctx)));
         Self {
             phrase,
             extent,
@@ -1559,7 +1562,7 @@ impl<'a> Grid<'a> {
             let (start, end) = selected_columns(step, selected.scope, len);
             styles[start..end].fill(theme::selected());
         }
-        // The rows the shape panel's token writes, in the cursor's colour as the token is.
+        // The rows the token under the cursor writes, in the cursor's colour as the token is.
         if let Some((column, rows)) = &self.token_rows
             && rows.contains(&index)
         {
