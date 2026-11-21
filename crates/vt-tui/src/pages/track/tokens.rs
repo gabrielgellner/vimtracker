@@ -45,6 +45,11 @@ impl PartialEq for GenTokens {
 }
 
 impl GenTokens {
+    /// Whether a Gen page setting, `control`, has a buffer: its text is in a grammar.
+    pub(crate) fn opens(services: &Services, view: View, control: Control) -> bool {
+        field_of(services, view, control).is_some()
+    }
+
     /// The buffer of a Gen page setting under the cursor, `control`, where its text is in a
     /// grammar, opened as `how` says, the token it's on named or why it isn't typing said.
     pub(crate) fn open(

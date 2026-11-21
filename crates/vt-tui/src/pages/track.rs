@@ -722,9 +722,9 @@ impl crate::pages::Page for TrackPage {
         };
         if let Some(how) = opening
             && self.on_gen(ctx.modes.view, control)
-            && let Some(tokens) = GenTokens::open(ctx.services, ctx.modes.view, control, how)
+            && GenTokens::opens(ctx.services, ctx.modes.view, control)
         {
-            self.tokens = Some(tokens);
+            self.tokens = GenTokens::open(ctx.services, ctx.modes.view, control, how);
             return Outcome::Enter(Mode::Tokens);
         }
         self.key_on(cmd, count, track)
