@@ -1,7 +1,8 @@
 //! Gen beside the grid (decision 467): the side form, the grid's own columns at the left and a
 //! 95-wide panel at the right at 163x42, with the meter, the overview, the row inspector and the
 //! timeline hidden; `Ctrl-w` `h` `l` `w` `o` `v` `c` and `Esc` between them; the form kept for
-//! the session.
+//! the session. A text's buffer opens over the panel, under its cell, and the rows its token
+//! writes are lit in the grid beside it (decision 470).
 
 use std::sync::Arc;
 
@@ -281,18 +282,20 @@ fn the_overview_inspector_and_timeline_come_back_when_the_panel_closes() {
     assert_eq!(screen_cells(&mut app)[..41], alone[..41]);
 }
 
-/// The token buffer opens over the panel, never over the grid.
-#[test]
-fn the_token_buffer_opens_over_the_panel() {
+/// Sixteen empty rows with an `Own` rhythm of notes kept live on them, Gen beside the grid, and
+/// the keys on the rhythm's `Text`, its buffer closed.
+fn on_own_text() -> (App, Realtime) {
     let mut song = Song::new(1);
     let steps: Vec<Step> = (0..16).map(|_| E.parse().unwrap()).collect();
     song.tracks[0]
         .phrases
         .insert(0, Arc::new(Phrase::from_steps(steps)));
-    let (mut app, _rt) = app_for(song);
+    let (mut app, realtime) = app_for(song);
     keys(&mut app, "vGS");
     down_to(&mut app, GenParam::Where);
-    keys(&mut app, "K/rhythm<Enter>L 8");
+    keys(&mut app, "K/rhythm<Enter>");
+    down_to(&mut app, GenParam::Rhythm);
+    keys(&mut app, "K/own<Enter>L 8");
     assert!(app.gen_beside_shown());
     'found: for _ in 0..12 {
         keys(&mut app, "0");
@@ -305,6 +308,18 @@ fn the_token_buffer_opens_over_the_panel() {
         keys(&mut app, "j");
     }
     assert_eq!(here(&app), Some(GenParam::OwnText));
+    (app, realtime)
+}
+
+/// The token buffer opens over the panel, under its cell, and never over the grid: its frame from
+/// the panel's 68 to its 162 at most (decision 470 pins decision 467's placing).
+#[test]
+fn the_token_buffer_opens_over_the_panel() {
+    let (mut app, _rt) = on_own_text();
+    let cell = screen_cells(&mut app)
+        .iter()
+        .position(|line| columns(line, 68, 162).contains("Text      x . ."))
+        .expect("the Text cell");
     keys(&mut app, "<Enter>");
     assert_eq!(app.modes.mode, Mode::Tokens);
     let lines = screen_cells(&mut app);
@@ -317,4 +332,68 @@ fn the_token_buffer_opens_over_the_panel() {
         })
         .unwrap_or_else(|| panic!("no buffer: {}", lines.join("\n")));
     assert!(x >= 68, "at column {x}, over the grid: {}", lines[y]);
+    assert_eq!(y, cell + 1, "under its cell: {}", lines.join("\n"));
+    let right = x + lines[y].chars().skip(x).position(|c| c == '╮').unwrap();
+    assert!(right <= 162, "to column {right}: {}", lines[y]);
+    // The grid beside it is drawn whole, its frame and rows untouched.
+    for line in &lines[1..18] {
+        assert!(
+            matches!(line.chars().nth(66), Some('╮' | '│' | '╯')),
+            "{line}"
+        );
+    }
+}
+
+/// The rows of the grid beside the panel with a cell in the cursor's colour, bold, by their
+/// numbers: those the buffer's token writes (decision 460).
+fn lit_in_grid(app: &mut App) -> Vec<usize> {
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(163, 42)).unwrap();
+    terminal
+        .draw(|frame| vt_tui::run::draw_screen(frame, app, None, std::time::Instant::now()))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let lines = drawn_lines(&buffer);
+    (0..16)
+        .filter(|row| {
+            let number = format!("{row:02X}");
+            let Some(y) = lines
+                .iter()
+                .position(|line| line.get(4..6) == Some(number.as_str()))
+            else {
+                return false;
+            };
+            (0..67).any(|x| {
+                let cell = &buffer[(x, y as u16)];
+                cell.fg == vt_tui::widgets::theme::ROSEWATER
+                    && cell.modifier.contains(ratatui::style::Modifier::BOLD)
+            })
+        })
+        .collect()
+}
+
+/// With the buffer open in the panel beside the grid, the rows its cursor's token writes are lit
+/// in the grid, moving as the cursor moves along the text, and none once it closes (decision
+/// 470).
+#[test]
+fn the_buffers_token_lights_its_rows_in_the_grid_beside_it() {
+    let (mut app, _rt) = on_own_text();
+    assert!(
+        lit_in_grid(&mut app).is_empty(),
+        "nothing lit while it's shut"
+    );
+    // `x . . x . . x . . . x . x . . .`: each `x` writes its own row.
+    keys(&mut app, "<Enter>");
+    assert_eq!(app.modes.mode, Mode::Tokens);
+    keys(&mut app, "lll");
+    assert_eq!(lit_in_grid(&mut app), vec![3]);
+    keys(&mut app, "lll");
+    assert_eq!(lit_in_grid(&mut app), vec![6]);
+    // A rest writes nothing.
+    keys(&mut app, "l");
+    assert!(lit_in_grid(&mut app).is_empty());
+    keys(&mut app, "lll");
+    assert_eq!(lit_in_grid(&mut app), vec![10]);
+    keys(&mut app, "<Enter>");
+    assert_ne!(app.modes.mode, Mode::Tokens);
+    assert!(lit_in_grid(&mut app).is_empty(), "none once it closes");
 }
