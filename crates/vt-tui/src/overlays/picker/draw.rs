@@ -155,6 +155,25 @@ fn hint(picker: &Picker, hint: &str) -> Line<'static> {
 /// they finish, which starts `column` characters in. It's after Vim's popup menu, with no search
 /// line, as the command line is its search.
 pub(crate) fn draw_menu(frame: &mut Frame, status: Rect, column: usize, picker: &mut Picker) {
+    let row = status.bottom().saturating_sub(1);
+    menu_in(frame, picker, |area, width, height| {
+        let left = column.saturating_sub(GUTTER + 1) as u16;
+        popup::above(area, row, left, width, height)
+    });
+}
+
+/// Draw the same list under a row of the screen, its names under the token they go in place of,
+/// which starts at `column` on the screen: what `K` and `Tab` offer in a field of tokens
+/// (decision 458).
+pub(crate) fn draw_menu_under(frame: &mut Frame, row: u16, column: u16, picker: &mut Picker) {
+    menu_in(frame, picker, |area, width, height| {
+        let left = column.saturating_sub((GUTTER + 1) as u16);
+        popup::below(area, row, left, width, height)
+    });
+}
+
+/// Draw the list of matches in the window `place` gives, from the screen and the list's size.
+fn menu_in(frame: &mut Frame, picker: &mut Picker, place: impl Fn(Rect, u16, u16) -> Rect) {
     let area = frame.area();
     let columns = Columns::of(picker);
     let list_width =
@@ -163,8 +182,7 @@ pub(crate) fn draw_menu(frame: &mut Frame, status: Rect, column: usize, picker: 
     // The border all round, and a space inside it on the right.
     let width = (list_width + 3) as u16;
     let height = (rows_shown + 2) as u16;
-    let left = column.saturating_sub(GUTTER + 1) as u16;
-    let window = popup::above(area, status.bottom().saturating_sub(1), left, width, height);
+    let window = place(area, width, height);
     let border = popup::border().title(Line::from(vec![
         Span::styled(
             format!(" {} ", picker.title),

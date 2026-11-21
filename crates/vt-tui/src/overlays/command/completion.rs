@@ -5,6 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use vt_model::groove::GrooveId;
+use vt_model::notation::Offer;
 use vt_model::order::{ORDER_WORDS, Snake};
 use vt_model::sample::is_sample_file;
 use vt_model::scale::{ROOTS, ScaleKind};
@@ -169,6 +170,25 @@ fn words<'a>(
             .into_iter()
             .filter(|word| starts_with(word, typed))
             .map(Candidate::word)
+            .collect(),
+    }
+}
+
+/// What a field of tokens offers that starts with what's typed of the word, as `Tab` completes it
+/// and `K` lists it (decision 458): the word starting at `start`, in the field's text.
+pub(crate) fn offered(
+    start: usize,
+    title: &'static str,
+    typed: &str,
+    offers: &[Offer],
+) -> Completions {
+    Completions {
+        start,
+        title,
+        candidates: offers
+            .iter()
+            .filter(|offer| starts_with(&offer.text, typed))
+            .map(|offer| Candidate::word(&offer.text).meaning(&offer.meaning))
             .collect(),
     }
 }

@@ -17,7 +17,7 @@ use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::Rect;
 use vt_model::action::{Action, edit};
 use vt_model::generator::Span;
-use vt_model::notation::{Field as TokenField, Kind};
+use vt_model::notation::{Around, Field as TokenField, Kind, Spot};
 use vt_model::selection::{Field, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
@@ -1046,11 +1046,7 @@ impl Overlay for ShapePanel {
     }
 
     fn takes_text(&self) -> bool {
-        self.typing.is_some()
-            || self
-                .tokens
-                .as_ref()
-                .is_some_and(|tokens| tokens.field.inserting().is_some())
+        self.typing.is_some() || self.tokens.as_ref().is_some_and(Tokens::completes)
     }
 
     fn inner_mode(&self) -> Option<Mode> {
@@ -1064,10 +1060,14 @@ impl Overlay for ShapePanel {
         }
     }
 
-    /// What's typed into a row; `Tab` and `Shift-Tab` play while it is, and any other key does
-    /// nothing.
+    /// What's typed into a row; `Tab` and `Shift-Tab` play while it is, but complete while a field
+    /// of tokens is typed or its list is open, and any other key does nothing.
     fn text(&mut self, key: Key, ctx: &mut CtxMut) -> Outcome {
+        let completes = self.tokens.as_ref().is_some_and(Tokens::completes);
         match key.code {
+            KeyCode::Tab | KeyCode::BackTab if completes => {
+                return self.token_text(key.code, ctx.services);
+            }
             KeyCode::Tab => return Outcome::Do(Cmd::PauseOrResume),
             KeyCode::BackTab => return Outcome::Do(Cmd::PlayFromStart),
             _ if key.command => {}
@@ -1392,21 +1392,47 @@ impl ShapePanel {
 
     /// One of the token editor's keys.
     fn token_key(&mut self, key: TokenKey, services: &mut Services) -> Outcome {
+        let tracks = self.track_names(services);
+        let around = self.around(&tracks);
         let (Some(tokens), Some(at)) = (self.tokens.as_mut(), self.weight.as_mut()) else {
             return Outcome::Passed;
         };
-        let did = tokens.key(key, at);
+        let did = match key {
+            TokenKey::Offer => tokens.offer(*at, &around),
+            key => tokens.key(key, at),
+        };
         self.tokens_did(did, services)
     }
 
-    /// A key that isn't the table's, in the tokens: a token typed in place, a count, or what's
-    /// being typed.
+    /// A key that isn't the table's, in the tokens: a token typed in place, a count, what's being
+    /// typed, or the list `K` or `Tab` opened.
     fn token_text(&mut self, code: KeyCode, services: &mut Services) -> Outcome {
+        let tracks = self.track_names(services);
+        let around = self.around(&tracks);
         let (Some(tokens), Some(at)) = (self.tokens.as_mut(), self.weight.as_mut()) else {
             return Outcome::Done;
         };
-        let did = tokens.text(code, at);
+        let did = tokens.text(code, at, &around);
         self.tokens_did(did, services)
+    }
+
+    /// The names of the tracks the panel shapes, for a kit line's tokens.
+    fn track_names(&self, services: &Services) -> Vec<String> {
+        self.parts
+            .iter()
+            .map(|part| services.track_name(part.track))
+            .collect()
+    }
+
+    /// What's around a field, for what `K` and `Tab` offer in it: the column, with its scale, and
+    /// From and To.
+    fn around<'a>(&self, tracks: &'a [String]) -> Around<'a> {
+        Around {
+            column: self.column,
+            from: self.shape.from,
+            to: self.shape.to,
+            tracks,
+        }
     }
 
     /// After a key in the tokens: the text written into the setting where it reads, and heard,
@@ -1460,6 +1486,17 @@ impl ShapePanel {
         };
         let field = &tokens.field;
         services.status = match (field.bad(), field.inserting()) {
+            // At the start of a word, what can go there, as Mockup 2 of the study has it, while
+            // the text it's typed into is still short of it.
+            (_, Some(_)) if field.typed_word() == Some("") => {
+                let after = match field.spot(at).0 {
+                    Spot::After(Some((_, before))) if field.fixed().is_none() => {
+                        format!("Typing after {before}: ")
+                    }
+                    _ => String::new(),
+                };
+                format!("{after}K lists what can go here, Tab completes a word")
+            }
             (Some(bad), _) => format!(
                 "{}; the column plays the last text that read. Esc puts it back",
                 bad.why

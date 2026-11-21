@@ -7,7 +7,7 @@
 
 use std::ops::Range;
 
-use super::{Bad, Bracket, Grammar, Kind, Token, is_rest, split};
+use super::{Around, Bad, Bracket, Grammar, Kind, Offer, Spot, Token, is_rest, split};
 use crate::shape::ShapeColumn;
 
 /// A move of the cursor among the tokens.
@@ -591,6 +591,102 @@ impl Field {
         };
         self.place_from(from)
     }
+
+    /// The word being typed: from the last space, comma or bracket typed to where the next
+    /// character goes, which `Tab` completes.
+    fn word(&self, insert: Insert) -> Range<usize> {
+        let ends = |c: char| c.is_whitespace() || c == ',' || Bracket::of(c).is_some();
+        let start = self.text[insert.from..insert.to]
+            .char_indices()
+            .rev()
+            .find(|(_, c)| ends(*c))
+            .map_or(insert.from, |(at, c)| insert.from + at + c.len_utf8());
+        start..insert.to
+    }
+
+    /// What's typed of the word being typed, while it is.
+    pub fn typed_word(&self) -> Option<&str> {
+        let insert = self.insert?;
+        Some(&self.text[self.word(insert)])
+    }
+
+    /// Where `K` and `Tab` ask what can go, from the cursor, and the bytes what's chosen goes in
+    /// place of: the token's, or while typing the word typed so far, after the token before it.
+    pub fn spot(&self, at: usize) -> (Spot<'_>, Range<usize>) {
+        if let Some(insert) = self.insert {
+            let word = self.word(insert);
+            let before = self
+                .tokens
+                .iter()
+                .rev()
+                .find(|token| token.at.end <= word.start)
+                .map(|token| (token.kind, &self.text[token.at.clone()]));
+            return (Spot::After(before), word);
+        }
+        match self.tokens.get(at) {
+            Some(token) => (
+                Spot::On {
+                    kind: token.kind,
+                    at,
+                    text: &self.text[token.at.clone()],
+                },
+                token.at.clone(),
+            ),
+            None => (Spot::After(None), self.text.len()..self.text.len()),
+        }
+    }
+
+    /// What can go at the cursor, for `K` to list and `Tab` to complete from.
+    pub fn offers(&self, at: usize, around: &Around) -> Vec<Offer> {
+        (self.grammar.offer)(self.spot(at).0, around)
+    }
+
+    /// What `K` or `Tab` offered, chosen: while typing, in place of the word typed so far, typing
+    /// going on unless a token as long as each is ends it; and among the tokens in the token's
+    /// place, where on a group's bracket another pair of brackets changes the group's, and
+    /// anything else goes in place of the group. Where the cursor goes, once back among the
+    /// tokens.
+    pub fn choose(&mut self, at: usize, chosen: &str) -> Result<Option<usize>, &'static str> {
+        if let Some(mut insert) = self.insert {
+            let word = self.word(insert);
+            insert.to = word.start + chosen.len();
+            self.insert = Some(insert);
+            self.replace(word, chosen);
+            let typed = self.text[insert.from..insert.to].chars().count();
+            let ends = insert.one && self.grammar.width.is_some_and(|width| typed >= width);
+            return Ok(ends.then(|| self.end_insert()));
+        }
+        let token = self.tokens.get(at).ok_or("Nothing here to replace")?;
+        if token.kind.bracket().is_none() {
+            self.put(at, chosen);
+            return Ok(Some(at));
+        }
+        let whole = self.whole(at);
+        if let Some((open, close)) = pair(chosen) {
+            // Close first, so the opening bracket's place stays where it was.
+            for place in [whole.end - 1, whole.start] {
+                let token = &self.tokens[place];
+                let opens = matches!(token.kind, Kind::Open(_));
+                let with = if opens { open } else { close };
+                self.replace(token.at.clone(), with);
+            }
+            return Ok(Some(at));
+        }
+        let bytes = self.bytes(&whole);
+        self.replace(bytes, chosen);
+        Ok(Some(whole.start))
+    }
+}
+
+/// A pair of brackets offered for a group's, `[ ]` or `< >`, as the text of each.
+fn pair(text: &str) -> Option<(&str, &str)> {
+    let mut brackets = text.split_whitespace();
+    let (open, close) = (brackets.next()?, brackets.next()?);
+    let bracket = |text: &str| text.chars().next().and_then(Bracket::of);
+    match (bracket(open)?, bracket(close)?, brackets.next()) {
+        ((opened, true), (closed, false), None) if opened == closed => Some((open, close)),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -805,5 +901,76 @@ mod tests {
         assert_eq!(field.text(), "FF8F8");
         assert_eq!(field.delete(0, Object::Token), Ok(0));
         assert_eq!(field.text(), "FF8F8");
+    }
+
+    fn around() -> Around<'static> {
+        Around {
+            column: note(),
+            from: 0,
+            to: 0,
+            tracks: &[],
+        }
+    }
+
+    /// `K` asks in a token's place, and while typing after the token before the word typed.
+    #[test]
+    fn k_asks_in_a_tokens_place_and_typing_after_the_token_before() {
+        let mut field = words("10 [20 30]");
+        let (spot, bytes) = field.spot(0);
+        assert_eq!(
+            spot,
+            Spot::On {
+                kind: Kind::Value,
+                at: 0,
+                text: "10"
+            }
+        );
+        assert_eq!(bytes, 0..2);
+        assert_eq!(field.offers(1, &around())[0].text, "[ ]");
+        field.insert(2, Place::After, false).unwrap();
+        assert_eq!(field.typed_word(), Some(""));
+        assert_eq!(field.spot(2).0, Spot::After(Some((Kind::Value, "20"))));
+        field.typed('3');
+        assert_eq!(field.typed_word(), Some("3"));
+        assert_eq!(field.spot(2).1, 7..8);
+        assert_eq!(field.offers(2, &around()).last().unwrap().text, "*2");
+    }
+
+    /// What's chosen goes in place of the word typed, and typing goes on; among the tokens, in
+    /// the token's place, another pair of brackets changing a group's and a rest taking its place.
+    #[test]
+    fn what_k_offers_goes_in_place_of_the_token_or_the_word() {
+        let mut field = words("10 [20 30]");
+        field.insert(0, Place::After, false).unwrap();
+        field.typed('4');
+        assert_eq!(field.choose(0, "40"), Ok(None));
+        assert_eq!(field.text(), "10 40 [20 30]");
+        assert!(field.typed(' '));
+        assert_eq!(field.typed_word(), Some(""), "a new word after a space");
+        field.backspace();
+        field.end_insert();
+        assert_eq!(field.choose(0, "50"), Ok(Some(0)));
+        assert_eq!(field.text(), "50 40 [20 30]");
+        assert_eq!(field.choose(2, "< >"), Ok(Some(2)));
+        assert_eq!(field.text(), "50 40 <20 30>");
+        assert_eq!(field.choose(2, "."), Ok(Some(2)));
+        assert_eq!(field.text(), "50 40 .");
+        assert_eq!(pair("[ >"), None);
+    }
+
+    /// On `Weights`, a weight chosen while typing over one is typed, and back on it.
+    #[test]
+    fn a_weight_chosen_while_typing_over_one_ends_the_typing() {
+        let mut field = Field::new(GrammarId::Weights.grammar(), "F08FF", pentatonic());
+        let around = Around {
+            column: pentatonic(),
+            ..around()
+        };
+        assert_eq!(field.offers(1, &around).len(), 16);
+        field.insert(1, Place::Over, false).unwrap();
+        assert_eq!(field.offers(1, &around).len(), 16);
+        assert_eq!(field.choose(1, "C"), Ok(Some(1)));
+        assert_eq!(field.text(), "FC8FF");
+        assert!(field.inserting().is_none());
     }
 }

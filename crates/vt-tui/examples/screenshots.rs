@@ -321,6 +321,15 @@ const SHOTS: &[Shot] = &[
         size: FULL,
         ..PLAIN
     },
+    // The same digits with `K` pressed on G's: the weights it could be listed under it, each
+    // with what it means, opened on its own.
+    Shot {
+        name: "shape-weights-offer",
+        rows: &[],
+        keys: ":set scale=minor-pentatonic<Enter>vGSKrandom<Enter>jjjjjjlf08K",
+        size: FULL,
+        ..PLAIN
+    },
     // The shape panel's ramp over a phrase's velocities, its ends swapped to rise, with the bars
     // beside the column: each row's velocity now solid, and what it was before set back behind it.
     Shot {

@@ -10,6 +10,7 @@
 //! which rows it writes.
 
 mod field;
+mod offer;
 mod weights;
 
 use std::ops::Range;
@@ -17,6 +18,7 @@ use std::ops::Range;
 use crate::shape::ShapeColumn;
 
 pub use field::{Field, Insert, Motion, Object, Place};
+pub use offer::{degrees, groups, notes_round, values};
 
 /// Which grammar a setting's text is in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -133,6 +135,30 @@ pub struct Offer {
     pub meaning: String,
 }
 
+/// Where `K` and `Tab` ask what can go (decision 458).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Spot<'a> {
+    /// In place of a token: what kind it is, its place counted from 0, and its text.
+    On {
+        kind: Kind,
+        at: usize,
+        text: &'a str,
+    },
+    /// Where a token is typed: after a token, by its kind and text, or first, with none before.
+    After(Option<(Kind, &'a str)>),
+}
+
+/// What the track says about what can go in a field, for `K` and `Tab`: its column, with the
+/// scale and root on a Note column and the command on an FX one; the setting's From and To,
+/// which degrees count from; and the names of the tracks it spans, for a kit line's tokens.
+#[derive(Debug, Clone, Copy)]
+pub struct Around<'a> {
+    pub column: ShapeColumn,
+    pub from: u8,
+    pub to: u8,
+    pub tracks: &'a [String],
+}
+
 /// A grammar, declared once: how its text splits into tokens, whether it reads, what each kind of
 /// token means and how it turns, what can go in its place and which rows it writes, and what the
 /// editor's keys do with it.
@@ -151,8 +177,9 @@ pub struct Grammar {
     /// A token turned by one of `=` and `-`, by its sign, or of `+` and `_` where `large`, as its
     /// new text, or none where it doesn't turn.
     pub turn: fn(Kind, &str, i16, bool) -> Option<String>,
-    /// What can go in place of a token of a kind, for `K` and `Tab` (#1088).
-    pub offer: fn(Kind, ShapeColumn) -> Vec<Offer>,
+    /// What can go at a spot, in a token's place or after one, from what's around the field,
+    /// for `K` to list and `Tab` to complete from, in the order they're listed (decision 458).
+    pub offer: fn(Spot, &Around) -> Vec<Offer>,
     /// The rows of the column the token at a place wrote, from each row's value there, for the
     /// grid to light (#1090).
     pub rows: fn(usize, ShapeColumn, &[Option<u8>]) -> Vec<usize>,
@@ -255,7 +282,28 @@ pub(crate) mod tests {
             }
             _ => None,
         },
-        offer: |_, _| Vec::new(),
+        offer: |spot, _| {
+            let value = |value: u8| Offer {
+                text: format!("{value:02X}"),
+                meaning: String::new(),
+            };
+            match spot {
+                Spot::On {
+                    kind: Kind::Open(_) | Kind::Close(_),
+                    ..
+                } => groups("."),
+                Spot::On { .. } => (0x10..=0x30).step_by(0x10).map(value).collect(),
+                Spot::After(_) => {
+                    let mut offers: Vec<Offer> = [0x10, 0x20].into_iter().map(value).collect();
+                    offers.extend(groups("."));
+                    offers.push(Offer {
+                        text: "*2".to_owned(),
+                        meaning: "twice in its place".to_owned(),
+                    });
+                    offers
+                }
+            }
+        },
         rows: |_, _, _| Vec::new(),
         fixed: |_| None,
         blank: "00",
