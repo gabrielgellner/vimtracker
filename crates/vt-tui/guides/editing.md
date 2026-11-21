@@ -355,12 +355,12 @@ its tokens ([Fields of tokens](#fields-of-tokens)).
 |---|---|
 | `x` `.` | A hit, and a rest; `~` is a rest too |
 | `[x x]` | A group: its tokens share its place |
-| `x*3` | Three in its place; on the Note column, finer than a row, a `RET` |
+| `x*3` | Three in its place, or in one row a `RET` |
 | `x!3` | Three places of `x` |
 | `x@3` | One hit three places long |
-| `x?` `x?30` | A hit half the time, or 30% of it, drawn from the seed |
-| `<x .>` | One of them each lap, the next each time the line comes round |
-| `x(3,8)` `x(3,8,2)` | 3 hits over 8 parts of its place, moved 2 parts later |
+| `x?` `x?30` | A hit half the time, or 30% of it |
+| `<x .>` | One of them each lap, in turn |
+| `x(3,8)` `x(3,8,2)` | 3 hits in 8 parts of its place, 2 later |
 
 It goes by steps, not cycles: each top-level token is `Step` rows, from `1 row`
 to `16 rows`, so a token more makes the line longer, as a row more does, and the
