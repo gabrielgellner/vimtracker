@@ -352,7 +352,11 @@ fn the_phrase_title_is_in_groups_and_the_track_labels_head_their_columns() {
     let (mut app, _realtime) = tracks_of_different_lengths();
     let buffer = screen(&app);
     let lines = drawn_lines(&buffer);
-    assert!(lines[0].contains("Track 01  Chain 00  00"), "{}", lines[0]);
+    assert!(
+        lines[0].contains("Track 01  Grid  Gen   Chain 00  00"),
+        "{}",
+        lines[0]
+    );
     assert!(!lines[0].contains("01  02"), "the labels left the title");
     // Each label over its column's note, past the marker's cell.
     let headings: String = lines[1].chars().skip(68).collect();
@@ -1016,14 +1020,14 @@ fn a_tracks_heading_has_its_machine_and_mute_or_solo_glyphs() {
     };
     let machine = app.song().tracks[0].machine;
     let glyph = vt_tui::widgets::glyphs::machine(machine);
-    assert!(heading(&app, 0).starts_with(&format!("{glyph} Track 01  Chain")));
+    assert!(heading(&app, 0).starts_with(&format!("{glyph} Track 01  Grid  Gen   Chain")));
     tap(&mut app, " m");
-    assert!(heading(&app, 0).starts_with(&format!("{glyph} Track 01 {MUTE}  Chain")));
+    assert!(heading(&app, 0).starts_with(&format!("{glyph} Track 01 {MUTE}  Grid  Gen   Chain")));
     // Over its column in the overview too, in place of the number's last cell.
     assert!(heading(&app, 1).contains(&format!(" 01{MUTE}")));
     tap(&mut app, " m");
     app.services.live.levels[0].solo = true;
-    assert!(heading(&app, 0).contains(&format!("Track 01 {SOLO}  Chain")));
+    assert!(heading(&app, 0).contains(&format!("Track 01 {SOLO}  Grid  Gen   Chain")));
     assert_eq!(vt_tui::widgets::glyphs::machine(Machine::Sampler), SAMPLER);
     assert_eq!(
         vt_tui::widgets::glyphs::machine(Machine::Plaits(SynthVoice::Kick)),

@@ -18,7 +18,7 @@ use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, GateKind, Mark, Note, Step, nudge_text};
 
 use crate::app::{Selection, TrackSpan};
-use crate::input::mode::Mode;
+use crate::input::mode::{Mode, View};
 use crate::pages::Ctx;
 use crate::pages::phrase::PhraseView;
 use crate::pages::phrase::inspector;
@@ -824,7 +824,7 @@ fn rows_shown(phrase: &Phrase, columns: &[Option<Column>], timeline_on: bool, ti
 /// The title in groups two spaces apart, as the track page's is: the track, with its machine or
 /// kind as a glyph before it and whether it's muted or soloed after; its chain, with the phrases
 /// along it; then what's said about this one.
-fn title(ctx: &Ctx, phrase: &Phrase, width: u16) -> Line<'static> {
+fn title(ctx: &Ctx, phrase: &Phrase, width: u16, beside: bool) -> Line<'static> {
     let bold = Style::new().add_modifier(Modifier::BOLD);
     let mut title = vec![];
     if let Some(track) = ctx.track_here() {
@@ -847,6 +847,8 @@ fn title(ctx: &Ctx, phrase: &Phrase, width: u16) -> Line<'static> {
     if let Some((glyph, style)) = level_glyph(ctx, ctx.cursor().track) {
         title.push(Span::styled(format!(" {glyph}"), style));
     }
+    title.push(Span::styled(" ", bold));
+    title.extend(page_tabs(ctx, beside));
     let chain = ctx.chain_id().unwrap_or(0);
     title.push(Span::styled(format!("  Chain {chain:02X}  "), bold));
     let after = title_details(ctx, phrase);
@@ -864,6 +866,21 @@ fn title(ctx: &Ctx, phrase: &Phrase, width: u16) -> Line<'static> {
     title.extend(chain_strip(ctx, room));
     title.extend(after);
     Line::from(title)
+}
+
+/// The phrase view's pages in its title, as the track page names its own, the grid's bold
+/// (decision 466). Beside Gen's panel, whose own title names Gen, it's the grid's alone, bold
+/// while the keys are in it (decision 467).
+fn page_tabs(ctx: &Ctx, beside: bool) -> Vec<Span<'static>> {
+    let bold = Style::new().add_modifier(Modifier::BOLD);
+    let tab = |name: &str, here: bool| {
+        Span::styled(format!(" {name} "), if here { bold } else { theme::dim() })
+    };
+    if beside {
+        vec![tab("Grid", ctx.view() != View::Gen)]
+    } else {
+        vec![tab("Grid", true), tab("Gen", false)]
+    }
 }
 
 /// A lane's length and division as the title shows them, `4` or `4/2`, the division only where a
@@ -1060,25 +1077,25 @@ impl<'a> Grid<'a> {
             let last = timeline::row_lines(phrase, step, timeline_on) - 1;
             (step, pulse.min(last))
         });
-        let body_width = phrase
-            .steps()
-            .iter()
-            .map(|step| step_text(step, ctx.track_here()).len())
-            .max()
-            .unwrap_or(0);
+        let body_width = body_width(phrase, ctx.track_here());
         let room = usize::from(area.width).saturating_sub(GUTTER + body_width + 2);
         // The row inspector takes the room right of the overview while every track's column still
         // fits beside it, and gives way to the overview when they need the room.
         let every = neighbours_width(ctx.song(), &neighbours(ctx, usize::MAX));
         let inspector_width = view
-            .inspector
+            .inspector_on()
             .then(|| room.saturating_sub(every + INSPECTOR_GAP))
             .filter(|width| *width >= usize::from(inspector::NARROWEST))
             .map(|width| width.min(usize::from(inspector::WIDEST)));
-        let others = neighbours(
-            ctx,
-            room - inspector_width.map_or(0, |width| width + INSPECTOR_GAP),
-        );
+        // Beside Gen's panel the grid is the phrase's own columns alone (decision 467).
+        let others = if view.gen_beside {
+            Vec::new()
+        } else {
+            neighbours(
+                ctx,
+                room - inspector_width.map_or(0, |width| width + INSPECTOR_GAP),
+            )
+        };
         let columns: Vec<_> = others.iter().map(|track| column(ctx, *track)).collect();
         // How long a line is, in ticks: one of this track's steps.
         let ticks = ctx
@@ -1706,6 +1723,28 @@ pub(crate) fn column_cells(column: ShapeColumn) -> (u16, u16) {
     ((GUTTER + start) as u16, (GUTTER + end) as u16)
 }
 
+/// How wide the rows' text of a phrase is, at its widest.
+fn body_width(phrase: &Phrase, track: Option<&Track>) -> usize {
+    phrase
+        .steps()
+        .iter()
+        .map(|step| step_text(step, track).len())
+        .max()
+        .unwrap_or(0)
+}
+
+/// How wide the grid of the cursor's phrase is drawn, its own columns in their frame with the
+/// gutter, and nothing beside it: the room it takes beside Gen's panel (decision 467). With no
+/// phrase, an empty row's.
+pub(crate) fn own_width(ctx: &Ctx) -> u16 {
+    let body = ctx.phrase_here().map_or_else(
+        || step_text(&Step::default(), ctx.track_here()).len(),
+        |phrase| body_width(phrase, ctx.track_here()),
+    );
+    // The gutter has the frame's left edge, and its right edge follows the rows.
+    (GUTTER + body + 1) as u16
+}
+
 /// Draw the view in an area, as it's laid out and scrolled.
 pub(crate) fn draw(frame: &mut Frame, area: Rect, view: &PhraseView, ctx: &Ctx) {
     let Some(phrase) = ctx.phrase_here() else {
@@ -1713,7 +1752,10 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, view: &PhraseView, ctx: &Ctx) 
         return;
     };
     let grid = Grid::new(ctx, view, phrase, area);
-    let mut lines = vec![title(ctx, phrase, area.width), grid.headings(ctx)];
+    let mut lines = vec![
+        title(ctx, phrase, area.width, view.gen_beside),
+        grid.headings(ctx),
+    ];
     lines.extend(grid.lines(ctx));
     frame.render_widget(Paragraph::new(lines), area);
     // Beside the overview, its top level with the grid's frame.

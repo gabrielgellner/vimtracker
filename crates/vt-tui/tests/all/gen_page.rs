@@ -27,12 +27,13 @@ fn notes(app: &App) -> Vec<String> {
         .collect()
 }
 
-/// Eight empty rows with a tresillo of notes kept live on them, from a ramp, then the Gen page.
+/// Eight empty rows with a tresillo of notes kept live on them, from a ramp, then the Gen page,
+/// the whole page, `Ctrl-w o`, with its previews (decision 467).
 fn on_gen_page() -> (App, Realtime) {
     let (mut app, realtime) = app_with(&[E; 8]);
     keys(&mut app, "vGSjjjjjj===L");
     assert_eq!(generators(&app).len(), 1);
-    keys(&mut app, " 8");
+    keys(&mut app, " 8^wo");
     assert_eq!(app.modes.view, View::Gen);
     assert_eq!(app.gen_page.page, Page::Gen);
     (app, realtime)

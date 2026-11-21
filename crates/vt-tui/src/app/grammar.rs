@@ -14,7 +14,7 @@ use vt_model::song::Song;
 use vt_model::step::{FxCommand, Note, Step};
 
 use crate::app::{App, Entry, Selection, TrackSpan};
-use crate::input::bindings::{Cmd, Op, Resolved};
+use crate::input::bindings::{Cmd, Op, Resolved, Window};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::overlays::shape::ShapePanel;
@@ -344,6 +344,13 @@ impl App {
     /// Handle a key in Normal, operator-pending or Visual mode.
     pub(crate) fn command_key_normal(&mut self, key: Key, now: Instant) {
         if key.code == KeyCode::Esc {
+            // In Gen's panel beside the grid, with nothing waiting, it gives the keys back to the
+            // grid, as from the macro panel (decision 467).
+            let idle = self.grammar.pending.is_empty() && self.modes.count.is_none();
+            if idle && self.key_scope() == Mode::Gen && self.gen_page.beside {
+                self.window(Window::Grid);
+                return;
+            }
             self.reset_pending();
             self.song_view.anchor = None;
             // `Esc` is what ends a selection kept through its changes, and `gv` brings it back,

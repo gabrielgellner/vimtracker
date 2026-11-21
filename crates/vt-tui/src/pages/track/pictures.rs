@@ -45,6 +45,8 @@ impl TrackPage {
             Page::Sound | Page::Macros => Vec::new(),
             Page::Mod => self.mod_panels(ctx, track),
             Page::Fx => self.fx_panels(ctx, track),
+            // Beside the grid, the grid's column is the preview (decision 467).
+            Page::Gen if self.beside => Vec::new(),
             Page::Gen => self.gen_panels(ctx, track),
         }
     }

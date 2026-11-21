@@ -1151,7 +1151,12 @@ The phrase view's Gen page (decision 466) is the same component, a second `Track
 track page's `Page::ALL`. `View::Gen` shows it, its rows of the binding table are
 `TrackPage::GEN_KEYS` under `Mode::Gen`, and `App::rack` and `App::rack_mut` give whichever of the
 two the keys work on, so the field jump, the jump list, Insert, the token buffer, the wheel and the
-pictures reach Gen's cursor and images as they reach the track page's.
+pictures reach Gen's cursor and images as they reach the track page's. Gen opens beside the grid,
+the side form (decision 467): `TrackPage::beside` is the form, kept for the session, and
+`PhraseView::gen_beside` whether the panel shows, which hides the meter, the overview, the row
+inspector and the timeline; `run::draw_screen` draws the grid in `phrase::draw::own_width` and Gen
+in the rest, and `Cmd::Window`, `Ctrl-w` and a letter, moves the keys between them
+(`app/windows.rs`).
 `App::run_track_pages` (`pages.rs`) hands each key to `TrackPage::key`, the page and the services
 borrowed apart, and what it passes back to `App::run_across_pages` (`pages/track.rs`), which runs
 what spans the pages itself (`/`, `M`, `gm`, the Keys mode, the Gen page's keys, `K` and `i`), and

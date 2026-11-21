@@ -52,6 +52,24 @@ const GEN_FOUR_CELLS: CellWidths = CellWidths {
     ..CellWidths::SOUND
 };
 
+/// The cells of a device of settings alone, `Phrase` or a lane: the Sound page's, unless its
+/// columns don't fit in the room, as beside the grid, where it takes the four-column cells the
+/// generators have (decision 467).
+fn cells_in(device: &DeviceSpec, room: u16) -> CellWidths {
+    let columns = device
+        .grid
+        .iter()
+        .filter_map(|row| row.iter().rposition(Option::is_some))
+        .max()
+        .map_or(0, |last| last as u16 + 1);
+    let wide = (columns * GEN_CELLS.column()).saturating_sub(GEN_CELLS.gap);
+    if wide > room {
+        GEN_FOUR_CELLS
+    } else {
+        GEN_CELLS
+    }
+}
+
 /// The macros' cells: a name as long as the Roto's, four digits and the Sound page's bars.
 const MACRO_CELLS: CellWidths = CellWidths {
     name: 13,
@@ -313,7 +331,11 @@ fn draw_generator(
     frame.render_widget(widget, area);
     let mut settings = Device::settings_area(area);
     let mut preview = None;
-    let id = page.images.get(PanelKey::Gen(generator));
+    // Beside the grid there's no preview: the grid's column is beside it (decision 467).
+    let id = page
+        .images
+        .get(PanelKey::Gen(generator))
+        .filter(|_| !page.beside);
     if let Some(id) = id {
         let lines = image::rows(id, LARGE_PANEL_WIDTH, LARGE_PANEL_HEIGHT)
             .into_iter()
@@ -347,7 +369,7 @@ fn draw_fields(
     device: &DeviceSpec,
     live: &LiveGen,
 ) -> Option<OpenAt> {
-    let here = page.control_here(ctx);
+    let here = page.has_keys(ctx).then(|| page.control_here(ctx));
     let context = live.context();
     let mut open_at = None;
     for (row, places) in device.grid.iter().enumerate() {
@@ -383,7 +405,7 @@ fn draw_fields(
                 continue;
             }
             let room = end - x;
-            let lit = (here == control).then(|| theme::cursor(Mode::Normal));
+            let lit = (here == Some(control)).then(|| theme::cursor(Mode::Normal));
             let playing = playing_token(ctx, control, live, &field);
             let line = token_buffer::cell_line(&field, playing, room.into(), lit);
             let buffer = frame.buffer_mut();
@@ -404,7 +426,7 @@ struct OpenAt {
 
 /// The buffer open on a Gen page cell (decision 463), under its value, its rows line under the
 /// text and the list `K` or `Tab` opened under the cursor's token, over the devices.
-fn draw_buffer(frame: &mut Frame, page: &TrackPage, ctx: &Ctx, at: OpenAt) {
+fn draw_buffer(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx, at: OpenAt) {
     let OpenAt { control, x, y } = at;
     let (
         Some(open),
@@ -425,7 +447,6 @@ fn draw_buffer(frame: &mut Frame, page: &TrackPage, ctx: &Ctx, at: OpenAt) {
     let context = live.context();
     let field = &open.tokens.field;
     let layout = Layout::of(param, field, &live.generator.shape, &context);
-    let area = frame.area();
     let room = Buffer::room(area);
     let table = ctx
         .song()
@@ -650,8 +671,9 @@ fn draw_lane(
     frame.render_widget(widget, area);
     let cells = TrackCells::new(page, ctx, track);
     let rows = device.grid.iter().copied().map(Vec::from).collect();
-    let grid = SettingsGrid::new(&cells, rows, GEN_CELLS);
-    frame.render_widget(grid, Device::settings_area(area));
+    let settings = Device::settings_area(area);
+    let grid = SettingsGrid::new(&cells, rows, cells_in(device, settings.width));
+    frame.render_widget(grid, settings);
 }
 
 /// `Phrase`, the track's settings that move its phrases' walks, with the order the phrase under the
@@ -680,8 +702,9 @@ fn draw_phrase(
     frame.render_widget(widget, area);
     let cells = TrackCells::new(page, ctx, track);
     let rows = device.grid.iter().copied().map(Vec::from).collect();
-    let grid = SettingsGrid::new(&cells, rows, GEN_CELLS);
-    frame.render_widget(grid, Device::settings_area(area));
+    let settings = Device::settings_area(area);
+    let grid = SettingsGrid::new(&cells, rows, cells_in(device, settings.width));
+    frame.render_widget(grid, settings);
 }
 
 fn lcm(a: u64, b: u64) -> u64 {
@@ -700,7 +723,7 @@ fn draw_empty(
     device: &DeviceSpec,
     focused: bool,
 ) {
-    let here = device.title[0] == Some(page.control_here(ctx));
+    let here = page.has_keys(ctx) && device.title[0] == Some(page.control_here(ctx));
     let look = ctx.look(Focus::at(here, false));
     let text = setting::text(&look, || "Empty".to_owned());
     let style = setting::style(&look, true);
@@ -802,8 +825,11 @@ pub(super) fn draw(
             _ => {}
         }
     }
+    // Beside the grid, the buffer opens over the panel, never the grid (decision 467); on the
+    // whole page, wherever it has room.
     if let Some(at) = open {
-        draw_buffer(frame, page, ctx, at);
+        let room = if page.beside { area } else { frame.area() };
+        draw_buffer(frame, room, page, ctx, at);
     }
     previews
 }

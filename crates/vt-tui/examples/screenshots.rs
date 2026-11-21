@@ -175,11 +175,12 @@ const SHOTS: &[Shot] = &[
         song: Some(lane_moved),
         ..PLAIN
     },
-    // The Gen page's `FX1 Lane` for that lane, its `Length` turned to `+2` and `Rate` to `÷2`.
+    // The Gen page's `FX1 Lane` for that lane, on the whole page, its `Length` turned to `+2` and
+    // `Rate` to `÷2`.
     Shot {
         name: "track-gen-lane",
         rows: LANE,
-        keys: "lllll:lane 3<Enter> 8==l-",
+        keys: "lllll:lane 3<Enter> 8<C-w>o==l-",
         play: 21,
         voice: Some(SynthVoice::VirtualAnalog),
         size: FULL,
@@ -279,12 +280,24 @@ const SHOTS: &[Shot] = &[
         ..PLAIN
     },
     // An acid line made live on the empty phrase from the shape panel; `Cut` and `Res` on macro
-    // 1, named `Bite`, from the Sound page; then the Gen page, with the acid's `Spread` on macro
-    // 2, `Dense`, with its `Vary` too, in its title, where a bar can't show the macro, and playing.
+    // 1, named `Bite`, from the Sound page; then the Gen page, the whole page, with the acid's
+    // `Spread` on macro 2, `Dense`, with its `Vary` too, in its title, where a bar can't show the
+    // macro, and playing.
     Shot {
         name: "track-gen",
         rows: &[],
-        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8j$M2:macro Dense<Enter>k$M2<Tab>",
+        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8<C-w>oj$M2:macro Dense<Enter>k$M2<Tab>",
+        play: 6,
+        voice: Some(SynthVoice::Acid),
+        size: FULL,
+        ..PLAIN
+    },
+    // Gen beside the grid, as `Space 8` opens it: the phrase's own columns on the left, the acid
+    // line written on the Note column, and the panel on the right, the keys in it on `Spread`.
+    Shot {
+        name: "gen-beside",
+        rows: &[],
+        keys: "vGSK/acid<Enter>L 8j$",
         play: 6,
         voice: Some(SynthVoice::Acid),
         size: FULL,
@@ -315,7 +328,7 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "macro-panel",
         rows: &[],
-        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8j$M2:macro Dense<Enter>k$M2 3 Tl__<Tab>",
+        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8j$M2:macro Dense<Enter>k$M2<C-w>c Tl__<Tab>",
         play: 6,
         voice: Some(SynthVoice::Acid),
         size: FULL,
@@ -626,7 +639,8 @@ fn two_outputs(app: &mut App) {
     app.audio_page.audio.latency_us = 9_800;
 }
 
-/// Press keys as they're written, with `<Name>` for a key that isn't a character, all at this
+/// Press keys as they're written, with `<Name>` for a key that isn't a character and `<C-w>` for
+/// one with Ctrl, all at this
 /// time. It's the shot's clock, never the wall clock's, so how long the machine took to get here
 /// can't change what's drawn, as whether the which-key popup's delay has passed (#660).
 fn press(app: &mut App, keys: &str, now: Instant) {
@@ -635,13 +649,23 @@ fn press(app: &mut App, keys: &str, now: Instant) {
         if c == '<'
             && let Some(end) = rest.find('>')
         {
-            let code = match &rest[1..end] {
-                "Esc" => KeyCode::Esc,
-                "Enter" => KeyCode::Enter,
-                "Tab" => KeyCode::Tab,
-                other => panic!("no key called <{other}>"),
+            let key = match &rest[1..end] {
+                "Esc" => Key::new(KeyCode::Esc),
+                "Enter" => Key::new(KeyCode::Enter),
+                "Tab" => Key::new(KeyCode::Tab),
+                // A letter with Ctrl, as `<C-w>`.
+                other => match other
+                    .strip_prefix("C-")
+                    .map(|c| c.chars().collect::<Vec<_>>())
+                {
+                    Some(letter) if letter.len() == 1 => Key {
+                        ctrl: true,
+                        ..Key::char(letter[0])
+                    },
+                    _ => panic!("no key called <{other}>"),
+                },
             };
-            app.key(Key::new(code), now);
+            app.key(key, now);
             rest = &rest[end + 1..];
         } else {
             app.key(Key::char(c), now);

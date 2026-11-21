@@ -59,7 +59,7 @@ if a row shows `10`, then `10j` or `10k` lands on it.
 | `Space 5` | Track page: Sound, the machine, filter and output |
 | `Space 6` | Track page: Mod, the envelopes, LFOs and mod slots |
 | `Space 7` | Track page: FX, the effects |
-| `Space 8` | Gen, the phrase view's page of its live generators |
+| `Space 8` | Gen, the phrase's live generators, beside the grid |
 | `Space 9` | Project: song settings, and this machine's audio |
 | `Space 0` | Sample page: this track's sample, big |
 | `Space Space`, `Space ff` | Pick a view. `Enter` flips back to the last one |
@@ -71,8 +71,9 @@ if a row shows `10`, then `10j` or `10k` lands on it.
 
 `Space 5` to `Space 7` open the track page on one of its first three pages, each where you
 left its cursor, and `H` and `L` still go between them and on to the fourth, Macros, the track's
-macros. `Space 8` opens Gen, the phrase view's second page, beside the grid's, where `H` goes
-back to the grid. `Space 9` opens the project
+macros. `Space 8` opens Gen, the phrase view's second page, as a panel beside the grid to begin
+with, or as the whole page, where `H` goes back to the grid (see **Beside the grid** below).
+`Space 9` opens the project
 page on whichever of its two pages you saw last: Song, the song's own settings, and
 Audio, this machine's device, rate and buffer, which are kept with the machine rather
 than the song. `H` and `L` go between those too.
@@ -80,7 +81,8 @@ than the song. `H` and `L` go between those too.
 The view picker, `Space Space`, lists every view with the key that opens it, the track
 page by its four pages and Gen as `phrase: gen`, so it teaches the keys as it's used.
 
-The phrase view's title shows the chain the phrase is in, `Chain 02  00 03 03 07`,
+The phrase view's title names its two pages after the track, `Track 01  Grid  Gen`, the
+grid's bold, as the track page's names its four, then shows the chain the phrase is in, `Chain 02  00 03 03 07`,
 its phrases in order with this one in the cursor's colour, so `]p` and `[p` are
 seen moving along it. A phrase that plays in more than one place has a link after
 its number, and a chain too long for the title is cut with `…`.
@@ -91,6 +93,32 @@ its gate does, its length, and each FX by the setting's name, with its value in
 its units and its mark. It follows the cursor, and `Space i` hides it again. With
 many tracks it gives way, so every track keeps its column, and comes back when
 there's room.
+
+### Beside the grid
+
+Gen opens as a panel beside the grid, the side form: on the left the phrase's own columns,
+Note to FX 3, 67 columns at 163x42, and on the right the panel, the other 95, under its own
+title, `Gen   Phrase 00`. While it shows, the main meter, the other tracks' columns, the row
+inspector and the timeline are hidden, so the grid and its generators have the screen; `Space i`
+and `zi` still switch them, and they come back as you left them when the panel closes. The
+panel draws no previews: the column beside it is the preview. Vim's window keys go between the
+two:
+
+| Keys | Does |
+|---|---|
+| `Ctrl-w l` | The keys to Gen, opening it if it isn't |
+| `Ctrl-w h` | The keys to the grid, the panel staying |
+| `Ctrl-w w` | The keys to the other one |
+| `Esc` | In the panel, the keys back to the grid |
+| `Ctrl-w o` | Gen as the whole page, with its previews and the meter |
+| `Ctrl-w v` | Gen beside the grid again; from the grid, the keys stay |
+| `Ctrl-w c` | Close Gen: the grid as it was, the meter back |
+
+With the keys in the grid, every grid key works as it does, and the panel stays in view; with
+them in the panel, they're Gen's (see the Gen guide). The status line's mode, `NORMAL` or
+`GEN`, and the bold `Grid` or `Gen` in the title say which has them. `Space 8` opens Gen in
+the form you used last, kept until you quit, and `Space 3` goes to the grid with the panel still
+beside it if it was.
 
 ## Lists
 

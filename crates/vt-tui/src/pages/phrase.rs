@@ -58,6 +58,10 @@ pub struct PhraseView {
     /// How many rows `C-d` and `C-u` go, once a count has set it, as Vim's `scroll` option: half
     /// a screen until then.
     pub(crate) half_page_rows: Option<usize>,
+    /// Gen's panel shows beside the grid, the side form (decision 467): the grid is drawn alone,
+    /// the phrase's own columns, without the overview, the row inspector or the timeline, which
+    /// come back as they were when it closes.
+    pub gen_beside: bool,
 }
 
 impl Default for PhraseView {
@@ -72,36 +76,51 @@ impl Default for PhraseView {
             scope: None,
             last_selection: None,
             half_page_rows: None,
+            gen_beside: false,
         }
     }
 }
 
 impl PhraseView {
-    /// Whether the view is laid out in time rather than collapsed to a line a row.
+    /// Whether the view is laid out in time rather than collapsed to a line a row: never while
+    /// Gen's panel is beside the grid, which keeps `z i`'s choice for when it closes.
     pub fn timeline_on(&self) -> bool {
-        !self.rows_collapsed
+        !self.rows_collapsed && !self.gen_beside
+    }
+
+    /// Whether the row inspector shows, while there's room: `Space i`'s choice, kept while Gen's
+    /// panel is beside the grid, which hides it.
+    pub fn inspector_on(&self) -> bool {
+        self.inspector && !self.gen_beside
+    }
+
+    /// What `z i` and `Space i` say beside what they did while Gen's panel hides what they show.
+    fn while_beside(&self, said: &str) -> String {
+        if self.gen_beside {
+            format!("{said}, once Gen's panel closes: Ctrl-w c")
+        } else {
+            said.to_owned()
+        }
     }
 
     /// Collapse the view to a line a row, or open it out into its timeline again.
     fn toggle_timeline(&mut self, services: &mut Services) {
         self.rows_collapsed = !self.rows_collapsed;
-        services.status = if self.rows_collapsed {
+        services.status = self.while_beside(if self.rows_collapsed {
             "Rows: a line each, beside the other tracks' rows. z i lays them out in time"
         } else {
             "Timeline: a line for each pulse, beside the other tracks in time. z i collapses it"
-        }
-        .to_owned();
+        });
     }
 
     /// Show the row inspector, or hide it.
     fn toggle_inspector(&mut self, services: &mut Services) {
         self.inspector = !self.inspector;
-        services.status = if self.inspector {
+        services.status = self.while_beside(if self.inspector {
             "Row inspector: the cursor's row in words, while there's room. Space i hides it"
         } else {
             "Row inspector hidden. Space i shows it"
-        }
-        .to_owned();
+        });
     }
 
     /// How many lines each stored row of the cursor's phrase takes on screen.

@@ -618,8 +618,8 @@ mod tests {
         assert_drawn(
             &cut(&screen, Rect::new(0, 0, 35, 2)),
             &[
-                "\u{f147d} Track 01  Chain 00  00           ",
-                "aabbbbbbbbbbbbbbbbbbbbccddddddddddd",
+                "\u{f147d} Track 01  Grid  Gen   Chain 00  0",
+                "aabbbbbbbbbbbbbbbaaaaabbbbbbbbbbbbc",
                 "        ╭Note ───────────── FX 1 ──",
                 "ddddddddeaaaaaeeeeeeeeeeeeeaaaaaaee",
                 "a fg OVERLAY2 bg BASE",

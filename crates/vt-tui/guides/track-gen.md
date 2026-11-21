@@ -3,12 +3,25 @@
 
 Gen is the phrase view's second page, after the grid, `Space 8`: the live columns of the phrase
 under the cursor, the one `gl` reopens, as devices you turn as you would a filter, then
-`Phrase`. Its title names the track and the phrase view's two pages, `Track 01  Grid  Gen`, then
+`Phrase`. It opens beside the grid, as a 95-wide panel on the right with the phrase's own columns
+on the left, the side form, or as the whole page, the full form; `Ctrl-w o` and `Ctrl-w v` go
+between them, and `Space 8` opens the one you used last (see **Beside the grid** below). On the
+whole page its title names the track and the phrase view's two pages, `Track 01  Grid  Gen`, then
 the phrase, `Phrase 00`, and `▶ 02`, dim, while the track is playing another. `H` goes back to
 the grid, as it goes back a page on the track page, and `Space 8` comes back to Gen where you
 left it; `Space 3` goes to the grid too. In the grid `H` and `L` stay Vim's top and bottom of
 the screen. The view picker lists it as `phrase: gen`. A fixed track has no phrases, so on one
 Gen says so and has nothing to turn.
+
+**Beside the grid.** In the side form the grid keeps the phrase's own columns at the left, and
+the panel at the right has its own title, `Gen   Phrase 00`, the devices under it as on the whole
+page, without their previews: the column beside it is the preview. A device whose four columns
+don't fit in the panel, `Phrase` and a lane, takes the narrower cells the four-column generators
+have. `Ctrl-w l` puts the keys in the panel and `Ctrl-w h` or `Esc` gives them back to the grid,
+the panel staying; `Ctrl-w w` goes to the other one and `Ctrl-w c` closes it. The cursor's
+setting is lit only while the keys are in the panel, and a text's buffer opens over the panel,
+never over the grid. The meter, the other tracks' columns, the row inspector and the timeline
+are hidden while it shows (see **Beside the grid** in the navigation guide).
 
 The track's eight macros are the track page's, on its fourth page, Macros, `L` from FX (see
 **Macros**).

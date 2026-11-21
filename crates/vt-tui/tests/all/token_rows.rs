@@ -223,7 +223,8 @@ fn the_gen_pages_preview_marks_the_rows_of_the_weight_under_the_cursor() {
     use vt_tui::graphics::Graphics;
     let (mut app, _realtime) = on_weights();
     keys(&mut app, "L");
-    keys(&mut app, " 8");
+    // The whole page, whose previews show (decision 467).
+    keys(&mut app, " 8^wo");
     let mut graphics = Graphics::new();
     let sent = |app: &mut App, graphics: &mut Graphics| {
         let mut out = Vec::new();

@@ -704,8 +704,10 @@ pub fn draw_screen(
         body.height
             .saturating_sub(crate::pages::phrase::draw::ROWS_AROUND_STEPS),
     ));
-    // The sample page's waveform has the whole width, as a sample editor's does.
-    let (view, meter) = if app.modes.view == View::Sample {
+    // The sample page's waveform has the whole width, as a sample editor's does, and so has
+    // the grid with Gen's panel beside it, which hide the meter (decision 467).
+    let beside = app.gen_beside_shown();
+    let (view, meter) = if app.modes.view == View::Sample || beside {
         (body, None)
     } else {
         crate::screen::meter::split(body)
@@ -718,14 +720,23 @@ pub fn draw_screen(
     if app.modes.view == View::Sample {
         app.sample_page.lay_out(view);
     }
-    match draw_view_noting(frame, view, app, app.modes.view) {
-        PageNotes::Nothing => {}
-        PageNotes::Track(drawn) => {
-            app.rack_mut().lfo_cycles_at = drawn.cycles;
-            app.rack_mut().gen_panels_at = drawn.previews;
+    // Beside Gen's panel, the grid is the phrase's own columns, and the panel has the rest.
+    let grid = if beside {
+        let (grid, panel) = gen_beside_areas(view, &app.ctx());
+        draw_view_noting(frame, grid, app, View::Phrase);
+        draw_view_noting(frame, panel, app, View::Gen);
+        grid
+    } else {
+        match draw_view_noting(frame, view, app, app.modes.view) {
+            PageNotes::Nothing => {}
+            PageNotes::Track(drawn) => {
+                app.rack_mut().lfo_cycles_at = drawn.cycles;
+                app.rack_mut().gen_panels_at = drawn.previews;
+            }
+            PageNotes::Sample(on_screen) => app.sample_page.on_screen = on_screen,
         }
-        PageNotes::Sample(on_screen) => app.sample_page.on_screen = on_screen,
-    }
+        view
+    };
     // Inside the box the track page has while the keyboard plays it.
     let free = if app.modes.mode == Mode::Keys && app.modes.view == View::Track {
         view.inner(Margin::new(1, 1))
@@ -753,9 +764,9 @@ pub fn draw_screen(
     if let Some(bars) = app.selection_bars() {
         let ctx = app.ctx();
         let beside = Beside {
-            area: view,
+            area: grid,
             column: crate::pages::phrase::draw::column_cells(bars.column),
-            lines: crate::pages::phrase::draw::rows_on_screen(&ctx, &app.phrase_view, view),
+            lines: crate::pages::phrase::draw::rows_on_screen(&ctx, &app.phrase_view, grid),
         };
         let at = beside
             .place(&bars, Side::Right)
@@ -773,9 +784,9 @@ pub fn draw_screen(
         // On the phrase grid, the bars of the column it shapes go beside the column.
         let ctx = app.ctx();
         let beside = (app.modes.view == View::Phrase).then(|| Beside {
-            area: view,
+            area: grid,
             column: crate::pages::phrase::draw::column_cells(panel.column),
-            lines: crate::pages::phrase::draw::rows_on_screen(&ctx, &app.phrase_view, view),
+            lines: crate::pages::phrase::draw::rows_on_screen(&ctx, &app.phrase_view, grid),
         });
         crate::overlays::shape::draw::draw_with_bars(frame, view, &ctx, &panel, beside.as_ref());
         app.overlays.shape = Some(panel);
@@ -801,6 +812,23 @@ pub fn draw_screen(
     }
     // Over everything, as what follows a key can be asked for in an overlay too.
     crate::overlays::help::draw_popup(frame, body, app, now);
+}
+
+/// The room between the grid and Gen's panel beside it.
+const GEN_GAP: u16 = 1;
+
+/// Where the grid and Gen's panel go beside each other in the page's area (decision 467): the
+/// grid as wide as the phrase's own columns, at the left, and the panel the rest, past a gap.
+pub fn gen_beside_areas(area: Rect, ctx: &crate::pages::Ctx) -> (Rect, Rect) {
+    let width = crate::pages::phrase::draw::own_width(ctx).min(area.width);
+    let grid = Rect { width, ..area };
+    let left = (grid.right() + GEN_GAP).min(area.right());
+    let panel = Rect {
+        x: left,
+        width: area.right() - left,
+        ..area
+    };
+    (grid, panel)
 }
 
 /// What a view's drawing notes for after the frame, for [`draw_screen`] to keep.
