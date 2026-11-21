@@ -35,10 +35,10 @@ generator. The status line names it too, `Vel is live, rows 00–0F: Ctrl-w l tu
 
 | Grid cursor on | The panel is on |
 |---|---|
-| Note, Vel, Nudge, Len | That column's generator whose rows hold the cursor's row, or its first |
-| The gate (`G1`, `M2`) | Len's, as the gate cell's last digits are its length |
+| Note, Vel, Nudge, Len | Its generator holding the row, or its first |
+| The gate (`G1`, `M2`) | Len's, the gate cell's last digits |
 | An FX column | Its generator, or with none its `Lane` |
-| A column with neither | `Empty`, naming the column: `Empty · Vel` |
+| A column with neither | `Empty` naming it: `Empty · Vel` |
 
 On `Empty · Vel`, `K` makes Velocity live over the phrase, as choosing `Vel` from `Empty`'s list
 does, and the panel goes to its new device. Following only moves the panel: the grid's cursor
