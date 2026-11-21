@@ -1,6 +1,10 @@
 {{#include ../../../../crates/vt-tui/guides/track-gen.md:before-gen}}
 
-![The Macros page, Space 8: the Macros band, with what macro 2 holds under it, over a live Acid on the Note column, its settings on the left and the notes it writes on the right, a dot on the one playing. Its Spread is on macro 2, so its bar shows that macro's range faint behind it, and so is its Vary, Once in its title, which has no bar, so a faint dot follows it](../images/track-gen.svg)
+![Gen, Space 8, on the phrase view: a live Acid on the Note column, its settings on the left and the notes it writes on the right, a dot on the one playing. Its Spread is on macro 2, so its bar shows that macro's range faint behind it, and so is its Vary, Once in its title, which has no bar, so a faint dot follows it](../images/track-gen.svg)
+
+{{#include ../../../../crates/vt-tui/guides/track-gen.md:before-macros}}
+
+![The Macros page, L from FX: the Macros band, Bite and Dense holding settings, and under it the two that Dense, the macro under the cursor, holds, Note Spread and Note Vary, each with its Min, Max, Curve, S and Zone](../images/track-macros.svg)
 
 {{#include ../../../../crates/vt-tui/guides/track-gen.md:before-panel}}
 

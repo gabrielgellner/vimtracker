@@ -650,7 +650,8 @@ impl Services {
             (Some(at), _) | (None, Control::Macro(at)) => Some(at),
             (None, _) => self.macro_here(control).map(|(_, at, _)| at),
         };
-        let Some(at) = at.filter(|_| view == View::Track || open.is_some()) else {
+        let Some(at) = at.filter(|_| matches!(view, View::Track | View::Gen) || open.is_some())
+        else {
             self.status = ":macro names the macro under the cursor, on the track page".to_owned();
             return;
         };

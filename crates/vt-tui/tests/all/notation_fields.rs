@@ -158,7 +158,7 @@ fn a_mask_is_eight_bits_switched_one_at_a_time() {
 fn the_gen_pages_cells_in_a_grammar_open_their_buffer() {
     let (mut app, _realtime) = app_with(&["--- -- --- --- ---"; 16]);
     command(&mut app, "set scale=minor-pentatonic");
-    keys(&mut app, "vGSKrandom<Enter>L 5LLL");
+    keys(&mut app, "vGSKrandom<Enter>L 8");
     to_cell(&mut app, GenParam::Weights);
     let text = fx_page_text(&app).join(
         "
@@ -200,7 +200,7 @@ fn the_gen_pages_cells_in_a_grammar_open_their_buffer() {
     // `j`, and `h` from the first, stay in the buffer.
     keys(&mut app, "jhhhhh");
     assert_eq!(app.modes.mode, Mode::Tokens);
-    assert_eq!(app.track_page.tokens.as_ref().unwrap().at, 0);
+    assert_eq!(app.gen_page.tokens.as_ref().unwrap().at, 0);
     // `Esc` closes it on the cell, and `u` takes back its changes at once.
     keys(&mut app, "<Esc>");
     assert_eq!(app.modes.mode, Mode::Normal);
@@ -215,7 +215,7 @@ fn the_gen_pages_cells_in_a_grammar_open_their_buffer() {
 fn a_live_lists_values_are_turned_on_the_gen_page() {
     let (mut app, _realtime) = app_with(&[NOTES; 16]);
     command(&mut app, "set scale=minor-pentatonic");
-    keys(&mut app, "vGSKlist<Enter>L 5LLL");
+    keys(&mut app, "vGSKlist<Enter>L 8");
     to_cell(&mut app, GenParam::Values);
     keys(&mut app, "<Enter>l=");
     let list = |app: &App| {

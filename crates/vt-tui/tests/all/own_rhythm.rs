@@ -169,7 +169,7 @@ fn to_cell(app: &mut App, param: GenParam) {
 #[test]
 fn the_gen_pages_text_cell_takes_the_token_editor() {
     let (mut app, _rt) = on_rhythm();
-    keys(&mut app, "L 5LLL");
+    keys(&mut app, "L 8");
     to_cell(&mut app, GenParam::Rhythm);
     keys(&mut app, "K/own<Enter>");
     let generator = |app: &App| app.song().tracks[0].phrases[&0].generators()[0].clone();

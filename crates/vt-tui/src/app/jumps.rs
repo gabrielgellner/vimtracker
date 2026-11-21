@@ -21,7 +21,7 @@ const JUMP_LIMIT: usize = 100;
 pub(crate) struct Place {
     view: View,
     cursor: Cursor,
-    /// Where on the track page or the mixer, as a jump can land on another of their settings.
+    /// Where on the track page, Gen or the mixer, as a jump can land on another of their settings.
     track_page: Page,
     track_row: usize,
     track_field: usize,
@@ -48,8 +48,8 @@ impl App {
             view: self.modes.view,
             cursor: self.services.cursor,
             track_page: self.track_page.page,
-            track_row: self.track_page.row,
-            track_field: self.track_page.field,
+            track_row: self.rack().row,
+            track_field: self.rack().field,
             mixer_row: self.mixer_page.row,
             sample_cursor: self.sample_page.cursor,
             sample_pinned: self.sample_page.pinned,
@@ -76,6 +76,14 @@ impl App {
             self.track_page.show(place.track_page);
             self.track_page.move_to(
                 self.services.track_here(),
+                place.track_row,
+                place.track_field,
+            );
+        }
+        if place.view == View::Gen {
+            let song = std::sync::Arc::clone(self.song());
+            self.gen_page.move_to(
+                song.tracks.get(self.services.cursor.track),
                 place.track_row,
                 place.track_field,
             );
@@ -255,7 +263,7 @@ impl App {
     }
 
     /// `gd` on the track page or the mixer: on a macro, its mapping view; on a setting or a
-    /// fader a macro holds, that macro in the Gen page's band, ready to turn, as a jump `C-o`
+    /// fader a macro holds, that macro in the Macros page's band, ready to turn, as a jump `C-o`
     /// comes back from (`gm` there opens its mapping); and on one more than one macro holds, a
     /// list of them to go to. Whether the cursor was on a macro or a setting one holds. It's
     /// `App`'s, as going to a macro is a jump.
@@ -289,7 +297,7 @@ impl App {
         }
     }
 
-    /// Go to a macro in the Gen page's band, as a jump, with no overlay open, so the next `=`
+    /// Go to a macro in the Macros page's band, as a jump, with no overlay open, so the next `=`
     /// turns it.
     pub(crate) fn go_to_macro(&mut self, at: usize) {
         self.go_to_macro_on(None, at);
@@ -303,7 +311,6 @@ impl App {
         }
         let track = self.services.page_track();
         self.track_page.show(Page::Macros);
-        self.track_page.phrase = self.services.phrase_id();
         let rows = self.track_page.rows(Some(&track));
         let place = rows.iter().enumerate().find_map(|(row, places)| {
             let field = places

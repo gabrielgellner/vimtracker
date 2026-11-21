@@ -373,7 +373,7 @@ fn on_hits() -> (App, vt_engine::link::Realtime) {
     let mut app = crate::common::new_app(song, None, samples, handle, 48_000);
     press(&mut app, "vGSjjjjjj===");
     special(&mut app, KeyCode::Char('L'));
-    press(&mut app, " 8}kjj$");
+    press(&mut app, " 8jj$");
     assert!(matches!(
         app.track_control(),
         Control::Gen {
@@ -415,14 +415,14 @@ fn m_maps_a_generators_hits_and_turning_the_macro_writes_the_column_again() {
         3,
         "the macro turned to where Hits is, so nothing jumps"
     );
-    // Its own turn is refused, and the band turns it.
+    // Its own turn is refused, and the band, on the Macros page, turns it.
     press(&mut app, "=");
     assert!(
         app.services.status.contains("is on macro 2"),
         "{}",
         app.services.status
     );
-    press(&mut app, "gg0l");
+    press(&mut app, " 7Lgg0l");
     assert_eq!(app.track_control(), Control::Macro(1));
     press(&mut app, "iFF");
     assert_eq!(notes(&app), 8);
@@ -578,7 +578,7 @@ fn gd_on_a_setting_a_macro_holds_goes_to_the_macro_on_the_gen_page_and_c_o_comes
     assert_eq!(app.track_page.page, Page::Sound);
     assert_eq!(app.track_control(), cut_here, "back on Cut");
     // On a macro, gd opens its mapping view, as gm does.
-    press(&mut app, " 8gg0");
+    press(&mut app, " 7Lgg0");
     assert_eq!(app.track_control(), Control::Macro(0));
     press(&mut app, "gd");
     assert_eq!(app.modes.mode, Mode::Mapping);
@@ -586,19 +586,17 @@ fn gd_on_a_setting_a_macro_holds_goes_to_the_macro_on_the_gen_page_and_c_o_comes
 }
 
 #[test]
-fn gd_on_a_generators_setting_goes_up_the_gen_page_to_its_macro_as_a_jump() {
+fn gd_on_a_generators_setting_goes_to_its_macro_on_the_macros_page_as_a_jump() {
     let (mut app, _realtime) = on_hits();
     press(&mut app, "M2");
     let hits = app.track_control();
     press(&mut app, "gd");
     assert_eq!(app.track_control(), Control::Macro(1));
     assert_eq!(app.modes.mode, Mode::Normal);
+    assert_eq!(app.modes.view, View::Track, "on the Macros page");
     jump_back(&mut app);
-    assert_eq!(
-        app.track_control(),
-        hits,
-        "a jump on the same page comes back too"
-    );
+    assert_eq!(app.modes.view, View::Gen);
+    assert_eq!(app.track_control(), hits, "back on Gen, on the setting");
 }
 
 #[test]
@@ -772,7 +770,7 @@ fn the_macros_page_lists_what_the_cursors_macro_holds_under_the_band() {
     let (mut app, _realtime) = on_cut();
     // Cut and Res on macro 1, Res kept below A0.
     press(&mut app, "M1jM1");
-    press(&mut app, " 8gg0");
+    press(&mut app, " 7Lgg0");
     assert_eq!(app.track_page.page, vt_tui::controls::Page::Macros);
     assert_eq!(app.track_control(), Control::Macro(0));
     press(&mut app, "gmjliA0");
@@ -802,7 +800,8 @@ fn the_macros_page_lists_what_the_cursors_macro_holds_under_the_band() {
         res.contains("│  Res                       00     A0"),
         "{res}"
     );
-    let bottom = row_of(&lines, "╭─ Empty").unwrap();
+    let foot = |lines: &[String]| lines.iter().position(|line| line.starts_with("╰"));
+    let bottom = foot(&lines).unwrap();
     // Along the band to a macro holding nothing: it says so, and the page doesn't move.
     press(&mut app, "l");
     let lines = screen_cells(&mut app);
@@ -813,24 +812,6 @@ fn the_macros_page_lists_what_the_cursors_macro_holds_under_the_band() {
         "{text}"
     );
     assert!(!text.contains("Setting                   Min"), "{text}");
-    assert_eq!(row_of(&lines, "╭─ Empty"), Some(bottom), "{text}");
-    // Off the band, on `Empty`, no macro holds the cursor's setting.
-    press(&mut app, "G");
-    let text = screen_cells(&mut app).join("\n");
-    assert!(
-        text.contains("On a macro, every setting it holds is listed here"),
-        "{text}"
-    );
-}
-
-#[test]
-fn off_the_band_the_macros_page_lists_the_macro_holding_the_cursors_setting() {
-    let (mut app, _realtime) = on_hits();
-    press(&mut app, "M2");
-    let text = screen_cells(&mut app).join("\n");
-    assert!(text.contains("· Macro 2 Hits, 1 mapping "), "{text}");
-    assert!(
-        text.contains("Note Hits                 0      8      0     0     00–FF"),
-        "{text}"
-    );
+    assert_eq!(foot(&lines), Some(bottom), "{text}");
+    assert!(!text.contains("Empty"), "Gen is the phrase view's: {text}");
 }

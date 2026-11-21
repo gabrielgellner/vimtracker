@@ -431,16 +431,13 @@ impl App {
                 .services
                 .pick_gen_choice(phrase, generator, choice, self.modes.view),
             Pick::GenColumn(field) => {
-                let outcome = self.track_page.pick_gen_column(
-                    field,
-                    None,
-                    self.modes.view,
-                    &mut self.services,
-                );
+                let outcome =
+                    self.gen_page
+                        .pick_gen_column(field, None, self.modes.view, &mut self.services);
                 self.settled(outcome, false);
             }
             Pick::GenCommand { field, command } => {
-                let outcome = self.track_page.pick_gen_column(
+                let outcome = self.gen_page.pick_gen_column(
                     field,
                     Some(command),
                     self.modes.view,

@@ -61,6 +61,7 @@ use crate::overlays::picker::{Pick, Picker};
 use crate::overlays::shape::ShapePanel;
 use crate::pages::audio::AudioState;
 use crate::pages::sample::{SamplePage, Shown, is_sample_motion};
+use crate::pages::track::TrackPage;
 use crate::roto::Roto;
 use crate::services::Services;
 use crate::services::audio::SlowdownReadout;
@@ -268,7 +269,7 @@ impl App {
     /// Returns false if it's none of theirs.
     pub(crate) fn run_page(&mut self, cmd: Cmd) -> bool {
         match self.modes.view {
-            View::Track | View::Mixer => self.run_track_pages(cmd),
+            View::Track | View::Mixer | View::Gen => self.run_track_pages(cmd),
             View::Chain => self.run_chain_view(cmd),
             View::Audio | View::Project => self.run_project_pages(cmd),
             View::Sample => self.run_sample_page(cmd),
@@ -277,51 +278,81 @@ impl App {
         }
     }
 
-    /// What the cursor is on, on the track page or the mixer.
+    /// What the cursor is on, on the track page, the mixer or Gen.
     pub fn track_control(&self) -> Control {
         if self.modes.view == View::Mixer {
             return self.mixer_page.control_here(&self.ctx());
         }
-        self.track_page.control(self.services.track_here())
+        self.rack().control(self.services.track_here())
     }
 
-    /// Run a command on the track page or the mixer: the page's own key, and what a key it passes
-    /// back means across pages, [`TrackPage::across`]. The mixer turns the track page's
+    /// The rack the keys work on: Gen's while it shows, and the track page's otherwise, which the
+    /// mixer's keys reach too.
+    pub fn rack(&self) -> &TrackPage {
+        if self.modes.view == View::Gen {
+            &self.gen_page
+        } else {
+            &self.track_page
+        }
+    }
+
+    /// The rack the keys work on, to change, as [`App::rack`] chooses it.
+    pub(crate) fn rack_mut(&mut self) -> &mut TrackPage {
+        if self.modes.view == View::Gen {
+            &mut self.gen_page
+        } else {
+            &mut self.track_page
+        }
+    }
+
+    /// Run a command on the track page, the mixer or Gen: the page's own key, and what a key it
+    /// passes back means across pages, [`TrackPage::across`]. The mixer turns the track page's
     /// controls, so a key it passes back goes on to the track page's own keys first. A key that
-    /// means what it does elsewhere, such as going to another track, leaves the track page's
-    /// cursor where it was kept, and the count for what takes it.
+    /// means what it does elsewhere, such as going to another track, leaves the page's cursor
+    /// where it was kept, and the count for what takes it.
     fn run_track_pages(&mut self, cmd: Cmd) -> bool {
-        self.track_page.phrase = self.services.phrase_id();
-        let kept = self.track_page.clone();
+        self.gen_page.phrase = self.services.phrase_id();
+        let kept = self.rack().clone();
         let count = self.modes.count.take();
         let times = count.unwrap_or(1).max(1);
+        let view = self.modes.view;
+        let rack = if view == View::Gen {
+            &mut self.gen_page
+        } else {
+            &mut self.track_page
+        };
         let mut ctx = CtxMut {
             services: &mut self.services,
             modes: &self.modes,
             wheel: &mut self.wheel,
         };
-        let outcome = match self.modes.view {
+        let outcome = match view {
             View::Mixer => match self.mixer_page.key(cmd, times, &mut ctx) {
-                Outcome::Passed => self.track_page.key(cmd, times, &mut ctx),
+                Outcome::Passed => rack.key(cmd, times, &mut ctx),
                 outcome => outcome,
             },
-            _ => self.track_page.key(cmd, times, &mut ctx),
+            _ => rack.key(cmd, times, &mut ctx),
         };
         if self.settled(outcome, true) {
             return true;
         }
         let control = self.track_control();
+        let rack = if view == View::Gen {
+            &mut self.gen_page
+        } else {
+            &mut self.track_page
+        };
         let mut ctx = CtxMut {
             services: &mut self.services,
             modes: &self.modes,
             wheel: &mut self.wheel,
         };
-        let outcome = self.track_page.across(cmd, times, control, &mut ctx);
+        let outcome = rack.across(cmd, times, control, &mut ctx);
         // The count was taken before the page had the key.
         if self.settled(outcome, false) {
             return true;
         }
-        self.track_page = kept;
+        *self.rack_mut() = kept;
         self.modes.count = count;
         false
     }
@@ -494,8 +525,8 @@ impl App {
                 if self.modes.view == View::Mixer {
                     self.mixer_page.row = field;
                 } else {
-                    self.track_page
-                        .move_to(self.services.track_here(), row, field);
+                    let track = self.services.track_here().cloned();
+                    self.rack_mut().move_to(track.as_ref(), row, field);
                 }
             }
             Outcome::Do(cmd) => self.run(cmd),

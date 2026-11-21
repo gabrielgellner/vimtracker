@@ -161,7 +161,7 @@ fn kept_live_the_line_is_saved_and_the_gen_page_types_it() {
         app.song().tracks[0].phrases[&0].steps()
     );
     // The Gen page's `Text` cell.
-    keys(&mut app, "L 5LLL");
+    keys(&mut app, "L 8");
     to_cell(&mut app, GenParam::MiniText);
     let depth = app.services.history.undo_depth();
     keys(&mut app, "SE-3 F-3<Enter>");

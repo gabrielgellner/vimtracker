@@ -57,7 +57,7 @@ fn subject(app: &App) -> Option<Subject<'_>> {
     if app.overlays.shape.is_some() {
         return Some(Subject::Shape);
     }
-    (app.modes.view == View::Track).then(|| Subject::Page(app.track_control()))
+    matches!(app.modes.view, View::Track | View::Gen).then(|| Subject::Page(app.track_control()))
 }
 
 /// The line as it reads now, or nothing where there's nothing to describe.

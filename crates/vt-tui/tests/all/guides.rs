@@ -51,7 +51,12 @@ fn space_question_opens_on_the_guide_for_the_page_showing() {
     assert_eq!(guide_opened_from(" 5"), "The Sound page, output and groups");
     assert_eq!(guide_opened_from(" 6"), "The Mod page, envelopes and LFOs");
     assert_eq!(guide_opened_from(" 7"), "The FX page and its effects");
-    assert!(guide_opened_from(" 8").starts_with("The Macros page"));
+    assert_eq!(guide_opened_from(" 8"), "Gen, the Macros page and presets");
+    assert_eq!(
+        guide_opened_from(" 7L"),
+        "Gen, the Macros page and presets",
+        "the Macros page is in Gen's guide"
+    );
     assert_eq!(guide_opened_from(" 9"), "Saving and rendering");
     assert_eq!(
         guide_opened_from(" 9L"),

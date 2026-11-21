@@ -247,16 +247,18 @@ pub(crate) fn for_fill(fill: &str) -> (Guide, &str, bool) {
 }
 
 /// The guide for where the program is: the track page's own for each of its pages, the one
-/// with the mixer, the project page or the sample page in it, and on the phrase view the moves.
+/// with the mixer, the project page or the sample page in it, on the phrase view the moves, and
+/// on Gen the guide the Macros page shares with it.
 pub(crate) fn for_view(view: View, page: Page) -> Guide {
     match view {
         View::Phrase => NAVIGATION,
+        View::Gen => TRACK_GEN,
         View::Chain | View::Song => CHAINS,
         View::Track => match page {
             Page::Sound => TRACK_SOUND,
             Page::Mod => TRACK_MOD,
             Page::Fx => TRACK_FX,
-            Page::Macros => TRACK_GEN,
+            Page::Macros | Page::Gen => TRACK_GEN,
         },
         View::Mixer => TRACK_SOUND,
         View::Audio => METER,

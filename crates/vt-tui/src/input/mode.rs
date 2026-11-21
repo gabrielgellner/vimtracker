@@ -6,6 +6,9 @@ pub enum View {
     Song,
     Chain,
     Phrase,
+    /// The phrase view's Gen page: the live generators of the phrase under the cursor, the
+    /// lanes and `Phrase`, as devices, beside the grid's own page (decision 466).
+    Gen,
     Track,
     Mixer,
     /// The project page's Audio sub-page: this machine's output, its device, rate and buffer.
@@ -19,8 +22,9 @@ pub enum View {
 
 impl View {
     /// Every view, in the order the picker starts with.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Phrase,
+        Self::Gen,
         Self::Chain,
         Self::Song,
         Self::Track,
@@ -36,6 +40,7 @@ impl View {
             Self::Song => "song",
             Self::Chain => "chain",
             Self::Phrase => "phrase",
+            Self::Gen => "phrase: gen",
             Self::Track => "track",
             Self::Mixer => "mixer",
             Self::Audio => "audio",
@@ -84,6 +89,9 @@ pub enum Mode {
     Chain,
     /// Normal mode's keys on the track page. Only the binding table and the label use this.
     Track,
+    /// Normal mode's keys on the phrase view's Gen page. Only the binding table and the label
+    /// use this.
+    Gen,
     /// Normal mode's keys on the mixer. Only the binding table and the label use this.
     Mixer,
     /// Normal mode's keys in the song view. Only the binding table and the label use this.
@@ -121,6 +129,7 @@ impl Mode {
             Self::Keys => "KEYS",
             Self::Chain => "CHAIN",
             Self::Track => "TRACK",
+            Self::Gen => "GEN",
             Self::Mixer => "MIX",
             Self::Song => "SONG",
             Self::Audio => "AUDIO",

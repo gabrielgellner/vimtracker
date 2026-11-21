@@ -263,8 +263,8 @@ impl App {
             }
         } else {
             JumpPage {
-                rows: self.track_page.rows(self.services.track_here()),
-                from: (self.track_page.row, self.track_page.field),
+                rows: self.rack().rows(self.services.track_here()),
+                from: (self.rack().row, self.rack().field),
             }
         }
     }

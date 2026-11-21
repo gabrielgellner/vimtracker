@@ -139,7 +139,7 @@ plays every time, as the module's knob fully right locks it. The draws aren't sa
 are a loop kept that way.
 
 **Give it knobs.** A macro is one knob that turns any of the track's settings, each between a
-`Min` and a `Max` of its own (see **Macros** in **The Macros page, Gen and presets**). Three
+`Min` and a `Max` of its own (see **Macros** in **Gen, the Macros page and presets**). Three
 make the slot a panel, each mapped to a setting of `Mod 4`:
 
 | Macro | Turns | `Min` | `Max` | The song has it at |
@@ -157,7 +157,7 @@ Now `Mutate`, `Length` and `Depth` show where their macros put them, each with a
 its value to say a macro holds it, and won't turn on their own: turning one says to turn its
 macro instead, or `gm` for its range.
 
-**Play it.** `Space 8` for the Macros page. Its first band is the `Macros`, with `Change`,
+**Play it.** `Space 7` and `L` for the Macros page. Its band is the `Macros`, with `Change`,
 `Length` and `Range` along the top row, each with its value in four digits and a bar. `h` and
 `l` go between them, `=` and `-` turn one a little, `+` and `_` by `10`, about a step of
 `Length`, `i` types two hex digits, and `x` takes one to `00`.
@@ -191,7 +191,7 @@ it has a `Rate` to map, for a register that steps in time rather than with the n
     one it was moved to the last time it was heard, and the slot is switched out, knobs and all.
 
 **Save it as a patch.** The Steps slot and the three macros that turn it are a Turing Machine you
-can put on any track, keeping that track's sound (see **Patches** in **The Macros page, Gen and presets**).
+can put on any track, keeping that track's sound (see **Patches** in **Gen, the Macros page and presets**).
 
 1.  On track 1, `:patch save Turing Machine`. A patch is the track's macros that hold something
     and what they move, so this one is `Mod 4` and the three macros, `1 slot, 3 macros` as the
@@ -203,7 +203,7 @@ can put on any track, keeping that track's sound (see **Patches** in **The Macro
     holding nothing, every mapping moved to match: `Change` turns `Mod 3`'s `Mutate` there. The
     status line says where each part went, and `u` takes it all off at once.
 3.  `Tab`. The kick's beats now wander in pitch from the same kind of loop, through the kick's
-    own sound, and `Space 8` shows `Change`, `Length` and `Range` on its Macros page, to play as on
+    own sound, and its Macros page, `Space 7` then `L`, shows `Change`, `Length` and `Range`, to play as on
     track 1.
 
 A track with too few free slots or macros refuses it, saying how many it needs and how many are
@@ -232,7 +232,7 @@ is a drone with a `Smooth` LFO wandering on its filter, as Marbles' Y output wan
 is a hat on every step, each with a `CHA` of its own, Marbles' T.
 [`song.ron`](songs/deja-vu/song.ron)
 
-**Build it.** See **Macros** in **The Macros page, Gen and presets** for how macros and their
+**Build it.** See **Macros** in **Gen, the Macros page and presets** for how macros and their
 zones are set.
 
 *   **Song:** D dorian, 100 BPM.

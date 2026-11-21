@@ -28,7 +28,7 @@ fn live_rhythm() -> (App, Realtime) {
     let (mut app, realtime) = app_for(song);
     keys(&mut app, "vGS");
     down_to(&mut app, GenParam::Where);
-    keys(&mut app, "K/rhythm<Enter>L 5LLL");
+    keys(&mut app, "K/rhythm<Enter>L 8");
     (app, realtime)
 }
 
@@ -37,7 +37,7 @@ fn page(app: &App) -> Vec<String> {
     let backend = ratatui::backend::TestBackend::new(163, 42);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Track))
+        .draw(|frame| vt_tui::run::draw_view(frame, frame.area(), app, View::Gen))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     (0..42)
@@ -84,7 +84,7 @@ fn h_l_j_k_on_a_text_cell_move_between_settings() {
         let before = here(&app);
         keys(&mut app, key);
         assert_eq!(app.modes.mode, Mode::Normal, "{key}");
-        assert!(app.track_page.tokens.is_none(), "{key}");
+        assert!(app.gen_page.tokens.is_none(), "{key}");
         // Back where it was, by the opposite key, for the next.
         let back = match key {
             "h" => "l",
@@ -105,7 +105,7 @@ fn i_and_a_type_at_the_end_keeping_the_text() {
     let depth = app.services.history.undo_depth();
     keys(&mut app, "i");
     assert_eq!(app.modes.mode, Mode::Tokens);
-    let field = &app.track_page.tokens.as_ref().unwrap().tokens.field;
+    let field = &app.gen_page.tokens.as_ref().unwrap().tokens.field;
     assert_eq!(field.text(), format!("{NAMED} "));
     assert!(field.inserting().is_some());
     keys(&mut app, "x<Enter>");
@@ -129,7 +129,7 @@ fn cc_and_capital_s_type_it_all_again() {
     place_of(&mut app, GenParam::OwnText);
     keys(&mut app, "cc");
     assert_eq!(app.modes.mode, Mode::Tokens);
-    let field = &app.track_page.tokens.as_ref().unwrap().tokens.field;
+    let field = &app.gen_page.tokens.as_ref().unwrap().tokens.field;
     assert_eq!(field.text(), "");
     keys(&mut app, "x x<Enter>");
     assert_eq!(generator(&app).rhythm(), "x x");
@@ -145,13 +145,13 @@ fn enter_opens_it_on_the_first_token_and_k_stays_the_settings_own() {
     let (mut app, _rt) = live_rhythm();
     place_of(&mut app, GenParam::OwnText);
     keys(&mut app, "K");
-    assert!(app.track_page.tokens.is_none(), "K isn't the buffer's");
+    assert!(app.gen_page.tokens.is_none(), "K isn't the buffer's");
     assert_ne!(app.modes.mode, Mode::Tokens);
     keys(&mut app, "<Esc>");
     place_of(&mut app, GenParam::OwnText);
     keys(&mut app, "<Enter>");
     assert_eq!(app.modes.mode, Mode::Tokens);
-    assert_eq!(app.track_page.tokens.as_ref().unwrap().at, 0);
+    assert_eq!(app.gen_page.tokens.as_ref().unwrap().at, 0);
     assert_eq!(app.services.status, "Hit: x");
     // Drawn whole, under the cell, as typed.
     let text = page(&app).join("\n");

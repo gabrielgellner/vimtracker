@@ -604,10 +604,12 @@ impl App {
     ) -> std::io::Result<()> {
         graphics.begin(out)?;
         let rate = self.services.rate;
-        if self.modes.view == View::Track && self.services.track_here().is_some() {
-            let wants = self.track_page.panels(&self.ctx());
+        if matches!(self.modes.view, View::Track | View::Gen)
+            && self.services.track_here().is_some()
+        {
+            let wants = self.rack().panels(&self.ctx());
             let ids = graphics.panels(&wants, rate, out)?;
-            self.track_page.take_panels(ids, &wants, rate);
+            self.rack_mut().take_panels(ids, &wants, rate);
             if let (Some(view), Some(track)) =
                 (self.overlays.mapping.as_mut(), self.services.track_here())
             {
@@ -650,8 +652,8 @@ impl App {
         out: &mut impl std::io::Write,
     ) -> std::io::Result<()> {
         let now = Instant::now();
-        let dots = if self.modes.view == View::Track {
-            self.track_page.dots(&self.ctx(), graphics.cell(), now)
+        let dots = if matches!(self.modes.view, View::Track | View::Gen) {
+            self.rack().dots(&self.ctx(), graphics.cell(), now)
         } else {
             [None; MOD_SLOTS]
         };
@@ -710,8 +712,8 @@ pub fn draw_screen(
     };
     // Only the Mod page's LFO cycles and the Gen page's previews have dots for the terminal to
     // place.
-    app.track_page.lfo_cycles_at = Default::default();
-    app.track_page.gen_panels_at = Vec::new();
+    app.rack_mut().lfo_cycles_at = Default::default();
+    app.rack_mut().gen_panels_at = Vec::new();
     // Laid out for the room first, so what it shows settles in the columns it's drawn with.
     if app.modes.view == View::Sample {
         app.sample_page.lay_out(view);
@@ -719,8 +721,8 @@ pub fn draw_screen(
     match draw_view_noting(frame, view, app, app.modes.view) {
         PageNotes::Nothing => {}
         PageNotes::Track(drawn) => {
-            app.track_page.lfo_cycles_at = drawn.cycles;
-            app.track_page.gen_panels_at = drawn.previews;
+            app.rack_mut().lfo_cycles_at = drawn.cycles;
+            app.rack_mut().gen_panels_at = drawn.previews;
         }
         PageNotes::Sample(on_screen) => app.sample_page.on_screen = on_screen,
     }
@@ -823,6 +825,7 @@ fn draw_view_noting(frame: &mut ratatui::Frame, area: Rect, app: &App, view: Vie
         View::Chain => app.chain_view.draw(frame, area, &ctx),
         View::Phrase => app.phrase_view.draw(frame, area, &ctx),
         View::Track => return PageNotes::Track(app.track_page.draw(frame, area, &ctx)),
+        View::Gen => return PageNotes::Track(app.gen_page.draw(frame, area, &ctx)),
         View::Mixer => app.mixer_page.draw(frame, area, &ctx),
         View::Audio => app.audio_page.draw(frame, area, &ctx),
         View::Project => app.project_page.draw(frame, area, &ctx),

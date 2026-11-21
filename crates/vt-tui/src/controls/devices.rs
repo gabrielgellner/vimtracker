@@ -16,20 +16,24 @@ use super::Control;
 pub(crate) use generators::macros_device;
 pub(crate) use modulation::modulator_bypassed;
 
-/// A part of the track page.
+/// A rack of devices: one of the track page's four pages, or the phrase view's Gen page, which is
+/// laid out and walked as they are (decision 466).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Page {
     #[default]
     Sound,
     Mod,
     Fx,
-    /// The track's eight macros and the cursor's macro's mappings (decision 465), with the live
-    /// generators of the phrase under the cursor under them until they move to the phrase view.
+    /// The track's eight macros and the cursor's macro's mappings (decision 465).
     Macros,
+    /// The phrase view's Gen page: the live generators of the phrase under the cursor, the lanes,
+    /// `Phrase` and `Empty` (decision 466). It isn't one of the track page's, so it's not in
+    /// [`Page::ALL`].
+    Gen,
 }
 
 impl Page {
-    /// Every page, in order.
+    /// The track page's pages, in order.
     pub const ALL: [Self; 4] = [Self::Sound, Self::Mod, Self::Fx, Self::Macros];
 
     /// The page's name on screen.
@@ -39,39 +43,44 @@ impl Page {
             Self::Mod => "Mod",
             Self::Fx => "FX",
             Self::Macros => "Macros",
+            Self::Gen => "Gen",
         }
     }
 
-    /// Where the page is in [`Page::ALL`].
+    /// Where the page is in [`Page::ALL`], and Gen after them.
     pub(crate) fn index(self) -> usize {
         self as usize
     }
 
-    /// The page next to this one, or this one at either end.
+    /// The track page's page next to this one, or this one at either end. Gen has none beside
+    /// it.
     pub(crate) fn beside(self, next: bool) -> Self {
-        let at = Self::ALL.iter().position(|page| *page == self).unwrap_or(0);
+        let Some(at) = Self::ALL.iter().position(|page| *page == self) else {
+            return self;
+        };
         let to = if next { at + 1 } else { at.saturating_sub(1) };
         Self::ALL[to.min(Self::ALL.len() - 1)]
     }
 
     /// The page's devices, in the order they're read, each page's from its own file: the Sound
     /// page's machine, filter, output and play, or a fixed track's output alone, the Mod page's
-    /// mod slots, accumulator and arpeggio, and the FX page's slots. The cursor, `j`, `k`,
-    /// `h`, `l`, `{` and `}` go through whatever devices a page gives, laid out as its rack
-    /// (the track page's `rack_places`). The Macros page's generators hang on a phrase as well, so they're
-    /// [`Page::devices_on`]'s, and here there are none.
+    /// mod slots, accumulator and arpeggio, the FX page's slots and the Macros page's band. The
+    /// cursor, `j`, `k`, `h`, `l`, `{` and `}` go through whatever devices a page gives, laid out
+    /// as its rack (the track page's `rack_places`). Gen's generators hang on a phrase as well,
+    /// so they're [`Page::devices_on`]'s, and here there are none.
     pub fn devices(self, track: &Track) -> Vec<DeviceSpec> {
         self.devices_on(track, None)
     }
 
-    /// The page's devices, the Macros page's being the macros, then a device for each live
-    /// generator of this phrase of the track, then `Empty`.
+    /// The page's devices, Gen's being a device for each live generator of this phrase of the
+    /// track, its lanes, `Phrase` and `Empty`.
     pub(crate) fn devices_on(self, track: &Track, phrase: Option<u32>) -> Vec<DeviceSpec> {
         match self {
             Self::Sound => sound::devices(track),
             Self::Mod => modulation::devices(track),
             Self::Fx => fx::devices(track),
-            Self::Macros => generators::devices(track, phrase),
+            Self::Macros => vec![macros_device()],
+            Self::Gen => generators::devices(track, phrase),
         }
     }
 }

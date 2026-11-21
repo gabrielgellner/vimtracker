@@ -10,7 +10,7 @@ use vt_model::shape::{CellStart, GenParam, Where};
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
 use vt_tui::app::App;
-use vt_tui::controls::Page;
+use vt_tui::input::mode::View;
 
 use crate::common::*;
 
@@ -183,7 +183,7 @@ fn a_live_cells_on_the_gen_page_has_its_rule_and_start_under_its_where() {
     let (mut app, _rt) = app_with(1);
     cells_from_one(&mut app, "vG", 30);
     keys(&mut app, "jK/each<Enter>L 8");
-    assert_eq!(app.track_page.page, Page::Macros);
+    assert_eq!(app.modes.view, View::Gen);
     let text = fx_page_text(&app).join("\n");
     assert!(text.contains("Ramp  Cells  Each pass"), "{text}");
     for setting in ["Rule", "Start", "One"] {

@@ -1,9 +1,9 @@
-//! The Macros page (decision 465): the track's eight macros and the mappings of the cursor's, then,
-//! until they move to the phrase view (#1111), a device for each live generator of the phrase
-//! under the cursor, each FX column's `Lane` where it has one, `Phrase` and `Empty`, stacked down
-//! the page as the FX page's slots are. Each has its preview at its right, the
-//! large panel the Sound page's filter has, of what it writes across its span, with the row
-//! playing as a dot the terminal places (`graphics/generators.rs`).
+//! The Macros page (decision 465), the track's eight macros and the mappings of the cursor's, and
+//! the phrase view's Gen page (decision 466): a device for each live generator of the phrase under
+//! the cursor, each FX column's `Lane` where it has one, `Phrase` and `Empty`, stacked down the
+//! area it's given as the FX page's slots are. Each has its preview at its right, the large panel
+//! the Sound page's filter has, of what it writes across its span, with the row playing as a dot
+//! the terminal places (`graphics/generators.rs`). The macro panel's strip is drawn here too.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -20,7 +20,7 @@ use vt_model::song::Track;
 use crate::controls::{Control, DeviceSpec};
 use crate::graphics::PanelKey;
 use crate::input::mode::Mode;
-use crate::overlays::mapping::{self, holding};
+use crate::overlays::mapping;
 use crate::pages::Ctx;
 use crate::pages::track::TrackPage;
 use crate::services::generators::LiveGen;
@@ -72,12 +72,11 @@ fn macros_height(track: &Track, room: u16) -> u16 {
     (rows + 9).min(room).max(DEVICE_HEIGHT)
 }
 
-/// The macro whose mappings the Macros page lists: the cursor's, on the band, or else the one
-/// holding the setting under the cursor, if one does.
-fn macro_listed(page: &TrackPage, ctx: &Ctx, track: &Track) -> Option<usize> {
+/// The macro whose mappings the Macros page lists: the cursor's, on the band.
+fn macro_listed(page: &TrackPage, ctx: &Ctx) -> Option<usize> {
     match page.control_here(ctx) {
         Control::Macro(at) => Some(at),
-        control => holding(control, track).next().map(|(at, _)| at),
+        _ => None,
     }
 }
 
@@ -92,7 +91,7 @@ fn draw_macros(
     device: &DeviceSpec,
     focused: bool,
 ) {
-    let listed = macro_listed(page, ctx, track);
+    let listed = macro_listed(page, ctx);
     let mut widget = Device::new(device.identity.clone()).focused(focused);
     // Which macro is listed, its name after its number once it has one, and how many it holds.
     if let Some(at) = listed {
@@ -174,7 +173,7 @@ const STRIP_CELLS: CellWidths = CellWidths {
 const STRIP_INDENT: u16 = 2;
 
 /// The macro panel (decision 385): the cursor's track's eight macros in a row, each its name over
-/// its value and bar, drawn as the Gen page's band draws them, under a rule that names the track.
+/// its value and bar, drawn as the Macros page's band draws them, under a rule that names the track.
 /// `cursor` is the macro the keys are on, while they're in the panel, whose value is in the
 /// cursor's colour and whose rule is brighter.
 pub(crate) fn draw_macro_strip(frame: &mut Frame, area: Rect, ctx: &Ctx, cursor: Option<usize>) {
@@ -715,10 +714,35 @@ fn draw_empty(
     frame.render_widget(hint, take_top(&mut row, 1));
 }
 
-/// The Macros page: the macros' device, as tall as its mappings need, then the generators' devices
-/// under it until they move to the phrase view, stacked down the page and going by whole devices
-/// to keep the cursor's in view. A fixed track has no phrases, so it has only the macros. It gives
-/// back where each generator's preview is drawn, by its place in its phrase's list.
+/// The Macros page (decision 465): the macros' device alone, as tall as its mappings need.
+pub(super) fn draw_macros_page(
+    frame: &mut Frame,
+    area: Rect,
+    page: &TrackPage,
+    ctx: &Ctx,
+    track: &Track,
+) {
+    let mut rest = area;
+    if let Some(device) = page.devices(Some(track)).first() {
+        let area = take_top(&mut rest, macros_height(track, area.height));
+        draw_macros(frame, area, page, ctx, track, device, true);
+    }
+}
+
+/// Why Gen has no devices on a track: there's no phrase under the cursor, or it's a fixed track,
+/// which has no phrases.
+pub(crate) fn no_generators(track: &Track) -> &'static str {
+    if track.is_sound() {
+        "There's no phrase here: put one in the chain to make its columns live"
+    } else {
+        "A fixed track has no phrases, so it has no generators"
+    }
+}
+
+/// The Gen page (decision 466): the generators' devices, the lanes', `Phrase` and `Empty`, stacked
+/// down the area it's given and going by whole devices to keep the cursor's in view. With no
+/// phrase there are none, and it says why. It gives back where each generator's preview is
+/// drawn, by its place in its phrase's list.
 pub(super) fn draw(
     frame: &mut Frame,
     area: Rect,
@@ -727,12 +751,12 @@ pub(super) fn draw(
     track: &Track,
 ) -> Vec<(usize, (u16, u16))> {
     let devices = page.devices(Some(track));
-    // The macros alone, with no phrase for generators, say why under them.
-    let alone = devices.len() == 1;
-    let height = |at: usize| match at {
-        0 => macros_height(track, area.height),
-        _ => DEVICE_HEIGHT,
-    };
+    if devices.is_empty() {
+        let why = Line::styled(no_generators(track), theme::dim());
+        frame.render_widget(Paragraph::new(why), area);
+        return Vec::new();
+    }
+    let height = |_: usize| DEVICE_HEIGHT;
     let cursor = page
         .device_cursor(Some(track))
         .map_or(0, |cursor| cursor.device);
@@ -752,9 +776,6 @@ pub(super) fn draw(
         }
         let area = take_top(&mut rest, height(at));
         match (device.title[0], device.grid[0][0]) {
-            (_, Some(Control::Macro(_))) => {
-                draw_macros(frame, area, page, ctx, track, device, at == cursor);
-            }
             (Some(Control::NewGenerator(_)), _) => {
                 draw_empty(frame, area, page, ctx, device, at == cursor);
             }
@@ -780,14 +801,6 @@ pub(super) fn draw(
             }
             _ => {}
         }
-    }
-    if alone {
-        let why = if track.is_sound() {
-            "There's no phrase here: put one in the chain to make its columns live"
-        } else {
-            "A fixed track has no phrases, so it has no generators"
-        };
-        frame.render_widget(Paragraph::new(Line::styled(why, theme::dim())), rest);
     }
     if let Some(at) = open {
         draw_buffer(frame, page, ctx, at);

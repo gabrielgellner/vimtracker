@@ -1012,7 +1012,8 @@ setting and draws the field with `widgets/tokens.rs`. Each grammar is declared o
 
 **Pages and modes** (`input/mode.rs`). A `View` is a page: the song view (`Space 1`), the chain view
 (`Space 2`), the phrase view (`Space 3`), the mixer (`Space 4`), the track page with its Sound, Mod, FX
-and Gen pages on `Space 5` to `Space 8` and on `H` and `L` (`Cmd::ShowTrackPage`), the project page
+and Macros pages on `Space 5` to `Space 7` and on `H` and `L` (`Cmd::ShowTrackPage`), the phrase
+view's Gen page (`Space 8`, `View::Gen`, its keys under `Mode::Gen`, decision 466), the project page
 (`Space 9`, `Cmd::ShowProject`), which is two views, `View::Project` for the song's settings and
 `View::Audio` for this machine's, on `H` and `L` (`PROJECT_PAGES`, decision 297), and the sample page
 (`Space 0`). `:sample` and `:kit` choose a sample and a kit in the picker. A `Mode` is
@@ -1126,7 +1127,7 @@ checked by eye.
 
 **The track page** (`pages/track.rs` and `pages/track/`, decision 145) is the first page that's a
 component (#320). `App::track_page` is a `TrackPage`: the page showing (`Page`: Sound, Mod, FX or
-Gen), the cursor's row and field, the field `j` and `k` aim for, whether it's on a value's fine
+Macros), the cursor's row and field, the field `j` and `k` aim for, whether it's on a value's fine
 digits, and where it was left on each of the other pages, which `TrackPage::show` goes back to
 (decision 209); whether the FX page is zoomed; the ids of the terminal's images it shows, as one
 `PanelIds` by panel (the Mod page's slots, the filter's curve, the sample's thumbnail, the FX page's
@@ -1145,6 +1146,12 @@ launched onto, the faders, the live generators). `App::ctx` lends one. `TrackPag
 `Page::key`, puts the cursor where it's seen and runs one of its own keys, given a `CtxMut`, and
 its `Page::draw` draws the page (`pages/track/draw.rs` and `pages/track/draw/`), giving back where its
 pictures with dots are. `run::draw_view` draws any view's page from an `App`, as the tests do.
+The phrase view's Gen page (decision 466) is the same component, a second `TrackPage`,
+`App::gen_page`, made by `TrackPage::on_gen_page` and always on `Page::Gen`, which isn't one of the
+track page's `Page::ALL`. `View::Gen` shows it, its rows of the binding table are
+`TrackPage::GEN_KEYS` under `Mode::Gen`, and `App::rack` and `App::rack_mut` give whichever of the
+two the keys work on, so the field jump, the jump list, Insert, the token buffer, the wheel and the
+pictures reach Gen's cursor and images as they reach the track page's.
 `App::run_track_pages` (`pages.rs`) hands each key to `TrackPage::key`, the page and the services
 borrowed apart, and what it passes back to `App::run_across_pages` (`pages/track.rs`), which runs
 what spans the pages itself (`/`, `M`, `gm`, the Keys mode, the Gen page's keys, `K` and `i`), and
@@ -1208,8 +1215,7 @@ entry, and `generators.rs`, which works through the live generators' sources and
     grid and a title of its type, its mode and its destination, then the accumulator and the
     arpeggio (decisions 151 and 165). The Gen page's (`generators.rs`, decision 279) hang on a
     phrase as well as the track, so `Page::devices_on` takes the phrase under the cursor, which
-    the app gives `TrackPage::phrase` as each key comes: first the track's macros as one band,
-    `macros_device`, `Control::Macro` two rows of four (decision 285), then a device each for its live generators,
+    the app gives `TrackPage::phrase` as each key comes: a device each for its live generators,
     their title and grid from `vt-model`'s `GenParam::title` and `GenParam::grid`, as
     `Control::Gen`, then `Empty`. Each generator's preview is `graphics/generators.rs`'s
     `GenDrawing`, its column's values across its span from the phrase's steps, sent again only as

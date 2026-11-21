@@ -1,12 +1,14 @@
-//! The Gen page: the live generators of the phrase under the cursor, the one `gl` reopens, a
-//! full-width device each in the phrase view's column order, then an `Empty` device that makes
-//! another column live (the generators study, `docs/designs/generators-page.md`, §3). A device's
-//! title is its fill and its `Where`, or `Acid`'s `Pitches` and `Follow`'s `Source`, then `Vary`
-//! where it draws, and its grid the fill's settings, both from the declared table, [`GenParam`].
-//! Every turn goes through the `Reshape` the shape panel's does, so the column is written again as
-//! it turns, one undo step a press.
+//! The Gen page, the phrase view's second page (decision 466): the live generators of the phrase
+//! under the cursor, the one `gl` reopens, a full-width device each in the phrase view's column
+//! order, then an `Empty` device that makes another column live (the generators study,
+//! `docs/designs/generators-page.md`, §3). A device's title is its fill and its `Where`, or
+//! `Acid`'s `Pitches` and `Follow`'s `Source`, then `Vary` where it draws, and its grid the fill's
+//! settings, both from the declared table, [`GenParam`]. Every turn goes through the `Reshape` the
+//! shape panel's does, so the column is written again as it turns, one undo step a press.
 //!
-//! The page's edits are the track page's, [`TrackPage::gen_edit`], over the [`Services`]: `K`'s
+//! It's a rack, walked as the track page's pages are, so it's a [`TrackPage`] of its own, `App`'s
+//! `gen_page`, always on [`Page::Gen`], with its own keys, [`TrackPage::GEN_KEYS`], under
+//! `Mode::Gen`. Its edits are the track page's, [`TrackPage::gen_edit`], over the [`Services`]: `K`'s
 //! lists come back in an [`Outcome::Open`] and `i` in an [`Outcome::Insert`]. `Enter` stays
 //! `App`'s, as it opens the shape panel on the generator, and so do the choices made from `K`'s
 //! lists, as the picker's are, a column made live building a shape panel too.
@@ -15,7 +17,7 @@ use vt_model::action::Action;
 use vt_model::constants::FX_SLOTS;
 use vt_model::generator::Generator;
 use vt_model::notation::mini_start;
-use vt_model::selection::Field;
+use vt_model::selection::{Field, Motion};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{Context, FillKind, GenParam, OwnRhythm, Shape, ShapeColumn};
 use vt_model::step::FxCommand;
@@ -240,14 +242,88 @@ fn relist_live(
 }
 
 impl TrackPage {
-    /// Whether a key on the setting under the cursor, `control`, is the Gen page's: the track
-    /// page is on screen, `view`, and on Gen, and the cursor isn't on the macros' band, first on
-    /// the page, `Phrase`'s settings, or a lane's `Length` and `Rate`, which turn as the other
-    /// pages' settings do. The mixer, which the track page may
-    /// be left on Gen behind, keeps its own keys.
+    /// The Gen page's rows of the binding table, under `Mode::Gen`: the track page's moves and
+    /// edits, without its pages' own, `H` going back to the grid (decision 466).
+    pub(crate) const GEN_KEYS: &'static [(&'static str, Cmd, &'static str)] = &[
+        ("j", Cmd::Move(Motion::Down), "Next row"),
+        ("k", Cmd::Move(Motion::Up), "Previous row"),
+        (
+            "g g",
+            Cmd::Move(Motion::First),
+            "First row, of the first device",
+        ),
+        ("G", Cmd::Move(Motion::Last), "Last row, of the last device"),
+        ("H", Cmd::PreviousPage, "Back to the phrase view's grid"),
+        (
+            "L",
+            Cmd::NextPage,
+            "Next page: Gen is the phrase view's last",
+        ),
+        ("/", Cmd::FieldJump, "Jump to a setting by its name"),
+        (
+            "M",
+            Cmd::MapMacro,
+            "Map this setting to a macro, or move it, or take it off",
+        ),
+        (
+            "g m",
+            Cmd::MacroMapping,
+            "This macro's mapping, or the one this setting is on",
+        ),
+        ("g d", Cmd::OpenItem, "Go to the macro holding this setting"),
+        (
+            "Space g a",
+            Cmd::ApplyGenerator,
+            "Apply this generator; with Vary on, keep the pass heard",
+        ),
+        ("r", Cmd::RollGenerator, "Roll this generator again"),
+        (
+            "Enter",
+            Cmd::ReopenGenerator,
+            "Open the shape panel on this generator, or a text's buffer",
+        ),
+        ("}", Cmd::Move(Motion::NextBeat), "Next device down"),
+        ("{", Cmd::Move(Motion::PreviousBeat), "Previous device up"),
+        ("h", Cmd::Move(Motion::Left), "Previous setting"),
+        ("l", Cmd::Move(Motion::Right), "Next setting"),
+        ("0", Cmd::Move(Motion::RowStart), "First setting"),
+        ("$", Cmd::Move(Motion::RowEnd), "Last setting"),
+        ("=", Cmd::Increase, "Increase the value"),
+        ("-", Cmd::Decrease, "Decrease the value"),
+        ("+", Cmd::IncreaseLarge, "Increase the value, a large step"),
+        ("_", Cmd::DecreaseLarge, "Decrease the value, a large step"),
+        ("C-a", Cmd::Increase, "Increase the value"),
+        ("C-x", Cmd::Decrease, "Decrease the value"),
+        ("x", Cmd::ClearField, "Back to its default"),
+        (
+            "d d",
+            Cmd::ToNothing,
+            "To nothing; on a generator's Fill, take it away",
+        ),
+        ("K", Cmd::PickValue, "Choose this setting from a list"),
+        (
+            "a",
+            Cmd::Append,
+            "Type; on a text, its buffer typing at the end, keeping it",
+        ),
+        (
+            "S",
+            Cmd::Retype,
+            "Type; on a text, its buffer typing it all again",
+        ),
+        (
+            "c c",
+            Cmd::Retype,
+            "Type; on a text, its buffer typing it all again",
+        ),
+    ];
+
+    /// Whether a key on the setting under the cursor, `control`, is the Gen page's own: the Gen
+    /// page is on screen, `view`, and the cursor isn't on `Phrase`'s settings or a lane's
+    /// `Length` and `Rate`, which turn as the track page's settings do.
     pub(super) fn on_gen(&self, view: View, control: Control) -> bool {
-        view == View::Track
-            && self.page == Page::Macros
+        view == View::Gen
+            && self.page == Page::Gen
             && !matches!(
                 control,
                 Control::Macro(_) | Control::Lane(..) | Control::Base(_)
@@ -661,7 +737,7 @@ impl TrackPage {
             return Outcome::Done;
         };
         let track = &services.song().tracks[services.cursor.track];
-        let devices = Page::Macros.devices_on(track, services.phrase_id());
+        let devices = Page::Gen.devices_on(track, services.phrase_id());
         let device = devices.iter().position(|device| {
             matches!(device.title[0], Some(Control::Gen { generator, .. }) if generator == made)
         });

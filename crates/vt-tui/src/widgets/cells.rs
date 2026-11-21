@@ -31,11 +31,16 @@ use crate::widgets::pin::{app, app_with, assert_drawn, cut, press, special};
 const CUT: Control = Control::Base(TrackControl::Cutoff);
 const RES: Control = Control::Base(TrackControl::Resonance);
 
-/// The track page as it's drawn beside the main meter at 163x42.
+/// The track page as it's drawn beside the main meter at 163x42, or Gen while it shows.
 fn page(app: &App) -> Buffer {
+    let view = if app.modes.view == View::Gen {
+        View::Gen
+    } else {
+        View::Track
+    };
     let mut terminal = Terminal::new(TestBackend::new(150, 40)).unwrap();
     terminal
-        .draw(|frame| crate::run::draw_view(frame, frame.area(), app, View::Track))
+        .draw(|frame| crate::run::draw_view(frame, frame.area(), app, view))
         .unwrap();
     terminal.backend().buffer().clone()
 }
@@ -793,13 +798,13 @@ fn a_generators_settings() {
         .insert(0, Arc::new(Phrase::from_steps(vec![empty; 8])));
     let (mut app, _realtime) = app_with(song);
     press(&mut app, "vGSjjjjjj===L");
-    press(&mut app, " 5LLL}");
+    press(&mut app, " 8j");
     assert!(matches!(
-        app.track_page.control_here(&app.ctx()),
+        app.gen_page.control_here(&app.ctx()),
         Control::Gen { .. }
     ));
     assert_drawn(
-        &cut(&page(&app), Rect::new(0, 12, 110, 8)),
+        &cut(&page(&app), Rect::new(0, 2, 110, 8)),
         &[
             "╭─ Ramp  Euclid · Note 00–07 ─────────────────────────────────────────────────────────────────────────────────",
             "aabccccbbccccccbbbbbbbbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

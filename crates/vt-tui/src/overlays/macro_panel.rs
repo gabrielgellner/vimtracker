@@ -1,5 +1,5 @@
 //! The macro panel (decision 385): a strip at the bottom of the screen with the cursor's track's
-//! eight macros, as the Gen page's band has them, so they can be turned from any page. `Space t`
+//! eight macros, as the Macros page's band has them, so they can be turned from any page. `Space t`
 //! shows it or hides it, and the pages give up its rows while it shows. `Space T` puts the keys in
 //! it, showing it if it's hidden: `h` and `l` go between the macros, `=` `-` `+` `_`, `x`, `i` and
 //! the wheel turn the one the keys are on, as the band's keys do, and `Esc` gives the keys back to
@@ -235,7 +235,7 @@ impl Overlay for MacroPanel {
 }
 
 /// What the status line names while the keys are in the panel: the macro its cursor is on, as
-/// the Gen page's band names it.
+/// the Macros page's band names it.
 pub(crate) fn column(panel: &MacroPanel, services: &Services) -> String {
     let at = panel.control();
     match services.track_here() {

@@ -9,8 +9,9 @@ use vt_model::lane::{LANE_RATES, Lane};
 use vt_model::macros::MacroTarget;
 use vt_model::settings::SettingId;
 use vt_tui::app::App;
-use vt_tui::controls::{Control, LaneField, Page};
+use vt_tui::controls::{Control, LaneField};
 use vt_tui::input::mode::Mode;
+use vt_tui::input::mode::View;
 
 use crate::common::*;
 
@@ -33,9 +34,8 @@ fn on_gen_page(with_lane: bool) -> (App, Realtime) {
     if with_lane {
         command(&mut app, "lane 4");
     }
-    keys(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Macros);
-    keys(&mut app, "}");
+    keys(&mut app, " 8");
+    assert_eq!(app.modes.view, View::Gen);
     (app, realtime)
 }
 

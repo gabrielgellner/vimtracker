@@ -304,9 +304,9 @@ impl Overlay for GenTokens {
 }
 
 impl crate::app::App {
-    /// Give the Gen page's buffer a key.
+    /// Give the buffer open on the Gen page, or on the Mod page's Steps slot, a key.
     pub(crate) fn gen_tokens_key(&mut self, key: Key, now: std::time::Instant) {
-        let Some(mut tokens) = self.track_page.tokens.take() else {
+        let Some(mut tokens) = self.rack_mut().tokens.take() else {
             self.modes.mode = Mode::Normal;
             return;
         };
@@ -322,16 +322,18 @@ impl crate::app::App {
             key,
             now,
         );
-        self.track_page.tokens = Some(tokens);
+        self.rack_mut().tokens = Some(tokens);
+        // What it asks for may show another view, so it's closed on both racks once it's left.
         self.settled(outcome, false);
         if self.modes.mode != Mode::Tokens {
+            self.gen_page.tokens = None;
             self.track_page.tokens = None;
         }
     }
 
-    /// The Gen page's buffer closed, back on its cell.
+    /// The buffer closed, back on its cell.
     pub(crate) fn leave_gen_tokens(&mut self) {
-        self.track_page.tokens = None;
+        self.rack_mut().tokens = None;
         self.modes.mode = Mode::Normal;
     }
 }

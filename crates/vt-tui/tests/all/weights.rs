@@ -8,7 +8,7 @@ use vt_model::macros::{GenColumn, MacroTarget};
 use vt_model::shape::{FillKind, GenParam};
 use vt_model::step::Note;
 use vt_tui::app::App;
-use vt_tui::controls::Page;
+use vt_tui::input::mode::View;
 use vt_tui::screen::describe;
 
 use crate::common::{
@@ -176,8 +176,8 @@ fn the_gen_pages_weights_are_the_panels_digits_and_take_a_macro_each() {
     assert!(app.overlays.shape.is_none(), "kept live");
     let live = |app: &App| app.song().tracks[0].phrases[&0].generators()[0].shape;
     assert_eq!(live(&app).random.weights[..5], [0xE, 0xF, 0xF, 0xF, 0xF]);
-    keys(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Macros);
+    keys(&mut app, " 8");
+    assert_eq!(app.modes.view, View::Gen);
     for _ in 0..12 {
         if here(&app) == Some(GenParam::Weight1) {
             break;

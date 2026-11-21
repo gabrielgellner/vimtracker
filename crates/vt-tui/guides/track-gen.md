@@ -1,14 +1,19 @@
 <!-- ANCHOR: before-gen -->
-# The Macros page, Gen and presets
+# Gen, the Macros page and presets
 
-The fourth page, after FX, is Macros, `Space 8`. At its top are the track's eight macros, and
-under them every setting the cursor's macro holds (see **Macros**). Under those, for now, is
-Gen: the live columns of the phrase under the cursor, the one `gl` reopens, as devices you
-turn as you would a filter, then `Phrase`. The page's title names the phrase, `Phrase 00`,
-and adds `▶ 02`, dim, while the track is playing another. A fixed track has no phrases, so
-its page has only the macros.
+Gen is the phrase view's second page, after the grid, `Space 8`: the live columns of the phrase
+under the cursor, the one `gl` reopens, as devices you turn as you would a filter, then
+`Phrase`. Its title names the track and the phrase view's two pages, `Track 01  Grid  Gen`, then
+the phrase, `Phrase 00`, and `▶ 02`, dim, while the track is playing another. `H` goes back to
+the grid, as it goes back a page on the track page, and `Space 8` comes back to Gen where you
+left it; `Space 3` goes to the grid too. In the grid `H` and `L` stay Vim's top and bottom of
+the screen. The view picker lists it as `phrase: gen`. A fixed track has no phrases, so on one
+Gen says so and has nothing to turn.
 
-Each live column is a device, under the macros, in the phrase view's order: Note, Velocity, Nudge,
+The track's eight macros are the track page's, on its fourth page, Macros, `L` from FX (see
+**Macros**).
+
+Each live column is a device, in the phrase view's order: Note, Velocity, Nudge,
 Length, then the FX columns. Its title is its fill and its `Where`, as `K` chooses
 them, `Acid`'s `Pitches` after them and a `Follow`'s source in place of the
 `Where`, a `Variation`'s and a `Ring`'s fill alone, as each makes its rows with
@@ -137,7 +142,7 @@ phrase as it is, so it changes as you turn a setting or edit a row.
 What a fill's settings do together, and recipes for the ones with the most, are in
 **Generators in depth**.
 <!-- ANCHOR_END: before-gen -->
-<!-- ANCHOR: before-panel -->
+<!-- ANCHOR: before-macros -->
 
 | Keys | Does |
 |---|---|
@@ -149,6 +154,8 @@ What a fill's settings do together, and recipes for the ones with the most, are 
 | `Space g a` | Apply it, as plain values; with `Vary` on, keep the pass heard |
 | `dd` | To nothing; on `Fill`, take it away, putting back what was under it |
 | `Enter` | Open the shape panel on it, in the phrase view, as `gl` does |
+| `H` | Back to the grid, where `Space 8` comes back from |
+| `M` `gm` `gd` | Map it to a macro, see its mapping, or go to its macro |
 
 **A new variation each pass.** A fill that draws from its seed, `Random`, `Walk`,
 `1/f`, `Acid`, `Shuffle`, `Grids` (its `Chaos`), `Divisions` (its dice), `Variation`, a
@@ -225,7 +232,8 @@ above its `Max` turns that setting the other way. A mapping can act over part of
 its zone, so one macro can be a knob with a different job on each side of its middle. A setting
 is on one macro at most.
 
-The `Macros` band, first on the Macros page, has the eight in two rows of four, each with its
+The Macros page, the track page's fourth, `L` from FX, the view picker's `macros` or `gd` on
+a setting a macro holds, is the `Macros` band: the eight in two rows of four, each with its
 name, its value in four digits and a bar. `=` `-` `+` `_` turn one, `i` types it, `x` takes it
 to `00`, and the status line says what it holds. A macro is named after the first setting it
 holds until you name it.
@@ -233,9 +241,10 @@ holds until you name it.
 Under the band is every setting the macro under the cursor holds, a row each, as `gm` lists
 them: its name, its `Min` and `Max`, its `Curve` and `S`, and its `Zone`, a straight response
 and the whole turn dim. The band's title says which macro it is and how many it holds,
-`· Macro 2 Bite, 3 mappings`. With the cursor on a setting under the band, a generator's, it
-lists the macro holding that setting, if one does. The list is as tall as the macro holding
+`· Macro 2 Bite, 3 mappings`. The list is as tall as the macro holding
 the most needs, so the page doesn't move as you go along the band; `gm` opens it to edit.
+<!-- ANCHOR_END: before-macros -->
+<!-- ANCHOR: before-panel -->
 
 | Keys | Does |
 |---|---|

@@ -8,7 +8,7 @@ use vt_model::shape::{DrumPart, FillKind, GenParam};
 use vt_model::song::{Machine, Phrase, Song, SynthVoice};
 use vt_model::step::{MAX_VELOCITY, Note, Step};
 use vt_tui::app::App;
-use vt_tui::controls::Page;
+use vt_tui::input::mode::View;
 
 use crate::common::*;
 
@@ -177,7 +177,7 @@ fn a_live_grids_on_the_gen_page_is_named_by_its_part() {
     keys(&mut app, "L");
     assert_eq!(rhythm(&app, 0), BEAT[1]);
     keys(&mut app, " 8");
-    assert_eq!(app.track_page.page, Page::Macros);
+    assert_eq!(app.modes.view, View::Gen);
     let text = fx_page_text(&app).join("\n");
     assert!(text.contains("Grids  SD  Once · Note 00–0F"), "{text}");
     for setting in ["X", "Y", "Chaos", "SD fill", "Note", "Rows"] {

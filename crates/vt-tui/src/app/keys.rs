@@ -286,10 +286,10 @@ impl App {
         self.held.started = None;
         // The Gen page shows the phrase under the cursor, wherever a key or the time between
         // keys has moved it.
-        self.track_page.phrase = self.services.phrase_id();
+        self.gen_page.phrase = self.services.phrase_id();
         self.handle_key(key, now);
         self.keep_cursor_shown();
-        self.track_page.phrase = self.services.phrase_id();
+        self.gen_page.phrase = self.services.phrase_id();
         // Something that lasts while its key is down is tied to that key, and doesn't repeat.
         // One already held ends as if let go now, as only one is kept.
         if let Some(what) = self.held.started.take() {
@@ -325,6 +325,7 @@ impl App {
             | Mode::VisualStep
             | Mode::Chain
             | Mode::Track
+            | Mode::Gen
             | Mode::Mixer
             | Mode::Song
             | Mode::Audio
@@ -473,6 +474,7 @@ impl App {
     pub fn key_scope(&self) -> Mode {
         match (self.modes.mode, self.modes.view) {
             (Mode::Keys | Mode::Normal, View::Track) => Mode::Track,
+            (Mode::Normal, View::Gen) => Mode::Gen,
             (Mode::Normal, View::Chain) => Mode::Chain,
             (Mode::Normal, View::Mixer) => Mode::Mixer,
             (Mode::Normal, View::Audio) => Mode::Audio,
@@ -503,16 +505,22 @@ impl App {
         {
             self.services.status = why;
         }
+        // Gen shows the phrase under the cursor, its cursor where it was left (decision 466).
+        if view == View::Gen {
+            self.gen_page.phrase = self.services.phrase_id();
+            let song = Arc::clone(self.song());
+            self.gen_page
+                .settle(song.tracks.get(self.services.cursor.track));
+        }
     }
 
-    /// `Space 5` to `Space 8`: the track page on one of its pages, where its cursor was left, as a
+    /// `Space 5` to `Space 7`, and `L` on to Macros: the track page on one of its pages, where its cursor was left, as a
     /// jump `C-o` comes back from. It's `App`'s, as it records the jump and shows the view.
     pub(crate) fn show_track_page(&mut self, page: Page) {
         if self.modes.view != View::Track || self.track_page.page != page {
             self.record_jump();
         }
         self.track_page.show(page);
-        self.track_page.phrase = self.services.phrase_id();
         let song = Arc::clone(self.song());
         self.track_page
             .settle(song.tracks.get(self.services.cursor.track));
@@ -545,9 +553,13 @@ impl App {
                 .map_or_else(String::new, |binding| shown(binding.keys))
         };
         let shown = self.track_page.page;
+        // The Macros page has no key of its own: it's `L` from FX (decision 466).
         let page_item = |page: Page| {
-            Item::new(page.name().to_lowercase(), Pick::TrackPage(page))
-                .meaning(key(Cmd::ShowTrackPage(page)))
+            let meaning = match page {
+                Page::Macros => format!("{}, L", key(Cmd::ShowTrackPage(Page::Fx))),
+                page => key(Cmd::ShowTrackPage(page)),
+            };
+            Item::new(page.name().to_lowercase(), Pick::TrackPage(page)).meaning(meaning)
         };
         let mut items: Vec<Item> = self
             .recent_views

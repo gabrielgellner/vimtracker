@@ -12,7 +12,7 @@ use vt_model::song::{Phrase, Song};
 use vt_model::speed::Speed;
 use vt_model::step::Step;
 use vt_tui::app::App;
-use vt_tui::controls::Page;
+use vt_tui::input::mode::View;
 
 use crate::common::*;
 
@@ -152,9 +152,8 @@ fn the_gen_page_has_the_rhythm_its_part_and_child() {
     down_to(&mut app, GenParam::Where);
     keys(&mut app, "K/rhythm<Enter>L");
     assert_eq!(generators(&app, 0)[0].shape.place, son(Role::Bell, 100));
-    keys(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Macros);
-    keys(&mut app, "}k");
+    keys(&mut app, " 8");
+    assert_eq!(app.modes.view, View::Gen);
     let text = fx_page_text(&app).join("\n");
     assert!(text.contains("Ramp  Rhythm  Once"), "{text}");
     for expected in ["Son clave", "Bell", "100%"] {

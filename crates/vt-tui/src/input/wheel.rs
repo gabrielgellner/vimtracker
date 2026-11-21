@@ -735,9 +735,9 @@ impl App {
         const FINE_MOST: u64 = FINE_STEPS * feel::MOST;
         let step = |finer, least, most| Some(FinerStep { finer, least, most });
         match (self.key_scope(), self.modes.view) {
-            (Mode::Track, View::Track) => {
-                let has_fine = self.track_page.has_fine_here(self.services.track_here());
-                match (has_fine, self.track_page.fine) {
+            (Mode::Track, View::Track) | (Mode::Gen, View::Gen) => {
+                let has_fine = self.rack().has_fine_here(self.services.track_here());
+                match (has_fine, self.rack().fine) {
                     (true, true) => step(Finer::Already, 1, FINE_MOST),
                     (true, false) => step(Finer::TrackFine, FINE_LEAST, FINE_MOST),
                     _ => None,
@@ -796,7 +796,7 @@ impl App {
             return None;
         }
         match (self.key_scope(), self.modes.view) {
-            (Mode::Track | Mode::Mixer, _) => {
+            (Mode::Track | Mode::Mixer | Mode::Gen, _) => {
                 let control = self.track_control();
                 let track = self.services.page_track_as_heard();
                 if !control.exists_on(&track) {
@@ -831,7 +831,7 @@ impl App {
     /// Puts the cursor on its setting's fine part for a tick, or back off it after.
     fn step_onto_fine(&mut self, finer: Finer, onto: bool) {
         match finer {
-            Finer::TrackFine => self.track_page.fine = onto,
+            Finer::TrackFine => self.rack_mut().fine = onto,
             Finer::PhraseFine(slot) => {
                 self.services.cursor.field = if onto {
                     Field::FxFine(slot)

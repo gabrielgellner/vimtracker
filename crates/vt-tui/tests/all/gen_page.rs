@@ -1,6 +1,7 @@
-//! The track page's Gen page: a device for each live generator of the phrase under the cursor,
-//! its settings turned, typed, listed, reset and rolled through the declared table, each turn
-//! rewriting the column as one undo step, and `Space g a`, `dd`, `Enter` and `Empty`'s `K`.
+//! The phrase view's Gen page (decision 466): a device for each live generator of the phrase
+//! under the cursor, its settings turned, typed, listed, reset and rolled through the declared
+//! table, each turn rewriting the column as one undo step, and `Space g a`, `dd`, `Enter` and
+//! `Empty`'s `K`; `Space 8` opening it and `H` going back to the grid.
 
 use vt_engine::link::Realtime;
 use vt_model::generator::Generator;
@@ -31,24 +32,102 @@ fn on_gen_page() -> (App, Realtime) {
     let (mut app, realtime) = app_with(&[E; 8]);
     keys(&mut app, "vGSjjjjjj===L");
     assert_eq!(generators(&app).len(), 1);
-    keys(&mut app, " 5LLL");
-    assert_eq!(app.track_page.page, Page::Macros);
-    // Past the macros' band, first on the page, to the generator's title.
-    assert_eq!(app.track_control(), Control::Macro(0));
-    keys(&mut app, "}k");
+    keys(&mut app, " 8");
+    assert_eq!(app.modes.view, View::Gen);
+    assert_eq!(app.gen_page.page, Page::Gen);
     (app, realtime)
 }
 
 #[test]
-fn the_page_is_fourth_and_shows_the_phrase_under_the_cursor_with_a_device_a_generator() {
+fn the_page_is_the_phrase_views_second_and_shows_the_phrase_under_the_cursor() {
     let (app, _rt) = on_gen_page();
     let text = fx_page_text(&app).join("\n");
-    assert!(text.contains(" Sound  Mod  FX  Macros "), "{text}");
+    assert!(text.contains(" Grid  Gen "), "{text}");
+    assert!(!text.contains("Macro 1"), "the macros are the track page's");
     assert!(text.contains("Phrase 00"), "{text}");
     assert!(text.contains("Ramp  Euclid · Note 00–07"), "{text}");
     assert!(text.contains("Hits"), "{text}");
     assert!(text.contains("make a column of this phrase live"), "{text}");
     assert_eq!(here(&app), Some(GenParam::Fill), "it starts on the fill");
+}
+
+/// `H` goes back to the grid, as it goes back a page on the track page, and `Space 8` comes back
+/// to where the cursor was; `L` says there's no page after it. The status line's mode is `GEN`.
+#[test]
+fn h_goes_back_to_the_grid_and_space_8_comes_back_where_it_was() {
+    let (mut app, _rt) = on_gen_page();
+    keys(&mut app, "jj$");
+    assert_eq!(here(&app), Some(GenParam::Hits));
+    assert!(status_line(&app).contains("GEN"), "{}", status_line(&app));
+    keys(&mut app, "L");
+    assert_eq!(app.modes.view, View::Gen);
+    assert!(
+        app.services.status.contains("last page"),
+        "{}",
+        app.services.status
+    );
+    keys(&mut app, "H");
+    assert_eq!(app.modes.view, View::Phrase);
+    // `H` is Vim's screen top again in the grid.
+    keys(&mut app, "H");
+    assert_eq!(app.modes.view, View::Phrase);
+    keys(&mut app, " 8");
+    assert_eq!(app.modes.view, View::Gen);
+    assert_eq!(here(&app), Some(GenParam::Hits));
+    // The track page's fourth is the macros alone.
+    keys(&mut app, " 7L");
+    assert_eq!(app.modes.view, View::Track);
+    assert_eq!(app.track_page.page, Page::Macros);
+    assert_eq!(app.track_page.devices(app.services.track_here()).len(), 1);
+    let text = fx_page_text(&app).join("\n");
+    assert!(!text.contains("Ramp"), "{text}");
+}
+
+/// The view picker lists Gen as the phrase view's, with `Space 8`, and Macros with the keys that
+/// reach it.
+#[test]
+fn the_view_picker_lists_gen_with_space_8() {
+    let (mut app, _rt) = on_gen_page();
+    keys(&mut app, " 3  ");
+    let listed: Vec<String> = app
+        .overlays
+        .picker
+        .as_ref()
+        .unwrap()
+        .items()
+        .iter()
+        .map(|item| format!("{}  {}", item.label, item.meaning))
+        .collect();
+    assert_eq!(listed[..2], ["phrase  Space 3", "phrase: gen  Space 8"]);
+    assert!(
+        listed.contains(&"macros  Space 7, L".to_owned()),
+        "{listed:?}"
+    );
+}
+
+/// A fixed track has no phrases, so Gen has no devices on it, and a key on a setting says why,
+/// turning nothing.
+#[test]
+fn on_a_fixed_track_it_says_why_and_turns_nothing() {
+    let (mut app, _rt) = app();
+    let fixed = app.song().sound_tracks();
+    app.services.cursor.track = fixed;
+    let before = std::sync::Arc::clone(app.song());
+    keys(&mut app, " 8");
+    assert!(app.gen_page.devices(app.services.track_here()).is_empty());
+    let text = fx_page_text(&app).join("\n");
+    assert!(text.contains("A fixed track has no phrases"), "{text}");
+    keys(&mut app, "=x");
+    assert!(
+        app.services.status.contains("A fixed track has no phrases"),
+        "{}",
+        app.services.status
+    );
+    assert_eq!(
+        app.song().tracks[fixed],
+        before.tracks[fixed],
+        "nothing turned"
+    );
 }
 
 #[test]
@@ -329,13 +408,13 @@ fn empty_makes_another_column_live() {
     keys(&mut app, "nudge<Enter>");
     let live = generators(&app);
     assert_eq!(live.len(), 2, "{}", app.services.status);
-    // Its device comes after the macros' and Note's, and the cursor is on it.
+    // Its device comes after Note's, and the cursor is on it.
     assert_eq!(
-        app.track_page
+        app.gen_page
             .device_cursor(app.services.track_here())
             .unwrap()
             .device,
-        2
+        1
     );
     assert!(
         matches!(app.track_control(), Control::Gen { generator: 1, .. }),
@@ -347,12 +426,10 @@ fn empty_makes_another_column_live() {
 }
 
 #[test]
-fn a_phrase_with_none_has_the_macros_phrase_and_empty() {
+fn a_phrase_with_none_has_phrase_and_empty() {
     let (mut app, _rt) = app_with(&[E; 8]);
-    keys(&mut app, " 5LLL");
-    assert_eq!(app.track_control(), Control::Macro(0));
-    assert_eq!(app.track_page.devices(app.services.track_here()).len(), 3);
-    keys(&mut app, "}");
+    keys(&mut app, " 8");
+    assert_eq!(app.gen_page.devices(app.services.track_here()).len(), 2);
     assert_eq!(
         app.track_control(),
         Control::Base(vt_model::action::TrackControl::Order),
@@ -378,18 +455,18 @@ fn each_device_has_a_preview_sent_again_only_as_its_column_changes() {
             .count()
     };
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    let first = app.track_page.images.get(PanelKey::Gen(0)).unwrap();
+    let first = app.gen_page.images.get(PanelKey::Gen(0)).unwrap();
     assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
     // Moving the cursor off it shows it dim, which is sent once, and back costs nothing.
     keys(&mut app, "}");
     assert_eq!(sync(&mut app, &mut graphics), 1);
     keys(&mut app, "{");
     assert_eq!(sync(&mut app, &mut graphics), 0);
-    assert_eq!(app.track_page.images.get(PanelKey::Gen(0)), Some(first));
+    assert_eq!(app.gen_page.images.get(PanelKey::Gen(0)), Some(first));
     // A turn of `Hits` changes the column, so it's drawn again.
     keys(&mut app, "jj$=");
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    assert_ne!(app.track_page.images.get(PanelKey::Gen(0)), Some(first));
+    assert_ne!(app.gen_page.images.get(PanelKey::Gen(0)), Some(first));
     // On screen, its box is beside the grid, and its brief value is the hits alone.
     let cells = screen_cells(&mut app).join("\n");
     assert!(
@@ -397,7 +474,7 @@ fn each_device_has_a_preview_sent_again_only_as_its_column_changes() {
         "{cells}"
     );
     assert!(cells.contains("Hits      4 "), "{cells}");
-    assert_eq!(app.track_page.gen_panels_at.len(), 1);
+    assert_eq!(app.gen_page.gen_panels_at.len(), 1);
 }
 
 #[test]
