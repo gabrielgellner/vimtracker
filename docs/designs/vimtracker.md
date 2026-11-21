@@ -1156,7 +1156,9 @@ the side form (decision 467): `TrackPage::beside` is the form, kept for the sess
 `PhraseView::gen_beside` whether the panel shows, which hides the meter, the overview, the row
 inspector and the timeline; `run::draw_screen` draws the grid in `phrase::draw::own_width` and Gen
 in the rest, and `Cmd::Window`, `Ctrl-w` and a letter, moves the keys between them
-(`app/windows.rs`).
+(`app/windows.rs`). With the panel open, `S` draws in its place (`shape::draw::draw_in_gen`), `L`
+lands in the new device, `gl` moves the panel and `gL` (`Cmd::OpenGenerator`) opens it there
+(decision 469).
 `App::run_track_pages` (`pages.rs`) hands each key to `TrackPage::key`, the page and the services
 borrowed apart, and what it passes back to `App::run_across_pages` (`pages/track.rs`), which runs
 what spans the pages itself (`/`, `M`, `gm`, the Keys mode, the Gen page's keys, `K` and `i`), and

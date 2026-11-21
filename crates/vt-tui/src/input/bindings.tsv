@@ -49,7 +49,8 @@ Normal	M-s	ToggleScale	Scale on or off
 Normal	z i	ToggleTimeline	Collapse the timeline to a line a row, or open it again
 Normal	Space i	ToggleInspector	Inspect the cursor's row beside the overview, or stop
 Normal	Space p d	Double	Double this phrase
-Normal	g l	ReopenGenerator	Open the shape panel again on the live column here
+Normal	g l	ReopenGenerator	Open the shape panel again on the live column here, or move Gen's panel to it
+Normal	g L	OpenGenerator	Gen beside the grid on the live column here, the keys in it
 Normal	Space g a	ApplyGenerator	Apply the live column here, leaving plain values
 Normal	Space g A	BakeMods	Write the pitch the mod slots played into the notes
 Normal	Space r	ToggleRecord	Record notes played in Insert, while playing

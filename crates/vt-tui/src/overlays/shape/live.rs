@@ -175,6 +175,33 @@ impl Services {
 }
 
 impl ShapePanel {
+    /// The live generator `L` kept on the cursor's track, in the phrase under the cursor: its
+    /// place in the phrase's list. Nothing if it was kept as plain values, or elsewhere.
+    pub(crate) fn kept_generator(&self, services: &Services) -> Option<usize> {
+        let track = services.cursor.track;
+        let part = self.parts.iter().find(|part| part.track == track)?;
+        if !self.kept_live || services.phrase_id() != Some(part.phrase) {
+            return None;
+        }
+        let first = part.range.first;
+        let generators = services.song().tracks[track]
+            .phrases
+            .get(&part.phrase)?
+            .generators();
+        // The one on its rows, or, on a lane, which has no rows, the column's.
+        let on_rows = generators.iter().position(|generator| {
+            generator.column == part.column
+                && generator
+                    .rows()
+                    .is_some_and(|rows| rows.first <= first && first <= rows.last)
+        });
+        on_rows.or_else(|| {
+            generators
+                .iter()
+                .position(|generator| generator.column == part.column)
+        })
+    }
+
     /// The panel open again on the live generator under the cursor, on its saved shape, or
     /// nothing, the status line saying why.
     pub(crate) fn reopen(services: &mut Services, view: View) -> Outcome {
@@ -238,6 +265,7 @@ impl ShapePanel {
             sources,
             default_source,
             kept: false,
+            kept_live: false,
         }))
     }
 }

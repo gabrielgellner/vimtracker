@@ -547,7 +547,12 @@ impl Page for PhraseView {
         (
             "g l",
             Cmd::ReopenGenerator,
-            "Open the shape panel again on the live column here",
+            "Open the shape panel again on the live column here, or move Gen's panel to it",
+        ),
+        (
+            "g L",
+            Cmd::OpenGenerator,
+            "Gen beside the grid on the live column here, the keys in it",
         ),
         (
             "Space g a",

@@ -21,7 +21,7 @@ use crate::widgets::popup;
 use crate::widgets::theme;
 use crate::widgets::token_buffer::{self, Buffer, Marks};
 use crate::widgets::tokens::{Layout, WEIGHT_CELL, buffer_hint, has_rows_line};
-use crate::widgets::value_bars::{Beside, Side};
+use crate::widgets::value_bars::{Beside, Side, ValueBars};
 
 /// Room for eight notes in a `List`'s values; a longer list shows as many as fit and how many
 /// more.
@@ -314,14 +314,41 @@ pub(crate) fn draw_with_bars(
         }
         None => {
             draw(frame, area, ctx, panel);
-            let at = beside
-                .place(&bars, Side::Right)
-                .or_else(|| beside.place(&bars, Side::Left));
-            if let Some(at) = at {
-                beside.draw(frame.buffer_mut(), &bars, at);
-            }
+            draw_bars(frame, beside, &bars);
         }
     }
+}
+
+/// Draw a column's bars right of the column, or left of it where there's no room right.
+fn draw_bars(frame: &mut Frame, beside: &Beside, bars: &ValueBars) {
+    let at = beside
+        .place(bars, Side::Right)
+        .or_else(|| beside.place(bars, Side::Left));
+    if let Some(at) = at {
+        beside.draw(frame.buffer_mut(), bars, at);
+    }
+}
+
+/// Draw the panel in Gen's panel's place beside the grid, at its top left, and the bars of the
+/// column it shapes beside the column in the grid, so neither covers the grid's columns
+/// (decision 469).
+pub(crate) fn draw_in_gen(
+    frame: &mut Frame,
+    gen_area: Rect,
+    ctx: &Ctx,
+    panel: &ShapePanel,
+    beside: &Beside,
+) {
+    if let Some(bars) = panel.value_bars(ctx) {
+        draw_bars(frame, beside, &bars);
+    }
+    draw_in(
+        frame,
+        gen_area,
+        window(gen_area, panel, Side::Left),
+        ctx,
+        panel,
+    );
 }
 
 /// Draw the panel in its window, and the row's buffer under the row where it's open.

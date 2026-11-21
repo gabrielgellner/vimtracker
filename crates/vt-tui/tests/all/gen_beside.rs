@@ -2,7 +2,9 @@
 //! 95-wide panel at the right at 163x42, with the meter, the overview, the row inspector and the
 //! timeline hidden; `Ctrl-w` `h` `l` `w` `o` `v` `c` and `Esc` between them; the form kept for
 //! the session. A text's buffer opens over the panel, under its cell, and the rows its token
-//! writes are lit in the grid beside it (decision 470).
+//! writes are lit in the grid beside it (decision 470). With the panel open, `S` draws in its
+//! place, `L` lands in the new device, `gl` moves the panel to the cursor's live column, and `gL`
+//! opens it there (decision 469).
 
 use std::sync::Arc;
 
@@ -11,6 +13,7 @@ use vt_model::shape::GenParam;
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
 use vt_tui::app::App;
+use vt_tui::controls::Control;
 use vt_tui::input::mode::{Mode, View};
 
 use crate::common::*;
@@ -399,4 +402,102 @@ fn the_buffers_token_lights_its_rows_in_the_grid_beside_it() {
     keys(&mut app, "<Enter>");
     assert_ne!(app.modes.mode, Mode::Tokens);
     assert!(lit_in_grid(&mut app).is_empty(), "none once it closes");
+}
+
+/// The live generator Gen's cursor is on, by its place in the phrase's list.
+fn gen_device(app: &App) -> Option<usize> {
+    match app.gen_page.control(app.services.track_here()) {
+        Control::Gen { generator, .. } => Some(generator),
+        _ => None,
+    }
+}
+
+/// From the grid, beside the panel, `S` on four rows of Nudge, the column after Velocity.
+fn shaping_nudge() -> (App, Realtime) {
+    let (mut app, realtime) = beside_the_grid();
+    keys(&mut app, "^whllggvjjjS");
+    assert_eq!(app.modes.mode, Mode::Shape);
+    (app, realtime)
+}
+
+/// `S` draws its box at the panel's top left, not over the grid, whose columns keep its bars.
+#[test]
+fn with_the_panel_open_s_draws_its_box_in_the_panels_place() {
+    let (mut app, _rt) = shaping_nudge();
+    let lines = screen_cells(&mut app);
+    assert_eq!(lines[2].chars().nth(68), Some('╭'), "{}", lines[2]);
+    let text = lines.join("\n");
+    let hints = lines
+        .iter()
+        .find(|line| line.contains("Enter keep  L keep live"))
+        .unwrap_or_else(|| panic!("no shape panel: {text}"));
+    assert_eq!(hints.chars().nth(68), Some('╰'), "{hints}");
+    // The grid's frame and the panel's both stand.
+    assert_eq!(lines[1].chars().nth(66), Some('╮'), "{}", lines[1]);
+    assert_eq!(lines[1].chars().nth(162), Some('╮'), "{}", lines[1]);
+    assert!(lines[2].contains('█'), "the bars stay on the grid: {text}");
+}
+
+/// `L` keeps it live and lands in its device in the panel, the keys in it; `Enter` keeps the
+/// values and leaves the keys in the grid.
+#[test]
+fn l_lands_in_the_new_device_and_enter_stays_in_the_grid() {
+    let (mut app, _rt) = shaping_nudge();
+    keys(&mut app, "L");
+    assert_eq!(app.modes.view, View::Gen);
+    assert!(app.gen_beside_shown());
+    assert_eq!(gen_device(&app), Some(1), "{}", app.services.status);
+    let (mut app, _rt) = shaping_nudge();
+    keys(&mut app, "<Enter>");
+    assert_eq!(app.modes.view, View::Phrase);
+    assert!(app.gen_beside_shown());
+}
+
+/// With the panel open, `gl` moves it to the cursor's live column's device, the keys staying in
+/// the grid and no shape panel opening. Off a live column it says so.
+#[test]
+fn with_the_panel_open_gl_moves_it_to_the_columns_device() {
+    let (mut app, _rt) = shaping_nudge();
+    keys(&mut app, "L^wh0gl");
+    assert_eq!(app.modes.view, View::Phrase);
+    assert_eq!(app.modes.mode, Mode::Normal);
+    assert!(app.overlays.shape.is_none());
+    assert_eq!(gen_device(&app), Some(0));
+    assert!(
+        app.services.status.contains("Ctrl-w l"),
+        "{}",
+        app.services.status
+    );
+    keys(&mut app, "llgl");
+    assert_eq!(gen_device(&app), Some(1));
+    keys(&mut app, "lgl");
+    assert!(
+        app.services.status.starts_with("No live column here"),
+        "{}",
+        app.services.status
+    );
+    assert_eq!(gen_device(&app), Some(1));
+    // Without the panel, `gl` opens the shape panel as it did.
+    keys(&mut app, "^wc0gl");
+    assert_eq!(app.modes.mode, Mode::Shape);
+}
+
+/// `gL` opens the side form on the live column's device, the keys in it, whichever form was last.
+#[test]
+fn gl_capital_opens_the_side_form_on_the_columns_device() {
+    let (mut app, _rt) = beside_the_grid();
+    keys(&mut app, "^wo^wc");
+    assert!(!app.gen_page.beside);
+    keys(&mut app, "lgL");
+    assert!(
+        app.services.status.starts_with("No live column here"),
+        "{}",
+        app.services.status
+    );
+    assert_eq!(app.modes.view, View::Phrase);
+    keys(&mut app, "0gL");
+    assert_eq!(app.modes.view, View::Gen);
+    assert!(app.gen_beside_shown());
+    assert!(app.gen_page.beside);
+    assert_eq!(gen_device(&app), Some(0));
 }

@@ -751,6 +751,9 @@ impl App {
                 let times = self.modes.count.take().unwrap_or(1).max(1);
                 self.jump_to_next_mark(key == SampleKey::NextMark, times);
             }
+            // With Gen's panel beside the grid, the panel moves to the column's device instead.
+            Cmd::ReopenGenerator if self.gen_to_here() => {}
+            Cmd::OpenGenerator => self.open_gen_here(),
             Cmd::ReopenGenerator => {
                 let outcome = ShapePanel::reopen(&mut self.services, self.modes.view);
                 self.settled(outcome, false);

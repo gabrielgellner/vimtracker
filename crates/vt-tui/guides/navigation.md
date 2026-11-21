@@ -113,10 +113,16 @@ two:
 | `Ctrl-w o` | Gen as the whole page, with its previews and the meter |
 | `Ctrl-w v` | Gen beside the grid again; from the grid, the keys stay |
 | `Ctrl-w c` | Close Gen: the grid as it was, the meter back |
+| `gl` | The panel to the live column's device, keys staying |
+| `gL` | The panel open on the live column's device, keys in it |
 
 With the keys in the grid, every grid key works as it does, and the panel stays in view; with them
-in the panel, they're Gen's (see the Gen guide). The status line's mode, `NORMAL` or `GEN`, and the
-bold `Grid` or `Gen` in the title say which has them. While the keys are in the grid the panel
+in the panel, they're Gen's (see the Gen guide). `gl` moves the panel rather than opening the shape
+panel, which shows nothing the device doesn't, and `gL` opens the side form whichever you used
+last. `S` still opens the shape panel on a selection, drawn at the top left of Gen's panel so the
+grid's columns stay in view; `L` there lands in the new generator's device with the keys in the
+panel, and `Enter` or `Esc` leaves them in the grid. The status line's mode, `NORMAL` or `GEN`, and
+the bold `Grid` or `Gen` in the title say which has them. While the keys are in the grid the panel
 follows its cursor, onto the device of the column it's on, and while they're in the panel its
 device lights its rows in the grid and shows its column's values as bars (see the Gen guide).
 `Space 8` opens Gen in the form you used last, kept until you quit, and `Space 3` goes to the grid
