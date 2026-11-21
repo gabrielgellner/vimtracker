@@ -2,7 +2,8 @@
 # The meter
 
 The column on the right of the screen shows the main output, going into the
-limiter. It hides on a very narrow terminal.
+limiter. It hides on a very narrow terminal, and while Gen's panel is beside the phrase
+view's grid, which takes its room (see **Beside the grid** in the navigation guide).
 
 ```
 /\/\/\          the scope

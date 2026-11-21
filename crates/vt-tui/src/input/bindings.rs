@@ -239,6 +239,27 @@ pub enum Cmd {
     ToggleDescription,
     /// A key of the macro panel, while the keys are in it.
     InMacros(MacroKey),
+    /// One of Vim's window keys, `Ctrl-w` and a letter, between the phrase view's grid and Gen
+    /// beside it (decision 467).
+    Window(Window),
+}
+
+/// What a window key, `Ctrl-w` and a letter, does on the phrase view, where Gen is a panel beside
+/// the grid or the whole page (decision 467).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Window {
+    /// `Ctrl-w h`, and `Esc` in the panel: the keys to the grid.
+    Grid,
+    /// `Ctrl-w l`: the keys to Gen, opening it if it isn't.
+    Gen,
+    /// `Ctrl-w w`: the keys to whichever of the two hasn't them.
+    Other,
+    /// `Ctrl-w o`: Gen as the whole page, the full form.
+    Only,
+    /// `Ctrl-w v`: Gen beside the grid, the side form.
+    Split,
+    /// `Ctrl-w c`: Gen closed, the grid as it was.
+    Close,
 }
 
 /// One row of the table.
@@ -385,6 +406,39 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ),
 ];
 
+/// Vim's window keys between the phrase view's grid and Gen, in both (decision 467).
+const WINDOWS: &[(&str, Cmd, &str)] = &[
+    (
+        "C-w h",
+        Cmd::Window(Window::Grid),
+        "Keys to the grid, Gen's panel staying beside it",
+    ),
+    (
+        "C-w l",
+        Cmd::Window(Window::Gen),
+        "Keys to Gen, beside the grid or the whole page",
+    ),
+    (
+        "C-w w",
+        Cmd::Window(Window::Other),
+        "Keys to the other of the grid and Gen",
+    ),
+    ("C-w o", Cmd::Window(Window::Only), "Gen as the whole page"),
+    ("C-w v", Cmd::Window(Window::Split), "Gen beside the grid"),
+    (
+        "C-w c",
+        Cmd::Window(Window::Close),
+        "Close Gen, the grid as it was",
+    ),
+];
+
+/// `Esc` in Gen's panel beside the grid, as from the macro panel (decision 467).
+const GEN_ESC: &[(&str, Cmd, &str)] = &[(
+    "Esc",
+    Cmd::Window(Window::Grid),
+    "Beside the grid, keys back to it, the panel staying",
+)];
+
 /// What `Space d` does, wherever it's bound: on the pages, in the shape panel and in the macro
 /// panel.
 pub(crate) const DESCRIBE: &str = "Describe the setting under the cursor, or stop";
@@ -438,6 +492,7 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Normal, PhraseView::MOTIONS);
     add(Mode::Normal, PhraseView::VIEWPORT);
     add(Mode::Normal, PhraseView::KEYS);
+    add(Mode::Normal, WINDOWS);
     add(Mode::Normal, FOLDS);
     add(Mode::Normal, EVERY_VIEW);
     add(Mode::Insert, PhraseView::INSERT_NOTE);
@@ -448,6 +503,8 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Track, FOLDS);
     add(Mode::Track, EVERY_VIEW);
     add(Mode::Gen, TrackPage::GEN_KEYS);
+    add(Mode::Gen, WINDOWS);
+    add(Mode::Gen, GEN_ESC);
     add(Mode::Gen, FOLDS);
     add(Mode::Gen, EVERY_VIEW);
     add(Mode::Song, SongView::KEYS);

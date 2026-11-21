@@ -803,8 +803,9 @@ fn a_generators_settings() {
         app.gen_page.control_here(&app.ctx()),
         Control::Gen { .. }
     ));
+    // Beside the grid, the devices start under the panel's title (decision 467).
     assert_drawn(
-        &cut(&page(&app), Rect::new(0, 2, 110, 8)),
+        &cut(&page(&app), Rect::new(0, 1, 110, 8)),
         &[
             "╭─ Ramp  Euclid · Note 00–07 ─────────────────────────────────────────────────────────────────────────────────",
             "aabccccbbccccccbbbbbbbbbbbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

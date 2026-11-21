@@ -120,9 +120,9 @@ fn an_edit_on_one_tracks_gen_page_is_made_on_all() {
     keys(&mut app, "K/mini<Enter>");
     down_to(&mut app, GenParam::MiniText);
     keys(&mut app, "Sbd sn hh .<Enter>L");
-    // To the third track's Gen page.
+    // To the third track's Gen page, the whole page.
     app.services.cursor.track = 2;
-    keys(&mut app, " 8");
+    keys(&mut app, " 8^wo");
     to_cell(&mut app, GenParam::MiniText);
     let depth = app.services.history.undo_depth();
     keys(&mut app, "Shh hh sn bd<Enter>");

@@ -12,7 +12,7 @@ use vt_model::song::{Track, TrackKind};
 
 use crate::controls::{Control, DEVICE_COLUMNS, DeviceSpec, Page};
 use crate::graphics::PanelKey;
-use crate::input::mode::Mode;
+use crate::input::mode::{Mode, View};
 use crate::pages::Ctx;
 use crate::pages::phrase::draw::level_glyph;
 use crate::pages::track::TrackPage;
@@ -439,7 +439,10 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx) -
     let bold = Style::new().add_modifier(Modifier::BOLD);
     // The track page's four pages, or on Gen the phrase view's two, the grid's and Gen's
     // (decision 466).
+    // Beside the grid, whose own title names the grid, Gen's names itself alone, bold while the
+    // keys are in it (decision 467).
     let names: Vec<(&str, bool)> = match page.page {
+        Page::Gen if page.beside => vec![("Gen", ctx.view() == View::Gen)],
         Page::Gen => vec![("Grid", false), ("Gen", true)],
         shown => Page::ALL
             .iter()
@@ -468,18 +471,22 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx) -
         TrackKind::Group(_) => group::style(ctx.song(), ctx.cursor().track).unwrap_or_default(),
         _ => theme::dim(),
     };
-    let mut title = vec![
-        Span::styled(format!("{} ", glyphs::track(track)), icon),
-        Span::styled(lead, bold),
-    ];
-    title.extend(role::ruled(ctx.song(), ctx.cursor().track, &name, bold));
-    title.push(Span::styled(" ", bold));
-    // A track in a group carries its mark, in the group's colour, as on the mixer.
-    if let Some(mark) = group::mark(ctx.song(), ctx.cursor().track) {
-        title.extend([mark.patch_style(bold), Span::raw(" ")]);
-    }
-    if let Some((glyph, style)) = level_glyph(ctx, ctx.cursor().track) {
-        title.push(Span::styled(format!("{glyph} "), style));
+    let mut title = vec![];
+    // Beside the grid, the grid's title names the track.
+    if !page.beside {
+        title.extend([
+            Span::styled(format!("{} ", glyphs::track(track)), icon),
+            Span::styled(lead, bold),
+        ]);
+        title.extend(role::ruled(ctx.song(), ctx.cursor().track, &name, bold));
+        title.push(Span::styled(" ", bold));
+        // A track in a group carries its mark, in the group's colour, as on the mixer.
+        if let Some(mark) = group::mark(ctx.song(), ctx.cursor().track) {
+            title.extend([mark.patch_style(bold), Span::raw(" ")]);
+        }
+        if let Some((glyph, style)) = level_glyph(ctx, ctx.cursor().track) {
+            title.push(Span::styled(format!("{glyph} "), style));
+        }
     }
     title.extend(tabs);
     if page.page == Page::Gen
@@ -491,7 +498,12 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx) -
         }
     }
     let mut rest = area;
-    frame.render_widget(Paragraph::new(Line::from(title)), take_top(&mut rest, 2));
+    // Beside the grid, the devices start level with the grid's frame.
+    let title_rows = if page.beside { 1 } else { 2 };
+    frame.render_widget(
+        Paragraph::new(Line::from(title)),
+        take_top(&mut rest, title_rows),
+    );
     match page.page {
         Page::Sound => sound::draw(frame, rest, page, ctx, track),
         Page::Fx => draw_fx(frame, rest, page, ctx, track),

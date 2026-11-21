@@ -73,7 +73,7 @@ pub(super) struct TrackCells<'a> {
 impl<'a> TrackCells<'a> {
     pub(super) fn new(page: &'a TrackPage, ctx: &'a Ctx<'a>, track: &'a Track) -> Self {
         Self {
-            here: Some(page.control_here(ctx)),
+            here: page.has_keys(ctx).then(|| page.control_here(ctx)),
             fine: page.fine,
             ctx,
             track,

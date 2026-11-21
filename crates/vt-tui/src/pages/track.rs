@@ -150,6 +150,10 @@ pub struct TrackPage {
     pub after_trim: [Held; 2],
     /// The Gen page setting whose tokens the cursor is in, after `l` on it (decision 459).
     pub tokens: Option<GenTokens>,
+    /// Gen's form, kept for the session: beside the grid, the side form it starts in, or the
+    /// whole page (decision 467). Beside the grid it draws no previews, as the grid's column is
+    /// beside it, and a device whose columns don't fit takes the four-column cells.
+    pub beside: bool,
 }
 
 impl Default for TrackPage {
@@ -174,18 +178,26 @@ impl Default for TrackPage {
             reduction_history: ReductionHistory::default(),
             after_trim: [Held::new(FLOOR_DB); 2],
             tokens: None,
+            beside: false,
         }
     }
 }
 
 impl TrackPage {
     /// The phrase view's Gen page, a rack of its own on [`Page::Gen`], which it never leaves
-    /// (decision 466).
+    /// (decision 466), beside the grid to begin with (decision 467).
     pub fn on_gen_page() -> Self {
         Self {
             page: Page::Gen,
+            beside: true,
             ..Self::default()
         }
+    }
+
+    /// Whether the keys are in the page as it's drawn: always, but for Gen beside the grid while
+    /// they're in the grid, which draws no cursor in it then (decision 467).
+    pub(crate) fn has_keys(&self, ctx: &Ctx) -> bool {
+        !self.beside || ctx.view() == View::Gen
     }
 
     /// The page's devices, or none with no track. An FX slot turned to its second page has that

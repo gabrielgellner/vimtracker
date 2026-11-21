@@ -70,6 +70,12 @@ Normal	] r	RotateLoop(1)	Rotate the loop's steps later
 Normal	[ r	RotateLoop(-1)	Rotate the loop's steps earlier
 Normal	g s	StartLoopHere	Start the loop on this step
 Normal	g e	EndLoopHere	End the loop on this step
+Normal	C-w h	Window(Grid)	Keys to the grid, Gen's panel staying beside it
+Normal	C-w l	Window(Gen)	Keys to Gen, beside the grid or the whole page
+Normal	C-w w	Window(Other)	Keys to the other of the grid and Gen
+Normal	C-w o	Window(Only)	Gen as the whole page
+Normal	C-w v	Window(Split)	Gen beside the grid
+Normal	C-w c	Window(Close)	Close Gen, the grid as it was
 Normal	z a	ToggleFold	Fold this group, or the one this track is in, or open it
 Normal	z M	FoldAll(true)	Fold every group
 Normal	z R	FoldAll(false)	Open every group, the empty ones too
@@ -330,6 +336,13 @@ Gen	K	PickValue	Choose this setting from a list
 Gen	a	Append	Type; on a text, its buffer typing at the end, keeping it
 Gen	S	Retype	Type; on a text, its buffer typing it all again
 Gen	c c	Retype	Type; on a text, its buffer typing it all again
+Gen	C-w h	Window(Grid)	Keys to the grid, Gen's panel staying beside it
+Gen	C-w l	Window(Gen)	Keys to Gen, beside the grid or the whole page
+Gen	C-w w	Window(Other)	Keys to the other of the grid and Gen
+Gen	C-w o	Window(Only)	Gen as the whole page
+Gen	C-w v	Window(Split)	Gen beside the grid
+Gen	C-w c	Window(Close)	Close Gen, the grid as it was
+Gen	Esc	Window(Grid)	Beside the grid, keys back to it, the panel staying
 Gen	z a	ToggleFold	Fold this group, or the one this track is in, or open it
 Gen	z M	FoldAll(true)	Fold every group
 Gen	z R	FoldAll(false)	Open every group, the empty ones too

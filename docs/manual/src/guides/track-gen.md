@@ -1,6 +1,8 @@
 {{#include ../../../../crates/vt-tui/guides/track-gen.md:before-gen}}
 
-![Gen, Space 8, on the phrase view: a live Acid on the Note column, its settings on the left and the notes it writes on the right, a dot on the one playing. Its Spread is on macro 2, so its bar shows that macro's range faint behind it, and so is its Vary, Once in its title, which has no bar, so a faint dot follows it](../images/track-gen.svg)
+![Gen as the whole page, Ctrl-w o from beside the grid: a live Acid on the Note column, its settings on the left and the notes it writes on the right, a dot on the one playing. Its Spread is on macro 2, so its bar shows that macro's range faint behind it, and so is its Vary, Once in its title, which has no bar, so a faint dot follows it](../images/track-gen.svg)
+
+![Gen beside the grid, as Space 8 opens it: the phrase's own columns on the left, an acid line live on the Note column, and on the right the 95-wide panel with the Acid's settings, Phrase and Empty under it, with no meter and no other tracks' columns](../images/gen-beside.svg)
 
 {{#include ../../../../crates/vt-tui/guides/track-gen.md:before-macros}}
 

@@ -28,7 +28,7 @@ fn live_rhythm() -> (App, Realtime) {
     let (mut app, realtime) = app_for(song);
     keys(&mut app, "vGS");
     down_to(&mut app, GenParam::Where);
-    keys(&mut app, "K/rhythm<Enter>L 8");
+    keys(&mut app, "K/rhythm<Enter>L 8^wo");
     (app, realtime)
 }
 

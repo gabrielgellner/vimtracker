@@ -505,12 +505,10 @@ impl App {
         {
             self.services.status = why;
         }
-        // Gen shows the phrase under the cursor, its cursor where it was left (decision 466).
+        // Gen shows the phrase under the cursor, its cursor where it was left (decision 466), in
+        // the form it was last in (decision 467).
         if view == View::Gen {
-            self.gen_page.phrase = self.services.phrase_id();
-            let song = Arc::clone(self.song());
-            self.gen_page
-                .settle(song.tracks.get(self.services.cursor.track));
+            self.gen_form_shown();
         }
     }
 
@@ -733,6 +731,7 @@ impl App {
             Cmd::ToggleMacroPanel => self.toggle_macro_panel(),
             Cmd::FocusMacroPanel => self.focus_macro_panel(),
             Cmd::ToggleDescription => self.overlays.describing = !self.overlays.describing,
+            Cmd::Window(key) => self.window(key),
             Cmd::Shape => self.open_shape(),
             // The sample page's marks: `'` and `m` wait for a letter, as an operator waits for a
             // motion, and `]'` and `['` are jumps, the jump list's.

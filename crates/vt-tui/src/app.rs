@@ -52,6 +52,7 @@ pub mod recording;
 mod sampling;
 pub(crate) mod tracks;
 pub(crate) mod tree;
+mod windows;
 
 /// A run of steps and columns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
