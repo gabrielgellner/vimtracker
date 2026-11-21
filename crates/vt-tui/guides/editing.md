@@ -1127,7 +1127,7 @@ keeps a cell so it fits; any other text is drawn as it's typed, brackets, commas
 ```
 
 The text is coloured by what each token is, in the buffer and on its cell, as the grid colours a
-row: what writes a row is plain, as a note is; a rest, an off bit and a weight of `0`, which write
+row: what writes a row is plain, as a note is, a kit line's track names too; a rest, an off bit and a weight of `0`, which write
 nothing, are faint, as an empty cell is; a group's brackets and the commas between tokens are dim;
 and what changes the token before it, `*2`, `!`, `@3`, `?30` and a Euclid's `(3,8)`, is in the
 orange of an event FX, as `RTG` and `CHA`, which do what `*` and `?` do. Text that doesn't read is

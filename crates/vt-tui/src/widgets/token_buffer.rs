@@ -549,6 +549,36 @@ mod tests {
     }
 
     #[test]
+    fn a_kit_line_is_coloured_as_a_mini_is_its_names_hits() {
+        let names = ["BD", "SN"].map(str::to_owned);
+        let field = Field::new(
+            GrammarId::Mini.grammar(),
+            "bd*2 [. sn] bd(3,8)",
+            ShapeColumn::Velocity,
+        )
+        .in_kit(&names);
+        let pieces: Vec<(String, Style)> = cell_line(&field, None, 128, None)
+            .into_iter()
+            .map(|span| (span.content.into_owned(), span.style))
+            .collect();
+        let change = Some(theme::PEACH);
+        assert_eq!(style_of(&pieces, "bd"), Style::new());
+        assert_eq!(style_of(&pieces, "sn"), Style::new());
+        assert_eq!(style_of(&pieces, "."), theme::faint());
+        assert_eq!(style_of(&pieces, "["), theme::dim());
+        assert_eq!(style_of(&pieces, "*2").fg, change);
+        assert_eq!(style_of(&pieces, "3").fg, change);
+        // A name no track of the line has doesn't read.
+        let field =
+            Field::new(GrammarId::Mini.grammar(), "bd hh", ShapeColumn::Velocity).in_kit(&names);
+        let pieces: Vec<(String, Style)> = cell_line(&field, None, 128, None)
+            .into_iter()
+            .map(|span| (span.content.into_owned(), span.style))
+            .collect();
+        assert_eq!(style_of(&pieces, "hh"), theme::warning());
+    }
+
+    #[test]
     fn what_doesnt_read_is_a_warning_and_playing_goes_over_a_kind() {
         let pieces = styles(GrammarId::Rhythm, "x q", None);
         assert_eq!(style_of(&pieces, "q"), theme::warning());
