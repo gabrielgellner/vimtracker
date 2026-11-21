@@ -49,6 +49,7 @@ fn generate(song: Song, track: usize, column: ShapeColumn, span: Span, shape: Sh
             span,
             shape,
             list: Box::default(),
+            rhythm: Box::default(),
         },
     )
 }
@@ -231,6 +232,7 @@ fn context(column: ShapeColumn) -> Context<'static> {
         sources: &[],
         source: None,
         list: &[],
+        rhythm: "",
     }
 }
 
@@ -253,6 +255,7 @@ fn reshaped(song: &Song, (track, column, param, number): Hold) -> Song {
             generator,
             shape,
             list: None,
+            rhythm: None,
         },
     )
 }
@@ -412,6 +415,7 @@ fn reshape(song: &Song, shape: Shape) -> Song {
             generator: 0,
             shape,
             list: None,
+            rhythm: None,
         },
     )
 }

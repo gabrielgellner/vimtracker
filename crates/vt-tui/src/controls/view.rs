@@ -1430,6 +1430,7 @@ pub fn set(
                 generator,
                 shape,
                 list: None,
+                rhythm: None,
             }
         }
     })

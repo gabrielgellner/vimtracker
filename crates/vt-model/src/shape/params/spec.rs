@@ -210,9 +210,16 @@ impl GenParam {
             Self::Markov => rows && matches!(shape.place, Where::Markov(_)),
             Self::States => rows && matches!(shape.place, Where::States(_)),
             Self::Share | Self::Side => rows && matches!(shape.place, Where::Complementary { .. }),
-            Self::Rhythm | Self::Role | Self::Child => {
-                rows && matches!(shape.place, Where::Rhythm { .. })
-            }
+            Self::Role | Self::Child => rows && matches!(shape.place, Where::Rhythm { .. }),
+            Self::Rhythm => rows && matches!(shape.place, Where::Rhythm { .. } | Where::Own(_)),
+            // A named rhythm shows its text too, which editing makes `Own` (decision 461), but
+            // on an `Acid`, whose page has no room for it: `K` on `Rhythm` gives `Own` there.
+            Self::OwnText => match shape.place {
+                Where::Rhythm { .. } => rows && kind != FillKind::Acid,
+                Where::Own(_) => rows,
+                _ => false,
+            },
+            Self::OwnStep => rows && matches!(shape.place, Where::Own(_)),
             Self::Rule => rows && matches!(shape.place, Where::Cells(_)),
             // Across tracks, the row they start from is worked out once, for all of them.
             Self::CellStart => {
@@ -279,10 +286,14 @@ impl GenParam {
         let mut last = none;
         // What the third column has no room for: a named rhythm's `Over`, and the top of the
         // column where the fill takes it.
-        let mut spilled = [None; 2];
+        let mut spilled = [None; 3];
         if shape.kind.has_where() {
             last = Self::of_where(shape.place);
             if matches!(shape.place, crate::shape::Where::Rhythm { .. }) {
+                spilled[1] = Some(Over);
+                spilled[2] = Some(OwnText);
+            }
+            if matches!(shape.place, crate::shape::Where::Own(_)) {
                 spilled[1] = Some(Over);
             }
         }
@@ -342,6 +353,7 @@ impl GenParam {
             Where::States(_) => [over, None, Some(Self::States)],
             Where::Complementary { .. } => [None, Some(Self::Share), Some(Self::Side)],
             Where::Rhythm { .. } => [Some(Self::Rhythm), Some(Self::Role), Some(Self::Child)],
+            Where::Own(_) => [Some(Self::Rhythm), Some(Self::OwnText), Some(Self::OwnStep)],
             Where::Cells(_) => [over, Some(Self::Rule), Some(Self::CellStart)],
             Where::Notes | Where::NoNotes | Where::Commands | Where::AllRows => [None; GRID_ROWS],
         }
@@ -487,7 +499,22 @@ impl GenParam {
             },
             Self::Rhythm => match shape.place {
                 Where::Rhythm { rhythm, .. } => rhythm.name().to_owned(),
+                Where::Own(_) => OWN.to_owned(),
                 _ => String::new(),
+            },
+            Self::OwnText => match shape.place {
+                Where::Rhythm {
+                    rhythm,
+                    part,
+                    child,
+                } => crate::notation::rhythm_preset(rhythm, part, child),
+                Where::Own(_) => context.rhythm.to_owned(),
+                _ => String::new(),
+            },
+            Self::OwnStep => match number() {
+                Some(1) => "1 row".to_owned(),
+                Some(rows) => format!("{rows} rows"),
+                None => String::new(),
             },
             Self::Role => match shape.place {
                 Where::Rhythm { part, .. } => part.name().to_owned(),
@@ -724,7 +751,11 @@ impl GenParam {
             Self::Part => DrumPart::ALL.into_iter().map(Choice::Part).collect(),
             Self::Channel => Channel::ALL.into_iter().map(Choice::Channel).collect(),
             Self::Bar => Bar::ALL.into_iter().map(Choice::Bar).collect(),
-            Self::Rhythm => World::ALL.into_iter().map(Choice::World).collect(),
+            Self::Rhythm => World::ALL
+                .into_iter()
+                .map(Choice::World)
+                .chain([Choice::Own])
+                .collect(),
             Self::Role => Role::ALL.into_iter().map(Choice::Role).collect(),
             Self::CellStart => CellStart::ALL.into_iter().map(Choice::CellStart).collect(),
             Self::Moves => Moves::ALL.into_iter().map(Choice::Moves).collect(),
@@ -794,6 +825,8 @@ impl GenParam {
                 Choice::Fill(kind) => kind == shape.kind,
                 Choice::Wave(wave) => wave == shape.wave,
                 Choice::Rate(rate) => rate == shape.rate,
+                // A rhythm of your own is among the named ones.
+                Choice::Where(Where::Rhythm { .. }) if matches!(shape.place, Where::Own(_)) => true,
                 Choice::Where(place) => {
                     std::mem::discriminant(&place) == std::mem::discriminant(&shape.place)
                 }
@@ -804,6 +837,7 @@ impl GenParam {
                 Choice::World(chosen) => {
                     matches!(shape.place, Where::Rhythm { rhythm, .. } if rhythm == chosen)
                 }
+                Choice::Own => matches!(shape.place, Where::Own(_)),
                 Choice::Role(chosen) => {
                     matches!(shape.place, Where::Rhythm { part, .. } if part == chosen)
                 }
@@ -859,6 +893,9 @@ impl GenParam {
                 );
             }
             Self::MoveList => return Err("Type the moves with i, like P L R L"),
+            Self::OwnText => {
+                return Err("Type the rhythm with i, like x . [. x] x(3,8), or l to edit a token");
+            }
             _ if self.spec().typing == Typing::Listed => {
                 let choices = self.choices(context).unwrap_or_default();
                 if !choices.is_empty() {
@@ -1034,6 +1071,13 @@ impl GenParam {
             Self::Triad => shape.tonnetz.quality = Quality::default(),
             Self::Moves => shape.tonnetz.moves = Moves::default(),
             Self::MoveList => shape.tonnetz.list = MoveList::default(),
+            // The text is its generator's, so it's put back beside the shape.
+            Self::OwnText => {}
+            Self::OwnStep => {
+                if let Where::Own(own) = &mut shape.place {
+                    own.step = 1;
+                }
+            }
             Self::PWeight | Self::LWeight | Self::RWeight => {
                 let start = Shape {
                     tonnetz: Tonnetz::default(),
@@ -1200,6 +1244,11 @@ impl GenParam {
             },
             // A list is its generator's, typed with [`GenParam::typed_list`].
             Self::Values => return Err("A list's values are its generator's, typed beside it"),
+            Self::OwnText => return Err("A rhythm's text is its generator's, typed beside it"),
+            Self::OwnStep => match text.parse::<u16>() {
+                Ok(step) if (1..=u16::from(MAX_STEP)).contains(&step) => step.into(),
+                _ => return Err("Step runs from 1 to 16 rows"),
+            },
             Self::Transpose => text
                 .parse::<i16>()
                 .map_err(|_| "Transpose runs from -48 to 48")?

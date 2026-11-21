@@ -10,8 +10,8 @@
 use super::mix;
 use super::random::{Odds, degree_of, unit};
 use super::{
-    FillKind, Ladder, Over, Shape, ShapeColumn, WaveRate, Where, acid, bits, curved, divisions,
-    follow, grids, rhythm, ring, tonnetz, variation, walk, world,
+    Beat, FillKind, Ladder, Over, Shape, ShapeColumn, WaveRate, Where, acid, bits, curved,
+    divisions, follow, grids, own, rhythm, ring, tonnetz, variation, walk, world,
 };
 use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS, TICKS_PER_STEP};
 use crate::lfo::wave;
@@ -251,18 +251,39 @@ impl ShapeColumn {
     }
 }
 
+/// What a render reads that's kept on its generator, beside its `Copy` shape, as it doesn't fit
+/// in one: a `List`'s values and an `Own` rhythm's beats, borrowed so nothing is copied.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Texts<'a> {
+    pub list: &'a [u8],
+    pub rhythm: &'a [Beat],
+}
+
+impl<'a> Texts<'a> {
+    /// None, for a shape that keeps nothing beside it.
+    pub const NONE: Texts<'static> = Texts {
+        list: &[],
+        rhythm: &[],
+    };
+
+    /// A `List`'s values alone.
+    pub fn list(list: &'a [u8]) -> Self {
+        Self { list, rhythm: &[] }
+    }
+}
+
 /// Write a shape's cells for `range` into `cells`, the first for its first row, allocating
 /// nothing. `cells` holds one for each row of the range, up to `MAX_PHRASE_STEPS`; a row it has no
 /// room for isn't rendered. Each is what the shape leaves on that row, or `Under` where it leaves
-/// the row alone. A `List` goes through `list`, its generator's values, borrowed so nothing is
-/// copied; any other shape is given none. A `Follow` reads `source`, the loop of the phrase it
+/// the row alone. A `List` goes through `texts`' list, its generator's values, and an `Own` rhythm
+/// plays `texts`' beats, borrowed so nothing is copied; any other shape is given none. A `Follow` reads `source`, the loop of the phrase it
 /// follows, and with none leaves every row alone.
 pub fn render_into(
     steps: &[Step],
     range: StepRange,
     column: ShapeColumn,
     shape: &Shape,
-    list: &[u8],
+    texts: Texts,
     source: Option<&[Step]>,
     cells: &mut [GenCell],
 ) {
@@ -271,7 +292,7 @@ pub fn render_into(
         range,
         column,
         shape,
-        list,
+        texts,
         source,
         cells,
         |_, _, _| {},
@@ -295,7 +316,7 @@ pub fn render_tokens_into(
     range: StepRange,
     column: ShapeColumn,
     shape: &Shape,
-    list: &[u8],
+    texts: Texts,
     source: Option<&[Step]>,
     cells: &mut [GenCell],
     tokens: &mut [u8],
@@ -311,7 +332,7 @@ pub fn render_tokens_into(
         range,
         column,
         shape,
-        list,
+        texts,
         source,
         cells,
         |row, value, nth| {
@@ -370,7 +391,7 @@ pub(super) fn render(
     range: StepRange,
     column: ShapeColumn,
     shape: &Shape,
-    list: &[u8],
+    texts: Texts,
     source: Option<&[Step]>,
     cells: &mut [GenCell],
     seen: impl FnMut(usize, &Shaped, Option<usize>),
@@ -388,7 +409,8 @@ pub(super) fn render(
         first: range.first,
         column,
         cells,
-        list,
+        list: texts.list,
+        rhythm: texts.rhythm,
         along: None,
         seen,
     };
@@ -450,6 +472,7 @@ pub(super) fn render(
                 shape.over,
                 shape.seed,
                 len,
+                texts.rhythm,
             );
             tonnetz::render(steps, range, column, shape, &rows, out.cells);
             tied(steps, range, column, shape, out.cells);
@@ -463,9 +486,13 @@ pub(super) fn render(
                 shape.over,
                 shape.seed,
                 len,
+                texts.rhythm,
             );
             match column {
-                ShapeColumn::Note { scale, .. } => noted(&rows, range, scale, shape, &mut out),
+                ShapeColumn::Note { scale, .. } => {
+                    noted(&rows, range, scale, shape, &mut out);
+                    ratchets(steps, range, column, shape, texts.rhythm, out.cells);
+                }
                 _ => {
                     let top = f64::from(column.highest());
                     filled(
@@ -493,6 +520,8 @@ pub(super) struct Out<'a, F> {
     pub(super) cells: &'a mut [GenCell],
     /// The values a `List` goes through.
     list: &'a [u8],
+    /// The beats an `Own` rhythm plays.
+    pub(super) rhythm: &'a [Beat],
     /// For a Note column's ramp, random fill, wave or transform, the ladder its values are
     /// positions on, and whether a value between two steps stays there rather than going to the
     /// lower.
@@ -673,6 +702,7 @@ pub(super) fn chosen(
     over: Option<Over>,
     seed: u64,
     len: usize,
+    rhythm: &[Beat],
 ) -> Rows {
     let mut rows = Rows::new(len);
     for offset in 0..rows.len {
@@ -695,7 +725,8 @@ pub(super) fn chosen(
             | Where::Clusters(_)
             | Where::Markov(_)
             | Where::States(_)
-            | Where::Cells(_) => false,
+            | Where::Cells(_)
+            | Where::Own(_) => false,
         };
         if chosen {
             rows.set(offset);
@@ -727,9 +758,55 @@ pub(super) fn chosen(
         Where::Markov(bias) => rhythm::markov(&counted(), bias, seed),
         Where::States(bias) => rhythm::states(&counted(), bias, seed).0,
         Where::Cells(cells) => cells.chosen(steps, range, seed, &counted(), len),
+        Where::Own(own) => own::chosen(rhythm, own, seed, &counted()),
         _ => rows,
     };
     writable(steps, range, column, &selected)
+}
+
+/// On the Note column, an `Own` rhythm's hits `*n` finer than a row as `RET`s on their notes.
+fn ratchets(
+    steps: &[Step],
+    range: StepRange,
+    column: ShapeColumn,
+    shape: &Shape,
+    rhythm: &[Beat],
+    cells: &mut [GenCell],
+) {
+    let Where::Own(own) = shape.place else {
+        return;
+    };
+    if !own.ratchets || !shape.kind.has_where() {
+        return;
+    }
+    let counted = over_rows(steps, range, column, shape.over, cells.len());
+    own::ratchet(
+        rhythm,
+        own,
+        shape.seed,
+        &counted,
+        (steps, range.first),
+        cells,
+    );
+}
+
+/// Which of an `Own` rhythm's hits lands on each row of the span, by its place among the hits,
+/// into `tokens`, one a row from the first, as long as the span's rows up to `MAX_PHRASE_STEPS`:
+/// [`NO_TOKEN`] where none lands, or the shape has no rhythm of its own (decision 461).
+pub fn rhythm_tokens_into(
+    steps: &[Step],
+    range: StepRange,
+    column: ShapeColumn,
+    shape: &Shape,
+    rhythm: &[Beat],
+    tokens: &mut [u8],
+) {
+    tokens.fill(NO_TOKEN);
+    let Where::Own(own) = shape.place else {
+        return;
+    };
+    let counted = over_rows(steps, range, column, shape.over, tokens.len());
+    own::hits(rhythm, own, shape.seed, &counted, tokens);
 }
 
 /// The rows a counting `Where` counts over, among the span's first `len`: every row, the rows
@@ -846,6 +923,7 @@ fn noted<F: FnMut(usize, &Shaped, Option<usize>)>(
                 column: out.column,
                 cells: &mut *out.cells,
                 list: out.list,
+                rhythm: out.rhythm,
                 along: Some((&ladder, moved)),
                 seen: &mut out.seen,
             };

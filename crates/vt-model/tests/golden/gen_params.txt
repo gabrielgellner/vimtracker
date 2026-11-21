@@ -107,6 +107,8 @@ side | Side
 rhythm | Rhythm
 role | Part
 child | Child
+own_text | Text
+own_step | Step
 rule | Rule
 start | Start
 vary | Vary

@@ -5,6 +5,7 @@ use std::fmt;
 use std::ops::Deref;
 
 use ratatui::crossterm::event::KeyCode;
+use vt_model::notation::MAX_RHYTHM;
 use vt_model::shape::params::Typing;
 use vt_model::shape::{MAX_LIST, WEIGHTS};
 
@@ -98,6 +99,10 @@ impl TypedValue {
                     && (matches!(c.to_ascii_uppercase(), 'P' | 'L' | 'R') || c == ' ') =>
             {
                 text.push(c.to_ascii_uppercase());
+            }
+            // An `Own` rhythm, Tidal's mini-notation, read as a whole once it's kept.
+            Typing::Rhythm if text.len() < MAX_RHYTHM && (c.is_ascii_graphic() || c == ' ') => {
+                text.push(c);
             }
             // A hex digit a degree, at most one for each semitone.
             Typing::Weights if c.is_ascii_hexdigit() && text.len() < WEIGHTS => {

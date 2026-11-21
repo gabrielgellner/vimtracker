@@ -137,6 +137,8 @@ pub enum Typing {
     Weights,
     /// The letters of a `Tonnetz`' moves, `P`, `L` and `R`, kept with `Enter`.
     Moves,
+    /// An `Own` rhythm's hits and rests, in Tidal's mini-notation, kept with `Enter`.
+    Rhythm,
 }
 
 impl Typing {
@@ -147,6 +149,7 @@ impl Typing {
             Self::Weights => Some(GrammarId::Weights),
             Self::HexList | Self::Named { list: true } => Some(GrammarId::List),
             Self::Moves => Some(GrammarId::Moves),
+            Self::Rhythm => Some(GrammarId::Rhythm),
             _ => None,
         }
     }

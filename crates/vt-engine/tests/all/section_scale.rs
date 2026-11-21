@@ -77,6 +77,7 @@ fn generated(second: Option<Scale>) -> Song {
             ..Shape::default()
         },
         list: Box::default(),
+        rhythm: Box::default(),
     };
     Arc::unwrap_or_clone(edit(&Arc::new(song), &generate).expect("the edit applies"))
 }

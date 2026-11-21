@@ -56,6 +56,7 @@ fn locked() -> Song {
             span: Span::rows(StepRange::between(0, 15)),
             shape: tresillo(),
             list: Box::default(),
+            rhythm: Box::default(),
         },
     );
     let hits = MacroTarget::Gen {

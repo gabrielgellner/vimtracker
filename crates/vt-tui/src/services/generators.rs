@@ -91,6 +91,7 @@ impl LiveGen {
                 sources: &self.sources,
                 source,
                 list: self.generator.list(),
+                rhythm: self.generator.rhythm(),
             })
     }
 

@@ -178,6 +178,10 @@ The tresillo's rows get the riff, a note of its own where you had none, and
 your notes off them stay as they are. Over `Notes` instead, the three hits fall
 among your notes.
 
+**A rhythm of your own.** On an empty column, Where `Rhythm`, Rhythm `Own`,
+Text `x . [. x] <x [x x]>`, Step `4 rows`. A beat a token: the riff on beat 1,
+the third sixteenth of beat 3, and on beat 4 a hit one bar and two the next.
+
 **Your line, new accents.** On notes you wrote, Fill `Acid`, Pitches `Keep`. Your
 notes and rhythm stay; `r` deals accents, slides and octaves until they fall
 right.

@@ -56,6 +56,8 @@ const MOVE_CELL: usize = 4;
 const BIT_CELL: usize = 2;
 /// The spaces between a `List`'s values in its field, so each stands apart.
 const LIST_GAP: usize = 2;
+/// The room each of an `Own` rhythm's hits and rests takes, and a space.
+const RHYTHM_CELL: usize = 2;
 
 /// How a generator setting's field is laid out, in the shape panel and on the Gen page alike.
 pub(crate) struct Layout {
@@ -87,6 +89,8 @@ impl Layout {
             }
             GenParam::MoveList => (MOVE_CELL, chords(shape, context).split_off(1)),
             GenParam::Flip | GenParam::Keep => (BIT_CELL, Vec::new()),
+            // An `Own` rhythm's tokens a space apart, as its text is typed.
+            GenParam::OwnText => (RHYTHM_CELL, Vec::new()),
             _ => (LIST_GAP + 1, Vec::new()),
         };
         let step = match param {
@@ -94,6 +98,10 @@ impl Layout {
             GenParam::Values => {
                 let longest = field.tokens().iter().map(|token| token.at.len()).max();
                 longest.unwrap_or(2) + LIST_GAP
+            }
+            GenParam::OwnText => {
+                let longest = field.tokens().iter().map(|token| token.at.len()).max();
+                longest.unwrap_or(1) + RHYTHM_CELL - 1
             }
             _ => cell,
         };

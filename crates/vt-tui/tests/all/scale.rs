@@ -317,6 +317,7 @@ fn live_ramp() -> Song {
             ..Shape::default()
         },
         list: Box::default(),
+        rhythm: Box::default(),
     };
     Arc::unwrap_or_clone(edit(&Arc::new(song), &generate).expect("the edit applies"))
 }

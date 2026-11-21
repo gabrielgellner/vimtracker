@@ -36,13 +36,13 @@ fn generators(app: &App, track: usize) -> Vec<Generator> {
 /// The panel as drawn, a line a row.
 fn drawn(app: &App) -> String {
     let panel = app.overlays.shape.clone().unwrap();
-    let backend = ratatui::backend::TestBackend::new(60, 18);
+    let backend = ratatui::backend::TestBackend::new(60, 20);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
         .draw(|frame| vt_tui::overlays::shape::draw::draw(frame, frame.area(), &app.ctx(), &panel))
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
-    (0..18)
+    (0..20)
         .map(|y| {
             let line: String = (0..60).map(|x| buffer[(x, y)].symbol()).collect();
             line.trim_end().to_owned()

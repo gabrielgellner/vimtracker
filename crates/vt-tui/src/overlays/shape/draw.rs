@@ -31,6 +31,8 @@ const AROUND_ROWS: u16 = 4;
 const FROM_TOP: u16 = 2;
 /// The room a row's label takes unless one is longer.
 const LABEL: usize = 8;
+/// Room for an `Own` rhythm's text, its tokens a space apart: sixteen pulses and some changes.
+const RHYTHM_ROOM: usize = 48;
 
 /// A row's value in spans, `room` characters at most for a `List`'s values, with a note outside
 /// the scale coloured as the grid colours it.
@@ -38,6 +40,7 @@ fn spans(panel: &ShapePanel, context: &Context, row: GenParam, room: usize) -> V
     let value = || vec![Span::raw(row.shown(&panel.shape, context))];
     let notes: Vec<u8> = match row {
         GenParam::Values => return list_spans(panel, room, None),
+        GenParam::OwnText => return vec![Span::raw(cut_end(&value()[0].content, room))],
         _ if !matches!(panel.column, ShapeColumn::Note { .. }) => return value(),
         GenParam::From => vec![panel.shape.from],
         GenParam::To => vec![panel.shape.to],
@@ -93,6 +96,15 @@ fn list_spans(panel: &ShapePanel, room: usize, lit: Option<Style>) -> Vec<Span<'
     spans
 }
 
+/// A text in `room` characters, its end cut to a `…` where it's longer.
+fn cut_end(text: &str, room: usize) -> String {
+    if text.chars().count() <= room || room < 2 {
+        return text.to_owned();
+    }
+    let head: String = text.chars().take(room - 1).collect();
+    format!("{head}…")
+}
+
 /// What's being typed, in `room` characters: its end, where the next character goes, kept in
 /// sight as a long list is typed, with `…` before it where the start is cut off.
 fn typed_text(typing: &TypedValue, room: usize) -> String {
@@ -111,7 +123,7 @@ fn drawn_as_tokens(panel: &ShapePanel, row: GenParam, current: bool) -> bool {
     match row {
         GenParam::Weights => true,
         _ if Layout::always(row) => !current || panel.typing.is_none(),
-        GenParam::Values => current && panel.tokens.is_some(),
+        GenParam::Values | GenParam::OwnText => current && panel.tokens.is_some(),
         _ => false,
     }
 }
@@ -169,10 +181,13 @@ fn token_lines(
     lines
 }
 
-/// Whether a field has the rows line under it: those whose tokens a render records, `Weights`
-/// and a `List`'s values.
+/// Whether a field has the rows line under it: those whose tokens a render records, `Weights`,
+/// a `List`'s values and an `Own` rhythm's hits.
 fn has_rows_line(row: GenParam) -> bool {
-    matches!(row, GenParam::Weights | GenParam::Values)
+    matches!(
+        row,
+        GenParam::Weights | GenParam::Values | GenParam::OwnText
+    )
 }
 
 /// The rows line's label.
@@ -243,6 +258,9 @@ fn rows_line(
 /// How wide the panel is: room for eight notes in a `List`'s values, or for each of `Weights`'
 /// digits over its note.
 fn width(panel: &ShapePanel, rows: &[GenParam], label: usize) -> u16 {
+    if rows.contains(&GenParam::OwnText) {
+        return WIDTH.max((label + RHYTHM_ROOM + 2) as u16);
+    }
     if !rows.contains(&GenParam::Weights) {
         return WIDTH;
     }
@@ -291,7 +309,9 @@ fn window(area: Rect, panel: &ShapePanel, side: Side) -> Rect {
         .map(|row| match row {
             GenParam::Weights => 2,
             GenParam::MoveList => 1,
-            GenParam::Values if panel.row == GenParam::Values && panel.tokens.is_some() => 1,
+            GenParam::Values | GenParam::OwnText if panel.row == *row && panel.tokens.is_some() => {
+                1
+            }
             _ => 0,
         })
         .sum::<u16>();
@@ -391,7 +411,12 @@ fn draw_in(frame: &mut Frame, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
     for (nth, part) in panel.parts.iter().enumerate() {
         let steps = panel.base_steps(part);
         let shape = panel.shape_of(nth);
-        let written = written_from(steps, part.range, part.column, &shape, &panel.list, source);
+        let own = panel.own();
+        let texts = vt_model::shape::Texts {
+            list: &panel.list,
+            rhythm: own.beats(),
+        };
+        let written = written_from(steps, part.range, part.column, &shape, texts, source);
         // A `Follow`, `Grids`, `Divisions`, `Ring` and a `Variation` write every row, rests and
         // all, so their count is of the notes, and `Multiply`'s of the rhythm it leaves. A
         // `Tonnetz` writes the rows its `Where` chooses, as other fills do.
@@ -474,6 +499,7 @@ fn draw_in(frame: &mut Frame, window: Rect, ctx: &Ctx, panel: &ShapePanel) {
     let hint = match panel.shape.kind {
         _ if panel.weight.is_some() => match panel.row {
             GenParam::Values => "h l move  = - turn  x out  a after  Esc out",
+            GenParam::OwnText => "h l move  = - turn  x out  ~ rest  a after  K what goes",
             GenParam::MoveList => "h l move  = - turn P L R  x out  Esc out",
             GenParam::Flip | GenParam::Keep => "h l move  = - switch  0 1 types  Esc out",
             _ => "h l move  = - change  0-F types  Esc out",

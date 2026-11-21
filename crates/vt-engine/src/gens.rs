@@ -238,17 +238,21 @@ struct Heard {
     /// The variation whose cells are in `now`, and the one before it, whose are in `was`.
     now: Option<i64>,
     was: Option<i64>,
-    /// The hash of the values its `List` goes through, worked out on the edit thread, which its
-    /// run's render key holds, so the list is never copied to the audio thread.
+    /// The hash of the values its `List` goes through and of its `Own` rhythm's text, worked out
+    /// on the edit thread, which its run's render key holds, so neither is ever copied to the
+    /// audio thread.
     list: u64,
 }
 
-/// A `List`'s values hashed, FNV-1a, with their count, for a run's render key.
-fn list_hash(list: &[u8]) -> u64 {
+/// A `List`'s values and an `Own` rhythm's text hashed, FNV-1a, each with its count, for a run's
+/// render key.
+fn list_hash(list: &[u8], rhythm: &str) -> u64 {
     let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-    let count = list.len() as u64;
-    for byte in count.to_le_bytes().iter().chain(list) {
-        hash = (hash ^ u64::from(*byte)).wrapping_mul(0x0000_0100_0000_01b3);
+    for bytes in [list, rhythm.as_bytes()] {
+        let count = bytes.len() as u64;
+        for byte in count.to_le_bytes().iter().chain(bytes) {
+            hash = (hash ^ u64::from(*byte)).wrapping_mul(0x0000_0100_0000_01b3);
+        }
     }
     hash
 }
@@ -279,7 +283,7 @@ impl Memory {
                         length,
                         now: None,
                         was: None,
-                        list: list_hash(live.list()),
+                        list: list_hash(live.list(), live.rhythm()),
                     });
                     cells += length;
                 }
@@ -678,6 +682,7 @@ impl GenScratch {
                 sources: &[],
                 source,
                 list: generator.list(),
+                rhythm: generator.rhythm(),
             };
             let on_lane = match run.column {
                 ShapeColumn::Fx { slot, .. } if generator.span == Span::Lane => Some(slot),
@@ -747,7 +752,7 @@ impl GenScratch {
                         run.rows,
                         column,
                         &heard,
-                        generator.list(),
+                        generator.texts(),
                         source,
                         cells,
                     );
@@ -899,6 +904,7 @@ mod tests {
             span,
             shape,
             list: Box::default(),
+            rhythm: Box::default(),
         };
         Arc::unwrap_or_clone(edit(&Arc::new(song), &action).expect("the edit applies"))
     }
@@ -1076,6 +1082,7 @@ mod tests {
             generator: 0,
             shape,
             list: None,
+            rhythm: None,
         };
         Arc::unwrap_or_clone(edit(&Arc::new(song), &action).expect("the edit applies"))
     }
@@ -1109,6 +1116,66 @@ mod tests {
         assert!(acid.is_some_and(|heard| heard.renders > 0));
     }
 
+    /// One synth track playing a phrase of 16 notes, a random fill on them playing a rhythm of
+    /// its own, `text`, kept on the generator (decision 461).
+    fn own(text: &str) -> Song {
+        let mut song = Song::new(1);
+        song.millibpm = vt_model::constants::MAX_MILLIBPM;
+        song.tracks[0].machine = Machine::Plaits(SynthVoice::Acid);
+        let notes = Phrase::from_steps(vec!["C-3 64 --- --- ---".parse().unwrap(); 16]);
+        song.tracks[0].phrases.insert(0, Arc::new(notes));
+        let place = Where::Own(vt_model::shape::Own {
+            step: 2,
+            ..Default::default()
+        });
+        let action = Action::Generate {
+            track: 0,
+            phrase: 0,
+            column: acid_column(&song),
+            span: Span::rows(StepRange::between(0, 15)),
+            shape: shape(FillKind::Random, 36, 60, place),
+            list: Box::default(),
+            rhythm: text.into(),
+        };
+        Arc::unwrap_or_clone(edit(&Arc::new(song), &action).expect("the edit applies"))
+    }
+
+    /// An `Own` rhythm whose `< >` runs on from pass to pass renders each pass, its `Step` held
+    /// by hand and its `x*3` a `RET`, and a new version with another text is heard: none of it
+    /// allocates or frees in the callback.
+    #[test]
+    fn an_own_rhythm_renders_each_pass_without_allocating() {
+        let texts = ["x <. x . [x x]> x*3 x?", "<x . .> [x x](3,8) x!2"];
+        let first = own(texts[0]);
+        let generator = &first.tracks[0].phrases[&0].generators()[0];
+        assert!(generator.heard().varies(), "its laps run on");
+        let column = generator.column;
+        let mut engine = Engine::new(RATE, version(&first));
+        engine.play_from(0);
+        let mut out = vec![0.0; BLOCK * 2];
+        let (mut violations, mut reported) = (0, 0);
+        let mut old = Vec::with_capacity(64);
+        for round in 0..600 {
+            let next = (round % 100 == 50).then(|| Handover::new(version(&own(texts[round % 2]))));
+            let ((), count) = forbidden(|| {
+                if let Some(next) = next {
+                    old.push(engine.hand_over(next));
+                }
+                let step = (round / 40 % 4 + 1) as i32;
+                engine.hold_generator(0, column, GenParam::OwnStep, Some(step));
+                engine.process(&mut out);
+                engine.take_gen_reports(|_, report| {
+                    reported += usize::from(matches!(report, GenReport::Pass(_)));
+                });
+            });
+            violations += count;
+        }
+        assert_eq!(violations, 0);
+        assert!(reported > 2, "{reported} passes reported");
+        let heard = engine.generators_heard(0).next();
+        assert!(heard.is_some_and(|heard| heard.renders > 0));
+    }
+
     /// One synth track playing a phrase of `rows` notes, a `List` of these values on its
     /// velocities, kept on the generator, each value for a run of 2 rows.
     fn listed(rows: usize, list: &[u8]) -> Song {
@@ -1127,6 +1194,7 @@ mod tests {
                 ..shape(FillKind::List, 0, 0, Where::AllRows)
             },
             list: list.into(),
+            rhythm: Box::default(),
         };
         Arc::unwrap_or_clone(edit(&Arc::new(song), &action).expect("the edit applies"))
     }
@@ -1256,7 +1324,7 @@ mod tests {
                 span,
                 generator.column,
                 &shape,
-                generator.list(),
+                vt_model::shape::Texts::list(generator.list()),
                 None,
                 &mut cells,
             );
@@ -1335,7 +1403,7 @@ mod tests {
                     range,
                     column,
                     &ramp,
-                    &[],
+                    vt_model::shape::Texts::NONE,
                     None,
                     &mut cells[..range.len()],
                 );
@@ -1351,7 +1419,7 @@ mod tests {
                         range,
                         column,
                         &ramp,
-                        &[],
+                        vt_model::shape::Texts::NONE,
                         None,
                         &mut cells[..range.len()],
                     );

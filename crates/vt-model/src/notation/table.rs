@@ -7,10 +7,13 @@
 //! notes' degrees. A grammar says which of those bytes each of its tokens is ([`Grammar::rows`]),
 //! so the table and a field meet without either knowing the other's text.
 
-use super::{Field, Kind, Token};
+use super::{Field, GrammarId, Kind, Token};
 use crate::generator::Generator;
 use crate::selection::StepRange;
-use crate::shape::{FillKind, GenCell, NO_TOKEN, Shape, ShapeColumn, render_tokens_into};
+use crate::shape::{
+    FillKind, GenCell, NO_TOKEN, Shape, ShapeColumn, Texts, Where, render_tokens_into,
+    rhythm_tokens_into,
+};
 use crate::step::Step;
 
 /// What the rows line under a field says of a row.
@@ -44,6 +47,9 @@ pub struct Table {
     /// Whether every row written was written by a token, as a `List`'s are, so a byte of
     /// [`NO_TOKEN`] on one is its 256th value rather than none.
     every: bool,
+    /// An `Own` rhythm's hit that chose each row, by its place among the hits, which its field
+    /// reads in place of the fill's tokens (decision 461): empty for any other `Where`.
+    hits: Vec<u8>,
 }
 
 impl Table {
@@ -53,7 +59,7 @@ impl Table {
         range: StepRange,
         column: ShapeColumn,
         shape: &Shape,
-        list: &[u8],
+        texts: Texts,
         source: Option<&[Step]>,
     ) -> Self {
         let len = range.len().min(crate::constants::MAX_PHRASE_STEPS);
@@ -64,16 +70,22 @@ impl Table {
             range,
             column,
             shape,
-            list,
+            texts,
             source,
             &mut cells,
             &mut tokens,
         );
+        let mut hits = Vec::new();
+        if matches!(shape.place, Where::Own(_)) {
+            hits = vec![NO_TOKEN; len];
+            rhythm_tokens_into(steps, range, column, shape, texts.rhythm, &mut hits);
+        }
         Self {
             range,
             cells,
             tokens,
             every: shape.kind == FillKind::List,
+            hits,
         }
     }
 
@@ -90,7 +102,7 @@ impl Table {
             range,
             generator.column,
             &shape,
-            generator.list(),
+            generator.texts(),
             None,
         ))
     }
@@ -113,6 +125,19 @@ impl Table {
         }
     }
 
+    /// The token of a field's grammar that wrote a stored row: an `Own` rhythm's hit, for its
+    /// text, and the fill's token for any other.
+    fn token_for(&self, field: &Field, row: usize) -> Option<u8> {
+        if !std::ptr::eq(field.grammar(), GrammarId::Rhythm.grammar()) {
+            return self.token(row);
+        }
+        let at = row.checked_sub(self.range.first)?;
+        if *self.cells.get(at)? == GenCell::Under {
+            return None;
+        }
+        self.hits.get(at).copied().filter(|hit| *hit != NO_TOKEN)
+    }
+
     /// Whether a stored row is written.
     pub fn written(&self, row: usize) -> bool {
         row.checked_sub(self.range.first)
@@ -127,13 +152,13 @@ impl Table {
             return Vec::new();
         };
         (self.range.first..=self.range.last)
-            .filter(|row| self.token(*row) == Some(token))
+            .filter(|row| self.token_for(field, *row) == Some(token))
             .collect()
     }
 
     /// The token of a field that wrote a stored row, by its place, while the text reads.
     pub fn token_of(&self, field: &Field, row: usize) -> Option<usize> {
-        let token = self.token(row)?;
+        let token = self.token_for(field, row)?;
         (0..field.tokens().len()).find(|at| written_as(field, *at) == Some(token))
     }
 
@@ -227,9 +252,10 @@ mod tests {
             ..Shape::default()
         };
         let range = StepRange::between(0, 15);
-        let table = Table::render(&steps(16), range, column, &shape, &[], None);
+        let table = Table::render(&steps(16), range, column, &shape, Texts::NONE, None);
         let field = Field::new(GrammarId::Weights.grammar(), "FFFFFFF", column);
-        let written = crate::shape::written_from(&steps(16), range, column, &shape, &[], None);
+        let written =
+            crate::shape::written_from(&steps(16), range, column, &shape, Texts::NONE, None);
         assert_eq!(written.len(), 16);
         let mut lit = 0;
         for degree in 0..7 {
@@ -270,7 +296,14 @@ mod tests {
             step.note = crate::step::Note::On(60);
         }
         let range = StepRange::between(0, 5);
-        let table = Table::render(&steps, range, column, &shape, &[0x40, 0x40, 0x7F], None);
+        let table = Table::render(
+            &steps,
+            range,
+            column,
+            &shape,
+            Texts::list(&[0x40, 0x40, 0x7F]),
+            None,
+        );
         let field = Field::new(&WORDS, "40 40 7F", column);
         assert_eq!(table.rows(&field, 0), [0, 3]);
         assert_eq!(table.rows(&field, 1), [1, 4]);
@@ -292,7 +325,14 @@ mod tests {
             step.note = crate::step::Note::On(60);
         }
         let range = StepRange::between(0, 255);
-        let table = Table::render(&steps, range, ShapeColumn::Velocity, &shape, &list, None);
+        let table = Table::render(
+            &steps,
+            range,
+            ShapeColumn::Velocity,
+            &shape,
+            Texts::list(&list),
+            None,
+        );
         assert_eq!(table.token(255), Some(255));
         assert_eq!(table.token(254), Some(254));
     }
@@ -316,7 +356,14 @@ mod tests {
             ..shape
         };
         let range = StepRange::between(0, 3);
-        let table = Table::render(&steps, range, column, &shape, &[0x10, 0x20], None);
+        let table = Table::render(
+            &steps,
+            range,
+            column,
+            &shape,
+            Texts::list(&[0x10, 0x20]),
+            None,
+        );
         let field = Field::new(&WORDS, "10 20?30", column);
         assert!(chance(&field, 1));
         assert!(!chance(&field, 0));
@@ -354,14 +401,14 @@ mod tests {
         let first = Table::of_generator(generator, phrase.steps(), 0).unwrap();
         assert_eq!(
             first,
-            Table::render(&under, range, column, &shape, &[], None)
+            Table::render(&under, range, column, &shape, Texts::NONE, None)
         );
         let second = Table::of_generator(generator, phrase.steps(), 1).unwrap();
         let heard = shape.on_pass(1);
         assert_ne!(heard.seed, shape.seed, "it varies");
         assert_eq!(
             second,
-            Table::render(&under, range, column, &heard, &[], None)
+            Table::render(&under, range, column, &heard, Texts::NONE, None)
         );
         assert_ne!(first, second);
     }

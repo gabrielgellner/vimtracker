@@ -85,12 +85,13 @@ impl Services {
     /// The edit that puts a patch's generator live on a column of the phrase under the cursor,
     /// over its loop or its lane, judged as `S` judges the column: an empty Note column is
     /// generated and notes are reshaped, and the generator already live there, `live`, is
-    /// reshaped in place. A `List` goes through the patch's list. Or why it can't go there.
+    /// reshaped in place. A `List` goes through the patch's list, and an `Own` rhythm plays its
+    /// text. Or why it can't go there.
     pub(crate) fn patch_generator(
         &mut self,
         field: Field,
         command: Option<FxCommand>,
-        (shape, list): (Shape, &[u8]),
+        (shape, list, rhythm): (Shape, &[u8], &str),
         live: Option<usize>,
         view: View,
     ) -> Result<Action, String> {
@@ -110,6 +111,7 @@ impl Services {
                 generator,
                 shape: fitted(shape, column)?,
                 list: Some(list.into()),
+                rhythm: Some(rhythm.into()),
             });
         }
         let selection = self.loop_selection(field);
@@ -122,6 +124,8 @@ impl Services {
         };
         panel.shape = fitted(shape, panel.parts[0].column)?;
         panel.list = list.to_vec();
+        rhythm.clone_into(&mut panel.rhythm);
+        panel.own().settle(&mut panel.shape);
         Ok(panel.live_action())
     }
 
@@ -190,6 +194,7 @@ impl ShapePanel {
         };
         let shape = generator.shape;
         let list = generator.list().to_vec();
+        let rhythm = generator.rhythm().to_owned();
         let (sources, default_source) = match part.column {
             ShapeColumn::Note { .. } => services.follow_sources(&base, &[part], view),
             _ => (Vec::new(), None),
@@ -204,6 +209,7 @@ impl ShapePanel {
             column: part.column,
             shape,
             list,
+            rhythm,
             row: GenParam::Fill,
             typing: None,
             weight: None,

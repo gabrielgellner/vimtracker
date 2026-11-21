@@ -1461,15 +1461,20 @@ gen_params! {
         name: "Rhythm",
         units: Reading::Listed,
         typing: Typing::Listed,
-        bounds: Bounds::Fixed(0, World::ALL.len() as i32 - 1),
+        // The named ones, then `Own`.
+        bounds: Bounds::Fixed(0, World::ALL.len() as i32),
         stepping: None,
         engine: true,
         app_only: true,
         get: |shape, _| match shape.place {
             Where::Rhythm { rhythm, .. } => Some(rhythm.index() as i32),
+            Where::Own(_) => Some(World::ALL.len() as i32),
             _ => None,
         },
-        set: |shape, _, at| Choice::World(World::ALL[at as usize]).apply(shape),
+        set: |shape, _, at| match World::ALL.get(at as usize) {
+            Some(rhythm) => Choice::World(*rhythm).apply(shape),
+            None => Choice::Own.apply(shape),
+        },
     },
     Role => GenParamSpec {
         meaning: "which of the rhythm's three parts this track plays",
@@ -1504,6 +1509,41 @@ gen_params! {
         set: |shape, _, number| {
             if let Where::Rhythm { child, .. } = &mut shape.place {
                 *child = number as u8;
+            }
+        },
+    },
+    /// An `Own` rhythm's text, typed in Tidal's mini-notation, kept on its generator rather than
+    /// the shape, and the rows each of its top-level tokens is (decision 461).
+    OwnText => GenParamSpec {
+        meaning: "the rhythm typed: x a hit, . a rest, [ ] a group, < > one each lap",
+        key: "own_text",
+        name: "Text",
+        units: Reading::Listed,
+        typing: Typing::Rhythm,
+        bounds: Bounds::Typed,
+        stepping: None,
+        engine: false,
+        app_only: true,
+        get: |_, _| None,
+        set: |_, _, _| {},
+    },
+    OwnStep => GenParamSpec {
+        meaning: "how many rows each of the rhythm's top-level tokens is",
+        key: "own_step",
+        name: "Step",
+        units: Reading::Rows,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(1, MAX_STEP as i32),
+        stepping: stops(1, EVERY_JUMP),
+        engine: true,
+        app_only: false,
+        get: |shape, _| match shape.place {
+            Where::Own(own) => Some(i32::from(own.step)),
+            _ => None,
+        },
+        set: |shape, _, number| {
+            if let Where::Own(own) = &mut shape.place {
+                own.step = number as u8;
             }
         },
     },

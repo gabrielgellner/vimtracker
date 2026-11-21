@@ -28,7 +28,10 @@ use super::{
     TonnetzVoice, VARIES, Variation, WAVES, WEIGHTS, WaveRate, Where, default_step, degree_count,
     degree_name, first_note,
 };
-use super::{BEATS, CHILD, CLUSTERS, MARKOV, Over, Role, SHARE, STATES, World};
+use super::{BEATS, CHILD, CLUSTERS, MARKOV, MAX_STEP, Over, Own, Role, SHARE, STATES, World};
+
+/// The name of a rhythm of your own among the named ones (decision 461).
+const OWN: &str = "Own";
 
 mod spec;
 mod table;
@@ -89,6 +92,8 @@ pub struct Context<'a> {
     /// The values a `List` goes through, kept on its generator, or beside the panel's shape, as
     /// they don't fit in a `Shape`. Elsewhere, none.
     pub list: &'a [u8],
+    /// An `Own` rhythm's text, kept likewise. Elsewhere, empty.
+    pub rhythm: &'a str,
 }
 
 /// What a setting goes back to with `x` where that hangs on what's there: `From` and `To` to the
@@ -166,6 +171,8 @@ pub enum Choice {
     Channel(Channel),
     Bar(Bar),
     World(World),
+    /// A rhythm of your own, in place of a named one.
+    Own,
     Role(Role),
     CellStart(CellStart),
     Over(Over),
@@ -187,6 +194,7 @@ impl Choice {
             Self::Channel(channel) => channel.name().to_owned(),
             Self::Bar(bar) => bar.name().to_owned(),
             Self::World(rhythm) => rhythm.name().to_owned(),
+            Self::Own => OWN.to_owned(),
             Self::Role(part) => part.name().to_owned(),
             Self::CellStart(start) => start.name().to_owned(),
             Self::Over(over) => over.name().to_owned(),
@@ -204,6 +212,7 @@ impl Choice {
             Self::Channel(channel) => Some(channel.description()),
             Self::Bar(bar) => Some(bar.description()),
             Self::World(rhythm) => Some(rhythm.description()),
+            Self::Own => Some("Your own, typed in Text: x a hit, . a rest, [ ] a group"),
             Self::Role(part) => Some(part.description()),
             Self::CellStart(start) => Some(start.description()),
             Self::Over(over) => Some(over.description()),
@@ -230,9 +239,21 @@ impl Choice {
             Self::Part(part) => shape.grids.part = Some(part),
             Self::Channel(channel) => shape.divisions.channel = Some(channel),
             Self::Bar(bar) => shape.divisions = shape.divisions.with_bar(bar),
-            Self::World(chosen) => {
-                if let Where::Rhythm { rhythm, .. } = &mut shape.place {
-                    *rhythm = chosen;
+            Self::World(chosen) => match &mut shape.place {
+                Where::Rhythm { rhythm, .. } => *rhythm = chosen,
+                // From a rhythm of your own, the named one's bell, every hit playing.
+                Where::Own(_) => {
+                    shape.place = Where::Rhythm {
+                        rhythm: chosen,
+                        part: Role::Bell,
+                        child: CHILD,
+                    };
+                }
+                _ => {}
+            },
+            Self::Own => {
+                if let Where::Rhythm { .. } = shape.place {
+                    shape.place = Where::Own(Own::default());
                 }
             }
             Self::Role(chosen) => {
@@ -499,6 +520,7 @@ mod tests {
             sources: &[],
             source: None,
             list: &[],
+            rhythm: "",
         }
     }
 
@@ -1498,7 +1520,8 @@ mod tests {
         // As numbers, the choices' places, so a macro reaches them.
         assert_eq!(
             Rhythm.bounds(&context),
-            Some((0, World::ALL.len() as i32 - 1))
+            Some((0, World::ALL.len() as i32)),
+            "the named ones and Own"
         );
         assert_eq!(
             Rhythm.number(&ramp, &context),
@@ -1516,6 +1539,10 @@ mod tests {
         Child.typed(&mut ramp, &context, "35").unwrap();
         Child.step(&mut ramp, &context, 1, true).unwrap();
         assert_eq!(ramp.place, son(super::Role::High, 45));
+        // Down from the first, round to a rhythm of your own, then the last named one.
+        Rhythm.step(&mut ramp, &context, -1, false).unwrap();
+        assert!(matches!(ramp.place, super::Where::Own(_)));
+        assert_eq!(Rhythm.shown(&ramp, &context), "Own");
         Rhythm.step(&mut ramp, &context, -1, false).unwrap();
         assert!(matches!(
             ramp.place,
@@ -1524,6 +1551,8 @@ mod tests {
                 ..
             }
         ));
+        // A named one chosen from `Own` starts on its bell.
+        Role.set_number(&mut ramp, &context, 2);
         // `x` puts the rhythm and `Child` back and leaves the part, which the track's own is.
         let starts = Starts::default();
         Rhythm.reset(&mut ramp, &context, starts);
@@ -1551,7 +1580,7 @@ mod tests {
         assert_eq!(grid.column(3), [Some(Spread), Some(Bias), Some(Over)]);
         // The list, each with where it's from.
         let listed = Rhythm.choices(&context).unwrap();
-        assert_eq!(listed.len(), World::ALL.len());
+        assert_eq!(listed.len(), World::ALL.len() + 1, "and Own");
         assert!(listed.iter().all(|choice| choice.description().is_some()));
         assert_eq!(Rhythm.chosen(&ramp, &context), Some(0));
     }

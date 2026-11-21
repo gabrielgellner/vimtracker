@@ -974,6 +974,7 @@ mod tests {
                     span: Span::rows(StepRange::between(0, 15)),
                     shape: random,
                     list: Box::default(),
+                    rhythm: Box::default(),
                 };
                 next = edit(&next, &generate).expect("the edit applies");
             }
@@ -1070,6 +1071,7 @@ mod tests {
                         span: Span::rows(StepRange::between(0, 15)),
                         shape,
                         list: Box::default(),
+                        rhythm: Box::default(),
                     };
                     next = edit(&next, &generate).expect("the edit applies");
                 }
@@ -1202,6 +1204,7 @@ mod tests {
                         ..Shape::default()
                     },
                     list: Box::default(),
+                    rhythm: Box::default(),
                 };
                 song = vt_model::action::edit(&song, &generate).unwrap();
             }
