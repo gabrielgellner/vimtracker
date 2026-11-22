@@ -1108,6 +1108,7 @@ holds, `[. 7F]` or `<30 40>`, and a **rest** is `.`, with `~` read as one too, a
 | `D` | Takes away from the token to the end of its group, or of the line |
 | `C` | The same, typing in its place |
 | `p` | Pastes after the token, or on a fixed length over it |
+| `u` `Ctrl-r` | Undoes the last change to the line, or redoes it |
 | `Esc` | Stops typing, or closes it, the last text that read put back |
 | `Enter` | Closes it, where the text reads, typing or not |
 
@@ -1124,6 +1125,11 @@ and `y` take a text object, and `p` pastes what they took:
 | `da<` `ca<` `ya<` | The `< >` group |
 | `di(` `ci(` `yi(` | A Euclid's numbers |
 | `da(` `ca(` `ya(` | A Euclid, with its brackets |
+
+`u` takes back the last change to the line, as in Vim: a key's change, or a whole stretch of
+typing from `i` to `Esc` as one, back to the line the buffer opened on, and `Ctrl-r` puts it
+back again. The rows follow the line each time, heard if it's playing. They're the line's own,
+kept while the buffer is open; closing it is one undo step of the song as ever.
 
 `D` and `C` stop at the bracket closing the group the cursor is in, so on the `.` of
 `[x . x] x` they leave `[x] x`, and the brackets never come apart. What they take, `p` pastes.
