@@ -339,6 +339,15 @@ impl App {
             | Mode::SampleVisual => {
                 self.command_key_normal(key, now);
             }
+            // A list, a guide or the keys over the page play as every page does (decision 477).
+            Mode::Help | Mode::Guide | Mode::Picker | Mode::Mapping
+                if !key.ctrl && !key.alt && matches!(key.code, KeyCode::Tab | KeyCode::BackTab) =>
+            {
+                self.run(match key.code {
+                    KeyCode::Tab => Cmd::PauseOrResume,
+                    _ => Cmd::PlayFromStart,
+                });
+            }
             Mode::Insert => self.insert_key(key),
             Mode::Replace => self.replace_key(key),
             Mode::Command => self.command_line_key(key, now),

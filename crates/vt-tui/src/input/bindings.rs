@@ -287,6 +287,13 @@ pub struct Binding {
 }
 
 /// Keys that mean the same in every view.
+/// Play and play from the start, which work in every mode (decision 477): in the Visual modes
+/// and after an operator too, where the rest of every view's keys don't.
+const TRANSPORT: &[(&str, Cmd, &str)] = &[
+    ("Tab", Cmd::PauseOrResume, "Play, or pause in place"),
+    ("S-Tab", Cmd::PlayFromStart, "Play from the start"),
+];
+
 const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("u", Cmd::Undo, "Undo"),
     ("C-r", Cmd::Redo, "Redo"),
@@ -550,11 +557,13 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::SampleVisual, SamplePage::OBJECTS);
     add(Mode::SampleVisual, &every_view_but_pads);
     add(Mode::OperatorPending, PhraseView::MOTIONS);
+    add(Mode::OperatorPending, TRANSPORT);
     add(Mode::OperatorPending, PhraseView::TARGETS);
     add(Mode::OperatorPending, PhraseView::WHOLE_STEP);
     for mode in [Mode::VisualField, Mode::VisualStep] {
         add(mode, PhraseView::MOTIONS);
         add(mode, PhraseView::ARROWS);
+        add(mode, TRANSPORT);
         add(mode, PhraseView::VIEWPORT);
         add(mode, PhraseView::TARGETS);
         add(mode, PhraseView::VISUAL);

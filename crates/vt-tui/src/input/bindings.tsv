@@ -927,6 +927,8 @@ OperatorPending	}	Move(NextBeat)	Next beat
 OperatorPending	{	Move(PreviousBeat)	Previous beat
 OperatorPending	g g	Move(First)	First step, or step n
 OperatorPending	G	Move(Last)	Last step, or step n
+OperatorPending	Tab	PauseOrResume	Play, or pause in place
+OperatorPending	S-Tab	PlayFromStart	Play from the start
 OperatorPending	i b	On(Beat)	This beat, whole steps
 OperatorPending	i c	On(Column)	This column, whole phrase
 OperatorPending	i p	On(Phrase)	This phrase, whole steps
@@ -952,6 +954,8 @@ VisualField	Left	GridMove { forward: false, snap: false }	Back by the grid
 VisualField	Right	GridMove { forward: true, snap: false }	On by the grid
 VisualField	S-Left	GridMove { forward: false, snap: true }	The previous row on the grid
 VisualField	S-Right	GridMove { forward: true, snap: true }	The next row on the grid
+VisualField	Tab	PauseOrResume	Play, or pause in place
+VisualField	S-Tab	PlayFromStart	Play from the start
 VisualField	H	ViewTop	Cursor to the top of the view
 VisualField	M	ViewMiddle	Cursor to the middle of the view
 VisualField	L	ViewBottom	Cursor to the bottom of the view
@@ -1008,6 +1012,8 @@ VisualStep	Left	GridMove { forward: false, snap: false }	Back by the grid
 VisualStep	Right	GridMove { forward: true, snap: false }	On by the grid
 VisualStep	S-Left	GridMove { forward: false, snap: true }	The previous row on the grid
 VisualStep	S-Right	GridMove { forward: true, snap: true }	The next row on the grid
+VisualStep	Tab	PauseOrResume	Play, or pause in place
+VisualStep	S-Tab	PlayFromStart	Play from the start
 VisualStep	H	ViewTop	Cursor to the top of the view
 VisualStep	M	ViewMiddle	Cursor to the middle of the view
 VisualStep	L	ViewBottom	Cursor to the bottom of the view
