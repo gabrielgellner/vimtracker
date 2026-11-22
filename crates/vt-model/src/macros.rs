@@ -657,7 +657,7 @@ impl Track {
     }
 
     /// One of the track's own settings' coarse byte, from the field that holds it.
-    fn own_value(&self, id: SettingId) -> u8 {
+    pub(crate) fn own_value(&self, id: SettingId) -> u8 {
         match id {
             SettingId::VOL => UNITY_LEVEL,
             SettingId::LEVEL => self.level,
