@@ -2622,7 +2622,7 @@ dependencies = [
 
 [[package]]
 name = "vt-engine"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "hound",
  "realfft",
@@ -2634,7 +2634,7 @@ dependencies = [
 
 [[package]]
 name = "vt-model"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "hound",
  "realfft",
@@ -2648,7 +2648,7 @@ dependencies = [
 
 [[package]]
 name = "vt-roto"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "midir",
  "serialport",
@@ -2659,7 +2659,7 @@ dependencies = [
 
 [[package]]
 name = "vt-tui"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "base64 0.23.1",
  "clap",
