@@ -1218,6 +1218,8 @@ Tokens	D-j	InTokens(DecreaseLarge)	Turn the token down a large step
 Tokens	x	InTokens(Remove)	Take the token away, or on a field of fixed length put back what it starts as
 Tokens	~	InTokens(Rest)	Rest the token, or give back what it was
 Tokens	r	InTokens(Replace)	Replace the token
+Tokens	D	InTokens(Delete(ToEnd))	Take away from the token to the end of its group, or of the line
+Tokens	C	InTokens(Change(ToEnd))	Type over from the token to the end of its group, or of the line
 Tokens	i	InTokens(Type(Before))	Type before the token, or on a field of fixed length over it
 Tokens	a	InTokens(Type(After))	Type after the token, or on a field of fixed length over it
 Tokens	s	InTokens(Type(Over))	Type over the token

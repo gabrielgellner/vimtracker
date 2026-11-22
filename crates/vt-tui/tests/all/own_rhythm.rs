@@ -82,7 +82,8 @@ fn own_starts_from_the_named_rhythm_and_plays_what_is_typed() {
     // Text that doesn't read keeps the last that did playing, and `Enter` keeps the buffer open
     // on it, saying why.
     keys(&mut app, "k");
-    keys(&mut app, "ax [x<Enter>");
+    // A `]` with no `[` stops the text reading there.
+    keys(&mut app, "ax ]<Enter>");
     assert_eq!(
         panel(&app).rhythm,
         "x . [. x] x(3,8) x",

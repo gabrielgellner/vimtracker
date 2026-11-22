@@ -146,6 +146,16 @@ pub const KEYS: &[(&str, Cmd, &str)] = &[
     ),
     ("r", Cmd::InTokens(TokenKey::Replace), "Replace the token"),
     (
+        "D",
+        Cmd::InTokens(TokenKey::Delete(Object::ToEnd)),
+        "Take away from the token to the end of its group, or of the line",
+    ),
+    (
+        "C",
+        Cmd::InTokens(TokenKey::Change(Object::ToEnd)),
+        "Type over from the token to the end of its group, or of the line",
+    ),
+    (
         "i",
         Cmd::InTokens(TokenKey::Type(Place::Before)),
         "Type before the token, or on a field of fixed length over it",

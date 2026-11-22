@@ -113,6 +113,15 @@ impl Bracket {
             _ => return None,
         })
     }
+
+    /// The character that closes it.
+    pub const fn close(self) -> char {
+        match self {
+            Self::Square => ']',
+            Self::Angle => '>',
+            Self::Round => ')',
+        }
+    }
 }
 
 /// What a token is, for what it means and how it turns. A grammar says which it splits into.
