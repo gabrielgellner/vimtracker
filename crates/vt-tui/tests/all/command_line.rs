@@ -320,3 +320,46 @@ fn the_keys_of_the_command_line_are_in_the_binding_table() {
         assert!(rows.iter().any(|line| line.contains(row)), "{row}");
     }
 }
+
+/// `Tab` plays in every mode, as decision 477 has it: in the Visual modes, after an operator,
+/// and over a list, a guide or the keys, which keep their place, as well as on the pages.
+#[test]
+fn tab_plays_in_every_mode() {
+    use vt_engine::engine::Transport;
+    for (keys, mode) in [
+        ("", Mode::Normal),
+        ("v", Mode::VisualField),
+        ("V", Mode::VisualStep),
+        ("d", Mode::OperatorPending),
+        (" ?", Mode::Picker),
+        (" ?\r", Mode::Guide),
+        (" k", Mode::Help),
+        (" /", Mode::Picker),
+        ("i", Mode::Insert),
+    ] {
+        let (mut app, mut rt) = app();
+        for c in keys.chars() {
+            if c == '\r' {
+                tap_special(&mut app, KeyCode::Enter);
+            } else {
+                press(&mut app, &c.to_string());
+            }
+        }
+        assert_eq!(app.modes.mode, mode, "after {keys:?}");
+        tap_special(&mut app, KeyCode::Tab);
+        block(&mut rt, &mut app);
+        assert_eq!(
+            app.services.reported.transport,
+            Transport::Playing,
+            "{mode:?}"
+        );
+        assert_eq!(app.modes.mode, mode, "{mode:?} stays");
+        tap_special(&mut app, KeyCode::Tab);
+        block(&mut rt, &mut app);
+        assert_eq!(
+            app.services.reported.transport,
+            Transport::Paused,
+            "{mode:?}"
+        );
+    }
+}
