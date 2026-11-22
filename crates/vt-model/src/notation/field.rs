@@ -1284,7 +1284,10 @@ mod tests {
         );
         assert_eq!(typed_at("x . x", 0, Place::After, "x").text(), "x x . x");
         // After a group's bracket, a Euclid joins the group.
-        assert_eq!(typed_at("x [x x]", 4, Place::After, "(3,8").text(), "x [x x](3,8)");
+        assert_eq!(
+            typed_at("x [x x]", 4, Place::After, "(3,8").text(),
+            "x [x x](3,8)"
+        );
     }
 
     /// An opening bracket gets its partner after the cursor; typing the partner steps over it,
